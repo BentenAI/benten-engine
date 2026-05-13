@@ -56,6 +56,17 @@
 //! - **arch-r1-10**: `benten-id` does NOT depend on `benten-graph`,
 //!   `benten-engine`, `benten-eval`, or `benten-caps`. The dependency
 //!   graph layer is enforced by `crates/benten-id/tests/dependency_edges.rs`.
+//!
+//! ## G27-C wave (Phase 4-Foundation §4.3) scope (LIVE)
+//!
+//! - [`grant_reader`] — sibling `GrantReader` trait at the `benten-id`
+//!   layer with a CID-keyed companion method
+//!   `has_unrevoked_grant_for_grant_cid(&Cid)` that closes the §13.11
+//!   structural-lesson architectural gap. Sibling (not extension) of
+//!   `benten-caps::grant_backed::GrantReader` because arch-r1-10
+//!   forbids `benten-id → benten-caps` dependency edges; the two
+//!   traits coexist + may be implemented together by concrete types
+//!   that need both key shapes.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
@@ -65,6 +76,7 @@ pub mod device_attestation;
 pub mod did;
 pub mod did_rotation;
 pub mod errors;
+pub mod grant_reader;
 pub mod keypair;
 pub mod multi_sig;
 pub mod ucan;
