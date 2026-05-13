@@ -305,6 +305,31 @@ pub enum DidRotationError {
     /// Attestation could not be decoded from canonical bytes.
     #[error("rotation attestation decode failed")]
     DecodeFailed,
+    /// G24-D-FP-2: rotation event's HLC (`superseded_at`) is not strictly
+    /// greater than the latest accepted rotation event for the same
+    /// previous DID. Defends against replay-at-same-HLC + nonce-swap
+    /// attacks per phase-4-backlog §4.10.
+    #[error(
+        "rotation event HLC not monotonically greater: prev_did={prev_did} incoming_hlc={incoming_hlc} latest_hlc={latest_hlc}"
+    )]
+    HlcNotStrictlyMonotonic {
+        /// The previous-DID whose rotation history was consulted.
+        prev_did: String,
+        /// HLC of the rotation event being accepted.
+        incoming_hlc: u64,
+        /// Latest already-accepted HLC for `prev_did`.
+        latest_hlc: u64,
+    },
+    /// G24-D-FP-2: rotation event is a verbatim duplicate of an
+    /// already-accepted event (same prev_did + same next_did + same
+    /// superseded_at + same signature). Nonce-binding defense.
+    #[error("rotation event verbatim replay rejected: prev_did={prev_did} hlc={hlc}")]
+    VerbatimReplay {
+        /// The previous-DID being replayed.
+        prev_did: String,
+        /// HLC of the replayed event.
+        hlc: u64,
+    },
 }
 
 /// Errors emitted by [`crate::device_attestation`] paths.

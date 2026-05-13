@@ -86,7 +86,8 @@ pub mod workflow_to_plugin;
 
 pub use plugin_manifest::{
     CapRequirement, ContentAddressed, InstallRecord, PluginManifest, RendererBackend,
-    RendererConfig, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget, sign_manifest,
+    RendererConfig, RotatedKeyWarning, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget,
+    ValidationOutcome, sign_manifest,
 };
 
 // G23-A schema_compiler canary public surface — the entry-point

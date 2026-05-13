@@ -92,6 +92,16 @@ pub trait SharesPolicyView {
     fn permits(&self, cap_pattern: &str, target_plugin_did: &Did) -> bool;
 }
 
+// Reference-blanket impl so `&T: SharesPolicyView` when `T:
+// SharesPolicyView`. Lets `ManifestEnvelopeLookup::View<'a>` borrows
+// return references without duplicating impls.
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: SharesPolicyView + ?Sized> SharesPolicyView for &T {
+    fn permits(&self, cap_pattern: &str, target_plugin_did: &Did) -> bool {
+        (*self).permits(cap_pattern, target_plugin_did)
+    }
+}
+
 /// Check whether a runtime delegation step is within the source
 /// plugin's manifest envelope.
 ///

@@ -38,30 +38,45 @@ fn manifest_struct_has_no_schema_version_field_at_type_level() {
     } = PluginManifestDestructure::from(&manifest);
 }
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
-    Canonical-bytes CBOR-key-walk inspection asserting absence of schema_version- \
-    shaped keys; requires PluginManifest::to_canonical_bytes public surface (NOT \
-    shipped at G24-D primary). The type-level field-set check (above test) carries \
-    the substance at G24-D; encoded-key-walk arm lands at G24-D-FP-2 per \
-    phase-4-backlog §4.9. Named destination: plan §3 G24-D-FP-2 + phase-4-backlog \
-    §4.9. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_canonical_bytes_dag_cbor_contains_no_schema_version_key() {
     let manifest = minimal_manifest();
 
-    // Future G24-D surface: PluginManifest::to_canonical_bytes() ->
-    // Vec<u8> via DAG-CBOR. The canonical-bytes form is a CBOR map.
-    // This assertion walks the CBOR keys and asserts none matches
-    // `schema_version|manifest_version|spec_version|version_field`.
-    //
-    // FAILS-IF-NO-OP because canonical-bytes is what's content-
-    // addressed; a stubbed no-op serializer would emit nothing, but a
-    // partial implementation might accidentally include a version
-    // field for forward-compat.
-    let _bytes = manifest.compute_content_cid();
-    panic!(
-        "RED-PHASE: G24-D wave must wire canonical-bytes encoding + verify absence of any version-keyed CBOR map entry"
-    );
+    // G24-D-FP-2 surface: PluginManifest::to_canonical_bytes() ->
+    // Vec<u8> via DAG-CBOR. Walk the encoded bytes byte-wise asserting
+    // no version-keyed CBOR map entry appears.
+    let bytes = manifest.to_canonical_bytes();
+    assert!(!bytes.is_empty(), "non-empty DAG-CBOR encoding");
+
+    // SUBSTANTIVE: search the raw CBOR bytes for any of the forbidden
+    // key names. Per DAG-CBOR, map keys are CBOR text strings encoded
+    // with major type 3 (0x60..0x77 length-embedded). The substring
+    // form of each forbidden key is searched directly in the byte
+    // stream — a non-zero match means a CBOR text key with that
+    // content was emitted. WOULD-FAIL-IF-NO-OP because if to_canonical_
+    // bytes were stub-no-op'd to empty, the round-trip below would
+    // fail; if it were stub-no-op'd to a map containing schema_version,
+    // the substring scan would catch it.
+    let forbidden = [
+        "schema_version",
+        "manifest_version",
+        "spec_version",
+        "version_field",
+    ];
+    for key in &forbidden {
+        let pos = bytes.windows(key.len()).position(|w| w == key.as_bytes());
+        assert!(
+            pos.is_none(),
+            "D-4F-13 pull-not-push: canonical-bytes DAG-CBOR MUST NOT contain forbidden \
+             key '{key}' (CID covers shape; no manifest schema versioning)"
+        );
+    }
+
+    // Round-trip sanity: encoded bytes deserialize back to the same
+    // PluginManifest (defeats the stub-no-op-empty failure mode).
+    let decoded: benten_platform_foundation::PluginManifest =
+        serde_ipld_dagcbor::from_slice(&bytes).expect("DAG-CBOR round-trip");
+    assert_eq!(decoded.plugin_name, manifest.plugin_name);
 }
 
 /// Helper struct to force compile-time field enumeration. If

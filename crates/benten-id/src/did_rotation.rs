@@ -185,6 +185,74 @@ impl RotationLog {
         self.entries.push(attestation);
     }
 
+    /// G24-D-FP-2 (per phase-4-backlog §4.10) — accept a rotation event
+    /// with HLC-monotonic-strict ordering + nonce-binding replay defense.
+    ///
+    /// Defenses (composed):
+    /// 1. **Verbatim replay**: identical `(previous_did, next_did,
+    ///    superseded_at, signature)` as an existing entry is rejected
+    ///    with [`DidRotationError::VerbatimReplay`].
+    /// 2. **HLC-monotonic-strict**: an incoming event for `previous_did`
+    ///    whose `superseded_at` is NOT strictly greater than the latest
+    ///    accepted `superseded_at` for the same `previous_did` is
+    ///    rejected with [`DidRotationError::HlcNotStrictlyMonotonic`].
+    ///    This is the defense against nonce-swap attacks: even if the
+    ///    attacker mutates the nonce / signature, the HLC of the
+    ///    replay event is the same as the original, so the strict-
+    ///    monotonic check rejects it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DidRotationError::VerbatimReplay`] on byte-identical
+    /// replay; [`DidRotationError::HlcNotStrictlyMonotonic`] on
+    /// at-or-before-HLC replay.
+    pub fn accept_rotation_event(
+        &mut self,
+        attestation: &RotationAttestation,
+    ) -> Result<(), crate::errors::DidRotationError> {
+        // Verbatim replay defense — DID + signature compares routed
+        // through ct_signature_eq per crypto-major-4 UNIFORMITY.
+        if self.entries.iter().any(|e| {
+            crate::ucan::ct_signature_eq(
+                e.previous_did.as_bytes(),
+                attestation.previous_did.as_bytes(),
+            ) && crate::ucan::ct_signature_eq(
+                e.next_did.as_bytes(),
+                attestation.next_did.as_bytes(),
+            ) && e.superseded_at == attestation.superseded_at
+                && crate::ucan::ct_signature_eq(&e.signature, &attestation.signature)
+        }) {
+            return Err(crate::errors::DidRotationError::VerbatimReplay {
+                prev_did: attestation.previous_did.clone(),
+                hlc: attestation.superseded_at,
+            });
+        }
+        // HLC-monotonic-strict defense: latest superseded_at for the
+        // same previous_did MUST be strictly less than incoming.
+        let latest = self
+            .entries
+            .iter()
+            .filter(|e| {
+                crate::ucan::ct_signature_eq(
+                    e.previous_did.as_bytes(),
+                    attestation.previous_did.as_bytes(),
+                )
+            })
+            .map(|e| e.superseded_at)
+            .max();
+        if let Some(latest_hlc) = latest
+            && attestation.superseded_at <= latest_hlc
+        {
+            return Err(crate::errors::DidRotationError::HlcNotStrictlyMonotonic {
+                prev_did: attestation.previous_did.clone(),
+                incoming_hlc: attestation.superseded_at,
+                latest_hlc,
+            });
+        }
+        self.entries.push(attestation.clone());
+        Ok(())
+    }
+
     /// Return `true` if `did` has been superseded by any attestation
     /// in the log. Used by the chain-walker to reject UCANs signed
     /// by a superseded keypair.

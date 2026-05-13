@@ -5,6 +5,8 @@
 
 use benten_core::Cid;
 use benten_id::did::Did;
+use benten_id::did_rotation::{RotationAttestation, rotate_keypair};
+use benten_id::keypair::Keypair;
 use benten_platform_foundation::{
     CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
     SharesPolicyDefault, SharesRule, SharesTarget,
@@ -175,6 +177,44 @@ pub fn manifest_with_accepts_content(refs: Vec<Cid>) -> PluginManifest {
         accepts_content: Some(refs),
         ..minimal_manifest()
     }
+}
+
+// =====================================================================
+// G24-D-FP-2 fixtures — RotationLog + key rotation round-trip helpers
+// =====================================================================
+//
+// Per phase-4-backlog §4.10: RotationLog + HLC-monotonic-strict
+// integration at install/load surfaces. These helpers ship the real
+// Ed25519 keypair construction + signed RotationAttestation used by
+// the un-ignored G24-D-FP-2 test pins.
+
+/// Construct a fresh keypair under OsRng. Used in rotation tests where
+/// the *identity* of the key matters but the specific bytes don't.
+#[allow(dead_code)]
+pub fn fresh_keypair() -> Keypair {
+    Keypair::generate()
+}
+
+/// Build a signed RotationAttestation `prev → next` at the given HLC.
+/// Caller controls HLC ordering for the HLC-monotonic-strict tests.
+#[allow(dead_code)]
+pub fn signed_rotation_event(old: &Keypair, new: &Keypair, hlc: u64) -> RotationAttestation {
+    let old_did = old.public_key().to_did();
+    rotate_keypair(&old_did, old, new, hlc)
+        .expect("rotation event signs cleanly under correctly-paired key")
+}
+
+/// Build a manifest whose `peer_did` is the public key of `kp` and
+/// whose `content_cid` + `peer_signature` are populated. Used by the
+/// rotation-warning round-trip test to exercise
+/// `validate_with_rotation_log`.
+#[allow(dead_code)]
+pub fn manifest_signed_by(kp: &Keypair) -> PluginManifest {
+    let mut m = minimal_manifest();
+    m.peer_did = kp.public_key().to_did();
+    m.content_cid = m.compute_content_cid();
+    m.peer_signature = benten_platform_foundation::sign_manifest(&m, kp);
+    m
 }
 
 /// 15 ErrorCode string forms minted at G24-D wave (post-R5 surface) per

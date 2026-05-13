@@ -40,23 +40,68 @@ fn manifest_accepts_content_field_is_cid_list_not_did_list() {
     );
 }
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
-    Canonical-bytes DAG-CBOR inspection: requires PluginManifest::to_canonical_bytes \
-    public surface (NOT shipped at G24-D primary; compute_content_cid serializes \
-    internally but does not expose bytes). The to_canonical_bytes surface lands at \
-    G24-D-FP-2 per phase-4-backlog §4.9. Named destination: plan §3 G24-D-FP-2 + \
-    phase-4-backlog §4.9 (to_canonical_bytes + CBOR-key-walk inspection). HARD \
-    RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_canonical_bytes_dag_cbor_encodes_accepts_content_as_cid_array() {
-    let manifest = manifest_with_accepts_content(vec![stub_cid_one(), stub_cid_two()]);
+    let cid_one = stub_cid_one();
+    let cid_two = stub_cid_two();
+    let manifest = manifest_with_accepts_content(vec![cid_one, cid_two]);
 
-    // Future G24-D surface: PluginManifest::to_canonical_bytes() ->
-    // Vec<u8> via DAG-CBOR. The encoded form contains the CID bytes
-    // directly (not a string-encoded DID). FAILS-IF-NO-OP because
-    // canonical-bytes encoding is what content-CID is computed over.
-    let _cid = manifest.compute_content_cid();
-    panic!(
-        "RED-PHASE: G24-D wave must wire canonical-bytes DAG-CBOR encoding of accepts_content as Cid array"
+    // G24-D-FP-2 surface: PluginManifest::to_canonical_bytes() ->
+    // Vec<u8> via DAG-CBOR. SUBSTANTIVE arm: encode the manifest +
+    // round-trip via serde_ipld_dagcbor::from_slice, then inspect the
+    // accepts_content field on the decoded value.
+    let bytes = manifest.to_canonical_bytes();
+    assert!(
+        !bytes.is_empty(),
+        "to_canonical_bytes emits non-empty DAG-CBOR"
     );
+
+    // Round-trip through DAG-CBOR; the decoded manifest must preserve
+    // accepts_content as a Vec<Cid> (not a Vec<String>). FAILS-IF-NO-OP
+    // because a no-op that returned empty bytes would not deserialize.
+    let decoded: benten_platform_foundation::PluginManifest =
+        serde_ipld_dagcbor::from_slice(&bytes).expect("DAG-CBOR round-trip");
+    let refs = decoded
+        .accepts_content
+        .as_ref()
+        .expect("accepts_content preserved through canonical-bytes round-trip");
+    assert_eq!(
+        refs.len(),
+        2,
+        "accepts_content array length preserved through canonical-bytes round-trip"
+    );
+    assert_eq!(
+        refs[0], cid_one,
+        "accepts_content[0] preserved as Cid (not string-encoded DID per CLAUDE.md #18 Q4)"
+    );
+    assert_eq!(
+        refs[1], cid_two,
+        "accepts_content[1] preserved as Cid (not string-encoded DID per CLAUDE.md #18 Q4)"
+    );
+
+    // OBSERVABLE: the encoding is CID-byte-shaped not DID-string-shaped.
+    // benten-core's `Cid` (36 bytes; v1 header + multicodec + multihash
+    // + 32-byte BLAKE3 digest) serializes via `serde_bytes::Bytes` as a
+    // CBOR byte-string (major type 2). A 36-byte byte string under CBOR
+    // is `0x58 0x24` (length-as-1-byte = 36). Search for at least 2
+    // occurrences of the byte-string marker pair — the test fixture
+    // emits two accepts_content CIDs, each emitted as its own byte
+    // string. A DID-string-shaped encoding would use major-type-3
+    // (text string, 0x60..0x77 short / 0x78 long) instead.
+    let cbor_36byte_marker_hits = bytes
+        .windows(2)
+        .filter(|w| w[0] == 0x58 && w[1] == 0x24)
+        .count();
+    assert!(
+        cbor_36byte_marker_hits >= 2,
+        "DAG-CBOR canonical-bytes must contain at least 2 36-byte CBOR byte strings \
+         (the accepts_content Cid pair); got {cbor_36byte_marker_hits}. \
+         Confirms accepts_content is CID-byte-shaped (not DID-string-shaped) per CLAUDE.md #18 Q4."
+    );
+    // Type-level guarantee: at the rust type level `accepts_content` is
+    // `Option<Vec<Cid>>` (not `Option<Vec<Did>>` or `Option<Vec<String>>`).
+    // The round-trip-decoded value (asserted equal to the original Cid
+    // values above) closes the negative: if it were string-encoded a
+    // Vec<Cid> deserialize would fail.
+    let _: Option<Vec<benten_core::Cid>> = decoded.accepts_content;
 }

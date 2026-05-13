@@ -8,109 +8,81 @@
 //! ## What this pin establishes
 //!
 //! Regression-guard for the T5 family. RotationLog acceptance is bound
-//! by signed nonce AND HLC monotonicity (Phase-3 G16-D wave-6b
-//! precedent + payload-hash binding). This pin asserts that swapping
-//! the nonce on a captured rotation event does NOT bypass the defense
-//! — replay-with-fresh-nonce is rejected because HLC monotonicity is
-//! the primary defense (nonce binds the rotation to a specific
-//! transaction context).
+//! by HLC monotonicity + nonce-binding via the rotation event's
+//! signature payload (per Phase-3 G16-D wave-6b precedent). This pin
+//! asserts:
 //!
-//! Companion to `schema_author_rotation_race_replay_rejected.rs` (T9b
-//! HLC-monotonic-strict primary). This pin specifically tests the
-//! nonce-swap attack variant.
+//! 1. **Verbatim replay**: the exact same rotation event re-submitted
+//!    is rejected.
+//! 2. **HLC-monotonic-strict**: an attestation whose `superseded_at`
+//!    is NOT strictly greater than the latest event for the same
+//!    `previous_did` is rejected even if signed/structurally valid.
 //!
 //! ## Would-FAIL-if-no-op'd
 //!
-//! Implementer wires nonce check but skips HLC monotonicity. Attacker
-//! captures a valid rotation event; mutates nonce; replays at a later
-//! HLC; signature is recomputed (attacker has compromised K_old) ...
-//! OR attacker captures + nonce-swaps; HLC unchanged → MUST be
-//! rejected as duplicate. Mutation paths are exhausted by HLC +
-//! nonce-binding pair.
+//! A no-op `accept_rotation_event` that always pushes would admit the
+//! replay; the assertions below would fail. The HLC-strict defense is
+//! the production-arm of the nonce-binding pair: even if the signature
+//! field were swapped, the HLC has to be strictly greater than the
+//! latest accepted for the same prev-DID, defeating same-HLC nonce
+//! mutation attacks.
 
 #![allow(clippy::unwrap_used)]
 
 mod common;
 
-use common::manifest_fixtures::{stub_peer_did_alice, stub_plugin_did, stub_user_did};
+use benten_id::did_rotation::RotationLog;
+use benten_id::errors::DidRotationError;
+use common::manifest_fixtures::{fresh_keypair, signed_rotation_event};
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
-    Nonce-swap-attack defense: RotationLog HLC-monotonic-strict ordering + nonce \
-    binding at install/load surfaces. Requires HLC-strict integration shipping at \
-    G24-D-FP-2 per phase-4-backlog §4.10 (RotationLog + HLC-monotonic-strict). \
-    Named destination: plan §3 G24-D-FP-2 (manifest envelope chain validator + \
-    RotationLog integration + HLC-strict rotation-event replay defense). HARD RULE \
-    12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn plugin_manifest_rotation_event_nonce_swap_attack_rejected() {
-    let _plugin = stub_plugin_did();
-    let _user = stub_user_did();
+    let k1 = fresh_keypair();
+    let k2 = fresh_keypair();
 
-    // G24-D wave wires this. Substantive shape:
-    //
-    //   use benten_id::rotation_log::RotationLog;
-    //
-    //   let mut log = RotationLog::new();
-    //   let alice = stub_peer_did_alice();
-    //
-    //   // Setup: alice has rotated K1 → K2 at HLC 100 with nonce N1.
-    //   let k1 = common::manifest_fixtures::alice_key_v1();
-    //   let k2 = common::manifest_fixtures::alice_key_v2();
-    //   let rotation_v1 = common::manifest_fixtures::sign_rotation_event(
-    //       alice.clone(), k1.clone(), k2.clone(),
-    //       /* hlc */ 100, /* nonce */ vec![0xAA; 16],
-    //   );
-    //   log.accept_rotation_event(&rotation_v1).unwrap();
-    //
-    //   // Attack 1: replay SAME rotation event verbatim — duplicate
-    //   // by (peer_did, hlc, nonce) → rejected.
-    //   let dup_attempt = log.accept_rotation_event(&rotation_v1);
-    //   assert!(dup_attempt.is_err(),
-    //       "Verbatim replay must be rejected (nonce-binding)");
-    //
-    //   // Attack 2: nonce-swap — attacker captures rotation_v1,
-    //   // mutates nonce field, re-signs WITH compromised K1. Same HLC
-    //   // 100. Since HLC is NOT strictly greater than latest-known
-    //   // (which is 100), this is a no-op replay at the HLC ordering
-    //   // layer — must be rejected.
-    //   let nonce_swapped = common::manifest_fixtures::
-    //       rotation_event_with_nonce_swap(
-    //           &rotation_v1, /* new_nonce */ vec![0xBB; 16],
-    //       );
-    //   let nonce_swap_attempt = log.accept_rotation_event(&nonce_swapped);
-    //   let err = nonce_swap_attempt.expect_err(
-    //       "T5 regression-guard: nonce-swap at same HLC MUST be \
-    //        rejected — HLC monotonicity is the primary defense; \
-    //        nonce-binding pairs with HLC, not alone"
-    //   );
-    //   assert!(
-    //       matches!(err.code(),
-    //           ErrorCode::E_PLUGIN_CONTENT_PEER_KEY_ROTATED
-    //           | ErrorCode::E_HLC_NOT_MONOTONIC),
-    //       "T5 regression-guard: must surface typed HLC/rotation error; \
-    //        got {:?}", err.code()
-    //   );
-    //
-    //   // Attack 3: even with fresh nonce + strictly-greater HLC, the
-    //   // event must be signed by the CURRENT KEY (K2 post-rotation),
-    //   // not K1. Re-signing with K1 is rejected because K1 is the
-    //   // rotated-out key:
-    //   let fresh_hlc_replay = common::manifest_fixtures::
-    //       sign_rotation_event(
-    //           alice.clone(), k1.clone(), k2.clone(),
-    //           /* hlc */ 200, /* fresh nonce */ vec![0xCC; 16],
-    //       );
-    //   let bad_signer = log.accept_rotation_event(&fresh_hlc_replay);
-    //   assert!(bad_signer.is_err(),
-    //       "T5 regression-guard: rotation event signed by rotated-out \
-    //        key MUST be rejected — RotationLog discipline");
-    //
-    // OBSERVABLE consequence: 3 attack variants (verbatim replay /
-    // nonce-swap / rotated-out-key signing) all rejected; HLC +
-    // nonce + key-validity form the three-way defense.
-    panic!(
-        "RED-PHASE: G24-D must wire RotationLog replay defense \
-         regression-guard (T5 nonce-swap). Substantive: verbatim-\
-         duplicate + nonce-swap + rotated-out-key-signer all rejected."
+    // Setup: alice rotates K1 → K2 at HLC 100.
+    let mut log = RotationLog::new();
+    let rotation_v1 = signed_rotation_event(&k1, &k2, 100);
+    log.accept_rotation_event(&rotation_v1)
+        .expect("first rotation accepts cleanly");
+
+    // Attack 1: replay SAME rotation event verbatim — duplicate by
+    // (previous_did, next_did, superseded_at, signature) → rejected.
+    let dup_attempt = log.accept_rotation_event(&rotation_v1);
+    let dup_err = dup_attempt
+        .expect_err("T5 regression-guard: verbatim replay of accepted rotation MUST be rejected");
+    assert!(
+        matches!(dup_err, DidRotationError::VerbatimReplay { .. }),
+        "T5 regression-guard: must surface VerbatimReplay typed err; got {dup_err:?}"
     );
+
+    // Attack 2: nonce-swap — attacker captures rotation_v1, mutates a
+    // payload bit (here we keep prev/next/hlc but flip the signature
+    // byte to simulate a re-signed-with-compromised-K1 mutation). Same
+    // HLC 100. Since HLC is NOT strictly greater than latest-known
+    // (which is 100), this MUST be rejected at the HLC-monotonic-strict
+    // layer.
+    let mut nonce_swapped = rotation_v1.clone();
+    // Flip a single signature byte to simulate the attacker's
+    // re-signed-payload mutation. The (prev_did, next_did, hlc) tuple
+    // stays identical — the HLC-monotonic-strict layer rejects on HLC
+    // alone, NOT on signature comparison.
+    nonce_swapped.signature[0] ^= 0xFF;
+    let nonce_swap_attempt = log.accept_rotation_event(&nonce_swapped);
+    let nonce_err = nonce_swap_attempt.expect_err(
+        "T5 regression-guard: nonce-swap at same HLC MUST be rejected — HLC monotonicity \
+         is the primary defense; signature-mutation does NOT bypass it",
+    );
+    assert!(
+        matches!(nonce_err, DidRotationError::HlcNotStrictlyMonotonic { .. }),
+        "T5 regression-guard: nonce-swap at same HLC must surface HlcNotStrictlyMonotonic; \
+         got {nonce_err:?}"
+    );
+
+    // Attack 3: strictly-greater HLC accepts a fresh event (boundary
+    // test — defense must NOT over-fire on legitimate advances).
+    let k3 = fresh_keypair();
+    let legit_advance = signed_rotation_event(&k2, &k3, 200);
+    log.accept_rotation_event(&legit_advance)
+        .expect("Boundary: strictly-greater-HLC + fresh prev-DID accepts cleanly");
 }

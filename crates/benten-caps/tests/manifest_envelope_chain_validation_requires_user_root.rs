@@ -15,10 +15,11 @@
 //! — when registries are P2P, the user-mint root is still the trust
 //! anchor."
 //!
-//! New seam (per plan §3 G24-D-FP-2): `crates/benten-caps/src/
-//! manifest_envelope_chain_validation.rs` — Layer 2 (manifest envelope)
-//! ↔ Layer 3 (runtime delegation) chain validator. Confirms every
-//! delegation chain traces to a user-mint root grant.
+//! New seam (per plan §3 G24-D-FP-2):
+//! `crates/benten-caps/src/manifest_envelope_chain_validation.rs` —
+//! Layer 2 (manifest envelope) ↔ Layer 3 (runtime delegation) chain
+//! validator. Confirms every delegation chain traces to a user-mint
+//! root grant.
 //!
 //! LOAD-BEARING for sec-4f-r1-3 closure per r4-triage §2 r4-tc-10.
 //!
@@ -32,136 +33,100 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-#[cfg(any())]
-mod red_phase_compile_witness {
-    use std::sync::Arc;
+use std::collections::HashSet;
 
-    use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
-    use benten_id::did::Did;
+use benten_caps::manifest_envelope_chain_validation::{
+    ChainValidationOutcome, DelegationStep, ManifestEnvelopeLookup, UserDidRegistry,
+    validate_chain_with_manifest_envelope,
+};
+use benten_caps::plugin_delegation::SharesPolicyView;
+use benten_errors::ErrorCode;
+use benten_id::did::Did;
 
-    struct MockGrants {
-        grants: Vec<String>,
+struct AllPermit;
+impl SharesPolicyView for AllPermit {
+    fn permits(&self, _cap: &str, _target: &Did) -> bool {
+        true
     }
+}
 
-    impl GrantReader for MockGrants {
-        fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError> {
-            Ok(self.grants.iter().any(|g| g == scope))
-        }
+struct EmptyLookup;
+impl ManifestEnvelopeLookup for EmptyLookup {
+    type View<'a>
+        = &'a AllPermit
+    where
+        Self: 'a;
+    fn lookup<'a>(&'a self, _plugin_did: &Did) -> Option<Self::View<'a>> {
+        None
     }
+}
 
-    fn stub_user_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkUser".to_string())
+struct UserRegistry {
+    users: HashSet<String>,
+}
+impl UserDidRegistry for UserRegistry {
+    fn is_user_did(&self, did: &Did) -> bool {
+        self.users.contains(did.as_str())
     }
+}
 
-    fn stub_plugin_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkPlugin".to_string())
-    }
+fn stub_user_did() -> Did {
+    Did::from_string_unchecked("did:key:z6MkUser".to_string())
+}
 
-    fn stub_peer_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkPeer".to_string())
-    }
+fn stub_plugin_did() -> Did {
+    Did::from_string_unchecked("did:key:z6MkPlugin".to_string())
+}
 
-    #[test]
-    fn chain_anchored_at_user_did_admitted() {
-        let user = stub_user_did();
-        let plugin = stub_plugin_did();
-
-        // Chain: user-DID → plugin-DID with scope store:notes:write.
-        // User-DID is the root → admitted.
-        let grants = Arc::new(MockGrants {
-            grants: vec!["store:notes:write".into()],
-        });
-        let _policy = GrantBackedPolicy::new(grants);
-
-        let _ctx = WriteContext {
-            label: "notes".into(),
-            scope: "store:notes:write".into(),
-            ..Default::default()
-        };
-
-        // G24-D-FP-2 wires the manifest_envelope_chain_validation
-        // helper. Future surface:
-        //   manifest_envelope_chain_validation::validate(
-        //       &chain,
-        //       &cap_policy,
-        //       &manifest_store,
-        //   ) -> Result<(), CapError>
-        //
-        // Expected: chain rooted at user-DID admitted.
-        unimplemented!("G24-D-FP-2: wire validate(chain anchored at user-DID) → Ok")
-    }
-
-    #[test]
-    fn chain_anchored_at_non_user_did_rejected() {
-        let peer = stub_peer_did();
-        let plugin = stub_plugin_did();
-
-        // Chain: peer-DID → plugin-DID with scope store:notes:write.
-        // Peer-DID is NOT a user-DID → CLAUDE.md #18 clause-(a)
-        // violation → REJECTED.
-        let _peer = peer;
-        let _plugin = plugin;
-
-        unimplemented!(
-            "G24-D-FP-2: wire validate(chain anchored at peer-DID, NOT \
-             user-DID) → Err(E_CHAIN_NOT_USER_ROOTED). LOAD-BEARING for \
-             sec-4f-r1-3 closure."
-        )
-    }
+fn stub_peer_did() -> Did {
+    Did::from_string_unchecked("did:key:z6MkPeer".to_string())
 }
 
 /// LOAD-BEARING per r4-triage §2 r4-tc-10. CLAUDE.md #18 clause-(a)
 /// closure.
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-2 — LOAD-BEARING; un-ignore at G24-D-FP-2 wave AFTER manifest_envelope_chain_validation.rs lands + user-root anchor check arm; drop cfg(any()) gate"]
 fn manifest_envelope_chain_validation_requires_user_root_anchor() {
-    // G24-D-FP-2 wave wires this. Substantive shape:
-    //
-    //   use benten_caps::manifest_envelope_chain_validation::{
-    //       validate, ChainAnchor,
-    //   };
-    //
-    //   // Construct a delegation chain anchored at a peer-DID (NOT a
-    //   // user-DID). Even if signatures + cap-attenuation are
-    //   // internally consistent, this MUST be rejected.
-    //   let peer_rooted_chain = build_chain_rooted_at_peer_did();
-    //   let result = validate(
-    //       &peer_rooted_chain,
-    //       &cap_policy,
-    //       &manifest_store,
-    //   );
-    //
-    //   let err = result.expect_err(
-    //       "CLAUDE.md #18 clause-(a) LOAD-BEARING: chain rooted at \
-    //        non-user-DID MUST be REJECTED — user-as-root anchor is \
-    //        the trust foundation"
-    //   );
-    //   assert!(
-    //       matches!(err, CapError::Denied { .. })
-    //           // narrow to E_CHAIN_NOT_USER_ROOTED at typed-error
-    //           // mint landing per G24-D-FP-2 plan
-    //           || matches!(err, CapError::DeniedRead { .. }),
-    //       "CLAUDE.md #18 clause-(a): must surface chain-not-user-rooted \
-    //        typed denial; got {err:?}"
-    //   );
-    //
-    //   // Boundary: same chain re-anchored at user-DID admitted:
-    //   let user_rooted_chain = re_anchor_chain_at_user_did(peer_rooted_chain);
-    //   let ok_result = validate(
-    //       &user_rooted_chain,
-    //       &cap_policy,
-    //       &manifest_store,
-    //   );
-    //   assert!(ok_result.is_ok(),
-    //       "CLAUDE.md #18 clause-(a) boundary: user-rooted chain MUST \
-    //        be admitted — defense must NOT over-fire");
-    //
-    // OBSERVABLE consequence: user-as-root anchor structurally enforced;
-    // peer-DID / plugin-DID / unsigned roots all rejected.
-    panic!(
-        "RED-PHASE: G24-D-FP-2 — LOAD-BEARING user-root anchor check \
-         (CLAUDE.md #18 clause-(a)) must land first; drop cfg(any()) \
-         gate + invoke red_phase_compile_witness::chain_anchored_at_*()."
+    let user = stub_user_did();
+    let plugin = stub_plugin_did();
+    let peer = stub_peer_did();
+
+    let mut users = HashSet::new();
+    users.insert(user.as_str().to_string());
+    let registry = UserRegistry { users };
+
+    // ATTACK: chain rooted at peer-DID (NOT a user-DID). Signatures +
+    // cap-attenuation may be internally consistent; the validator MUST
+    // still reject at the clause-(a) anchor check.
+    let peer_rooted = vec![DelegationStep {
+        issuer_did: peer.clone(),
+        audience_did: plugin.clone(),
+        cap_pattern: "store:notes:write".into(),
+    }];
+    let outcome = validate_chain_with_manifest_envelope(&peer_rooted, &EmptyLookup, &registry);
+    assert_eq!(
+        outcome,
+        ChainValidationOutcome::RootNotUserDid,
+        "CLAUDE.md #18 clause-(a) LOAD-BEARING: chain rooted at non-user-DID MUST be REJECTED — user-as-root anchor is the trust foundation"
+    );
+    // Typed error surfaces:
+    let err = outcome.into_result().expect_err("non-user root rejects");
+    assert_eq!(
+        err,
+        ErrorCode::PluginManifestInvalid,
+        "sec-4f-r1-3: typed error must point at manifest envelope"
+    );
+
+    // BOUNDARY: same chain re-anchored at user-DID admitted.
+    let user_rooted = vec![DelegationStep {
+        issuer_did: user.clone(),
+        audience_did: plugin.clone(),
+        cap_pattern: "store:notes:write".into(),
+    }];
+    let ok_outcome = validate_chain_with_manifest_envelope(&user_rooted, &EmptyLookup, &registry);
+    assert_eq!(
+        ok_outcome,
+        ChainValidationOutcome::Admitted,
+        "clause-(a) boundary: user-rooted single-step chain MUST be admitted — defense must NOT over-fire"
     );
 }
 
