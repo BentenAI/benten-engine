@@ -270,3 +270,101 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
         "cycle-rejected install MUST NOT provision private namespace (Step 10 unreached)"
     );
 }
+
+#[test]
+fn composition_cycle_detector_builds_subgraph_with_canonical_primitives_and_compose_edges() {
+    // **R6-FP-D substantive pin (cag-ux-r6-r1-4 closure)**.
+    //
+    // pim-2 §3.6b end-to-end test pin: the lifted detector builds a
+    // real `Subgraph` representation of the composition graph + walks
+    // it via `detect_cycle_in_subgraph`. ASSERT the SHAPE of the built
+    // subgraph:
+    //   1. Every node is `PrimitiveKind::Read` (CLAUDE.md #1 — no new
+    //      primitive variant minted; the composition walk reuses the
+    //      canonical 12-primitive vocabulary).
+    //   2. Every edge label is `EDGE_COMPOSES`.
+    //   3. Node count = number of distinct manifests reachable from
+    //      root via composition refs.
+    //   4. The detector walks this subgraph + surfaces the typed
+    //      `PluginMetaCompositionCycleRejected` ErrorCode on cycle.
+    //
+    // Would-FAIL if the lift was implemented via a non-subgraph
+    // walker (e.g. a parallel HashSet stack), or if it introduced a
+    // new `PrimitiveKind::Compose` variant.
+    use benten_core::PrimitiveKind;
+    use benten_platform_foundation::plugin_manifest::{
+        EDGE_COMPOSES, HANDLER_ID_COMPOSITION_WALK, build_composition_subgraph,
+        detect_cycle_in_subgraph,
+    };
+
+    let a_cid = Cid::from_blake3_digest([0xAAu8; 32]);
+    let b_cid = Cid::from_blake3_digest([0xBBu8; 32]);
+    let c_cid = Cid::from_blake3_digest([0xCCu8; 32]);
+
+    // Acyclic chain A → B → C: 3 nodes, 2 edges, no cycle.
+    let mut a = minimal_manifest();
+    a.composes_plugins = Some(vec![b_cid]);
+    let mut b = minimal_manifest();
+    b.composes_plugins = Some(vec![c_cid]);
+    let mut c = minimal_manifest();
+    c.composes_plugins = None;
+    let resolver = |cid: &Cid| -> Option<_> {
+        if *cid == b_cid {
+            Some(b.clone())
+        } else if *cid == c_cid {
+            Some(c.clone())
+        } else {
+            None
+        }
+    };
+
+    let sg = build_composition_subgraph(a_cid, &a, &resolver);
+    assert_eq!(sg.handler_id(), HANDLER_ID_COMPOSITION_WALK);
+    assert_eq!(sg.nodes().len(), 3, "A + B + C = 3 nodes");
+    assert_eq!(sg.edges().len(), 2, "A→B + B→C = 2 edges");
+    for n in sg.nodes() {
+        assert!(
+            matches!(n.primitive_kind(), PrimitiveKind::Read),
+            "composition Nodes MUST be PrimitiveKind::Read \
+             (CLAUDE.md #1 12-primitive-irreducibility); would-FAIL \
+             if a new variant was minted. Got: {:?}",
+            n.primitive_kind()
+        );
+    }
+    for (_, _, label) in sg.edges() {
+        assert_eq!(
+            label, EDGE_COMPOSES,
+            "every composition edge MUST use EDGE_COMPOSES label"
+        );
+    }
+
+    // The cycle-walker over an acyclic subgraph returns Ok.
+    let root_id = benten_platform_foundation::plugin_manifest::composition_node_id(&a_cid);
+    detect_cycle_in_subgraph(&sg, &root_id).expect("acyclic walk MUST admit");
+
+    // Now build a cycle B → A; detector surfaces the typed error.
+    let mut b_cycle = minimal_manifest();
+    b_cycle.composes_plugins = Some(vec![a_cid]);
+    let cycle_resolver = |cid: &Cid| -> Option<_> {
+        if *cid == b_cid {
+            Some(b_cycle.clone())
+        } else {
+            None
+        }
+    };
+    let sg_cycle = build_composition_subgraph(a_cid, &a, &cycle_resolver);
+    // The subgraph EXPLICITLY contains the back-edge B → A; the
+    // walker uses that to detect the cycle.
+    assert!(
+        sg_cycle
+            .edges()
+            .iter()
+            .any(|(from, to, label)| label == EDGE_COMPOSES
+                && from
+                    == &benten_platform_foundation::plugin_manifest::composition_node_id(&b_cid)
+                && to == &benten_platform_foundation::plugin_manifest::composition_node_id(&a_cid)),
+        "back-edge B→A MUST be encoded as an edge in the built subgraph"
+    );
+    let err = detect_cycle_in_subgraph(&sg_cycle, &root_id).expect_err("cyclic walk MUST reject");
+    assert_eq!(err, ErrorCode::PluginMetaCompositionCycleRejected);
+}
