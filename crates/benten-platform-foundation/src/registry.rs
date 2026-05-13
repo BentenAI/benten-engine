@@ -1,0 +1,99 @@
+//! Phase-4-Foundation G24-D — decentralized registry surface.
+//!
+//! Per post-R1-triage ratification #3: **decentralized registry →
+//! Phase 4-Meta**. Phase 4-Foundation v0 uses direct content-addressed-
+//! share over Atriums (out-of-band handshake; user pulls from peer
+//! they trust). This module is the RESERVED placeholder + type-shapes
+//! that Phase 4-Meta fills with the Atrium-substrate publish /
+//! subscribe wiring.
+//!
+//! At G24-D the module has zero production call sites — only test
+//! pins enumerate the reserved surface (per
+//! `tests/registry_phase_4_meta_reserved_no_production_callsites.rs`).
+//!
+//! The `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode is minted here at
+//! G24-D wave but has no firing site until Phase 4-Meta.
+
+use crate::plugin_manifest::PluginManifest;
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_id::did::Did;
+
+/// Registry entry — what gets published to the decentralized registry.
+///
+/// **Phase 4-Foundation: this type exists but is NOT wired to any
+/// production publish surface.** Phase 4-Meta fills the substrate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistryEntry {
+    /// CID of the published manifest.
+    pub manifest_cid: Cid,
+    /// Peer-DID of the publisher (typically equals
+    /// `manifest.peer_did`; sync intermediaries may differ).
+    pub publisher_did: Did,
+    /// Manifest body (cached on the registry; receiver still verifies
+    /// peer-DID signature + content-CID match independently).
+    pub manifest: PluginManifest,
+}
+
+/// Discovery query — what kind of plugins to surface.
+#[derive(Debug, Clone)]
+pub enum DiscoveryQuery {
+    /// All published plugins by a specific peer-DID.
+    ByAuthor(Did),
+    /// Plugins by name (exact match).
+    ByName(String),
+    /// Plugins that accept a specific content-CID (e.g., a schema CID).
+    AcceptingContent(Cid),
+}
+
+/// Discovery result.
+#[derive(Debug, Clone)]
+pub struct DiscoveryResult {
+    /// Matching registry entries.
+    pub matches: Vec<RegistryEntry>,
+}
+
+/// The registry trait — Phase 4-Meta implementations land in
+/// `benten-sync` (Atrium-substrate publish/subscribe) and an
+/// alternative in-memory test backend lands alongside.
+///
+/// **Phase 4-Foundation: trait declared; no production impl.**
+pub trait Registry {
+    /// Publish a manifest to the registry. Returns the published CID.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-defined; Phase 4-Meta defines the typed shapes.
+    fn publish(&mut self, entry: RegistryEntry) -> Result<Cid, ErrorCode>;
+
+    /// Discover entries matching the query.
+    ///
+    /// # Errors
+    ///
+    /// `E_REGISTRY_DISCOVERY_TIMEOUT` if the underlying transport
+    /// times out before any peer responds.
+    fn discover(&self, query: &DiscoveryQuery) -> Result<DiscoveryResult, ErrorCode>;
+}
+
+/// Reserved registry-discovery-timeout error helper.
+///
+/// **Phase 4-Foundation reserved-but-not-emitted.** The variant is
+/// minted in `benten-errors` at G24-D so future Phase 4-Meta call
+/// sites have a stable code; no fires here.
+#[must_use]
+pub fn timeout_error_code() -> ErrorCode {
+    ErrorCode::RegistryDiscoveryTimeout
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeout_error_code_returns_reserved_variant() {
+        assert_eq!(
+            timeout_error_code().as_static_str(),
+            "E_REGISTRY_DISCOVERY_TIMEOUT"
+        );
+    }
+}

@@ -79,6 +79,7 @@ pub mod errors;
 pub mod grant_reader;
 pub mod keypair;
 pub mod multi_sig;
+pub mod plugin_did;
 pub mod ucan;
 pub mod vc;
 

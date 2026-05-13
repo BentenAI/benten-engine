@@ -78,6 +78,7 @@ pub mod hlc;
 pub mod subgraph;
 pub mod value;
 pub mod version;
+pub mod version_chain;
 
 pub use change_stream::{ChangeEvent, ChangeKind, ChangeStream, SubscriberId};
 pub use edge::Edge;

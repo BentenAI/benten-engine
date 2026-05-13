@@ -151,9 +151,15 @@ pub fn manifest_requires_sandbox_exec() -> PluginManifest {
 }
 
 /// Stub install record — user-DID signed (signature is stub bytes at R3).
+///
+/// Phase 4-Foundation G24-D: InstallRecord now carries `plugin_did`
+/// (UCAN audience handle per CLAUDE.md #18 retense). This fixture
+/// supplies the standard test plugin-DID; production install paths
+/// mint a fresh plugin-DID via OsRng per D-4F-16.
 pub fn stub_install_record(manifest_cid: Cid) -> InstallRecord {
     InstallRecord {
         manifest_cid,
+        plugin_did: stub_plugin_did(),
         consenting_user_did: stub_user_did(),
         user_signature: vec![0u8; 64],
         timestamp_stub_nanos: 1_700_000_000_000_000_000,
