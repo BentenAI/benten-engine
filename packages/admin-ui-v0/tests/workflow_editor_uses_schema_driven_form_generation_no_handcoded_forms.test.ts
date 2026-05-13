@@ -1,62 +1,135 @@
-// G24-B wave-6b RED-PHASE pin (substantive; G23-A consumer pin).
+// G24-B wave-6b LANDED — G23-A consumer pin (substantive).
 //
 // Asserts the workflow editor's form-generation logic is driven by the
 // G23-A schema-driven-rendering subgraph — NOT by handcoded form
-// templates per primitive. Defense against the failure mode "form
-// generation drifts from schema authority over time" + an architectural
-// pin that admin UI v0 IS a consumer of D-4F-2's schema-driven
-// rendering (per CLAUDE.md baked-in #15 v1-platform-gate framing).
+// templates per primitive.
 //
-// ## RED-PHASE status
+// Defense composition:
+// - Amending the schema (adding a new field) MUST surface that field
+//   in the regenerated form WITHOUT any source-code change to the
+//   editor.
+// - The editor's source file MUST NOT contain hand-coded
+//   `<input name="..."` per-primitive form template strings (the
+//   substantive grep-assert pin).
 //
-// `test.skip` until G23-A wave-5 ships the schema-driven-rendering
-// subgraph + G24-B wave-6b ships the workflow editor consumer.
+// Pin source: `.addl/phase-4-foundation/r2-test-landscape.md` §2.7 row 2.
 //
-// ## Closes
+// ## Would-FAIL-if-no-op'd
 //
-// G24-B + G23-A consumer (`r2-test-landscape.md` §2.7 row 2)
-
-// RED-PHASE production-surface canary (closes at R5 G24-A / G24-B).
-// When un-ignored, these production-surface imports MUST resolve BEFORE
-// vitest + placeholder imports below so that an absent
-// @benten/engine export surfaces as a module-load failure rather than
-// a deep-in-test runtime undefined-reference. Guard ordering matters:
-// production imports first, test infrastructure imports second.
-//
-// import { Engine } from "@benten/engine"; // production-surface canary
-// import { readNodeAs } from "@benten/engine/policy"; // cap-scoped read
+// - If form-gen used a hand-coded template: the amended-schema field
+//   would not appear → the assertion fires.
+// - If the editor's source contained a hand-coded `<input>` per
+//   primitive: the grep-assert fires.
 
 import { describe, test, expect } from "vitest";
-import { placeholder } from "../src/index.js";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  WORKFLOW_EDITOR_FORM_GEN_SOURCE_SENTINEL,
+  WorkflowEditor,
+  deriveFormFromSchema,
+  type ManifestEnvelopeShape,
+  type SchemaSubgraphSpecShape,
+  type WorkflowPrimitiveKind,
+} from "../src/index.js";
+import type { AdminUiV0Bridge } from "../src/index.js";
+
+function nullBridge(): AdminUiV0Bridge {
+  return {
+    async readNodeAs() {
+      return null;
+    },
+    async onChangeAsWithCursor() {
+      return { subscriptionId: "no-op" };
+    },
+    async callAs() {
+      return { cid: "" };
+    },
+  };
+}
+
+const SCHEMA_V1: SchemaSubgraphSpecShape = {
+  schemaName: "Note",
+  primitives: [
+    {
+      id: "r_body",
+      kind: "Read" as WorkflowPrimitiveKind,
+      capScope: "read:Note.body",
+      fieldPath: "Note.body",
+    },
+  ],
+};
+
+const SCHEMA_V2_ADDED_FIELD: SchemaSubgraphSpecShape = {
+  schemaName: "Note",
+  primitives: [
+    {
+      id: "r_body",
+      kind: "Read" as WorkflowPrimitiveKind,
+      capScope: "read:Note.body",
+      fieldPath: "Note.body",
+    },
+    {
+      id: "r_filter_label",
+      kind: "Read" as WorkflowPrimitiveKind,
+      capScope: "read:Note.filter_label",
+      fieldPath: "Note.filter_label",
+    },
+  ],
+};
 
 describe("workflow_editor_uses_schema_driven_form_generation_no_handcoded_forms (G23-A consumer)", () => {
-  test.skip("workflow editor form-gen pulls from G23-A schema subgraph (RED-PHASE: closes at R5 G24-B wave-6b)", async () => {
-    // Production arm (G24-B wave-6b):
-    //
-    //   // Modify the G23-A schema for "READ" primitive — add a new
-    //   // typed-field Node "filter_label".
-    //   await schemaSubgraph.amend({
-    //     primitive: "READ",
-    //     addField: { name: "filter_label", type: "Label" },
-    //   });
-    //
-    //   // Re-mount the workflow editor; the new field MUST appear
-    //   // automatically (form-gen consults schema at mount-time).
-    //   const editor = WorkflowEditor.mount({ engine, manifest });
-    //   const readForm = await editor.openPrimitiveForm("READ");
-    //
-    //   expect(readForm.fields).toContainEqual(
-    //     expect.objectContaining({ name: "filter_label" })
-    //   );
-    //
-    //   // Grep-assert: NO handcoded form templates in workflow editor
-    //   // bundle source. The admin UI bundle must not contain a
-    //   // hardcoded `<input name="filter_label">` string for any
-    //   // primitive form (drift detector).
-    //
-    // Would-FAIL-if-no-op'd: handcoded forms would not pick up the new
-    // schema field; the field-presence assertion would fail.
-    expect(placeholder().stage).toBe("r3-red-phase");
-    throw new Error("RED-PHASE: production surface lands at G24-B wave-6b");
+  test("amending the schema surfaces the new field automatically (no hand-coded template)", () => {
+    const formV1 = deriveFormFromSchema(SCHEMA_V1);
+    const formV2 = deriveFormFromSchema(SCHEMA_V2_ADDED_FIELD);
+
+    expect(formV1.fields.map((f) => f.id)).toEqual(["r_body"]);
+    expect(formV2.fields.map((f) => f.id)).toEqual([
+      "r_body",
+      "r_filter_label",
+    ]);
+
+    // The schema-amendment field carries the schema-derived cap-scope
+    // — proves form-gen pulled from the spec, not a hand-coded
+    // template.
+    const newField = formV2.fields.find((f) => f.id === "r_filter_label");
+    expect(newField?.capScope).toBe("read:Note.filter_label");
+  });
+
+  test("editor.openPrimitiveForm consumes the schema spec (not a template)", () => {
+    const editor = WorkflowEditor.mount({
+      bridge: nullBridge(),
+      manifest: { requires: [{ scope: "read:Note.*" }] } as ManifestEnvelopeShape,
+      principal: "did:key:zAdminUiV0",
+      schemaSpecs: new Map<WorkflowPrimitiveKind, SchemaSubgraphSpecShape>([
+        ["Read", SCHEMA_V2_ADDED_FIELD],
+      ]),
+    });
+    const form = editor.openPrimitiveForm("Read");
+    expect(form.fields.length).toBe(SCHEMA_V2_ADDED_FIELD.primitives.length);
+    expect(form.fields.some((f) => f.id === "r_filter_label")).toBe(true);
+  });
+
+  test("editor source carries form-gen sentinel + NO hand-coded <input> per-primitive templates", () => {
+    // Grep-assert (substantive): the workflow-editor source file
+    // carries the canonical form-gen sentinel AND does NOT contain
+    // hand-coded `<input name=` per-primitive HTML template strings.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const editorPath = resolve(here, "../src/workflow-editor/index.ts");
+    const source = readFileSync(editorPath, "utf-8");
+
+    expect(source).toContain(WORKFLOW_EDITOR_FORM_GEN_SOURCE_SENTINEL);
+
+    // Allow `name=` in DOC-ONLY comment lines (the file's prose
+    // mentions the failure-mode pattern). Filter to non-comment lines
+    // for the substantive grep.
+    const nonCommentLines = source
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .filter((line) => !line.trim().startsWith("*"))
+      .join("\n");
+    expect(nonCommentLines).not.toMatch(/<input\s+name="/);
+    expect(nonCommentLines).not.toMatch(/<input\s+type="/);
   });
 });

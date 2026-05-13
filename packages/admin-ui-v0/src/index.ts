@@ -156,3 +156,34 @@ export function bootstrapAdminUiV0(_bridge: AdminUiV0Bridge): {
 export function placeholder(): { readonly stage: "r3-red-phase" } {
   return { stage: "r3-red-phase" };
 }
+
+// G24-B wave-6b — workflow editor surface (admin UI v0 first plugin's
+// workflow authoring path). See `./workflow-editor/index.ts` for full
+// docs.
+export {
+  CANONICAL_12_PRIMITIVE_KINDS,
+  WORKFLOW_EDITOR_ERROR_CODES,
+  WORKFLOW_EDITOR_FORM_GEN_SOURCE_SENTINEL,
+  WorkflowEditor,
+  WorkflowEditorError,
+  deriveFormFromSchema,
+  manifestEnvelopeAdmits,
+  validateDraftWithinEnvelope,
+  validateSubgraphSpecWithinEnvelope,
+} from "./workflow-editor/index.js";
+export type {
+  ManifestCapRequirement,
+  ManifestEnvelopeShape,
+  SchemaPrimitiveDescriptor,
+  SchemaSubgraphSpecShape,
+  SubgraphSpecWire,
+  WorkflowDraft,
+  WorkflowEdge,
+  WorkflowEditorErrorCode,
+  WorkflowEditorMountInput,
+  WorkflowForm,
+  WorkflowFormField,
+  WorkflowPrimitiveKind,
+  WorkflowPrimitiveSelection,
+  WorkflowSaveOutcome,
+} from "./workflow-editor/index.js";

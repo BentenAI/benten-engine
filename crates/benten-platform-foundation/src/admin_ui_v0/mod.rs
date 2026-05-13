@@ -71,6 +71,15 @@
 
 #![allow(missing_docs)]
 
+pub mod workflow_editor;
+
+pub use workflow_editor::{
+    WorkflowDraft, WorkflowEdge, WorkflowEditorError, WorkflowForm, WorkflowFormField,
+    WorkflowPrimitiveSelection, compile_draft_within_manifest_envelope,
+    derive_cap_scopes_from_subgraph, derive_form_from_schema,
+    validate_subgraph_within_manifest_envelope, workflow_content_hash,
+};
+
 use benten_core::{Cid, OperationNode, PrimitiveKind, Subgraph, Value};
 
 use crate::materializer::{
