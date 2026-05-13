@@ -66,3 +66,14 @@ harness = false
 # locality at R3-C landing).
 name = "algorithm_b_canonical"
 harness = false
+
+[[bench]]
+# Phase-4-Foundation G23-0a: IVM-subgraph generalization kernel hot-path
+# vs. hand-written baseline (mat-r1-2). Informational at G23-0a landing;
+# promoted to required at R6 once baseline measurements are stable. R3
+# RED-PHASE skeleton — both arms measure the same hand-written workload
+# until R5 implementer wires `Algorithm::register_subgraph` +
+# `SubgraphSpec::for_canonical_view` into the `subgraph_generalized`
+# arm.
+name = "ivm_generalized_kernel_hot_path_within_20_percent_of_handwritten_baseline"
+harness = false
