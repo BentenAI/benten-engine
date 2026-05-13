@@ -32,8 +32,7 @@ fn schema_compiler_emits_valid_subgraph_spec_for_canonical_note_type() {
     // canonical Note CRUD path); FieldRef "author" is read-only so the
     // author chain does not contribute a WRITE primitive (but body +
     // created_at do).
-    let kinds: std::collections::HashSet<_> =
-        spec.primitives().iter().map(|p| p.kind()).collect();
+    let kinds: std::collections::HashSet<_> = spec.primitives().iter().map(|p| p.kind()).collect();
     assert!(
         kinds.contains(&benten_core::PrimitiveKind::Read),
         "Note schema must emit at least one READ primitive (field access path)"
