@@ -1,5 +1,10 @@
 //! G24-D row pin — heterogeneity contract (ds-r1-8).
 //!
+//! R6-FP-A: imports legacy `module_ecosystem::install_plugin`
+//! (deprecated). Migration scheduled for pre-tag sweep.
+#![allow(deprecated)]
+
+//!
 //! Per docs/PLUGIN-MANIFEST.md §3.1: if a plugin's requires include
 //! `host:sandbox:exec` AND the installing peer is a thin-compute-
 //! surface (browser / edge per CLAUDE.md #17), install fails with

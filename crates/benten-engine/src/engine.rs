@@ -1710,7 +1710,22 @@ impl<B: GraphBackend> EngineGeneric<B> {
             wait_ttl_gc_stats: std::sync::Mutex::new(crate::WaitTtlGcStats::default()),
             wait_ttl_gc_event_driven_disabled: std::sync::atomic::AtomicBool::new(false),
             wait_ttl_tracked_envelopes: std::sync::Mutex::new(std::collections::HashSet::new()),
-            manifest_envelope_rechecker: None,
+            // p4f-r6-pa-cp-2 BLOCKER + tmr-r6-r1-1 closure (R6-FP-A):
+            // default to the explicit-Noop rather than `None`, so the
+            // recheck-path ALWAYS fires + the gate is structurally
+            // active (even if the Noop impl returns NotApplicable for
+            // every call today, the production adapter is the only
+            // swap needed to engage real envelope enforcement).
+            // Eliminates the silent-skip fail-open default. Engines
+            // that want the explicit no-op semantics can keep this
+            // value; engines that want real envelope enforcement call
+            // `set_manifest_envelope_rechecker(Arc::new(<real>))`. The
+            // observable difference at v1 is zero (Noop returns
+            // NotApplicable → Admitted); the structural posture is
+            // fail-closed by default for future adapter swap.
+            manifest_envelope_rechecker: Some(Arc::new(
+                crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker,
+            )),
         }
     }
 

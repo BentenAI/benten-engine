@@ -1,6 +1,14 @@
 //! Phase-4-Foundation R4-FP-1 — T5b LOAD-BEARING pin: plugin content
 //! substitution at install rejected (peer-DID signature check).
 //!
+//! R6-FP-A: this test exercises BOTH the legacy
+//! `module_ecosystem::install_plugin` (deprecated; first arm at line
+//! ~93) AND the canonical `plugin_lifecycle::install_plugin` (second
+//! arm at line ~165). Migration of the legacy arm is scheduled for
+//! pre-tag sweep.
+#![allow(deprecated)]
+
+//!
 //! Pin source: `.addl/phase-4-foundation/r4-triage.md` §2 MAJOR row
 //! r4-tc-4 + `.addl/phase-4-foundation/admin-ui-v0-threat-model.md` §T5
 //! (T5b sub-threat) + defense step 3 (DID resolution for peer-DID at

@@ -204,12 +204,16 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         &|_| None,
     );
     let sub_err = sub_outcome.expect_err("install MUST reject substituted consent record");
+    // R6-FP-A arch-r6-r1-5 split: manifest-CID-mismatch now surfaces
+    // the typed `PluginInstallRecordManifestCidMismatch` (forensic
+    // discrimination from the null-consent + the consenting-user +
+    // the plugin-DID-binding arms).
     assert_eq!(
         sub_err,
-        ErrorCode::PluginInstallConsentRequired,
+        ErrorCode::PluginInstallRecordManifestCidMismatch,
         "manifest-CID-mismatch on InstallRecord MUST surface \
-         PluginInstallConsentRequired; would-FAIL if the seam skipped \
-         the cid-binding check"
+         PluginInstallRecordManifestCidMismatch (arch-r6-r1-5 split); \
+         would-FAIL if the seam skipped the cid-binding check"
     );
     assert!(
         library2.is_empty(),

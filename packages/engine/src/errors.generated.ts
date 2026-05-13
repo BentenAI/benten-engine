@@ -186,6 +186,9 @@ export const CATALOG_CODES = [
   "E_PLUGIN_CONTENT_PEER_KEY_ROTATED",
   "E_PLUGIN_AUTHOR_NOT_TRUSTED",
   "E_PLUGIN_INSTALL_CONSENT_REQUIRED",
+  "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH",
+  "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH",
+  "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH",
   "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE",
   "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN",
   "E_PLUGIN_CONTENT_CID_MISMATCH",
@@ -2486,7 +2489,7 @@ export class EPluginAuthorNotTrusted extends BentenError {
  * E_PLUGIN_INSTALL_CONSENT_REQUIRED
  *
  * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
- * Message template: "plugin install attempted without user consent (missing or unverified InstallRecord)"
+ * Message template: "plugin install attempted without user consent (no InstallRecord supplied)"
  */
 export class EPluginInstallConsentRequired extends BentenError {
   static readonly code = "E_PLUGIN_INSTALL_CONSENT_REQUIRED";
@@ -2494,6 +2497,51 @@ export class EPluginInstallConsentRequired extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_PLUGIN_INSTALL_CONSENT_REQUIRED", "User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.", message, context);
     this.name = "EPluginInstallConsentRequired";
+  }
+}
+
+/**
+ * E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+ * Message template: "install record's bound manifest_cid did not match the install path's expected manifest CID (consent-record-substitution defense)"
+ */
+export class EPluginInstallRecordManifestCidMismatch extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH";
+  static readonly fixHint = "The install record was signed for a different manifest. Either fetch the matching manifest, or have user-DID sign a fresh InstallRecord bound to this manifest CID.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH", "The install record was signed for a different manifest. Either fetch the matching manifest, or have user-DID sign a fresh InstallRecord bound to this manifest CID.", message, context);
+    this.name = "EPluginInstallRecordManifestCidMismatch";
+  }
+}
+
+/**
+ * E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+ * Message template: "install record's consenting_user_did did not match the install context's user_did (consent-record-substitution defense)"
+ */
+export class EPluginInstallRecordConsentingUserMismatch extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH";
+  static readonly fixHint = "The install record was signed by a different user. Either install under that user's context, or have the active user-DID sign a fresh InstallRecord.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH", "The install record was signed by a different user. Either install under that user's context, or have the active user-DID sign a fresh InstallRecord.", message, context);
+    this.name = "EPluginInstallRecordConsentingUserMismatch";
+  }
+}
+
+/**
+ * E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+ * Message template: "install record's signed plugin_did did not match the supplied expected plugin-DID (consent-payload integrity defense)"
+ */
+export class EPluginInstallRecordPluginDidMismatch extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH";
+  static readonly fixHint = "The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH", "The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.", message, context);
+    this.name = "EPluginInstallRecordPluginDidMismatch";
   }
 }
 
@@ -2839,6 +2887,9 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_PLUGIN_CONTENT_PEER_KEY_ROTATED": EPluginContentPeerKeyRotated,
   "E_PLUGIN_AUTHOR_NOT_TRUSTED": EPluginAuthorNotTrusted,
   "E_PLUGIN_INSTALL_CONSENT_REQUIRED": EPluginInstallConsentRequired,
+  "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH": EPluginInstallRecordManifestCidMismatch,
+  "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH": EPluginInstallRecordConsentingUserMismatch,
+  "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH": EPluginInstallRecordPluginDidMismatch,
   "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE": EPluginDelegationOutsideManifestEnvelope,
   "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN": EPluginPrivateNamespaceDelegationForbidden,
   "E_PLUGIN_CONTENT_CID_MISMATCH": EPluginContentCidMismatch,

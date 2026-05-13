@@ -941,8 +941,33 @@ pub enum ErrorCode {
     PluginContentPeerKeyRotated,
     /// Plugin author's peer-DID is not in the user's trust-list.
     PluginAuthorNotTrusted,
-    /// Plugin install attempted without user consent.
+    /// Plugin install attempted without user consent — no `InstallRecord`
+    /// was supplied OR the record carried a missing/empty signature
+    /// payload. (Distinct cryptographic-signature-invalid failures
+    /// surface `PluginInstallRecordUserSignatureInvalid`; distinct
+    /// substitution-attack failures surface the two
+    /// `PluginInstallRecordManifestCidMismatch` /
+    /// `PluginInstallRecordConsentingUserMismatch` variants.)
     PluginInstallConsentRequired,
+    /// Install record's bound `manifest_cid` did not match the install
+    /// path's `expected_cid` (consent-record-substitution defense per
+    /// arch-r6-r1-5 split). Forensically distinct from
+    /// `PluginInstallConsentRequired` (no record) and from
+    /// `PluginInstallRecordUserSignatureInvalid` (forged signature) so
+    /// defenders can triage attack class.
+    PluginInstallRecordManifestCidMismatch,
+    /// Install record's bound `consenting_user_did` did not match the
+    /// install path's `InstallContext::user_did` (consent-record-
+    /// substitution defense per arch-r6-r1-5 split). Distinct from
+    /// `PluginInstallConsentRequired` (no record) and from
+    /// `PluginInstallRecordUserSignatureInvalid` (forged signature).
+    PluginInstallRecordConsentingUserMismatch,
+    /// Install record's bound `plugin_did` did not match the
+    /// install_plugin call site's expected plugin-DID (sec-r6r1-1
+    /// BLOCKER closure — consent-record-substitution defense at the
+    /// signing-payload `plugin_did_bytes` slot). Without this discrimination
+    /// the InstallRecord.plugin_did field would be signed-but-ignored.
+    PluginInstallRecordPluginDidMismatch,
     /// Runtime delegation request fell outside the source plugin's
     /// manifest `shares` envelope.
     PluginDelegationOutsideManifestEnvelope,
@@ -1242,6 +1267,15 @@ impl ErrorCode {
             ErrorCode::PluginContentPeerKeyRotated => "E_PLUGIN_CONTENT_PEER_KEY_ROTATED",
             ErrorCode::PluginAuthorNotTrusted => "E_PLUGIN_AUTHOR_NOT_TRUSTED",
             ErrorCode::PluginInstallConsentRequired => "E_PLUGIN_INSTALL_CONSENT_REQUIRED",
+            ErrorCode::PluginInstallRecordManifestCidMismatch => {
+                "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH"
+            }
+            ErrorCode::PluginInstallRecordConsentingUserMismatch => {
+                "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH"
+            }
+            ErrorCode::PluginInstallRecordPluginDidMismatch => {
+                "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH"
+            }
             ErrorCode::PluginDelegationOutsideManifestEnvelope => {
                 "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE"
             }
@@ -1651,6 +1685,9 @@ impl ErrorCode {
             | ErrorCode::PluginContentPeerKeyRotated
             | ErrorCode::PluginAuthorNotTrusted
             | ErrorCode::PluginInstallConsentRequired
+            | ErrorCode::PluginInstallRecordManifestCidMismatch
+            | ErrorCode::PluginInstallRecordConsentingUserMismatch
+            | ErrorCode::PluginInstallRecordPluginDidMismatch
             | ErrorCode::PluginContentCidMismatch
             | ErrorCode::PluginNewVersionAvailable
             | ErrorCode::PluginHeterogeneityIncompatible
@@ -1879,6 +1916,15 @@ impl ErrorCode {
             "E_PLUGIN_CONTENT_PEER_KEY_ROTATED" => ErrorCode::PluginContentPeerKeyRotated,
             "E_PLUGIN_AUTHOR_NOT_TRUSTED" => ErrorCode::PluginAuthorNotTrusted,
             "E_PLUGIN_INSTALL_CONSENT_REQUIRED" => ErrorCode::PluginInstallConsentRequired,
+            "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH" => {
+                ErrorCode::PluginInstallRecordManifestCidMismatch
+            }
+            "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH" => {
+                ErrorCode::PluginInstallRecordConsentingUserMismatch
+            }
+            "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH" => {
+                ErrorCode::PluginInstallRecordPluginDidMismatch
+            }
             "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE" => {
                 ErrorCode::PluginDelegationOutsideManifestEnvelope
             }

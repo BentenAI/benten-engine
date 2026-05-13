@@ -1,5 +1,10 @@
 //! G24-D substantive pipeline end-to-end test.
 //!
+//! R6-FP-A: imports legacy `module_ecosystem::install_plugin*` for
+//! several arms (deprecated). Migration scheduled for pre-tag sweep.
+#![allow(deprecated)]
+
+//!
 //! Exercises the FULL plugin manifest lifecycle through real
 //! signing / verification / install / library / DAG version chain
 //! / cap-change-triggered upgrade-consent paths against the API

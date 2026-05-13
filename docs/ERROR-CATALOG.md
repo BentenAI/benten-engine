@@ -13,6 +13,7 @@
 | **Schema vocabulary + compiler** | G23-A | `E_SCHEMA_VALIDATION_FAILED`, `E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED`, `E_SCHEMA_SANDBOX_HOST_FN_REJECTED`, `E_SCHEMA_VOCAB_INVALID_LABEL`, `E_SCHEMA_VOCAB_EDGE_MISMATCH`, `E_SCHEMA_VOCAB_SCALAR_UNKNOWN`, `E_SCHEMA_VOCAB_REF_TARGET_MISSING`, `E_SCHEMA_VOCAB_CYCLE_REJECTED`, `E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING` (9 codes) |
 | **Materializer pipeline** | G23-B | `E_MATERIALIZER_CAP_DENIED`, `E_MATERIALIZER_SCHEMA_MISMATCH`, `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE` (3 codes) |
 | **Plugin manifest + lifecycle** | G24-D | `E_PLUGIN_MANIFEST_INVALID`, `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_KEY_ROTATED`, `E_PLUGIN_AUTHOR_NOT_TRUSTED`, `E_PLUGIN_INSTALL_CONSENT_REQUIRED`, `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`, `E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN`, `E_PLUGIN_CONTENT_CID_MISMATCH`, `E_PLUGIN_NEW_VERSION_AVAILABLE`, `E_PLUGIN_HETEROGENEITY_INCOMPATIBLE`, `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED`, `E_PLUGIN_DEVICE_ATTESTATION_FORGED`, `E_PLUGIN_LIBRARY_INDEX_TAMPER`, `E_REGISTRY_DISCOVERY_TIMEOUT` (15 codes; arch-r1-3 conflated `E_PLUGIN_MANIFEST_SIGNATURE_INVALID` split into 3 typed codes — USER_SIGNATURE / PEER_SIGNATURE / PEER_KEY_ROTATED) |
+| **Plugin consent-substitution (R6-FP-A split)** | R6-FP-A | `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` (3 codes; arch-r6-r1-5 split + sec-r6r1-1 BLOCKER closure — narrows `E_PLUGIN_INSTALL_CONSENT_REQUIRED` to null-consent + discriminates three substitution-attack arms) |
 
 Total: 9 + 3 + 15 = 27 minted at canaries; the final 118 → 135 delta accounts for the prior plan's overlap (the post-triage adjustment is +17 net new vs the pre-triage estimate of 12-13). Code-shape (message template + context fields + fix hint) for each new code lands per-canary in this catalog at the canary's companion-doc PR; not filled in at this revision.
 
@@ -1375,12 +1376,41 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 ### E_PLUGIN_INSTALL_CONSENT_REQUIRED
 
-> **Production firing path (Phase 4-Foundation R4b-FP-1):** the install-pipeline gate at `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` surfaces this variant when the supplied `InstallRecord`'s `manifest_cid` mismatches the install path's `expected_cid` (consent-record-substitution defense) or when `consenting_user_did` mismatches `InstallContext::user_did`. The `verify_install_record` failure mode surfaces `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` (the structural-vs-cryptographic-failure split per arch-r1-3 ErrorCode minting).
+<!-- reachability: ignore -->
 
-- **Message:** "plugin install attempted without user consent (missing or unverified InstallRecord)"
+> **Production firing path (Phase 4-Foundation R6-FP-A — narrowed):** post-arch-r6-r1-5 split, this variant means *no `InstallRecord` was supplied* (null-consent case). The current `install_plugin` signature takes `&InstallRecord` (non-optional), so this variant has no production-code construction site at HEAD — it is reserved for a Phase-4-Meta callable-from-admin-UI path that surfaces "user must consent before install can proceed" as a first-class error when no record is supplied. Three distinct sibling codes now discriminate the three substitution-attack arms: `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH` (record's `manifest_cid` ≠ expected), `E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH` (record's `consenting_user_did` ≠ `InstallContext::user_did`), `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` (record's signed `plugin_did` ≠ supplied plugin-DID). `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` continues to surface for cryptographic-forge-class failures.
+
+- **Message:** "plugin install attempted without user consent (no InstallRecord supplied)"
 - **Fix:** User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.
 - **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
-- **Phase:** 4-Foundation G24-D + R4b-FP-1 wired
+- **Phase:** 4-Foundation G24-D + R4b-FP-1 wired + R6-FP-A narrowed
+
+### E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH
+
+> **Production firing path (Phase 4-Foundation R6-FP-A):** the consent gate at `plugin_lifecycle::install_plugin` Step 4 surfaces this when `install_record.manifest_cid != expected_cid`. Defends against consent-record-substitution where an attacker re-uses Alice's signed consent for plugin-A to authorize installation of plugin-B. Forensically distinct from `PluginInstallConsentRequired` (no record) and from `PluginInstallRecordUserSignatureInvalid` (forged signature).
+
+- **Message:** "install record's bound manifest_cid did not match the install path's expected manifest CID (consent-record-substitution defense)"
+- **Fix:** The install record was signed for a different manifest. Either fetch the matching manifest, or have user-DID sign a fresh InstallRecord bound to this manifest CID.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation R6-FP-A (arch-r6-r1-5 split)
+
+### E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH
+
+> **Production firing path (Phase 4-Foundation R6-FP-A):** the consent gate at `plugin_lifecycle::install_plugin` Step 4 surfaces this when `install_record.consenting_user_did != ctx.user_did`. Defends against consent-record-substitution where an attacker presents Alice's signed consent against Bob's install context. Forensically distinct from `PluginInstallConsentRequired` (no record) and from `PluginInstallRecordUserSignatureInvalid` (forged signature).
+
+- **Message:** "install record's consenting_user_did did not match the install context's user_did (consent-record-substitution defense)"
+- **Fix:** The install record was signed by a different user. Either install under that user's context, or have the active user-DID sign a fresh InstallRecord.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation R6-FP-A (arch-r6-r1-5 split)
+
+### E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH
+
+> **Production firing path (Phase 4-Foundation R6-FP-A — sec-r6r1-1 BLOCKER closure):** the consent gate at `plugin_lifecycle::install_plugin` Step 4 surfaces this when the caller supplies an `expected_plugin_did` (the plugin-DID the user signed the InstallRecord for) and `install_record.plugin_did != expected_plugin_did`. Closes the sec-r6r1-1 BLOCKER where the install-record signing payload bound `plugin_did_bytes` but Step 8 silently minted a fresh DID and discarded the record's signed value — defeating the load-bearing consent-payload integrity guarantee.
+
+- **Message:** "install record's signed plugin_did did not match the supplied expected plugin-DID (consent-payload integrity defense)"
+- **Fix:** The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation R6-FP-A (sec-r6r1-1 BLOCKER closure)
 
 ### E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
 
