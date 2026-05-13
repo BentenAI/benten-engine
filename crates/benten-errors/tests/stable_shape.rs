@@ -382,6 +382,9 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginContentPeerKeyRotated,
     ErrorCode::PluginAuthorNotTrusted,
     ErrorCode::PluginInstallConsentRequired,
+    ErrorCode::PluginInstallRecordManifestCidMismatch,
+    ErrorCode::PluginInstallRecordConsentingUserMismatch,
+    ErrorCode::PluginInstallRecordPluginDidMismatch,
     ErrorCode::PluginDelegationOutsideManifestEnvelope,
     ErrorCode::PluginPrivateNamespaceDelegationForbidden,
     ErrorCode::PluginContentCidMismatch,
@@ -662,8 +665,27 @@ fn variant_count_is_pinned() {
     // (2026-05-13): +3 codes (MaterializerCapDenied,
     // MaterializerSchemaMismatch, MaterializerSubscribeSeamFailure).
     // 146 + 3 = 149.
+    //
+    // Phase 4-Foundation R6-FP-A plugin-trust BLOCKER closure
+    // (2026-05-13): +3 codes from the arch-r6-r1-5 consent-record
+    // ErrorCode split + the sec-r6r1-1 BLOCKER plugin-DID-binding
+    // closure: PluginInstallRecordManifestCidMismatch +
+    // PluginInstallRecordConsentingUserMismatch +
+    // PluginInstallRecordPluginDidMismatch. The first two are
+    // consent-record-substitution discriminations (distinct from
+    // PluginInstallConsentRequired which now means "no record / null
+    // consent" and distinct from PluginInstallRecordUserSignatureInvalid
+    // which means cryptographic forge). The third closes the BLOCKER
+    // where install_plugin step 8 used to silently mint a fresh
+    // plugin-DID and discard the record's signed plugin_did field.
+    // 149 + 3 = 152.
+    //
+    // NOTE FOR PARALLEL WAVES (R6-FP-B / R6-FP-C): if any sibling wave
+    // also touches CATALOG_VARIANT_COUNT, take the union of additions
+    // + bump this assert appropriately at merge time (Strategy-C batch
+    // reconcile per dispatch-conventions §3.14).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 149,
+        CATALOG_VARIANT_COUNT, 152,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

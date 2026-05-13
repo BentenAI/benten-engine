@@ -103,7 +103,20 @@ impl PluginManifest {
                     return Err(ErrorCode::PluginManifestInvalid);
                 }
             }
-            SharesPolicyDefault::None | SharesPolicyDefault::Any => {}
+            // sec-r6r1-7 hardening (R6-FP-A): `SharesPolicyDefault::Any` is
+            // the footgun arm — a manifest can fire `shares: { default:
+            // Any, rules: None }` and silently delegate ANY required cap
+            // to ANY plugin. The threat-model assumes the conservative v0
+            // default is `default: None`; the validator now requires
+            // `Any` to be paired with an explicit anti-rule or scoping
+            // `rules` vector so the consent-UX surface has SOMETHING to
+            // present + the cap envelope isn't structurally fail-open.
+            SharesPolicyDefault::Any => {
+                if self.shares.rules.as_ref().is_none_or(|r| r.is_empty()) {
+                    return Err(ErrorCode::PluginManifestInvalid);
+                }
+            }
+            SharesPolicyDefault::None => {}
         }
         for req in &self.requires {
             if req.scope.is_empty() {
@@ -462,14 +475,24 @@ impl SharesRule {
 }
 
 /// Target of a `SharesRule`.
+///
+/// R6-FP-A sec-r6r1-8 closure (2026-05-13): the prior
+/// `SharesTarget::PluginAuthor(Did)` variant was DEAD CODE — `matches()`
+/// returned `false` unconditionally with a comment claiming "chain
+/// validator resolves the target's manifest peer-DID", but the chain
+/// validator at `manifest_envelope_chain_validation` consults the same
+/// `SharesPolicy` so the variant never resolved; it silently denied
+/// while masquerading as a feature. Removed entirely to prevent future
+/// implementer surprise. If author-DID-based targeting is wanted in
+/// Phase-4-Meta, mint a NEW typed `SharesTarget::PluginAuthor` variant
+/// THEN with the resolver-lookup wiring AND a typed ErrorCode for the
+/// resolver-miss case.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SharesTarget {
     /// Any plugin permitted (within `cap_pattern`).
     Any,
     /// A specific plugin-DID permitted.
     PluginDid(Did),
-    /// Any plugin authored by a specific peer-DID permitted.
-    PluginAuthor(Did),
 }
 
 impl SharesTarget {
@@ -477,10 +500,6 @@ impl SharesTarget {
         match self {
             SharesTarget::Any => true,
             SharesTarget::PluginDid(d) => d == target,
-            // PluginAuthor matching at this layer is conservative —
-            // chain validator at manifest_envelope_chain_validation
-            // resolves the target's manifest peer-DID.
-            SharesTarget::PluginAuthor(_) => false,
         }
     }
 }

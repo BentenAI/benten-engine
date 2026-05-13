@@ -1,5 +1,14 @@
 //! G24-D row pin — pull-model CID verification on receive.
 //!
+//! R6-FP-A migration note (2026-05-13): this test still imports the
+//! legacy `module_ecosystem::install_plugin` (deprecated). The legacy
+//! path verifies content-CID + peer-signature + heterogeneity only —
+//! exactly the surfaces this row pin exercises, so the legacy path is
+//! the correct test target. Migration to `plugin_lifecycle::
+//! install_plugin` is scheduled for the pre-tag sweep (post-R6-FP).
+#![allow(deprecated)]
+
+//!
 //! Per docs/PLUGIN-MANIFEST.md §4.1 step 2(a): receiver verifies bytes
 //! hash to declared content-CID. Mismatch surfaces
 //! `E_PLUGIN_CONTENT_CID_MISMATCH`.

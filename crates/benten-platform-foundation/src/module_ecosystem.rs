@@ -59,7 +59,32 @@ pub enum InstallerShape {
     ThinClient,
 }
 
-/// Install a plugin from received bytes — the full install pipeline.
+/// **DEPRECATED — legacy install path that BYPASSES Layer-2 + Layer-3
+/// consent gates per CLAUDE.md #18.** Use
+/// [`crate::plugin_lifecycle::install_plugin`] for ALL production
+/// installs.
+///
+/// This precursor was the Phase-4-Foundation G24-D canary; it verifies
+/// content-CID + peer-DID signature + heterogeneity + composition cycle
+/// ONLY. It does NOT:
+///
+/// - Verify the `InstallRecord` user-DID signature (Layer-2 consent
+///   gate; CLAUDE.md #18 user-as-root anchor).
+/// - Check the install-time manifest envelope (Layer-2).
+/// - Cascade-mint root grants from user-DID → plugin-DID (Layer-1
+///   trace anchor).
+/// - Provision the plugin's private namespace.
+/// - Run the clock-injected validate seam (`E_UCAN_CLOCK_NOT_INJECTED`).
+///
+/// Three pre-R4b-FP-1 integration tests still consume this surface for
+/// content-CID-mismatch / peer-signature-substitution / heterogeneity
+/// arms. Those tests are scheduled for migration to
+/// `plugin_lifecycle::install_plugin` in the post-R6 pre-tag sweep;
+/// once migrated, this function will be removed entirely (no shim).
+///
+/// **Future consumers MUST route through `plugin_lifecycle::install_plugin`** —
+/// the legacy path is `#[deprecated]` so the compiler surfaces a
+/// warning at every call site (including legitimate tests).
 ///
 /// `received_bytes` is the canonical-bytes DAG-CBOR encoding of the
 /// manifest that the receiver got over the wire / out-of-band.
@@ -74,6 +99,12 @@ pub enum InstallerShape {
 /// # Errors
 ///
 /// See `docs/PLUGIN-MANIFEST.md` §4.1 for the full failure mode list.
+#[deprecated(
+    since = "0.1.0",
+    note = "BYPASSES Layer-2 consent + Layer-1 cap cascade per CLAUDE.md #18. \
+            Use `plugin_lifecycle::install_plugin` for all production installs. \
+            Three test consumers scheduled for migration in the pre-tag sweep."
+)]
 pub fn install_plugin<F>(
     library: &mut PluginLibrary,
     received_bytes: &[u8],
@@ -149,6 +180,12 @@ where
 /// See [`install_plugin`] — this seam adds NO failure modes beyond
 /// what the underlying install path surfaces; the persist step is
 /// infallible.
+#[deprecated(
+    since = "0.1.0",
+    note = "BYPASSES Layer-2 consent + Layer-1 cap cascade. Use \
+            `plugin_lifecycle::install_plugin` which atomically persists \
+            the minted plugin-DID."
+)]
 pub fn install_plugin_persisting_did<F>(
     library: &mut PluginLibrary,
     plugin_did_store: &mut PluginDidStore,
@@ -161,6 +198,7 @@ pub fn install_plugin_persisting_did<F>(
 where
     F: Fn(&Cid) -> Option<PluginManifest>,
 {
+    #[allow(deprecated)]
     let result = install_plugin(
         library,
         received_bytes,

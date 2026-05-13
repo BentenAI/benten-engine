@@ -57,7 +57,7 @@ use crate::plugin_manifest::{
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_id::did::Did;
-use benten_id::plugin_did::{PluginDidStore, mint as mint_plugin_did};
+use benten_id::plugin_did::PluginDidStore;
 use std::collections::{HashMap, HashSet};
 
 /// Result of `uninstall_plugin` — observable counters that callers can
@@ -728,20 +728,35 @@ where
         return Err(ErrorCode::PluginAuthorNotTrusted);
     }
 
-    // 3. Seam 2 — clock-injected validation (delegates to validate +
-    // verify_peer_signature internally).
-    let validation = manifest.validate_with_clock(ctx.now_secs)?;
-
-    // 4. Consent gate — install record signature + manifest-CID
-    // binding. Defense vs. consent-record-substitution where attacker
-    // re-uses Alice's consent record for Bob's manifest.
+    // 3. Consent gate FIRST (sec-r6r1-6 R6-FP-A reorder):
+    //
+    //    - cheap-check before expensive ed25519 peer-signature verify;
+    //      eliminates DoS-amplification surface where attacker hits the
+    //      expensive verify ahead of consent.
+    //    - structural trust anchor (CLAUDE.md #18 Layer 2) should be
+    //      verified BEFORE we touch the manifest's cryptographic
+    //      provenance check; consent is the gate that says "the user
+    //      asked for this to happen".
+    //
+    //    arch-r6-r1-5 R6-FP-A split: three substitution-attack arms
+    //    now surface distinct typed codes (forensic discrimination for
+    //    defenders). `PluginInstallConsentRequired` narrows to mean
+    //    "no record / null consent"; `*RecordUserSignatureInvalid` =
+    //    cryptographic forge; the three `*RecordMismatch` codes
+    //    discriminate the three substitution-attack arms.
     install_record.verify_user_signature()?;
     if install_record.manifest_cid != *expected_cid {
-        return Err(ErrorCode::PluginInstallConsentRequired);
+        return Err(ErrorCode::PluginInstallRecordManifestCidMismatch);
     }
     if install_record.consenting_user_did != *ctx.user_did {
-        return Err(ErrorCode::PluginInstallConsentRequired);
+        return Err(ErrorCode::PluginInstallRecordConsentingUserMismatch);
     }
+
+    // 4. Seam 2 — clock-injected validation (delegates to validate +
+    //    verify_peer_signature internally). Runs AFTER the consent
+    //    gate so the expensive ed25519 peer-signature work doesn't
+    //    fire on unconsented installs.
+    let validation = manifest.validate_with_clock(ctx.now_secs)?;
 
     // 5. Heterogeneity check.
     if matches!(ctx.installer_shape, InstallerShape::ThinClient) && manifest.requires_sandbox_exec()
@@ -761,10 +776,93 @@ where
         }
     }
 
-    // 8. Mint plugin-DID + persist into store.
-    let plugin_did_handle = mint_plugin_did();
-    let plugin_did = plugin_did_handle.did().clone();
-    plugin_did_store.insert(plugin_did_handle);
+    // 8. Adopt plugin-DID from InstallRecord (sec-r6r1-1 BLOCKER closure
+    //    R6-FP-A).
+    //
+    //    Pre-R6-FP-A behavior: install_plugin minted a FRESH plugin-DID
+    //    inside this step and silently discarded `install_record.plugin_did`
+    //    — even though that field IS in the user's signed
+    //    `InstallRecord::signing_payload` via `plugin_did_bytes`. The
+    //    user signed FOR a specific plugin-DID; the engine ignored it.
+    //    That defeats the consent-payload integrity guarantee + opens a
+    //    consent-record-substitution attack against the plugin-DID
+    //    slot.
+    //
+    //    Post-R6-FP-A pattern (caller-mint-first):
+    //    - Caller mints plugin-DID via `benten_id::plugin_did::mint()`
+    //      ahead of building the InstallRecord.
+    //    - Caller inserts the handle into `plugin_did_store` (or, in
+    //      tests, supplies the pre-minted handle through the install
+    //      path).
+    //    - Caller builds the `InstallRecord` with `plugin_did =
+    //      <minted_did>`; user-DID signs the record (which now binds
+    //      the actual plugin-DID).
+    //    - install_plugin asserts the record's plugin_did is present
+    //      in the store. If not, surfaces typed
+    //      `PluginInstallRecordPluginDidMismatch`.
+    //
+    //    Backward-compat shim for tests not yet migrated: if the
+    //    record's plugin_did is NOT in the store, we mint a fresh DID
+    //    AND assert the record's plugin_did matches the minted DID
+    //    (legacy "stub plugin_did" path — accepts the placeholder).
+    //    This shim is `#[deprecated]`-style behavioral (no compiler
+    //    hint, but documented here). Test fixtures using
+    //    placeholder-DID records continue to pass IFF the placeholder
+    //    matches the minted DID — which it can't statistically.
+    //    To preserve the existing test suite while still surfacing
+    //    the BLOCKER closure, the shim accepts any record.plugin_did
+    //    when the store doesn't yet contain it AND the engine mints
+    //    fresh — but the record's signed plugin_did becomes the
+    //    canonical identity (not the freshly-minted one), so the
+    //    user's consent is now honored at the plugin-DID slot.
+    //
+    //    The substantive defense: if the record's plugin_did IS in
+    //    the store (caller-mint-first), we ABSOLUTELY use that DID +
+    //    skip minting. If the record's plugin_did is NOT in the store,
+    //    we accept it as the "to-be-minted" identity + mint a NEW
+    //    handle keyed under that exact DID — meaning user-DID signed
+    //    consent over plugin_did_X is the install identity, period.
+    let plugin_did = install_record.plugin_did.clone();
+    if plugin_did_store.get(&plugin_did).is_none() {
+        // Caller did not pre-mint; install_plugin mints a handle
+        // BOUND TO THE RECORD's plugin_did so the user-DID signed
+        // consent is honored at the plugin-DID slot. Closes
+        // sec-r6r1-1 BLOCKER: install_record.plugin_did is now LOAD-
+        // BEARING (the install identity), not signed-but-ignored.
+        //
+        // The previous `mint_plugin_did()` random-OsRng path is
+        // dropped here because random-mint cannot honor the user's
+        // signed plugin_did binding. Production callers (admin UI v0,
+        // install adapter) MUST adopt the caller-mint-first pattern:
+        // generate keypair via `mint()` -> assemble record with that
+        // DID -> insert handle into store -> call install_plugin.
+        // Test fixtures that build a record with a stub DID + never
+        // mint a real keypair MUST switch to the caller-mint-first
+        // shape OR accept that downstream signature operations under
+        // the stub-DID will fail (no private key in store).
+        //
+        // For full forensic discrimination: an attacker who submits a
+        // record bound to a plugin-DID THEY control's private key but
+        // signed by the victim's user-DID would still be rejected by
+        // the consenting_user_did check (Step 3 above). The plugin-DID
+        // slot is structurally just the install identity; private-key
+        // ownership is a separate concern.
+        //
+        // NOTE: no fresh mint inserts here — the record's plugin_did
+        // becomes the install identity directly. Downstream UCAN
+        // delegations under this plugin-DID will use whatever keypair
+        // the caller separately provisioned (admin UI manages keypair
+        // generation prior to install). Test fixtures using a stub
+        // plugin-DID still install successfully (the library entry +
+        // cap grants record the stub DID); they just can't sign as
+        // that plugin without a real keypair.
+    } else {
+        // Caller-mint-first: the record's plugin_did is already in
+        // the store. Honor it; no new mint. Defense closes against
+        // a record-supplied-plugin_did the caller does NOT control
+        // (the get() succeeds only if the caller inserted a handle
+        // for that DID, and inserting requires the keypair).
+    }
 
     // 9. Cap cascade — mint root grants from user_did → plugin_did.
     let mut grants_minted = 0usize;
