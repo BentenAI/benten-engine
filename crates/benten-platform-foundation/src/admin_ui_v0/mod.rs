@@ -69,8 +69,12 @@
 //! receive delegated grants for the drafts namespace. The plugin
 //! manifest at install time mints a private-NS cap under this prefix.
 
-#![allow(missing_docs)]
-
+/// The workflow editor authority — derives forms from schemas, compiles
+/// user-authored drafts into canonical `Subgraph`s, and validates each
+/// save against the active `PluginManifest`'s `requires` envelope (T1
+/// subgraph-injection + T4 cap-elevation defenses). See the submodule
+/// rustdoc for the full posture; canary tests live alongside the
+/// production surfaces.
 pub mod workflow_editor;
 
 pub use workflow_editor::{

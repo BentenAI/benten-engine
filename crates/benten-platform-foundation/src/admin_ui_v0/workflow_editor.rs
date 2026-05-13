@@ -26,7 +26,7 @@
 //! Nodes carry derived cap-scope annotations. Before the subgraph is
 //! handed to `Engine::call_as` the editor RE-DERIVES the cap-scope set
 //! from the emitted subgraph and verifies every scope is admissible
-//! under the active [`PluginManifest`]'s `requires` envelope (T1
+//! under the active `PluginManifest`'s `requires` envelope (T1
 //! defense for subgraph injection + T4 defense for cap elevation). A
 //! mismatch returns [`WorkflowEditorError::CapElevation`] or
 //! [`WorkflowEditorError::SubgraphInjection`] BEFORE any write reaches

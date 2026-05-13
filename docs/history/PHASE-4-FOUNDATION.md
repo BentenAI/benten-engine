@@ -74,9 +74,11 @@ Phase 4-Foundation ships the substantive Benten Platform engineering — the lay
 
 ## Numbers (preliminary)
 
-- **CATALOG_VARIANT_COUNT:** 132 (pre-Phase-4-Foundation baseline) → 163 (Phase-4-Foundation close; +14 R6-FP-C cohort)
-  - 17 planned net-new (per R5 baseline)
-  - 14 unplanned-but-named (R6-FP-A 4 new + R6-FP-C 14 new; cohort math reconciled at ERROR-CATALOG.md preamble narrative)
+- **CATALOG_VARIANT_COUNT:** 132 (pre-Phase-4-Foundation baseline) → 163 (R6-FP-C HEAD; +31 net new). After strategy-C batch reconciliation with Wave-A's 4 plugin install-record + DID-handle variants: **167** (pre-tag).
+  - 17 planned net-new (per R5 baseline: G23-A 9 + G23-B 3 + G24-D 15, minus absorbed)
+  - 14 unplanned-but-named at R6-FP-C (ALL_CATALOG_VARIANTS regression list refresh)
+  - 4 added at R6-FP-A (typed consent-substitution-defense ErrorCodes)
+  - Cohort math reconciled at ERROR-CATALOG.md preamble narrative (4-row table: throwable / catalog / rust enum / list)
 - **Crates:** 10 → 12 (`benten-platform-foundation` + `benten-renderer-tauri`)
 - **PRs merged this phase:** 30+ (#207-#238 + R4b-FP cluster + R6-FP cluster)
 - **R1 findings:** 203 (19 BLOCKER / 84 MAJOR / 67 MINOR / 33 OBS)
