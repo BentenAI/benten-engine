@@ -56,10 +56,6 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
-    15 G24-D ErrorCodes do not exist at HEAD; G24-D wires atomic Rust+TS mint per §3.5g. \
-    Currently from_str returns ErrorCode::Unknown for all 15. Closes r4-triage §5.2 \
-    Rust-side mint pin."]
 fn plugin_manifest_error_codes_present_in_rust_enum() {
     // Iterate the G24_D_ERROR_CODES registry; for each code, assert
     // ErrorCode::from_str returns a NAMED variant (not Unknown) AND
@@ -86,10 +82,6 @@ fn plugin_manifest_error_codes_present_in_rust_enum() {
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
-    15 G24-D ErrorCodes not yet present in packages/engine/src/errors.generated.ts \
-    CATALOG_CODES at HEAD; G24-D wires atomic Rust+TS mint per §3.5g. \
-    Closes r4-triage §5.2 TS-side mirror pin."]
 fn plugin_manifest_error_codes_present_in_ts_catalog_mirror() {
     // Read the canonical TS mirror at
     // packages/engine/src/errors.generated.ts (per Ben's R4-triage §7
@@ -126,10 +118,6 @@ fn plugin_manifest_error_codes_present_in_ts_catalog_mirror() {
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
-    15 G24-D ErrorCodes not yet entered in docs/ERROR-CATALOG.md at HEAD; \
-    G24-D wires companion-with-canary catalog entries per doc-r1-1. \
-    Closes r4-triage §5.2 catalog-side mirror pin."]
 fn plugin_manifest_error_codes_present_in_error_catalog_md() {
     // Read docs/ERROR-CATALOG.md. For each G24-D code, assert a
     // `### E_<NAME>` heading exists. This catches "minted Rust+TS but

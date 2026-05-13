@@ -40,8 +40,8 @@ fn manifest_accepts_content_field_is_cid_list_not_did_list() {
     );
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave provides the canonical-bytes DAG-CBOR serialization; un-ignore at G24-D landing"]
 fn manifest_canonical_bytes_dag_cbor_encodes_accepts_content_as_cid_array() {
     let manifest = manifest_with_accepts_content(vec![stub_cid_one(), stub_cid_two()]);
 

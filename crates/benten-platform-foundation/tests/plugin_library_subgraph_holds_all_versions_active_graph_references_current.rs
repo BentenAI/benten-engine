@@ -11,8 +11,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_cid_one, stub_cid_two};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires plugin_library subgraph; un-ignore at G24-D landing"]
 fn plugin_library_subgraph_holds_all_installed_versions_active_ref_points_at_current() {
     let v1 = stub_cid_one();
     let v2 = stub_cid_two();

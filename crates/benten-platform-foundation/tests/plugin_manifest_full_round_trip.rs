@@ -12,7 +12,6 @@ mod common;
 use common::manifest_fixtures::{minimal_manifest, stub_install_record};
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave fills validate + compute_content_cid + install round-trip; un-ignore at G24-D landing per pim-12 §3.6e"]
 fn plugin_manifest_full_round_trip_sign_then_verify_then_install_then_uninstall_then_upgrade() {
     let manifest = minimal_manifest();
 

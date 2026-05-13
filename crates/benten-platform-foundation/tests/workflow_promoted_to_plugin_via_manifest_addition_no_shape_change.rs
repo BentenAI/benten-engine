@@ -14,8 +14,8 @@ mod common;
 
 use common::manifest_fixtures::minimal_manifest;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires workflow_to_plugin promotion seam; un-ignore at G24-D landing"]
 fn promoting_workflow_to_plugin_via_manifest_addition_changes_cid_by_one_node_only() {
     let _manifest = minimal_manifest();
 

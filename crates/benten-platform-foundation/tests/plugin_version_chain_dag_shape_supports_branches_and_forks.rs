@@ -12,8 +12,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_cid_one, stub_cid_two};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave extends version_chain to DAG shape; un-ignore at G24-D landing"]
 fn version_chain_extended_to_dag_supports_fork_then_merge_topology() {
     let v1 = stub_cid_one();
     let v2_fork = stub_cid_two();
@@ -29,8 +29,8 @@ fn version_chain_extended_to_dag_supports_fork_then_merge_topology() {
     panic!("RED-PHASE: G24-D wave must extend version_chain to DAG with fork-and-merge walk");
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires per-device-local CURRENT pointer (Loro Map per ratification #2); un-ignore at G24-D landing"]
 fn current_pointer_is_per_device_keyed_loro_map() {
     let v1 = stub_cid_one();
     let v2_fork = stub_cid_two();

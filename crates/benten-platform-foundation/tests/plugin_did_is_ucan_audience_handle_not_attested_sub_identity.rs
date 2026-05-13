@@ -14,8 +14,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave provides UCAN audience-handle flow; un-ignore at G24-D landing"]
 fn ucan_with_audience_equals_plugin_did_validates_without_attestation_chain() {
     let _user = stub_user_did();
     let _plugin = stub_plugin_did();

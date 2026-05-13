@@ -35,8 +35,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wires clock-injection requirement in install path; un-ignore at G24-D landing. Pin source: r4-triage §2 r4-tc-4 + threat-model §T11 LOAD-BEARING + sec-3.5-r1-7 carry."]
 fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injected() {
     let _plugin = stub_plugin_did();
     let _user = stub_user_did();

@@ -62,11 +62,6 @@ const EXPECTED_G24_D_CODES: &[&str] = &[
 ];
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
-    15 E_PLUGIN_* / E_REGISTRY_* variants do not exist in benten-errors at HEAD; \
-    subset-closure pin asserts post-G24-D every expected variant has \
-    enum + as_str + from_str arms AND the family-prefix discipline holds. \
-    Closes r4-triage §5.2 G24-D subset-closure pin."]
 fn every_expected_g24_d_plugin_code_resolves_to_named_variant() {
     for code in EXPECTED_G24_D_CODES {
         // Family-prefix discipline: every code in the G24-D set must
@@ -98,11 +93,6 @@ fn every_expected_g24_d_plugin_code_resolves_to_named_variant() {
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
-    Sentinel pin: E_PLUGIN_DEVICE_ATTESTATION_FORGED keeps E_PLUGIN_* family \
-    prefix per Ben's R4-triage §7 ratification (renamed from \
-    E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE). Defends against \
-    accidental rename-back during G24-D landing."]
 fn device_attestation_forged_code_keeps_plugin_family_prefix() {
     // Defends Ben's R4-triage §7 ratification: the device-attestation
     // forgery code in the plugin-share context must be named with the

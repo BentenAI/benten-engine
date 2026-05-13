@@ -11,8 +11,8 @@ mod common;
 use benten_platform_foundation::{CapRequirement, SharesPolicy, SharesPolicyDefault};
 use common::manifest_fixtures::{minimal_manifest, stub_plugin_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires private_namespace_policy enforcement; un-ignore at G24-D landing"]
 fn private_namespace_cap_rejects_cross_plugin_delegation_even_with_shares_any() {
     // Construct a manifest that ATTEMPTS to declare shares: any
     // for a private namespace cap. Defense must reject delegation

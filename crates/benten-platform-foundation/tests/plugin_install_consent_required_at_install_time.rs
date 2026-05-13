@@ -8,8 +8,8 @@ mod common;
 
 use common::manifest_fixtures::minimal_manifest;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires install_plugin consent gate; un-ignore at G24-D landing"]
 fn install_without_user_consent_record_surfaces_e_plugin_install_consent_required() {
     let _manifest = minimal_manifest();
 

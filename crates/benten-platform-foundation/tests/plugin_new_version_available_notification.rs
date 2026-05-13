@@ -7,8 +7,8 @@
 
 mod common;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires pull-model new-version notification; un-ignore at G24-D landing"]
 fn discovering_newer_version_in_atrium_surfaces_new_version_available_notification() {
     let _v1 = common::manifest_fixtures::stub_cid_one();
     let _v2 = common::manifest_fixtures::stub_cid_two();

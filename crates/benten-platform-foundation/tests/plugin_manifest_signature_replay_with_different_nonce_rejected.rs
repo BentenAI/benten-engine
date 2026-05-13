@@ -34,8 +34,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_plugin_did, stub_user_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D + RotationLog wires nonce-binding + HLC defense; un-ignore at G24-D landing. Pin source: r4-triage §2 r4-tc-4 + threat-model §T5 regression-guard."]
 fn plugin_manifest_rotation_event_nonce_swap_attack_rejected() {
     let _plugin = stub_plugin_did();
     let _user = stub_user_did();
