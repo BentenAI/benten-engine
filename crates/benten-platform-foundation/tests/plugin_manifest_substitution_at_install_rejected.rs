@@ -165,23 +165,113 @@ fn plugin_install_admits_bytes_when_peer_did_matches_signing_key() {
     assert_eq!(library.len(), 1);
 }
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    The user-trust-list arm (E_PLUGIN_AUTHOR_NOT_TRUSTED — unknown-author \
-    prompts user) is NOT yet wired into install_plugin; install_plugin only \
-    verifies peer-DID-signature, not trust-list membership. Trust-list \
-    integration ships at G24-D-FP-1 (plugin_lifecycle hardening). Named \
-    destination: plan §3 G24-D-FP-1. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt() {
-    // Phase 4-Foundation R5 G24-D-FP-1 un-ignores this. Surface shape:
-    //   install_plugin consults user-DID trust-list (admin UI's
-    //   `requires_plugin_authors`); rejects with
-    //   ErrorCode::PluginAuthorNotTrusted when the manifest's peer_did
-    //   is not in the trust list. Distinct typed error from
-    //   PluginContentPeerSignatureInvalid (forged-claim) — both arms
-    //   land as G24-D-FP-1.
-    panic!(
-        "G24-D-FP-1 wires user-trust-list arm via install_plugin's \
-         lifecycle hardening"
+    // **R4b-FP-1 Seam 1** un-ignore — substantive trust-list arm in
+    // plugin_lifecycle::install_plugin. Two arms per pim-2 §3.6b:
+    //  (a) NEGATIVE — alice authors; trust-list does NOT contain alice
+    //      → typed PluginAuthorNotTrusted.
+    //  (b) POSITIVE — same manifest, trust-list contains alice → admits.
+    use benten_platform_foundation::plugin_lifecycle::{
+        InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+    };
+
+    let alice = Keypair::generate();
+    let trusted_author = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
+
+    // Honestly-signed manifest by alice.
+    let mut manifest = PluginManifest {
+        plugin_name: "unknown-author-test".to_string(),
+        content_cid: Cid::from_blake3_digest([0u8; 32]),
+        peer_did: alice.public_key().to_did(),
+        peer_signature: vec![0u8; 64],
+        requires: vec![CapRequirement::new("store:notes:read")],
+        shares: SharesPolicy::none(),
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    };
+    manifest.content_cid = manifest.compute_content_cid();
+    manifest.peer_signature = sign_manifest(&manifest, &alice);
+
+    let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
+    let expected_cid = manifest.content_cid;
+
+    let install_record = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        expected_cid,
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkUnknownAuthorTest".to_string()),
+        2,
     );
+
+    // ARM (a) — trust-list does NOT contain alice.
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let trust_list = vec![trusted_author.public_key().to_did()];
+    let mut ctx = InstallContext {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+    let attempt = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx,
+        &bytes,
+        &expected_cid,
+        &install_record,
+        1,
+        &|_| None,
+    );
+    let err = attempt.expect_err("unknown-author install MUST be rejected by trust-list");
+    assert_eq!(
+        err,
+        ErrorCode::PluginAuthorNotTrusted,
+        "Seam 1 trust-list arm: unknown-author install MUST surface typed \
+         PluginAuthorNotTrusted; would-FAIL if seam skipped trust-list check"
+    );
+    assert!(
+        library.is_empty(),
+        "trust-list-rejected install MUST NOT commit"
+    );
+
+    // ARM (b) — POSITIVE: trust-list contains alice.
+    let mut library2 = PluginLibrary::new();
+    let mut store2 = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade2 = InMemoryInstallCascade::new();
+    let mut private_ns2 = InMemoryInstallCascade::new();
+    let trust_list_with_alice = vec![alice.public_key().to_did()];
+    let mut ctx2 = InstallContext {
+        cap_minter: &mut cascade2,
+        private_ns: &mut private_ns2,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list_with_alice,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+    install_plugin(
+        &mut library2,
+        &mut store2,
+        &mut ctx2,
+        &bytes,
+        &expected_cid,
+        &install_record,
+        1,
+        &|_| None,
+    )
+    .expect("alice-in-trust-list install MUST admit");
+    assert_eq!(library2.len(), 1);
 }

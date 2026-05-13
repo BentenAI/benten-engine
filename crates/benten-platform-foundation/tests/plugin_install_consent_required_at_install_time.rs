@@ -75,28 +75,181 @@ fn install_record_with_malformed_64_byte_signature_rejected_at_consent_gate() {
     );
 }
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    install_plugin currently does NOT bundle the install-record consent gate \
-    inside its signature (callers verify_install_record separately). \
-    G24-D-FP-1 ships the lifecycle integration where install_plugin walks \
-    install_record validation alongside library insert + cap-cascade. Named \
-    destination: plan §3 G24-D-FP-1 (plugin_lifecycle::uninstall_plugin + \
-    install_plugin lifecycle hardening). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
+#[allow(clippy::too_many_lines)]
 fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_required() {
-    // Phase 4-Foundation R5 G24-D-FP-1 un-ignores this. Surface shape:
-    //   plugin_lifecycle::install_plugin_with_consent(
-    //     library, bytes, expected_cid, installer_shape, install_record,
-    //     installed_at, resolver,
-    //   ) -> Result; returns ErrorCode::PluginInstallConsentRequired
-    // when install_record is None or its signature fails verification.
+    // **R4b-FP-1 Seam 1** un-ignore — substantive: the consent gate
+    // is bundled INSIDE `plugin_lifecycle::install_plugin`, not a
+    // separate caller step. Two arms per pim-2-amendment §3.6b sub-rule 4:
     //
-    // FAILS-IF-NO-OP because the consent gate must explicitly check
-    // the install record's presence and user-DID signature validity
-    // as part of the install lifecycle (not as a separate caller step).
-    panic!(
-        "G24-D-FP-1 wires install_plugin's internal consent gate; \
-         until then the umbrella test exercises verify_install_record \
-         separately"
+    //  (a) bad-signature install record → install_plugin rejects with
+    //      typed E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID (the
+    //      structural ErrorCode-split per arch-r1-3).
+    //  (b) valid-signature install record but its `manifest_cid`
+    //      mismatches the install path's `expected_cid` → install_plugin
+    //      rejects with E_PLUGIN_INSTALL_CONSENT_REQUIRED (consent-
+    //      record-substitution defense).
+    //
+    // Would-FAIL-if-no-op'd: skipping verify_install_record entirely
+    // allows arm (a); skipping the cid-binding allows arm (b).
+    use benten_id::keypair::Keypair;
+    use benten_platform_foundation::plugin_library::PluginLibrary;
+    use benten_platform_foundation::plugin_lifecycle::{
+        InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+    };
+
+    let alice = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
+    let plugin_did_placeholder = benten_id::did::Did::from_string_unchecked(
+        "did:key:z6MkInstallTestPluginPlaceholder".to_string(),
     );
+
+    // Honestly-signed manifest by alice.
+    let manifest = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "consent-gate-test",
+        &["store:notes:read"],
+    );
+    let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
+    let expected_cid = manifest.content_cid;
+
+    // ARM (a) — install record carries a 64-byte but cryptographically
+    // bogus user signature.
+    let bad_record = InstallRecord {
+        manifest_cid: expected_cid,
+        plugin_did: plugin_did_placeholder.clone(),
+        consenting_user_did: user_did.clone(),
+        user_signature: vec![0xAAu8; 64], // bogus
+        timestamp_stub_nanos: 1_700_000_000_000_000_000,
+        nonce: vec![0u8; 16],
+        granted_caps_bytes: vec![],
+    };
+
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let trust_list: Vec<benten_id::did::Did> = vec![];
+    let mut ctx = InstallContext {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+        now_secs: 1_700_000_000, // valid clock (non-sentinel)
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+
+    let bad_outcome = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx,
+        &bytes,
+        &expected_cid,
+        &bad_record,
+        1,
+        &|_| None,
+    );
+    let bad_err = bad_outcome.expect_err("install MUST reject bad consent signature");
+    assert_eq!(
+        bad_err,
+        ErrorCode::PluginInstallRecordUserSignatureInvalid,
+        "consent gate MUST surface typed PluginInstallRecordUserSignatureInvalid; \
+         would-FAIL if install_plugin skipped verify_user_signature"
+    );
+    assert!(
+        library.is_empty(),
+        "consent-rejected install MUST NOT commit library state"
+    );
+    assert!(
+        cascade.minted_grants().is_empty(),
+        "consent-rejected install MUST NOT mint root grants (fail-closed)"
+    );
+
+    // ARM (b) — record has VALID signature but signs over a DIFFERENT
+    // manifest CID. Defense vs. consent-record substitution.
+    let other_cid = benten_core::Cid::from_blake3_digest([0xCCu8; 32]);
+    let mismatched_record = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        other_cid, // valid signature but over the WRONG cid
+        plugin_did_placeholder.clone(),
+        7,
+    );
+
+    let mut library2 = PluginLibrary::new();
+    let mut store2 = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade2 = InMemoryInstallCascade::new();
+    let mut private_ns2 = InMemoryInstallCascade::new();
+    let mut ctx2 = InstallContext {
+        cap_minter: &mut cascade2,
+        private_ns: &mut private_ns2,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+
+    let sub_outcome = install_plugin(
+        &mut library2,
+        &mut store2,
+        &mut ctx2,
+        &bytes,
+        &expected_cid,
+        &mismatched_record,
+        1,
+        &|_| None,
+    );
+    let sub_err = sub_outcome.expect_err("install MUST reject substituted consent record");
+    assert_eq!(
+        sub_err,
+        ErrorCode::PluginInstallConsentRequired,
+        "manifest-CID-mismatch on InstallRecord MUST surface \
+         PluginInstallConsentRequired; would-FAIL if the seam skipped \
+         the cid-binding check"
+    );
+    assert!(
+        library2.is_empty(),
+        "consent-record-substitution rejected install MUST NOT commit"
+    );
+
+    // POSITIVE arm (defense-in-depth boundary per pim-2 §3.6b — confirms
+    // the seam is not over-strict): with a properly-signed record whose
+    // manifest_cid matches expected_cid, install_plugin admits.
+    let good_record = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        expected_cid,
+        plugin_did_placeholder.clone(),
+        9,
+    );
+    let mut library3 = PluginLibrary::new();
+    let mut store3 = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade3 = InMemoryInstallCascade::new();
+    let mut private_ns3 = InMemoryInstallCascade::new();
+    let mut ctx3 = InstallContext {
+        cap_minter: &mut cascade3,
+        private_ns: &mut private_ns3,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+    let good_outcome = install_plugin(
+        &mut library3,
+        &mut store3,
+        &mut ctx3,
+        &bytes,
+        &expected_cid,
+        &good_record,
+        1,
+        &|_| None,
+    )
+    .expect("properly-signed consent record MUST admit");
+    assert_eq!(good_outcome.grants_minted, 1);
+    assert_eq!(library3.len(), 1);
 }

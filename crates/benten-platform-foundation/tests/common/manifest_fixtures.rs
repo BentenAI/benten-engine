@@ -252,3 +252,63 @@ pub const G24_D_ERROR_CODES: &[&str] = &[
     "E_PLUGIN_LIBRARY_INDEX_TAMPER",
     "E_REGISTRY_DISCOVERY_TIMEOUT",
 ];
+
+// =====================================================================
+// R4b-FP-1 helpers — substantive install-lifecycle fixtures
+// =====================================================================
+
+/// Build an honestly-signed manifest by `kp` with the supplied
+/// requires-scopes. Used by R4b-FP-1 install_plugin tests.
+#[allow(dead_code)]
+pub fn signed_manifest_by(
+    kp: &Keypair,
+    plugin_name: &str,
+    requires_scopes: &[&str],
+) -> PluginManifest {
+    let mut m = PluginManifest {
+        plugin_name: plugin_name.to_string(),
+        content_cid: stub_cid_zero(),
+        peer_did: kp.public_key().to_did(),
+        peer_signature: vec![0u8; 64],
+        requires: requires_scopes
+            .iter()
+            .map(|s| CapRequirement {
+                scope: (*s).to_string(),
+            })
+            .collect(),
+        shares: SharesPolicy {
+            default: SharesPolicyDefault::None,
+            rules: None,
+        },
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    };
+    m.content_cid = m.compute_content_cid();
+    m.peer_signature = benten_platform_foundation::sign_manifest(&m, kp);
+    m
+}
+
+/// Build a properly-signed InstallRecord by `user_kp` over `manifest_cid`.
+#[allow(dead_code)]
+pub fn signed_install_record(
+    user_kp: &Keypair,
+    manifest_cid: Cid,
+    plugin_did: Did,
+    nonce_byte: u8,
+) -> InstallRecord {
+    let mut record = InstallRecord {
+        manifest_cid,
+        plugin_did,
+        consenting_user_did: user_kp.public_key().to_did(),
+        user_signature: vec![0u8; 64],
+        timestamp_stub_nanos: 1_700_000_000_000_000_000,
+        nonce: vec![nonce_byte; 16],
+        granted_caps_bytes: vec![],
+    };
+    let payload = record.signing_payload();
+    record.user_signature = user_kp.sign(&payload).to_bytes().to_vec();
+    record
+}

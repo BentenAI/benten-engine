@@ -1375,14 +1375,12 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 ### E_PLUGIN_INSTALL_CONSENT_REQUIRED
 
-> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at admin-UI-v0 install flow (couples to G24-A consent surface).** The variant lands at G24-D wave per §3.5g; the install-pipeline gate that requires a verified InstallRecord before library insertion is the admin-UI-v0 install flow's Layer-1 gate per CLAUDE.md #18.
-
-<!-- reachability: ignore -->
+> **Production firing path (Phase 4-Foundation R4b-FP-1):** the install-pipeline gate at `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` surfaces this variant when the supplied `InstallRecord`'s `manifest_cid` mismatches the install path's `expected_cid` (consent-record-substitution defense) or when `consenting_user_did` mismatches `InstallContext::user_did`. The `verify_install_record` failure mode surfaces `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` (the structural-vs-cryptographic-failure split per arch-r1-3 ErrorCode minting).
 
 - **Message:** "plugin install attempted without user consent (missing or unverified InstallRecord)"
 - **Fix:** User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.
-- **Thrown at:** install pipeline Layer 1 gate at `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin`.
-- **Phase:** 4-Foundation G24-D
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation G24-D + R4b-FP-1 wired
 
 ### E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
 

@@ -5,14 +5,13 @@ mod common;
 
 use common::manifest_fixtures::admin_ui_v0_manifest;
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    Admin UI v0 end-to-end cross-atrium install path: peer A publishes admin UI \
-    bundle; peer B receives + verifies peer-DID signature + verifies content-CID \
-    + installs. Requires accept_atrium_share seam at plugin_lifecycle (G24-D-FP-1 \
-    hardening). The CID + signature verification primitives ship at G24-D primary; \
-    end-to-end cross-peer wiring is G24-D-FP-1 scope. Named destination: plan §3 \
-    G24-D-FP-1 (plugin_lifecycle accept_atrium_share + install lifecycle). HARD \
-    RULE 12 clause-(b) BELONGS-NAMED-NOW."]
+#[ignore = "R4b-FP-1 redirected — end-to-end cross-Atrium install requires \
+    `plugin_lifecycle::accept_atrium_share` (NOT shipped at R4b-FP-1; only the \
+    single-process install_plugin seam landed at Seam 1). Single-process install \
+    path is covered by `g24d_substantive_pipeline::full_install_pipeline_real_signatures_succeeds`. \
+    Named destination: docs/future/phase-4-backlog.md §4.19 (`plugin_lifecycle::accept_atrium_share` \
+    cross-peer install seam — Phase-4-Meta). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW \
+    satisfied via backlog §4.19 entry."]
 #[test]
 fn admin_ui_v0_installs_across_two_atrium_peers_when_peer_did_signature_valid() {
     let _manifest = admin_ui_v0_manifest();

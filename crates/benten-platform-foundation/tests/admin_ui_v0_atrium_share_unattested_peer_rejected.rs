@@ -38,12 +38,12 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_peer_did_attacker, stub_plugin_did};
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    T6c HandshakeFrame peer-DID validation at Atrium-share boundary; rejects \
-    unattested peers before share negotiation. Couples to plugin_lifecycle \
-    accept_atrium_share seam (G24-D-FP-1 hardening). Named destination: plan §3 \
-    G24-D-FP-1 (plugin_lifecycle uninstall/install/share lifecycle). HARD RULE 12 \
-    clause-(b) BELONGS-NAMED-NOW."]
+#[ignore = "R4b-FP-1 redirected — T6c HandshakeFrame peer-DID validation at the \
+    Atrium-share boundary requires plugin_lifecycle::accept_atrium_share (cross-peer \
+    install seam) which R4b-FP-1 did NOT ship; only the single-process install_plugin \
+    seam landed at Seam 1. Named destination: docs/future/phase-4-backlog.md §4.19 \
+    (plugin_lifecycle accept_atrium_share cross-peer install seam — Phase-4-Meta). \
+    HARD RULE 12 clause-(b) BELONGS-NAMED-NOW satisfied via backlog §4.19 entry."]
 #[test]
 fn admin_ui_v0_atrium_share_from_unattested_peer_rejected_at_handshake_frame() {
     let _plugin = stub_plugin_did();
