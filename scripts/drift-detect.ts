@@ -191,11 +191,32 @@ function diff(a: Set<string>, b: Set<string>): string[] {
  */
 function parseErrorCodeVariants(rust: string): string[] {
   const variants = new Set<string>();
-  // Grab any ErrorCode::<Variant> token that is followed by ` => "`, which
-  // uniquely identifies a defining arm (not a use-site).
-  const rx = /ErrorCode::([A-Z][A-Za-z0-9]+)\s*=>\s*"E_/g;
+  // R6-FP-A mr-3 fix: parser must match BOTH single-line and multi-line
+  // block arms used in the `as_str` body. The single-line shape is:
+  //   ErrorCode::X => "E_X",
+  // The multi-line block shape (used when the E_ string + comments
+  // exceed the 100-col rustfmt limit) is:
+  //   ErrorCode::X => {
+  //       "E_X"
+  //   }
+  // The prior parser only matched the first shape, so long-named codes
+  // (`PluginInstallRecord*`, etc.) silently bypassed the reachability
+  // check. The fix: also accept `=>` followed by `{` then any
+  // whitespace then the `"E_` string token. We do this in TWO passes
+  // since JS regex doesn't have a clean `OR` across multi-line contexts
+  // without backtracking heroics.
+  //
+  // Pass 1: single-line `=> "E_...`
+  const rxSingleLine = /ErrorCode::([A-Z][A-Za-z0-9]+)\s*=>\s*"E_/g;
   let m: RegExpExecArray | null;
-  while ((m = rx.exec(rust)) !== null) {
+  while ((m = rxSingleLine.exec(rust)) !== null) {
+    variants.add(m[1]);
+  }
+  // Pass 2: block-form `=> {` followed (whitespace + maybe a doc
+  // comment line) by `"E_...`. `[\s\S]*?` non-greedy across newlines
+  // captures the small block body until the first `"E_` literal.
+  const rxBlock = /ErrorCode::([A-Z][A-Za-z0-9]+)\s*=>\s*\{[\s\S]*?"E_/g;
+  while ((m = rxBlock.exec(rust)) !== null) {
     variants.add(m[1]);
   }
   return [...variants].sort();

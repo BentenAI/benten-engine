@@ -385,6 +385,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginInstallRecordManifestCidMismatch,
     ErrorCode::PluginInstallRecordConsentingUserMismatch,
     ErrorCode::PluginInstallRecordPluginDidMismatch,
+    ErrorCode::PluginDidHandleNotPreInserted,
     ErrorCode::PluginDelegationOutsideManifestEnvelope,
     ErrorCode::PluginPrivateNamespaceDelegationForbidden,
     ErrorCode::PluginContentCidMismatch,
@@ -680,12 +681,22 @@ fn variant_count_is_pinned() {
     // plugin-DID and discard the record's signed plugin_did field.
     // 149 + 3 = 152.
     //
+    // Phase 4-Foundation R6-FP-A fix-pass (mr-1 + mr-2 BLOCKER
+    // closure, 2026-05-13): +1 code `PluginDidHandleNotPreInserted` —
+    // closes the keypair-orphan failure mode by enforcing the
+    // caller-mint-first pattern (caller mints PluginDidHandle via
+    // `benten_id::plugin_did::mint()` + inserts to store BEFORE
+    // calling install_plugin). Pairs with the new
+    // `expected_plugin_did` field on `InstallContext` so the
+    // forensically distinct `PluginInstallRecordPluginDidMismatch`
+    // variant now has a real firing path. 152 + 1 = 153.
+    //
     // NOTE FOR PARALLEL WAVES (R6-FP-B / R6-FP-C): if any sibling wave
     // also touches CATALOG_VARIANT_COUNT, take the union of additions
     // + bump this assert appropriately at merge time (Strategy-C batch
     // reconcile per dispatch-conventions §3.14).
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 152,
+        CATALOG_VARIANT_COUNT, 153,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

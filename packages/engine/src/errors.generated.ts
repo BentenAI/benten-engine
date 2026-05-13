@@ -189,6 +189,7 @@ export const CATALOG_CODES = [
   "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH",
   "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH",
   "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH",
+  "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED",
   "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE",
   "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN",
   "E_PLUGIN_CONTENT_CID_MISMATCH",
@@ -2533,15 +2534,30 @@ export class EPluginInstallRecordConsentingUserMismatch extends BentenError {
 /**
  * E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH
  *
- * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
  * Message template: "install record's signed plugin_did did not match the supplied expected plugin-DID (consent-payload integrity defense)"
  */
 export class EPluginInstallRecordPluginDidMismatch extends BentenError {
   static readonly code = "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH";
-  static readonly fixHint = "The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.";
+  static readonly fixHint = "The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern — caller mints via `benten_id::plugin_did::mint()`, inserts handle to `PluginDidStore`, builds InstallRecord with that DID, passes it as `InstallContext::expected_plugin_did`) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH", "The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.", message, context);
+    super("E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH", "The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern — caller mints via `benten_id::plugin_did::mint()`, inserts handle to `PluginDidStore`, builds InstallRecord with that DID, passes it as `InstallContext::expected_plugin_did`) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.", message, context);
     this.name = "EPluginInstallRecordPluginDidMismatch";
+  }
+}
+
+/**
+ * E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
+ * Message template: "install_record.plugin_did is not present in PluginDidStore — caller-mint-first pattern requires the handle to be inserted before install_plugin is called"
+ */
+export class EPluginDidHandleNotPreInserted extends BentenError {
+  static readonly code = "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED";
+  static readonly fixHint = "Caller must mint `PluginDidHandle` via `benten_id::plugin_did::mint()` AND call `plugin_did_store.insert(handle)` BEFORE invoking `install_plugin`. The install path no longer mints on the caller's behalf; the handle is the caller's responsibility because only the caller can produce a real Ed25519 keypair backing an arbitrary DID string.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED", "Caller must mint `PluginDidHandle` via `benten_id::plugin_did::mint()` AND call `plugin_did_store.insert(handle)` BEFORE invoking `install_plugin`. The install path no longer mints on the caller's behalf; the handle is the caller's responsibility because only the caller can produce a real Ed25519 keypair backing an arbitrary DID string.", message, context);
+    this.name = "EPluginDidHandleNotPreInserted";
   }
 }
 
@@ -2890,6 +2906,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH": EPluginInstallRecordManifestCidMismatch,
   "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH": EPluginInstallRecordConsentingUserMismatch,
   "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH": EPluginInstallRecordPluginDidMismatch,
+  "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED": EPluginDidHandleNotPreInserted,
   "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE": EPluginDelegationOutsideManifestEnvelope,
   "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN": EPluginPrivateNamespaceDelegationForbidden,
   "E_PLUGIN_CONTENT_CID_MISMATCH": EPluginContentCidMismatch,

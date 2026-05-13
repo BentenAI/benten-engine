@@ -209,16 +209,19 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
     let expected_cid = manifest.content_cid;
 
+    // R6-FP-A-fp caller-mint-first: pre-mint + insert real plugin-DID
+    // handles per the new install_plugin Step 8 contract.
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_unknown = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_record = common::manifest_fixtures::signed_install_record(
         &user_kp,
         expected_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkUnknownAuthorTest".to_string()),
+        plugin_did_unknown.clone(),
         2,
     );
 
     // ARM (a) — trust-list does NOT contain alice.
     let mut library = PluginLibrary::new();
-    let mut store = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list = vec![trusted_author.public_key().to_did()];
@@ -231,6 +234,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_unknown,
     };
     let attempt = install_plugin(
         &mut library,
@@ -257,6 +261,13 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     // ARM (b) — POSITIVE: trust-list contains alice.
     let mut library2 = PluginLibrary::new();
     let mut store2 = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_arm_b = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store2);
+    let install_record_arm_b = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        expected_cid,
+        plugin_did_arm_b.clone(),
+        3,
+    );
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let trust_list_with_alice = vec![alice.public_key().to_did()];
@@ -269,6 +280,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_arm_b,
     };
     install_plugin(
         &mut library2,
@@ -276,7 +288,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
         &mut ctx2,
         &bytes,
         &expected_cid,
-        &install_record,
+        &install_record_arm_b,
         1,
         &|_| None,
     )

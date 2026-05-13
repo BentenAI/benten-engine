@@ -103,7 +103,8 @@ pub enum InstallerShape {
     since = "0.1.0",
     note = "BYPASSES Layer-2 consent + Layer-1 cap cascade per CLAUDE.md #18. \
             Use `plugin_lifecycle::install_plugin` for all production installs. \
-            Three test consumers scheduled for migration in the pre-tag sweep."
+            Deletion + test-migration named at docs/future/phase-4-backlog.md \
+            §4.22 (Phase-4-Meta opening wave)."
 )]
 pub fn install_plugin<F>(
     library: &mut PluginLibrary,

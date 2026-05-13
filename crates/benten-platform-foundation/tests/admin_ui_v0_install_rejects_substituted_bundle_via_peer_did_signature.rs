@@ -49,15 +49,16 @@ fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
     );
     let bytes = serde_ipld_dagcbor::to_vec(&hostile).expect("encode");
     let expected_cid = hostile.content_cid;
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_subst = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_record = common::manifest_fixtures::signed_install_record(
         &user_kp,
         expected_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkSubstitutedBundle".to_string()),
+        plugin_did_subst.clone(),
         2,
     );
 
     let mut library = PluginLibrary::new();
-    let mut store = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     // User's trust-list contains alice only (NOT attacker).
@@ -71,6 +72,7 @@ fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_subst,
     };
 
     let attempt = install_plugin(

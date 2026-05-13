@@ -194,15 +194,16 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
     };
 
     let bytes = serde_ipld_dagcbor::to_vec(&a).expect("encode");
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_meta = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_record = common::manifest_fixtures::signed_install_record(
         &user_kp,
         a_final_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkMetaCycleTest".to_string()),
+        plugin_did_meta.clone(),
         4,
     );
 
     let mut library = PluginLibrary::new();
-    let mut store = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade_minter = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
@@ -215,6 +216,7 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_meta,
     };
     let b_clone = b.clone();
     let attempt = install_plugin(
@@ -248,9 +250,15 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
         library.is_empty(),
         "cycle-rejected install MUST NOT commit library entry (Step 11 unreached)"
     );
-    assert!(
-        store.is_empty(),
-        "cycle-rejected install MUST NOT persist plugin-DID (Step 8 unreached)"
+    // R6-FP-A-fp: caller-mint-first pre-inserts the handle BEFORE
+    // install_plugin runs. Step 8 no longer mutates the store on
+    // either success or fail. Assert exactly the pre-inserted handle
+    // is present (len 1) — install_plugin did not add a second.
+    assert_eq!(
+        store.len(),
+        1,
+        "cycle-rejected install MUST NOT add anything to plugin_did_store \
+         beyond the caller-pre-inserted handle (Step 8 unreached)"
     );
     assert!(
         cascade_minter.minted_grants().is_empty(),

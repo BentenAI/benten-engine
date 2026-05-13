@@ -649,6 +649,28 @@ where
     /// Optional prior CID — when both this and `version_chain` are
     /// supplied, the seam runs the upgrade DAG-descendant check.
     pub prior_installed_cid: Option<Cid>,
+    /// **R6-FP-A-fp (mr-1 BLOCKER closure)** — the caller's assertion
+    /// of which plugin-DID the user signed the InstallRecord for.
+    /// Step 8 enforces `install_record.plugin_did == *expected_plugin_did`
+    /// (surfacing `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` on
+    /// mismatch) AND `plugin_did_store.get(expected_plugin_did).is_some()`
+    /// (surfacing `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` if the caller
+    /// did not first mint + insert the keypair handle).
+    ///
+    /// **Caller-mint-first flow contract (CLAUDE.md #18):**
+    /// 1. Caller mints `PluginDidHandle` via
+    ///    [`benten_id::plugin_did::mint`].
+    /// 2. Caller calls `plugin_did_store.insert(handle)`.
+    /// 3. Caller builds `InstallRecord { plugin_did: handle.did().clone(), .. }`
+    ///    + signs with user-DID.
+    /// 4. Caller passes both the store + this `expected_plugin_did =
+    ///    handle.did()` into install_plugin.
+    ///
+    /// The engine cannot synthesize keypairs matching an arbitrary
+    /// `did:key:...` string (Ed25519 derives the DID from the public
+    /// key, not vice versa), so the caller-mint-first pattern is a
+    /// structural requirement rather than ergonomic preference.
+    pub expected_plugin_did: &'a Did,
 }
 
 /// Outcome of a successful [`install_plugin`] call.
@@ -688,7 +710,13 @@ pub struct InstallOutcome {
 /// 6. **Seam 4** — cycle detection.
 /// 7. **Upgrade DAG-descendant check** (T10-upgrade (b)) when
 ///    `prior_installed_cid` + `version_chain` are supplied.
-/// 8. **Mint plugin-DID** + **persist into store**.
+/// 8. **Plugin-DID adoption (caller-mint-first)** — assert
+///    `install_record.plugin_did == *ctx.expected_plugin_did`
+///    (`E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` on mismatch); then
+///    assert `plugin_did_store.get(expected_plugin_did).is_some()`
+///    (`E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` if the caller did not
+///    pre-mint + insert). Eliminates the legacy fresh-mint-and-discard
+///    code path which silently ignored the user's signed plugin_did.
 /// 9. **Cap cascade** — mint a root grant under
 ///    `audience=plugin_did` for each `requires` scope.
 /// 10. **Private namespace** provision.
@@ -776,93 +804,49 @@ where
         }
     }
 
-    // 8. Adopt plugin-DID from InstallRecord (sec-r6r1-1 BLOCKER closure
-    //    R6-FP-A).
+    // 8. Plugin-DID adoption (caller-mint-first contract per R6-FP-A
+    //    + R6-FP-A-fp mr-1 + mr-2 BLOCKER closures).
     //
-    //    Pre-R6-FP-A behavior: install_plugin minted a FRESH plugin-DID
-    //    inside this step and silently discarded `install_record.plugin_did`
-    //    — even though that field IS in the user's signed
-    //    `InstallRecord::signing_payload` via `plugin_did_bytes`. The
-    //    user signed FOR a specific plugin-DID; the engine ignored it.
-    //    That defeats the consent-payload integrity guarantee + opens a
-    //    consent-record-substitution attack against the plugin-DID
-    //    slot.
+    //    The legacy pre-R6-FP-A path minted a fresh OsRng plugin-DID
+    //    here + discarded `install_record.plugin_did` even though that
+    //    field IS in the user's signed `InstallRecord::signing_payload`
+    //    via `plugin_did_bytes`. That defeated the consent-payload
+    //    integrity guarantee.
     //
-    //    Post-R6-FP-A pattern (caller-mint-first):
-    //    - Caller mints plugin-DID via `benten_id::plugin_did::mint()`
-    //      ahead of building the InstallRecord.
-    //    - Caller inserts the handle into `plugin_did_store` (or, in
-    //      tests, supplies the pre-minted handle through the install
-    //      path).
-    //    - Caller builds the `InstallRecord` with `plugin_did =
-    //      <minted_did>`; user-DID signs the record (which now binds
-    //      the actual plugin-DID).
-    //    - install_plugin asserts the record's plugin_did is present
-    //      in the store. If not, surfaces typed
-    //      `PluginInstallRecordPluginDidMismatch`.
+    //    The post-fp path enforces:
     //
-    //    Backward-compat shim for tests not yet migrated: if the
-    //    record's plugin_did is NOT in the store, we mint a fresh DID
-    //    AND assert the record's plugin_did matches the minted DID
-    //    (legacy "stub plugin_did" path — accepts the placeholder).
-    //    This shim is `#[deprecated]`-style behavioral (no compiler
-    //    hint, but documented here). Test fixtures using
-    //    placeholder-DID records continue to pass IFF the placeholder
-    //    matches the minted DID — which it can't statistically.
-    //    To preserve the existing test suite while still surfacing
-    //    the BLOCKER closure, the shim accepts any record.plugin_did
-    //    when the store doesn't yet contain it AND the engine mints
-    //    fresh — but the record's signed plugin_did becomes the
-    //    canonical identity (not the freshly-minted one), so the
-    //    user's consent is now honored at the plugin-DID slot.
+    //    (a) `install_record.plugin_did == *ctx.expected_plugin_did`
+    //        — the caller's claim about which plugin-DID the user
+    //        signed for. Mismatch surfaces typed
+    //        `PluginInstallRecordPluginDidMismatch` (sec-r6r1-1
+    //        forensic-discrimination ErrorCode).
     //
-    //    The substantive defense: if the record's plugin_did IS in
-    //    the store (caller-mint-first), we ABSOLUTELY use that DID +
-    //    skip minting. If the record's plugin_did is NOT in the store,
-    //    we accept it as the "to-be-minted" identity + mint a NEW
-    //    handle keyed under that exact DID — meaning user-DID signed
-    //    consent over plugin_did_X is the install identity, period.
-    let plugin_did = install_record.plugin_did.clone();
-    if plugin_did_store.get(&plugin_did).is_none() {
-        // Caller did not pre-mint; install_plugin mints a handle
-        // BOUND TO THE RECORD's plugin_did so the user-DID signed
-        // consent is honored at the plugin-DID slot. Closes
-        // sec-r6r1-1 BLOCKER: install_record.plugin_did is now LOAD-
-        // BEARING (the install identity), not signed-but-ignored.
-        //
-        // The previous `mint_plugin_did()` random-OsRng path is
-        // dropped here because random-mint cannot honor the user's
-        // signed plugin_did binding. Production callers (admin UI v0,
-        // install adapter) MUST adopt the caller-mint-first pattern:
-        // generate keypair via `mint()` -> assemble record with that
-        // DID -> insert handle into store -> call install_plugin.
-        // Test fixtures that build a record with a stub DID + never
-        // mint a real keypair MUST switch to the caller-mint-first
-        // shape OR accept that downstream signature operations under
-        // the stub-DID will fail (no private key in store).
-        //
-        // For full forensic discrimination: an attacker who submits a
-        // record bound to a plugin-DID THEY control's private key but
-        // signed by the victim's user-DID would still be rejected by
-        // the consenting_user_did check (Step 3 above). The plugin-DID
-        // slot is structurally just the install identity; private-key
-        // ownership is a separate concern.
-        //
-        // NOTE: no fresh mint inserts here — the record's plugin_did
-        // becomes the install identity directly. Downstream UCAN
-        // delegations under this plugin-DID will use whatever keypair
-        // the caller separately provisioned (admin UI manages keypair
-        // generation prior to install). Test fixtures using a stub
-        // plugin-DID still install successfully (the library entry +
-        // cap grants record the stub DID); they just can't sign as
-        // that plugin without a real keypair.
-    } else {
-        // Caller-mint-first: the record's plugin_did is already in
-        // the store. Honor it; no new mint. Defense closes against
-        // a record-supplied-plugin_did the caller does NOT control
-        // (the get() succeeds only if the caller inserted a handle
-        // for that DID, and inserting requires the keypair).
+    //    (b) `plugin_did_store.get(expected_plugin_did).is_some()` —
+    //        the caller-mint-first contract requires the keypair
+    //        handle to be inserted BEFORE install_plugin runs.
+    //        Eliminates the keypair-orphan failure mode where install
+    //        succeeded but no handle ever entered the store
+    //        (downstream sign-as-plugin / revoke-on-uninstall would
+    //        observably no-op).
+    //
+    //    Defense narrative: the engine CANNOT synthesize a keypair
+    //    matching an arbitrary `did:key:...` string (Ed25519 derives
+    //    the DID from the public key, not vice versa). The
+    //    caller-mint-first pattern is therefore a structural
+    //    requirement, not ergonomic preference. The substitution
+    //    attack against the plugin-DID slot is bounded at the
+    //    Step 3 user-signature check (the signing payload binds
+    //    `plugin_did_bytes`; any tamper invalidates the signature);
+    //    the new Step 8 checks add defense-in-depth via the caller's
+    //    explicit `expected_plugin_did` claim + store-membership
+    //    assertion.
+    if install_record.plugin_did != *ctx.expected_plugin_did {
+        return Err(ErrorCode::PluginInstallRecordPluginDidMismatch);
     }
+    if plugin_did_store.get(ctx.expected_plugin_did).is_none() {
+        return Err(ErrorCode::PluginDidHandleNotPreInserted);
+    }
+    let plugin_did = install_record.plugin_did.clone();
 
     // 9. Cap cascade — mint root grants from user_did → plugin_did.
     let mut grants_minted = 0usize;

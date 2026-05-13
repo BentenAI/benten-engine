@@ -312,3 +312,20 @@ pub fn signed_install_record(
     record.user_signature = user_kp.sign(&payload).to_bytes().to_vec();
     record
 }
+
+/// R6-FP-A-fp caller-mint-first helper.
+///
+/// Mints a real `PluginDidHandle` via `benten_id::plugin_did::mint()`,
+/// inserts it into the supplied `PluginDidStore`, and returns the DID.
+/// Use this everywhere a test would otherwise build an `InstallRecord`
+/// with a `Did::from_string_unchecked` placeholder — the new
+/// `install_plugin` Step 8 enforces that `install_record.plugin_did`
+/// is present in the store + matches `InstallContext::expected_plugin_did`,
+/// so placeholder DIDs no longer work.
+#[allow(dead_code)]
+pub fn mint_and_insert_plugin_did(store: &mut benten_id::plugin_did::PluginDidStore) -> Did {
+    let handle = benten_id::plugin_did::mint();
+    let did = handle.did().clone();
+    store.insert(handle);
+    did
+}

@@ -507,6 +507,23 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-FP-BF mini-review r6fp-bf-mr-1). R6-
 
 Estimated scope: ~50-100 LOC + 2 integration test pins.
 
+### §4.33 `module_ecosystem::install_plugin*` legacy-path deletion + test migration (Phase-4-Meta)
+
+R6-FP-A (PR `r6/fp-1-plugin-trust` commit `2be7841`) marked the legacy `benten_platform_foundation::module_ecosystem::install_plugin` and `install_plugin_persisting_did` as `#[deprecated]` per HARD RULE 12 clause-(a) (BLOCKER-DEPRECATE rather than BLOCKER-DELETE) to avoid migrating 4 test files in the same wave. The deprecation-without-deletion has a NAMED destination — THIS ENTRY — per mini-review finding `r6fp-a-mr-6` + HARD RULE 12 clause-(b). (Originally proposed as `§4.22`; renumbered to `§4.33` at strategy-C batch reconciliation to avoid collision with the §4.22-§4.32 sequence added by Wave-BF + its mr-fix.)
+
+**Deletion deadline:** Phase-4-Meta opening wave (pre-v1-assessment-window per CLAUDE.md #15 — the v1 platform-shippable assessment cannot tolerate two install paths with different security envelopes coexisting in the public surface).
+
+**Migration scope (4 test files use `#![allow(deprecated)]`):**
+
+- `crates/benten-platform-foundation/tests/plugin_content_cid_mismatch_rejected_on_receive.rs` — single arm imports `module_ecosystem::{InstallerShape, install_plugin}` (line ~17 after R6-FP-A allow-deprecated header). The CID-mismatch arm is exercised by Steps 1-2 of `plugin_lifecycle::install_plugin` (decode + verify content-CID); migration is direct (build an InstallRecord + ctx + call lifecycle path).
+- `crates/benten-platform-foundation/tests/plugin_manifest_substitution_at_install_rejected.rs` — TWO arms: lines ~50 + ~165 import legacy; the substitution defense (peer-signature mismatch) is exercised at Step 4's `validate_with_clock → verify_peer_signature` in the lifecycle path. Lines 220+ already exercise the lifecycle path; lines 50-170 need migration.
+- `crates/benten-platform-foundation/tests/plugin_heterogeneity_incompatible.rs` — single arm imports `module_ecosystem::{InstallerShape, install_plugin}` (line ~12). The heterogeneity check is Step 5 of the lifecycle path; migration trivially folds.
+- `crates/benten-platform-foundation/tests/g24d_substantive_pipeline.rs` — multiple arms at lines ~23, ~99, ~135, ~165, ~409, ~418, ~506 import `module_ecosystem::*` (including `install_plugin_persisting_did`). This is the LARGEST migration surface; the test exercises end-to-end flows that should fold into `plugin_lifecycle::install_plugin` with caller-mint-first fixtures (helper `mint_and_insert_plugin_did` already shipped in R6-FP-A-fp at `tests/common/manifest_fixtures.rs`).
+
+**Migration target:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (11-step pipeline with full Layer-2 consent + Layer-1 cap cascade + caller-mint-first contract).
+
+**Post-migration:** delete `module_ecosystem::install_plugin` + `install_plugin_persisting_did` + the duplicate `InstallerShape` enum (re-export the canonical one from `plugin_lifecycle`). Estimated LOC delta: -150 (legacy fns) +250 (4 test migrations) = ~+100 LOC.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

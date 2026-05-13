@@ -101,15 +101,17 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
     // Pre-install v3 = CURRENT (no version_chain or prior_installed_cid
     // — fresh install).
     let bytes_v3 = serde_ipld_dagcbor::to_vec(&v3).expect("encode");
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    // R6-FP-A-fp caller-mint-first.
+    let plugin_did_v3 = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_v3 = common::manifest_fixtures::signed_install_record(
         &user_kp,
         v3.content_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeV3".to_string()),
+        plugin_did_v3.clone(),
         3,
     );
 
-    let mut library = PluginLibrary::new();
-    let mut store = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
@@ -123,6 +125,7 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
             user_did: &user_did,
             version_chain: None,
             prior_installed_cid: None,
+            expected_plugin_did: &plugin_did_v3,
         };
         install_plugin(
             &mut library,
@@ -140,10 +143,11 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
 
     // ATTACK: attempt to "upgrade" to v1 (an ANCESTOR of v3).
     let bytes_v1 = serde_ipld_dagcbor::to_vec(&v1).expect("encode");
+    let plugin_did_v1_atk = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_v1 = common::manifest_fixtures::signed_install_record(
         &user_kp,
         v1.content_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeV1Attack".to_string()),
+        plugin_did_v1_atk.clone(),
         4,
     );
     let mut cascade2 = InMemoryInstallCascade::new();
@@ -157,6 +161,7 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
         user_did: &user_did,
         version_chain: Some(&chain),
         prior_installed_cid: Some(v3.content_cid),
+        expected_plugin_did: &plugin_did_v1_atk,
     };
     let downgrade_attempt = install_plugin(
         &mut library,
@@ -192,10 +197,11 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
 
     // ATTACK 2: cross-branch upgrade to v2-fork (NOT a descendant of v3).
     let bytes_fork = serde_ipld_dagcbor::to_vec(&v2_fork).expect("encode");
+    let plugin_did_fork = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_fork = common::manifest_fixtures::signed_install_record(
         &user_kp,
         v2_fork.content_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeForkAttack".to_string()),
+        plugin_did_fork.clone(),
         5,
     );
     let mut cascade3 = InMemoryInstallCascade::new();
@@ -209,6 +215,7 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
         user_did: &user_did,
         version_chain: Some(&chain),
         prior_installed_cid: Some(v3.content_cid),
+        expected_plugin_did: &plugin_did_fork,
     };
     let fork_attempt = install_plugin(
         &mut library,
@@ -230,10 +237,11 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
     // path validates the "same CID = re-install" branch).
     let mut cascade4 = InMemoryInstallCascade::new();
     let mut private_ns4 = InMemoryInstallCascade::new();
+    let plugin_did_v3_redo = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_v3_redo = common::manifest_fixtures::signed_install_record(
         &user_kp,
         v3.content_cid,
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeV3Redo".to_string()),
+        plugin_did_v3_redo.clone(),
         6,
     );
     let mut ctx_same = InstallContext {
@@ -245,6 +253,7 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
         user_did: &user_did,
         version_chain: Some(&chain),
         prior_installed_cid: Some(v3.content_cid),
+        expected_plugin_did: &plugin_did_v3_redo,
     };
     let same_attempt = install_plugin(
         &mut library,

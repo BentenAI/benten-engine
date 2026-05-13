@@ -99,17 +99,17 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
     let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
     let expected_cid = manifest.content_cid;
 
-    let plugin_did_placeholder =
-        benten_id::did::Did::from_string_unchecked("did:key:z6MkClockInjectionTest".to_string());
+    // R6-FP-A-fp caller-mint-first.
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_clock = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
     let install_record = common::manifest_fixtures::signed_install_record(
         &user_kp,
         expected_cid,
-        plugin_did_placeholder,
+        plugin_did_clock.clone(),
         3,
     );
 
     let mut library = PluginLibrary::new();
-    let mut store = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
@@ -123,6 +123,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_clock,
     };
 
     let attempt = install_plugin(
@@ -155,10 +156,15 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
         cascade.minted_grants().is_empty(),
         "T11: fail-closed install MUST NOT mint root grants"
     );
+    // R6-FP-A-fp: post-caller-mint-first, the caller pre-inserts the
+    // handle BEFORE install_plugin. install_plugin itself no longer
+    // mutates the store on either success OR fail. Assert the store
+    // still holds exactly the pre-inserted handle (no extra).
     assert_eq!(
         store.len(),
-        0,
-        "T11: fail-closed install MUST NOT persist plugin-DID"
+        1,
+        "T11: fail-closed install MUST NOT add anything to plugin_did_store \
+         beyond the caller-pre-inserted handle"
     );
 
     // Boundary: same install path WITH a real clock injected MUST
@@ -166,6 +172,13 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
     // properly).
     let mut library2 = PluginLibrary::new();
     let mut store2 = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_clock_b = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store2);
+    let install_record_b = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        expected_cid,
+        plugin_did_clock_b.clone(),
+        4,
+    );
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let mut ctx_with_clock = InstallContext {
@@ -177,6 +190,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_clock_b,
     };
     let outcome = install_plugin(
         &mut library2,
@@ -184,7 +198,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
         &mut ctx_with_clock,
         &bytes,
         &expected_cid,
-        &install_record,
+        &install_record_b,
         1,
         &|_| None,
     )
