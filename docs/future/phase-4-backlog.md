@@ -303,6 +303,63 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Cl
 
 **Closure (G24-B-FP-1):** `materializer_rejects_handcoded_spec_referencing_edges_remove_host_fn` sub-test landed alongside the existing 3 banned-host-fn arms. Asserts `MaterializerError::SchemaMismatch { code: MaterializerSchemaMismatch }` + diagnostic naming `edges:remove`.
 
+### §4.16 G24-B workflow editor substantive replay arm via real engine round-trip
+
+**Origin:** G24-B mini-review MAJOR finding `g24b-mr-1`. The existing `replay_produces_identical_content_hash` canary (`crates/benten-platform-foundation/src/admin_ui_v0/workflow_editor.rs:613`) is a degenerate same-struct double-hash: both sides call `blake3(canonical_subgraph_bytes(&sg_save))` on the same in-memory Subgraph; no encode → store → load → decode cycle is exercised. Same shape on the TS side (`packages/admin-ui-v0/tests/workflow_editor_creates_workflow_and_replays_through_evaluator.test.ts` uses in-memory Map + FNV-1a hash). Plan §3 G24-B row explicitly requires "PRODUCTION substantive arm (workflow CREATED is persisted to redb + readable via Engine::read_node + replays with same CID), NOT shape-only."
+
+**Scope:** new integration pin file `crates/benten-engine/tests/admin_ui_v0_workflow_editor_substantive_replay_via_harness.rs` (~80 LOC) using the G24-B-FP-1-graduated `AdminUiV0TestHarness::new()`:
+1. PRODUCTION-ARM: drive `compile_draft_within_manifest_envelope` → persist to redb via real `Engine::create_node` (or similar public surface) under admin-UI plugin-DID principal via `Engine::call_as`.
+2. OBSERVABLE-CONSEQUENCE: read the persisted Node back via `Engine::read_node_as(admin_ui_principal_cid, persisted_cid)` (Class B β read seam per CLAUDE.md #18); reconstruct the canonical-bytes encoding; re-derive the content hash; assert byte-for-byte equality with the save-time hash.
+3. WOULD-FAIL-IF-NO-OP: if `Engine::create_node` stored a different encoding than `canonical_subgraph_bytes` emits, the persisted CID would differ from the save-time hash; this test fires.
+
+**Blockers to land at G24-B (encountered during batch-5 assembly attempt):**
+- `fixture_manifest` is `pub(crate)` — needs `#[doc(hidden)] pub fn fixture_manifest_for_test()` OR test-helper module surface
+- `canonical_subgraph_bytes` is private — needs `#[doc(hidden)] pub fn` test-helper variant or expose the public path
+- `Node` struct construction in test context requires deeper familiarity with `benten-core` Node shape and the engine's content-addressing path
+
+The harness's `create_test_node(&Node) -> Result<Cid, EngineError>` already exists; the gap is exposing workflow_editor's internal canonical-bytes helper through a doc-hidden test surface (mirrors the §4.13 mr-4 pattern of doc-hidden test constructors on SchemaSubgraphSpec).
+
+**Phase target:** **Phase 4-Foundation R5 G24-B-FP-2** (NEW wave; companion to G24-B). LOC estimate: ~120 (test pin ~80 + ~40 for doc-hidden test-helper exposure on workflow_editor.rs internal helpers).
+
+**Acceptance:**
+- `#[doc(hidden)] pub fn` test-helper exposures on `workflow_editor.rs` for `fixture_manifest` + `canonical_subgraph_bytes` (or equivalent surface).
+- NEW substantive pin `admin_ui_v0_workflow_editor_substantive_replay_via_harness.rs` per the scope above.
+- Existing `replay_produces_identical_content_hash` canary renamed/documented as the encoding-only unit-level pin (clarifies its scope vs the new integration arm).
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes G24-B mini-review g24b-mr-1 MAJOR.
+
+### §4.17 G24-B + G24-C cross-language drift-defense pins (MINORs)
+
+**Origin:** G24-B mini-review `g24b-mr-2` MINOR (no parity drift-defense for `WorkflowFormField` + `CANONICAL_12_PRIMITIVE_KINDS` between Rust + TS) + G24-C mini-review `g24c-mr-1` MINOR (TS `UserViewSpec.anchorPatternLabel` field is TS-side-only; not in Rust `SubgraphSpec`; unguarded).
+
+**Scope:**
+- For `WorkflowFormField` + `CANONICAL_12_PRIMITIVE_KINDS`: add either (a) cross-language drift-defense test pin that asserts TS shape mirrors Rust shape OR (b) a sharpened docstring naming the parity contract + a sentinel test asserting both sides export the same constants.
+- For `UserViewSpec.anchorPatternLabel`: either (a) add an inline drift-defense pin that asserts TS adds anchorPatternLabel intentionally + Rust SubgraphSpec lacks it (locked semantic) OR (b) sharpen the TS docstring naming `anchorPatternLabel` as TS-side-only UX metadata.
+
+**Phase target:** **Phase 4-Foundation R5 G24-B-FP-2** (companion to §4.16 — same fp wave; both are admin-UI-v0-side polish).
+
+**Acceptance:**
+- Drift-defense pin OR sharpened docstring for both surfaces.
+- §3.5g cross-language rule-mirror discipline preserved.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-2 MINOR + G24-C mr-1 MINOR.
+
+### §4.18 G24-B `pnpm-lock.yaml` tracking + G24-C Rust-side revoke-mid-preview pin
+
+**Origin:** G24-B mini-review `g24b-mr-3` MINOR (`packages/admin-ui-v0/pnpm-lock.yaml` un-tracked; sibling `packages/engine/pnpm-lock.yaml` IS tracked — workspace convention demands tracking) + G24-C mini-review `g24c-mr-2` OBSERVATION (no Rust-side revoke-mid-preview pin coupling admin UI consumer to real `CapRecheckOutcome::Cancel → E_SUBSCRIBE_REVOKED_MID_STREAM` propagation; TS revoke test synthesizes the sentinel in-bridge).
+
+**Scope:**
+- Commit `packages/admin-ui-v0/pnpm-lock.yaml` (re-run `pnpm install` cleanly in the workspace + check in the lockfile).
+- Add Rust-side revoke-mid-preview pin at `crates/benten-engine/tests/admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview.rs` (or similar location) that drives real `Engine::on_change_as_with_cursor` + revokes the cap mid-stream + asserts `E_SUBSCRIBE_REVOKED_MID_STREAM` surfaces with proper absorbing-state semantics. Couples to Phase-3 G16-B-F per-row recheck + G16-B-C1 SubscribeRevokedMidStream contract.
+
+**Phase target:** **Phase 4-Foundation R5 G24-B-FP-2** (companion to §4.16 + §4.17 — same fp wave).
+
+**Acceptance:**
+- `packages/admin-ui-v0/pnpm-lock.yaml` tracked in repo.
+- Rust-side substantive revoke-mid-preview pin landed + PASS.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-3 MINOR + G24-C mr-2 OBS.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
