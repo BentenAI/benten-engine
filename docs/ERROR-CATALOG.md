@@ -14,6 +14,7 @@
 | **Materializer pipeline** | G23-B | `E_MATERIALIZER_CAP_DENIED`, `E_MATERIALIZER_SCHEMA_MISMATCH`, `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE` (3 codes) |
 | **Plugin manifest + lifecycle** | G24-D | `E_PLUGIN_MANIFEST_INVALID`, `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_KEY_ROTATED`, `E_PLUGIN_AUTHOR_NOT_TRUSTED`, `E_PLUGIN_INSTALL_CONSENT_REQUIRED`, `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`, `E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN`, `E_PLUGIN_CONTENT_CID_MISMATCH`, `E_PLUGIN_NEW_VERSION_AVAILABLE`, `E_PLUGIN_HETEROGENEITY_INCOMPATIBLE`, `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED`, `E_PLUGIN_DEVICE_ATTESTATION_FORGED`, `E_PLUGIN_LIBRARY_INDEX_TAMPER`, `E_REGISTRY_DISCOVERY_TIMEOUT` (15 codes; arch-r1-3 conflated `E_PLUGIN_MANIFEST_SIGNATURE_INVALID` split into 3 typed codes — USER_SIGNATURE / PEER_SIGNATURE / PEER_KEY_ROTATED) |
 | **Plugin consent-substitution (R6-FP-A split)** | R6-FP-A | `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` (3 codes; arch-r6-r1-5 split + sec-r6r1-1 BLOCKER closure — narrows `E_PLUGIN_INSTALL_CONSENT_REQUIRED` to null-consent + discriminates three substitution-attack arms) |
+| **Plugin caller-mint-first contract (R6-FP-A-fp)** | R6-FP-A-fp | `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` (1 code; mr-2 BLOCKER closure — enforces caller-mint-first pattern at install_plugin Step 8, eliminates the keypair-orphan failure mode where install succeeded without any handle in the PluginDidStore) |
 
 Total: 9 + 3 + 15 = 27 minted at canaries; the final 118 → 135 delta accounts for the prior plan's overlap (the post-triage adjustment is +17 net new vs the pre-triage estimate of 12-13). Code-shape (message template + context fields + fix hint) for each new code lands per-canary in this catalog at the canary's companion-doc PR; not filled in at this revision.
 
@@ -1405,12 +1406,21 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 ### E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH
 
-> **Production firing path (Phase 4-Foundation R6-FP-A — sec-r6r1-1 BLOCKER closure):** the consent gate at `plugin_lifecycle::install_plugin` Step 4 surfaces this when the caller supplies an `expected_plugin_did` (the plugin-DID the user signed the InstallRecord for) and `install_record.plugin_did != expected_plugin_did`. Closes the sec-r6r1-1 BLOCKER where the install-record signing payload bound `plugin_did_bytes` but Step 8 silently minted a fresh DID and discarded the record's signed value — defeating the load-bearing consent-payload integrity guarantee.
+> **Production firing path (Phase 4-Foundation R6-FP-A + R6-FP-A-fp — sec-r6r1-1 BLOCKER closure):** the Step 8 plugin-DID adoption check at `plugin_lifecycle::install_plugin` surfaces this when `install_record.plugin_did != *ctx.expected_plugin_did`. The caller asserts (via `InstallContext::expected_plugin_did`) which plugin-DID the user signed the InstallRecord for; if the record's bound `plugin_did_bytes` (via `InstallRecord::signing_payload`) disagrees with the caller's claim, the install rejects. Closes the sec-r6r1-1 BLOCKER where the install-record signing payload bound `plugin_did_bytes` but the legacy Step 8 silently minted a fresh DID and discarded the record's signed value — defeating the load-bearing consent-payload integrity guarantee.
 
 - **Message:** "install record's signed plugin_did did not match the supplied expected plugin-DID (consent-payload integrity defense)"
-- **Fix:** The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.
-- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
-- **Phase:** 4-Foundation R6-FP-A (sec-r6r1-1 BLOCKER closure)
+- **Fix:** The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern — caller mints via `benten_id::plugin_did::mint()`, inserts handle to `PluginDidStore`, builds InstallRecord with that DID, passes it as `InstallContext::expected_plugin_did`) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
+- **Phase:** 4-Foundation R6-FP-A + R6-FP-A-fp (sec-r6r1-1 BLOCKER closure)
+
+### E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED
+
+> **Production firing path (Phase 4-Foundation R6-FP-A-fp — mr-1 + mr-2 BLOCKER closure):** the Step 8 plugin-DID adoption check at `plugin_lifecycle::install_plugin` surfaces this when `install_record.plugin_did == *ctx.expected_plugin_did` (consent integrity holds) BUT the corresponding `PluginDidHandle` was never inserted into the supplied `PluginDidStore`. Closes the keypair-orphan failure mode where pre-fp Step 8's empty branches let install_plugin succeed without any handle in the store, making downstream UCAN-sign-as-plugin / `PluginDidStore::revoke` on uninstall observably broken.
+
+- **Message:** "install_record.plugin_did is not present in PluginDidStore — caller-mint-first pattern requires the handle to be inserted before install_plugin is called"
+- **Fix:** Caller must mint `PluginDidHandle` via `benten_id::plugin_did::mint()` AND call `plugin_did_store.insert(handle)` BEFORE invoking `install_plugin`. The install path no longer mints on the caller's behalf; the handle is the caller's responsibility because only the caller can produce a real Ed25519 keypair backing an arbitrary DID string.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
+- **Phase:** 4-Foundation R6-FP-A-fp (mr-1 + mr-2 closure)
 
 ### E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
 

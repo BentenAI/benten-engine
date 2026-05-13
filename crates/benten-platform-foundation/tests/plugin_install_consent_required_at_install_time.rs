@@ -101,9 +101,11 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let alice = Keypair::generate();
     let user_kp = Keypair::generate();
     let user_did = user_kp.public_key().to_did();
-    let plugin_did_placeholder = benten_id::did::Did::from_string_unchecked(
-        "did:key:z6MkInstallTestPluginPlaceholder".to_string(),
-    );
+    // R6-FP-A-fp caller-mint-first: pre-mint + insert a real plugin-DID
+    // handle so install_plugin Step 8's `PluginDidHandleNotPreInserted`
+    // check passes. Placeholder DIDs no longer work.
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_placeholder = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
 
     // Honestly-signed manifest by alice.
     let manifest = common::manifest_fixtures::signed_manifest_by(
@@ -127,7 +129,6 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     };
 
     let mut library = PluginLibrary::new();
-    let mut store = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
@@ -140,6 +141,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_placeholder,
     };
 
     let bad_outcome = install_plugin(
@@ -180,6 +182,18 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
 
     let mut library2 = PluginLibrary::new();
     let mut store2 = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_b = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store2);
+    // Rebuild mismatched_record with this run's plugin_did_b so the
+    // expected_plugin_did binding holds on the legitimate-Step-8 path
+    // — we want the manifest-CID-mismatch to be the SOLE rejection
+    // reason in this arm.
+    let mismatched_record_b = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        other_cid,
+        plugin_did_b.clone(),
+        7,
+    );
+    let _ = mismatched_record; // silence unused (replaced by *_b)
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let mut ctx2 = InstallContext {
@@ -191,6 +205,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_b,
     };
 
     let sub_outcome = install_plugin(
@@ -199,7 +214,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         &mut ctx2,
         &bytes,
         &expected_cid,
-        &mismatched_record,
+        &mismatched_record_b,
         1,
         &|_| None,
     );
@@ -223,14 +238,15 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     // POSITIVE arm (defense-in-depth boundary per pim-2 §3.6b — confirms
     // the seam is not over-strict): with a properly-signed record whose
     // manifest_cid matches expected_cid, install_plugin admits.
+    let mut store3 = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did_c = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store3);
     let good_record = common::manifest_fixtures::signed_install_record(
         &user_kp,
         expected_cid,
-        plugin_did_placeholder.clone(),
+        plugin_did_c.clone(),
         9,
     );
     let mut library3 = PluginLibrary::new();
-    let mut store3 = benten_id::plugin_did::PluginDidStore::new();
     let mut cascade3 = InMemoryInstallCascade::new();
     let mut private_ns3 = InMemoryInstallCascade::new();
     let mut ctx3 = InstallContext {
@@ -242,6 +258,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         user_did: &user_did,
         version_chain: None,
         prior_installed_cid: None,
+        expected_plugin_did: &plugin_did_c,
     };
     let good_outcome = install_plugin(
         &mut library3,

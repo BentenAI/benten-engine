@@ -968,6 +968,16 @@ pub enum ErrorCode {
     /// signing-payload `plugin_did_bytes` slot). Without this discrimination
     /// the InstallRecord.plugin_did field would be signed-but-ignored.
     PluginInstallRecordPluginDidMismatch,
+    /// Caller supplied an `install_record` referencing a `plugin_did`
+    /// that was NEVER inserted into the `PluginDidStore` via
+    /// `benten_id::plugin_did::mint()` + `insert()`. The caller-mint-first
+    /// pattern (CLAUDE.md #18 + R6-FP-A mr-2 closure) REQUIRES the
+    /// caller to mint the keypair handle + insert it before calling
+    /// `install_plugin` so the engine can sign UCAN delegations / revoke
+    /// on uninstall / drive observable cap-store operations under the
+    /// plugin-DID. Closes the keypair-orphan failure mode where
+    /// install_plugin succeeded but no handle ever entered the store.
+    PluginDidHandleNotPreInserted,
     /// Runtime delegation request fell outside the source plugin's
     /// manifest `shares` envelope.
     PluginDelegationOutsideManifestEnvelope,
@@ -1276,6 +1286,7 @@ impl ErrorCode {
             ErrorCode::PluginInstallRecordPluginDidMismatch => {
                 "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH"
             }
+            ErrorCode::PluginDidHandleNotPreInserted => "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED",
             ErrorCode::PluginDelegationOutsideManifestEnvelope => {
                 "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE"
             }
@@ -1688,6 +1699,7 @@ impl ErrorCode {
             | ErrorCode::PluginInstallRecordManifestCidMismatch
             | ErrorCode::PluginInstallRecordConsentingUserMismatch
             | ErrorCode::PluginInstallRecordPluginDidMismatch
+            | ErrorCode::PluginDidHandleNotPreInserted
             | ErrorCode::PluginContentCidMismatch
             | ErrorCode::PluginNewVersionAvailable
             | ErrorCode::PluginHeterogeneityIncompatible
@@ -1925,6 +1937,7 @@ impl ErrorCode {
             "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH" => {
                 ErrorCode::PluginInstallRecordPluginDidMismatch
             }
+            "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED" => ErrorCode::PluginDidHandleNotPreInserted,
             "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE" => {
                 ErrorCode::PluginDelegationOutsideManifestEnvelope
             }

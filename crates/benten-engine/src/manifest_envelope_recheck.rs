@@ -111,7 +111,13 @@ impl ManifestEnvelopeRechecker for NoopManifestEnvelopeRechecker {
 /// Helper used inside [`crate::Engine::apply_atrium_merge`]'s per-row
 /// loop — converts an `OutsideEnvelope` outcome into the typed engine
 /// error.
-pub(crate) fn outcome_to_row_reject(
+///
+/// Exposed as `pub` (R6-FP-A-fp mr-7) so test pins can exercise the
+/// recheck-outcome → row-reject mapping without spinning up a full
+/// Engine + iroh + Atrium harness. The end-to-end wire-up at
+/// `apply_atrium_merge` is the same code path; this helper IS the
+/// boundary the per-row loop calls.
+pub fn outcome_to_row_reject(
     outcome: ManifestEnvelopeRecheckOutcome,
     zone: &str,
     key: &str,
