@@ -19,36 +19,41 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D canary; G23-A wave-4 un-ignores) — \
-    benten_platform_foundation::schema_compiler::compile does not exist at HEAD; G23-A \
-    wave-4 wires `compile(bytes) -> Result<SubgraphSpec, SchemaCompileError>` + round-trip \
-    pin. Closes r2-test-landscape §2.4 row 1 + plan §3 G23-A primary."]
 fn schema_compiler_emits_valid_subgraph_spec_for_canonical_note_type() {
-    // G23-A implementer wires this:
-    //
-    //   use benten_platform_foundation::schema_compiler::compile;
-    //   use benten_core::canonical_subgraph_bytes;
-    //
-    //   let bytes = schema_fixtures::canonical_note_type_schema_bytes();
-    //   let spec = compile(bytes).expect("canonical Note schema must compile");
-    //
-    //   // Emitted SubgraphSpec must wire READ + WRITE + TRANSFORM at minimum
-    //   // (the canonical Note CRUD path).
-    //   let kinds: std::collections::HashSet<_> =
-    //       spec.primitives().iter().map(|p| p.kind()).collect();
-    //   assert!(kinds.contains(&benten_core::PrimitiveKind::Read),
-    //       "Note schema must emit at least one READ primitive (field access path)");
-    //   assert!(kinds.contains(&benten_core::PrimitiveKind::Write),
-    //       "Note schema must emit at least one WRITE primitive (mutation path)");
-    //
-    //   // Canonical-bytes round-trip: re-compile must yield identical CID.
-    //   let spec2 = compile(bytes).expect("re-compile");
-    //   assert_eq!(
-    //       canonical_subgraph_bytes(spec.as_subgraph()),
-    //       canonical_subgraph_bytes(spec2.as_subgraph()),
-    //       "G23-A round-trip: canonical-bytes must be stable across compiles"
-    //   );
-    let _ = schema_fixtures::canonical_note_type_schema_bytes();
-    unimplemented!("G23-A wave-4 wires benten_platform_foundation::schema_compiler::compile");
+    use benten_core::canonical_subgraph_bytes;
+    use benten_platform_foundation::schema_compiler::compile;
+
+    let bytes = schema_fixtures::canonical_note_type_schema_bytes();
+    let spec = compile(bytes).expect("canonical Note schema must compile");
+
+    // Emitted Subgraph must wire READ + WRITE + TRANSFORM at minimum (the
+    // canonical Note CRUD path); FieldRef "author" is read-only so the
+    // author chain does not contribute a WRITE primitive (but body +
+    // created_at do).
+    let kinds: std::collections::HashSet<_> =
+        spec.primitives().iter().map(|p| p.kind()).collect();
+    assert!(
+        kinds.contains(&benten_core::PrimitiveKind::Read),
+        "Note schema must emit at least one READ primitive (field access path)"
+    );
+    assert!(
+        kinds.contains(&benten_core::PrimitiveKind::Write),
+        "Note schema must emit at least one WRITE primitive (mutation path; body + created_at \
+         are mutable; author is FieldRef and read-only)"
+    );
+    assert!(
+        kinds.contains(&benten_core::PrimitiveKind::Transform),
+        "Note schema must emit at least one TRANSFORM primitive"
+    );
+
+    // Canonical-bytes round-trip: re-compile must yield identical bytes.
+    let spec2 = compile(bytes).expect("re-compile");
+    let b1 = canonical_subgraph_bytes(spec.as_subgraph()).expect("canonical bytes spec1");
+    let b2 = canonical_subgraph_bytes(spec2.as_subgraph()).expect("canonical bytes spec2");
+    assert_eq!(
+        b1, b2,
+        "G23-A round-trip: canonical-bytes must be stable across compiles"
+    );
 }

@@ -13,25 +13,40 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    unconstrained EMIT/RESPOND target rejection requires schema_compiler. \
-    sec-3.5-r1-4 negative pin. Closes r2 §2.4 row 4."]
 fn schema_compiler_rejects_schema_with_unconstrained_emit_or_respond_targets() {
-    // G23-A implementer wires this:
-    //
-    //   use benten_platform_foundation::schema_compiler::compile;
-    //   use benten_errors::ErrorCode;
-    //
-    //   // A schema that requests EMIT without a `scope` clause must be rejected.
-    //   let bad = br#"{
-    //     "label": "SchemaRoot", "name": "BadEmit",
-    //     "fields": [],
-    //     "emit_targets": [ { "topic": "anything", "scope": null } ]
-    //   }"#;
-    //   let err = compile(bad).expect_err("unconstrained EMIT must be rejected");
-    //   assert_eq!(err.code(), ErrorCode::SchemaValidationFailed,
-    //       "must surface E_SCHEMA_VALIDATION_FAILED");
+    use benten_errors::ErrorCode;
+    use benten_platform_foundation::schema_compiler::compile;
+
+    // Schema with EMIT target carrying no `scope` — rejected.
+    let bad_emit = br#"{
+        "label": "SchemaRoot",
+        "name": "BadEmit",
+        "fields": [],
+        "emit_targets": [ { "topic": "anything" } ]
+    }"#;
+    let err = compile(bad_emit).expect_err("unconstrained EMIT must be rejected");
+    assert_eq!(
+        err.code(),
+        ErrorCode::SchemaValidationFailed,
+        "unconstrained EMIT must surface E_SCHEMA_VALIDATION_FAILED"
+    );
+
+    // Schema with RESPOND target carrying no `scope` — rejected.
+    let bad_respond = br#"{
+        "label": "SchemaRoot",
+        "name": "BadRespond",
+        "fields": [],
+        "respond_targets": [ { "handler_id": "anything" } ]
+    }"#;
+    let err = compile(bad_respond).expect_err("unconstrained RESPOND must be rejected");
+    assert_eq!(
+        err.code(),
+        ErrorCode::SchemaValidationFailed,
+        "unconstrained RESPOND must surface E_SCHEMA_VALIDATION_FAILED"
+    );
+
+    // Reference: hostile-unknown-label fixture is used by a sibling test.
     let _ = schema_fixtures::hostile_schema_unknown_label_bytes();
-    unimplemented!("G23-A wave-4 wires unconstrained-EMIT/RESPOND rejection");
 }

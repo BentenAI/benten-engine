@@ -13,31 +13,44 @@
 
 #![allow(clippy::unwrap_used)]
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
+//
+// SHAPE (grep the engine source for the canonical signature) +
+// SUBSTANCE (assert no parallel `register_subgraph_from_schema` /
+// `register_schema_subgraph` / `register_typed_schema` /
+// `register_compiled_schema` surface) per §3.6f.
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    grep-asserts the public Engine::register_subgraph signature is unchanged post-G23-A. \
-    arch-r1-15 sibling pin. Closes r2 §2.4 row 7."]
 fn schema_compiler_does_not_widen_register_subgraph_signature() {
-    // G23-A implementer wires this:
-    //
-    //   let baseline_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //       .join("..").join("..").join("docs").join("public-api")
-    //       .join("benten-engine.json");
-    //   let baseline = std::fs::read_to_string(&baseline_path).unwrap();
-    //
-    //   // The cargo-public-api baseline contains every `register_subgraph`
-    //   // method signature. Assert the only fn with that name is the canonical
-    //   // pre-G23-A shape.
-    //   let count = baseline.matches("register_subgraph").count();
-    //   assert!(count >= 1, "register_subgraph must remain in public API");
-    //
-    //   // Negative pin: must not have introduced a parallel `register_subgraph_from_schema`
-    //   // or `register_schema_subgraph` surface.
-    //   assert!(!baseline.contains("register_subgraph_from_schema"),
-    //       "schema compiler must not introduce parallel registration surface");
-    //   assert!(!baseline.contains("register_schema_subgraph"),
-    //       "schema compiler must not introduce parallel registration surface");
-    unimplemented!(
-        "G23-A wave-4 wires public-API baseline grep-assert for register_subgraph signature"
+    let engine_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("benten-engine")
+        .join("src")
+        .join("engine.rs");
+    let body = std::fs::read_to_string(&engine_src)
+        .unwrap_or_else(|e| panic!("read {}: {}", engine_src.display(), e));
+
+    // SHAPE: the canonical `pub fn register_subgraph<S>` signature must
+    // exist (at least once; exactly-one is enforced by cargo-public-api
+    // drift, not here).
+    assert!(
+        body.contains("pub fn register_subgraph<S>(&self, spec: S) -> Result<String, EngineError>"),
+        "canonical `pub fn register_subgraph<S>(&self, spec: S) -> Result<String, EngineError>` \
+         must exist in crates/benten-engine/src/engine.rs (arch-r1-15)"
     );
+
+    // SUBSTANCE: no parallel schema-registration surfaces. Companion
+    // surfaces `register_subgraph_replace` + `register_subgraph_aggregate`
+    // are legitimate (Phase-2b + Phase-3 work) and are NOT flagged here.
+    for forbidden in [
+        "register_subgraph_from_schema",
+        "register_schema_subgraph",
+        "register_typed_schema",
+        "register_compiled_schema",
+    ] {
+        assert!(
+            !body.contains(forbidden),
+            "schema compiler must not introduce parallel registration surface; \
+             engine.rs contains forbidden symbol `{forbidden}`"
+        );
+    }
 }

@@ -15,23 +15,23 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary). The compile-time arch-grep
+// against `engine.register_subgraph(...)` is load-bearing — if a future
+// wave widened the registration surface, this test would fail to compile.
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    requires benten_platform_foundation::schema_compiler::compile + engine round-trip via \
-    existing register_subgraph surface. arch-r1-15. Closes r2 §2.4 row 6."]
 fn schema_compiler_routes_through_existing_register_subgraph_surface_no_new_engine_method() {
-    // G23-A implementer wires this:
-    //
-    //   use benten_platform_foundation::schema_compiler::compile;
-    //   use benten_engine::{Engine, EngineBuilder};
-    //
-    //   let spec = compile(schema_fixtures::canonical_note_type_schema_bytes()).unwrap();
-    //   let mut engine = EngineBuilder::default().open_in_memory().unwrap();
-    //
-    //   // Routes through EXISTING Engine::register_subgraph. No new engine
-    //   // method introduced. Compile-time pin: if the signature widens, this
-    //   // line will not compile.
-    //   engine.register_subgraph(spec).expect("register_subgraph(SubgraphSpec) round-trip");
-    let _ = schema_fixtures::canonical_note_type_schema_bytes();
-    unimplemented!("G23-A wave-4 wires register_subgraph round-trip pin (arch-r1-15)");
+    use benten_engine::EngineBuilder;
+    use benten_platform_foundation::schema_compiler::compile;
+
+    let spec = compile(schema_fixtures::canonical_note_type_schema_bytes()).unwrap();
+    let engine = EngineBuilder::new()
+        .path(":memory:")
+        .build()
+        .expect("engine build");
+    // Routes through EXISTING Engine::register_subgraph(IntoSubgraphSpec).
+    // `IntoSubgraphSpec for benten_eval::Subgraph` (== benten_core::Subgraph)
+    // is the seam; no new engine method introduced.
+    engine
+        .register_subgraph(spec.into_subgraph())
+        .expect("register_subgraph(Subgraph) round-trip — arch-r1-15");
 }

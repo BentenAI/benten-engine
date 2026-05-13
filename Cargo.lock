@@ -431,6 +431,7 @@ dependencies = [
 name = "benten-platform-foundation"
 version = "0.1.0"
 dependencies = [
+ "benten-caps",
  "benten-core",
  "benten-engine",
  "benten-errors",
