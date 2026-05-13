@@ -21,6 +21,18 @@ version: 2
 # it deserves, and restore the ignore after it lands.
 
 updates:
+  # Cargo workspace. Covers every member crate under /crates/* including
+  # `benten-renderer-tauri` (Phase-4-Foundation G24-E; engine extension
+  # per CLAUDE.md #19). Tauri 2.x version-range updates flow through
+  # this entry: today `benten-renderer-tauri` stays Tauri-runtime-
+  # agnostic (preserves `tauri-runtime-verso` swap-readiness per
+  # br-r1-9), so no direct `tauri` dep appears in its Cargo.toml; the
+  # integrator binary that wires `TauriRenderer` into a Tauri 2.x
+  # `WebviewWindowBuilder` carries the `tauri` dep and Dependabot
+  # tracks it from there. When that integrator binary lands in-tree,
+  # Tauri 2.x semver-major bumps will continue to be ignored (per the
+  # global semver-major policy below) and arrive on a human-driven
+  # bump branch — same discipline as wasmtime / iroh / Loro.
   - package-ecosystem: cargo
     directory: "/"
     schedule:

@@ -455,6 +455,8 @@ dependencies = [
  "benten-engine",
  "benten-errors",
  "benten-platform-foundation",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-//! G24-E wave-7 RED-PHASE pin (T3 + br-r1-11; substantive).
+//! G24-E wave-7 LANDED pin (T3 + br-r1-11; substantive).
 //!
 //! Asserts the Tauri webview is loaded with a locked Content-Security-
 //! Policy header that:
@@ -7,32 +7,57 @@
 //! - Allows `connect-src 'self' tauri://*` (in-process IPC origin).
 //! - Restricts `style-src` and `font-src` to `'self'`.
 //! - Sets `default-src 'none'`.
-//! - Does NOT include `'unsafe-eval'` or `'unsafe-inline'`.
-//!
-//! ## RED-PHASE status
-//!
-//! `#[ignore]` until G24-E wave-7 lands the webview-construction surface.
+//! - Does NOT include `'unsafe-eval'` (classic eval) or
+//!   `'unsafe-inline'`.
 //!
 //! ## Closes
 //!
 //! T3 + br-r1-11 (`r2-test-landscape.md` §2.10 row 3 + threat-model §T3
 //! line ~108)
 
-#![allow(clippy::unwrap_used, dead_code, unused_imports)]
+#![allow(clippy::unwrap_used)]
 
-use benten_renderer_tauri as _renderer;
+use benten_renderer_tauri::{AdminUiManifest, TauriRenderer, WEBVIEW_CSP_HEADER};
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G24-E wave-7 (CSP enforcement landing)"]
 fn webview_csp_is_locked_no_unsafe_eval_or_unsafe_inline() {
-    // Production arm (G24-E wave-7):
-    //
-    //   let renderer = TauriRenderer::new_with_manifest(admin_ui_v0_manifest());
-    //   let csp = renderer.webview_csp_header();
-    //   assert!(csp.contains("default-src 'none'"));
-    //   assert!(csp.contains("script-src 'self' 'wasm-unsafe-eval'"));
-    //   assert!(csp.contains("connect-src 'self' tauri://*"));
-    //   assert!(!csp.contains("'unsafe-eval'") || csp.contains("'wasm-unsafe-eval'"));
-    //   assert!(!csp.contains("'unsafe-inline'"));
-    panic!("RED-PHASE: production surface lands at G24-E wave-7");
+    let renderer = TauriRenderer::new_with_manifest(AdminUiManifest::default());
+    let csp = renderer.webview_csp_header();
+
+    assert!(
+        csp.contains("default-src 'none'"),
+        "missing default-src: {csp}"
+    );
+    assert!(
+        csp.contains("script-src 'self' 'wasm-unsafe-eval'"),
+        "missing wasm-relaxed script-src: {csp}"
+    );
+    assert!(
+        csp.contains("connect-src 'self' tauri://*"),
+        "missing tauri connect-src: {csp}"
+    );
+    assert!(csp.contains("style-src 'self'"));
+    assert!(csp.contains("font-src 'self'"));
+
+    // `'wasm-unsafe-eval'` is the wasm-only relaxation; classic
+    // `'unsafe-eval'` MUST NOT appear. Strip the wasm-relaxed token
+    // before scanning so the substring check is precise.
+    let stripped = csp.replace("'wasm-unsafe-eval'", "");
+    assert!(
+        !stripped.contains("'unsafe-eval'"),
+        "classic unsafe-eval present after wasm-token strip: {stripped}"
+    );
+    assert!(
+        !csp.contains("'unsafe-inline'"),
+        "unsafe-inline present: {csp}"
+    );
+}
+
+#[test]
+fn webview_csp_constant_matches_renderer_method() {
+    // Drift-defense: the const + method must agree byte-for-byte so
+    // future agents can't accidentally route one consumer through a
+    // weaker header.
+    let renderer = TauriRenderer::new_with_manifest(AdminUiManifest::default());
+    assert_eq!(renderer.webview_csp_header(), WEBVIEW_CSP_HEADER);
 }

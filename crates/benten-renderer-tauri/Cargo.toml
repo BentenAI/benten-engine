@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-4-Foundation Tauri 2.x renderer backend — engine extension per CLAUDE.md #19. Embedded-webview host for the wasm32-unknown-unknown admin UI v0 bundle via in-process IPC. R3 stub; G24-E wave-7 fills IPC allowlist + per-method cap-binding + CSP enforcement + tauri-runtime-verso swap-readiness."
+description = "Phase-4-Foundation Tauri 2.x renderer backend — engine extension per CLAUDE.md #19. Embedded-webview host for the wasm32-unknown-unknown admin UI v0 bundle via in-process IPC. Compile-time-linked Rust crate hosting an IpcAllowlist + per-method cap-binding + locked CSP, sharing the DidKeyedSession + SessionToken contract with the G24-F thin-client HTTP/fetch transport-swapped to in-process channel (br-r1-14)."
 
 [lints]
 workspace = true
@@ -14,27 +14,33 @@ workspace = true
 [lib]
 bench = false
 
-# Phase-4-Foundation R3 RED-PHASE skeleton. The Tauri 2.x renderer is an
-# engine extension per CLAUDE.md #19 — compile-time-linked Rust crate
-# trusted via the cargo + code-review boundary, NOT through UCAN or
-# `read_node_as`. G24-E wave-7 fills the production logic:
+# Phase-4-Foundation G24-E wave-7. The Tauri 2.x renderer is an engine
+# extension per CLAUDE.md #19 — compile-time-linked Rust crate trusted
+# via the cargo + code-review boundary, NOT through UCAN or
+# `read_node_as`. The crate provides:
 #
-# - IPC method allowlist (per-method cap-binding to admin UI manifest)
-# - CSP enforcement at webview load (script-src/connect-src/style-src)
-# - tauri-runtime-verso swap-readiness (transport-agnostic Renderer shape)
-# - 3-rung baked-in #17 defense extension (wasm32-objdump forbidden-prefix)
-#
-# At R3 the crate is a placeholder so F2 test pins compile-but-fail.
-# Tauri 2.x runtime dependency is deferred until G24-E so we don't pull a
-# heavy dependency tree into the R3 RED-PHASE build.
+# - `IpcAllowlist` — explicit method-name allowlist for the in-process
+#   webview ↔ engine channel (T3 defense rung 1).
+# - `TauriRenderer::dispatch_ipc` — per-method capability check via the
+#   admin UI v0 manifest's `requires` envelope (T3 defense rung 2).
+# - `TauriRenderer::webview_csp_header` — locked CSP at webview load
+#   (T3 defense rung 3); rejects `'unsafe-eval'` + `'unsafe-inline'`.
+# - In-process session bridge — reuses `DidKeyedSession` from
+#   `benten-engine` so shape (b) browser-tab and shape (c) embedded-
+#   webview share ONE auth contract (br-r1-14).
+# - `tauri-runtime-verso` swap-readiness — transport-agnostic methods
+#   on the `Renderer` trait (br-r1-9; Verso is a post-v1 swap target).
 [dependencies]
 benten-core = { path = "../benten-core" }
-benten-errors = { path = "../benten-errors" }
+benten-errors = { workspace = true }
 benten-engine = { path = "../benten-engine" }
 benten-platform-foundation = { path = "../benten-platform-foundation" }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 benten-core = { path = "../benten-core" }
-benten-errors = { path = "../benten-errors" }
+benten-errors = { workspace = true }
 benten-engine = { path = "../benten-engine" }
 benten-platform-foundation = { path = "../benten-platform-foundation" }
+serde_json = { workspace = true }
