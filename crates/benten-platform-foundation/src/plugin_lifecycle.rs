@@ -49,11 +49,15 @@
 //! - PR #199 `Engine::revoke_capability_by_grant_cid` — engine-side
 //!   adapter routes through that typed surface.
 
-use crate::plugin_library::PluginLibrary;
+use crate::plugin_library::{LibraryEntry, PluginLibrary};
+use crate::plugin_manifest::{
+    InstallRecord, MANIFEST_CLOCK_NOT_INJECTED_SENTINEL, PluginManifest, ValidationOutcome,
+    detect_composition_cycle,
+};
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_id::did::Did;
-use benten_id::plugin_did::PluginDidStore;
+use benten_id::plugin_did::{PluginDidStore, mint as mint_plugin_did};
 use std::collections::{HashMap, HashSet};
 
 /// Result of `uninstall_plugin` — observable counters that callers can
@@ -536,6 +540,317 @@ impl SubscriptionRegistry for InMemoryUninstallCascade {
             .iter()
             .filter(|s| s.subscriber == *plugin_did)
             .count()
+    }
+}
+
+// =====================================================================
+// install_plugin lifecycle — R4b-FP-1 Seam 1 + Seam 2 + Seam 4
+// =====================================================================
+//
+// Symmetric companion to [`uninstall_plugin`] at the lifecycle layer.
+// Wires the SIX install-time concerns named in
+// `docs/PLUGIN-MANIFEST.md` §4.1 + the FOUR new R4b-FP-1 seams:
+//
+// - Seam 1: lifecycle integration (install_record consent + cap
+//   cascade + library entry + plugin-DID minted-and-persisted)
+// - Seam 2: engine-injected clock at install boundary
+//   (`PluginManifest::validate_with_clock`)
+// - Seam 4: cycle detection wired at the install entry-point (already
+//   present at `module_ecosystem::install_plugin`; the lifecycle seam
+//   layers consent + clock-injection + trust-list on top)
+//
+// Per CLAUDE.md baked-in #18 four-identity-concepts model: this is
+// where the InstallRecord's user-DID signature is verified, the
+// plugin-DID is minted, and the library entry is added. The cap
+// cascade (Layer 1 trace from user-DID grants → plugin-DID audience)
+// is consulted via the supplied `CapMinter` port — the foundation
+// crate doesn't depend on `benten-caps` for production paths, so the
+// engine adapter wires the real grant store; the [`InMemoryInstallCascade`]
+// substantive default powers test pins.
+
+/// Shape of the installing peer (mirrors
+/// [`crate::module_ecosystem::InstallerShape`] — re-declared here to
+/// keep the lifecycle seam dep-direction clean against
+/// `module_ecosystem`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallerShape {
+    /// Full peer (native Rust; runs_sandbox=true; shape (a)).
+    FullPeer,
+    /// Thin compute surface (browser wasm32 / edge / Tauri webview;
+    /// shapes (b)/(c)).
+    ThinClient,
+}
+
+/// Port the engine adapter implements to mint root grants for caps
+/// the manifest declares as `requires` (Layer 1 trace anchor per
+/// CLAUDE.md #18).
+///
+/// Default test impl: [`InMemoryInstallCascade::mint_root_grant`] —
+/// records each scope under the plugin-DID audience.
+pub trait CapMinter {
+    /// Mint a root grant from `user_did` to `plugin_did` for `scope`.
+    ///
+    /// Returns the grant CID on success.
+    ///
+    /// # Errors
+    ///
+    /// `E_INTERNAL` propagated from the adapter.
+    fn mint_root_grant(
+        &mut self,
+        user_did: &Did,
+        plugin_did: &Did,
+        scope: &str,
+    ) -> Result<Cid, ErrorCode>;
+}
+
+/// Port the storage-backend adapter implements to provision the
+/// plugin's private namespace.
+pub trait PrivateNamespaceProvisioner {
+    /// Create the `private:<plugin_did>:*` scope-prefix root for the
+    /// plugin. Idempotent.
+    ///
+    /// # Errors
+    ///
+    /// `E_INTERNAL` propagated from the adapter.
+    fn provision_private_namespace(&mut self, plugin_did: &Did) -> Result<(), ErrorCode>;
+}
+
+/// Bundle of the engine-side ports — passed to [`install_plugin`].
+pub struct InstallContext<'a, M, P>
+where
+    M: CapMinter,
+    P: PrivateNamespaceProvisioner,
+{
+    /// Cap-minter port.
+    pub cap_minter: &'a mut M,
+    /// Private-namespace provisioner port.
+    pub private_ns: &'a mut P,
+    /// Engine-injected wall-clock (seconds since UNIX epoch). Pass
+    /// [`MANIFEST_CLOCK_NOT_INJECTED_SENTINEL`] when the engine builder
+    /// did NOT inject a clock — Seam 2 fail-closes for manifests with
+    /// time-bounded requirements.
+    pub now_secs: u64,
+    /// Installer shape (heterogeneity check at step 5).
+    pub installer_shape: InstallerShape,
+    /// Per-user trust-list of plugin-author peer-DIDs. Empty list per
+    /// D-4F-3 default = trust-list-empty. When non-empty AND the
+    /// manifest's `peer_did` is absent, install fails with
+    /// `E_PLUGIN_AUTHOR_NOT_TRUSTED`. (Empty list = legacy "trust by
+    /// signature alone" — first-install consent prompt handled at
+    /// caller layer.)
+    pub user_trust_list: &'a [Did],
+    /// User-DID that consents to the install (anchors Layer 1).
+    pub user_did: &'a Did,
+    /// Optional version-chain view for upgrade DAG-descendant check.
+    /// When `Some` AND `prior_installed_cid` is `Some`, the seam
+    /// enforces T10-upgrade (b) per D-4F-14: the new `expected_cid`
+    /// MUST be a DAG-descendant of `prior_installed_cid`.
+    pub version_chain: Option<&'a benten_core::version_chain::DagVersionChain>,
+    /// Optional prior CID — when both this and `version_chain` are
+    /// supplied, the seam runs the upgrade DAG-descendant check.
+    pub prior_installed_cid: Option<Cid>,
+}
+
+/// Outcome of a successful [`install_plugin`] call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstallOutcome {
+    /// The newly-inserted library entry.
+    pub entry: LibraryEntry,
+    /// Manifest validation outcome (carries any rotated-key warning).
+    pub validation: ValidationOutcome,
+    /// Count of root grants minted under the plugin-DID audience
+    /// (one per [`PluginManifest::requires`] entry).
+    pub grants_minted: usize,
+    /// Whether the private namespace was provisioned.
+    pub private_namespace_provisioned: bool,
+}
+
+/// **Phase-4-Foundation R4b-FP-1 Seam 1** — full install lifecycle.
+///
+/// Wires the SIX install concerns per `docs/PLUGIN-MANIFEST.md` §4.1
+/// plus the four R4b-FP-1 hardening seams (Seam 2 clock injection,
+/// Seam 4 cycle wiring, consent gate integration, trust-list check).
+///
+/// Order:
+///
+/// 1. Decode + verify content-CID matches declared.
+/// 2. **Trust-list check** — if `user_trust_list` non-empty, reject with
+///    `E_PLUGIN_AUTHOR_NOT_TRUSTED` when manifest's `peer_did` is not
+///    in the list.
+/// 3. **Seam 2** — `validate_with_clock(now_secs)`. Fail-closes with
+///    `E_UCAN_CLOCK_NOT_INJECTED` when clock missing + manifest declares
+///    time-bounded requirements.
+/// 4. **Consent gate** — verify InstallRecord's user-DID signature
+///    (`E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`) AND match
+///    `record.manifest_cid == expected_cid` (defense vs. consent-record-
+///    substitution).
+/// 5. **Heterogeneity** check (`E_PLUGIN_HETEROGENEITY_INCOMPATIBLE`).
+/// 6. **Seam 4** — cycle detection.
+/// 7. **Upgrade DAG-descendant check** (T10-upgrade (b)) when
+///    `prior_installed_cid` + `version_chain` are supplied.
+/// 8. **Mint plugin-DID** + **persist into store**.
+/// 9. **Cap cascade** — mint a root grant under
+///    `audience=plugin_did` for each `requires` scope.
+/// 10. **Private namespace** provision.
+/// 11. **Insert** into library + set active reference.
+///
+/// # Errors
+///
+/// See `docs/PLUGIN-MANIFEST.md` §4.1 for the full failure-mode list.
+#[allow(clippy::too_many_arguments)]
+pub fn install_plugin<F, M, P>(
+    library: &mut PluginLibrary,
+    plugin_did_store: &mut PluginDidStore,
+    ctx: &mut InstallContext<'_, M, P>,
+    received_bytes: &[u8],
+    expected_cid: &Cid,
+    install_record: &InstallRecord,
+    installed_at_nanos: u64,
+    resolver: &F,
+) -> Result<InstallOutcome, ErrorCode>
+where
+    F: Fn(&Cid) -> Option<PluginManifest>,
+    M: CapMinter,
+    P: PrivateNamespaceProvisioner,
+{
+    // 1. Decode manifest + verify content-CID.
+    let manifest: PluginManifest = serde_ipld_dagcbor::from_slice(received_bytes)
+        .map_err(|_| ErrorCode::PluginManifestInvalid)?;
+    if manifest.compute_content_cid() != *expected_cid {
+        return Err(ErrorCode::PluginContentCidMismatch);
+    }
+    if manifest.content_cid != *expected_cid {
+        return Err(ErrorCode::PluginContentCidMismatch);
+    }
+
+    // 2. Trust-list check (R4b-FP-1: T5b user-trust-list arm).
+    if !ctx.user_trust_list.is_empty() && !ctx.user_trust_list.contains(&manifest.peer_did) {
+        return Err(ErrorCode::PluginAuthorNotTrusted);
+    }
+
+    // 3. Seam 2 — clock-injected validation (delegates to validate +
+    // verify_peer_signature internally).
+    let validation = manifest.validate_with_clock(ctx.now_secs)?;
+
+    // 4. Consent gate — install record signature + manifest-CID
+    // binding. Defense vs. consent-record-substitution where attacker
+    // re-uses Alice's consent record for Bob's manifest.
+    install_record.verify_user_signature()?;
+    if install_record.manifest_cid != *expected_cid {
+        return Err(ErrorCode::PluginInstallConsentRequired);
+    }
+    if install_record.consenting_user_did != *ctx.user_did {
+        return Err(ErrorCode::PluginInstallConsentRequired);
+    }
+
+    // 5. Heterogeneity check.
+    if matches!(ctx.installer_shape, InstallerShape::ThinClient) && manifest.requires_sandbox_exec()
+    {
+        return Err(ErrorCode::PluginHeterogeneityIncompatible);
+    }
+
+    // 6. Seam 4 — composition cycle detection.
+    detect_composition_cycle(*expected_cid, &manifest, resolver)?;
+
+    // 7. Upgrade DAG-descendant check (T10-upgrade (b)).
+    if let (Some(chain), Some(prior_cid)) = (ctx.version_chain, ctx.prior_installed_cid) {
+        // Same CID = re-install (no-op upgrade); otherwise must be
+        // a strict descendant.
+        if prior_cid != *expected_cid && !chain.is_ancestor_of(&prior_cid, expected_cid) {
+            return Err(ErrorCode::PluginManifestInvalid);
+        }
+    }
+
+    // 8. Mint plugin-DID + persist into store.
+    let plugin_did_handle = mint_plugin_did();
+    let plugin_did = plugin_did_handle.did().clone();
+    plugin_did_store.insert(plugin_did_handle);
+
+    // 9. Cap cascade — mint root grants from user_did → plugin_did.
+    let mut grants_minted = 0usize;
+    for req in &manifest.requires {
+        ctx.cap_minter
+            .mint_root_grant(ctx.user_did, &plugin_did, &req.scope)?;
+        grants_minted += 1;
+    }
+
+    // 10. Provision private namespace.
+    ctx.private_ns.provision_private_namespace(&plugin_did)?;
+
+    // 11. Insert into library + set active reference.
+    let entry = LibraryEntry {
+        manifest_cid: *expected_cid,
+        manifest: manifest.clone(),
+        plugin_did,
+        installed_at_nanos,
+    };
+    library.insert(entry.clone());
+    library.set_active(&manifest.plugin_name, *expected_cid)?;
+
+    Ok(InstallOutcome {
+        entry,
+        validation,
+        grants_minted,
+        private_namespace_provisioned: true,
+    })
+}
+
+/// Substantive in-memory default for the install-side cascade ports.
+///
+/// Mirrors the [`InMemoryUninstallCascade`] discipline — gives
+/// substantive test pins a working backend without dragging
+/// `benten-caps` into the foundation crate's production-path deps.
+#[derive(Debug, Default)]
+pub struct InMemoryInstallCascade {
+    minted_grants: Vec<(Did, Did, String, Cid)>,
+    provisioned_namespaces: HashSet<Did>,
+    next_grant_byte: u8,
+}
+
+impl InMemoryInstallCascade {
+    /// New empty cascade.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Snapshot all minted grants `(user_did, plugin_did, scope, grant_cid)`.
+    #[must_use]
+    pub fn minted_grants(&self) -> &[(Did, Did, String, Cid)] {
+        &self.minted_grants
+    }
+
+    /// Whether the cascade has provisioned the private namespace for
+    /// `plugin_did`.
+    #[must_use]
+    pub fn has_provisioned(&self, plugin_did: &Did) -> bool {
+        self.provisioned_namespaces.contains(plugin_did)
+    }
+}
+
+impl CapMinter for InMemoryInstallCascade {
+    fn mint_root_grant(
+        &mut self,
+        user_did: &Did,
+        plugin_did: &Did,
+        scope: &str,
+    ) -> Result<Cid, ErrorCode> {
+        let cid = {
+            let mut digest = [0u8; 32];
+            digest[0] = self.next_grant_byte;
+            self.next_grant_byte = self.next_grant_byte.wrapping_add(1);
+            Cid::from_blake3_digest(digest)
+        };
+        self.minted_grants
+            .push((user_did.clone(), plugin_did.clone(), scope.to_string(), cid));
+        Ok(cid)
+    }
+}
+
+impl PrivateNamespaceProvisioner for InMemoryInstallCascade {
+    fn provision_private_namespace(&mut self, plugin_did: &Did) -> Result<(), ErrorCode> {
+        self.provisioned_namespaces.insert(plugin_did.clone());
+        Ok(())
     }
 }
 

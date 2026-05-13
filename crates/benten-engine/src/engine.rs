@@ -988,6 +988,15 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// by GC + delete.
     pub(crate) wait_ttl_tracked_envelopes:
         std::sync::Mutex<std::collections::HashSet<benten_core::Cid>>,
+    /// **Phase-4-Foundation R4b-FP-1 Seam 3** — manifest-envelope
+    /// recheck port consulted from inside [`Self::apply_atrium_merge`]'s
+    /// per-row recheck loop. `None` collapses to
+    /// [`crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker`]
+    /// behavior (Phase-3 baseline; no envelope recheck). Engines built
+    /// WITHOUT [`crate::builder::EngineBuilder::manifest_envelope_rechecker`]
+    /// behave observably identically to Phase-3.
+    pub(crate) manifest_envelope_rechecker:
+        Option<Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>>,
 }
 
 /// Default engine alias resolving to the redb-backed specialization on
@@ -1373,6 +1382,29 @@ impl Engine {
                     return Err(EngineError::Cap(cap_err));
                 }
             }
+
+            // **Phase-4-Foundation R4b-FP-1 Seam 3** — defense-in-depth
+            // at the sync merge boundary. Consult the manifest-envelope
+            // rechecker port; on `OutsideEnvelope` the row rejects
+            // with typed `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`.
+            // Engines built WITHOUT a configured rechecker collapse to
+            // `NotApplicable` (Phase-3-baseline behavior).
+            //
+            // Couples to Phase-3 G16-B-F's structural-always-on
+            // per-row cap-recheck — the envelope recheck runs AFTER
+            // the cap-revocation check because the envelope semantics
+            // are a Layer-3 refinement (CLAUDE.md #18) on top of the
+            // Layer-1 revocation defense.
+            if let Some(rechecker) = self.manifest_envelope_rechecker.as_ref() {
+                let peer_did_str = atrium
+                    .resolve_peer_dids(&seed.peer_node_ids)
+                    .await
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| "<unresolved-peer>".to_string());
+                let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
+                crate::manifest_envelope_recheck::outcome_to_row_reject(outcome, zone, key)?;
+            }
         }
 
         // 4. Build the merge Version Node. Properties carry the merged
@@ -1678,6 +1710,7 @@ impl<B: GraphBackend> EngineGeneric<B> {
             wait_ttl_gc_stats: std::sync::Mutex::new(crate::WaitTtlGcStats::default()),
             wait_ttl_gc_event_driven_disabled: std::sync::atomic::AtomicBool::new(false),
             wait_ttl_tracked_envelopes: std::sync::Mutex::new(std::collections::HashSet::new()),
+            manifest_envelope_rechecker: None,
         }
     }
 
@@ -1688,6 +1721,30 @@ impl<B: GraphBackend> EngineGeneric<B> {
     /// (which would mask a write that committed).
     pub(crate) fn set_read_only_snapshot(&mut self) {
         self.read_only_snapshot = true;
+    }
+
+    /// **Phase-4-Foundation R4b-FP-1 Seam 3** — install the manifest-
+    /// envelope rechecker port. Consulted from
+    /// [`Self::apply_atrium_merge`]'s per-row recheck loop for
+    /// defense-in-depth at the sync merge boundary against the T8
+    /// attack class (chain leaks past sender's `check_write` but
+    /// fails the receiver's manifest-envelope validation).
+    ///
+    /// Engines built without this setter behave observably identically
+    /// to Phase-3 (no envelope recheck). The default
+    /// [`crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker`]
+    /// is wired in shortly: `engine.set_manifest_envelope_rechecker(
+    /// Arc::new(NoopManifestEnvelopeRechecker))` is observably
+    /// equivalent to NOT calling the setter.
+    ///
+    /// Production wiring lives in the engine-adapter crate that owns
+    /// the plugin library (typically `benten-platform-foundation`'s
+    /// glue type that wraps `PluginLibrary` + the chain validator).
+    pub fn set_manifest_envelope_rechecker(
+        &mut self,
+        rechecker: Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>,
+    ) {
+        self.manifest_envelope_rechecker = Some(rechecker);
     }
 
     /// Phase-2b G10-A-wasip1: returns `true` when this engine is a

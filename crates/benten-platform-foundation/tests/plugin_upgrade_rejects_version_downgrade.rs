@@ -35,97 +35,229 @@
 
 mod common;
 
+use benten_errors::ErrorCode;
 use common::manifest_fixtures::{stub_peer_did_alice, stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    T10-upgrade (b) per-finding arm: upgrade rejects CID that is NOT a DAG-descendant \
-    of the installed version (downgrade attack defense). Named destination: \
-    plan §3 G24-D-FP-1 (plugin_lifecycle hardening — upgrade flow + DAG-descendant \
-    check). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
+#[allow(clippy::too_many_lines)]
 fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
-    let _plugin = stub_plugin_did();
-    let _user = stub_user_did();
+    // **R4b-FP-1 Seam 1** un-ignore — substantive T10-upgrade (b) per
+    // pim-2-amendment §3.6b sub-rule 4: install_plugin's upgrade arm
+    // (driven by ctx.version_chain + ctx.prior_installed_cid) rejects
+    // when the new CID is NOT a DAG-descendant of the prior installed
+    // CID. Would-FAIL if seam skipped the is_ancestor_of check.
+    use benten_core::version_chain::DagVersionChain;
+    use benten_id::keypair::Keypair;
+    use benten_platform_foundation::plugin_library::PluginLibrary;
+    use benten_platform_foundation::plugin_lifecycle::{
+        InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+    };
 
-    // G24-D-FP-1 wave wires this. Substantive shape:
-    //
-    //   use benten_platform_foundation::plugin_lifecycle::upgrade_plugin;
-    //
-    //   let mut engine = common::manifest_fixtures::test_engine_with_user_did();
-    //   let plugin_did = stub_plugin_did();
-    //   let alice = stub_peer_did_alice();
-    //
-    //   // Plugin version DAG:
-    //   //   v1 (anchor) → v2 → v3 (installed; CURRENT)
-    //   //                  ↘ v2-fork (separate branch)
-    //   let v1 = common::manifest_fixtures::stub_cid_zero();
-    //   let v2 = common::manifest_fixtures::stub_cid_one();
-    //   let v3 = common::manifest_fixtures::stub_cid_two();
-    //
-    //   // Install v3 from alice; DAG: v1 → v2 → v3.
-    //   common::manifest_fixtures::install_plugin_with_version_chain(
-    //       &mut engine, plugin_did.clone(),
-    //       /* peer_did */ alice.clone(),
-    //       /* dag_chain */ vec![v1, v2, v3],
-    //       /* current */ v3,
-    //   ).unwrap();
-    //
-    //   // Attack: deliver an "upgrade" CID that's an ANCESTOR (v1)
-    //   // — a known-vulnerable older version. Same peer-DID (alice).
-    //   let downgrade_attempt = upgrade_plugin(
-    //       &mut engine,
-    //       /* plugin_did */ plugin_did.clone(),
-    //       /* new_content_cid */ v1,
-    //       /* signing_peer_did */ alice.clone(),
-    //       /* signature */
-    //       common::manifest_fixtures::valid_signature_by(&alice, &v1),
-    //   );
-    //
-    //   // T10-upgrade (b) defense: downgrade to NON-DESCENDANT MUST
-    //   // be REJECTED. CURRENT can advance to any reachable descendant
-    //   // per D-4F-14; v1 is an ancestor, not a descendant of v3.
-    //   let err = downgrade_attempt.expect_err(
-    //       "T10-upgrade (b): upgrade to CID that's NOT a DAG descendant \
-    //        of installed CURRENT MUST be REJECTED — version chain \
-    //        monotonicity per D-4F-14"
-    //   );
-    //   assert!(
-    //       matches!(err.code(),
-    //           ErrorCode::E_PLUGIN_MANIFEST_INVALID
-    //           | ErrorCode::E_PLUGIN_INSTALL_CONSENT_REQUIRED),
-    //       "T10-upgrade (b): must surface typed downgrade rejection; \
-    //        got {:?}", err.code()
-    //   );
-    //
-    //   // Defense-in-depth: CURRENT pointer UNCHANGED:
-    //   let current = engine.manifest_store().current_cid_for(&plugin_did);
-    //   assert_eq!(current, v3,
-    //       "T10-upgrade (b): rejected downgrade MUST NOT mutate \
-    //        CURRENT pointer");
-    //
-    //   // Cross-branch fork upgrade also rejected (v2-fork is NOT a
-    //   // descendant of v3):
-    //   let v2_fork = common::manifest_fixtures::stub_cid_v2_fork();
-    //   let fork_attempt = upgrade_plugin(
-    //       &mut engine,
-    //       plugin_did.clone(),
-    //       v2_fork,
-    //       alice.clone(),
-    //       common::manifest_fixtures::valid_signature_by(&alice, &v2_fork),
-    //   );
-    //   assert!(
-    //       fork_attempt.is_err(),
-    //       "T10-upgrade (b): cross-fork upgrade MUST be rejected at \
-    //        upgrade surface — per CLAUDE.md #18 cross-fork merge \
-    //        requires user-initiated merge flow (ratification #8)"
-    //   );
-    //
-    // OBSERVABLE consequence: DAG-monotonicity enforcement at upgrade
-    // boundary; cross-fork transitions surfaced as merge-not-upgrade.
-    panic!(
-        "RED-PHASE: G24-D-FP-1 must wire DAG-descendant check in \
-         upgrade_plugin (T10-upgrade (b) per-finding-granular pin). \
-         Substantive: v1→v2→v3 chain + downgrade-to-v1-rejected + \
-         CURRENT unchanged + cross-fork rejected."
+    let _ = (stub_peer_did_alice(), stub_plugin_did(), stub_user_did());
+
+    let alice = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
+
+    // Build a 3-version chain v1 → v2 → v3 + a v2-fork branch (under
+    // v1 as parallel branch). CIDs come from the manifest content
+    // they sign, so build manifests in order.
+    let v1 = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "downgrade-test",
+        &["store:notes:read"],
+    );
+    let v2 = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "downgrade-test-v2",
+        &["store:notes:read", "store:notes:write"],
+    );
+    let v3 = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "downgrade-test-v3",
+        &[
+            "store:notes:read",
+            "store:notes:write",
+            "store:plugins:read",
+        ],
+    );
+    let v2_fork = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "downgrade-test-v2-fork",
+        &["store:notes:read", "store:contacts:read"],
+    );
+
+    let mut chain = DagVersionChain::new(v1.content_cid);
+    chain
+        .add_version(v1.content_cid, v2.content_cid)
+        .expect("v1 → v2 OK");
+    chain
+        .add_version(v2.content_cid, v3.content_cid)
+        .expect("v2 → v3 OK");
+    chain
+        .add_version(v1.content_cid, v2_fork.content_cid)
+        .expect("v1 → v2-fork OK");
+
+    // Pre-install v3 = CURRENT (no version_chain or prior_installed_cid
+    // — fresh install).
+    let bytes_v3 = serde_ipld_dagcbor::to_vec(&v3).expect("encode");
+    let install_v3 = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        v3.content_cid,
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeV3".to_string()),
+        3,
+    );
+
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let trust_list: Vec<benten_id::did::Did> = vec![];
+    {
+        let mut ctx = InstallContext {
+            cap_minter: &mut cascade,
+            private_ns: &mut private_ns,
+            now_secs: 1_700_000_000,
+            installer_shape: InstallerShape::FullPeer,
+            user_trust_list: &trust_list,
+            user_did: &user_did,
+            version_chain: None,
+            prior_installed_cid: None,
+        };
+        install_plugin(
+            &mut library,
+            &mut store,
+            &mut ctx,
+            &bytes_v3,
+            &v3.content_cid,
+            &install_v3,
+            1,
+            &|_| None,
+        )
+        .expect("fresh install of v3 admits");
+    }
+    assert_eq!(library.len(), 1);
+
+    // ATTACK: attempt to "upgrade" to v1 (an ANCESTOR of v3).
+    let bytes_v1 = serde_ipld_dagcbor::to_vec(&v1).expect("encode");
+    let install_v1 = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        v1.content_cid,
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeV1Attack".to_string()),
+        4,
+    );
+    let mut cascade2 = InMemoryInstallCascade::new();
+    let mut private_ns2 = InMemoryInstallCascade::new();
+    let mut ctx_downgrade = InstallContext {
+        cap_minter: &mut cascade2,
+        private_ns: &mut private_ns2,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: Some(&chain),
+        prior_installed_cid: Some(v3.content_cid),
+    };
+    let downgrade_attempt = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx_downgrade,
+        &bytes_v1,
+        &v1.content_cid,
+        &install_v1,
+        2,
+        &|_| None,
+    );
+    let err = downgrade_attempt
+        .expect_err("T10-upgrade (b): downgrade to non-descendant MUST be REJECTED");
+    assert_eq!(
+        err,
+        ErrorCode::PluginManifestInvalid,
+        "T10-upgrade (b): downgrade rejection MUST surface typed code; got {err:?}"
+    );
+    // Defense-in-depth: library state unchanged (still has v3).
+    assert_eq!(
+        library.len(),
+        1,
+        "rejected downgrade MUST NOT alter library state"
+    );
+    assert!(
+        library.get(&v3.content_cid).is_some(),
+        "v3 entry MUST remain"
+    );
+    assert!(
+        library.get(&v1.content_cid).is_none(),
+        "rejected v1 MUST NOT have been inserted"
+    );
+
+    // ATTACK 2: cross-branch upgrade to v2-fork (NOT a descendant of v3).
+    let bytes_fork = serde_ipld_dagcbor::to_vec(&v2_fork).expect("encode");
+    let install_fork = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        v2_fork.content_cid,
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeForkAttack".to_string()),
+        5,
+    );
+    let mut cascade3 = InMemoryInstallCascade::new();
+    let mut private_ns3 = InMemoryInstallCascade::new();
+    let mut ctx_fork = InstallContext {
+        cap_minter: &mut cascade3,
+        private_ns: &mut private_ns3,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: Some(&chain),
+        prior_installed_cid: Some(v3.content_cid),
+    };
+    let fork_attempt = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx_fork,
+        &bytes_fork,
+        &v2_fork.content_cid,
+        &install_fork,
+        3,
+        &|_| None,
+    );
+    assert!(
+        fork_attempt.is_err(),
+        "T10-upgrade (b): cross-fork upgrade MUST be rejected"
+    );
+
+    // POSITIVE arm — legitimate v3 → v3 same-CID re-install OR upgrade
+    // to a fresh descendant (we'd need v4 in chain to test that; this
+    // path validates the "same CID = re-install" branch).
+    let mut cascade4 = InMemoryInstallCascade::new();
+    let mut private_ns4 = InMemoryInstallCascade::new();
+    let install_v3_redo = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        v3.content_cid,
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkUpgradeV3Redo".to_string()),
+        6,
+    );
+    let mut ctx_same = InstallContext {
+        cap_minter: &mut cascade4,
+        private_ns: &mut private_ns4,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: Some(&chain),
+        prior_installed_cid: Some(v3.content_cid),
+    };
+    let same_attempt = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx_same,
+        &bytes_v3,
+        &v3.content_cid,
+        &install_v3_redo,
+        4,
+        &|_| None,
+    );
+    assert!(
+        same_attempt.is_ok(),
+        "T10-upgrade (b) boundary: same-CID re-install MUST admit (not over-strict): {same_attempt:?}"
     );
 }

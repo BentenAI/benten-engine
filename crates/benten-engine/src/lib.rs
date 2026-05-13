@@ -69,9 +69,13 @@ pub mod ast_cache;
 // See `cap_recheck.rs` rustdoc for the design pins.
 pub mod cap_recheck;
 pub mod cap_snapshot_hash;
+// Phase-4-Foundation R4b-FP-1 Seam 3 — manifest-envelope recheck port
+// consumed by `Engine::apply_atrium_merge`'s per-row recheck loop.
+// Defense-in-depth at the sync merge boundary for the T8 attack class.
 pub mod change;
 pub mod change_probe;
 pub mod handler_router;
+pub mod manifest_envelope_recheck;
 // Phase-3 G15-A wave-5a — materialization-time per-row READ gate for
 // IVM-materialized views. Closes Compromise #11 in coordination with
 // G14-D delivery-time gate per `ivm-major-2` + `ds-r4r2-7` shared-trait

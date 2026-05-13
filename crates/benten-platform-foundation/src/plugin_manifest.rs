@@ -244,7 +244,67 @@ impl PluginManifest {
             Ok(ValidationOutcome::Valid)
         }
     }
+
+    /// **Phase-4-Foundation R4b-FP-1 Seam 2** — engine-injection-time
+    /// validation seam. Plugin authors call [`Self::validate`] WITHOUT
+    /// a clock parameter; the engine surface (here +
+    /// [`crate::plugin_lifecycle::install_plugin`]) wraps with clock
+    /// injection at the load boundary per D-4F-15 transparent-clock-
+    /// injection ratification.
+    ///
+    /// Fail-CLOSED contract (sec-3.5-r1-7 carry): the
+    /// `MANIFEST_CLOCK_NOT_INJECTED_SENTINEL = 0` sentinel encodes
+    /// "engine built WITHOUT clock injection". If the caller passes
+    /// the sentinel AND the manifest declares ANY time-bounded
+    /// behavior (today the `host:time:now` cap requirement is the
+    /// observable proxy; future UCAN-typed `nbf`/`exp` proofs in the
+    /// install record extend this), the seam fail-closes with
+    /// [`ErrorCode::UcanClockNotInjected`]. With a non-sentinel clock,
+    /// validation proceeds normally + the `now_secs` is threaded
+    /// through to downstream UCAN chain-walkers in
+    /// [`crate::plugin_lifecycle::install_plugin`].
+    ///
+    /// **Cross-language rule-mirror discipline (§3.5g)**: the
+    /// `E_UCAN_CLOCK_NOT_INJECTED` typed code is the SAME variant
+    /// Phase-3 PR #158 minted for `UcanGroundedPolicy`; reusing
+    /// preserves a single mental model for "no wallclock injected at
+    /// the engine surface".
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorCode::UcanClockNotInjected`] when `now_secs == 0` AND
+    ///   the manifest declares time-bounded requirements.
+    /// - Propagates [`Self::validate`] + [`Self::verify_peer_signature`]
+    ///   structural/cryptographic failures.
+    pub fn validate_with_clock(&self, now_secs: u64) -> Result<ValidationOutcome, ErrorCode> {
+        self.validate()?;
+        self.verify_peer_signature()?;
+        if now_secs == MANIFEST_CLOCK_NOT_INJECTED_SENTINEL && self.declares_time_bounded() {
+            return Err(ErrorCode::UcanClockNotInjected);
+        }
+        Ok(ValidationOutcome::Valid)
+    }
+
+    /// Whether this manifest declares any time-bounded behavior whose
+    /// validation requires a real engine-injected wallclock.
+    ///
+    /// At G24-D the observable proxy is presence of `host:time:now` in
+    /// `requires` (the standard wallclock-cap requirement). Phase-4-Meta
+    /// extension: UCAN-typed `nbf`/`exp` proofs carried in the install
+    /// record's `granted_caps_bytes` also count as time-bounded.
+    #[must_use]
+    pub fn declares_time_bounded(&self) -> bool {
+        self.requires
+            .iter()
+            .any(|r| r.scope == "host:time:now" || r.scope.starts_with("host:time:"))
+    }
 }
+
+/// Sentinel value indicating "engine built without clock injection".
+/// Mirrors the `DEFAULT_NOW_SECS = 0` sentinel in
+/// `benten-caps::ucan_grounded` for a single mental model across the
+/// platform.
+pub const MANIFEST_CLOCK_NOT_INJECTED_SENTINEL: u64 = 0;
 
 // =====================================================================
 // ValidationOutcome — G24-D-FP-2 (per phase-4-backlog §4.10 + D-4F-12)

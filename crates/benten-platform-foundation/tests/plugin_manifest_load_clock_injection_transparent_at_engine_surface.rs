@@ -6,54 +6,189 @@
 //!
 //! Fail-closed if clock not injected (sec-3.5-r1-7):
 //! `E_UCAN_CLOCK_NOT_INJECTED` (existing Phase-3 ErrorCode).
+//!
+//! **R4b-FP-1 Seam 2** — both arms un-ignored against the new
+//! `PluginManifest::validate_with_clock(now_secs)` + `install_plugin`
+//! seam in `plugin_lifecycle.rs`. The seam fail-closes when
+//! `now_secs == MANIFEST_CLOCK_NOT_INJECTED_SENTINEL` AND the manifest
+//! declares time-bounded requirements (e.g. `host:time:now`).
 
 mod common;
 
-use common::manifest_fixtures::minimal_manifest;
+use benten_errors::ErrorCode;
+use benten_id::keypair::Keypair;
+use benten_platform_foundation::plugin_library::PluginLibrary;
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+};
+use benten_platform_foundation::plugin_manifest::MANIFEST_CLOCK_NOT_INJECTED_SENTINEL;
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    D-4F-15 transparent-clock-injection at engine surface: \
-    PluginManifest::validate_with_clock(&clock_fn) + install_plugin clock-injection \
-    seam. Plugin authors call validate() without clock parameter; engine wraps with \
-    clock injection at the load boundary; fail-closed E_UCAN_CLOCK_NOT_INJECTED \
-    when not injected. Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle + \
-    engine clock-injection seam at install/load boundary). HARD RULE 12 clause-(b) \
-    BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_validate_consults_engine_injected_clock_not_plugin_local_clock() {
-    let manifest = minimal_manifest();
+    // R4b-FP-1 Seam 2 — direct test against
+    // PluginManifest::validate_with_clock. Substantive per pim-2
+    // §3.6b: builds two manifests (one with `host:time:now`, one
+    // without); sentinel clock fail-closes the time-bounded one,
+    // admits the unbounded one; with a real clock, both admit.
+    let alice = Keypair::generate();
 
-    // Future G24-D surface:
-    //   PluginManifest::validate_with_clock(&clock_fn) -> Result
-    // where clock_fn is engine-provided. Plugin authors call
-    // PluginManifest::validate() (without explicit clock parameter)
-    // and the engine wraps with clock injection at the load boundary.
-    //
-    // FAILS-IF-NO-OP because the validate() call without injected
-    // clock should surface E_UCAN_CLOCK_NOT_INJECTED.
-    let _r = manifest.validate();
-    panic!(
-        "RED-PHASE: G24-D wave must wire engine-surface clock injection at PluginManifest::validate()"
+    // (1) Time-bounded manifest (declares host:time:now).
+    let time_bounded = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "time-bounded",
+        &["host:time:now", "store:notes:read"],
     );
+    assert!(
+        time_bounded.declares_time_bounded(),
+        "test scaffold: manifest should declare time-bounded behavior"
+    );
+    let err = time_bounded
+        .validate_with_clock(MANIFEST_CLOCK_NOT_INJECTED_SENTINEL)
+        .expect_err("clock-not-injected MUST fail-closed for time-bounded manifest");
+    assert_eq!(
+        err,
+        ErrorCode::UcanClockNotInjected,
+        "Seam 2 fail-closed: time-bounded manifest + sentinel clock MUST surface \
+         typed E_UCAN_CLOCK_NOT_INJECTED; would-FAIL if seam skipped sentinel check"
+    );
+    // Boundary: same manifest with a real clock admits.
+    time_bounded
+        .validate_with_clock(1_700_000_000)
+        .expect("time-bounded manifest WITH real clock MUST admit");
+
+    // (2) Time-unbounded manifest (no host:time:* requires) — sentinel
+    // clock is fine because no time-bounded behavior to validate.
+    let unbounded =
+        common::manifest_fixtures::signed_manifest_by(&alice, "unbounded", &["store:notes:read"]);
+    assert!(
+        !unbounded.declares_time_bounded(),
+        "test scaffold: unbounded manifest should NOT declare time-bounded behavior"
+    );
+    unbounded
+        .validate_with_clock(MANIFEST_CLOCK_NOT_INJECTED_SENTINEL)
+        .expect(
+            "time-unbounded manifest with sentinel clock MUST admit \
+             (seam is fail-closed only for time-bounded manifests)",
+        );
 }
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    D-4F-15 transparent-clock-injection at engine surface: \
-    PluginManifest::validate_with_clock(&clock_fn) + install_plugin clock-injection \
-    seam. Plugin authors call validate() without clock parameter; engine wraps with \
-    clock injection at the load boundary; fail-closed E_UCAN_CLOCK_NOT_INJECTED \
-    when not injected. Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle + \
-    engine clock-injection seam at install/load boundary). HARD RULE 12 clause-(b) \
-    BELONGS-NAMED-NOW."]
 #[test]
 fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injected() {
-    let manifest = common::manifest_fixtures::admin_ui_v0_manifest();
+    // R4b-FP-1 Seam 2 + Seam 1 integration — install_plugin lifecycle
+    // threads `ctx.now_secs` into `validate_with_clock`. Substantive
+    // per pim-2 §3.6b sub-rule 4: install of the admin-UI-v0-shaped
+    // manifest (declares host:time:now) WITHOUT clock injection
+    // surfaces typed E_UCAN_CLOCK_NOT_INJECTED at the install boundary.
+    //
+    // Would-FAIL-if-no-op'd: install_plugin skips validate_with_clock
+    // OR uses a hardcoded clock instead of threading ctx.now_secs.
+    let alice = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
 
-    // Future G24-D surface mirrors sec-3.5-r1-7 closure: install
-    // without clock injection surfaces E_UCAN_CLOCK_NOT_INJECTED.
-    // Routes through `crates/benten-platform-foundation/src/
-    // plugin_lifecycle.rs::install_plugin(manifest, clock_fn)`; if
-    // clock_fn returns DEFAULT_NOW_SECS sentinel, fail-closed.
-    let _r = manifest.validate();
-    panic!("RED-PHASE: G24-D wave must wire fail-closed clock-not-injected at install_plugin");
+    // Manifest declares host:time:now → fail-closed on sentinel clock.
+    let manifest = common::manifest_fixtures::signed_manifest_by(
+        &alice,
+        "admin-ui-v0-clock-injection",
+        &[
+            "host:time:now",
+            "store:plugins:read",
+            "private:admin-ui:logs",
+        ],
+    );
+    let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
+    let expected_cid = manifest.content_cid;
+
+    let plugin_did_placeholder =
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkClockInjectionTest".to_string());
+    let install_record = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        expected_cid,
+        plugin_did_placeholder,
+        3,
+    );
+
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let trust_list: Vec<benten_id::did::Did> = vec![];
+
+    let mut ctx_no_clock = InstallContext {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+        now_secs: MANIFEST_CLOCK_NOT_INJECTED_SENTINEL, // engine built WITHOUT clock injection
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+
+    let attempt = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx_no_clock,
+        &bytes,
+        &expected_cid,
+        &install_record,
+        1,
+        &|_| None,
+    );
+
+    let err = attempt.expect_err(
+        "T11 LOAD-BEARING: admin UI v0 install WITHOUT injected clock MUST fail-closed",
+    );
+    assert_eq!(
+        err,
+        ErrorCode::UcanClockNotInjected,
+        "T11: must surface typed E_UCAN_CLOCK_NOT_INJECTED (Phase-3 PR #158 invariant); got {err:?}"
+    );
+
+    // Defense-in-depth: fail-closed install MUST NOT commit partial
+    // state — no library entry, no minted grants, no provisioned NS.
+    assert!(
+        library.is_empty(),
+        "T11: fail-closed install MUST NOT commit library state"
+    );
+    assert!(
+        cascade.minted_grants().is_empty(),
+        "T11: fail-closed install MUST NOT mint root grants"
+    );
+    assert_eq!(
+        store.len(),
+        0,
+        "T11: fail-closed install MUST NOT persist plugin-DID"
+    );
+
+    // Boundary: same install path WITH a real clock injected MUST
+    // admit (defense isn't over-strict; sec-3.5-r1-7 carry threads
+    // properly).
+    let mut library2 = PluginLibrary::new();
+    let mut store2 = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade2 = InMemoryInstallCascade::new();
+    let mut private_ns2 = InMemoryInstallCascade::new();
+    let mut ctx_with_clock = InstallContext {
+        cap_minter: &mut cascade2,
+        private_ns: &mut private_ns2,
+        now_secs: 1_700_000_000, // real clock injected
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+    let outcome = install_plugin(
+        &mut library2,
+        &mut store2,
+        &mut ctx_with_clock,
+        &bytes,
+        &expected_cid,
+        &install_record,
+        1,
+        &|_| None,
+    )
+    .expect("admin UI v0 install WITH injected clock MUST succeed");
+    assert_eq!(outcome.grants_minted, 3);
+    assert_eq!(library2.len(), 1);
 }

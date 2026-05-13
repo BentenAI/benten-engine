@@ -362,24 +362,29 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-2 MINOR + G24-C mr-1 MI
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-3 MINOR + G24-C mr-2 OBS.
 
-### §4.19 Phase-4-Meta carry: R5 phantom-destination un-ignore promises (test-positive-pairs + enhancement seams)
+### §4.19 `plugin_lifecycle::accept_atrium_share` cross-peer install seam + schema-author trust-list user-prompt surface (Phase-4-Meta)
 
-**Origin:** R4b L1 findings r4b-l1-4 (plugin_did UCAN audience-handle positive arm) + r4b-l1-6 (schema_author trust-list prompt path). Both tests cited specific R5 waves (G22-FP-2 + G24-B respectively) as their un-ignore destinations; both waves shipped without delivering the un-ignore. Per Ben ratification 2026-05-13 (Q4 disposition), these are non-v1-blocker carries to Phase 4-Meta.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R4b-FP-1 + R4b-FP-3 both consolidated stranded pins here):
 
-**Scope — 2 deferred items (the v1-shippable seams from L1 cluster land at R4b-FP-1 in the same window):**
+**(a) Cross-peer install seam.** Production surface NOT YET BUILT for the cross-Atrium-peer install path. R4b-FP-1 closed the single-process `install_plugin` lifecycle but the cross-peer share-and-install pipeline (peer A publishes admin UI bundle through Atrium; peer B receives + verifies via the existing benten-sync `HandshakeFrame` device-DID-attestation pathway from Phase-3 G16-D wave-6b PR #163; bytes hydrate into peer B's ManifestStore; peer B's user-DID consents via local-anchored InstallRecord) lands at Phase-4-Meta.
 
-1. **`plugin_did` UCAN audience-handle POSITIVE arm** — `crates/benten-platform-foundation/tests/plugin_did_is_ucan_audience_handle_not_attested_sub_identity.rs`. The production code path (`UcanGroundedPolicy::permits_typed_proof_for` audience-binding) ALREADY EXISTS as of pre-R5 (G22-FP-2 commit `55f136e`); the substantive defense is covered by the sibling negative grep-walk arm in this same file (which IS un-ignored + substantive). The missing piece is THIS positive integration test that drives a real UCAN through the chain validator end-to-end. **Test-positive-pair only — does NOT gate a production capability.**
+**Stranded cross-peer pin destinations** (each test's ignore message MUST be updated to point at THIS row when the wave lands):
 
-2. **Schema-author trust-list user-prompt surface** — `crates/benten-platform-foundation/tests/schema_author_not_in_admin_ui_trust_list_prompts_user.rs`. Per Ben Q3 ratification at r4-triage §7, v1 admin UI ships with default-trust-not-shown (default trust-list = EMPTY); the explicit `ProvenanceOutcome::UserPromptRequired` surface + admin-UI prompt UX is an enhancement. **v1 admin UI is functional without this surface** — installs ship the manifest-envelope + plugin-DID checks already; the missing piece is the UX prompt flow.
+- `crates/benten-platform-foundation/tests/admin_ui_v0_install_as_signed_plugin_across_two_atrium_peers.rs:8` (single ignored test) — end-to-end cross-peer install via `accept_atrium_share`.
+- `crates/benten-platform-foundation/tests/admin_ui_v0_atrium_share_unattested_peer_rejected.rs:41` (single ignored test, T6c) — HandshakeFrame peer-DID validation rejection arm.
+- `crates/benten-platform-foundation/tests/admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs:14` (single ignored test, T6b end-to-end) — substitution defense end-to-end (the trust-list arm closed at R4b-FP-1; the cross-peer end-to-end remains).
 
-**Phase target:** **Phase 4-Meta** (post-`phase-4-foundation-close` tag).
+Estimated scope: ~300-500 LOC (cross-peer test fixtures + accept_atrium_share entry + HandshakeFrame integration into the install path + manifest-store hydration). Couples to §3.1 (decentralized registry) once Phase-4-Meta opens.
 
-**Acceptance:**
-- Phase-4-Meta wave un-ignores both tests substantively
-- For the UCAN positive arm: drive a real `UcanGroundedPolicy::permits_typed_proof_for` call with `audience=plugin_did` + assert admission
-- For the schema-author trust-list prompt: implement `ProvenanceOutcome::UserPromptRequired` variant + admin-UI v0 (or v1 if reframed) UX surface + assert prompt path is taken on untrusted-author schemas
+**(b) Schema-author trust-list user-prompt surface.** Per R4b L1 finding r4b-l1-6 + Ben Q3 ratification at r4-triage §7, v1 admin UI ships with default-trust-not-shown (default trust-list = EMPTY); the explicit `ProvenanceOutcome::UserPromptRequired` surface + admin-UI prompt UX is an enhancement. **v1 admin UI is functional without this surface** — installs ship the manifest-envelope + plugin-DID checks already; the missing piece is the UX prompt flow.
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes R4b L1 findings r4b-l1-4 + r4b-l1-6 via Phase-4-Meta carry per Ben Q4 ratification.
+- `crates/benten-platform-foundation/tests/schema_author_not_in_admin_ui_trust_list_prompts_user.rs:41` — un-ignore via real `ProvenanceOutcome::UserPromptRequired` variant + admin-UI v0 (or v1 if reframed) UX surface + assert prompt path is taken on untrusted-author schemas.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes R4b L1 findings r4b-l1-4 (PLUGIN_DID positive arm closed at R4b-FP-1; no longer deferred) + r4b-l1-6 (schema_author trust-list — deferred here) + R4b-FP-1's three cross-peer redirects, all via Phase-4-Meta carry per Ben Q4 ratification.
+
+### §4.20 `validate_with_clock` end-to-end thread through engine builder + IndexedDB clock-injection (Phase-4-Meta)
+
+R4b-FP-1 Seam 2 shipped `PluginManifest::validate_with_clock` + threaded through `plugin_lifecycle::install_plugin`. The end-to-end **engine builder** clock-injection seam (`EngineBuilder::clock_source` plumbed through to the install path's `now_secs` AND through IndexedDB persistence so a thin-compute-surface install consults the injected clock at hydrate time too) lands at Phase-4-Meta. ~100-200 LOC.
 
 ---
 

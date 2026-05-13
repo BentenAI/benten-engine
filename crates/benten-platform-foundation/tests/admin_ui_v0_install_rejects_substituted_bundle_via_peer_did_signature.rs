@@ -9,30 +9,90 @@
 
 mod common;
 
-use common::manifest_fixtures::{admin_ui_v0_manifest, stub_peer_did_attacker};
+use benten_errors::ErrorCode;
+use benten_id::keypair::Keypair;
+use benten_platform_foundation::plugin_library::PluginLibrary;
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+};
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    Admin UI v0 substitution-defense end-to-end with user-DID trust-list path: \
-    install_plugin must consult user's requires_plugin_authors trust-list and \
-    distinguish forged-claim (E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID) from \
-    unknown-author (E_PLUGIN_AUTHOR_NOT_TRUSTED). Sibling \
-    plugin_manifest_substitution_at_install_rejected.rs wires the forged-claim arm \
-    NOW; trust-list arm lands at G24-D-FP-1. Named destination: plan §3 G24-D-FP-1 \
-    (plugin_lifecycle hardening — trust-list integration). HARD RULE 12 clause-(b) \
-    BELONGS-NAMED-NOW."]
 #[test]
 fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
-    let mut hostile = admin_ui_v0_manifest();
-    hostile.peer_did = stub_peer_did_attacker();
-    // Note: hostile.peer_signature is still 0-bytes; even if the
-    // attacker fabricates a signature with their own key, it won't
-    // verify against the EXPECTED peer-DID (which user's
-    // requires_plugin_authors trust-list would name).
+    // **R4b-FP-1 Seam 1** un-ignore — substantive substitution-defense
+    // end-to-end via install_plugin's two-stage check:
+    //  (i) peer-DID signature verification (existing G24-D primary).
+    //  (ii) user-DID trust-list check (NEW at R4b-FP-1 Seam 1).
+    //
+    // Both arms surface DIFFERENT typed codes per pim-2-amendment
+    // §3.6b sub-rule 4 (per-finding granularity):
+    //  (a) attacker forges manifest claiming alice's peer_did but
+    //      signs with attacker's key → E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID
+    //      (covered by sibling plugin_manifest_substitution_at_install_rejected.rs).
+    //  (b) attacker honestly signs as themselves but user's trust-list
+    //      doesn't contain attacker → E_PLUGIN_AUTHOR_NOT_TRUSTED.
+    //
+    // This test pins arm (b) — the trust-list cross-Atrium-substitution
+    // arm. Together they form defense in depth.
+    let alice = Keypair::generate(); // trusted author
+    let attacker = Keypair::generate(); // un-trusted; could be any author
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
 
-    // Future surface: install_plugin verifies signature against
-    // declared peer_did + checks against user's trust-list. Rejects
-    // with ErrorCode::PluginAuthorNotTrusted (when DID not in trust
-    // list) OR ErrorCode::PluginContentPeerSignatureInvalid (when
-    // signature itself is bad).
-    panic!("RED-PHASE: G24-D wave must wire substitution-attack rejection via peer-DID signature");
+    // Attacker constructs a manifest honestly signed by THEIR key
+    // (passes the peer-DID-signature check) but published under same
+    // human-readable name as alice's admin UI v0. The trust-list
+    // (containing only alice) catches the substitution.
+    let hostile = common::manifest_fixtures::signed_manifest_by(
+        &attacker,
+        "admin-ui-v0", // same plugin name as alice's
+        &["private:admin-ui-private:foo", "store:plugins:read"],
+    );
+    let bytes = serde_ipld_dagcbor::to_vec(&hostile).expect("encode");
+    let expected_cid = hostile.content_cid;
+    let install_record = common::manifest_fixtures::signed_install_record(
+        &user_kp,
+        expected_cid,
+        benten_id::did::Did::from_string_unchecked("did:key:z6MkSubstitutedBundle".to_string()),
+        2,
+    );
+
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    // User's trust-list contains alice only (NOT attacker).
+    let trust_list = vec![alice.public_key().to_did()];
+    let mut ctx = InstallContext {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &trust_list,
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+    };
+
+    let attempt = install_plugin(
+        &mut library,
+        &mut store,
+        &mut ctx,
+        &bytes,
+        &expected_cid,
+        &install_record,
+        1,
+        &|_| None,
+    );
+    let err = attempt.expect_err("substituted bundle MUST be rejected by trust-list arm");
+    assert_eq!(
+        err,
+        ErrorCode::PluginAuthorNotTrusted,
+        "Substitution-defense (b): attacker honestly signed but author NOT in user's \
+         trust-list MUST surface typed E_PLUGIN_AUTHOR_NOT_TRUSTED; \
+         would-FAIL if install_plugin skipped trust-list check"
+    );
+    assert!(
+        library.is_empty(),
+        "rejected install MUST NOT commit library state"
+    );
 }
