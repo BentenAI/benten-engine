@@ -75,9 +75,14 @@
 
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 
+pub mod module_ecosystem;
+pub mod plugin_lifecycle;
+pub mod plugin_library;
 pub mod plugin_manifest;
+pub mod registry;
+pub mod workflow_to_plugin;
 
 pub use plugin_manifest::{
-    CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
-    SharesPolicyDefault, SharesRule, SharesTarget,
+    CapRequirement, ContentAddressed, InstallRecord, PluginManifest, RendererBackend,
+    RendererConfig, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget, sign_manifest,
 };

@@ -24,6 +24,12 @@ bench = false
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 benten-id = { path = "../benten-id" }
+# G24-D — canonical-bytes DAG-CBOR + BLAKE3 content hashing + Ed25519
+# verification for the FULL plugin manifest schema per CLAUDE.md #18.
+blake3 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_ipld_dagcbor = { workspace = true }
+ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

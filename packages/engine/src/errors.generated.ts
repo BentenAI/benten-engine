@@ -167,6 +167,22 @@ export const CATALOG_CODES = [
   "E_TYPED_CALL_DISPATCH_ERROR",
   "E_UCAN_CLOCK_NOT_INJECTED",
   "E_RESERVED_HANDLER_NAMESPACE",
+  // Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
+  "E_PLUGIN_MANIFEST_INVALID",
+  "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID",
+  "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID",
+  "E_PLUGIN_CONTENT_PEER_KEY_ROTATED",
+  "E_PLUGIN_AUTHOR_NOT_TRUSTED",
+  "E_PLUGIN_INSTALL_CONSENT_REQUIRED",
+  "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE",
+  "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN",
+  "E_PLUGIN_CONTENT_CID_MISMATCH",
+  "E_PLUGIN_NEW_VERSION_AVAILABLE",
+  "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE",
+  "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED",
+  "E_PLUGIN_DEVICE_ATTESTATION_FORGED",
+  "E_PLUGIN_LIBRARY_INDEX_TAMPER",
+  "E_REGISTRY_DISCOVERY_TIMEOUT",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2181,6 +2197,129 @@ export class EReservedHandlerNamespace extends BentenError {
   }
 }
 
+// Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
+// Atomic Rust + TS mirror per §3.5g cross-language rule-mirror.
+export class EPluginManifestInvalid extends BentenError {
+  static readonly code = "E_PLUGIN_MANIFEST_INVALID";
+  static readonly fixHint = "Plugin manifest envelope structurally invalid: empty fields, signature length mismatch, or malformed shares-policy. Inspect the validate() failure at the platform-foundation plugin_manifest::validate construction site.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_MANIFEST_INVALID", EPluginManifestInvalid.fixHint, message, context);
+    this.name = "EPluginManifestInvalid";
+  }
+}
+export class EPluginInstallRecordUserSignatureInvalid extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID";
+  static readonly fixHint = "InstallRecord's user-DID signature did not verify against the consenting user-DID's public key. Catches forged install records. Inspect the install pipeline + user-DID resolution.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID", EPluginInstallRecordUserSignatureInvalid.fixHint, message, context);
+    this.name = "EPluginInstallRecordUserSignatureInvalid";
+  }
+}
+export class EPluginContentPeerSignatureInvalid extends BentenError {
+  static readonly code = "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID";
+  static readonly fixHint = "Plugin content's peer-DID signature did not verify. Catches author forgery / substituted bundles. Receiver-peer should reject install and prompt user for first-install consent with a different author.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID", EPluginContentPeerSignatureInvalid.fixHint, message, context);
+    this.name = "EPluginContentPeerSignatureInvalid";
+  }
+}
+export class EPluginContentPeerKeyRotated extends BentenError {
+  static readonly code = "E_PLUGIN_CONTENT_PEER_KEY_ROTATED";
+  static readonly fixHint = "Plugin content's peer-DID key rotated (matched by RotationLog). Surfaces as a WARNING at install — not hard-reject by default per D-4F-12. Admin UI displays the rotation chain for user review.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_CONTENT_PEER_KEY_ROTATED", EPluginContentPeerKeyRotated.fixHint, message, context);
+    this.name = "EPluginContentPeerKeyRotated";
+  }
+}
+export class EPluginAuthorNotTrusted extends BentenError {
+  static readonly code = "E_PLUGIN_AUTHOR_NOT_TRUSTED";
+  static readonly fixHint = "Plugin author's peer-DID is not in the user's trust-list. Admin UI surfaces first-install consent prompt; user may add author to trust-list or reject install.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_AUTHOR_NOT_TRUSTED", EPluginAuthorNotTrusted.fixHint, message, context);
+    this.name = "EPluginAuthorNotTrusted";
+  }
+}
+export class EPluginInstallConsentRequired extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_CONSENT_REQUIRED";
+  static readonly fixHint = "Plugin install attempted without user consent (no InstallRecord signature OR install path bypassed). User-DID must sign an InstallRecord referencing the manifest CID before the plugin enters the library.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_CONSENT_REQUIRED", EPluginInstallConsentRequired.fixHint, message, context);
+    this.name = "EPluginInstallConsentRequired";
+  }
+}
+export class EPluginDelegationOutsideManifestEnvelope extends BentenError {
+  static readonly code = "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE";
+  static readonly fixHint = "Runtime UCAN delegation request fell outside the source plugin's manifest `shares` envelope. The plugin may not delegate this cap to that target. Inspect the source manifest's shares policy.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE", EPluginDelegationOutsideManifestEnvelope.fixHint, message, context);
+    this.name = "EPluginDelegationOutsideManifestEnvelope";
+  }
+}
+export class EPluginPrivateNamespaceDelegationForbidden extends BentenError {
+  static readonly code = "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN";
+  static readonly fixHint = "Cross-plugin delegation of a private-namespace cap (`private:<plugin_did>:*`) — unconditionally denied. Private namespaces never cross plugin boundaries. Re-scope the cap to a sharable namespace.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN", EPluginPrivateNamespaceDelegationForbidden.fixHint, message, context);
+    this.name = "EPluginPrivateNamespaceDelegationForbidden";
+  }
+}
+export class EPluginContentCidMismatch extends BentenError {
+  static readonly code = "E_PLUGIN_CONTENT_CID_MISMATCH";
+  static readonly fixHint = "Plugin content bytes hash does not match the declared content_cid. Catches substitution attacks at receive-time. Re-pull the plugin from a trusted peer.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_CONTENT_CID_MISMATCH", EPluginContentCidMismatch.fixHint, message, context);
+    this.name = "EPluginContentCidMismatch";
+  }
+}
+export class EPluginNewVersionAvailable extends BentenError {
+  static readonly code = "E_PLUGIN_NEW_VERSION_AVAILABLE";
+  static readonly fixHint = "A new version of an installed plugin was discovered (pull-not-push model). This is a HINT, not an error — surfaces to the admin UI as a 'new version available' prompt for user-initiated upgrade.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_NEW_VERSION_AVAILABLE", EPluginNewVersionAvailable.fixHint, message, context);
+    this.name = "EPluginNewVersionAvailable";
+  }
+}
+export class EPluginHeterogeneityIncompatible extends BentenError {
+  static readonly code = "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE";
+  static readonly fixHint = "Plugin requires `host:sandbox:exec` but the installing peer is a thin-compute-surface (browser / edge / Tauri webview per CLAUDE.md #17). Install on a full-peer device instead.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_HETEROGENEITY_INCOMPATIBLE", EPluginHeterogeneityIncompatible.fixHint, message, context);
+    this.name = "EPluginHeterogeneityIncompatible";
+  }
+}
+export class EPluginMetaCompositionCycleRejected extends BentenError {
+  static readonly code = "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED";
+  static readonly fixHint = "Meta-plugin composition graph contains a cycle. Detected at install time; rejected to prevent infinite recursion at evaluator walk.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED", EPluginMetaCompositionCycleRejected.fixHint, message, context);
+    this.name = "EPluginMetaCompositionCycleRejected";
+  }
+}
+export class EPluginDeviceAttestationForged extends BentenError {
+  static readonly code = "E_PLUGIN_DEVICE_ATTESTATION_FORGED";
+  static readonly fixHint = "Device-DID attestation envelope failed verification at the plugin-share boundary. Plugin authors share from full peers with valid device-DIDs; this code surfaces forged envelopes during cross-peer share.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_DEVICE_ATTESTATION_FORGED", EPluginDeviceAttestationForged.fixHint, message, context);
+    this.name = "EPluginDeviceAttestationForged";
+  }
+}
+export class EPluginLibraryIndexTamper extends BentenError {
+  static readonly code = "E_PLUGIN_LIBRARY_INDEX_TAMPER";
+  static readonly fixHint = "Plugin library index tampering detected: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_LIBRARY_INDEX_TAMPER", EPluginLibraryIndexTamper.fixHint, message, context);
+    this.name = "EPluginLibraryIndexTamper";
+  }
+}
+export class ERegistryDiscoveryTimeout extends BentenError {
+  static readonly code = "E_REGISTRY_DISCOVERY_TIMEOUT";
+  static readonly fixHint = "Decentralized registry discovery query timed out before any peer responded. Reserved at Phase 4-Foundation; first firing at Phase 4-Meta when registry-substrate lands.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_REGISTRY_DISCOVERY_TIMEOUT", ERegistryDiscoveryTimeout.fixHint, message, context);
+    this.name = "ERegistryDiscoveryTimeout";
+  }
+}
+
 /**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
@@ -2324,4 +2463,20 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_TYPED_CALL_DISPATCH_ERROR": ETypedCallDispatchError,
   "E_UCAN_CLOCK_NOT_INJECTED": EUcanClockNotInjected,
   "E_RESERVED_HANDLER_NAMESPACE": EReservedHandlerNamespace,
+  // Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
+  "E_PLUGIN_MANIFEST_INVALID": EPluginManifestInvalid,
+  "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID": EPluginInstallRecordUserSignatureInvalid,
+  "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID": EPluginContentPeerSignatureInvalid,
+  "E_PLUGIN_CONTENT_PEER_KEY_ROTATED": EPluginContentPeerKeyRotated,
+  "E_PLUGIN_AUTHOR_NOT_TRUSTED": EPluginAuthorNotTrusted,
+  "E_PLUGIN_INSTALL_CONSENT_REQUIRED": EPluginInstallConsentRequired,
+  "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE": EPluginDelegationOutsideManifestEnvelope,
+  "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN": EPluginPrivateNamespaceDelegationForbidden,
+  "E_PLUGIN_CONTENT_CID_MISMATCH": EPluginContentCidMismatch,
+  "E_PLUGIN_NEW_VERSION_AVAILABLE": EPluginNewVersionAvailable,
+  "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE": EPluginHeterogeneityIncompatible,
+  "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED": EPluginMetaCompositionCycleRejected,
+  "E_PLUGIN_DEVICE_ATTESTATION_FORGED": EPluginDeviceAttestationForged,
+  "E_PLUGIN_LIBRARY_INDEX_TAMPER": EPluginLibraryIndexTamper,
+  "E_REGISTRY_DISCOVERY_TIMEOUT": ERegistryDiscoveryTimeout,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

@@ -435,6 +435,10 @@ dependencies = [
  "benten-engine",
  "benten-errors",
  "benten-id",
+ "blake3",
+ "ed25519-dalek 2.2.0",
+ "serde",
+ "serde_ipld_dagcbor",
  "thiserror 2.0.18",
  "walkdir",
 ]
