@@ -110,6 +110,21 @@ impl PluginDidStore {
         did
     }
 
+    /// Persist a pre-minted [`PluginDidHandle`] into the store.
+    ///
+    /// G24-D-FP-1: the install path mints the plugin-DID via
+    /// [`mint`] (so the receiver can return the `LibraryEntry`'s
+    /// plugin-DID immediately) and then persists the handle into the
+    /// store via this method — at uninstall time
+    /// [`PluginDidStore::revoke`] can then succeed because the store
+    /// actually carries the minted DID. Prior to this method the
+    /// install path had nowhere to persist the handle, leaving the
+    /// `plugin_did_revoked` observable structurally false (g24d
+    /// substantive pipeline test simulation limitation).
+    pub fn insert(&mut self, handle: PluginDidHandle) {
+        self.handles.push(handle);
+    }
+
     /// Look up a handle by DID.
     #[must_use]
     pub fn get(&self, did: &Did) -> Option<&PluginDidHandle> {
