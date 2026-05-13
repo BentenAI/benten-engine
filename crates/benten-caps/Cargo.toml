@@ -69,6 +69,14 @@ criterion = { workspace = true }
 # `test-helpers` default was flipped off on benten-engine; the helpers
 # stay available for these integration tests under the explicit opt-in.
 benten-engine = { path = "../benten-engine", features = ["test-helpers"] }
+# Phase-4-Foundation Family G G27-D test pins consume the stub
+# `PluginManifest` type from `benten-platform-foundation` (authored by
+# Family F3 R3 canary) to author manifest-aware scope-derivation pins.
+# Family G's R3 compile depends on the F3 stub being present (cross-
+# family R3 dependency per .addl/phase-4-foundation/r2-test-landscape.md
+# §4 helper inventory item #2). G24-D wave fills the FULL manifest
+# logic that these pins exercise.
+benten-platform-foundation = { path = "../benten-platform-foundation" }
 
 [[bench]]
 name = "wallclock_toctou_refresh"

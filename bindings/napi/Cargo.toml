@@ -249,3 +249,25 @@ required-features = ["in-process-test"]
 [[test]]
 name = "wait_clock"
 required-features = ["in-process-test"]
+
+# Phase-4-Foundation G27-A — class-of-bug audit regression-guard suite.
+# These four tests construct an in-memory `benten_engine::Engine` to
+# drive the resolving-seam invariants the napi cap-* entry points
+# inherit. Same `in-process-test` rlib gate as `wait_clock` / the
+# wasm32-* sister tests: the test binaries link against the rlib +
+# require the napi cdylib extern symbols to be excluded.
+[[test]]
+name = "cap_grant_class_of_bug_audit_regression_guard"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "cap_revoke_napi_passes_resolved_scope_not_cid_regression_guard"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "cap_delegate_napi_resolved_scope_regression_guard"
+required-features = ["in-process-test"]
+
+[[test]]
+name = "cap_device_did_revocation_resolved_scope_regression_guard"
+required-features = ["in-process-test"]
