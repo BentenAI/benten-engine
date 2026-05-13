@@ -34,7 +34,13 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
+    Nonce-swap-attack defense: RotationLog HLC-monotonic-strict ordering + nonce \
+    binding at install/load surfaces. Requires HLC-strict integration shipping at \
+    G24-D-FP-2 per phase-4-backlog §4.10 (RotationLog + HLC-monotonic-strict). \
+    Named destination: plan §3 G24-D-FP-2 (manifest envelope chain validator + \
+    RotationLog integration + HLC-strict rotation-event replay defense). HARD RULE \
+    12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn plugin_manifest_rotation_event_nonce_swap_attack_rejected() {
     let _plugin = stub_plugin_did();

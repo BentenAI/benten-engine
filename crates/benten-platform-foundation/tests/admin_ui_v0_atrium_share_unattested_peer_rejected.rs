@@ -38,7 +38,12 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_peer_did_attacker, stub_plugin_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    T6c HandshakeFrame peer-DID validation at Atrium-share boundary; rejects \
+    unattested peers before share negotiation. Couples to plugin_lifecycle \
+    accept_atrium_share seam (G24-D-FP-1 hardening). Named destination: plan §3 \
+    G24-D-FP-1 (plugin_lifecycle uninstall/install/share lifecycle). HARD RULE 12 \
+    clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn admin_ui_v0_atrium_share_from_unattested_peer_rejected_at_handshake_frame() {
     let _plugin = stub_plugin_did();

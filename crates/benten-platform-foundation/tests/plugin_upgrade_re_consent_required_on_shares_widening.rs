@@ -11,11 +11,17 @@
 mod common;
 
 use benten_platform_foundation::CapRequirement;
+use benten_platform_foundation::module_ecosystem::{
+    UpgradeConsentDecision, decide_upgrade_consent,
+};
 use common::manifest_fixtures::minimal_manifest;
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
 fn upgrade_with_strict_subset_requires_silent_within_lineage_upgrade() {
+    // SUBSTANTIVE per pim-2 §3.6b: build old manifest with TWO caps;
+    // new manifest with ONE (subset). decide_upgrade_consent at HEAD
+    // returns Silent. Would-FAIL if cap-diff logic missed strict-subset
+    // path.
     let mut old = minimal_manifest();
     old.requires = vec![
         CapRequirement {
@@ -31,17 +37,19 @@ fn upgrade_with_strict_subset_requires_silent_within_lineage_upgrade() {
         scope: "store:notes:read".to_string(),
     }];
 
-    // Future surface:
-    //   plugin_lifecycle::upgrade(old_cid, new_cid) ->
-    //     Result<UpgradeOutcome>
-    //   UpgradeOutcome::SilentWithinLineage(new_cid)
-    //   UpgradeOutcome::RequiresReconsent(new_manifest)
-    panic!("RED-PHASE: G24-D wave must wire upgrade cap-diff logic");
+    let decision = decide_upgrade_consent(&old, &new_smaller);
+    assert_eq!(
+        decision,
+        UpgradeConsentDecision::Silent,
+        "strict-subset MUST be Silent; would-FAIL if cap-diff misread \
+         as growth"
+    );
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-fn upgrade_with_widened_requires_surfaces_e_plugin_install_consent_required() {
+fn upgrade_with_widened_requires_surfaces_consent_required() {
+    // SUBSTANTIVE per pim-2 §3.6b: cap growth (added scope) triggers
+    // ConsentRequired. Would-FAIL if cap-diff missed the growth case.
     let mut old = minimal_manifest();
     old.requires = vec![CapRequirement {
         scope: "store:notes:read".to_string(),
@@ -57,7 +65,29 @@ fn upgrade_with_widened_requires_surfaces_e_plugin_install_consent_required() {
         }, // NEW
     ];
 
-    // FAILS-IF-NO-OP because the cap-diff must explicitly compute
-    // the delta and route to re-consent.
-    panic!("RED-PHASE: G24-D wave must wire E_PLUGIN_INSTALL_CONSENT_REQUIRED on cap growth");
+    let decision = decide_upgrade_consent(&old, &new_wider);
+    assert_eq!(
+        decision,
+        UpgradeConsentDecision::ConsentRequired,
+        "cap growth MUST trigger ConsentRequired"
+    );
+}
+
+#[test]
+fn upgrade_with_identical_requires_set_is_silent() {
+    // SUBSTANTIVE boundary per pim-2 §3.6b: identical requires set is
+    // a degenerate subset → Silent. Would-FAIL if equal-not-strict-
+    // subset arm was missed.
+    let mut old = minimal_manifest();
+    old.requires = vec![CapRequirement {
+        scope: "store:notes:read".to_string(),
+    }];
+
+    let mut new_same = minimal_manifest();
+    new_same.requires = vec![CapRequirement {
+        scope: "store:notes:read".to_string(),
+    }];
+
+    let decision = decide_upgrade_consent(&old, &new_same);
+    assert_eq!(decision, UpgradeConsentDecision::Silent);
 }

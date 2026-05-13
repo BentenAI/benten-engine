@@ -26,8 +26,10 @@
 //! - `E_PLUGIN_DEVICE_ATTESTATION_FORGED` keeps the `E_PLUGIN_*` family
 //!   prefix (renamed from earlier `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE`).
 //! - TS mirror canonical location is `packages/engine/src/errors.generated.ts`.
-//! - CATALOG_VARIANT_COUNT 130 → 135 net (15 minted at G24-D minus 10
-//!   absorbed across the 17-net-new tally = 5 incremental at this wave).
+//!
+//! UN-IGNORED at G24-D wave: all 15 variants exist in the enum post-
+//! G24-D HEAD with as_static_str + from_str arms. The test now serves
+//! as a durable regression guard rather than a RED-PHASE pin.
 
 #![allow(clippy::unwrap_used)]
 
@@ -40,9 +42,6 @@ use benten_errors::ErrorCode;
 /// Frozen here to catch the failure mode where a NEW `E_PLUGIN_*` (or
 /// `E_REGISTRY_*`) variant lands in `benten-errors` but the downstream
 /// registry array is not updated to match.
-///
-/// RED-PHASE: at HEAD these don't exist in the enum. Un-ignore at
-/// G24-D wave.
 const EXPECTED_G24_D_CODES: &[&str] = &[
     "E_PLUGIN_MANIFEST_INVALID",
     "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID",
@@ -74,8 +73,8 @@ fn every_expected_g24_d_plugin_code_resolves_to_named_variant() {
             "G24-D subset-closure: expected code {code} does not start \
              with E_PLUGIN_ or E_REGISTRY_ — family-naming discipline broken"
         );
-        // Dynamic half: from_str round-trip. At HEAD all 15 hit
-        // ErrorCode::Unknown so this fails — RED-PHASE closure target.
+        // Dynamic half: from_str round-trip. Post-G24-D, all 15
+        // variants resolve to NAMED variants (un-ignored sentinel).
         let parsed = ErrorCode::from_str(code);
         assert!(
             !matches!(parsed, ErrorCode::Unknown(_)),
@@ -115,5 +114,16 @@ fn device_attestation_forged_code_keeps_plugin_family_prefix() {
         "Sentinel: {code} must round-trip exact string form — \
          catches accidental rename back to \
          E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE or other drift"
+    );
+    // Inverse-direction sentinel: the OLD pre-rename name must NOT
+    // resolve to a named variant. Defends against an accidental
+    // alias-or-rename-back; catches the failure mode where a future
+    // implementer adds the long name back as an alias arm.
+    let old_name = "E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE";
+    let parsed_old = ErrorCode::from_str(old_name);
+    assert!(
+        matches!(parsed_old, ErrorCode::Unknown(_)),
+        "Sentinel inverse: {old_name} (pre-rename) MUST NOT be a named \
+         variant; R4-triage §7 ratification chose E_PLUGIN_DEVICE_ATTESTATION_FORGED"
     );
 }

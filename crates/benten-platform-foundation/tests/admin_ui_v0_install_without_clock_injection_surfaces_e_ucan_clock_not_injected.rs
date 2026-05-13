@@ -35,7 +35,13 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    T11 LOAD-BEARING admin UI v0 install fail-closed clock-injection arm; routes \
+    through install_plugin's UCAN-consent-chain validation; surfaces typed \
+    E_UCAN_CLOCK_NOT_INJECTED when engine built without clock injection. Couples \
+    to D-4F-15 transparent-clock-injection ratification + install_plugin lifecycle \
+    hardening. Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle + engine \
+    clock-injection seam at install boundary). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injected() {
     let _plugin = stub_plugin_did();
