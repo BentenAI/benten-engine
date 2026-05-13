@@ -11,18 +11,14 @@
 //!
 //! ## G23-0b: wired to production
 //!
-//! `tests/common.rs` is the established drift-detector helper module —
-//! large, scenario-specific, tied to the G15-A `Algorithm::register`
-//! shape. The G23-0a generalization introduces a NEW input shape
-//! (`SubgraphSpec` — schema-shaped view definition, NOT
-//! `(label_pattern, projection)` triple) that requires its own canary
-//! file so Family C consumers import a stable, isolated surface.
-//!
-//! ## GREEN-PHASE (R5 G23-0a landed)
-//!
-//! These fixtures now thread through `benten_ivm::subgraph_spec::SubgraphSpec` +
-//! `benten_ivm::Algorithm::register_subgraph` (production symbols shipped
-//! in R5 G23-0a canary commit). Consumer pins un-ignore per pim-12 §3.6e.
+//! At G23-0a + G23-0b landing time this module's stub
+//! `register_and_walk_to_completion` is replaced with the production
+//! call shape — `benten_ivm::Algorithm::register_subgraph(spec)?
+//! .walk_writes(&writes)?`. The canary types `KernelInput` /
+//! `KernelOutput` / `TypedOutputProjection` are now re-exports of
+//! production types from `benten_ivm`. `CanarySubgraphSpec` is preserved
+//! as a thin convenience wrapper consumers already import; conversion
+//! to production `benten_ivm::SubgraphSpec` happens inside the helper.
 //!
 //! ## §3.6b would-FAIL-if-no-op'd
 //!
@@ -250,53 +246,98 @@ impl CanarySubgraphSpec {
 /// production [`Algorithm::register_subgraph`] + `walk_writes` surface
 /// at G23-0a/G23-0b.
 ///
-/// **GREEN-PHASE (R5 G23-0a landed):** threads the canary spec into the
-/// production `benten_ivm::SubgraphSpec` + drives the registered view
-/// through `Algorithm::walk_writes`. Consumer pins un-ignore per pim-12
-/// §3.6e.
+/// Returns `Ok(KernelOutput)` on a successful register + walk; returns
+/// `Err(...)` carrying a stable string when registration or walk surfaces
+/// an error. Consumers that expect specific error variants (self-reference
+/// rejection, typed-output-projection mismatch) use
+/// [`register_subgraph_returning_algorithm_error`] which preserves the
+/// typed error.
 pub fn register_and_walk_to_completion(
     spec: &CanarySubgraphSpec,
     writes: &[KernelInput],
 ) -> Result<KernelOutput, String> {
-    use benten_ivm::algorithm_b::LabelPattern;
-    use benten_ivm::{Algorithm, SubgraphSpec};
+    let prod_spec = spec
+        .clone()
+        .into_production()
+        .map_err(|e| format!("CanarySubgraphSpec::into_production: {e}"))?;
+    let mut view = Algorithm::register_subgraph(prod_spec)
+        .map_err(|e| format!("Algorithm::register_subgraph: {e}"))?;
+    view.walk_writes(writes)
+        .map_err(|e| format!("AlgorithmBView::walk_writes: {e}"))
+}
 
-    // Build the production SubgraphSpec from the canary shape.
-    let prod_spec = if spec.is_canonical {
-        SubgraphSpec::for_canonical_view(&spec.view_id)
-            .map_err(|e| format!("SubgraphSpec::for_canonical_view: {e}"))?
+/// Variant of [`register_and_walk_to_completion`] that returns the typed
+/// [`AlgorithmError`] from `Algorithm::register_subgraph` directly. Used
+/// by Family B pins that match on specific error variants (e.g.
+/// `SelfReferentialSubgraphRejected`).
+///
+/// On successful registration this returns the registered
+/// `AlgorithmBView` ready for callers to drive directly (e.g. to
+/// observe the post-walk shape via `materialize_full` instead of
+/// `walk_writes` + materialize).
+pub fn register_subgraph_returning_algorithm_error(
+    spec: &CanarySubgraphSpec,
+) -> Result<benten_ivm::AlgorithmBView, AlgorithmError> {
+    let prod_spec = spec
+        .clone()
+        .into_production()
+        .expect("into_production rejects only at canonical-id+user-id boundary; canary tests stay inside contract");
+    Algorithm::register_subgraph(prod_spec)
+}
+
+/// Walk a registered view through a sequence of [`KernelInput`] records;
+/// surfaces the typed `ViewError` from `walk_writes`. Used by budget-trip
+/// pins that match on `ViewError::BudgetExceeded`.
+pub fn walk_writes_returning_view_error(
+    view: &mut benten_ivm::AlgorithmBView,
+    writes: &[KernelInput],
+) -> Result<KernelOutput, ViewError> {
+    view.walk_writes(writes)
+}
+
+/// Run the SAME write sequence through TWO independent registrations of
+/// the SAME canonical view — the LEFT side uses the G23-0a
+/// `Algorithm::register_subgraph(SubgraphSpec)` API; the RIGHT side uses
+/// the G15-A `Algorithm::register(view_id, label_pattern, projection)`
+/// API. Family C's round-trip pins use this to assert post-G23-0b
+/// generalization preserves the wrapper-construction shape — i.e., the
+/// G23-0a SubgraphSpec input shape compiles to the SAME `AlgorithmBView`
+/// wrapper + the SAME inner-kernel handle that the G15-A triple input
+/// shape produces.
+///
+/// **What this baseline DOES NOT prove (per G23-0b mr-1):** both paths
+/// route to the same wrapper construction code path + the same inner
+/// kernel for canonical view ids, so byte-equivalence at the wrapper's
+/// `walk_observable` is established by construction-identity, not by
+/// independent inner-kernel-read assertions. A future regression to the
+/// inner kernel's `read` emission shape would NOT surface here. The
+/// inner-kernel-read equivalence arm lands at G24-A when the
+/// materializer pipeline consumes inner-kernel output (see RED-PHASE pin
+/// `inner_kernel_read_equivalence_post_subgraph_spec_round_trip.rs`).
+pub fn algorithm_register_baseline_via_g15a_path(
+    canary: &CanarySubgraphSpec,
+    writes: &[KernelInput],
+) -> Result<KernelOutput, String> {
+    let label = if let Some(l) = &canary.label_override {
+        LabelPattern::exact(l.clone())
+    } else if canary.view_id == "content_listing" {
+        LabelPattern::exact("post")
     } else {
-        // User-defined views default to LabelPattern::Exact("post") for
-        // the canary contract — matches the canary's KernelInput label
-        // convention. Family C round-trip pins can override via
-        // SubgraphSpec::with_label_pattern at the construction site.
-        SubgraphSpec::user_view(spec.view_id.clone(), LabelPattern::exact("post"))
-            .map_err(|e| format!("SubgraphSpec::user_view: {e}"))?
+        // The 4 hardcoded-label canonical views: surface the canonical
+        // label so `Algorithm::register` accepts it.
+        let hardcoded = benten_ivm::algorithm_b::hardcoded_label_for_id(&canary.view_id)
+            .ok_or_else(|| format!("no hardcoded label for `{}`", canary.view_id))?;
+        LabelPattern::exact(hardcoded)
     };
-    let prod_spec = if spec.self_referential {
-        prod_spec.with_self_reference()
-    } else {
-        prod_spec
-    };
-
-    // Convert canary inputs to production inputs.
-    let prod_writes: Vec<benten_ivm::KernelInput> = writes
-        .iter()
-        .map(|w| benten_ivm::KernelInput::new(w.label.clone(), w.created_at, w.disambiguator))
-        .collect();
-
-    let mut view = Algorithm::register_subgraph(prod_spec).map_err(|e| format!("register: {e}"))?;
-    let prod_output = view
-        .walk_writes(&prod_writes)
-        .map_err(|e| format!("walk: {e}"))?;
-    // Convert production KernelOutput → canary KernelOutput (same shape;
-    // re-wrap to keep canary surface isolated from cross-crate type
-    // dependency).
-    Ok(match prod_output {
-        benten_ivm::KernelOutput::Rows(bytes) => KernelOutput::Rows(bytes),
-        benten_ivm::KernelOutput::Rules(bytes) => KernelOutput::Rules(bytes),
-        benten_ivm::KernelOutput::Current(opt) => KernelOutput::Current(opt),
-    })
+    let mut view = match canary.budget {
+        Some(b) => {
+            Algorithm::register_with_budget(&canary.view_id, label, Projection::all_props(), b)
+        }
+        None => Algorithm::register(&canary.view_id, label, Projection::all_props()),
+    }
+    .map_err(|e| format!("Algorithm::register (G15-A baseline): {e}"))?;
+    view.walk_writes(writes)
+        .map_err(|e| format!("baseline walk_writes: {e}"))
 }
 
 /// Assertion helper Family C round-trip pins call to verify the
