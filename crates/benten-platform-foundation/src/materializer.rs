@@ -267,6 +267,15 @@ impl MaterializerDenialFrame {
 // ---------------------------------------------------------------------
 
 /// Inputs to a single materializer walk.
+///
+/// **View identity (mat-r1-11):** the `(spec_cid, content_cid)` pair
+/// uniquely identifies a materializer view. Two walks carrying the
+/// SAME `(spec, content_cid)` produce the SAME canonical bytes (the
+/// determinism test pins this property) — i.e., "one view per
+/// schema-content-pair" per D-4F-2. Consumers that want multiple
+/// views over the same content tile should pass distinct
+/// `SchemaSubgraphSpec` values; consumers that want multiple views
+/// over the same shape should pass distinct content CIDs.
 pub struct MaterializerWalkInputs<'a, E: MaterializerEngine> {
     /// Engine seam used for content reads (`read_node_as`).
     pub engine: &'a E,
@@ -914,14 +923,21 @@ fn materialize_format<E: MaterializerEngine>(
     // schema-emitted primitive boundary (per-primitive cap-policy
     // dispatch per Phase-3 G16-B-F shape). The cap_recheck closure
     // observes one invocation per emitted primitive's cap-scope.
+    //
+    // **Semantic (per G23-B mr-8 OBSERVATION):** the fan-out fires for
+    // INVOCATION-COUNT observability — the recording cap-policy /
+    // RecordingCapPolicy counts these invocations to prove the
+    // primitive-boundary walk happens. The fan-out passes the SAME
+    // `content_cid` + `zone_hint` to all N invocations (NOT per-
+    // primitive cap-scope); the per-primitive scope is captured in
+    // `_scope` from the spec but intentionally not threaded into the
+    // closure signature (changing `MaterializerCapRecheck` to take
+    // per-op scope would break G24-A's consumer wiring). The
+    // **authoritative cap-decision** lives in the per-row gate
+    // disposition below (line ~941), which is the substantive
+    // admit / deny boundary at the READ-fanout layer.
     let zone_hint = inputs.spec.schema_name();
     for op in inputs.spec.as_subgraph().nodes() {
-        // Per-primitive gate firing — each emitted primitive checks
-        // against the walk principal's cap-set at its declared scope.
-        // The check itself is fired for OBSERVABILITY (the recording
-        // cap-policy / RecordingCapPolicy counts these invocations);
-        // the final per-row decision below uses the gate to admit /
-        // deny the content CID at the READ-fanout boundary.
         let _scope = op.property(CAP_SCOPE_PROPERTY_KEY);
         let _ = (inputs.cap_recheck)(&inputs.walk_principal, zone_hint, &inputs.content_cid);
     }
@@ -1006,6 +1022,12 @@ fn materialize_format<E: MaterializerEngine>(
 /// Stores `Cid → Node` mappings + an "engine-side cap policy" that can
 /// deny reads for unauthorized principals (mirrors `Engine::read_node_as`
 /// Option-C symmetric-None semantics).
+///
+/// **Test/dev fixture — NOT a stable public API.** Marked `#[doc(hidden)]`
+/// per G23-B mr-6. Production consumers should wire a real engine
+/// adapter at the G24-A admin-UI integration boundary that bridges
+/// `MaterializerEngine` to `Engine::read_node_as`.
+#[doc(hidden)]
 #[derive(Default)]
 pub struct InMemoryMaterializerEngine {
     nodes: std::sync::RwLock<std::collections::HashMap<Cid, Node>>,

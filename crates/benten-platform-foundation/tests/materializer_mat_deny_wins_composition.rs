@@ -1,8 +1,18 @@
 //! G23-B GREEN: dual-gate composition — mat-layer deny wins even when
-//! delivery-layer would admit (LOAD-BEARING).
+//! delivery-layer would admit.
+//!
+//! **Scope (per G23-B mr-3 amendment):** this pin exercises the
+//! `Materializer::dual_gate_admits(..)` HELPER-FUNCTION contract over
+//! two closures — NOT the production walk path
+//! `Materializer::materialize_with_gate(..)`, which threads only the
+//! mat-layer gate. The production composition (mat × delivery at
+//! WRITE + SUBSCRIBE seams) is asserted by
+//! `materializer_dual_gate_pim_2_end_to_end_would_fail_if_no_op.rs`
+//! (the LOAD-BEARING end-to-end pin) + lands fully at G24-A admin-UI
+//! integration when `Engine::on_change_as_with_cursor` is wired.
 //!
 //! Closes r2-test-landscape §2.5 row 5 + sec-3.5-r1-1 dual-gate
-//! composition pin 2 of 4.
+//! composition pin 2 of 4 (helper-function level).
 
 #![allow(clippy::unwrap_used)]
 
