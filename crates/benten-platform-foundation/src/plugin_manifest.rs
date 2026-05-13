@@ -189,16 +189,23 @@ impl PluginManifest {
         self.requires.iter().any(|r| r.scope == "host:sandbox:exec")
     }
 
-    /// Canonical-bytes DAG-CBOR encoding of this manifest.
+    /// Canonical-bytes DAG-CBOR encoding of this **fully-populated**
+    /// manifest (i.e., bytes preserve `content_cid` + `peer_signature`
+    /// if set; nothing zeroed).
     ///
     /// G24-D-FP-2 surface (per `docs/future/phase-4-backlog.md §4.9`).
-    /// The bytes returned are the SAME bytes the chain validator hashes
-    /// for content-addressing AND the BLAKE3 hash of these bytes
-    /// (with `content_cid` + `peer_signature` zeroed) is what
-    /// [`Self::compute_content_cid`] computes.
+    /// Two distinct serializations exist on this type — don't confuse:
     ///
-    /// Test pins inspect the CBOR shape directly (CID array shape for
-    /// `accepts_content` + absence of `schema_version`-like keys).
+    /// - **`to_canonical_bytes` (this method)** — round-trippable
+    ///   manifest bytes. Used by the chain validator + by test pins
+    ///   that inspect the CBOR shape (CID array shape for
+    ///   `accepts_content`; absence of `schema_version`-like keys).
+    /// - **[`Self::signing_payload`]** — bytes WITH `content_cid` +
+    ///   `peer_signature` zeroed (chicken-and-egg: signature can't
+    ///   sign over itself). [`Self::compute_content_cid`] hashes the
+    ///   signing-payload, NOT `to_canonical_bytes`.
+    ///
+    /// Test pins inspect the CBOR shape directly via this method.
     #[must_use]
     pub fn to_canonical_bytes(&self) -> Vec<u8> {
         serde_ipld_dagcbor::to_vec(self)

@@ -79,13 +79,16 @@ impl DelegationDecision {
 /// stub it in tests without dragging in the concrete
 /// `SharesPolicy` shape.
 ///
-/// G27-D introduced a target-conditional native-only prod dep on
-/// `benten-platform-foundation` (for `PluginManifest::requires` walk
-/// at scope-derivation time per plan §3 G27-D); the dep edge is
-/// Cargo-cycle-safe because the reverse `platform-foundation →
-/// benten-caps` direction stays dev-only. The platform-foundation
-/// crate provides an `impl SharesPolicyView for SharesPolicy`
-/// blanket at the manifest-envelope-chain-validation G24-D-FP-2 wave.
+/// G27-D introduced a target-conditional native-only prod dep edge
+/// `benten-caps → benten-platform-foundation` (for `PluginManifest::
+/// requires` walk at scope-derivation time per plan §3 G27-D). The
+/// dep edge is Cargo-cycle-safe because the reverse direction
+/// (`platform-foundation → benten-caps`) stays dev-only. With this
+/// prod-edge direction available (batch-3 onwards), the blanket
+/// `impl SharesPolicyView for SharesPolicy` ships in
+/// `benten-platform-foundation::plugin_manifest` directly so
+/// production callers can pass `&manifest.shares` without a per-test
+/// `PolicyAdapter` newtype wrapper.
 pub trait SharesPolicyView {
     /// Whether the policy permits delegating `cap_pattern` to
     /// `target_plugin_did`.
@@ -99,6 +102,19 @@ pub trait SharesPolicyView {
 impl<T: SharesPolicyView + ?Sized> SharesPolicyView for &T {
     fn permits(&self, cap_pattern: &str, target_plugin_did: &Did) -> bool {
         (*self).permits(cap_pattern, target_plugin_did)
+    }
+}
+
+// Blanket impl per G24-D-FP-2 mr-1 closure: production + test callers
+// pass `&manifest.shares` directly without a per-test `PolicyAdapter`
+// newtype wrapper. Lands at batch-3 assembly because G27-D's prod
+// dep edge `benten-caps → benten-platform-foundation` is now on the
+// same branch tree (Cargo-cycle-safe: foundation declares caps as
+// dev-only). Native-only mirroring the rest of plugin_delegation.
+#[cfg(not(target_arch = "wasm32"))]
+impl SharesPolicyView for benten_platform_foundation::SharesPolicy {
+    fn permits(&self, cap_pattern: &str, target_plugin_did: &Did) -> bool {
+        self.permits_delegation(cap_pattern, target_plugin_did)
     }
 }
 
