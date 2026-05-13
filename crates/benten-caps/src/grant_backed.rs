@@ -209,9 +209,51 @@ impl GrantBackedPolicy {
         Self { grants }
     }
 
+    /// Derive the required write scope from a [`WriteContext`].
+    ///
+    /// # G27-B scope-derivation lift (Phase 4-Foundation)
+    ///
+    /// Resolution order (top wins):
+    ///
+    /// 1. **Explicit scope override.** If `ctx.scope` is non-empty, return it
+    ///    verbatim. This is the lifted surface: callers (plugin manifest
+    ///    grammar, non-CRUD primitive zones, sandbox/handler/view scopes,
+    ///    `engine_wait.rs::resume` cap-recheck shape) populate `scope`
+    ///    directly and the policy consults the explicit value without
+    ///    routing through label derivation. Mirrors how
+    ///    [`crate::ucan_grounded::UcanGroundedPolicy::check_write`] keys off
+    ///    `ctx.scope` for typed-cap proof lookup
+    ///    (`crates/benten-caps/src/ucan_grounded.rs::check_write` line 340).
+    /// 2. **Label-derived fallback.** If `ctx.scope` is empty, derive
+    ///    `"store:<label>:write"` from `ctx.label`. Empty label collapses to
+    ///    `"store:write"`. Preserves the Phase-1 zero-config
+    ///    `crud('<label>')` shape that every existing caller relies on
+    ///    (see `tests/grant_backed_policy_existing_store_label_write_paths_unchanged.rs`).
+    ///
+    /// # Why the override is checked first
+    ///
+    /// Plugin manifest grammar (G24-D, CLAUDE.md #18) introduces non-CRUD
+    /// scope shapes that the label-derived path cannot express:
+    /// `private:<plugin_did>:*`, `requires:<plugin_did>:<path>`,
+    /// `shares:<plugin_did>:<path>`. Honoring the explicit `ctx.scope`
+    /// surface lets those shapes flow through `check_write` without
+    /// expanding the label derivation grammar (which would couple the
+    /// caps crate to plugin-manifest semantics).
+    fn derive_write_scope_from_ctx(ctx: &WriteContext) -> String {
+        if !ctx.scope.is_empty() {
+            return ctx.scope.clone();
+        }
+        Self::derive_write_scope(&ctx.label)
+    }
+
     /// Derive the Phase-1 required scope from a label. The mapping is the
     /// canonical `"store:<label>:write"` form used by the Phase-1 zero-config
     /// `crud('<label>')` path. An empty label collapses to `"store:write"`.
+    ///
+    /// Retained as the per-`PendingOp` derivation helper for batch shapes
+    /// where each op contributes its own label-derived scope; the explicit
+    /// [`WriteContext::scope`] override (G27-B lift) is handled by
+    /// [`Self::derive_write_scope_from_ctx`].
     fn derive_write_scope(label: &str) -> String {
         if label.is_empty() {
             "store:write".to_string()
@@ -253,19 +295,34 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // grant-backed policy DENIES rather than permit-by-default — an
         // unstructured WriteContext reaching the policy is an error mode,
         // not a legitimate no-op, and denying closes the fail-open surface.
-        let scopes: Vec<String> = if ctx.pending_ops.is_empty() {
-            if ctx.label.is_empty() && ctx.scope.is_empty() {
+        //
+        // G27-B scope-derivation lift: when `ctx.scope` is explicitly
+        // populated, the override SHORT-CIRCUITS the per-op derivation
+        // and the policy consults the single explicit scope. This holds
+        // regardless of whether `pending_ops` is empty, because the
+        // explicit scope expresses the caller's intent at a higher
+        // grain than per-op labels (mirrors `UcanGroundedPolicy`
+        // keying off `ctx.scope` at `ucan_grounded.rs::check_write`
+        // line 340 — the typed-cap proof-chain walker resolves
+        // `ctx.scope` as the lookup key, not the per-op labels). See
+        // `tests/grant_backed_policy_derives_scope_from_write_context.rs`
+        // for the substantive arm + `tests/grant_backed_policy_non_crud_scope_round_trip.rs`
+        // for the plugin-manifest grammar shapes that depend on this
+        // override path. Per-op derivation remains the default fallback
+        // for the Phase-1 `crud('<label>')` shape (every existing caller
+        // leaves `ctx.scope` empty per `WriteContext::default()`); see
+        // `tests/grant_backed_policy_existing_store_label_write_paths_unchanged.rs`
+        // for the backward-compat regression guard.
+        let scopes: Vec<String> = if !ctx.scope.is_empty() {
+            vec![ctx.scope.clone()]
+        } else if ctx.pending_ops.is_empty() {
+            if ctx.label.is_empty() {
                 return Err(CapError::Denied {
                     required: "store:write".to_string(),
                     entity: String::new(),
                 });
             }
-            let scope = if ctx.scope.is_empty() {
-                Self::derive_write_scope(&ctx.label)
-            } else {
-                ctx.scope.clone()
-            };
-            vec![scope]
+            vec![Self::derive_write_scope_from_ctx(ctx)]
         } else {
             let mut v = Vec::new();
             for op in &ctx.pending_ops {

@@ -63,7 +63,6 @@ impl GrantReader for MockGrants {
 /// to derive `store:<label>:write` from `WriteContext::label` when
 /// `WriteContext::scope` is empty.
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; backward-compat for label-derived store:<label>:write shape when scope field is empty"]
 fn grant_backed_policy_existing_store_label_write_paths_unchanged_when_scope_unset() {
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
@@ -88,7 +87,6 @@ fn grant_backed_policy_existing_store_label_write_paths_unchanged_when_scope_uns
 /// deny (r6-sec-8 (a) inheritance from existing
 /// `grant_backed_policy.rs::grant_backed_policy_denies_unstructured_empty_context`).
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; empty-label + empty-scope continues to fail-closed (r6-sec-8 inheritance)"]
 fn grant_backed_policy_empty_label_empty_scope_continues_to_deny_unstructured() {
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);

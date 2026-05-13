@@ -69,7 +69,6 @@ impl GrantReader for MockGrants {
 /// `WriteContext::scope`. The G27-B implementer threads the explicit
 /// scope through; this pin un-ignores at G27-B wave-time.
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; verifies WriteContext::scope is consulted (not just derived from label)"]
 fn grant_backed_policy_derives_scope_from_write_context_scope_field() {
     let grants = MockGrants::new(&["store:custom:write"]);
     let policy = GrantBackedPolicy::new(grants);

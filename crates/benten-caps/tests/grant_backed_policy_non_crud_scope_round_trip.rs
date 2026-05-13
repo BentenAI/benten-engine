@@ -63,7 +63,6 @@ impl GrantReader for MockGrants {
 /// non-CRUD scope shapes that the hard-coded `store:{label}:write`
 /// derivation cannot express.
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; verifies non-CRUD scopes flow through WriteContext::scope correctly"]
 fn grant_backed_policy_non_crud_scope_round_trip_private_namespace() {
     let plugin_did = "did:key:zPluginDidPlaceholder";
     let scope = format!("private:{plugin_did}:notes");
@@ -82,7 +81,6 @@ fn grant_backed_policy_non_crud_scope_round_trip_private_namespace() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; manifest `requires` scope shape"]
 fn grant_backed_policy_non_crud_scope_round_trip_manifest_requires() {
     let plugin_did = "did:key:zPluginDidPlaceholder";
     let scope = format!("requires:{plugin_did}:calendar/events");
@@ -101,7 +99,6 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_requires() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; manifest `shares` scope shape"]
 fn grant_backed_policy_non_crud_scope_round_trip_manifest_shares() {
     let plugin_did = "did:key:zPluginDidPlaceholder";
     let scope = format!("shares:{plugin_did}:tasks/list");
