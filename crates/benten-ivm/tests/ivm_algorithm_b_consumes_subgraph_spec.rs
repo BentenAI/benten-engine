@@ -47,7 +47,6 @@ use common_kernel_canary::{
 };
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn algorithm_b_kernel_accepts_subgraph_spec_for_user_defined_view_id() {
     // Substantive arm 1: user-defined view id flows through register_subgraph
     // + walks to completion. Per D-4F-2 the kernel's generic-kernel path
@@ -90,7 +89,6 @@ fn algorithm_b_kernel_accepts_subgraph_spec_for_user_defined_view_id() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn algorithm_b_kernel_empty_walk_produces_distinct_output_from_populated_walk() {
     // §3.6b would-FAIL-if-no-op'd: feeding 0 writes vs N writes through
     // the SAME SubgraphSpec MUST produce observably-distinct
@@ -117,7 +115,6 @@ fn algorithm_b_kernel_empty_walk_produces_distinct_output_from_populated_walk() 
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn algorithm_b_kernel_accepts_subgraph_spec_for_canonical_view_id() {
     // Substantive arm 2: canonical view id routes to fast-path
     // classification (Strategy::A per algorithm_b.rs dispatch); walking

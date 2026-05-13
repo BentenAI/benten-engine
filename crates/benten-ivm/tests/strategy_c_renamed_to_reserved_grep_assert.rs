@@ -79,7 +79,6 @@ fn walk_collect_rs(dir: &PathBuf, out: &mut Vec<PathBuf>) {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn strategy_c_rename_complete_in_source_tree() {
     let files = collect_source_rs_files();
 
@@ -144,7 +143,6 @@ fn strategy_c_rename_complete_in_source_tree() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn strategy_reserved_referenced_in_source_tree() {
     // Companion-positive: the rename target MUST appear somewhere in
     // the source tree (strategy.rs minimum; testing.rs typically too
