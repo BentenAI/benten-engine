@@ -72,10 +72,25 @@ export interface UserViewSpec {
    */
   readonly budget: number | null;
   /**
-   * Anchor pattern label the creator was driven by (UX-side; used for
-   * display + traceability in the persisted view subgraph). The kernel
-   * itself only consumes `labelPattern`; this field is metadata that
-   * the bridge round-trips back through the view's persisted Node.
+   * Anchor pattern label the creator was driven by.
+   *
+   * **§3.5g cross-language rule-mirror EXCEPTION — INTENTIONALLY
+   * TS-side-only.** This field is **NOT** part of the Rust-side
+   * `benten_ivm::subgraph_spec::SubgraphSpec` parity contract. It is
+   * UX-side metadata used by the admin UI v0 composed-view creator
+   * for display + traceability in the persisted view subgraph; the
+   * generalized Algorithm B kernel in `benten-ivm` only consumes
+   * `labelPattern`. The bridge round-trips this field back through
+   * the view's persisted Node as opaque metadata.
+   *
+   * **Future-agent contract (closes g24c-mr-1 MINOR / §4.17):** do
+   * NOT add a mirrored field to the Rust `SubgraphSpec` to "fix the
+   * mirror." This deliberate asymmetry is the contract — the kernel
+   * does not need this field, and adding it would broaden the
+   * kernel's input surface without semantic gain. Drift-defense
+   * pin `crates/benten-engine/tests/workflow_editor_cross_language_drift_defense.rs`
+   * grep-asserts THIS docstring's presence so that any future
+   * removal of the exception declaration also fails the parity test.
    */
   readonly anchorPatternLabel: string;
 }

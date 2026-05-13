@@ -305,7 +305,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Cl
 
 **Closure (G24-B-FP-1):** `materializer_rejects_handcoded_spec_referencing_edges_remove_host_fn` sub-test landed alongside the existing 3 banned-host-fn arms. Asserts `MaterializerError::SchemaMismatch { code: MaterializerSchemaMismatch }` + diagnostic naming `edges:remove`.
 
-### §4.16 G24-B workflow editor substantive replay arm via real engine round-trip
+### §4.16 G24-B workflow editor substantive replay arm via real engine round-trip [CLOSED at R4b-FP-2]
 
 **Origin:** G24-B mini-review MAJOR finding `g24b-mr-1`. The existing `replay_produces_identical_content_hash` canary (`crates/benten-platform-foundation/src/admin_ui_v0/workflow_editor.rs:613`) is a degenerate same-struct double-hash: both sides call `blake3(canonical_subgraph_bytes(&sg_save))` on the same in-memory Subgraph; no encode → store → load → decode cycle is exercised. Same shape on the TS side (`packages/admin-ui-v0/tests/workflow_editor_creates_workflow_and_replays_through_evaluator.test.ts` uses in-memory Map + FNV-1a hash). Plan §3 G24-B row explicitly requires "PRODUCTION substantive arm (workflow CREATED is persisted to redb + readable via Engine::read_node + replays with same CID), NOT shape-only."
 
@@ -330,7 +330,12 @@ The harness's `create_test_node(&Node) -> Result<Cid, EngineError>` already exis
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes G24-B mini-review g24b-mr-1 MAJOR.
 
-### §4.17 G24-B + G24-C cross-language drift-defense pins (MINORs)
+**Closure (R4b-FP-2):**
+- `#[doc(hidden)] pub fn fixture_manifest_for_test(scopes: &[&str]) -> PluginManifest` + `#[doc(hidden)] pub fn canonical_subgraph_bytes_for_test(sg: &Subgraph) -> Result<Vec<u8>, CoreError>` exposed at `crates/benten-platform-foundation/src/admin_ui_v0/workflow_editor.rs` (mirrors §4.13 mr-4 doc-hidden test-helper pattern).
+- NEW substantive integration pin `crates/benten-engine/tests/admin_ui_v0_workflow_editor_substantive_replay_via_harness.rs` drives the full encode → `register_subgraph` → `create_node` → `read_node_as` → decode → re-encode → re-hash round-trip via `AdminUiV0TestHarness::new()`. Asserts (a) handler-version-chain head CID matches `Subgraph::cid()`, (b) reloaded canonical bytes byte-equal save-time bytes, (c) replay hash equals save hash, (d) replay CID equals save CID, (e) reloaded subgraph's handler_id / primitive-count / edge-count preserved.
+- Inline canary `replay_produces_identical_content_hash` renamed to `replay_produces_identical_content_hash_encoding_only` with a docstring naming its degenerate same-struct double-hash scope + cross-referencing the integration pin as the substantive arm.
+
+### §4.17 G24-B + G24-C cross-language drift-defense pins (MINORs) [CLOSED at R4b-FP-2]
 
 **Origin:** G24-B mini-review `g24b-mr-2` MINOR (no parity drift-defense for `WorkflowFormField` + `CANONICAL_12_PRIMITIVE_KINDS` between Rust + TS) + G24-C mini-review `g24c-mr-1` MINOR (TS `UserViewSpec.anchorPatternLabel` field is TS-side-only; not in Rust `SubgraphSpec`; unguarded).
 
@@ -346,7 +351,11 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Cl
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-2 MINOR + G24-C mr-1 MINOR.
 
-### §4.18 G24-B `pnpm-lock.yaml` tracking + G24-C Rust-side revoke-mid-preview pin
+**Closure (R4b-FP-2):**
+- NEW drift-defense pin file `crates/benten-engine/tests/workflow_editor_cross_language_drift_defense.rs` with 3 sub-tests: (a) `workflow_form_field_ts_shape_mirrors_rust_struct_fields` — grep-asserts each Rust `WorkflowFormField` field has a TS `readonly <camelCase>` declaration inside the `export interface WorkflowFormField` body; (b) `canonical_12_primitive_kinds_ts_set_mirrors_rust_primitivekind_enum` — grep-asserts each Rust `PrimitiveKind` variant appears in BOTH the TS `CANONICAL_12_PRIMITIVE_KINDS` set AND the `WorkflowPrimitiveKind` union type (defense-in-depth across both TS surfaces); (c) `user_view_spec_anchor_pattern_label_is_intentionally_ts_only_per_3_5g_exception` — grep-asserts the explicit `§3.5g cross-language rule-mirror EXCEPTION — INTENTIONALLY TS-side-only` docstring marker survives on the TS-side `anchorPatternLabel` field.
+- TS-side docstring sharpening at `packages/admin-ui-v0/src/view-composer/view_spec.ts` enumerates `anchorPatternLabel` as a deliberate §3.5g EXCEPTION (UX-side metadata; not in Rust `SubgraphSpec`); names the drift-defense pin's grep target so any future docstring drift fails the pin.
+
+### §4.18 G24-B `pnpm-lock.yaml` tracking + G24-C Rust-side revoke-mid-preview pin [CLOSED at R4b-FP-2]
 
 **Origin:** G24-B mini-review `g24b-mr-3` MINOR (`packages/admin-ui-v0/pnpm-lock.yaml` un-tracked; sibling `packages/engine/pnpm-lock.yaml` IS tracked — workspace convention demands tracking) + G24-C mini-review `g24c-mr-2` OBSERVATION (no Rust-side revoke-mid-preview pin coupling admin UI consumer to real `CapRecheckOutcome::Cancel → E_SUBSCRIBE_REVOKED_MID_STREAM` propagation; TS revoke test synthesizes the sentinel in-bridge).
 
@@ -361,6 +370,10 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-2 MINOR + G24-C mr-1 MI
 - Rust-side substantive revoke-mid-preview pin landed + PASS.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-3 MINOR + G24-C mr-2 OBS.
+
+**Closure (R4b-FP-2):**
+- `packages/admin-ui-v0/pnpm-lock.yaml` generated via `pnpm install` + checked in (mirrors `packages/engine/pnpm-lock.yaml` tracking convention).
+- NEW Rust-side substantive pin `crates/benten-engine/tests/admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview.rs` (required-features = `["test-helpers"]`) drives real `Engine::on_change_as_with_cursor` under an admin-UI plugin-DID principal + a `GrantBackedPolicy` engine; flips whole-actor revocation via `Engine::testing_revoke_cap_mid_call`; asserts (a) `Subscription::termination_reason() == Some(ErrorCode::SubscribeRevokedMidStream)`, (b) `Subscription::is_active() == false`, (c) `subscribe_revoked_mid_stream_count()` increments by exactly 1, (d) post-Cancel events do NOT re-fire the callback (absorbing-state property). Couples to Phase-3 G16-B-F per-row cap-recheck + R6-FP Wave-C1 typed-error contract + Phase-4-Foundation G22-FP-1 option-D `CapRecheckOutcome` enum.
 
 ### §4.19 `plugin_lifecycle::accept_atrium_share` cross-peer install seam + schema-author trust-list user-prompt surface (Phase-4-Meta)
 

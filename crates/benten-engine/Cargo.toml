@@ -262,6 +262,13 @@ required-features = ["test-helpers"]
 name = "ivm_view_subscribe_compose"
 required-features = ["test-helpers"]
 
+# Phase 4-Foundation R4b-FP-2 §4.18 — Rust-side companion to the
+# TS revoke-mid-preview test. Consumes `Engine::testing_revoke_cap_mid_call`
+# which lives behind `cfg(any(test, feature = "test-helpers"))`.
+[[test]]
+name = "admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview"
+required-features = ["test-helpers"]
+
 [[bench]]
 name = "roundtrip"
 harness = false
