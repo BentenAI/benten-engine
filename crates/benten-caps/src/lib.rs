@@ -55,6 +55,12 @@ pub mod typed_cap_mapping;
 pub mod ucan_grounded;
 pub mod ucan_stub;
 
+// G24-D — runtime UCAN delegation gate (Layer 3 of the three-layer
+// plugin trust model per CLAUDE.md baked-in #18). Native-only; thin
+// clients don't run delegation checks (CLAUDE.md #17).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod plugin_delegation;
+
 pub use attenuation::check_attenuation;
 // G14-B durable UCAN backend is native-only (see `backends/mod.rs`).
 #[cfg(not(target_arch = "wasm32"))]

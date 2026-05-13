@@ -925,6 +925,48 @@ pub enum ErrorCode {
     /// sec-3.5-r1-4); the compiler synthesizes it from field path. Maps
     /// to `E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING`.
     SchemaVocabRequiredPropertyMissing,
+    // ----- Phase 4-Foundation G24-D — FULL plugin manifest (15 codes) -----
+    /// Plugin manifest envelope structurally invalid (empty fields,
+    /// signature length mismatch, malformed shares-policy, etc.).
+    PluginManifestInvalid,
+    /// Install record's user-DID signature did not verify against the
+    /// consenting user-DID's public key.
+    PluginInstallRecordUserSignatureInvalid,
+    /// Plugin content's peer-DID signature did not verify against the
+    /// declared peer-DID.
+    PluginContentPeerSignatureInvalid,
+    /// Plugin content's peer-DID key rotated (matched by RotationLog).
+    /// Surfaces as a WARNING at install — not hard-reject by default
+    /// per D-4F-12.
+    PluginContentPeerKeyRotated,
+    /// Plugin author's peer-DID is not in the user's trust-list.
+    PluginAuthorNotTrusted,
+    /// Plugin install attempted without user consent.
+    PluginInstallConsentRequired,
+    /// Runtime delegation request fell outside the source plugin's
+    /// manifest `shares` envelope.
+    PluginDelegationOutsideManifestEnvelope,
+    /// Cross-plugin delegation of a private-namespace cap.
+    PluginPrivateNamespaceDelegationForbidden,
+    /// Plugin content bytes hash does not match the declared
+    /// `content_cid`.
+    PluginContentCidMismatch,
+    /// A new version of an installed plugin was discovered
+    /// (pull-not-push model). Hint, not an error.
+    PluginNewVersionAvailable,
+    /// Plugin requires SANDBOX exec but the installing peer is a
+    /// thin-compute-surface.
+    PluginHeterogeneityIncompatible,
+    /// Meta-plugin composition graph contains a cycle.
+    PluginMetaCompositionCycleRejected,
+    /// Device-DID attestation envelope failed verification at the
+    /// plugin-share boundary.
+    PluginDeviceAttestationForged,
+    /// Plugin library index tampering detected.
+    PluginLibraryIndexTamper,
+    /// Decentralized registry discovery query timed out.
+    /// Reserved at Phase 4-Foundation; first firing at Phase 4-Meta.
+    RegistryDiscoveryTimeout,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1167,6 +1209,32 @@ impl ErrorCode {
             ErrorCode::SchemaVocabRequiredPropertyMissing => {
                 "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING"
             }
+            // Phase 4-Foundation G24-D — FULL plugin manifest.
+            ErrorCode::PluginManifestInvalid => "E_PLUGIN_MANIFEST_INVALID",
+            ErrorCode::PluginInstallRecordUserSignatureInvalid => {
+                "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID"
+            }
+            ErrorCode::PluginContentPeerSignatureInvalid => {
+                "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID"
+            }
+            ErrorCode::PluginContentPeerKeyRotated => "E_PLUGIN_CONTENT_PEER_KEY_ROTATED",
+            ErrorCode::PluginAuthorNotTrusted => "E_PLUGIN_AUTHOR_NOT_TRUSTED",
+            ErrorCode::PluginInstallConsentRequired => "E_PLUGIN_INSTALL_CONSENT_REQUIRED",
+            ErrorCode::PluginDelegationOutsideManifestEnvelope => {
+                "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE"
+            }
+            ErrorCode::PluginPrivateNamespaceDelegationForbidden => {
+                "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN"
+            }
+            ErrorCode::PluginContentCidMismatch => "E_PLUGIN_CONTENT_CID_MISMATCH",
+            ErrorCode::PluginNewVersionAvailable => "E_PLUGIN_NEW_VERSION_AVAILABLE",
+            ErrorCode::PluginHeterogeneityIncompatible => "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE",
+            ErrorCode::PluginMetaCompositionCycleRejected => {
+                "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED"
+            }
+            ErrorCode::PluginDeviceAttestationForged => "E_PLUGIN_DEVICE_ATTESTATION_FORGED",
+            ErrorCode::PluginLibraryIndexTamper => "E_PLUGIN_LIBRARY_INDEX_TAMPER",
+            ErrorCode::RegistryDiscoveryTimeout => "E_REGISTRY_DISCOVERY_TIMEOUT",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1543,6 +1611,28 @@ impl ErrorCode {
             | ErrorCode::SchemaVocabRefTargetMissing
             | ErrorCode::SchemaVocabCycleRejected
             | ErrorCode::SchemaVocabRequiredPropertyMissing => None,
+            // Phase-4-Foundation G24-D — plugin manifest envelope codes
+            // route to `ON_DENIED` for capability-class denials (these
+            // fire at the cap-policy boundary like other CapDenied
+            // family codes); structural / install-time / configuration
+            // codes return None (no primitive edge — they fire at the
+            // install pipeline, not during handler walks).
+            ErrorCode::PluginDelegationOutsideManifestEnvelope
+            | ErrorCode::PluginPrivateNamespaceDelegationForbidden => Some("ON_DENIED"),
+
+            ErrorCode::PluginManifestInvalid
+            | ErrorCode::PluginInstallRecordUserSignatureInvalid
+            | ErrorCode::PluginContentPeerSignatureInvalid
+            | ErrorCode::PluginContentPeerKeyRotated
+            | ErrorCode::PluginAuthorNotTrusted
+            | ErrorCode::PluginInstallConsentRequired
+            | ErrorCode::PluginContentCidMismatch
+            | ErrorCode::PluginNewVersionAvailable
+            | ErrorCode::PluginHeterogeneityIncompatible
+            | ErrorCode::PluginMetaCompositionCycleRejected
+            | ErrorCode::PluginDeviceAttestationForged
+            | ErrorCode::PluginLibraryIndexTamper
+            | ErrorCode::RegistryDiscoveryTimeout => None,
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -1737,6 +1827,32 @@ impl ErrorCode {
             "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING" => {
                 ErrorCode::SchemaVocabRequiredPropertyMissing
             }
+            // Phase 4-Foundation G24-D — FULL plugin manifest.
+            "E_PLUGIN_MANIFEST_INVALID" => ErrorCode::PluginManifestInvalid,
+            "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID" => {
+                ErrorCode::PluginInstallRecordUserSignatureInvalid
+            }
+            "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID" => {
+                ErrorCode::PluginContentPeerSignatureInvalid
+            }
+            "E_PLUGIN_CONTENT_PEER_KEY_ROTATED" => ErrorCode::PluginContentPeerKeyRotated,
+            "E_PLUGIN_AUTHOR_NOT_TRUSTED" => ErrorCode::PluginAuthorNotTrusted,
+            "E_PLUGIN_INSTALL_CONSENT_REQUIRED" => ErrorCode::PluginInstallConsentRequired,
+            "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE" => {
+                ErrorCode::PluginDelegationOutsideManifestEnvelope
+            }
+            "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN" => {
+                ErrorCode::PluginPrivateNamespaceDelegationForbidden
+            }
+            "E_PLUGIN_CONTENT_CID_MISMATCH" => ErrorCode::PluginContentCidMismatch,
+            "E_PLUGIN_NEW_VERSION_AVAILABLE" => ErrorCode::PluginNewVersionAvailable,
+            "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE" => ErrorCode::PluginHeterogeneityIncompatible,
+            "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED" => {
+                ErrorCode::PluginMetaCompositionCycleRejected
+            }
+            "E_PLUGIN_DEVICE_ATTESTATION_FORGED" => ErrorCode::PluginDeviceAttestationForged,
+            "E_PLUGIN_LIBRARY_INDEX_TAMPER" => ErrorCode::PluginLibraryIndexTamper,
+            "E_REGISTRY_DISCOVERY_TIMEOUT" => ErrorCode::RegistryDiscoveryTimeout,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

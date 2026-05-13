@@ -24,12 +24,19 @@ bench = false
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 benten-id = { path = "../benten-id" }
+# G24-D — canonical-bytes DAG-CBOR + BLAKE3 content hashing + Ed25519
+# verification for the FULL plugin manifest schema per CLAUDE.md #18.
+blake3 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_ipld_dagcbor = { workspace = true }
+ed25519-dalek = { workspace = true }
 thiserror = { workspace = true }
 # G23-A schema_compiler: JSON-Schema ingest dialect parser. `serde_json` is
 # the workspace-canonical JSON parser; no other JSON deps allowed in the
 # foundation crate (drift-defense: a future agent introducing `simd-json` or
 # similar would surface in arch-N dep-direction test).
-serde = { workspace = true }
+# (serde is declared above at line 30 with features=["derive"]; that superset
+# satisfies both G23-A's needs and G24-D's needs — batch-2 conflict resolution.)
 serde_json = { workspace = true }
 
 [dev-dependencies]

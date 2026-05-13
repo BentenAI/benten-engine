@@ -367,6 +367,30 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SchemaVocabRefTargetMissing,
     ErrorCode::SchemaVocabCycleRejected,
     ErrorCode::SchemaVocabRequiredPropertyMissing,
+    // Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
+    // 14 E_PLUGIN_* + 1 E_REGISTRY_* per Ben's R4-triage §7 ratification.
+    // Construction sites distributed across:
+    //   `benten-platform-foundation::plugin_manifest::validate`,
+    //   `::verify_user_signature`, `::verify_peer_signature`, etc.;
+    //   `benten-caps::plugin_delegation::check_delegation_within_envelope`;
+    //   `benten-platform-foundation::module_ecosystem::install_plugin`.
+    //   `RegistryDiscoveryTimeout` reserved at Phase 4-Foundation; fires
+    //   first at Phase 4-Meta.
+    ErrorCode::PluginManifestInvalid,
+    ErrorCode::PluginInstallRecordUserSignatureInvalid,
+    ErrorCode::PluginContentPeerSignatureInvalid,
+    ErrorCode::PluginContentPeerKeyRotated,
+    ErrorCode::PluginAuthorNotTrusted,
+    ErrorCode::PluginInstallConsentRequired,
+    ErrorCode::PluginDelegationOutsideManifestEnvelope,
+    ErrorCode::PluginPrivateNamespaceDelegationForbidden,
+    ErrorCode::PluginContentCidMismatch,
+    ErrorCode::PluginNewVersionAvailable,
+    ErrorCode::PluginHeterogeneityIncompatible,
+    ErrorCode::PluginMetaCompositionCycleRejected,
+    ErrorCode::PluginDeviceAttestationForged,
+    ErrorCode::PluginLibraryIndexTamper,
+    ErrorCode::RegistryDiscoveryTimeout,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -616,10 +640,15 @@ fn variant_count_is_pinned() {
     // SchemaVocabRefTargetMissing, SchemaVocabCycleRejected,
     // SchemaVocabRequiredPropertyMissing).
     //
-    // Batch-1 strategy-C combined (G24-F + G23-A; G23-0a mints none):
-    // 118 + 4 + 9 = 131.
+    // Phase 4-Foundation G24-D — FULL plugin manifest landing
+    // (2026-05-12; CLAUDE.md baked-in #18 four-identity-concepts
+    // model): +15 catalog variants for the plugin manifest envelope
+    // surface (14 E_PLUGIN_* + 1 E_REGISTRY_* per Ben's R4-triage §7).
+    //
+    // Batch-1 (G24-F + G23-A) + Batch-2 (G24-D + G23-0b):
+    // 118 + 4 (G24-F) + 9 (G23-A) + 0 (G23-0a) + 15 (G24-D) + 0 (G23-0b) = 146.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 131,
+        CATALOG_VARIANT_COUNT, 146,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

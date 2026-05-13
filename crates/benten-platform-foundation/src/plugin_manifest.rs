@@ -1,151 +1,319 @@
-//! Phase-4-Foundation R3 RED-PHASE stub for the FULL plugin manifest.
+//! Phase-4-Foundation G24-D — FULL plugin manifest schema.
 //!
-//! Type-shape only. NO validation, NO signing, NO serialization logic
-//! lives here at R3. G24-D wave fills all of it.
+//! Implements the CLAUDE.md baked-in #18 four-identity-concepts model:
 //!
-//! This stub exists so that:
-//! - Family F3 (this family) test pins compile-but-fail at the `use`
-//!   line per canonical RED-PHASE shape;
-//! - Family G + Family F1 + Family F2 — which consume this type to
-//!   author their own test pins (cap-policy backend chain validation,
-//!   atrium-merge manifest-envelope recheck, sync defenses) — have a
-//!   stable type to import.
+//! 1. **Content-CID** — what the plugin IS (canonical-bytes DAG-CBOR
+//!    encoding of the manifest body).
+//! 2. **Peer-DID signature on original content** — provenance.
+//! 3. **Plugin-DID minted at install** — UCAN audience handle AND
+//!    constrained issuer within manifest envelope (NOT an attested
+//!    sub-identity of user-DID).
+//! 4. **User-DID** — trust anchor + signs `InstallRecord`s + issues
+//!    UCAN delegations with `audience = plugin-DID`.
 //!
-//! Schema per `docs/PLUGIN-MANIFEST.md` §3 + CLAUDE.md baked-in #18
-//! "Implementation refinements" four-identity-concepts model.
+//! See `docs/PLUGIN-MANIFEST.md` for the engineer-facing reference.
 
 use benten_core::Cid;
+use benten_errors::ErrorCode;
 use benten_id::did::Did;
+use ed25519_dalek::Verifier;
+use serde::{Deserialize, Serialize};
 
-/// FULL plugin manifest. Content-addressed; canonical-bytes DAG-CBOR
-/// at G24-D landing.
+// =====================================================================
+// PluginManifest
+// =====================================================================
+
+/// FULL plugin manifest. Content-addressed; canonical-bytes DAG-CBOR.
 ///
-/// **Stub.** At R3, the constructor and all methods `unimplemented!()`.
-/// Test pins exercise the type-shape only at this stage.
-#[derive(Debug, Clone)]
+/// **Four-identity-concepts model** per CLAUDE.md baked-in #18:
+/// - `content_cid` (concept 1) — set after `compute_content_cid()`.
+/// - `peer_did` + `peer_signature` (concept 2) — provenance.
+/// - Plugin-DID (concept 3) — NOT carried in the manifest; minted at
+///   install time per `benten_id::plugin_did::PluginDidStore::mint`.
+/// - User-DID (concept 4) — NOT carried in the manifest; signs the
+///   `InstallRecord` that references the manifest.
+///
+/// **Pull-not-push** (D-4F-13): no `schema_version` field — CID covers
+/// shape. Version selection is per-user-local.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginManifest {
-    // Identity (per docs/PLUGIN-MANIFEST.md §3)
+    /// Human-readable name. Not unique; `content_cid` is the unique
+    /// handle.
     pub plugin_name: String,
+
+    /// Content-CID over canonical-bytes DAG-CBOR encoding of the body.
+    /// Filled by `compute_content_cid()`; verified at install via
+    /// `verify_content_cid_matches`.
     pub content_cid: Cid,
+
+    /// Peer-DID of original author / sharer. Provenance — receiver
+    /// verifies signature; rotation handled by RotationLog (warning,
+    /// not hard reject per D-4F-12).
     pub peer_did: Did,
+
+    /// Ed25519 signature over `(content_cid_bytes || canonical_body)`.
+    /// 64 bytes (Ed25519 detached signature).
     pub peer_signature: Vec<u8>,
 
-    // Capability envelope
+    /// Capability requirements — caps the plugin needs to function.
     pub requires: Vec<CapRequirement>,
+
+    /// Delegation policy — what this plugin may delegate to OTHER
+    /// plugins at runtime, within the user-consented envelope.
     pub shares: SharesPolicy,
 
-    // Renderer + composition
+    /// Optional renderer config. `None` for SUBSCRIBE-only plugins.
     pub renderer_config: Option<RendererConfig>,
+
+    /// Meta-plugin composition: CIDs of sub-plugins. Engine walks via
+    /// 12-primitive vocabulary. Cycle detection at install.
     pub composes_plugins: Option<Vec<Cid>>,
 
-    // Cross-references (content-CID-keyed; per CLAUDE.md #18
-    // "Cross-plugin/schema references use content-CID, not author-DID")
+    /// Cross-plugin / schema content references — CID-keyed per
+    /// CLAUDE.md #18 (NOT author-DID-keyed).
     pub accepts_content: Option<Vec<Cid>>,
+
+    /// Trust-list of peer-DIDs for schemas this plugin reads
+    /// (PIN-trust to specific authors; default is CID-keyed).
     pub requires_schema_authors: Option<Vec<Did>>,
+
+    /// Trust-list of peer-DIDs for plugins this plugin composes.
     pub requires_plugin_authors: Option<Vec<Did>>,
 }
 
 impl PluginManifest {
-    /// Validate the manifest envelope against schema rules + signature.
+    /// Validate the manifest envelope: structural shape.
     ///
-    /// **Stub.** G24-D fills with a typed error path (likely
-    /// `Result<(), benten_errors::ErrorCode>` or a typed
-    /// `PluginManifestError`). At R3 RED-PHASE the return type is
-    /// intentionally minimal-shape so test pins compile.
-    #[allow(clippy::result_unit_err)]
-    pub fn validate(&self) -> Result<(), ()> {
-        unimplemented!("R3 RED-PHASE stub — G24-D fills validation logic")
+    /// # Errors
+    ///
+    /// `E_PLUGIN_MANIFEST_INVALID` on structural violation.
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        if self.plugin_name.is_empty() {
+            return Err(ErrorCode::PluginManifestInvalid);
+        }
+        if self.peer_signature.len() != 64 {
+            return Err(ErrorCode::PluginManifestInvalid);
+        }
+        if self.requires.is_empty() {
+            return Err(ErrorCode::PluginManifestInvalid);
+        }
+        match self.shares.default {
+            SharesPolicyDefault::Matching => {
+                if self.shares.rules.as_ref().is_none_or(|r| r.is_empty()) {
+                    return Err(ErrorCode::PluginManifestInvalid);
+                }
+            }
+            SharesPolicyDefault::None | SharesPolicyDefault::Any => {}
+        }
+        for req in &self.requires {
+            if req.scope.is_empty() {
+                return Err(ErrorCode::PluginManifestInvalid);
+            }
+        }
+        Ok(())
     }
 
     /// Compute the content-CID over the canonical-bytes DAG-CBOR
-    /// encoding of the manifest body.
-    ///
-    /// **Stub.** G24-D fills.
+    /// encoding of the body with `content_cid` + `peer_signature`
+    /// zeroed (chicken-and-egg + signature-bytes-not-yet-known).
+    #[must_use]
     pub fn compute_content_cid(&self) -> Cid {
-        unimplemented!("R3 RED-PHASE stub — G24-D fills CID computation")
+        let mut copy = self.clone();
+        copy.content_cid = Cid::from_blake3_digest([0u8; 32]);
+        copy.peer_signature = Vec::new();
+        let bytes = serde_ipld_dagcbor::to_vec(&copy)
+            .expect("plugin manifest serializes (programmer error if this fires)");
+        let digest = blake3::hash(&bytes);
+        Cid::from_blake3_digest(*digest.as_bytes())
+    }
+
+    /// Verify the stored `content_cid` matches the computed CID.
+    ///
+    /// # Errors
+    ///
+    /// `E_PLUGIN_CONTENT_CID_MISMATCH` if computed != stored.
+    pub fn verify_content_cid_matches(&self) -> Result<(), ErrorCode> {
+        let computed = self.compute_content_cid();
+        if computed == self.content_cid {
+            Ok(())
+        } else {
+            Err(ErrorCode::PluginContentCidMismatch)
+        }
+    }
+
+    /// Verify the peer-DID signature on the manifest content.
+    ///
+    /// # Errors
+    ///
+    /// - `E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID` on signature failure.
+    /// - `E_PLUGIN_CONTENT_CID_MISMATCH` if CID drift detected.
+    pub fn verify_peer_signature(&self) -> Result<(), ErrorCode> {
+        self.verify_content_cid_matches()?;
+        if self.peer_signature.len() != 64 {
+            return Err(ErrorCode::PluginContentPeerSignatureInvalid);
+        }
+        let pubkey = self
+            .peer_did
+            .resolve()
+            .map_err(|_| ErrorCode::PluginContentPeerSignatureInvalid)?;
+        let sig_bytes: [u8; 64] = self
+            .peer_signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| ErrorCode::PluginContentPeerSignatureInvalid)?;
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        let msg = self.signing_payload();
+        pubkey
+            .as_verifying_key()
+            .verify(&msg, &signature)
+            .map_err(|_| ErrorCode::PluginContentPeerSignatureInvalid)
+    }
+
+    /// Bytes signed by the peer-DID: `content_cid_bytes || canonical_body`.
+    #[must_use]
+    pub fn signing_payload(&self) -> Vec<u8> {
+        let mut copy = self.clone();
+        copy.peer_signature = Vec::new();
+        let body = serde_ipld_dagcbor::to_vec(&copy)
+            .expect("plugin manifest signing-payload serializes");
+        let mut out = Vec::with_capacity(36 + body.len());
+        out.extend_from_slice(self.content_cid.as_bytes());
+        out.extend_from_slice(&body);
+        out
+    }
+
+    /// Whether this manifest declares the `host:sandbox:exec` cap.
+    /// Heterogeneity check fires on thin-compute-surface installs.
+    #[must_use]
+    pub fn requires_sandbox_exec(&self) -> bool {
+        self.requires.iter().any(|r| r.scope == "host:sandbox:exec")
     }
 }
 
-/// `manifest_cid` round-trip stub-consumer pin (R4-FP-4 §5.4).
-///
-/// Companion to `InstallRecord::manifest_cid`. At G24-D wave-time the
-/// install lifecycle path will produce an `InstallRecord` whose
-/// `manifest_cid` field equals the result of
-/// `PluginManifest::compute_content_cid()` (round-trip identity).
-/// This stub-consumer is the seam future G24-D round-trip pins import
-/// to assert that identity — at R3 RED-PHASE the body
-/// `unimplemented!()`s, so any caller surfaces the seam absence
-/// explicitly at the call site rather than silently no-op'ing.
-///
-/// Why a stub-consumer (per §3.6e / pim-12): without a concrete
-/// function shape the round-trip test pin has nothing to import; the
-/// stub-consumer locks the future signature shape AND fires explicitly
-/// if a future implementer skips the round-trip wiring (the
-/// `unimplemented!()` body fires at first-call, surfacing the gap).
-///
-/// G24-D wave-time implementer:
-/// 1. Replace the `unimplemented!()` body with the actual round-trip:
-///    construct the canonical-bytes DAG-CBOR encoding of `manifest`,
-///    re-decode, re-encode, re-hash, compare to `record.manifest_cid`.
-/// 2. Wire the new body to call `manifest.compute_content_cid()` once
-///    that function lands.
-/// 3. Un-ignore the future `g24_d_install_record_manifest_cid_roundtrip.rs`
-///    pin in `tests/` (RED-PHASE there per §3.6e).
-pub fn assert_install_record_manifest_cid_matches_manifest_content_cid(
-    record: &InstallRecord,
-    manifest: &PluginManifest,
-) {
-    // RED-PHASE shape per §3.6f: the seam compiles + the function
-    // exists at HEAD so future G24-D round-trip pins can import it.
-    // The body intentionally `unimplemented!()`s so first-call surfaces
-    // the gap explicitly rather than silently passing.
-    let _ = (record, manifest);
-    unimplemented!(
-        "R3 RED-PHASE stub — G24-D fills round-trip identity check: \
-         record.manifest_cid == manifest.compute_content_cid() (with \
-         canonical-bytes DAG-CBOR re-encode + re-hash round-trip)"
-    );
+/// Trait-shim for cross-crate content-addressing without forcing a
+/// blake3/serde_ipld_dagcbor dep downstream.
+pub trait ContentAddressed {
+    /// Compute the canonical-bytes-content-CID of this value.
+    fn content_cid(&self) -> Cid;
 }
 
+impl ContentAddressed for PluginManifest {
+    fn content_cid(&self) -> Cid {
+        self.compute_content_cid()
+    }
+}
+
+// =====================================================================
+// CapRequirement
+// =====================================================================
+
 /// Capability requirement entry — typed scope the plugin needs.
-///
-/// Scope shape per `docs/PLUGIN-MANIFEST.md` §6 cap-scope grammar
-/// (`requires:<plugin_did>:<requirement_path>` or domain-typed shapes
-/// such as `store:notes:read` / `host:time:now`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapRequirement {
+    /// Scope string (e.g. `store:notes:read`, `private:<did>:*`).
     pub scope: String,
 }
 
-/// Delegation policy envelope (the `shares` half of the manifest).
-///
-/// Per `docs/PLUGIN-MANIFEST.md` §3.2.
-#[derive(Debug, Clone)]
+impl CapRequirement {
+    /// New requirement with the given scope.
+    #[must_use]
+    pub fn new(scope: impl Into<String>) -> Self {
+        Self {
+            scope: scope.into(),
+        }
+    }
+
+    /// Whether this scope is a private-namespace shape.
+    #[must_use]
+    pub fn is_private_namespace(&self) -> bool {
+        self.scope.starts_with("private:")
+    }
+}
+
+// =====================================================================
+// SharesPolicy
+// =====================================================================
+
+/// Delegation policy envelope — the `shares` half of the manifest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharesPolicy {
+    /// Default disposition when no rule matches.
     pub default: SharesPolicyDefault,
+    /// Per-cap or per-target rules.
     pub rules: Option<Vec<SharesRule>>,
 }
 
-/// Default share-disposition when no rule matches.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SharesPolicyDefault {
+impl SharesPolicy {
     /// Conservative v0 default — no delegation permitted.
+    #[must_use]
+    pub fn none() -> Self {
+        Self {
+            default: SharesPolicyDefault::None,
+            rules: None,
+        }
+    }
+
+    /// Whether delegation of `cap_pattern` to `target_plugin_did` is
+    /// permitted under this policy.
+    ///
+    /// Private-namespace caps (`private:*`) MUST be checked at the
+    /// caller (`plugin_delegation.rs`) BEFORE invoking this — they
+    /// are unconditionally denied.
+    #[must_use]
+    pub fn permits_delegation(&self, cap_pattern: &str, target_plugin_did: &Did) -> bool {
+        if let Some(rules) = &self.rules {
+            for rule in rules {
+                if rule.matches(cap_pattern, target_plugin_did) {
+                    return true;
+                }
+            }
+        }
+        matches!(self.default, SharesPolicyDefault::Any)
+    }
+}
+
+/// Default share-disposition when no rule matches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SharesPolicyDefault {
+    /// Conservative — no delegation permitted (v0 default).
     None,
-    /// Any delegation permitted (rare; used by trust-anchor plugins).
+    /// Any delegation permitted (rare; trust-anchor plugins).
     Any,
-    /// Matching `rules` permitted; non-matching denied.
+    /// Only matching `rules` permit; non-matching denies.
     Matching,
 }
 
-/// Per-cap or per-target delegation rule.
-#[derive(Debug, Clone)]
+/// Per-cap / per-target delegation rule.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharesRule {
+    /// Cap pattern (exact or single trailing `:*` glob).
     pub cap_pattern: String,
+    /// Target of the rule.
     pub target: SharesTarget,
 }
 
+impl SharesRule {
+    /// Whether this rule matches the request.
+    #[must_use]
+    pub fn matches(&self, cap: &str, target: &Did) -> bool {
+        self.cap_pattern_matches(cap) && self.target.matches(target)
+    }
+
+    fn cap_pattern_matches(&self, cap: &str) -> bool {
+        if self.cap_pattern == cap {
+            return true;
+        }
+        if let Some(prefix) = self.cap_pattern.strip_suffix(":*") {
+            return cap.starts_with(prefix)
+                && cap.len() > prefix.len()
+                && cap.as_bytes()[prefix.len()] == b':';
+        }
+        false
+    }
+}
+
 /// Target of a `SharesRule`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SharesTarget {
     /// Any plugin permitted (within `cap_pattern`).
     Any,
@@ -155,37 +323,163 @@ pub enum SharesTarget {
     PluginAuthor(Did),
 }
 
+impl SharesTarget {
+    fn matches(&self, target: &Did) -> bool {
+        match self {
+            SharesTarget::Any => true,
+            SharesTarget::PluginDid(d) => d == target,
+            // PluginAuthor matching at this layer is conservative —
+            // chain validator at manifest_envelope_chain_validation
+            // resolves the target's manifest peer-DID.
+            SharesTarget::PluginAuthor(_) => false,
+        }
+    }
+}
+
+// =====================================================================
+// RendererConfig
+// =====================================================================
+
 /// Renderer configuration (optional; per `docs/PLUGIN-MANIFEST.md` §7).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RendererConfig {
+    /// Output format: `"html_json"` / `"plaintext"` / others.
     pub output_format: String,
+    /// Optional list of renderer backends supported.
     pub renderer_backends: Option<Vec<RendererBackend>>,
+    /// Hosting target: `"browser_wasm32"` / `"tauri_embedded_webview"`.
     pub hosting_target: Option<String>,
+    /// Bundle size budget in KiB (thin-compute-surface enforcement).
     pub bundle_size_budget_kb: Option<u32>,
 }
 
-/// Renderer backend handle. Concrete enumeration deferred to G24-D.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Renderer backend handle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RendererBackend {
+    /// Browser wasm32-unknown-unknown bundle (CLAUDE.md #17 shape b).
     BrowserWasm32,
+    /// Tauri 2.x embedded webview (CLAUDE.md #17 shape c).
     TauriEmbeddedWebview,
+    /// Other backend name (forward-compat).
     Other(String),
 }
 
-/// Install-time consent record. User-DID signs over (manifest_cid +
-/// timestamp + nonce). G24-D fills the actual `Hlc` / signature surface.
-///
-/// Per `docs/PLUGIN-MANIFEST.md` §3 InstallRecord schema.
-#[derive(Debug, Clone)]
+// =====================================================================
+// InstallRecord
+// =====================================================================
+
+/// Install-time consent record. User-DID signs over `(manifest_cid ||
+/// timestamp_nanos || nonce || plugin_did_bytes)`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstallRecord {
+    /// CID of the manifest this install record consents to.
     pub manifest_cid: Cid,
+    /// Plugin-DID minted at install (UCAN audience handle per
+    /// CLAUDE.md #18 retense — NOT attested sub-identity).
+    pub plugin_did: Did,
+    /// User-DID that consented (root of cap chain per Layer 1).
     pub consenting_user_did: Did,
+    /// Ed25519 detached signature by `consenting_user_did`.
     pub user_signature: Vec<u8>,
-    /// Stub `Hlc` shape at R3 — G24-D wires the real `benten-core::Hlc`.
+    /// Wall-clock timestamp at install (nanoseconds since UNIX epoch).
+    /// Engine injects per Ben Q6 ratification.
     pub timestamp_stub_nanos: u64,
+    /// Replay-defense nonce (16 bytes from OsRng).
     pub nonce: Vec<u8>,
-    /// Granted UCAN capability grants from user-DID to plugin-DID.
-    /// Concrete `CapGrant` shape lives in `benten-caps`; this is a
-    /// payload-bytes placeholder at R3.
+    /// UCAN delegations from user-DID to plugin-DID for granted caps.
     pub granted_caps_bytes: Vec<Vec<u8>>,
+}
+
+impl InstallRecord {
+    /// Bytes signed by the user-DID.
+    #[must_use]
+    pub fn signing_payload(&self) -> Vec<u8> {
+        let plugin_did_bytes = self.plugin_did.as_str().as_bytes();
+        let mut out = Vec::with_capacity(36 + 8 + self.nonce.len() + plugin_did_bytes.len());
+        out.extend_from_slice(self.manifest_cid.as_bytes());
+        out.extend_from_slice(&self.timestamp_stub_nanos.to_le_bytes());
+        out.extend_from_slice(&self.nonce);
+        out.extend_from_slice(plugin_did_bytes);
+        out
+    }
+
+    /// Verify the user-DID signature on the install record.
+    ///
+    /// # Errors
+    ///
+    /// `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`.
+    pub fn verify_user_signature(&self) -> Result<(), ErrorCode> {
+        if self.user_signature.len() != 64 {
+            return Err(ErrorCode::PluginInstallRecordUserSignatureInvalid);
+        }
+        let pubkey = self
+            .consenting_user_did
+            .resolve()
+            .map_err(|_| ErrorCode::PluginInstallRecordUserSignatureInvalid)?;
+        let sig_bytes: [u8; 64] = self
+            .user_signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| ErrorCode::PluginInstallRecordUserSignatureInvalid)?;
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        pubkey
+            .as_verifying_key()
+            .verify(&self.signing_payload(), &signature)
+            .map_err(|_| ErrorCode::PluginInstallRecordUserSignatureInvalid)
+    }
+}
+
+// =====================================================================
+// Composition cycle detection (post-R1-triage Q2 ratification)
+// =====================================================================
+
+/// Detect a cycle in the meta-plugin composition graph rooted at
+/// `root_cid` / `root_manifest`, resolving each `composes_plugins`
+/// reference via `resolver`.
+///
+/// # Errors
+///
+/// `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED` on cycle detection.
+pub fn detect_composition_cycle<F>(
+    root_cid: Cid,
+    root_manifest: &PluginManifest,
+    resolver: &F,
+) -> Result<(), ErrorCode>
+where
+    F: Fn(&Cid) -> Option<PluginManifest>,
+{
+    let mut stack: Vec<(Cid, PluginManifest)> = vec![(root_cid, root_manifest.clone())];
+    let mut visited: std::collections::HashSet<Cid> = std::collections::HashSet::new();
+    visited.insert(root_cid);
+
+    while let Some((_, m)) = stack.pop() {
+        if let Some(refs) = &m.composes_plugins {
+            for child_cid in refs {
+                if *child_cid == root_cid {
+                    return Err(ErrorCode::PluginMetaCompositionCycleRejected);
+                }
+                if visited.contains(child_cid) {
+                    // Already-visited child — diamond shape; not a cycle.
+                    continue;
+                }
+                if let Some(child_manifest) = resolver(child_cid) {
+                    visited.insert(*child_cid);
+                    stack.push((*child_cid, child_manifest));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// =====================================================================
+// Signing helper
+// =====================================================================
+
+/// Sign a manifest body with the given keypair. The `content_cid`
+/// MUST be pre-populated via `compute_content_cid()`.
+#[must_use]
+pub fn sign_manifest(manifest: &PluginManifest, keypair: &benten_id::keypair::Keypair) -> Vec<u8> {
+    let payload = manifest.signing_payload();
+    keypair.sign(&payload).to_bytes().to_vec()
 }
