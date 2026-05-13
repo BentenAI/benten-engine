@@ -19,36 +19,45 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    benten_platform_foundation::schema_compiler does not exist at HEAD; G23-A wires the \
-    composition-over-12-primitives pin. Defends CLAUDE.md baked-in #1. Closes r2 §2.4 row 2."]
 fn schema_compiler_emits_subgraph_with_no_new_primitive_kind_variants() {
-    // G23-A implementer wires this:
-    //
-    //   use benten_platform_foundation::schema_compiler::compile;
-    //   use benten_core::PrimitiveKind;
-    //
-    //   // The 12 canonical PrimitiveKind variants per CLAUDE.md baked-in #1.
-    //   let allowed: std::collections::HashSet<PrimitiveKind> = [
-    //       PrimitiveKind::Read, PrimitiveKind::Write, PrimitiveKind::Transform,
-    //       PrimitiveKind::Branch, PrimitiveKind::Iterate, PrimitiveKind::Wait,
-    //       PrimitiveKind::Call, PrimitiveKind::Respond, PrimitiveKind::Emit,
-    //       PrimitiveKind::Sandbox, PrimitiveKind::Subscribe, PrimitiveKind::Stream,
-    //   ].into_iter().collect();
-    //
-    //   for fixture in &[
-    //       schema_fixtures::canonical_note_type_schema_bytes(),
-    //       schema_fixtures::minimal_schema_bytes(),
-    //       schema_fixtures::benign_schema_round_trip_bytes(),
-    //   ] {
-    //       let spec = compile(fixture).unwrap();
-    //       for p in spec.primitives() {
-    //           assert!(allowed.contains(&p.kind()),
-    //               "schema compiler MUST NOT emit non-canonical PrimitiveKind \
-    //                (CLAUDE.md baked-in #1 violation); got: {:?}", p.kind());
-    //       }
-    //   }
-    let _ = schema_fixtures::VOCAB_LABELS;
-    unimplemented!("G23-A wave-4 wires 12-primitive composition assertion across fixture set");
+    use benten_core::PrimitiveKind;
+    use benten_platform_foundation::schema_compiler::compile;
+
+    // The 12 canonical PrimitiveKind variants per CLAUDE.md baked-in #1.
+    let allowed: std::collections::HashSet<PrimitiveKind> = [
+        PrimitiveKind::Read,
+        PrimitiveKind::Write,
+        PrimitiveKind::Transform,
+        PrimitiveKind::Branch,
+        PrimitiveKind::Iterate,
+        PrimitiveKind::Wait,
+        PrimitiveKind::Call,
+        PrimitiveKind::Respond,
+        PrimitiveKind::Emit,
+        PrimitiveKind::Sandbox,
+        PrimitiveKind::Subscribe,
+        PrimitiveKind::Stream,
+    ]
+    .into_iter()
+    .collect();
+
+    for fixture in [
+        schema_fixtures::canonical_note_type_schema_bytes(),
+        schema_fixtures::minimal_schema_bytes(),
+        schema_fixtures::benign_schema_round_trip_bytes(),
+    ] {
+        let spec = compile(fixture).unwrap();
+        for p in spec.primitives() {
+            assert!(
+                allowed.contains(&p.kind()),
+                "schema compiler MUST NOT emit non-canonical PrimitiveKind \
+                 (CLAUDE.md baked-in #1 violation); got: {:?}",
+                p.kind()
+            );
+        }
+    }
+    // Static cross-check: vocab-labels constant must equal the 8-set.
+    assert_eq!(schema_fixtures::VOCAB_LABELS.len(), 8);
 }

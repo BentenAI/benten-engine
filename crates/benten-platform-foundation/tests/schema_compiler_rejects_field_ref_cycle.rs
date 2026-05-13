@@ -9,20 +9,17 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    FieldRef cycle rejection requires schema_compiler + cycle detector. Surfaces \
-    E_SCHEMA_VOCAB_CYCLE_REJECTED. Closes r2 §2.4 cycle-reject row."]
 fn schema_compiler_rejects_field_ref_cycle() {
-    // G23-A implementer wires this:
-    //
-    //   use benten_platform_foundation::schema_compiler::compile;
-    //   use benten_errors::ErrorCode;
-    //
-    //   let bytes = schema_fixtures::hostile_schema_with_cycle_bytes();
-    //   let err = compile(bytes).expect_err("FieldRef cycle must be rejected");
-    //   assert_eq!(err.code(), ErrorCode::SchemaVocabCycleRejected,
-    //       "must surface E_SCHEMA_VOCAB_CYCLE_REJECTED");
-    let _ = schema_fixtures::hostile_schema_with_cycle_bytes();
-    unimplemented!("G23-A wave-4 wires FieldRef cycle detection (E_SCHEMA_VOCAB_CYCLE_REJECTED)");
+    use benten_errors::ErrorCode;
+    use benten_platform_foundation::schema_compiler::compile;
+
+    let bytes = schema_fixtures::hostile_schema_with_cycle_bytes();
+    let err = compile(bytes).expect_err("FieldRef cycle must be rejected");
+    assert_eq!(
+        err.code(),
+        ErrorCode::SchemaVocabCycleRejected,
+        "must surface E_SCHEMA_VOCAB_CYCLE_REJECTED"
+    );
 }

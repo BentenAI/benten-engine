@@ -42,10 +42,8 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary): 9 E_SCHEMA_* variants minted in benten-errors.
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    9 G23-A ErrorCodes do not exist at HEAD; G23-A wires atomic Rust+TS mint per §3.5g. \
-    Currently from_str returns ErrorCode::Unknown for all 9. Closes r2 §2.4 ErrorCode pin."]
 fn error_catalog_mints_9_g23_a_error_codes() {
     for code in schema_fixtures::G23_A_ERROR_CODES {
         let parsed = ErrorCode::from_str(code);
@@ -63,11 +61,8 @@ fn error_catalog_mints_9_g23_a_error_codes() {
     }
 }
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary): TS mirror regenerated via codegen-errors.ts.
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    9 G23-A ErrorCodes not yet present in packages/engine/src/errors.generated.ts \
-    CATALOG_CODES at HEAD; G23-A wires atomic Rust+TS mint per §3.5g. \
-    Closes r4-triage §5.2 G23-A TS-side companion pin."]
 fn error_catalog_mints_9_g23_a_error_codes_ts_mirror() {
     // Read the canonical TS mirror at
     // packages/engine/src/errors.generated.ts (per Ben's R4-triage §7
