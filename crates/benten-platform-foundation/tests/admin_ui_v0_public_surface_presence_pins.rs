@@ -57,7 +57,7 @@ fn wintertc_forbidden_apis_present_with_canonical_entries() {
     let expected = ["document.cookie", "new FormData"];
     for needle in expected {
         assert!(
-            WINTERTC_FORBIDDEN_APIS.iter().any(|api| *api == needle),
+            WINTERTC_FORBIDDEN_APIS.contains(&needle),
             "WINTERTC_FORBIDDEN_APIS missing canonical entry `{needle}`"
         );
     }
