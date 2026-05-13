@@ -51,12 +51,10 @@ const EXPECTED_G23_A_CODES: &[&str] = &[
     "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING",
 ];
 
+// Un-ignored at G23-A wave-4 (2026-05-12): all 9 E_SCHEMA_* variants
+// landed in benten-errors with as_str + from_str arms + TS mirror + catalog
+// entries. Subset-closure pin now GREEN as a permanent regression-guard.
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    9 E_SCHEMA_* variants do not exist in benten-errors at HEAD; \
-    subset-closure pin asserts post-G23-A every expected variant has \
-    enum + as_str + from_str arms AND the family-prefix discipline holds. \
-    Closes r4-triage §5.2 G23-A subset-closure pin."]
 fn every_expected_g23_a_schema_code_resolves_to_named_variant() {
     for code in EXPECTED_G23_A_CODES {
         // Family-prefix discipline: every code in the G23-A set must

@@ -351,6 +351,22 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::ThinClientChallengeReplay,
     ErrorCode::ThinClientOriginMismatch,
     ErrorCode::ThinClientSessionExpired,
+    // Phase 4-Foundation G23-A schema_compiler canary (2026-05-12): 9 NEW
+    // E_SCHEMA_* codes minted atomically Rust + TS per §3.5g. Construction
+    // site: `crates/benten-platform-foundation/src/schema_compiler/`. All
+    // 9 carry `as_static_str` + `from_str` arms + routed_edge_label `None`
+    // (registration-time refusal, same disposition as
+    // `ReservedHandlerNamespace` / `DuplicateHandler`). Post-G24-F + G23-A
+    // (batch-1 of strategy-C local-merge): 118 + 4 + 9 = 131.
+    ErrorCode::SchemaValidationFailed,
+    ErrorCode::SchemaEmitNewPrimitiveRejected,
+    ErrorCode::SchemaSandboxHostFnRejected,
+    ErrorCode::SchemaVocabInvalidLabel,
+    ErrorCode::SchemaVocabEdgeMismatch,
+    ErrorCode::SchemaVocabScalarUnknown,
+    ErrorCode::SchemaVocabRefTargetMissing,
+    ErrorCode::SchemaVocabCycleRejected,
+    ErrorCode::SchemaVocabRequiredPropertyMissing,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -590,10 +606,20 @@ fn variant_count_is_pinned() {
     // thin-client session-protocol surface; T2 defenses 1-3 + br-r1-1
     // + sec-4f-r1-5 + Family F1 gap #2): + ThinClientHandshakeInvalid
     // + ThinClientChallengeReplay + ThinClientOriginMismatch +
-    // ThinClientSessionExpired = 122. All four route to `ON_DENIED`
+    // ThinClientSessionExpired = +4. All four route to `ON_DENIED`
     // per the cap-denial family precedent.
+    //
+    // Phase 4-Foundation G23-A schema_compiler canary (2026-05-12): + 9
+    // E_SCHEMA_* codes (SchemaValidationFailed, SchemaEmitNewPrimitiveRejected,
+    // SchemaSandboxHostFnRejected, SchemaVocabInvalidLabel,
+    // SchemaVocabEdgeMismatch, SchemaVocabScalarUnknown,
+    // SchemaVocabRefTargetMissing, SchemaVocabCycleRejected,
+    // SchemaVocabRequiredPropertyMissing).
+    //
+    // Batch-1 strategy-C combined (G24-F + G23-A; G23-0a mints none):
+    // 118 + 4 + 9 = 131.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 122,
+        CATALOG_VARIANT_COUNT, 131,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

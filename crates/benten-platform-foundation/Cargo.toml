@@ -25,6 +25,12 @@ benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 benten-id = { path = "../benten-id" }
 thiserror = { workspace = true }
+# G23-A schema_compiler: JSON-Schema ingest dialect parser. `serde_json` is
+# the workspace-canonical JSON parser; no other JSON deps allowed in the
+# foundation crate (drift-defense: a future agent introducing `simd-json` or
+# similar would surface in arch-N dep-direction test).
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 benten-engine = { path = "../benten-engine" }
