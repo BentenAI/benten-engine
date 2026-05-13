@@ -42,6 +42,17 @@
 //!   namespace contract that drives the dispatch decision);
 //! - would FAIL if the dispatch-layer per-key scan were silently
 //!   no-op'd (i.e., if rejection only fired at whole-zone divergence).
+//!
+//! ## R4-FP-4 substance audit cross-reference
+//!
+//! This file is audited at
+//! `.addl/phase-4-foundation/notes-wave-c1-attack-audit.md` §2.2 per
+//! sec-3.5-r1-8 + pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight. Audit
+//! verdict: SUBSTANTIVE — production-surface (`LoroDoc::all_writes`) +
+//! 2 observable-consequence assertions (positive + negative arms) +
+//! engine-end companion pin at
+//! `crates/benten-engine/tests/sync_inv_13_op_log_dispatch_reject.rs`.
+//! No substance gaps detected at HEAD.
 
 #![allow(clippy::unwrap_used)]
 

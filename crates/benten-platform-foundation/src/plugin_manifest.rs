@@ -66,6 +66,47 @@ impl PluginManifest {
     }
 }
 
+/// `manifest_cid` round-trip stub-consumer pin (R4-FP-4 §5.4).
+///
+/// Companion to `InstallRecord::manifest_cid`. At G24-D wave-time the
+/// install lifecycle path will produce an `InstallRecord` whose
+/// `manifest_cid` field equals the result of
+/// `PluginManifest::compute_content_cid()` (round-trip identity).
+/// This stub-consumer is the seam future G24-D round-trip pins import
+/// to assert that identity — at R3 RED-PHASE the body
+/// `unimplemented!()`s, so any caller surfaces the seam absence
+/// explicitly at the call site rather than silently no-op'ing.
+///
+/// Why a stub-consumer (per §3.6e / pim-12): without a concrete
+/// function shape the round-trip test pin has nothing to import; the
+/// stub-consumer locks the future signature shape AND fires explicitly
+/// if a future implementer skips the round-trip wiring (the
+/// `unimplemented!()` body fires at first-call, surfacing the gap).
+///
+/// G24-D wave-time implementer:
+/// 1. Replace the `unimplemented!()` body with the actual round-trip:
+///    construct the canonical-bytes DAG-CBOR encoding of `manifest`,
+///    re-decode, re-encode, re-hash, compare to `record.manifest_cid`.
+/// 2. Wire the new body to call `manifest.compute_content_cid()` once
+///    that function lands.
+/// 3. Un-ignore the future `g24_d_install_record_manifest_cid_roundtrip.rs`
+///    pin in `tests/` (RED-PHASE there per §3.6e).
+pub fn assert_install_record_manifest_cid_matches_manifest_content_cid(
+    record: &InstallRecord,
+    manifest: &PluginManifest,
+) {
+    // RED-PHASE shape per §3.6f: the seam compiles + the function
+    // exists at HEAD so future G24-D round-trip pins can import it.
+    // The body intentionally `unimplemented!()`s so first-call surfaces
+    // the gap explicitly rather than silently passing.
+    let _ = (record, manifest);
+    unimplemented!(
+        "R3 RED-PHASE stub — G24-D fills round-trip identity check: \
+         record.manifest_cid == manifest.compute_content_cid() (with \
+         canonical-bytes DAG-CBOR re-encode + re-hash round-trip)"
+    );
+}
+
 /// Capability requirement entry — typed scope the plugin needs.
 ///
 /// Scope shape per `docs/PLUGIN-MANIFEST.md` §6 cap-scope grammar

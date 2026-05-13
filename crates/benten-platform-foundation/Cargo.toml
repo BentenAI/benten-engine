@@ -28,3 +28,8 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 benten-engine = { path = "../benten-engine" }
+# walkdir for R4-FP-4 substantive grep-walk pin
+# (`plugin_did_is_ucan_audience_handle_not_attested_sub_identity.rs`
+# negative-arm walks `crates/benten-id/src/` for forbidden
+# device-DID-attestation patterns per CLAUDE.md baked-in #18).
+walkdir = "2.5"
