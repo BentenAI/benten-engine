@@ -256,7 +256,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 - **mr-7 RE-VERIFIED at G24-A** — rustdoc on `MaterializerWalkInputs` (line ~285-300) names `(spec_cid, content_cid)` as the view-identity pair; G24-A consumer wiring at `admin_ui_v0_render_propagates_engine_side_node_update_through_adapter` renders two distinct (same spec, different content_cid) pairs in one test fn — multi-instance shape exercised.
 - **mr-8 RE-VERIFIED at G24-A** — the invocation-count-observability semantic is explicit at `materializer.rs:923-943`; the G24-A pin `admin_ui_v0_render_dual_gate_invocation_count_observability` asserts ≥ spec.primitive_count invocations per walk.
 
-### §4.14 T1 + T7 LOAD-BEARING end-to-end pins → G24-B-FP-1 harness graduation
+### §4.14 T1 + T7 LOAD-BEARING end-to-end pins → G24-B-FP-1 harness graduation [CLOSED at G24-B-FP-1]
 
 **Origin:** G24-A mini-review BLOCKER findings `g24a-mr-1` (T1 hostile-schema), `g24a-mr-2` (T7 private-namespace), + paired MAJOR `g24a-mr-3` (T1 benign-control). All three R3 RED-PHASE pins cited "un-ignore at G24-A landing" but G24-A shipped the substrate module (admin_ui_v0/mod.rs) + engine adapter bridge WITHOUT graduating the full end-to-end test harness (`AdminUiV0TestHarness::new()`) that the substantive arms require. Per pim-12 §3.6e, the wave-citation must match the actual un-ignore wave; per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW, the destination needs a specific named follow-up wave.
 
@@ -284,7 +284,12 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for the 3 deferred T1+T7 LOAD-BEARING pins. Closes G24-A mini-review g24a-mr-1 + g24a-mr-2 + g24a-mr-3.
 
-### §4.15 Defense-in-depth SANDBOX 4th banned host-fn (`edges:remove`) coverage gap
+**Closure (G24-B-FP-1):** `AdminUiV0TestHarness::new()` graduated to a composed-engine + materializer end-to-end harness (`crates/benten-engine/tests/common/admin_ui_v0_harness.rs`). The 3 LOAD-BEARING pins un-ignored with substantive arms:
+- `admin_ui_v0_hostile_schema_read_emit_chain_denied.rs` — 2 sub-tests pinning T1 envelope-recheck against hand-coded hostile schemas; asserts typed `E_MATERIALIZER_SCHEMA_MISMATCH` + diagnostic-names-attempted-scope forensic visibility.
+- `admin_ui_v0_benign_schema_renders_correctly.rs` — 2 sub-tests pinning the T1 regression-guard arm: real `schema_compile` + materializer walk through HarnessEngineAdapter renders content + structural cap-recheck fires (Compromise #11 closure floor).
+- `admin_ui_v0_private_namespace_isolated_from_other_plugins.rs` — 3 sub-tests pinning T7 end-to-end against `Engine::delegate_capability` (refusal fires + target-DID independence + non-private-scope regression-guard).
+
+### §4.15 Defense-in-depth SANDBOX 4th banned host-fn (`edges:remove`) coverage gap [CLOSED at G24-B-FP-1]
 
 **Origin:** G24-A mini-review `g24a-mr-4` OBSERVATION. The `materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` pin (G24-A wave) exercises 3 of the 4 banned host-fns (`kv:write` + `kv:delete` + `edges:add`); `edges:remove` is named in the module doc + the production runtime banned-set but not pinned by a sub-test.
 
@@ -295,6 +300,8 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 **Acceptance:** 4 sub-tests in `materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` (3 existing + 1 new for `edges:remove`); all assert `MaterializerError::SchemaMismatch { code: E_MATERIALIZER_SCHEMA_MISMATCH }`.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes G24-A mini-review g24a-mr-4 OBSERVATION.
+
+**Closure (G24-B-FP-1):** `materializer_rejects_handcoded_spec_referencing_edges_remove_host_fn` sub-test landed alongside the existing 3 banned-host-fn arms. Asserts `MaterializerError::SchemaMismatch { code: MaterializerSchemaMismatch }` + diagnostic naming `edges:remove`.
 
 ---
 
