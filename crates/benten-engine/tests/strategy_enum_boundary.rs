@@ -35,12 +35,12 @@ fn strategy_enum_at_engine_boundary_does_not_leak_algorithm_b_internals_per_clau
         match s {
             Strategy::A => "A",
             Strategy::B => "B",
-            Strategy::C => "C",
+            Strategy::Reserved => "Reserved",
         }
     }
     assert_eq!(classify(Strategy::A), "A");
     assert_eq!(classify(Strategy::B), "B");
-    assert_eq!(classify(Strategy::C), "C");
+    assert_eq!(classify(Strategy::Reserved), "Reserved");
 
     // The G15-A internal dispatch router lives behind a `pub fn
     // dispatch_for(view_id: &str) -> Strategy` — it RETURNS a Strategy
