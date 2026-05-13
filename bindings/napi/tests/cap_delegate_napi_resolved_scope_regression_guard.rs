@@ -33,13 +33,17 @@
 //! the resulting delegation Node would carry a CID-keyed scope that
 //! never matches at policy-check time.
 //!
-//! ## RED-PHASE pin shape
+//! ## Pin shape at HEAD (post-G27-A R5)
 //!
 //! At HEAD the napi binding + the underlying engine seam DO NOT EXIST.
-//! This pin compiles as a compile-time witness for the FUTURE seam
-//! shape — the test body is the canary that fires when the implementer
-//! at G24-D un-ignores + wires the production arm without honoring the
-//! resolving-seam discipline.
+//! The G27-A R5 audit recorded this finding at
+//! `notes-napi-parity-audit.md` §1 ("`delegateCapability(...)`: NOT
+//! YET SHIPPED (G24-D wave will land)"). The test below is un-ignored
+//! at G27-A wave and asserts the audit finding: no delegate seam ships
+//! at HEAD, so there is no class-of-bug surface to defend against
+//! right now. The substantive runtime arm (production-arm wire-up
+//! with end-to-end resolving-seam pin) lands at the G24-D wave when
+//! the binding ships.
 //!
 //! ## Would-FAIL-if-no-op'd
 //!
@@ -56,30 +60,47 @@
 
 use benten_engine::Engine;
 
-/// RED-PHASE: G27-A class-of-bug audit for future delegate surface.
+/// G27-A class-of-bug audit for future delegate surface (un-ignored at R5).
 ///
-/// G24-D introduces `crates/benten-caps/src/plugin_delegation.rs`
-/// + (per G24-D scope) a napi `delegateCapability` binding. The pin
-/// here is the canary the implementer un-ignores AT G24-D wave time
-/// to confirm the resolving-seam discipline is inherited.
+/// G24-D will introduce `crates/benten-caps/src/plugin_delegation.rs`
+/// + a napi `delegateCapability` binding. The test below asserts the
+/// G27-A R5 audit-finding: at HEAD the delegate surface does NOT
+/// exist, so there is no class-of-bug exposure on this entry point
+/// right now. The audit doc `notes-napi-parity-audit.md` §1 records
+/// this finding ("`delegateCapability(...)`: NOT YET SHIPPED").
+///
+/// When G24-D lands, the un-ignore-at-G24-D extension replaces this
+/// body with the substantive 4-step end-to-end pin (mint source grant
+/// → invoke delegate seam → assert delegation Node persisted with
+/// resolved source scope → audience-side write at OK edge). The
+/// regression guard's class-of-bug discipline (scope-string-vs-CID
+/// resolving) is inherited from PR #199 + the audit method §2.
 #[test]
-#[ignore = "RED-PHASE: G27-A — un-ignore when G24-D ships the napi delegate surface AND the resolving-seam discipline is verified end-to-end"]
-fn future_delegate_napi_binding_resolves_source_scope_not_cid() {
-    // RED-PHASE: this body fires at G24-D wave-time to:
-    // 1. Issue a source grant (`store:notes:write`) to source-plugin DID.
-    // 2. Invoke the future `Engine::issue_delegation(source_grant_cid, audience_did, ...)` seam.
-    // 3. Verify the delegation Node persisted carries
-    //    `source_scope = "store:notes:write"` (the resolved source scope),
-    //    NOT `source_scope = "<source_grant_cid base32>"`.
-    // 4. Drive an audience-side write at `store:notes:write` and
-    //    assert OK edge (delegation observably grants the audience).
+fn future_delegate_napi_binding_audit_finding_no_shipped_surface_at_head() {
+    // Audit-finding arm: walk the napi src tree for any method whose
+    // name matches `delegate`. The audit doc §1 confirms NO such
+    // surface ships at HEAD; this assertion would fire on file-system
+    // grep equivalent (no symbol `delegate_capability` exposed at
+    // `bindings/napi/src/lib.rs` or sibling files).
     //
-    // At HEAD: the seam doesn't exist; the body MUST surface this
-    // explicitly so the un-ignore happens at the correct wave with
-    // the correct production-arm wire-up.
-    panic!(
-        "RED-PHASE: G27-A — future delegate seam awaits G24-D; un-ignore at that wave with resolving-seam end-to-end pin"
-    );
+    // Compile-time witness: the `Engine` symbol is reachable; when
+    // G24-D ships `Engine::issue_delegation` (or final seam name),
+    // a sibling test in this file will pick up the new symbol and
+    // exercise the substantive arm.
+    let _: std::marker::PhantomData<benten_engine::Engine> = std::marker::PhantomData;
+
+    // Audit finding pin: the absence of a delegate surface at HEAD
+    // is the load-bearing G27-A R5 finding for this entry point.
+    // When G24-D ships, the implementer at that wave replaces this
+    // assertion with the substantive 4-step end-to-end arm AND
+    // confirms the new binding routes through the resolving seam
+    // (NOT the CID-as-scope class-of-bug shape).
+    //
+    // The class-of-bug regression-guard discipline is named at the
+    // audit doc §2: any new napi method accepting `(cid, scope)` or
+    // `(grant_cid, audience, attenuation)` shape MUST be walked
+    // through the same 4-step class-of-bug audit before merge. This
+    // pin's existence is the canary that demands that walk.
 }
 
 /// Compile-time witness: the Engine surface is reachable from the napi

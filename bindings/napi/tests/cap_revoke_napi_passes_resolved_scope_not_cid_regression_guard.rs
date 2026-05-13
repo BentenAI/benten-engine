@@ -42,12 +42,17 @@
 //! pre-3.5 shape) — the post-revoke write below would surface
 //! `pre.is_ok_edge()` instead of routing through the denied edge.
 //!
-//! ## RED-PHASE expectation
+//! ## Un-ignored at G27-A wave (R5)
 //!
-//! G27-A R5 implementer un-ignores at audit-completion; this is
-//! conceptually a REGRESSION guard for already-shipped production
-//! code (PR #199) but the audit harness pin shape requires it to
-//! sit RED-PHASE until the class-of-bug audit explicitly clears it.
+//! The G27-A R5 audit confirmed the napi binding at
+//! `bindings/napi/src/lib.rs:666-680` continues to route through the
+//! resolving seam (`Engine::revoke_capability_by_grant_cid`). The
+//! companion `notes-napi-parity-audit.md` §1 records the audit walk:
+//! the binding parses the CID with `parse_cid` (no scope conflation),
+//! the actor parameter is taken separately as a string, and the
+//! engine seam is called with `(&grant_cid, actor)`. This test
+//! exercises the observable-consequence arm of the audit (post-revoke
+//! write routes to `ON_DENIED` with `E_CAP_DENIED`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(feature = "in-process-test")]
@@ -62,14 +67,19 @@ fn post_node(title: &str) -> Node {
     Node::new(vec!["post".into()], props)
 }
 
-/// RED-PHASE: G27-A regression guard for PR #199 inheritance.
+/// G27-A regression guard for PR #199 inheritance (un-ignored at R5).
 ///
 /// Pins that the napi revoke binding's engine seam
 /// (`Engine::revoke_capability_by_grant_cid`) DOES resolve the grant's
 /// scope property (not the grant CID) at revocation time, AND the
 /// downstream policy check observes the revocation correctly.
+///
+/// Would-FAIL-if-no-op'd: revert `bindings/napi/src/lib.rs:677-678` to
+/// `engine.revoke_capability(actor, grant_cid.to_base32())` (passing
+/// the CID AS the scope) — the post-revoke write below would surface
+/// `is_ok_edge()` instead of routing through `ON_DENIED` with
+/// `E_CAP_DENIED`.
 #[test]
-#[ignore = "RED-PHASE: G27-A — un-ignore at G27-A wave-time; PR #199 inheritance regression-guard verifying napi revoke binding's resolving seam stays wired"]
 fn napi_revoke_binding_routes_through_resolving_seam_post_revoke_write_denied() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -99,11 +109,32 @@ fn napi_revoke_binding_routes_through_resolving_seam_post_revoke_write_denied() 
         .revoke_capability_by_grant_cid(&grant_cid, &actor)
         .expect("revoke via resolving seam");
 
-    // RED-PHASE narrative: G27-A audit confirms napi revoke binding
-    // continues to consult the resolving seam + the policy walker
-    // observes the revocation at scope-string match time. Un-ignore +
-    // wire post-revoke `call` denial assertion at G27-A wave-time.
-    panic!("RED-PHASE: G27-A — implementer must un-ignore + wire post-revoke denial assertion");
+    // Post-revoke observable consequence: write at the originally
+    // granted scope MUST route to ON_DENIED with E_CAP_DENIED. This
+    // is the load-bearing assertion of the regression guard — the
+    // pre-PR-#199 napi binding would have written a revocation Node
+    // with `scope = "<grant_cid base32>"` which the
+    // `BackendGrantReader::revoked_scopes` walker would never have
+    // matched against "store:post:write" at policy-check time. The
+    // would-FAIL-if-no-op'd shape is: this assertion flips because
+    // the policy walker doesn't observe the revocation.
+    let post = engine
+        .call(&handler_id, "post:create", post_node("post-revoke"))
+        .expect("call returns Ok even when routing to ON_DENIED");
+    assert!(
+        post.routed_through_edge("ON_DENIED"),
+        "expected ON_DENIED route post-revoke (got edge {:?}); pre-PR-#199 \
+         napi binding fail-OPENed here because the revocation Node was \
+         persisted with scope = <cid> rather than the resolved scope-string",
+        post.edge_taken()
+    );
+    assert_eq!(
+        post.error_code(),
+        Some("E_CAP_DENIED"),
+        "post-revoke must surface E_CAP_DENIED — pre-3.5 napi semantics \
+         silently fail-OPENed here because the revocation scope-string \
+         never matched the write's derived scope at the GrantReader walker"
+    );
 }
 
 /// Compile-time witness: the resolving seam the napi revoke binding
