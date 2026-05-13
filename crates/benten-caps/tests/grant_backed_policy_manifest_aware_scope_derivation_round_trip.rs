@@ -8,154 +8,159 @@
 //! D-4F-1 FULL plugin manifest ratification + CLAUDE.md baked-in #18
 //! "Implementation refinements" layered-consent model.
 //!
-//! ## What this pin verifies
+//! ## What this pin verifies (un-ignored at G27-D)
 //!
 //! Under the FULL plugin manifest (G24-D), the cap-policy scope
 //! derivation must consult the manifest `requires` / `shares` halves
-//! to map plugin-DID-keyed scope shapes through the policy. The new
+//! to map plugin-DID-keyed scope shapes through the policy. The
 //! `crates/benten-caps/src/manifest_scope.rs` module (G27-D) wires a
 //! pure function `manifest_requires_to_scope(manifest, plugin_did)`
 //! that produces the canonical scope-string set per
-//! plugin-arch-r1-10 grammar pin:
+//! plugin-arch-r1-10 grammar:
 //!
 //! - `private:<plugin_did>:*`             (private-namespace caps)
 //! - `requires:<plugin_did>:<path>`       (manifest `requires` half)
 //! - `shares:<plugin_did>:<path>`         (manifest `shares` half)
 //!
-//! ## Round-trip pin shape
+//! ## Round-trip pin shape (substantive — pim-2 §3.6b + pim-18 §3.6f)
 //!
-//! 1. Construct a stub `PluginManifest` (F3 type-shape) with two
-//!    `requires` entries + one `shares` rule.
-//! 2. Invoke the (yet-unwritten) `manifest_requires_to_scope` mapping
-//!    function.
-//! 3. Mint grants for each derived scope string.
-//! 4. Construct `WriteContext` with `scope` field set to one of the
-//!    derived shapes; assert `check_write(&ctx) == Ok(())`.
-//! 5. Repeat for the inverse direction (a scope shape NOT derivable
-//!    from the manifest → no matching grant → denied).
-//!
-//! ## Would-FAIL-if-no-op'd
-//!
-//! G27-D module not yet present (at HEAD); the test fails to compile
-//! at the `use` line. After G27-D lands the module, an implementer
-//! who omits the manifest-derivation arm (returning an empty vec)
-//! would PASS the compile but flip this round-trip assertion to deny.
-//!
-//! ## RED-PHASE expectation
-//!
-//! G27-D R5 implementer creates `crates/benten-caps/src/manifest_scope.rs`
-//! with the public function shape `manifest_requires_to_scope` per
-//! plugin-arch-r1-10 grammar. This pin un-ignores at G27-D wave-time
-//! per §3.6e + drops the inner `cfg(any())` gate.
-//!
-//! ## Coupling
-//!
-//! Co-dependent with G24-D `plugin_delegation.rs` (which mints UCAN
-//! delegations carrying these manifest-derived scopes). This pin
-//! verifies the scope-DERIVATION half; G24-D's pins verify the
-//! delegation-LIFECYCLE half.
+//! 1. Construct a `PluginManifest` (via F3 fixture) with both
+//!    `private:`-shaped + plain-shaped `requires` entries.
+//! 2. Invoke `manifest_requires_to_scope` — verify every output
+//!    string matches the plugin-arch-r1-10 canonical grammar prefix.
+//! 3. Mint grants for each derived scope; assert a write under the
+//!    derived scope permits via the existing `GrantBackedPolicy`
+//!    explicit-scope short-circuit (G27-B lift).
+//! 4. Inverse arm — a scope-string OUTSIDE the manifest envelope
+//!    has no matching grant → policy DENIES.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-// RED-PHASE: G27-D's `benten_caps::manifest_scope` module doesn't
-// exist at HEAD. The inner module compiles only when the module
-// lands; the implementer drops the cfg(any()) gate to un-ignore.
-#[cfg(any())]
-mod red_phase_compile_witness {
-    use std::sync::Arc;
+use std::sync::Arc;
 
-    use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
-    // Future G27-D surface:
-    use benten_caps::manifest_scope::manifest_requires_to_scope;
-    use benten_id::did::Did;
-    use benten_platform_foundation::{
-        CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault,
-    };
+use benten_caps::manifest_scope::{
+    REQUIRES_PREFIX, manifest_requires_to_scope, manifest_shares_to_scope,
+};
+use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
+use benten_id::did::Did;
+use benten_platform_foundation::{
+    CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget,
+};
 
-    struct MockGrants {
-        grants: Vec<String>,
-    }
+struct MockGrants {
+    grants: Vec<String>,
+}
 
-    impl GrantReader for MockGrants {
-        fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError> {
-            Ok(self.grants.iter().any(|g| g == scope))
-        }
-    }
-
-    fn plugin_did_stub() -> Did {
-        // F3 stub doesn't expose a constructor at R3; un-ignore
-        // wires the real did::key generation per benten-id surface.
-        unimplemented!("RED-PHASE: G27-D un-ignore wires real Did::from_str for the plugin DID")
-    }
-
-    fn manifest_with_requires() -> PluginManifest {
-        // F3 stub field-shape directly constructable; G24-D fills
-        // validation. Un-ignore wires the proper builder.
-        unimplemented!("RED-PHASE: G27-D un-ignore wires the manifest builder")
-    }
-
-    #[test]
-    fn round_trip() {
-        let plugin_did = plugin_did_stub();
-        let manifest = manifest_with_requires();
-
-        // G27-D surface — pure function producing canonical scope strings.
-        let derived: Vec<String> = manifest_requires_to_scope(&manifest, &plugin_did);
-
-        // Grammar invariant: every derived scope is `requires:<did>:...`
-        // or `shares:<did>:...` or `private:<did>:*` shape.
-        for scope in &derived {
-            assert!(
-                scope.starts_with("requires:")
-                    || scope.starts_with("shares:")
-                    || scope.starts_with("private:"),
-                "G27-D grammar (plugin-arch-r1-10): manifest-derived scopes \
-                 must match canonical plugin-DID-keyed shape; got {scope}"
-            );
-        }
-
-        // Round-trip the first derived scope through the policy.
-        let grants = Arc::new(MockGrants {
-            grants: derived.clone(),
-        });
-        let policy = GrantBackedPolicy::new(grants);
-        let scope = derived
-            .first()
-            .expect("at least one requires entry")
-            .clone();
-        let ctx = WriteContext {
-            label: String::new(),
-            scope: scope.clone(),
-            ..Default::default()
-        };
-        policy
-            .check_write(&ctx)
-            .expect("G27-D round-trip: manifest-derived scope must permit when grant present");
-
-        // Inverse: a scope OUTSIDE the manifest envelope is denied.
-        let grants_2 = Arc::new(MockGrants { grants: vec![] });
-        let policy_2 = GrantBackedPolicy::new(grants_2);
-        let ctx_2 = WriteContext {
-            label: String::new(),
-            scope: scope.clone(),
-            ..Default::default()
-        };
-        let err = policy_2.check_write(&ctx_2).expect_err("no grant → deny");
-        assert!(
-            matches!(err, CapError::Denied { .. }),
-            "G27-D inverse: scope without grant must deny; got {err:?}"
-        );
+impl GrantReader for MockGrants {
+    fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError> {
+        Ok(self.grants.iter().any(|g| g == scope))
     }
 }
 
-/// RED-PHASE outer test.
+fn plugin_did_alpha() -> Did {
+    Did::from_string_unchecked("did:key:z6MkAlpha".to_string())
+}
+
+fn manifest_with_mixed_requires() -> PluginManifest {
+    PluginManifest {
+        plugin_name: "test-plugin".to_string(),
+        content_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        peer_did: plugin_did_alpha(),
+        peer_signature: vec![0u8; 64],
+        requires: vec![
+            CapRequirement {
+                scope: "store:notes:read".to_string(),
+            },
+            CapRequirement {
+                scope: "private:admin-ui-private:scratch".to_string(),
+            },
+            CapRequirement {
+                scope: "host:time:now".to_string(),
+            },
+        ],
+        shares: SharesPolicy {
+            default: SharesPolicyDefault::Matching,
+            rules: Some(vec![SharesRule {
+                cap_pattern: "store:notes:write".to_string(),
+                target: SharesTarget::Any,
+            }]),
+        },
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    }
+}
+
+/// G27-D primary round-trip pin: manifest's `requires` / `shares`
+/// halves map to canonical scope strings that round-trip through
+/// `GrantBackedPolicy::check_write`.
 #[test]
-#[ignore = "RED-PHASE: G27-D — un-ignore at G27-D wave AFTER manifest_scope::manifest_requires_to_scope lands; drop cfg(any()) gate"]
 fn manifest_aware_scope_derivation_round_trip() {
-    panic!(
-        "RED-PHASE: G27-D — `benten_caps::manifest_scope::manifest_requires_to_scope` must land first \
-         (depends on G24-D FULL manifest schema; couples to F3 stub PluginManifest); \
-         then drop the cfg(any()) gate above + invoke `red_phase_compile_witness::round_trip()`."
+    let plugin_did = plugin_did_alpha();
+    let manifest = manifest_with_mixed_requires();
+
+    // Step 1: derive scope strings from `requires` half.
+    let derived = manifest_requires_to_scope(&manifest, &plugin_did);
+    assert_eq!(
+        derived.len(),
+        3,
+        "expected one derived scope per `requires` entry"
+    );
+
+    // plugin-arch-r1-10 grammar: every derived scope must be one of
+    // `requires:`/`shares:`/`private:` prefixed.
+    for scope in &derived {
+        assert!(
+            scope.starts_with("requires:")
+                || scope.starts_with("shares:")
+                || scope.starts_with("private:"),
+            "G27-D grammar (plugin-arch-r1-10): manifest-derived scopes \
+             must match canonical plugin-DID-keyed shape; got {scope}"
+        );
+    }
+
+    // Step 2: round-trip through the policy.
+    let grants = Arc::new(MockGrants {
+        grants: derived.clone(),
+    });
+    let policy = GrantBackedPolicy::new(grants);
+    let scope = derived
+        .iter()
+        .find(|s| s.starts_with(REQUIRES_PREFIX))
+        .expect("at least one requires-prefixed scope")
+        .clone();
+    let ctx = WriteContext {
+        label: String::new(),
+        scope: scope.clone(),
+        ..Default::default()
+    };
+    policy
+        .check_write(&ctx)
+        .expect("G27-D round-trip: manifest-derived scope must permit when grant present");
+
+    // Step 3: inverse arm — scope outside envelope denies.
+    let empty_grants = Arc::new(MockGrants { grants: vec![] });
+    let policy_2 = GrantBackedPolicy::new(empty_grants);
+    let ctx_2 = WriteContext {
+        label: String::new(),
+        scope: scope.clone(),
+        ..Default::default()
+    };
+    let err = policy_2.check_write(&ctx_2).expect_err("no grant → deny");
+    assert!(
+        matches!(err, CapError::Denied { .. }),
+        "G27-D inverse: scope without grant must deny; got {err:?}"
+    );
+
+    // Step 4: shares half also produces canonical scope strings.
+    let shares_derived = manifest_shares_to_scope(&manifest, &plugin_did);
+    assert_eq!(
+        shares_derived,
+        vec!["shares:did:key:z6MkAlpha:store:notes:write"],
+        "G27-D shares-half: manifest_shares_to_scope emits canonical \
+         `shares:<plugin_did>:<cap_pattern>` form"
     );
 }
 

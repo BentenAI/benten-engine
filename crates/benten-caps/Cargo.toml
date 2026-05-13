@@ -52,6 +52,17 @@ subtle = { workspace = true }
 # `cfg(not(target_arch = "wasm32"))`-gated in `src/backends/mod.rs`.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 benten-id = { path = "../benten-id" }
+# G27-D (Phase 4-Foundation): `benten-platform-foundation` consumed
+# for `PluginManifest`, `CapRequirement`, `SharesPolicy` in the
+# manifest-aware scope-derivation module. Native-only — wasm32 thin-
+# client doesn't run cap-policy checks per CLAUDE.md #17. Dep cycle
+# note: `benten-platform-foundation` declares `benten-caps` as a
+# dev-only dep (test-time consumption of `plugin_delegation`); this
+# prod dep + that dev dep coexist safely because dev-deps don't enter
+# the production link graph. Mirrors the existing `benten-caps` →
+# `benten-engine` (dev) + `benten-engine` → `benten-caps` (prod)
+# pattern; Cargo supports the pattern.
+benten-platform-foundation = { path = "../benten-platform-foundation" }
 
 [dev-dependencies]
 proptest = { workspace = true }
@@ -69,14 +80,12 @@ criterion = { workspace = true }
 # `test-helpers` default was flipped off on benten-engine; the helpers
 # stay available for these integration tests under the explicit opt-in.
 benten-engine = { path = "../benten-engine", features = ["test-helpers"] }
-# Phase-4-Foundation Family G G27-D test pins consume the stub
-# `PluginManifest` type from `benten-platform-foundation` (authored by
-# Family F3 R3 canary) to author manifest-aware scope-derivation pins.
-# Family G's R3 compile depends on the F3 stub being present (cross-
-# family R3 dependency per .addl/phase-4-foundation/r2-test-landscape.md
-# §4 helper inventory item #2). G24-D wave fills the FULL manifest
-# logic that these pins exercise.
-benten-platform-foundation = { path = "../benten-platform-foundation" }
+# Phase-4-Foundation G27-D — `benten-platform-foundation` is now a
+# production dep (target-conditional, native-only) above. The earlier
+# dev-only declaration is retired: Family G R5 (G27-D) ratified the
+# prod-dep direction so the `manifest_scope` module can consume
+# `PluginManifest` types directly. Test pins inherit visibility via
+# the prod dep.
 
 [[bench]]
 name = "wallclock_toctou_refresh"
