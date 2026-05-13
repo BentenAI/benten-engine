@@ -1,0 +1,23 @@
+{
+  "_comment": "Per-NEW-crate cargo-public-api baseline per seq-minor-5 + gap #1a (r2-test-landscape §5 + F2 brief). This file is the seed baseline at R3 stub landing time; the F2 test `ipc_method_name_stability_drift_detector.rs` references this file as the source of truth for the IPC method-name allowlist. The `cargo-public-api` workflow will populate the structured surface entries on the next push that includes the workflow. At R3 RED-PHASE the crate exposes only `placeholder()`; the full surface lands at G24-E wave-7 (TauriRenderer + IpcAllowlist + dispatch_ipc + webview_csp_header + establish_in_process_session).",
+  "_baseline_seed_at_commit": "Phase-4-Foundation R3 F2 landing",
+  "_crate": "benten-renderer-tauri",
+  "_version": "0.1.0",
+  "_surfaces": [
+    "pub fn placeholder()"
+  ],
+  "_ipc_method_name_allowlist_baseline": {
+    "_comment": "Drift-detector baseline for the IPC allowlist method-name set, per gap #1a. G24-E wave-7 will populate this list; the F2 test asserts the populated list at HEAD matches this baseline. Adding a method requires an explicit baseline update + manifest review (T3 defense — silent IPC surface expansion is a manifest-bypass risk).",
+    "_status": "EMPTY_AT_R3_STUB_FILLS_AT_G24_E_WAVE_7",
+    "_anticipated_method_set": [
+      "engine.read_node_as",
+      "engine.call_as",
+      "engine.subscribe_via_on_change_as_with_cursor",
+      "engine.list_caps",
+      "engine.identity.user_did",
+      "plugin.manifest.review",
+      "plugin.install.consent",
+      "ui.notify"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+[package]
+name = "benten-renderer-tauri"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase-4-Foundation Tauri 2.x renderer backend — engine extension per CLAUDE.md #19. Embedded-webview host for the wasm32-unknown-unknown admin UI v0 bundle via in-process IPC. R3 stub; G24-E wave-7 fills IPC allowlist + per-method cap-binding + CSP enforcement + tauri-runtime-verso swap-readiness."
+
+[lints]
+workspace = true
+
+[lib]
+bench = false
+
+# Phase-4-Foundation R3 RED-PHASE skeleton. The Tauri 2.x renderer is an
+# engine extension per CLAUDE.md #19 — compile-time-linked Rust crate
+# trusted via the cargo + code-review boundary, NOT through UCAN or
+# `read_node_as`. G24-E wave-7 fills the production logic:
+#
+# - IPC method allowlist (per-method cap-binding to admin UI manifest)
+# - CSP enforcement at webview load (script-src/connect-src/style-src)
+# - tauri-runtime-verso swap-readiness (transport-agnostic Renderer shape)
+# - 3-rung baked-in #17 defense extension (wasm32-objdump forbidden-prefix)
+#
+# At R3 the crate is a placeholder so F2 test pins compile-but-fail.
+# Tauri 2.x runtime dependency is deferred until G24-E so we don't pull a
+# heavy dependency tree into the R3 RED-PHASE build.
+[dependencies]
+benten-core = { path = "../benten-core" }
+benten-errors = { path = "../benten-errors" }
+benten-engine = { path = "../benten-engine" }
+benten-platform-foundation = { path = "../benten-platform-foundation" }
+
+[dev-dependencies]
+benten-core = { path = "../benten-core" }
+benten-errors = { path = "../benten-errors" }
+benten-engine = { path = "../benten-engine" }
+benten-platform-foundation = { path = "../benten-platform-foundation" }
