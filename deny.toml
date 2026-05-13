@@ -106,6 +106,7 @@ ignore = [
     { id = "RUSTSEC-2024-0418", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gtk); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
     { id = "RUSTSEC-2024-0419", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gtk-sys); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
     { id = "RUSTSEC-2024-0420", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gtk3-macros); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0429", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (glib 0.18.5); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
 
     # RUSTSEC-2025-0075..0081 + 0098 + 0100: unic-* crates
     # unmaintained (informational). Transitive via urlpattern ->
