@@ -237,9 +237,11 @@ fn parse_field(raw: &serde_json::Value, location: &str) -> Result<ParsedField, S
     // shape). The 4-mandatory invariant is enforced over the emitted
     // primitive's property bag (the emitter stamps the default property
     // regardless); `vocab_required_property_missing` is reserved for
-    // `name` and `required` only at G23-A canary. Strict 4-of-4 dialect
-    // validation lands at G23-A wave-4b once the canonical-fixture
-    // generator is auto-regenerated from the typed IR.
+    // `name` and `required` only at G23-A canary. Strict 4-of-4 input-
+    // dialect validation deferred per docs/future/phase-4-backlog.md
+    // §4.6 (lands when the canonical-fixture generator is auto-derived
+    // from the typed IR, OR earlier if a future wave needs strict
+    // input-dialect validation).
     let default = obj
         .get("default")
         .cloned()
@@ -394,8 +396,10 @@ fn parse_respond_target(raw: &serde_json::Value) -> Result<RespondTarget, Schema
 ///
 /// G23-A canary: at the current dialect shape there are no user-declared
 /// edge labels (the field-tree structure implies edges); this validator
-/// is the scaffolding for the wave-4b dialect (which lets the schema
-/// author declare explicit edges).
+/// is the scaffolding for the explicit-edge dialect deferred per
+/// `docs/future/phase-4-backlog.md` §4.6 (couples to strict 4-of-4
+/// input-dialect validation; lands when the canonical-fixture generator
+/// is auto-derived from the typed IR).
 pub(crate) fn validate_vocab(parsed: &ParsedSchema) -> Result<(), SchemaCompileError> {
     // Per-field vocabulary depth-walk — confirms each field's
     // (label, scalar / ref-target / item-scalar) shape is internally

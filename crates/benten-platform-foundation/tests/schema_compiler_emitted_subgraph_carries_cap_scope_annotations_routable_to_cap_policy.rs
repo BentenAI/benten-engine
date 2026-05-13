@@ -1,20 +1,36 @@
-//! R3 Family D RED-PHASE pin for G23-A end-to-end cap-policy firing
-//! (sec-3.5-r1-4 §3.6b end-to-end pin; LOAD-BEARING; would-FAIL-if-no-op'd).
+//! R3 Family D RED-PHASE pin for G23-A: schema-emitted SubgraphSpec
+//! carries non-empty schema-derived cap-scope annotations that are
+//! routable to the engine's CapabilityPolicy at handler-walk time.
+//! (sec-3.5-r1-4 §3.6b end-to-end pin; LOAD-BEARING; would-FAIL-if-no-op'd
+//! for the G23-A canary substantive arm — cap-scope annotation presence +
+//! engine.register_subgraph injection arm.)
+//!
+//! Renamed from the prior misleading name
+//! `schema_compiler_emitted_subgraph_walk_fires_cap_policy_at_each_primitive_boundary`
+//! per G23-A mini-review finding g23a-mr-3: the G23-A canary doesn't
+//! exercise the full walk (handler dispatch lands at G23-B materializer);
+//! this file now truthfully covers the G23-A-scoped substance (annotation
+//! presence + policy injection + non-empty schema-derived scope). The
+//! full-walk arm lives at
+//! `tests/materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_primitive_boundary.rs`
+//! as a G23-B-tagged RED-PHASE pin.
 //!
 //! Pin source: r2-test-landscape §2.4 row 5.
 //!
-//! ## §3.6b end-to-end shape (per pim-2)
+//! ## §3.6b shape (per pim-2; G23-A scoped substance)
 //!
 //! - PRODUCTION RUNTIME ARM: register the schema-emitted SubgraphSpec via
-//!   `Engine::register_subgraph`, then call the resulting handler via
-//!   `Engine::call_as(principal, ...)`. The cap policy fires inside the
-//!   evaluator's walk, not in the schema compiler.
-//! - OBSERVABLE CONSEQUENCE: capability checks register at every primitive
-//!   boundary the walk crosses; a recording cap-policy backend captures the
-//!   trail.
-//! - WOULD-FAIL-IF-NO-OP: if the schema-emitted SubgraphSpec carried EMPTY
-//!   cap-scope annotations, the recording backend would observe zero
-//!   checks at primitive boundaries → assertion fails.
+//!   `Engine::register_subgraph`, with a recording CapabilityPolicy wired
+//!   through `EngineBuilder::capability_policy`. Registration succeeding
+//!   through the existing surface proves the injection seam (arch-r1-15:
+//!   no signature widening).
+//! - OBSERVABLE CONSEQUENCE: every primitive's `cap_scope` annotation is
+//!   non-empty AND schema-derived (`:Note`-prefixed); recording policy is
+//!   reachable + receives no spurious registration-time invocations.
+//! - WOULD-FAIL-IF-NO-OP: if the emitter stamped EMPTY cap-scopes, the
+//!   substantive `!scope.is_empty()` + `scope.contains(":Note")`
+//!   assertions fail. The full-walk arm (cap-policy fires at every
+//!   primitive boundary during dispatch) lives in the G23-B companion pin.
 
 #![allow(clippy::unwrap_used)]
 
@@ -85,7 +101,7 @@ impl CapabilityPolicy for RecordingCapPolicy {
 //   `engine.register_subgraph(spec.into_subgraph())` call is the
 //   compile-time arch-r1-15 grep-equivalent).
 #[test]
-fn schema_compiler_emitted_subgraph_walk_fires_cap_policy_at_each_primitive_boundary() {
+fn schema_compiler_emitted_subgraph_carries_cap_scope_annotations_routable_to_cap_policy() {
     use benten_engine::EngineBuilder;
     use benten_platform_foundation::schema_compiler::compile;
 

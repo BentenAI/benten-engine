@@ -15,10 +15,10 @@
 mod schema_fixtures;
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    schema-compile idempotency proptest requires schema_compiler. \
-    Canonical-bytes round-trip invariant per pure-function commitment. \
-    Closes r2 §2.4 row 11 prop pin."]
+#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D) — DEFERRED PER docs/future/phase-4-backlog.md §4.6. \
+    G23-A canary covers fixed-fixture round-trip idempotency via schema_compiler_round_trip_canonical_bytes_stable.rs (un-ignored, PASS); \
+    the arbitrary-schema generator arbitrary_valid_schema_bytes(seed) needs the strict 4-of-4 input-dialect grammar finalized (per §4.6 carry-criterion) before it can generate property-test inputs that exercise the dialect boundary. \
+    Un-ignores when strict 4-of-4 input-dialect lands. Pin source: r2 §2.4 row 11. Named destination: phase-4-backlog §4.6 per HARD RULE 12 BELONGS-NAMED-NOW."]
 fn prop_schema_compile_is_idempotent_arbitrary_schemas() {
     // G23-A implementer wires this with proptest:
     //

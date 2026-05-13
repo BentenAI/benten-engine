@@ -53,7 +53,11 @@
 //! synthesized from the field's path (e.g. `read:Note.body`) — NOT
 //! user-supplied. Pinned by
 //! `tests/schema_compiler_emits_subgraph_with_cap_scope_annotations_per_primitive_node.rs`
-//! + `tests/schema_compiler_emitted_subgraph_walk_fires_cap_policy_at_each_primitive_boundary.rs`.
+//! + `tests/schema_compiler_emitted_subgraph_carries_cap_scope_annotations_routable_to_cap_policy.rs`
+//! (G23-A scoped substance — annotation presence + injection seam). The
+//! full-walk arm (cap-policy fires at every primitive boundary during
+//! dispatch) is the G23-B-tagged companion pin at
+//! `tests/materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_primitive_boundary.rs`.
 //!
 //! ## SANDBOX storage-mutating host-fn rejection (CLAUDE.md #16)
 //!
