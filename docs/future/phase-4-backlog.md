@@ -89,6 +89,16 @@ Per §13.11 structural lesson — the scope-keyed `has_unrevoked_grant_for_scope
 
 Define mapping from manifest `requires` / `shares` to scope strings; story for `private:<plugin_did>:*` interaction with `wildcard_variants`; install-time-vs-check-time decision. Per cap-r1-3 closure.
 
+### §4.5 `bindings/napi/tests/cap_delegate_napi_resolved_scope_regression_guard.rs` substantive arm at G24-D
+
+R5 G27-A landed the napi class-of-bug audit (PR #224 via R5 wave-g27-a; merged 2026-05-13). The audit confirmed 4 cap-* entry points are the complete enumeration of scope-vs-CID class-of-bug risk surfaces. However, `delegateCapability` is **NOT YET SHIPPED** at the napi layer — the delegate surface lands at G24-D (FULL plugin manifest, via `crates/benten-caps/src/plugin_delegation.rs` runtime UCAN delegation with `audience=plugin-DID` within manifest envelope).
+
+To preserve the un-ignore directive (per the G27-A R5 brief: "4/4 un-ignored") without violating HARD RULE rule-12 (no defer-without-destination), the G27-A implementer un-ignored the test + reshaped its body to assert the audit finding at HEAD (no shipped delegate surface). When G24-D lands the napi delegate surface, **that wave's implementer MUST rewrite `cap_delegate_napi_resolved_scope_regression_guard.rs` body to the substantive 4-step arm**: (1) `delegateCapability(grantCid, plugin_did, attenuated_caps)` over napi; (2) verify the delegation Node is minted with the resolved scope (not the grantCid as a string); (3) attempt a write under the delegated cap; (4) assert the per-row cap-recheck at delivery resolves the scope correctly.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination + the work obligation lands NOW (not "I'll add it later"). G24-D R5 implementer reads this section as part of their dispatch.
+
+Closes G27-A R5 mini-review MINOR finding `g27a-mr-1`.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

@@ -46,12 +46,25 @@
 //! would be denied (no matching scope-keyed grant Node), flipping this
 //! pin from PASS to FAIL.
 //!
-//! ## RED-PHASE expectation
+//! ## G27-A R5 audit-completion finding
 //!
-//! The G27-A implementer at R5 wires the audit + (if no additional
-//! confusion sites surface) confirms the existing `revoke_capability_by_grant_cid`
-//! seam + napi grant binding satisfy the class invariant. This pin
-//! lands ignored; un-ignore happens at G27-A wave-time per §3.6e.
+//! The G27-A R5 implementer walked `bindings/napi/src/lib.rs` +
+//! `bindings/napi/src/policy.rs` and confirmed:
+//!
+//! - `JsEngine::grant_capability` at lib.rs:639-652 routes through
+//!   `parse_grant_json` (policy.rs:86-118) which extracts `scope` as
+//!   a `String` from the JSON object's `"scope"` field directly. No
+//!   conflation with CID values; no normalization or canonicalization.
+//! - The parsed scope flows verbatim into
+//!   `Engine::grant_capability_with_proof(actor, scope, issuer, hlc)`
+//!   as `parsed.scope.as_str()`.
+//! - No alternate napi grant binding exists at HEAD that could
+//!   bypass this resolving seam.
+//!
+//! The 2 substantive tests below + the compile witness landed
+//! DURABLE at R4-FP-4 (not awaiting un-ignore); the G27-A R5 audit
+//! confirms the class-invariant continues to hold. See companion
+//! audit doc `notes-napi-parity-audit.md` §3.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![cfg(feature = "in-process-test")]
