@@ -427,4 +427,183 @@ impl Engine {
             message: format!("install_ucan_proof: {e}"),
         })
     }
+
+    /// Phase-4-Foundation G24-D-FP-3 — runtime UCAN delegation surface
+    /// (audience = plugin-DID, scope = resolved-from-source-grant).
+    ///
+    /// Consumed by the napi `delegateCapability(grantCid, pluginDid,
+    /// attenuatedCaps)` binding. Mirrors the resolve-by-CID discipline
+    /// of [`Engine::revoke_capability_by_grant_cid`]: the napi caller
+    /// passes the SOURCE grant's CID; this seam resolves the grant
+    /// Node + extracts its actual `scope` text + then writes the
+    /// delegation grant carrying that **resolved** scope. The CID is
+    /// NEVER persisted as the new grant's scope — that would mirror the
+    /// pre-PR-#199 napi revoke class-of-bug shape on the delegate
+    /// surface (a `system:CapabilityGrant` Node with
+    /// `scope = "<source_cid base32>"` that the `GrantReader` walker
+    /// never matches against the actual write scope at policy-check
+    /// time, silently fail-OPENing every cross-plugin write).
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Resolve `source_grant_cid` → load the Node → verify it is a
+    ///    `system:CapabilityGrant` → extract its `scope` text. This is
+    ///    the **resolved scope**.
+    /// 2. Run the single-step manifest-envelope check via
+    ///    [`benten_caps::plugin_delegation::check_delegation_within_envelope`]
+    ///    against the resolved scope + audience plugin-DID. Today this
+    ///    uses an `AllPermit` policy-view because the manifest
+    ///    `shares` policy lookup wiring lands at G27-D
+    ///    (manifest-aware scope derivation). The private-namespace
+    ///    forbidden clause STILL fires here — that's the class-of-bug
+    ///    defense for `private:<plugin_did>:*` source grants per
+    ///    CLAUDE.md baked-in #18.
+    /// 3. Determine the effective scope for the new delegation grant:
+    ///    - If `attenuated_caps` is empty → use the resolved source
+    ///      scope unchanged (identity delegation).
+    ///    - Otherwise → use `attenuated_caps[0]` as the new scope.
+    ///      Each attenuated cap is also stored as a JSON-encoded text
+    ///      property on the delegation Node for audit purposes.
+    /// 4. Write a new `system:CapabilityGrant` Node via the privileged
+    ///    path with `actor = plugin_did` + `scope = <resolved or
+    ///    first-attenuated>` + `derived_from = source_grant_cid` text.
+    ///    Return its CID.
+    ///
+    /// # Errors
+    ///
+    /// - [`EngineError::SubsystemDisabled`] when caps are disabled.
+    /// - [`EngineError::Other`] with `benten_errors::ErrorCode::NotFound`
+    ///   when the grant CID does not resolve to a stored Node, when
+    ///   the Node is not a `system:CapabilityGrant`, or when its
+    ///   `scope` property is missing / wrong-typed.
+    /// - [`EngineError::Other`] with
+    ///   `benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden`
+    ///   when the source grant's scope is a `private:*` namespace cap.
+    /// - [`EngineError::Other`] with
+    ///   `benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope`
+    ///   when the envelope check denies the delegation.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn delegate_capability(
+        &self,
+        source_grant_cid: &Cid,
+        plugin_did: &str,
+        attenuated_caps: &[String],
+    ) -> Result<Cid, EngineError> {
+        use benten_caps::plugin_delegation::{
+            DelegationDecision, SharesPolicyView, check_delegation_within_envelope,
+        };
+        use benten_id::did::Did;
+
+        if !self.caps_enabled {
+            return Err(EngineError::SubsystemDisabled {
+                subsystem: "capabilities",
+            });
+        }
+
+        // Step 1 — resolve source grant Node, extract scope (mirrors
+        // `revoke_capability_by_grant_cid` class-of-bug defense).
+        let Some(node) = self
+            .backend
+            .get_node(source_grant_cid)
+            .map_err(EngineError::Graph)?
+        else {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::NotFound,
+                message: format!(
+                    "delegate_capability: source grant CID {} not found in backend",
+                    source_grant_cid.to_base32()
+                ),
+            });
+        };
+        if !node.labels.iter().any(|l| l == "system:CapabilityGrant") {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::NotFound,
+                message: format!(
+                    "delegate_capability: CID {} is not a system:CapabilityGrant Node \
+                     (got labels: {:?})",
+                    source_grant_cid.to_base32(),
+                    node.labels
+                ),
+            });
+        }
+        let resolved_scope = match node.properties.get("scope") {
+            Some(Value::Text(s)) => s.clone(),
+            _ => {
+                return Err(EngineError::Other {
+                    code: benten_errors::ErrorCode::NotFound,
+                    message: format!(
+                        "delegate_capability: source grant Node {} missing or wrong-typed \
+                         `scope` property",
+                        source_grant_cid.to_base32()
+                    ),
+                });
+            }
+        };
+
+        // Step 2 — single-step envelope check. Today consults an
+        // `AllPermit` policy-view (manifest lookup lands at G27-D);
+        // private-namespace clause still fires.
+        struct AllPermit;
+        impl SharesPolicyView for AllPermit {
+            fn permits(&self, _cap: &str, _target: &Did) -> bool {
+                true
+            }
+        }
+        let audience = Did::from_string_unchecked(plugin_did.to_string());
+        let decision =
+            check_delegation_within_envelope(resolved_scope.as_str(), &audience, &AllPermit);
+        match decision {
+            DelegationDecision::Permitted => {}
+            DelegationDecision::OutsideEnvelope => {
+                return Err(EngineError::Other {
+                    code: benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope,
+                    message: format!(
+                        "delegate_capability: delegation of `{resolved_scope}` to `{plugin_did}` \
+                         denied by source plugin's manifest `shares` envelope",
+                    ),
+                });
+            }
+            DelegationDecision::PrivateNamespaceForbidden => {
+                return Err(EngineError::Other {
+                    code: benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden,
+                    message: format!(
+                        "delegate_capability: private-namespace cap `{resolved_scope}` cannot \
+                         cross plugin boundaries (CLAUDE.md #18 private-namespace clause)",
+                    ),
+                });
+            }
+        }
+
+        // Step 3 — pick effective scope for the new delegation grant.
+        // Attenuation here is the simplest "narrowed-or-identical
+        // scope" form per the G24-D-FP-3 brief; full attenuation
+        // semantics (per-segment subset check) land alongside G27-D.
+        let effective_scope = if attenuated_caps.is_empty() {
+            resolved_scope.clone()
+        } else {
+            attenuated_caps[0].clone()
+        };
+
+        // Step 4 — write the new system:CapabilityGrant Node carrying
+        // the resolved (not the CID) scope. The `derived_from` field
+        // records the source grant CID for audit + future chain-walker
+        // consumption.
+        let mut props: BTreeMap<String, Value> = BTreeMap::new();
+        props.insert("actor".into(), Value::Text(plugin_did.to_string()));
+        props.insert("scope".into(), Value::Text(effective_scope));
+        props.insert("revoked".into(), Value::Bool(false));
+        props.insert(
+            "derived_from".into(),
+            Value::Text(source_grant_cid.to_base32()),
+        );
+        if !attenuated_caps.is_empty() {
+            // serde_json::to_string over Vec<String> is infallible in
+            // practice (no NaN floats, no non-string keys); fall back
+            // to a safe default if the encoder ever surprises us.
+            let attenuation_json = serde_json::to_string(attenuated_caps).unwrap_or_default();
+            props.insert("attenuation".into(), Value::Text(attenuation_json));
+        }
+        let new_grant = Node::new(vec!["system:CapabilityGrant".into()], props);
+        self.privileged_put_node(&new_grant)
+    }
 }

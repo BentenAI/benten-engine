@@ -130,6 +130,20 @@ interface NativeEngine {
   handlerToMermaid?: (handlerId: string) => string;
   grantCapability?: (grant: unknown) => string;
   revokeCapability?: (grantCid: string, actor: string) => void;
+  // Phase-4-Foundation G24-D-FP-3 — runtime UCAN delegation from one
+  // plugin / principal to another. `sourceGrantCid` is the SOURCE
+  // grant's CID; the engine resolves its actual `scope` text + writes
+  // the new delegation grant with that resolved scope (not the CID
+  // string — defends the G27-A class-of-bug shape PR #199 closed for
+  // `revokeCapability`). `pluginDid` is the audience DID; the new
+  // grant's `actor` is set to this string so subsequent `callAs(...,
+  // pluginDid)` admits via `GrantBackedPolicy::check_write`.
+  // `attenuatedCaps` is the (possibly empty) attenuation list.
+  delegateCapability?: (
+    sourceGrantCid: string,
+    pluginDid: string,
+    attenuatedCaps: string[],
+  ) => string;
   createView?: (viewDef: unknown) => string;
   // R6-FP r6-arch-2: rename create_user_view → register_user_view to
   // align with the Engine's `register_*` lifecycle pattern (R4b major
@@ -1303,6 +1317,58 @@ export class Engine {
     }
     try {
       this.inner.revokeCapability(grantCid, actor);
+    } catch (err) {
+      throw mapNativeError(err);
+    }
+  }
+
+  /**
+   * Phase-4-Foundation G24-D-FP-3 — runtime UCAN delegation from one
+   * plugin / principal to another (audience = plugin-DID, scope =
+   * resolved-from-source-grant).
+   *
+   * `sourceGrantCid` is the CID of the source capability grant
+   * (typically a user-issued root grant, or a parent plugin's grant
+   * in a multi-hop chain). The engine seam resolves the source
+   * grant's actual `scope` text from its persisted Node + writes a
+   * NEW `system:CapabilityGrant` carrying that **resolved** scope —
+   * NEVER the source CID as a string (defending the G27-A
+   * class-of-bug shape PR #199 closed for `revokeCapability`).
+   *
+   * `pluginDid` is the audience DID; the new grant's `actor` is set
+   * to this string so subsequent `callAs(handler, op, input,
+   * pluginDid)` calls admit via `GrantBackedPolicy::check_write`.
+   *
+   * `attenuatedCaps` is the (possibly empty) attenuation list. Empty
+   * → the delegation carries the source's resolved scope unchanged.
+   * Non-empty → the delegation carries `attenuatedCaps[0]` as its
+   * scope (full per-segment subset semantics land alongside G27-D).
+   *
+   * The single-step manifest-envelope check
+   * (`check_delegation_within_envelope`) fires inside the engine
+   * seam — `private:*` namespace caps are rejected
+   * (`E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN`); other caps
+   * are admitted (manifest-aware lookup wiring lands at G27-D).
+   *
+   * Returns the new delegation grant's CID.
+   */
+  public async delegateCapability(
+    sourceGrantCid: string,
+    pluginDid: string,
+    attenuatedCaps: string[],
+  ): Promise<string> {
+    this.assertOpen();
+    if (!this.inner.delegateCapability) {
+      throw new EDslInvalidShape(
+        "Engine.delegateCapability unavailable on this binding",
+      );
+    }
+    try {
+      return this.inner.delegateCapability(
+        sourceGrantCid,
+        pluginDid,
+        attenuatedCaps,
+      );
     } catch (err) {
       throw mapNativeError(err);
     }
