@@ -833,6 +833,60 @@ pub enum ErrorCode {
     /// a registry lookup failure, joining the `NotFound` /
     /// `BackendNotFound` family). Maps to `E_DSL_UNREGISTERED_HANDLER`.
     DslUnregisteredHandler,
+    /// Phase 4-Foundation G23-A schema_compiler canary: the input schema
+    /// failed top-level validation (malformed JSON / missing required field
+    /// at the SchemaRoot / unconstrained EMIT or RESPOND target with no
+    /// scope). Construction site:
+    /// `crates/benten-platform-foundation/src/schema_compiler/`. The
+    /// schema-compile boundary is registration-time (BEFORE
+    /// `Engine::register_subgraph`); a rejected schema produces no engine
+    /// state. Routes to `ON_ERROR`. Maps to `E_SCHEMA_VALIDATION_FAILED`.
+    SchemaValidationFailed,
+    /// Phase 4-Foundation G23-A schema_compiler canary: rejected because
+    /// the emitted SubgraphSpec would require a new `PrimitiveKind` variant
+    /// outside the canonical 12 (CLAUDE.md baked-in #1). The 12-primitive
+    /// commitment is irreducible. Maps to
+    /// `E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED`.
+    SchemaEmitNewPrimitiveRejected,
+    /// Phase 4-Foundation G23-A schema_compiler canary: rejected because
+    /// the schema references a SANDBOX module whose manifest requests a
+    /// storage-mutating host fn (`kv:write` / `kv:delete` / edge-mutating).
+    /// CLAUDE.md baked-in #16 forbids these — they would be parallel
+    /// write-pathways bypassing the WRITE primitive's capability gating +
+    /// Inv-13 firing matrix. Maps to `E_SCHEMA_SANDBOX_HOST_FN_REJECTED`.
+    SchemaSandboxHostFnRejected,
+    /// Phase 4-Foundation G23-A schema_compiler canary: the schema
+    /// references a vocabulary label outside the 8-label set
+    /// (`SchemaRoot` / `FieldScalar` / `FieldObject` / `FieldList` /
+    /// `FieldMap` / `FieldRef` / `FieldEnum` / `FieldUnion`) ratified at
+    /// D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Maps to
+    /// `E_SCHEMA_VOCAB_INVALID_LABEL`.
+    SchemaVocabInvalidLabel,
+    /// Phase 4-Foundation G23-A schema_compiler canary: an edge in the
+    /// schema connects vocabulary labels whose pairing is not in the
+    /// 6-edge set (`FIELD` / `ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` /
+    /// `REF_TARGET` / `VARIANT`). Maps to `E_SCHEMA_VOCAB_EDGE_MISMATCH`.
+    SchemaVocabEdgeMismatch,
+    /// Phase 4-Foundation G23-A schema_compiler canary: a `FieldScalar`
+    /// referenced a scalar name outside the 8-scalar vocabulary
+    /// (`text` / `int` / `float` / `bool` / `bytes` / `bytes-cid` /
+    /// `timestamp-hlc` / `null`). Maps to `E_SCHEMA_VOCAB_SCALAR_UNKNOWN`.
+    SchemaVocabScalarUnknown,
+    /// Phase 4-Foundation G23-A schema_compiler canary: a `FieldRef`'s
+    /// `ref_target_kind` is missing or resolves to no known target. Maps
+    /// to `E_SCHEMA_VOCAB_REF_TARGET_MISSING`.
+    SchemaVocabRefTargetMissing,
+    /// Phase 4-Foundation G23-A schema_compiler canary: the schema's
+    /// FieldRef graph contains a cycle. The schema vocabulary is DAG-only
+    /// (matches CLAUDE.md baked-in #4). Maps to
+    /// `E_SCHEMA_VOCAB_CYCLE_REJECTED`.
+    SchemaVocabCycleRejected,
+    /// Phase 4-Foundation G23-A schema_compiler canary: a field is missing
+    /// one of the 4 mandatory properties (`name` / `required` / `default` /
+    /// `scope`). `scope` is schema-DERIVED, not user-supplied (per
+    /// sec-3.5-r1-4); the compiler synthesizes it from field path. Maps
+    /// to `E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING`.
+    SchemaVocabRequiredPropertyMissing,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1056,6 +1110,19 @@ impl ErrorCode {
             ErrorCode::SyncHashMismatch => "E_SYNC_HASH_MISMATCH",
             ErrorCode::SyncHlcDrift => "E_SYNC_HLC_DRIFT",
             ErrorCode::SyncCapUnverified => "E_SYNC_CAP_UNVERIFIED",
+            // Phase 4-Foundation G23-A schema_compiler canary — 9 NEW
+            // ErrorCodes minted atomically Rust + TS per §3.5g.
+            ErrorCode::SchemaValidationFailed => "E_SCHEMA_VALIDATION_FAILED",
+            ErrorCode::SchemaEmitNewPrimitiveRejected => "E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED",
+            ErrorCode::SchemaSandboxHostFnRejected => "E_SCHEMA_SANDBOX_HOST_FN_REJECTED",
+            ErrorCode::SchemaVocabInvalidLabel => "E_SCHEMA_VOCAB_INVALID_LABEL",
+            ErrorCode::SchemaVocabEdgeMismatch => "E_SCHEMA_VOCAB_EDGE_MISMATCH",
+            ErrorCode::SchemaVocabScalarUnknown => "E_SCHEMA_VOCAB_SCALAR_UNKNOWN",
+            ErrorCode::SchemaVocabRefTargetMissing => "E_SCHEMA_VOCAB_REF_TARGET_MISSING",
+            ErrorCode::SchemaVocabCycleRejected => "E_SCHEMA_VOCAB_CYCLE_REJECTED",
+            ErrorCode::SchemaVocabRequiredPropertyMissing => {
+                "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING"
+            }
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1411,6 +1478,20 @@ impl ErrorCode {
             // registration API; no `ON_*` edge label applies.
             ErrorCode::ReservedHandlerNamespace => None,
 
+            // Phase 4-Foundation G23-A: schema-compile rejections fire at
+            // schema_compiler::compile time (BEFORE register_subgraph), not
+            // along a primitive edge. Same disposition as
+            // ReservedHandlerNamespace / DuplicateHandler.
+            ErrorCode::SchemaValidationFailed
+            | ErrorCode::SchemaEmitNewPrimitiveRejected
+            | ErrorCode::SchemaSandboxHostFnRejected
+            | ErrorCode::SchemaVocabInvalidLabel
+            | ErrorCode::SchemaVocabEdgeMismatch
+            | ErrorCode::SchemaVocabScalarUnknown
+            | ErrorCode::SchemaVocabRefTargetMissing
+            | ErrorCode::SchemaVocabCycleRejected
+            | ErrorCode::SchemaVocabRequiredPropertyMissing => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -1587,6 +1668,18 @@ impl ErrorCode {
             "E_SYNC_HASH_MISMATCH" => ErrorCode::SyncHashMismatch,
             "E_SYNC_HLC_DRIFT" => ErrorCode::SyncHlcDrift,
             "E_SYNC_CAP_UNVERIFIED" => ErrorCode::SyncCapUnverified,
+            // Phase 4-Foundation G23-A schema_compiler canary — 9 NEW codes.
+            "E_SCHEMA_VALIDATION_FAILED" => ErrorCode::SchemaValidationFailed,
+            "E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED" => ErrorCode::SchemaEmitNewPrimitiveRejected,
+            "E_SCHEMA_SANDBOX_HOST_FN_REJECTED" => ErrorCode::SchemaSandboxHostFnRejected,
+            "E_SCHEMA_VOCAB_INVALID_LABEL" => ErrorCode::SchemaVocabInvalidLabel,
+            "E_SCHEMA_VOCAB_EDGE_MISMATCH" => ErrorCode::SchemaVocabEdgeMismatch,
+            "E_SCHEMA_VOCAB_SCALAR_UNKNOWN" => ErrorCode::SchemaVocabScalarUnknown,
+            "E_SCHEMA_VOCAB_REF_TARGET_MISSING" => ErrorCode::SchemaVocabRefTargetMissing,
+            "E_SCHEMA_VOCAB_CYCLE_REJECTED" => ErrorCode::SchemaVocabCycleRejected,
+            "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING" => {
+                ErrorCode::SchemaVocabRequiredPropertyMissing
+            }
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

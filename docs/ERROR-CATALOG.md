@@ -1225,6 +1225,78 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-engine/src/engine.rs::register_subgraph` + `register_subgraph_replace` (Phase-3 G21-T3 §2.5(d) fold-in; corr-minor-3 carry from G21-T1 fp-mini-review). Fires BEFORE invariant validation / subgraph CID derivation so a misnamed registration has zero observable side effect on engine state.
 - **Phase:** 3 G21-T3
 
+### E_SCHEMA_VALIDATION_FAILED
+
+- **Message:** "schema_compiler: schema failed validation (malformed JSON / missing required field / unconstrained EMIT/RESPOND target without scope)"
+- **Context:** `{ reason: String, location: Option<String> }`
+- **Fix:** Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 6-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED
+
+- **Message:** "schema_compiler: schema would require emitting a new PrimitiveKind variant outside the canonical 12 (CLAUDE.md baked-in #1 violation)"
+- **Context:** `{ requested_kind: String }`
+- **Fix:** Schema requested a primitive kind outside the 12-canonical set (READ / WRITE / TRANSFORM / BRANCH / ITERATE / WAIT / CALL / RESPOND / EMIT / SANDBOX / SUBSCRIBE / STREAM). The 12-primitive commitment is irreducible (CLAUDE.md baked-in #1). Re-express the schema as a composition over the existing 12 primitives. If the schema genuinely needs new compute that doesn't fit, route through SANDBOX (CLAUDE.md baked-in #16).
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/emit.rs` (G23-A canary).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_SANDBOX_HOST_FN_REJECTED
+
+- **Message:** "schema_compiler: schema references SANDBOX module requesting storage-mutating host fn `{host_fn}` — forbidden per CLAUDE.md baked-in #16"
+- **Context:** `{ host_fn: String, module_cid: Option<String> }`
+- **Fix:** A schema-embedded SANDBOX reference requested a storage-mutating host fn (`kv:write` / `kv:delete` / edge-mutating). Per CLAUDE.md baked-in #16 these are explicitly NOT engine concerns — they would be parallel write-pathways that bypass the WRITE primitive's capability gating + Inv-13 firing matrix + IVM materialization seam. The minimum-viable SANDBOX host-fn surface is `time` / `log` / `kv:read` / `random` only. Re-shape the schema so any writes go through the WRITE primitive (which the materializer pipeline composes for you).
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, sandbox-ref validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_INVALID_LABEL
+
+- **Message:** "schema_compiler: schema references vocabulary label `{label}` outside the 8-label set (SchemaRoot / FieldScalar / FieldObject / FieldList / FieldMap / FieldRef / FieldEnum / FieldUnion)"
+- **Context:** `{ label: String, field_name: Option<String> }`
+- **Fix:** Replace the unknown label with one of the 8 ratified labels (D-4F-NEW-TYPED-FIELD-NODE-VOCAB). The schema vocabulary is closed; extension requires re-opening the D-4F-NEW-TYPED-FIELD-NODE-VOCAB decision.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, label validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_EDGE_MISMATCH
+
+- **Message:** "schema_compiler: schema edge does not match any of the 6 declared edge types (FIELD / ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT) for the given label pair"
+- **Context:** `{ source_label: String, target_label: String, edge: String }`
+- **Fix:** The schema's edge-label pairing is not in the 6-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, edge validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_SCALAR_UNKNOWN
+
+- **Message:** "schema_compiler: FieldScalar references scalar name `{scalar}` outside the 8-scalar vocabulary (text / int / float / bool / bytes / bytes-cid / timestamp-hlc / null)"
+- **Context:** `{ scalar: String, field_name: Option<String> }`
+- **Fix:** Use one of the 8 ratified scalar names. Each maps to a `benten-core::Value` variant per `docs/SCHEMA-DRIVEN-RENDERING.md §2.3`.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, scalar validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_REF_TARGET_MISSING
+
+- **Message:** "schema_compiler: FieldRef `{field_name}` references a target kind `{ref_target_kind}` that is missing or unresolvable"
+- **Context:** `{ field_name: String, ref_target_kind: Option<String> }`
+- **Fix:** Supply a `ref_target_kind` that resolves either to a content CID (cross-content reference) or to another label/schema in scope. FieldRef nodes MUST declare a target; an undeclared target fails the closure invariant for cross-content references.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, FieldRef validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_CYCLE_REJECTED
+
+- **Message:** "schema_compiler: FieldRef graph contains a cycle — schema vocabulary is DAG-only (CLAUDE.md baked-in #4)"
+- **Context:** `{ cycle_through: Vec<String> }`
+- **Fix:** Break the cycle. Schemas form a DAG per the same commitment that governs all subgraphs (CLAUDE.md baked-in #4 — DAGs only; bounded iteration via ITERATE primitive). Recursive shapes must terminate via FieldRef-to-content-CID (which is a runtime-resolved reference, not a compile-time edge).
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, cycle detection).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING
+
+- **Message:** "schema_compiler: field `{field_name}` is missing one of the 4 mandatory properties (name / required / default / scope)"
+- **Context:** `{ field_name: String, missing_property: String }`
+- **Fix:** Supply the missing property. Note: `scope` is schema-DERIVED (synthesized by the compiler from field path per sec-3.5-r1-4), NOT user-supplied — if a user-supplied `scope` is detected, the compiler discards it and synthesizes its own. The 4 mandatory properties form the irreducible per-field metadata budget.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, per-field validation).
+- **Phase:** 4-Foundation G23-A
+
 ## Extending the catalog
 
 When adding a new error:

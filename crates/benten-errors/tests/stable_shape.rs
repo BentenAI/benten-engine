@@ -331,6 +331,22 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::TypedCallInvalidInput,
     ErrorCode::TypedCallCapDenied,
     ErrorCode::TypedCallDispatchError,
+    // Phase 4-Foundation G23-A schema_compiler canary (2026-05-12): 9 NEW
+    // E_SCHEMA_* codes minted atomically Rust + TS per §3.5g. Construction
+    // site: `crates/benten-platform-foundation/src/schema_compiler/`. All
+    // 9 carry `as_static_str` + `from_str` arms + routed_edge_label `None`
+    // (registration-time refusal, same disposition as
+    // `ReservedHandlerNamespace` / `DuplicateHandler`). Post-G23-A:
+    // 118 + 9 = 127.
+    ErrorCode::SchemaValidationFailed,
+    ErrorCode::SchemaEmitNewPrimitiveRejected,
+    ErrorCode::SchemaSandboxHostFnRejected,
+    ErrorCode::SchemaVocabInvalidLabel,
+    ErrorCode::SchemaVocabEdgeMismatch,
+    ErrorCode::SchemaVocabScalarUnknown,
+    ErrorCode::SchemaVocabRefTargetMissing,
+    ErrorCode::SchemaVocabCycleRejected,
+    ErrorCode::SchemaVocabRequiredPropertyMissing,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -565,8 +581,15 @@ fn variant_count_is_pinned() {
     // + TypedCallDispatchError = 118 (typed-CALL dispatch family was
     // already in the enum + catalog `as_str` / `from_str` arms; only
     // this round-trip list was missing them).
+    //
+    // Phase 4-Foundation G23-A schema_compiler canary (2026-05-12): + 9
+    // E_SCHEMA_* codes (SchemaValidationFailed, SchemaEmitNewPrimitiveRejected,
+    // SchemaSandboxHostFnRejected, SchemaVocabInvalidLabel,
+    // SchemaVocabEdgeMismatch, SchemaVocabScalarUnknown,
+    // SchemaVocabRefTargetMissing, SchemaVocabCycleRejected,
+    // SchemaVocabRequiredPropertyMissing). Post-G23-A: 118 + 9 = 127.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 118,
+        CATALOG_VARIANT_COUNT, 127,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
