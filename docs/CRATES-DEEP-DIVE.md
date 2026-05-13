@@ -1,6 +1,6 @@
 # Crates Deep-Dive — Workspace-level Synthesis
 
-A plain-English walk across the 10 workspace crates. This doc reads the per-crate `INTERNALS.md` deep-dives as primary sources and synthesizes patterns at the workspace level — what's working well, what's leaking, what's elegant, what could be more so, and what the open architectural questions are.
+A plain-English walk across the 12 workspace crates. This doc reads the per-crate `INTERNALS.md` deep-dives as primary sources and synthesizes patterns at the workspace level — what's working well, what's leaking, what's elegant, what could be more so, and what the open architectural questions are.
 
 Audience: a fresh contributor or AI agent who has read `CLAUDE.md`'s "Architectural Decisions Baked In" items (#1–#19), `docs/VISION.md`, `docs/ARCHITECTURE.md`, and `docs/HOW-IT-WORKS.md`, and now wants the cross-crate picture before touching code.
 
@@ -12,7 +12,7 @@ Source citations point at the per-crate `INTERNALS.md` documents under `crates/<
 
 ## § 1. Workspace at a glance
 
-Ten crates. Roughly stacked from foundational types at the bottom to the orchestrator at the top, with two sibling layers (capabilities, IVM) feeding into the engine and one Phase-3 surface (sync) sitting alongside.
+Twelve crates. Roughly stacked from foundational types at the bottom to the orchestrator at the top, with two sibling layers (capabilities, IVM) feeding into the engine, one Phase-3 surface (sync) sitting alongside, and two Phase-4-Foundation additions on top (`benten-platform-foundation` for the v1 platform-shippable surface — schema-rendering + materializer + plugin manifest + admin UI v0 + `Renderer` trait — and `benten-renderer-tauri` for the embedded-webview engine extension per CLAUDE.md baked-in #19).
 
 **`benten-errors`** — The single, frozen list of every error the engine is allowed to emit. 118 named variants today; the strings are the contract that TypeScript classes, operator dashboards, and audit pipelines route on. The crate is `no_std + alloc` with zero workspace deps, no `thiserror`, no `strum` — deliberately the irreducible nucleus that every other crate can depend on without pulling Benten machinery along. It earns its keep by being the engine's "what compositions are illegal" vocabulary; growing the catalog is how the engine teaches itself new ways to say no. (`crates/benten-errors/INTERNALS.md`.)
 
@@ -33,6 +33,10 @@ Ten crates. Roughly stacked from foundational types at the bottom to the orchest
 **`benten-dsl-compiler`** — A runt of a crate, deliberately. Takes a short DSL string of operation-primitive calls chained with `->` and emits a canonical `benten_core::Subgraph` that the engine knows how to load. Added in Phase-2b to give the devserver a Rust-side compiler that doesn't drag in `benten-eval` or `benten-graph`. Whole crate is ~895 LOC in a single `lib.rs`; depends only on `benten-core` + `benten-errors` + `thiserror`. The four-public-item discipline is intact; arch-N tests scan its Cargo.toml directly to forbid additional engine-shape deps.
 
 **`benten-engine`** — The orchestrator at the top. Composes storage, evaluator, IVM, capability, identity, and sync into a single public API (`Engine`). Owns the `Engine` struct, the builder pipeline, the active-call metadata that lets the evaluator look up the actor + handler, the change-broadcast tap that bridges storage commits into IVM and ad-hoc subscribers, the WAIT / STREAM / SUBSCRIBE engine-side surfaces, the privileged system-zone writes, the Atrium peer-to-peer session handle, the typed-CALL dispatch into `benten-id` crypto, and the napi-facing public API. Every TypeScript caller's eventual ground truth is a method here. Largest crate: ~25.6k LOC across 40 files.
+
+**`benten-platform-foundation`** — The 11th crate (Phase 4-Foundation addition). The v1 platform-shippable surface that sits one layer above `benten-engine` and composes engine primitives into the platform shape. Hosts: the schema-driven rendering compiler (typed-field-Node vocabulary — `FieldScalar` / `FieldEnum` / `FieldUnion` / `FieldList` / `FieldMap` / `FieldObject` / `FieldRef` / `SchemaRoot` — compiled to renderable `SubgraphSpec`); the materializer pipeline (`HtmlJsonMaterializer` + IVM-subgraph generalisation; consumer-side `render_category_content`); the FULL plugin manifest surface (install-time consent flow + per-plugin DID minting + manifest envelope chain validation + private-namespace caps + DAG-shape versioning + meta-plugin composition + workflow↔plugin unification); the admin UI v0 plugin subgraph + 4-category navigation IA (Plugins / Workflows / Content Types / Views); the `Renderer` trait abstraction with `BrowserRender` (browser-wasm32) as default impl + cap-recheck seam. Intentionally broader than other crates per arch-r1-8 closure — every part composes into one platform-shippable boundary. Depends on `benten-engine` + `benten-core` + `benten-graph` + `benten-caps` + `benten-errors`.
+
+**`benten-renderer-tauri`** — The 12th crate (Phase 4-Foundation addition). Tauri 2.x renderer as an ENGINE EXTENSION per CLAUDE.md baked-in #19: compile-time linked Rust crate implementing the `Renderer` trait for embedded-webview deployment shape (c). Carries the IpcAllowlist (per-method cap-binding), CSP, and in-process IPC protocol that lets the webview talk to its embedded full peer. Trust model = "you compiled this in" — same trust as Benten core; no UCAN, no manifest envelope, no `read_node_as` boundary; the boundary is `cargo` and code review. Distinct from app-level plugins (which are subgraphs the evaluator walks).
 
 ---
 
@@ -462,7 +466,7 @@ These are gaps that won't block dispatch but will become tangible inside Phase 4
 
 ## § 9. Open questions for Ben
 
-Flat list of the most-impactful unresolved decisions across all 10 crates. Roughly priority-ordered for the pre-Phase-4-Foundation-R5 + pre-Phase-4-Meta windows.
+Flat list of the most-impactful unresolved decisions across all 12 crates. Roughly priority-ordered for the pre-Phase-4-Meta + v1-assessment-window contexts.
 
 1. **D-4F-2 materializer location + composition shape (formerly D-3.5-2).** Sketch A (extend `benten-ivm`'s `Projection` enum + register materializer views as user views) vs Sketch B (sibling subscriber, new crate or new module) vs Sketch C (materializers are subgraphs the evaluator walks). The audit positions the current plan as "(b) engine-side sub-module" but the underlying composition-vs-sibling-vs-subgraph question hasn't been codified. This is the single biggest pre-Phase-4-Foundation decision.
 

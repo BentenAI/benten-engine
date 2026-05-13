@@ -257,7 +257,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 **Origin:** G23-B mini-review BLOCKER findings `g23b-mr-1` (T9a forged peer-DID signature) + `g23b-mr-2` (T9b rotation-race replay). The R3 test pins (`schema_with_forged_author_signature_rejected.rs` + `schema_author_rotation_race_replay_rejected.rs`) were authored before the post-R1-triage ratifications clarified that **JSON schemas in the ingest dialect are static type definitions** — not peer-signed, not rotation-bearing, not provenance-anchored. The T9 threat-class (forged author signature + rotation-race replay) applies to **plugin manifests**, NOT to schemas.
 
 **Resolution:** the defense already ships in the plugin-manifest namespace:
-- **T9a forged peer-DID signature** — G24-D ships `plugin_manifest::sign_manifest` + `verify_peer_signature` + Ed25519 verifier. Substantive coverage at `crates/benten-platform-foundation/tests/g24d_substantive_pipeline.rs::plugin_manifest_peer_did_signature_round_trip` (PASS at HEAD post-batch-2).
+- **T9a forged peer-DID signature** — G24-D ships `plugin_manifest::sign_manifest` + `verify_peer_signature` + Ed25519 verifier. Substantive coverage at `crates/benten-platform-foundation/tests/g24d_substantive_pipeline.rs::full_install_pipeline_real_signatures_succeeds` + `crates/benten-platform-foundation/tests/g24d_substantive_pipeline.rs::install_pipeline_rejects_substituted_content` (both PASS at HEAD post-batch-2) + the dedicated provenance round-trip pin at `crates/benten-platform-foundation/tests/plugin_content_carries_peer_did_signature_for_provenance.rs::manifest_peer_did_signature_independent_of_install_record_user_did_signature`.
 - **T9b rotation-race replay** — G24-D-FP-2 ships `crates/benten-id/src/did_rotation.rs::RotationLog::accept_rotation_event` with HLC-monotonic-strict + VerbatimReplay defense. Substantive coverage at `crates/benten-platform-foundation/tests/plugin_manifest_rotation_event_nonce_swap_attack_rejected.rs` (3 attack variants) + `plugin_manifest_peer_did_key_rotation_surfaces_warning_round_trip.rs` (round-trip).
 
 **Schema-namespace pins** (`schema_with_forged_author_signature_rejected.rs` + `schema_author_rotation_race_replay_rejected.rs`) retained as forward-looking documentation should schema-level provenance ever be needed (no current plan to add — schemas are static data and propagate via plugin manifests). Their `#[ignore]` rationale was updated to cite the manifest-namespace destination per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW.
@@ -596,7 +596,33 @@ Per doc-r1-1 + doc-r1-2: 17+ new ErrorCodes for Phase 4-Foundation mint across w
 
 ### §6.2 INTERNALS.md retense for new surfaces
 
-Per cross-lens doc-engineer findings: `benten-platform-foundation/INTERNALS.md` (NEW; 12th workspace crate), `benten-renderer-tauri/INTERNALS.md` (NEW; 12th-or-13th crate), updates to `benten-ivm/INTERNALS.md` (post IVM-subgraph generalization), `benten-engine/INTERNALS.md` (post audience-binding + actor_cid wiring + SUBSCRIBE-cap-recheck closure), `benten-caps/INTERNALS.md` (post Q5 plugin-DID-keyed signing-key infrastructure).
+Per cross-lens doc-engineer findings: `benten-platform-foundation/INTERNALS.md` (NEW; 11th workspace crate), `benten-renderer-tauri/INTERNALS.md` (NEW; 12th workspace crate), updates to `benten-ivm/INTERNALS.md` (post IVM-subgraph generalization), `benten-engine/INTERNALS.md` (post audience-binding + actor_cid wiring + SUBSCRIBE-cap-recheck closure), `benten-caps/INTERNALS.md` (post Q5 plugin-DID-keyed signing-key infrastructure).
+
+### §6.3 admin_ui_v0 module missing_docs escape-hatch retire (Phase-4-Meta)
+
+The `#![allow(missing_docs)]` escape hatch at `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs:72` is the sole surviving Phase-3 G20-B C-7 escape hatch as of Phase-4-Foundation R6-FP-G G26-A pre-tag sweep. R6-FP-G verified the **module-scope** public surfaces — all top-level `pub const` / `pub fn` / `pub enum` / `pub struct` items at `mod.rs` already have doc comments at HEAD; the residual coverage gap is in the `workflow_editor` re-exported surfaces (`WorkflowDraft` + `WorkflowEdge` + `WorkflowEditorError` + `WorkflowForm` + `WorkflowFormField` + `WorkflowPrimitiveSelection` + `compile_draft_within_manifest_envelope` + `derive_cap_scopes_from_subgraph` + `derive_form_from_schema` + `validate_subgraph_within_manifest_envelope` + `workflow_content_hash` + several `pub` fields per struct — ~22 pub items totaling ~50-100 doc comments needed at the `workflow_editor.rs` side).
+
+The retire path is mechanical: walk `workflow_editor.rs` + add the missing rustdoc comments + remove the `#![allow(missing_docs)]` at `mod.rs:72` + verify the `phase_3_workspace_tests::missing_docs_workspace::no_allow_missing_docs_at_phase_3_close` test passes. Touch size: ~50-100 LOC across two files; risk surface: low (no logic changes).
+
+**Phase-4-Meta target.** Lands in an early Phase-4-Meta cleanup wave alongside the other workspace-residual sweeps. The `phase-3-workspace-tests` pin currently fails on main (pre-existing per HANDOFF §5/§7) — this destination closes the test pin's failure shape.
+
+R6-FP-G isolated this work from the doc-retense sweep because the LOC + per-pub-item discipline doesn't fit the doc-sweep's "single mechanical pass across many docs" shape — it's a per-symbol code-doc sweep on one file pair, and bundling it would have crowded out the higher-impact 11→12 crate transition + GLOSSARY + INVARIANT-COVERAGE + SECURITY-POSTURE work. Per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW: this entry IS the named destination + lands AT THIS COMMIT.
+
+### §6.4 phase-4-backlog.md §-numbering reconciliation for strategy-C batch
+
+Wave-G (R6-FP-G) consolidates §-numbering for the strategy-C batch reconciler. At the time R6-FP-G shipped, the §-numbering state across the 6 R6-FP branches was:
+
+| Wave | §-additions on its branch |
+|---|---|
+| Wave-A (`r6/fp-1-plugin-trust`) | added `§4.22` (caller-mint-first deprecation seam destination) |
+| Wave-BF (`r6/fp-2-schema-and-tests`) | added `§4.22`-`§4.31` (10 entries; OVERLAP with Wave-A at 22) |
+| Wave-BF mr-fix | added `§4.32` |
+| Wave-C (`r6/fp-4-catalog`) | added `§4.NEXT-ec-r6r1-8` (provisional placeholder) |
+| Wave-D (`r6/fp-5-plugin-library-graph`) | unknown — likely no backlog additions (substantive code work) |
+| Wave-E (`r6/fp-3-admin-shell`) | added `§3.6` (RUSTSEC ignore migrations) |
+| Wave-G (`r6/fp-6-doc-retense`, THIS branch) | added `§6.3` + `§6.4` (THIS entry) |
+
+**Reconciler instructions for strategy-C batch.** Wave-A's `§4.22` + Wave-BF's `§4.22`-`§4.31` OVERLAP at 22. Proposed resolution: renumber Wave-A's `§4.22` to `§4.32` + shift Wave-BF mr-fix's `§4.32` to `§4.33`; Wave-C's `§4.NEXT-ec-r6r1-8` placeholder takes `§4.34`. Final ordering after batch merge: `§4.22`-`§4.31` (Wave-BF block) → `§4.32` (Wave-A, renumbered) → `§4.33` (Wave-BF mr-fix, shifted) → `§4.34` (Wave-C, definite from placeholder) → `§6.3` + `§6.4` (Wave-G). The strategy-C batch reconciler updates cross-refs in all 6 branches' final commit messages atomically as the merge lands. Wave-E's `§3.6` lives in a separate top-level section (RUSTSEC migrations) so it doesn't collide with the `§4.x` block.
 
 ---
 
