@@ -187,3 +187,18 @@ export type {
   WorkflowPrimitiveSelection,
   WorkflowSaveOutcome,
 } from "./workflow-editor/index.js";
+
+// G24-C wave-6b — composed-view creator re-exports.
+export {
+  ComposedViewCreator,
+  userViewSpec,
+} from "./view-composer/index.js";
+export type {
+  ComposedViewCreatorBridge,
+  LabelPattern,
+  PreviewState,
+  SaveOutcome,
+  SubscribeCursor,
+  TypedOutputProjection,
+  UserViewSpec,
+} from "./view-composer/index.js";

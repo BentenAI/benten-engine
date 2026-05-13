@@ -114,7 +114,8 @@ pub use schema_compiler::{
 // G24-A admin UI v0 shell + 4-category navigation + materializer
 // consumer wiring per CLAUDE.md baked-in #18 (first app-level plugin).
 pub use admin_ui_v0::{
-    ADMIN_UI_V0_PRIVATE_NAMESPACE_PREFIX, Category, INDEXEDDB_FORBIDDEN_STORES,
+    ADMIN_UI_V0_CLASS_B_BETA_READ_SEAM, ADMIN_UI_V0_PRIVATE_NAMESPACE_PREFIX,
+    ADMIN_UI_V0_SUBSCRIBE_SEAM, Category, INDEXEDDB_FORBIDDEN_STORES,
     INDEXEDDB_MANIFEST_STORE_STORE, INDEXEDDB_SNAPSHOT_CACHE_STORE, NAV_CATEGORIES, Subscriber,
     WINTERTC_FORBIDDEN_APIS, WorkflowDraft, WorkflowEdge, WorkflowEditorError, WorkflowForm,
     WorkflowFormField, WorkflowPrimitiveSelection, build_admin_ui_v0_subgraph,
