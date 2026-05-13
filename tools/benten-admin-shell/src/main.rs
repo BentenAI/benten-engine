@@ -1,8 +1,9 @@
 //! Phase-4-Foundation R6-FP-E `benten-admin-shell` integrator binary.
 //!
-//! Closes r6-r1-browser-runtime finding `br-r6-r1-3` MAJOR (half (i)):
-//! production caller for `TauriRenderer` + `InProcessSessionBridge`
-//! lives here.
+//! Closes r6-r1-browser-runtime finding `br-r6-r1-3` MAJOR — production
+//! caller for `TauriRenderer` + `InProcessSessionBridge`. Ben ratified
+//! path-a-FULL on Q-R6-3 (2026-05-13): both halves (the scaffold + the
+//! webview-driven E2E) land in this PR.
 //!
 //! # Two-mode boot path
 //!
@@ -11,17 +12,19 @@
 //!    + prints a launch summary describing the IPC method-cap-binding
 //!    surface + the locked CSP header. This mode is the
 //!    workspace-default build path — the orchestrator's §3.5h workspace
-//!    pre-push pre-flight runs in this shape.
+//!    pre-push pre-flight runs in this shape. The `e2e_admin_shell_ipc`
+//!    integration tests exercise the SAME `AdminShellState::dispatch`
+//!    code path the `tauri` mode wraps in Tauri commands.
 //!
-//! 2. **`tauri` feature mode** (opt-in; see `tauri_boot` module). Wires
-//!    `tauri::Builder` against the same `AdminShellState` + loads
-//!    `webview-assets/index.html`. Off by default per the
-//!    `tools/benten-admin-shell/Cargo.toml` header rationale (Tauri 2.x
-//!    pulls ~533 transitive deps + WebKit2GTK at runtime on linux; the
-//!    full webview-driven E2E is named-NOW for v1-assessment-window per
-//!    HARD RULE rule-12 clause-(b) destination
-//!    `docs/future/phase-4-backlog.md §3` "webview-driven tauri-driver
-//!    smoke test").
+//! 2. **`tauri` feature mode** (opt-in; CI lane `admin-shell-e2e.yml`
+//!    flips this ON every run). Wires `tauri::Builder` against the
+//!    same `AdminShellState`, registers Tauri commands wrapping
+//!    `AdminShellState::dispatch`, loads `webview-assets/index.html`
+//!    into the embedded webview, and runs the real WebView2 /
+//!    WebKit2GTK / WKWebView runtime. The `tests/e2e_webview_smoke.rs`
+//!    test drives a `tauri-driver` WebDriver session against the
+//!    running binary to verify the full webview load + CSP
+//!    enforcement + Tauri command-payload handling end-to-end.
 //!
 //! The dispatch pipeline is **identical** across modes: both modes
 //! construct the same `AdminShellState` + call
@@ -32,6 +35,7 @@
 
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout)]
+#![allow(clippy::print_stderr)]
 
 use benten_admin_shell::{ADMIN_SHELL_BOUND_ORIGIN, AdminShellState};
 use benten_renderer_tauri::IPC_METHOD_CAP_BINDING;
@@ -39,12 +43,7 @@ use benten_renderer_tauri::IPC_METHOD_CAP_BINDING;
 fn main() -> std::process::ExitCode {
     // Default-mode boot path. Constructs the production state shape
     // (`DidKeyedSession::new` with real verifier + OS CSPRNG +
-    // wallclock) + emits a launch summary on stdout. The integrator
-    // operator wires logging via `RUST_LOG` + `tracing-subscriber` in a
-    // future wave; this binary stays stdout-quiet apart from the
-    // launch summary so the §3.5h workspace pre-push gate's
-    // `print_stdout = "warn"` clippy lint is satisfied by the
-    // crate-level `allow` above.
+    // wallclock) + emits a launch summary on stdout.
     let state = AdminShellState::new_production();
 
     println!("benten-admin-shell — production boot path");
@@ -65,45 +64,96 @@ fn main() -> std::process::ExitCode {
 
     #[cfg(not(feature = "tauri"))]
     {
-        // Without the `tauri` feature the binary has nothing more to do
-        // — return Ok and let the operator opt in. This shape lets the
-        // integration tests in `tests/` exercise the full
-        // `AdminShellState` API without depending on a running webview.
         std::process::ExitCode::SUCCESS
     }
 }
 
 // ---------------------------------------------------------------------
-// `tauri` feature gated boot path (opt-in)
+// `tauri` feature gated boot path — REAL Tauri 2.x runtime
 // ---------------------------------------------------------------------
 
 #[cfg(feature = "tauri")]
 mod tauri_boot {
-    //! Real Tauri 2.x boot path. Off by default; the workspace pre-push
-    //! gate exercises the no-feature path only. When the v1-assessment-
-    //! window webview-driven tauri-driver smoke test wave lands, this
-    //! module gains:
-    //!
-    //! - `tauri = "2"` dependency in the feature's deplist.
-    //! - A real `tauri::Builder::default()` invocation.
-    //! - Tauri commands wrapping
-    //!   `benten_admin_shell::AdminShellState::dispatch`.
-    //! - Webview asset loading from `webview-assets/index.html`.
-    //! - CSP wiring via the operator's tauri.conf.json (the
-    //!   `webview_csp_header()` is the canonical reference value).
-    //!
-    //! At HEAD this module is a placeholder that compiles ONLY when the
-    //! operator opts in to the feature; the actual `tauri = "2"` dep
-    //! lands at the v1-window wave.
-    use benten_admin_shell::AdminShellState;
+    //! Real Tauri 2.x boot path. Active when the `tauri` cargo feature
+    //! is on. The CI lane `admin-shell-e2e.yml` flips this ON every
+    //! run; the `tests/e2e_webview_smoke.rs` test drives a real
+    //! WebDriver session against a running instance of this binary.
 
-    pub fn run(_state: AdminShellState) -> std::process::ExitCode {
-        // Placeholder. When the `tauri` feature flips on at the
-        // v1-window wave, this body wires the real Tauri 2.x builder.
-        eprintln!(
-            "[benten-admin-shell] `tauri` feature scaffold reached — webview boot lands at \
-             docs/future/phase-4-backlog.md §3 v1-assessment-window-bound wave"
-        );
-        std::process::ExitCode::SUCCESS
+    use std::sync::Arc;
+
+    use benten_admin_shell::AdminShellState;
+    use benten_renderer_tauri::{IpcRequest, ipc_method_cap_bindings};
+    use tauri::Manager;
+
+    /// Tauri command: dispatch an IPC envelope through
+    /// `AdminShellState::dispatch`. The webview invokes this via
+    /// `window.__TAURI__.core.invoke("dispatch_ipc", {method, payload})`.
+    /// Session-token plumbing (challenge → handshake → token) is
+    /// exercised by the Rust-level e2e_admin_shell_ipc tests; the
+    /// webview-driven smoke exercises the un-authenticated rejection
+    /// branches (MissingSession + MethodNotInAllowlist) at the real
+    /// Tauri command-invoke surface, which is what br-r6-r1-3 named
+    /// as the specific gap.
+    #[tauri::command]
+    fn dispatch_ipc(
+        state: tauri::State<'_, Arc<AdminShellState>>,
+        method: String,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let request = IpcRequest {
+            method,
+            payload,
+            session: None,
+        };
+        match state.dispatch(request) {
+            Ok(response) => Ok(response.payload),
+            Err(err) => Err(format!("{:?}", err.error_code())),
+        }
+    }
+
+    /// Tauri command: return the canonical IPC method-cap-binding map
+    /// so the webview can sanity-check its surface knowledge. Used by
+    /// the E2E smoke as a happy-path round-trip pin (tests Tauri
+    /// command framing + JSON serialization end-to-end).
+    #[tauri::command]
+    fn ipc_method_cap_bindings_command() -> std::collections::BTreeMap<String, String> {
+        ipc_method_cap_bindings()
+    }
+
+    /// Tauri command: return the canonical bound-origin string for
+    /// the admin shell.
+    #[tauri::command]
+    fn admin_shell_bound_origin() -> &'static str {
+        benten_admin_shell::ADMIN_SHELL_BOUND_ORIGIN
+    }
+
+    pub fn run(state: AdminShellState) -> std::process::ExitCode {
+        let shared = Arc::new(state);
+        let result = tauri::Builder::default()
+            .manage(shared)
+            .invoke_handler(tauri::generate_handler![
+                dispatch_ipc,
+                ipc_method_cap_bindings_command,
+                admin_shell_bound_origin,
+            ])
+            .setup(|app| {
+                if let Some(window) = app.get_webview_window("main")
+                    && let Ok(url) = window.url()
+                {
+                    tracing::info!(
+                        target: "benten-admin-shell",
+                        "webview URL at boot: {url}"
+                    );
+                }
+                Ok(())
+            })
+            .run(tauri::generate_context!());
+        match result {
+            Ok(()) => std::process::ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("[benten-admin-shell] tauri runtime error: {err}");
+                std::process::ExitCode::FAILURE
+            }
+        }
     }
 }

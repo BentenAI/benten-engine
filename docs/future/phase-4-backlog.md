@@ -74,30 +74,33 @@ This MVP doesn't defeat the purpose of rotation (it doesn't ask receivers to tru
 
 **Origin:** carried from original Phase 4 scope; Phase 4-Foundation ships admin UI v0 that lets users edit workflows + composed views THROUGH it, but does NOT make the admin UI's own subgraph user-editable through itself. That meta-circular self-composing capability is Phase 4-Meta-bound.
 
-### §3.5 `benten-admin-shell` webview-driven tauri-driver smoke test (Phase-4-Meta)
+### §3.5 `benten-admin-shell` webview-driven tauri-driver smoke test — CLOSED at R6-FP-E (path-a-FULL ratification 2026-05-13)
 
-**Origin:** Phase 4-Foundation R6 phase-close R6-FP-E (2026-05-13). The R6-R1 browser-runtime lens (`.addl/phase-4-foundation/r6-r1-browser-runtime-reviewer.json` finding `br-r6-r1-3` MAJOR) named two halves of integrator-binary work:
+Per Ben's path-a-FULL ratification on Q-R6-3 (2026-05-13): both halves of br-r6-r1-3 land at R6-FP-E. Half (i) ships the integrator-binary scaffold + 9 Rust-level IPC dispatch E2E pins; half (ii) ships:
 
-- **Half (i) — integrator-binary scaffold + IPC dispatch pipeline E2E pin.** CLOSED at R6-FP-E (this PR). `tools/benten-admin-shell/` ships the bin crate; `tests/e2e_admin_shell_ipc.rs` exercises the full T3 three-rung defense + bridge resolve through 9 production-arm + negative-arm pins.
-- **Half (ii) — webview-driven tauri-driver smoke test.** A real Tauri 2.x `tauri::Builder` invocation that loads `tools/benten-admin-shell/webview-assets/index.html` into an embedded WebView2 (Windows) / WKWebView (macOS) / WebKit2GTK (linux), driven by `tauri-driver` over WebDriver, asserting a click in the webview triggers an IPC roundtrip + a DOM update. Deferred here per HARD RULE rule-12 clause-(b).
+- Real `tauri = "2"` runtime dep on `tools/benten-admin-shell/Cargo.toml` (opt-in `tauri` cargo feature; OFF for the default workspace build to keep agent-pre-flight cost under the dispatch-conventions §3 cap=7 RAM budget; CI lane `admin-shell-e2e.yml` flips ON every run).
+- Real `tauri::Builder::default().invoke_handler(...).run(...)` boot path in `src/main.rs::tauri_boot` wiring Tauri commands `dispatch_ipc`, `ipc_method_cap_bindings_command`, `admin_shell_bound_origin` against `AdminShellState::dispatch`.
+- `tauri.conf.json` + `build.rs` calling `tauri_build::build()` + minimal `icons/icon.png` for the codegen pass.
+- `tests/e2e_webview_smoke.rs` — fantoccini-rustls WebDriver client driving `tauri-driver` subprocess against the running binary. Asserts: (a) webview loads `webview-assets/index.html` (title round-trip), (b) Tauri command-invoke serializes a `ipc_method_cap_bindings_command` request JS→Rust→JS preserving the canonical method-cap map byte-for-byte, (c) classic `eval("1+1")` is blocked by the CSP forbidding `'unsafe-eval'`.
+- New CI workflow `.github/workflows/admin-shell-e2e.yml` matrix ubuntu-latest (substantive WebDriver session via WebKit2GTK + WebKitWebDriver) + macos-latest (build-only smoke — Tauri's own tauri-driver project documents that macOS WKWebView lacks WebDriver bindings; see <https://v2.tauri.app/develop/tests/webdriver/>). Windows deferred per dispatch brief.
 
-**Deferral rationale (R6-FP-E ratification 2026-05-13):**
+Closes br-r6-r1-3 MAJOR (both halves) + br-r6-r1-5 MINOR (handler payload contract — `tauri_boot::dispatch_ipc` is the integrator-side handler that maps `IpcResponse.payload` to the Tauri command return value).
 
-- Pulling `tauri = "2"` into the workspace `Cargo.lock` adds ~533 transitive crates + a deny.toml license-audit pass; on linux it adds the `webkit2gtk-4.1` runtime dependency to the CI matrix.
-- The half-(i) scaffold's `AdminShellState::dispatch` IS the code path a real Tauri 2.x command handler invokes one-to-one — the webview-driver layer adds the actual webview runtime but the IPC dispatch substance is exercised end-to-end already.
-- Cost-benefit: half-(ii) gains the actual webview-runtime integration test (defense against a regression in `WebviewWindowBuilder::with_csp()` semantics or Tauri command-payload handling) but does NOT close a security guarantee the half-(i) tests don't already cover. The CSP header byte-shape is asserted by `e2e_integrator_publishes_canonical_csp_header` + `webview_assets_csp_meta_matches_rust_constant`; the dispatch pipeline is exercised end-to-end through 8 negative-arm + happy-path cases.
+### §3.6 Tauri 2.x upstream unmaintained-dep migration (v1-assessment-window security-advisory carry)
 
-**Phase 4-Meta scope:**
+**Origin:** Phase 4-Foundation R6 phase-close R6-FP-E (2026-05-13). The path-a-FULL ratification of br-r6-r1-3 pulled `tauri = "2"` into the workspace `Cargo.lock` as an opt-in feature dep. Tauri's transitive deps include several unmaintained crates flagged informational by rustsec:
 
-- Add `tauri = "2"` to `tools/benten-admin-shell/Cargo.toml` `[features.tauri.dependencies]` block + flip the `tauri_boot::run` placeholder body to a real `tauri::Builder::default().invoke_handler(...).run(...)` call wiring Tauri commands against `AdminShellState::dispatch`.
-- Add `tauri-driver` + a WebDriver client (`fantoccini` or `thirtyfour`) as `[dev-dependencies]` under the `tauri` feature.
-- New e2e test `tools/benten-admin-shell/tests/e2e_webview_driver_smoke.rs` (feature-gated): launches the admin-shell binary in `tauri-driver` mode; clicks `#ipc-roundtrip`; asserts the DOM `#response` updates with the IPC response; verifies CSP enforcement by attempting a `fetch("https://attacker.example")` from webview JS and asserting it's blocked.
-- New CI workflow `.github/workflows/admin-shell-webview-e2e.yml` matrix = `ubuntu-latest` + `macos-latest`; installs `webkit2gtk-4.1` on linux; non-required check initially; promote to required after first green run.
-- Update Cargo.toml header (`tools/benten-admin-shell/Cargo.toml`) describing the feature flip + the dep-tree audit results against `deny.toml`.
+| Advisory | Crate | Upstream Tauri closure |
+|---|---|---|
+| RUSTSEC-2024-0370 | proc-macro-error | Tauri macro stack migration to proc-macro-error2 |
+| RUSTSEC-2024-0411..0420 | gtk-rs GTK3 bindings cluster (atk / gdk / gtk / gdkx11-sys / gdk-sys / gtk-sys / gtk3-macros / atk-sys) | Tauri linux webview migration to gtk4-rs |
+| RUSTSEC-2025-0075, 0080, 0081, 0098, 0100 | unic-ucd-* family | Tauri-utils urlpattern → unic-ucd successor migration |
 
-**Estimated scope:** ~200-300 LOC (binary feature-mode body + e2e test + workflow). Couples to §3.3 (self-composing admin UI Phase-4-Meta scope) which DEMANDS a live webview for the meta-circular editing surface — the half-(ii) wave can land alongside §3.3 to share CI infrastructure cost.
+All are **informational-only unmaintained advisories** (no exploit class). The crates land via the opt-in `tauri` feature on `benten-admin-shell` ONLY — they are NOT in the default workspace build path. Pre-existing CI lanes (workspace clippy / doc / nextest / cargo-deny base) do NOT enable the feature; only the new `admin-shell-e2e.yml` CI lane enables it.
 
-Closes R6 R6-R1 finding `br-r6-r1-3` named-NOW destination clause-(b) half (ii). Couples to `br-r6-r1-5` MINOR (integrator-binary handler payload overwrite contract — the per-method handlers land at the same wave).
+**v1-assessment-window action:** when re-evaluating the dep tree, audit Tauri 2.x's migration progress for each cluster + tighten the `deny.toml` ignore list as upstream closures land. If Tauri ships a major-version bump that resolves the cluster, drop the corresponding `RUSTSEC-*` ignore entries.
+
+**Tracked deny.toml ignores at `/Users/benwork/Documents/benten-engine/deny.toml` lines 75-113** (R6-FP-E commit).
 
 ### §3.4 Phase 4-Meta inherited carries from Phase 3
 

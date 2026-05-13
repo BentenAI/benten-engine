@@ -1,0 +1,151 @@
+name: Admin-Shell WebDriver E2E (Tauri 2.x)
+
+# Phase-4-Foundation R6-FP-E (path-a-FULL ratification 2026-05-13).
+#
+# ## What this workflow asserts
+#
+# Drives a real `tauri-driver` WebDriver session against the
+# `benten-admin-shell` integrator binary built with the `tauri` cargo
+# feature on. Closes the half-(ii) substantive arm of `br-r6-r1-3`
+# MAJOR: a regression in `WebviewWindowBuilder::with_csp()` integration
+# semantics or Tauri command-payload handling does NOT surface via the
+# Rust-level `e2e_admin_shell_ipc.rs` pins (those exercise
+# `AdminShellState::dispatch` directly, not through the Tauri
+# command-invoke channel). This workflow exercises:
+#
+# 1. **Webview load:** the real Tauri 2.x runtime loads
+#    `tools/benten-admin-shell/webview-assets/index.html` into an
+#    embedded WebKit2GTK webview (on linux) — title-roundtrip assertion.
+#
+# 2. **Tauri command-invoke round-trip:** the `ipc_method_cap_bindings_command`
+#    Tauri command serializes JS → Rust → JS, preserving the canonical
+#    method-cap binding map byte-for-byte.
+#
+# 3. **CSP enforcement at the real Tauri webview layer:** classic
+#    `eval("1+1")` is rejected by the CSP forbidding `'unsafe-eval'`
+#    (the strict CSP at `tauri.conf.json::app.security.csp`).
+#
+# ## Platform matrix
+#
+# - **ubuntu-latest:** SUBSTANTIVE WebDriver session via WebKit2GTK
+#   (`libwebkit2gtk-4.1-dev`) + the `WebKitWebDriver` binary that
+#   ships with it; `tauri-driver` proxies WebDriver requests to it.
+#
+# - **macos-latest:** BUILD-ONLY smoke (asserts the binary compiles
+#   with `--features tauri` + boots without panic). Tauri's own
+#   tauri-driver project documents that macOS WKWebView does NOT
+#   expose a WebDriver binding for embedded webviews. See
+#   <https://v2.tauri.app/develop/tests/webdriver/>. The test's
+#   `webdriver_supported_on_host()` check returns false on macOS so
+#   the test runs + skips with a diagnostic — and this lane only
+#   asserts the build succeeds.
+#
+# - **windows-latest:** DEFERRED per the R6-FP-E dispatch brief. Tauri
+#   2.x supports WebView2 + Microsoft Edge WebDriver on Windows; the
+#   matrix expansion lands at a follow-up wave. The test code path
+#   itself is OS-agnostic.
+#
+# ## Required vs. non-required
+#
+# Marked NON-required in this initial PR (the workflow ships green
+# locally on macOS; first ubuntu-latest run via this PR is the
+# substantive green check). Promotes to REQUIRED via
+# `branch-protection-spec-check.yml` cadence after 30 days of
+# informational green per the workspace promotion convention.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: admin-shell-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-only-macos:
+    name: build-smoke / macos-latest
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-admin-shell-e2e-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build benten-admin-shell with tauri feature
+        run: cargo build --release -p benten-admin-shell --features tauri --bin benten-admin-shell
+      - name: Run full test suite with tauri feature (e2e test skips on macOS)
+        run: cargo test --release -p benten-admin-shell --features tauri
+
+  webdriver-linux:
+    name: webview-e2e / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WebKit2GTK + WebKitWebDriver
+        run: |
+          sudo apt-get update
+          # Tauri 2.x requires libwebkit2gtk-4.1-dev (the GTK4 transition is
+          # in progress upstream; v2.11.1 still binds to 4.1). WebKitWebDriver
+          # ships in the webkit2gtk-driver package.
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            webkit2gtk-driver \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            xvfb
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-admin-shell-e2e-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Build benten-admin-shell with tauri feature
+        run: cargo build --release -p benten-admin-shell --features tauri --bin benten-admin-shell
+
+      - name: Run e2e_webview_smoke under Xvfb
+        # The webview needs a display server to load; CI hosts are
+        # headless so we wrap the test invocation in xvfb-run.
+        run: |
+          xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
+            cargo test --release -p benten-admin-shell --features tauri \
+              --test e2e_webview_smoke -- --nocapture
+
+      - name: Run remaining tauri-feature tests
+        # The other test files (e2e_admin_shell_ipc + library units +
+        # webview_assets_csp_meta) don't need Xvfb but still benefit
+        # from the same cargo cache. Run them after the webdriver
+        # smoke so a failure surfaces at the webdriver step (the
+        # named gap closure for br-r6-r1-3).
+        run: |
+          cargo test --release -p benten-admin-shell --features tauri \
+            --test e2e_admin_shell_ipc
+          cargo test --release -p benten-admin-shell --features tauri \
+            --test webview_assets_csp_meta_matches_rust_constant
+          cargo test --release -p benten-admin-shell --features tauri --lib
