@@ -781,13 +781,19 @@ fn variant_count_is_pinned() {
 /// that allowed 14 throwable variants to silently escape regression
 /// coverage across Phase-2b / Phase-3 / Phase-4-Foundation R5.
 ///
-/// Implementation strategy: exhaustive `match` arm over every variant.
-/// Adding a new variant to `enum ErrorCode` without adding a match arm
-/// here is a compile error — the test is structurally impossible to
-/// drift past. The match collects each non-`Unknown` arm into a counter;
-/// the test asserts `counter == ALL_CATALOG_VARIANTS.len()`. Because
-/// `Unknown(String)` is the forward-compat fallback (not a catalog
-/// code), it is the only arm excluded from the counter.
+/// Implementation strategy: dual tripwire. Because `ErrorCode` is
+/// `#[non_exhaustive]`, the `match` here carries a `_ => false`
+/// wildcard fallthrough — a new variant added to the enum without an
+/// arm here will silently classify as non-catalog (NOT a compile
+/// error). The actual tripwire is two-fold: (1) the hard-coded
+/// `CATALOG_VARIANT_COUNT` assertion in `variant_count_is_pinned`
+/// forces the author to bump that const + add the variant to
+/// `ALL_CATALOG_VARIANTS` + add a `from_str` round-trip arm in
+/// `every_variant_round_trips`; (2) the runtime length-mismatch
+/// assertion below (`counter == ALL_CATALOG_VARIANTS.len()`) fires
+/// if a match arm is added without a corresponding list entry (or
+/// vice versa). The `Unknown(String)` arm is excluded from the
+/// counter (forward-compat fallback; not a catalog code).
 #[test]
 #[allow(clippy::too_many_lines)]
 fn catalog_variant_count_matches_enum() {
