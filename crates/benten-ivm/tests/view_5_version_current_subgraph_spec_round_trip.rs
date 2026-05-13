@@ -64,7 +64,7 @@ fn handwritten_baseline_for_writes(writes: &[KernelInput]) -> KernelOutput {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_version_current_subgraph_spec_round_trip_matches_handwritten() {
     let spec = CanarySubgraphSpec::for_canonical_view("version_current");
     assert!(spec.is_canonical, "version_current is canonical");
@@ -86,7 +86,7 @@ fn view_5_version_current_subgraph_spec_round_trip_matches_handwritten() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_subgraph_spec_emits_current_not_rows_or_rules() {
     // mat-r1-1 LOAD-BEARING: View 5 MUST route to the typed-output
     // Current path, NOT to the default Rows path or to View 4's
@@ -112,7 +112,7 @@ fn view_5_subgraph_spec_emits_current_not_rows_or_rules() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_subgraph_spec_empty_walk_emits_current_none() {
     // View 5 distinct shape arm: zero NEXT_VERSION events MUST
     // produce Current(None), not Current(Some(empty_bytes)). The
@@ -136,7 +136,7 @@ fn view_5_subgraph_spec_empty_walk_emits_current_none() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
     let spec = CanarySubgraphSpec::for_canonical_view("version_current");
 

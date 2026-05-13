@@ -66,6 +66,7 @@ This MVP doesn't defeat the purpose of rotation (it doesn't ask receivers to tru
 - Light-client mode-(b) range-query proof (ds-r4r2-3)
 - Light-client mode-(c) signed checkpoint (ds-r4r2-3)
 - Handler-call-graph cycle detection at handler-registration time (`phase-3-backlog §15.2`)
+- **View 3 (content_listing) stale-with-last-known-good fallback generalization (mat-r1-14)** — the `ContentListingView` budget-exhaustion path returns the LAST KNOWN GOOD snapshot via `read_page_allow_stale` rather than empty. G23-0b preserves this non-trivial-named behavior at the canonical-view inner kernel + does NOT generalize the fallback into a uniform pathway on `Algorithm B`'s generic kernel. Phase 4-Meta lifts the stale-with-last-known-good shape into a general `View::read_allow_stale` semantics that user-defined views can opt into; until then the canonical View 3 path is the only fallback-aware view. Closure pin: `crates/benten-ivm/tests/view_3_stale_with_last_known_good_does_not_generalize_trivially_named_carry.rs`.
 
 ---
 

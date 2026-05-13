@@ -62,11 +62,6 @@ fn walk_rs_files(dir: &std::path::Path, visit: &mut dyn FnMut(&std::path::Path, 
 }
 
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G23-0b wave-3 un-ignores at close. \
-    Pin source: r2-test-landscape.md §2.3 G23-0b + CRATES-DEEP-DIVE §4. Family C IVM \
-    AllProps-placeholder-retirement residual (was orphaned by R3 family charter per r4-tc-6). \
-    AllProps identifier present at HEAD per benten-ivm/src/algorithm_b.rs:205 — un-ignore \
-    after G23-0b strips the variant + cleans callsites."]
 fn projection_all_props_placeholder_removed_no_remaining_references() {
     let src = ivm_src_root();
     assert!(

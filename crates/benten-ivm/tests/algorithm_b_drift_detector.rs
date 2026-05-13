@@ -36,7 +36,7 @@
 //!   `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`
 //!   + the pattern-extension pin both drive G15-A's merged
 //!   `Algorithm::register(view_id, LabelPattern::Exact(label),
-//!   Projection::AllProps)` end-to-end (the helper's
+//!   Projection::all_props())` end-to-end (the helper's
 //!   `Algorithm::register` lane). The drift-detector observes
 //!   `GenericKernel`'s `is_stale` / row-set determinism.
 //! - The budget-trip / rebuild-after-stale / asymmetric-budget pins drive

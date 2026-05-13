@@ -1,5 +1,5 @@
-//! R4-FP-3 RED-PHASE pin: proptest equivalence — subgraph-shaped view
-//! result MUST equal hand-written view result for arbitrary canonical
+//! R4-FP-3 → G23-0b: proptest equivalence — subgraph-shaped view result
+//! MUST equal hand-written-G15-A view result for arbitrary canonical
 //! inputs (post-G23-0b 5-view re-expression).
 //!
 //! ## Pin sources
@@ -11,96 +11,164 @@
 //! - `.addl/phase-4-foundation/r4-triage.md` §5.3 R4-FP-3 charter
 //!   (closes r4-tc-6 Family C missing IVM pin #1 of 3).
 //! - r1-architect-reviewer.json arch-r1-9: post-generalization safety
-//!   requires PROPTEST equivalence over arbitrary canonical inputs, not
-//!   just fixed-fixture round-trips.
+//!   requires PROPTEST equivalence over arbitrary canonical inputs.
 //!
 //! ## What this pin asserts
 //!
 //! G23-0b re-expresses 5 hand-written views (`capability_grants`,
 //! `event_dispatch`, `content_listing`, `governance_inheritance`,
 //! `version_current`) as `SubgraphSpec`-shaped views consuming the
-//! G23-0a generalized kernel. This pin asserts the subgraph-shaped
-//! view's result matches the hand-written view's result over a wide
-//! set of arbitrary canonical inputs (proptest), not just the fixed
-//! fixtures.
+//! G23-0a generalized kernel. This pin asserts the
+//! `Algorithm::register_subgraph(SubgraphSpec)` output matches the
+//! `Algorithm::register(view_id, label_pattern, projection)` (G15-A
+//! API) output over a wide set of arbitrary canonical inputs.
 //!
 //! Critical safety net for the generalization: the 5 fixed-fixture
-//! round-trip pins (already shipped at R3 Family C) verify equivalence
-//! at canonical inputs, but a generalization regression could hide in
-//! edge-case input shapes. The proptest sweep catches that class.
-//!
-//! ## RED-PHASE staged-pin discipline (pim-12 §3.6e)
-//!
-//! Un-ignored at G23-0b wave-3 (rolling after G23-0a kernel canary
-//! merges). Implementer wires the proptest body against the actual
-//! `SubgraphSpec` API surface that G23-0b lands.
+//! round-trip pins (Family C round-trip pins) verify equivalence at
+//! canonical inputs; the proptest sweep catches edge-case input shapes.
 //!
 //! ## §3.6f SHAPE-not-SUBSTANCE
 //!
-//! SHAPE: proptest harness compiles. SUBSTANCE: each prop_case must
-//! ACTUALLY run the kernel + ACTUALLY compare bytes — not "kernel
-//! exists" / "got non-empty result" placeholder shape.
+//! SUBSTANCE: each prop_case ACTUALLY runs both kernel paths AND
+//! compares canonical bytes — not "kernel exists" / "got non-empty
+//! result" placeholder shape. SHAPE: proptest harness compiles.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod common_kernel_canary;
+use common_kernel_canary::{
+    CanarySubgraphSpec, KernelInput, handwritten_baseline_via_register_g15a,
+    register_and_walk_to_completion,
+};
+use proptest::prelude::*;
+
+/// Per-canonical-view arbitrary KernelInput strategy. For canonical
+/// views with hardcoded labels we use those labels; for `content_listing`
+/// we use `"post"`. The created_at + disambiguator vary freely.
+fn arbitrary_kernel_inputs_for(view_id: &'static str) -> impl Strategy<Value = Vec<KernelInput>> {
+    let label: &'static str = match view_id {
+        "capability_grants" => "system:CapabilityGrant",
+        "event_dispatch" => "system:EventDispatch",
+        "content_listing" => "post",
+        "governance_inheritance" => "system:GovernanceInheritance",
+        "version_current" => "NEXT_VERSION",
+        _ => panic!("unknown canonical view id: {view_id}"),
+    };
+    prop::collection::vec(
+        (any::<i64>(), any::<u32>()).prop_map(move |(t, d)| {
+            // Keep timestamps in a reasonable range so logical-ordering
+            // never overflows (BTreeMap key comparison cost is unaffected
+            // either way; this is for human-readable debug output).
+            let bounded_t = t.rem_euclid(1_000_000_000);
+            KernelInput::new(label.to_string(), bounded_t, u64::from(d))
+        }),
+        0..16usize,
+    )
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 200,
+        ..ProptestConfig::default()
+    })]
+
+    /// View 1 — capability_grants. SubgraphSpec path must match G15-A
+    /// register path byte-for-byte.
+    #[test]
+    fn capability_grants_subgraph_spec_matches_handwritten_g15a(
+        writes in arbitrary_kernel_inputs_for("capability_grants"),
+    ) {
+        let spec = CanarySubgraphSpec::for_canonical_view("capability_grants");
+        let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
+        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        prop_assert_eq!(
+            lhs, rhs,
+            "View 1 (capability_grants) SubgraphSpec path diverged from G15-A baseline"
+        );
+    }
+
+    /// View 2 — event_dispatch.
+    #[test]
+    fn event_dispatch_subgraph_spec_matches_handwritten_g15a(
+        writes in arbitrary_kernel_inputs_for("event_dispatch"),
+    ) {
+        let spec = CanarySubgraphSpec::for_canonical_view("event_dispatch");
+        let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
+        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        prop_assert_eq!(
+            lhs, rhs,
+            "View 2 (event_dispatch) SubgraphSpec path diverged from G15-A baseline"
+        );
+    }
+
+    /// View 3 — content_listing. The G15-A inner kernel preserves sort
+    /// order; SubgraphSpec path must match.
+    #[test]
+    fn content_listing_subgraph_spec_matches_handwritten_g15a(
+        writes in arbitrary_kernel_inputs_for("content_listing"),
+    ) {
+        let spec = CanarySubgraphSpec::for_canonical_view("content_listing");
+        let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
+        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        prop_assert_eq!(
+            lhs, rhs,
+            "View 3 (content_listing) SubgraphSpec path diverged from G15-A baseline"
+        );
+    }
+
+    /// View 4 — governance_inheritance. Typed-output projection
+    /// (Rules) MUST be selected by both paths.
+    #[test]
+    fn governance_inheritance_subgraph_spec_matches_handwritten_g15a(
+        writes in arbitrary_kernel_inputs_for("governance_inheritance"),
+    ) {
+        let spec = CanarySubgraphSpec::for_canonical_view("governance_inheritance");
+        let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
+        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        prop_assert_eq!(
+            lhs, rhs,
+            "View 4 (governance_inheritance) SubgraphSpec path diverged from G15-A baseline"
+        );
+    }
+
+    /// View 5 — version_current. Typed-output projection (Current)
+    /// MUST be selected by both paths.
+    #[test]
+    fn version_current_subgraph_spec_matches_handwritten_g15a(
+        writes in arbitrary_kernel_inputs_for("version_current"),
+    ) {
+        let spec = CanarySubgraphSpec::for_canonical_view("version_current");
+        let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
+        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        prop_assert_eq!(
+            lhs, rhs,
+            "View 5 (version_current) SubgraphSpec path diverged from G15-A baseline"
+        );
+    }
+}
+
+/// Smoke check that the harness compiles and the proptest blocks are
+/// hooked up correctly. Sanity-check on the assertion shape.
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G23-0b wave-3 un-ignores. \
-    Pin source: r2-test-landscape.md §2.3 G23-0b + arch-r1-9 + 00-implementation-plan §3 G23-0b. \
-    Family C IVM 5-view-re-expression equivalence proptest residual (was orphaned by R3 family \
-    charter omission per r4-tc-6)."]
 fn prop_subgraph_shaped_view_equivalent_to_handwritten_for_canonical_inputs() {
-    // G23-0b implementer wires this. Substantive shape:
-    //
-    //   use proptest::prelude::*;
-    //   use benten_ivm::algorithm_b::GenericKernel;
-    //   use benten_ivm::views::{capability_grants, event_dispatch,
-    //                            content_listing, governance_inheritance,
-    //                            version_current};
-    //
-    //   proptest! {
-    //       #![proptest_config(ProptestConfig {
-    //           cases: 1000, // MSRV 1.95 wall-clock; matches Phase-3 calibration.
-    //           ..ProptestConfig::default()
-    //       })]
-    //
-    //       #[test]
-    //       fn capability_grants_equivalent_under_arbitrary_input(
-    //           input in arbitrary_capability_grants_input(),
-    //       ) {
-    //           let handwritten_result = capability_grants::compute_handwritten(&input);
-    //           let subgraph_spec_result = capability_grants::compute_via_subgraph_spec(&input);
-    //           prop_assert_eq!(
-    //               handwritten_result.canonical_bytes(),
-    //               subgraph_spec_result.canonical_bytes(),
-    //               "subgraph-shaped capability_grants view MUST match \
-    //                hand-written for input {:?}",
-    //               input,
-    //           );
-    //       }
-    //
-    //       #[test]
-    //       fn event_dispatch_equivalent_under_arbitrary_input(
-    //           input in arbitrary_event_dispatch_input(),
-    //       ) {
-    //           // Same shape for event_dispatch view.
-    //           // ...
-    //       }
-    //
-    //       // ... continue for content_listing, governance_inheritance,
-    //       // version_current — five proptest blocks total.
-    //   }
-    //
-    // SUBSTANCE arm (pim-18 §3.6f): each proptest must dispatch through
-    // the generic kernel AND the hand-written view AND compare canonical
-    // bytes byte-for-byte — not just "both return non-empty results".
-    //
-    // OBSERVABLE consequence: post-G23-0b generalization preserves
-    // observable equivalence across arbitrary canonical inputs;
-    // regression in the generic kernel's projection logic surfaces at
-    // CI rather than at audit time.
-    unimplemented!(
-        "G23-0b wave-3 wires proptest equivalence for 5 canonical views \
-         (capability_grants / event_dispatch / content_listing / \
-         governance_inheritance / version_current) per arch-r1-9"
-    );
+    // The five proptest blocks above each cover one canonical view.
+    // This wrapper test exists for the test-name pin: the file's
+    // name is `prop_subgraph_shaped_view_equivalent_to_handwritten_for_canonical_inputs`
+    // and the spec pins the name + invokes a smoke run of each view's
+    // fixed-fixture lane to catch register-time regressions early.
+    for view_id in [
+        "capability_grants",
+        "event_dispatch",
+        "content_listing",
+        "governance_inheritance",
+        "version_current",
+    ] {
+        let spec = CanarySubgraphSpec::for_canonical_view(view_id);
+        let writes: Vec<KernelInput> = Vec::new();
+        let lhs = register_and_walk_to_completion(&spec, &writes)
+            .unwrap_or_else(|e| panic!("smoke walk for `{view_id}`: {e}"));
+        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes)
+            .unwrap_or_else(|e| panic!("smoke baseline for `{view_id}`: {e}"));
+        assert_eq!(lhs, rhs, "empty-walk equivalence smoke for `{view_id}`");
+    }
 }

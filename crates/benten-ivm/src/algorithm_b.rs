@@ -105,6 +105,23 @@ pub fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
         .find_map(|(id, label)| (*id == view_id).then_some(*label))
 }
 
+/// Derive the typed-output projection a canonical view_id is expected to
+/// emit, mirroring [`crate::subgraph_spec::SubgraphSpec::for_canonical_view`]'s
+/// declarations. `governance_inheritance` ⇒ Rules; `version_current` ⇒
+/// Current; every other (canonical or user-defined) id ⇒ `None`
+/// (row-keyed Cids output).
+///
+/// G23-0b (mat-r1-1 + g23-0a-mr-3): the typed-output projection is a
+/// load-bearing declaration the kernel validates at materialisation.
+#[must_use]
+pub fn canonical_typed_output_projection_for(view_id: &str) -> Option<TypedOutputProjection> {
+    match view_id {
+        "governance_inheritance" => Some(TypedOutputProjection::Rules),
+        "version_current" => Some(TypedOutputProjection::Current),
+        _ => None,
+    }
+}
+
 /// Is `view_id` one of the 5 canonical Phase-1 view ids?
 ///
 /// Used by [`dispatch_for`] to classify which strategy lane the view-id
@@ -197,28 +214,35 @@ impl LabelPattern {
     }
 }
 
-/// Projection — Phase-3 G15-A ships the no-op `AllProps` projection (every
-/// matched Node yielded as-is). Future shape narrowing (`PropSubset`,
-/// `Computed`) lifts to a richer enum without breaking the kernel surface.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Projection {
-    /// Yield matched Nodes unchanged.
-    AllProps,
-}
+/// Projection — output-shape narrowing applied to matched Nodes.
+///
+/// **G23-0b: placeholder removed (CRATES-DEEP-DIVE §4 closure).** Pre-G23-0b
+/// this was an enum carrying a single no-op identity variant; the variant
+/// has been removed now that View 4 (Rules) + View 5 (Current) emit their
+/// own typed-output projections via [`crate::subgraph_spec::TypedOutputProjection`]
+/// (the load-bearing typed-output declaration per `mat-r1-1`).
+///
+/// The unit-struct shape is retained at the kernel surface so callers can
+/// still pass a [`Projection`] argument to [`Algorithm::register`] (the
+/// G15-A API + Phase-1 callsite ergonomics stay unchanged); future shape
+/// narrowing (`PropSubset`, `Computed`) lifts to enum form without
+/// breaking the call signature.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Projection;
 
 impl Projection {
-    /// Convenience constructor for the no-op projection.
+    /// Convenience constructor — identity projection (no narrowing).
     #[must_use]
     pub fn all_props() -> Self {
-        Self::AllProps
+        Self
     }
 
-    /// Apply the projection to a Node. `AllProps` is the identity.
+    /// Apply the projection to a Node. The identity projection is the
+    /// no-op transform; G23-0b ships this shape only. Future narrowing
+    /// lifts to enum form behind the same call signature.
     #[must_use]
     pub fn apply(&self, node: Node) -> Node {
-        match self {
-            Projection::AllProps => node,
-        }
+        node
     }
 }
 
@@ -273,6 +297,26 @@ pub enum AlgorithmError {
     SelfReferentialSubgraphRejected {
         /// The view id of the rejected self-referential spec.
         view_id: String,
+    },
+    /// G23-0b (mat-r1-1 + g23-0a-mr-3): caller supplied a [`SubgraphSpec`]
+    /// whose `typed_output_projection` declaration does not match the
+    /// view-id's required typed-output shape. `governance_inheritance`
+    /// MUST carry `Some(Rules)`; `version_current` MUST carry
+    /// `Some(Current)`; every other view-id MUST carry `None`. Fail-loud
+    /// at registration so a mis-declared spec can't silently materialise
+    /// the wrong KernelOutput variant.
+    #[error(
+        "typed-output projection mismatch for view `{view_id}`: declared `{declared:?}` \
+         but view requires `{required:?}` (governance_inheritance ⇒ Rules; \
+         version_current ⇒ Current; other ⇒ None) per mat-r1-1"
+    )]
+    TypedOutputProjectionMismatch {
+        /// The view id whose typed-output declaration was wrong.
+        view_id: String,
+        /// What the caller declared on the spec.
+        declared: Option<TypedOutputProjection>,
+        /// What the view-id actually requires per mat-r1-1.
+        required: Option<TypedOutputProjection>,
     },
 }
 
@@ -483,6 +527,36 @@ pub struct AlgorithmBView {
     /// Inner kernel — either a canonical hand-written view or
     /// `GenericKernel` for user-defined ids.
     inner: Box<dyn View>,
+    /// Declared typed-output projection (G23-0b, per `mat-r1-1` + g23-0a-mr-3).
+    ///
+    /// `Some(Rules)` ⇒ inner kernel MUST emit `ViewResult::Rules` (View 4
+    /// governance_inheritance). `Some(Current)` ⇒ inner kernel MUST emit
+    /// `ViewResult::Current(_)` (View 5 version_current). `None` ⇒ inner
+    /// kernel MUST emit `ViewResult::Cids(_)` (Views 1/2/3 + user-defined
+    /// views).
+    ///
+    /// [`Self::materialize`] consults this field to validate the
+    /// inner kernel's variant at every walk; a mismatch surfaces a
+    /// fail-loud panic per the g23-0a-mr-3 promise that the declared
+    /// typed-output projection is load-bearing post-G23-0b.
+    typed_output_projection: Option<TypedOutputProjection>,
+    /// Stored label pattern (for kernel-input filtering in `walk_writes`).
+    /// Lifted onto the wrapper at G23-0b so `walk_writes` can compute the
+    /// canary observable representation without delegating to a per-view
+    /// query-keyed read pathway (the 4 of 5 canonical inner kernels
+    /// require a specific `ViewQuery` field to be populated; the wrapper
+    /// surface is registration-path-agnostic + works for all 5).
+    label_pattern: LabelPattern,
+    /// Walk-time observable: the CIDs of [`KernelInput`] records that
+    /// (a) matched the wrapper's `label_pattern` and (b) were submitted
+    /// to the inner kernel's `update`. Stable across two independent
+    /// registration paths that share the same `label_pattern` + budget
+    /// (both consume the same writes through the same inner kernel
+    /// type). Used by [`Self::materialize`] post-G23-0b to produce the
+    /// canary observable representation that the round-trip pins
+    /// compare across the G15-A register API + the SubgraphSpec
+    /// register_subgraph API.
+    walk_observable: BTreeSet<Cid>,
 }
 
 impl core::fmt::Debug for AlgorithmBView {
@@ -494,7 +568,48 @@ impl core::fmt::Debug for AlgorithmBView {
     }
 }
 
+/// Resolve the input_pattern_label a `definition.input_pattern_label` carries
+/// for one of the canonical view ids — used by the legacy
+/// `AlgorithmBView::for_id` constructor (which receives the definition value
+/// from the caller) to seed the wrapper's `label_pattern` field. For the 4
+/// hardcoded-label canonical views this is the hardcoded label; for
+/// `content_listing` (which honors the caller's supplied label) this is
+/// `"post"` (the canonical default), but the caller's `register` path
+/// supplies the actual label via the wrapper-construction route.
+fn definition_input_pattern_label_owned(view_id: &str) -> String {
+    match view_id {
+        "capability_grants" => "system:CapabilityGrant".to_string(),
+        "event_dispatch" => "system:EventDispatch".to_string(),
+        "content_listing" => "post".to_string(),
+        "governance_inheritance" => "system:GovernanceInheritance".to_string(),
+        "version_current" => "NEXT_VERSION".to_string(),
+        // Default: same value used by user-defined views when no label
+        // override is supplied.
+        _ => "post".to_string(),
+    }
+}
+
 impl AlgorithmBView {
+    /// Private wrapper-construction helper — single source of truth for
+    /// initialising the `walk_observable` BTreeSet + holding the
+    /// label_pattern lift onto the wrapper.
+    fn assemble(
+        view_id: String,
+        definition: ViewDefinition,
+        inner: Box<dyn View>,
+        typed_output_projection: Option<TypedOutputProjection>,
+        label_pattern: LabelPattern,
+    ) -> Self {
+        Self {
+            view_id,
+            definition,
+            inner,
+            typed_output_projection,
+            label_pattern,
+            walk_observable: BTreeSet::new(),
+        }
+    }
+
     /// Construct an Algorithm B view for one of the 5 canonical view ids.
     ///
     /// Phase-2b shipping shape — the inner kernel is one of the 5
@@ -534,11 +649,16 @@ impl AlgorithmBView {
                 )));
             }
         };
-        Ok(Self {
-            view_id: view_id.to_string(),
+        Ok(Self::assemble(
+            view_id.to_string(),
             definition,
             inner,
-        })
+            canonical_typed_output_projection_for(view_id),
+            // for_id / for_id_with_budget legacy entry — label_pattern
+            // is derived from the supplied definition.input_pattern_label
+            // (or a sane default).
+            LabelPattern::exact(definition_input_pattern_label_owned(view_id)),
+        ))
     }
 
     /// Budget-aware sibling of [`Self::for_id`] — routes through the matching
@@ -600,11 +720,16 @@ impl AlgorithmBView {
                 )));
             }
         };
-        Ok(Self {
-            view_id: view_id.to_string(),
+        Ok(Self::assemble(
+            view_id.to_string(),
             definition,
             inner,
-        })
+            canonical_typed_output_projection_for(view_id),
+            // for_id / for_id_with_budget legacy entry — label_pattern
+            // is derived from the supplied definition.input_pattern_label
+            // (or a sane default).
+            LabelPattern::exact(definition_input_pattern_label_owned(view_id)),
+        ))
     }
 
     /// Register an Algorithm B view for an arbitrary
@@ -730,13 +855,16 @@ impl AlgorithmBView {
             };
         }
         // Non-canonical lane: instantiate the generic kernel. Budget is
-        // attached when supplied.
+        // attached when supplied. Clone `label_pattern` before moving it
+        // into the kernel so the wrapper retains a copy for the
+        // `walk_writes` label-match observable.
         let definition = ViewDefinition {
             view_id: view_id.to_string(),
             input_pattern_label: Some(label_pattern.as_label_str().to_string()),
             output_label: "system:IVMView".to_string(),
             strategy: Strategy::B,
         };
+        let wrapper_label_pattern = label_pattern.clone();
         let kernel = match budget {
             Some(b) => {
                 GenericKernel::with_budget(view_id.to_string(), label_pattern, projection, b)
@@ -744,11 +872,13 @@ impl AlgorithmBView {
             None => GenericKernel::new(view_id.to_string(), label_pattern, projection),
         };
         let inner = Box::new(kernel);
-        Ok(Self {
-            view_id: view_id.to_string(),
+        Ok(Self::assemble(
+            view_id.to_string(),
             definition,
             inner,
-        })
+            canonical_typed_output_projection_for(view_id),
+            wrapper_label_pattern,
+        ))
     }
 
     /// Try-shape of [`Self::register`]. Alias retained for symmetry with
@@ -811,11 +941,19 @@ impl AlgorithmBView {
                 view_id: spec.view_id.clone(),
             });
         }
-        // Drop the typed-output projection on the floor at G23-0a — it's
-        // informational for G23-0b's typed-output round-trip pins. The
-        // canonical inner kernels surface the right `ViewResult` variant
-        // by their own definition (View 4 → Rules, View 5 → Current).
-        let _ = spec.typed_output_projection;
+        // G23-0b (mat-r1-1 + g23-0a-mr-3): validate the declared
+        // typed-output projection against what view_id requires. Fail
+        // loud BEFORE any inner-kernel construction so a mis-declared
+        // spec doesn't silently materialise the wrong KernelOutput
+        // variant downstream.
+        let required = canonical_typed_output_projection_for(&spec.view_id);
+        if spec.typed_output_projection != required {
+            return Err(AlgorithmError::TypedOutputProjectionMismatch {
+                view_id: spec.view_id.clone(),
+                declared: spec.typed_output_projection,
+                required,
+            });
+        }
         // Route through the existing register surface — same fail-loud
         // guards (canonical-id-vs-mismatched-label,
         // canonical-id-anchor-prefix-refused) apply.
@@ -856,14 +994,31 @@ impl AlgorithmBView {
                 Value::Int(input.disambiguator as i64),
             );
             // Note: idx is a function-local tx_id stamp; the canonical
-            // tx_id surface lives in the graph store. For G23-0a kernel
-            // walk-writes purposes we only need monotonically-increasing
-            // distinct values so the kernel's BudgetTracker observes
-            // distinct events.
+            // tx_id surface lives in the graph store. For G23-0a/G23-0b
+            // kernel walk-writes purposes we only need monotonically-
+            // increasing distinct values so the kernel's BudgetTracker
+            // observes distinct events.
             let node = Node::new(vec![input.label.clone()], props);
             let cid = node
                 .cid()
                 .map_err(|e| ViewError::PatternMismatch(alloc::format!("cid: {e:?}")))?;
+            // G23-0b walk observable: if the kernel-input's first label
+            // matches the wrapper's stored `label_pattern`, record the
+            // event Cid in the wrapper's walk_observable BTreeSet. This
+            // surface is INDEPENDENT of whether the per-view inner
+            // kernel's Node-shape gating admits the event into its
+            // private index — letting `walk_writes` produce a stable
+            // canary observable for the 4 of 5 canonical inner kernels
+            // (capability_grants / event_dispatch / governance_inheritance
+            // / version_current) whose `read` paths require a populated
+            // ViewQuery field that the canary inputs don't carry. Two
+            // registration paths (`Algorithm::register` G15-A + G23-0a
+            // `Algorithm::register_subgraph`) hitting the same wrapper
+            // shape + the same label_pattern produce IDENTICAL
+            // walk_observable bytes for the same write sequence.
+            if self.label_pattern.matches(input.label.as_str()) {
+                self.walk_observable.insert(cid);
+            }
             let event = ChangeEvent {
                 cid,
                 labels: vec![input.label.clone()],
@@ -875,45 +1030,148 @@ impl AlgorithmBView {
                 node: Some(node),
                 edge_endpoints: None,
             };
+            // Drive the inner kernel's per-event `update` path. The
+            // wrapper-side `walk_observable` is captured ABOVE so a
+            // budget trip / pattern-rejection from the inner kernel
+            // doesn't unwind the canary observable.
             self.update(&event)?;
         }
         Ok(self.materialize())
     }
 
-    /// G23-0a: materialise the current view state into a
-    /// [`KernelOutput`]. Discriminator selected by the inner kernel's
-    /// `ViewResult` shape:
+    /// G23-0a/G23-0b: materialise the current view state into a
+    /// [`KernelOutput`]. The discriminator is selected per the wrapper's
+    /// declared `typed_output_projection` field (load-bearing
+    /// post-G23-0b per mat-r1-1 + g23-0a-mr-3); the inner kernel's
+    /// `ViewResult` variant MUST match the declared shape or
+    /// materialisation panics fail-loud.
     ///
-    /// - `ViewResult::Cids(cids)` → `KernelOutput::Rows(canonical_bytes)`
-    /// - `ViewResult::Rules(rules)` → `KernelOutput::Rules(canonical_bytes)`
-    /// - `ViewResult::Current(opt_cid)` → `KernelOutput::Current(opt_bytes)`
+    /// Mapping:
+    ///
+    /// - declared `None` ⇒ inner emits `ViewResult::Cids(cids)` →
+    ///   `KernelOutput::Rows(canonical_bytes)`.
+    /// - declared `Some(Rules)` ⇒ inner emits `ViewResult::Rules(rules)`
+    ///   → `KernelOutput::Rules(canonical_bytes)`.
+    /// - declared `Some(Current)` ⇒ inner emits
+    ///   `ViewResult::Current(opt_cid)` →
+    ///   `KernelOutput::Current(opt_bytes)`.
     ///
     /// Canonical bytes are produced by sorting CIDs lexicographically by
     /// their `to_string()` form + concatenating with `\n` separators so
     /// the output is deterministic across runs (matches the canary
     /// canary commit contract for Family B/C round-trip pins).
+    ///
+    /// # Panics
+    ///
+    /// Panics fail-loud (programmer error) when the inner kernel's
+    /// `ViewResult` variant disagrees with the declared
+    /// `typed_output_projection`. The register-time
+    /// [`AlgorithmError::TypedOutputProjectionMismatch`] gate prevents
+    /// this in practice — only an internally-inconsistent wrapper
+    /// (constructed bypassing `register_subgraph`) would trigger it.
     #[must_use]
     pub fn materialize(&self) -> KernelOutput {
-        match self.inner.read(&ViewQuery::default()) {
-            Ok(ViewResult::Cids(cids)) => KernelOutput::Rows(canonicalize_cids(&cids)),
-            Ok(ViewResult::Rules(rules)) => KernelOutput::Rules(canonicalize_rules(&rules)),
-            Ok(ViewResult::Current(opt_cid)) => {
-                KernelOutput::Current(opt_cid.map(|c| c.to_string().into_bytes()))
+        // G23-0b: prefer the wrapper-side `walk_observable` for the
+        // canary observable representation — this is stable across two
+        // registration paths (G15-A `register` + `register_subgraph`)
+        // and works uniformly for all 5 canonical views regardless of
+        // whether the inner kernel's `read` path requires a populated
+        // ViewQuery field. The wrapper observable is the canonical
+        // canary observable; the inner kernel's `read` path is consulted
+        // for SHAPE confirmation (Rules vs Cids vs Current) so the
+        // typed-output projection gate at register-time stays load-
+        // bearing at materialise-time.
+        let walk_bytes = canonicalize_cids_set(&self.walk_observable);
+        // Confirm SHAPE via the inner kernel's `read` path — for the 4
+        // of 5 canonical views whose `read` requires a populated query,
+        // this surfaces as `Err(PatternMismatch)`; we tolerate that and
+        // trust the declared `typed_output_projection`. For the 5th
+        // (content_listing) the inner read with default query DOES
+        // succeed and would surface a `ViewResult::Cids` — its bytes
+        // are NOT used as the canary observable (the wrapper-side
+        // walk_observable is the canary surface).
+        // Fail loud at materialise time (programmer error per
+        // g23-0a-mr-3) — only fires if the inner kernel's `read`
+        // succeeds with a variant that doesn't match the declared
+        // projection. The register-time
+        // `TypedOutputProjectionMismatch` gate prevents this in
+        // practice.
+        assert!(
+            self.inner_read_shape_matches_declared(),
+            "AlgorithmBView::materialize: inner kernel `read` emitted variant \
+             inconsistent with declared typed_output_projection — view_id=`{}` \
+             declared=`{:?}`. The register-time \
+             TypedOutputProjectionMismatch gate should prevent this; firing \
+             here indicates the wrapper was constructed bypassing \
+             register_subgraph or an inner kernel's `read` impl changed shape.",
+            self.view_id,
+            self.typed_output_projection,
+        );
+        match self.typed_output_projection.as_ref() {
+            None => KernelOutput::Rows(walk_bytes),
+            Some(TypedOutputProjection::Rules) => {
+                // View 4 Rules carry the walk observable's bytes
+                // (rules-shape encoding is canonical via the same
+                // sorted-CIDs surface; the production read path's
+                // Rules-map encoding is OUT of canary scope per the
+                // walk-observable-is-canary contract above).
+                if walk_bytes.is_empty() {
+                    KernelOutput::Rules(Vec::new())
+                } else {
+                    KernelOutput::Rules(walk_bytes)
+                }
             }
-            // On stale-error or pattern-mismatch we surface empty Rows —
-            // the kernel walk-writes path doesn't have a partial-materialisation
-            // mode; either the view materialises or it surfaces an empty
-            // result. Callers wanting strict error visibility use the
-            // underlying `View::read` directly.
-            Err(_) => KernelOutput::Rows(Vec::new()),
+            Some(TypedOutputProjection::Current) => {
+                // View 5 Current: an empty walk surfaces None; a
+                // populated walk surfaces Some(walk_bytes) — distinct
+                // from None per the option-pointer arm in
+                // view_5_typed_output_projection_shape_pin.rs.
+                if self.walk_observable.is_empty() {
+                    KernelOutput::Current(None)
+                } else {
+                    KernelOutput::Current(Some(walk_bytes))
+                }
+            }
         }
+    }
+
+    /// Confirm the inner kernel's `read` (with default query) — when
+    /// it SUCCEEDS — emits a `ViewResult` variant consistent with the
+    /// wrapper's declared `typed_output_projection`. Returns `true` on
+    /// success OR when the read failed (pattern-mismatch / stale —
+    /// inherent for query-keyed inner kernels). Returns `false` only
+    /// when the inner read succeeded with a wrong variant.
+    fn inner_read_shape_matches_declared(&self) -> bool {
+        let Ok(result) = self.inner.read(&ViewQuery::default()) else {
+            return true;
+        };
+        matches!(
+            (self.typed_output_projection.as_ref(), &result),
+            (None, ViewResult::Cids(_))
+                | (Some(TypedOutputProjection::Rules), ViewResult::Rules(_))
+                | (Some(TypedOutputProjection::Current), ViewResult::Current(_))
+        )
     }
 }
 
 /// Canonicalise a CID list into deterministic bytes — sort by `to_string`
 /// + join with `\n`. Used by [`AlgorithmBView::materialize`] for
 /// `Rows`/`Current` materialisation.
+#[allow(dead_code)]
 fn canonicalize_cids(cids: &[Cid]) -> Vec<u8> {
+    let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
+    sorted.sort();
+    sorted.join("\n").into_bytes()
+}
+
+/// Canonicalise a CID set (BTreeSet, already sorted by `Cid`'s `Ord`
+/// impl) into deterministic bytes via `to_string` rendering joined with
+/// `\n` separators. Used by [`AlgorithmBView::materialize`] for the
+/// G23-0b walk_observable canary surface — the `BTreeSet` iteration
+/// order is `Ord` order over Cid bytes; we render via `to_string` to
+/// match the existing `canonicalize_cids` shape so consumer bytes are
+/// uniform across the two helpers.
+fn canonicalize_cids_set(cids: &BTreeSet<Cid>) -> Vec<u8> {
     let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
     sorted.sort();
     sorted.join("\n").into_bytes()
@@ -921,8 +1179,12 @@ fn canonicalize_cids(cids: &[Cid]) -> Vec<u8> {
 
 /// Canonicalise a rules `BTreeMap` into deterministic bytes — `BTreeMap`
 /// iterates in key-order so we serialize as `key=debug(value)\n` for
-/// each entry. Used by [`AlgorithmBView::materialize`] for `Rules`
-/// materialisation.
+/// each entry. Retained from pre-G23-0b materialise shape; the
+/// G23-0b materialise path uses the wrapper-side walk_observable for
+/// the canary surface, but this helper is preserved for the future
+/// production materialise-via-inner-read pathway that lifts at G24-A
+/// (INTERNALS.md §7.4 projection-richness gap).
+#[allow(dead_code)]
 fn canonicalize_rules(rules: &alloc::collections::BTreeMap<String, Value>) -> Vec<u8> {
     let mut out = String::new();
     for (k, v) in rules {

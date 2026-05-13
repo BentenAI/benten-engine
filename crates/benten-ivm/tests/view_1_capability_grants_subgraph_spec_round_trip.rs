@@ -70,7 +70,7 @@ fn handwritten_baseline_for_writes(writes: &[KernelInput]) -> KernelOutput {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_1_capability_grants_subgraph_spec_round_trip_matches_handwritten() {
     // Substantive production-runtime arm: register the canonical view 1
     // as a SubgraphSpec via Family B's kernel + assert byte-equivalent
@@ -99,7 +99,7 @@ fn view_1_capability_grants_subgraph_spec_round_trip_matches_handwritten() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_1_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
     // §3.6b would-FAIL-if-no-op'd: feeding empty vs populated write
     // sequences through the SAME canonical-view spec MUST produce
@@ -126,7 +126,7 @@ fn view_1_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_1_subgraph_spec_emits_rows_output_not_typed_projection() {
     // View 1 is a Rows-producing view (set of grant Cids). The
     // generalized kernel must route View 1 to Rows-output, not to

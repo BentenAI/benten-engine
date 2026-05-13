@@ -1,4 +1,4 @@
-//! R4-FP-3 RED-PHASE pin: View 3 stale-with-last-known-good behavior
+//! R4-FP-3 → G23-0b: View 3 stale-with-last-known-good behavior
 //! preserved across G23-0b re-expression; named carry to Phase-4-Meta
 //! documented (NOT a "carry to next brief" phantom destination — HARD
 //! RULE rule-12 clause-(b) BELONGS-NAMED-NOW compliant).
@@ -10,38 +10,35 @@
 //!   Phase-4-Meta documented).
 //! - `.addl/phase-4-foundation/00-implementation-plan.md` §3 G23-0b
 //!   must-pass + mat-r1-14.
-//! - `.addl/phase-4-foundation/r4-triage.md` §5.3 R4-FP-3 charter
-//!   (closes r4-tc-6 Family C missing IVM pin #3 of 3).
+//! - `.addl/phase-4-foundation/r4-triage.md` §5.3 R4-FP-3 charter.
 //! - mat-r1-14: View 3 (`content_listing`) has a stale-with-last-known-
 //!   good fallback behavior that is intentionally NOT generalized in
 //!   G23-0b — it is named-carried to Phase-4-Meta at
-//!   `docs/future/phase-4-backlog.md §3.4` (or successor destination)
-//!   so the deferral is BELONGS-NAMED-NOW compliant per HARD RULE.
+//!   `docs/future/phase-4-backlog.md §3.4`.
 //!
 //! ## What this pin asserts (two arms)
 //!
 //! **Arm 1 (SUBSTANCE):** post-G23-0b the View 3 stale-with-last-known-
-//! good behavior is preserved (a stale-snapshot read still returns the
-//! last known good value during budget exhaustion). G23-0b's
-//! generalization preserves this non-trivial-named behavior; it does
-//! NOT generalize trivially over the stale-fallback.
+//! good behavior is preserved (a stale `read_page_allow_stale` read
+//! still returns the last known good value during budget exhaustion).
+//! G23-0b's generalization preserves this non-trivial-named behavior;
+//! it does NOT generalize trivially over the stale-fallback.
 //!
 //! **Arm 2 (named-carry assertion):** assert that the destination doc
-//! `docs/future/phase-4-backlog.md` (or current phase-4 backlog file)
-//! contains the named-carry entry for "View 3 stale-with-last-known-
-//! good generalization" referencing mat-r1-14. This is the HARD RULE
-//! rule-12 clause-(b) BELONGS-NAMED-NOW pin (defense against phantom-
-//! destination drift; the destination must EXIST + carry the entry).
-//!
-//! ## RED-PHASE staged-pin discipline (pim-12 §3.6e)
-//!
-//! Un-ignored at G23-0b wave-3 close. Implementer wires arm 1 against
-//! the actual View 3 production API + verifies arm 2 reads the backlog
-//! doc at the canonical path.
+//! `docs/future/phase-4-backlog.md` contains the named-carry entry for
+//! "View 3 stale-with-last-known-good generalization" referencing
+//! mat-r1-14. This is the HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW
+//! pin (defense against phantom-destination drift; the destination
+//! must EXIST + carry the entry).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::PathBuf;
+
+use benten_core::{Node, Value};
+use benten_graph::{ChangeEvent, ChangeKind};
+use benten_ivm::View;
+use benten_ivm::views::ContentListingView;
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -49,53 +46,99 @@ fn workspace_root() -> PathBuf {
         .join("..")
 }
 
+/// Construct a `post`-labeled ChangeEvent with the given disambiguator.
+fn make_post_event(disambiguator: u64) -> ChangeEvent {
+    let mut props = std::collections::BTreeMap::new();
+    props.insert(
+        String::from("createdAt"),
+        Value::Int(disambiguator as i64 * 100),
+    );
+    props.insert(
+        String::from("disambiguator"),
+        Value::Int(disambiguator as i64),
+    );
+    let node = Node::new(vec!["post".to_string()], props);
+    let cid = node.cid().unwrap();
+    ChangeEvent {
+        cid,
+        labels: vec!["post".to_string()],
+        kind: ChangeKind::Created,
+        tx_id: disambiguator,
+        actor_cid: None,
+        handler_cid: None,
+        capability_grant_cid: None,
+        node: Some(node),
+        edge_endpoints: None,
+    }
+}
+
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G23-0b wave-3 un-ignores. \
-    Pin source: r2-test-landscape.md §2.3 G23-0b + mat-r1-14 + r4-triage.md §5.3 R4-FP-3 \
-    charter. Family C IVM View 3 stale-with-last-known-good preservation + named-carry \
-    residual (was orphaned by R3 family charter omission per r4-tc-6)."]
 fn view_3_stale_with_last_known_good_does_not_generalize_trivially_named_carry() {
-    // G23-0b implementer wires this. Substantive shape:
+    // ============================================================
+    // ARM 1 (SUBSTANCE) — View 3 stale-with-last-known-good preserved
+    // ============================================================
     //
-    //   // ARM 1 (SUBSTANCE) — View 3 stale-with-last-known-good fallback
-    //   // behavior is preserved post-G23-0b generalization. The View 3
-    //   // budget-exhaustion path returns the LAST KNOWN GOOD snapshot,
-    //   // not None or a stub. Generalization MUST NOT replace this with
-    //   // a trivial empty-fallback.
+    // Drive a ContentListingView with a SMALL budget; admit 2 events
+    // (within budget); admit a 3rd which trips the budget. Strict
+    // `read_page` MUST surface ViewError::Stale; relaxed
+    // `read_page_allow_stale` MUST return the 2-event last-known-good
+    // snapshot. A trivial generalization that drops stale-with-last-
+    // known-good (returns empty when stale) would FAIL this arm.
+
+    let mut view = ContentListingView::with_budget_for_testing(2);
+
+    // First 2 events succeed.
+    view.update(&make_post_event(1)).unwrap();
+    view.update(&make_post_event(2)).unwrap();
+    assert!(
+        !view.is_stale(),
+        "after 2 events within budget, view must NOT be stale"
+    );
+
+    // 3rd event trips budget. The current view impl's `update` returns
+    // Ok(()) and flips stale internally (the trip path swallows the
+    // BudgetExceeded into the stale flag); we tolerate either error
+    // shape — the post-condition is that the view is stale.
+    let _ = view.update(&make_post_event(3));
+    assert!(
+        view.is_stale(),
+        "after 3rd matching event past budget=2, view MUST be stale"
+    );
+
+    // Strict read MUST surface stale.
+    let strict = view.read_page(0, 10);
+    assert!(
+        strict.is_err(),
+        "post-stale strict `read_page` MUST surface error; got Ok({strict:?})"
+    );
+
+    // Relaxed read MUST return the last-known-good snapshot (2 events).
+    let relaxed = view
+        .read_page_allow_stale(0, 10)
+        .expect("read_page_allow_stale is infallible in Phase 1");
+    assert_eq!(
+        relaxed.len(),
+        2,
+        "post-stale relaxed `read_page_allow_stale` MUST return the last-known-good \
+         snapshot (2 events admitted before the trip); got `{}` rows — a trivial \
+         generalization that drops the last-known-good buffer would yield 0 here \
+         (mat-r1-14 closure pin)",
+        relaxed.len(),
+    );
+
+    // ============================================================
+    // ARM 2 (NAMED-CARRY) — phase-4-backlog.md §3.4 carries the entry
+    // ============================================================
     //
-    //   use benten_ivm::views::content_listing;
-    //
-    //   // Drive a budget-exhaustion scenario (Strategy::B with very
-    //   // small budget; force fallback path):
-    //   let view = content_listing::register_with_micro_budget();
-    //   let last_known_good = drive_to_known_good_state(&view);
-    //   exhaust_budget_via_repeated_writes(&view);
-    //
-    //   let stale_read = view.read_after_budget_exhaustion();
-    //   assert_eq!(
-    //       stale_read.canonical_bytes(),
-    //       last_known_good.canonical_bytes(),
-    //       "View 3 stale-with-last-known-good MUST return the last known good \
-    //        snapshot under budget exhaustion (mat-r1-14); G23-0b generalization \
-    //        preserved this non-trivial-named behavior, did not collapse to empty"
-    //   );
-    //
-    //   // ARM 2 (NAMED-CARRY ASSERTION) — the destination doc
-    //   // `docs/future/phase-4-backlog.md` (or canonical successor)
-    //   // MUST carry the named entry for View 3 stale-with-last-known-
-    //   // good generalization. HARD RULE rule-12 clause-(b) compliance.
+    // HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW compliance: the
+    // destination MUST exist + carry the entry NOW (not "I'll add it
+    // later").
 
     let backlog = workspace_root().join("docs/future/phase-4-backlog.md");
-    // RED-PHASE: the file may not exist at HEAD (G26-A wave-10 ships
-    // the skeleton). At un-ignore time the file MUST exist + carry the
-    // named-carry entry.
     assert!(
         backlog.is_file(),
-        "RED-PHASE landed-state check: docs/future/phase-4-backlog.md is missing at {} — \
-         G26-A wave-10 ships the skeleton. Until that lands, the named-carry destination \
-         for mat-r1-14 (View 3 stale-with-last-known-good generalization) is a phantom \
-         destination (HARD RULE rule-12 violation). Un-ignore this test only after G26-A \
-         landed the backlog skeleton + the named-carry entry.",
+        "docs/future/phase-4-backlog.md missing at {} — HARD RULE rule-12 destination \
+         must exist for clause-(b) BELONGS-NAMED-NOW compliance",
         backlog.display()
     );
 
@@ -103,24 +146,16 @@ fn view_3_stale_with_last_known_good_does_not_generalize_trivially_named_carry()
     let lower = body.to_ascii_lowercase();
     let mentions_view_3 =
         lower.contains("view 3") || lower.contains("view_3") || lower.contains("content_listing");
-    let mentions_stale =
-        lower.contains("stale-with-last-known-good") || lower.contains("stale with last known");
+    let mentions_stale = lower.contains("stale-with-last-known-good")
+        || lower.contains("stale with last known good");
     let mentions_mat_r1_14 = lower.contains("mat-r1-14");
 
     assert!(
         mentions_view_3 && mentions_stale && mentions_mat_r1_14,
         "docs/future/phase-4-backlog.md MUST carry the named-carry entry for View 3 \
          stale-with-last-known-good generalization referencing mat-r1-14. \
-         Found: view-3-mention={} stale-mention={} mat-r1-14-mention={}. \
-         HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW compliance — destination \
-         must EXIST + carry the entry NOW (not 'I'll add it later').",
-        mentions_view_3,
-        mentions_stale,
-        mentions_mat_r1_14,
-    );
-
-    unimplemented!(
-        "G23-0b wave-3 wires View 3 stale-with-last-known-good production behavior \
-         preservation arm (Arm 1) against benten_ivm::views::content_listing API"
+         Found: view-3-mention={mentions_view_3} stale-mention={mentions_stale} \
+         mat-r1-14-mention={mentions_mat_r1_14}. HARD RULE rule-12 clause-(b) \
+         BELONGS-NAMED-NOW compliance — destination must EXIST + carry the entry NOW.",
     );
 }

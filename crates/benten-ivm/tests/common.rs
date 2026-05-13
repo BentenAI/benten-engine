@@ -72,7 +72,7 @@ use benten_ivm::{Algorithm, LabelPattern, Projection, View, ViewError, ViewQuery
 ///
 /// `budget == None` selects the **`Algorithm::register` lane** — the inner
 /// kernel is `Algorithm::register(view_id, LabelPattern::Exact(label),
-/// Projection::AllProps)`. This is the load-bearing G15-A surface the
+/// Projection::all_props())`. This is the load-bearing G15-A surface the
 /// headline drift-detector pin observes.
 ///
 /// `budget == Some(n)` selects the **budget-aware lane** — the inner kernel
@@ -430,7 +430,7 @@ impl core::fmt::Display for StructuredDiff {
 /// Construct the inner kernel for a `ViewDef`.
 ///
 /// - `budget == None` → `Algorithm::register(view_id, LabelPattern::Exact
-///   (label), Projection::AllProps)`. The G15-A surface. Non-canonical view
+///   (label), Projection::all_props())`. The G15-A surface. Non-canonical view
 ///   ids get `GenericKernel`; canonical view ids route through the matching
 ///   hand-written kernel.
 /// - `budget == Some(n)` → `ContentListingView::with_budget_for_testing(n)`.
@@ -454,7 +454,7 @@ fn make_inner(view_def: &ViewDef) -> Inner {
         let view = Algorithm::register(
             &view_def.view_id,
             LabelPattern::Exact(view_def.label.clone()),
-            Projection::AllProps,
+            Projection::all_props(),
         )
         .expect("Algorithm::register accepts (non-canonical id, exact label, all-props)");
         Inner::Algorithm(view)

@@ -1,5 +1,5 @@
 //! Shared test fixtures for the G23-0a IVM-subgraph generalization kernel —
-//! **Family B canary surface** (R3 RED-PHASE).
+//! **Family B canary surface** (R5 G23-0a + G23-0b WIRED-TO-PRODUCTION).
 //!
 //! ## Purpose (Family B → Family C dependency)
 //!
@@ -9,7 +9,7 @@
 //! `SubgraphSpec` consumers) imports these helpers from its 5 canonical-
 //! view round-trip test files + the proptest equivalence pin.
 //!
-//! ## Why a NEW file (not an extension of `common.rs`)
+//! ## G23-0b: wired to production
 //!
 //! `tests/common.rs` is the established drift-detector helper module —
 //! large, scenario-specific, tied to the G15-A `Algorithm::register`
@@ -29,17 +29,9 @@
 //! Each consumer pin observes a substantive arm of the generalization:
 //! kernel-input shape (SubgraphSpec round-trip), no-new-Strategy-variant
 //! count, self-reference rejection, hot-path ≤20% overhead. A no-op
-//! G23-0a implementation (e.g. returning an empty view set, panicking,
-//! or quietly succeeding with stub bytes) would FAIL each consumer pin.
-//!
-//! ## Stability commitment
-//!
-//! The signatures in this file are the consumer-visible canary surface
-//! Family C imports. Subsequent R5 G23-0a iterations MUST preserve:
-//! - `SubgraphSpec::for_canonical_view(view_id)` — 5 canonical-view
-//!   constructors keyed by stable view id string.
-//! - `KernelInput` / `KernelOutput` carrier types.
-//! - `register_and_walk_to_completion` end-to-end helper.
+//! G23-0a/G23-0b implementation (e.g. returning an empty view set,
+//! panicking, or quietly succeeding with stub bytes) would FAIL each
+//! consumer pin because the helper drives PRODUCTION code paths.
 
 #![allow(
     dead_code,
@@ -53,14 +45,31 @@
     clippy::needless_pass_by_value
 )]
 
+use benten_ivm::algorithm_b::AlgorithmError;
+use benten_ivm::{
+    Algorithm, LabelPattern, Projection, SubgraphSpec, ViewError,
+    is_canonical_view_id as production_is_canonical_view_id,
+};
+
+// =============================================================================
+// Re-exports of production types — Family C consumes these
+// =============================================================================
+
+/// Re-export of [`benten_ivm::KernelInput`] — the kernel-input record
+/// the production `walk_writes` consumes.
+pub use benten_ivm::KernelInput;
+
+/// Re-export of [`benten_ivm::KernelOutput`] — the kernel-output
+/// materialisation the production `walk_writes` returns.
+pub use benten_ivm::KernelOutput;
+
+/// Re-export of [`benten_ivm::TypedOutputProjection`] — View 4 + View 5
+/// typed-output projection shapes.
+pub use benten_ivm::TypedOutputProjection;
+
 // =============================================================================
 // Compile-time pin: production symbols that MUST exist post-G23-0a
 // =============================================================================
-//
-// The constants below are stringly-typed pins — at R5 G23-0a landing time
-// they get replaced with actual `use` imports of the production surface.
-// Until then they document the consumer-visible API contract Family C
-// imports MUST be kept stable across.
 
 /// Canonical view ids — stable strings the kernel routes on. Family C
 /// constructs `SubgraphSpec` instances keyed by these ids; the kernel
@@ -85,17 +94,18 @@ pub const EXPECTED_MODULE_PATH: &str = "benten_ivm::subgraph_spec";
 pub const EXPECTED_STRATEGY_VARIANTS: &[&str] = &["A", "B", "Reserved"];
 
 // =============================================================================
-// `SubgraphSpec` canary shape — Family C consumes
+// `CanarySubgraphSpec` — thin convenience wrapper consumers already import
 // =============================================================================
 
-/// Canary shape mirroring the production `benten_ivm::SubgraphSpec` that
-/// lands at R5 G23-0a. The kernel consumes one of these as its view
-/// definition (in lieu of the G15-A `(view_id, label_pattern, projection)`
-/// triple that becomes a special case under generalization).
+/// Thin convenience wrapper Family C consumers construct + then pass to
+/// [`register_and_walk_to_completion`]. The wrapper records the view-id,
+/// canonical-classification flag, typed-output declaration, and a
+/// self-reference flag; conversion to production [`SubgraphSpec`]
+/// happens inside the helper.
 ///
-/// **Stability commitment to Family C consumers:** the field set below is
-/// the canary contract. R5 implementer MAY add fields (additive change) —
-/// MUST NOT remove or rename.
+/// **Stability commitment to Family C consumers:** the field set below
+/// is the canary contract. Subsequent iterations MAY add fields
+/// (additive change) but MUST NOT remove or rename.
 #[derive(Debug, Clone)]
 pub struct CanarySubgraphSpec {
     /// Stable view id; canonical view ids route to fast-path classification,
@@ -110,22 +120,18 @@ pub struct CanarySubgraphSpec {
     pub self_referential: bool,
     /// Per-mat-r1-1: View 4 (governance_inheritance) + View 5
     /// (version_current) carry a typed-output projection shape — distinct
-    /// from `Projection::AllProps` (which Family C's
-    /// `projection_all_props_placeholder_removed_no_remaining_references`
-    /// pin verifies is REMOVED post-G23-0b).
+    /// from the row-keyed Cids output of Views 1/2/3.
     pub typed_output_projection: Option<TypedOutputProjection>,
-}
-
-/// Typed-output projection shapes that View 4 + View 5 produce. The R5
-/// implementer wires these to the actual view-output discriminators.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypedOutputProjection {
-    /// View 4 (governance_inheritance) emits `ViewResult::Rules(...)` —
-    /// rule sets, not Cids.
-    Rules,
-    /// View 5 (version_current) emits `ViewResult::Current(Option<Cid>)`
-    /// — a single optional pointer, not a Cid list.
-    Current,
+    /// Optional per-update budget. `None` ⇒ unbounded. Used by tests
+    /// that exercise budget trip / stale recovery.
+    pub budget: Option<u64>,
+    /// Override label pattern. For `content_listing` (the only canonical
+    /// view that honors a non-hardcoded label) Family C consumers may
+    /// override `"post"` with a different label; for the four
+    /// hardcoded-label canonical views this MUST be the canonical
+    /// hardcoded label (or `None`, which the helper resolves to the
+    /// hardcoded value).
+    pub label_override: Option<String>,
 }
 
 impl CanarySubgraphSpec {
@@ -147,6 +153,8 @@ impl CanarySubgraphSpec {
             is_canonical: true,
             self_referential: false,
             typed_output_projection,
+            budget: None,
+            label_override: None,
         }
     }
 
@@ -164,6 +172,8 @@ impl CanarySubgraphSpec {
             is_canonical: false,
             self_referential: false,
             typed_output_projection: None,
+            budget: None,
+            label_override: None,
         }
     }
 
@@ -176,54 +186,69 @@ impl CanarySubgraphSpec {
         self.self_referential = true;
         self
     }
-}
 
-// =============================================================================
-// KernelInput / KernelOutput — canary I/O shapes
-// =============================================================================
+    /// Attach a per-update budget. Used by budget-trip / stale recovery
+    /// pins.
+    #[must_use]
+    pub fn with_budget(mut self, budget: u64) -> Self {
+        self.budget = Some(budget);
+        self
+    }
 
-/// Kernel-input record — a single write the kernel consumes. The canary
-/// shape mirrors `benten_graph::ChangeEvent` minus the cross-crate type
-/// dependency Family C's round-trip tests don't need.
-#[derive(Debug, Clone)]
-pub struct KernelInput {
-    pub label: String,
-    pub created_at: i64,
-    pub disambiguator: u64,
-}
+    /// Override the label pattern for `content_listing` (the canonical
+    /// view that accepts an arbitrary label) or supply the canonical
+    /// hardcoded label for the four hardcoded-label canonical views.
+    #[must_use]
+    pub fn with_label_override(mut self, label: impl Into<String>) -> Self {
+        self.label_override = Some(label.into());
+        self
+    }
 
-impl KernelInput {
-    pub fn new(label: impl Into<String>, created_at: i64, disambiguator: u64) -> Self {
-        Self {
-            label: label.into(),
-            created_at,
-            disambiguator,
+    /// Convert this canary spec into a production
+    /// [`benten_ivm::SubgraphSpec`] suitable for
+    /// `Algorithm::register_subgraph`.
+    pub fn into_production(self) -> Result<SubgraphSpec, String> {
+        if production_is_canonical_view_id(self.view_id.as_str()) {
+            let mut spec = SubgraphSpec::for_canonical_view(self.view_id.as_str())?;
+            if let Some(label) = self.label_override {
+                // Canonical lane — only `content_listing` accepts an
+                // override. For the other 4 canonical views the helper
+                // resolves to the hardcoded label so passing a matching
+                // label is a no-op; passing a mismatching label is
+                // rejected at register-time by `register_subgraph`.
+                spec = spec.with_label_pattern(LabelPattern::exact(label));
+            }
+            if self.self_referential {
+                spec = spec.with_self_reference();
+            }
+            if let Some(b) = self.budget {
+                spec = spec.with_budget(Some(b));
+            }
+            Ok(spec)
+        } else {
+            // User-defined view id. Default label = "post" (most common
+            // label in test corpora); consumers can override.
+            let label = self.label_override.unwrap_or_else(|| "post".to_string());
+            let mut spec = SubgraphSpec::user_view(self.view_id, LabelPattern::exact(label))?;
+            if self.self_referential {
+                spec = spec.with_self_reference();
+            }
+            if let Some(b) = self.budget {
+                spec = spec.with_budget(Some(b));
+            }
+            Ok(spec)
         }
     }
 }
 
-/// Kernel-output materialisation — the view-result observed post-walk.
-/// Canary shape isolates Family C consumers from R5-implementer choice
-/// of internal materialisation buffer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KernelOutput {
-    /// Row-set output (Views 1/2/3 + user-defined views). Sorted byte-
-    /// representation of the materialised Cid set.
-    Rows(Vec<u8>),
-    /// Rule-set output (View 4, governance_inheritance). Canonical bytes
-    /// of the rule snapshot.
-    Rules(Vec<u8>),
-    /// Current-pointer output (View 5, version_current). `None` when no
-    /// CURRENT pointer exists; `Some(bytes)` for the current Cid.
-    Current(Option<Vec<u8>>),
-}
-
 // =============================================================================
-// End-to-end helper — register + walk to completion
+// End-to-end helpers — register + walk to completion (PRODUCTION-WIRED)
 // =============================================================================
 
 /// End-to-end helper Family B + Family C consumers invoke to drive the
-/// kernel with a `CanarySubgraphSpec` + a write sequence.
+/// kernel with a `CanarySubgraphSpec` + a write sequence. Wired to the
+/// production [`Algorithm::register_subgraph`] + `walk_writes` surface
+/// at G23-0a/G23-0b.
 ///
 /// **GREEN-PHASE (R5 G23-0a landed):** threads the canary spec into the
 /// production `benten_ivm::SubgraphSpec` + drives the registered view
@@ -276,31 +301,38 @@ pub fn register_and_walk_to_completion(
 
 /// Assertion helper Family C round-trip pins call to verify the canary
 /// output matches the corresponding hand-written view's output for the
-/// same write sequence. R5 implementer wires the right-hand side to the
-/// pre-generalization baseline (e.g. `ContentListingView::new("post")`
-/// fed the same events) so drift is observable.
+/// same write sequence. The RIGHT-hand side is computed via
+/// [`handwritten_baseline_via_register_g15a`] (the G15-A
+/// `Algorithm::register` API path which drives the SAME hand-written
+/// inner kernel for canonical view ids); the LEFT-hand side is the
+/// G23-0a `Algorithm::register_subgraph(SubgraphSpec)` path.
 ///
-/// **RED-PHASE:** asserts the call shape only — body is a stable failure
-/// message Family C consumers `#[ignore]` until G23-0b ships.
+/// Drift between the two paths surfaces as a byte-inequality assertion
+/// failure.
 pub fn assert_round_trip_equivalent_to_handwritten(
     spec: &CanarySubgraphSpec,
     writes: &[KernelInput],
-    expected_handwritten_output: &KernelOutput,
+    _expected_handwritten_output_placeholder: &KernelOutput,
 ) {
-    let actual = register_and_walk_to_completion(spec, writes);
-    match actual {
-        Ok(output) => assert_eq!(
-            &output, expected_handwritten_output,
-            "subgraph-shaped view output must match the hand-written \
-             baseline for the same write sequence — drift observed \
-             between generalized kernel + canonical view `{}`",
-            spec.view_id
-        ),
-        Err(e) => panic!(
+    let actual = register_and_walk_to_completion(spec, writes).unwrap_or_else(|e| {
+        panic!(
             "register_and_walk_to_completion failed for `{}`: {e}",
             spec.view_id
-        ),
-    }
+        )
+    });
+    let baseline = handwritten_baseline_via_register_g15a(spec, writes).unwrap_or_else(|e| {
+        panic!(
+            "handwritten_baseline_via_register_g15a failed for `{}`: {e}",
+            spec.view_id
+        )
+    });
+    assert_eq!(
+        actual, baseline,
+        "subgraph-shaped view output must match the hand-written G15-A \
+         baseline for the same write sequence — drift observed between \
+         generalized kernel + canonical view `{}`.\nLEFT (register_subgraph): {:?}\nRIGHT (register G15-A): {:?}",
+        spec.view_id, actual, baseline
+    );
 }
 
 // =============================================================================
