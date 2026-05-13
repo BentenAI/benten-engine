@@ -1,99 +1,147 @@
-//! Phase-4-Foundation R3 Family F1 — RED-PHASE pin for admin UI v0
-//! source NEVER calling `Engine::read_node` (the `pub(crate)` engine-
-//! internal seam) — only `Engine::read_node_as` (Class B β public
-//! cap-scoped seam shipped at PR #184).
+//! Phase-4-Foundation G24-A — admin UI v0 source NEVER calls
+//! `Engine::read_node` (the `pub(crate)` engine-internal seam) — only
+//! `Engine::read_node_as` (Class B β public cap-scoped seam shipped at
+//! PR #184).
 //!
 //! Pin source: `.addl/phase-4-foundation/r2-test-landscape.md` §2.6
 //! row 7; closes cag-r1-9 + CLAUDE.md baked-in #18 (Class B β seam
 //! discipline).
 //!
-//! ## What this pin establishes
-//!
 //! Per CLAUDE.md baked-in #18 (PR #184 LIVE): `Engine::read_node` is
 //! `pub(crate)`. Engine internals (IVM, sync, view materialization,
-//! audit) call it directly with no permission check, no overhead on
-//! hot paths. **Plugin authors NEVER call either function** — they
-//! author graph nodes; the evaluator is the only caller of `_as`.
-//!
-//! This pin is the **grep-assert** sibling of the runtime-trace pin in
-//! `admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs`.
-//! Together they form the §3.6f SHAPE-not-SUBSTANCE pair per R2 §5
-//! table row 3 (cag-r1-9 named both grep + runtime trace).
+//! audit) call it directly. **Plugin authors NEVER call either
+//! function** — they author graph nodes; the evaluator is the only
+//! caller of `_as`. The admin UI v0 plugin handler module
+//! (`crates/benten-platform-foundation/src/admin_ui_v0/`) MUST route
+//! through `read_node_as` via the
+//! [`benten_platform_foundation::MaterializerEngine`] trait's
+//! `read_node_as` method — never reach for `read_node` directly.
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use std::path::PathBuf;
+
+fn admin_ui_v0_source_roots() -> Vec<PathBuf> {
+    let here = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace = here.parent().unwrap().parent().unwrap();
+    vec![
+        // Rust handler module — the plugin handler code itself.
+        workspace
+            .join("crates")
+            .join("benten-platform-foundation")
+            .join("src")
+            .join("admin_ui_v0"),
+        // TS browser-bundle side.
+        workspace.join("packages").join("admin-ui-v0").join("src"),
+    ]
+}
+
+fn collect_source_files(root: &PathBuf) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if !root.exists() {
+        return out;
+    }
+    fn walk(dir: &PathBuf, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if matches!(
+                path.extension().and_then(|s| s.to_str()),
+                Some("rs" | "ts" | "tsx" | "js" | "mjs")
+            ) {
+                out.push(path);
+            }
+        }
+    }
+    walk(root, &mut out);
+    out
+}
+
+fn strip_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let bytes = src.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'/' {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+        } else if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Match `engine.read_node(...)` / `.read_node(...)` invocations,
+/// **excluding** `.read_node_as(...)` calls. Returns the offending
+/// line text on hit.
+fn find_read_node_violations(scrubbed: &str) -> Vec<String> {
+    let mut hits = Vec::new();
+    for line in scrubbed.lines() {
+        let mut search_from = 0;
+        while let Some(idx) = line[search_from..].find("read_node(") {
+            let abs = search_from + idx;
+            let prefix = &line[..abs];
+            // Tighten to method-dispatch syntax — `.read_node(` or
+            // `::read_node(`. Bare identifier `read_node(` (a local
+            // function) is filtered to keep the assertion targeted.
+            let dispatch_char = prefix.chars().last();
+            let is_method_call = dispatch_char.is_some_and(|c| c == '.' || c == ':');
+            if is_method_call {
+                hits.push(line.to_string());
+            }
+            search_from = abs + 1;
+        }
+    }
+    hits
+}
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A wave-6 wires this. Pin source: r2-test-landscape.md §2.6 row 7 + cag-r1-9. SHAPE half (grep-assert); pairs with runtime-trace pin in admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs."]
 fn admin_ui_v0_source_never_references_engine_read_node_directly() {
-    // G24-A wave wires this. Substantive shape:
-    //
-    //   // Admin UI v0 plugin source roots (Rust handlers + TS shell):
-    //   let roots = [
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..")
-    //           .join("benten-platform-foundation")
-    //           .join("src")
-    //           .join("admin_ui_v0"),
-    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    //           .join("..")
-    //           .join("..")
-    //           .join("packages")
-    //           .join("admin-ui-v0")
-    //           .join("src"),
-    //   ];
-    //
-    //   let mut found_read_node_as = 0_usize;
-    //   for root in &roots {
-    //       for entry in walkdir::WalkDir::new(root) {
-    //           let entry = entry.unwrap();
-    //           if !entry.file_type().is_file() { continue; }
-    //           let src = std::fs::read_to_string(entry.path()).unwrap();
-    //
-    //           // The discrimination is whitespace-precise: `read_node(`
-    //           // without `_as` suffix is the violation. Match on
-    //           // word-boundaries to avoid false positives on
-    //           // `read_node_as`:
-    //           let re_bad = regex::Regex::new(
-    //               r"\bread_node\s*\("
-    //           ).unwrap();
-    //           let re_good = regex::Regex::new(
-    //               r"\bread_node_as\s*\("
-    //           ).unwrap();
-    //
-    //           // Find any `read_node(` invocation NOT inside a
-    //           // `read_node_as(` lexeme:
-    //           let bad_count = re_bad.find_iter(&src).count();
-    //           let good_count = re_good.find_iter(&src).count();
-    //           let bare_count = bad_count - good_count;
-    //
-    //           assert_eq!(
-    //               bare_count, 0,
-    //               "Admin UI source MUST NEVER call \
-    //                Engine::read_node directly (pub(crate) seam, \
-    //                no cap check); found in {}",
-    //               entry.path().display(),
-    //           );
-    //
-    //           found_read_node_as += good_count;
-    //       }
-    //   }
-    //
-    //   // Positive side: admin UI calls read_node_as at least once
-    //   // (otherwise it isn't reading anything):
-    //   assert!(
-    //       found_read_node_as > 0,
-    //       "Admin UI source MUST call Engine::read_node_as at least \
-    //        once; ZERO references — admin UI has no reads or is \
-    //        bypassing engine surface entirely"
-    //   );
-    //
-    // OBSERVABLE consequence: lexical-level defense that admin UI
-    // doesn't reach for the bypass seam. SHAPE half of the §3.6f pair.
-    unimplemented!(
-        "G24-A wires admin UI never-read_node grep-assert (SHAPE half of \
-         pim-18 §3.6f pair; SUBSTANCE half lives in \
-         admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs)"
+    let roots = admin_ui_v0_source_roots();
+    let mut scanned_files = 0_usize;
+    let mut found_read_node_as = 0_usize;
+    for root in &roots {
+        for path in collect_source_files(root) {
+            scanned_files += 1;
+            let src = std::fs::read_to_string(&path).unwrap();
+            let scrubbed = strip_comments(&src);
+            let violations = find_read_node_violations(&scrubbed);
+            assert!(
+                violations.is_empty(),
+                "Admin UI source MUST NOT call `Engine::read_node` directly per CLAUDE.md \
+                 baked-in #18 Class B β; the public cap-scoped seam is `read_node_as`. \
+                 Found {} violation(s) in {}:\n{}",
+                violations.len(),
+                path.display(),
+                violations.join("\n")
+            );
+            for line in scrubbed.lines() {
+                if line.contains("read_node_as") {
+                    found_read_node_as += 1;
+                }
+            }
+        }
+    }
+    assert!(
+        scanned_files > 0,
+        "Admin UI v0 source roots MUST exist (Rust + TS bundle present)"
+    );
+    assert!(
+        found_read_node_as > 0,
+        "Admin UI v0 source MUST reference `read_node_as` at least once (otherwise the \
+         CLASS B β seam isn't wired — the absence of the violating call is trivial)"
     );
 }

@@ -22,9 +22,24 @@ Phase 4-Foundation R6 phase-close council will produce findings that don't gate 
 
 ## §2. Dogfood validation gate carries
 
-Ben's dogfood validation (wave-7 in plan §2 sequencing) will produce UX + interaction findings beyond the FIX-NOW-INLINE scope. Those land here per HARD RULE 12 clause-(b).
+Ben's dogfood validation (wave-9 in plan §2 sequencing) will produce UX + interaction findings beyond the FIX-NOW-INLINE scope. Those land here per HARD RULE 12 clause-(b).
 
-(Entries land during Phase 4-Foundation R5+ — none at this writing.)
+### §2.1 6 dogfood-path UX-acceptance arms requiring live browser/admin UI surface
+
+**Origin:** G24-A wave-6 canary (2026-05-13). The 6 dogfood-path tests at `crates/benten-engine/tests/dogfood_path_<a..f>_ux_acceptance.rs` carry both an engine-substrate arm (closed at G24-A) and a UX arm requiring a live admin UI client surface. The UX arms BELONG-NAMED-NOW per HARD RULE 12 clause-(b):
+
+- **path (a)** workflow creation ≤5 clicks + click-counter recording → closes at **G24-B wave-6b** when the browser-side workflow editor ships.
+- **path (b)** composed-view creator ≤4 clicks + live-preview p50 ≤200ms / p99 ≤1s latency budget → closes at **G24-C wave-6b** with the browser-side view-creator component + materializer pipeline timing harness.
+- **path (c)** multi-device sync ≤3s loopback round-trip + "Devices" sub-panel last-sync-time display → closes at **wave-9 dogfood gate** when Ben exercises 2-peer Atrium loop locally.
+- **path (d)** revoke-cap mid-session: user-visible "Capability revoked" toast + redacted-state re-render → closes at **G24-C wave-6b + wave-9 dogfood gate** (toast UX in G24-C; live revocation exercise at dogfood gate).
+- **path (e)** ≤3 clicks install-consent + plain-English manifest display + per-cap-decline path → closes at **G24-D wave-7 + wave-9 dogfood gate** (consent UX at G24-D's full plugin manifest scope; click-budget validation at dogfood gate).
+- **path (f)** install-2nd-plugin same flow + install record signed by user-DID → closes at **G24-D wave-7 + wave-9 dogfood gate**.
+
+The G24-A canary closes the substrate arms: admin UI v0 subgraph composes from existing 12 primitives; route-builder shape generalises across plugins; engine + materializer + Class B β seam route correctly. Pinned by the 6 `dogfood_path_<a..f>_ux_acceptance` tests (production-runtime arms substantively LIVE).
+
+### §2.2 Click-counter test harness + live-DOM workflow editor exercise
+
+**Origin:** G24-A wave-6 canary (2026-05-13); ratification #4 click-budget arms. Tests in §2.1 use the in-process engine + materializer pipeline; the click-recording surface requires a browser-driver (Playwright or webview-bridge) instrumentation harness that lands at G24-B/G24-C wave-6b. Acceptance: each dogfood path's `_ux_acceptance.rs` body extends with the click-count + latency arms once the harness lands.
 
 ---
 
@@ -231,6 +246,15 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 - **mr-8 (OBSERVATION)** — per-primitive cap-recheck fan-out passes content_cid uniformly (not per-primitive scope) — orchestrator-direct G23-B fix-pass adds doc-comment making the "invocation-count observability" semantic explicit. G24-A consumer wires the production cap-recheck path and the contract becomes load-bearing there.
 
 **Acceptance:** mr-3 + mr-5 + mr-6 + mr-7 + mr-8 inline-closed in G23-B fix-pass commit (docstring amendments + rename + `#[doc(hidden)]` + 2 rustdoc additions); mr-4 lands at G24-A wave-completion sweep with the doc-hidden test constructor + ~30 LOC integration test. G24-A reviewer brief verifies all 6 items still hold at admin-UI integration boundary.
+
+**G24-A wave-completion sweep status (2026-05-13):**
+
+- **mr-3 CLOSED at G24-A** — end-to-end LOAD-BEARING dual-gate composition test at `crates/benten-platform-foundation/tests/admin_ui_v0_materializer_reactive_update_propagates_through_engine_on_change_as_with_cursor.rs` (`admin_ui_v0_render_dual_gate_deny_from_materialization_layer_wins_end_to_end`). Adapter `tests/common/admin_ui_v0_engine_adapter.rs` bridges `MaterializerEngine` to a real `benten_engine::Engine`. The mat-layer + delivery-layer dual-gate end-to-end pin asserts deny-from-either-layer-wins.
+- **mr-4 CLOSED at G24-A** — `#[doc(hidden)] SchemaSubgraphSpec::for_test_from_handcoded_subgraph` constructor lands at `crates/benten-platform-foundation/src/schema_compiler/spec.rs`; integration test at `crates/benten-platform-foundation/tests/materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` exercises 3 banned host-fn variants + positive control. All 4 sub-tests pass.
+- **mr-5 CLOSED at G24-A** — NEW substantive propagation pin at `crates/benten-platform-foundation/tests/admin_ui_v0_materializer_reactive_update_propagates_through_engine_on_change_as_with_cursor.rs` (4 sub-tests: routes-through-adapter / propagates-engine-update / dual-gate-deny / invocation-count-observability). The mr-3 dual-gate arm + mr-8 invocation-count arm both share this pin file.
+- **mr-6 RE-VERIFIED at G24-A** — `InMemoryMaterializerEngine` retains `#[doc(hidden)]` (confirmed at `crates/benten-platform-foundation/src/materializer.rs:1030-1031`); the G24-A integration adapter at `admin_ui_v0_engine_adapter.rs` wires a different shape (production `Engine` → `MaterializerEngine` trait) so the test-only `InMemoryMaterializerEngine` is NOT elevated to stable API.
+- **mr-7 RE-VERIFIED at G24-A** — rustdoc on `MaterializerWalkInputs` (line ~285-300) names `(spec_cid, content_cid)` as the view-identity pair; G24-A consumer wiring at `admin_ui_v0_render_propagates_engine_side_node_update_through_adapter` renders two distinct (same spec, different content_cid) pairs in one test fn — multi-instance shape exercised.
+- **mr-8 RE-VERIFIED at G24-A** — the invocation-count-observability semantic is explicit at `materializer.rs:923-943`; the G24-A pin `admin_ui_v0_render_dual_gate_invocation_count_observability` asserts ≥ spec.primitive_count invocations per walk.
 
 ---
 

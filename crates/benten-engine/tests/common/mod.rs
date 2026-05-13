@@ -15,5 +15,6 @@
 
 #![allow(dead_code)]
 
+pub mod admin_ui_v0_dogfood;
 pub mod admin_ui_v0_harness;
 pub mod ucan_fixtures;

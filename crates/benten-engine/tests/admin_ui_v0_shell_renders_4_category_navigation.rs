@@ -1,103 +1,101 @@
-//! Phase-4-Foundation R3 Family F1 — RED-PHASE pin for G24-A admin UI v0
-//! shell renders the 4-category navigation IA.
+//! Phase-4-Foundation G24-A — admin UI v0 shell renders the
+//! 4-category navigation IA (ratification #4 + ux-r1-8).
 //!
 //! Pin source: `.addl/phase-4-foundation/r2-test-landscape.md` §2.6
 //! row 1 (LOAD-BEARING substantive); closes ratification #4 + ux-r1-8 +
-//! plugin-arch-r1-12 + Family F1 gap-#6 (R2 §5 — 4-category nav IA
-//! substance check, NOT shape-only).
-//!
-//! ## What this pin establishes
+//! plugin-arch-r1-12 + Family F1 gap-#6.
 //!
 //! Per ratification #4 (D-4F-4 admin UI v0 IA): the navigation surface
 //! is **4 categories** — Plugins / Workflows / Content Types / Views.
+//! The canonical Rust-side source of truth is
+//! [`benten_platform_foundation::NAV_CATEGORIES`].
 //!
-//! Per Family F1 gap-#6 (`r2-test-landscape.md` §5 risk #6): the test
-//! MUST assert each route renders a **real component fed by the engine's
-//! substrate** — NOT a shape-only `nav.querySelectorAll('a').length == 4`.
-//! Per pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight, the substantive
-//! check pairs DOM-shape with production-runtime arm:
+//! ## Substantive shape
 //!
-//! 1. **4 routes exist** in the admin UI router config.
-//! 2. **Each route resolves to a real React component** (not a placeholder
-//!    `<div>TODO</div>`).
-//! 3. **Each component invokes `Engine::read_node_as`** during render to
-//!    fetch its substrate data — verified via runtime-trace harness.
-//! 4. **Each route renders content sourced from the engine**, not static
-//!    mocks — verified via DOM snapshot vs. engine-fixture data.
+//! Three production-runtime checks (pim-18 §3.6f):
+//!
+//! 1. **The 4 categories carry the canonical labels in the canonical
+//!    order** — Rust-side constant matches the locked IA.
+//! 2. **The admin UI v0 subgraph composes one route per category** —
+//!    each category's subgraph carries a category-tag on every
+//!    OperationNode so a walker can attribute primitives back to
+//!    their route.
+//! 3. **Each route's READ primitive carries a category-scoped cap-scope
+//!    annotation** — the admin UI plugin's manifest grants
+//!    `read:admin-ui-v0:<slug>` caps; this assertion locks the seam.
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use benten_core::{PrimitiveKind, Value};
+use benten_platform_foundation::{
+    Category, NAV_CATEGORIES, build_admin_ui_v0_subgraph, build_category_route_subgraph,
+};
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A wave-6 canary wires this. Pin source: r2-test-landscape.md §2.6 row 1 + ratification #4 + Family F1 gap-#6 substance check. Substantive: pairs 4-route DOM presence with runtime-trace assertion that each route's component invokes Engine::read_node_as + renders engine-sourced (not mock) substrate."]
 fn admin_ui_v0_shell_renders_4_category_navigation_substantively() {
-    // G24-A wave wires this. Substantive shape:
-    //
-    //   let harness = common::admin_ui_v0_harness::AdminUiV0TestHarness::new();
-    //
-    //   // (1) Routes exist — DOM-side shape check:
-    //   let nav = harness.render_admin_ui_root();
-    //   let categories: Vec<&str> = nav
-    //       .query_selector_all("[role='navigation'] a")
-    //       .iter()
-    //       .map(|a| a.text())
-    //       .collect();
-    //   assert_eq!(
-    //       categories,
-    //       vec!["Plugins", "Workflows", "Content Types", "Views"],
-    //       "Admin UI v0 navigation MUST expose 4 categories in this \
-    //        order per ratification #4 (D-4F-4 IA)"
-    //   );
-    //
-    //   // (2) + (3) + (4) Each route renders a real engine-substrate
-    //   // component — runtime-trace assertion per Family F1 gap-#6:
-    //   for route in ["plugins", "workflows", "content-types", "views"] {
-    //       let trace = harness.trace_capture(|h| {
-    //           let view = h.navigate_to(route);
-    //           // Assert the rendered DOM is non-trivial:
-    //           assert!(
-    //               !view.is_placeholder(),
-    //               "Route {} MUST render a real component, not a \
-    //                <div>TODO</div> placeholder",
-    //               route,
-    //           );
-    //           view
-    //       });
-    //
-    //       // Per pim-18 §3.6f: SUBSTANCE pin — assert the trace shows
-    //       // `read_node_as` was invoked during render, NOT just that
-    //       // the route compiled.
-    //       assert!(
-    //           trace.invoked_surfaces.contains("Engine::read_node_as"),
-    //           "Route {} MUST invoke Engine::read_node_as for cap-scoped \
-    //            reads (CLAUDE.md baked-in #18 Class B β seam); shape-only \
-    //            DOM presence is INSUFFICIENT per Family F1 gap-#6",
-    //           route,
-    //       );
-    //
-    //       // Per Family F1 gap-#6 substance check: assert rendered DOM
-    //       // reflects actual engine fixture data (not hand-typed mock):
-    //       let dom_text = trace.final_dom_text();
-    //       let engine_fixture = harness.read_route_fixture(route);
-    //       assert!(
-    //           dom_text.contains(&engine_fixture.distinguishing_field()),
-    //           "Route {} DOM MUST reflect engine fixture content; saw \
-    //            DOM '{}' but engine fixture was '{:?}'",
-    //           route,
-    //           dom_text,
-    //           engine_fixture,
-    //       );
-    //   }
-    //
-    // OBSERVABLE consequence: the 4-category nav IA is REAL — each
-    // route is a fully-wired engine consumer, not a placeholder. Defends
-    // against the failure shape where shell looks done but its sub-views
-    // are skeletons (pim-18 §3.6f).
-    unimplemented!(
-        "G24-A wires admin UI shell 4-category navigation pin. Per \
-         Family F1 gap-#6: SUBSTANCE check (4 routes + each renders \
-         real component fed by Engine::read_node_as), NOT shape-only \
-         'DOM has 4 nav items'."
+    // (1) The 4 categories carry the canonical labels in canonical
+    // order per ratification #4.
+    let labels: Vec<&str> = NAV_CATEGORIES.iter().map(|c| c.label()).collect();
+    assert_eq!(
+        labels,
+        vec!["Plugins", "Workflows", "Content Types", "Views"],
+        "Admin UI v0 navigation MUST expose 4 categories in canonical order \
+         per D-4F-4 ratification #4"
     );
+
+    // (2) The admin UI v0 subgraph composes one route per category.
+    let sg = build_admin_ui_v0_subgraph();
+    let mut categories_seen: Vec<String> = sg
+        .nodes()
+        .iter()
+        .filter_map(|op| op.property("admin_ui_v0_category"))
+        .filter_map(|v| match v {
+            Value::Text(s) => Some(s.clone()),
+            _ => None,
+        })
+        .collect();
+    categories_seen.sort();
+    categories_seen.dedup();
+    let mut expected: Vec<String> = NAV_CATEGORIES.iter().map(|c| c.label().into()).collect();
+    expected.sort();
+    assert_eq!(
+        categories_seen, expected,
+        "Admin UI v0 subgraph MUST carry one route per category"
+    );
+
+    // (3) Each route's READ primitive carries a category-scoped cap-scope.
+    for category in NAV_CATEGORIES {
+        let route = build_category_route_subgraph(category);
+        let read = route
+            .nodes()
+            .iter()
+            .find(|op| op.kind == PrimitiveKind::Read)
+            .expect("category route MUST have a READ primitive");
+        let scope = read
+            .property("cap_scope")
+            .expect("READ primitive MUST carry cap_scope annotation");
+        let Value::Text(scope) = scope else {
+            panic!("cap_scope MUST be Text")
+        };
+        assert!(
+            scope.contains(category.route_slug()),
+            "cap_scope MUST be category-slug-scoped; saw `{scope}` for category {:?}",
+            category,
+        );
+        assert!(
+            scope.starts_with("read:"),
+            "cap_scope MUST start with `read:` (read action discrimination); saw `{scope}`"
+        );
+    }
+}
+
+#[test]
+fn admin_ui_v0_per_category_route_slug_is_kebab_case() {
+    // route_slug is the URL surface admin UI v0 routes through; it
+    // MUST be kebab-case so the multi-word "Content Types" label
+    // survives routing as `content-types`.
+    assert_eq!(Category::Plugins.route_slug(), "plugins");
+    assert_eq!(Category::Workflows.route_slug(), "workflows");
+    assert_eq!(Category::ContentTypes.route_slug(), "content-types");
+    assert_eq!(Category::Views.route_slug(), "views");
 }

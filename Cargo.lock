@@ -300,6 +300,7 @@ dependencies = [
  "benten-graph",
  "benten-id",
  "benten-ivm",
+ "benten-platform-foundation",
  "benten-sync",
  "blake3",
  "bs58",

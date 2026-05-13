@@ -218,6 +218,15 @@ iroh = { version = "0.98", default-features = false, features = ["tls-ring"] }
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }
+# Phase 4-Foundation G24-A: admin UI v0 integration test crate consumes
+# the canonical 4-category navigation constants
+# (`INDEXEDDB_FORBIDDEN_STORES`, `WINTERTC_FORBIDDEN_APIS`,
+# `NAV_CATEGORIES`, `build_admin_ui_v0_subgraph`, etc.) from the
+# admin-UI-v0 module that lives in `benten-platform-foundation`. This
+# is a dev-dep ONLY — production `benten-engine` does NOT depend on
+# `benten-platform-foundation` (preserves arch-r1-1 thinness; pinned
+# by `crates/benten-platform-foundation/tests/arch_n_benten_platform_foundation_dep_direction.rs`).
+benten-platform-foundation = { path = "../benten-platform-foundation" }
 # Phase 2a R3 tests: proptest + serde + serde_ipld_dagcbor reach into the
 # DAG-CBOR schema directly for tamper-injection paths (notably
 # `resume_with_missing_attribution_triple_rejects` derives `Serialize`
