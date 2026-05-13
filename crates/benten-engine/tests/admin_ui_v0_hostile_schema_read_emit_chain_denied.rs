@@ -36,7 +36,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G23-A + G23-B + G24-A wire schema-emit-chain defense end-to-end; un-ignore at G24-A landing. Pin source: r4-triage §2 r4-tc-5 + threat-model §T1 LOAD-BEARING."]
+#[ignore = "DESTINATION-REMAPPED per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: T1 hostile-schema end-to-end pin requires AdminUiV0TestHarness::new() graduation (a substantive test-harness that wires schema_compile → register_subgraph → Engine.call_as → materialize through a real Engine end-to-end). G24-A landed the substrate module (admin_ui_v0/mod.rs) + engine adapter bridge but the full hostile-schema chain test requires harness graduation. Substantive arm lands at phase-4-foundation-backlog §4.14 (G24-B-FP-1 alongside workflow-editor harness graduation). Companion benign-control pin (admin_ui_v0_benign_schema_renders_correctly.rs) un-ignores together with this one per pim-2 §3.6b sub-rule 4."]
 fn admin_ui_v0_hostile_schema_with_read_emit_chain_outside_envelope_denied() {
     // G24-A wave wires this. Substantive shape:
     //

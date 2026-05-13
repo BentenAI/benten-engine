@@ -256,6 +256,46 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 - **mr-7 RE-VERIFIED at G24-A** — rustdoc on `MaterializerWalkInputs` (line ~285-300) names `(spec_cid, content_cid)` as the view-identity pair; G24-A consumer wiring at `admin_ui_v0_render_propagates_engine_side_node_update_through_adapter` renders two distinct (same spec, different content_cid) pairs in one test fn — multi-instance shape exercised.
 - **mr-8 RE-VERIFIED at G24-A** — the invocation-count-observability semantic is explicit at `materializer.rs:923-943`; the G24-A pin `admin_ui_v0_render_dual_gate_invocation_count_observability` asserts ≥ spec.primitive_count invocations per walk.
 
+### §4.14 T1 + T7 LOAD-BEARING end-to-end pins → G24-B-FP-1 harness graduation
+
+**Origin:** G24-A mini-review BLOCKER findings `g24a-mr-1` (T1 hostile-schema), `g24a-mr-2` (T7 private-namespace), + paired MAJOR `g24a-mr-3` (T1 benign-control). All three R3 RED-PHASE pins cited "un-ignore at G24-A landing" but G24-A shipped the substrate module (admin_ui_v0/mod.rs) + engine adapter bridge WITHOUT graduating the full end-to-end test harness (`AdminUiV0TestHarness::new()`) that the substantive arms require. Per pim-12 §3.6e, the wave-citation must match the actual un-ignore wave; per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW, the destination needs a specific named follow-up wave.
+
+**Scope:** new wave **G24-B-FP-1** (NEW fp wave alongside G24-B workflow editor; planner adds row to plan §3 §3.5.2 alongside existing G24-D-FP-* family). G24-B-FP-1 ships:
+1. `AdminUiV0TestHarness::new()` — substantive test-harness graduation that wires:
+   - Schema-compile → `Engine::register_subgraph` end-to-end
+   - `Engine::call_as(plugin_did, ...)` with the admin-UI plugin-DID as principal
+   - Materializer dispatch through the harness
+   - Cross-plugin install path for private-NS isolation tests (T7)
+2. Un-ignore + wire substantive bodies for the 3 pins:
+   - `crates/benten-engine/tests/admin_ui_v0_hostile_schema_read_emit_chain_denied.rs` (T1 LOAD-BEARING)
+   - `crates/benten-engine/tests/admin_ui_v0_benign_schema_renders_correctly.rs` (T1 paired regression-guard)
+   - `crates/benten-engine/tests/admin_ui_v0_private_namespace_isolated_from_other_plugins.rs` (T7 LOAD-BEARING)
+
+**Acceptance:**
+- `AdminUiV0TestHarness::new()` ships with substantive end-to-end wiring (NOT a stub).
+- All 3 pin bodies replaced from `unimplemented!()` → substantive arms per pim-2 §3.6b (PRODUCTION-ARM + OBSERVABLE-CONSEQUENCE + WOULD-FAIL-IF-NO-OP).
+- T1 hostile-schema arm asserts the hostile READ→EMIT chain is structurally denied (not just a generic error — specific deny-at-cap-policy path).
+- T7 private-namespace arm asserts cross-plugin write into `private:<plugin_did_other>:*` namespace yields `E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN` (already minted at G24-D).
+- T1 benign-control passes (regression-guard against over-rejection).
+
+**Phase target:** **Phase 4-Foundation R5 G24-B-FP-1** (NEW wave; lands alongside G24-B workflow editor implementer).
+
+**Coupling notes:** G24-D's `g24d_substantive_pipeline.rs::private_namespace_cap_unconditionally_denied_cross_plugin` (PASS at HEAD) covers the STRUCTURAL private-NS defense at the cap-policy layer; G27-D's `private_namespace_scope_admits_only_plugin_did_actor` covers the scope-derivation layer. The §4.14 T7 pin closes the END-TO-END arm via the admin-UI v0 plugin install path — a different surface than the existing structural pins.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for the 3 deferred T1+T7 LOAD-BEARING pins. Closes G24-A mini-review g24a-mr-1 + g24a-mr-2 + g24a-mr-3.
+
+### §4.15 Defense-in-depth SANDBOX 4th banned host-fn (`edges:remove`) coverage gap
+
+**Origin:** G24-A mini-review `g24a-mr-4` OBSERVATION. The `materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` pin (G24-A wave) exercises 3 of the 4 banned host-fns (`kv:write` + `kv:delete` + `edges:add`); `edges:remove` is named in the module doc + the production runtime banned-set but not pinned by a sub-test.
+
+**Scope:** add 4th sub-test arm `for_handcoded_spec_with_edges_remove_host_fn_rejected_at_materializer_entry` mirroring the existing 3-variant shape. ~15 LOC.
+
+**Phase target:** **Phase 4-Foundation R5 G24-B-FP-1** (alongside the §4.14 harness graduation — same fp wave, adjacent test surface).
+
+**Acceptance:** 4 sub-tests in `materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` (3 existing + 1 new for `edges:remove`); all assert `MaterializerError::SchemaMismatch { code: E_MATERIALIZER_SCHEMA_MISMATCH }`.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes G24-A mini-review g24a-mr-4 OBSERVATION.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

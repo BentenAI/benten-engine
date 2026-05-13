@@ -25,7 +25,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G23-A + G23-B + G24-A wire benign-schema render path; un-ignore at G24-A landing. Pin source: r4-triage §2 r4-tc-5 + threat-model §T1 regression-guard."]
+#[ignore = "DESTINATION-REMAPPED per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: paired regression-guard for the T1 hostile-schema pin — pim-2 §3.6b sub-rule 4 requires this benign-positive-control un-ignores TOGETHER with admin_ui_v0_hostile_schema_read_emit_chain_denied.rs. Both land at phase-4-foundation-backlog §4.14 (G24-B-FP-1 alongside AdminUiV0TestHarness::new() graduation)."]
 fn admin_ui_v0_benign_schema_renders_correctly() {
     // G24-A wave wires this. Substantive shape:
     //
