@@ -9,15 +9,21 @@ mod common;
 
 use common::manifest_fixtures::stub_plugin_did;
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    uninstall_plugin's private-namespace data teardown arm; walks all storage \
+    rows under `private:<plugin_did>:*` scope-prefix + deletes them. Named \
+    destination: plan §3 G24-D-FP-1 (plugin_lifecycle uninstall cascade + \
+    private-NS teardown + library-entry removal). HARD RULE 12 clause-(b) \
+    BELONGS-NAMED-NOW: plan row pre-exists."]
 #[test]
 fn uninstall_deletes_private_namespace_rows_for_plugin_did() {
     let _plugin = stub_plugin_did();
 
-    // Future surface: uninstall_plugin walks all storage rows under
-    // the `private:<plugin_did>:*` scope-prefix and deletes them.
+    // Phase 4-Foundation R5 G24-D-FP-1 surface (NOT at G24-D primary):
+    // uninstall_plugin walks all storage rows under the
+    // `private:<plugin_did>:*` scope-prefix and deletes them.
     //
     // FAILS-IF-NO-OP because re-install would inherit stale state,
     // breaking the T7 isolation guarantee.
-    panic!("RED-PHASE: G24-D-FP-1 must wire private namespace teardown");
+    panic!("G24-D-FP-1 wires private namespace teardown in uninstall_plugin");
 }

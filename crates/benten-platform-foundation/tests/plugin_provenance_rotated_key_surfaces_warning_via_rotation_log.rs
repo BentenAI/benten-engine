@@ -9,7 +9,13 @@ mod common;
 
 use common::manifest_fixtures::minimal_manifest;
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
+    RotationLog consultation at PluginManifest::validate_with_rotation_log; returns \
+    ValidWithWarning(RotatedKeyWarning) when peer-DID found in RotationLog (NOT \
+    hard-reject by default per D-4F-12). Surface ships at G24-D-FP-2 per \
+    phase-4-backlog §4.10. Named destination: plan §3 G24-D-FP-2 (manifest envelope \
+    chain validator + RotationLog integration). HARD RULE 12 clause-(b) \
+    BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_with_rotated_peer_did_surfaces_rotated_key_warning_not_hard_reject() {
     let _manifest = minimal_manifest();

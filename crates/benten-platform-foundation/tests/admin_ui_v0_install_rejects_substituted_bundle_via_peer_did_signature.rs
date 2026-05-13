@@ -11,7 +11,15 @@ mod common;
 
 use common::manifest_fixtures::{admin_ui_v0_manifest, stub_peer_did_attacker};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    Admin UI v0 substitution-defense end-to-end with user-DID trust-list path: \
+    install_plugin must consult user's requires_plugin_authors trust-list and \
+    distinguish forged-claim (E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID) from \
+    unknown-author (E_PLUGIN_AUTHOR_NOT_TRUSTED). Sibling \
+    plugin_manifest_substitution_at_install_rejected.rs wires the forged-claim arm \
+    NOW; trust-list arm lands at G24-D-FP-1. Named destination: plan §3 G24-D-FP-1 \
+    (plugin_lifecycle hardening — trust-list integration). HARD RULE 12 clause-(b) \
+    BELONGS-NAMED-NOW."]
 #[test]
 fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
     let mut hostile = admin_ui_v0_manifest();
