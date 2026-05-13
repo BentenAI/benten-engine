@@ -444,6 +444,84 @@ pub fn workflow_content_hash(sg: &Subgraph) -> Result<[u8; 32], benten_core::Cor
 }
 
 // ---------------------------------------------------------------------
+// Doc-hidden test-helper exposures (§4.16 closure — g24b-mr-1 MAJOR).
+//
+// The G24-B EXIT CRITERION substantive replay pin lives in the
+// `benten-engine` integration-test crate
+// (`crates/benten-engine/tests/admin_ui_v0_workflow_editor_substantive_replay_via_harness.rs`)
+// — a sibling crate that cannot reach the inline-canary `fixture_manifest`
+// (`pub(crate)`) NOR the `canonical_subgraph_bytes` re-export
+// (private to this module). To let that pin drive a real
+// `compile_draft_within_manifest_envelope` end-to-end without
+// duplicating fixture wiring, expose minimal `#[doc(hidden)] pub fn`
+// shims here. Mirrors the §4.13 mr-4 pattern of doc-hidden test-
+// constructors on `SchemaSubgraphSpec`.
+//
+// These shims are **test-only by convention** — `doc(hidden)`
+// removes them from rustdoc visible API + the names carry the
+// `_for_test` suffix; downstream production callers MUST NOT depend
+// on either symbol.
+// ---------------------------------------------------------------------
+
+/// Fixture-manifest helper used by the G24-B EXIT CRITERION
+/// substantive replay pin. Returns a manifest whose `requires`
+/// envelope admits the listed scopes (exact + `<prefix>.*` shapes).
+///
+/// **`#[doc(hidden)]`:** not part of the public crate API — kept
+/// out of rustdoc visible surface. Reachable so the sibling
+/// `benten-engine` test crate can drive `compile_draft_within_manifest_envelope`
+/// without duplicating the keypair + content_cid wiring (§4.16
+/// closure path).
+#[doc(hidden)]
+#[must_use]
+pub fn fixture_manifest_for_test(scopes: &[&str]) -> PluginManifest {
+    use crate::plugin_manifest::{CapRequirement, SharesPolicy, SharesPolicyDefault};
+    use benten_core::Cid;
+    use benten_id::keypair::Keypair;
+
+    let requires = scopes
+        .iter()
+        .map(|s| CapRequirement::new((*s).to_string()))
+        .collect();
+    let kp = Keypair::generate();
+    let mut m = PluginManifest {
+        plugin_name: "admin-ui-v0".to_string(),
+        content_cid: Cid::from_blake3_digest([0u8; 32]),
+        peer_did: kp.public_key().to_did(),
+        peer_signature: vec![0u8; 64],
+        requires,
+        shares: SharesPolicy {
+            default: SharesPolicyDefault::None,
+            rules: None,
+        },
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    };
+    m.content_cid = m.compute_content_cid();
+    m
+}
+
+/// Re-export of [`benten_core::canonical_subgraph_bytes`] under the
+/// `_for_test` suffix so the §4.16 substantive replay pin can encode
+/// a `Subgraph` to canonical bytes without pulling a fresh
+/// `benten_core` dep into the consuming test crate's `Cargo.toml`.
+///
+/// **`#[doc(hidden)]`:** not part of the public crate API. Pure
+/// passthrough to the same encoder the `workflow_content_hash`
+/// helper consults.
+///
+/// # Errors
+/// Surfaces [`benten_core::CoreError`] verbatim on DAG-CBOR encode
+/// failure (mirrors [`workflow_content_hash`]).
+#[doc(hidden)]
+pub fn canonical_subgraph_bytes_for_test(sg: &Subgraph) -> Result<Vec<u8>, benten_core::CoreError> {
+    canonical_subgraph_bytes(sg)
+}
+
+// ---------------------------------------------------------------------
 // Inline canary tests.
 // ---------------------------------------------------------------------
 
@@ -610,9 +688,23 @@ mod canary {
     }
 
     #[test]
-    fn replay_produces_identical_content_hash() {
-        // G24-B exit-criterion substantive pin: workflow save-time hash
-        // == workflow replay-time hash.
+    fn replay_produces_identical_content_hash_encoding_only() {
+        // **Scope: encoding-only unit-level pin.**
+        //
+        // This is the degenerate same-struct double-hash arm: both
+        // sides call `canonical_subgraph_bytes(&sg_save)` on the same
+        // in-memory `Subgraph`, so equality only proves that
+        // `canonical_subgraph_bytes` is deterministic over a stable
+        // in-memory struct. It does **NOT** exercise an
+        // encode → store → load → decode → re-encode round trip
+        // through the real engine; that substantive arm lives at
+        // `crates/benten-engine/tests/admin_ui_v0_workflow_editor_substantive_replay_via_harness.rs`
+        // (the G24-B EXIT CRITERION substantive replay pin closed at
+        // R4b-FP-2 / §4.16 of `docs/future/phase-4-backlog.md`).
+        //
+        // Renamed from `replay_produces_identical_content_hash` so
+        // future readers don't mistake this unit canary for the
+        // substantive replay arm (g24b-mr-1 MAJOR closure discipline).
         let manifest = fixture_manifest(&["read:Note.*"]);
         let mut draft = WorkflowDraft::new("identity");
         draft.drag_primitive(WorkflowPrimitiveSelection {
