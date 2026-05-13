@@ -63,7 +63,6 @@ impl GrantReader for MockGrants {
 /// non-CRUD scope shapes that the hard-coded `store:{label}:write`
 /// derivation cannot express.
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; verifies non-CRUD scopes flow through WriteContext::scope correctly"]
 fn grant_backed_policy_non_crud_scope_round_trip_private_namespace() {
     let plugin_did = "did:key:zPluginDidPlaceholder";
     let scope = format!("private:{plugin_did}:notes");
@@ -82,7 +81,6 @@ fn grant_backed_policy_non_crud_scope_round_trip_private_namespace() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; manifest `requires` scope shape"]
 fn grant_backed_policy_non_crud_scope_round_trip_manifest_requires() {
     let plugin_did = "did:key:zPluginDidPlaceholder";
     let scope = format!("requires:{plugin_did}:calendar/events");
@@ -101,7 +99,6 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_requires() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: G27-B — un-ignore at G27-B wave; manifest `shares` scope shape"]
 fn grant_backed_policy_non_crud_scope_round_trip_manifest_shares() {
     let plugin_did = "did:key:zPluginDidPlaceholder";
     let scope = format!("shares:{plugin_did}:tasks/list");
@@ -117,4 +114,59 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_shares() {
     policy
         .check_write(&ctx)
         .expect("RED-PHASE: G27-B — manifest `shares` scope must round-trip");
+}
+
+/// G27-B mini-review MAJOR finding closure (r5-g27-b-mini-review.json
+/// finding `r5g27b-mr-1`): the THREE preceding tests use empty
+/// `pending_ops` and would PASS pre-G27-B too (the empty-pending_ops
+/// branch already honored `ctx.scope`). This test exercises the
+/// **actual new behavior** introduced by G27-B — the explicit
+/// `ctx.scope` short-circuits per-op label derivation EVEN WHEN
+/// `pending_ops` is populated.
+///
+/// Pre-G27-B path: with a PutNode containing label `"post"` in
+/// `pending_ops`, derivation produces `store:post:write`; the grant
+/// for `store:custom:write` does NOT match; `check_write` returns
+/// Err(Denied). Post-G27-B path: `ctx.scope = "store:custom:write"`
+/// short-circuits the per-op derivation entirely; the single grant
+/// matches; `check_write` returns Ok(()).
+///
+/// Would-FAIL-if-no-op'd: reverting G27-B (re-enabling per-op
+/// derivation when pending_ops is non-empty) causes this test to
+/// flip from PASS to Err(Denied). This is the load-bearing substance
+/// arm of the G27-B lift per pim-18 §3.6f production-runtime
+/// substantive-not-shape discipline.
+#[test]
+fn grant_backed_policy_scope_overrides_pending_op_label_derivation() {
+    use benten_caps::PendingOp;
+    use benten_core::Cid;
+
+    let scope = "store:custom:write";
+    let grants = MockGrants::new(&[scope]);
+    let policy = GrantBackedPolicy::new(grants);
+
+    // Synthesize a stable test CID (BLAKE3 of a literal; the value is
+    // irrelevant — only the pending-op SHAPE matters for the
+    // derivation path).
+    let stub_cid = Cid::from_blake3_digest(*blake3::hash(b"g27b-test-cid").as_bytes());
+
+    let ctx = WriteContext {
+        label: "post".to_string(),
+        scope: scope.to_string(),
+        pending_ops: vec![PendingOp::PutNode {
+            cid: stub_cid,
+            labels: vec!["post".to_string()],
+        }],
+        ..Default::default()
+    };
+
+    // Pre-G27-B: per-op derivation produces `store:post:write` (NOT
+    // granted) AND ignores `ctx.scope`. Post-G27-B: `ctx.scope`
+    // short-circuits → single `store:custom:write` scope → granted.
+    policy.check_write(&ctx).expect(
+        "G27-B substantive arm: ctx.scope MUST override per-op label \
+         derivation EVEN WHEN pending_ops is populated. Without the \
+         short-circuit, the per-op PutNode with label=\"post\" derives \
+         store:post:write which is NOT in the grant set.",
+    );
 }
