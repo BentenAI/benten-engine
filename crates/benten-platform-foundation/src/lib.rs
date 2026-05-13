@@ -75,6 +75,7 @@
 
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 
+pub mod manifest_store;
 pub mod module_ecosystem;
 pub mod plugin_library;
 pub mod plugin_lifecycle;

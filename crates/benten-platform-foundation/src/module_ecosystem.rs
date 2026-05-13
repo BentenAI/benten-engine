@@ -30,7 +30,7 @@ use crate::plugin_manifest::{InstallRecord, PluginManifest, detect_composition_c
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_id::did::Did;
-use benten_id::plugin_did::{PluginDidHandle, mint as mint_plugin_did};
+use benten_id::plugin_did::{PluginDidHandle, PluginDidStore, mint as mint_plugin_did};
 
 /// Result of an install attempt — both the LibraryEntry and the
 /// minted plugin-DID handle (returned so caller can persist the
@@ -40,6 +40,12 @@ pub struct InstallResult {
     pub entry: LibraryEntry,
     /// The minted plugin-DID handle (caller persists into a
     /// `PluginDidStore`).
+    ///
+    /// G24-D-FP-1: callers that want the uninstall path to observably
+    /// revoke the plugin-DID SHOULD use [`install_plugin_persisting_did`]
+    /// instead — it persists the handle into the store atomically so
+    /// `PluginDidStore::revoke` succeeds at uninstall. The legacy
+    /// [`install_plugin`] still returns the handle for older callers.
     pub plugin_did_handle: PluginDidHandle,
 }
 
@@ -125,6 +131,46 @@ where
         entry,
         plugin_did_handle,
     })
+}
+
+/// Install a plugin AND persist the freshly-minted plugin-DID handle
+/// into the supplied [`PluginDidStore`]. Returns the resulting
+/// library entry + the persisted plugin-DID.
+///
+/// G24-D-FP-1 ergonomic seam: the legacy [`install_plugin`] returns a
+/// loose [`PluginDidHandle`] for the caller to persist manually; in
+/// the umbrella uninstall test path we want the install path to
+/// atomically persist into the store so the subsequent uninstall
+/// observes `plugin_did_revoked=true`. Production callers will route
+/// through this seam.
+///
+/// # Errors
+///
+/// See [`install_plugin`] — this seam adds NO failure modes beyond
+/// what the underlying install path surfaces; the persist step is
+/// infallible.
+pub fn install_plugin_persisting_did<F>(
+    library: &mut PluginLibrary,
+    plugin_did_store: &mut PluginDidStore,
+    received_bytes: &[u8],
+    expected_cid: &Cid,
+    installer_shape: InstallerShape,
+    installed_at_nanos: u64,
+    resolver: &F,
+) -> Result<LibraryEntry, ErrorCode>
+where
+    F: Fn(&Cid) -> Option<PluginManifest>,
+{
+    let result = install_plugin(
+        library,
+        received_bytes,
+        expected_cid,
+        installer_shape,
+        installed_at_nanos,
+        resolver,
+    )?;
+    plugin_did_store.insert(result.plugin_did_handle);
+    Ok(result.entry)
 }
 
 /// Verify an install record was signed by the consenting user-DID.

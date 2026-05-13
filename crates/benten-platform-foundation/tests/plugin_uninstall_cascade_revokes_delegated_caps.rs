@@ -28,81 +28,129 @@
 
 mod common;
 
+use benten_core::Cid;
+use benten_id::did::Did;
+use benten_id::plugin_did::PluginDidStore;
+use benten_platform_foundation::plugin_library::{LibraryEntry, PluginLibrary};
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemoryGrant, InMemoryUninstallCascade, UninstallContext, uninstall_plugin,
+};
+use benten_platform_foundation::plugin_manifest::{
+    CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault,
+};
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    T10-uninstall (b) per-finding arm: uninstall_plugin cascade-revokes caps the \
-    plugin delegated to OTHER plugins (walks grants WHERE issuer = plugin_did). \
-    Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle uninstall cascade). \
-    HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
+fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
+    PluginManifest {
+        plugin_name: plugin_name.to_string(),
+        content_cid: cid,
+        peer_did: Did::from_string_unchecked("did:key:zAuthor".to_string()),
+        peer_signature: vec![0u8; 64],
+        requires: vec![CapRequirement::new("store:notes:read")],
+        shares: SharesPolicy {
+            default: SharesPolicyDefault::None,
+            rules: None,
+        },
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    }
+}
+
 #[test]
 fn plugin_uninstall_cascade_revokes_caps_delegated_to_other_plugins() {
-    let _plugin = stub_plugin_did();
-    let _user = stub_user_did();
+    let plugin_a = stub_plugin_did();
+    let plugin_b = Did::from_string_unchecked("did:key:zPluginB".to_string());
+    let user_did = stub_user_did();
 
-    // G24-D-FP-1 wave wires this. Substantive shape:
-    //
-    //   use benten_platform_foundation::plugin_lifecycle::uninstall_plugin;
-    //
-    //   let mut engine = common::manifest_fixtures::test_engine_with_user_did();
-    //   let plugin_a = stub_plugin_did();
-    //   let plugin_b = common::manifest_fixtures::stub_plugin_did_b();
-    //   let user_did = stub_user_did();
-    //
-    //   // Install plugin A with shares=any + plugin B.
-    //   common::manifest_fixtures::install_test_plugin_with_shares_any(
-    //       &mut engine, plugin_a.clone(),
-    //       vec!["store:notes:read"]
-    //   ).unwrap();
-    //   common::manifest_fixtures::install_test_plugin(
-    //       &mut engine, plugin_b.clone(),
-    //       vec![],
-    //   ).unwrap();
-    //
-    //   // Plugin A delegates cap to plugin B (within envelope per shares=any).
-    //   let delegation_cid = engine.delegate_cap(
-    //       /* delegator */ plugin_a.clone(),
-    //       /* audience */ plugin_b.clone(),
-    //       /* scope */ "store:notes:read",
-    //   ).unwrap();
-    //
-    //   // Baseline: B has the delegated cap.
-    //   let b_baseline = engine.cap_store().active_grants_for_audience(&plugin_b);
-    //   assert!(
-    //       b_baseline.iter().any(|g| g.issuer == plugin_a),
-    //       "Baseline: plugin B must have an active grant issued by plugin A"
-    //   );
-    //
-    //   // Uninstall plugin A.
-    //   uninstall_plugin(&plugin_a, &mut engine).unwrap();
-    //
-    //   // T10-uninstall (b): cap A→B MUST be cascade-revoked.
-    //   let b_after = engine.cap_store().active_grants_for_audience(&plugin_b);
-    //   assert!(
-    //       !b_after.iter().any(|g| g.issuer == plugin_a),
-    //       "T10-uninstall (b): cap A→B MUST be cascade-revoked when A \
-    //        is uninstalled; {} grants from A still active for B",
-    //       b_after.iter().filter(|g| g.issuer == plugin_a).count()
-    //   );
-    //
-    //   // Defense-in-depth: revocation log shows cascade explicitly
-    //   // (audience = plugin_b, NOT plugin_a):
-    //   let revoke_log = engine.cap_store().revocation_log_since_test_start();
-    //   assert!(
-    //       revoke_log.iter().any(|r|
-    //           r.grant_cid == delegation_cid
-    //           && r.audience == plugin_b
-    //           && r.cascade_source == Some(plugin_a.clone())),
-    //       "T10-uninstall (b): revocation log MUST tag the cascade \
-    //        source for forensic auditability"
-    //   );
-    //
-    // OBSERVABLE consequence: Layer 3 transitivity guarantee preserved;
-    // downstream plugins lose delegated caps cleanly on uninstall.
-    panic!(
-        "RED-PHASE: G24-D-FP-1 must wire cascade-revocation in \
-         uninstall_plugin (T10-uninstall (b) per-finding-granular pin). \
-         Substantive: 2 plugins + delegation A→B + uninstall A + \
-         cascade-revocation assertion + forensic cascade-source log tag."
+    let cid_a = Cid::from_blake3_digest([1u8; 32]);
+    let mut library = PluginLibrary::new();
+    library.insert(LibraryEntry {
+        manifest_cid: cid_a,
+        manifest: fake_manifest("plugin-a", cid_a),
+        plugin_did: plugin_a.clone(),
+        installed_at_nanos: 1,
+    });
+    let mut store = PluginDidStore::new();
+
+    let mut cascade = InMemoryUninstallCascade::new();
+    // A delegates two caps to B (within envelope).
+    let delegation_1_cid = Cid::from_blake3_digest([21u8; 32]);
+    let delegation_2_cid = Cid::from_blake3_digest([22u8; 32]);
+    cascade.insert_grant(InMemoryGrant {
+        grant_cid: delegation_1_cid,
+        audience: plugin_b.clone(),
+        issuer: plugin_a.clone(),
+        scope: "store:notes:read".to_string(),
+    });
+    cascade.insert_grant(InMemoryGrant {
+        grant_cid: delegation_2_cid,
+        audience: plugin_b.clone(),
+        issuer: plugin_a.clone(),
+        scope: "host:time:now".to_string(),
+    });
+    // Distractor: user-DID directly grants B a cap; that grant MUST NOT
+    // be cascade-revoked (different issuer).
+    let user_grant_cid = Cid::from_blake3_digest([55u8; 32]);
+    cascade.insert_grant(InMemoryGrant {
+        grant_cid: user_grant_cid,
+        audience: plugin_b.clone(),
+        issuer: user_did.clone(),
+        scope: "store:notes:write".to_string(),
+    });
+
+    // Baseline: B has 3 active grants (2 from A + 1 from user-DID).
+    let b_baseline = cascade.active_grants_for_audience(&plugin_b);
+    assert_eq!(
+        b_baseline.len(),
+        3,
+        "Baseline: B must have 3 active grants pre-uninstall (2 from A + 1 from user-DID)"
+    );
+
+    // Uninstall A.
+    let mut private = InMemoryUninstallCascade::new();
+    let mut subs = InMemoryUninstallCascade::new();
+    let mut ctx = UninstallContext {
+        cap_revoker: &mut cascade,
+        private_ns: &mut private,
+        subscriptions: &mut subs,
+    };
+    let outcome =
+        uninstall_plugin(&mut library, &mut store, &mut ctx, &cid_a).expect("uninstall ok");
+
+    // T10-uninstall (b): caps A→B MUST be cascade-revoked.
+    assert_eq!(
+        outcome.delegations_cascade_revoked, 2,
+        "T10-uninstall (b): outcome counter reflects 2 cascade-revocations"
+    );
+    let b_after_revoke = cascade.active_grants_for_audience(&plugin_b);
+    // User-DID-issued grant must remain.
+    assert_eq!(
+        b_after_revoke.len(),
+        1,
+        "T10-uninstall (b): user-DID-issued grant to B must remain; got {} active",
+        b_after_revoke.len()
+    );
+    assert_eq!(
+        b_after_revoke[0].issuer, user_did,
+        "T10-uninstall (b): remaining grant's issuer MUST be user-DID"
+    );
+
+    // Defense-in-depth: revocation log tags cascade-source explicitly.
+    let cascade_entries: Vec<_> = cascade
+        .revocation_log()
+        .iter()
+        .filter(|r| r.cascade_source == Some(plugin_a.clone()))
+        .collect();
+    assert_eq!(
+        cascade_entries.len(),
+        2,
+        "T10-uninstall (b): revocation log MUST tag cascade-source (plugin_a) for forensic auditability"
+    );
+    assert!(
+        cascade_entries.iter().all(|r| r.audience == plugin_b),
+        "T10-uninstall (b): cascade-revoked grants' audience is plugin_b"
     );
 }

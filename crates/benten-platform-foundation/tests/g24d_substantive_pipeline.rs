@@ -21,10 +21,12 @@ use benten_id::keypair::Keypair;
 use benten_id::plugin_did::{PluginDidStore, mint as mint_plugin_did};
 use benten_platform_foundation::module_ecosystem::{
     InstallerShape, UpgradeConsentDecision, decide_upgrade_consent, install_plugin,
-    verify_install_record, verify_upgrade_author_continuity,
+    install_plugin_persisting_did, verify_install_record, verify_upgrade_author_continuity,
 };
 use benten_platform_foundation::plugin_library::PluginLibrary;
-use benten_platform_foundation::plugin_lifecycle::uninstall_plugin;
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemoryUninstallCascade, UninstallContext, uninstall_plugin,
+};
 use benten_platform_foundation::plugin_manifest::{
     CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
     SharesPolicyDefault, SharesRule, SharesTarget, detect_composition_cycle, sign_manifest,
@@ -495,8 +497,15 @@ fn uninstall_removes_library_entry_and_revokes_plugin_did() {
     let cid = manifest.content_cid;
     let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
     let mut library = PluginLibrary::new();
-    let result = install_plugin(
+    let mut store = PluginDidStore::new();
+
+    // G24-D-FP-1: install_plugin_persisting_did persists the minted
+    // plugin-DID handle into the store atomically — so the uninstall
+    // path's PluginDidStore::revoke call substantively succeeds
+    // (closes the pim-18 simulation-limitation from G24-D primary).
+    let entry = install_plugin_persisting_did(
         &mut library,
+        &mut store,
         &bytes,
         &cid,
         InstallerShape::FullPeer,
@@ -504,23 +513,32 @@ fn uninstall_removes_library_entry_and_revokes_plugin_did() {
         &|_| None,
     )
     .expect("install ok");
-    let plugin_did = result.entry.plugin_did.clone();
+    let plugin_did = entry.plugin_did.clone();
+    // Baseline: store carries the plugin-DID.
+    assert!(
+        store.get(&plugin_did).is_some(),
+        "Baseline: install_plugin_persisting_did persists the handle"
+    );
 
-    // Persist the plugin-DID handle into a store for the uninstall to
-    // exercise the revoke path.
-    let mut store = PluginDidStore::new();
-    let _ = store.mint_and_store(); // unrelated entry
-    // (We can't easily inject the EXISTING handle into the store —
-    // PluginDidStore owns its keypairs by design. For this test we
-    // simulate via the revoke-by-DID path even if the store doesn't
-    // have this exact handle; uninstall returns plugin_did_revoked=false
-    // in that case, which is the correct observable.)
-    let outcome = uninstall_plugin(&mut library, &mut store, &cid).expect("uninstall ok");
+    let mut cascade = InMemoryUninstallCascade::new();
+    let mut private = InMemoryUninstallCascade::new();
+    let mut subs = InMemoryUninstallCascade::new();
+    let mut ctx = UninstallContext {
+        cap_revoker: &mut cascade,
+        private_ns: &mut private,
+        subscriptions: &mut subs,
+    };
+    let outcome = uninstall_plugin(&mut library, &mut store, &mut ctx, &cid).expect("uninstall ok");
     assert!(outcome.library_entry_removed);
+    assert!(
+        outcome.plugin_did_revoked,
+        "G24-D-FP-1 substantive: plugin_did_revoked MUST be true now \
+         that install_plugin_persisting_did persists the handle"
+    );
     assert!(library.get(&cid).is_none());
     assert_eq!(library.active("doomed"), None);
-    // plugin_did_revoked=false because the store didn't carry this DID
-    // (test simulation limitation; production install path persists the
-    // minted handle into the store, where revoke would succeed).
-    let _ = plugin_did;
+    assert!(
+        store.get(&plugin_did).is_none(),
+        "G24-D-FP-1: store no longer carries the revoked plugin-DID"
+    );
 }

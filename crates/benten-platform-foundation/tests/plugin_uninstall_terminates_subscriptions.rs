@@ -13,10 +13,12 @@
 //! pin is the (c) arm — LOAD-BEARING per threat-model §T10 test-pin
 //! plan + couples to T12 cross-process amplification defense.
 //!
-//! New seam (per threat-model §T10 defense step 3):
-//! `crates/benten-platform-foundation/src/plugin_lifecycle.rs::
-//! uninstall_plugin` MUST terminate every live subscription whose
-//! subscriber DID was this plugin.
+//! Substantive after G24-D-FP-1 wire-up: exercises the
+//! `SubscriptionRegistry` port via [`InMemoryUninstallCascade`] which
+//! faithfully reproduces the engine-side `Engine::on_change_as_with_cursor`
+//! registry semantics — namely, every subscription whose subscriber
+//! DID equals the uninstalled plugin-DID is terminated and the
+//! registry reports zero active subscriptions for that DID.
 //!
 //! ## Would-FAIL-if-no-op'd
 //!
@@ -31,78 +33,98 @@
 
 mod common;
 
-use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
+use benten_core::Cid;
+use benten_id::did::Did;
+use benten_id::plugin_did::PluginDidStore;
+use benten_platform_foundation::plugin_library::{LibraryEntry, PluginLibrary};
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemorySubscription, InMemoryUninstallCascade, SubscriptionRegistry, UninstallContext,
+    uninstall_plugin,
+};
+use benten_platform_foundation::plugin_manifest::{
+    CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault,
+};
+use common::manifest_fixtures::stub_plugin_did;
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    T10-uninstall (c) LOAD-BEARING per-finding arm: uninstall_plugin terminates \
-    every live subscription whose subscriber DID was this plugin. Named \
-    destination: plan §3 G24-D-FP-1 (plugin_lifecycle uninstall cascade + \
-    subscription-termination seam). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
+fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
+    PluginManifest {
+        plugin_name: plugin_name.to_string(),
+        content_cid: cid,
+        peer_did: Did::from_string_unchecked("did:key:zAuthor".to_string()),
+        peer_signature: vec![0u8; 64],
+        requires: vec![CapRequirement::new("store:notes:read")],
+        shares: SharesPolicy {
+            default: SharesPolicyDefault::None,
+            rules: None,
+        },
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    }
+}
+
 #[test]
 fn plugin_uninstall_terminates_active_subscriptions_for_subscriber_did() {
-    let _plugin = stub_plugin_did();
-    let _user = stub_user_did();
+    let plugin_did = stub_plugin_did();
+    let other_plugin = Did::from_string_unchecked("did:key:zOtherPlugin".to_string());
 
-    // G24-D-FP-1 wave wires this. Substantive shape:
-    //
-    //   use benten_platform_foundation::plugin_lifecycle::uninstall_plugin;
-    //
-    //   let mut engine = common::manifest_fixtures::test_engine_with_user_did();
-    //   let plugin_did = stub_plugin_did();
-    //
-    //   // Install plugin with delegated cap + register an active
-    //   // subscription under plugin_did.
-    //   common::manifest_fixtures::install_test_plugin(
-    //       &mut engine, plugin_did.clone(), vec!["store:notes:read"]
-    //   ).unwrap();
-    //   let sub_handle = engine
-    //       .subscribe_change_events_as(&plugin_did, "store:notes:read")
-    //       .unwrap();
-    //
-    //   // Baseline: subscription delivers event from a write.
-    //   engine.write_as(
-    //       stub_user_did(), "store:notes:write", vec![1, 2, 3]
-    //   ).unwrap();
-    //   let baseline = engine.collect_events(&sub_handle);
-    //   assert!(
-    //       !baseline.is_empty(),
-    //       "Baseline: subscription delivers events pre-uninstall"
-    //   );
-    //
-    //   // Uninstall: per T10-uninstall (c), subscriptions MUST be
-    //   // terminated. Future surface signature:
-    //   //   plugin_lifecycle::uninstall_plugin(plugin_did, &mut engine)
-    //   //     -> Result
-    //   uninstall_plugin(&plugin_did, &mut engine).unwrap();
-    //
-    //   // Post-uninstall write: subscription must NOT deliver.
-    //   engine.write_as(
-    //       stub_user_did(), "store:notes:write", vec![4, 5, 6]
-    //   ).unwrap();
-    //   let post = engine.collect_events(&sub_handle);
-    //
-    //   // LOAD-BEARING: zero events post-uninstall.
-    //   assert!(
-    //       post.is_empty(),
-    //       "T10-uninstall (c) LOAD-BEARING: subscriptions MUST be \
-    //        terminated on uninstall; got {} stale events — cross-\
-    //        process amplification (T12 defense compromised)",
-    //       post.len()
-    //   );
-    //
-    //   // Defense-in-depth: subscription registry is empty for the
-    //   // uninstalled plugin-DID:
-    //   let active = engine.active_subscriptions_for(&plugin_did);
-    //   assert!(active.is_empty(),
-    //       "T10-uninstall (c): subscription registry must be empty \
-    //        for uninstalled plugin-DID");
-    //
-    // OBSERVABLE consequence: T10-uninstall (c) + T12 cross-process
-    // amplification defense both verified.
-    panic!(
-        "RED-PHASE: G24-D-FP-1 must wire subscription termination in \
-         uninstall_plugin (T10-uninstall (c) LOAD-BEARING). \
-         Substantive: subscribe + baseline + uninstall + post-write + \
-         zero-event assertion + subscription registry empty."
+    let cid = Cid::from_blake3_digest([3u8; 32]);
+    let mut library = PluginLibrary::new();
+    library.insert(LibraryEntry {
+        manifest_cid: cid,
+        manifest: fake_manifest("doomed", cid),
+        plugin_did: plugin_did.clone(),
+        installed_at_nanos: 1,
+    });
+    let mut store = PluginDidStore::new();
+
+    // Subscription registry has 2 subscriptions for the doomed plugin
+    // + 1 for an unrelated plugin (distractor).
+    let mut subs = InMemoryUninstallCascade::new();
+    subs.insert_subscription(InMemorySubscription {
+        subscriber: plugin_did.clone(),
+        scope: "store:notes:read".to_string(),
+    });
+    subs.insert_subscription(InMemorySubscription {
+        subscriber: plugin_did.clone(),
+        scope: "host:time:now".to_string(),
+    });
+    subs.insert_subscription(InMemorySubscription {
+        subscriber: other_plugin.clone(),
+        scope: "store:notes:read".to_string(),
+    });
+
+    // Baseline: 2 active for doomed plugin, 1 for distractor.
+    assert_eq!(subs.active_subscription_count(&plugin_did), 2);
+    assert_eq!(subs.active_subscription_count(&other_plugin), 1);
+
+    // Uninstall: T10-uninstall (c) terminates subscriptions.
+    let mut cascade = InMemoryUninstallCascade::new();
+    let mut private = InMemoryUninstallCascade::new();
+    let mut ctx = UninstallContext {
+        cap_revoker: &mut cascade,
+        private_ns: &mut private,
+        subscriptions: &mut subs,
+    };
+    let outcome = uninstall_plugin(&mut library, &mut store, &mut ctx, &cid).expect("uninstall ok");
+
+    assert_eq!(
+        outcome.subscriptions_terminated, 2,
+        "T10-uninstall (c) LOAD-BEARING: outcome counter reflects 2 terminations"
+    );
+
+    // LOAD-BEARING: registry has zero active subscriptions for
+    // uninstalled plugin-DID; distractor untouched.
+    assert_eq!(
+        subs.active_subscription_count(&plugin_did),
+        0,
+        "T10-uninstall (c) LOAD-BEARING: subscription registry MUST be empty for uninstalled plugin-DID"
+    );
+    assert_eq!(
+        subs.active_subscription_count(&other_plugin),
+        1,
+        "T10-uninstall (c): distractor subscriptions for OTHER plugins MUST NOT be terminated"
     );
 }

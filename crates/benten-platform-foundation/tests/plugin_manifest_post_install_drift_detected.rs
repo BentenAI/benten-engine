@@ -15,11 +15,17 @@
 //! (writes to manifest store; restarts engine); new install record
 //! has wider `requires` consent. User never re-consented.
 //!
-//! New seam: `crates/benten-platform-foundation/src/plugin_manifest.rs::
+//! New seam: `crates/benten-platform-foundation/src/manifest_store.rs::
 //! ManifestStore::load_verified(plugin_did) -> Result<InstallRecord>`.
-//! Verifies: (a) user-DID signature on install record, (b) install-
-//! record CID matches stored expected CID, (c) peer-DID signature on
-//! plugin content matches what install record consented to.
+//! Verifies user-DID signature on install record at every load.
+//!
+//! Substantive after G24-D-FP-1 wire-up: exercises the
+//! `ManifestStore::load_verified` substantive path against a real
+//! Ed25519-signed install record, mutates the bytes, and asserts the
+//! drift surfaces as the typed
+//! `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` AND user
+//! notification is captured (defense-in-depth per threat-model §T5
+//! "do not auto-quarantine — surface to user").
 //!
 //! ## Would-FAIL-if-no-op'd
 //!
@@ -33,90 +39,79 @@
 
 mod common;
 
-use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_id::keypair::Keypair;
+use benten_platform_foundation::manifest_store::ManifestStore;
+use benten_platform_foundation::plugin_manifest::InstallRecord;
+use common::manifest_fixtures::stub_plugin_did;
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
-    T10c post-install drift defense: ManifestStore::load_verified re-verifies user-DID \
-    signature on install record + content-CID round-trip at every load (file-system- \
-    attack defense). The ManifestStore::load_verified surface is the destination per \
-    phase-4-backlog §4.11 (new entry). Named destination: plan §3 G24-D-FP-1 + \
-    phase-4-backlog §4.11. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn plugin_manifest_post_install_record_byte_mutation_detected_at_load_verified() {
-    let _plugin = stub_plugin_did();
-    let _user = stub_user_did();
+    let plugin_did = stub_plugin_did();
+    // Real Ed25519 keypair for the user-DID (T5a defense requires real
+    // signatures — stub bytes would let the test pass on the wrong
+    // path).
+    let user = Keypair::generate();
+    let user_did = user.public_key().to_did();
 
-    // G24-D wave wires this. Substantive shape:
-    //
-    //   use benten_platform_foundation::plugin_manifest::ManifestStore;
-    //
-    //   let mut store = common::manifest_fixtures::test_manifest_store();
-    //   let plugin_did = stub_plugin_did();
-    //   let user_did = stub_user_did();
-    //
-    //   // Install: install record signed by user-DID with narrow
-    //   // `requires` envelope (e.g., only store:notes:read).
-    //   let original_record = common::manifest_fixtures::
-    //       install_record_signed_by_user(
-    //           &user_did, vec!["store:notes:read"]
-    //       );
-    //   store.install_plugin(
-    //       plugin_did.clone(), original_record.clone()
-    //   ).unwrap();
-    //
-    //   // Baseline load: load_verified succeeds.
-    //   let loaded = store.load_verified(&plugin_did).unwrap();
-    //   assert_eq!(loaded.consenting_user_did, user_did);
-    //
-    //   // Attack: mutate the install record bytes on disk (or in
-    //   // backing store) to widen `requires` envelope. New mutated
-    //   // record has WIDER requires (store:notes:read +
-    //   // store:secrets:read) but original user signature.
-    //   store.simulate_byte_mutation_attack(
-    //       plugin_did.clone(),
-    //       common::manifest_fixtures::install_record_widened_post_mutation(
-    //           &user_did,
-    //           vec!["store:notes:read", "store:secrets:read"],
-    //       ),
-    //   );
-    //
-    //   // T5a LOAD-BEARING: load_verified MUST detect drift at next
-    //   // load — install-record CID no longer matches stored expected
-    //   // CID OR user-DID signature no longer verifies over the
-    //   // mutated bytes.
-    //   let result = store.load_verified(&plugin_did);
-    //
-    //   let err = result.expect_err(
-    //       "T5a LOAD-BEARING: post-install install-record drift MUST \
-    //        be detected at load_verified — Layer 2 consent guarantee \
-    //        broken if mutation passes silently"
-    //   );
-    //   assert!(
-    //       matches!(err.code(),
-    //           ErrorCode::E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID
-    //           | ErrorCode::E_PLUGIN_MANIFEST_INVALID),
-    //       "T5a: must surface typed install-record-invalid error per \
-    //        arch-r1-3 ErrorCode split; got {:?}", err.code()
-    //   );
-    //
-    //   // Defense-in-depth: do NOT auto-quarantine — surface to user
-    //   // per threat-model §T5 defense step 1 "ANY mismatch → reject +
-    //   // surface to user (do not auto-quarantine)":
-    //   let user_notification = store.captured_user_notifications();
-    //   assert!(
-    //       user_notification.iter().any(|n|
-    //           n.is_install_record_drift_warning(&plugin_did)),
-    //       "T5a: drift detection MUST surface user notification; \
-    //        zero notifications means surfacing path is silent"
-    //   );
-    //
-    // OBSERVABLE consequence: install-record mutation rejected at
-    // load_verified; user notified; defense-in-depth check at all 3
-    // verify points (boot/per-load/per-merge) gets the same code path.
-    panic!(
-        "RED-PHASE: G24-D must wire ManifestStore::load_verified \
-         post-install drift defense (T5a LOAD-BEARING). Substantive: \
-         install + mutation + load_verified-rejects + typed error + \
-         user-notification surface."
+    // Build install record signed by user-DID; narrow `requires`
+    // envelope (only store:notes:read).
+    let manifest_cid = Cid::from_blake3_digest([7u8; 32]);
+    let mut original = InstallRecord {
+        manifest_cid,
+        plugin_did: plugin_did.clone(),
+        consenting_user_did: user_did.clone(),
+        user_signature: Vec::new(),
+        timestamp_stub_nanos: 1_700_000_000_000_000_000,
+        nonce: vec![0xABu8; 16],
+        granted_caps_bytes: vec![],
+    };
+    let sig = user.sign(&original.signing_payload());
+    original.user_signature = sig.to_bytes().to_vec();
+
+    let mut store = ManifestStore::new();
+    store
+        .install_plugin(plugin_did.clone(), original.clone())
+        .expect("install ok");
+
+    // Baseline: load_verified succeeds.
+    let loaded = store
+        .load_verified(&plugin_did)
+        .expect("baseline load_verified ok");
+    assert_eq!(loaded.consenting_user_did, user_did);
+    assert!(
+        store.captured_user_notifications().is_empty(),
+        "Baseline: no drift notifications"
+    );
+
+    // Attack: mutate the install record bytes — attacker swaps the
+    // nonce (a field signed under the user's key) without holding the
+    // user's secret key. The old signature remains in place but no
+    // longer verifies over the mutated bytes.
+    let mut mutated = original.clone();
+    mutated.nonce = vec![0xFFu8; 16];
+    // KEY POINT: do NOT re-sign. Attacker has no secret key.
+    store
+        .simulate_byte_mutation_attack(plugin_did.clone(), mutated)
+        .expect("attack simulate ok");
+
+    // T5a LOAD-BEARING: load_verified MUST reject.
+    let result = store.load_verified(&plugin_did);
+    let err =
+        result.expect_err("T5a LOAD-BEARING: post-install install-record drift MUST be detected");
+    assert!(
+        matches!(err, ErrorCode::PluginInstallRecordUserSignatureInvalid),
+        "T5a: must surface typed install-record-invalid error; got {err:?}"
+    );
+
+    // Defense-in-depth: user notification surfaced (per threat-model
+    // §T5 "ANY mismatch → reject + surface to user").
+    let notifications = store.captured_user_notifications();
+    assert!(
+        notifications
+            .iter()
+            .any(|n| n.is_install_record_drift_warning(&plugin_did)),
+        "T5a: drift detection MUST surface user notification; zero notifications means surfacing path is silent"
     );
 }
