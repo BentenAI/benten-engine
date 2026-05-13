@@ -89,15 +89,82 @@ Per §13.11 structural lesson — the scope-keyed `has_unrevoked_grant_for_scope
 
 Define mapping from manifest `requires` / `shares` to scope strings; story for `private:<plugin_did>:*` interaction with `wildcard_variants`; install-time-vs-check-time decision. Per cap-r1-3 closure.
 
-### §4.5 `bindings/napi/tests/cap_delegate_napi_resolved_scope_regression_guard.rs` substantive arm at G24-D
+### §4.5 `bindings/napi/tests/cap_delegate_napi_resolved_scope_regression_guard.rs` substantive arm (DESTINATION RETARGETED: §4.7)
 
-R5 G27-A landed the napi class-of-bug audit (PR #224 via R5 wave-g27-a; merged 2026-05-13). The audit confirmed 4 cap-* entry points are the complete enumeration of scope-vs-CID class-of-bug risk surfaces. However, `delegateCapability` is **NOT YET SHIPPED** at the napi layer — the delegate surface lands at G24-D (FULL plugin manifest, via `crates/benten-caps/src/plugin_delegation.rs` runtime UCAN delegation with `audience=plugin-DID` within manifest envelope).
+R5 G27-A landed the napi class-of-bug audit (PR #224 via R5 wave-g27-a; merged 2026-05-13). The audit confirmed 4 cap-* entry points are the complete enumeration of scope-vs-CID class-of-bug risk surfaces. However, `delegateCapability` is **NOT YET SHIPPED** at the napi layer.
 
-To preserve the un-ignore directive (per the G27-A R5 brief: "4/4 un-ignored") without violating HARD RULE rule-12 (no defer-without-destination), the G27-A implementer un-ignored the test + reshaped its body to assert the audit finding at HEAD (no shipped delegate surface). When G24-D lands the napi delegate surface, **that wave's implementer MUST rewrite `cap_delegate_napi_resolved_scope_regression_guard.rs` body to the substantive 4-step arm**: (1) `delegateCapability(grantCid, plugin_did, attenuated_caps)` over napi; (2) verify the delegation Node is minted with the resolved scope (not the grantCid as a string); (3) attempt a write under the delegated cap; (4) assert the per-row cap-recheck at delivery resolves the scope correctly.
+**Retarget rationale (G24-D fix-pass, 2026-05-12):** the original §4.5 destination "at G24-D" was incorrect. G24-D ships the Rust-side `crates/benten-caps/src/plugin_delegation.rs` runtime UCAN delegation envelope-check surface but does NOT ship the napi binding (`delegateCapability(grantCid, plugin_did, attenuated_caps)` from Node-side TS). The napi binding is its own work item — see §4.7 below for the new named destination.
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination + the work obligation lands NOW (not "I'll add it later"). G24-D R5 implementer reads this section as part of their dispatch.
+The G24-D wave deliberately preserved the existing test body in `cap_delegate_napi_resolved_scope_regression_guard.rs` (the G27-A audit-finding shape) because the substantive 4-step arm cannot land until §4.7 ships the napi binding. The test's `#[ignore]` message MUST cite **§4.7** (NOT a phantom "wave-N") as its un-ignore destination.
 
 Closes G27-A R5 mini-review MINOR finding `g27a-mr-1`.
+
+### §4.6 RED-PHASE-BODY status terminology (PROCESS NOTE)
+
+The G24-D primary implementer retagged ~33 RED-PHASE test files with a novel `RED-PHASE-BODY` ignore-message prefix to signal "the test body needs a substantive rewrite vs. a fresh un-ignore." The G24-D mini-review correctly identified this as a HARD RULE 12 phantom-destination drift (the retags also cited a phantom "wave-N"). The G24-D fix-pass restored the standard `RED-PHASE (...)` ignore-message shape with SPECIFIC named destinations (G24-D-FP-1 / G24-D-FP-2 / §4.7 / Phase-4-Meta) per pim-12 §3.6e + HARD RULE 12 clause-(b).
+
+**Do not reintroduce `RED-PHASE-BODY` without explicit Ben ratification + a §3.6e clause defining lifecycle separate from `RED-PHASE`.** Orchestrator may surface a §3.6e clause-amendment to Ben if the body-rewrite-vs-fresh-un-ignore distinction proves load-bearing in future waves.
+
+### §4.7 napi `delegateCapability` binding + substantive arm for `cap_delegate_napi_resolved_scope_regression_guard.rs`
+
+**Origin:** G24-D mini-review BLOCKER g24d-mr-1 closure + retargeting of §4.5 destination. The §4.5 destination ("at G24-D") was incorrect because G24-D ships the Rust-side delegation envelope-check surface only — not the napi Node-side binding.
+
+**Scope:** new napi function `delegateCapability(grantCid: string, pluginDid: string, attenuatedCaps: string[]) -> string` (returns the resulting delegation grant CID). Wires Node-side TS callers to `benten_caps::plugin_delegation::check_delegation_within_envelope` + the underlying UCAN delegation issuance (audience=plugin-DID + attenuated caps within manifest envelope). The 4-step substantive arm for `cap_delegate_napi_resolved_scope_regression_guard.rs`:
+  1. `delegateCapability(grantCid, plugin_did, attenuated_caps)` over napi resolves the napi-passed CID to the underlying grant + invokes envelope-check.
+  2. Verify the new delegation Node is minted with the **resolved scope** (not the grantCid as a string — defends the G27-A class-of-bug).
+  3. Attempt a write under the delegated cap; verify it admits per the manifest envelope.
+  4. Assert the per-row cap-recheck at delivery resolves the scope correctly (couples to G16-B-F per-row recheck at sync delivery).
+
+**LOC estimate:** ~200-400 (napi binding + TS catalog entry + test body rewrite + a benten-caps issuance helper if not already at HEAD).
+
+**Phase target:** **Phase 4-Foundation R5 G24-D-FP-3** (NEW wave; planner adds row to plan §3 §3.5.1 alongside G24-D-FP-1 + G24-D-FP-2). **Dependency:** depends on G24-D primary (envelope-check surface) + G24-D-FP-2 (manifest envelope chain validator seam — the napi binding consumes both). Couples to G27-D (manifest-aware scope derivation) for resolved-scope semantics.
+
+**Acceptance:**
+- `cap_delegate_napi_resolved_scope_regression_guard.rs` body rewritten to the 4-step substantive arm; `#[ignore]` removed.
+- New napi binding ships in `bindings/napi/src/cap.rs` (or equivalent) with TS class signature in `bindings/napi/index.d.ts`.
+- New TS-side test under `packages/engine/test/` exercising the binding end-to-end.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for the substantive arm + the §4.7 entry lands NOW (the actual code obligation defers to G24-D-FP-3).
+
+### §4.8 `PluginManifest::to_canonical_bytes` + DAG-CBOR key-walk inspection
+
+**Origin:** G24-D mini-review fix-pass disposition of two RED-PHASE test pins (`plugin_cross_plugin_reference_uses_content_cid_not_author_did.rs::manifest_canonical_bytes_dag_cbor_encodes_accepts_content_as_cid_array` + `plugin_pull_not_push_no_manifest_schema_version_field.rs::manifest_canonical_bytes_dag_cbor_contains_no_schema_version_key`) that need a public `to_canonical_bytes() -> Vec<u8>` surface at HEAD to assert structural properties of the canonical encoding (Cid array shape; absence of schema_version key).
+
+**Scope:** the helper `compute_content_cid` already serializes via `serde_ipld_dagcbor::to_vec` internally; the proposal is to surface this as a public `pub fn to_canonical_bytes(&self) -> Vec<u8>` method. Test pins then inspect the encoded CBOR key set / structure of `accepts_content` directly.
+
+**Phase target:** **Phase 4-Foundation R5 G24-D-FP-2** (manifest envelope chain validator + canonical-bytes surface). Couples to envelope-chain validation because canonical-bytes is the form the chain validator hashes.
+
+**Acceptance:**
+- `PluginManifest::to_canonical_bytes(&self) -> Vec<u8>` shipped pub.
+- Two pinned tests un-ignored:
+  - `manifest_canonical_bytes_dag_cbor_encodes_accepts_content_as_cid_array` (asserts CID-shaped CBOR for `accepts_content` field; CID byte form vs string form).
+  - `manifest_canonical_bytes_dag_cbor_contains_no_schema_version_key` (asserts no schema_version-shaped key in the CBOR map).
+
+### §4.9 RotationLog + HLC-monotonic-strict integration at install/load surfaces
+
+**Origin:** G24-D mini-review fix-pass disposition of three RED-PHASE test pins (`plugin_manifest_author_key_rotation_round_trip.rs` + `plugin_provenance_rotated_key_surfaces_warning_via_rotation_log.rs` + `plugin_manifest_signature_replay_with_different_nonce_rejected.rs`) that need `PluginManifest::validate_with_rotation_log(&rotation_log)` + HLC-strict rotation-event replay defense seams to land.
+
+**Scope:** new public API at `crates/benten-platform-foundation/src/plugin_manifest.rs`:
+- `pub fn validate_with_rotation_log(&self, rotation_log: &benten_id::rotation_log::RotationLog) -> Result<ValidationOutcome, ErrorCode>` returning `Valid` / `ValidWithWarning(RotatedKeyWarning)` per D-4F-12 (rotation surfaces warning, not hard-reject by default).
+- HLC-monotonic-strict rotation-event ordering defense (couples to existing Phase-3 `benten-id::rotation_log` + HLC infrastructure).
+
+**Phase target:** **Phase 4-Foundation R5 G24-D-FP-2** (manifest envelope chain validator + RotationLog integration). The chain validator already consumes RotationLog state at the Layer 2/3 bridge per plan §3 G24-D-FP-2 row.
+
+**Acceptance:**
+- `validate_with_rotation_log` pub method on PluginManifest.
+- Three pinned tests un-ignored: rotation round-trip + warning surface + nonce-swap replay rejection.
+
+### §4.10 `ManifestStore::load_verified` + post-install drift detection
+
+**Origin:** G24-D mini-review fix-pass disposition of `plugin_manifest_post_install_drift_detected.rs` — needs a `ManifestStore` durable surface that re-verifies install records on load (post-install byte-mutation defense per threat-model §T10c).
+
+**Scope:** new `crates/benten-platform-foundation/src/manifest_store.rs` (or extension to plugin_library.rs) with `ManifestStore::load_verified(plugin_did) -> Result<InstallRecord, ErrorCode>` that re-runs install-record verification on every load. Backs the persistent half (file-system attack defense) of the user-as-source signing model.
+
+**Phase target:** **Phase 4-Foundation R5 G24-D-FP-1** (plugin_lifecycle hardening; install/uninstall + load surface). Couples to the redb-persisted plugin library work.
+
+**Acceptance:**
+- `ManifestStore::load_verified` shipped pub.
+- `plugin_manifest_post_install_drift_detected.rs` substantive test body wired against the new load_verified path.
 
 ---
 

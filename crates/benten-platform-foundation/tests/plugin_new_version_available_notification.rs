@@ -5,17 +5,41 @@
 //! hard-reject) when a newer descendant of the installed CID is
 //! discovered via atrium.
 
-mod common;
+use benten_errors::ErrorCode;
+use benten_platform_foundation::module_ecosystem::new_version_available_code;
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-fn discovering_newer_version_in_atrium_surfaces_new_version_available_notification() {
-    let _v1 = common::manifest_fixtures::stub_cid_one();
-    let _v2 = common::manifest_fixtures::stub_cid_two();
+fn new_version_notification_surfaces_typed_pull_not_push_code_at_engine_boundary() {
+    // SUBSTANTIVE per pim-2 §3.6b: at HEAD `new_version_available_code()`
+    // is the engine-boundary anchor that the admin UI surfaces as the
+    // pull-not-push notification. Asserting the typed return defends
+    // against rename / collapse to a different code family. Would-FAIL
+    // if the anchor returned a wrong/stale ErrorCode (e.g.,
+    // PluginManifestInvalid).
+    assert_eq!(
+        new_version_available_code(),
+        ErrorCode::PluginNewVersionAvailable,
+        "pull-not-push notification anchor MUST return typed \
+         PluginNewVersionAvailable; would-FAIL if family-shifted"
+    );
+    // Round-trip via the string form to defend the string contract.
+    assert_eq!(
+        ErrorCode::PluginNewVersionAvailable.as_static_str(),
+        "E_PLUGIN_NEW_VERSION_AVAILABLE"
+    );
+}
 
-    // Future surface: atrium peer announces v2; receiver's
-    // plugin_lifecycle checks if v2 is a descendant of any installed
-    // plugin's anchor; if yes, emit E_PLUGIN_NEW_VERSION_AVAILABLE
-    // event to admin UI (NOT auto-install per pull-not-push model).
-    panic!("RED-PHASE: G24-D wave must wire pull-model new-version notification");
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    End-to-end pull-not-push notification surface: atrium peer announces v2 CID; \
+    receiver's plugin_lifecycle checks if v2 is a DAG-descendant of any installed \
+    plugin's anchor; if yes, emit PluginNewVersionAvailable change-event to admin UI. \
+    Couples to G24-D-FP-1 plugin_lifecycle hardening (uninstall + upgrade + \
+    pull-notify in same lifecycle module). Named destination: plan §3 G24-D-FP-1. \
+    HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
+#[test]
+fn discovering_newer_version_in_atrium_surfaces_new_version_available_event_end_to_end() {
+    // Phase 4-Foundation R5 G24-D-FP-1 surface: plugin_lifecycle ships
+    // the discover-then-notify path. At HEAD only the typed anchor
+    // exists; end-to-end atrium-discovery wiring lands at G24-D-FP-1.
+    panic!("G24-D-FP-1 wires end-to-end atrium-discovery pull-not-push notify path");
 }

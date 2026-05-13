@@ -11,7 +11,14 @@ mod common;
 
 use common::manifest_fixtures::minimal_manifest;
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    D-4F-15 transparent-clock-injection at engine surface: \
+    PluginManifest::validate_with_clock(&clock_fn) + install_plugin clock-injection \
+    seam. Plugin authors call validate() without clock parameter; engine wraps with \
+    clock injection at the load boundary; fail-closed E_UCAN_CLOCK_NOT_INJECTED \
+    when not injected. Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle + \
+    engine clock-injection seam at install/load boundary). HARD RULE 12 clause-(b) \
+    BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_validate_consults_engine_injected_clock_not_plugin_local_clock() {
     let manifest = minimal_manifest();
@@ -30,7 +37,14 @@ fn manifest_validate_consults_engine_injected_clock_not_plugin_local_clock() {
     );
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    D-4F-15 transparent-clock-injection at engine surface: \
+    PluginManifest::validate_with_clock(&clock_fn) + install_plugin clock-injection \
+    seam. Plugin authors call validate() without clock parameter; engine wraps with \
+    clock injection at the load boundary; fail-closed E_UCAN_CLOCK_NOT_INJECTED \
+    when not injected. Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle + \
+    engine clock-injection seam at install/load boundary). HARD RULE 12 clause-(b) \
+    BELONGS-NAMED-NOW."]
 #[test]
 fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injected() {
     let manifest = common::manifest_fixtures::admin_ui_v0_manifest();

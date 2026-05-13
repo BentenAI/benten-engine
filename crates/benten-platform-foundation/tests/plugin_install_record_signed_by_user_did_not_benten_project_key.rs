@@ -29,27 +29,70 @@ fn install_record_is_signed_by_user_did_anchored_in_users_graph() {
     // ed25519 verify would reject. Stub at R3.
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
 fn no_benten_project_key_infrastructure_in_codebase_grep_assert() {
-    // Per R2 §5 substance discipline: grep-assert the codebase
-    // CONTAINS NO functions/types/symbols matching the Benten-project-
-    // key pattern. The user-as-source signing model is structural;
-    // there should be no "project key" anywhere.
+    // SUBSTANTIVE per R2 §5: grep-walk over the platform-foundation
+    // crate source tree asserting NO symbols match the Benten-
+    // project-key pattern. The user-as-source signing model is
+    // structural; there should be no "project key" anywhere.
     //
-    // Future surface: a build-time / test-time grep over
-    // crates/benten-platform-foundation/src/ for symbol patterns
-    // matching `benten_project_key|BentenProjectKey|project_signing_key|
-    // BENTEN_PROJECT_KEY`. Assert: count == 0.
-    //
-    // At R3 RED-PHASE, the platform-foundation crate is mostly empty
-    // stubs so this trivially passes, but un-ignoring at G24-D requires
-    // the assertion still hold after the full implementation lands.
+    // pim-18 §3.6f vacuous-truth defense: first-line assert the
+    // walked root exists; assert the walk actually surfaces .rs
+    // files. Without these guards, a 0-file walk would silently pass.
 
-    // R3 stub: pretend assertion runs against the directory above.
-    // G24-D implementer must implement the actual grep walker + count==0
-    // assertion against the post-implementation source tree.
-    panic!(
-        "RED-PHASE: G24-D wave must implement grep-assertion over crates/benten-platform-foundation/src/ counting 0 matches for benten_project_key|BentenProjectKey patterns"
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src_dir = manifest_dir.join("src");
+    assert!(
+        src_dir.exists() && src_dir.is_dir(),
+        "walked root MUST exist: {src_dir:?} (vacuous-truth defense per pim-18 §3.6f)"
+    );
+
+    // Forbidden patterns — Benten-project-key symbols that MUST NOT
+    // appear in the codebase per CLAUDE.md #18 "user-as-source signing
+    // model" (post-2026-05-11 D-4F-12 retense).
+    let forbidden_patterns = [
+        "benten_project_key",
+        "BentenProjectKey",
+        "project_signing_key",
+        "BENTEN_PROJECT_KEY",
+        "ProjectSigningKey",
+    ];
+
+    let mut walked_files = 0usize;
+    let mut violations: Vec<(String, &str)> = Vec::new();
+
+    for entry in walkdir::WalkDir::new(&src_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+            continue;
+        }
+        walked_files += 1;
+        let src = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
+        for pat in &forbidden_patterns {
+            if src.contains(pat) {
+                violations.push((path.display().to_string(), pat));
+            }
+        }
+    }
+
+    // pim-18 §3.6f sub-rule: assert the walk actually visited files.
+    assert!(
+        walked_files > 0,
+        "walkdir surfaced 0 .rs files under {src_dir:?} — vacuous-truth defense"
+    );
+
+    assert!(
+        violations.is_empty(),
+        "platform-foundation src/ MUST NOT contain Benten-project-key \
+         patterns (user-as-source signing model per CLAUDE.md #18). \
+         Violations: {violations:?}"
     );
 }

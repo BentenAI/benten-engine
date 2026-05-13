@@ -35,7 +35,12 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    T10c post-install drift defense: ManifestStore::load_verified re-verifies user-DID \
+    signature on install record + content-CID round-trip at every load (file-system- \
+    attack defense). The ManifestStore::load_verified surface is the destination per \
+    phase-4-backlog §4.10 (new entry). Named destination: plan §3 G24-D-FP-1 + \
+    phase-4-backlog §4.10. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn plugin_manifest_post_install_record_byte_mutation_detected_at_load_verified() {
     let _plugin = stub_plugin_did();

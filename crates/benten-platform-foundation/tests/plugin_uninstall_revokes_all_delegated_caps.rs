@@ -14,7 +14,11 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    Umbrella uninstall cascade arm: walks user-DID-issued grants WHERE \
+    audience=plugin_did + revokes each via Engine::revoke_capability_by_grant_cid \
+    (shipped PR #199). Named destination: plan §3 G24-D-FP-1 (plugin_lifecycle \
+    uninstall cascade-revoke). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn uninstall_cascade_revokes_user_grants_with_audience_equals_plugin_did() {
     let _plugin = stub_plugin_did();
@@ -30,7 +34,10 @@ fn uninstall_cascade_revokes_user_grants_with_audience_equals_plugin_did() {
     panic!("RED-PHASE: G24-D-FP-1 must wire uninstall_plugin cascade-revoke");
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    Plugin-DID downstream cascade arm: walks grants WHERE issuer=plugin_did + \
+    revokes each (cascades plugin-to-plugin delegations per CLAUDE.md #18 Layer 3). \
+    Named destination: plan §3 G24-D-FP-1. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn uninstall_cascade_revokes_plugin_did_downstream_ucan_delegations() {
     let _plugin = stub_plugin_did();

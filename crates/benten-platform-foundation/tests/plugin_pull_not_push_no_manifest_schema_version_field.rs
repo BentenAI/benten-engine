@@ -38,7 +38,13 @@ fn manifest_struct_has_no_schema_version_field_at_type_level() {
     } = PluginManifestDestructure::from(&manifest);
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
+    Canonical-bytes CBOR-key-walk inspection asserting absence of schema_version- \
+    shaped keys; requires PluginManifest::to_canonical_bytes public surface (NOT \
+    shipped at G24-D primary). The type-level field-set check (above test) carries \
+    the substance at G24-D; encoded-key-walk arm lands at G24-D-FP-2 per \
+    phase-4-backlog §4.8. Named destination: plan §3 G24-D-FP-2 + phase-4-backlog \
+    §4.8. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_canonical_bytes_dag_cbor_contains_no_schema_version_key() {
     let manifest = minimal_manifest();

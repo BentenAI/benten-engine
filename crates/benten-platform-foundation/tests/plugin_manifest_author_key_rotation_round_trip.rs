@@ -39,7 +39,14 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
+    T5c peer-DID key-rotation round-trip via RotationLog integration: K1 leaked, \
+    Alice rotates to K2 via signed RotationLog event, post-rotation content signed \
+    by K1 surfaces 'plugin came from rotated key' warning per D-4F-12 (NOT hard- \
+    reject by default). Requires PluginManifest::validate_with_rotation_log (per \
+    phase-4-backlog §4.9) shipping at G24-D-FP-2. Named destination: plan §3 \
+    G24-D-FP-2 (manifest envelope chain validator + RotationLog integration). \
+    HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn plugin_manifest_peer_did_key_rotation_surfaces_warning_round_trip() {
     let _plugin = stub_plugin_did();

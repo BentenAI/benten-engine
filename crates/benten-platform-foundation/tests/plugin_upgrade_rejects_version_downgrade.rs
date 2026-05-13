@@ -37,7 +37,11 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-1 wave un-ignores) — \
+    T10-upgrade (b) per-finding arm: upgrade rejects CID that is NOT a DAG-descendant \
+    of the installed version (downgrade attack defense). Named destination: \
+    plan §3 G24-D-FP-1 (plugin_lifecycle hardening — upgrade flow + DAG-descendant \
+    check). HARD RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
     let _plugin = stub_plugin_did();

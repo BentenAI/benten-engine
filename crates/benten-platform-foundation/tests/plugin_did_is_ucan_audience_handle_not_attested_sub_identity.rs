@@ -14,7 +14,15 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G22-FP-2 wave un-ignores) — \
+    Positive UCAN audience-handle flow: user_did issues UCAN with audience=plugin_did \
+    + cap; chain validator at UcanGroundedPolicy::permits_typed_proof_for admits with \
+    audience-bound check + does NOT traverse any attestation-chain. The audience- \
+    binding seam ships at G22-FP-2 (per plan §3 G22-FP-2 row). Until then the \
+    negative grep-walk substance arm (no_attestation_chain_for_plugin_did_function_ \
+    in_benten_id_grep_assert below) carries the substance. Named destination: plan \
+    §3 G22-FP-2 (UcanGroundedPolicy audience binding). HARD RULE 12 clause-(b) \
+    BELONGS-NAMED-NOW."]
 #[test]
 fn ucan_with_audience_equals_plugin_did_validates_without_attestation_chain() {
     let _user = stub_user_did();

@@ -6,41 +6,81 @@
 
 mod common;
 
-use common::manifest_fixtures::{minimal_manifest, stub_cid_one, stub_cid_two};
+use benten_core::Cid;
+use benten_errors::ErrorCode;
+use benten_platform_foundation::plugin_manifest::detect_composition_cycle;
+use common::manifest_fixtures::minimal_manifest;
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-fn meta_plugin_composition_cycle_rejected_at_install_with_typed_error() {
+fn meta_plugin_composition_cycle_rejected_with_typed_error_code() {
+    // SUBSTANTIVE per pim-2 §3.6b: build a cycle A -> B -> A;
+    // exercise detect_composition_cycle at HEAD; expect typed
+    // PluginMetaCompositionCycleRejected. Would-FAIL if cycle-walk
+    // missed (would return Ok or infinite-loop).
+    //
+    // Use distinct CID values so root_cid != child_cid identity is real.
+    let a_cid = Cid::from_blake3_digest([0xAAu8; 32]);
+    let b_cid = Cid::from_blake3_digest([0xBBu8; 32]);
+
     let mut a = minimal_manifest();
-    a.composes_plugins = Some(vec![stub_cid_one()]);
+    a.composes_plugins = Some(vec![b_cid]);
 
     let mut b = minimal_manifest();
-    b.composes_plugins = Some(vec![stub_cid_two()]); // points back to a (cycle)
+    b.composes_plugins = Some(vec![a_cid]); // cycle back to a
 
-    // Future surface:
-    //   plugin_lifecycle::install_plugin(manifest, install_record)
-    //     walks composes_plugins recursively; if any descendant
-    //     references the manifest being installed, return
-    //     ErrorCode::PluginMetaCompositionCycleRejected.
-    //
-    // FAILS-IF-NO-OP because cycle would cause infinite walk at
-    // runtime (not at install).
-    panic!("RED-PHASE: G24-D wave must wire meta-composition cycle detection AS REJECTION");
+    // Resolver: returns b's manifest when looking up b_cid; nothing
+    // else.
+    let resolver = |cid: &Cid| -> Option<_> { if *cid == b_cid { Some(b.clone()) } else { None } };
+
+    let result = detect_composition_cycle(a_cid, &a, &resolver);
+    let err = result.expect_err("cycle MUST be rejected");
+    assert_eq!(
+        err,
+        ErrorCode::PluginMetaCompositionCycleRejected,
+        "cycle MUST surface typed PluginMetaCompositionCycleRejected; \
+         would-FAIL if cycle-walk skipped"
+    );
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[test]
+fn meta_plugin_acyclic_composition_admitted_no_typed_error() {
+    // SUBSTANTIVE boundary per pim-2 §3.6b: non-cyclic composition
+    // (A -> B -> nothing) admits. Would-FAIL if detector over-rejected.
+    let a_cid = Cid::from_blake3_digest([0xAAu8; 32]);
+    let b_cid = Cid::from_blake3_digest([0xBBu8; 32]);
+
+    let mut a = minimal_manifest();
+    a.composes_plugins = Some(vec![b_cid]);
+
+    let mut b = minimal_manifest();
+    b.composes_plugins = None; // leaf
+
+    let resolver = |cid: &Cid| -> Option<_> { if *cid == b_cid { Some(b.clone()) } else { None } };
+
+    let result = detect_composition_cycle(a_cid, &a, &resolver);
+    result.expect("acyclic chain MUST admit");
+}
+
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
+    Verifies recursive composition walk is implemented via engine evaluator's existing \
+    12 primitives (CALL/SUBSCRIBE) without minting a new primitive. The grep-walk \
+    defense lives in the engine evaluator integration path that G24-D-FP-2 ships \
+    (manifest_envelope_chain_validation.rs walks composition via engine evaluator). \
+    Named destination: plan §3 G24-D-FP-2 row (manifest envelope chain validator). \
+    HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: plan row pre-exists; this pin couples to it."]
 #[test]
 fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
-    let mut a = minimal_manifest();
-    a.composes_plugins = Some(vec![stub_cid_one()]);
-
-    // Future surface: walking meta-plugin composition uses the existing
-    // 12-primitive vocabulary (likely SUBSCRIBE + CALL recursion);
-    // NO new primitive minted. Per CLAUDE.md baked-in #1 (12 primitives
-    // irreducible).
+    // Future surface at G24-D-FP-2: walking meta-plugin composition
+    // uses the existing 12-primitive vocabulary (CALL + SUBSCRIBE
+    // recursion); NO new primitive minted. Per CLAUDE.md baked-in #1
+    // (12 primitives irreducible).
     //
-    // Substance: grep-assert benten-eval/src/ for no new primitive
-    // variant; or assertion at the meta_composition surface that the
-    // walk is implemented via CALL/SUBSCRIBE.
-    panic!("RED-PHASE: G24-D wave must wire recursive walk via existing 12 primitives");
+    // Substance shape: grep-assert benten-eval/src/ for no new
+    // primitive variant; verify the composition walk path uses CALL
+    // or SUBSCRIBE.
+    panic!(
+        "Phase 4-Foundation R5 G24-D-FP-2 un-ignores once \
+         manifest_envelope_chain_validation.rs wires composition-walk \
+         through engine evaluator"
+    );
 }

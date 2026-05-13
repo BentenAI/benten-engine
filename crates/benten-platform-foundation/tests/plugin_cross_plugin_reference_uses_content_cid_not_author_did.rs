@@ -40,7 +40,13 @@ fn manifest_accepts_content_field_is_cid_list_not_did_list() {
     );
 }
 
-#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-D-FP-2 wave un-ignores) — \
+    Canonical-bytes DAG-CBOR inspection: requires PluginManifest::to_canonical_bytes \
+    public surface (NOT shipped at G24-D primary; compute_content_cid serializes \
+    internally but does not expose bytes). The to_canonical_bytes surface lands at \
+    G24-D-FP-2 per phase-4-backlog §4.8. Named destination: plan §3 G24-D-FP-2 + \
+    phase-4-backlog §4.8 (to_canonical_bytes + CBOR-key-walk inspection). HARD \
+    RULE 12 clause-(b) BELONGS-NAMED-NOW."]
 #[test]
 fn manifest_canonical_bytes_dag_cbor_encodes_accepts_content_as_cid_array() {
     let manifest = manifest_with_accepts_content(vec![stub_cid_one(), stub_cid_two()]);
