@@ -281,9 +281,9 @@ generic kernel's label-matching semantics.
 Test/dev-only helpers, exposed publicly (not `#[cfg(test)]`) because
 consumer crates' integration tests reach into them.
 - `testing_construct_view_with_strategy(strategy) -> Box<dyn View>` — picks
-  one default view per strategy. Panics on `Strategy::C`.
+  one default view per strategy. Panics on `Strategy::Reserved`.
 - `try_construct_view_with_strategy(strategy) -> Result<...>` — same, but
-  surfaces the typed `StrategyNotImplemented` error for `Strategy::C`
+  surfaces the typed `StrategyNotImplemented` error for `Strategy::Reserved`
   instead of panicking.
 - `criterion_estimates_mean_ns(group, view, axis, value)` — reads a
   Criterion `estimates.json` and returns the `mean.point_estimate` in
@@ -455,7 +455,7 @@ Trait + enum shapes:
   object-safety).
 - `strategy_enum_present.rs` (60 LOC) — `Strategy::{A,B,C}` exists + the 5
   views default to `A`.
-- `strategy_c_reserved.rs` (70 LOC) — Strategy::C surfaces typed
+- `strategy_c_reserved.rs` (70 LOC) — Strategy::Reserved surfaces typed
   `E_IVM_STRATEGY_NOT_IMPLEMENTED`.
 - `strategy_explicit_opt_in.rs` (72 LOC) — no auto-select, no runtime
   adaptation (D8-RESOLVED pin).
@@ -803,14 +803,15 @@ subscriber), or REPLACE IVM (subgraphs replace incremental indices)?
   INTERNAL.** Documented in §7.3. Honor-system boundary; could be
   narrowed to `pub(crate)` after a re-export sweep.
 
-- **`Strategy::C` is reserved-not-implemented forever-deferred.** No
-  Phase target ever named beyond the vague `"Phase 3+"`. Z-set / DBSP
+- **`Strategy::Reserved` is reserved-not-implemented forever-deferred.**
+  No Phase target ever named beyond the vague `"Phase 3+"`. Z-set / DBSP
   cancellation is a real algorithmic family the variant gestures at, but
   the value of pre-reserving a variant for an algorithm we haven't
   designed is more API-stability-theater than concrete forward planning.
-  Either commit to a phase for `Strategy::C` or rename the variant to
-  something less load-bearing (e.g. `Strategy::Reserved` with a string
-  payload).
+  Phase-4-Foundation G23-0a renamed the prior third-variant spelling to
+  `Strategy::Reserved` per arch-r1-14 — closing the
+  CRATES-DEEP-DIVE §4 named-but-deferred item by surfacing the
+  reserved-not-implemented state in the variant name itself.
 
 - **Subscriber pattern-based pre-filtering is named Phase-3 TODO and
   hasn't moved.** Every view sees every event with internal filter. Fine

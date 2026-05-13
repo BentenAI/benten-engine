@@ -67,8 +67,8 @@ pub enum ViewError {
     /// in this phase. The IVM crate ships `Strategy::A` (hand-written) +
     /// `Strategy::B` (Algorithm B; G23-0a generalizes to consume
     /// `SubgraphSpec`); `Strategy::Reserved` (Z-set / DBSP cancellation;
-    /// renamed from `Strategy::C` at G23-0a per arch-r1-14) is reserved
-    /// for Phase 3+ (g8-concern-3). Surfaces from
+    /// renamed from the prior third-variant spelling at G23-0a per
+    /// arch-r1-14) is reserved for Phase 3+ (g8-concern-3). Surfaces from
     /// [`crate::testing::try_construct_view_with_strategy`]. Maps to
     /// [`ErrorCode::IvmStrategyNotImplemented`](benten_errors::ErrorCode::IvmStrategyNotImplemented).
     #[error(
@@ -104,10 +104,10 @@ impl ViewError {
             // StrategyNotImplemented (G8-A, g8-concern-3): the caller asked
             // for a Strategy variant that is reserved but not yet wired —
             // currently only `Strategy::Reserved` (Z-set / DBSP cancellation;
-            // renamed from `Strategy::C` at G23-0a per arch-r1-14),
-            // deferred to Phase 3+. The dedicated catalog code keeps cross-
-            // language consumers from confusing this with the runtime-stale
-            // `E_IVM_VIEW_STALE` family.
+            // renamed from the prior third-variant spelling at G23-0a per
+            // arch-r1-14), deferred to Phase 3+. The dedicated catalog code
+            // keeps cross-language consumers from confusing this with the
+            // runtime-stale `E_IVM_VIEW_STALE` family.
             ViewError::StrategyNotImplemented { .. } => {
                 benten_errors::ErrorCode::IvmStrategyNotImplemented
             }

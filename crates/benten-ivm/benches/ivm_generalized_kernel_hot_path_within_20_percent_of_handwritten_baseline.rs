@@ -55,6 +55,7 @@ mod inner {
     use benten_graph::{ChangeEvent, ChangeKind};
     use benten_ivm::View;
     use benten_ivm::views::ContentListingView;
+    use benten_ivm::{Algorithm, KernelInput, SubgraphSpec};
     use criterion::{Criterion, criterion_group};
 
     /// Corpus size — matches the existing `algorithm_b_canonical` bench
@@ -84,11 +85,18 @@ mod inner {
         (0..CORPUS_SIZE as u64).map(make_event).collect()
     }
 
-    /// G23-0a kernel hot-path comparison bench.
+    /// G23-0a kernel hot-path comparison bench (mat-r1-2).
+    ///
+    /// THRESHOLD: subgraph_generalized <= 1.20 * handwritten_baseline.
+    /// POLICY: informational at G23-0a landing; promoted to required at
+    /// R6 once baseline measurements are stable.
     pub fn ivm_generalized_kernel_hot_path(c: &mut Criterion) {
         let mut group = c.benchmark_group("ivm_generalized_kernel_hot_path");
 
         let events = corpus();
+        let kernel_inputs: Vec<KernelInput> = (0..CORPUS_SIZE as u64)
+            .map(|i| KernelInput::new("post", i as i64, i))
+            .collect();
 
         // Baseline: hand-written ContentListingView. Pre-G23-0a shape.
         group.bench_function("handwritten_baseline", |b| {
@@ -101,27 +109,20 @@ mod inner {
             });
         });
 
-        // Generalized: post-G23-0a `Algorithm::register_subgraph`. R5
-        // implementer wires the production call here:
-        //
-        //   use benten_ivm::{Algorithm, SubgraphSpec};
-        //   let spec = SubgraphSpec::for_canonical_view("content_listing")
-        //       .with_label_pattern_exact("post");
-        //   let mut view = Algorithm::register_subgraph(spec).unwrap();
-        //   for e in &events { view.update(e).unwrap(); }
-        //
-        // RED-PHASE skeleton drives the hand-written view AGAIN so the
-        // bench compiles + criterion output JSON shape is valid. The
-        // ratio measurement is meaningful only after R5 landing —
-        // until then both arms measure the same workload + the gate
-        // is trivially within 20%. The gate test the R5 implementer
-        // adds at landing parses these JSON outputs.
+        // Generalized: post-G23-0a `Algorithm::register_subgraph` walking
+        // through `walk_writes`. The canonical content_listing inner
+        // kernel is the same hand-written view; the generalized path's
+        // overhead is the SubgraphSpec → kernel-input conversion +
+        // KernelInput → ChangeEvent translation inside walk_writes.
         group.bench_function("subgraph_generalized", |b| {
             b.iter(|| {
-                let mut view = ContentListingView::new("post");
-                for e in &events {
-                    let _ = view.update(e);
-                }
+                let spec = SubgraphSpec::for_canonical_view("content_listing")
+                    .expect("content_listing is canonical");
+                let mut view =
+                    Algorithm::register_subgraph(spec).expect("register_subgraph succeeds");
+                let _ = view
+                    .walk_writes(&kernel_inputs)
+                    .expect("walk_writes succeeds");
                 black_box(&view);
             });
         });

@@ -36,7 +36,6 @@ mod common_kernel_canary;
 use common_kernel_canary::EXPECTED_STRATEGY_VARIANTS;
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn strategy_enum_remains_3_variants_post_generalization() {
     // Locate `crates/benten-ivm/src/strategy.rs` via CARGO_MANIFEST_DIR.
     // Workspace layout: <root>/crates/benten-ivm/{tests,src}.
@@ -103,7 +102,6 @@ fn strategy_enum_remains_3_variants_post_generalization() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn strategy_enum_does_not_contain_strategy_c() {
     // arch-r1-14 rename verification — post-G23-0a, no `C` variant in
     // the Strategy enum body. Grep-assert because the rename is
@@ -140,7 +138,6 @@ fn strategy_enum_does_not_contain_strategy_c() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn strategy_enum_contains_reserved_variant() {
     // Companion-positive pin to the negative `_does_not_contain_strategy_c`
     // pin above — both must hold to confirm the rename is complete.
