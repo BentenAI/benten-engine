@@ -240,5 +240,25 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
         "Seam 4: install_plugin MUST wire detect_composition_cycle (Step 6); \
          would-FAIL if cycle-walk skipped"
     );
-    assert!(library.is_empty(), "cycle-rejected install MUST NOT commit");
+    // pim-2 §3.6b sub-rule 4: pin the FULL no-partial-state-commit
+    // invariant. Step 6 (cycle detect) precedes Step 8 (DID mint) +
+    // Step 9 (cap cascade) + Step 10 (private-ns provision) + Step 11
+    // (library insert) — all four MUST be empty if Step 6 rejects.
+    assert!(
+        library.is_empty(),
+        "cycle-rejected install MUST NOT commit library entry (Step 11 unreached)"
+    );
+    assert!(
+        store.is_empty(),
+        "cycle-rejected install MUST NOT persist plugin-DID (Step 8 unreached)"
+    );
+    assert!(
+        cascade_minter.minted_grants().is_empty(),
+        "cycle-rejected install MUST NOT mint cap-cascade grants (Step 9 unreached)"
+    );
+    assert_eq!(
+        private_ns.provisioned_count(),
+        0,
+        "cycle-rejected install MUST NOT provision private namespace (Step 10 unreached)"
+    );
 }

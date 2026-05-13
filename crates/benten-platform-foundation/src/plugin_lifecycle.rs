@@ -826,6 +826,14 @@ impl InMemoryInstallCascade {
     pub fn has_provisioned(&self, plugin_did: &Did) -> bool {
         self.provisioned_namespaces.contains(plugin_did)
     }
+
+    /// Count of plugin-DIDs whose private namespace has been provisioned.
+    /// Used by no-partial-state-commit pins (e.g. cycle-rejected install)
+    /// where no plugin-DID is known at assertion time.
+    #[must_use]
+    pub fn provisioned_count(&self) -> usize {
+        self.provisioned_namespaces.len()
+    }
 }
 
 impl CapMinter for InMemoryInstallCascade {

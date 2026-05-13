@@ -386,6 +386,10 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Cl
 
 R4b-FP-1 Seam 2 shipped `PluginManifest::validate_with_clock` + threaded through `plugin_lifecycle::install_plugin`. The end-to-end **engine builder** clock-injection seam (`EngineBuilder::clock_source` plumbed through to the install path's `now_secs` AND through IndexedDB persistence so a thin-compute-surface install consults the injected clock at hydrate time too) lands at Phase-4-Meta. ~100-200 LOC.
 
+### §4.21 `install_plugin` Steps 9/10/11 partial-failure rollback semantics (Phase-4-Meta)
+
+R4b-FP-1 Seam 1 shipped the 11-step `plugin_lifecycle::install_plugin` pipeline. Steps 8 (DID mint + persist), 9 (cap cascade mint), 10 (private-ns provision), and 11 (library insert + active ref) each early-return on `Err` via `?`, which can leave partial state behind in the engine adapter's production cascade (e.g. plugin-DID persisted at Step 8 with no library entry if Step 9 fails). The `InMemoryInstallCascade` test default has all infallible paths so the no-partial-state invariant is structurally enforced for the v1 test suite, but the engine adapter that wires the real grant store + plugin-DID store at Phase-4-Meta MUST define rollback shape: either (a) transactional install (all-or-nothing across Steps 8-11), or (b) post-install reconciliation pass that detects + cleans up partial-state residue (`plugin_did` in store with no library entry → revoke + drop). Cite: `crates/benten-platform-foundation/src/plugin_lifecycle.rs:701-790` Steps 8-11; mini-review `.addl/phase-4-foundation/r4b-fp-1-mini-review.json` finding `r4b-fp-1-mr-2`. ~150-300 LOC + transactional test pins.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
