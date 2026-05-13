@@ -331,6 +331,26 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::TypedCallInvalidInput,
     ErrorCode::TypedCallCapDenied,
     ErrorCode::TypedCallDispatchError,
+    // Phase-4-Foundation G24-F (DidKeyedSession + SessionToken
+    // thin-client session-protocol surface; T2 defenses 1-3 + br-r1-1
+    // + sec-4f-r1-5 + Family F1 gap #2). Four new catalog variants for
+    // the four failure modes the protocol surfaces at the full-peer
+    // boundary. Construction site:
+    // `crates/benten-engine/src/thin_client.rs`. All route to
+    // `ON_DENIED` per cap-denial family precedent.
+    //   `ThinClientHandshakeInvalid` — sig verification, unknown
+    //     challenge, or expired challenge at handshake.
+    //   `ThinClientChallengeReplay` — captured-challenge replay; the
+    //     single-use nonce was already consumed by a prior handshake.
+    //   `ThinClientOriginMismatch` — origin pinning recheck rejected
+    //     the request (fires at establishment AND per-request
+    //     mid-session per Family F1 gap #2 closure).
+    //   `ThinClientSessionExpired` — token wallclock TTL elapsed;
+    //     also surfaces on unknown / fabricated token ids.
+    ErrorCode::ThinClientHandshakeInvalid,
+    ErrorCode::ThinClientChallengeReplay,
+    ErrorCode::ThinClientOriginMismatch,
+    ErrorCode::ThinClientSessionExpired,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -565,8 +585,15 @@ fn variant_count_is_pinned() {
     // + TypedCallDispatchError = 118 (typed-CALL dispatch family was
     // already in the enum + catalog `as_str` / `from_str` arms; only
     // this round-trip list was missing them).
+    //
+    // Phase-4-Foundation G24-F (DidKeyedSession + SessionToken
+    // thin-client session-protocol surface; T2 defenses 1-3 + br-r1-1
+    // + sec-4f-r1-5 + Family F1 gap #2): + ThinClientHandshakeInvalid
+    // + ThinClientChallengeReplay + ThinClientOriginMismatch +
+    // ThinClientSessionExpired = 122. All four route to `ON_DENIED`
+    // per the cap-denial family precedent.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 118,
+        CATALOG_VARIANT_COUNT, 122,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

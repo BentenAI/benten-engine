@@ -632,6 +632,44 @@ pub enum ErrorCode {
     /// generic `CapDenied` so audit pipelines can route on thin-client
     /// auth boundary failures. Maps to `E_THIN_CLIENT_AUTH_REJECTED`.
     ThinClientAuthRejected,
+    /// Phase-4-Foundation G24-F wave: DID-keyed handshake signature
+    /// verification failed (bad sig, unknown challenge, expired
+    /// challenge). Distinct from
+    /// [`ErrorCode::ThinClientAuthRejected`] (which gates the broader
+    /// thin-client device-attestation auth boundary at G14-D
+    /// wave-5a). Surfaces at
+    /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session`
+    /// per `docs/admin-ui-v0-threat-model.md` §T2 defense 1 + br-r1-1.
+    /// Routes to `ON_DENIED`.
+    ThinClientHandshakeInvalid,
+    /// Phase-4-Foundation G24-F wave: DID-keyed handshake replayed a
+    /// previously-consumed challenge nonce. Defends T2 defense 1
+    /// captured-replay attack class — even if the signature
+    /// cryptographically verifies, a single-use nonce that was
+    /// consumed by an earlier successful handshake rejects on the
+    /// second presentation. Surfaces at
+    /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session`.
+    /// Routes to `ON_DENIED`.
+    ThinClientChallengeReplay,
+    /// Phase-4-Foundation G24-F wave: session-token origin-binding
+    /// recheck rejected the request because the presented origin
+    /// does not match the origin the token was minted against at
+    /// handshake. Fires at session establishment (cross-origin
+    /// handshake) AND mid-session (per-request structural recheck per
+    /// Family F1 gap #2 closure — token-leak attack class). Surfaces
+    /// at
+    /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::resolve`
+    /// + `establish_session` per `docs/admin-ui-v0-threat-model.md`
+    /// §T2 defense 3 + sec-4f-r1-5. Routes to `ON_DENIED`.
+    ThinClientOriginMismatch,
+    /// Phase-4-Foundation G24-F wave: session token's wallclock
+    /// expiry has elapsed (default 1 hour TTL per
+    /// `benten_engine::thin_client::SessionConfig`); the thin-client must
+    /// re-handshake from a fresh challenge. Also surfaces on
+    /// fabricated / unknown token ids (rejected with the same code so
+    /// audit pipelines don't have to multiplex error families). Per
+    /// T2 defense 2 time-bound clause. Routes to `ON_DENIED`.
+    ThinClientSessionExpired,
     /// G18-A wave-5a: IndexedDB write failed with `QuotaExceededError`
     /// because the origin-storage quota for this browser tab is
     /// exhausted. Surfaces at the browser thin-client cache write
@@ -1030,6 +1068,12 @@ impl ErrorCode {
             ErrorCode::DeviceAttestationForged => "E_DEVICE_ATTESTATION_FORGED",
             ErrorCode::SyncHopDepthExceeded => "E_SYNC_HOP_DEPTH_EXCEEDED",
             ErrorCode::ThinClientAuthRejected => "E_THIN_CLIENT_AUTH_REJECTED",
+            // Phase-4-Foundation G24-F — DidKeyedSession + SessionToken
+            // thin-client session-protocol surface (T2 defenses 1-3).
+            ErrorCode::ThinClientHandshakeInvalid => "E_THIN_CLIENT_HANDSHAKE_INVALID",
+            ErrorCode::ThinClientChallengeReplay => "E_THIN_CLIENT_CHALLENGE_REPLAY",
+            ErrorCode::ThinClientOriginMismatch => "E_THIN_CLIENT_ORIGIN_MISMATCH",
+            ErrorCode::ThinClientSessionExpired => "E_THIN_CLIENT_SESSION_EXPIRED",
             ErrorCode::StorageQuotaExceeded => "E_STORAGE_QUOTA_EXCEEDED",
             // Phase-3 G16-A — Atrium transport surface
             ErrorCode::AtriumRelayUnreachable => "E_ATRIUM_RELAY_UNREACHABLE",
@@ -1152,6 +1196,14 @@ impl ErrorCode {
             | ErrorCode::DeviceAttestationForged
             | ErrorCode::SyncHopDepthExceeded
             | ErrorCode::ThinClientAuthRejected
+            // Phase-4-Foundation G24-F — DidKeyedSession + SessionToken
+            // thin-client session-protocol surface joins the
+            // cap-denial routing family (T2 defenses 1-3 reject as
+            // capability-boundary denials, not transport degrades).
+            | ErrorCode::ThinClientHandshakeInvalid
+            | ErrorCode::ThinClientChallengeReplay
+            | ErrorCode::ThinClientOriginMismatch
+            | ErrorCode::ThinClientSessionExpired
             // Phase-3 G21-T1 — typed-CALL cap-denial joins the
             // cap-denial routing family per the same precedent as
             // `CapDenied` / `SandboxHostFnDenied` (the dispatching
@@ -1557,6 +1609,11 @@ impl ErrorCode {
             "E_DEVICE_ATTESTATION_FORGED" => ErrorCode::DeviceAttestationForged,
             "E_SYNC_HOP_DEPTH_EXCEEDED" => ErrorCode::SyncHopDepthExceeded,
             "E_THIN_CLIENT_AUTH_REJECTED" => ErrorCode::ThinClientAuthRejected,
+            // Phase-4-Foundation G24-F — DidKeyedSession session-protocol surface.
+            "E_THIN_CLIENT_HANDSHAKE_INVALID" => ErrorCode::ThinClientHandshakeInvalid,
+            "E_THIN_CLIENT_CHALLENGE_REPLAY" => ErrorCode::ThinClientChallengeReplay,
+            "E_THIN_CLIENT_ORIGIN_MISMATCH" => ErrorCode::ThinClientOriginMismatch,
+            "E_THIN_CLIENT_SESSION_EXPIRED" => ErrorCode::ThinClientSessionExpired,
             // Phase-3 G18-A wave-5a — IndexedDB QuotaExceededError →
             // typed E_STORAGE_QUOTA_EXCEEDED per D-PHASE-3-27 / br-r1-2.
             "E_STORAGE_QUOTA_EXCEEDED" => ErrorCode::StorageQuotaExceeded,

@@ -78,6 +78,14 @@ pub mod handler_router;
 // callout (composes [`cap_recheck::CapRecheckFn`]).
 pub mod ivm_view_read_gate;
 pub mod thin_client_subscribe;
+// Phase-4-Foundation G24-F wave — DidKeyedSession + SessionToken
+// thin-client session protocol (T2 defenses 1-3 + br-r1-1 +
+// sec-4f-r1-5 + Family F1 gap #2). Native-only per CLAUDE.md baked-in
+// #17 — full peers MINT/VERIFY session tokens; thin compute surfaces
+// (shape b + shape c) consume them as opaque bytes through the
+// transport boundary.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod thin_client;
 // Wave-8h audit-gap fix — EMIT-only broadcast channel so a handler with
 // a standalone EMIT primitive (no backing WRITE) produces an observable
 // event. Mirrors `change::ChangeBroadcast` but for emit-only events.
