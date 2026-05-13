@@ -403,6 +403,100 @@ R4b-FP-1 Seam 2 shipped `PluginManifest::validate_with_clock` + threaded through
 
 R4b-FP-1 Seam 1 shipped the 11-step `plugin_lifecycle::install_plugin` pipeline. Steps 8 (DID mint + persist), 9 (cap cascade mint), 10 (private-ns provision), and 11 (library insert + active ref) each early-return on `Err` via `?`, which can leave partial state behind in the engine adapter's production cascade (e.g. plugin-DID persisted at Step 8 with no library entry if Step 9 fails). The `InMemoryInstallCascade` test default has all infallible paths so the no-partial-state invariant is structurally enforced for the v1 test suite, but the engine adapter that wires the real grant store + plugin-DID store at Phase-4-Meta MUST define rollback shape: either (a) transactional install (all-or-nothing across Steps 8-11), or (b) post-install reconciliation pass that detects + cleans up partial-state residue (`plugin_did` in store with no library entry → revoke + drop). Cite: `crates/benten-platform-foundation/src/plugin_lifecycle.rs:701-790` Steps 8-11; mini-review `.addl/phase-4-foundation/r4b-fp-1-mini-review.json` finding `r4b-fp-1-mr-2`. ~150-300 LOC + transactional test pins.
 
+### §4.22 `admin_ui_v0` thin-client bridge surface (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 cluster — thin-client bridge family). G24-A landed the admin UI v0 categories + composed engine harness scaffolding; G24-F shipped `DidKeyedSession::resolve` / TTL enforcement / origin pinning at `crates/benten-engine/src/thin_client.rs`. The **thin-client bridge** itself — the surface that consumes `DidKeyedSession::resolve(token) -> Principal` and wires `Engine::call_as(Principal, ...)` for thin-compute-surface clients (shape (b) per CLAUDE.md #17) — is NOT YET BUILT. Production sites do not exist for: bridge principal-resolution, DID-handshake required for writes, cap-token storage grep-pin via headless browser dogfood, CSP directives lock, session-token TTL end-to-end via Atrium bridge, bundle-integrity load-time check, CSRF cross-origin POST defense end-to-end. Scope target: Phase-4-Meta — couples to admin UI v0 shape (c) embedded-webview launch (Tauri) + decentralized-registry hydrate path.
+
+**Stranded thin-client-bridge pin destinations** (each test's ignore message MUST cite §4.22):
+
+- `crates/benten-engine/tests/admin_ui_v0_thin_client_bridge_resolves_principal_from_session_not_client.rs` — T2 defense 3 second clause; bridge resolves principal from `DidKeyedSession::resolve`, never client-asserted.
+- `crates/benten-engine/tests/admin_ui_v0_thin_client_did_handshake_required_for_writes.rs` — T2 defense 1; bridge invocation without session-token → DENIED.
+- `crates/benten-engine/tests/admin_ui_v0_thin_client_no_cap_tokens_in_browser_storage.rs` — T2 defense 2; headless browser dogfood; zero cap-token writes.
+- `crates/benten-engine/tests/admin_ui_v0_thin_client_csp_directives_locked.rs` — T2 defense 5; CSP headers from full-peer admin UI.
+- `crates/benten-engine/tests/admin_ui_v0_thin_client_session_token_time_bound.rs` — T2 defense 2; replay-past-TTL → E_THIN_CLIENT_SESSION_EXPIRED end-to-end via composed-engine harness.
+- `crates/benten-engine/tests/admin_ui_v0_thin_client_bundle_integrity_verified_at_load.rs` — T2 defense 4 + T5b; substituted bundle bytes at CID-Y rejected.
+- `crates/benten-engine/tests/admin_ui_v0_csrf_attempt_via_cross_origin_post_denied.rs` — T2 LOAD-BEARING end-to-end; origin pinning end-to-end.
+- `crates/benten-engine/tests/admin_ui_v0_no_cap_tokens_persisted_to_browser_storage.rs` — T2 defense 2; admin UI source grep-assert against cap-token write to browser storage.
+
+Estimated scope: ~500-800 LOC (bridge module + composed-engine harness extensions + Tauri/embedded-webview adapter glue for shape (c)). Couples to §4.20 (validate_with_clock e2e via EngineBuilder + IndexedDB).
+
+### §4.23 `admin_ui_v0` user-DID root-chain write-boundary validator (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 + sdr-r6-r1 cluster — G24-B-FP family). G24-B / G24-B-FP shipped the workflow editor surface; the **synchronous write-boundary chain validator** that verifies every WRITE traces back to a user-DID root grant (CLAUDE.md #18 Layer 1 user-as-root invariant, runtime-enforced) is NOT YET WIRED. The grant chain is structurally present (cap minted under `audience=plugin_did` from `user_did` at install-time), but the WRITE primitive's evaluator dispatch does not currently re-verify the chain ends at a user-DID at admission time.
+
+**Stranded write-boundary-chain-validator pin destinations** (each test's ignore message MUST cite §4.23):
+
+- `crates/benten-engine/tests/admin_ui_did_cannot_mint_root_grant.rs` — admin UI plugin-DID cannot mint a root grant (only user-DID can; structural defense vs. plugin-elevation).
+- `crates/benten-engine/tests/admin_ui_v0_background_write_must_trace_to_user_root.rs` — background write attempts trace WRITE → plugin grant → user root.
+- `crates/benten-engine/tests/admin_ui_v0_user_initiated_write_succeeds.rs` — positive arm.
+- `crates/benten-engine/tests/cap_policy_chain_validation_at_write_boundary.rs` — synchronous validation arm.
+
+Estimated scope: ~200-400 LOC (chain-walker helper in `benten-caps` + dispatch hook at WRITE primitive admit-time). Couples to §5.5 manifest-envelope-chain-validation seam.
+
+### §4.24 Materializer recursive walk into vocabulary edges (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 schema-mat-r6-6 + sdr-r6-r1 narrative cluster). R6-FP-BF wired the 5 missing vocabulary edges (`ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET` / `VARIANT`) at emit time per schema-mat-r6-1 path-(a); the **materializer's recursive walk** that consumes those edges at materialize time — resolving `FieldRef::REF_TARGET` content via a secondary `read_node_as` against the referenced content-CID; iterating `FieldList` / `FieldMap` elements via `ITEM_TYPE` / `VALUE_TYPE` descriptor lookup; dispatching `FieldEnum` / `FieldUnion` variant selection via `VARIANT` edges — lands at Phase-4-Meta when admin UI v0 nested-form rendering drives the need. The G23-B canary's opcode-list-shaped walk is sufficient for v1 platform-shippable framing (admin UI shows flat schemas); recursive composition for nested forms is the Phase-4-Meta driver. Scope target: ~200-300 LOC at `crates/benten-platform-foundation/src/materializer.rs::materialize_format` recursion arm + integration pin `materializer_resolves_field_ref_target_via_engine_read_node_as.rs`.
+
+### §4.25 Atrium-share CID + peer-DID verification at sync layer (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — atrium-share cluster). Cross-Atrium plugin-share verification (a peer publishes plugin bytes through Atrium; receiver verifies `(bytes_cid == announced_cid)` AND `peer_did_signature_valid_for_bytes`) is NOT YET WIRED at the `benten-sync` layer. The single-peer install pipeline at `plugin_lifecycle::install_plugin` performs the CID + signature check, but the sync-layer entry point that hydrates received plugin bytes into the ManifestStore does NOT yet re-verify. Couples to §4.19 (a) cross-peer install seam — both surfaces land together.
+
+**Stranded atrium-share pin destinations** (each test's ignore message MUST cite §4.25):
+
+- `crates/benten-sync/tests/admin_ui_v0_atrium_share_bytes_dont_match_announced_cid_rejected.rs` — substitution defense at sync hydrate.
+- `crates/benten-sync/tests/admin_ui_v0_atrium_share_substitution_with_different_author_rejected.rs` — peer-DID signature mismatch defense at sync hydrate.
+
+Estimated scope: ~150-250 LOC (sync hydrate-time verifier + integration into `benten-sync::HandshakeFrame` consumer path). Phase-4-Meta carry.
+
+### §4.26 RotationLog rehydration at engine open + `resolve_did_for_cid` round-trip (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — benten-id rehydrate cluster). At engine open time, RotationLog state should be rehydrated from durable storage so the post-restart rotation-aware-resolve seam answers correctly on the first call. Likewise, `resolve_did_for_cid` round-trip (DID-keyed content-store lookup) needs end-to-end pinning against the Phase-4-Foundation persistence backend.
+
+**Stranded benten-id rehydrate pin destinations** (each test's ignore message MUST cite §4.26):
+
+- `crates/benten-id/tests/rotation_log_rehydrated_at_engine_open.rs`
+- `crates/benten-id/tests/resolve_did_for_cid_round_trip.rs`
+
+Estimated scope: ~100-200 LOC. Couples to §4.20 engine-builder seam.
+
+### §4.27 plugin_did install RNG provenance grep-pins (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 + tc-2 — `plugin_did::mint` source-cite cluster). `plugin_did::mint` SHIPPED at `crates/benten-id/src/plugin_did.rs:69` using OS CSPRNG. The grep-pins that source-cite the OS-RNG path + assert no HKDF-from-user-DID derivation occurs need to be authored against the shipped surface:
+
+- `crates/benten-id/tests/plugin_did_install_uses_os_rng_not_seed_derivation.rs` — grep-cite `plugin_did::mint` calls `Keypair::generate` (which routes to `OsRng`).
+- `crates/benten-id/tests/plugin_did_install_no_hkdf_from_user_did_grep_assert.rs` — grep-assert no `hkdf` / `derive_from(user_did)` site in `plugin_did.rs`.
+
+Estimated scope: ~50-100 LOC (grep tests; not production code).
+
+### §4.28 Private-namespace cross-plugin delegation policy substantive arm (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — private-namespace cluster). The single-scope cross-plugin-delegation refusal arm is structurally present at `manifest_envelope_chain_validation.rs::private_namespace_cap_across_plugins_rejected` (R4b-FP-2 closure). The companion test files cite a `private_namespace_policy::reject_cross_plugin` symbol that does NOT exist at HEAD (the surface lives under a different name); these tests need to be retargeted to the actually-shipped surface or deleted + their case folded into `manifest_envelope_chain_validation` test family. Couples to §5.5 manifest-envelope-chain-validation seam.
+
+**Stranded private-namespace pin destinations** (each test's ignore message MUST cite §4.28):
+
+- `crates/benten-caps/tests/private_namespace_cross_plugin_delegation_denied.rs`
+- `crates/benten-caps/tests/private_namespace_scope_prefix_canonicalization.rs`
+
+Estimated scope: ~50-100 LOC.
+
+### §4.29 phase-3-backlog §7.3.D stale-rationale sweep at pre-tag (Phase-4-Foundation pre-tag)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-3 — ~30+ tests cite phase-3-backlog §7.3.D 'next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep'). Phase 3 SHIPPED at tag `phase-3-close` without the cited fix-pass batch firing; the cluster needs sweep-by-batch at the Phase-4-Foundation pre-tag wave. For each cited test: if production surface IS at HEAD, un-ignore + author body; otherwise retarget the cite to v1-assessment-window or this row. Belongs at the pre-tag sweep coupled with the cite-drift G26-A wave.
+
+Estimated scope: ~300-500 LOC across body authoring + retarget messages.
+
+### §4.31 IVM inner-kernel-read byte-equivalence arms post-SubgraphSpec round-trip (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — `inner_kernel_read_equivalence_post_subgraph_spec_round_trip.rs` cluster, 5 arms). G23-0a + G23-0b shipped the SubgraphSpec round-trip wrapper-construction-equivalence pins; the inner-kernel-read byte-equivalence companion arms (one per canonical IVM view: capability_grants / event_dispatch / content_listing / governance_inheritance / version_current) require the materializer pipeline to expose a `materialize_inner_kernel_read` seam that produces byte-equivalent output across both the SubgraphSpec-routed walk and the legacy G15-A path-view walk. The G23-B canary's materializer surface materializes formatted output (HtmlJson / Plaintext), not raw inner-kernel-read bytes; the byte-equivalence arm couples to §4.24 (recursive materializer walk) + G15-A path-view shape preservation. Phase-4-Meta carry.
+
+Estimated scope: ~200-400 LOC (materializer seam + 5 substantive byte-equivalence test arms).
+
+### §4.30 Mini-review JSON schema discipline + `disposition` field uniformity (Phase-4-Foundation pre-tag)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 methodology-critic meth-r6-r1-3 + meth-r6-r1-4). Lens JSON reports + mini-review JSONs should carry a uniform top-level shape: `disposition` field + `findings[]` array + optional `orchestrator_action_summary`. The `r6-r1-pim-n-meta-sweep.json` lacks `disposition`; some R5 mini-reviews lack `orchestrator_action_summary`. Codify uniform schema in `.addl/dispatch-conventions.md` §3.6c brief-template; bring legacy artifacts in line via pre-tag sweep.
+
+Estimated scope: ~10-30 LOC dispatch-conventions + JSON patch for `pim-n-meta-sweep.json` (orchestrator-direct).
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

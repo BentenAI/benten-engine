@@ -25,7 +25,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A + G24-F + G24-D wires this; depends on Family F3 install-record shape. Pin source: r2-test-landscape.md §2.6 row 9 + T2 defense 4 RETENSED + T5b. Substantive: install bundle at CID-X; substitute bundle bytes to CID-Y; load-time check FAILS with typed E_PLUGIN_CONTENT_CID_MISMATCH."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-D shipped manifest-envelope substitution defense at install_plugin; the load-time bundle-integrity verifier at the thin-client BRIDGE entry point (where the browser receives the bundle bytes pre-install) is part of the thin-client bridge surface NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22. T2 defense 4 RETENSED + T5b; substantive shape preserved in body comment."]
 fn admin_ui_v0_thin_client_bundle_integrity_verified_at_load() {
     // G24-A + G24-F + G24-D wire this. Substantive shape:
     //

@@ -19,7 +19,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-F wave-7 wires this. Pin source: r2-test-landscape.md §2.11 supplementary + T2 defense 5 + br-r1-11. Substantive: HTTP response from full-peer admin UI surface carries the canonical CSP header values."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. Full-peer admin UI HTTP surface that emits CSP headers NOT YET BUILT (Phase-4-Meta thin-client bridge surface includes the HTTP serving layer). Named destination: docs/future/phase-4-backlog.md §4.22. T2 defense 5; substantive shape preserved in body comment."]
 fn admin_ui_v0_thin_client_csp_directives_locked() {
     // G24-F wave wires this. Substantive shape:
     //

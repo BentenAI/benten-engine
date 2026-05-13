@@ -63,13 +63,44 @@ pub struct ParsedField {
     /// For FieldList — item scalar (G23-A canary supports
     /// scalar-only items; FieldObject items land at later wave).
     pub(crate) item_scalar: Option<Scalar>,
+    /// For FieldMap — key scalar (the schema-spec §2.2 KEY_TYPE
+    /// edge target). KEY_TYPE always resolves to a FieldScalar per
+    /// vocab.rs `VocabEdge::KeyType` doc.
+    pub(crate) map_key_scalar: Option<Scalar>,
+    /// For FieldMap — value scalar (the schema-spec §2.2 VALUE_TYPE
+    /// edge target; G23-A canary supports scalar values; FieldObject
+    /// values follow the same Phase-4-Meta extension path as
+    /// FieldList items).
+    pub(crate) map_value_scalar: Option<Scalar>,
+    /// For FieldEnum / FieldUnion — named variants (the schema-spec
+    /// §2.2 VARIANT edge targets). Each variant carries its own
+    /// scalar discriminator (`text` for enums; the typed value's
+    /// scalar for unions). G23-A canary represents variants as
+    /// `(name, scalar)` pairs; richer variant-types (FieldObject
+    /// variants for sum-of-products unions) follow Phase-4-Meta.
+    pub(crate) variants: Vec<ParsedVariant>,
+}
+
+/// Variant of a FieldEnum / FieldUnion. Each variant is emitted as a
+/// child primitive Node and connected to its parent via a `VARIANT`
+/// edge (see `vocab::VocabEdge::Variant` + emit.rs).
+#[derive(Debug, Clone)]
+pub struct ParsedVariant {
+    pub(crate) name: String,
+    pub(crate) scalar: Scalar,
 }
 
 impl ParsedField {
     /// Diagnostic — does this field carry a child reference (object /
     /// list / map / ref / enum / union)?
+    #[allow(dead_code)]
     pub(crate) fn has_child_shape(&self) -> bool {
-        !self.sub_fields.is_empty() || self.item_scalar.is_some() || self.ref_target_kind.is_some()
+        !self.sub_fields.is_empty()
+            || self.item_scalar.is_some()
+            || self.ref_target_kind.is_some()
+            || self.map_key_scalar.is_some()
+            || self.map_value_scalar.is_some()
+            || !self.variants.is_empty()
     }
 }
 
@@ -203,6 +234,7 @@ pub(crate) fn parse_schema_json(bytes: &[u8]) -> Result<ParsedSchema, SchemaComp
     })
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_field(raw: &serde_json::Value, location: &str) -> Result<ParsedField, SchemaCompileError> {
     let obj = raw
         .as_object()
@@ -318,6 +350,60 @@ fn parse_field(raw: &serde_json::Value, location: &str) -> Result<ParsedField, S
         None
     };
 
+    // FieldMap key/value scalars — KEY_TYPE + VALUE_TYPE edge targets.
+    let (map_key_scalar, map_value_scalar) = if label == VocabLabel::FieldMap {
+        let key = obj
+            .get("key_scalar")
+            .and_then(|v| v.as_str())
+            .map(|s| Scalar::from_str(s, Some(name.as_str())))
+            .transpose()?;
+        let value = obj
+            .get("value_scalar")
+            .and_then(|v| v.as_str())
+            .map(|s| Scalar::from_str(s, Some(name.as_str())))
+            .transpose()?;
+        (key, value)
+    } else {
+        (None, None)
+    };
+
+    // FieldEnum / FieldUnion variants — VARIANT edge targets.
+    let variants = if matches!(label, VocabLabel::FieldEnum | VocabLabel::FieldUnion) {
+        if let Some(arr) = obj.get("variants").and_then(|v| v.as_array()) {
+            let mut parsed_variants = Vec::with_capacity(arr.len());
+            for raw_variant in arr {
+                let variant_obj = raw_variant.as_object().ok_or_else(|| {
+                    SchemaCompileError::ValidationFailed {
+                        reason: "variant must be a JSON object".to_string(),
+                        location: Some(format!("{location}.variants[]")),
+                    }
+                })?;
+                let variant_name = variant_obj
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SchemaCompileError::VocabRequiredPropertyMissing {
+                        field_name: name.clone(),
+                        missing_property: "variant.name".to_string(),
+                    })?
+                    .to_string();
+                let variant_scalar_str = variant_obj
+                    .get("scalar")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("text");
+                let variant_scalar = Scalar::from_str(variant_scalar_str, Some(name.as_str()))?;
+                parsed_variants.push(ParsedVariant {
+                    name: variant_name,
+                    scalar: variant_scalar,
+                });
+            }
+            parsed_variants
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
     Ok(ParsedField {
         label,
         name,
@@ -327,6 +413,9 @@ fn parse_field(raw: &serde_json::Value, location: &str) -> Result<ParsedField, S
         ref_target_kind,
         sub_fields,
         item_scalar,
+        map_key_scalar,
+        map_value_scalar,
+        variants,
     })
 }
 
@@ -508,7 +597,10 @@ pub(crate) fn validate_no_unconstrained_emit_respond(
 /// FieldRef cycle detection. G23-A canary uses the simple "self-referent"
 /// definition: a FieldRef whose `ref_target_kind` matches the schema
 /// name is a cycle. The richer cross-schema cycle detection (across the
-/// FieldRef graph of multiple schemas) lands at G23-A wave-4b.
+/// FieldRef graph of multiple schemas) is named in
+/// `docs/future/phase-4-backlog.md` §4.6 (strict 4-of-4 input-dialect
+/// validation + auto-derived canonical-fixture generator + cross-schema
+/// FieldRef cycle detection).
 ///
 /// Aux: also catches a degenerate cycle inside FieldObject sub-fields
 /// where a sub-field's `ref_target_kind` references its parent's name.

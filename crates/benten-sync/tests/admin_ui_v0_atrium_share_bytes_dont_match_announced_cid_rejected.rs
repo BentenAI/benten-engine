@@ -1,25 +1,8 @@
 //! T6a pin — substitution at transit (content-addressing defense).
-//!
-//! Per admin-ui-v0-threat-model.md §T6a: peer A publishes admin UI
-//! bundle CID `X`; peer B receives bundle bytes that hash to a
-//! different CID `Y`. Without content-addressing verification on
-//! receive, B installs the wrong bundle.
-//!
-//! Defense: `benten-sync` content-address-verifies all received Node
-//! bytes against announced CIDs (Phase-3 R5 wave-9 W9-T6 shipped).
-//! This pin verifies the plugin-share path uses it, surfacing the
-//! typed error `E_PLUGIN_CONTENT_CID_MISMATCH` specifically.
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires plugin-share CID verification at sync layer; un-ignore at G24-D landing"]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. The single-process install_plugin lifecycle verifies bytes against announced CID (R4b-FP-1); the cross-Atrium sync-layer hydrate-time verifier that re-checks before depositing bytes into ManifestStore is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.25 (Phase-4-Meta Atrium-share CID + peer-DID verification at sync layer)."]
 fn atrium_share_bytes_dont_match_announced_cid_rejected_with_plugin_content_cid_mismatch() {
-    // Future surface: sync receive path verifies bytes hash against
-    // declared CID; surfaces ErrorCode::PluginContentCidMismatch for
-    // the plugin-share-boundary case (distinct from generic sync CID
-    // mismatch which surfaces ErrorCode::SyncDivergentCidRejected).
-    //
-    // The typed error allows admin UI to present a plugin-specific
-    // error UI ("This plugin bundle was tampered with in transit")
-    // rather than the generic sync error.
-    panic!("RED-PHASE: G24-D wave must wire plugin-share CID mismatch typed error");
+    // Substantive surface lands at §4.25. Body deferred; couples to
+    // §4.19 (a) cross-peer install seam.
 }

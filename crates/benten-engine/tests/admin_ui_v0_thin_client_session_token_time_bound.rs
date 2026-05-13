@@ -19,7 +19,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A wave wires the composed-engine harness that exercises this end-to-end (G24-F shipped DidKeyedSession TTL enforcement at thin_client.rs:484-491; this companion test additionally needs the admin_ui_v0 composed-engine + Atrium bridge surface from G24-A). Pin source: r2-test-landscape.md §2.11 supplementary + T2 defense 2. Substantive: establish session; advance clock past TTL; replay → DENIED with typed E_THIN_CLIENT_SESSION_EXPIRED."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-F shipped DidKeyedSession TTL enforcement at thin_client.rs:484-491 (the primitive); the composed-engine + Atrium bridge harness that exercises TTL end-to-end is part of the thin-client bridge surface NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22. T2 defense 2; substantive shape preserved in body comment."]
 fn admin_ui_v0_thin_client_session_token_time_bound() {
     // G24-F wave wires this. Substantive shape:
     //

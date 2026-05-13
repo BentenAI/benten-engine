@@ -48,31 +48,38 @@ Per D-4F-NEW-TYPED-FIELD-NODE-VOCAB post-R1-triage resolution + Ben Q9 correctio
 
 ### §2.3 Eight scalars
 
-Derived from `benten-core::Value` variants (per schema-r1-4 + cag-r1-1):
+Derived from `benten_core::Value` variants (per schema-r1-4 + cag-r1-1). Scalar-to-`Value` mapping is many-to-one: `bytes-cid` + `timestamp-hlc` are *interpretations layered over* `Value::Bytes` + `Value::Int` respectively, not distinct `Value` variants. The canonical `Value` enum has 8 variants total: `Null` / `Bool` / `Int(i64)` / `Float(f64)` / `Text(String)` / `Bytes` / `List` / `Map`.
 
 | Scalar | `Value` variant | Notes |
 |---|---|---|
-| `text` | `Value::String` | UTF-8 string |
-| `int` | `Value::I64` | 64-bit signed integer |
-| `float` | `Value::F64` | 64-bit float |
+| `text` | `Value::Text` | UTF-8 string |
+| `int` | `Value::Int` | 64-bit signed integer |
+| `float` | `Value::Float` | 64-bit float |
 | `bool` | `Value::Bool` | True/false |
 | `bytes` | `Value::Bytes` | Raw byte array |
-| `bytes-cid` | `Value::Cid` | Content identifier; integrates with content-addressing |
-| `timestamp-hlc` | `Value::Hlc` | Hybrid Logical Clock timestamp; carries causal ordering |
+| `bytes-cid` | `Value::Bytes` (CID-interpreted) | Content identifier; bytes carry multibase-encoded CID. NOT a distinct `Value` variant. |
+| `timestamp-hlc` | `Value::Int` (HLC-interpreted) | Hybrid Logical Clock timestamp; int carries the HLC ticks. NOT a distinct `Value` variant. |
 | `null` | `Value::Null` | Explicit null |
 
 ### §2.4 Four mandatory field properties
 
-Every `Field*` Node MUST carry:
+Every emitted `Field*` Node carries 4 properties, split into 3 user-supplied + 1 compiler-derived:
+
+#### User-supplied (3)
 
 | Property | Type | Notes |
 |---|---|---|
 | `name` | `text` | Human-readable field name (used in admin UI form generation) |
 | `required` | `bool` | Whether this field must be present on instances |
 | `default` | value-or-null | Default value if omitted |
-| `scope` | `text` | Schema-derived cap-scope (sec-3.5-r1-4) — NOT user-supplied. Computed at schema-compile time |
 
-`scope` is the load-bearing security property: a user-supplied schema cannot specify an arbitrary cap-scope; the compiler maps schema content-types → cap-scope via a fixed derivation (`schema_field_to_cap_scope(schema_cid, field_name) -> CapScope`). This is the structural defense against subgraph-injection attacks via schemas (threat-model T1).
+#### Compiler-derived (1)
+
+| Property | Type | Notes |
+|---|---|---|
+| `scope` | `text` | Schema-derived cap-scope (sec-3.5-r1-4) — NEVER user-supplied. Computed by `derive_scope(action, schema_name, field_path)` at emit time |
+
+`scope` is the load-bearing security property: schema author supplies 3 properties, the compiler synthesizes scope from the field path (`action:SchemaName.field_path` form). If the input JSON has a `scope` key, the parser **silently discards it** (see `schema_compiler::parse::parse_field`); the emitter synthesizes its own. This is the structural defense against subgraph-injection attacks via schemas (threat-model T1) — a user-supplied scope would be an authorization-side-channel, letting the schema author decide their own cap-policy namespace.
 
 ### §2.5 Composability invariant
 
@@ -140,16 +147,22 @@ The materializer is the runtime that walks a composed subgraph and produces outp
 
 ### §7.2 Where the walk happens
 
-In the generalized IVM Algorithm B kernel (per Ben D-4F-2). The kernel walks the `SubgraphSpec` subgraph using existing engine evaluator dispatch on READ / TRANSFORM / SUBSCRIBE / RESPOND primitive Nodes. No host-side `Materializer::walk()` outer loop — walking is engine-internal subgraph evaluation.
+Per Ben D-4F-2: the materializer view IS an IVM view, walking the same `SubgraphSpec` subgraph with existing engine evaluator dispatch on READ / TRANSFORM / SUBSCRIBE / RESPOND primitive Nodes.
+
+**G23-B canary scope (Phase-4-Foundation):** the materializer iterates the emitted SubgraphSpec primitives directly, dispatching reads against a single content_cid via `Engine::read_node_as`. Recursive composition (walking `FieldRef::REF_TARGET` content into its referenced Node; nested `FieldObject` sub-field composition; `FieldList` / `FieldMap` element-level resolution at materialize time) is **named** in `docs/future/phase-4-backlog.md` §4.24 (Phase-4-Meta — admin UI v0 nested-form rendering driver). The opcode-list-shaped walk at G23-B is the v1-platform-shippable substrate; the recursive walk lands when the admin UI workflow editor needs nested-form rendering.
+
+The vocabulary-edge wiring (`ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET` / `VARIANT` per §2.2) IS shipped at R6-FP — the SubgraphSpec carries the edges so that the recursive walk has structure to consume when Phase-4-Meta opens.
 
 ### §7.3 Primitive composition
 
 | Primitive | Use |
 |---|---|
-| `READ` | Content fetch (gated via `read_node_as` per §3.Y dual-gate; SHARES `IvmViewReadGate` per D-4F-NEW-MATERIALIZER-READ-GATE post-triage resolution) |
-| `TRANSFORM` | Field-level shaping (apply default values; format scalars; etc.) |
+| `READ` | Content fetch (gated via `read_node_as` per §3.Y dual-gate; SHARES the `IvmViewReadGate` **shape** — not the literal type — per D-4F-NEW-MATERIALIZER-READ-GATE post-triage resolution. The materializer crate defines its own `MaterializerCapRecheck` alias with the same `Fn(&Cid, &str, &Cid) -> bool` signature; the literal `IvmViewReadGate` type lives in `benten-engine` and cannot be imported here without violating the dep-direction commitment (arch-r1-1: `benten-platform-foundation` does NOT depend on `benten-engine` in production). The Materializer-view-IS-IVM-view commitment per D-4F-2 is preserved by shape parity + the same dual-gate composition rules.) |
+| `TRANSFORM` | Field-level shaping (apply default values; format scalars; etc.). Vocabulary-edge type-descriptor primitives (targets of `ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET` / `VARIANT` edges) are also `TRANSFORM`-kinded — they reuse the canonical 12 primitives rather than minting a 13th. |
 | `SUBSCRIBE` | Reactive update via `on_change_as_with_cursor` ONLY (sec-3.5-r1-9) — the principal-aware variant; NEVER plain `subscribe_change_events` |
 | `RESPOND` | Output emission consumed by `Renderer` trait |
+
+**Cap-policy fan-out semantics:** the per-row cap-recheck closure is invoked once per primitive during materializer walk (observability + audit-trail surface — readers see N invocations for N primitives in the spec). The **authoritative substantive cap-decision** happens once at the per-row gate boundary against the row's `(content_cid, zone_hint)` — see `materializer.rs:940-947` for the inline comment. Per-primitive `scope` properties stamped on each primitive Node ARE consulted authoritatively at the T1 envelope-check entry (materializer-entry — *before* any READ fanout). So the defense composes: T1 envelope check (per-primitive scopes against the manifest's declared envelope, always-on when `declared_requires` is non-empty) + per-row gate (per-row admit/deny against content). The fan-out's per-invocation return value is observability-only.
 
 ### §7.4 Renderer pluggability (two layers)
 
@@ -162,9 +175,9 @@ Both layers validated empirically by 2 impls; pluggability is not just declared 
 
 ### §7.5 Cap-scoped redaction (Compromise #11 floor)
 
-Materializer's read fanout uses `Engine::read_node_as(walk_principal, cid)` at every read. Cap-policy fires per primitive. Compromise #11 closure floor is REAFFIRMED against the materializer surface (sec-3.5-r1-13).
+Materializer's read fanout uses `Engine::read_node_as(walk_principal, cid)` at every read. Cap-policy is consulted at materializer-entry (T1 envelope check, per-primitive scopes against manifest envelope) + at the per-row gate (substantive admit/deny). The per-primitive fan-out is observability/audit-trail only (see §7.3 narrative). Compromise #11 closure floor is REAFFIRMED against the materializer surface (sec-3.5-r1-13).
 
-Per post-R1-triage ratification #7 (D-4F-NEW-MATERIALIZER-SUBSCRIBE-RE-WALK-CONSISTENCY): SUBSCRIBE-re-walk is option (c) — re-filter at delivery; **Node-granularity redaction** (G22-FP-1 implementation). Redacted Nodes drop from the delivery stream; subscriber sees consistent stream-stays-open-but-elides-revoked-Nodes UX.
+Per post-R1-triage ratification #7 (D-4F-NEW-MATERIALIZER-SUBSCRIBE-RE-WALK-CONSISTENCY): SUBSCRIBE-re-walk is **option-D** (originally tracked as option-(c) at R1 ratification time; renamed at R1-FP G22-FP-1 landing — see `engine_subscribe.rs:303` source comment for the timeline). Semantic: re-filter at delivery; **Node-granularity redaction** (G22-FP-1 implementation). Redacted Nodes drop from the delivery stream; subscriber sees consistent stream-stays-open-but-elides-revoked-Nodes UX; whole-actor revoke cancels the subscription (Cancel arm).
 
 ---
 

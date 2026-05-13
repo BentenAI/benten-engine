@@ -1,22 +1,9 @@
 //! T7 canonicalization pin — private namespace cap-scope shape.
-//!
-//! Per docs/PLUGIN-MANIFEST.md §6 + T7 defense: private namespace
-//! cap-scopes are formed as `private:<plugin_did>:<label>` (typed
-//! prefix). The cap-policy backend rejects any cap-scope matching the
-//! `private:*` prefix where the requester's DID doesn't match
-//! `<plugin_did>`.
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave canonicalizes private-namespace scope shape; un-ignore at G24-D landing"]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. Private-namespace canonicalization landed at manifest_scope.rs (R4b-FP cluster); the standalone `private_namespace_policy::canonicalize_scope` symbol was never minted. Named destination: docs/future/phase-4-backlog.md §4.28 (Phase-4-Meta private-namespace cross-plugin delegation policy substantive arm)."]
 fn private_namespace_scope_string_requires_plugin_did_segment_match_requester() {
-    // Future surface:
-    //   private_namespace_policy::canonicalize_scope(scope) ->
-    //     Result<CanonicalScope>
-    // where the parse extracts the embedded plugin-DID and validates
-    // the structural shape. Mismatched plugin-DIDs in the scope
-    // string get rejected.
-    //
-    // FAILS-IF-NO-OP because canonicalization is what binds the
-    // scope-string to the policy-enforcement layer.
-    panic!("RED-PHASE: G24-D wave must canonicalize private:<plugin_did>:<label> scope strings");
+    // Substantive surface lives at
+    // `crates/benten-platform-foundation/src/manifest_scope.rs`; this
+    // pin defers to §4.28 closure.
 }

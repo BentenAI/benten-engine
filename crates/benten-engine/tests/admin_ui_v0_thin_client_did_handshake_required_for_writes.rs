@@ -22,7 +22,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A + G24-F wave-7 wires this. Pin source: r2-test-landscape.md §2.6 row 8 + T2 defense 1. LOAD-BEARING substantive: bridge invocation without session-token → DENIED; client-asserted principal field IGNORED; engine state UNCHANGED."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. Admin UI v0 thin-client bridge surface NOT YET BUILT (G24-F shipped DidKeyedSession primitives; the bridge that consumes them is Phase-4-Meta). Named destination: docs/future/phase-4-backlog.md §4.22 (Phase-4-Meta thin-client bridge surface). T2 defense 1 LOAD-BEARING; substantive shape preserved in body comment."]
 fn admin_ui_v0_thin_client_did_handshake_required_for_writes() {
     // G24-A + G24-F wave wires this. Substantive shape:
     //

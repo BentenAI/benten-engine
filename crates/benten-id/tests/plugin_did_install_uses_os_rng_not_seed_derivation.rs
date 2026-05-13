@@ -1,26 +1,22 @@
 //! D-4F-16 pin — plugin-DID minted via OsRng at install, NOT via
 //! HKDF / seed-derivation from user-DID.
 //!
-//! Per CLAUDE.md #18 + D-4F-16: "Plugin-DID minted at install — a UCAN
-//! audience handle (NOT an attested sub-identity); just an identifier
-//! so the user can issue UCAN caps with `audience=plugin-DID`".
-//!
-//! Per R2 §5 Gap fix #5 paired discipline: this OsRng pin is
-//! statistically fragile alone; PAIR with the grep-assert against
-//! `hkdf` / `derive_from` patterns in `crates/benten-id/src/plugin_
-//! did.rs` (see companion test file
-//! `plugin_did_install_no_hkdf_from_user_did_grep_assert.rs`).
+//! Un-ignored at R6-FP-BF (closes R6 R1 test-coverage-auditor tc-1 +
+//! tc-2 — `plugin_did::mint` source-cite cluster). The production
+//! surface `benten_id::plugin_did::mint` shipped at G24-D wave; this
+//! pin exercises the OsRng-not-deterministic-seed property.
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires plugin_did::mint(OsRng); un-ignore at G24-D landing"]
 fn plugin_did_mint_uses_os_rng_two_mints_distinct() {
-    // Future surface:
-    //   benten_id::plugin_did::mint() -> Keypair
-    // calls Keypair::generate(&mut OsRng) per crypto-major-2 baseline.
-    //
-    // Statistical-only assertion: two separate mints produce distinct
-    // public keys with overwhelming probability (OsRng entropy).
-    // FAILS-IF-NO-OP if mint were deterministic from user-DID (would
-    // produce identical keys).
-    panic!("RED-PHASE: G24-D wave must wire plugin_did::mint via OsRng");
+    use benten_id::plugin_did::mint;
+
+    let h1 = mint();
+    let h2 = mint();
+    assert_ne!(
+        h1.did(),
+        h2.did(),
+        "two plugin_did::mint() calls MUST produce distinct DIDs; \
+         identical DIDs would indicate deterministic seed derivation \
+         (CLAUDE.md #18 + D-4F-16 violation)"
+    );
 }

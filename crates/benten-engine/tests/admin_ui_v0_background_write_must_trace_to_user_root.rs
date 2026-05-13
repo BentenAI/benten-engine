@@ -38,7 +38,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-B-FP wires background-write chain validator; un-ignore at G24-B-FP wave landing. Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 LOAD-BEARING. Substantive end-to-end per pim-2 §3.6b: real evaluator walk + chain-trace check + typed E_CHAIN_NOT_USER_ROOTED."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-B-FP closed the workflow editor surface; the synchronous background-write chain validator is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.23 (Phase-4-Meta user-DID root-chain write-boundary validator). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 LOAD-BEARING; substantive shape preserved in body."]
 fn admin_ui_v0_background_write_must_trace_to_user_root() {
     // G24-B-FP wave wires this. Substantive shape:
     //

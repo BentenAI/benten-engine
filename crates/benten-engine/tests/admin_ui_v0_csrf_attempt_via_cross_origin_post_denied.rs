@@ -29,7 +29,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A + G24-F wave-7 wires this. Pin source: r2-test-landscape.md §2.6 row 17 + admin-ui-v0-threat-model.md §T2 LOAD-BEARING end-to-end. WOULD FAIL if origin pinning no-op'd — defends entire T2 attack surface."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-F shipped origin-pinning primitives at thin_client.rs; the cross-origin POST end-to-end test driven via the bridge harness requires the thin-client bridge surface NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22. T2 LOAD-BEARING end-to-end; substantive shape preserved in body comment."]
 fn admin_ui_v0_csrf_attempt_via_cross_origin_post_denied() {
     // G24-A + G24-F wave wires this. Substantive shape:
     //

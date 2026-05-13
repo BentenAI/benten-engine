@@ -14,14 +14,29 @@
 //! synthesized via [`crate::schema_compiler::derive_scope`] from the
 //! field path — NOT supplied by the user (sec-3.5-r1-4).
 
-use benten_core::{NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder, Value};
+use benten_core::{NodeHandle, PrimitiveKind, Subgraph, SubgraphBuilder, Value};
 
 use super::error::SchemaCompileError;
-use super::parse::{ParsedField, ParsedSchema};
-use super::vocab::{VocabLabel, canonical_handler_id};
+use super::parse::{ParsedField, ParsedSchema, ParsedVariant};
+use super::vocab::{Scalar, VocabEdge, VocabLabel, canonical_handler_id};
 use super::{
     CAP_SCOPE_PROPERTY_KEY, FIELD_PATH_PROPERTY_KEY, VOCAB_LABEL_PROPERTY_KEY, derive_scope,
 };
+
+/// Property-bag key carrying the scalar-type tag for a terminal primitive
+/// Node emitted as the target of an ITEM_TYPE / KEY_TYPE / VALUE_TYPE /
+/// VARIANT vocabulary edge. Materializers (G23-B onward) read this to
+/// recover the collection's element / map's key+value / variant's
+/// scalar discriminator at walk time.
+pub const SCALAR_TAG_PROPERTY_KEY: &str = "schema_scalar_tag";
+
+/// Property-bag key carrying the ref-target kind for a terminal primitive
+/// Node emitted as the target of a REF_TARGET vocabulary edge.
+pub const REF_TARGET_KIND_PROPERTY_KEY: &str = "schema_ref_target_kind";
+
+/// Property-bag key carrying the variant name for a terminal primitive
+/// Node emitted as the target of a VARIANT vocabulary edge.
+pub const VARIANT_NAME_PROPERTY_KEY: &str = "schema_variant_name";
 
 /// Per-primitive descriptor exposed by
 /// [`crate::schema_compiler::SchemaSubgraphSpec::primitives`]. Mirrors the
@@ -232,7 +247,161 @@ fn emit_field(
         }
     }
 
+    // Emit the 5 vocabulary edges per D-4F-NEW-TYPED-FIELD-NODE-VOCAB
+    // (in addition to the implicit FIELD edge formed by parent → field
+    // recursion). The anchor for each edge is the READ primitive — the
+    // first stable walk target the materializer dispatches to for this
+    // field. Each edge terminates at a small TRANSFORM-shaped
+    // type-descriptor primitive whose `properties` carry the
+    // discriminator (scalar tag / ref-target-kind / variant name).
+    //
+    // The descriptor primitive's `PrimitiveKind::Transform` is
+    // intentionally a no-op transform — it is a vocabulary-edge target,
+    // NOT an executable transform. The 12-primitive-irreducibility
+    // commitment (CLAUDE.md baked-in #1) is preserved because we reuse
+    // an existing canonical kind rather than mint a new one.
+    emit_vocabulary_edges(sb, schema_name, field, &field_path, read)?;
+
     Ok(())
+}
+
+/// Emit the 5 vocabulary edges for collection / ref / variant fields.
+/// Caller passes the field's anchor handle (the READ primitive) which
+/// becomes the source of each emitted labeled edge.
+fn emit_vocabulary_edges(
+    sb: &mut SubgraphBuilder,
+    schema_name: &str,
+    field: &ParsedField,
+    field_path: &str,
+    anchor: NodeHandle,
+) -> Result<(), SchemaCompileError> {
+    match field.label {
+        VocabLabel::FieldList => {
+            if let Some(item_scalar) = field.item_scalar {
+                let target =
+                    push_scalar_target(sb, schema_name, field, field_path, "item", item_scalar);
+                sb.add_edge_labeled(anchor, target, VocabEdge::ItemType.as_str());
+            }
+        }
+        VocabLabel::FieldMap => {
+            if let Some(key_scalar) = field.map_key_scalar {
+                let target =
+                    push_scalar_target(sb, schema_name, field, field_path, "key", key_scalar);
+                sb.add_edge_labeled(anchor, target, VocabEdge::KeyType.as_str());
+            }
+            if let Some(value_scalar) = field.map_value_scalar {
+                let target =
+                    push_scalar_target(sb, schema_name, field, field_path, "value", value_scalar);
+                sb.add_edge_labeled(anchor, target, VocabEdge::ValueType.as_str());
+            }
+        }
+        VocabLabel::FieldRef => {
+            if let Some(target_kind) = &field.ref_target_kind {
+                let target = push_ref_target(sb, schema_name, field, field_path, target_kind);
+                sb.add_edge_labeled(anchor, target, VocabEdge::RefTarget.as_str());
+            }
+        }
+        VocabLabel::FieldEnum | VocabLabel::FieldUnion => {
+            for variant in &field.variants {
+                let target = push_variant_target(sb, schema_name, field, field_path, variant);
+                sb.add_edge_labeled(anchor, target, VocabEdge::Variant.as_str());
+            }
+        }
+        // FieldScalar / FieldObject / SchemaRoot — no vocabulary edges
+        // beyond the implicit FIELD edge formed by recursion.
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Emit a terminal scalar-typed descriptor Node (target of ITEM_TYPE /
+/// KEY_TYPE / VALUE_TYPE edges). The Node's `properties` carry the
+/// scalar tag for materializer recovery.
+fn push_scalar_target(
+    sb: &mut SubgraphBuilder,
+    schema_name: &str,
+    field: &ParsedField,
+    field_path: &str,
+    role: &str,
+    scalar: Scalar,
+) -> NodeHandle {
+    let id = format!("{role}_{}", field.name);
+    let scope = derive_scope("type", schema_name, &format!("{field_path}.{role}"));
+    let h = push_with_scope(
+        sb,
+        id,
+        PrimitiveKind::Transform,
+        &scope,
+        field_path,
+        field.label,
+    );
+    sb.set_property_for_test(
+        h,
+        SCALAR_TAG_PROPERTY_KEY,
+        Value::Text(scalar.as_str().to_string()),
+    );
+    h
+}
+
+/// Emit a terminal ref-target descriptor Node (target of REF_TARGET edge).
+fn push_ref_target(
+    sb: &mut SubgraphBuilder,
+    schema_name: &str,
+    field: &ParsedField,
+    field_path: &str,
+    target_kind: &str,
+) -> NodeHandle {
+    let id = format!("ref_{}", field.name);
+    let scope = derive_scope("type", schema_name, &format!("{field_path}.ref"));
+    let h = push_with_scope(
+        sb,
+        id,
+        PrimitiveKind::Transform,
+        &scope,
+        field_path,
+        field.label,
+    );
+    sb.set_property_for_test(
+        h,
+        REF_TARGET_KIND_PROPERTY_KEY,
+        Value::Text(target_kind.to_string()),
+    );
+    h
+}
+
+/// Emit a terminal variant descriptor Node (target of VARIANT edge).
+fn push_variant_target(
+    sb: &mut SubgraphBuilder,
+    schema_name: &str,
+    field: &ParsedField,
+    field_path: &str,
+    variant: &ParsedVariant,
+) -> NodeHandle {
+    let id = format!("variant_{}_{}", field.name, variant.name);
+    let scope = derive_scope(
+        "type",
+        schema_name,
+        &format!("{field_path}.variant.{}", variant.name),
+    );
+    let h = push_with_scope(
+        sb,
+        id,
+        PrimitiveKind::Transform,
+        &scope,
+        field_path,
+        field.label,
+    );
+    sb.set_property_for_test(
+        h,
+        VARIANT_NAME_PROPERTY_KEY,
+        Value::Text(variant.name.clone()),
+    );
+    sb.set_property_for_test(
+        h,
+        SCALAR_TAG_PROPERTY_KEY,
+        Value::Text(variant.scalar.as_str().to_string()),
+    );
+    h
 }
 
 /// Emit a degenerate "empty-schema" chain so an empty SchemaRoot still

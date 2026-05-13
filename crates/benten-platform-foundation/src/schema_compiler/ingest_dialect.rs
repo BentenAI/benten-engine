@@ -2,11 +2,11 @@
 //! canonical schema-JSON dialect the [`super::parse`] module consumes.
 //!
 //! G23-A canary supports only the **canonical dialect** (the JSON shape
-//! described at the top of `parse.rs`). Future ingest dialects land at
-//! later G23-A waves:
+//! described at the top of `parse.rs`). Future ingest dialects are named
+//! in `docs/future/phase-4-backlog.md` §4.6 (strict input-dialect work):
 //!
-//! - JSON-Schema standard (Draft 2020-12) — translator wave-4b
-//! - TypeScript DSL — wave-4c (parses TS literal source via napi-rs)
+//! - JSON-Schema standard (Draft 2020-12) — Phase-4-Meta translator
+//! - TypeScript DSL — Phase-4-Meta translator (parses TS literal source via napi-rs)
 //! - Python ingest — Phase-6+ exploratory
 //!
 //! The translator-pattern is: dialect-bytes → canonical-JSON-bytes →

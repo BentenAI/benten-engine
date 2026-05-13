@@ -9,15 +9,20 @@
 use std::fs;
 use std::path::Path;
 
+/// Un-ignored at R6-FP-BF (closes R6 R1 test-coverage-auditor tc-1 +
+/// tc-2 — `plugin_did::mint` source-cite cluster). The
+/// `crates/benten-id/src/plugin_did.rs` source file exists at HEAD;
+/// this grep-assert confirms no HKDF / seed-derivation pattern is
+/// present.
 #[test]
-#[ignore = "RED-PHASE: G24-D wave creates plugin_did.rs source file; un-ignore at G24-D landing"]
 fn plugin_did_module_source_contains_no_hkdf_or_derive_from_user_did_patterns() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("plugin_did.rs");
 
-    let src = fs::read_to_string(&path)
-        .expect("RED-PHASE: G24-D wave must create crates/benten-id/src/plugin_did.rs");
+    let src = fs::read_to_string(&path).expect(
+        "crates/benten-id/src/plugin_did.rs must exist (shipped at G24-D wave per CLAUDE.md #18)",
+    );
 
     // Forbidden patterns: HKDF, seed-derivation, deterministic-from-
     // user-DID minting. Plugin-DID MUST be freshly minted via OsRng.

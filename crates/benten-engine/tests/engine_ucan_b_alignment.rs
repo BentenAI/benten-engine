@@ -21,7 +21,7 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — Engine<B> + UCANBackend<B> alignment. G13-B + G14-B both shipped (commits 4238ed7 + 496e144); test body pins Engine-UCAN-backend generic-alignment structural contract; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+#[ignore = "phase-3-backlog §7.3.D — Engine<B> + UCANBackend<B> alignment. G13-B + G14-B both shipped (commits 4238ed7 + 496e144); test body pins Engine-UCAN-backend generic-alignment structural contract; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
 fn engine_generic_b_aligns_with_ucan_backend_b_at_construction_time() {
     // G13-B + G14-B implementer wires this:
     //   use benten_engine::EngineGeneric;
