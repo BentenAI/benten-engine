@@ -524,6 +524,14 @@ R6-FP-A (PR `r6/fp-1-plugin-trust` commit `2be7841`) marked the legacy `benten_p
 
 **Post-migration:** delete `module_ecosystem::install_plugin` + `install_plugin_persisting_did` + the duplicate `InstallerShape` enum (re-export the canonical one from `plugin_lifecycle`). Estimated LOC delta: -150 (legacy fns) +250 (4 test migrations) = ~+100 LOC.
 
+### §4.34 `scripts/drift-detect.ts` output clarity for `E_INV_ITERATE_NEST_DEPTH` retained-stopgap labeling (Phase-4-Foundation pre-tag)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-FP-C mini-review r6fp-c-mr-2 closing ec-r6r1-8). The `drift-detect.ts` reachability scanner currently lists `E_INV_ITERATE_NEST_DEPTH` as `reachability: ignore` without an explicit reason tag in its output line. Reader has to cross-reference `ERROR-CATALOG.md` to learn the variant is intentionally retired-stopgap-retained (retained for forensic forward-compat per the catalog Status note). Tweak `drift-detect.ts::reportIgnored()` to emit the catalog's `reachability_reason` (or equivalent free-text annotation) alongside the variant name so the scanner output is self-describing. Couples to Wave-G G26-A doc retense if the §-numbering shifts at strategy-C batch.
+
+**Scope:** ~10-30 LOC TypeScript tweak + a snapshot test of the reportIgnored() output if a sentinel exists. Pre-tag-sweep candidate (Wave-G can absorb if scope-cheap).
+
+**Strategy-C batch reconciliation note:** this row was originally proposed as `§4.NEXT-ec-r6r1-8` placeholder in Wave-C; renumbered to `§4.34` at batch-merge per Wave-G §-numbering reconciliation log (Wave-C branched from `origin/main` which didn't include any §4.22+ rows at the time).
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
