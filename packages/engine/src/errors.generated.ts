@@ -2485,7 +2485,7 @@ export class EPluginAuthorNotTrusted extends BentenError {
 /**
  * E_PLUGIN_INSTALL_CONSENT_REQUIRED
  *
- * Thrown at: install pipeline Layer 1 gate at `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin`.
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
  * Message template: "plugin install attempted without user consent (missing or unverified InstallRecord)"
  */
 export class EPluginInstallConsentRequired extends BentenError {
