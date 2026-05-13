@@ -1,0 +1,28 @@
+[package]
+name = "benten-platform-foundation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase 4-Foundation G23-A canary STUB at R3 landing — schema-driven rendering compiler + materializer pipeline + Renderer trait. 11th workspace crate per D-4F-2 ratification. Empty stub at R3 so test pins compile-but-fail at the `use` line (canonical RED-phase). G23-A wave-4 (schema_compiler.rs) + G23-B wave-5 (materializer.rs) fill substantive content."
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[dependencies]
+# Per D-4F-2 + arch-r1-1: depends on benten-core (Subgraph/SubgraphSpec types)
+# + benten-errors (ErrorCode); MUST NOT depend on benten-eval or benten-graph
+# (preserves arch-1 / arch-r1-15).
+benten-core = { path = "../benten-core" }
+benten-errors = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+benten-engine = { path = "../benten-engine" }

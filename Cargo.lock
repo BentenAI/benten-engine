@@ -426,6 +426,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-platform-foundation"
+version = "0.1.0"
+dependencies = [
+ "benten-core",
+ "benten-engine",
+ "benten-errors",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "benten-sync"
 version = "0.1.0"
 dependencies = [
