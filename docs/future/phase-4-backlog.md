@@ -147,6 +147,26 @@ The G24-D primary implementer retagged ~33 RED-PHASE test files with a novel `RE
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for the substantive arm + the §4.7 entry lands NOW (the actual code obligation defers to G24-D-FP-3).
 
+### §4.8.1 `Engine::delegate_capability` chain-walk integration (G24-D-FP-3 followup)
+
+**Origin:** G24-D-FP-3 mini-review finding `g24dfp3-mr-1` (MAJOR, phantom-destination drift). FP-3's brief specified consumption of G24-D-FP-2's `crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope` chain validator. FP-3 actually shipped only the single-step `check_delegation_within_envelope` + an `AllPermit` policy-view placeholder. The chain-walker surface ALREADY EXISTS from FP-2; the integration is the missing piece.
+
+**Scope:** wire `Engine::delegate_capability` through `validate_chain_with_manifest_envelope` so the delegation path walks the FULL UCAN delegation chain (not just one step). Specifically:
+1. After single-step envelope check succeeds, look up the `derived_from` ancestor chain by walking the `system:CapabilityGrant` Node's `derived_from` text property recursively back to the user-root grant.
+2. For each step in the chain, consult the intermediate plugin's `shares` policy (consumes G27-D's manifest-aware lookup at backlog §4.8 once that lands; until then uses `AllPermit` consistently — same posture as today's single-step).
+3. Reject the delegation if ANY chain step traces back to a non-existent / revoked / non-user-root ancestor.
+
+**Acceptance:**
+- `Engine::delegate_capability` calls `validate_chain_with_manifest_envelope` (not just `check_delegation_within_envelope`).
+- New test pin `engine_delegate_capability_walks_full_delegation_chain_via_fp2_validator.rs` (~60 LOC) asserts: (a) single-step delegation continues to admit (no regression); (b) multi-step delegation walks the full chain; (c) multi-step delegation whose middle hop has a missing `derived_from` ancestor REJECTS with the typed `PluginDelegationOutsideManifestEnvelope` ErrorCode.
+- `Engine::delegate_capability` rustdoc updates to remove the §4.8.1 reference once integration lands.
+
+**Phase target:** **Phase 4-Foundation R5 G24-D-FP-3-followup** (likely combined with G27-D since they share the manifest-shares lookup wiring) OR **Phase 4-Meta v1-assessment-window** if chain-walk semantics need broader design.
+
+**Coupling notes:** FP-2's `validate_chain_with_manifest_envelope` is generic over `ManifestEnvelopeLookup` + `UserDidRegistry` traits — both need concrete impls bridging to the engine's manifest store + user-DID registry. Those bridges land at this followup.
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for the chain-walk integration deferral. Closes G24-D-FP-3 mini-review g24dfp3-mr-1.
+
 ### §4.9 `PluginManifest::to_canonical_bytes` + DAG-CBOR key-walk inspection
 
 **Origin:** G24-D mini-review fix-pass disposition of two RED-PHASE test pins (`plugin_cross_plugin_reference_uses_content_cid_not_author_did.rs::manifest_canonical_bytes_dag_cbor_encodes_accepts_content_as_cid_array` + `plugin_pull_not_push_no_manifest_schema_version_field.rs::manifest_canonical_bytes_dag_cbor_contains_no_schema_version_key`) that need a public `to_canonical_bytes() -> Vec<u8>` surface at HEAD to assert structural properties of the canonical encoding (Cid array shape; absence of schema_version key).

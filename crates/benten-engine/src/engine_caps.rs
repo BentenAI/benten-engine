@@ -452,12 +452,24 @@ impl Engine {
     /// 2. Run the single-step manifest-envelope check via
     ///    [`benten_caps::plugin_delegation::check_delegation_within_envelope`]
     ///    against the resolved scope + audience plugin-DID. Today this
-    ///    uses an `AllPermit` policy-view because the manifest
-    ///    `shares` policy lookup wiring lands at G27-D
-    ///    (manifest-aware scope derivation). The private-namespace
-    ///    forbidden clause STILL fires here — that's the class-of-bug
-    ///    defense for `private:<plugin_did>:*` source grants per
-    ///    CLAUDE.md baked-in #18.
+    ///    uses an `AllPermit` policy-view because:
+    ///    - **Manifest `shares` policy lookup** wiring lands at G27-D
+    ///      (manifest-aware scope derivation; see phase-4-foundation-
+    ///      backlog §4.8 + plan §3 G27-D row).
+    ///    - **Full chain-walk integration** through G24-D-FP-2's
+    ///      [`benten_caps::manifest_envelope_chain_validation::validate_chain_with_manifest_envelope`]
+    ///      lands at phase-4-foundation-backlog §4.8.1 (named NOW —
+    ///      this wave shipped the single-step envelope check + the
+    ///      chain-walk validator surface ALREADY exists from FP-2;
+    ///      the integration is a follow-up wave coupling delegate's
+    ///      `derived_from` ancestor traversal with the chain-walker
+    ///      + an end-to-end pin asserting chain-walk fires + denies
+    ///      a multi-step delegation whose intermediate hop violates
+    ///      the source plugin's shares policy).
+    ///
+    ///    The private-namespace forbidden clause STILL fires here —
+    ///    that's the class-of-bug defense for `private:<plugin_did>:*`
+    ///    source grants per CLAUDE.md baked-in #18.
     /// 3. Determine the effective scope for the new delegation grant:
     ///    - If `attenuated_caps` is empty → use the resolved source
     ///      scope unchanged (identity delegation).
