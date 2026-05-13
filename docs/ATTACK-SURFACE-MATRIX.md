@@ -310,24 +310,24 @@ The completeness-audit cycle is the matrix's primary load-bearing role. Per `doc
 
 ## Part 3 — Phase-4-Foundation plugin + admin-UI attack surfaces
 
-The Phase-4-Foundation platform layer introduces 12 named threat classes orthogonal to Phase-2b SANDBOX + Phase-3 P2P-sync surfaces. The authoritative per-class narrative + driving test pin + defense closure state lives at `.addl/phase-4-foundation/admin-ui-v0-threat-model.md`; this section is a brief status snapshot to keep the matrix's meta-completeness role intact post-Phase-4-Foundation.
+The Phase-4-Foundation platform layer introduces 12 named threat classes orthogonal to Phase-2b SANDBOX + Phase-3 P2P-sync surfaces. This section is the meta-completeness snapshot — each row's "cross-ref" column links to the authoritative defense narrative + closure state in the doc cluster.
 
 | Class | Surface | Defense state | Authoritative cross-ref |
 |---|---|---|---|
-| T1 | Plugin manifest install-time forgery (author signature replay / publish-time tamper) | Defended via author Ed25519 signature on canonical manifest bytes + install-record signed by user-DID | `PLUGIN-MANIFEST.md` §2 + `admin-ui-v0-threat-model.md` §T1 |
+| T1 | Plugin manifest install-time forgery (author signature replay / publish-time tamper) | Defended via author Ed25519 signature on canonical manifest bytes + install-record signed by user-DID | `PLUGIN-MANIFEST.md` §2 + SECURITY-POSTURE.md §"Plugin trust model" |
 | T2 | Manifest envelope drift between install and runtime delegation | Defended via `manifest_envelope_chain_validation` (G24-D-FP-2 seam at `crates/benten-caps/src/manifest_envelope_chain_validation.rs` joining `benten-platform-foundation::plugin_manifest` with `benten-caps::plugin_delegation`) | SECURITY-POSTURE.md Compromise #26 |
 | T3 | Plugin-to-plugin smuggling (A delegates to B beyond A's `shares`) | Defended via manifest `shares` policy validation at delegation time | SECURITY-POSTURE.md §"Plugin trust model" |
 | T4 | Object-capability bypass via plugin attempting to construct cap from thin air | Defended via chain-traces-to-user-root validation at access time | SECURITY-POSTURE.md §"Plugin trust model" |
 | T5 | Engine-internal-as-principal forgery (plugin tries to call `Engine::read_node` unchecked path) | Mitigated-by-construction via `pub(crate)` visibility on `Engine::read_node` + Class B β `read_node_as` surface | SECURITY-POSTURE.md §"Plugin trust model" + CLAUDE.md baked-in #18 |
-| T6 | Private-namespace cross-plugin leak (cap-scope `private:<plugin_did>:*` delegated via `shares` policy) | Defended via `crates/benten-caps/src/private_namespace_policy.rs` (implicit `shares: none` regardless of declared policy) | GLOSSARY "Private namespace" + PLUGIN-MANIFEST.md §6 |
+| T6 | Private-namespace cross-plugin leak (cap-scope `private:<plugin_did>:*` delegated via `shares` policy) | Defended via `private_namespace` provisioning at `crates/benten-platform-foundation/src/plugin_lifecycle.rs` install Step 10 + cross-plugin delegation denial enforced by `SharesPolicy` validation; test pins at `crates/benten-caps/tests/private_namespace_cross_plugin_delegation_denied.rs` + `crates/benten-platform-foundation/tests/plugin_private_namespace_*.rs` | GLOSSARY "Private namespace" + PLUGIN-MANIFEST.md §6 |
 | T7 | Manifest-envelope recheck bypass on sync merge ingress | Defended at R4b-FP-1 Seam 3 (`apply_atrium_merge` revalidates envelope chain before per-row cap-recheck) | SECURITY-POSTURE.md Compromise #26 |
-| T8 | Admin UI IndexedDB cap-token leak (browser bundle accidentally caches caps) | Defended via `INDEXEDDB_FORBIDDEN_STORES` deny list at `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs` + grep-asserted source pin | `admin-ui-v0-threat-model.md` §T8 |
-| T9 | WinterTC compatibility drift (browser-only API sneaks into bundle, breaks edge worker deployment shape (b)) | Defended via `WINTERTC_FORBIDDEN_APIS` deny list + CI guard at G26-B + source-grep test pin | `admin-ui-v0-threat-model.md` §T9 |
+| T8 | Admin UI IndexedDB cap-token leak (browser bundle accidentally caches caps) | Defended via `INDEXEDDB_FORBIDDEN_STORES` deny list at `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs` + grep-asserted source pin | ADMIN-UI.md §4 + `crates/benten-platform-foundation/tests/admin_ui_v0_public_surface_presence_pins.rs` |
+| T9 | WinterTC compatibility drift (browser-only API sneaks into bundle, breaks edge worker deployment shape (b)) | Defended via `WINTERTC_FORBIDDEN_APIS` deny list + CI guard at G26-B + source-grep test pin | ADMIN-UI.md §4 + `crates/benten-platform-foundation/tests/admin_ui_v0_public_surface_presence_pins.rs` |
 | T10 | Tauri IPC allowlist bypass (embedded webview calls non-allowlisted host method) | Defended via per-method cap-binding in `benten-renderer-tauri::IpcAllowlist` + CSP | ARCHITECTURE.md §benten-renderer-tauri |
 | T11 | Plugin device-DID attestation forgery (plugin claims user-DID's attestation chain) | Mitigated-by-construction: plugin-DID has NO device-DID-style attestation chain per CLAUDE.md baked-in #18 four-identity-concept separation; plugin-DID is purely a UCAN audience handle bounded by manifest `shares` | GLOSSARY "Plugin DID" |
 | T12 | Schema-driven rendering field-vocabulary tampering (malicious schema-subgraph introduces non-canonical label) | Defended via 8-label vocabulary allow-list at schema-compiler entry + composability invariant cag-r1-1 | SCHEMA-DRIVEN-RENDERING.md §2 |
 
-**Bucket totals:** 9 Defended (T1, T2, T3, T4, T6, T7, T8, T9, T10, T12) + 2 Mitigated-by-construction (T5, T11) = 12. No Phase-4-Foundation surface is currently `Phase-N-deferred`; all close at HEAD.
+**Bucket totals:** 10 Defended (T1, T2, T3, T4, T6, T7, T8, T9, T10, T12) + 2 Mitigated-by-construction (T5, T11) = 12. No Phase-4-Foundation surface is currently `Phase-N-deferred`; all close at HEAD.
 
 **Audit cycle.** Same shape as Part 1 + Part 2: walk every row at every phase-close; verify cited defense site + driving test pin both exist at HEAD; pim-13 §3.12 R7-equivalent spec-to-code-compliance audit at Phase-4-Foundation R6 final round covers Part 3 exhaustively.
 

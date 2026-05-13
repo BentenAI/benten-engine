@@ -62,7 +62,7 @@ Phase 1 shipped 2026-04-21. Phase 2a closed at tag `phase-2a-close` (2026-04-25)
 
 **Live today:** all 12 operation primitives (READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL, RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM), the `crud()` zero-config path, content-addressed storage with MVCC, IVM views (5 hand-written + Algorithm B for user-registered views on canonical IDs), pluggable capability policy with durable UCAN backend, WASM-fueled SANDBOX with capability-derived host-function manifests + entropy-budgeted `random` host-fn, P2P sync over iroh + Loro CRDT (Atriums), Ed25519/DID/UCAN/VC identity stack, multi-device cryptographic attestation, scaffolder, debug tooling, `handler.toMermaid()` and `engine.trace()` introspection, suspend/resume across process boundaries, hot-reload dev server. TypeScript bindings via napi-rs; Rust API available directly.
 
-**Next up:** Phase 4 — Benten Platform v1 (admin UI + plugin manifest + decentralized self-discovered registry + schema-driven rendering + materializer + self-composing admin + module ecosystem tooling). See [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) for the plain-English tour of where the project is going.
+**In flight:** Phase 4-Foundation closing at tag `phase-4-foundation-close` — admin UI v0 + full plugin manifest schema + schema-driven rendering + materializer pipeline + IVM-subgraph generalization + Tauri 2.x integrator + decentralized identity working name "Kith" (exploratory). **Next up after that:** Phase 4-Meta — self-composing admin (admin UI editing the admin UI through the admin UI) + Phase-3-deferred items + v1-assessment-window before tagging `v1`. See [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) for the plain-English tour of where the project is going.
 
 ## Start here
 
