@@ -29,6 +29,24 @@ pub struct ParsedSchema {
     pub(crate) respond_targets: Vec<RespondTarget>,
 }
 
+impl ParsedSchema {
+    /// G24-A wave-completion sweep: `#[doc(hidden)]` constructor used
+    /// only by [`super::spec::SchemaSubgraphSpec::for_test_from_handcoded_subgraph`]
+    /// to build an empty `ParsedSchema` shell when callers want to
+    /// hand-author the underlying [`benten_core::Subgraph`] directly
+    /// (defense-in-depth integration tests against the materializer
+    /// entry-point per phase-4-backlog §4.13 mr-4).
+    pub(crate) fn for_test_empty(name: String) -> Self {
+        Self {
+            name,
+            fields: Vec::new(),
+            sandbox_refs: Vec::new(),
+            emit_targets: Vec::new(),
+            respond_targets: Vec::new(),
+        }
+    }
+}
+
 /// A single field declaration.
 #[derive(Debug, Clone)]
 pub struct ParsedField {

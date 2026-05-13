@@ -239,6 +239,36 @@ Per ux-r1-1 BLOCKER closure; each path carries observable user-moment + success 
 
 ---
 
+## §9.1 G24-A canary deliverable state (2026-05-13)
+
+Phase 4-Foundation G24-A wave-6 canary ships the **engine-substrate arm** of the admin UI v0 surface. The 4-category nav substrate + materializer-pipeline consumer wiring + dogfood-path engine-side arms are LIVE; the browser-side admin UI components (workflow editor drag-drop, view creator UI, install consent dialog) land at G24-B + G24-C wave-6b + G24-D wave-7. Dogfood UX arms — click-budgets + live-preview latency + multi-device-sync wall-clock + revoke toast surfacing — carry to wave-9 dogfood gate (named at `docs/future/phase-4-backlog.md §2`).
+
+### G24-A canary shipped at this wave
+
+| Component | Location | Status |
+|---|---|---|
+| Admin UI v0 module | `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs` | LIVE (300 LOC) |
+| 4-category nav constants (`NAV_CATEGORIES`, `Category`) | same module | LIVE |
+| `build_admin_ui_v0_subgraph` + `build_category_route_subgraph` | same module | LIVE — composes from 12 primitives only |
+| `render_category_content_allow_all` + `render_category_content` | same module | LIVE — `Materializer` trait consumer |
+| `Subscriber::for_category` seam | same module | LIVE — patterns route to `on_change_as_with_cursor` |
+| Engine→Materializer adapter | `crates/benten-platform-foundation/tests/common/admin_ui_v0_engine_adapter.rs` | LIVE — test-side adapter shape |
+| Defense-in-depth SANDBOX banned-host-fn pin (mr-4) | `crates/benten-platform-foundation/tests/materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` | 4 sub-tests pass |
+| End-to-end dual-gate pin (mr-3) + propagation pin (mr-5) + invocation-count pin (mr-8) | `crates/benten-platform-foundation/tests/admin_ui_v0_materializer_reactive_update_propagates_through_engine_on_change_as_with_cursor.rs` | 4 sub-tests pass |
+| Engine-side shell pins (7) | `crates/benten-engine/tests/admin_ui_v0_*.rs` | Un-ignored + substantively LIVE |
+| Dogfood-path engine-substrate arms (6) | `crates/benten-engine/tests/dogfood_path_<a..f>_ux_acceptance.rs` | Un-ignored + substantively LIVE |
+
+### G24-A canary punt-list (lands at later waves; named at `docs/future/phase-4-backlog.md §2`)
+
+- Click-counter test harness + live-DOM workflow editor → **G24-B wave-6b**
+- Composed-view creator live-preview latency p50/p99 measurement → **G24-C wave-6b**
+- Multi-device sync ≤3s loopback round-trip + Devices sub-panel → **wave-9 dogfood gate**
+- "Capability revoked" user-visible toast UX → **G24-C wave-6b + wave-9 dogfood gate**
+- ≤3-click install-consent flow + plain-English manifest display → **G24-D wave-7 + wave-9 dogfood gate**
+- User-DID install-record signing UX → **G24-D wave-7 + wave-9 dogfood gate**
+
+---
+
 ## §10. Cross-references
 
 - **CLAUDE.md baked-in #18** — three-layer consent (canonical)

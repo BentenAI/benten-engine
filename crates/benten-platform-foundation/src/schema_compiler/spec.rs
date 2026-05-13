@@ -66,4 +66,32 @@ impl SchemaSubgraphSpec {
     pub fn handler_id(&self) -> &str {
         self.subgraph.handler_id()
     }
+
+    /// G24-A wave-completion sweep closes phase-4-backlog §4.13 mr-4
+    /// MAJOR: defense-in-depth integration-test surface.
+    ///
+    /// The materializer entry-point at `materializer.rs:905-921` has a
+    /// re-check for `SchemaSubgraphSpec` inputs whose SANDBOX node
+    /// references a banned storage-mutating host-fn. The PRIMARY
+    /// defense is at `schema_compiler::compile` (G23-A), which refuses
+    /// such schemas during parse. This `for_test_*` constructor lets
+    /// integration tests construct a hand-authored spec that bypasses
+    /// the parse-time defense, so the materializer-entry-arm can be
+    /// exercised in isolation (closes mr-4 G24-A acceptance).
+    ///
+    /// **Not part of the stable public API.** Marked `#[doc(hidden)]`.
+    /// Production callers use [`crate::schema_compiler::compile`].
+    #[doc(hidden)]
+    #[must_use]
+    pub fn for_test_from_handcoded_subgraph(
+        schema_name: impl Into<String>,
+        subgraph: Subgraph,
+    ) -> Self {
+        let descriptors = PrimitiveDescriptor::derive_for(&subgraph);
+        Self {
+            parsed: ParsedSchema::for_test_empty(schema_name.into()),
+            subgraph,
+            descriptors,
+        }
+    }
 }

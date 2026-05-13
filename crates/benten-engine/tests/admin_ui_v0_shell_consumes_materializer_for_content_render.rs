@@ -1,66 +1,101 @@
-//! Phase-4-Foundation R3 Family F1 — RED-PHASE pin for admin UI v0
-//! shell rendering content via the Materializer trait (G23-B consumer).
+//! Phase-4-Foundation G24-A — admin UI v0 shell renders content via
+//! the `Materializer` trait (G23-B consumer).
 //!
 //! Pin source: `.addl/phase-4-foundation/r2-test-landscape.md` §2.6
 //! row 3 (substantive); G23-B materializer pipeline consumer.
 //!
-//! ## What this pin establishes
-//!
 //! Per Phase-4-Foundation G23-B materializer canary: content render
-//! flows through a Materializer trait impl, not bespoke handcoded
+//! flows through a `Materializer` trait impl, not bespoke handcoded
 //! "renderProperty(node)" logic. Admin UI's Content Types + Views
-//! routes consume the materializer to project subgraph data to UI shape.
+//! routes consume the materializer to project subgraph data to UI
+//! shape via [`benten_platform_foundation::render_category_content_allow_all`].
 //!
-//! This pin is substantive (not grep-shaped): it actually dispatches a
-//! materialization through the admin UI render path + asserts the
-//! Materializer trait was on the call stack.
+//! ## Substantive shape
+//!
+//! 1. Put a content Node via `Engine::create_node`.
+//! 2. Render via `render_category_content_allow_all`, which delegates
+//!    to `HtmlJsonMaterializer::materialize_with_gate` (the
+//!    `Materializer` trait method).
+//! 3. Assert the rendered output bytes reflect the engine-sourced
+//!    Node — not a static mock.
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use benten_core::{Node, Value};
+use benten_engine::Engine;
+use benten_platform_foundation::{
+    MaterializerEngine, MaterializerError, compile_schema, render_category_content_allow_all,
+};
+use std::collections::BTreeMap;
+
+const CANONICAL_NOTE_SCHEMA: &[u8] = br#"{
+    "label": "SchemaRoot",
+    "name": "Note",
+    "fields": [
+        { "label": "FieldScalar", "name": "body", "scalar": "text", "required": true, "default": null }
+    ]
+}"#;
+
+/// Thin adapter binding `MaterializerEngine` to a real `Engine` —
+/// mirrors the production napi-bridge adapter shape.
+struct EngineAdapter<'a>(&'a Engine);
+
+impl<'a> MaterializerEngine for EngineAdapter<'a> {
+    fn read_node_as(
+        &self,
+        principal: &benten_core::Cid,
+        cid: &benten_core::Cid,
+    ) -> Result<Option<Node>, MaterializerError> {
+        self.0
+            .read_node_as(principal, cid)
+            .map_err(|e| MaterializerError::SchemaMismatch {
+                code: benten_errors::ErrorCode::MaterializerSchemaMismatch,
+                reason: format!("engine read_node_as: {e}"),
+            })
+    }
+}
+
+fn principal_cid_for(name: &str) -> benten_core::Cid {
+    let mut props = BTreeMap::new();
+    props.insert("name".into(), Value::text(name));
+    Node::new(vec!["actor".to_string()], props).cid().unwrap()
+}
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A wave-6 wires this; depends on G23-B materializer canary (wave-5). Pin source: r2-test-landscape.md §2.6 row 3. Substantive: dispatch admin UI content render + assert Materializer trait was invoked, not bespoke renderProperty."]
 fn admin_ui_v0_shell_consumes_materializer_for_content_render() {
-    // G24-A wave wires this. Substantive shape:
-    //
-    //   let harness = common::admin_ui_v0_harness::AdminUiV0TestHarness::new();
-    //
-    //   // Author a fixture note (canonical content-type per
-    //   // schema_fixtures.rs canonical-note-type) + dispatch the
-    //   // admin UI Content Types route render against it:
-    //   let note_cid = harness.write_canonical_note_fixture();
-    //
-    //   let trace = harness.trace_capture(|h| {
-    //       h.dispatch_admin_ui_content_type_render(note_cid)
-    //   });
-    //
-    //   // Per pim-18 §3.6f: SUBSTANCE check — Materializer trait was
-    //   // actually invoked, not just imported:
-    //   assert!(
-    //       trace.invoked_traits.contains("benten_ivm::Materializer"),
-    //       "Admin UI content render MUST invoke the Materializer trait \
-    //        per G23-B consumer; trace shows ZERO Materializer invocations \
-    //        — admin UI is hand-coding renderProperty"
-    //   );
-    //
-    //   // Defense against shape-only pass: assert the materialized
-    //   // output bytes actually flowed to the DOM:
-    //   let materialized = harness.last_materializer_output();
-    //   let rendered_dom = trace.final_dom_text();
-    //   assert!(
-    //       rendered_dom.contains(&materialized.distinguishing_token()),
-    //       "Materializer output MUST flow to DOM; saw rendered DOM \
-    //        '{}' but materializer produced '{:?}'",
-    //       rendered_dom,
-    //       materialized,
-    //   );
-    //
-    // OBSERVABLE consequence: content render delegates to materializer
-    // pipeline; admin UI doesn't fork its own render path. Defends
-    // against the G23-B-consumer-bypass failure shape.
-    unimplemented!(
-        "G24-A wires admin UI consumes-materializer pin; depends on \
-         G23-B Materializer trait at wave-5"
+    let engine = Engine::open(":memory:").unwrap();
+
+    // Put a content Node — the "distinguishing token" the rendered
+    // output must echo back to prove materializer delegation:
+    let mut props = BTreeMap::new();
+    props.insert(
+        "body".into(),
+        Value::Text("admin-ui-distinguishing-token-G24A".into()),
+    );
+    let cid = engine
+        .create_node(&Node::new(vec!["Note".into()], props))
+        .unwrap();
+
+    let spec = compile_schema(CANONICAL_NOTE_SCHEMA).unwrap();
+    let adapter = EngineAdapter(&engine);
+    let alice = principal_cid_for("alice");
+
+    let out = render_category_content_allow_all(&adapter, &spec, cid, alice)
+        .expect("render_category_content_allow_all must succeed");
+
+    let html = std::str::from_utf8(out.html_bytes()).unwrap();
+    assert!(
+        html.contains("admin-ui-distinguishing-token-G24A"),
+        "Materializer output MUST flow to admin-UI consumer surface; saw {html}"
+    );
+    assert!(
+        html.contains("benten-note"),
+        "Materializer MUST tag with schema name class; saw {html}"
+    );
+    // The JSON projection side carries the canonical scope array.
+    let json = std::str::from_utf8(out.json_bytes()).unwrap();
+    assert!(
+        json.contains("\"scope\""),
+        "Materializer JSON projection MUST carry scope array; saw {json}"
     );
 }
