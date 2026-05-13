@@ -238,10 +238,11 @@ pub fn check_scope_within_envelope(
     target_plugin_did: &Did,
     source_manifest: &PluginManifest,
 ) -> Result<(), CapError> {
-    // Private-namespace caps are NEVER delegable cross-plugin —
-    // mirrors `plugin_delegation::is_private_namespace_cap` at the
-    // audience-side path. The cross-plugin deny is structural.
-    if cap_scope.starts_with("private:") {
+    // Private-namespace caps are NEVER delegable cross-plugin — the
+    // cross-plugin deny is structural. Delegates to
+    // `plugin_delegation::is_private_namespace_cap` (same-crate sibling)
+    // so the private-NS shape lives in exactly one source location.
+    if crate::plugin_delegation::is_private_namespace_cap(cap_scope) {
         return Err(CapError::Denied {
             required: cap_scope.to_string(),
             entity: target_plugin_did.as_str().to_string(),
