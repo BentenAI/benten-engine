@@ -651,7 +651,7 @@ impl Engine {
                   registration / persisted-Node write sequence"
     )]
     pub fn register_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
-        // D8-RESOLVED: refuse Strategy::A + Strategy::C BEFORE writing the
+        // D8-RESOLVED: refuse Strategy::A + Strategy::Reserved BEFORE writing the
         // definition Node so a refused registration leaves no on-disk
         // residue (the `system:IVMView` Node only exists for accepted
         // strategies).
@@ -661,7 +661,7 @@ impl Engine {
                     view_id: spec.id().to_string(),
                 });
             }
-            benten_ivm::Strategy::C => {
+            benten_ivm::Strategy::Reserved => {
                 return Err(EngineError::ViewStrategyCReserved {
                     view_id: spec.id().to_string(),
                 });
@@ -861,6 +861,22 @@ impl Engine {
                             view_id,
                             expected_label,
                             got_label: format!("AnchorPrefix({got_prefix:?})"),
+                        });
+                    }
+                    Err(benten_ivm::AlgorithmError::SelfReferentialSubgraphRejected {
+                        view_id,
+                    }) => {
+                        // G23-0a mat-r1-13 defense-in-depth — register_user_view
+                        // routes through `Algorithm::register` not
+                        // `register_subgraph`, so a self-referential spec can
+                        // never reach this match arm via this code path.
+                        // The arm exists for exhaustivity and surfaces a
+                        // typed engine error if a future code change wires
+                        // `register_subgraph` here.
+                        return Err(EngineError::ViewLabelMismatch {
+                            view_id,
+                            expected_label: "<non-self-referential>".to_string(),
+                            got_label: "<self-referential SubgraphSpec>".to_string(),
                         });
                     }
                 }

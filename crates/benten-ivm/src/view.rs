@@ -64,9 +64,11 @@ pub enum ViewError {
     BudgetExceeded(String),
 
     /// The requested IVM [`crate::Strategy`] is reserved but not implemented
-    /// in this phase. Phase 2b ships `Strategy::A` (hand-written) +
-    /// `Strategy::B` (Algorithm B); `Strategy::C` (Z-set / DBSP cancellation)
-    /// is reserved for Phase 3+ (g8-concern-3). Surfaces from
+    /// in this phase. The IVM crate ships `Strategy::A` (hand-written) +
+    /// `Strategy::B` (Algorithm B; G23-0a generalizes to consume
+    /// `SubgraphSpec`); `Strategy::Reserved` (Z-set / DBSP cancellation;
+    /// renamed from `Strategy::C` at G23-0a per arch-r1-14) is reserved
+    /// for Phase 3+ (g8-concern-3). Surfaces from
     /// [`crate::testing::try_construct_view_with_strategy`]. Maps to
     /// [`ErrorCode::IvmStrategyNotImplemented`](benten_errors::ErrorCode::IvmStrategyNotImplemented).
     #[error(
@@ -76,7 +78,7 @@ pub enum ViewError {
         /// The reserved strategy variant the caller asked for.
         strategy: crate::Strategy,
         /// Human-readable phase target the caller can wait for (e.g.
-        /// `"Phase 3+"` for `Strategy::C`).
+        /// `"Phase 3+"` for `Strategy::Reserved`).
         deferred_to_phase: String,
     },
 }
@@ -101,7 +103,8 @@ impl ViewError {
             ViewError::PatternMismatch(_) => benten_errors::ErrorCode::IvmPatternMismatch,
             // StrategyNotImplemented (G8-A, g8-concern-3): the caller asked
             // for a Strategy variant that is reserved but not yet wired —
-            // currently only `Strategy::C` (Z-set / DBSP cancellation),
+            // currently only `Strategy::Reserved` (Z-set / DBSP cancellation;
+            // renamed from `Strategy::C` at G23-0a per arch-r1-14),
             // deferred to Phase 3+. The dedicated catalog code keeps cross-
             // language consumers from confusing this with the runtime-stale
             // `E_IVM_VIEW_STALE` family.
@@ -239,9 +242,10 @@ pub enum ViewResult {
 ///
 /// `Debug` is a supertrait so `Result<Box<dyn View>, _>::expect_err` and
 /// `Result::unwrap_err` compile against the trait-object form (G8-A: the
-/// `try_construct_view_with_strategy(Strategy::C)` reserved-not-implemented
-/// test path needs `Debug` on the `Ok` arm). Every concrete view in the
-/// crate already derives `Debug`, so this adds no implementor burden.
+/// `try_construct_view_with_strategy(Strategy::Reserved)` reserved-not-
+/// implemented test path needs `Debug` on the `Ok` arm). Every concrete
+/// view in the crate already derives `Debug`, so this adds no implementor
+/// burden.
 pub trait View: Send + Sync + core::fmt::Debug {
     /// Ingest a single change event. Implementations update incrementally.
     ///
@@ -370,11 +374,15 @@ impl ViewDefinition {
     /// deterministic iteration so the Node's CID is stable across calls.
     ///
     /// G8-A (g8-concern-1): the `strategy` property is folded in as a
-    /// stable string (`"A"` / `"B"` / `"C"`) so two definitions that differ
-    /// only in strategy yield different CIDs — preserving registry
+    /// stable string (`"A"` / `"B"` / `"Reserved"`) so two definitions that
+    /// differ only in strategy yield different CIDs — preserving registry
     /// distinguishability across Phase-2b's hybrid keep-all-parallel
     /// rollout where `Strategy::A` and `Strategy::B` views can coexist
-    /// for the same `view_id`.
+    /// for the same `view_id`. G23-0a (arch-r1-14): the `"Reserved"`
+    /// string replaces the prior `"C"` — `Strategy::Reserved` view
+    /// definitions are not constructed in production (the variant is
+    /// reserved-not-implemented), so no on-disk content-addressing
+    /// contract is broken by the string change.
     #[must_use]
     pub fn as_node(&self) -> Node {
         let mut props = BTreeMap::new();
@@ -388,7 +396,7 @@ impl ViewDefinition {
         let strategy_str = match self.strategy {
             crate::Strategy::A => "A",
             crate::Strategy::B => "B",
-            crate::Strategy::C => "C",
+            crate::Strategy::Reserved => "Reserved",
         };
         props.insert(String::from("strategy"), Value::text(strategy_str));
         Node::new(vec![self.output_label.clone()], props)

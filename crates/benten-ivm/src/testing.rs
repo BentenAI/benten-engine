@@ -24,9 +24,9 @@ use crate::views::{CapabilityGrantsView, ContentListingView};
 ///
 /// # Panics
 ///
-/// Panics on [`Strategy::C`] because the variant is reserved and not
-/// implemented in Phase 2b. Tests that need to assert the typed-error
-/// behavior should use [`try_construct_view_with_strategy`] instead.
+/// Panics on [`Strategy::Reserved`] because the variant is reserved and not
+/// implemented. Tests that need to assert the typed-error behavior should
+/// use [`try_construct_view_with_strategy`] instead.
 #[must_use]
 pub fn testing_construct_view_with_strategy(strategy: Strategy) -> Box<dyn View> {
     try_construct_view_with_strategy(strategy)
@@ -34,14 +34,15 @@ pub fn testing_construct_view_with_strategy(strategy: Strategy) -> Box<dyn View>
 }
 
 /// Fallible variant of [`testing_construct_view_with_strategy`] — surfaces
-/// the typed [`ViewError::StrategyNotImplemented`] for [`Strategy::C`]
+/// the typed [`ViewError::StrategyNotImplemented`] for [`Strategy::Reserved`]
 /// rather than panicking.
 ///
 /// # Errors
 ///
 /// Returns [`ViewError::StrategyNotImplemented`] when `strategy` is
-/// [`Strategy::C`] (Z-set / DBSP cancellation, deferred to Phase 3+).
-/// Strategy::A + Strategy::B always succeed.
+/// [`Strategy::Reserved`] (Z-set / DBSP cancellation, deferred to Phase 3+;
+/// renamed from `Strategy::C` at G23-0a per arch-r1-14). Strategy::A +
+/// Strategy::B always succeed.
 pub fn try_construct_view_with_strategy(strategy: Strategy) -> Result<Box<dyn View>, ViewError> {
     match strategy {
         Strategy::A => Ok(Box::new(CapabilityGrantsView::new())),
@@ -49,8 +50,8 @@ pub fn try_construct_view_with_strategy(strategy: Strategy) -> Result<Box<dyn Vi
             let view = AlgorithmBView::for_id("content_listing", ContentListingView::definition())?;
             Ok(Box::new(view))
         }
-        Strategy::C => Err(ViewError::StrategyNotImplemented {
-            strategy: Strategy::C,
+        Strategy::Reserved => Err(ViewError::StrategyNotImplemented {
+            strategy: Strategy::Reserved,
             deferred_to_phase: "Phase 3+".to_string(),
         }),
     }

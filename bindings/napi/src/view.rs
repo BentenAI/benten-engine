@@ -136,7 +136,7 @@ pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserVi
         let strategy = match strategy_str.to_ascii_uppercase().as_str() {
             "A" => benten_ivm::Strategy::A,
             "B" => benten_ivm::Strategy::B,
-            "C" => benten_ivm::Strategy::C,
+            "C" | "RESERVED" => benten_ivm::Strategy::Reserved,
             other => {
                 return Err(napi::Error::new(
                     Status::GenericFailure,

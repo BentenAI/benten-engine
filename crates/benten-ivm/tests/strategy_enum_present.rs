@@ -28,7 +28,7 @@ fn strategy_enum_a_b_c_present() {
     // adding/removing one breaks compile.
     let a = Strategy::A;
     let b = Strategy::B;
-    let c = Strategy::C;
+    let c = Strategy::Reserved;
 
     assert_ne!(a, b);
     assert_ne!(b, c);
@@ -38,7 +38,7 @@ fn strategy_enum_a_b_c_present() {
     // error catalog wiring + view-definition CID stability).
     assert_eq!(format!("{a:?}"), "A");
     assert_eq!(format!("{b:?}"), "B");
-    assert_eq!(format!("{c:?}"), "C");
+    assert_eq!(format!("{c:?}"), "Reserved");
 }
 
 #[test]

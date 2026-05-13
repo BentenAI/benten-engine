@@ -39,6 +39,7 @@ extern crate alloc;
 pub mod algorithm_b;
 pub mod budget;
 pub mod strategy;
+pub mod subgraph_spec;
 pub mod subscriber;
 pub mod testing;
 pub mod view;
@@ -49,6 +50,7 @@ pub use algorithm_b::{
 };
 pub use budget::BudgetTracker;
 pub use strategy::Strategy;
+pub use subgraph_spec::{KernelInput, KernelOutput, SubgraphSpec, TypedOutputProjection};
 pub use subscriber::{ChangeStreamSubscriber, Subscriber};
 pub use view::{
     IvmError, View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState,

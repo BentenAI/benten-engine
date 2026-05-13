@@ -32,7 +32,7 @@ fn view_definition_carries_strategy_field_in_cid() {
         view_id: "content_listing".into(),
         input_pattern_label: Some("post".into()),
         output_label: "system:IVMView".into(),
-        strategy: Strategy::C,
+        strategy: Strategy::Reserved,
     };
 
     let cid_a = def_a.cid().expect("definition cid must be infallible");

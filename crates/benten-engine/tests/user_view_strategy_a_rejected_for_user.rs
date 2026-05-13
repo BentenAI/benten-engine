@@ -74,7 +74,7 @@ fn user_view_strategy_c_refused_as_reserved() {
     let spec = UserViewSpec::builder()
         .id("user_c_attempt")
         .input_pattern(UserViewInputPattern::AnchorPrefix("post".into()))
-        .strategy(benten_ivm::Strategy::C)
+        .strategy(benten_ivm::Strategy::Reserved)
         .build()
         .expect("UserViewSpec builder constructs (rejection lives at register_user_view)");
 
