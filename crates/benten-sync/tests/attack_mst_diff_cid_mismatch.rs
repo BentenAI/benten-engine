@@ -35,6 +35,17 @@
 //!   `MstError::EntryCidByteMismatch` + write-NOT-applied);
 //! - would FAIL if the application-layer rehash check were silently
 //!   no-op'd (i.e., if entries were trusted by declaration).
+//!
+//! ## R4-FP-4 substance audit cross-reference
+//!
+//! This file is audited at
+//! `.addl/phase-4-foundation/notes-wave-c1-attack-audit.md` §2.3 per
+//! sec-3.5-r1-8 + pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight. Audit
+//! verdict: SUBSTANTIVE — production-surface (`Mst::apply_entries`) +
+//! 3 observable-consequence assertions (typed variant + CID field
+//! values + write-NOT-applied) + companion-positive pin at lines
+//! 108-122 confirms asymmetric rehash check. No substance gaps
+//! detected at HEAD.
 
 #![allow(clippy::unwrap_used)]
 

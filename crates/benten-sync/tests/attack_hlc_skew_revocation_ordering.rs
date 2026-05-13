@@ -40,6 +40,15 @@
 //!   `CoreError::HlcSkewExceeded` + local clock NOT mutated +
 //!   `Hlc::now()` post-rejection still less than the future-skew stamp);
 //! - would FAIL if the inbound skew-cap check were silently no-op'd.
+//!
+//! ## R4-FP-4 substance audit cross-reference
+//!
+//! This file is audited at
+//! `.addl/phase-4-foundation/notes-wave-c1-attack-audit.md` §2.1 per
+//! sec-3.5-r1-8 + pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight. Audit
+//! verdict: SUBSTANTIVE — production-surface (`Hlc::update`) + 4
+//! observable-consequence assertions + would-FAIL-if-no-op'd documented
+//! inline. No substance gaps detected at HEAD.
 
 #![allow(clippy::unwrap_used)]
 

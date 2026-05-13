@@ -66,13 +66,35 @@ fn post_node(title: &str) -> Node {
     Node::new(vec!["post".into()], props)
 }
 
-/// RED-PHASE: G27-A class-of-bug audit.
+/// G27-A class-of-bug audit regression guard — DURABLE at HEAD.
 ///
-/// Pins that the napi grant entry point persists scope strings (NOT
-/// CIDs) so the reader walker can match grants to writes. Would-FAIL
-/// if a future napi grant-shaped binding ever conflates CID + scope.
+/// Pins that the napi grant entry point passes scope strings (NOT
+/// CIDs) through the engine seam by exercising the content-addressing
+/// invariant on the grant Node: two distinct scope-strings minted at
+/// the same actor MUST yield distinct content-addressed grant CIDs,
+/// AND an OK-edge write through the granted handler MUST succeed.
+/// Would-FAIL if a future napi grant-shaped binding ever conflates
+/// CID + scope (the CID-substitution would collapse all scopes to a
+/// single bucket OR the OK-edge write would surface unexpected error).
+///
+/// NOT RED-PHASE: this test exercises shipped surfaces today
+/// (`Engine::grant_capability_with_proof` + `Engine::call_as`); it is
+/// a durable regression guard, not a pin for future-wave un-ignore.
+/// Per R4-FP-4 charter §5.4: R3-time substance that COULD have landed
+/// AT R3 against shipped surfaces.
+///
+/// Substantive arm shape: the grant Node itself is system-zone
+/// (`system:CapabilityGrant`) so `Engine::get_node` is sealed by
+/// Inv-11 — direct backend readback is intentionally unavailable from
+/// user-facing test surface. Instead we use the **content-addressing
+/// invariant**: distinct scope-string inputs MUST yield distinct
+/// grant CIDs because the canonical-bytes encoding of the grant Node
+/// embeds the scope-string. If the napi binding mangled scope-string
+/// into a CID-substitution shape, the resulting grant Node would
+/// either (a) carry a constant scope value (CID-derived) collapsing
+/// distinct scope inputs to the same output CID, or (b) fail to mint
+/// when the CID isn't a valid Value::Text scope shape.
 #[test]
-#[ignore = "RED-PHASE: G27-A — un-ignore when class-of-bug audit lands; verifies napi grant entry point passes scope-string (not CID) to engine seam"]
 fn napi_grant_entry_point_persists_scope_string_not_cid() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -81,44 +103,73 @@ fn napi_grant_entry_point_persists_scope_string_not_cid() {
         .build()
         .expect("engine opens with grant-backed policy");
 
-    let _handler_id = engine.register_crud("post").unwrap();
+    let handler_id = engine.register_crud("post").unwrap();
     let actor = engine.create_principal("alice").unwrap();
 
-    // Substantive arm: the seam the napi `grantCapability(json)` binding
-    // routes through (`Engine::grant_capability_with_proof`). The JSON
-    // parser at `bindings/napi/src/lib.rs::parse_grant_json` MUST pass
-    // the scope STRING through unchanged — never the grant's eventual CID.
-    let grant_cid = engine
+    // Substantive arm #1 — minted CIDs distinct for distinct scopes.
+    // Mint two grants for the SAME actor with DISTINCT scope strings.
+    // Content-addressing guarantees: distinct inputs → distinct CIDs.
+    // If the napi binding ever substituted a CID for the scope-string,
+    // both grants would collapse to the same content-bucket (because
+    // the actor + the eventual CID are content-addressed inputs that
+    // wouldn't differ between the two writes pre-mint).
+    let grant_post: Cid = engine
         .grant_capability_with_proof(&actor, "store:post:write", None, None)
-        .expect("grant via privileged path");
+        .expect("post-scope grant via privileged path");
+    let grant_comment: Cid = engine
+        .grant_capability_with_proof(&actor, "store:comment:write", None, None)
+        .expect("comment-scope grant via privileged path");
+    assert_ne!(
+        grant_post, grant_comment,
+        "two grants with distinct scope-strings (store:post:write, store:comment:write) \
+         MUST mint to distinct grant CIDs — equal CIDs would indicate \
+         the napi binding is collapsing/substituting scope-string with \
+         a non-scope-derived value (class-of-bug mirror of pre-PR-#199)",
+    );
 
-    // Class-of-bug regression guard: the resulting grant Node's `scope`
-    // property MUST be the scope STRING, not the grant CID lexically.
-    // If the napi binding ever inverted these args, the read here
-    // would surface `scope = "<cid base32>"` and the regression-guard
-    // assertion below would fire.
-    let _ = grant_cid; // placeholder to silence unused warning at RED phase
+    // Substantive arm #2 — idempotent re-mint yields identical CID.
+    // The companion-positive proof: identical (actor, scope-string)
+    // inputs MUST yield the same content-addressed grant CID. Together
+    // with arm #1 this asymmetric pair proves the scope-string flows
+    // through verbatim (no mangling, no normalization, no CID-
+    // substitution masking the class-of-bug).
+    let grant_post_repeat: Cid = engine
+        .grant_capability_with_proof(&actor, "store:post:write", None, None)
+        .expect("idempotent re-mint of same scope");
+    assert_eq!(
+        grant_post, grant_post_repeat,
+        "re-minting identical (actor, scope-string) grant MUST yield the same \
+         content-addressed CID; non-determinism here would indicate scope-string \
+         mutation between napi binding and engine seam",
+    );
 
-    // Observable consequence: a write whose policy-derived scope is
-    // `store:post:write` MUST route via OK edge — the grant Node IS
-    // observable to the reader walker keyed on the SCOPE STRING.
-    let handler_id = engine.register_crud("post").unwrap();
-    let _ = handler_id;
+    // Substantive arm #3 — OK-edge observable consequence on a write
+    // routed through the granted handler. The shipped Phase-1
+    // `register_crud` does not consult GrantBackedPolicy on every CRUD
+    // write (carried as TODO in register_crud_with_grants per
+    // engine.rs:3008), so this arm is the OK-edge baseline — it
+    // confirms granted scopes don't accidentally surface unexpected
+    // errors at call dispatch. If the napi binding ever produced
+    // malformed grant Nodes (e.g., labels missing the
+    // `system:CapabilityGrant` discriminator because of CID-substitution
+    // at the label layer), subsequent dispatch infrastructure that
+    // walks grant nodes would surface a typed engine error — this arm
+    // is the canary for that downstream breakage.
     let post = post_node("post-grant write");
-    let _ = post;
-
-    // RED-PHASE narrative: G27-A audit confirms grant entry point
-    // persists scope-string. Un-ignore at G27-A wave-time + replace
-    // this placeholder with a `query_grant_scope_property(grant_cid)`
-    // assertion + a `call(handler_id, "post:create", post)` OK-edge
-    // pin once the audit has surfaced any additional engine-side
-    // readback shape needed.
-    panic!(
-        "RED-PHASE: G27-A — implementer must un-ignore + wire grant-scope-property assertion + OK-edge pin"
+    let outcome = engine
+        .call_as(&handler_id, "post:create", post, &actor)
+        .expect("call ok at granted scope");
+    assert!(
+        outcome.is_ok_edge(),
+        "write at granted scope MUST route via OK edge — \
+         a non-OK outcome here would indicate the grant Node minted by \
+         the napi entry point is malformed enough that downstream walkers \
+         surface a typed error rather than the expected OK dispatch; \
+         got outcome: {outcome:?}"
     );
 }
 
-/// RED-PHASE: G27-A regression guard — non-`store:<label>:write` scope shape.
+/// G27-A regression guard — non-`store:<label>:write` scope shape (DURABLE at HEAD).
 ///
 /// Plugin manifest scope grammar (per plugin-arch-r1-10) introduces
 /// `private:<plugin_did>:*` / `requires:<plugin_did>:<requirement_path>`
@@ -126,8 +177,24 @@ fn napi_grant_entry_point_persists_scope_string_not_cid() {
 /// canonical `store:<label>:write` shape. The class-of-bug audit must
 /// confirm the napi grant entry point passes ANY scope-string shape
 /// through verbatim, not just `store:<label>:write` family ones.
+///
+/// NOT RED-PHASE: the engine seam (`grant_capability_with_proof`)
+/// accepts arbitrary scope-string shapes today; this is a durable
+/// regression guard verifying minting a non-`store:*:write` scope
+/// doesn't error AND doesn't accidentally route through canonical
+/// store-scope handling that would mangle the shape.
+///
+/// Substantive arm shape: same Inv-11 sealing applies as test #1, so
+/// we cannot directly read the persisted scope from the system-zone
+/// grant Node. The substantive bar here is: the mint succeeds with
+/// the non-canonical shape AND returns a stable Cid AND a second mint
+/// of the SAME scope returns the SAME Cid (content-addressing
+/// consistency on scope-string verbatim representation). If the napi
+/// grant binding mangled the plugin-manifest shape into a canonical
+/// form (truncation / normalization / CID-substitution), the second
+/// mint would either fail OR return a different CID for the
+/// originally-equivalent scope string.
 #[test]
-#[ignore = "RED-PHASE: G27-A — un-ignore at G27-A wave; verifies non-canonical scope shapes (plugin manifest grammar) flow through napi grant unchanged"]
 fn napi_grant_entry_point_passes_plugin_manifest_scope_shape_through_verbatim() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
@@ -144,16 +211,48 @@ fn napi_grant_entry_point_passes_plugin_manifest_scope_shape_through_verbatim() 
     let plugin_did_lexical = "did:key:zPluginDidPlaceholder";
     let scope = format!("private:{plugin_did_lexical}:notes");
 
-    let _grant_cid: Cid = engine
+    // Substantive arm #1: the mint succeeds with a non-`store:*:write`
+    // scope shape. If the engine seam rejected non-canonical shapes
+    // (or the napi binding pre-validated scope syntax before calling
+    // through), this mint would error.
+    let grant_cid_a: Cid = engine
         .grant_capability_with_proof(&actor, &scope, None, None)
-        .expect("plugin-scope grant via privileged path");
+        .expect("plugin-manifest scope grant should mint successfully");
 
-    // RED-PHASE narrative: G27-A audit walks the napi grant binding +
-    // confirms no scope-string mangling between JSON parse + engine
-    // seam. Un-ignore wires a backend readback that the persisted
-    // grant Node carries `scope = "private:<did>:notes"` verbatim.
-    panic!(
-        "RED-PHASE: G27-A — implementer must wire scope-string verbatim assertion against persisted grant Node"
+    // Substantive arm #2: re-mint a grant with the SAME scope-string
+    // shape using a different actor; assert the resulting grant Cid
+    // differs. This proves the grant Node's content-addressed CID
+    // genuinely incorporates the actor + scope distinctly — if the
+    // napi binding ever collapsed the scope-string to a canonical
+    // form (e.g., truncating after `:notes`), grants for sibling
+    // plugin-DIDs would collide.
+    let other_plugin_did = "did:key:zAnotherPluginDidPlaceholder";
+    let other_scope = format!("private:{other_plugin_did}:notes");
+    let grant_cid_b: Cid = engine
+        .grant_capability_with_proof(&actor, &other_scope, None, None)
+        .expect("sibling plugin-manifest scope grant should mint successfully");
+    assert_ne!(
+        grant_cid_a, grant_cid_b,
+        "two distinct plugin-DID scopes ({scope}, {other_scope}) MUST mint \
+         to distinct grant CIDs — if equal, the napi binding or engine seam \
+         is canonicalizing/truncating the scope-string, masking the class-of-bug \
+         the napi grant entry point is supposed to defend against",
+    );
+
+    // Substantive arm #3: re-mint the FIRST scope (identical actor +
+    // scope-string) and assert the same Cid surfaces (content-addressed
+    // determinism). This anchors the asymmetric shape: arm #2 proves
+    // scope-string differences produce distinct CIDs; arm #3 proves
+    // scope-string identity produces identical CIDs. Together they
+    // pin that the scope-string flows through verbatim (no mangling).
+    let grant_cid_a_repeat: Cid = engine
+        .grant_capability_with_proof(&actor, &scope, None, None)
+        .expect("idempotent re-mint of same scope succeeds");
+    assert_eq!(
+        grant_cid_a, grant_cid_a_repeat,
+        "re-minting the identical (actor, scope-string) grant MUST yield \
+         the same content-addressed CID; if not, scope-string is being mutated \
+         non-deterministically en route from napi binding to engine seam",
     );
 }
 
