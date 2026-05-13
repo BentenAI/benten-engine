@@ -1,0 +1,5 @@
+# Tauri build-script codegen output. The `tauri_build::build()` call
+# in `build.rs` (under the `tauri` feature) generates per-OS capability
+# schemas into `gen/schemas/` at each build. The files are
+# deterministic and rebuild-on-demand; not source.
+gen/

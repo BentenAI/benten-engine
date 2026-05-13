@@ -72,6 +72,49 @@ ignore = [
     # Closure plan: heapless 0.8+ drops the atomic-polyfill dep; tracked alongside
     # the postcard upstream's heapless bump at `docs/future/phase-3-backlog.md` §9.
     { id = "RUSTSEC-2023-0089", reason = "transitive via postcard -> heapless 0.7 -> atomic-polyfill; informational unmaintained advisory; closure on heapless 0.8+ bump tracked at docs/future/phase-3-backlog.md §9" },
+
+    # ----- Phase-4-Foundation R6-FP-E: Tauri 2.x integrator-binary
+    # advisories. The `tauri = "2"` runtime dep pulls in a stack of
+    # unmaintained crates that are informational-only (no
+    # exploit-class advisory; rust-sec flags them because the
+    # upstream maintainer has gone quiet). The crates land via the
+    # opt-in `tauri` feature on `benten-admin-shell` ONLY — they are
+    # NOT in the default workspace build path. Closure: Tauri 2.x's
+    # own migration to gtk4-rs (RUSTSEC-2024-04XX cluster) +
+    # proc-macro-error2 (RUSTSEC-2024-0370) + unic-ucd successor
+    # (RUSTSEC-2024-04XX) is upstream-tracked + lands when Tauri
+    # ships the migrations. Tracked at
+    # `docs/future/phase-4-backlog.md §3.6` (v1-assessment-window
+    # security-advisory carry — Tauri 2.x upstream migrations).
+
+    # RUSTSEC-2024-0370: proc-macro-error unmaintained (informational).
+    # Transitive via wry / tao / Tauri 2.x macro stack.
+    { id = "RUSTSEC-2024-0370", reason = "transitive via tauri 2.x macro stack -> proc-macro-error; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream proc-macro-error2 migration)" },
+
+    # RUSTSEC-2024-0411..0420: gtk-rs GTK3 bindings unmaintained
+    # (informational). Transitive via webkit2gtk / Tauri 2.x linux
+    # webview stack. The CI lane only enables `--features tauri` on
+    # ubuntu-latest + macos-latest. On macOS the GTK3 crates compile
+    # but are dead code (Apple Cocoa is used for webview hosting);
+    # on linux they're load-bearing for the WebKit2GTK embed.
+    # Closure: Tauri's own gtk4-rs migration roadmap.
+    { id = "RUSTSEC-2024-0411", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (atk); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0412", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (atk-sys); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0413", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gdk); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0415", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gdkx11-sys); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0416", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gdk-sys); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0418", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gtk); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0419", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gtk-sys); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+    { id = "RUSTSEC-2024-0420", reason = "transitive via tauri 2.x linux webview -> gtk-rs GTK3 bindings (gtk3-macros); informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream gtk4-rs migration)" },
+
+    # RUSTSEC-2025-0075..0081 + 0098 + 0100: unic-* crates
+    # unmaintained (informational). Transitive via urlpattern ->
+    # tauri-utils.
+    { id = "RUSTSEC-2025-0075", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-ident -> unic-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
+    { id = "RUSTSEC-2025-0080", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
+    { id = "RUSTSEC-2025-0081", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
+    { id = "RUSTSEC-2025-0098", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
+    { id = "RUSTSEC-2025-0100", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
 ]
 
 # ---------------------------------------------------------------------------
