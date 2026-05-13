@@ -40,7 +40,7 @@ pub enum ManifestEnvelopeRecheckOutcome {
     /// No manifest-envelope chain found for this row (e.g. user-issued
     /// write not delegated through any plugin) — recheck passes
     /// trivially. The Layer 1 user-root-anchor check in
-    /// [`CapabilityPolicy::check_write`] still applies.
+    /// `CapabilityPolicy::check_write` still applies.
     NotApplicable,
     /// A manifest-envelope chain was found AND every step fits the
     /// source plugin's `shares` policy. Admit the row.
