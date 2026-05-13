@@ -170,3 +170,39 @@ pub fn manifest_with_accepts_content(refs: Vec<Cid>) -> PluginManifest {
         ..minimal_manifest()
     }
 }
+
+/// 15 ErrorCode string forms minted at G24-D wave (post-R5 surface) per
+/// §3.5g cross-language rule-mirror.
+///
+/// At HEAD these do NOT exist in `benten-errors`; the
+/// `plugin_error_codes_atomic_rust_ts_mirror_pin` test proves their
+/// post-G24-D presence via round-trip through `ErrorCode::from_str` +
+/// presence in the TS mirror at `packages/engine/src/errors.generated.ts`
+/// + heading entry in `docs/ERROR-CATALOG.md`.
+///
+/// Per Ben's R4-triage §7 ratification (2026-05-11):
+/// - The TS mirror canonical location is
+///   `packages/engine/src/errors.generated.ts` (NOT a new
+///   `packages/error-codes/` package).
+/// - `E_PLUGIN_DEVICE_ATTESTATION_FORGED` (renamed from
+///   `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE`) keeps the
+///   `E_PLUGIN_*` prefix family for grep + subset-closure clarity.
+/// - CATALOG_VARIANT_COUNT math: 27 minted across G23-A (9) + G23-B (3) +
+///   G24-D (15) = 27 minted / 10 absorbed / 17 net new (118 → 135).
+pub const G24_D_ERROR_CODES: &[&str] = &[
+    "E_PLUGIN_MANIFEST_INVALID",
+    "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID",
+    "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID",
+    "E_PLUGIN_CONTENT_PEER_KEY_ROTATED",
+    "E_PLUGIN_AUTHOR_NOT_TRUSTED",
+    "E_PLUGIN_INSTALL_CONSENT_REQUIRED",
+    "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE",
+    "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN",
+    "E_PLUGIN_CONTENT_CID_MISMATCH",
+    "E_PLUGIN_NEW_VERSION_AVAILABLE",
+    "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE",
+    "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED",
+    "E_PLUGIN_DEVICE_ATTESTATION_FORGED",
+    "E_PLUGIN_LIBRARY_INDEX_TAMPER",
+    "E_REGISTRY_DISCOVERY_TIMEOUT",
+];

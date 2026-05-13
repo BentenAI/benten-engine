@@ -26,6 +26,16 @@
 // - §3.6f SHAPE-not-SUBSTANCE pre-flight: assertion targets CID
 //   equality post-replay, not mere "workflow saved" callback.
 
+// RED-PHASE production-surface canary (closes at R5 G24-A / G24-B).
+// When un-ignored, these production-surface imports MUST resolve BEFORE
+// vitest + placeholder imports below so that an absent
+// @benten/engine export surfaces as a module-load failure rather than
+// a deep-in-test runtime undefined-reference. Guard ordering matters:
+// production imports first, test infrastructure imports second.
+//
+// import { Engine } from "@benten/engine"; // production-surface canary
+// import { readNodeAs } from "@benten/engine/policy"; // cap-scoped read
+
 import { describe, test, expect } from "vitest";
 import { placeholder } from "../src/index.js";
 

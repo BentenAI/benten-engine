@@ -12,62 +12,148 @@
 //! APPROVE doesn't substitute for workspace pre-merge cite-drift gate;
 //! this pin reaches into the CATALOG_VARIANT_COUNT drift-defense
 //! surface in `crates/benten-errors/tests/stable_shape.rs`.
+//!
+//! ## §3.5g cross-language rule-mirror
+//!
+//! Each ErrorCode minted at G24-D must land in ALL of:
+//!   1. `benten-errors`: `ErrorCode` enum variant + `as_str` arm +
+//!      `as_static_str` arm + `from_str` arm.
+//!   2. `packages/engine/src/errors.generated.ts`: TS-side
+//!      `CATALOG_CODES` string-literal entry (canonical TS mirror per
+//!      Ben's R4-triage §7 ratification — NOT a new
+//!      `packages/error-codes/` package).
+//!   3. `docs/ERROR-CATALOG.md`: `### E_XXX` heading entry
+//!      (companion-with-canary at G24-D landing per doc-r1-1).
+//!
+//! ## CATALOG_VARIANT_COUNT (per Ben's R4-triage §7 ratification)
+//!
+//! 27 minted across G23-A (9) + G23-B (3) + G24-D (15) = 27 minted /
+//! 10 absorbed / 17 net new: 118 → 135.
+
+#![allow(clippy::unwrap_used)]
+
+#[path = "common/manifest_fixtures.rs"]
+mod manifest_fixtures;
+
+use benten_errors::ErrorCode;
+use std::fs;
+use std::path::PathBuf;
+
+/// Locate the workspace root by walking up from CARGO_MANIFEST_DIR
+/// (crate-relative paths break when tests run from arbitrary cwd; the
+/// reliable surface is CARGO_MANIFEST_DIR + relative crate-to-root
+/// traversal).
+fn workspace_root() -> PathBuf {
+    // CARGO_MANIFEST_DIR for this crate is
+    // `<workspace>/crates/benten-platform-foundation`; pop twice.
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    crate_dir
+        .parent()
+        .expect("crate dir has parent (crates/)")
+        .parent()
+        .expect("crates dir has parent (workspace root)")
+        .to_path_buf()
+}
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave mints 15 new ErrorCodes atomically Rust+TS; un-ignore at G24-D landing"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
+    15 G24-D ErrorCodes do not exist at HEAD; G24-D wires atomic Rust+TS mint per §3.5g. \
+    Currently from_str returns ErrorCode::Unknown for all 15. Closes r4-triage §5.2 \
+    Rust-side mint pin."]
 fn plugin_manifest_error_codes_present_in_rust_enum() {
-    // Future surface: 15 new ErrorCode variants in
-    // crates/benten-errors/src/lib.rs:
-    //   PluginManifestInvalid,
-    //   PluginInstallRecordUserSignatureInvalid,
-    //   PluginContentPeerSignatureInvalid,
-    //   PluginContentPeerKeyRotated,
-    //   PluginAuthorNotTrusted,
-    //   PluginInstallConsentRequired,
-    //   PluginDelegationOutsideManifestEnvelope,
-    //   PluginPrivateNamespaceDelegationForbidden,
-    //   PluginContentCidMismatch,
-    //   PluginNewVersionAvailable,
-    //   PluginHeterogeneityIncompatible,
-    //   PluginMetaCompositionCycleRejected,
-    //   DeviceAttestationForgedAtPluginShare,
-    //   PluginLibraryIndexTamper,
-    //   RegistryDiscoveryTimeout (reserved for Phase 4-Meta; 0
-    //     production call sites at Phase 4-Foundation).
+    // Iterate the G24_D_ERROR_CODES registry; for each code, assert
+    // ErrorCode::from_str returns a NAMED variant (not Unknown) AND
+    // round-trips via as_static_str.
     //
-    // Each variant has matched as_str() / as_static_str() / from_str()
-    // arms per crates/benten-errors/src/lib.rs documented protocol.
-    //
-    // FAILS-IF-NO-OP because the Rust enum must contain each variant
-    // by name.
-    panic!("RED-PHASE: G24-D wave must mint 15 new ErrorCode variants atomic Rust+TS per §3.5g");
+    // Would-FAIL-if-no-op'd: at HEAD all 15 hit
+    // ErrorCode::Unknown("E_PLUGIN_…") so the matches! check fails.
+    // Post-G24-D each name resolves to a named variant.
+    for code in manifest_fixtures::G24_D_ERROR_CODES {
+        let parsed = ErrorCode::from_str(code);
+        assert!(
+            !matches!(parsed, ErrorCode::Unknown(_)),
+            "ErrorCode {code} MUST be a named variant post-G24-D; \
+             round-trip through from_str returned Unknown — §3.5g atomic \
+             Rust mint missing"
+        );
+        assert_eq!(
+            parsed.as_static_str(),
+            *code,
+            "ErrorCode {code} must round-trip as_static_str → from_str \
+             (§3.5g rule-mirror)"
+        );
+    }
 }
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave updates CATALOG_VARIANT_COUNT 118 -> 135 (15 G24-D + others); un-ignore at G24-D landing"]
-fn catalog_variant_count_post_g24_d_matches_135() {
-    // Per plan §3 G23-A through G24-D summary: CATALOG_VARIANT_COUNT
-    // moves 118 -> 135 across Phase 4-Foundation waves. G24-D
-    // contributes 15 new codes.
-    //
-    // The actual assertion lives in
-    // crates/benten-errors/tests/stable_shape.rs::
-    // catalog_variant_count_matches_enum.
-    //
-    // This test serves as a sibling-pin reminding G24-D implementer
-    // that the count update is part of the atomic Rust+TS landing.
-    panic!("RED-PHASE: G24-D wave must update CATALOG_VARIANT_COUNT to reflect 15 new variants");
-}
-
-#[test]
-#[ignore = "RED-PHASE: G24-D wave updates TS ErrorCode catalog mirror; un-ignore at G24-D landing"]
+#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
+    15 G24-D ErrorCodes not yet present in packages/engine/src/errors.generated.ts \
+    CATALOG_CODES at HEAD; G24-D wires atomic Rust+TS mint per §3.5g. \
+    Closes r4-triage §5.2 TS-side mirror pin."]
 fn plugin_manifest_error_codes_present_in_ts_catalog_mirror() {
-    // Future surface: the TS-side ErrorCode catalog mirror at
-    // bindings/napi/ (or wherever the TS catalog lives) MUST contain
-    // string-form entries for each of the 15 new codes.
+    // Read the canonical TS mirror at
+    // packages/engine/src/errors.generated.ts (per Ben's R4-triage §7
+    // ratification — NOT packages/error-codes/). For each G24-D code,
+    // assert the string literal appears in the file.
     //
-    // The drift-defense surface (parity test between Rust + TS)
-    // catches gaps. Per pim-cross-language-rule-mirror, this is
-    // §3.5g atomic-update territory.
-    panic!("RED-PHASE: G24-D wave must mirror 15 new ErrorCodes in TS catalog per §3.5g");
+    // Would-FAIL-if-no-op'd: at HEAD the TS file's CATALOG_CODES array
+    // does not contain any E_PLUGIN_* entry, so contains() returns false
+    // for all 15. Post-G24-D codegen-regen the array gains all 15 lines.
+    let ts_path = workspace_root().join("packages/engine/src/errors.generated.ts");
+    let ts_contents = fs::read_to_string(&ts_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read TS mirror at {}: {} \
+             (§3.5g rule-mirror surface)",
+            ts_path.display(),
+            e
+        )
+    });
+    for code in manifest_fixtures::G24_D_ERROR_CODES {
+        // Match the quoted string-literal form to avoid partial-prefix
+        // false positives (e.g. E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID
+        // could accidentally match if a future E_PLUGIN_CONTENT_PEER_*
+        // family is added).
+        let needle = format!("\"{code}\"");
+        assert!(
+            ts_contents.contains(&needle),
+            "ErrorCode {code} missing from TS mirror at \
+             packages/engine/src/errors.generated.ts — §3.5g atomic \
+             Rust+TS mint must regenerate the TS catalog. Run \
+             `npx tsx scripts/codegen-errors.ts` after adding the Rust \
+             variant + ERROR-CATALOG.md heading."
+        );
+    }
+}
+
+#[test]
+#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family F3; G24-D wave un-ignores) — \
+    15 G24-D ErrorCodes not yet entered in docs/ERROR-CATALOG.md at HEAD; \
+    G24-D wires companion-with-canary catalog entries per doc-r1-1. \
+    Closes r4-triage §5.2 catalog-side mirror pin."]
+fn plugin_manifest_error_codes_present_in_error_catalog_md() {
+    // Read docs/ERROR-CATALOG.md. For each G24-D code, assert a
+    // `### E_<NAME>` heading exists. This catches "minted Rust+TS but
+    // forgot the catalog entry" — the most common §3.5g drift gap.
+    //
+    // Would-FAIL-if-no-op'd: at HEAD ERROR-CATALOG.md has no E_PLUGIN_*
+    // headings, so contains() returns false for all 15.
+    let catalog_path = workspace_root().join("docs/ERROR-CATALOG.md");
+    let catalog_contents = fs::read_to_string(&catalog_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read ERROR-CATALOG.md at {}: {} \
+             (§3.5g rule-mirror surface)",
+            catalog_path.display(),
+            e
+        )
+    });
+    for code in manifest_fixtures::G24_D_ERROR_CODES {
+        let heading = format!("### {code}");
+        assert!(
+            catalog_contents.contains(&heading),
+            "ErrorCode {code} missing `### {code}` heading in \
+             docs/ERROR-CATALOG.md — §3.5g atomic mint must add catalog \
+             entry alongside Rust+TS mint per doc-r1-1 \
+             companion-with-canary routing."
+        );
+    }
 }

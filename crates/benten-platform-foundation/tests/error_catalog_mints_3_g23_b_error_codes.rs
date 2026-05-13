@@ -12,12 +12,16 @@
 //!   2. `benten-errors`: variant listed in `ALL_CATALOG_VARIANTS` (used to
 //!      derive `CATALOG_VARIANT_COUNT`); pinned at 130 after G23-B canary
 //!      (127 + 3).
-//!   3. `bindings/napi`: TS-side string-literal union mirror.
+//!   3. `packages/engine/src/errors.generated.ts`: TS-side `CATALOG_CODES`
+//!      string-literal mirror (canonical TS location per Ben's R4-triage
+//!      §7 ratification — NOT a new `packages/error-codes/` package).
 //!   4. `docs/ERROR-CATALOG.md`: companion-with-canary entry (NOT bundled
 //!      at G26-A per doc-r1-1).
 //!
-//! This pin asserts shape #1 — every G23-B-minted ErrorCode round-trips
-//! through `ErrorCode::from_str` to a NAMED variant (not `Unknown`).
+//! This pin asserts shape #1 (Rust round-trip) AND shape #3 (TS mirror
+//! presence) — every G23-B-minted ErrorCode round-trips through
+//! `ErrorCode::from_str` to a NAMED variant (not `Unknown`), AND each
+//! string-form appears in the TS `CATALOG_CODES` array.
 
 #![allow(clippy::unwrap_used)]
 
@@ -25,6 +29,18 @@
 mod materializer_fixtures;
 
 use benten_errors::ErrorCode;
+use std::fs;
+use std::path::PathBuf;
+
+fn workspace_root() -> PathBuf {
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    crate_dir
+        .parent()
+        .expect("crate dir has parent (crates/)")
+        .parent()
+        .expect("crates dir has parent (workspace root)")
+        .to_path_buf()
+}
 
 #[test]
 #[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
@@ -44,6 +60,41 @@ fn error_catalog_mints_3_g23_b_error_codes() {
             parsed.as_static_str(),
             *code,
             "ErrorCode {code} must round-trip as_static_str → from_str"
+        );
+    }
+}
+
+#[test]
+#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
+    3 G23-B ErrorCodes not yet present in packages/engine/src/errors.generated.ts \
+    CATALOG_CODES at HEAD; G23-B wires atomic Rust+TS mint per §3.5g. \
+    Closes r4-triage §5.2 G23-B TS-side companion pin."]
+fn error_catalog_mints_3_g23_b_error_codes_ts_mirror() {
+    // Read the canonical TS mirror at
+    // packages/engine/src/errors.generated.ts (per Ben's R4-triage §7
+    // ratification). For each G23-B code, assert the string literal
+    // appears in the file.
+    //
+    // Would-FAIL-if-no-op'd: at HEAD the TS file's CATALOG_CODES array
+    // does not contain any E_MATERIALIZER_* entry. Post-G23-B
+    // codegen-regen the array gains all 3 lines.
+    let ts_path = workspace_root().join("packages/engine/src/errors.generated.ts");
+    let ts_contents = fs::read_to_string(&ts_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read TS mirror at {}: {} (§3.5g rule-mirror surface)",
+            ts_path.display(),
+            e
+        )
+    });
+    for code in materializer_fixtures::G23_B_ERROR_CODES {
+        let needle = format!("\"{code}\"");
+        assert!(
+            ts_contents.contains(&needle),
+            "ErrorCode {code} missing from TS mirror at \
+             packages/engine/src/errors.generated.ts — §3.5g atomic \
+             Rust+TS mint must regenerate the TS catalog. Run \
+             `npx tsx scripts/codegen-errors.ts` after adding the Rust \
+             variant + ERROR-CATALOG.md heading."
         );
     }
 }
