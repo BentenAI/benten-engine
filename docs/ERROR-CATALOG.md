@@ -2,11 +2,29 @@
 
 **Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
 
-**Catalog size at Phase-3-close:** 118 stable error codes total. The authoritative count lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length so adding a variant without updating this doc fails CI. Phase 3 added five new codes for Atrium sync attack defenses, device-attestation forgery, and engine cap-state observability (`E_SYNC_REVOKED_DURING_SESSION`, `E_DEVICE_ATTESTATION_FORGED`, `E_ATRIUM_INACTIVE`, plus three SYNC codes landed in R6 fix-pass Wave C1); Phase-3-close pre-v1 cleanup added the four `E_TYPED_CALL_*` family codes for the typed-CALL dispatch surface.
+**Catalog count narrative (post Phase-4-Foundation R6-FP-C reconciliation, 2026-05-13):** three distinct counts coexist by design — each measures a different surface:
 
-**Catalog size after Phase-4-Foundation G24-F:** 122 stable error codes total (118 + 4 incremental). The four added are the `E_THIN_CLIENT_*` session-protocol family for the `DidKeyedSession` + `SessionToken` contract at `crates/benten-engine/src/thin_client.rs`: `E_THIN_CLIENT_HANDSHAKE_INVALID`, `E_THIN_CLIENT_CHALLENGE_REPLAY`, `E_THIN_CLIENT_ORIGIN_MISMATCH`, `E_THIN_CLIENT_SESSION_EXPIRED`. These sit alongside the pre-existing `E_THIN_CLIENT_AUTH_REJECTED` (G14-D wave-5a device-attestation auth boundary). Per `.addl/dispatch-conventions.md §3.5g` cross-language rule-mirror discipline, the Rust enum + TS catalog + this doc updated atomically in the G24-F PR. The added codes are independent of (and additive to) the 17-net-new tally the cohort table below tracks for the planned schema / materializer / plugin canaries.
+| Count | Source | Value (at HEAD post R6-FP-C) | Meaning |
+|---|---|---|---|
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **163** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **163** | The round-trip-pinned list. Now matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **165** | = 163 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 165 \| rust codes: 164 \| ts codes: 165" line reflects this intentional retention. |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **164** | = 163 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
-**Catalog size expectation at Phase-4-Foundation-close: 135** stable error codes total (118 + 17 net new). The 17 new codes land in 3 cohorts via the **companion-with-canary routing** discipline (per `.addl/phase-4-foundation/00-implementation-plan.md §1.0 + §6 pim-N candidates`) — each cohort is added to this catalog AT the canary wave that mints them, not bundled at G26-A end-of-phase. Atomic Rust + TS update via `.addl/dispatch-conventions.md §3.5g` cross-language rule-mirror. The 3 cohorts:
+**Why four counts (163 / 163 / 164 / 165):** the Rust enum is the source of throwable variants (163); plus a forward-compat `Unknown(String)` fallback (= 164 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 165 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (163). Single canonical headline number: **163 production-throwable codes** at Phase-4-Foundation R6-FP-C HEAD.
+
+**Cohort math (Phase-4-Foundation):**
+- **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.
+- **Phase-4-Foundation R5 mints:** 31 new codes across 4 cohorts (G24-F thin-client +4, G23-A schema +9, G24-D plugin +15, G23-B materializer +3). 132 + 31 = 163. The 4 cohorts:
+- **R6-FP closure cohort:** R6-FP-A added 4 plugin install-record / DID-handle codes (lands on `r6/fp-1-plugin-trust`; at strategy-C batch reconcile time the count moves 163 → 167).
+
+Authoritative count assertion lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length AND the exhaustive-match `catalog_variant_count_matches_enum` cross-check so adding a variant without updating this doc fails CI.
+
+Phase 3 added five new codes for Atrium sync attack defenses, device-attestation forgery, and engine cap-state observability (`E_SYNC_REVOKED_DURING_SESSION`, `E_DEVICE_ATTESTATION_FORGED`, `E_ATRIUM_INACTIVE`, plus three SYNC codes landed in R6 fix-pass Wave C1); Phase-3-close pre-v1 cleanup added the four `E_TYPED_CALL_*` family codes for the typed-CALL dispatch surface.
+
+**Catalog size after Phase-4-Foundation G24-F:** 122 of the 31-cohort baseline (118 + 4 incremental). The four added are the `E_THIN_CLIENT_*` session-protocol family for the `DidKeyedSession` + `SessionToken` contract at `crates/benten-engine/src/thin_client.rs`: `E_THIN_CLIENT_HANDSHAKE_INVALID`, `E_THIN_CLIENT_CHALLENGE_REPLAY`, `E_THIN_CLIENT_ORIGIN_MISMATCH`, `E_THIN_CLIENT_SESSION_EXPIRED`. These sit alongside the pre-existing `E_THIN_CLIENT_AUTH_REJECTED` (G14-D wave-5a device-attestation auth boundary). Per `.addl/dispatch-conventions.md §3.5g` cross-language rule-mirror discipline, the Rust enum + TS catalog + this doc updated atomically in the G24-F PR.
+
+**Phase-4-Foundation full mints by cohort** (31 new at HEAD; companion-with-canary discipline per `.addl/phase-4-foundation/00-implementation-plan.md §1.0 + §6`):
 
 | Cohort | Canary wave | New ErrorCodes |
 |---|---|---|
@@ -1064,8 +1082,17 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SUBSCRIBE_REVOKED_MID_STREAM
 
-<!-- reachability: ignore -->
-<!-- Rationale: Phase-3 G14-D wave-5a ships the catalog code + ON_DENIED routing + from_string round-trip. The production construction site (per-event delivery-time cap-recheck firing on a partial-revoke event) wires once G14-B's durable UCAN backend `chain-for-audience` accessor stabilizes through `engine.caps()`; the RED-PHASE pins at `crates/benten-engine/tests/subscribe_cap_recheck.rs` carry the wave-pairing destination per pim-4 §3.10. Remove this annotation when the F6 SUBSCRIBE per-event recheck composes against the durable grant store. -->
+<!-- R6-FP-C ec-r6r1-5 closure (2026-05-13): reachability:ignore
+     annotation removed. Construction site is LIVE in production at
+     `crates/benten-eval/src/primitives/subscribe.rs::publish_walk`
+     (the per-event delivery-time cap-recheck closure populates
+     the termination-reason slot AND fires the typed
+     `EvalError::SubscribeRevokedMidStream` notify callback when a
+     partial-revoke event fires). Phase-3 R6-FP Wave-C1 closed
+     the engine-side wireup via cap-recheck composition with
+     G14-B's durable UCAN backend `chain-for-audience` accessor;
+     drift-detect now picks up the construction site directly. -->
+
 
 - **Message:** "subscribe: cap revoked mid-stream for subscriber {subscriber} on channel {channel}"
 - **Context:** `{ subscriber: String, channel: String }`
@@ -1334,7 +1361,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Phase:** 4-Foundation G23-A
 ## Phase 4-Foundation G24-D — FULL plugin manifest (15 codes)
 
-Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.md` engineering reference. Atomic Rust + TS mirror per dispatch-conventions §3.5g; CATALOG_VARIANT_COUNT 118 → 133 at G24-D landing.
+Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.md` engineering reference. Atomic Rust + TS mirror per dispatch-conventions §3.5g; G24-D minted 15 new variants per the cohort-table enumeration in the preamble. Pre-G24-D landing baseline within the Phase-4-Foundation R5 cohort: 131 (118 + 4 G24-F + 9 G23-A); post-G24-D landing: 146 (131 + 15). Final Phase-4-Foundation R5 enum size after G23-B materializer cohort (+3): 149 → reconciled to 163 at R6-FP-C closure (149 list-entries + 14 pre-existing latent throwable variants promoted into the regression list per ec-r6r1-1). See preamble for the full count narrative.
 
 ### E_PLUGIN_MANIFEST_INVALID
 

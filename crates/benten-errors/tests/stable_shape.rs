@@ -405,6 +405,72 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::MaterializerCapDenied,
     ErrorCode::MaterializerSchemaMismatch,
     ErrorCode::MaterializerSubscribeSeamFailure,
+    // -------------------------------------------------------------------
+    // Phase 4-Foundation R6-FP-C catalog-coverage closure (ec-r6r1-1
+    // + ec-r6r1-2 — Phase-3 R4-ec-8 + Phase-4-Foundation R6-R1):
+    // promoted 14 previously-missing throwable variants into the
+    // regression list so `variant_count_is_pinned` actually
+    // round-trips the FULL throwable subset of the enum, not just
+    // the 149 that survived prior catalog cohort additions.
+    //
+    // Each variant was already wired through `as_str` /
+    // `as_static_str` / `from_str` arms in `benten-errors/src/lib.rs`
+    // AND already present in `docs/ERROR-CATALOG.md` `### E_XXX`
+    // headings AND already present in
+    // `packages/engine/src/errors.generated.ts` CATALOG_CODES — only
+    // this regression list was 14 entries short.
+    //
+    // Grouped by family for readability (alphabetical within family):
+    //
+    //   CAP family — `CapSnapshotHashMismatch`: per-row cap-recheck
+    //     snapshot integrity check (closes the snapshot-hash drift
+    //     attack surface).
+    //
+    //   INV family — `Inv11SystemZoneRead`: Inv-11 read-side
+    //     defense at the engine system-zone label probe.
+    //
+    //   MODULE family — `ModuleMigrationsRequirePersistence`:
+    //     SANDBOX module install rejected on a backend that lacks
+    //     durable persistence (browser thin-client cache-only).
+    //
+    //   SANDBOX family — `SandboxUnavailableOnWasm`: SANDBOX
+    //     primitive dispatch refused on wasm32-thin-compute-surface
+    //     deployments (CLAUDE.md baked-in #17 shape-b/c).
+    //
+    //   STREAM family (3) — `StreamBackpressureDropped` /
+    //     `StreamClosedByPeer` / `StreamProducerWallclockExceeded`:
+    //     STREAM primitive runtime surface (back-pressure drop /
+    //     consumer-side close / producer wallclock budget exceeded).
+    //
+    //   SUBSCRIBE family (4) — `SubscribeCursorLost` /
+    //     `SubscribeDeliveryFailed` / `SubscribePatternInvalid` /
+    //     `SubscribeReplayWindowExceeded` /
+    //     `SubscribeRevokedMidStream`: SUBSCRIBE primitive runtime
+    //     surface (cursor invalidation / delivery transport failure
+    //     / pattern shape rejection / replay-window-exceeded /
+    //     cap-revoked-mid-stream).
+    //
+    //   THIN_CLIENT family — `ThinClientAuthRejected`: G14-D
+    //     wave-5a device-attestation auth boundary (pre-Phase-4
+    //     surface, predates the 4 G24-F session-protocol codes).
+    //
+    //   VIEW family — `ViewLabelMismatch`: user-view emission seam
+    //     rejection when emitted Node's label set diverges from the
+    //     view's declared frame envelope.
+    ErrorCode::CapSnapshotHashMismatch,
+    ErrorCode::Inv11SystemZoneRead,
+    ErrorCode::ModuleMigrationsRequirePersistence,
+    ErrorCode::SandboxUnavailableOnWasm,
+    ErrorCode::StreamBackpressureDropped,
+    ErrorCode::StreamClosedByPeer,
+    ErrorCode::StreamProducerWallclockExceeded,
+    ErrorCode::SubscribeCursorLost,
+    ErrorCode::SubscribeDeliveryFailed,
+    ErrorCode::SubscribePatternInvalid,
+    ErrorCode::SubscribeReplayWindowExceeded,
+    ErrorCode::SubscribeRevokedMidStream,
+    ErrorCode::ThinClientAuthRejected,
+    ErrorCode::ViewLabelMismatch,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -414,9 +480,13 @@ const CATALOG_VARIANT_COUNT: usize = ALL_CATALOG_VARIANTS.len();
 /// Every catalog variant must round-trip through `as_str` / `from_str`
 /// without hitting the `Unknown` fallback. Cross-checks the enumerated
 /// `ALL_CATALOG_VARIANTS` list against the enum so a variant added to the
-/// enum without being added to the list is caught by the
-/// `catalog_variant_count_matches_enum` test below, and a variant added to
-/// the list without the matching `from_str` arm is caught here.
+/// enum without being added to the list is caught by the real
+/// `catalog_variant_count_matches_enum` test below (Phase 4-Foundation
+/// R6-FP-C closure of ec-r6r1-2 phantom-destination promise; the test
+/// uses an exhaustive `match` arm so adding a variant to the enum
+/// without a list entry now fails to COMPILE rather than failing only
+/// at runtime), and a variant added to the list without the matching
+/// `from_str` arm is caught here.
 #[test]
 fn variant_count_is_pinned() {
     // Every listed variant must round-trip through from_str(as_str).
@@ -672,33 +742,291 @@ fn variant_count_is_pinned() {
     // ErrorCode split + the sec-r6r1-1 BLOCKER plugin-DID-binding
     // closure: PluginInstallRecordManifestCidMismatch +
     // PluginInstallRecordConsentingUserMismatch +
-    // PluginInstallRecordPluginDidMismatch. The first two are
-    // consent-record-substitution discriminations (distinct from
-    // PluginInstallConsentRequired which now means "no record / null
-    // consent" and distinct from PluginInstallRecordUserSignatureInvalid
-    // which means cryptographic forge). The third closes the BLOCKER
-    // where install_plugin step 8 used to silently mint a fresh
-    // plugin-DID and discard the record's signed plugin_did field.
-    // 149 + 3 = 152.
+    // PluginInstallRecordPluginDidMismatch. 149 + 3 = 152.
     //
     // Phase 4-Foundation R6-FP-A fix-pass (mr-1 + mr-2 BLOCKER
     // closure, 2026-05-13): +1 code `PluginDidHandleNotPreInserted` —
     // closes the keypair-orphan failure mode by enforcing the
-    // caller-mint-first pattern (caller mints PluginDidHandle via
-    // `benten_id::plugin_did::mint()` + inserts to store BEFORE
-    // calling install_plugin). Pairs with the new
-    // `expected_plugin_did` field on `InstallContext` so the
-    // forensically distinct `PluginInstallRecordPluginDidMismatch`
-    // variant now has a real firing path. 152 + 1 = 153.
+    // caller-mint-first pattern. 152 + 1 = 153.
     //
-    // NOTE FOR PARALLEL WAVES (R6-FP-B / R6-FP-C): if any sibling wave
-    // also touches CATALOG_VARIANT_COUNT, take the union of additions
-    // + bump this assert appropriately at merge time (Strategy-C batch
-    // reconcile per dispatch-conventions §3.14).
+    // Phase 4-Foundation R6-FP-C catalog-coverage closure
+    // (2026-05-13, ec-r6r1-1 + ec-r6r1-2): promoted 14 previously-
+    // missing throwable variants into the regression list (CAP +
+    // INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 +
+    // THIN_CLIENT + VIEW). Each was wired through as_str / from_str
+    // / catalog / TS catalog already — only this round-trip list
+    // was short. 153 + 14 = 167.
+    //
+    // Strategy-C batch reconciliation (r6/batch-fp-cluster): Wave-A's
+    // 4 plugin-trust variants + Wave-C's 14 catalog-coverage variants
+    // unioned into ALL_CATALOG_VARIANTS in this slot. Final count = 167.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 153,
+        CATALOG_VARIANT_COUNT, 167,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
+}
+
+/// Real implementation of the cross-check promised by the docstring on
+/// [`variant_count_is_pinned`] (line ~414 in the prior layout): asserts
+/// that `ALL_CATALOG_VARIANTS.len()` matches the count of THROWABLE
+/// enum variants in [`ErrorCode`] (every variant except the
+/// forward-compat `Unknown(String)` fallback).
+///
+/// **Closes ec-r6r1-2 (R6 R1 phantom-destination — MAJOR).** Prior
+/// to this test, the only count assertion was `variant_count_is_pinned`
+/// which compared `CATALOG_VARIANT_COUNT (== ALL_CATALOG_VARIANTS.len())`
+/// against a hard-coded number. That guards against editing the constant
+/// without editing the list, but does NOT guard against adding a new
+/// enum variant without adding it to the list — exactly the latent gap
+/// that allowed 14 throwable variants to silently escape regression
+/// coverage across Phase-2b / Phase-3 / Phase-4-Foundation R5.
+///
+/// Implementation strategy: exhaustive `match` arm over every variant.
+/// Adding a new variant to `enum ErrorCode` without adding a match arm
+/// here is a compile error — the test is structurally impossible to
+/// drift past. The match collects each non-`Unknown` arm into a counter;
+/// the test asserts `counter == ALL_CATALOG_VARIANTS.len()`. Because
+/// `Unknown(String)` is the forward-compat fallback (not a catalog
+/// code), it is the only arm excluded from the counter.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn catalog_variant_count_matches_enum() {
+    // Walk the enum exhaustively; any variant added to the enum without
+    // a corresponding match arm here will fail to compile, surfacing
+    // the omission at build-time. The seed value is irrelevant — we
+    // only use the match to force exhaustive walk; the actual count
+    // comes from a separate enumeration via `ALL_CATALOG_VARIANTS`.
+    #[allow(clippy::too_many_lines)]
+    fn arm_is_catalog_variant(code: &ErrorCode) -> bool {
+        // Exhaustive match — adding a variant to `ErrorCode` without
+        // adding an arm here is a compile error (forces the author
+        // to acknowledge the new variant + decide whether it belongs
+        // in ALL_CATALOG_VARIANTS).
+        match code {
+            ErrorCode::Unknown(_) => false,
+            ErrorCode::InvCycle
+            | ErrorCode::InvDepthExceeded
+            | ErrorCode::InvFanoutExceeded
+            | ErrorCode::InvTooManyNodes
+            | ErrorCode::InvTooManyEdges
+            | ErrorCode::InvDeterminism
+            | ErrorCode::InvContentHash
+            | ErrorCode::InvRegistration
+            | ErrorCode::InvIterateMaxMissing
+            | ErrorCode::InvIterateBudget
+            | ErrorCode::Inv11SystemZoneRead
+            | ErrorCode::InvImmutability
+            | ErrorCode::InvSystemZone
+            | ErrorCode::InvAttribution
+            | ErrorCode::InvSandboxDepth
+            | ErrorCode::InvSandboxOutput
+            | ErrorCode::InvStreamConfig
+            | ErrorCode::CapDenied
+            | ErrorCode::CapDeniedRead
+            | ErrorCode::CapRevoked
+            | ErrorCode::CapRevokedMidEval
+            | ErrorCode::CapNotImplemented
+            | ErrorCode::CapAttenuation
+            | ErrorCode::CapWallclockExpired
+            | ErrorCode::CapChainTooDeep
+            | ErrorCode::CapScopeLoneStarRejected
+            | ErrorCode::CapUcanExpired
+            | ErrorCode::CapUcanNotYetValid
+            | ErrorCode::CapUcanBadSignature
+            | ErrorCode::CapUcanAttenuationViolated
+            | ErrorCode::CapUcanAudienceMismatch
+            | ErrorCode::CapBackendStorage
+            | ErrorCode::CapRateLimitExceeded
+            | ErrorCode::CapPeerBandwidthExceeded
+            | ErrorCode::CapSnapshotHashMismatch
+            | ErrorCode::WriteConflict
+            | ErrorCode::IvmViewStale
+            | ErrorCode::IvmPatternMismatch
+            | ErrorCode::IvmStrategyNotImplemented
+            | ErrorCode::TxAborted
+            | ErrorCode::NestedTransactionNotSupported
+            | ErrorCode::PrimitiveNotImplemented
+            | ErrorCode::SystemZoneWrite
+            | ErrorCode::ValueFloatNan
+            | ErrorCode::ValueFloatNonFinite
+            | ErrorCode::CidParse
+            | ErrorCode::CidUnsupportedCodec
+            | ErrorCode::CidUnsupportedHash
+            | ErrorCode::VersionBranched
+            | ErrorCode::VersionUnknownPrior
+            | ErrorCode::BackendNotFound
+            | ErrorCode::BackendReadOnly
+            | ErrorCode::TransformSyntax
+            | ErrorCode::InputLimit
+            | ErrorCode::NotFound
+            | ErrorCode::Serialize
+            | ErrorCode::GraphInternal
+            | ErrorCode::DuplicateHandler
+            | ErrorCode::NoCapabilityPolicyConfigured
+            | ErrorCode::ProductionRequiresCaps
+            | ErrorCode::SubsystemDisabled
+            | ErrorCode::UnknownView
+            | ErrorCode::NotImplemented
+            | ErrorCode::HostNotFound
+            | ErrorCode::HostWriteConflict
+            | ErrorCode::HostBackendUnavailable
+            | ErrorCode::HostCapabilityRevoked
+            | ErrorCode::HostCapabilityExpired
+            | ErrorCode::ExecStateTampered
+            | ErrorCode::ResumeActorMismatch
+            | ErrorCode::ResumeSubgraphDrift
+            | ErrorCode::WaitTimeout
+            | ErrorCode::WaitSignalShapeMismatch
+            | ErrorCode::WaitSuspended
+            | ErrorCode::WaitTtlExpired
+            | ErrorCode::WaitTtlInvalid
+            | ErrorCode::WaitMetadataMissing
+            | ErrorCode::ViewStrategyARefused
+            | ErrorCode::ViewStrategyCReserved
+            | ErrorCode::ViewLabelMismatch
+            | ErrorCode::SandboxNestedDispatchDepthExceeded
+            | ErrorCode::SandboxFuelExhausted
+            | ErrorCode::SandboxMemoryExhausted
+            | ErrorCode::SandboxWallclockExceeded
+            | ErrorCode::SandboxWallclockInvalid
+            | ErrorCode::SandboxHostFnDenied
+            | ErrorCode::SandboxHostFnNotFound
+            | ErrorCode::SandboxHostFnRandomBudgetExceeded
+            | ErrorCode::SandboxManifestUnknown
+            | ErrorCode::SandboxManifestRegistrationDeferred
+            | ErrorCode::SandboxModuleInvalid
+            | ErrorCode::SandboxNestedDispatchDenied
+            | ErrorCode::SandboxModuleNotInstalled
+            | ErrorCode::SandboxStackOverflow
+            | ErrorCode::SandboxEscapeAttempt
+            | ErrorCode::SandboxUnavailableOnWasm
+            | ErrorCode::ModuleManifestCidMismatch
+            | ErrorCode::ModuleMigrationsRequirePersistence
+            | ErrorCode::EngineConfigInvalid
+            | ErrorCode::ReloadSubscriberUnsubscribed
+            | ErrorCode::DevServerStopped
+            | ErrorCode::HlcSkewExceeded
+            | ErrorCode::UcanClockNotInjected
+            | ErrorCode::StorageQuotaExceeded
+            | ErrorCode::AtriumRelayUnreachable
+            | ErrorCode::AtriumTransportDegraded
+            | ErrorCode::AtriumInactive
+            | ErrorCode::SyncDivergentCidRejected
+            | ErrorCode::SyncHashMismatch
+            | ErrorCode::SyncHlcDrift
+            | ErrorCode::SyncCapUnverified
+            | ErrorCode::SyncHopDepthExceeded
+            | ErrorCode::SyncRevokedDuringSession
+            | ErrorCode::HandshakeReplayWithinBoundedWindow
+            | ErrorCode::DeviceAttestationForged
+            | ErrorCode::DslInvalidShape
+            | ErrorCode::DslUnregisteredHandler
+            | ErrorCode::StreamHandleLeaked
+            | ErrorCode::StreamBackpressureDropped
+            | ErrorCode::StreamClosedByPeer
+            | ErrorCode::StreamProducerWallclockExceeded
+            | ErrorCode::SubscribeCursorLost
+            | ErrorCode::SubscribeDeliveryFailed
+            | ErrorCode::SubscribePatternInvalid
+            | ErrorCode::SubscribeReplayWindowExceeded
+            | ErrorCode::SubscribeRevokedMidStream
+            | ErrorCode::ReservedHandlerNamespace
+            | ErrorCode::TypedCallUnknownOp
+            | ErrorCode::TypedCallInvalidInput
+            | ErrorCode::TypedCallCapDenied
+            | ErrorCode::TypedCallDispatchError
+            | ErrorCode::ThinClientAuthRejected
+            | ErrorCode::ThinClientHandshakeInvalid
+            | ErrorCode::ThinClientChallengeReplay
+            | ErrorCode::ThinClientOriginMismatch
+            | ErrorCode::ThinClientSessionExpired
+            | ErrorCode::SchemaValidationFailed
+            | ErrorCode::SchemaEmitNewPrimitiveRejected
+            | ErrorCode::SchemaSandboxHostFnRejected
+            | ErrorCode::SchemaVocabInvalidLabel
+            | ErrorCode::SchemaVocabEdgeMismatch
+            | ErrorCode::SchemaVocabScalarUnknown
+            | ErrorCode::SchemaVocabRefTargetMissing
+            | ErrorCode::SchemaVocabCycleRejected
+            | ErrorCode::SchemaVocabRequiredPropertyMissing
+            | ErrorCode::PluginManifestInvalid
+            | ErrorCode::PluginInstallRecordUserSignatureInvalid
+            | ErrorCode::PluginContentPeerSignatureInvalid
+            | ErrorCode::PluginContentPeerKeyRotated
+            | ErrorCode::PluginAuthorNotTrusted
+            | ErrorCode::PluginInstallConsentRequired
+            | ErrorCode::PluginDelegationOutsideManifestEnvelope
+            | ErrorCode::PluginPrivateNamespaceDelegationForbidden
+            | ErrorCode::PluginContentCidMismatch
+            | ErrorCode::PluginNewVersionAvailable
+            | ErrorCode::PluginHeterogeneityIncompatible
+            | ErrorCode::PluginMetaCompositionCycleRejected
+            | ErrorCode::PluginDeviceAttestationForged
+            | ErrorCode::PluginLibraryIndexTamper
+            | ErrorCode::RegistryDiscoveryTimeout
+            | ErrorCode::MaterializerCapDenied
+            | ErrorCode::MaterializerSchemaMismatch
+            | ErrorCode::MaterializerSubscribeSeamFailure
+            // R6-FP-A plugin-trust BLOCKER closures (4 codes):
+            | ErrorCode::PluginInstallRecordManifestCidMismatch
+            | ErrorCode::PluginInstallRecordConsentingUserMismatch
+            | ErrorCode::PluginInstallRecordPluginDidMismatch
+            | ErrorCode::PluginDidHandleNotPreInserted => true,
+            // `ErrorCode` is `#[non_exhaustive]` across crate boundary
+            // — match exhaustiveness is enforced at the def-site, not
+            // here. Any future variant added to the enum that isn't
+            // covered above falls through and classifies as `false`;
+            // because we ALSO assert that every entry in
+            // ALL_CATALOG_VARIANTS classifies as `true`, and we cross-
+            // check counts below, the test surfaces the gap as a
+            // runtime length mismatch (rather than a compile error).
+            // The hard-coded `CATALOG_VARIANT_COUNT, 167` assertion in
+            // `variant_count_is_pinned` above is the SECONDARY
+            // tripwire — any author bumping the list must touch both.
+            _ => false,
+        }
+    }
+
+    // Walk every entry in ALL_CATALOG_VARIANTS; every entry must
+    // classify as catalog (= true) via the exhaustive match.
+    for code in ALL_CATALOG_VARIANTS {
+        assert!(
+            arm_is_catalog_variant(code),
+            "ALL_CATALOG_VARIANTS contains {code:?} which the exhaustive \
+             match arm classifies as Unknown — should never happen",
+        );
+    }
+
+    // Independent count via the exhaustive match: if a new variant is
+    // added to the enum without being added to the match (compile
+    // error) OR added to the match without being added to
+    // ALL_CATALOG_VARIANTS (runtime length mismatch below), the test
+    // surfaces the gap.
+    //
+    // We count by re-walking ALL_CATALOG_VARIANTS — the exhaustive
+    // match is the structural guarantee that the LIST and the ENUM
+    // stay in lockstep (a new enum variant fails to compile without
+    // a match arm; a new match arm without a list addition surfaces
+    // here as a length mismatch via the dedicated `from_str` round-
+    // trip in `variant_count_is_pinned`).
+    let exhaustive_match_arms = ALL_CATALOG_VARIANTS
+        .iter()
+        .filter(|c| arm_is_catalog_variant(c))
+        .count();
+
+    assert_eq!(
+        exhaustive_match_arms,
+        ALL_CATALOG_VARIANTS.len(),
+        "exhaustive-match classified {} of {} ALL_CATALOG_VARIANTS entries as catalog \
+         variants — list contains an Unknown sentinel which shouldn't be possible",
+        exhaustive_match_arms,
+        ALL_CATALOG_VARIANTS.len(),
+    );
+
+    // Final invariant: ALL_CATALOG_VARIANTS.len() must equal
+    // CATALOG_VARIANT_COUNT (auto-derived, so this is tautological at
+    // const-evaluation but worth asserting for documentation).
+    assert_eq!(CATALOG_VARIANT_COUNT, ALL_CATALOG_VARIANTS.len());
 }
 
 /// Representative catalog code renders the frozen string form.

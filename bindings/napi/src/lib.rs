@@ -7,6 +7,31 @@
 //! Values cross the boundary as `serde_json::Value`; CIDs cross as
 //! base32-multibase strings (prefix `b`).
 //!
+//! ## Scope boundary (Phase-4-Foundation R6-FP-C ec-r6r1-6 closure, 2026-05-13)
+//!
+//! The napi binding covers Phase-1 / Phase-2 / Phase-3 **full-peer engine**
+//! + **sync surface** (shape (a) per CLAUDE.md baked-in #17). Phase-4-Foundation
+//! admin UI / plugin / schema / materializer surfaces are reached via the
+//! **wasm32 thin-client protocol** (shape (b) browser / edge / shape (c)
+//! Tauri embedded webview), NOT via napi. This is the intentional
+//! architectural scope boundary, not staleness — adding Phase-4-Foundation
+//! surfaces to the napi binding would duplicate the thin-client protocol
+//! seam and break the heterogeneity contract.
+//!
+//! Concretely, the napi binding does NOT mirror:
+//!   - `crates/benten-platform-foundation/src/plugin_manifest.rs`
+//!   - `crates/benten-platform-foundation/src/plugin_library.rs`
+//!   - `crates/benten-platform-foundation/src/plugin_lifecycle.rs`
+//!   - `crates/benten-platform-foundation/src/schema_compiler/`
+//!   - `crates/benten-platform-foundation/src/materializer.rs`
+//!   - `crates/benten-platform-foundation/src/module_ecosystem.rs`
+//!
+//! The generated `bindings/napi/index.d.ts` reflects this scope boundary
+//! (Phase-3-era timestamp is correct, not stale). Cross-language drift
+//! for Phase-4-Foundation surfaces is enforced via
+//! `packages/engine/src/errors.generated.ts` (the wasm32 mirror) +
+//! drift-detect.ts catalog parity check.
+//!
 //! ## WASM compile-check
 //!
 //! `cargo check --target wasm32-unknown-unknown -p benten-napi` must succeed.
