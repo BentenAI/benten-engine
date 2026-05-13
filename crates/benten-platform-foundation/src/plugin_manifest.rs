@@ -188,6 +188,88 @@ impl PluginManifest {
     pub fn requires_sandbox_exec(&self) -> bool {
         self.requires.iter().any(|r| r.scope == "host:sandbox:exec")
     }
+
+    /// Canonical-bytes DAG-CBOR encoding of this manifest.
+    ///
+    /// G24-D-FP-2 surface (per `docs/future/phase-4-backlog.md §4.9`).
+    /// The bytes returned are the SAME bytes the chain validator hashes
+    /// for content-addressing AND the BLAKE3 hash of these bytes
+    /// (with `content_cid` + `peer_signature` zeroed) is what
+    /// [`Self::compute_content_cid`] computes.
+    ///
+    /// Test pins inspect the CBOR shape directly (CID array shape for
+    /// `accepts_content` + absence of `schema_version`-like keys).
+    #[must_use]
+    pub fn to_canonical_bytes(&self) -> Vec<u8> {
+        serde_ipld_dagcbor::to_vec(self)
+            .expect("plugin manifest serializes (programmer error if this fires)")
+    }
+
+    /// Validate the manifest envelope, consulting a RotationLog for
+    /// peer-DID key-rotation events.
+    ///
+    /// G24-D-FP-2 surface (per `docs/future/phase-4-backlog.md §4.10`).
+    /// Returns:
+    /// - `Ok(ValidationOutcome::Valid)` when structural validation +
+    ///   signature pass + peer-DID is NOT in the RotationLog.
+    /// - `Ok(ValidationOutcome::ValidWithWarning(RotatedKeyWarning))` when
+    ///   structural validation + signature pass BUT the peer-DID has been
+    ///   superseded in the RotationLog. Per D-4F-12 this is a WARNING by
+    ///   default (NOT hard-reject); admin UI surfaces it; user decides
+    ///   whether to trust.
+    /// - `Err(ErrorCode)` on structural or signature failure.
+    ///
+    /// # Errors
+    ///
+    /// Propagates errors from [`Self::validate`] and
+    /// [`Self::verify_peer_signature`].
+    pub fn validate_with_rotation_log(
+        &self,
+        rotation_log: &benten_id::did_rotation::RotationLog,
+    ) -> Result<ValidationOutcome, ErrorCode> {
+        self.validate()?;
+        self.verify_peer_signature()?;
+        if rotation_log.is_superseded(&self.peer_did) {
+            Ok(ValidationOutcome::ValidWithWarning(RotatedKeyWarning {
+                rotated_peer_did: self.peer_did.clone(),
+            }))
+        } else {
+            Ok(ValidationOutcome::Valid)
+        }
+    }
+}
+
+// =====================================================================
+// ValidationOutcome — G24-D-FP-2 (per phase-4-backlog §4.10 + D-4F-12)
+// =====================================================================
+
+/// Outcome of [`PluginManifest::validate_with_rotation_log`].
+///
+/// Per D-4F-12: rotation surfaces a WARNING by default, not a
+/// hard-reject. Strict-mode (future Phase-4-Meta opt-in) returns
+/// `Err(E_PLUGIN_CONTENT_PEER_KEY_ROTATED)` instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValidationOutcome {
+    /// All checks passed; no rotation event observed.
+    Valid,
+    /// All checks passed BUT peer-DID has been rotated. Admin UI
+    /// surfaces the warning; user decides whether to trust.
+    ValidWithWarning(RotatedKeyWarning),
+}
+
+impl ValidationOutcome {
+    /// Whether the outcome carries a rotated-key warning.
+    #[must_use]
+    pub fn has_rotated_key_warning(&self) -> bool {
+        matches!(self, ValidationOutcome::ValidWithWarning(_))
+    }
+}
+
+/// Warning surfaced when manifest peer-DID is found in RotationLog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RotatedKeyWarning {
+    /// The peer-DID that was found rotated in the RotationLog.
+    pub rotated_peer_did: Did,
 }
 
 /// Trait-shim for cross-crate content-addressing without forcing a

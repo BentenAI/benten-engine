@@ -70,6 +70,13 @@ pub mod plugin_delegation;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod manifest_scope;
 
+// G24-D-FP-2 — Layer 2 ↔ Layer 3 chain validator. Composes the
+// single-step `plugin_delegation` gate across an entire UCAN
+// delegation chain + asserts the user-DID root anchor per
+// CLAUDE.md #18 clause-(a). Native-only.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod manifest_envelope_chain_validation;
+
 pub use attenuation::check_attenuation;
 // G14-B durable UCAN backend is native-only (see `backends/mod.rs`).
 #[cfg(not(target_arch = "wasm32"))]
