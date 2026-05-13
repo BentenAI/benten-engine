@@ -116,6 +116,10 @@ pub use schema_compiler::{
 pub use admin_ui_v0::{
     ADMIN_UI_V0_PRIVATE_NAMESPACE_PREFIX, Category, INDEXEDDB_FORBIDDEN_STORES,
     INDEXEDDB_MANIFEST_STORE_STORE, INDEXEDDB_SNAPSHOT_CACHE_STORE, NAV_CATEGORIES, Subscriber,
-    WINTERTC_FORBIDDEN_APIS, build_admin_ui_v0_subgraph, build_category_route_subgraph,
-    render_category_content, render_category_content_allow_all,
+    WINTERTC_FORBIDDEN_APIS, WorkflowDraft, WorkflowEdge, WorkflowEditorError, WorkflowForm,
+    WorkflowFormField, WorkflowPrimitiveSelection, build_admin_ui_v0_subgraph,
+    build_category_route_subgraph, compile_draft_within_manifest_envelope,
+    derive_cap_scopes_from_subgraph, derive_form_from_schema, render_category_content,
+    render_category_content_allow_all, validate_subgraph_within_manifest_envelope,
+    workflow_content_hash,
 };
