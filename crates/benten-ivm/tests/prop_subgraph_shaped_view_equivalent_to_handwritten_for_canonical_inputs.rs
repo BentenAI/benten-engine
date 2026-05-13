@@ -37,7 +37,7 @@
 
 mod common_kernel_canary;
 use common_kernel_canary::{
-    CanarySubgraphSpec, KernelInput, handwritten_baseline_via_register_g15a,
+    CanarySubgraphSpec, KernelInput, algorithm_register_baseline_via_g15a_path,
     register_and_walk_to_completion,
 };
 use proptest::prelude::*;
@@ -80,7 +80,7 @@ proptest! {
     ) {
         let spec = CanarySubgraphSpec::for_canonical_view("capability_grants");
         let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
-        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        let rhs = algorithm_register_baseline_via_g15a_path(&spec, &writes).expect("G15-A walk");
         prop_assert_eq!(
             lhs, rhs,
             "View 1 (capability_grants) SubgraphSpec path diverged from G15-A baseline"
@@ -94,7 +94,7 @@ proptest! {
     ) {
         let spec = CanarySubgraphSpec::for_canonical_view("event_dispatch");
         let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
-        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        let rhs = algorithm_register_baseline_via_g15a_path(&spec, &writes).expect("G15-A walk");
         prop_assert_eq!(
             lhs, rhs,
             "View 2 (event_dispatch) SubgraphSpec path diverged from G15-A baseline"
@@ -109,7 +109,7 @@ proptest! {
     ) {
         let spec = CanarySubgraphSpec::for_canonical_view("content_listing");
         let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
-        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        let rhs = algorithm_register_baseline_via_g15a_path(&spec, &writes).expect("G15-A walk");
         prop_assert_eq!(
             lhs, rhs,
             "View 3 (content_listing) SubgraphSpec path diverged from G15-A baseline"
@@ -124,7 +124,7 @@ proptest! {
     ) {
         let spec = CanarySubgraphSpec::for_canonical_view("governance_inheritance");
         let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
-        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        let rhs = algorithm_register_baseline_via_g15a_path(&spec, &writes).expect("G15-A walk");
         prop_assert_eq!(
             lhs, rhs,
             "View 4 (governance_inheritance) SubgraphSpec path diverged from G15-A baseline"
@@ -139,7 +139,7 @@ proptest! {
     ) {
         let spec = CanarySubgraphSpec::for_canonical_view("version_current");
         let lhs = register_and_walk_to_completion(&spec, &writes).expect("SubgraphSpec walk");
-        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes).expect("G15-A walk");
+        let rhs = algorithm_register_baseline_via_g15a_path(&spec, &writes).expect("G15-A walk");
         prop_assert_eq!(
             lhs, rhs,
             "View 5 (version_current) SubgraphSpec path diverged from G15-A baseline"
@@ -167,7 +167,7 @@ fn prop_subgraph_shaped_view_equivalent_to_handwritten_for_canonical_inputs() {
         let writes: Vec<KernelInput> = Vec::new();
         let lhs = register_and_walk_to_completion(&spec, &writes)
             .unwrap_or_else(|e| panic!("smoke walk for `{view_id}`: {e}"));
-        let rhs = handwritten_baseline_via_register_g15a(&spec, &writes)
+        let rhs = algorithm_register_baseline_via_g15a_path(&spec, &writes)
             .unwrap_or_else(|e| panic!("smoke baseline for `{view_id}`: {e}"));
         assert_eq!(lhs, rhs, "empty-walk equivalence smoke for `{view_id}`");
     }

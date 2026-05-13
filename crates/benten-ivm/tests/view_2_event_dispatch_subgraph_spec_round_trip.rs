@@ -33,7 +33,8 @@
 
 mod common_kernel_canary;
 use common_kernel_canary::{
-    CanarySubgraphSpec, KernelInput, KernelOutput, assert_round_trip_equivalent_to_handwritten,
+    CanarySubgraphSpec, KernelInput, KernelOutput,
+    assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path,
     register_and_walk_to_completion,
 };
 
@@ -69,7 +70,9 @@ fn view_2_event_dispatch_subgraph_spec_round_trip_matches_handwritten() {
     ];
 
     let expected = handwritten_baseline_for_writes(&writes);
-    assert_round_trip_equivalent_to_handwritten(&spec, &writes, &expected);
+    assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path(
+        &spec, &writes, &expected,
+    );
 }
 
 #[test]
