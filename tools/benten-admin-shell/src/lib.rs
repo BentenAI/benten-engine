@@ -41,9 +41,12 @@
 //!    [`AdminShellState::dispatch`]. See `src/main.rs` for the boot
 //!    sequence.
 //!
-//! See `Cargo.toml` header for the v1-assessment-window deferral
-//! rationale on the webview-driven tauri-driver smoke test (half (ii)
-//! of br-r6-r1-3).
+//! Both halves of br-r6-r1-3 are CLOSED at HEAD (path-a-FULL): the
+//! default-mode IPC pipeline E2E at `tests/e2e_admin_shell_ipc.rs`
+//! and the webview-driven `tauri-driver` E2E at
+//! `tests/e2e_webview_smoke.rs` (under the `tauri` feature). Only
+//! the Tauri upstream-migration carries (gtk-rs GTK3→GTK4 etc.)
+//! remain as `docs/future/phase-4-backlog.md §3.6` items.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

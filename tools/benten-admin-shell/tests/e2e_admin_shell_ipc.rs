@@ -16,9 +16,9 @@
 //!   mismatch / expired session / missing session / replay), and
 //!   asserts the happy-path returns `Ok(IpcResponse{ payload: Null })`
 //!   per the renderer contract (the integrator-binary's per-method
-//!   handler then overwrites payload with the real response — that
-//!   step is on the v1-window webview-driven wave per
-//!   `docs/future/phase-4-backlog.md §3`).
+//!   handler then overwrites payload with the real response —
+//!   exercised in the webview-driven wave at
+//!   `tests/e2e_webview_smoke.rs` under the `tauri` feature).
 //!
 //! - **WOULD-FAIL-IF-NO-OP'd:** any of these regressions would surface
 //!   here:
@@ -107,9 +107,9 @@ fn e2e_happy_path_dispatch_succeeds_for_every_allowlisted_method() {
         });
         // Renderer contract: happy-path returns `Null` payload — the
         // integrator-binary's per-method handler overwrites with the
-        // real response. The webview-driven wave per
-        // docs/future/phase-4-backlog.md §3 lands the per-method
-        // handlers.
+        // real response. Webview-driven E2E at
+        // `tests/e2e_webview_smoke.rs` exercises the per-method
+        // handler under the `tauri` feature.
         assert_eq!(resp.payload, serde_json::Value::Null);
     }
 }
