@@ -967,6 +967,28 @@ pub enum ErrorCode {
     /// Decentralized registry discovery query timed out.
     /// Reserved at Phase 4-Foundation; first firing at Phase 4-Meta.
     RegistryDiscoveryTimeout,
+    // ----- Phase 4-Foundation G23-B — materializer pipeline (3 codes) -----
+    /// Materializer walk encountered a Node the walk-principal cannot
+    /// READ at the per-row cap-recheck boundary. The denial collapses
+    /// to a redacted view at Node-granularity per ratification #7 —
+    /// the materializer returns Ok(out) where the affected Node
+    /// content is replaced by a placeholder; the structured denial
+    /// frame surfaces the typed code so the admin UI can render an
+    /// explanation. Routes to `ON_DENIED`. Maps to
+    /// `E_MATERIALIZER_CAP_DENIED`.
+    MaterializerCapDenied,
+    /// Materializer rejected a SubgraphSpec because the runtime
+    /// composition's required cap-scope envelope exceeds the schema's
+    /// declared `requires` envelope (T1 negative defense). Fires at
+    /// materializer entry BEFORE any READ fanout. Construction site:
+    /// `benten-platform-foundation::materializer::HtmlJsonMaterializer::
+    /// materialize_with_gate`. Maps to `E_MATERIALIZER_SCHEMA_MISMATCH`.
+    MaterializerSchemaMismatch,
+    /// Materializer's reactive `subscribe_with_gate` seam failed to
+    /// attach to the engine's `on_change_as_with_cursor` cursor — pattern
+    /// invalid, cursor-attach failed, or the underlying subscription
+    /// was rejected. Maps to `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE`.
+    MaterializerSubscribeSeamFailure,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1235,6 +1257,9 @@ impl ErrorCode {
             ErrorCode::PluginDeviceAttestationForged => "E_PLUGIN_DEVICE_ATTESTATION_FORGED",
             ErrorCode::PluginLibraryIndexTamper => "E_PLUGIN_LIBRARY_INDEX_TAMPER",
             ErrorCode::RegistryDiscoveryTimeout => "E_REGISTRY_DISCOVERY_TIMEOUT",
+            ErrorCode::MaterializerCapDenied => "E_MATERIALIZER_CAP_DENIED",
+            ErrorCode::MaterializerSchemaMismatch => "E_MATERIALIZER_SCHEMA_MISMATCH",
+            ErrorCode::MaterializerSubscribeSeamFailure => "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1634,6 +1659,22 @@ impl ErrorCode {
             | ErrorCode::PluginLibraryIndexTamper
             | ErrorCode::RegistryDiscoveryTimeout => None,
 
+            // Phase 4-Foundation G23-B materializer pipeline:
+            // - MaterializerCapDenied joins the ON_DENIED cap-denial
+            //   family per the same routing precedent as CapDenied /
+            //   SubscribeRevokedMidStream — the per-row read at the
+            //   materializer's READ fanout is exactly the cap-recheck
+            //   boundary precedent established at G14-D / G16-B-F.
+            // - MaterializerSchemaMismatch + MaterializerSubscribeSeamFailure
+            //   fire at materializer entry (pre-fanout structural
+            //   rejection) and at SUBSCRIBE-attach (pre-event-stream
+            //   structural rejection) — both are registration-time-shape
+            //   failures and do not have a primitive-edge routing
+            //   disposition.
+            ErrorCode::MaterializerCapDenied => Some("ON_DENIED"),
+            ErrorCode::MaterializerSchemaMismatch
+            | ErrorCode::MaterializerSubscribeSeamFailure => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -1853,6 +1894,9 @@ impl ErrorCode {
             "E_PLUGIN_DEVICE_ATTESTATION_FORGED" => ErrorCode::PluginDeviceAttestationForged,
             "E_PLUGIN_LIBRARY_INDEX_TAMPER" => ErrorCode::PluginLibraryIndexTamper,
             "E_REGISTRY_DISCOVERY_TIMEOUT" => ErrorCode::RegistryDiscoveryTimeout,
+            "E_MATERIALIZER_CAP_DENIED" => ErrorCode::MaterializerCapDenied,
+            "E_MATERIALIZER_SCHEMA_MISMATCH" => ErrorCode::MaterializerSchemaMismatch,
+            "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE" => ErrorCode::MaterializerSubscribeSeamFailure,
             other => ErrorCode::Unknown(other.to_string()),
         }
     }

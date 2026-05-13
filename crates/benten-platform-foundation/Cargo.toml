@@ -54,3 +54,5 @@ benten-caps = { path = "../benten-caps" }
 # negative-arm walks `crates/benten-id/src/` for forbidden
 # device-DID-attestation patterns per CLAUDE.md baked-in #18).
 walkdir = "2.5"
+# G23-B proptest for `prop_materializer_idempotent_for_static_schemas`.
+proptest = { workspace = true }

@@ -44,11 +44,6 @@ const EXPECTED_G23_B_CODES: &[&str] = &[
 ];
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
-    3 E_MATERIALIZER_* variants do not exist in benten-errors at HEAD; \
-    subset-closure pin asserts post-G23-B every expected variant has \
-    enum + as_str + from_str arms AND the family-prefix discipline holds. \
-    Closes r4-triage §5.2 G23-B subset-closure pin."]
 fn every_expected_g23_b_materializer_code_resolves_to_named_variant() {
     for code in EXPECTED_G23_B_CODES {
         // Family-prefix discipline: every code in the G23-B set must

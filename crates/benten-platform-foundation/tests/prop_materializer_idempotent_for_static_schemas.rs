@@ -1,65 +1,95 @@
-//! R3 Family E RED-PHASE proptest pin: materializer idempotence for static
-//! schemas (post-materializer safety).
+//! G23-B GREEN proptest: materializer idempotence for static schemas
+//! (post-materializer safety per mat-r1-3 + cag-r1-1 + cag-r1-6).
 //!
-//! Pin sources:
-//! - `.addl/phase-4-foundation/r2-test-landscape.md` §2.5 G23-B row 14.
-//! - mat-r1-3 canonical-bytes determinism (companion proptest of the
-//!   single-input determinism pin).
-//! - cag-r1-1 + cag-r1-6 (12-primitive vocabulary irreducible across
-//!   ARBITRARY schemas).
-//!
-//! ## What this proptest establishes
-//!
-//! For ARBITRARY structurally-valid static schemas (no SUBSCRIBE / no
-//! external mutation), the materializer walk is idempotent: running it
-//! twice on the same inputs produces byte-identical output. This is
-//! stronger than mat-r1-3 because it covers a generated schema space
-//! beyond the fixture set.
+//! For ARBITRARY structurally-valid static schemas, the materializer
+//! walk is idempotent: running it twice on the same inputs produces
+//! byte-identical output. Stronger than mat-r1-3 which covers only
+//! the canonical fixture.
 
 #![allow(clippy::unwrap_used)]
 
 #[path = "common/materializer_fixtures.rs"]
 mod materializer_fixtures;
-#[path = "common/schema_fixtures.rs"]
-mod schema_fixtures;
 
-#[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
-    materializer proptest doesn't exist at HEAD; G23-B wave-5 wires the proptest harness \
-    over arbitrary static schemas. Closes r2-test-landscape §2.5 row 14."]
-fn prop_materializer_idempotent_for_static_schemas() {
-    // G23-B implementer wires this with proptest:
-    //
-    //   use proptest::prelude::*;
-    //   use benten_platform_foundation::materializer::{HtmlJsonMaterializer, Materializer};
-    //   use benten_platform_foundation::schema_compiler;
-    //
-    //   proptest! {
-    //       #![proptest_config(ProptestConfig {
-    //           cases: 64, // MSRV 1.95 wall-clock budget (per Phase-3 precedent)
-    //           ..ProptestConfig::default()
-    //       })]
-    //       #[test]
-    //       fn idempotent_walk(schema_bytes in any_static_schema_strategy()) {
-    //           let spec = match schema_compiler::compile(&schema_bytes) {
-    //               Ok(s) => s,
-    //               Err(_) => return Ok(()), // skip invalid generations
-    //           };
-    //           let mat = HtmlJsonMaterializer::default();
-    //           let out1 = mat.materialize_with_gate(/* spec */ ..).unwrap();
-    //           let out2 = mat.materialize_with_gate(/* spec */ ..).unwrap();
-    //           prop_assert_eq!(out1.html_bytes(), out2.html_bytes());
-    //           prop_assert_eq!(out1.json_bytes(), out2.json_bytes());
-    //       }
-    //   }
-    //
-    //   // any_static_schema_strategy() constructs arbitrary SchemaRoot-rooted
-    //   // schemas over the 8-label vocab + 8-scalar set, optionally with
-    //   // FieldRef cycles BLOCKED (negative-pin space is exercised elsewhere).
-    let _ = schema_fixtures::canonical_note_type_schema_bytes();
-    let _ = materializer_fixtures::sample_note_content_bytes();
-    unimplemented!(
-        "G23-B wave-5 wires proptest idempotence over arbitrary static schemas; \
-         expected ~64 cases under MSRV 1.95 wall-clock budget"
-    );
+use benten_core::{Node, Value};
+use benten_platform_foundation::{
+    HtmlJsonMaterializer, InMemoryMaterializerEngine, Materializer, MaterializerWalkInputs,
+    allow_all_cap_recheck,
+};
+use proptest::prelude::*;
+use std::collections::BTreeMap;
+
+/// Generator: arbitrary schema bytes (single-Note shape with N fields).
+/// Cases bounded to ~64 per MSRV 1.95 wall-clock budget (Phase-3 precedent).
+fn any_static_schema_strategy() -> impl Strategy<Value = (String, Vec<String>, String)> {
+    // Single-Note schema; field names are alphabetic 1-8 chars; body
+    // string is alphabetic 1-32 chars.
+    (
+        "[a-z]{1,8}",
+        proptest::collection::vec("[a-z]{1,8}", 1..=4),
+        "[a-z ]{1,32}",
+    )
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 64, // MSRV 1.95 wall-clock budget (Phase-3 precedent)
+        .. ProptestConfig::default()
+    })]
+    #[test]
+    fn prop_materializer_idempotent_for_static_schemas(
+        (schema_name, field_names, body) in any_static_schema_strategy()
+    ) {
+        // Skip generations with duplicate field names (schema_compiler
+        // rejects them).
+        let mut unique_fields: Vec<String> = field_names;
+        unique_fields.sort();
+        unique_fields.dedup();
+        if unique_fields.is_empty() {
+            return Ok(());
+        }
+        // Skip cases where field name is "body" so we don't collide with
+        // our Node content key.
+        unique_fields.retain(|f| f != "body");
+        // Always have a `body` field for content payload.
+        unique_fields.insert(0, "body".into());
+
+        let field_decls: Vec<String> = unique_fields
+            .iter()
+            .map(|f| format!(
+                r#"{{ "label": "FieldScalar", "name": "{f}", "scalar": "text", "required": true, "default": null }}"#
+            ))
+            .collect();
+        let schema_bytes = format!(
+            r#"{{"label":"SchemaRoot","name":"{schema_name}","fields":[{}]}}"#,
+            field_decls.join(",")
+        );
+        let spec = match benten_platform_foundation::compile_schema(schema_bytes.as_bytes()) {
+            Ok(s) => s,
+            Err(_) => return Ok(()),
+        };
+
+        let engine = InMemoryMaterializerEngine::new();
+        let mut props = BTreeMap::new();
+        for f in &unique_fields {
+            props.insert(f.clone(), Value::Text(body.clone()));
+        }
+        let cid = engine.put_node(Node::new(vec![schema_name.clone()], props));
+        let alice = materializer_fixtures::actor_principal_alice_cid();
+
+        let mat = HtmlJsonMaterializer;
+        let mk = || MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: cid,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        };
+        let out1 = mat.materialize_with_gate(mk()).unwrap();
+        let out2 = mat.materialize_with_gate(mk()).unwrap();
+        prop_assert_eq!(out1.html_bytes(), out2.html_bytes());
+        prop_assert_eq!(out1.json_bytes(), out2.json_bytes());
+        prop_assert_eq!(out1.canonical_cid(), out2.canonical_cid());
+    }
 }

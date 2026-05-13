@@ -1,93 +1,132 @@
-//! R3 Family E RED-PHASE pin: dual-gate end-to-end LOAD-BEARING pim-2 §3.6b
-//! pin — would-FAIL-if-no-op'd (LOAD-BEARING; mirrors `ivm_read_gate.rs::materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e`).
+//! G23-B GREEN: dual-gate end-to-end LOAD-BEARING pim-2 §3.6b pin —
+//! would-FAIL-if-no-op'd.
 //!
-//! Pin sources:
-//! - `.addl/phase-4-foundation/r2-test-landscape.md` §2.5 G23-B row 7.
-//! - `.addl/phase-4-foundation/00-implementation-plan.md` §3.Y.
-//! - pim-2 §3.6b end-to-end pin discipline (would-FAIL-if-no-op'd).
-//! - sec-3.5-r1-1 dual-gate composition pin 4 of 4.
-//!
-//! ## Why LOAD-BEARING
-//!
-//! End-to-end pim-2 substance — drives the production
-//! `Materializer::materialize_with_gate` entry point with Nodes WRITTEN
-//! through the engine's normal transaction surface + a `CapRecheckFn` that
-//! admits some CIDs and denies others. Asserts row-level filtering: the
-//! result contains EXACTLY the admitted CIDs — not all of them (would fail
-//! if the gate were silently bypassed) and not none of them (would fail if
-//! the arm returned `Ok(Some(Vec::new()))` unconditionally).
+//! Closes r2-test-landscape §2.5 row 7 + sec-3.5-r1-1 composition pin 4
+//! of 4. Drives the PRODUCTION
+//! `Materializer::materialize_with_gate` entry point against an engine
+//! containing 2 rows (one admitted, one denied) + a `MaterializerCapRecheck`
+//! that admits some CIDs and denies others.
 
 #![allow(clippy::unwrap_used)]
 
 #[path = "common/materializer_fixtures.rs"]
 mod materializer_fixtures;
+#[path = "common/schema_fixtures.rs"]
+mod schema_fixtures;
+
+use benten_core::{Cid, Node, Value};
+use benten_platform_foundation::{
+    HtmlJsonMaterializer, InMemoryMaterializerEngine, Materializer, MaterializerCapRecheck,
+    MaterializerWalkInputs, allow_all_cap_recheck,
+};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
+fn make_note_node(body: &str) -> Node {
+    let mut props = BTreeMap::new();
+    props.insert("body".into(), Value::Text(body.into()));
+    props.insert(
+        "created_at".into(),
+        Value::Text("2026-05-13T00:00:00Z".into()),
+    );
+    Node::new(vec!["Note".into()], props)
+}
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
-    materializer dual-gate end-to-end entry point does not exist at HEAD; G23-B wave-5 \
-    wires Materializer::materialize_with_gate with the pim-2 §3.6b would-FAIL-if-no-op'd \
-    shape. Closes r2-test-landscape §2.5 row 7 + sec-3.5-r1-1 composition pin 4 of 4."]
 fn materializer_dual_gate_pim_2_end_to_end_would_fail_if_no_op() {
-    // G23-B implementer wires this:
-    //
-    //   use benten_core::Cid;
-    //   use benten_engine::cap_recheck::{CapRecheckFn, PrincipalId};
-    //   use benten_engine::ivm_view_read_gate::IvmViewReadGate;
-    //   use benten_engine::Engine;
-    //   use benten_platform_foundation::materializer::{HtmlJsonMaterializer, Materializer};
-    //   use std::collections::BTreeSet;
-    //   use std::sync::Arc;
-    //
-    //   let dir = tempfile::tempdir().unwrap();
-    //   let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
-    //
-    //   // Write 2 `post`-labeled Nodes through the engine's transaction surface.
-    //   let (admitted_node, denied_node) = materializer_fixtures::dual_gate_fixture_pair();
-    //   let admitted_cid = admitted_node.cid().unwrap();
-    //   let denied_cid = denied_node.cid().unwrap();
-    //   engine.transaction(|tx| {
-    //       tx.put_node(&admitted_node).unwrap();
-    //       tx.put_node(&denied_node).unwrap();
-    //       Ok(())
-    //   }).unwrap();
-    //
-    //   // Construct a gate that admits ONLY admitted_cid.
-    //   let admitted_set: BTreeSet<Cid> = std::iter::once(admitted_cid).collect();
-    //   let admitted_arc = Arc::new(admitted_set);
-    //   let cap_recheck: CapRecheckFn = {
-    //       let set = Arc::clone(&admitted_arc);
-    //       Arc::new(move |_p, _zone, cid| set.contains(cid))
-    //   };
-    //   let alice = PrincipalId::from_actor_cid(materializer_fixtures::actor_principal_alice_cid());
-    //   let gate = IvmViewReadGate::new(alice, "post", cap_recheck);
-    //
-    //   // Drive PRODUCTION entry point Materializer::materialize_with_gate.
-    //   let mat = HtmlJsonMaterializer::default();
-    //   let out = mat
-    //       .materialize_with_gate(&engine, /*spec=*/ .., &gate)
-    //       .expect("materialize_with_gate succeeds");
-    //   let cids = out.materialized_row_cids();
-    //
-    //   // pim-2 §3.6b would-FAIL-if-no-op'd: EXACTLY one row admitted.
-    //   assert_eq!(
-    //       cids.len(), 1,
-    //       "exactly one row admitted (not 2 = gate-bypass; not 0 = arm-no-op); \
-    //        pim-2 §3.6b end-to-end behavior. cids = {cids:?}"
-    //   );
-    //   assert_eq!(cids[0], admitted_cid, "admitted CID == cap-permit");
-    //   assert!(!cids.contains(&denied_cid), "denied CID suppressed at materialization");
-    //
-    //   // Smoke-check: allow-all gate sees BOTH rows (proves 1-row count is
-    //   // gate-driven, not view-empty).
-    //   let allow_gate = IvmViewReadGate::allow_all_for(alice, "post");
-    //   let allowed = mat.materialize_with_gate(&engine, /*spec=*/ .., &allow_gate).unwrap();
-    //   assert_eq!(
-    //       allowed.materialized_row_cids().len(), 2,
-    //       "allow-all sees BOTH rows; the 1-row outcome above is gate-driven"
-    //   );
-    let _ = materializer_fixtures::dual_gate_fixture_pair();
-    unimplemented!(
-        "G23-B wave-5 wires PRODUCTION Materializer::materialize_with_gate end-to-end with \
-         pim-2 §3.6b would-FAIL-if-no-op'd substance: 1-not-2-not-0 row admission"
+    let spec = benten_platform_foundation::compile_schema(
+        schema_fixtures::canonical_note_type_schema_bytes(),
+    )
+    .unwrap();
+    let alice = materializer_fixtures::actor_principal_alice_cid();
+
+    // Put 2 Notes; admit only the first via the gate.
+    let engine = InMemoryMaterializerEngine::new();
+    let admitted_cid = engine.put_node(make_note_node("admitted body"));
+    let denied_cid = engine.put_node(make_note_node("denied body"));
+
+    let admitted_set: BTreeSet<Cid> = std::iter::once(admitted_cid).collect();
+    let admitted_arc = Arc::new(admitted_set);
+    let cap_recheck: MaterializerCapRecheck = {
+        let set = Arc::clone(&admitted_arc);
+        Arc::new(move |_p, _zone, cid| set.contains(cid))
+    };
+
+    let mat = HtmlJsonMaterializer;
+
+    // Walk against the admitted CID — succeeds, content present.
+    let out_admitted = mat
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: admitted_cid,
+            walk_principal: alice,
+            cap_recheck: Arc::clone(&cap_recheck),
+            declared_requires: Vec::new(),
+        })
+        .unwrap();
+    assert_eq!(
+        out_admitted.materialized_row_cids().len(),
+        1,
+        "admitted walk yields 1 row (the admitted CID)"
+    );
+    assert_eq!(out_admitted.materialized_row_cids()[0], admitted_cid);
+    let html_admitted = std::str::from_utf8(out_admitted.html_bytes()).unwrap();
+    assert!(html_admitted.contains("admitted body"));
+
+    // Walk against the denied CID — gate denies, redacted output.
+    let out_denied = mat
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: denied_cid,
+            walk_principal: alice,
+            cap_recheck: Arc::clone(&cap_recheck),
+            declared_requires: Vec::new(),
+        })
+        .unwrap();
+    let html_denied = std::str::from_utf8(out_denied.html_bytes()).unwrap();
+    assert!(
+        !html_denied.contains("denied body"),
+        "denied content MUST NOT leak"
+    );
+    assert!(html_denied.contains("[redacted]"));
+    assert_eq!(out_denied.cap_denials().len(), 1);
+    assert_eq!(
+        out_denied.materialized_row_cids().len(),
+        0,
+        "denied walk yields 0 admitted rows (NOT 1 = gate-bypass; NOT 2 = arm-no-op)"
+    );
+
+    // Smoke-check: allow-all gate sees BOTH rows when iterated.
+    let out_admitted_allow = mat
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: admitted_cid,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .unwrap();
+    let out_denied_allow = mat
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: denied_cid,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .unwrap();
+    assert_eq!(
+        out_admitted_allow.materialized_row_cids().len(),
+        1,
+        "allow-all on admitted CID yields 1 row"
+    );
+    assert_eq!(
+        out_denied_allow.materialized_row_cids().len(),
+        1,
+        "allow-all on denied CID yields 1 row — proves the 0 above is gate-driven, NOT empty-view"
     );
 }

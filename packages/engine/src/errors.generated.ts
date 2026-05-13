@@ -195,6 +195,9 @@ export const CATALOG_CODES = [
   "E_PLUGIN_DEVICE_ATTESTATION_FORGED",
   "E_PLUGIN_LIBRARY_INDEX_TAMPER",
   "E_REGISTRY_DISCOVERY_TIMEOUT",
+  "E_MATERIALIZER_CAP_DENIED",
+  "E_MATERIALIZER_SCHEMA_MISMATCH",
+  "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2630,6 +2633,51 @@ export class ERegistryDiscoveryTimeout extends BentenError {
 }
 
 /**
+ * E_MATERIALIZER_CAP_DENIED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::materialize_with_gate` (G23-B canary).
+ * Message template: "materializer walk: Node `{cid}` denied at per-row cap-recheck for walk-principal `{principal}`; redacted in output"
+ */
+export class EMaterializerCapDenied extends BentenError {
+  static readonly code = "E_MATERIALIZER_CAP_DENIED";
+  static readonly fixHint = "The materializer walks `SchemaSubgraphSpec`-emitted READ primitives under the supplied walk-principal. Per-row reads route through `Engine::read_node_as(principal, cid)` (CLAUDE.md baked-in #18 Class B β) and the optional `IvmViewReadGate`. A denial collapses to a redacted view (Node-granularity) per ratification #7 — the materializer returns Ok(out) with the affected Node content replaced by a placeholder; the structured denial frame surfaces this typed code so the admin UI can render an explanation rather than a hard error. Joins the cap-denial routing family (`ON_DENIED`).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_MATERIALIZER_CAP_DENIED", "The materializer walks `SchemaSubgraphSpec`-emitted READ primitives under the supplied walk-principal. Per-row reads route through `Engine::read_node_as(principal, cid)` (CLAUDE.md baked-in #18 Class B β) and the optional `IvmViewReadGate`. A denial collapses to a redacted view (Node-granularity) per ratification #7 — the materializer returns Ok(out) with the affected Node content replaced by a placeholder; the structured denial frame surfaces this typed code so the admin UI can render an explanation rather than a hard error. Joins the cap-denial routing family (`ON_DENIED`).", message, context);
+    this.name = "EMaterializerCapDenied";
+  }
+}
+
+/**
+ * E_MATERIALIZER_SCHEMA_MISMATCH
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::materialize_with_gate` (G23-B canary, T1 defense per `admin-ui-v0-threat-model.md` §T1).
+ * Message template: "materializer rejected SubgraphSpec at entry: runtime composition requires cap-scope envelope exceeding the schema's declared `requires` (T1 negative defense)"
+ */
+export class EMaterializerSchemaMismatch extends BentenError {
+  static readonly code = "E_MATERIALIZER_SCHEMA_MISMATCH";
+  static readonly fixHint = "The materializer entry-point validates the SubgraphSpec's runtime cap-scope composition against the declared `requires` envelope BEFORE any READ fanout. If the spec's emitted READ / EMIT / RESPOND primitives carry a `cap_scope` annotation set whose union exceeds the declared envelope, the walk is refused with this typed code. Re-declare the schema's `requires` to cover all primitives the runtime walks, or narrow the schema so its emit shape stays inside the declared envelope. Pre-fanout rejection — no primitive-edge routing (None).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_MATERIALIZER_SCHEMA_MISMATCH", "The materializer entry-point validates the SubgraphSpec's runtime cap-scope composition against the declared `requires` envelope BEFORE any READ fanout. If the spec's emitted READ / EMIT / RESPOND primitives carry a `cap_scope` annotation set whose union exceeds the declared envelope, the walk is refused with this typed code. Re-declare the schema's `requires` to cover all primitives the runtime walks, or narrow the schema so its emit shape stays inside the declared envelope. Pre-fanout rejection — no primitive-edge routing (None).", message, context);
+    this.name = "EMaterializerSchemaMismatch";
+  }
+}
+
+/**
+ * E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::subscribe_with_gate` (G23-B canary).
+ * Message template: "materializer reactive subscribe seam failed to attach to Engine::on_change_as_with_cursor (invalid pattern / cursor / subscription rejected)"
+ */
+export class EMaterializerSubscribeSeamFailure extends BentenError {
+  static readonly code = "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE";
+  static readonly fixHint = "The materializer's reactive update path routes ONLY through `Engine::on_change_as_with_cursor` (the cap-rechecking SUBSCRIBE entry point per sec-3.5-r1-9). Attachment failed — pattern is empty or invalid, the cursor type is unsupported, or the engine's policy denied subscription registration. Fix the pattern shape (non-empty event-name glob) or supply a valid SubscribeCursor; consult `Engine::on_change_as_with_cursor` docs.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE", "The materializer's reactive update path routes ONLY through `Engine::on_change_as_with_cursor` (the cap-rechecking SUBSCRIBE entry point per sec-3.5-r1-9). Attachment failed — pattern is empty or invalid, the cursor type is unsupported, or the engine's policy denied subscription registration. Fix the pattern shape (non-empty event-name glob) or supply a valid SubscribeCursor; consult `Engine::on_change_as_with_cursor` docs.", message, context);
+    this.name = "EMaterializerSubscribeSeamFailure";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -2800,4 +2848,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_PLUGIN_DEVICE_ATTESTATION_FORGED": EPluginDeviceAttestationForged,
   "E_PLUGIN_LIBRARY_INDEX_TAMPER": EPluginLibraryIndexTamper,
   "E_REGISTRY_DISCOVERY_TIMEOUT": ERegistryDiscoveryTimeout,
+  "E_MATERIALIZER_CAP_DENIED": EMaterializerCapDenied,
+  "E_MATERIALIZER_SCHEMA_MISMATCH": EMaterializerSchemaMismatch,
+  "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE": EMaterializerSubscribeSeamFailure,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

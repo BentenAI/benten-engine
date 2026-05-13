@@ -1455,6 +1455,30 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Thrown at:** `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
 - **Phase:** 4-Foundation G24-D (reserved); 4-Meta (firing)
 
+### E_MATERIALIZER_CAP_DENIED
+
+- **Message:** "materializer walk: Node `{cid}` denied at per-row cap-recheck for walk-principal `{principal}`; redacted in output"
+- **Context:** `{ node_cid: String, principal_cid: String, scope: Option<String> }`
+- **Fix:** The materializer walks `SchemaSubgraphSpec`-emitted READ primitives under the supplied walk-principal. Per-row reads route through `Engine::read_node_as(principal, cid)` (CLAUDE.md baked-in #18 Class B β) and the optional `IvmViewReadGate`. A denial collapses to a redacted view (Node-granularity) per ratification #7 — the materializer returns Ok(out) with the affected Node content replaced by a placeholder; the structured denial frame surfaces this typed code so the admin UI can render an explanation rather than a hard error. Joins the cap-denial routing family (`ON_DENIED`).
+- **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::materialize_with_gate` (G23-B canary).
+- **Phase:** 4-Foundation G23-B
+
+### E_MATERIALIZER_SCHEMA_MISMATCH
+
+- **Message:** "materializer rejected SubgraphSpec at entry: runtime composition requires cap-scope envelope exceeding the schema's declared `requires` (T1 negative defense)"
+- **Context:** `{ schema_name: String, declared_scopes: Vec<String>, required_scopes: Vec<String> }`
+- **Fix:** The materializer entry-point validates the SubgraphSpec's runtime cap-scope composition against the declared `requires` envelope BEFORE any READ fanout. If the spec's emitted READ / EMIT / RESPOND primitives carry a `cap_scope` annotation set whose union exceeds the declared envelope, the walk is refused with this typed code. Re-declare the schema's `requires` to cover all primitives the runtime walks, or narrow the schema so its emit shape stays inside the declared envelope. Pre-fanout rejection — no primitive-edge routing (None).
+- **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::materialize_with_gate` (G23-B canary, T1 defense per `admin-ui-v0-threat-model.md` §T1).
+- **Phase:** 4-Foundation G23-B
+
+### E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE
+
+- **Message:** "materializer reactive subscribe seam failed to attach to Engine::on_change_as_with_cursor (invalid pattern / cursor / subscription rejected)"
+- **Context:** `{ pattern: String, reason: String }`
+- **Fix:** The materializer's reactive update path routes ONLY through `Engine::on_change_as_with_cursor` (the cap-rechecking SUBSCRIBE entry point per sec-3.5-r1-9). Attachment failed — pattern is empty or invalid, the cursor type is unsupported, or the engine's policy denied subscription registration. Fix the pattern shape (non-empty event-name glob) or supply a valid SubscribeCursor; consult `Engine::on_change_as_with_cursor` docs.
+- **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::subscribe_with_gate` (G23-B canary).
+- **Phase:** 4-Foundation G23-B
+
 ## Extending the catalog
 
 When adding a new error:

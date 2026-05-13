@@ -43,10 +43,6 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
-    3 G23-B ErrorCodes do not exist at HEAD; G23-B wires atomic Rust+TS mint per §3.5g. \
-    Currently from_str returns ErrorCode::Unknown for all 3. Closes r2-test-landscape \
-    §2.5 ErrorCode pin."]
 fn error_catalog_mints_3_g23_b_error_codes() {
     for code in materializer_fixtures::G23_B_ERROR_CODES {
         let parsed = ErrorCode::from_str(code);
@@ -65,10 +61,6 @@ fn error_catalog_mints_3_g23_b_error_codes() {
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
-    3 G23-B ErrorCodes not yet present in packages/engine/src/errors.generated.ts \
-    CATALOG_CODES at HEAD; G23-B wires atomic Rust+TS mint per §3.5g. \
-    Closes r4-triage §5.2 G23-B TS-side companion pin."]
 fn error_catalog_mints_3_g23_b_error_codes_ts_mirror() {
     // Read the canonical TS mirror at
     // packages/engine/src/errors.generated.ts (per Ben's R4-triage §7
