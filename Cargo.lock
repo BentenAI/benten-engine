@@ -432,6 +432,7 @@ dependencies = [
  "benten-core",
  "benten-engine",
  "benten-errors",
+ "benten-id",
  "thiserror 2.0.18",
 ]
 

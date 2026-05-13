@@ -1,14 +1,16 @@
-//! `benten-platform-foundation` — Phase 4-Foundation G23-A + G23-B canary STUB.
+//! `benten-platform-foundation` — Phase 4-Foundation G23-A + G23-B + G24-D canary STUB.
 //!
-//! **R3 RED-PHASE landing state** (2026-05-11): empty stub crate. R3 test pins
-//! reference symbols that DON'T EXIST YET — they compile-but-fail at the `use`
-//! line (canonical RED-phase per pim-12 §3.6e). G23-A wave-4 + G23-B wave-5
-//! fill the substantive content.
+//! **R3 RED-PHASE landing state** (2026-05-12): empty stub crate plus the
+//! [`plugin_manifest`] module exporting the stub `PluginManifest` type-shape
+//! that Family G + Family F1 + Family F2 depend on. R3 test pins reference
+//! symbols that DON'T EXIST YET — they compile-but-fail at the `use` line
+//! (canonical RED-phase per pim-12 §3.6e). G23-A wave-4 + G23-B wave-5 +
+//! G24-D wave-7 fill the substantive content.
 //!
 //! ## Scope (post-R5; for orientation)
 //!
 //! Per Ben D-4F-2 ratification (2026-05-11): this is the 11th workspace crate.
-//! Hosts THREE substantive surfaces:
+//! Hosts FOUR substantive surfaces:
 //!
 //! 1. **`schema_compiler`** (G23-A wave-4) — schema-as-subgraph-of-primitive-typed-field-Nodes
 //!    parser using the RATIFIED VOCABULARY (D-4F-NEW-TYPED-FIELD-NODE-VOCAB):
@@ -32,10 +34,17 @@
 //!    `Renderer` trait abstraction; BrowserRender default impl. TauriRender
 //!    lives in sibling crate `benten-renderer-tauri` per G24-E NEW wave.
 //!
+//! 4. **`plugin_manifest`** (G24-D wave-7) — FULL plugin manifest schema +
+//!    install/uninstall/upgrade lifecycle + plugin library + meta-plugin
+//!    composition per CLAUDE.md #18. R3 has the stub type-shape only.
+//!    G24-D-FP-1 + G24-D-FP-2 add uninstall-cascade + manifest-envelope-
+//!    chain-validation seams. See `docs/PLUGIN-MANIFEST.md`.
+//!
 //! ## Dep direction (D-4F-2 + arch-r1-1 + arch-r1-15)
 //!
 //! - Depends on: `benten-core` (Subgraph + SubgraphSpec + PrimitiveKind +
-//!   Value), `benten-errors` (ErrorCode).
+//!   Value), `benten-errors` (ErrorCode), `benten-id` (Did for peer-DID +
+//!   plugin-DID + user-DID per CLAUDE.md #18 four-identity-concepts model).
 //! - **Must not** depend on: `benten-eval`, `benten-graph`, `benten-engine`
 //!   (preserves arch-1 thinness-test). Pinned by test
 //!   `tests/arch_n_benten_platform_foundation_dep_direction.rs` at R5.
@@ -64,4 +73,11 @@
 //! current RED-PHASE state. Real variants land at G23-A / G23-B with the
 //! canary commit.
 
-#![cfg_attr(not(test), warn(missing_docs))]
+#![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
+
+pub mod plugin_manifest;
+
+pub use plugin_manifest::{
+    CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
+    SharesPolicyDefault, SharesRule, SharesTarget,
+};
