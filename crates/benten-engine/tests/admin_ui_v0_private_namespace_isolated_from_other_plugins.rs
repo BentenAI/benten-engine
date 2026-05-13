@@ -37,7 +37,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-A wires private-namespace isolation end-to-end; un-ignore at G24-A landing. Pin source: r4-triage §2 r4-tc-5 + threat-model §T7 LOAD-BEARING."]
+#[ignore = "DESTINATION-REMAPPED per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: T7 private-namespace isolation end-to-end pin requires the FULL plugin manifest install path + cross-plugin write attempt + per-row recheck at delivery. G24-A landed the substrate module but NOT the cross-plugin install + private-NS structural defense (that lives at G24-D — already on main at f9bd5b1 via batch-2). The substantive end-to-end pin needs the AdminUiV0TestHarness::new() graduation + plugin install + cross-plugin write attempt. Substantive arm lands at phase-4-foundation-backlog §4.14 (G24-B-FP-1 alongside harness graduation). The structural private-NS defense at G24-D + G27-D manifest_scope is already covered by sibling pins g24d_substantive_pipeline.rs::private_namespace_cap_unconditionally_denied_cross_plugin (PASS at HEAD) + g27-d/tests/private_namespace_scope_admits_only_plugin_did_actor.rs (PASS)."]
 fn admin_ui_v0_private_namespace_isolated_from_other_plugins_end_to_end() {
     // G24-A wave wires this. Substantive shape:
     //

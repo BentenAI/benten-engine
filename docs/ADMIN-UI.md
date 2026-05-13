@@ -247,7 +247,7 @@ Phase 4-Foundation G24-A wave-6 canary ships the **engine-substrate arm** of the
 
 | Component | Location | Status |
 |---|---|---|
-| Admin UI v0 module | `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs` | LIVE (300 LOC) |
+| Admin UI v0 module | `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs` | LIVE (524 LOC) |
 | 4-category nav constants (`NAV_CATEGORIES`, `Category`) | same module | LIVE |
 | `build_admin_ui_v0_subgraph` + `build_category_route_subgraph` | same module | LIVE — composes from 12 primitives only |
 | `render_category_content_allow_all` + `render_category_content` | same module | LIVE — `Materializer` trait consumer |
