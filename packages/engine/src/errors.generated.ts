@@ -180,7 +180,6 @@ export const CATALOG_CODES = [
   "E_SCHEMA_VOCAB_REF_TARGET_MISSING",
   "E_SCHEMA_VOCAB_CYCLE_REJECTED",
   "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING",
-  // Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
   "E_PLUGIN_MANIFEST_INVALID",
   "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID",
   "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID",
@@ -2270,129 +2269,6 @@ export class EReservedHandlerNamespace extends BentenError {
   }
 }
 
-// Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
-// Atomic Rust + TS mirror per §3.5g cross-language rule-mirror.
-export class EPluginManifestInvalid extends BentenError {
-  static readonly code = "E_PLUGIN_MANIFEST_INVALID";
-  static readonly fixHint = "Plugin manifest envelope structurally invalid: empty fields, signature length mismatch, or malformed shares-policy. Inspect the validate() failure at the platform-foundation plugin_manifest::validate construction site.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_MANIFEST_INVALID", EPluginManifestInvalid.fixHint, message, context);
-    this.name = "EPluginManifestInvalid";
-  }
-}
-export class EPluginInstallRecordUserSignatureInvalid extends BentenError {
-  static readonly code = "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID";
-  static readonly fixHint = "InstallRecord's user-DID signature did not verify against the consenting user-DID's public key. Catches forged install records. Inspect the install pipeline + user-DID resolution.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID", EPluginInstallRecordUserSignatureInvalid.fixHint, message, context);
-    this.name = "EPluginInstallRecordUserSignatureInvalid";
-  }
-}
-export class EPluginContentPeerSignatureInvalid extends BentenError {
-  static readonly code = "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID";
-  static readonly fixHint = "Plugin content's peer-DID signature did not verify. Catches author forgery / substituted bundles. Receiver-peer should reject install and prompt user for first-install consent with a different author.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID", EPluginContentPeerSignatureInvalid.fixHint, message, context);
-    this.name = "EPluginContentPeerSignatureInvalid";
-  }
-}
-export class EPluginContentPeerKeyRotated extends BentenError {
-  static readonly code = "E_PLUGIN_CONTENT_PEER_KEY_ROTATED";
-  static readonly fixHint = "Plugin content's peer-DID key rotated (matched by RotationLog). Surfaces as a WARNING at install — not hard-reject by default per D-4F-12. Admin UI displays the rotation chain for user review.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_CONTENT_PEER_KEY_ROTATED", EPluginContentPeerKeyRotated.fixHint, message, context);
-    this.name = "EPluginContentPeerKeyRotated";
-  }
-}
-export class EPluginAuthorNotTrusted extends BentenError {
-  static readonly code = "E_PLUGIN_AUTHOR_NOT_TRUSTED";
-  static readonly fixHint = "Plugin author's peer-DID is not in the user's trust-list. Admin UI surfaces first-install consent prompt; user may add author to trust-list or reject install.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_AUTHOR_NOT_TRUSTED", EPluginAuthorNotTrusted.fixHint, message, context);
-    this.name = "EPluginAuthorNotTrusted";
-  }
-}
-export class EPluginInstallConsentRequired extends BentenError {
-  static readonly code = "E_PLUGIN_INSTALL_CONSENT_REQUIRED";
-  static readonly fixHint = "Plugin install attempted without user consent (no InstallRecord signature OR install path bypassed). User-DID must sign an InstallRecord referencing the manifest CID before the plugin enters the library.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_INSTALL_CONSENT_REQUIRED", EPluginInstallConsentRequired.fixHint, message, context);
-    this.name = "EPluginInstallConsentRequired";
-  }
-}
-export class EPluginDelegationOutsideManifestEnvelope extends BentenError {
-  static readonly code = "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE";
-  static readonly fixHint = "Runtime UCAN delegation request fell outside the source plugin's manifest `shares` envelope. The plugin may not delegate this cap to that target. Inspect the source manifest's shares policy.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE", EPluginDelegationOutsideManifestEnvelope.fixHint, message, context);
-    this.name = "EPluginDelegationOutsideManifestEnvelope";
-  }
-}
-export class EPluginPrivateNamespaceDelegationForbidden extends BentenError {
-  static readonly code = "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN";
-  static readonly fixHint = "Cross-plugin delegation of a private-namespace cap (`private:<plugin_did>:*`) — unconditionally denied. Private namespaces never cross plugin boundaries. Re-scope the cap to a sharable namespace.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN", EPluginPrivateNamespaceDelegationForbidden.fixHint, message, context);
-    this.name = "EPluginPrivateNamespaceDelegationForbidden";
-  }
-}
-export class EPluginContentCidMismatch extends BentenError {
-  static readonly code = "E_PLUGIN_CONTENT_CID_MISMATCH";
-  static readonly fixHint = "Plugin content bytes hash does not match the declared content_cid. Catches substitution attacks at receive-time. Re-pull the plugin from a trusted peer.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_CONTENT_CID_MISMATCH", EPluginContentCidMismatch.fixHint, message, context);
-    this.name = "EPluginContentCidMismatch";
-  }
-}
-export class EPluginNewVersionAvailable extends BentenError {
-  static readonly code = "E_PLUGIN_NEW_VERSION_AVAILABLE";
-  static readonly fixHint = "A new version of an installed plugin was discovered (pull-not-push model). This is a HINT, not an error — surfaces to the admin UI as a 'new version available' prompt for user-initiated upgrade.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_NEW_VERSION_AVAILABLE", EPluginNewVersionAvailable.fixHint, message, context);
-    this.name = "EPluginNewVersionAvailable";
-  }
-}
-export class EPluginHeterogeneityIncompatible extends BentenError {
-  static readonly code = "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE";
-  static readonly fixHint = "Plugin requires `host:sandbox:exec` but the installing peer is a thin-compute-surface (browser / edge / Tauri webview per CLAUDE.md #17). Install on a full-peer device instead.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_HETEROGENEITY_INCOMPATIBLE", EPluginHeterogeneityIncompatible.fixHint, message, context);
-    this.name = "EPluginHeterogeneityIncompatible";
-  }
-}
-export class EPluginMetaCompositionCycleRejected extends BentenError {
-  static readonly code = "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED";
-  static readonly fixHint = "Meta-plugin composition graph contains a cycle. Detected at install time; rejected to prevent infinite recursion at evaluator walk.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED", EPluginMetaCompositionCycleRejected.fixHint, message, context);
-    this.name = "EPluginMetaCompositionCycleRejected";
-  }
-}
-export class EPluginDeviceAttestationForged extends BentenError {
-  static readonly code = "E_PLUGIN_DEVICE_ATTESTATION_FORGED";
-  static readonly fixHint = "Device-DID attestation envelope failed verification at the plugin-share boundary. Plugin authors share from full peers with valid device-DIDs; this code surfaces forged envelopes during cross-peer share.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_DEVICE_ATTESTATION_FORGED", EPluginDeviceAttestationForged.fixHint, message, context);
-    this.name = "EPluginDeviceAttestationForged";
-  }
-}
-export class EPluginLibraryIndexTamper extends BentenError {
-  static readonly code = "E_PLUGIN_LIBRARY_INDEX_TAMPER";
-  static readonly fixHint = "Plugin library index tampering detected: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_LIBRARY_INDEX_TAMPER", EPluginLibraryIndexTamper.fixHint, message, context);
-    this.name = "EPluginLibraryIndexTamper";
-  }
-}
-export class ERegistryDiscoveryTimeout extends BentenError {
-  static readonly code = "E_REGISTRY_DISCOVERY_TIMEOUT";
-  static readonly fixHint = "Decentralized registry discovery query timed out before any peer responded. Reserved at Phase 4-Foundation; first firing at Phase 4-Meta when registry-substrate lands.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_REGISTRY_DISCOVERY_TIMEOUT", ERegistryDiscoveryTimeout.fixHint, message, context);
-    this.name = "ERegistryDiscoveryTimeout";
-  }
-}
-
 /**
  * E_SCHEMA_VALIDATION_FAILED
  *
@@ -2525,6 +2401,231 @@ export class ESchemaVocabRequiredPropertyMissing extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING", "Supply the missing property. Note: `scope` is schema-DERIVED (synthesized by the compiler from field path per sec-3.5-r1-4), NOT user-supplied — if a user-supplied `scope` is detected, the compiler discards it and synthesizes its own. The 4 mandatory properties form the irreducible per-field metadata budget.", message, context);
     this.name = "ESchemaVocabRequiredPropertyMissing";
+  }
+}
+
+/**
+ * E_PLUGIN_MANIFEST_INVALID
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::validate`.
+ * Message template: "plugin manifest envelope structurally invalid (empty fields, signature length mismatch, malformed shares-policy)"
+ */
+export class EPluginManifestInvalid extends BentenError {
+  static readonly code = "E_PLUGIN_MANIFEST_INVALID";
+  static readonly fixHint = "Inspect the `PluginManifest::validate` failure: `plugin_name` non-empty, `peer_signature` is 64 bytes (Ed25519 detached), `requires` non-empty, `shares.default == Matching` implies non-empty `rules`, per-requirement `scope` non-empty.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_MANIFEST_INVALID", "Inspect the `PluginManifest::validate` failure: `plugin_name` non-empty, `peer_signature` is 64 bytes (Ed25519 detached), `requires` non-empty, `shares.default == Matching` implies non-empty `rules`, per-requirement `scope` non-empty.", message, context);
+    this.name = "EPluginManifestInvalid";
+  }
+}
+
+/**
+ * E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature`.
+ * Message template: "install record's user-DID signature did not verify against the consenting user-DID's public key"
+ */
+export class EPluginInstallRecordUserSignatureInvalid extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID";
+  static readonly fixHint = "Catches forged install records (user-DID is the trust anchor per CLAUDE.md #18 Layer 1). Re-mint via the install signing path.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID", "Catches forged install records (user-DID is the trust anchor per CLAUDE.md #18 Layer 1). Re-mint via the install signing path.", message, context);
+    this.name = "EPluginInstallRecordUserSignatureInvalid";
+  }
+}
+
+/**
+ * E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_peer_signature`.
+ * Message template: "plugin content peer-DID signature did not verify against declared peer-DID"
+ */
+export class EPluginContentPeerSignatureInvalid extends BentenError {
+  static readonly code = "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID";
+  static readonly fixHint = "Receiver-peer rejects substituted bundles or forged peer-DID signatures (CLAUDE.md #18 Layer 2 provenance). Re-pull from a trusted peer.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID", "Receiver-peer rejects substituted bundles or forged peer-DID signatures (CLAUDE.md #18 Layer 2 provenance). Re-pull from a trusted peer.", message, context);
+    this.name = "EPluginContentPeerSignatureInvalid";
+  }
+}
+
+/**
+ * E_PLUGIN_CONTENT_PEER_KEY_ROTATED
+ *
+ * Thrown at: install pipeline at `crates/benten-platform-foundation/src/module_ecosystem.rs` + `benten-id::did_rotation::RotationLog` consultation.
+ * Message template: "plugin content peer-DID key rotated (matched by RotationLog)"
+ */
+export class EPluginContentPeerKeyRotated extends BentenError {
+  static readonly code = "E_PLUGIN_CONTENT_PEER_KEY_ROTATED";
+  static readonly fixHint = "Surfaces as WARNING at install (not hard-reject by default per D-4F-12). Admin UI displays the rotation chain; user may proceed or decline.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_CONTENT_PEER_KEY_ROTATED", "Surfaces as WARNING at install (not hard-reject by default per D-4F-12). Admin UI displays the rotation chain; user may proceed or decline.", message, context);
+    this.name = "EPluginContentPeerKeyRotated";
+  }
+}
+
+/**
+ * E_PLUGIN_AUTHOR_NOT_TRUSTED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/module_ecosystem.rs::check_author_trust` + upgrade-author-continuity check.
+ * Message template: "plugin author peer-DID is not in the user's trust-list and no first-install consent has been recorded"
+ */
+export class EPluginAuthorNotTrusted extends BentenError {
+  static readonly code = "E_PLUGIN_AUTHOR_NOT_TRUSTED";
+  static readonly fixHint = "Admin UI surfaces first-install consent prompt; user may add author to trust-list or reject install.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_AUTHOR_NOT_TRUSTED", "Admin UI surfaces first-install consent prompt; user may add author to trust-list or reject install.", message, context);
+    this.name = "EPluginAuthorNotTrusted";
+  }
+}
+
+/**
+ * E_PLUGIN_INSTALL_CONSENT_REQUIRED
+ *
+ * Thrown at: install pipeline Layer 1 gate at `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin`.
+ * Message template: "plugin install attempted without user consent (missing or unverified InstallRecord)"
+ */
+export class EPluginInstallConsentRequired extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_CONSENT_REQUIRED";
+  static readonly fixHint = "User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_CONSENT_REQUIRED", "User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.", message, context);
+    this.name = "EPluginInstallConsentRequired";
+  }
+}
+
+/**
+ * E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
+ *
+ * Thrown at: `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
+ * Message template: "runtime UCAN delegation request fell outside the source plugin's manifest `shares` envelope"
+ */
+export class EPluginDelegationOutsideManifestEnvelope extends BentenError {
+  static readonly code = "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE";
+  static readonly fixHint = "The source plugin's manifest did not authorize delegation of this cap to this target. Inspect the source plugin's `shares` policy + the target plugin-DID.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE", "The source plugin's manifest did not authorize delegation of this cap to this target. Inspect the source plugin's `shares` policy + the target plugin-DID.", message, context);
+    this.name = "EPluginDelegationOutsideManifestEnvelope";
+  }
+}
+
+/**
+ * E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN
+ *
+ * Thrown at: `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
+ * Message template: "cross-plugin delegation of a private-namespace cap (`private:<plugin_did>:*`) is unconditionally denied"
+ */
+export class EPluginPrivateNamespaceDelegationForbidden extends BentenError {
+  static readonly code = "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN";
+  static readonly fixHint = "Private-namespace caps are sovereign to the owning plugin — never delegable cross-plugin regardless of `shares` policy. Re-scope to a sharable namespace if cross-plugin access is intended.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN", "Private-namespace caps are sovereign to the owning plugin — never delegable cross-plugin regardless of `shares` policy. Re-scope to a sharable namespace if cross-plugin access is intended.", message, context);
+    this.name = "EPluginPrivateNamespaceDelegationForbidden";
+  }
+}
+
+/**
+ * E_PLUGIN_CONTENT_CID_MISMATCH
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_content_cid_matches` + install pipeline.
+ * Message template: "plugin content bytes hash does not match the declared content_cid"
+ */
+export class EPluginContentCidMismatch extends BentenError {
+  static readonly code = "E_PLUGIN_CONTENT_CID_MISMATCH";
+  static readonly fixHint = "Catches substitution attacks at receive-time. Receiver re-pulls plugin from a trusted peer.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_CONTENT_CID_MISMATCH", "Catches substitution attacks at receive-time. Receiver re-pulls plugin from a trusted peer.", message, context);
+    this.name = "EPluginContentCidMismatch";
+  }
+}
+
+/**
+ * E_PLUGIN_NEW_VERSION_AVAILABLE
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/module_ecosystem.rs::new_version_available_code`.
+ * Message template: "a new version of an installed plugin was discovered (pull-not-push notification)"
+ */
+export class EPluginNewVersionAvailable extends BentenError {
+  static readonly code = "E_PLUGIN_NEW_VERSION_AVAILABLE";
+  static readonly fixHint = "HINT, not an error — pull-not-push model per plugin-arch-r1-13. Admin UI surfaces \"new version available\" prompt for user-initiated upgrade.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_NEW_VERSION_AVAILABLE", "HINT, not an error — pull-not-push model per plugin-arch-r1-13. Admin UI surfaces \"new version available\" prompt for user-initiated upgrade.", message, context);
+    this.name = "EPluginNewVersionAvailable";
+  }
+}
+
+/**
+ * E_PLUGIN_HETEROGENEITY_INCOMPATIBLE
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin` heterogeneity check.
+ * Message template: "plugin requires `host:sandbox:exec` but installing peer is a thin-compute-surface"
+ */
+export class EPluginHeterogeneityIncompatible extends BentenError {
+  static readonly code = "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE";
+  static readonly fixHint = "Per CLAUDE.md #17 heterogeneity contract: SANDBOX is full-peer-only. Install on a full-peer device (laptop / phone OS app / desktop); thin-clients (browser / edge / Tauri webview) cannot host SANDBOX-using plugins.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_HETEROGENEITY_INCOMPATIBLE", "Per CLAUDE.md #17 heterogeneity contract: SANDBOX is full-peer-only. Install on a full-peer device (laptop / phone OS app / desktop); thin-clients (browser / edge / Tauri webview) cannot host SANDBOX-using plugins.", message, context);
+    this.name = "EPluginHeterogeneityIncompatible";
+  }
+}
+
+/**
+ * E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_manifest.rs::detect_composition_cycle`.
+ * Message template: "meta-plugin composition graph contains a cycle"
+ */
+export class EPluginMetaCompositionCycleRejected extends BentenError {
+  static readonly code = "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED";
+  static readonly fixHint = "Install-time cycle detection over `composes_plugins` references. Cycles would cause infinite recursion at evaluator walk; rejected as install policy.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED", "Install-time cycle detection over `composes_plugins` references. Cycles would cause infinite recursion at evaluator walk; rejected as install policy.", message, context);
+    this.name = "EPluginMetaCompositionCycleRejected";
+  }
+}
+
+/**
+ * E_PLUGIN_DEVICE_ATTESTATION_FORGED
+ *
+ * Thrown at: plugin-share path in `benten-sync` consulting `benten-id::device_attestation::Acceptor`.
+ * Message template: "device-DID attestation envelope failed verification at the plugin-share boundary"
+ */
+export class EPluginDeviceAttestationForged extends BentenError {
+  static readonly code = "E_PLUGIN_DEVICE_ATTESTATION_FORGED";
+  static readonly fixHint = "Renamed from earlier `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE` per Ben's R4-triage §7 ratification (keeps `E_PLUGIN_*` family prefix). Plugin authors share from full peers with valid device-DIDs; this code surfaces forged device-attestation envelopes during cross-peer share, distinct from the existing Phase-3 sync-layer `E_DEVICE_ATTESTATION_FORGED`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_DEVICE_ATTESTATION_FORGED", "Renamed from earlier `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE` per Ben's R4-triage §7 ratification (keeps `E_PLUGIN_*` family prefix). Plugin authors share from full peers with valid device-DIDs; this code surfaces forged device-attestation envelopes during cross-peer share, distinct from the existing Phase-3 sync-layer `E_DEVICE_ATTESTATION_FORGED`.", message, context);
+    this.name = "EPluginDeviceAttestationForged";
+  }
+}
+
+/**
+ * E_PLUGIN_LIBRARY_INDEX_TAMPER
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_library.rs` integrity checks.
+ * Message template: "plugin library index tampering detected"
+ */
+export class EPluginLibraryIndexTamper extends BentenError {
+  static readonly code = "E_PLUGIN_LIBRARY_INDEX_TAMPER";
+  static readonly fixHint = "Integrity check fired: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage / re-sync from trusted peer.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_LIBRARY_INDEX_TAMPER", "Integrity check fired: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage / re-sync from trusted peer.", message, context);
+    this.name = "EPluginLibraryIndexTamper";
+  }
+}
+
+/**
+ * E_REGISTRY_DISCOVERY_TIMEOUT
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
+ * Message template: "decentralized registry discovery query timed out before any peer responded"
+ */
+export class ERegistryDiscoveryTimeout extends BentenError {
+  static readonly code = "E_REGISTRY_DISCOVERY_TIMEOUT";
+  static readonly fixHint = "**Reserved at Phase 4-Foundation; first production firing at Phase 4-Meta** when registry-substrate lands per ratification #3. Phase 4-Foundation v0 uses direct content-addressed-share over Atriums (no registry).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_REGISTRY_DISCOVERY_TIMEOUT", "**Reserved at Phase 4-Foundation; first production firing at Phase 4-Meta** when registry-substrate lands per ratification #3. Phase 4-Foundation v0 uses direct content-addressed-share over Atriums (no registry).", message, context);
+    this.name = "ERegistryDiscoveryTimeout";
   }
 }
 
@@ -2684,7 +2785,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_SCHEMA_VOCAB_REF_TARGET_MISSING": ESchemaVocabRefTargetMissing,
   "E_SCHEMA_VOCAB_CYCLE_REJECTED": ESchemaVocabCycleRejected,
   "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING": ESchemaVocabRequiredPropertyMissing,
-  // Phase 4-Foundation G24-D — FULL plugin manifest (15 codes).
   "E_PLUGIN_MANIFEST_INVALID": EPluginManifestInvalid,
   "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID": EPluginInstallRecordUserSignatureInvalid,
   "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID": EPluginContentPeerSignatureInvalid,
