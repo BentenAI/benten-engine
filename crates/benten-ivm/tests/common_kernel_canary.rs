@@ -299,17 +299,27 @@ pub fn register_and_walk_to_completion(
     })
 }
 
-/// Assertion helper Family C round-trip pins call to verify the canary
-/// output matches the corresponding hand-written view's output for the
-/// same write sequence. The RIGHT-hand side is computed via
-/// [`handwritten_baseline_via_register_g15a`] (the G15-A
-/// `Algorithm::register` API path which drives the SAME hand-written
-/// inner kernel for canonical view ids); the LEFT-hand side is the
-/// G23-0a `Algorithm::register_subgraph(SubgraphSpec)` path.
+/// Assertion helper Family C round-trip pins call to verify the
+/// SubgraphSpec input path constructs an equivalent wrapper to the G15-A
+/// `Algorithm::register` triple input path for canonical view ids. The
+/// RIGHT-hand side is computed via
+/// [`algorithm_register_baseline_via_g15a_path`] (the G15-A
+/// `Algorithm::register` API path); the LEFT-hand side is the G23-0a
+/// `Algorithm::register_subgraph(SubgraphSpec)` path.
 ///
-/// Drift between the two paths surfaces as a byte-inequality assertion
-/// failure.
-pub fn assert_round_trip_equivalent_to_handwritten(
+/// **Substance per G23-0b mr-1:** what this asserts is *wrapper-
+/// construction-equivalence* (the two API surfaces produce the same
+/// `AlgorithmBView` wrapper + same inner-kernel handle) — NOT
+/// inner-kernel-read byte-equivalence. The wrapper's `walk_observable`
+/// is the observable; the inner kernel's `read` emission shape is NOT
+/// exercised here. Inner-kernel-read equivalence is asserted at G24-A
+/// when the materializer pipeline wires the inner-read seam (RED-PHASE
+/// pin: `inner_kernel_read_equivalence_post_subgraph_spec_round_trip.rs`).
+///
+/// Drift between the two API surfaces (e.g., SubgraphSpec input shape
+/// diverging from G15-A triple input shape under canonical view ids)
+/// surfaces as a byte-inequality at the wrapper's `walk_observable`.
+pub fn assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path(
     spec: &CanarySubgraphSpec,
     writes: &[KernelInput],
     _expected_handwritten_output_placeholder: &KernelOutput,
@@ -320,9 +330,9 @@ pub fn assert_round_trip_equivalent_to_handwritten(
             spec.view_id
         )
     });
-    let baseline = handwritten_baseline_via_register_g15a(spec, writes).unwrap_or_else(|e| {
+    let baseline = algorithm_register_baseline_via_g15a_path(spec, writes).unwrap_or_else(|e| {
         panic!(
-            "handwritten_baseline_via_register_g15a failed for `{}`: {e}",
+            "algorithm_register_baseline_via_g15a_path failed for `{}`: {e}",
             spec.view_id
         )
     });
@@ -345,5 +355,5 @@ fn _assert_canary_signatures_compile() {
     let _: fn(&CanarySubgraphSpec, &[KernelInput]) -> Result<KernelOutput, String> =
         register_and_walk_to_completion;
     let _: fn(&CanarySubgraphSpec, &[KernelInput], &KernelOutput) =
-        assert_round_trip_equivalent_to_handwritten;
+        assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path;
 }

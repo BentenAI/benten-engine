@@ -33,7 +33,8 @@
 
 mod common_kernel_canary;
 use common_kernel_canary::{
-    CanarySubgraphSpec, KernelInput, KernelOutput, assert_round_trip_equivalent_to_handwritten,
+    CanarySubgraphSpec, KernelInput, KernelOutput,
+    assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path,
     register_and_walk_to_completion,
 };
 
@@ -69,7 +70,9 @@ fn view_3_content_listing_subgraph_spec_round_trip_matches_handwritten() {
     ];
 
     let expected = handwritten_baseline_for_writes(&writes);
-    assert_round_trip_equivalent_to_handwritten(&spec, &writes, &expected);
+    assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path(
+        &spec, &writes, &expected,
+    );
 }
 
 #[test]
@@ -110,5 +113,9 @@ fn view_3_subgraph_spec_sort_discipline_preserved() {
         KernelInput::new("post", 200, 2),
     ];
     let expected = handwritten_baseline_for_writes(&out_of_order);
-    assert_round_trip_equivalent_to_handwritten(&spec, &out_of_order, &expected);
+    assert_subgraph_spec_path_construction_equivalent_to_g15a_register_path(
+        &spec,
+        &out_of_order,
+        &expected,
+    );
 }
