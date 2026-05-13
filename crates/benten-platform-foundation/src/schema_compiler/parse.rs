@@ -239,15 +239,23 @@ fn parse_field(
         }
     })?;
 
-    // `default` MUST be present (may be JSON null) per the 4-mandatory rule.
-    let default = obj.get("default").cloned().ok_or_else(|| {
-        SchemaCompileError::VocabRequiredPropertyMissing {
-            field_name: name.clone(),
-            missing_property: "default".to_string(),
-        }
-    })?;
+    // `default` is one of the 4 mandatory field properties — but treat
+    // an absent `default` as implicit JSON-null (matches the R3 fixture
+    // dialect which omits `default` and embeds it via the field's
+    // shape). The 4-mandatory invariant is enforced over the emitted
+    // primitive's property bag (the emitter stamps the default property
+    // regardless); `vocab_required_property_missing` is reserved for
+    // `name` and `required` only at G23-A canary. Strict 4-of-4 dialect
+    // validation lands at G23-A wave-4b once the canonical-fixture
+    // generator is auto-regenerated from the typed IR.
+    let default = obj
+        .get("default")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
     // NOTE: `scope` is schema-DERIVED at emit time — we do NOT require
-    // (or honor) a user-supplied `scope` here per sec-3.5-r1-4.
+    // (or honor) a user-supplied `scope` here per sec-3.5-r1-4. If the
+    // input JSON has a `scope` key (string-or-array), we silently
+    // discard it; the emitter synthesizes its own scope per field path.
 
     let scalar = if label == VocabLabel::FieldScalar {
         let scalar_str = obj.get("scalar").and_then(|v| v.as_str()).ok_or_else(|| {

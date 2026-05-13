@@ -16,28 +16,28 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    schema-emitted SubgraphSpec primitives must carry derived cap-scope annotations \
-    (NOT user-supplied) per sec-3.5-r1-4. Closes r2 §2.4 row 3."]
 fn schema_compiler_emits_subgraph_with_cap_scope_annotations_per_primitive_node() {
-    // G23-A implementer wires this:
-    //
-    //   use benten_platform_foundation::schema_compiler::compile;
-    //
-    //   let bytes = schema_fixtures::canonical_note_type_schema_bytes();
-    //   let spec = compile(bytes).unwrap();
-    //
-    //   // Every emitted primitive MUST carry a cap-scope annotation (the
-    //   // derived-from-schema scope; e.g. `read:note` for a Note FieldScalar
-    //   // walk). Annotation discovery API at R5; pattern is
-    //   // `PrimitiveSpec::cap_scope() -> Option<&CapScope>`.
-    //   for p in spec.primitives() {
-    //       let scope = p.cap_scope();
-    //       assert!(scope.is_some(),
-    //           "every emitted primitive must carry derived cap-scope \
-    //            annotation per sec-3.5-r1-4; primitive {:?} has none", p);
-    //   }
-    let _ = schema_fixtures::canonical_note_type_schema_bytes();
-    unimplemented!("G23-A wave-4 wires cap-scope annotation pin per sec-3.5-r1-4");
+    use benten_platform_foundation::schema_compiler::compile;
+
+    let bytes = schema_fixtures::canonical_note_type_schema_bytes();
+    let spec = compile(bytes).unwrap();
+
+    for p in spec.primitives() {
+        let scope = p.cap_scope();
+        assert!(
+            scope.is_some(),
+            "every emitted primitive must carry derived cap-scope annotation per \
+             sec-3.5-r1-4; primitive {:?} has none",
+            p.id
+        );
+        let s = scope.unwrap();
+        // Sanity: schema-derived scopes are prefixed by `<action>:<SchemaName>`.
+        assert!(
+            s.contains(":Note"),
+            "cap-scope `{s}` must be schema-derived (contain `:Note`); \
+             user-supplied `scope` array from fixture MUST be discarded per sec-3.5-r1-4"
+        );
+    }
 }

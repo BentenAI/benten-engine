@@ -18,10 +18,8 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+// Un-ignored at G23-A wave-4 (2026-05-12 canary).
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family D; G23-A wave-4 un-ignores) — \
-    8-label vocab composability over 12 primitives requires schema_compiler. \
-    cag-r1-1 + D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Closes r2 §2.4 row 9."]
 fn schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension() {
     // G23-A implementer wires this:
     //
@@ -56,11 +54,62 @@ fn schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension() 
     //       }
     //   }
     //
-    // Compile-time canary on vocab constants: ensures fixtures naming the
-    // 8 labels stays in sync with the post-R5 schema_compiler vocab.
+    use benten_core::PrimitiveKind;
+    use benten_platform_foundation::schema_compiler::compile;
+
+    // Vocab constants cross-check (R3 helper-side mirror of the
+    // post-R5 schema_compiler vocab; the fixture helper carries the
+    // expected lengths so a drift on either side surfaces immediately).
     assert_eq!(schema_fixtures::VOCAB_LABELS.len(), 8);
     assert_eq!(schema_fixtures::VOCAB_EDGES.len(), 6);
     assert_eq!(schema_fixtures::VOCAB_SCALARS.len(), 8);
     assert_eq!(schema_fixtures::VOCAB_FIELD_PROPS.len(), 4);
-    unimplemented!("G23-A wave-4 wires per-label compositional coverage assertion");
+
+    let allowed: std::collections::HashSet<PrimitiveKind> = [
+        PrimitiveKind::Read,
+        PrimitiveKind::Write,
+        PrimitiveKind::Transform,
+        PrimitiveKind::Branch,
+        PrimitiveKind::Iterate,
+        PrimitiveKind::Wait,
+        PrimitiveKind::Call,
+        PrimitiveKind::Respond,
+        PrimitiveKind::Emit,
+        PrimitiveKind::Sandbox,
+        PrimitiveKind::Subscribe,
+        PrimitiveKind::Stream,
+    ]
+    .into_iter()
+    .collect();
+
+    // Per-fixture compositional coverage. The G23-A canary supplies
+    // canonical / minimal / benign fixtures exercising
+    // SchemaRoot+FieldScalar+FieldList+FieldRef. FieldObject /
+    // FieldMap / FieldEnum / FieldUnion per-label coverage lands at
+    // G23-A wave-4b (per-label fixtures); at canary we exercise the
+    // 4 labels the existing fixtures touch and assert no non-canonical
+    // primitive emerges.
+    let fixtures: Vec<(&str, &[u8])> = vec![
+        ("SchemaRoot/FieldScalar", schema_fixtures::minimal_schema_bytes()),
+        (
+            "SchemaRoot/FieldScalar/FieldList",
+            schema_fixtures::benign_schema_round_trip_bytes(),
+        ),
+        (
+            "SchemaRoot/FieldScalar/FieldRef",
+            schema_fixtures::canonical_note_type_schema_bytes(),
+        ),
+    ];
+
+    for (label_path, bytes) in fixtures {
+        let spec = compile(bytes).unwrap_or_else(|e| panic!("{label_path} fixture: {e}"));
+        for p in spec.primitives() {
+            assert!(
+                allowed.contains(&p.kind()),
+                "label-path `{label_path}` compiled to non-canonical primitive `{:?}` — \
+                 12-primitive irreducibility violation (CLAUDE.md baked-in #1)",
+                p.kind()
+            );
+        }
+    }
 }
