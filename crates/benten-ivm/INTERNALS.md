@@ -611,12 +611,14 @@ boundary.
 
 ### 7.4 Generality gap for Algorithm B — projections are placeholder
 
-`Projection::AllProps` is the only variant. The kernel applies the
-identity transform on every matched Node. Real projections (a `Computed`
-variant carrying a small expression tree; a `PropSubset` variant carrying
-a property allow-list; a `Reshape` variant for emitting non-Node
-structures) lift later. This is named in the docstring on `Projection` —
-"future shape narrowing lifts to a richer enum without breaking the
+`Projection` is a unit struct at G23-0b (the pre-G23-0b `AllProps` enum
+variant placeholder was removed per CRATES-DEEP-DIVE §4 closure). The
+kernel applies the identity transform on every matched Node. Real
+projections (a `Computed` variant carrying a small expression tree; a
+`PropSubset` variant carrying a property allow-list; a `Reshape` variant
+for emitting non-Node structures) lift later. This is named in the
+docstring on `Projection` — "future shape narrowing lifts to enum form
+without breaking the
 kernel surface". The current shape is fine as a placeholder because the 5
 canonical views all have their own bespoke projection logic in the
 hand-written kernels (View 4 emits `Rules`, View 5 emits `Current`),
@@ -721,7 +723,7 @@ stale-with-last-known-good is exactly the contract a render layer wants
 ("on failure, show the last good page"). Subscriber fan-out gives
 multi-view composition for free.
 
-Cons: `Projection::AllProps` is the only variant — real schema-driven
+Cons: `Projection` is a unit struct post-G23-0b — real schema-driven
 projections (joins across labels, edge-traversal-keyed views, computed
 fields, reshape to non-Node output) ALL need `Projection` to be a much
 richer enum than today. This is named in §7.4 above; the materializer
@@ -771,8 +773,8 @@ the view's pre-materialized index).
 
 The IVM crate is well-positioned to be a building block of the
 materializer (sketch A's incremental-index half) but the Phase 4
-materializer scope clearly exceeds what `Projection::AllProps`
-expresses. Whether the materializer LIVES as an extension to this crate
+materializer scope clearly exceeds what the unit-struct `Projection`
+identity-only shape expresses. Whether the materializer LIVES as an extension to this crate
 (views grow more expressive projections) or as a SIBLING subscriber
 (new crate, parallel to `benten-ivm`) is a real fork that hasn't been
 codified anywhere in the docs or memory.

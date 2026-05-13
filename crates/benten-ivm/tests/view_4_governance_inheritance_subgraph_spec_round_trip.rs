@@ -60,7 +60,7 @@ fn handwritten_baseline_for_writes(writes: &[KernelInput]) -> KernelOutput {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_4_governance_inheritance_subgraph_spec_round_trip_matches_handwritten() {
     let spec = CanarySubgraphSpec::for_canonical_view("governance_inheritance");
     assert!(spec.is_canonical, "governance_inheritance is canonical");
@@ -73,9 +73,9 @@ fn view_4_governance_inheritance_subgraph_spec_round_trip_matches_handwritten() 
     );
 
     let writes = vec![
-        KernelInput::new("Community", 100, 0),
-        KernelInput::new("Community", 200, 1),
-        KernelInput::new("GovernedBy", 300, 2),
+        KernelInput::new("system:GovernanceInheritance", 100, 0),
+        KernelInput::new("system:GovernanceInheritance", 200, 1),
+        KernelInput::new("system:GovernanceInheritance", 300, 2),
     ];
 
     let expected = handwritten_baseline_for_writes(&writes);
@@ -83,14 +83,14 @@ fn view_4_governance_inheritance_subgraph_spec_round_trip_matches_handwritten() 
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_4_subgraph_spec_emits_rules_not_rows_or_current() {
     // mat-r1-1 LOAD-BEARING: View 4 MUST route to the typed-output
     // Rules path, NOT to the default Rows path. A no-op re-expression
     // that defaults all canonical views to Rows fails this gate.
     let spec = CanarySubgraphSpec::for_canonical_view("governance_inheritance");
 
-    let writes = vec![KernelInput::new("Community", 1, 0)];
+    let writes = vec![KernelInput::new("system:GovernanceInheritance", 1, 0)];
     let output = register_and_walk_to_completion(&spec, &writes).expect("walk ok");
 
     match output {
@@ -109,14 +109,14 @@ fn view_4_subgraph_spec_emits_rules_not_rows_or_current() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_4_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
     let spec = CanarySubgraphSpec::for_canonical_view("governance_inheritance");
 
     let empty: Vec<KernelInput> = Vec::new();
     let populated = vec![
-        KernelInput::new("Community", 100, 0),
-        KernelInput::new("GovernedBy", 200, 1),
+        KernelInput::new("system:GovernanceInheritance", 100, 0),
+        KernelInput::new("system:GovernanceInheritance", 200, 1),
     ];
 
     let empty_output = register_and_walk_to_completion(&spec, &empty).expect("empty walk ok");

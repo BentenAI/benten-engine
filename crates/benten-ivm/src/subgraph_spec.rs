@@ -75,10 +75,10 @@ pub const CANONICAL_VIEW_IDS: &[&str] = &[
 
 /// Typed-output projection shapes that View 4 (governance_inheritance) +
 /// View 5 (version_current) carry. Per `mat-r1-1` the typed-output shape
-/// is distinct from `Projection::AllProps` (which Family C's
-/// `projection_all_props_placeholder_removed_no_remaining_references` pin
-/// verifies is removed post-G23-0b — out of G23-0a scope, named for
-/// future-shape stability).
+/// supersedes the pre-G23-0b identity-projection placeholder (the
+/// `Projection` placeholder variant was removed at G23-0b per CRATES-DEEP-DIVE
+/// §4; Family C's `projection_all_props_placeholder_removed_no_remaining_references`
+/// pin guards the removal).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedOutputProjection {
     /// View 4 emits rule sets (a map of governance-rules, not Cids).
@@ -113,14 +113,18 @@ pub struct SubgraphSpec {
     /// invariant per `r6-r3-ivm-1`); user views may also use
     /// `LabelPattern::AnchorPrefix`.
     pub label_pattern: LabelPattern,
-    /// Output projection. G23-0a ships `Projection::AllProps` only;
-    /// G23-0b's typed-output shapes (View 4 Rules + View 5 Current)
-    /// thread through a separate [`SubgraphSpec::typed_output_projection`]
-    /// field per mat-r1-1.
+    /// Output projection. G23-0b ships the identity projection only;
+    /// View 4 Rules + View 5 Current typed-output shapes are declared
+    /// separately via [`SubgraphSpec::typed_output_projection`] per
+    /// mat-r1-1.
     pub projection: Projection,
     /// Typed-output projection for views 4 + 5 (Rules / Current).
     /// `None` for views 1/2/3 + user-defined views (which emit row-set
-    /// output via the row-keyed `Projection::AllProps` path).
+    /// output via the row-keyed identity-projection path). Wired at
+    /// `register_subgraph` time to the inner kernel's `ViewResult`
+    /// variant — a declared typed-output projection that does NOT match
+    /// the inner kernel's actual variant is a programmer error (caught
+    /// at materialisation via fail-loud per g23-0a-mr-3).
     pub typed_output_projection: Option<TypedOutputProjection>,
     /// Self-reference flag — set when the SubgraphSpec body would
     /// reference itself transitively. Inspected at register-time per

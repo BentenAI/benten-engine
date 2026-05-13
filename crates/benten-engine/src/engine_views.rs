@@ -879,6 +879,28 @@ impl Engine {
                             got_label: "<self-referential SubgraphSpec>".to_string(),
                         });
                     }
+                    Err(benten_ivm::AlgorithmError::TypedOutputProjectionMismatch {
+                        view_id,
+                        declared,
+                        required,
+                    }) => {
+                        // G23-0b mat-r1-1 defense-in-depth — register_user_view
+                        // routes through `Algorithm::register` not
+                        // `register_subgraph`, so a TypedOutputProjectionMismatch
+                        // can never reach this match arm via this code path
+                        // (the typed-output declaration is a SubgraphSpec field,
+                        // and `Algorithm::register` derives the projection
+                        // canonically from view_id). The arm exists for
+                        // exhaustivity; surfaces through `E_VIEW_LABEL_MISMATCH`
+                        // since the closest semantic on the engine boundary
+                        // is "registration declaration disagrees with the
+                        // canonical kernel's shape".
+                        return Err(EngineError::ViewLabelMismatch {
+                            view_id,
+                            expected_label: format!("typed_output_projection={required:?}"),
+                            got_label: format!("typed_output_projection={declared:?}"),
+                        });
+                    }
                 }
             }
         }

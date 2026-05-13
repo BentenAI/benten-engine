@@ -53,7 +53,7 @@ fn handwritten_baseline_for_writes(writes: &[KernelInput]) -> KernelOutput {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_3_content_listing_subgraph_spec_round_trip_matches_handwritten() {
     let spec = CanarySubgraphSpec::for_canonical_view("content_listing");
     assert!(spec.is_canonical, "content_listing is canonical");
@@ -73,7 +73,7 @@ fn view_3_content_listing_subgraph_spec_round_trip_matches_handwritten() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_3_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
     let spec = CanarySubgraphSpec::for_canonical_view("content_listing");
 
@@ -95,7 +95,7 @@ fn view_3_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_3_subgraph_spec_sort_discipline_preserved() {
     // Insert OUT-OF-ORDER by created_at; round-trip must still produce
     // the SAME bytes as the hand-written view, which sorts on

@@ -67,7 +67,7 @@ use common_kernel_canary::{
 const VIEW_5_PROJECTION_FIELDS: usize = 3;
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_typed_output_projection_declares_current_variant() {
     // First-line shape gate: the canary spec for View 5 MUST declare
     // TypedOutputProjection::Current. A re-expression that drops the
@@ -86,7 +86,7 @@ fn view_5_typed_output_projection_declares_current_variant() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_typed_output_projection_emits_current_kernel_output() {
     // Walk-time shape gate: the materialised KernelOutput MUST be
     // Current(_), not Rows / Rules. Pairs with the round-trip pin
@@ -134,7 +134,7 @@ fn view_5_typed_output_projection_emits_current_kernel_output() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_typed_output_projection_option_pointer_distinguishes_none_vs_some() {
     // Option-pointer arm: Current(None) (no version yet) MUST be
     // observably distinct from Current(Some(empty_bytes)) (degenerate
@@ -158,7 +158,7 @@ fn view_5_typed_output_projection_option_pointer_distinguishes_none_vs_some() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_5_typed_output_projection_field_cardinality_pinned() {
     // Cardinality drift gate: the canonical 3-tuple shape (anchor_cid,
     // current_version_cid, current_version_index) is part of the

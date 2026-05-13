@@ -50,7 +50,7 @@ fn handwritten_baseline_for_writes(writes: &[KernelInput]) -> KernelOutput {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_2_event_dispatch_subgraph_spec_round_trip_matches_handwritten() {
     let spec = CanarySubgraphSpec::for_canonical_view("event_dispatch");
     assert!(
@@ -64,8 +64,8 @@ fn view_2_event_dispatch_subgraph_spec_round_trip_matches_handwritten() {
     );
 
     let writes = vec![
-        KernelInput::new("Event", 100, 0),
-        KernelInput::new("Event", 200, 1),
+        KernelInput::new("system:EventDispatch", 100, 0),
+        KernelInput::new("system:EventDispatch", 200, 1),
     ];
 
     let expected = handwritten_baseline_for_writes(&writes);
@@ -73,14 +73,14 @@ fn view_2_event_dispatch_subgraph_spec_round_trip_matches_handwritten() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_2_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
     let spec = CanarySubgraphSpec::for_canonical_view("event_dispatch");
 
     let empty: Vec<KernelInput> = Vec::new();
     let populated = vec![
-        KernelInput::new("Event", 100, 0),
-        KernelInput::new("Event", 200, 1),
+        KernelInput::new("system:EventDispatch", 100, 0),
+        KernelInput::new("system:EventDispatch", 200, 1),
     ];
 
     let empty_output = register_and_walk_to_completion(&spec, &empty).expect("empty walk ok");
@@ -95,10 +95,10 @@ fn view_2_subgraph_spec_distinct_inputs_produce_distinct_outputs() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_2_subgraph_spec_emits_rows_output_not_typed_projection() {
     let spec = CanarySubgraphSpec::for_canonical_view("event_dispatch");
-    let writes = vec![KernelInput::new("Event", 1, 0)];
+    let writes = vec![KernelInput::new("system:EventDispatch", 1, 0)];
     let output = register_and_walk_to_completion(&spec, &writes).expect("walk ok");
 
     match output {

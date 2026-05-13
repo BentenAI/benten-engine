@@ -77,7 +77,7 @@ const VIEW_4_PROJECTION_FIELDS: usize = 3; // (root_cid, leaf_cid, depth)
 const MAX_GOVERNANCE_DEPTH_PIN: u32 = 5;
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_4_typed_output_projection_declares_rules_variant() {
     // First-line shape gate: the canary spec for View 4 MUST declare
     // TypedOutputProjection::Rules. A re-expression that drops the
@@ -95,7 +95,7 @@ fn view_4_typed_output_projection_declares_rules_variant() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_4_typed_output_projection_emits_rules_kernel_output() {
     // Walk-time shape gate: the materialised KernelOutput MUST be
     // Rules(_), not Rows / Current. Pairs with the round-trip pin
@@ -103,9 +103,9 @@ fn view_4_typed_output_projection_emits_rules_kernel_output() {
     // assertion from the byte-equivalence assertion.
     let spec = CanarySubgraphSpec::for_canonical_view("governance_inheritance");
     let writes = vec![
-        KernelInput::new("Community", 100, 0),
-        KernelInput::new("GovernedBy", 200, 1),
-        KernelInput::new("Community", 300, 2),
+        KernelInput::new("system:GovernanceInheritance", 100, 0),
+        KernelInput::new("system:GovernanceInheritance", 200, 1),
+        KernelInput::new("system:GovernanceInheritance", 300, 2),
     ];
 
     let output = register_and_walk_to_completion(&spec, &writes).expect("walk ok");
@@ -140,7 +140,7 @@ fn view_4_typed_output_projection_emits_rules_kernel_output() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0b"]
+
 fn view_4_typed_output_projection_depth_cap_pinned() {
     // Depth-cap discipline pin: MAX_GOVERNANCE_DEPTH is part of the
     // typed-output projection contract — a depth value beyond the
