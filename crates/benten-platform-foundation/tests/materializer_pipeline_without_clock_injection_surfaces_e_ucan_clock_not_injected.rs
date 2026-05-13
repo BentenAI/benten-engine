@@ -1,70 +1,80 @@
-//! R3 Family E RED-PHASE pin: materializer wallclock fail-closed inheritance
-//! per sec-3.5-r1-7 + threat-model T11 (LOAD-BEARING substantive).
+//! G23-B GREEN: materializer wallclock fail-closed inheritance per
+//! sec-3.5-r1-7 + threat-model T11 (LOAD-BEARING substantive).
 //!
-//! Pin sources:
-//! - `.addl/phase-4-foundation/r2-test-landscape.md` §2.5 G23-B row 9.
-//! - sec-3.5-r1-7 wallclock fail-closed inheritance (Compromise #24 floor).
-//! - Threat-model §3 T11 (wallclock-injection-bypass).
+//! Negative arm: materializer constructed against an engine adapter
+//! with NO clock injected MUST fail-closed with
+//! `E_UCAN_CLOCK_NOT_INJECTED` (NOT silently default to `now()`) per
+//! Compromise #24 + Phase-3 G16-B-B closure floor.
 //!
-//! ## Why the materializer inherits the fail-closed floor
-//!
-//! The materializer's walk invokes UCAN cap-policy evaluation at every
-//! READ fanout. UCAN time-window checks REQUIRE an injected clock per
-//! `E_UCAN_CLOCK_NOT_INJECTED`. If the materializer is constructed without
-//! a clock injection, the walk MUST fail-closed (NOT silently default to
-//! `now()`) per Compromise #24 + Phase-3 G16-B-B closure floor.
-//!
-//! Negative pin: construct a materializer with no clock + drive a walk
-//! whose READ fanout would consult a time-bounded UCAN; verify the error
-//! returned carries `ErrorCode::UcanClockNotInjected`.
+//! SUBSTANCE companion arm: re-running the SAME walk against an engine
+//! WITH clock injected MUST succeed — proves the failure is
+//! clock-driven, not unrelated.
 
 #![allow(clippy::unwrap_used)]
 
 #[path = "common/materializer_fixtures.rs"]
 mod materializer_fixtures;
+#[path = "common/schema_fixtures.rs"]
+mod schema_fixtures;
+
+use benten_core::{Node, Value};
+use benten_errors::ErrorCode;
+use benten_platform_foundation::{
+    HtmlJsonMaterializer, InMemoryMaterializerEngine, Materializer, MaterializerError,
+    MaterializerWalkInputs, allow_all_cap_recheck,
+};
+use std::collections::BTreeMap;
+
+fn make_note() -> Node {
+    let mut props = BTreeMap::new();
+    props.insert("body".into(), Value::Text("body".into()));
+    props.insert(
+        "created_at".into(),
+        Value::Text("2026-05-13T00:00:00Z".into()),
+    );
+    Node::new(vec!["Note".into()], props)
+}
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R3 Family E; G23-B wave-5 un-ignores) — \
-    materializer fail-closed-no-clock pathway doesn't exist at HEAD; G23-B wave-5 wires \
-    UCAN clock-injection inheritance through HtmlJsonMaterializer construction. Closes \
-    r2-test-landscape §2.5 row 9 + sec-3.5-r1-7 + T11."]
 fn materializer_pipeline_without_clock_injection_surfaces_e_ucan_clock_not_injected() {
-    // G23-B implementer wires this:
-    //
-    //   use benten_engine::Engine;
-    //   use benten_engine::EngineError;
-    //   use benten_errors::ErrorCode;
-    //   use benten_platform_foundation::materializer::{HtmlJsonMaterializer, Materializer};
-    //
-    //   // Engine WITHOUT clock injection (skip Engine::open_with_clock).
-    //   let dir = tempfile::tempdir().unwrap();
-    //   let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
-    //
-    //   // ... write content + register a UCAN-backed cap policy with time
-    //   //     window so the materializer's READ fanout consults UCAN ...
-    //
-    //   let mat = HtmlJsonMaterializer::default();
-    //   let err = mat
-    //       .materialize_with_gate(&engine, /* spec */ ..)
-    //       .expect_err("materializer MUST fail-closed with no clock injected per sec-3.5-r1-7");
-    //
-    //   // Surfaced as ErrorCode::UcanClockNotInjected (existing variant; not new).
-    //   match err {
-    //       EngineError::Other { code: ErrorCode::UcanClockNotInjected, .. } => (),
-    //       other => panic!(
-    //           "expected E_UCAN_CLOCK_NOT_INJECTED, got {other:?} — fail-closed floor breached"
-    //       ),
-    //   }
-    //
-    //   // SUBSTANCE: also verify that injecting a clock to the SAME setup
-    //   // makes the walk succeed (proves the failure is clock-driven, not
-    //   // unrelated).
-    //   let engine2 = Engine::open_with_clock(dir.path().join("benten2.redb"), test_clock).unwrap();
-    //   let _ok = mat.materialize_with_gate(&engine2, /* spec */ ..)
-    //       .expect("with clock injected, walk succeeds");
-    let _ = materializer_fixtures::actor_principal_alice_cid();
-    unimplemented!(
-        "G23-B wave-5 wires materializer fail-closed inheritance of \
-         E_UCAN_CLOCK_NOT_INJECTED + the with-clock-positive sibling check per sec-3.5-r1-7"
+    let spec = benten_platform_foundation::compile_schema(
+        schema_fixtures::canonical_note_type_schema_bytes(),
+    )
+    .unwrap();
+    let alice = materializer_fixtures::actor_principal_alice_cid();
+
+    // Negative arm: no-clock engine — fail-closed.
+    let engine_no_clock = InMemoryMaterializerEngine::without_clock();
+    let cid_nc = engine_no_clock.put_node(make_note());
+    let mat = HtmlJsonMaterializer;
+    let err = mat
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine_no_clock,
+            spec: &spec,
+            content_cid: cid_nc,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .expect_err("materializer MUST fail-closed with no clock injected per sec-3.5-r1-7");
+    assert!(
+        matches!(err, MaterializerError::UcanClockNotInjected),
+        "expected MaterializerError::UcanClockNotInjected, got {err:?} — fail-closed floor breached"
     );
+    assert_eq!(err.code(), ErrorCode::UcanClockNotInjected);
+
+    // SUBSTANCE arm: same walk against a clock-injected engine
+    // succeeds. Proves the failure was clock-driven, not unrelated.
+    let engine_ok = InMemoryMaterializerEngine::new();
+    let cid_ok = engine_ok.put_node(make_note());
+    let _ok = mat
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine_ok,
+            spec: &spec,
+            content_cid: cid_ok,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .expect("with clock injected, walk succeeds");
 }

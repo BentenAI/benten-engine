@@ -76,6 +76,7 @@
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 
 pub mod manifest_store;
+pub mod materializer;
 pub mod module_ecosystem;
 pub mod plugin_library;
 pub mod plugin_lifecycle;
@@ -83,6 +84,16 @@ pub mod plugin_manifest;
 pub mod registry;
 pub mod schema_compiler;
 pub mod workflow_to_plugin;
+
+// G23-B materializer canary public surface — re-exported through the
+// crate root for ergonomic consumption by admin UI v0 at G24-A.
+pub use materializer::{
+    BrowserRender, HtmlJsonMaterializer, InMemoryMaterializerEngine, Materializer,
+    MaterializerCapRecheck, MaterializerDenialFrame, MaterializerEngine, MaterializerError,
+    MaterializerOutput, MaterializerWalkInputs, PlaintextMaterializer, RenderError, Renderer,
+    SubscribeAttachToken, allow_all_cap_recheck, deny_all_cap_recheck, materialize_html_json,
+    materialize_plaintext,
+};
 
 pub use plugin_manifest::{
     CapRequirement, ContentAddressed, InstallRecord, PluginManifest, RendererBackend,

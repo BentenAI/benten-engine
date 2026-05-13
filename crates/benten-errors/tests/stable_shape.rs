@@ -391,6 +391,16 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginDeviceAttestationForged,
     ErrorCode::PluginLibraryIndexTamper,
     ErrorCode::RegistryDiscoveryTimeout,
+    // Phase 4-Foundation G23-B — materializer pipeline (3 codes).
+    // Construction sites:
+    //   `benten-platform-foundation::materializer::HtmlJsonMaterializer::materialize_with_gate`
+    //   `benten-platform-foundation::materializer::HtmlJsonMaterializer::subscribe_with_gate`
+    // MaterializerCapDenied routes to ON_DENIED (cap-denial family);
+    // MaterializerSchemaMismatch + MaterializerSubscribeSeamFailure are
+    // pre-fanout structural rejections (no primitive-edge routing).
+    ErrorCode::MaterializerCapDenied,
+    ErrorCode::MaterializerSchemaMismatch,
+    ErrorCode::MaterializerSubscribeSeamFailure,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -647,8 +657,13 @@ fn variant_count_is_pinned() {
     //
     // Batch-1 (G24-F + G23-A) + Batch-2 (G24-D + G23-0b):
     // 118 + 4 (G24-F) + 9 (G23-A) + 0 (G23-0a) + 15 (G24-D) + 0 (G23-0b) = 146.
+    //
+    // Phase 4-Foundation G23-B — materializer pipeline canary
+    // (2026-05-13): +3 codes (MaterializerCapDenied,
+    // MaterializerSchemaMismatch, MaterializerSubscribeSeamFailure).
+    // 146 + 3 = 149.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 146,
+        CATALOG_VARIANT_COUNT, 149,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }

@@ -438,6 +438,7 @@ dependencies = [
  "benten-id",
  "blake3",
  "ed25519-dalek 2.2.0",
+ "proptest",
  "serde",
  "serde_ipld_dagcbor",
  "serde_json",
