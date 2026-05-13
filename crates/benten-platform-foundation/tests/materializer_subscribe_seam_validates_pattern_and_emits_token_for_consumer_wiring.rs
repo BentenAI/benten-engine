@@ -1,8 +1,19 @@
-//! G23-B GREEN: reactive update via SUBSCRIBE through
-//! `on_change_as_with_cursor` ONLY (LOAD-BEARING substantive;
-//! would-FAIL-if-no-op'd).
+//! G23-B GREEN: subscribe seam validates pattern shape + emits a
+//! `SubscribeAttachToken` for consumer wiring.
 //!
-//! Closes r2-test-landscape §2.5 row 2 + sec-3.5-r1-9 floor.
+//! Closes r2-test-landscape §2.5 row 2 + sec-3.5-r1-9 floor (the
+//! routing-is-cursor-only floor; substantive propagation arm lives
+//! at G24-A consumer wiring per phase-4-foundation-backlog §4.13).
+//!
+//! ## Scope (per G23-B mr-5 truthfulness rename)
+//!
+//! Renamed from `materializer_pipeline_reactive_update_propagates_
+//! through_subscribe_seam` to truthful name: this pin validates the
+//! token-pattern shape + grep-asserts the source contains zero bare
+//! `.on_change(` call sites. It does NOT exercise a reactive update
+//! propagation end-to-end (the propagation arm requires a real or
+//! mock engine's `on_change_as_with_cursor` callback firing — that's
+//! G24-A consumer wiring; phase-4-foundation-backlog §4.13).
 //!
 //! ## What this pin establishes
 //!
@@ -29,7 +40,7 @@ use benten_errors::ErrorCode;
 use benten_platform_foundation::{HtmlJsonMaterializer, MaterializerError};
 
 #[test]
-fn materializer_pipeline_reactive_update_propagates_through_subscribe_seam() {
+fn materializer_subscribe_seam_validates_pattern_and_emits_token_for_consumer_wiring() {
     let mat = HtmlJsonMaterializer;
 
     // RUNTIME ARM: subscribe_with_gate attaches successfully with a

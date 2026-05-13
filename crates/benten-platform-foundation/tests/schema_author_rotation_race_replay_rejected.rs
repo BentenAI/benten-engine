@@ -31,7 +31,10 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G23-B + benten-id RotationLog integration wires HLC-monotonic-strict replay defense; un-ignore at G23-B landing. Pin source: r4-triage §1 r4-tc-2 + threat-model §T9b."]
+#[ignore = "DESTINATION-REMAPPED post-R1-triage per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: T9b defense lives at PLUGIN-MANIFEST namespace (G24-D-FP-2), NOT schema-namespace (G23-B). \
+RotationLog HLC-monotonic-strict + VerbatimReplay defense shipped at G24-D-FP-2 in `crates/benten-id/src/did_rotation.rs::RotationLog::accept_rotation_event`. \
+Substantive coverage for T9b (rotation-race replay) at G24-D-FP-2's `plugin_manifest_rotation_event_nonce_swap_attack_rejected.rs` (3 attack variants) + `plugin_manifest_peer_did_key_rotation_surfaces_warning_round_trip.rs`. \
+Per phase-4-foundation-backlog §4.12: this pin is retained as forward-looking documentation should schema-level provenance ever be needed. Un-ignore is N/A — defense lives at the manifest surface."]
 fn schema_author_rotation_race_replay_rejected_via_hlc_monotonic_strict() {
     // G23-B wave wires this. Substantive shape:
     //

@@ -181,6 +181,31 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 - `ManifestStore::load_verified` shipped pub.
 - `plugin_manifest_post_install_drift_detected.rs` substantive test body wired against the new load_verified path.
 
+### §4.12 T9 threat-class scope-move: schema-namespace → plugin-manifest-namespace
+
+**Origin:** G23-B mini-review BLOCKER findings `g23b-mr-1` (T9a forged peer-DID signature) + `g23b-mr-2` (T9b rotation-race replay). The R3 test pins (`schema_with_forged_author_signature_rejected.rs` + `schema_author_rotation_race_replay_rejected.rs`) were authored before the post-R1-triage ratifications clarified that **JSON schemas in the ingest dialect are static type definitions** — not peer-signed, not rotation-bearing, not provenance-anchored. The T9 threat-class (forged author signature + rotation-race replay) applies to **plugin manifests**, NOT to schemas.
+
+**Resolution:** the defense already ships in the plugin-manifest namespace:
+- **T9a forged peer-DID signature** — G24-D ships `plugin_manifest::sign_manifest` + `verify_peer_signature` + Ed25519 verifier. Substantive coverage at `crates/benten-platform-foundation/tests/g24d_substantive_pipeline.rs::plugin_manifest_peer_did_signature_round_trip` (PASS at HEAD post-batch-2).
+- **T9b rotation-race replay** — G24-D-FP-2 ships `crates/benten-id/src/did_rotation.rs::RotationLog::accept_rotation_event` with HLC-monotonic-strict + VerbatimReplay defense. Substantive coverage at `crates/benten-platform-foundation/tests/plugin_manifest_rotation_event_nonce_swap_attack_rejected.rs` (3 attack variants) + `plugin_manifest_peer_did_key_rotation_surfaces_warning_round_trip.rs` (round-trip).
+
+**Schema-namespace pins** (`schema_with_forged_author_signature_rejected.rs` + `schema_author_rotation_race_replay_rejected.rs`) retained as forward-looking documentation should schema-level provenance ever be needed (no current plan to add — schemas are static data and propagate via plugin manifests). Their `#[ignore]` rationale was updated to cite the manifest-namespace destination per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW.
+
+**No further code obligation** — the substantive defense lives at the manifest surface; this entry is the named destination for the schema-namespace pin disposition.
+
+### §4.13 G23-B materializer wave deferred items → G24-A wave-completion sweep
+
+**Origin:** G23-B mini-review (`g23b-mr-3` mr-3 path-b + `g23b-mr-4` + `g23b-mr-5` rename-with-named-destination + `g23b-mr-6` + `g23b-mr-7` + `g23b-mr-8`). Six items scoped to G24-A admin-UI integration:
+
+- **mr-3 (MAJOR, path-b document-helper-boundary)** — `materializer_mat_deny_wins_composition.rs` + `materializer_delivery_deny_wins_composition.rs` exercise the `Materializer::dual_gate_admits` HELPER-FUNCTION contract over two closures; the production walk path `Materializer::materialize_with_gate` threads only the mat-layer gate (delivery composition is the consumer's responsibility per the docstrings). G23-B fix-pass amended both test docstrings to make the helper-function vs production-walk boundary explicit. **G24-A wires the consumer side (`Engine::on_change_as_with_cursor`) and the end-to-end LOAD-BEARING dual-gate composition lands at `materializer_dual_gate_pim_2_end_to_end_would_fail_if_no_op.rs` once the production walk path is connected.**
+- **mr-4 (MAJOR, defense-in-depth integration test)** — materializer entry-point at materializer.rs:905-921 has a defense-in-depth re-check for SANDBOX subgraphs whose `sandbox_host_fn` is in the banned set. PRIMARY defense at `schema_compiler::compile` (G23-A); this materializer-entry re-check is for hand-authored `SchemaSubgraphSpec` inputs bypassing schema-compile. Currently the only test exercises the schema_compile primary; the materializer-entry arm has no integration test because constructing a `SchemaSubgraphSpec` directly requires `pub(crate) fn new` access. **G24-A wave-completion sweep adds a `#[doc(hidden)] pub fn for_test_*` constructor on `SchemaSubgraphSpec` + the ~30 LOC defense-in-depth integration test** (asserts `MaterializerError::SchemaMismatch { code: E_MATERIALIZER_SCHEMA_MISMATCH }` fires for hand-authored banned-host-fn spec).
+- **mr-5 (MAJOR, rename + named destination)** — test file `materializer_pipeline_reactive_update_propagates_through_subscribe_seam.rs` renamed to `materializer_subscribe_seam_validates_pattern_and_emits_token_for_consumer_wiring.rs` (truthful — body validates pattern-shape + emits token, doesn't exercise propagation). **G24-A consumer wires `Engine::on_change_as_with_cursor`** + adds a NEW substantive propagation pin (file name like `admin_ui_v0_materializer_reactive_update_propagates_through_engine_on_change_as_with_cursor.rs`) that drives a real change event end-to-end + asserts the materialized view updates.
+- **mr-6 (MINOR)** — `InMemoryMaterializerEngine` is `pub` in production lib for cross-crate test ergonomics; orchestrator-direct addition of `#[doc(hidden)]` at G23-B fix-pass marks it not-API-stable. G24-A wave-completion sweep verifies the marker still applies and the consumer wiring doesn't elevate it to stable API.
+- **mr-7 (MINOR)** — mat-r1-11 "one view per (spec, content) pair" — orchestrator-direct G23-B fix-pass adds the rustdoc on `MaterializerWalkInputs` naming the (spec_cid, content_cid) pair as the view identity. G24-A consumer wiring exercises the multi-instance shape.
+- **mr-8 (OBSERVATION)** — per-primitive cap-recheck fan-out passes content_cid uniformly (not per-primitive scope) — orchestrator-direct G23-B fix-pass adds doc-comment making the "invocation-count observability" semantic explicit. G24-A consumer wires the production cap-recheck path and the contract becomes load-bearing there.
+
+**Acceptance:** mr-3 + mr-5 + mr-6 + mr-7 + mr-8 inline-closed in G23-B fix-pass commit (docstring amendments + rename + `#[doc(hidden)]` + 2 rustdoc additions); mr-4 lands at G24-A wave-completion sweep with the doc-hidden test constructor + ~30 LOC integration test. G24-A reviewer brief verifies all 6 items still hold at admin-UI integration boundary.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
