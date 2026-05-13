@@ -19,7 +19,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-F wave-7 wires this. Pin source: r2-test-landscape.md §2.11 supplementary + T2 defense 2. Substantive: establish session; advance clock past TTL; replay → DENIED with typed E_THIN_CLIENT_SESSION_EXPIRED."]
+#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A wave wires the composed-engine harness that exercises this end-to-end (G24-F shipped DidKeyedSession TTL enforcement at thin_client.rs:484-491; this companion test additionally needs the admin_ui_v0 composed-engine + Atrium bridge surface from G24-A). Pin source: r2-test-landscape.md §2.11 supplementary + T2 defense 2. Substantive: establish session; advance clock past TTL; replay → DENIED with typed E_THIN_CLIENT_SESSION_EXPIRED."]
 fn admin_ui_v0_thin_client_session_token_time_bound() {
     // G24-F wave wires this. Substantive shape:
     //

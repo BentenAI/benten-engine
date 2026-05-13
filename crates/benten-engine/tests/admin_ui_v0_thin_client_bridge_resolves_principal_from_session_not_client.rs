@@ -23,7 +23,7 @@
 mod common;
 
 #[test]
-#[ignore = "phase-4-foundation R3 RED-PHASE — G24-F wave-7 wires this. Pin source: r2-test-landscape.md §2.11 supplementary + T2 defense 3 second clause. Substantive: request with valid token (resolves to principal_X) + client-supplied principal field = principal_Y; bridge MUST use principal_X, IGNORE principal_Y."]
+#[ignore = "phase-4-foundation R3 RED-PHASE — G24-A wave wires the admin_ui_v0 bridge surface that exercises this end-to-end (G24-F shipped DidKeyedSession::resolve at thin_client.rs:497-525 returning Principal from token only; this companion test additionally needs the admin_ui_v0 thin-client bridge from G24-A that consumes Principal + must IGNORE the client-asserted principal field). Pin source: r2-test-landscape.md §2.11 supplementary + T2 defense 3 second clause. Substantive: request with valid token (resolves to principal_X) + client-supplied principal field = principal_Y; bridge MUST use principal_X, IGNORE principal_Y."]
 fn admin_ui_v0_thin_client_bridge_resolves_principal_from_session_not_client() {
     // G24-F wave wires this. Substantive shape:
     //
