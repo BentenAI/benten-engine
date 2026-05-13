@@ -35,8 +35,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D + G24-D-FP-2 wire ManifestStore::load_verified; un-ignore at G24-D landing. Pin source: r4-triage §2 r4-tc-4 + threat-model §T5a LOAD-BEARING."]
 fn plugin_manifest_post_install_record_byte_mutation_detected_at_load_verified() {
     let _plugin = stub_plugin_did();
     let _user = stub_user_did();

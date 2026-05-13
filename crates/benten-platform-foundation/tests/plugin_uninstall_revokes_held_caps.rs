@@ -30,8 +30,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-1 wires direct-cap-revocation in uninstall_plugin; un-ignore at G24-D-FP-1 landing. Pin source: r4-triage §1 r4-tc-3 + threat-model §T10-uninstall (a) per-finding-granular."]
 fn plugin_uninstall_revokes_every_cap_with_audience_equals_plugin_did() {
     let _plugin = stub_plugin_did();
     let _user = stub_user_did();

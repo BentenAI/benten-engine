@@ -13,7 +13,6 @@ use common::manifest_fixtures::{
 };
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires peer-DID provenance signing; un-ignore at G24-D landing"]
 fn manifest_peer_did_signature_independent_of_install_record_user_did_signature() {
     let manifest = minimal_manifest();
     let install = stub_install_record(common::manifest_fixtures::stub_cid_zero());

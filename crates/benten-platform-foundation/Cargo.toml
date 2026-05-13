@@ -34,6 +34,11 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 benten-engine = { path = "../benten-engine" }
+# G24-D end-to-end substantive pipeline test exercises the
+# benten-caps::plugin_delegation surface from the platform-foundation
+# integration layer. dev-only dep keeps dep-direction one-way for
+# production (platform-foundation does NOT depend on caps at lib time).
+benten-caps = { path = "../benten-caps" }
 # walkdir for R4-FP-4 substantive grep-walk pin
 # (`plugin_did_is_ucan_audience_handle_not_attested_sub_identity.rs`
 # negative-arm walks `crates/benten-id/src/` for forbidden

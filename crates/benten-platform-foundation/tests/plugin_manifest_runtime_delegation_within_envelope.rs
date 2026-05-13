@@ -8,8 +8,8 @@ mod common;
 use benten_platform_foundation::SharesTarget;
 use common::manifest_fixtures::{manifest_with_shares_matching_rule, stub_plugin_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires plugin_delegation chain validation; un-ignore at G24-D landing"]
 fn plugin_delegation_within_envelope_admitted_by_manifest_envelope_chain_validator() {
     let _manifest_a = manifest_with_shares_matching_rule(
         "store:notes:read",

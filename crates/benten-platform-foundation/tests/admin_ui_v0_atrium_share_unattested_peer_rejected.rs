@@ -38,8 +38,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_peer_did_alice, stub_peer_did_attacker, stub_plugin_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wires HandshakeFrame peer-DID validation at Atrium-share boundary; un-ignore at G24-D landing. Pin source: r4-triage §2 r4-tc-4 + threat-model §T6c + PR #163 G16-D wave-6b reuse."]
 fn admin_ui_v0_atrium_share_from_unattested_peer_rejected_at_handshake_frame() {
     let _plugin = stub_plugin_did();
     let _alice = stub_peer_did_alice();

@@ -13,8 +13,8 @@ mod common;
 use benten_platform_foundation::CapRequirement;
 use common::manifest_fixtures::minimal_manifest;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires upgrade cap-diff logic; un-ignore at G24-D landing"]
 fn upgrade_with_strict_subset_requires_silent_within_lineage_upgrade() {
     let mut old = minimal_manifest();
     old.requires = vec![
@@ -39,8 +39,8 @@ fn upgrade_with_strict_subset_requires_silent_within_lineage_upgrade() {
     panic!("RED-PHASE: G24-D wave must wire upgrade cap-diff logic");
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires re-consent on cap growth; un-ignore at G24-D landing"]
 fn upgrade_with_widened_requires_surfaces_e_plugin_install_consent_required() {
     let mut old = minimal_manifest();
     old.requires = vec![CapRequirement {

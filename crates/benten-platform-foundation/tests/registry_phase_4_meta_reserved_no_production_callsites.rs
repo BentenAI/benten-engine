@@ -8,8 +8,8 @@
 //! Foundation (0 production call sites; carries to Phase 4-Meta).
 //! This test pins the surface stub but exercises NO production path.
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: Phase-4-Meta scope; reserves the surface stub only at Phase 4-Foundation"]
 fn registry_discover_surface_stub_exists_for_phase_4_meta() {
     // Future surface (Phase 4-Meta):
     //   registry::discover(plugin_did) -> Result<Vec<Cid>, ErrorCode>

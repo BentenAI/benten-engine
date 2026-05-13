@@ -9,8 +9,8 @@ mod common;
 
 use common::manifest_fixtures::minimal_manifest;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires RotationLog consultation at manifest-load surface; un-ignore at G24-D landing"]
 fn manifest_with_rotated_peer_did_surfaces_rotated_key_warning_not_hard_reject() {
     let _manifest = minimal_manifest();
 

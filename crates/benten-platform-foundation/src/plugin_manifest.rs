@@ -174,8 +174,8 @@ impl PluginManifest {
     pub fn signing_payload(&self) -> Vec<u8> {
         let mut copy = self.clone();
         copy.peer_signature = Vec::new();
-        let body = serde_ipld_dagcbor::to_vec(&copy)
-            .expect("plugin manifest signing-payload serializes");
+        let body =
+            serde_ipld_dagcbor::to_vec(&copy).expect("plugin manifest signing-payload serializes");
         let mut out = Vec::with_capacity(36 + body.len());
         out.extend_from_slice(self.content_cid.as_bytes());
         out.extend_from_slice(&body);

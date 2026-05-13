@@ -1225,6 +1225,115 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `crates/benten-engine/src/engine.rs::register_subgraph` + `register_subgraph_replace` (Phase-3 G21-T3 §2.5(d) fold-in; corr-minor-3 carry from G21-T1 fp-mini-review). Fires BEFORE invariant validation / subgraph CID derivation so a misnamed registration has zero observable side effect on engine state.
 - **Phase:** 3 G21-T3
 
+## Phase 4-Foundation G24-D — FULL plugin manifest (15 codes)
+
+Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.md` engineering reference. Atomic Rust + TS mirror per dispatch-conventions §3.5g; CATALOG_VARIANT_COUNT 118 → 133 at G24-D landing.
+
+### E_PLUGIN_MANIFEST_INVALID
+
+- **Message:** "plugin manifest envelope structurally invalid (empty fields, signature length mismatch, malformed shares-policy)"
+- **Fix:** Inspect the `PluginManifest::validate` failure: `plugin_name` non-empty, `peer_signature` is 64 bytes (Ed25519 detached), `requires` non-empty, `shares.default == Matching` implies non-empty `rules`, per-requirement `scope` non-empty.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::validate`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID
+
+- **Message:** "install record's user-DID signature did not verify against the consenting user-DID's public key"
+- **Fix:** Catches forged install records (user-DID is the trust anchor per CLAUDE.md #18 Layer 1). Re-mint via the install signing path.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature`.
+- **Phase:** 4-Foundation G24-D (arch-r1-3 split of conflated `E_PLUGIN_MANIFEST_SIGNATURE_INVALID`)
+
+### E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID
+
+- **Message:** "plugin content peer-DID signature did not verify against declared peer-DID"
+- **Fix:** Receiver-peer rejects substituted bundles or forged peer-DID signatures (CLAUDE.md #18 Layer 2 provenance). Re-pull from a trusted peer.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_peer_signature`.
+- **Phase:** 4-Foundation G24-D (arch-r1-3 split)
+
+### E_PLUGIN_CONTENT_PEER_KEY_ROTATED
+
+- **Message:** "plugin content peer-DID key rotated (matched by RotationLog)"
+- **Fix:** Surfaces as WARNING at install (not hard-reject by default per D-4F-12). Admin UI displays the rotation chain; user may proceed or decline.
+- **Thrown at:** install pipeline at `crates/benten-platform-foundation/src/module_ecosystem.rs` + `benten-id::did_rotation::RotationLog` consultation.
+- **Phase:** 4-Foundation G24-D (arch-r1-3 split)
+
+### E_PLUGIN_AUTHOR_NOT_TRUSTED
+
+- **Message:** "plugin author peer-DID is not in the user's trust-list and no first-install consent has been recorded"
+- **Fix:** Admin UI surfaces first-install consent prompt; user may add author to trust-list or reject install.
+- **Thrown at:** `crates/benten-platform-foundation/src/module_ecosystem.rs::check_author_trust` + upgrade-author-continuity check.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_INSTALL_CONSENT_REQUIRED
+
+- **Message:** "plugin install attempted without user consent (missing or unverified InstallRecord)"
+- **Fix:** User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.
+- **Thrown at:** install pipeline Layer 1 gate at `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
+
+- **Message:** "runtime UCAN delegation request fell outside the source plugin's manifest `shares` envelope"
+- **Fix:** The source plugin's manifest did not authorize delegation of this cap to this target. Inspect the source plugin's `shares` policy + the target plugin-DID.
+- **Thrown at:** `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN
+
+- **Message:** "cross-plugin delegation of a private-namespace cap (`private:<plugin_did>:*`) is unconditionally denied"
+- **Fix:** Private-namespace caps are sovereign to the owning plugin — never delegable cross-plugin regardless of `shares` policy. Re-scope to a sharable namespace if cross-plugin access is intended.
+- **Thrown at:** `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_CONTENT_CID_MISMATCH
+
+- **Message:** "plugin content bytes hash does not match the declared content_cid"
+- **Fix:** Catches substitution attacks at receive-time. Receiver re-pulls plugin from a trusted peer.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_content_cid_matches` + install pipeline.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_NEW_VERSION_AVAILABLE
+
+- **Message:** "a new version of an installed plugin was discovered (pull-not-push notification)"
+- **Fix:** HINT, not an error — pull-not-push model per plugin-arch-r1-13. Admin UI surfaces "new version available" prompt for user-initiated upgrade.
+- **Thrown at:** `crates/benten-platform-foundation/src/module_ecosystem.rs::new_version_available_code`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_HETEROGENEITY_INCOMPATIBLE
+
+- **Message:** "plugin requires `host:sandbox:exec` but installing peer is a thin-compute-surface"
+- **Fix:** Per CLAUDE.md #17 heterogeneity contract: SANDBOX is full-peer-only. Install on a full-peer device (laptop / phone OS app / desktop); thin-clients (browser / edge / Tauri webview) cannot host SANDBOX-using plugins.
+- **Thrown at:** `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin` heterogeneity check.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED
+
+- **Message:** "meta-plugin composition graph contains a cycle"
+- **Fix:** Install-time cycle detection over `composes_plugins` references. Cycles would cause infinite recursion at evaluator walk; rejected as install policy.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::detect_composition_cycle`.
+- **Phase:** 4-Foundation G24-D (post-R1-triage Q2 ratification — install-time AS REJECTION)
+
+### E_PLUGIN_DEVICE_ATTESTATION_FORGED
+
+- **Message:** "device-DID attestation envelope failed verification at the plugin-share boundary"
+- **Fix:** Renamed from earlier `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE` per Ben's R4-triage §7 ratification (keeps `E_PLUGIN_*` family prefix). Plugin authors share from full peers with valid device-DIDs; this code surfaces forged device-attestation envelopes during cross-peer share, distinct from the existing Phase-3 sync-layer `E_DEVICE_ATTESTATION_FORGED`.
+- **Thrown at:** plugin-share path in `benten-sync` consulting `benten-id::device_attestation::Acceptor`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_LIBRARY_INDEX_TAMPER
+
+- **Message:** "plugin library index tampering detected"
+- **Fix:** Integrity check fired: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage / re-sync from trusted peer.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_library.rs` integrity checks.
+- **Phase:** 4-Foundation G24-D
+
+### E_REGISTRY_DISCOVERY_TIMEOUT
+
+- **Message:** "decentralized registry discovery query timed out before any peer responded"
+- **Fix:** **Reserved at Phase 4-Foundation; first production firing at Phase 4-Meta** when registry-substrate lands per ratification #3. Phase 4-Foundation v0 uses direct content-addressed-share over Atriums (no registry).
+- **Thrown at:** `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
+- **Phase:** 4-Foundation G24-D (reserved); 4-Meta (firing)
+
 ## Extending the catalog
 
 When adding a new error:

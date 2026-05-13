@@ -181,11 +181,7 @@ impl DagVersionChain {
     pub fn tips(&self) -> Vec<Cid> {
         self.all
             .iter()
-            .filter(|c| {
-                self.children
-                    .get(c)
-                    .is_none_or(BTreeSet::is_empty)
-            })
+            .filter(|c| self.children.get(c).is_none_or(BTreeSet::is_empty))
             .copied()
             .collect()
     }
@@ -218,6 +214,15 @@ impl DagVersionChain {
     #[must_use]
     pub fn len(&self) -> usize {
         self.all.len()
+    }
+
+    /// Whether the DAG has no versions. **Always false in practice** —
+    /// a `DagVersionChain` always carries its root, so the inhabited
+    /// shape never has `len() == 0`. Present to satisfy clippy
+    /// `len_without_is_empty` lint at the public-API surface.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.all.is_empty()
     }
 
     /// Whether the DAG only has the root.

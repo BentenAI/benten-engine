@@ -38,8 +38,8 @@ fn manifest_struct_has_no_schema_version_field_at_type_level() {
     } = PluginManifestDestructure::from(&manifest);
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave provides canonical-bytes DAG-CBOR serialization; un-ignore at G24-D landing"]
 fn manifest_canonical_bytes_dag_cbor_contains_no_schema_version_key() {
     let manifest = minimal_manifest();
 

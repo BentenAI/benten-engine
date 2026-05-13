@@ -5,8 +5,8 @@ mod common;
 
 use common::manifest_fixtures::admin_ui_v0_manifest;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave + atrium-share path; un-ignore at G24-D landing"]
 fn admin_ui_v0_installs_across_two_atrium_peers_when_peer_did_signature_valid() {
     let _manifest = admin_ui_v0_manifest();
 
