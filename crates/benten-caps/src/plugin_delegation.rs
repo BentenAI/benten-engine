@@ -75,14 +75,17 @@ impl DelegationDecision {
 }
 
 /// The minimal abstract shape of a manifest's `shares` policy that
-/// this crate consumes. Defined here as a trait (rather than
-/// importing the concrete `SharesPolicy` from `benten-platform-
-/// foundation`) so the dep-direction stays one-way (caps does NOT
-/// depend on platform-foundation per arch invariants).
+/// this crate consumes. Defined here as a trait so consumers can
+/// stub it in tests without dragging in the concrete
+/// `SharesPolicy` shape.
 ///
-/// The platform-foundation crate provides an `impl SharesPolicyView
-/// for SharesPolicy` blanket at the manifest-envelope-chain-validation
-/// G24-D-FP-2 wave.
+/// G27-D introduced a target-conditional native-only prod dep on
+/// `benten-platform-foundation` (for `PluginManifest::requires` walk
+/// at scope-derivation time per plan §3 G27-D); the dep edge is
+/// Cargo-cycle-safe because the reverse `platform-foundation →
+/// benten-caps` direction stays dev-only. The platform-foundation
+/// crate provides an `impl SharesPolicyView for SharesPolicy`
+/// blanket at the manifest-envelope-chain-validation G24-D-FP-2 wave.
 pub trait SharesPolicyView {
     /// Whether the policy permits delegating `cap_pattern` to
     /// `target_plugin_did`.
