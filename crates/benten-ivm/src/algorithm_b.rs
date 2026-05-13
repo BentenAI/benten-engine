@@ -55,6 +55,7 @@ use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::Strategy;
 use crate::budget::BudgetTracker;
+use crate::subgraph_spec::{KernelInput, KernelOutput, SubgraphSpec, TypedOutputProjection};
 use crate::view::{View, ViewDefinition, ViewError, ViewQuery, ViewResult};
 use crate::views::{
     CapabilityGrantsView, ContentListingView, EventDispatchView, GovernanceInheritanceView,
@@ -257,6 +258,21 @@ pub enum AlgorithmError {
         view_id: String,
         /// The prefix string from the rejected `LabelPattern::AnchorPrefix`.
         got_prefix: String,
+    },
+    /// G23-0a mat-r1-13 fail-fast: caller supplied a [`SubgraphSpec`]
+    /// marked as self-referential. `Algorithm::register_subgraph` rejects
+    /// the spec BEFORE any kernel input walk — fail-fast semantics
+    /// preclude partial materialisation + walk-time-only checks.
+    /// A future richer cycle-detection pass (named referenced sub-views
+    /// + graph walk) lives behind the same error shape.
+    #[error(
+        "subgraph spec for view `{view_id}` is self-referential / recursive; \
+         register-time cycle check rejected per mat-r1-13 fail-fast — \
+         subgraph-shaped views MUST NOT reference themselves"
+    )]
+    SelfReferentialSubgraphRejected {
+        /// The view id of the rejected self-referential spec.
+        view_id: String,
     },
 }
 
@@ -763,6 +779,157 @@ impl AlgorithmBView {
             Err(_) => Vec::new(),
         }
     }
+
+    /// G23-0a: register an Algorithm B view from a [`SubgraphSpec`] —
+    /// the generalized-kernel input shape. Routes through the same
+    /// `dispatch_for` classification as [`Self::register`] (canonical
+    /// ids → hand-written inner kernel; user-defined ids → generic
+    /// kernel) but takes a single schema-shaped value in lieu of the
+    /// `(view_id, label_pattern, projection)` triple.
+    ///
+    /// **Self-reference rejection (mat-r1-13 fail-fast):** when
+    /// `spec.self_referential` is `true` this returns
+    /// [`AlgorithmError::SelfReferentialSubgraphRejected`] BEFORE any
+    /// inner-kernel construction. No partial materialisation, no
+    /// walk-time-only check.
+    ///
+    /// # Errors
+    ///
+    /// - [`AlgorithmError::SelfReferentialSubgraphRejected`] when the
+    ///   spec is marked self-referential.
+    /// - [`AlgorithmError::ViewLabelMismatch`] when `spec.view_id` is
+    ///   canonical and `spec.label_pattern` does not select the canonical
+    ///   hardcoded label.
+    /// - [`AlgorithmError::CanonicalIdAnchorPrefixRefused`] when
+    ///   `spec.view_id` is canonical and `spec.label_pattern` is an
+    ///   anchor-prefix (canonical kernels require `LabelPattern::Exact`).
+    pub fn register_subgraph(spec: SubgraphSpec) -> Result<Self, AlgorithmError> {
+        // Fail-fast cycle check FIRST — mat-r1-13. MUST run before any
+        // inner-kernel construction or walk.
+        if spec.self_referential {
+            return Err(AlgorithmError::SelfReferentialSubgraphRejected {
+                view_id: spec.view_id.clone(),
+            });
+        }
+        // Drop the typed-output projection on the floor at G23-0a — it's
+        // informational for G23-0b's typed-output round-trip pins. The
+        // canonical inner kernels surface the right `ViewResult` variant
+        // by their own definition (View 4 → Rules, View 5 → Current).
+        let _ = spec.typed_output_projection;
+        // Route through the existing register surface — same fail-loud
+        // guards (canonical-id-vs-mismatched-label,
+        // canonical-id-anchor-prefix-refused) apply.
+        match spec.budget {
+            Some(budget) => Self::register_with_budget(
+                &spec.view_id,
+                spec.label_pattern,
+                spec.projection,
+                budget,
+            ),
+            None => Self::register(&spec.view_id, spec.label_pattern, spec.projection),
+        }
+    }
+
+    /// G23-0a: walk a sequence of [`KernelInput`] records through the
+    /// registered view, driving the per-event `View::update` path. Each
+    /// `KernelInput` is converted to a transient `ChangeEvent` with
+    /// `kind = ChangeKind::Created` + a content-addressed Cid derived
+    /// from the input properties.
+    ///
+    /// Returns the materialised [`KernelOutput`] post-walk — discriminator
+    /// matches the inner kernel's `ViewResult` shape (Rows / Rules /
+    /// Current).
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`ViewError`] from `View::update` (e.g.
+    /// [`ViewError::BudgetExceeded`] on budget trip).
+    pub fn walk_writes(&mut self, writes: &[KernelInput]) -> Result<KernelOutput, ViewError> {
+        use benten_core::{Node, Value};
+        use benten_graph::{ChangeEvent, ChangeKind};
+
+        for (idx, input) in writes.iter().enumerate() {
+            let mut props = alloc::collections::BTreeMap::new();
+            props.insert(String::from("createdAt"), Value::Int(input.created_at));
+            props.insert(
+                String::from("disambiguator"),
+                Value::Int(input.disambiguator as i64),
+            );
+            // Note: idx is a function-local tx_id stamp; the canonical
+            // tx_id surface lives in the graph store. For G23-0a kernel
+            // walk-writes purposes we only need monotonically-increasing
+            // distinct values so the kernel's BudgetTracker observes
+            // distinct events.
+            let node = Node::new(vec![input.label.clone()], props);
+            let cid = node
+                .cid()
+                .map_err(|e| ViewError::PatternMismatch(alloc::format!("cid: {e:?}")))?;
+            let event = ChangeEvent {
+                cid,
+                labels: vec![input.label.clone()],
+                kind: ChangeKind::Created,
+                tx_id: idx as u64,
+                actor_cid: None,
+                handler_cid: None,
+                capability_grant_cid: None,
+                node: Some(node),
+                edge_endpoints: None,
+            };
+            self.update(&event)?;
+        }
+        Ok(self.materialize())
+    }
+
+    /// G23-0a: materialise the current view state into a
+    /// [`KernelOutput`]. Discriminator selected by the inner kernel's
+    /// `ViewResult` shape:
+    ///
+    /// - `ViewResult::Cids(cids)` → `KernelOutput::Rows(canonical_bytes)`
+    /// - `ViewResult::Rules(rules)` → `KernelOutput::Rules(canonical_bytes)`
+    /// - `ViewResult::Current(opt_cid)` → `KernelOutput::Current(opt_bytes)`
+    ///
+    /// Canonical bytes are produced by sorting CIDs lexicographically by
+    /// their `to_string()` form + concatenating with `\n` separators so
+    /// the output is deterministic across runs (matches the canary
+    /// canary commit contract for Family B/C round-trip pins).
+    #[must_use]
+    pub fn materialize(&self) -> KernelOutput {
+        match self.inner.read(&ViewQuery::default()) {
+            Ok(ViewResult::Cids(cids)) => KernelOutput::Rows(canonicalize_cids(&cids)),
+            Ok(ViewResult::Rules(rules)) => KernelOutput::Rules(canonicalize_rules(&rules)),
+            Ok(ViewResult::Current(opt_cid)) => {
+                KernelOutput::Current(opt_cid.map(|c| c.to_string().into_bytes()))
+            }
+            // On stale-error or pattern-mismatch we surface empty Rows —
+            // the kernel walk-writes path doesn't have a partial-materialisation
+            // mode; either the view materialises or it surfaces an empty
+            // result. Callers wanting strict error visibility use the
+            // underlying `View::read` directly.
+            Err(_) => KernelOutput::Rows(Vec::new()),
+        }
+    }
+}
+
+/// Canonicalise a CID list into deterministic bytes — sort by `to_string`
+/// + join with `\n`. Used by [`AlgorithmBView::materialize`] for
+/// `Rows`/`Current` materialisation.
+fn canonicalize_cids(cids: &[Cid]) -> Vec<u8> {
+    let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
+    sorted.sort();
+    sorted.join("\n").into_bytes()
+}
+
+/// Canonicalise a rules `BTreeMap` into deterministic bytes — `BTreeMap`
+/// iterates in key-order so we serialize as `key=debug(value)\n` for
+/// each entry. Used by [`AlgorithmBView::materialize`] for `Rules`
+/// materialisation.
+fn canonicalize_rules(rules: &alloc::collections::BTreeMap<String, Value>) -> Vec<u8> {
+    let mut out = String::new();
+    for (k, v) in rules {
+        use core::fmt::Write as _;
+        let _ = writeln!(out, "{k}={v:?}");
+    }
+    out.into_bytes()
 }
 
 impl View for AlgorithmBView {
@@ -899,7 +1066,7 @@ mod tests {
                 assert_eq!(view_id, "capability_grants");
                 assert_eq!(expected_label, "system:CapabilityGrant");
             }
-            other @ AlgorithmError::CanonicalIdAnchorPrefixRefused { .. } => {
+            other => {
                 panic!("expected ViewLabelMismatch, got {other:?}")
             }
         }
@@ -931,7 +1098,7 @@ mod tests {
                 assert_eq!(view_id, "capability_grants");
                 assert_eq!(got_prefix, "");
             }
-            other @ AlgorithmError::ViewLabelMismatch { .. } => {
+            other => {
                 panic!("expected CanonicalIdAnchorPrefixRefused, got {other:?}")
             }
         }
@@ -953,7 +1120,7 @@ mod tests {
                 assert_eq!(view_id, "capability_grants");
                 assert_eq!(got_prefix, "system:");
             }
-            other @ AlgorithmError::ViewLabelMismatch { .. } => {
+            other => {
                 panic!("expected CanonicalIdAnchorPrefixRefused, got {other:?}")
             }
         }

@@ -57,7 +57,7 @@ fn user_view_strategy_c_reserved_at_registration() {
     let spec = UserViewSpec::builder()
         .id("user_strategy_c_attempt")
         .input_pattern(UserViewInputPattern::Label("post".to_string()))
-        .strategy(benten_ivm::Strategy::C)
+        .strategy(benten_ivm::Strategy::Reserved)
         .build()
         .unwrap();
 
