@@ -18,13 +18,11 @@
 //! `(label_pattern, projection)` triple) that requires its own canary
 //! file so Family C consumers import a stable, isolated surface.
 //!
-//! ## RED-PHASE
+//! ## GREEN-PHASE (R5 G23-0a landed)
 //!
-//! These fixtures reference `benten_ivm::subgraph_spec::SubgraphSpec` +
-//! `benten_ivm::Algorithm::register_subgraph` — production symbols that
-//! land in R5 G23-0a. The fixtures compile only after G23-0a ships;
-//! every test that consumes them carries `#[ignore = "RED-PHASE: closes
-//! at R5 G23-0a"]` per dispatch-conventions §3.6e.
+//! These fixtures now thread through `benten_ivm::subgraph_spec::SubgraphSpec` +
+//! `benten_ivm::Algorithm::register_subgraph` (production symbols shipped
+//! in R5 G23-0a canary commit). Consumer pins un-ignore per pim-12 §3.6e.
 //!
 //! ## §3.6b would-FAIL-if-no-op'd
 //!
@@ -227,38 +225,53 @@ pub enum KernelOutput {
 /// End-to-end helper Family B + Family C consumers invoke to drive the
 /// kernel with a `CanarySubgraphSpec` + a write sequence.
 ///
-/// **RED-PHASE behavior:** until R5 G23-0a lands, this helper is a stub
-/// that panics with a stable message. Consumers carry
-/// `#[ignore = "RED-PHASE: closes at R5 G23-0a"]` so cargo test ignores
-/// the pin until the implementer un-ignores per pim-12 §3.6e.
-///
-/// **R5 G23-0a contract:** at landing time, this stub is replaced with
-/// the production call shape — `benten_ivm::Algorithm::register_subgraph(spec)?
-/// .walk_writes(&writes)?` — and consumer pins un-ignore.
+/// **GREEN-PHASE (R5 G23-0a landed):** threads the canary spec into the
+/// production `benten_ivm::SubgraphSpec` + drives the registered view
+/// through `Algorithm::walk_writes`. Consumer pins un-ignore per pim-12
+/// §3.6e.
 pub fn register_and_walk_to_completion(
     spec: &CanarySubgraphSpec,
     writes: &[KernelInput],
 ) -> Result<KernelOutput, String> {
-    // RED-PHASE skeleton. R5 implementer replaces with:
-    //
-    //   use benten_ivm::{Algorithm, SubgraphSpec};
-    //   let prod_spec = SubgraphSpec::from(spec.clone());
-    //   let mut view = Algorithm::register_subgraph(prod_spec)
-    //       .map_err(|e| format!("register: {e:?}"))?;
-    //   for w in writes {
-    //       view.update_from_kernel_input(w)
-    //           .map_err(|e| format!("update: {e:?}"))?;
-    //   }
-    //   Ok(view.materialise().into())
-    //
-    // Until then, return a stable error so the wrapper test files
-    // observe a clear "not yet implemented" signal at RED-PHASE.
-    let _ = (spec, writes);
-    Err(String::from(
-        "RED-PHASE: benten_ivm::Algorithm::register_subgraph + \
-         SubgraphSpec land at R5 G23-0a; un-ignore consumer pins then \
-         per pim-12 §3.6e",
-    ))
+    use benten_ivm::algorithm_b::LabelPattern;
+    use benten_ivm::{Algorithm, SubgraphSpec};
+
+    // Build the production SubgraphSpec from the canary shape.
+    let prod_spec = if spec.is_canonical {
+        SubgraphSpec::for_canonical_view(&spec.view_id)
+            .map_err(|e| format!("SubgraphSpec::for_canonical_view: {e}"))?
+    } else {
+        // User-defined views default to LabelPattern::Exact("post") for
+        // the canary contract — matches the canary's KernelInput label
+        // convention. Family C round-trip pins can override via
+        // SubgraphSpec::with_label_pattern at the construction site.
+        SubgraphSpec::user_view(spec.view_id.clone(), LabelPattern::exact("post"))
+            .map_err(|e| format!("SubgraphSpec::user_view: {e}"))?
+    };
+    let prod_spec = if spec.self_referential {
+        prod_spec.with_self_reference()
+    } else {
+        prod_spec
+    };
+
+    // Convert canary inputs to production inputs.
+    let prod_writes: Vec<benten_ivm::KernelInput> = writes
+        .iter()
+        .map(|w| benten_ivm::KernelInput::new(w.label.clone(), w.created_at, w.disambiguator))
+        .collect();
+
+    let mut view = Algorithm::register_subgraph(prod_spec).map_err(|e| format!("register: {e}"))?;
+    let prod_output = view
+        .walk_writes(&prod_writes)
+        .map_err(|e| format!("walk: {e}"))?;
+    // Convert production KernelOutput → canary KernelOutput (same shape;
+    // re-wrap to keep canary surface isolated from cross-crate type
+    // dependency).
+    Ok(match prod_output {
+        benten_ivm::KernelOutput::Rows(bytes) => KernelOutput::Rows(bytes),
+        benten_ivm::KernelOutput::Rules(bytes) => KernelOutput::Rules(bytes),
+        benten_ivm::KernelOutput::Current(opt) => KernelOutput::Current(opt),
+    })
 }
 
 /// Assertion helper Family C round-trip pins call to verify the canary

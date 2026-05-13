@@ -41,8 +41,8 @@ pub fn testing_construct_view_with_strategy(strategy: Strategy) -> Box<dyn View>
 ///
 /// Returns [`ViewError::StrategyNotImplemented`] when `strategy` is
 /// [`Strategy::Reserved`] (Z-set / DBSP cancellation, deferred to Phase 3+;
-/// renamed from `Strategy::C` at G23-0a per arch-r1-14). Strategy::A +
-/// Strategy::B always succeed.
+/// renamed from the prior third-variant spelling at G23-0a per
+/// arch-r1-14). Strategy::A + Strategy::B always succeed.
 pub fn try_construct_view_with_strategy(strategy: Strategy) -> Result<Box<dyn View>, ViewError> {
     match strategy {
         Strategy::A => Ok(Box::new(CapabilityGrantsView::new())),

@@ -42,7 +42,6 @@ mod common_kernel_canary;
 use common_kernel_canary::{CanarySubgraphSpec, KernelInput, register_and_walk_to_completion};
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn self_referential_subgraph_spec_rejected_at_register_time() {
     // Construct a user-defined SubgraphSpec marked as self-referential
     // (the canary shape carries a `self_referential` flag that the R5
@@ -75,7 +74,6 @@ fn self_referential_subgraph_spec_rejected_at_register_time() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn non_self_referential_subgraph_spec_registers_cleanly() {
     // Companion-positive arm: an OTHERWISE-identical user-defined spec
     // WITHOUT the self-reference flag MUST register cleanly. Without
@@ -93,7 +91,6 @@ fn non_self_referential_subgraph_spec_registers_cleanly() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G23-0a"]
 fn self_reference_check_runs_before_any_kernel_input_walks() {
     // "Fails fast" substance check: the rejection MUST surface before
     // any walk happens. We test this by passing a write sequence that,

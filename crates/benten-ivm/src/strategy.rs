@@ -21,10 +21,10 @@
 //!   kernel to consume a `SubgraphSpec` as view definition without minting
 //!   a new Strategy variant (CLAUDE.md baked-in #2).
 //! - [`Strategy::Reserved`] — Z-set / DBSP cancellation. **Reserved-not-
-//!   implemented** (g8-concern-3; renamed from `Strategy::C` at G23-0a per
-//!   arch-r1-14 — closes CRATES-DEEP-DIVE §4 named-but-deferred item). The
-//!   variant exists so the catalog is stable; constructing a
-//!   `Strategy::Reserved` view returns
+//!   implemented** (g8-concern-3; renamed from the prior third-variant
+//!   spelling at G23-0a per arch-r1-14 — closes CRATES-DEEP-DIVE §4
+//!   named-but-deferred item). The variant exists so the catalog is
+//!   stable; constructing a `Strategy::Reserved` view returns
 //!   [`crate::ViewError::StrategyNotImplemented`] with a deferral message
 //!   pointing at Phase 3+.
 //!
@@ -56,10 +56,11 @@ pub enum Strategy {
     /// baked-in #2 — `Strategy::B` IS the generalized Algorithm B).
     B,
     /// Z-set / DBSP cancellation. **Reserved-not-implemented** (renamed
-    /// from `Strategy::C` at G23-0a per arch-r1-14 — closes CRATES-DEEP-DIVE
-    /// §4 named-but-deferred item). The variant exists so the catalog of
-    /// options is complete + stable. Constructing a `Strategy::Reserved`
-    /// view via [`crate::testing::try_construct_view_with_strategy`] returns
+    /// from the prior third-variant spelling at G23-0a per arch-r1-14 —
+    /// closes CRATES-DEEP-DIVE §4 named-but-deferred item). The variant
+    /// exists so the catalog of options is complete + stable.
+    /// Constructing a `Strategy::Reserved` view via
+    /// [`crate::testing::try_construct_view_with_strategy`] returns
     /// [`crate::ViewError::StrategyNotImplemented`] with a deferral message
     /// naming the Phase-3+ target.
     Reserved,
