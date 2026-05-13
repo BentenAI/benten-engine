@@ -64,11 +64,7 @@
 
 #![allow(clippy::module_name_repetitions, missing_docs)]
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
-use benten_core::{Cid, OperationNode, PrimitiveKind, Subgraph, Value};
-use benten_errors::ErrorCode;
+use benten_core::PrimitiveKind;
 
 pub mod emit;
 pub mod error;
@@ -238,16 +234,4 @@ mod canary_smoke {
         let b2 = benten_core::canonical_subgraph_bytes(s2.as_subgraph()).unwrap();
         assert_eq!(b1, b2, "canonical-bytes must be stable across compiles");
     }
-}
-
-// Suppress unused-import warnings — these will be touched once a downstream
-// G23-B / G24-D wave wires them into a real call path.
-#[allow(dead_code)]
-fn _unused_imports_anchor() {
-    let _: Option<BTreeMap<String, Value>> = None;
-    let _: Option<BTreeSet<String>> = None;
-    let _: Option<Cid> = None;
-    let _: Option<OperationNode> = None;
-    let _: Option<Subgraph> = None;
-    let _: Option<ErrorCode> = None;
 }

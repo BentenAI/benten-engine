@@ -21,8 +21,8 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
 

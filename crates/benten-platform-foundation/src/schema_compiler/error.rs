@@ -23,14 +23,18 @@ pub enum SchemaCompileError {
     },
 
     /// Defensive guard — the emitter produced a kind outside the 12.
-    #[error("schema_compiler: emitter would mint new PrimitiveKind `{requested_kind}` outside canonical 12 (CLAUDE.md baked-in #1 violation)")]
+    #[error(
+        "schema_compiler: emitter would mint new PrimitiveKind `{requested_kind}` outside canonical 12 (CLAUDE.md baked-in #1 violation)"
+    )]
     EmitNewPrimitiveRejected {
         /// Requested kind name.
         requested_kind: String,
     },
 
     /// SANDBOX ref requested storage-mutating host fn.
-    #[error("schema_compiler: SANDBOX module reference requests storage-mutating host fn `{host_fn}` — forbidden per CLAUDE.md baked-in #16")]
+    #[error(
+        "schema_compiler: SANDBOX module reference requests storage-mutating host fn `{host_fn}` — forbidden per CLAUDE.md baked-in #16"
+    )]
     SandboxHostFnRejected {
         /// The forbidden host fn name (`kv:write` etc).
         host_fn: String,
@@ -48,7 +52,9 @@ pub enum SchemaCompileError {
     },
 
     /// Edge outside the 6-set.
-    #[error("schema_compiler: edge `{edge}` is not in the 6-edge set (source={source_label}, target={target_label})")]
+    #[error(
+        "schema_compiler: edge `{edge}` is not in the 6-edge set (source={source_label}, target={target_label})"
+    )]
     VocabEdgeMismatch {
         /// Source label.
         source_label: String,
@@ -68,7 +74,9 @@ pub enum SchemaCompileError {
     },
 
     /// FieldRef missing or unresolvable target.
-    #[error("schema_compiler: FieldRef `{field_name}` has missing/unresolvable ref_target_kind={ref_target_kind:?}")]
+    #[error(
+        "schema_compiler: FieldRef `{field_name}` has missing/unresolvable ref_target_kind={ref_target_kind:?}"
+    )]
     VocabRefTargetMissing {
         /// FieldRef field name.
         field_name: String,
@@ -84,7 +92,9 @@ pub enum SchemaCompileError {
     },
 
     /// Field missing a mandatory property.
-    #[error("schema_compiler: field `{field_name}` is missing mandatory property `{missing_property}`")]
+    #[error(
+        "schema_compiler: field `{field_name}` is missing mandatory property `{missing_property}`"
+    )]
     VocabRequiredPropertyMissing {
         /// Field name.
         field_name: String,

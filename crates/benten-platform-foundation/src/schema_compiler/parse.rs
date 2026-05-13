@@ -51,9 +51,7 @@ impl ParsedField {
     /// Diagnostic — does this field carry a child reference (object /
     /// list / map / ref / enum / union)?
     pub(crate) fn has_child_shape(&self) -> bool {
-        !self.sub_fields.is_empty()
-            || self.item_scalar.is_some()
-            || self.ref_target_kind.is_some()
+        !self.sub_fields.is_empty() || self.item_scalar.is_some() || self.ref_target_kind.is_some()
     }
 }
 
@@ -120,13 +118,12 @@ pub(crate) fn parse_schema_json(bytes: &[u8]) -> Result<ParsedSchema, SchemaComp
             location: Some("$".to_string()),
         })?;
 
-    let label_raw = obj
-        .get("label")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| SchemaCompileError::ValidationFailed {
+    let label_raw = obj.get("label").and_then(|v| v.as_str()).ok_or_else(|| {
+        SchemaCompileError::ValidationFailed {
             reason: "missing `label` at SchemaRoot".to_string(),
             location: Some("$".to_string()),
-        })?;
+        }
+    })?;
     let label = VocabLabel::from_str(label_raw)?;
     if label != VocabLabel::SchemaRoot {
         return Err(SchemaCompileError::ValidationFailed {
@@ -164,13 +161,14 @@ pub(crate) fn parse_schema_json(bytes: &[u8]) -> Result<ParsedSchema, SchemaComp
     };
 
     let emit_targets = if let Some(arr) = obj.get("emit_targets").and_then(|v| v.as_array()) {
-        arr.iter().map(parse_emit_target).collect::<Result<Vec<_>, _>>()?
+        arr.iter()
+            .map(parse_emit_target)
+            .collect::<Result<Vec<_>, _>>()?
     } else {
         Vec::new()
     };
 
-    let respond_targets = if let Some(arr) = obj.get("respond_targets").and_then(|v| v.as_array())
-    {
+    let respond_targets = if let Some(arr) = obj.get("respond_targets").and_then(|v| v.as_array()) {
         arr.iter()
             .map(parse_respond_target)
             .collect::<Result<Vec<_>, _>>()?
@@ -187,10 +185,7 @@ pub(crate) fn parse_schema_json(bytes: &[u8]) -> Result<ParsedSchema, SchemaComp
     })
 }
 
-fn parse_field(
-    raw: &serde_json::Value,
-    location: &str,
-) -> Result<ParsedField, SchemaCompileError> {
+fn parse_field(raw: &serde_json::Value, location: &str) -> Result<ParsedField, SchemaCompileError> {
     let obj = raw
         .as_object()
         .ok_or_else(|| SchemaCompileError::ValidationFailed {
@@ -198,26 +193,22 @@ fn parse_field(
             location: Some(location.to_string()),
         })?;
 
-    let label_raw = obj
-        .get("label")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| SchemaCompileError::VocabRequiredPropertyMissing {
+    let label_raw = obj.get("label").and_then(|v| v.as_str()).ok_or_else(|| {
+        SchemaCompileError::VocabRequiredPropertyMissing {
             field_name: obj
                 .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or("<unnamed>")
                 .to_string(),
             missing_property: "label".to_string(),
-        })?;
+        }
+    })?;
     let label = match VocabLabel::from_str(label_raw) {
         Ok(l) => l,
         Err(SchemaCompileError::VocabInvalidLabel { label, .. }) => {
             return Err(SchemaCompileError::VocabInvalidLabel {
                 label,
-                field_name: obj
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string),
+                field_name: obj.get("name").and_then(|v| v.as_str()).map(str::to_string),
             });
         }
         Err(e) => return Err(e),
@@ -232,12 +223,13 @@ fn parse_field(
         })?
         .to_string();
 
-    let required = obj.get("required").and_then(|v| v.as_bool()).ok_or_else(|| {
-        SchemaCompileError::VocabRequiredPropertyMissing {
+    let required = obj
+        .get("required")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| SchemaCompileError::VocabRequiredPropertyMissing {
             field_name: name.clone(),
             missing_property: "required".to_string(),
-        }
-    })?;
+        })?;
 
     // `default` is one of the 4 mandatory field properties — but treat
     // an absent `default` as implicit JSON-null (matches the R3 fixture
@@ -286,10 +278,7 @@ fn parse_field(
         if let Some(arr) = obj.get("fields").and_then(|v| v.as_array()) {
             let mut sub = Vec::with_capacity(arr.len());
             for (idx, raw_sub) in arr.iter().enumerate() {
-                sub.push(parse_field(
-                    raw_sub,
-                    &format!("{location}.fields[{idx}]"),
-                )?);
+                sub.push(parse_field(raw_sub, &format!("{location}.fields[{idx}]"))?);
             }
             sub
         } else {
@@ -345,7 +334,10 @@ fn parse_sandbox_ref(raw: &serde_json::Value) -> Result<SandboxRef, SchemaCompil
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    Ok(SandboxRef { module_cid, host_fns })
+    Ok(SandboxRef {
+        module_cid,
+        host_fns,
+    })
 }
 
 fn parse_emit_target(raw: &serde_json::Value) -> Result<EmitTarget, SchemaCompileError> {
@@ -416,21 +408,17 @@ pub(crate) fn validate_vocab(parsed: &ParsedSchema) -> Result<(), SchemaCompileE
 
 fn validate_field_vocab(field: &ParsedField) -> Result<(), SchemaCompileError> {
     match field.label {
-        VocabLabel::FieldScalar => {
-            if field.scalar.is_none() {
-                return Err(SchemaCompileError::VocabRequiredPropertyMissing {
-                    field_name: field.name.clone(),
-                    missing_property: "scalar".to_string(),
-                });
-            }
+        VocabLabel::FieldScalar if field.scalar.is_none() => {
+            return Err(SchemaCompileError::VocabRequiredPropertyMissing {
+                field_name: field.name.clone(),
+                missing_property: "scalar".to_string(),
+            });
         }
-        VocabLabel::FieldRef => {
-            if field.ref_target_kind.is_none() {
-                return Err(SchemaCompileError::VocabRefTargetMissing {
-                    field_name: field.name.clone(),
-                    ref_target_kind: None,
-                });
-            }
+        VocabLabel::FieldRef if field.ref_target_kind.is_none() => {
+            return Err(SchemaCompileError::VocabRefTargetMissing {
+                field_name: field.name.clone(),
+                ref_target_kind: None,
+            });
         }
         VocabLabel::FieldObject => {
             for sub in &field.sub_fields {
@@ -502,9 +490,7 @@ pub(crate) fn validate_no_unconstrained_emit_respond(
 ///
 /// Aux: also catches a degenerate cycle inside FieldObject sub-fields
 /// where a sub-field's `ref_target_kind` references its parent's name.
-pub(crate) fn detect_field_ref_cycle(
-    parsed: &ParsedSchema,
-) -> Result<(), SchemaCompileError> {
+pub(crate) fn detect_field_ref_cycle(parsed: &ParsedSchema) -> Result<(), SchemaCompileError> {
     let schema_name = &parsed.name;
     let mut trace = BTreeSet::new();
     for field in &parsed.fields {
@@ -518,14 +504,14 @@ fn detect_cycle_walk(
     schema_name: &str,
     trace: &mut BTreeSet<String>,
 ) -> Result<(), SchemaCompileError> {
-    if let Some(target) = &field.ref_target_kind {
-        if target == schema_name || trace.contains(target) {
-            let mut path: Vec<String> = trace.iter().cloned().collect();
-            path.push(target.clone());
-            return Err(SchemaCompileError::VocabCycleRejected {
-                cycle_through: path,
-            });
-        }
+    if let Some(target) = &field.ref_target_kind
+        && (target == schema_name || trace.contains(target))
+    {
+        let mut path: Vec<String> = trace.iter().cloned().collect();
+        path.push(target.clone());
+        return Err(SchemaCompileError::VocabCycleRejected {
+            cycle_through: path,
+        });
     }
     trace.insert(field.name.clone());
     for sub in &field.sub_fields {

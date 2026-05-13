@@ -25,8 +25,8 @@ fn schema_compiler_rejects_schema_referencing_sandbox_with_storage_mutating_host
     use benten_platform_foundation::schema_compiler::compile;
 
     let bytes = schema_fixtures::hostile_schema_with_sandbox_kv_write_bytes();
-    let err =
-        compile(bytes).expect_err("schema with SANDBOX kv:write request MUST be rejected per CLAUDE.md #16");
+    let err = compile(bytes)
+        .expect_err("schema with SANDBOX kv:write request MUST be rejected per CLAUDE.md #16");
     assert_eq!(
         err.code(),
         ErrorCode::SchemaSandboxHostFnRejected,
