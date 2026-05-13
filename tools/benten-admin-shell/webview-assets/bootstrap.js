@@ -20,9 +20,11 @@
 //      The Tauri command handler in `src/main.rs::tauri_boot` calls
 //      `AdminShellState::dispatch` with the request envelope.
 //
-// At HEAD the `tauri` feature scaffold prints a placeholder + exits;
-// this file is the contract the v1-assessment-window webview-driven
-// wave will wire against (per docs/future/phase-4-backlog.md §3).
+// With the `tauri` cargo feature enabled the boot path wires a real
+// Tauri 2.x runtime via `tauri_boot::run` and this script invokes
+// `window.__TAURI__.core.invoke` against the registered command
+// handler. Without the feature, the default-mode binary prints a
+// placeholder + the helpful "feature disabled" message below.
 
 (function () {
   "use strict";
@@ -40,12 +42,11 @@
   button.addEventListener("click", function () {
     setText(responseEl, "(dispatching engine.plugin.manifest.review ...)");
 
-    // The v1-assessment-window webview wave wires this through
-    // window.__TAURI__.core.invoke; at HEAD we just describe the
-    // contract so the wave has a concrete file to extend.
+    // With the `tauri` feature enabled the runtime is present and
+    // `window.__TAURI__.core.invoke` is wired by `tauri_boot::run`.
     var tauri = window.__TAURI__;
     if (!tauri || !tauri.core || typeof tauri.core.invoke !== "function") {
-      setText(responseEl, "tauri runtime not present — default-mode build (no `tauri` feature). Wire framing lands at v1-assessment-window wave per Cargo.toml header.");
+      setText(responseEl, "tauri runtime not present in this build — `tauri` feature disabled (default-mode binary).");
       return;
     }
 
