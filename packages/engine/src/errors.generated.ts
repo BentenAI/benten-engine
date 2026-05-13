@@ -171,6 +171,15 @@ export const CATALOG_CODES = [
   "E_TYPED_CALL_DISPATCH_ERROR",
   "E_UCAN_CLOCK_NOT_INJECTED",
   "E_RESERVED_HANDLER_NAMESPACE",
+  "E_SCHEMA_VALIDATION_FAILED",
+  "E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED",
+  "E_SCHEMA_SANDBOX_HOST_FN_REJECTED",
+  "E_SCHEMA_VOCAB_INVALID_LABEL",
+  "E_SCHEMA_VOCAB_EDGE_MISMATCH",
+  "E_SCHEMA_VOCAB_SCALAR_UNKNOWN",
+  "E_SCHEMA_VOCAB_REF_TARGET_MISSING",
+  "E_SCHEMA_VOCAB_CYCLE_REJECTED",
+  "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2246,6 +2255,141 @@ export class EReservedHandlerNamespace extends BentenError {
 }
 
 /**
+ * E_SCHEMA_VALIDATION_FAILED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary).
+ * Message template: "schema_compiler: schema failed validation (malformed JSON / missing required field / unconstrained EMIT/RESPOND target without scope)"
+ */
+export class ESchemaValidationFailed extends BentenError {
+  static readonly code = "E_SCHEMA_VALIDATION_FAILED";
+  static readonly fixHint = "Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 6-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VALIDATION_FAILED", "Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 6-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.", message, context);
+    this.name = "ESchemaValidationFailed";
+  }
+}
+
+/**
+ * E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/emit.rs` (G23-A canary).
+ * Message template: "schema_compiler: schema would require emitting a new PrimitiveKind variant outside the canonical 12 (CLAUDE.md baked-in #1 violation)"
+ */
+export class ESchemaEmitNewPrimitiveRejected extends BentenError {
+  static readonly code = "E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED";
+  static readonly fixHint = "Schema requested a primitive kind outside the 12-canonical set (READ / WRITE / TRANSFORM / BRANCH / ITERATE / WAIT / CALL / RESPOND / EMIT / SANDBOX / SUBSCRIBE / STREAM). The 12-primitive commitment is irreducible (CLAUDE.md baked-in #1). Re-express the schema as a composition over the existing 12 primitives. If the schema genuinely needs new compute that doesn't fit, route through SANDBOX (CLAUDE.md baked-in #16).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED", "Schema requested a primitive kind outside the 12-canonical set (READ / WRITE / TRANSFORM / BRANCH / ITERATE / WAIT / CALL / RESPOND / EMIT / SANDBOX / SUBSCRIBE / STREAM). The 12-primitive commitment is irreducible (CLAUDE.md baked-in #1). Re-express the schema as a composition over the existing 12 primitives. If the schema genuinely needs new compute that doesn't fit, route through SANDBOX (CLAUDE.md baked-in #16).", message, context);
+    this.name = "ESchemaEmitNewPrimitiveRejected";
+  }
+}
+
+/**
+ * E_SCHEMA_SANDBOX_HOST_FN_REJECTED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, sandbox-ref validation).
+ * Message template: "schema_compiler: schema references SANDBOX module requesting storage-mutating host fn `{host_fn}` — forbidden per CLAUDE.md baked-in #16"
+ */
+export class ESchemaSandboxHostFnRejected extends BentenError {
+  static readonly code = "E_SCHEMA_SANDBOX_HOST_FN_REJECTED";
+  static readonly fixHint = "A schema-embedded SANDBOX reference requested a storage-mutating host fn (`kv:write` / `kv:delete` / edge-mutating). Per CLAUDE.md baked-in #16 these are explicitly NOT engine concerns — they would be parallel write-pathways that bypass the WRITE primitive's capability gating + Inv-13 firing matrix + IVM materialization seam. The minimum-viable SANDBOX host-fn surface is `time` / `log` / `kv:read` / `random` only. Re-shape the schema so any writes go through the WRITE primitive (which the materializer pipeline composes for you).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_SANDBOX_HOST_FN_REJECTED", "A schema-embedded SANDBOX reference requested a storage-mutating host fn (`kv:write` / `kv:delete` / edge-mutating). Per CLAUDE.md baked-in #16 these are explicitly NOT engine concerns — they would be parallel write-pathways that bypass the WRITE primitive's capability gating + Inv-13 firing matrix + IVM materialization seam. The minimum-viable SANDBOX host-fn surface is `time` / `log` / `kv:read` / `random` only. Re-shape the schema so any writes go through the WRITE primitive (which the materializer pipeline composes for you).", message, context);
+    this.name = "ESchemaSandboxHostFnRejected";
+  }
+}
+
+/**
+ * E_SCHEMA_VOCAB_INVALID_LABEL
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, label validation).
+ * Message template: "schema_compiler: schema references vocabulary label `{label}` outside the 8-label set (SchemaRoot / FieldScalar / FieldObject / FieldList / FieldMap / FieldRef / FieldEnum / FieldUnion)"
+ */
+export class ESchemaVocabInvalidLabel extends BentenError {
+  static readonly code = "E_SCHEMA_VOCAB_INVALID_LABEL";
+  static readonly fixHint = "Replace the unknown label with one of the 8 ratified labels (D-4F-NEW-TYPED-FIELD-NODE-VOCAB). The schema vocabulary is closed; extension requires re-opening the D-4F-NEW-TYPED-FIELD-NODE-VOCAB decision.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VOCAB_INVALID_LABEL", "Replace the unknown label with one of the 8 ratified labels (D-4F-NEW-TYPED-FIELD-NODE-VOCAB). The schema vocabulary is closed; extension requires re-opening the D-4F-NEW-TYPED-FIELD-NODE-VOCAB decision.", message, context);
+    this.name = "ESchemaVocabInvalidLabel";
+  }
+}
+
+/**
+ * E_SCHEMA_VOCAB_EDGE_MISMATCH
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, edge validation).
+ * Message template: "schema_compiler: schema edge does not match any of the 6 declared edge types (FIELD / ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT) for the given label pair"
+ */
+export class ESchemaVocabEdgeMismatch extends BentenError {
+  static readonly code = "E_SCHEMA_VOCAB_EDGE_MISMATCH";
+  static readonly fixHint = "The schema's edge-label pairing is not in the 6-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VOCAB_EDGE_MISMATCH", "The schema's edge-label pairing is not in the 6-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.", message, context);
+    this.name = "ESchemaVocabEdgeMismatch";
+  }
+}
+
+/**
+ * E_SCHEMA_VOCAB_SCALAR_UNKNOWN
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, scalar validation).
+ * Message template: "schema_compiler: FieldScalar references scalar name `{scalar}` outside the 8-scalar vocabulary (text / int / float / bool / bytes / bytes-cid / timestamp-hlc / null)"
+ */
+export class ESchemaVocabScalarUnknown extends BentenError {
+  static readonly code = "E_SCHEMA_VOCAB_SCALAR_UNKNOWN";
+  static readonly fixHint = "Use one of the 8 ratified scalar names. Each maps to a `benten-core::Value` variant per `docs/SCHEMA-DRIVEN-RENDERING.md §2.3`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VOCAB_SCALAR_UNKNOWN", "Use one of the 8 ratified scalar names. Each maps to a `benten-core::Value` variant per `docs/SCHEMA-DRIVEN-RENDERING.md §2.3`.", message, context);
+    this.name = "ESchemaVocabScalarUnknown";
+  }
+}
+
+/**
+ * E_SCHEMA_VOCAB_REF_TARGET_MISSING
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, FieldRef validation).
+ * Message template: "schema_compiler: FieldRef `{field_name}` references a target kind `{ref_target_kind}` that is missing or unresolvable"
+ */
+export class ESchemaVocabRefTargetMissing extends BentenError {
+  static readonly code = "E_SCHEMA_VOCAB_REF_TARGET_MISSING";
+  static readonly fixHint = "Supply a `ref_target_kind` that resolves either to a content CID (cross-content reference) or to another label/schema in scope. FieldRef nodes MUST declare a target; an undeclared target fails the closure invariant for cross-content references.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VOCAB_REF_TARGET_MISSING", "Supply a `ref_target_kind` that resolves either to a content CID (cross-content reference) or to another label/schema in scope. FieldRef nodes MUST declare a target; an undeclared target fails the closure invariant for cross-content references.", message, context);
+    this.name = "ESchemaVocabRefTargetMissing";
+  }
+}
+
+/**
+ * E_SCHEMA_VOCAB_CYCLE_REJECTED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, cycle detection).
+ * Message template: "schema_compiler: FieldRef graph contains a cycle — schema vocabulary is DAG-only (CLAUDE.md baked-in #4)"
+ */
+export class ESchemaVocabCycleRejected extends BentenError {
+  static readonly code = "E_SCHEMA_VOCAB_CYCLE_REJECTED";
+  static readonly fixHint = "Break the cycle. Schemas form a DAG per the same commitment that governs all subgraphs (CLAUDE.md baked-in #4 — DAGs only; bounded iteration via ITERATE primitive). Recursive shapes must terminate via FieldRef-to-content-CID (which is a runtime-resolved reference, not a compile-time edge).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VOCAB_CYCLE_REJECTED", "Break the cycle. Schemas form a DAG per the same commitment that governs all subgraphs (CLAUDE.md baked-in #4 — DAGs only; bounded iteration via ITERATE primitive). Recursive shapes must terminate via FieldRef-to-content-CID (which is a runtime-resolved reference, not a compile-time edge).", message, context);
+    this.name = "ESchemaVocabCycleRejected";
+  }
+}
+
+/**
+ * E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, per-field validation).
+ * Message template: "schema_compiler: field `{field_name}` is missing one of the 4 mandatory properties (name / required / default / scope)"
+ */
+export class ESchemaVocabRequiredPropertyMissing extends BentenError {
+  static readonly code = "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING";
+  static readonly fixHint = "Supply the missing property. Note: `scope` is schema-DERIVED (synthesized by the compiler from field path per sec-3.5-r1-4), NOT user-supplied — if a user-supplied `scope` is detected, the compiler discards it and synthesizes its own. The 4 mandatory properties form the irreducible per-field metadata budget.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING", "Supply the missing property. Note: `scope` is schema-DERIVED (synthesized by the compiler from field path per sec-3.5-r1-4), NOT user-supplied — if a user-supplied `scope` is detected, the compiler discards it and synthesizes its own. The 4 mandatory properties form the irreducible per-field metadata budget.", message, context);
+    this.name = "ESchemaVocabRequiredPropertyMissing";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -2392,4 +2536,13 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_TYPED_CALL_DISPATCH_ERROR": ETypedCallDispatchError,
   "E_UCAN_CLOCK_NOT_INJECTED": EUcanClockNotInjected,
   "E_RESERVED_HANDLER_NAMESPACE": EReservedHandlerNamespace,
+  "E_SCHEMA_VALIDATION_FAILED": ESchemaValidationFailed,
+  "E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED": ESchemaEmitNewPrimitiveRejected,
+  "E_SCHEMA_SANDBOX_HOST_FN_REJECTED": ESchemaSandboxHostFnRejected,
+  "E_SCHEMA_VOCAB_INVALID_LABEL": ESchemaVocabInvalidLabel,
+  "E_SCHEMA_VOCAB_EDGE_MISMATCH": ESchemaVocabEdgeMismatch,
+  "E_SCHEMA_VOCAB_SCALAR_UNKNOWN": ESchemaVocabScalarUnknown,
+  "E_SCHEMA_VOCAB_REF_TARGET_MISSING": ESchemaVocabRefTargetMissing,
+  "E_SCHEMA_VOCAB_CYCLE_REJECTED": ESchemaVocabCycleRejected,
+  "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING": ESchemaVocabRequiredPropertyMissing,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

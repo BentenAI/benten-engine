@@ -76,8 +76,18 @@
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 
 pub mod plugin_manifest;
+pub mod schema_compiler;
 
 pub use plugin_manifest::{
     CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
     SharesPolicyDefault, SharesRule, SharesTarget,
+};
+
+// G23-A schema_compiler canary public surface — the entry-point
+// `schema_compiler::compile` + `SchemaSubgraphSpec` wrapper + the
+// vocabulary types. Downstream G23-B materializer + G24-D plugin manifest
+// + test pins consume these.
+pub use schema_compiler::{
+    PrimitiveDescriptor, SCHEMA_COMPILER_PROPERTY_KEYS, Scalar, SchemaCompileError,
+    SchemaSubgraphSpec, VocabEdge, VocabLabel, compile as compile_schema,
 };
