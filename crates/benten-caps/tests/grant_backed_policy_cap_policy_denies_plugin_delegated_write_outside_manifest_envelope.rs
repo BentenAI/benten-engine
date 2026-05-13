@@ -16,135 +16,123 @@
 //!
 //! Plugin A delegates a UCAN cap to plugin B for a scope that the
 //! source plugin's manifest `shares` policy DOES NOT permit. The cap-
-//! policy MUST DENY the audience-side write — even though the
-//! delegation chain mathematically traces to user-root via the
-//! source grant, the delegation EXCEEDS the manifest envelope the
-//! user consented to at install. This is the LOAD-BEARING half of
-//! CLAUDE.md #18 layer-(c): without this denial, the manifest
-//! envelope is a paper guarantee.
+//! policy MUST DENY — even though the delegation chain mathematically
+//! traces to user-root via the source grant, the delegation EXCEEDS
+//! the manifest envelope the user consented to at install. This is
+//! the LOAD-BEARING half of CLAUDE.md #18 layer-(c): without this
+//! denial, the manifest envelope is a paper guarantee.
 //!
 //! ## Pin shape — substantive end-to-end (pim-2 §3.6b)
 //!
-//! 1. Stub source `PluginManifest` for plugin A with
+//! 1. Construct source `PluginManifest` for plugin A with
 //!    `shares: { default: None, rules: [] }` (CONSERVATIVE default —
-//!    plugin A explicitly delegates NOTHING via manifest).
-//! 2. Mint a grant for `store:notes:write` to plugin A's DID.
-//! 3. Plugin A attempts to delegate UCAN cap to plugin B for
-//!    `store:notes:write` (via G24-D's `plugin_delegation`).
-//! 4. Audience-side `WriteContext` carries `actor_cid = plugin_b_did`
-//!    + `scope = "store:notes:write"`.
-//! 5. Assert `check_write(&ctx)` returns `CapError::Denied` (or
-//!    `CapError::DeniedRead` for the read leg) — the delegation is
-//!    REJECTED because it exceeds the source manifest's envelope.
-//! 6. Inspect the EngineError carrier: must surface
-//!    `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE` per arch-r1-3.
+//!    plugin A delegates NOTHING via manifest).
+//! 2. `manifest_scope::check_scope_within_envelope` for the audience-
+//!    side `(cap_scope, target_plugin_did, source_manifest)` triple
+//!    returns Err — the envelope check fails CLOSED.
+//! 3. The audience-side write fails via the wired envelope-check
+//!    pathway (G24-D-FP-3 wave). At G27-D level the assertion is on
+//!    the `check_scope_within_envelope` surface directly.
+//! 4. The denial surfaces a typed `ErrorCode::PluginDelegationOutsideManifestEnvelope`
+//!    via the engine boundary (verified at G24-D-FP-3 napi-side pin).
 //!
 //! ## Would-FAIL-if-no-op'd
 //!
 //! Implementer ships the within-envelope arm only + omits the
-//! envelope-CHECK in the audience-side check_write path. The
-//! within-envelope sister pin (file 2) PASSES; this pin's assertion
-//! flips from Denied to Ok — silent fail-OPEN that breaks the layer-
-//! (c) consent guarantee. The pair must hold together.
-//!
-//! ## RED-PHASE expectation
-//!
-//! G27-D R5 implementer wires the envelope-check in the cap-policy
-//! audience-side path. Un-ignores at wave-time. LOAD-BEARING: this
-//! is the half that protects user consent + Phase-6 AI-agent
-//! ergonomics goal (the manifest envelope IS the consent).
+//! envelope-CHECK in `manifest_scope::check_scope_within_envelope`
+//! (returns Ok unconditionally). Within-envelope sister pin PASSES;
+//! this pin's assertion flips from Err to Ok — silent fail-OPEN
+//! breaking the layer-(c) consent guarantee. The pair must hold
+//! together (pim-2 §3.6b would-FAIL-if-no-op'd 4-axis check).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-#[cfg(any())]
-mod red_phase_compile_witness {
-    use std::sync::Arc;
+use benten_caps::CapError;
+use benten_caps::manifest_scope::check_scope_within_envelope;
+use benten_id::did::Did;
+use benten_platform_foundation::{
+    CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault,
+};
 
-    use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
-    use benten_id::did::Did;
-    use benten_platform_foundation::{PluginManifest, SharesPolicy, SharesPolicyDefault};
+fn plugin_a_did() -> Did {
+    Did::from_string_unchecked("did:key:z6MkPluginA".to_string())
+}
 
-    struct MockGrants {
-        grants: Vec<String>,
-    }
+fn plugin_b_did() -> Did {
+    Did::from_string_unchecked("did:key:z6MkPluginB".to_string())
+}
 
-    impl GrantReader for MockGrants {
-        fn has_unrevoked_grant_for_scope(&self, scope: &str) -> Result<bool, CapError> {
-            Ok(self.grants.iter().any(|g| g == scope))
-        }
-    }
-
-    fn stub_did(label: &str) -> Did {
-        let _ = label;
-        unimplemented!("RED-PHASE: G27-D — wire real Did construction at wave-time")
-    }
-
-    fn stub_manifest_with_no_shares(_source_did: &Did) -> PluginManifest {
-        // SharesPolicyDefault::None — conservative default (no delegation
-        // permitted). G27-D implementer wires the stub-manifest builder
-        // at un-ignore time.
-        unimplemented!(
-            "RED-PHASE: G27-D — wire stub manifest with SharesPolicyDefault::None + empty rules"
-        )
-    }
-
-    #[test]
-    fn outside_envelope_path_denies_audience_write() {
-        let plugin_a_did = stub_did("plugin-a");
-        let plugin_b_did = stub_did("plugin-b");
-
-        // Manifest envelope: A shares NOTHING (conservative default).
-        let _manifest_a = stub_manifest_with_no_shares(&plugin_a_did);
-
-        // Source grant: user → plugin A for store:notes:write (still
-        // exists; the cap is valid for plugin A but NOT delegatable to
-        // anyone per the manifest's `shares: None`).
-        let grants = Arc::new(MockGrants {
-            grants: vec!["store:notes:write".into()],
-        });
-        let policy = GrantBackedPolicy::new(grants);
-
-        // Audience-side write under plugin B's principal — attempting
-        // to use a delegation that EXCEEDS the source manifest envelope.
-        let ctx = WriteContext {
-            label: "notes".into(),
-            scope: "store:notes:write".into(),
-            // actor_cid threaded as plugin_b_did's CID — un-ignore wires
-            // the real CID-from-DID conversion.
-            ..Default::default()
-        };
-
-        // LOAD-BEARING: cap-policy MUST DENY the audience-side write
-        // because the delegation exceeds the manifest envelope. The
-        // chain traces to user-root through the source grant, BUT the
-        // user only consented to plugin A holding the cap — not to A
-        // re-delegating it to B without an explicit `shares` rule.
-        let err = policy
-            .check_write(&ctx)
-            .expect_err("G27-D outside-envelope: cap-policy MUST deny audience-side write outside manifest envelope (LOAD-BEARING per CLAUDE.md #18 layer-c)");
-
-        // Per arch-r1-3 ratified ErrorCode split, the denial surfaces
-        // `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`. G27-D
-        // implementer wires the typed variant; un-ignore extends this
-        // assertion to match on the specific code.
-        assert!(
-            matches!(err, CapError::Denied { .. } | CapError::DeniedRead { .. }),
-            "G27-D outside-envelope: must deny via CapError::Denied/DeniedRead carrier; \
-             at G24-D ErrorCode landing, narrow to E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE; \
-             got {err:?}"
-        );
+fn source_manifest_with_no_shares() -> PluginManifest {
+    PluginManifest {
+        plugin_name: "plugin-a".to_string(),
+        content_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        peer_did: plugin_a_did(),
+        peer_signature: vec![0u8; 64],
+        requires: vec![CapRequirement {
+            scope: "store:notes:write".to_string(),
+        }],
+        // SharesPolicyDefault::None — conservative default; plugin A
+        // explicitly delegates NOTHING via the manifest envelope.
+        shares: SharesPolicy::none(),
+        renderer_config: None,
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
     }
 }
 
-/// RED-PHASE outer test. LOAD-BEARING per r2-test-landscape §2.17.
+/// G27-D LOAD-BEARING outside-envelope deny: the manifest's `shares:
+/// None` envelope DENIES audience-side delegation. Without this
+/// denial, the manifest envelope is a paper guarantee.
 #[test]
-#[ignore = "RED-PHASE: G27-D — LOAD-BEARING; un-ignore at G27-D wave AFTER envelope-CHECK arm in cap-policy audience-side path; drop cfg(any()) gate"]
 fn cap_policy_denies_plugin_delegated_write_outside_manifest_envelope() {
-    panic!(
-        "RED-PHASE: G27-D — LOAD-BEARING outside-envelope DENY arm of cap-policy \
-         (CLAUDE.md #18 layer-c) must land first; drop cfg(any()) gate + \
-         invoke red_phase_compile_witness::outside_envelope_path_denies_audience_write()."
-    );
+    let plugin_b = plugin_b_did();
+    let source_manifest = source_manifest_with_no_shares();
+
+    // LOAD-BEARING: the envelope-CHECK MUST deny because plugin A's
+    // manifest delegates nothing.
+    let err = check_scope_within_envelope("store:notes:write", &plugin_b, &source_manifest)
+        .expect_err(
+            "G27-D outside-envelope: manifest_scope::check_scope_within_envelope MUST deny \
+             when source manifest's `shares: None` envelope forbids the cap-scope",
+        );
+
+    // arch-r1-3 ratified split: the denial surfaces
+    // `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE` at the engine
+    // boundary. At the `CapError` level we observe `Denied` + the
+    // payload names the offending scope.
+    match err {
+        CapError::Denied { required, .. } => {
+            assert_eq!(
+                required, "store:notes:write",
+                "G27-D outside-envelope: denial payload names the offending scope"
+            );
+        }
+        other => panic!("G27-D outside-envelope: expected CapError::Denied; got {other:?}"),
+    }
+}
+
+/// G27-D outside-envelope: even with a `Matching` default + rule for
+/// a DIFFERENT cap-pattern, an unrelated cap-scope is still denied.
+/// Defends against the "rule wildcard widens unintentionally" mode.
+#[test]
+fn outside_envelope_denies_when_rule_targets_unrelated_cap_pattern() {
+    let plugin_b = plugin_b_did();
+    let manifest = PluginManifest {
+        shares: SharesPolicy {
+            default: SharesPolicyDefault::Matching,
+            rules: Some(vec![benten_platform_foundation::SharesRule {
+                cap_pattern: "store:other:read".to_string(), // unrelated cap
+                target: benten_platform_foundation::SharesTarget::Any,
+            }]),
+        },
+        ..source_manifest_with_no_shares()
+    };
+
+    let err = check_scope_within_envelope("store:notes:write", &plugin_b, &manifest)
+        .expect_err("G27-D outside-envelope: unrelated rule does not widen envelope");
+    assert!(matches!(err, CapError::Denied { .. }));
 }
 
 /// Compile-time witness: F3 stub `PluginManifest` + `SharesPolicyDefault::None`

@@ -61,6 +61,15 @@ pub mod ucan_stub;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod plugin_delegation;
 
+// G27-D — manifest-aware scope derivation. Pure functions mapping
+// `PluginManifest::requires` / `shares` halves to canonical cap-scope
+// strings + audience-side envelope check. Native-only (depends on
+// `benten-platform-foundation::PluginManifest` which is full-peer-
+// only per CLAUDE.md #17). See `docs/future/phase-4-backlog.md` §4.4
+// for the cap-r1-3 closure narrative.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod manifest_scope;
+
 pub use attenuation::check_attenuation;
 // G14-B durable UCAN backend is native-only (see `backends/mod.rs`).
 #[cfg(not(target_arch = "wasm32"))]
