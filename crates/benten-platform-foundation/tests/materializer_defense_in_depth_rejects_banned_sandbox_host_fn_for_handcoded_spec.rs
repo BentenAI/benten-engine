@@ -135,6 +135,40 @@ fn materializer_rejects_handcoded_spec_referencing_edges_add_host_fn() {
 }
 
 #[test]
+fn materializer_rejects_handcoded_spec_referencing_edges_remove_host_fn() {
+    // G24-B-FP-1 closure of §4.15: the 4th banned host-fn
+    // (`edges:remove`) was named in the module-level banned-set + the
+    // production runtime check at `materializer.rs:909`, but had no
+    // dedicated sub-test prior. This mirrors the 3-variant shape +
+    // proves the rejection arm is symmetric across all 4 banned
+    // host-fns.
+    let engine = InMemoryMaterializerEngine::new();
+    let cid = note_cid(&engine);
+    let alice = materializer_fixtures::actor_principal_alice_cid();
+    let spec = handcoded_spec_with_sandbox_host_fn("edges:remove");
+    let err = HtmlJsonMaterializer
+        .materialize_with_gate(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: cid,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .expect_err("edges:remove host-fn MUST trip defense-in-depth materializer entry-check");
+    match err {
+        MaterializerError::SchemaMismatch { code, reason } => {
+            assert_eq!(code, ErrorCode::MaterializerSchemaMismatch);
+            assert!(
+                reason.contains("edges:remove"),
+                "diagnostic must name the banned host-fn: {reason}"
+            );
+        }
+        other => panic!("expected SchemaMismatch, got: {other:?}"),
+    }
+}
+
+#[test]
 fn materializer_accepts_handcoded_spec_with_no_sandbox_node() {
     // Positive control: the rejection arm is targeted at banned-SANDBOX,
     // not pathologically rejecting all hand-authored specs.
