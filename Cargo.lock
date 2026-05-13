@@ -233,6 +233,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-admin-shell"
+version = "0.1.0"
+dependencies = [
+ "benten-core",
+ "benten-engine",
+ "benten-errors",
+ "benten-platform-foundation",
+ "benten-renderer-tauri",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "benten-caps"
 version = "0.1.0"
 dependencies = [

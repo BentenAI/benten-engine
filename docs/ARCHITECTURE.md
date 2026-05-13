@@ -153,6 +153,18 @@ ten minutes from `npx` to a green test:
 - `tools/benten-dev/` — the diagnostic CLI. The `inspect-state <path>`
   subcommand reads a DAG-CBOR `ExecutionStateEnvelope` from disk and
   pretty-prints the suspended state.
+- `tools/benten-admin-shell/` — Phase-4-Foundation R6-FP-E integrator
+  binary for deployment shape (c). Production caller for
+  `benten-renderer-tauri`'s `TauriRenderer` + `InProcessSessionBridge`;
+  composes them with the canonical admin-UI-v0 manifest envelope into
+  `AdminShellState::dispatch`. Default-mode boot prints the IPC method-
+  cap-binding map + locked CSP header; the `tauri` cargo feature
+  reserves the boot scaffold for the v1-assessment-window webview-
+  driven wave per `docs/future/phase-4-backlog.md §3.5`. Substantive
+  end-to-end pin at
+  `tools/benten-admin-shell/tests/e2e_admin_shell_ipc.rs` exercises
+  the T3 three-rung defense + bridge resolve through 9 happy-path +
+  negative-arm cases. Closes R6 R6-R1 br-r6-r1-3 named-NOW half (i).
 - `packages/engine-devserver/` — the napi-rs-backed `BentenDevServer`
   TypeScript wrapper that wraps a real `Engine` and exposes
   `replaceHandler` / hot-reload semantics through

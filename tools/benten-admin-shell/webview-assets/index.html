@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Benten Admin Shell</title>
+  <!-- CSP is enforced server-side by `benten_renderer_tauri::WEBVIEW_CSP_HEADER`
+       at webview load (T3 defense rung 3). The header is the source of
+       truth; this meta tag is a defense-in-depth duplicate so the same
+       directives apply if the embedding context strips the server header.
+       Drift between this meta + the Rust constant is asserted by the
+       integration test
+       `tests/webview_assets_csp_meta_matches_rust_constant.rs`. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' tauri://*; style-src 'self'; font-src 'self'" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <h1>Benten Admin Shell</h1>
+    <p>Phase-4-Foundation deployment shape (c) — embedded webview.</p>
+    <button id="ipc-roundtrip">Fetch plugin list (engine.plugin.manifest.review)</button>
+    <pre id="response">(awaiting click)</pre>
+  </main>
+  <script src="bootstrap.js"></script>
+</body>
+</html>
