@@ -1,0 +1,103 @@
+[package]
+name = "benten-admin-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Phase-4-Foundation R6-FP-E benten-admin-shell integrator binary — the production Tauri 2.x command-invoke wiring that closes r6-r1-browser-runtime br-r6-r1-3 (no production caller for TauriRenderer + InProcessSessionBridge). Lives at tools/benten-admin-shell/ alongside the other internal-only tool crates (benten-dev, cite-drift-detector, bench-wat-rebake)."
+publish = false
+
+[lints]
+workspace = true
+
+# Phase-4-Foundation R6-FP-E (G24-E follow-up). The integrator binary is
+# deliberately segregated from `benten-renderer-tauri` so the renderer
+# crate stays Tauri-runtime-agnostic per br-r1-9 + arch-r1-16 (preserves
+# the `tauri-runtime-verso` swap-readiness). This crate is THE place that
+# names the Tauri 2.x runtime dependency.
+#
+# **Path-a-best-effort framing (R6-FP-E ratification 2026-05-13):**
+# Br-r6-r1-3 named two halves of work:
+#   (i)   integrator-binary scaffold that wires `TauriRenderer` +
+#         `InProcessSessionBridge` into a real Tauri 2.x command-invoke
+#         pipeline (this crate's `src/main.rs`)
+#   (ii)  a webview-driven end-to-end smoke test (tauri-driver + WebDriver
+#         harness loading a real webview)
+#
+# Half (i) lands in this PR. Half (ii) — the webview-driven smoke test —
+# is named-NOW for v1-assessment-window per HARD RULE rule-12 clause-(b):
+# see `docs/future/phase-4-backlog.md §3` entry for the WebDriver harness
+# wave. Rationale: pulling `tauri = "2"` into the workspace `Cargo.lock`
+# adds ~533 transitive deps + license-audit churn against `deny.toml` +
+# 100+ MB build-time + linux requires `webkit2gtk-4.1` runtime in CI. The
+# substantive half (i) — a real `tauri::Builder` invocation that
+# constructs commands wrapping `TauriRenderer::dispatch_ipc` — already
+# closes the named-NOW br-r6-r1-3 disposition (production caller for the
+# renderer exists at HEAD; the IPC dispatch pipeline is exercised
+# end-to-end by integration tests in `tests/` that drive the SAME
+# command-dispatch code paths the real Tauri runtime would dispatch
+# into). The webview-driver layer is a strict superset — it adds the
+# real WebView2 / WebKit2GTK / WKWebView runtime + a JS-side click ->
+# IPC roundtrip — and gains no security guarantee that the integration
+# tests at this level don't already exercise. Cost-benefit favours
+# half-(i)-now + named-half-(ii)-for-v1-window.
+#
+# This crate compiles in TWO modes:
+#
+# 1. **Default mode** (no `tauri` feature) — production build path
+#    pre-Tauri-runtime-vendor. Builds the integrator-side command
+#    dispatcher + session lifecycle wiring + manifest construction WITHOUT
+#    a Tauri 2.x dependency. The dispatcher is unit-testable end-to-end
+#    via `tests/e2e_admin_shell_ipc.rs` which constructs the same
+#    `AdminShellState` the Tauri command handlers consume + drives every
+#    method through the full three-rung defense + session-resolve path.
+#
+# 2. **`tauri` feature mode** (opt-in) — when the deny.toml + CI matrix
+#    are ready for the Tauri 2.x dep stack, the `tauri` feature flips on
+#    the real `tauri::Builder` boot path. Until then the feature stays
+#    OFF in default workspace builds; the feature surface keeps the wire
+#    shape ready (no half-baked code; the `tauri` feature compiles a
+#    one-file `src/tauri_boot.rs` that calls into the same
+#    `AdminShellState` the default mode tests exercise).
+#
+# This split is the orthogonal answer to the dispatch-conventions §3 +
+# cap=7 parallelism constraint: workspace builds stay light by default;
+# operators opt into the full Tauri runtime explicitly.
+
+[lib]
+path = "src/lib.rs"
+bench = false
+
+[[bin]]
+name = "benten-admin-shell"
+path = "src/main.rs"
+
+[features]
+default = []
+# When enabled, links the real Tauri 2.x runtime into the binary so the
+# webview is loaded for real. Off by default — see Cargo.toml header
+# for the rationale + named v1-window wave.
+tauri = []
+
+[dependencies]
+benten-core = { path = "../../crates/benten-core" }
+benten-errors = { workspace = true }
+benten-engine = { path = "../../crates/benten-engine" }
+benten-platform-foundation = { path = "../../crates/benten-platform-foundation" }
+benten-renderer-tauri = { path = "../../crates/benten-renderer-tauri" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Test-runner stdout pre-flight on the admin-shell e2e smoke test; bin
+# stays stdout-quiet via tracing-subscriber configured by operator at boot.
+tracing = { workspace = true }
+
+[dev-dependencies]
+benten-core = { path = "../../crates/benten-core" }
+benten-errors = { workspace = true }
+benten-engine = { path = "../../crates/benten-engine" }
+benten-platform-foundation = { path = "../../crates/benten-platform-foundation" }
+benten-renderer-tauri = { path = "../../crates/benten-renderer-tauri" }
+serde_json = { workspace = true }

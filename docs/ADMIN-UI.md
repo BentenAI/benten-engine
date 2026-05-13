@@ -187,6 +187,17 @@ Per br-r1-8: admin UI v0 wasm bundle must not reference DOM-only APIs / FormData
 
 Per br-r1-7 grep-assert pin: admin UI v0 IndexedDB writes ONLY snapshot cache and manifest store. Blocks UCAN bytes / plugin secrets / direct sync state from landing in browser storage. CAPS stay at full peer; admin UI delegates via UCAN.
 
+### §4.6 Integrator binary (`benten-admin-shell`)
+
+Per R6-FP-E (closes br-r6-r1-3 MAJOR named-NOW half (i)): the production caller for `TauriRenderer` + `InProcessSessionBridge` lives at `tools/benten-admin-shell/` as the `benten-admin-shell` bin crate. The crate splits cleanly along three lines:
+
+- **`src/lib.rs`** — `AdminShellState` composes `TauriRenderer` + `InProcessSessionBridge` + the canonical admin-UI-v0 manifest envelope (`admin_ui_v0_canonical_manifest`). `dispatch(IpcRequest) -> Result<IpcResponse, IpcError>` is the exact code path a real Tauri 2.x command handler invokes one-to-one.
+- **`src/main.rs`** — default-mode boot path prints a launch summary (IPC method-cap-binding map + locked CSP header) so the operator confirms wiring. The `tauri` cargo feature reserves the boot scaffold for the Phase-4-Meta v1-assessment-window wave per `docs/future/phase-4-backlog.md §3.5` (webview-driven tauri-driver smoke test); the feature is OFF by default to keep the workspace `Cargo.lock` light.
+- **`tests/e2e_admin_shell_ipc.rs`** — substantive end-to-end pin (pim-2 §3.6b production-arm + observable-consequence + would-FAIL-if-no-op'd) exercises 9 paths through the integrator: happy-path dispatch for every allowlisted method, T3 rung 1 unknown-method reject, T3 rung 2 missing-cap reject, missing-session reject, origin-mismatch reject, session-expired reject, handshake replay reject, CSP header canonical pin, single-`DidKeyedSession`-instance reuse across handshake + dispatch.
+- **`webview-assets/`** — `index.html` + `style.css` + `bootstrap.js` loaded by the embedded webview when the `tauri` feature lands at Phase-4-Meta. The `<meta http-equiv="Content-Security-Policy">` directive in `index.html` is asserted byte-equivalent to `WEBVIEW_CSP_HEADER` by `tests/webview_assets_csp_meta_matches_rust_constant.rs` (defense-in-depth duplicate; T3 rung 3 stays armed even if the embedding context strips the server-set header).
+
+The webview-driven `tauri-driver` E2E (real WebView2 / WKWebView / WebKit2GTK runtime under WebDriver) is named-NOW at `docs/future/phase-4-backlog.md §3.5` per HARD RULE rule-12 clause-(b); the half-(i) IPC dispatch pipeline already exercises every security guarantee end-to-end through 9 production-shape Rust pins.
+
 ---
 
 ## §5. Renderer trait surface
