@@ -870,8 +870,17 @@ impl SubgraphBuilder {
         self.push_chained(op, prev, nest)
     }
 
-    /// Phase 2a test-only property setter — used by
-    /// `wait_signal_shape_optional_typing` to inject malformed payloads.
+    /// Property setter on a previously-pushed node by handle.
+    ///
+    /// Two consumers at HEAD:
+    /// - Phase-2a test fixture `wait_signal_shape_optional_typing` (injects
+    ///   malformed payloads to exercise WAIT signal-shape validation).
+    /// - Phase-4-Foundation `schema_compiler::emit` typed-field-node vocabulary
+    ///   emission (sets the vocabulary scalar properties + edge-target node
+    ///   wiring; see SCHEMA-DRIVEN-RENDERING.md §7.2).
+    ///
+    /// Retained `_for_test` suffix is historical; the setter is now a
+    /// production builder method.
     pub fn set_property_for_test(&mut self, h: NodeHandle, key: &str, value: Value) -> &mut Self {
         if let Some(n) = self.nodes.get_mut(h.0 as usize) {
             n.properties.insert(key.to_string(), value);
