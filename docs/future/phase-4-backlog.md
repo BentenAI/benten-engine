@@ -135,6 +135,8 @@ The G24-D primary implementer retagged ~33 RED-PHASE test files with a novel `RE
 
 **Do not reintroduce `RED-PHASE-BODY` without explicit Ben ratification + a §3.6e clause defining lifecycle separate from `RED-PHASE`.** Orchestrator may surface a §3.6e clause-amendment to Ben if the body-rewrite-vs-fresh-un-ignore distinction proves load-bearing in future waves.
 
+**Ben ratification 2026-05-13 (Q1):** `RED-PHASE-BODY` is **NOT codified** as a separate §3.6e sub-rule. Treated as one-time anomaly. The G24-D fix-pass treatment is the precedent: every novel pin-status invention must (a) wire the test substantively against the existing surface OR (b) retag with standard `RED-PHASE` + a SPECIFIC named destination per HARD RULE 12 clause-(b). Future agents who feel the body-rewrite-vs-fresh-un-ignore distinction would be useful should propose it as a Ben ratification request, not unilaterally invent a new pin status. Closure: R4b-FP-3 inline.
+
 ### §4.8 napi `delegateCapability` binding + substantive arm for `cap_delegate_napi_resolved_scope_regression_guard.rs` — CLOSED at G24-D-FP-3
 
 **Origin:** G24-D mini-review BLOCKER g24d-mr-1 closure + retargeting of §4.5 destination. The §4.5 destination ("at G24-D") was incorrect because G24-D ships the Rust-side delegation envelope-check surface only — not the napi Node-side binding.
@@ -359,6 +361,25 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-2 MINOR + G24-C mr-1 MI
 - Rust-side substantive revoke-mid-preview pin landed + PASS.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW. Closes G24-B mr-3 MINOR + G24-C mr-2 OBS.
+
+### §4.19 Phase-4-Meta carry: R5 phantom-destination un-ignore promises (test-positive-pairs + enhancement seams)
+
+**Origin:** R4b L1 findings r4b-l1-4 (plugin_did UCAN audience-handle positive arm) + r4b-l1-6 (schema_author trust-list prompt path). Both tests cited specific R5 waves (G22-FP-2 + G24-B respectively) as their un-ignore destinations; both waves shipped without delivering the un-ignore. Per Ben ratification 2026-05-13 (Q4 disposition), these are non-v1-blocker carries to Phase 4-Meta.
+
+**Scope — 2 deferred items (the v1-shippable seams from L1 cluster land at R4b-FP-1 in the same window):**
+
+1. **`plugin_did` UCAN audience-handle POSITIVE arm** — `crates/benten-platform-foundation/tests/plugin_did_is_ucan_audience_handle_not_attested_sub_identity.rs`. The production code path (`UcanGroundedPolicy::permits_typed_proof_for` audience-binding) ALREADY EXISTS as of pre-R5 (G22-FP-2 commit `55f136e`); the substantive defense is covered by the sibling negative grep-walk arm in this same file (which IS un-ignored + substantive). The missing piece is THIS positive integration test that drives a real UCAN through the chain validator end-to-end. **Test-positive-pair only — does NOT gate a production capability.**
+
+2. **Schema-author trust-list user-prompt surface** — `crates/benten-platform-foundation/tests/schema_author_not_in_admin_ui_trust_list_prompts_user.rs`. Per Ben Q3 ratification at r4-triage §7, v1 admin UI ships with default-trust-not-shown (default trust-list = EMPTY); the explicit `ProvenanceOutcome::UserPromptRequired` surface + admin-UI prompt UX is an enhancement. **v1 admin UI is functional without this surface** — installs ship the manifest-envelope + plugin-DID checks already; the missing piece is the UX prompt flow.
+
+**Phase target:** **Phase 4-Meta** (post-`phase-4-foundation-close` tag).
+
+**Acceptance:**
+- Phase-4-Meta wave un-ignores both tests substantively
+- For the UCAN positive arm: drive a real `UcanGroundedPolicy::permits_typed_proof_for` call with `audience=plugin_did` + assert admission
+- For the schema-author trust-list prompt: implement `ProvenanceOutcome::UserPromptRequired` variant + admin-UI v0 (or v1 if reframed) UX surface + assert prompt path is taken on untrusted-author schemas
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Closes R4b L1 findings r4b-l1-4 + r4b-l1-6 via Phase-4-Meta carry per Ben Q4 ratification.
 
 ---
 

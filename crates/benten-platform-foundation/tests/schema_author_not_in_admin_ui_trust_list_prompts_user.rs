@@ -38,7 +38,7 @@
 mod common;
 
 #[test]
-#[ignore = "RED-PHASE: G24-B wires schema-author trust-list prompt path; un-ignore at G24-B landing. Pin source: r4-triage §1 r4-tc-2 + Ben Q3 ratification (r4-triage §7) — default trust-list = EMPTY."]
+#[ignore = "DESTINATION-REMAPPED at R4b-FP-3 per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW + L1 r4b-l1-6 closure: G24-B shipped at commit c6dfc12 WITHOUT delivering this trust-list prompt path — the `ProvenanceOutcome::UserPromptRequired` surface never built. v1 admin UI ships with default-trust-not-shown (per Ben ratification Q3 at r4-triage §7 default trust-list = EMPTY); the explicit user-prompt UI surface is an enhancement deferred to Phase-4-Meta. Named destination: docs/future/phase-4-backlog.md §4.19 (Phase-4-Meta carry: R5 phantom-destination un-ignore promises)."]
 fn schema_author_not_in_admin_ui_trust_list_returns_user_prompt_outcome() {
     // G24-B wave wires this. Substantive shape:
     //

@@ -14,14 +14,9 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G22-FP-2 wave un-ignores) — \
-    Positive UCAN audience-handle flow: user_did issues UCAN with audience=plugin_did \
-    + cap; chain validator at UcanGroundedPolicy::permits_typed_proof_for admits with \
-    audience-bound check + does NOT traverse any attestation-chain. The audience- \
-    binding seam ships at G22-FP-2 (per plan §3 G22-FP-2 row). Until then the \
-    negative grep-walk substance arm (no_attestation_chain_for_plugin_did_function_ \
-    in_benten_id_grep_assert below) carries the substance. Named destination: plan \
-    §3 G22-FP-2 (UcanGroundedPolicy audience binding). HARD RULE 12 clause-(b) \
+#[ignore = "DESTINATION-REMAPPED at R4b-FP-3 per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW + L1 r4b-l1-4 closure: G22-FP-2 already shipped pre-R5 at commit 55f136e WITHOUT delivering this positive arm's un-ignore. The audience-binding production code is already live (verified by sibling negative grep-walk arm); the missing piece is THIS positive integration test that drives a real UCAN through the chain validator. \
+    Phase target: Phase-4-Meta (per phase-4-foundation-backlog §4.19 — non-v1-blocker test-positive-pair; substantive defense ALREADY EXISTS via the paired grep-walk negative arm in this same file). \
+    Named destination: docs/future/phase-4-backlog.md §4.19 (Phase-4-Meta carry: R5 phantom-destination un-ignore promises). \
     BELONGS-NAMED-NOW."]
 #[test]
 fn ucan_with_audience_equals_plugin_did_validates_without_attestation_chain() {
