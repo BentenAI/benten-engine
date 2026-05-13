@@ -98,9 +98,7 @@ where
     manifest.verify_peer_signature()?;
 
     // 5. Heterogeneity check.
-    if matches!(installer_shape, InstallerShape::ThinClient)
-        && manifest.requires_sandbox_exec()
-    {
+    if matches!(installer_shape, InstallerShape::ThinClient) && manifest.requires_sandbox_exec() {
         return Err(ErrorCode::PluginHeterogeneityIncompatible);
     }
 
@@ -213,10 +211,7 @@ pub fn new_version_available_code() -> ErrorCode {
 /// # Errors
 ///
 /// `E_PLUGIN_AUTHOR_NOT_TRUSTED` if `author_did` is not in `trust_list`.
-pub fn check_author_trust(
-    author_did: &Did,
-    trust_list: &[Did],
-) -> Result<(), ErrorCode> {
+pub fn check_author_trust(author_did: &Did, trust_list: &[Did]) -> Result<(), ErrorCode> {
     if trust_list.iter().any(|d| d == author_did) {
         Ok(())
     } else {

@@ -8,8 +8,8 @@ mod common;
 
 use common::manifest_fixtures::{minimal_manifest, stub_cid_one, stub_cid_two};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires meta-composition cycle detection; un-ignore at G24-D landing"]
 fn meta_plugin_composition_cycle_rejected_at_install_with_typed_error() {
     let mut a = minimal_manifest();
     a.composes_plugins = Some(vec![stub_cid_one()]);
@@ -28,8 +28,8 @@ fn meta_plugin_composition_cycle_rejected_at_install_with_typed_error() {
     panic!("RED-PHASE: G24-D wave must wire meta-composition cycle detection AS REJECTION");
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires recursive walk via engine evaluator; un-ignore at G24-D landing"]
 fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
     let mut a = minimal_manifest();
     a.composes_plugins = Some(vec![stub_cid_one()]);

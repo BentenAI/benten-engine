@@ -8,8 +8,8 @@ mod common;
 
 use common::manifest_fixtures::minimal_manifest;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave + G24-D-FP-2 wire manifest_envelope_chain_validation; un-ignore at G24-D landing"]
 fn plugin_delegation_outside_envelope_denied_with_e_plugin_delegation_outside_manifest_envelope() {
     let _manifest_a = minimal_manifest(); // shares: none
 

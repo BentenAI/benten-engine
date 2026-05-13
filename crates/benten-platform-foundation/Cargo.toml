@@ -41,9 +41,13 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 benten-engine = { path = "../benten-engine" }
-# G23-A cap-policy end-to-end pin (RecordingCapPolicy) — implements
+# G23-A cap-policy end-to-end pin (RecordingCapPolicy) implements
 # `benten_caps::CapabilityPolicy` to count cap-checks at the engine
 # boundary during a schema-emitted Subgraph walk per §3.6b pim-2.
+# G24-D end-to-end substantive pipeline also exercises the
+# benten-caps::plugin_delegation surface. dev-only dep keeps
+# dep-direction one-way for production (platform-foundation does NOT
+# depend on caps at lib time).
 benten-caps = { path = "../benten-caps" }
 # walkdir for R4-FP-4 substantive grep-walk pin
 # (`plugin_did_is_ucan_audience_handle_not_attested_sub_identity.rs`

@@ -36,8 +36,8 @@ use common::manifest_fixtures::{
     stub_peer_did_alice, stub_peer_did_attacker, stub_plugin_did, stub_user_did,
 };
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-1 wires same-author-DID check in upgrade_plugin; un-ignore at G24-D-FP-1 landing. Pin source: r4-triage §1 r4-tc-3 + threat-model §T10 step 4(a)."]
 fn plugin_upgrade_with_different_peer_did_author_rejected_or_treated_as_reinstall() {
     let _plugin = stub_plugin_did();
     let _user = stub_user_did();

@@ -137,10 +137,10 @@ impl PluginLibrary {
     pub fn remove(&mut self, manifest_cid: &Cid) -> Option<LibraryEntry> {
         let dropped = self.entries.remove(manifest_cid)?;
         // If the removed CID was the active ref for its plugin, clear it.
-        if let Some(active_cid) = self.active.get(&dropped.manifest.plugin_name) {
-            if active_cid == manifest_cid {
-                self.active.remove(&dropped.manifest.plugin_name);
-            }
+        if let Some(active_cid) = self.active.get(&dropped.manifest.plugin_name)
+            && active_cid == manifest_cid
+        {
+            self.active.remove(&dropped.manifest.plugin_name);
         }
         Some(dropped)
     }

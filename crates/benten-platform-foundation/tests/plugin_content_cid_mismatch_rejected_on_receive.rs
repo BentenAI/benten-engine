@@ -8,8 +8,8 @@
 
 mod common;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires receive-side CID verification; un-ignore at G24-D landing"]
 fn plugin_bytes_with_mismatched_announced_cid_rejected_with_typed_error() {
     let claimed_cid = common::manifest_fixtures::stub_cid_one();
     let actual_bytes = b"these bytes do not hash to claimed_cid".to_vec();

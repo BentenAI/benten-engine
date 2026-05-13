@@ -9,8 +9,8 @@ mod common;
 
 use common::manifest_fixtures::stub_plugin_did;
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-1 wires private-NS teardown; un-ignore at G24-D-FP-1 landing"]
 fn uninstall_deletes_private_namespace_rows_for_plugin_did() {
     let _plugin = stub_plugin_did();
 

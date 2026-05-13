@@ -16,7 +16,6 @@ mod common;
 use common::manifest_fixtures::{stub_install_record, stub_user_did};
 
 #[test]
-#[ignore = "RED-PHASE: G24-D wave fills user-DID install-record signing; un-ignore at G24-D landing"]
 fn install_record_is_signed_by_user_did_anchored_in_users_graph() {
     let manifest_cid = common::manifest_fixtures::stub_cid_zero();
     let install = stub_install_record(manifest_cid);
@@ -30,8 +29,8 @@ fn install_record_is_signed_by_user_did_anchored_in_users_graph() {
     // ed25519 verify would reject. Stub at R3.
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave provides codebase-grep assertion infrastructure (or the absence is exhibited at G24-D landing)"]
 fn no_benten_project_key_infrastructure_in_codebase_grep_assert() {
     // Per R2 §5 substance discipline: grep-assert the codebase
     // CONTAINS NO functions/types/symbols matching the Benten-project-

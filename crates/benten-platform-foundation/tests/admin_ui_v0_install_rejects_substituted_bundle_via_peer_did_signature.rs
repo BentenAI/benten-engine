@@ -11,8 +11,8 @@ mod common;
 
 use common::manifest_fixtures::{admin_ui_v0_manifest, stub_peer_did_attacker};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D wave wires peer-DID signature verification at install; un-ignore at G24-D landing"]
 fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
     let mut hostile = admin_ui_v0_manifest();
     hostile.peer_did = stub_peer_did_attacker();

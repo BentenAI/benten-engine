@@ -76,8 +76,8 @@
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 
 pub mod module_ecosystem;
-pub mod plugin_lifecycle;
 pub mod plugin_library;
+pub mod plugin_lifecycle;
 pub mod plugin_manifest;
 pub mod registry;
 pub mod schema_compiler;

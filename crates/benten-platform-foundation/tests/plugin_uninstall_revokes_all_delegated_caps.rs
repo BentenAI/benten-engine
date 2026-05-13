@@ -14,8 +14,8 @@ mod common;
 
 use common::manifest_fixtures::{stub_plugin_did, stub_user_did};
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-1 wires uninstall_plugin cascade; un-ignore at G24-D-FP-1 landing"]
 fn uninstall_cascade_revokes_user_grants_with_audience_equals_plugin_did() {
     let _plugin = stub_plugin_did();
     let _user = stub_user_did();
@@ -30,8 +30,8 @@ fn uninstall_cascade_revokes_user_grants_with_audience_equals_plugin_did() {
     panic!("RED-PHASE: G24-D-FP-1 must wire uninstall_plugin cascade-revoke");
 }
 
+#[ignore = "RED-PHASE-BODY: panic-stub body needs substantive G24-D-FP / wave-N rewrite against landed API surface"]
 #[test]
-#[ignore = "RED-PHASE: G24-D-FP-1 wires cascade of plugin-DID downstream delegations; un-ignore at G24-D-FP-1 landing"]
 fn uninstall_cascade_revokes_plugin_did_downstream_ucan_delegations() {
     let _plugin = stub_plugin_did();
 

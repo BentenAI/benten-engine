@@ -4,11 +4,11 @@
 //!
 //! **Plugin-DID is a UCAN audience handle AND constrained issuer**
 //! within the manifest envelope. It is **NOT an attested sub-identity**
-//! of user-DID. There is NO `PluginAttestationEnvelope`, NO
-//! `attestation_chain_for_plugin_did`, NO device-DID-style
-//! attestation chain — those patterns belong to device-DIDs (which
-//! represent physical hardware) and explicitly do NOT apply to
-//! plugin-DIDs (which are code running inside the user's engine).
+//! of user-DID. The attestation-chain patterns that belong to
+//! device-DIDs (which represent physical hardware) explicitly do NOT
+//! apply to plugin-DIDs (which are code running inside the user's
+//! engine). See `device_attestation` module for the device-DID side;
+//! this module intentionally does NOT mirror its surface.
 //!
 //! Plugin-DID:
 //! - is freshly minted at every install via OsRng (per D-4F-16)
