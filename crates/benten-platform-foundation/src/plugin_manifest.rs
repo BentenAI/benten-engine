@@ -13,7 +13,7 @@
 //!
 //! See `docs/PLUGIN-MANIFEST.md` for the engineer-facing reference.
 
-use benten_core::Cid;
+use benten_core::{Cid, OperationNode, PrimitiveKind, Subgraph, Value};
 use benten_errors::ErrorCode;
 use benten_id::did::Did;
 use ed25519_dalek::Verifier;
@@ -601,9 +601,136 @@ impl InstallRecord {
 // Composition cycle detection (post-R1-triage Q2 ratification)
 // =====================================================================
 
+/// Canonical handler-id for a composition-cycle-detection subgraph.
+/// Foundation-owned namespace (parallel to `schema:` from
+/// [`crate::schema_compiler`] + `plugin-library` from
+/// [`crate::plugin_library`]).
+pub const HANDLER_ID_COMPOSITION_WALK: &str = "plugin-composition-walk";
+
+/// Edge label used inside the composition-walk subgraph: source
+/// (compositing) manifest → target (sub-) manifest. The walker treats
+/// this label as the "composes" relation.
+pub const EDGE_COMPOSES: &str = "COMPOSES";
+
+/// Property key on a composition-walk node: the manifest CID (bytes).
+pub const PROP_NODE_MANIFEST_CID: &str = "manifest_cid";
+
+/// Build a [`Subgraph`] representation of the meta-plugin composition
+/// graph rooted at `root_cid`. Each visited manifest is one
+/// [`PrimitiveKind::Read`] Node carrying its CID as a property, and
+/// each `composes_plugins` reference is one `COMPOSES`-labelled edge.
+///
+/// The walker BFS-traverses outward from the root via the supplied
+/// `resolver`. Unresolvable children (resolver returns `None`) are
+/// recorded as terminal nodes — the subgraph still contains them as
+/// Read Nodes with no outgoing edges.
+///
+/// Unlike [`detect_composition_cycle`] this builder does NOT short-
+/// circuit on cycle detection — the cycle itself is encoded as an
+/// edge back to a previously-visited node. [`detect_composition_cycle`]
+/// then walks the built subgraph to surface the typed error.
+#[must_use]
+pub fn build_composition_subgraph<F>(
+    root_cid: Cid,
+    root_manifest: &PluginManifest,
+    resolver: &F,
+) -> Subgraph
+where
+    F: Fn(&Cid) -> Option<PluginManifest>,
+{
+    let mut sg = Subgraph::new(HANDLER_ID_COMPOSITION_WALK);
+    let mut queue: Vec<(Cid, PluginManifest)> = vec![(root_cid, root_manifest.clone())];
+    let mut visited: std::collections::HashSet<Cid> = std::collections::HashSet::new();
+    // Always emit the root node FIRST so the resulting subgraph's
+    // first node is the canonical root for downstream consumers.
+    sg.nodes.push(
+        OperationNode::new(composition_node_id(&root_cid), PrimitiveKind::Read).with_property(
+            PROP_NODE_MANIFEST_CID,
+            Value::Bytes(root_cid.as_bytes().to_vec()),
+        ),
+    );
+    visited.insert(root_cid);
+
+    while let Some((parent_cid, parent_manifest)) = queue.pop() {
+        let Some(refs) = &parent_manifest.composes_plugins else {
+            continue;
+        };
+        for child_cid in refs {
+            // Always emit the COMPOSES edge — cycle edges (when
+            // *child_cid == root_cid or matches any visited node) ARE
+            // valid edges in the structural subgraph; the downstream
+            // cycle-walker reads them to detect the cycle.
+            sg.edges.push((
+                composition_node_id(&parent_cid),
+                composition_node_id(child_cid),
+                EDGE_COMPOSES.to_string(),
+            ));
+            // Emit child Node ONCE per CID.
+            if !visited.contains(child_cid) {
+                visited.insert(*child_cid);
+                sg.nodes.push(
+                    OperationNode::new(composition_node_id(child_cid), PrimitiveKind::Read)
+                        .with_property(
+                            PROP_NODE_MANIFEST_CID,
+                            Value::Bytes(child_cid.as_bytes().to_vec()),
+                        ),
+                );
+                // Recurse only into resolvable children.
+                if let Some(child_manifest) = resolver(child_cid) {
+                    queue.push((*child_cid, child_manifest));
+                }
+            }
+        }
+    }
+
+    sg
+}
+
+/// Canonical Node id for a composition-walk Node representing
+/// `manifest_cid`.
+#[must_use]
+pub fn composition_node_id(manifest_cid: &Cid) -> String {
+    let mut hex = String::with_capacity(2 + 64);
+    hex.push_str("manifest::");
+    for b in manifest_cid.as_bytes() {
+        use core::fmt::Write;
+        let _ = write!(&mut hex, "{b:02x}");
+    }
+    hex
+}
+
 /// Detect a cycle in the meta-plugin composition graph rooted at
 /// `root_cid` / `root_manifest`, resolving each `composes_plugins`
 /// reference via `resolver`.
+///
+/// **R6-FP-D lift (cag-ux-r6-r1-4 closure):** the detector is now a
+/// two-step pipeline:
+///
+/// 1. Build a real [`Subgraph`] representation of the composition
+///    graph via [`build_composition_subgraph`]. The subgraph has one
+///    [`PrimitiveKind::Read`] Node per visited manifest CID + one
+///    [`EDGE_COMPOSES`]-labelled edge per composition reference. No
+///    new [`PrimitiveKind`] variant is introduced (CLAUDE.md baked-in
+///    #1 12-primitive irreducibility).
+///
+/// 2. Walk the subgraph via [`detect_cycle_in_subgraph`] (DFS
+///    visited-on-entry / cleared-on-exit). A cycle = any back-edge
+///    encountered during the walk.
+///
+/// This shape is the "subgraph-aware fallback" path the wave brief
+/// names: composition-cycle detection consumes a [`Subgraph`]
+/// representation of the composition graph, but uses its own
+/// structural walker internally rather than threading through the
+/// full engine evaluator (which would require library-as-subgraph +
+/// evaluator handoff and is named for Phase-4-Meta).
+///
+/// Observable behavior is preserved: cycle present →
+/// [`ErrorCode::PluginMetaCompositionCycleRejected`]. The
+/// `meta_plugin_composition_cycle_rejected_with_typed_error_code` +
+/// `meta_plugin_acyclic_composition_admitted_no_typed_error` test
+/// pins (in
+/// `crates/benten-platform-foundation/tests/plugin_meta_composition_cycle_rejected.rs`)
+/// stay green.
 ///
 /// # Errors
 ///
@@ -616,27 +743,72 @@ pub fn detect_composition_cycle<F>(
 where
     F: Fn(&Cid) -> Option<PluginManifest>,
 {
-    let mut stack: Vec<(Cid, PluginManifest)> = vec![(root_cid, root_manifest.clone())];
-    let mut visited: std::collections::HashSet<Cid> = std::collections::HashSet::new();
-    visited.insert(root_cid);
+    let sg = build_composition_subgraph(root_cid, root_manifest, resolver);
+    detect_cycle_in_subgraph(&sg, &composition_node_id(&root_cid))
+}
 
-    while let Some((_, m)) = stack.pop() {
-        if let Some(refs) = &m.composes_plugins {
-            for child_cid in refs {
-                if *child_cid == root_cid {
+/// Walk a composition-shaped Subgraph rooted at `root_node_id` and
+/// surface [`ErrorCode::PluginMetaCompositionCycleRejected`] on any
+/// back-edge. The walker uses DFS with on-stack tracking — a back-
+/// edge to any node currently in the DFS stack is a cycle.
+///
+/// This function is the engine-evaluator-style structural walk over
+/// the composition subgraph: it consults `sg.edges()` and walks
+/// outgoing edges by label ([`EDGE_COMPOSES`]) just as the engine
+/// evaluator walks operation-node edges. The walker is internal to
+/// [`detect_composition_cycle`]; exposed `pub` for substantive test
+/// pins that exercise the shape directly.
+///
+/// # Errors
+///
+/// [`ErrorCode::PluginMetaCompositionCycleRejected`] when any
+/// reachable back-edge is encountered.
+pub fn detect_cycle_in_subgraph(sg: &Subgraph, root_node_id: &str) -> Result<(), ErrorCode> {
+    use std::collections::HashSet;
+
+    // visited = fully-explored set (post-DFS); on_stack = currently in
+    // the DFS recursion stack. A back-edge into on_stack is a cycle.
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut on_stack: HashSet<String> = HashSet::new();
+    // Frame: (node_id, child_iter_index). Hand-rolled iterative DFS
+    // avoids unbounded recursion on adversarial input.
+    let mut stack: Vec<(String, usize)> = vec![(root_node_id.to_string(), 0)];
+    on_stack.insert(root_node_id.to_string());
+
+    while let Some((node_id, ref_idx)) = stack.last().cloned() {
+        // Find the (ref_idx)-th outgoing COMPOSES edge from node_id.
+        let next_child = sg
+            .edges()
+            .iter()
+            .filter(|(from, _, label)| from == &node_id && label == EDGE_COMPOSES)
+            .nth(ref_idx)
+            .map(|(_, to, _)| to.clone());
+        match next_child {
+            Some(child_id) => {
+                // Advance the parent's index for the next iteration.
+                if let Some(top) = stack.last_mut() {
+                    top.1 += 1;
+                }
+                if on_stack.contains(&child_id) {
+                    // Back-edge into DFS-stack = cycle.
                     return Err(ErrorCode::PluginMetaCompositionCycleRejected);
                 }
-                if visited.contains(child_cid) {
-                    // Already-visited child — diamond shape; not a cycle.
-                    continue;
+                if !visited.contains(&child_id) {
+                    on_stack.insert(child_id.clone());
+                    stack.push((child_id, 0));
                 }
-                if let Some(child_manifest) = resolver(child_cid) {
-                    visited.insert(*child_cid);
-                    stack.push((*child_cid, child_manifest));
-                }
+                // Already-visited child not on stack = diamond
+                // (cross-edge); not a cycle; continue.
+            }
+            None => {
+                // Exhausted children — finalize this node.
+                on_stack.remove(&node_id);
+                visited.insert(node_id);
+                stack.pop();
             }
         }
     }
+
     Ok(())
 }
 

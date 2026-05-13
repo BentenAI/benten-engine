@@ -208,6 +208,17 @@ impl WorkflowDraft {
     /// a distinct handler-id namespace from the four category-route
     /// subgraphs (`admin-ui-v0::plugins` / `admin-ui-v0::workflows` /
     /// etc.).
+    ///
+    /// **R6-FP-D (cag-ux-r6-r1-3 closure):** the prior synthetic
+    /// `admin_ui_v0_workflow_source` property key has been removed —
+    /// the workflow-name is already conveyed by the handler_id
+    /// (`admin-ui-v0::workflow::<name>`), which is the canonical
+    /// engine-wide identifier-naming surface. Stamping the name a
+    /// second time on every primitive Node was a parallel naming
+    /// surface that would have drifted as future plugins minted their
+    /// own analogous local keys. The only Node property the workflow
+    /// editor stamps now is `cap_scope` (the engine-wide convention
+    /// shared with [`crate::admin_ui_v0::build_category_route_subgraph`]).
     #[must_use]
     pub fn compile_subgraph(&self) -> Subgraph {
         let handler_id = format!("admin-ui-v0::workflow::{}", self.name);
@@ -217,10 +228,6 @@ impl WorkflowDraft {
             if let Some(scope) = &prim.cap_scope {
                 op = op.with_property("cap_scope", Value::Text(scope.clone()));
             }
-            op = op.with_property(
-                "admin_ui_v0_workflow_source",
-                Value::Text(self.name.clone()),
-            );
             sg.nodes.push(op);
         }
         for (from, to, label) in &self.edges {
