@@ -679,6 +679,50 @@ mod napi_surface {
                 .map_err(engine_err)
         }
 
+        /// Phase-4-Foundation G24-D-FP-3 — runtime UCAN delegation
+        /// from one plugin / principal to another (audience = plugin-
+        /// DID, scope = resolved-from-source-grant).
+        ///
+        /// `source_grant_cid` is the CID of the SOURCE capability grant
+        /// (typically a user-issued root grant, or a parent plugin's
+        /// grant in a multi-hop chain). The engine seam resolves the
+        /// source grant's actual `scope` text from the persisted Node
+        /// + writes a NEW `system:CapabilityGrant` Node carrying that
+        /// resolved scope — NEVER the source CID as a string. This is
+        /// the napi-side defense against the G27-A class-of-bug shape
+        /// that PR #199 closed for `revokeCapability` (a delegation
+        /// Node persisted with `scope = "<cid base32>"` would never be
+        /// matched by `GrantReader::has_unrevoked_grant_for_scope` at
+        /// the write-check seam, silently fail-OPENing every
+        /// cross-plugin write).
+        ///
+        /// `plugin_did` is the audience DID — stored as the new grant's
+        /// `actor` so subsequent `callAs(handler, op, input, plugin_did)`
+        /// calls under the delegated scope admit per
+        /// `GrantBackedPolicy::check_write`.
+        ///
+        /// `attenuated_caps` is the (possibly empty) attenuation list.
+        /// Empty → the new grant carries the resolved source scope
+        /// unchanged. Non-empty → the new grant carries
+        /// `attenuated_caps[0]` as its scope (full per-segment subset
+        /// semantics land alongside G27-D).
+        ///
+        /// Returns the new delegation grant's CID.
+        #[napi]
+        pub fn delegate_capability(
+            &self,
+            source_grant_cid: String,
+            plugin_did: String,
+            attenuated_caps: Vec<String>,
+        ) -> napi::Result<String> {
+            let source = parse_cid(&source_grant_cid)?;
+            let cid = self
+                .inner
+                .delegate_capability(&source, plugin_did.as_str(), &attenuated_caps)
+                .map_err(engine_err)?;
+            Ok(cid.to_base32())
+        }
+
         // -------- IVM Views --------
 
         /// Register / materialize an IVM view definition.

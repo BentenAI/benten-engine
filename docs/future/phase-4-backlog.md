@@ -90,13 +90,13 @@ Per §13.11 structural lesson — the scope-keyed `has_unrevoked_grant_for_scope
 
 Define mapping from manifest `requires` / `shares` to scope strings; story for `private:<plugin_did>:*` interaction with `wildcard_variants`; install-time-vs-check-time decision. Per cap-r1-3 closure.
 
-### §4.5 `bindings/napi/tests/cap_delegate_napi_resolved_scope_regression_guard.rs` substantive arm (DESTINATION RETARGETED: §4.8)
+### §4.5 `bindings/napi/tests/cap_delegate_napi_resolved_scope_regression_guard.rs` substantive arm — CLOSED at G24-D-FP-3
 
-R5 G27-A landed the napi class-of-bug audit (PR #224 via R5 wave-g27-a; merged 2026-05-13). The audit confirmed 4 cap-* entry points are the complete enumeration of scope-vs-CID class-of-bug risk surfaces. However, `delegateCapability` is **NOT YET SHIPPED** at the napi layer.
+R5 G27-A landed the napi class-of-bug audit (PR #224 via R5 wave-g27-a; merged 2026-05-13). The audit confirmed 4 cap-* entry points are the complete enumeration of scope-vs-CID class-of-bug risk surfaces. `delegateCapability` was **NOT YET SHIPPED** at the napi layer at G27-A time.
 
-**Retarget rationale (G24-D fix-pass, 2026-05-12):** the original §4.5 destination "at G24-D" was incorrect. G24-D ships the Rust-side `crates/benten-caps/src/plugin_delegation.rs` runtime UCAN delegation envelope-check surface but does NOT ship the napi binding (`delegateCapability(grantCid, plugin_did, attenuated_caps)` from Node-side TS). The napi binding is its own work item — see §4.7 below for the new named destination.
+**Retarget rationale (G24-D fix-pass, 2026-05-12):** the original §4.5 destination "at G24-D" was incorrect. G24-D ships the Rust-side `crates/benten-caps/src/plugin_delegation.rs` runtime UCAN delegation envelope-check surface but does NOT ship the napi binding (`delegateCapability(grantCid, plugin_did, attenuated_caps)` from Node-side TS). The napi binding became its own work item per §4.8.
 
-The G24-D wave deliberately preserved the existing test body in `cap_delegate_napi_resolved_scope_regression_guard.rs` (the G27-A audit-finding shape) because the substantive 4-step arm cannot land until §4.8 ships the napi binding. The test's `#[ignore]` message MUST cite **§4.8** (NOT a phantom "wave-N") as its un-ignore destination.
+**CLOSED at G24-D-FP-3** (branch `r5/wave-g24-d-fp-3`, builds on G24-D-FP-2 `30327b0`): `Engine::delegate_capability` engine seam shipped at `crates/benten-engine/src/engine_caps.rs` + napi `delegate_capability` binding shipped at `bindings/napi/src/lib.rs` + TS-side `Engine.delegateCapability` shipped at `packages/engine/src/engine.ts` + `cap_delegate_napi_resolved_scope_regression_guard.rs` body rewritten to the 4-step substantive arm (un-ignored). TS-side end-to-end pin at `packages/engine/test/cap_delegate_napi_resolved_scope.test.ts`.
 
 Closes G27-A R5 mini-review MINOR finding `g27a-mr-1`.
 
@@ -120,9 +120,15 @@ The G24-D primary implementer retagged ~33 RED-PHASE test files with a novel `RE
 
 **Do not reintroduce `RED-PHASE-BODY` without explicit Ben ratification + a §3.6e clause defining lifecycle separate from `RED-PHASE`.** Orchestrator may surface a §3.6e clause-amendment to Ben if the body-rewrite-vs-fresh-un-ignore distinction proves load-bearing in future waves.
 
-### §4.8 napi `delegateCapability` binding + substantive arm for `cap_delegate_napi_resolved_scope_regression_guard.rs`
+### §4.8 napi `delegateCapability` binding + substantive arm for `cap_delegate_napi_resolved_scope_regression_guard.rs` — CLOSED at G24-D-FP-3
 
 **Origin:** G24-D mini-review BLOCKER g24d-mr-1 closure + retargeting of §4.5 destination. The §4.5 destination ("at G24-D") was incorrect because G24-D ships the Rust-side delegation envelope-check surface only — not the napi Node-side binding.
+
+**CLOSED at G24-D-FP-3** (branch `r5/wave-g24-d-fp-3`, builds on G24-D-FP-2 `30327b0`). All §4.8 acceptance criteria satisfied:
+- `cap_delegate_napi_resolved_scope_regression_guard.rs` body rewritten to the 4-step substantive arm; `#[ignore]` removed; new private-namespace + compile-witness companion tests added.
+- New napi binding shipped at `bindings/napi/src/lib.rs::Engine::delegate_capability` (gated to `not(target_arch="wasm32")` per the existing `napi_surface` module gating).
+- TS class signature surfaced via `packages/engine/src/engine.ts::Engine.delegateCapability` (with the `BentenNative.delegateCapability?` interface entry).
+- New TS-side end-to-end test at `packages/engine/test/cap_delegate_napi_resolved_scope.test.ts` exercising the binding (resolved-scope arm + private-namespace-forbidden arm).
 
 **Scope:** new napi function `delegateCapability(grantCid: string, pluginDid: string, attenuatedCaps: string[]) -> string` (returns the resulting delegation grant CID). Wires Node-side TS callers to `benten_caps::plugin_delegation::check_delegation_within_envelope` + the underlying UCAN delegation issuance (audience=plugin-DID + attenuated caps within manifest envelope). The 4-step substantive arm for `cap_delegate_napi_resolved_scope_regression_guard.rs`:
   1. `delegateCapability(grantCid, plugin_did, attenuated_caps)` over napi resolves the napi-passed CID to the underlying grant + invokes envelope-check.
