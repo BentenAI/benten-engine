@@ -59,7 +59,9 @@ mod tests {
     #[test]
     fn canonical_translates_identity() {
         let input = b"{ \"label\": \"SchemaRoot\" }";
-        let out = IngestDialect::Canonical.translate_to_canonical(input).unwrap();
+        let out = IngestDialect::Canonical
+            .translate_to_canonical(input)
+            .unwrap();
         assert_eq!(out, input);
     }
 }

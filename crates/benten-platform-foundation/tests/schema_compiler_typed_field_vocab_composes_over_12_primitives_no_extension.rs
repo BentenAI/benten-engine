@@ -90,7 +90,10 @@ fn schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension() 
     // 4 labels the existing fixtures touch and assert no non-canonical
     // primitive emerges.
     let fixtures: Vec<(&str, &[u8])> = vec![
-        ("SchemaRoot/FieldScalar", schema_fixtures::minimal_schema_bytes()),
+        (
+            "SchemaRoot/FieldScalar",
+            schema_fixtures::minimal_schema_bytes(),
+        ),
         (
             "SchemaRoot/FieldScalar/FieldList",
             schema_fixtures::benign_schema_round_trip_bytes(),

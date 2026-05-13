@@ -65,22 +65,18 @@ impl PrimitiveDescriptor {
             .map(|op| PrimitiveDescriptor {
                 id: op.id.clone(),
                 kind: op.primitive_kind(),
-                cap_scope: op
-                    .property(CAP_SCOPE_PROPERTY_KEY)
-                    .and_then(|v| match v {
-                        Value::Text(s) => Some(s.clone()),
-                        _ => None,
-                    }),
+                cap_scope: op.property(CAP_SCOPE_PROPERTY_KEY).and_then(|v| match v {
+                    Value::Text(s) => Some(s.clone()),
+                    _ => None,
+                }),
                 field_path: op.property(FIELD_PATH_PROPERTY_KEY).and_then(|v| match v {
                     Value::Text(s) => Some(s.clone()),
                     _ => None,
                 }),
-                vocab_label: op
-                    .property(VOCAB_LABEL_PROPERTY_KEY)
-                    .and_then(|v| match v {
-                        Value::Text(s) => VocabLabel::from_str(s).ok(),
-                        _ => None,
-                    }),
+                vocab_label: op.property(VOCAB_LABEL_PROPERTY_KEY).and_then(|v| match v {
+                    Value::Text(s) => VocabLabel::from_str(s).ok(),
+                    _ => None,
+                }),
             })
             .collect()
     }
@@ -280,7 +276,11 @@ fn push_with_scope(
     label: VocabLabel,
 ) -> NodeHandle {
     let h = sb.push_primitive(id, kind);
-    sb.set_property_for_test(h, CAP_SCOPE_PROPERTY_KEY, Value::Text(cap_scope.to_string()));
+    sb.set_property_for_test(
+        h,
+        CAP_SCOPE_PROPERTY_KEY,
+        Value::Text(cap_scope.to_string()),
+    );
     sb.set_property_for_test(
         h,
         FIELD_PATH_PROPERTY_KEY,

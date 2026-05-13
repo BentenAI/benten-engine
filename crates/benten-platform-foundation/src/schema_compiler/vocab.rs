@@ -185,10 +185,7 @@ impl Scalar {
     /// Parse a scalar name. Returns
     /// [`SchemaCompileError::VocabScalarUnknown`] for anything outside
     /// the 8-set.
-    pub fn from_str(
-        s: &str,
-        field_name: Option<&str>,
-    ) -> Result<Self, SchemaCompileError> {
+    pub fn from_str(s: &str, field_name: Option<&str>) -> Result<Self, SchemaCompileError> {
         match s {
             "text" => Ok(Scalar::Text),
             "int" => Ok(Scalar::Int),
