@@ -33,6 +33,26 @@ Per post-R1-triage ratification #4: 4-category navigation over the unified subgr
 
 The substrate is unified: all four categories are subgraphs at the engine layer. The user-facing IA distinguishes them by usage intent + lifecycle affordances; the underlying machinery is identical.
 
+### §2.1 User-facing field-type labels (1-to-1 mapping to engine vocabulary)
+
+The "Content Types" category exposes a small, plain-English label set to users. Each label maps 1-to-1 to the engine-facing typed-field-Node vocabulary (8 labels per `SCHEMA-DRIVEN-RENDERING.md §2.1`) — there are no hidden modes or compound expansions at the user surface. Closes ux-r1-12 R1-triage disposition `(a) FIX-NOW-INLINE`; companion to `GLOSSARY.md` "FieldEnum / … / SchemaRoot" entry.
+
+| User-facing label | Engine-facing vocabulary | Notes |
+|---|---|---|
+| **Text** | `FieldScalar(text)` | Free-form string |
+| **Number** | `FieldScalar(int)` or `FieldScalar(float)` | Picker disambiguates at field-create time |
+| **Yes/No** | `FieldScalar(bool)` | Boolean toggle |
+| **Date** | `FieldScalar(timestamp-hlc)` | HLC-keyed for sync ordering |
+| **Link** | `FieldRef` | Cross-Node reference (typed by target schema) |
+| **Choice** | `FieldEnum` | Closed variant set |
+| **Variant** | `FieldUnion` | Open variant set (each carries its own shape) |
+| **List** | `FieldList` | Ordered collection of one type |
+| **Map** | `FieldMap` | Keyed collection (key-type + value-type) |
+| **Object** | `FieldObject` | Nested record |
+| **Schema** | `SchemaRoot` | Top-level container (the schema itself) |
+
+See `SCHEMA-DRIVEN-RENDERING.md §2` for the engine-facing vocabulary's full surface (5 labeled edges connecting these labels; object-to-field is implicit-via-recursion per D-4F-NEW-TYPED-FIELD-NODE-VOCAB). Cross-link: `GLOSSARY.md` "FieldEnum / FieldUnion / FieldList / FieldMap / FieldObject / FieldRef / FieldScalar / SchemaRoot" entry.
+
 ---
 
 ## §3. User flows
