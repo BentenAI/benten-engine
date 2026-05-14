@@ -2285,9 +2285,9 @@ export class EReservedHandlerNamespace extends BentenError {
  */
 export class ESchemaValidationFailed extends BentenError {
   static readonly code = "E_SCHEMA_VALIDATION_FAILED";
-  static readonly fixHint = "Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 6-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.";
+  static readonly fixHint = "Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 5-labeled-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB (object-to-field relationships are implicit-via-recursion; see `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`). Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SCHEMA_VALIDATION_FAILED", "Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 6-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.", message, context);
+    super("E_SCHEMA_VALIDATION_FAILED", "Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 5-labeled-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB (object-to-field relationships are implicit-via-recursion; see `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`). Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.", message, context);
     this.name = "ESchemaValidationFailed";
   }
 }
@@ -2345,9 +2345,9 @@ export class ESchemaVocabInvalidLabel extends BentenError {
  */
 export class ESchemaVocabEdgeMismatch extends BentenError {
   static readonly code = "E_SCHEMA_VOCAB_EDGE_MISMATCH";
-  static readonly fixHint = "The schema's edge-label pairing is not in the 6-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.";
+  static readonly fixHint = "The schema's edge-label pairing is not in the 5-labeled-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SCHEMA_VOCAB_EDGE_MISMATCH", "The schema's edge-label pairing is not in the 6-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.", message, context);
+    super("E_SCHEMA_VOCAB_EDGE_MISMATCH", "The schema's edge-label pairing is not in the 5-labeled-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.", message, context);
     this.name = "ESchemaVocabEdgeMismatch";
   }
 }
