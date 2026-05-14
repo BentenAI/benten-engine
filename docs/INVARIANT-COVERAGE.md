@@ -1,10 +1,10 @@
-# Invariant Coverage — Phase 3 Close
+# Invariant Coverage — Phase 4-Foundation Close
 
 CLAUDE.md commits to **14 invariants** governing the Benten engine.
 This document tracks per-invariant enforcement state, the enforcing
 crate, and the regression suite that pins it.
 
-**Phase 3 status:** 14 of 14 invariants enforced. Inv-4 + Inv-7 went
+**Phase 4-Foundation status:** 14 of 14 invariants enforced. Phase-4-Foundation extends Inv-14 with the plugin-DID principal classifier (see `Inv-14 Phase-4-Foundation plugin-DID principal extension` sub-section below) — the principal-type matrix now spans User-local + User-sync-merged + Device-multi-device-sync + Plugin-app-level-subgraph + Plugin-via-materializer-read. Inv-4 + Inv-7 went
 ACTIVE in Phase 2b alongside the SANDBOX runtime (registration arm
 landed in G7-B; runtime arm landed across waves 8b + 8h with a bounded
 honest-disclosure for Inv-4 — see the "Inv-4 + Inv-7 runtime arm
@@ -321,4 +321,4 @@ A row is **active** iff:
    bypasses it without explicit named-compromise documentation in
    `docs/SECURITY-POSTURE.md`).
 
-All 14 invariants meet (1) (2) (3) at Phase 3 close.
+All 14 invariants meet (1) (2) (3) at Phase 4-Foundation close.

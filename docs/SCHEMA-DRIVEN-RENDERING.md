@@ -169,7 +169,7 @@ The vocabulary-edge wiring (`ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGE
 Per cag-r1-6 disambiguation:
 
 - **Output-FORMAT pluggability**: `Materializer` trait has multiple impls (`HtmlJsonMaterializer` default + `PlaintextMaterializer` 2nd impl per arch-r1-10, empirically validating pluggability with 2 impls).
-- **Renderer-BACKEND pluggability**: `Renderer` trait abstracts the rendering target. Two backends ship at Phase 4-Foundation: `BrowserRender` (browser-wasm32 in `benten-platform-foundation`) + `TauriRender` (Tauri 2.x embedded-webview in `benten-renderer-tauri` per CLAUDE.md #19 — new 12th crate).
+- **Renderer-BACKEND pluggability**: `Renderer` trait abstracts the rendering target. Two backends ship at Phase 4-Foundation: `BrowserRender` (browser-wasm32 in `benten-platform-foundation`) + `TauriRenderer` (Tauri 2.x embedded-webview in `benten-renderer-tauri` per CLAUDE.md #19 — new 12th crate).
 
 Both layers validated empirically by 2 impls; pluggability is not just declared but exercised.
 

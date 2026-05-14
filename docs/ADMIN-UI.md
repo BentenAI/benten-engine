@@ -16,7 +16,7 @@ This is intentional: by making admin UI v0 a plugin, the manifest schema gets do
 - Admin UI as engine extension per CLAUDE.md #19. Plugin-arch-r1-12 + plugin-arch-r1-17 surfaced this explicitly. Engine extensions are Rust crates compile-time linked; admin UI is JS+wasm in a browser tab or webview — it's app-level.
 - A "system" trust posture distinct from regular plugins. Admin UI's privileges come from caps the user grants at install (per Layer 2 manifest envelope); not from being baked into the engine.
 
-The renderer-backend impls (`BrowserRender` in `benten-platform-foundation` + `TauriRender` in `benten-renderer-tauri`) ARE engine extensions per CLAUDE.md #19. They sit at the engine boundary, are compile-time linked, are trusted because the user compiled the engine. Admin UI consumes them via the `Renderer` trait surface.
+The renderer-backend impls (`BrowserRender` in `benten-platform-foundation` + `TauriRenderer` in `benten-renderer-tauri`) ARE engine extensions per CLAUDE.md #19. They sit at the engine boundary, are compile-time linked, are trusted because the user compiled the engine. Admin UI consumes them via the `Renderer` trait surface.
 
 ---
 
@@ -48,9 +48,9 @@ When the user receives a plugin (out-of-band content-addressed-share over Atrium
 3. **Identity disclosure.** Manifest review shows the four identity concepts (per D-4F-12):
    - Content-CID + canonical bytes hash
    - Peer-DID of original author + verification status against `requires_plugin_authors` trust list
-   - Plugin-DID that will be minted at install (engine-held; user doesn't manage)
-   - Confirmation that user-DID will sign the install record
-4. **Consent.** User clicks "Install" → user-DID signs InstallRecord + grants UCANs for accepted caps → plugin enters library + active reference updates.
+   - Plugin-DID that the **admin-UI caller mints + inserts into `PluginDidStore` before invoking `install_plugin`** (caller-mint-first contract per R6-FP-A; see `docs/PLUGIN-MANIFEST.md §3` "Plugin-DID minting protocol" for the 4-step caller sequence + `crates/benten-platform-foundation/src/plugin_lifecycle.rs::InstallContext::expected_plugin_did` rustdoc for the API contract). The engine never mints; the caller-mint-first contract makes Ed25519-derives-DID-from-key the structural defense against plugin-DID substitution at install.
+   - Confirmation that user-DID will sign the install record (binding `manifest_cid` + `consenting_user_did` + `plugin_did_bytes` + `nonce`).
+4. **Consent.** User clicks "Install" → user-DID signs InstallRecord + grants UCANs for accepted caps → plugin enters library + active reference updates. `install_plugin` Step 8 verifies `install_record.plugin_did == ctx.expected_plugin_did` AND `plugin_did_store.get(expected_plugin_did).is_some()`; either mismatch surfaces a typed `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` or `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` to the admin-UI for plain-English display.
 
 UX-acceptance (per ux-r1-2 BLOCKER closure): user can install a plugin in ≤3 clicks; user can decline a single cap without aborting install.
 
@@ -153,7 +153,7 @@ Per Ben D-4F-4 + CLAUDE.md #17:
 | Shape | Renderer backend | Trust posture | Use case |
 |---|---|---|---|
 | **Browser tab (thin client)** | `BrowserRender` (browser-wasm32) | Full peer is user's own machine; browser tab is a view INTO it | Default v0; works everywhere with a browser |
-| **Tauri 2.x embedded-webview** | `TauriRender` (in `benten-renderer-tauri`) | Same as above + native shell can hold engine-level caps | Desktop dogfood; v0 ships minimal scope per post-triage Q4 (full T3 defenses → Phase 4-Meta) |
+| **Tauri 2.x embedded-webview** | `TauriRenderer` (in `benten-renderer-tauri`) | Same as above + native shell can hold engine-level caps | Desktop dogfood; v0 ships minimal scope per post-triage Q4 (full T3 defenses → Phase 4-Meta) |
 
 The 3-rung baked-in #17 defense extends to both renderer crates (br-r1-4 + br-r1-13): wasm32-objdump forbidden-prefix list updated; feature-graph-closure test extended; `tauri-runtime-verso` swap-readiness validated.
 

@@ -511,7 +511,11 @@ Estimated scope: ~50-100 LOC.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-3 — ~30+ tests cite phase-3-backlog §7.3.D 'next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep'). Phase 3 SHIPPED at tag `phase-3-close` without the cited fix-pass batch firing; the cluster needs sweep-by-batch at the Phase-4-Foundation pre-tag wave. For each cited test: if production surface IS at HEAD, un-ignore + author body; otherwise retarget the cite to v1-assessment-window or this row. Belongs at the pre-tag sweep coupled with the cite-drift G26-A wave.
 
-Estimated scope: ~300-500 LOC across body authoring + retarget messages.
+**Acceptance criteria (R6-R2 smc-r6-r2-3 narrow specificity):** including these explicit renames + retenses:
+- (a) Rename `SubgraphBuilder::set_property_for_test` → `set_property` (drop `_for_test` suffix; production call sites at `crates/benten-platform-foundation/src/schema_compiler/emit.rs:338 + 364 + 393` cascade to all test call sites). The misleading `_for_test` suffix surfaces in production code paths today.
+- (b) [other stale items: stale phase-3 prose, retired-wave references, dispatch-conventions cross-refs to closed Phase-3 §7.3.D].
+
+Estimated scope: ~300-500 LOC across body authoring + retarget messages + the set_property rename cascade.
 
 ### §4.31 IVM inner-kernel-read byte-equivalence arms post-SubgraphSpec round-trip (Phase-4-Meta)
 
@@ -560,6 +564,48 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-FP-C mini-review r6fp-c-mr-2 closing
 
 **Strategy-C batch reconciliation note:** this row was originally proposed as `§4.NEXT-ec-r6r1-8` placeholder in Wave-C; renumbered to `§4.34` at batch-merge per Wave-G §-numbering reconciliation log (Wave-C branched from `origin/main` which didn't include any §4.22+ rows at the time).
 
+### §4.35 `install_plugin` Step-9 cap-cascade atomicity gap (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 plugin-arch r2-cp-1 + L4+L7 cp-1 cap-cascade atomicity gap). `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` Step 9 iterates `cap_minter.mint_root_grant` over `manifest.requires` without batch-commit semantics. If `mint_root_grant` fails on `requires[k]` after `requires[0..k]` succeeded, those k-1 grants persist in the cap store while Step 10 (provision_private_namespace) + Step 11 (library.insert + set_active) never execute → orphan grants + no library entry + no NS.
+
+**Acceptance criteria.** (a) New `InstallCascade` shape: collect intended grants into a pending Vec; commit ONLY after all succeed; OR (b) reorder fallible-work-first-then-commit so the observable commit point is `library.insert + set_active`. Add test pin `install_plugin_step_9_cap_mint_failure_rolls_back_prior_grants.rs` driving a real cap-minter wrapper that fails on requires[k] + asserts zero residual grants + zero library entry + ErrorCode `E_PLUGIN_INSTALL_CAP_CASCADE_FAILED` (new code or routed through existing). Couples to §4.21 partial-failure rollback semantics. ~150-250 LOC.
+
+### §4.36 Production `ManifestEnvelopeRechecker` adapter shipment (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-1 MAJOR + R6-R2 plugin-arch r2-cp-2 + L4+L7 cp-2). At HEAD `crates/benten-engine/src/manifest_envelope_recheck.rs` ships only `NoopManifestEnvelopeRechecker` (returns `NotApplicable` for every call). The default `Engine::default` now installs `Some(Arc::new(Noop))` (post-R6-FP-A flip) so the recheck-path always fires — but the call is operationally inert because Noop admits everything. CLAUDE.md #18 Layer-3 ('CapabilityPolicy validates the chain at access-time') is structurally wired but defaults to admit-everything.
+
+**Acceptance criteria.** Ship `ProductionManifestEnvelopeRechecker` in `benten-platform-foundation` that consults `PluginLibrary` (for the source plugin's manifest `shares` policy) + `UserDidRegistry` (for chain root verification) + `manifest_envelope_chain_validation::validate_chain_with_manifest_envelope` (for per-step audit). Wire into the default builder so production deployments get substantive Layer-3 enforcement automatically. Update threat-model T8 narrative to reflect gate-2-of-2 going LIVE. Also: add fluent `EngineBuilder::with_manifest_envelope_rechecker` setter (currently only `Engine::set_manifest_envelope_rechecker` exists post-build). Add `NotApplicable → UnresolvedDeny` variant rename + Noop semantics flip per r2-cp-2 disposition. ~200-400 LOC.
+
+### §4.37 InstallRecord replay-defense (nonce-store seen-or-record) (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-2 MAJOR + sec-r6r1-2 R1 finding). `InstallRecord` carries a `nonce: Vec<u8>` field bound by `signing_payload` but `install_plugin` Step 3 verifies the signature without consulting any seen-nonce store. An attacker who captures a valid InstallRecord can replay it: (a) re-install after uninstall to revive a removed plugin; (b) install across multiple devices without re-consent; (c) replay after manifest update to roll back to a prior version. Phase-3 device-attestation envelope V2 uses `nonce_store: Mutex<HashSet<(String, [u8; 32])>>` at `crates/benten-id/src/device_attestation.rs::Acceptor::accept_at`; InstallRecord has no equivalent.
+
+**Acceptance criteria.** Add `InstallRecordReplayDefense` port consulted at Step 4 + new ErrorCode `E_PLUGIN_INSTALL_RECORD_REPLAY`; mirror the device_attestation nonce_store pattern. Add cross-device/re-install threat narrative to SECURITY-POSTURE.md as a numbered Compromise OR sibling note under Compromise #26. ~80-150 LOC.
+
+### §4.38 G18-A-followup cross-browser-determinism Playwright fixture-bodies + wasm32 IndexedDB persistence (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 br-r6-r2-2 MAJOR + br-r6-r1-1 R1 finding). The phase-rename 2026-05-11 moved `phase-3-backlog §4.3` carry into Phase-4-Foundation scope but the entry was not migrated. At HEAD: `.github/workflows/cross-browser-determinism.yml` emits `::warning::...harness fixture not yet wired (G18-A-followup)` for 11 matrix-cells (all `::warning::` not failure-causing). `BrowserManifestStore::is_persistent()` + `IndexedDbBlobBackend::is_persistent()` honest-disclose `false` on wasm32. Compromise #19 + #20 in SECURITY-POSTURE.md remain PARTIALLY-CLOSED.
+
+**Acceptance criteria.** (a) Land 11 Playwright fixture-body cells exercising real cross-browser canonical-bytes determinism (BLAKE3 + DAG-CBOR + CIDv1 + Ed25519 deterministic-signing) so a regression FAILS the matrix workflow per pim-2 §3.6b; (b) wire wasm32 IndexedDB persistence (web-sys / js-sys / wasm-bindgen-futures) so `BrowserManifestStore::is_persistent()` returns `true` on wasm32 when IDB is available; (c) update Compromises #19 + #20 to CLOSED. Phase-4-Meta v1-assessment-window target. ~500-1000 LOC.
+
+### §4.39 WINTERTC_FORBIDDEN_APIS list extension (Phase-4-Foundation pre-tag)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-4 MINOR + sec-r6r1-10 MINOR + br-r6-r2-3 MAJOR). `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs::WINTERTC_FORBIDDEN_APIS` currently lists 5 entries (`document.cookie`, `new FormData`, 3 relative-URL fetch variants). T2 defense step 2 says "No cap-tokens in JS storage" but the CI grep guard at G26-B only sweeps the 5 currently-listed surfaces.
+
+**Acceptance criteria.** Extend the const to enumerate at minimum: `eval(`, `new Function(`, `localStorage.setItem`, `sessionStorage.setItem`, `indexedDB.open`, `XMLHttpRequest`, `window.addEventListener`, `document.addEventListener`, `navigator.cookieEnabled`, `Worker(`, `WebSocket("./` per the WinterTC Minimum Common API spec. Extend the `wintertc_forbidden_apis_present_with_canonical_entries` presence-pin test to assert ≥12 entries with explicit canonical-needles for `localStorage` + `XMLHttpRequest` + `eval(` + `new Function(`. Couples to G26-B CI guard wave staying ON-CRITICAL-PATH for v1. ~20 LOC.
+
+### §4.40 Engine-held plugin-DID private-key compromise threat-class (T13 + Compromise) (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-6 MINOR + tmr-r6-r1-4 MAJOR R1 finding). Ratification #5 + D-4F-12 introduced engine-held plugin-DID signing keypairs (caller mints + inserts into `PluginDidStore`; engine-held private key per installed plugin under caller-mint-first contract). Threat class: (a) engine-process compromise leaks all plugin-DID private keys → attacker forges UCAN delegations as any plugin within manifest envelopes; (b) on-disk persistence threat. `admin-ui-v0-threat-model.md` §3 + SECURITY-POSTURE.md (Compromises #24 #25 wallclock-related, not engine-process-compromise) do not enumerate this.
+
+**Acceptance criteria.** Add T13 to `admin-ui-v0-threat-model.md` enumerating engine-process-compromise threat class + defense narrative (OS-level engine binary protection; in-memory key zeroization on uninstall; key encryption at rest via OS keyring). Add corresponding numbered Compromise to SECURITY-POSTURE.md OR sibling note under #26. Then ship key-at-rest encryption via OS keyring at Phase-4-Meta. ~50-100 LOC doc work + ~200-400 LOC encryption implementation.
+
+### §4.41 caps-grew fresh-consent gate at upgrade Step 7-extension (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-5 MINOR + tmr-r6-r1-2 MAJOR R1 finding). `admin-ui-v0-threat-model.md` documents ratification #8 (cap-change-triggered fresh consent: silent within-lineage subset; full re-consent if `requires` GREW). `install_plugin` Step 7 currently enforces version-DAG-descendant ordering but does NOT compute the `new.requires \ prior.requires` delta and demand a fresh consent for that specific delta. Test pin `plugin_upgrade_requires_caps_grew_triggers_user_consent.rs` is referenced at threat-model.md:300 but un-ignore status uncertain.
+
+**Acceptance criteria.** (a) Add Step-7-extension at `install_plugin`: compute requires-delta; if non-empty, demand fresh consent (caller-supplied flag or new ErrorCode `E_PLUGIN_CAPS_GREW_REQUIRES_RECONSENT` propagating up to admin-UI). (b) Verify + un-ignore the test pin. (c) Update PLUGIN-MANIFEST.md §4.3 narrative once shipped. Couples to §4.21. ~50-150 LOC.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
@@ -597,6 +643,37 @@ Per doc-r1-1 + doc-r1-2: 17+ new ErrorCodes for Phase 4-Foundation mint across w
 ### §6.2 INTERNALS.md retense for new surfaces
 
 Per cross-lens doc-engineer findings: `benten-platform-foundation/INTERNALS.md` (NEW; 11th workspace crate), `benten-renderer-tauri/INTERNALS.md` (NEW; 12th workspace crate), updates to `benten-ivm/INTERNALS.md` (post IVM-subgraph generalization), `benten-engine/INTERNALS.md` (post audience-binding + actor_cid wiring + SUBSCRIBE-cap-recheck closure), `benten-caps/INTERNALS.md` (post Q5 plugin-DID-keyed signing-key infrastructure).
+
+### §6.4 ManifestStore redb-durable persistence (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 r7-r6-r1-2 PLUGIN-MANIFEST.md drift closure: doc retensed to describe v1 in-memory reality + named here as Phase-4-Meta carry). `crates/benten-platform-foundation/src/manifest_store.rs` ships an in-memory `HashMap<Cid, InstallRecord>`-backed store at Phase-4-Foundation v1. The redb-durable wiring (share storage with GrantStore per cap-r1-15) is deferred to Phase-4-Meta — the in-memory shape preserves the seam contract so the swap is a transparent backend lift.
+
+**Acceptance criteria.** Wire `RedbManifestStore` in `benten-platform-foundation` sharing storage with `GrantStore` (cap-r1-15). Add migration path for in-memory-state-at-restart scenarios. Update PLUGIN-MANIFEST.md §4.1 narrative once shipped. ~150-300 LOC.
+
+### §6.5 §3.6h "rule-ratification-against-drift mandatory-close" pim-N candidate (Phase-4-Foundation pre-tag — awaiting Ben ratification)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 pim-n-r7-spec finding r6r2-new-1; 3+ recurrence threshold MET). When a new pim-N or §-codification names specific instance(s) as origin, the same PR/wave that lands the rule MUST close (or explicitly defer-with-named-destination) the originating instance(s). Otherwise the rule's ratification is decoupled from its origin — engineers reading the rule + accepting it as "live" while the origin remains unfixed produces a credibility gap.
+
+**Three recurrence instances at R6 R2 (3+-recurrence threshold met):**
+1. Phase-4-Foundation R6 R1 Q3 §3.5g #3 type-name cross-doc mirror: ratified naming `TauriRender` vs `TauriRenderer` 8-cite drift as origin; 7 cite sites unfixed at HEAD post-ratification (closed at R6-FP-2 this row).
+2. Phase-4-Foundation R6 R1 §3.6g prior-pim-explicit-preflight: ratified with 5-instance Phase-4-Foundation R3-R5 recurrence table as origin; rule does NOT carry follow-on action to re-dispatch the affected briefs / sweep already-shipped wave residuals.
+3. Phase-3 / 2b precedent §3.5h MANDATORY-PRE-MERGE: ratified 2026-05-09 R6 R6-final naming 4 specific cite-drift fix-pass instances as origin; 2 of 4 closed inline; 2 already-closed before ratification (borderline counterexample).
+
+**Acceptance criteria.** Either (a) Ben ratify the §3.6h codification into `.addl/dispatch-conventions.md` with explicit text "When a pim-N or §-codification names specific instance(s) as origin, the same PR/wave that lands the rule MUST close (or explicitly defer-with-named-destination) the originating instance(s) — same PR, not next PR" + memory file `feedback_pim_n_ratification_must_close_origin.md`; OR (b) Ben rule-out as DISAGREE-WITH-EXPLANATION (existing HARD RULE rule-12 already covers; no additional codification needed). Surface to Ben at R6 R3 / R6-final.
+
+**Sibling pim-N candidates from R6-R2 methodology lens (also awaiting Ben ratification):**
+- **pim-r6-fp-stable-clippy-cycle-1** — §3.5h sub-rule: orchestrator pre-merge MUST run `cargo +stable clippy --workspace --all-targets -- -D warnings` (IN ADDITION to existing `cargo +1.95 clippy --workspace` for MSRV compatibility). R6-FP batch required 4 successive CI fix-cycles for clippy lints firing only on stable Rust (commits `debdc0a` + `4b0369f` + `15de4b4`). ~30s additional pre-flight; collapses 3-4 CI fix-cycles → 0.
+- **pim-r6-fp-cargo-audit-mirror-2** — §3.5h gate-step addition (or §3.5g extension to cross-config rule-mirrors): `cargo audit` MUST run as a §3.5h workspace pre-merge step. R6-FP Wave-E required follow-up `2b96091` to mirror Tauri RUSTSEC ignores from `deny.toml` to `audit.toml` after the original PR shipped with cargo-audit failing.
+
+### §6.6 caps-grew gate seam tracking (cross-ref to §4.41)
+
+Tracking entry for PLUGIN-MANIFEST.md §4.3 cross-reference. Substantive content lives at §4.41 above. This entry exists so PLUGIN-MANIFEST.md's cross-reference resolves to a §6.x doc-retense surface (the gate's appearance in the narrative is a doc-coupling sub-task of the substantive engineering).
+
+### §6.7 Sentinel-test re-baseline note (R6-FP-2 closure of r6-r2-tc-1)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 r6-r2-tc-1 MAJOR). The cite-drift sentinel test `cite_drift_detector_finds_zero_drift_on_clean_main_post_g13_pre_a` was RED at HEAD `85ecb69` with 316 findings (266 `.addl/_archive*` + 48 `.addl` planning-artifact-frozen-in-time + 1 docs/ERROR-CATALOG.md publish_walk symbol drift + 1 dispatch-conventions historical narrative cite). R6-FP-2 closed by: (a) excluding `.addl/_archive*`, `.addl/_archive-extraction`, `docs/history/` from `walk_doc_inputs` (frozen historical artifacts; cites are accurate-for-phase); (b) narrowing `.addl/` to ONLY `dispatch-conventions.md` (the live standing-rules catalog); (c) fixing `docs/ERROR-CATALOG.md:1087` `publish_walk` → `publish_change_event_with_labels` symbol cite; (d) escaping historical-narrative cites in `.addl/dispatch-conventions.md` that referred to past-recurrence-site line numbers. Sentinel test now PASSES at HEAD.
+
+No further acceptance criteria — entry exists to canonicalize the R6-FP-2 closure shape for forward retrospective traceability.
 
 ### §6.3 phase-4-backlog.md §-numbering reconciliation for strategy-C batch
 

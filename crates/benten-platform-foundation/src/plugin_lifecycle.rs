@@ -784,6 +784,11 @@ where
     //    verify_peer_signature internally). Runs AFTER the consent
     //    gate so the expensive ed25519 peer-signature work doesn't
     //    fire on unconsented installs.
+    // v1: validate_with_clock only; rotation-log-aware variant
+    // (validate_with_rotation_log_and_clock) deferred to Phase-4-Meta per
+    // docs/future/phase-4-backlog.md §4.10 — at v1 a rotated peer-DID
+    // still passes install (D-4F-12: rotation → WARNING not hard-reject)
+    // but the WARNING-emitting path isn't called yet.
     let validation = manifest.validate_with_clock(ctx.now_secs)?;
 
     // 5. Heterogeneity check.
