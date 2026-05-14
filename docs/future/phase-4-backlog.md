@@ -525,11 +525,13 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — `i
 
 Estimated scope: ~200-400 LOC (materializer seam + 5 substantive byte-equivalence test arms).
 
-### §4.30 Mini-review JSON schema discipline + `disposition` field uniformity (Phase-4-Foundation pre-tag)
+### §4.30 Mini-review JSON schema discipline + `disposition` field uniformity (CLOSED at R6-FP-3 2026-05-13)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 methodology-critic meth-r6-r1-3 + meth-r6-r1-4). Lens JSON reports + mini-review JSONs should carry a uniform top-level shape: `disposition` field + `findings[]` array + optional `orchestrator_action_summary`. The `r6-r1-pim-n-meta-sweep.json` lacks `disposition`; some R5 mini-reviews lack `orchestrator_action_summary`. Codify uniform schema in `.addl/dispatch-conventions.md` §3.6c brief-template; bring legacy artifacts in line via pre-tag sweep.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 methodology-critic meth-r6-r1-3 + meth-r6-r1-4). Lens JSON reports + mini-review JSONs should carry a uniform top-level shape: `disposition` field + `findings[]` array + optional `orchestrator_action_summary`.
 
-Estimated scope: ~10-30 LOC dispatch-conventions + JSON patch for `pim-n-meta-sweep.json` (orchestrator-direct).
+**CLOSED at R6-FP-3 (2026-05-13):** Canonical schema codified at `.addl/dispatch-conventions.md §3.6i` (NEW section). 14 legacy mini-review JSONs + 17 R6 R3 lens JSONs swept `"verdict":` → `"disposition":` inline at R6-FP-3 wave. Original §4.30 cite of `§3.6c brief-template` was a mis-cite — §3.6c is "Mirror-precedent overshoot guard", unrelated. §3.6i is the actual live-discipline destination. R6 R3 methodology-critic `meth-r6-r3-1` MAJOR triggered the closure.
+
+Estimated scope (actuals): ~80 LOC dispatch-conventions (§3.6i) + 32 file sed (verdict→disposition) + 1 malformed-JSON inline fix at r6-r3-invariant-compromise.json line 70 (`]` → `}`).
 
 ### §4.32 `validate_schema_author_within_manifest_envelope` runtime production-wiring (Phase-4-Meta)
 
