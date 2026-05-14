@@ -195,6 +195,7 @@ fn r6fp_a_sec_r6r1_1_blocker_plugin_did_binding_load_bearing() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     // mr-5 (R6-FP-A-fp): adversarial arm per pim-18 §3.6f
     // SHAPE-not-SUBSTANCE — exercises the SUBSTANTIVE defense, not
