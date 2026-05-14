@@ -869,7 +869,15 @@ The Rust-side anchor test `crates/benten-eval/tests/sandbox_severity_priority_g1
 
 ## 7. Observability + diagnostic completeness
 
-### 7.1 SANDBOX execution metrics propagation (Compromise #17 reinforcement)
+### 7.1 SANDBOX execution metrics propagation (Compromise #17 reinforcement) — CLOSED at fix(sandbox-metrics-propagation) (post-phase-4-foundation-close pre-Phase-4-Meta wave)
+
+**Final closure-delta:** The legacy `"unknown"` string sentinel on the TS-side `SandboxNodeDescription` (`fuelConsumedHighWater` / `outputConsumedHighWater` / `lastInvocationMs`) is replaced with the structural `number | null` shape. `null` means "no SANDBOX invocation has been recorded yet for this handler" (the metric record is created lazily on first call) OR "underlying napi cdylib lacks the `test-helpers` bridge"; `number` means real measured value. The wave landed:
+- `packages/engine/src/types.ts::SandboxNodeDescription` — three fields lift from `number | "unknown"` to `number | null`.
+- `packages/engine/src/engine.ts::Engine.describeSandboxNode` — fallback shape + JSON-parse fall-through emit `null` instead of `"unknown"`.
+- `bindings/napi/src/sandbox.rs` — stale "HONEST IMPLEMENTATION STATE" narrative comment block refreshed to point at the wave-7 G19-C2 metric-propagation wiring (no source-code-shape change; doc-coupling closure per §3.5b HARDENED).
+- TS-side closure-pin: `packages/engine/test/sandbox.test.ts::"describeSandboxNode returns real numeric metrics after invocation (§7.1 closure)"` — pre-invocation arm asserts `null` (not `"unknown"`); would-FAIL-if-reverted per pim-2 §3.6b.
+
+The Rust-side load-bearing pin (`crates/benten-engine/tests/sandbox_metrics.rs::sandbox_node_metrics_high_water_tracker_round_trip`) is the production-runtime arm that drives real wasm-compiled bytes through `Engine::call` → records into `EngineInner::sandbox_metrics` → returns real numeric high-water values; that pin landed at G19-C2 wave-7 and continues to gate the metric-tracking shape end-to-end. This wave closes the LAST remaining drift: the TS-side `"unknown"` string sentinel that survived G19-C2 + R6 fp Wave C2 as a "honest 2b-state" carry-forward that no longer reflects the shipped behaviour.
 
 **Phase 2b state:** R6 metadata-producer-vs-consumer audit (`r6-mpc-3`) + R6 napi-bindings (`r6-napi-3`) + R6 dx-optimizer (`r6-dx-10`) — three lenses converged — flagged: `Engine::describe_sandbox_node` claims `fuel_consumed_high_water` + `last_invocation_ms` metrics, but `SandboxResult.fuel_consumed` + `output_consumed` are dropped at `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (the post-execute return-shape extraction in the second `execute_sandbox` definition: only `output` propagates back to the engine wrapper). The diagnostic surface always returns `Err(Unknown)`; TS surface synthesizes hardcoded defaults client-side. Wave-8j R6-FP landed the doc-fix variant (honest "unknown" route + Compromise #17 reinforcement narrative); full metric-propagation deferred here.
 

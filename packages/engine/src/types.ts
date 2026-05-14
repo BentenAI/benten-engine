@@ -878,25 +878,38 @@ export interface SandboxResult {
  * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
  * `outputLimitBytes = 1_048_576` (D24 + dx-r1-2b-5).
  *
- * # Phase-2b metrics tracking
+ * # Metrics tracking (Phase-3 G19-C2 wave-7 §7.1 — fully closed)
  *
- * `fuelConsumedHighWater` + `lastInvocationMs` are the per-node
- * runtime-introspection metrics. **In Phase 2b they are NOT tracked**
- * — `SandboxResult.fuelConsumed` + `output_consumed` are dropped at
- * the eval-engine boundary (`primitive_host.rs::execute_sandbox` only
- * propagates `output`), and `Engine::describe_sandbox_node` does not
- * maintain a per-handler metric record. The literal `"unknown"`
- * sentinel is returned for both fields so callers can distinguish
- * "metric is structurally not available" from "node hasn't been
- * invoked yet" (the prior `null` shape conflated both states).
+ * `fuelConsumedHighWater` + `outputConsumedHighWater` + `lastInvocationMs`
+ * are the per-node runtime-introspection metrics. They are tracked
+ * end-to-end from the wasmtime executor through
+ * `primitive_host.rs::execute_sandbox` → `EngineInner::sandbox_metrics`
+ * → `Engine::describe_sandbox_node_for_handler` → the napi
+ * `describeSandboxNode` JSON template → this TS surface.
  *
- * Reinforces Compromise #17 cross-layer narrative: per-node
- * sandbox-introspection telemetry is Phase-3 surface (named
- * destination: `docs/future/phase-3-backlog.md` SnapshotBlobBackend
- * metric-propagation entry — to be added by R6-FP Group 4).
+ * Returned shape:
+ * - **`number`** — real measured value from a recorded invocation.
+ *   `fuelConsumedHighWater` + `outputConsumedHighWater` are monotonic
+ *   high-water marks across invocations within a single Engine
+ *   instance; `lastInvocationMs` is the wall-clock duration of the
+ *   most recent invocation only.
+ * - **`null`** — no SANDBOX invocation has been recorded yet for this
+ *   handler. The metric record is created lazily on first
+ *   `engine.call(handlerId, ...)` against the SANDBOX-bearing handler.
+ *   Distinguishable from `undefined` (which would indicate the field
+ *   is absent from the descriptor shape entirely).
  *
- * Pin source: ts-r4-3 R4 finding;
- * `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
+ * Cross-process WAIT-resume note (per stream-r1-8): metrics are
+ * RAM-only per Engine instance; the suspend/resume envelope does NOT
+ * carry in-flight SANDBOX metrics across the boundary. A fresh
+ * `Engine.open` starts with an empty metrics map by design. Durable
+ * cross-restart promotion follows the GraphBackend umbrella trait
+ * (`docs/future/phase-3-backlog.md` §1.1).
+ *
+ * Pin source: ts-r4-3 R4 finding +
+ * `docs/future/phase-3-backlog.md` §7.1 closure;
+ * `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"` +
+ * `packages/engine/test/sandbox.test.ts::"describeSandboxNode returns real numeric metrics after invocation (§7.1 closure)"`.
  */
 export interface SandboxNodeDescription {
   /** CID of the WebAssembly module the SANDBOX node references. */
@@ -915,36 +928,29 @@ export interface SandboxNodeDescription {
   outputLimitBytes: number;
   /**
    * Cumulative high-water mark of fuel consumed by this node across
-   * every invocation since registration.
+   * every invocation since registration. `null` when no invocation
+   * has been recorded yet (lazy-created metric record).
    *
-   * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the
-   * eval-engine boundary in 2b (r6-mpc-3). Phase-3 wiring will return
-   * a `number` once `SandboxResult.fuelConsumed` is propagated through
-   * `StepResult` + a per-handler metric record.
+   * Monotonic non-decreasing within an Engine instance lifetime.
    */
-  fuelConsumedHighWater: number | "unknown";
+  fuelConsumedHighWater: number | null;
   /**
    * Cumulative high-water mark of guest output bytes emitted by this
-   * node across every invocation since registration.
+   * node across every invocation since registration. `null` when no
+   * invocation has been recorded yet.
    *
-   * R6 fp Wave C2 (closes obs-r6r1-1 MAJOR — 25th producer/consumer
-   * drift instance): the field is recorded at
-   * `engine.rs::record_sandbox_metric` and now reaches the TS consumer
-   * via the `describeSandboxNode` napi bridge JSON template. Returns
-   * `"unknown"` when the napi cdylib lacks the `test-helpers` bridge
-   * OR when no SANDBOX invocation has been recorded for the handler.
-   * Closes the Phase-3 §7.1 trio (fuel + output + wallclock).
+   * Closes the Phase-3 §7.1 trio (fuel + output + wallclock) — was the
+   * 25th producer/consumer drift instance, closed at R6 fp Wave C2
+   * (`obs-r6r1-1` MAJOR).
    */
-  outputConsumedHighWater: number | "unknown";
+  outputConsumedHighWater: number | null;
   /**
    * Wallclock duration of the most recent invocation in milliseconds.
+   * `null` when no invocation has been recorded yet.
    *
-   * Phase 2b: ALWAYS `"unknown"` — metrics are not tracked at the
-   * eval-engine boundary in 2b (r6-mpc-3). Phase-3 wiring will return
-   * a `number` once per-call `durationMs` is propagated through
-   * `StepResult` + a per-handler metric record.
+   * NOT a high-water mark — this is the most-recent invocation only.
    */
-  lastInvocationMs: number | "unknown";
+  lastInvocationMs: number | null;
 }
 
 /**
