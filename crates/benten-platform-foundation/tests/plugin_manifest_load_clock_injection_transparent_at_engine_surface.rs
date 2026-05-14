@@ -73,6 +73,7 @@ fn manifest_validate_consults_engine_injected_clock_not_plugin_local_clock() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injected() {
     // R4b-FP-1 Seam 2 + Seam 1 integration — install_plugin lifecycle
     // threads `ctx.now_secs` into `validate_with_clock`. Substantive

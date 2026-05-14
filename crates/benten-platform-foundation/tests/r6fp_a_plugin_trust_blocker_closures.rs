@@ -530,6 +530,7 @@ fn r6fp_a_mr_7_manifest_envelope_recheck_outcome_drives_row_reject() {
     // STRUCTURAL: instantiating a NoopManifestEnvelopeRechecker via
     // its public surface confirms the type is constructable + matches
     // the engine builder default. Closes plugin-arch BLOCKER #2.
-    let noop = NoopManifestEnvelopeRechecker;
-    drop(noop);
+    // (Type is Copy + zero-sized; this is purely a name/visibility
+    // check that surfaces at compile time.)
+    let _: NoopManifestEnvelopeRechecker = NoopManifestEnvelopeRechecker;
 }
