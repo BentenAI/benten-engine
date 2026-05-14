@@ -41,9 +41,13 @@ pub struct WorkflowHandle {
 /// `module_ecosystem::publish_plugin` path) signs after computing
 /// `content_cid`.
 ///
-/// The workflow's `subgraph_cid` becomes the manifest's `content_cid`
-/// (the manifest content IS the workflow's subgraph CID + the
-/// envelope metadata).
+/// The workflow's `subgraph_cid` is seeded into the manifest's
+/// `content_cid` slot but is then OVERWRITTEN by the hash-of-manifest-body
+/// at line 70 below (`manifest.compute_content_cid()`). The shipped
+/// shape: the manifest body (including the seed subgraph_cid + envelope
+/// metadata) IS the plugin identity post-promotion — the manifest's
+/// `content_cid` after promotion is structurally distinct from the
+/// original workflow's `subgraph_cid`.
 #[must_use]
 pub fn promote_workflow_to_plugin(
     workflow: &WorkflowHandle,
@@ -64,9 +68,12 @@ pub fn promote_workflow_to_plugin(
         requires_schema_authors: None,
         requires_plugin_authors: None,
     };
-    // Compute the real content_cid (manifest body), replacing the
-    // placeholder subgraph_cid; subgraph_cid is still recoverable
-    // from the subgraph itself via the cap_pattern grammar.
+    // Compute the real content_cid (hash of the manifest body itself),
+    // OVERWRITING the seed subgraph_cid placeholder set at construction.
+    // The promotion-time subgraph_cid is NOT recoverable from the post-
+    // promotion manifest (would require the caller to retain the
+    // original workflow handle); this is intentional — the manifest's
+    // identity post-promotion is the manifest body, not the workflow.
     manifest.content_cid = manifest.compute_content_cid();
     manifest
 }

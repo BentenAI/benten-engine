@@ -2,7 +2,7 @@
 
 **Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
 
-**Catalog count narrative (post Phase-4-Foundation R6-FP-A batch-merge, 2026-05-13):** three distinct counts coexist by design — each measures a different surface:
+**Catalog count narrative (post Phase-4-Foundation R6-FP-3 close, 2026-05-13):** four distinct counts coexist by design — each measures a different surface:
 
 | Count | Source | Value (at HEAD post R6-FP-A batch-merge) | Meaning |
 |---|---|---|---|
@@ -1324,7 +1324,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SCHEMA_VOCAB_EDGE_MISMATCH
 
-- **Message:** "schema_compiler: schema edge does not match any of the 6 declared edge types (FIELD / ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT) for the given label pair"
+- **Message:** "schema_compiler: schema edge does not match any of the 5 labeled edge types (ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT; object-to-field is implicit-via-recursion + has no edge label) for the given label pair"
 - **Context:** `{ source_label: String, target_label: String, edge: String }`
 - **Fix:** The schema's edge-label pairing is not in the 5-labeled-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.
 - **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, edge validation).

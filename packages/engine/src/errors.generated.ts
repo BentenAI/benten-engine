@@ -2341,7 +2341,7 @@ export class ESchemaVocabInvalidLabel extends BentenError {
  * E_SCHEMA_VOCAB_EDGE_MISMATCH
  *
  * Thrown at: `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, edge validation).
- * Message template: "schema_compiler: schema edge does not match any of the 6 declared edge types (FIELD / ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT) for the given label pair"
+ * Message template: "schema_compiler: schema edge does not match any of the 5 labeled edge types (ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT; object-to-field is implicit-via-recursion + has no edge label) for the given label pair"
  */
 export class ESchemaVocabEdgeMismatch extends BentenError {
   static readonly code = "E_SCHEMA_VOCAB_EDGE_MISMATCH";

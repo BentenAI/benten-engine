@@ -1,5 +1,9 @@
 //! Phase 4-Foundation R6-FP-BF wave: closure pin for R6 R1 BLOCKER
-//! schema-mat-r6-1 (5 of 6 vocabulary edges un-wired pre-fix-pass).
+//! schema-mat-r6-1 (the 5 labeled vocabulary edges un-wired pre-fix-pass —
+//! historical narrative said "5 of 6" but the canonical post-vocabulary-
+//! reduction vocabulary at HEAD is 5 labeled edges total, with
+//! object-to-field as implicit-via-recursion; see
+//! `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`).
 //!
 //! Substantive arm: compile a SchemaRoot with a `FieldList` whose
 //! `item_scalar` is `text`; assert the emitted Subgraph carries an
