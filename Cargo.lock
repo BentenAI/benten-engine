@@ -299,6 +299,7 @@ dependencies = [
  "benten-platform-foundation",
  "benten-renderer-tauri",
  "fantoccini",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",

@@ -121,4 +121,10 @@ serde_json = { workspace = true }
 # `native-tls` feature transitively pulls openssl). Rustls is the
 # workspace TLS standard.
 fantoccini = { version = "0.22", default-features = false, features = ["rustls-tls"] }
+# rustls 0.23+ requires the dev-test to explicitly install a
+# `CryptoProvider` since fantoccini's `rustls-tls` feature is
+# crypto-backend-agnostic. We use `ring` (already in the workspace
+# transitive dep graph) per its long-stable shape vs `aws-lc-rs` which
+# pulls additional C dependencies.
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time", "net"] }
