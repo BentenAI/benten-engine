@@ -172,6 +172,15 @@ async fn e2e_webview_smoke_loads_index_html_and_invokes_ipc_command() {
     // Wait for tauri-driver to be ready.
     sleep(Duration::from_secs(3)).await;
 
+    // rustls 0.23+ requires an explicit `CryptoProvider` install since
+    // no default is auto-selected when the feature-flag pinning is
+    // disabled. Install ring (already in the workspace dep graph via
+    // multiple transitives) before the fantoccini rustls builder
+    // constructs its connection pool. Ignore the result — a sibling
+    // dep may have installed already, in which case `install_default`
+    // returns Err that we treat as "already installed".
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Connect fantoccini client to tauri-driver's WebDriver port.
     // Use `rustls()` constructor (the workspace bans openssl via
     // deny.toml so the fantoccini `native-tls` default-feature is
