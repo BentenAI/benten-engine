@@ -2,34 +2,35 @@
 
 A plain-English deep-dive into the foundational crate of the Benten Engine. Read this when you need to understand what `benten-core` owns, how it sits in the workspace, and what philosophical lines it draws around itself. Audience: contributors who already know Rust but are new to the crate.
 
+Current as of HEAD `c589ffe` (post `phase-4-foundation-close` tag).
+
 ---
 
 ## 1. What this crate does (in two paragraphs)
 
-`benten-core` is the foundation of the Benten type system. It defines the four shapes everything else in the workspace agrees on — `Value` (the DAG-CBOR-compatible value type), `Node` (a labelled, propertied content-addressed graph node), `Edge` (a content-addressed directed edge between two Node CIDs), and `Cid` (a thin CIDv1 newtype). On top of those, it provides content-addressed hashing (BLAKE3 over DAG-CBOR with canonical key sort), two coexisting version-chain shapes (a thin `u64`-id anchor for the simple case and a Cid-head-threaded anchor that detects concurrent forks), a Hybrid Logical Clock (HLC) for Phase-3 sync, and a `Subgraph` + `SubgraphBuilder` pair that represents a handler-as-graph and produces a deterministic CID for it.
+`benten-core` is the foundation of the Benten type system. It defines the four shapes everything else in the workspace agrees on — `Value` (the DAG-CBOR-compatible value type), `Node` (a labelled, propertied content-addressed graph node), `Edge` (a content-addressed directed edge between two Node CIDs), and `Cid` (a thin CIDv1 newtype). On top of those, it provides content-addressed hashing (BLAKE3 over DAG-CBOR with canonical key sort), three coexisting version-chain shapes (a thin `u64`-id anchor for the simple case, a Cid-head-threaded linear anchor that detects concurrent forks, and a DAG-shaped chain added in Phase-4-Foundation G24-D to support branches + merges per the plugin-library subgraph design), a Hybrid Logical Clock (HLC) for Phase-3 sync, a `Subgraph` + `SubgraphBuilder` pair that represents a handler-as-graph and produces a deterministic CID for it, and the `ChangeStream` port that `benten-eval`'s SUBSCRIBE primitive consumes.
 
-The crate is intentionally `#![no_std]` (with `extern crate alloc`). It forbids `unsafe_code`, warns on `missing_docs`, and depends on no other Benten crate except `benten-errors` (the workspace error-catalog). It pulls in nothing storage-shaped, nothing evaluator-shaped, nothing capability-shaped, and nothing networking-shaped. Every other Benten crate either depends on `benten-core` or depends on a crate that does — making `benten-core` the bottom of the workspace dependency graph and the place where the hash contract lives single-sourced.
+The crate is intentionally `#![no_std]` (with `extern crate alloc`). It forbids `unsafe_code`, warns on `missing_docs`, and depends on no other Benten crate except `benten-errors` (the workspace error-catalog). It pulls in nothing storage-shaped, nothing evaluator-shaped, nothing capability-shaped, and nothing networking-shaped. Every other Benten crate either depends on `benten-core` or depends on a crate that does — making `benten-core` the bottom of the workspace dependency graph and the place where the hash contract lives single-sourced. This is Compromise #3 (zero-Benten-deps root of dep graph) operationalised.
 
 ---
 
 ## 2. Where it sits in the dependency chain
 
 ### Inputs (workspace)
-- `benten-errors` — the only Benten crate `benten-core` depends on. Provides the stable `ErrorCode` enum that `CoreError::code()` and `VersionError::code()` map into.
+- `benten-errors` — the only Benten crate `benten-core` depends on. Provides the stable `ErrorCode` enum that `CoreError::code()`, `VersionError::code()`, and `VersionDagError::code()` map into.
 
 ### Inputs (external)
 - `blake3` (pure feature) — content hashing.
 - `serde_ipld_dagcbor` — canonical DAG-CBOR encode/decode with length-first key sort.
 - `serde` + `serde_bytes` — the data-model glue.
 - `spin` — `no_std`-compatible `Mutex` + `Lazy`. Used by the `u64`-id anchor table, the Cid-head anchor's per-anchor chain, and the HLC's `last_emitted` cell.
-- `thiserror` — ergonomic `Display`/`Error` derives for `CoreError` and `VersionError`.
+- `thiserror` — ergonomic `Display`/`Error` derives for `CoreError`, `VersionError`, and `VersionDagError`.
 
 Dev-deps (`proptest`, `criterion`, `serde_json`) are target-gated off `wasm32-*` so the wasm32-wasip1 example build doesn't drag in `wait-timeout` (which lacks a wasi backend).
 
 ### Workspace consumers (out)
 Nearly every other crate. Direct `path = "../benten-core"` entries appear in:
-- `benten-caps`, `benten-graph`, `benten-ivm`, `benten-eval`, `benten-engine`, `benten-dsl-compiler`, `benten-sync`
-- (And `benten-id` indirectly via the engine.)
+- `benten-caps`, `benten-graph`, `benten-ivm`, `benten-eval`, `benten-engine`, `benten-dsl-compiler`, `benten-sync`, `benten-id`, and the Phase-4-Foundation `benten-platform-foundation` crate.
 
 ### External consumers
 - `bindings/napi` (napi-rs v3) wraps `Cid`, `Node`, `Value` for TypeScript.
@@ -46,21 +47,23 @@ This is not soft style — it is the invariant that lets the crate stay foundati
 
 ## 3. Files inventory in `src/`
 
-There are seven `.rs` files. Total source size is roughly ~2,500 lines.
+There are eight `.rs` files. Total source size is roughly ~3,750 lines.
 
-### `lib.rs` (~950 LOC)
-Crate root. Carries the module-level docs, the `WriteAuthority` enum (lifted into core so `benten-graph` and `benten-caps` can re-export the same type), the four multicodec/multihash constants (`CID_V1=0x01`, `MULTICODEC_DAG_CBOR=0x71`, `MULTIHASH_BLAKE3=0x1e`, `BLAKE3_DIGEST_LEN=32`, plus `CID_LEN=36`), the `Node` struct + its hash path (`canonical_bytes` / `cid` / `load_verified`), the `Cid` newtype + its parse paths (`from_bytes`, `from_str`, `to_base32`), the rolled-by-hand base32-lower-nopad codec, the `CoreError` enum + its `code()` mapping, the `u64`-id `Anchor` surface (with its process-global `U64_CHAINS` table), the `LABEL_CURRENT` / `LABEL_NEXT_VERSION` constants, the `format_err` helper used to bridge `Display`-only errors into owned `String`s without triggering the workspace's `unwrap_used` / `expect_used` lints, and the `pub mod testing` module exposing `canonical_test_node` for cross-process determinism fixtures.
+### `lib.rs` (~948 LOC)
+Crate root. Carries the module-level docs, the `WriteAuthority` enum (lifted into core during Phase-2a ucca-9 / arch-r1-2 so `benten-graph` and `benten-caps` can re-export the same type — `Copy` per R6 R2 C2-R2-6), the four multicodec/multihash constants (`CID_V1=0x01`, `MULTICODEC_DAG_CBOR=0x71`, `MULTIHASH_BLAKE3=0x1e`, `BLAKE3_DIGEST_LEN=32`, plus `CID_LEN=36`), the `Node` struct + its hash path (`canonical_bytes` / `cid` / `load_verified`), the `Cid` newtype + its parse paths (`from_bytes`, `from_str`, `to_base32`), the rolled-by-hand base32-lower-nopad codec, the `CoreError` enum + its `code()` mapping, the `u64`-id `Anchor` surface (with its process-global `U64_CHAINS` table), the `LABEL_CURRENT` / `LABEL_NEXT_VERSION` constants, the `format_err` helper used to bridge `Display`-only errors into owned `String`s without triggering the workspace's `unwrap_used` / `expect_used` lints, and the `pub mod testing` module exposing `canonical_test_node` for cross-process determinism fixtures.
 
 **Key invariants:** Node CID is a pure function of `(labels, properties)`; `anchor_id` is `#[serde(skip)]` and excluded by both the skip attribute and a dedicated `NodeHashView` projection (belt-and-suspenders). NaN/±Inf rejection is performed up-front by `Value::to_canonical` so failures surface as typed `CoreError::FloatNan` / `FloatNonFinite` rather than wrapped serde errors. `-0.0` is normalised to `+0.0` so the CID is stable across the sign of zero.
 
-### `value.rs` (~260 LOC)
+`WriteAuthority` (`lib.rs:103-120`) has three variants — `User` (default), `EnginePrivileged`, `SyncReplica { origin_peer: Cid }` — and is the single source-of-truth shape both `benten-graph` and `benten-caps` re-export.
+
+### `value.rs` (~261 LOC)
 The `Value` enum (eight variants: `Null`, `Bool`, `Int(i64)`, `Float(f64)`, `Text(String)`, `Bytes(Vec<u8>)`, `List(Vec<Value>)`, `Map(BTreeMap<String, Value>)`). Three convenience constructors (`text`, `unit`, `map_of`). `to_canonical` performs the float-validation + `-0.0`-normalisation walk before encode.
 
 **Codec split** (the load-bearing design choice): `Serialize` is derived via `#[serde(untagged)]` and is safe at encode time because every variant writes a distinct CBOR major type. `Deserialize` is **hand-written** because `untagged` deserialisation collapses channels CBOR distinguishes — a small-integer array could round-trip as `Bytes` instead of `List`, and a text-string would land on `visit_str` regardless of which CBOR major type was on the wire. The `ValueVisitor` impl dispatches on the actual data-model type the decoder surfaces. Map keys are decoded as `String` to enforce DAG-CBOR's text-key restriction.
 
 **Public exports:** `Value`.
 
-### `edge.rs` (~134 LOC)
+### `edge.rs` (~133 LOC)
 The `Edge` struct (`source: Cid`, `target: Cid`, `label: String`, `properties: Option<BTreeMap<String, Value>>`) + a private `EdgeHashView` serde view used for canonical bytes.
 
 **Two non-obvious choices, both pinned by tests:**
@@ -71,8 +74,8 @@ The endpoint Node CIDs are passed by value, never by reference, so building an E
 
 **Public exports:** `Edge`.
 
-### `version.rs` (~190 LOC)
-The Cid-head-threaded version-chain surface. Each `Anchor` owns an `Arc<spin::Mutex<Vec<(Cid, Cid)>>>` of `(prior_head, new_head)` pairs. Cloning an `Anchor` shares the chain; calling `Anchor::new` twice with the same head produces independent chains (this was the fix for a prior process-global-map design that leaked state between unrelated anchors).
+### `version.rs` (~189 LOC)
+The Cid-head-threaded **linear** version-chain surface. Each `Anchor` owns an `Arc<spin::Mutex<Vec<(Cid, Cid)>>>` of `(prior_head, new_head)` pairs. Cloning an `Anchor` shares the chain; calling `Anchor::new` twice with the same head produces independent chains (this was the fix for a prior process-global-map design that leaked state between unrelated anchors).
 
 `append_version(anchor, &prior_head, &new_head)` returns:
 - `Ok(())` on a clean append.
@@ -83,7 +86,23 @@ The Cid-head-threaded version-chain surface. Each `Anchor` owns an `Arc<spin::Mu
 
 **Public exports:** `version::Anchor`, `version::append_version`, `version::walk_versions`, `version::VersionError`.
 
-### `hlc.rs` (~580 LOC, including tests)
+### `version_chain.rs` (~327 LOC) — Phase-4-Foundation G24-D
+The **DAG-shaped** version-chain surface, added in Phase-4-Foundation per CLAUDE.md baked-in #18 implementation refinement (D-4F-14): "Linear version-chain extended to support branches (forks). Anchor → v1 → {v2-mainline, v1.5-fork}; CURRENT can point at any branch tip." The linear `version.rs` shape stays for callers that don't need branches; `version_chain.rs` is what the plugin-library subgraph design depends on (one `version::<cid>` Read Node per installed CID, with fork-installs against a non-tip prior head retained in the library subgraph without the linear-chain extending past the fork point).
+
+`DagVersionChain` is a forest of `(parent, child)` edges keyed by CID with a per-anchor "tips" set tracking branches that have no descendants. Storage shape: `parents[child]` + `children[parent]` (both `BTreeMap<Cid, BTreeSet<Cid>>`), `all` (every CID in the DAG), and `current` (the per-device-local CURRENT pointer per ratification #2 of CLAUDE.md #18).
+
+Operations:
+- `add_version(parent, child)` — link `parent → child`. Multiple calls with the same `parent` create branches; multiple parents for the same `child` create a merge node. Returns `VersionDagError::UnknownParent` if parent unseen, `VersionDagError::Cycle` if `child` is already an ancestor of `parent`.
+- `tips()` — all leaf CIDs (branch tips).
+- `descendants(from)` — BFS walk of everything reachable from `from`.
+- `is_ancestor_of(candidate, target)` / `is_descendant_of(target, candidate)` — transitive ancestry check; used for upgrade DAG-monotonicity at the plugin-install path.
+- `current()` / `set_current(cid)` — read/write the local active reference; `set_current` returns `VersionDagError::UnknownCurrent` if the CID is not in the DAG.
+
+`VersionDagError` exposes `.code()` mapping into `ErrorCode::VersionUnknownPrior` (for `UnknownParent` + `UnknownCurrent`) and `ErrorCode::VersionBranched` (for `Cycle`). These reuse existing catalog codes rather than minting new ones, matching the linear `VersionError` mapping.
+
+**Public exports:** `version_chain::DagVersionChain`, `version_chain::VersionDagError`.
+
+### `hlc.rs` (~583 LOC, including tests)
 Hybrid Logical Clock primitives. `BentenHlc` is the 20-byte value type `(physical_ms: u64, logical: u32, node_id: u64)` with lexicographic ordering. `Hlc` is the state machine: bound to a `node_id`, takes a `fn() -> u64` physical-clock callback (deliberately a bare fn pointer to keep the surface `no_std`-compatible and to allow injection in tests), and protects its `last_emitted` cell with a `spin::Mutex`.
 
 `Hlc::now()` follows the Kulkarni-Demirbas rule: `l' = max(last.physical_ms, physical_clock())`; if `l'` did not advance past last, bump the logical counter (saturating at `u32::MAX`); otherwise reset logical to 0. `Hlc::update(remote)` returns `CoreError::HlcSkewExceeded` (which maps to `E_HLC_SKEW_EXCEEDED`) when the remote's physical_ms exceeds local physical clock + the configured skew tolerance (5 minutes default). Local state is NOT mutated when the skew error fires.
@@ -92,8 +111,8 @@ Hybrid Logical Clock primitives. `BentenHlc` is the 20-byte value type `(physica
 
 **Public exports:** `BentenHlc`, `Hlc`, `PhysicalClockFn`.
 
-### `subgraph.rs` (~1,013 LOC)
-The biggest file in the crate. Defines `PrimitiveKind` (the 12 operation primitives), `OperationNode`, `NodeHandle`, `Subgraph`, and `SubgraphBuilder`. Phase-2b G12-C-cont relocated these from `benten-eval` so the `Subgraph` CID is single-sourced under the crate that owns the rest of content hashing.
+### `subgraph.rs` (~1,042 LOC)
+The biggest file in the crate. Defines `PrimitiveKind` (the 12 operation primitives per CLAUDE.md #1), `OperationNode`, `NodeHandle`, `Subgraph`, and `SubgraphBuilder`. Phase-2b G12-C-cont relocated these from `benten-eval` so the `Subgraph` CID is single-sourced under the crate that owns the rest of content hashing.
 
 `canonical_subgraph_bytes` is the authoritative encoding: nodes sorted by `(id, kind_tag)`, edges by `(from, to, label)`, plus the `handler_id` and `deterministic` fields. The encoding uses a dedicated `CanonView`/`CanonNodeRef`/`CanonEdgeRef` private projection that encodes `PrimitiveKind` as a stable string tag ("READ", "WRITE", ...) rather than the auto-derived enum discriminant.
 
@@ -103,9 +122,11 @@ The biggest file in the crate. Defines `PrimitiveKind` (the 12 operation primiti
 
 `build_unvalidated_for_test` finalises without running the invariant pass. The validated version lives in `benten-eval::SubgraphBuilderExt::build_validated` (an extension trait), keeping the ~2,000 LOC invariants module out of `benten-core` while preserving the arch-1 dep direction.
 
+The Phase-4-Foundation plugin composition-cycle detector (`benten_platform_foundation::plugin_manifest::detect_composition_cycle`) builds a structural `Subgraph` over manifest-CID Read Nodes + `COMPOSES`-labelled edges and walks it via DFS — no new `PrimitiveKind` variant minted, CLAUDE.md #1 12-primitive irreducibility preserved.
+
 **Public exports:** `ATTRIBUTION_PROPERTY_KEY`, `NodeHandle`, `OperationNode`, `PrimitiveKind`, `Subgraph`, `SubgraphBuilder`, `canonical_subgraph_bytes`.
 
-### `change_stream.rs` (~232 LOC)
+### `change_stream.rs` (~231 LOC)
 The `ChangeStream` port that `benten-eval`'s SUBSCRIBE primitive consumes via dependency injection. Defines `SubscriberId` (a content-addressed `Cid` newtype), `ChangeKind` (`Created` / `Updated` / `Deleted`, `non_exhaustive` for Phase-3 `Replicated` / `Conflict` arms), and `ChangeEvent` (the full nine-field shape: `anchor_cid`, `kind`, `seq`, `payload_bytes`, `labels`, `tx_id`, `actor_cid`, `handler_cid`, `capability_grant_cid`).
 
 The trait is object-safe with three methods (`subscribe`, `next_event`, `unsubscribe`) returning `Result<_, String>` so it carries no error-type dependency. The decision to put this port in `benten-core` rather than `benten-eval` is recorded inline: the change-event source is a backend concern and the port must sit at the stable arch-1 seam.
@@ -128,9 +149,10 @@ If you're a user of `benten-core`, you mostly touch these:
 
 **Constructing a CID.** Three doors. `Cid::from_blake3_digest([u8; 32])` for internal mint. `Cid::from_bytes(&[u8])` for napi-boundary 36-byte buffers; distinguishes structural failures (`InvalidCid`) from protocol-mismatch (`CidUnsupportedCodec`, `CidUnsupportedHash`). `Cid::from_str(&str)` for the multibase form `"bafyr4i..."`; only accepts the `b` prefix (base32-lower-nopad). Render via `to_base32()` or `Display`.
 
-**Version chains, simple shape.** `Anchor::new()` (root crate). `append_version(&anchor, &node)` returns the appended CID; `current_version(&anchor)` returns the latest; `walk_versions(&anchor)` returns the oldest-first `Vec<Cid>`. No fork detection. Backed by a process-global `U64_CHAINS` `BTreeMap`.
-
-**Version chains, Cid-head-threaded shape.** `version::Anchor::new(root_cid)`. Each `append_version(&anchor, &prior_head, &new_head)` declares the prior head the caller observed; concurrent appends against the same prior fork into a typed `VersionError::Branched`. Per-anchor state, no global table.
+**Version chains, three shapes.**
+- **Thin `u64`-id (root crate).** `Anchor::new()` allocates a fresh monotonic id. `append_version(&anchor, &node)` returns the appended CID; `current_version(&anchor)` returns the latest; `walk_versions(&anchor)` returns the oldest-first `Vec<Cid>`. No fork detection. Backed by a process-global `U64_CHAINS` `BTreeMap`.
+- **Cid-head-threaded linear (`version::*`).** `version::Anchor::new(root_cid)`. Each `append_version(&anchor, &prior_head, &new_head)` declares the prior head the caller observed; concurrent appends against the same prior fork into a typed `VersionError::Branched`. Per-anchor state, no global table.
+- **DAG-shaped (`version_chain::*`).** `DagVersionChain::new(root_cid)`. Each `add_version(parent, child)` builds the parent/children edge map; multiple children per parent = branches; multiple parents per child = merge. `tips()` returns leaf CIDs; `current()` / `set_current(cid)` track the per-device-local active reference. Cycle detection runs on every `add_version`. This is the surface the Phase-4-Foundation plugin-library subgraph stores against.
 
 **HLC.** `Hlc::new(node_id, fn() -> u64)` constructs a clock. `hlc.now()` returns a strictly-greater stamp each call. `hlc.update(&remote)` advances local and returns the post-update local stamp, or errors with `HlcSkewExceeded` if the remote is too far in the future.
 
@@ -138,13 +160,13 @@ If you're a user of `benten-core`, you mostly touch these:
 
 **Subscribe surface.** `SubscriberId::from_cid(cid)`, `ChangeEvent { anchor_cid, kind, seq, payload_bytes, labels, tx_id, actor_cid, handler_cid, capability_grant_cid }`. Implement `ChangeStream` to provide events to SUBSCRIBE.
 
-**Errors.** `CoreError` is `#[non_exhaustive]` and ten-variant. Every variant has a stable catalog code via `CoreError::code() -> ErrorCode`. Sibling `VersionError` exposes `.code()` symmetrically.
+**Errors.** `CoreError` is `#[non_exhaustive]` and ten-variant. Every variant has a stable catalog code via `CoreError::code() -> ErrorCode`. Sibling `VersionError` + `VersionDagError` expose `.code()` symmetrically.
 
 ---
 
 ## 5. Tests inventory
 
-28 integration tests under `tests/`, ~2,800 LOC total. Grouped by surface:
+30 integration tests under `tests/` (plus a `fixtures/` directory and per-test `proptest-regressions/`). Grouped by surface:
 
 ### Value / Node hashing
 - `value_variants.rs` — round-trip each of the eight `Value` variants through `Node::canonical_bytes`.
@@ -165,9 +187,11 @@ If you're a user of `benten-core`, you mostly touch these:
 
 ### Version chain
 - `anchor_version.rs` — `u64`-id-Anchor happy path.
-- `version_branched.rs` — Cid-head `VersionError::Branched` / `UnknownPrior` shapes.
-- `version_error_codes.rs` — `.code()` mapping for both variants.
+- `version_branched.rs` — Cid-head linear `VersionError::Branched` / `UnknownPrior` shapes.
+- `version_error_codes.rs` — `.code()` mapping for both `VersionError` variants.
 - `version_chain_label_constants.rs` — pins `LABEL_CURRENT == "CURRENT"` and `LABEL_NEXT_VERSION == "NEXT_VERSION"`.
+
+(The DAG-shape surface `version_chain::DagVersionChain` is covered by inline `#[cfg(test)] mod tests` in `src/version_chain.rs` rather than a separate integration test — linear/branch/merge/cycle/unknown-parent/set-current-unknown coverage all there.)
 
 ### Subgraph
 - `subgraph_deterministic_dagcbor.rs` — round-trip preserves the `deterministic` flag.
@@ -188,7 +212,7 @@ If you're a user of `benten-core`, you mostly touch these:
 - `d2_cross_process.rs` — re-computes the canonical CID and asserts byte-for-byte equality against the committed `tests/fixtures/canonical_cid.txt`. Cross-architecture coverage is via the CI matrix, not subprocess-spawning.
 - `benten_core_no_eval_dep.rs` — arch-1 invariant CI gate, reads `Cargo.toml` and rejects any `benten-eval` dep.
 
-Each test file's docs explicitly name the R2 landscape row / closure pin (e.g. "R2 landscape §2.1 row 9"), making provenance traceable.
+Each test file's docs explicitly name the R2 landscape row / closure pin (e.g. "R2 landscape §2.1 row 9"), making provenance traceable. The canonical fixture CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` remains stable across Phases 1 → 4-Foundation; any change to it is an immediately-flagging cross-phase break.
 
 ---
 
@@ -209,21 +233,24 @@ There's one example: `examples/print_canonical_cid.rs` (~18 LOC) — prints the 
 
 ## 7. Thin-engine + composable-graph philosophy check
 
-`benten-core` is the foundational layer; expect strict philosophy adherence. I find substantial respect for the principles, plus three observations worth flagging.
+`benten-core` is the foundational layer; expect strict philosophy adherence. Substantial respect for the principles, plus three observations worth flagging.
 
 ### Well-respected examples
 
 - **No policy in types.** `Node`, `Edge`, `Value` are pure data shapes. No capability fields, no IVM annotations, no evaluator state, no transaction handles. `WriteAuthority` lives in core because it's an enum two downstream crates need to agree on, not because core uses it.
-- **Hash contract is single-sourced.** All four content-addressed types (`Node`, `Edge`, `Subgraph`, `SubscriberId`) route through the same BLAKE3 + DAG-CBOR + multicodec/multihash header construction. There is no second encoding lurking — the `subgraph_serde_fail_loud_no_generic_serialize_impl.rs` test proves it for `Subgraph`/`OperationNode`/`NodeHandle`/`PrimitiveKind`, and the `NodeHashView` / `EdgeHashView` private projections defend the same boundary for Node and Edge.
+- **Hash contract is single-sourced.** All four content-addressed types (`Node`, `Edge`, `Subgraph`, `SubscriberId`) route through the same BLAKE3 + DAG-CBOR + multicodec/multihash header construction (CLAUDE.md baked-in #5). There is no second encoding lurking — the `subgraph_serde_fail_loud_no_generic_serialize_impl.rs` test proves it for `Subgraph`/`OperationNode`/`NodeHandle`/`PrimitiveKind`, and the `NodeHashView` / `EdgeHashView` private projections defend the same boundary for Node and Edge.
+- **12 primitives respected.** `PrimitiveKind` is the canonical 12-variant enum (CLAUDE.md baked-in #1). The Phase-4-Foundation plugin composition-cycle detector mints structural `Subgraph`s over CID-keyed Read Nodes + `COMPOSES`-labelled edges — no 13th primitive, no new variant.
 - **No IVM logic.** Search confirms zero references to `Strategy`, `View`, or `Algorithm B` in `src/`. The `ChangeStream` trait is a port — observation-only, abstract over which crate produces events. IVM-specific machinery is `benten-ivm`'s problem.
 - **No evaluator concerns.** No `dispatch_call`, no `PrimitiveHost`, no transaction handles, no `Engine` struct. `Subgraph` and `SubgraphBuilder` describe shape; execution lives in `benten-eval`/`benten-engine`. The `SubgraphBuilderExt` extension-trait pattern keeps validation eval-side while keeping the shape core-side.
 - **`benten-core` MUST NOT depend on `benten-eval`** is enforced both by a unit test (`benten_core_no_eval_dep.rs`) AND a workflow (`arch-1-dep-break.yml`). Belt-and-suspenders, deliberately.
 - **`#[no_std]` + `forbid(unsafe_code)` + `warn(missing_docs)`** at the crate root. The crate is portable to `wasm32-unknown-unknown` (Class B thin-compute surface per CLAUDE.md #17) and the missing_docs lint is on so every public surface has docstring coverage.
 - **HLC stays out of `uhlc`'s `async-std` mire.** The decision to roll HLC directly rather than take `uhlc 0.2.1` is documented in `hlc.rs` and explicitly cites the `no_std` + sync-surface motivation. The state machine is ~150 LOC, no external deps.
+- **DAG-shaped version chain composes with the linear one.** `version_chain::DagVersionChain` doesn't replace `version::Anchor`; it sits alongside, sharing the `Cid` keying + the same catalog-code mapping. Phase-4-Foundation extended the version-chain surface without breaking the linear callers.
 
 ### Observations (not findings — context for future contributors)
 
-- **Process-global `U64_CHAINS` table for the `u64`-id `Anchor`.** This `static spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>>` in `lib.rs` is acknowledged inline as a Phase-3 deferral: it grows unbounded for the life of the process and has no `drop_anchor` / GC. Fine for Phase 1 test runs; a long-running process would want a caller-owned `AnchorStore`. The Cid-head-threaded sibling in `version.rs` already moved to per-anchor `Arc<Mutex<...>>`, so the migration target is clear — `r5 G7` was supposed to pick a canonical shape and the residual carry tag is `TODO(phase-3 — version surface consolidation)`. As of phase-3-close, both shapes still coexist; the consolidation didn't happen during Phase 3 R5 closure. Worth a v1-gate-window or Phase 4 sweep.
+- **Three coexisting Anchor shapes.** `u64`-id at `lib.rs`, Cid-head linear at `version.rs`, DAG-shaped at `version_chain.rs`. The plain-English contract is: `u64`-id for cheap simple cases (no fork detection), linear-Cid-head for the rejecting-fork case, DAG for the branches-allowed case. The R5-G7 "pick a canonical shape" carry has now been overtaken by events: Phase-4-Foundation needed the DAG shape, so consolidation can't mean "delete two." A future consolidation could collapse to "DAG only with an `is_linear()` convenience" but no concrete pressure to do that yet. Carried as a v1-gate / Phase 4-Meta assessment candidate — the residual `TODO(phase-3 — version surface consolidation)` markers in `lib.rs:666` and `version.rs:13` are still present at HEAD.
+- **Process-global `U64_CHAINS` table for the `u64`-id `Anchor`.** This `static spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>>` in `lib.rs:718` is acknowledged inline as a Phase-3-deferral: it grows unbounded for the life of the process and has no `drop_anchor` / GC. Fine for Phase 1 test runs; a long-running process would want a caller-owned `AnchorStore`. The Cid-head-threaded sibling in `version.rs` already moved to per-anchor `Arc<Mutex<...>>`, and `version_chain::DagVersionChain` is value-typed (no global table). The `TODO(phase-3 — anchorstore + GC)` marker in `lib.rs:712` and the `TODO(phase-3 — anchorstore + CRDT merge)` in `version.rs:26` are both still present.
 - **`Subgraph` field-pub-ness vs accessor discipline.** `Subgraph::nodes`, `edges`, `handler_id`, `deterministic` are `pub`. The G12-C-cont docstring acknowledges this is a deliberate choice — `benten-eval`'s invariants module was reaching into the previous `pub(crate)` siblings and converting to accessors-everywhere would have cascaded across ~2,000 LOC. There ARE read-only accessor methods alongside (`nodes()` / `edges()` / `handler_id()` / `is_deterministic()`), so consumers have the option. Mutation discipline is enforced at registration time by Inv-13 (`benten-graph::immutability`), not by the type system. This is a legitimate trade-off; documenting that it's a trade-off is appropriate.
 - **`SubgraphBuilder` knows about Inv-14.** `push()` stamps `attribution: true` on every emitted `OperationNode` by default. The constant `ATTRIBUTION_PROPERTY_KEY` is core-side because the eval-side builder previously needed the string. This is a soft boundary leak — Inv-14 is an evaluator concern that benten-core's builder defaults a property for. The inline justification (D12.7 Decision 1) is fair: the builder is the canonical attribution-stamp surface and tests bypass the builder when probing the reject path. Worth noting as a "core knows about one invariant by name, but only as a property key string."
 
@@ -231,15 +258,16 @@ These are observations, not violations. The crate is in a healthy posture for a 
 
 ---
 
-## 8. Phase 4-Foundation + Phase 4-Meta expectations
+## 8. Phase-4-Foundation impact + Phase 4-Meta expectations
 
-CLAUDE.md baked-in #18 (app-level plugin trust model) and #19 (engine-level extensions) are the next architectural waves that touch this crate. Probable shapes:
+Phase-4-Foundation shipped at tag `phase-4-foundation-close` and added one new module (`version_chain.rs`) per CLAUDE.md baked-in #18 implementation refinement D-4F-14. The rest of the Foundation work landed downstream — plugin manifest types live in `benten-platform-foundation`, schema-driven rendering surfaces live in the new admin-shell + render-backend crates, and the Class B β `Engine::read_node_as` shipped at PR #184 entirely engine-side. The crate's role as the bottom of the workspace stayed intact across the phase.
 
-- **Plugin manifest types.** Per CLAUDE.md #18, every plugin ships a signed manifest with `requires` + `shares` halves. The manifest is content-addressed (Phase 8 decentralised plugin discovery depends on this). A `PluginManifest` type — or whatever it ends up named — could live in `benten-core` because (a) it's a value-shaped struct that needs deterministic content hashing, and (b) `benten-caps` will consume the `requires` half for the capability-policy backend, while `benten-engine` will consume it at install-time. Putting the type in core keeps it consumable by both without bouncing through `benten-eval`. Alternative: if the manifest carries evaluator concerns (e.g. handler-CID references that imply evaluator-loaded subgraphs), the manifest could split — value-shape in core, install-time validation in engine.
-- **Schema → SubgraphSpec types.** Phase 4-Foundation schema-driven rendering is mentioned as upcoming work. The `Subgraph` + `SubgraphBuilder` pair already lives here, so schema-to-subgraph projections naturally compose at the core boundary. A `SchemaSpec` value type might live here; the projection function (`schema_to_subgraph(spec: &SchemaSpec) -> Subgraph`) probably lives in `benten-engine` or a new `benten-schema` crate, since it's a transformation rather than a primitive shape.
-- **`Engine::read_node_as(principal, cid)` Class B β surface.** Shipped via PR #184 in pre-v1 cleanup per CLAUDE.md current-status. The `principal` here is `benten-core::Cid` (Node CID of the active plugin's identity), so no new core-side type. The 4 `todo!()` stubs at `crates/benten-engine/src/engine_wait.rs:1011-1026` cited in CLAUDE.md #18 are the β migration target — that's engine-side, not core-side.
-- **Phase-3 version-surface consolidation.** The two coexisting Anchor shapes (`u64`-id at `lib.rs` vs Cid-head-threaded at `version.rs`) carry the `TODO(phase-3 — version surface consolidation)` marker. R5 G7 was supposed to pick a canonical shape; Phase 3 closed without that pick. Resolving this is a candidate for the v1-gate assessment.
-- **`AnchorStore` / anchor GC.** The `TODO(phase-3 — anchorstore + CRDT merge)` in `version.rs` and `TODO(phase-3 — anchorstore + GC)` in `lib.rs` both anticipate a caller-owned `AnchorStore` handle. Phase-3 `benten-sync` is now CRDT-merge-shaped (per `benten-sync` Loro integration); the `AnchorStore` half of the comment still needs landing.
+Phase 4-Meta is the next architectural wave that may touch this crate:
+
+- **Plugin manifest types — where they live.** Per CLAUDE.md #18 implementation refinements, every plugin ships a signed manifest with `requires` + `shares` halves. Foundation chose to keep these in `benten-platform-foundation` (closer to where install-time validation runs) rather than lifting to `benten-core`. If Phase 4-Meta needs the manifest types referenced from `benten-caps` for the capability-policy backend AND from `benten-platform-foundation` for install, the consolidation candidate is moving the value-shaped half (the immutable serialised manifest) into `benten-core` while keeping install-time validation in `benten-platform-foundation`. Open call; no concrete pressure yet.
+- **`Engine::get_node` visibility tightening.** CLAUDE.md #18 names a v1-assessment-window question: `Engine::get_node` is currently `pub` (originally intended `pub(crate)` per the initial bake-in framing). This is an engine-side decision (not core-side), but it interacts with how plugins consume Node CIDs through the public API — the `Cid` type that flows through `read_node_as(principal, cid)` is owned by `benten-core`, so any visibility change ripples through the type surface here.
+- **Phase-3 version-surface consolidation TODO.** Still carried; see §7 above. With three shapes coexisting, the "pick a canonical one" framing is obsolete; a more useful framing for Phase 4-Meta might be "do we need an `AnchorStore` trait that all three shapes implement, so callers can swap underlying state strategy without retyping?"
+- **`AnchorStore` / anchor GC.** The `TODO(phase-3 — anchorstore + CRDT merge)` in `version.rs` and `TODO(phase-3 — anchorstore + GC)` in `lib.rs` both anticipate a caller-owned `AnchorStore` handle. Phase-3 `benten-sync` is now CRDT-merge-shaped (Loro integration shipped); the `AnchorStore` half of the comment still needs landing. v1-gate-window candidate per CLAUDE.md #15.
 
 None of the above involves opening up a 13th primitive or relaxing the arch-1 dep direction. The crate's role as the bottom of the workspace stays intact.
 
@@ -247,12 +275,12 @@ None of the above involves opening up a 13th primitive or relaxing the arch-1 de
 
 ## 9. Open questions / unresolved internals
 
-Four explicit `TODO`-tagged carries in source:
+Four explicit `TODO`-tagged carries in source — all still present at `phase-4-foundation-close`:
 
-- `lib.rs:666` — `TODO(phase-3 — version surface consolidation)` on the `u64`-id Anchor block, deferred to whenever R5-G7-equivalent work happens.
-- `lib.rs:711` — `TODO(phase-3 — anchorstore + GC)` on `U64_CHAINS` unbounded growth.
+- `lib.rs:666` — `TODO(phase-3 — version surface consolidation)` on the `u64`-id Anchor block. Now reframed in scope by Phase-4-Foundation's addition of `version_chain.rs` (three shapes, not two).
+- `lib.rs:712` — `TODO(phase-3 — anchorstore + GC)` on `U64_CHAINS` unbounded growth.
 - `version.rs:13` — second instance of the version-surface-consolidation marker.
-- `version.rs:26` — `TODO(phase-3 — anchorstore + CRDT merge)` on the per-anchor Mutex pattern.
+- `version.rs:26` — `TODO(phase-3 — anchorstore + CRDT merge)` on the per-anchor `Arc<Mutex<...>>` pattern.
 
 No `FIXME` markers in source.
 
@@ -260,6 +288,7 @@ A few non-obvious design choices worth flagging for fresh readers:
 
 - **`Cid` is byte-lexicographic-`Ord` with no semantic meaning.** Docstring explicitly says this. CIDs are sortable so they can be `BTreeMap` keys; the ordering is not causal, not version-ordered, not anything-meaningful. Anyone tempted to use `cid_a < cid_b` as a "happens-before" check is mistaken.
 - **`format_err` exists to bridge `Display`-only errors into owned `String`s without using `expect` on infallible `write!` calls.** Workspace lints `clippy::unwrap_used` + `clippy::expect_used` are denied at the crate level, so the helper centralises the "writing to a String can't fail but the compiler doesn't know that" workaround at one site.
-- **Per-test HLC mock-clock statics.** `hlc.rs` tests (and `tests/prop_hlc_monotonic.rs`, `tests/hlc_clock_skew_*`) each own their own module-level `static AtomicU64` + `fn` pointer pair. The reason is the `Hlc::new(node_id, fn() -> u64)` signature: it takes a bare fn pointer (not `impl Fn` closure or trait object), so each test's mock physical clock must live in a static. A shared `MOCK_TIME_MS` across tests caused a real flake under `cargo-llvm-cov` parallel execution (R6 R2 finding hlc-r6-r2-1/2); the per-test-statics shape is the structural fix. Documented inline both in `hlc.rs` tests and `phase-3-backlog §7.18`.
+- **Per-test HLC mock-clock statics.** `hlc.rs` tests (and `tests/prop_hlc_monotonic.rs`, `tests/hlc_clock_skew_*`) each own their own module-level `static AtomicU64` + `fn` pointer pair. The reason is the `Hlc::new(node_id, fn() -> u64)` signature: it takes a bare fn pointer (not `impl Fn` closure or trait object), so each test's mock physical clock must live in a static. A shared `MOCK_TIME_MS` across tests caused a real flake under `cargo-llvm-cov` parallel execution (R6 R2 finding hlc-r6-r2-1/2); the per-test-statics shape is the structural fix and pim-N test-isolation-process-scoped-shared-state (§3.13) codified it.
 - **`Cid::sample_for_test` / `Cid::sample_for_label`.** Gated behind `cfg(any(test, feature = "testing"))` so production builds cannot accidentally mint synthetic CIDs. The `testing` cargo feature exists exactly for downstream crates' integration tests; `benten-eval/Cargo.toml`'s `testing = ["benten-core/testing", "dep:wat"]` activates it.
 - **The `NodeHashView` / `EdgeHashView` / `CanonView` private projection pattern.** These exist to make the hash-input contract explicit and protect against `#[serde(skip)]` regressions. Even if someone accidentally removed `#[serde(skip)]` from `Node::anchor_id`, the canonical-bytes path would still go through `NodeHashView` which only knows about `labels` and `properties`. Belt-and-suspenders.
+- **`DagVersionChain::current` initialised to `Some(root_cid)`.** On construction the local CURRENT pointer is the root, not `None`. This matches the "anchor IS the first version" framing — a freshly-rooted plugin install has CURRENT = root, not "no version selected." Tests probing the unknown-CURRENT error path use a fresh CID that was never `add_version`'d in.

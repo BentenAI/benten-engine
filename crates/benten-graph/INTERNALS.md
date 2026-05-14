@@ -1,8 +1,13 @@
 # benten-graph — Crate Internals
 
-A plain-English, code-grounded tour of the `benten-graph` crate as it stands at the
-Phase-3 close + pre-v1 cleanup window. This is a READ-ONLY audit — no claims here
-about future plans, just what the code does today and where the design seams sit.
+A plain-English, code-grounded tour of the `benten-graph` crate as it stands at
+HEAD `c589ffe` (Phase-4-Foundation close, post tag `phase-4-foundation-close`).
+The crate body has been substantively stable since the Phase-3 close window —
+the last source change was the `docs(phase-rename)` retense at `00f2784`
+2026-05-11, and the last code change was `dcd1275` (class-e bug fixes,
+2026-05-10) + `92bd65e` (W9-T6 verify-on-read, 2026-05-08). This is a READ-ONLY
+audit — no claims here about future plans, just what the code does today and
+where the design seams sit.
 
 ## 1. What this crate does
 
@@ -301,7 +306,7 @@ Stable error codes via `GraphError::code() -> ErrorCode`. `BackendNotFound`
 redacts the absolute path in its Display form (r6-err-7) so user-facing
 strings don't leak `$HOME`.
 
-## 5. Tests inventory (51 integration tests)
+## 5. Tests inventory (48 integration tests)
 
 Most-load-bearing groups:
 
@@ -361,9 +366,9 @@ Plus a long tail of single-finding regression pins (`subgraph_load_verified_migr
 `get_node_label_only.rs`, `security_posture_compromise_12_marked_closed.rs`,
 `node_edge_store_blanket.rs`).
 
-## 6. Benches inventory (5 + 1 informational)
+## 6. Benches inventory (6 files + README)
 
-Five criterion benches live in `benches/`, all with `harness = false` and the
+Six criterion benches live in `benches/`, all with `harness = false` and the
 `bench = false` lib flag set on the crate so `cargo bench --workspace` passes
 criterion CLI flags through cleanly.
 
@@ -482,11 +487,15 @@ itself implements via Arc-counted page references. Both satisfy
 hold a snapshot across `.await` points. The two snapshot impls thus look
 different at the struct level but match at the contract level.
 
-## 8. Phase 4-Foundation + Phase 4-Meta expectations
+## 8. Phase 4-Meta + post-v1 expectations
 
-The materializer (Phase-3.5 or Phase-4 territory, depending on how the
-v1-gate framing lands) will read graphs heavily and will care about three
-things in this crate:
+Phase 4-Foundation has closed at tag `phase-4-foundation-close`. The
+substantive Phase-4 platform work (admin UI v0, full plugin manifest schema,
+schema-driven rendering, materializer pipeline, IVM-subgraph generalization,
+decentralized registry on top of Atriums) landed in that window; the storage
+layer absorbed it without trait-surface change. Phase 4-Meta + post-v1
+materializer + admin-UI dogfood work will continue to read graphs heavily and
+care about three things in this crate:
 
 - **`get_node`'s verify-on-read posture.** Already wired (W9-T6). The
   ~3-10µs BLAKE3 recompute cost per `get_node` is the floor; if
@@ -523,43 +532,56 @@ content-type lives in a Node label (`"Post"`, `"Comment"`) and is reachable
 via `get_by_label`. A dedicated "content-type registry" index would be
 new — see the application-layer-composition note in §7.
 
-Plugins-as-subgraphs (CLAUDE.md baked-in #18) will run through
-`store_subgraph` / `load_subgraph_verified`; both are wired and the
-hash-first verification posture is in place. The plugin manifest
-schema (Phase-4 scope) does not have a storage-layer touchpoint yet —
-manifests will likely land as `system:ModuleManifest` Nodes parallel to
-`system:ModuleBytes` blobs, which means `put_node_with_context` +
-`privileged_for_engine_api` is the entry point.
+Plugins-as-subgraphs (CLAUDE.md baked-in #18) run through `store_subgraph` /
+`load_subgraph_verified`; both are wired and the hash-first verification
+posture is in place. Phase 4-Foundation's plugin manifest schema landed
+above this crate (in `benten-platform-foundation::plugin_manifest`); its
+storage-layer touchpoint is the `system:`-prefixed manifest Nodes which flow
+through `put_node_with_context(privileged_for_engine_api())` — same path
+already in production for `system:ModuleBytes` blobs via `RedbBlobBackend`.
+Composition-cycle detection (per ratification of CLAUDE.md #18) walks a
+structural `Subgraph` representation at install time without minting a new
+`PrimitiveKind` variant. The plugin-library subgraph (`handler_id =
+"plugin-library"`) extends the Phase-1 anchor + Version Node pattern over
+existing `n:CID` / `e:CID` keys; no new prefix or schema change in this
+crate.
+
+CLAUDE.md baked-in #19 (engine-level Rust extensions linked at compile time)
+has zero storage-layer touchpoint by construction — engine extensions plug
+in above the `GraphBackend` trait surface, not below it.
 
 ## 9. Open questions / unresolved internals
 
 Five TODOs in the source today, plus a few not-explicitly-TODO frictions
 worth surfacing.
 
-**Explicit TODOs:**
+**Explicit TODOs (5 in-source; all carrying past Phase-3 close):**
 
-- `lib.rs:797-800` — `WriteContext::with_authority` flips `is_privileged`
+- `lib.rs:796` — `WriteContext::with_authority` flips `is_privileged`
   on `EnginePrivileged` but the inverse direction (callers explicitly
   setting `is_privileged = true` separately from authority) can drift.
-  Phase-3 was named as the resolution window; the TODO is still live at
-  Phase-3 close.
-- `redb_backend.rs:266-273` — the in-transaction flag is per-
+  The TODO text names Phase-3 as the resolution window; it remained
+  live through `phase-3-close` and `phase-4-foundation-close` without
+  driving a regression; the two axes are de facto co-set in every
+  production caller today.
+- `redb_backend.rs:266` — the in-transaction flag is per-
   `Arc<RedbBackend>`. Two distinct Arc handles opened on the same redb
   file do not coordinate at the Mutex level and fall through to redb's
   single-writer lock (which blocks rather than deadlocks — but it's a
   different observable shape). Mini-review g3-ce-7 proposed keying the
   flag on the canonical DB path via a process-wide static; carried.
-- `redb_backend.rs:280-287` — `next_tx_id` is process-lifetime-only.
+- `redb_backend.rs:280` — `next_tx_id` is process-lifetime-only.
   Reopening the backend restarts the counter at 1. An IVM persistence layer
   that uses `tx_id` as a durable high-water-mark would observe a
   monotonicity violation across restart. Mini-review g3-ce-8 proposed
   persisting it into a dedicated redb table; carried.
-- `transaction.rs:46-50, 725-728` — a permanently-broken subscriber drifts
+- `transaction.rs:48, 725` — a permanently-broken subscriber drifts
   invisibly today. The `catch_unwind` keeps it from poisoning the commit
   thread but there is no dead-letter counter and no `tracing` dep on this
-  crate, so repeated panics are unobservable to operators. Mini-review
-  g3-ce-5 reserves the work for Phase-3+.
-- `lib.rs:266-272` — `read_bytes_since_reset` is a no-op stub returning 0
+  crate, so repeated panics are unobservable to operators. The TODO text
+  names "phase-3 — subscriber dead-letter counter" as the resolution
+  window; carried past `phase-3-close`.
+- `lib.rs:266` — `read_bytes_since_reset` is a no-op stub returning 0
   unconditionally because `get_node_label_only` is full-decode-then-project
   rather than a prefix-bounded read. A real prefix-bounded fast-path is
   tracked at phase-3-backlog §7.21; until that lands the test that pins
