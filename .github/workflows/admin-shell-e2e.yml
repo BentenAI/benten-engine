@@ -56,8 +56,29 @@ name: Admin-Shell WebDriver E2E (Tauri 2.x)
 on:
   push:
     branches: [main]
+    paths:
+      - 'tools/benten-admin-shell/**'
+      - 'crates/benten-renderer-tauri/**'
+      - 'packages/admin-ui-v0/**'
+      - 'crates/benten-platform-foundation/src/admin_ui_v0**'
+      - '.github/workflows/admin-shell-e2e.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'tools/benten-admin-shell/**'
+      - 'crates/benten-renderer-tauri/**'
+      - 'packages/admin-ui-v0/**'
+      - 'crates/benten-platform-foundation/src/admin_ui_v0**'
+      - '.github/workflows/admin-shell-e2e.yml'
+  # Path-filter added 2026-05-14 post-phase-4-foundation-close: workflow
+  # was firing on every main commit + PR regardless of whether the change
+  # touched the admin-shell surface, producing 8+ recurring loud-fail
+  # signals against PR #240/#242/#243/#244/#245/#246/#247/#248 + every
+  # post-tag main commit. The §4.49 EXPLICITLY-ACCEPT-AT-TAG decision
+  # ratified at PR #245 means the known macOS-WKWebView-WebDriver-absent
+  # limitation is accepted; ubuntu-latest WebKit2GTK substantive coverage
+  # still fires loudly when admin-shell code changes. This is the durable
+  # path-filter fix carried from Phase-3 pre-v1 cleanup window.
   workflow_dispatch:
 
 concurrency:
