@@ -664,17 +664,46 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 r6r3-r7-1 MINOR). The cite-drift 
 
 **Acceptance criteria.** Either (a) extend parser to recognize historical-narrative markers, OR (b) sentinel re-baseline with §6.7 narrative documenting the false-positive classes + accepting them as known-noise. ~30-80 LOC. Couples to §6.7 sentinel re-baseline.
 
+### §4.43 Class-B β engine-internal API cluster: visibility tighten (`pub` → `pub(crate)`) per CLAUDE.md #18 baked-in intent (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cag-r6-r3-1 MINOR + R6-R4 cag-r6-r4-1 MAJOR widening). CLAUDE.md baked-in #18 prose originally named `Engine::read_node(cid)` — `pub(crate)`, no permission check — as the engine-internal un-attributed read pathway. **R6-R4 cag-r6-r4-1 surfaced that the visibility drift applies to a CLUSTER of four engine-internal functions, not just one:**
+
+1. **`Engine::get_node`** at `crates/benten-engine/src/engine_crud.rs::get_node` — `pub`; primary un-attributed read pathway (was originally intended `pub(crate)` per #18).
+2. **`Engine::put_node`** at `crates/benten-engine/src/engine_wait.rs::put_node` — `pub`; doc-comment says 'plugin authors never call this directly'; bypasses `CapabilityPolicy::check_write` so an external caller using this directly escapes the Inv-13 firing matrix.
+3. **`Engine::get_node_label_only`** at `crates/benten-engine/src/engine_wait.rs::get_node_label_only` — `pub`; un-attributed read of label-only (lower-bandwidth than full Node but same attribution-bypass shape).
+4. **`Engine::resolve_subgraph_cid_for_test`** at `crates/benten-engine/src/engine_wait.rs::resolve_subgraph_cid_for_test` — `pub`; `_for_test` suffix but production-consumed (DX hazard; same shape as `SubgraphBuilder::set_property_for_test` per R6-R4 cag-r6-r4-2).
+
+**Acceptance criteria (widened at R6-FP-4).** Two paths apply atomically to the whole 4-function cluster:
+- **Path (a) — tighten visibility:** rename + change visibility (`get_node` → `read_node` `pub(crate)`; `put_node` → `pub(crate)`; `get_node_label_only` → `pub(crate)`; `resolve_subgraph_cid_for_test` → `pub(crate)` + drop `_for_test` suffix or replace with proper test-feature-gate); verify napi-rs surfaces don't break (`benten-napi` reaches into engine's public API; some of these are napi-exposed today).
+- **Path (b) — preserve shipped surface + update prose:** CLAUDE.md #18 prose updated to match shipped surface at R6-FP-3; sibling rustdoc surfaces updated to clarify "intentionally `pub` for napi binding usage; engine-internal discipline applies."
+
+Path (a) is the bake-in-intent path; path (b) preserves the shipped surface. v1-API-stabilization decision. **~50-200 LOC depending on path** (widened scope from R6-R3's ~20-100 LOC single-function estimate). Sibling carry to §4.19 (orchestrator's earlier brief mis-cited that destination).
+
+R6-FP-4 partial: SECURITY-POSTURE.md plugin-trust threat-model narrative + CLAUDE.md #18 prose now match shipped surface for `Engine::get_node`; rest of cluster narratives retain the original framing pending v1-API-stabilization decision.
+
+### §4.49 webview-e2e CI lane verify-against-actual-CI after orchestrator-direct fix (Phase-4-Foundation pre-tag housekeeping)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 br-r6-r4-1 MINOR). The R6-FP-3 br-r6-r3-1 port-binding race fix at `tools/benten-admin-shell/tests/e2e_webview_smoke.rs` (active port-probe loop + stdout/stderr=inherit) addresses the most-likely race-condition shape; whether webview-e2e ubuntu lane actually goes GREEN on subsequent PRs is an empirical question that pim-2 §3.6b OBSERVABLE-CONSEQUENCE discipline says we should verify against the actual CI surface. Currently webview-e2e is non-required + admin-bypassed; the obligation is to confirm the port-probe fix has the expected effect at next non-FP CI run on `main`.
+
+**Acceptance criteria.** Track the next 2-3 main CI runs that include webview-e2e; if it goes GREEN at HEAD without further intervention, close this row. If it stays RED, dispatch a follow-up to investigate the remaining race condition (likely Tauri webview startup vs fantoccini session-create timing, or X virtual framebuffer setup on the runner).
+
+### §4.50 `Engine::*` `_for_test` suffix in production-consumed APIs cleanup (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 cag-r6-r4-2 MINOR). `SubgraphBuilder::set_property_for_test` retains `_for_test` suffix despite production consumption by `schema_compiler::emit`. DX hazard — engineers reading the symbol expect test-only scope; production use signals confusion about the API's stability contract.
+
+**Acceptance criteria.** Audit all `_for_test` suffixed functions for production consumption; rename or split (proper test-feature-gate per `crates/benten-id/Cargo.toml` testing-feature precedent) any that escape test scope. Sibling carry to §4.43 v1-API-stabilization sweep — bundle the rename + visibility-tighten + test-feature-gate work into one wave.
+
+### §4.51 `CRATES-DEEP-DIVE.md` napi-rs binding-vs-workspace-member distinction (Phase-4-Foundation pre-tag housekeeping)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 arch-r6-r4-2 MINOR). `docs/CRATES-DEEP-DIVE.md` mentions `benten-napi` adjacent to the 12-crate workspace-member list without explicitly clarifying that `benten-napi` is a workspace member crate at `bindings/napi/`, not part of the "12 production-shipped crates" count narrative. Functionally correct; readers can resolve from context; inline clarification at pre-tag sweep would tighten the prose.
+
+**Acceptance criteria.** ~3-5 LOC inline rewording at `docs/CRATES-DEEP-DIVE.md §1` clarifying that benten-napi is a Node.js binding workspace member, not a separately-counted crate in the 12-crate production stack narrative. Couples to G26-A pre-tag docs retense wave.
+
 ### §4.44 `tests/phase_3_workspace/architecture_md_g20b_final.rs` rename (10-crate→12-crate; Phase-4-Foundation pre-tag housekeeping)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 arch-r6-r3-3 MINOR). The Phase-3 R3-E RED-PHASE pin `tests/phase_3_workspace/architecture_md_g20b_final.rs` carries "10-crate FINAL" in test fn name + module-level comments. The actual assertion is a subset-check that still passes against the 12-crate doc state (no regression). Superseded by `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs` (Phase-4-Foundation R6-FP canary). Test name rename is a non-time-pressured housekeeping retense.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 arch-r6-r3-3 MINOR). The Phase-3 R3-E RED-PHASE pin `tests/phase_3_workspace/architecture_md_g20b_final.rs` carries "10-crate FINAL" in test fn name + module-level comments. The actual assertion is a subset-check that still passes against the 12-crate doc state (no regression). Superseded by `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs` (Phase-4-Foundation R6-FP canary). R6-FP-3 inline closure: module-level doc-comment now carries "HISTORICAL ANCHOR (Phase-3 R3-E origin)" framing + names the post-Phase-4-Foundation canary as authoritative successor. File rename is a non-time-pressured housekeeping retense.
 
-**Acceptance criteria.** Rename file + test fn + module-level comments from "10-crate" to "12-crate" (or retire the Phase-3 R3-E pin entirely if the post-Phase-4-Foundation canary fully supersedes). ~5-10 LOC. Sibling carry to G26-A pre-tag docs retense wave.
-
-### §4.43 `Engine::get_node` engine-internal visibility tighten (`pub` → `pub(crate)`) per CLAUDE.md #18 baked-in intent (Phase-4-Meta)
-
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cag-r6-r3-1 MINOR). CLAUDE.md baked-in #18 prose names `Engine::read_node(cid)` — `pub(crate)`, no permission check — as the engine-internal un-attributed read pathway. Actual shipped surface at `crates/benten-engine/src/engine_crud.rs:95` is `pub fn get_node` — name drift + visibility drift (public exposes an un-attributed read that is supposed to be engine-internal-only per the Class B β trust-model). Cross-cuts the security-API surface (external callers can call `get_node` without Class B β attribution today; the only attributed entry point that exists is `Engine::read_node_as`).
-
-**Acceptance criteria.** Two paths: (a) tighten visibility — rename `Engine::get_node` to `Engine::read_node` + change `pub` to `pub(crate)`; verify napi-rs surfaces don't break (`benten-napi` reaches into the engine's public API; `get_node` may be napi-exposed today). (b) Update CLAUDE.md #18 prose to match shipped surface (`Engine::get_node` — `pub` — engine-internal pathway not exposed via napi by convention). Path (a) is the bake-in-intent path; path (b) preserves the shipped surface. v1-assessment-window decision. ~20-100 LOC depending on path. Sibling carry to §4.19 (orchestrator's earlier brief mis-cited that destination).
+**Acceptance criteria.** Rename file + test fn from "10-crate" to "12-crate" (or retire the Phase-3 R3-E pin entirely if the post-Phase-4-Foundation canary fully supersedes). ~5-10 LOC. Sibling carry to G26-A pre-tag docs retense wave.
 
 ---
 

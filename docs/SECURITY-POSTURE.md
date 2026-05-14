@@ -37,7 +37,7 @@ the end of the table narrative.
 | 23 | Wire device-attestation envelope cryptographic closure | 3 | **CLOSED** at Phase-3 G16-D wave-6b fix-pass (cryptographic shape CLOSED inline; **operator-deployment `FreshnessPolicy` override REQUIRED for production** — see body) |
 | 24 | Wallclock fail-closed posture (no default-clock-zero expiration bypass) | 3 | **CLOSED** at Phase-3 G16-B-B-rest (PR #158); engine refuses to initialize UCAN backend without explicit clock injection — surfaces `E_UCAN_CLOCK_NOT_INJECTED` |
 | 25 | HLC-monotonic enforcement at sync layer (adversarial-peer wallclock-injection defense) | 3 | **CLOSED** at Phase-3 sync-attack test family (HLC monotonicity + nonce-cache for replay defense + HLC bound inside signed envelope) |
-| 26 | Manifest-envelope recheck at sync merge boundary (Phase-4-Foundation plugin-DID principal extension) | 4-Foundation | **CLOSED** at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4 ratification 2026-05-13). `apply_atrium_merge` revalidates the manifest-envelope chain against the locally-stored manifest before admitting plugin-attributed writes, in addition to the per-row `CapabilityPolicy::pre_write` check. Closes the loophole where a peer's locally-cached manifest could authorise a write that the receiver's current manifest no longer permits. See body. |
+| 26 | Manifest-envelope recheck at sync merge boundary (Phase-4-Foundation plugin-DID principal extension) | 4-Foundation | **PARTIALLY CLOSED** at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4 ratification 2026-05-13). The `ManifestEnvelopeRechecker` port + always-firing default-flip ship; the production-default `NoopManifestEnvelopeRechecker` returns `Outcome::NotApplicable` for every row at HEAD, so the substantive Layer-2 defense is NOT live in shipped binaries — only the per-row `CapabilityPolicy::pre_write` check from Compromise #2 sync-replica sub-narrative is. The substantive `ProductionManifestEnvelopeRechecker` adapter (consuming `PluginLibrary` + `UserDidRegistry` + invoking `manifest_envelope_chain_validation::validate_chain_with_manifest_envelope`) is deferred to Phase-4-Meta per `docs/future/phase-4-backlog.md §4.36`. See body for the full seam-vs-adapter shape. |
 
 **Phase-4-Foundation delta:** Compromise #26 is the sole net-new addition. The remaining surfaces (#1-25) inherit Phase-3 posture unchanged. Phase-4-Foundation engineering shipped without introducing a sixth-class principal type at the evaluator boundary — the plugin-DID principal extension routes through the existing `CapabilityPolicy` + manifest-envelope-chain-validation seams.
 
@@ -1850,9 +1850,37 @@ model — same UCAN machinery, different policy.
   cap presented at access time must trace back to a user-mint root. There is
   no engine sentinel principal callable from outside the engine crate.
 - **Engine-internal-as-principal forgery** (a plugin tries to call the
-  evaluator's unchecked read path) — defended by `pub(crate)` visibility on
-  `Engine::read_node`. The Rust compiler refuses cross-crate calls; plugin
-  subgraph nodes cannot directly invoke the function regardless.
+  evaluator's unchecked read path) — at HEAD defended by the
+  `Engine::read_node_as(principal, cid)` attribution discipline at the napi
+  binding layer; the engine-internal un-attributed `Engine::get_node(cid)`
+  is `pub` today (originally intended `pub(crate)` per CLAUDE.md #18 baked-in
+  framing); visibility-tighten to `pub(crate)` is a v1-API-stabilization
+  decision deferred to Phase-4-Meta per `docs/future/phase-4-backlog.md
+  §4.43`. External callers who use `get_node` directly bypass attribution
+  but cannot escalate caps via that path (the cap-policy check fires on the
+  WRITE pathway, not the unchecked READ — at worst they read content they
+  don't have attribution for).
+- **Plugin-DID forgery at install / chosen-DID substitution** (a malicious
+  caller tries to install a plugin with a `did:key:` it didn't actually mint
+  the keypair for) — defended structurally by the **caller-mint-first
+  contract** (per `docs/PLUGIN-MANIFEST.md §3 Plugin-DID minting protocol`):
+  Step 8 of `install_plugin` asserts BOTH `install_record.plugin_did ==
+  *ctx.expected_plugin_did` (rejects record-substitution; surfaces
+  `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH`) AND
+  `plugin_did_store.get(expected_plugin_did).is_some()` (rejects
+  orphan-handle path; surfaces `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED`). The
+  Ed25519-derives-DID-from-public-key property makes this structurally
+  adversary-resistant — to substitute identities an attacker must mint a
+  keypair whose `did:key:` encoding matches the chosen string
+  (computationally infeasible).
+- **Plugin-DID duplicate-insert (caller bug or adversarial collision attempt)**
+  — defended by **R6-FP-3 defensive-return hardening at
+  `PluginDidStore::insert`**: returns `Err(ErrorCode::PluginDidHandleDuplicate)`
+  if a handle with the same DID is already present. Closes the caller-bug
+  failure mode where double-mint or double-insert in the install path would
+  silently overwrite (pre-R6-FP-3 return was `()`). The same defense surfaces
+  any computationally-infeasible Ed25519 keypair collision attempt as a
+  typed error rather than silent overwrite.
 
 **Trajectory alignment.** v1 (Phase 4 — Phase 4-Foundation ships the
 manifest schema + admin UI v0 + install-time consent; Phase 4-Meta layers
@@ -1991,13 +2019,19 @@ narrowed between the peer's last-seen and the merge ingress).
 **Closure shape (seam half).** `crates/benten-engine/src/engine.rs::Engine`
 holds a `manifest_envelope_rechecker: Arc<dyn ManifestEnvelopeRechecker>`
 defaulting to `Arc::new(NoopManifestEnvelopeRechecker::new())` (engine.rs
-~1729); `apply_atrium_merge` calls `recheck_row(...)` per row before the
-per-row cap-recheck; failures reject with `E_CAP_DENIED` + a `Layer: 2`
-tag distinguishing envelope-shape denials from leaf-grant denials.
-The seam composes with Compromise #25 (HLC + envelope + nonce store
-defenses) — the envelope verifies cryptographically THEN the manifest
-shape is rechecked (via the rechecker port) THEN the per-row leaf grant
-is rechecked. No new ErrorCode required.
+~1729); `apply_atrium_merge` calls `recheck_row(...)` per row **AFTER**
+the per-row cap-revocation check (Layer-3 manifest-envelope refinement on
+top of Layer-1 revocation defense per CLAUDE.md #18 + engine.rs:1396-1400
+comment). On `OutsideEnvelope`, the row rejects with typed
+`E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE` (NOT a generic
+`E_CAP_DENIED` — the typed code distinguishes envelope-shape denials from
+leaf-grant denials at the operator-log layer). The seam composes with
+Compromise #25 (HLC + envelope + nonce store defenses) — the envelope
+verifies cryptographically THEN the per-row leaf grant is rechecked THEN
+the manifest shape is rechecked (via the rechecker port). The
+`E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE` ErrorCode was minted at
+Phase-4-Foundation G24-D for the runtime delegation surface + reused at
+the sync-merge boundary.
 
 **Substantive-adapter shape (Phase-4-Meta target).** The
 `ProductionManifestEnvelopeRechecker` implementation will live in

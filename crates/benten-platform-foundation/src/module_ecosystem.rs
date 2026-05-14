@@ -178,9 +178,14 @@ where
 ///
 /// # Errors
 ///
-/// See [`install_plugin`] — this seam adds NO failure modes beyond
-/// what the underlying install path surfaces; the persist step is
-/// infallible.
+/// See [`install_plugin`] for the bulk of failure modes propagated
+/// through this seam. **R6-FP-3 addition (cap-r6-r3-1):** the
+/// `plugin_did_store.insert` call now propagates
+/// `Err(ErrorCode::PluginDidHandleDuplicate)` if a handle with the
+/// same DID is already in the store (defensive-return hardening over
+/// the caller-mint-first contract; defends against caller-bug
+/// double-mint/double-insert + computationally-infeasible Ed25519
+/// `did:key:` collision attempts).
 #[deprecated(
     since = "0.1.0",
     note = "BYPASSES Layer-2 consent + Layer-1 cap cascade. Use \

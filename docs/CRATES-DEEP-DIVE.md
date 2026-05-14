@@ -14,7 +14,7 @@ Source citations point at the per-crate `INTERNALS.md` documents under `crates/<
 
 Twelve crates. Roughly stacked from foundational types at the bottom to the orchestrator at the top, with two sibling layers (capabilities, IVM) feeding into the engine, one Phase-3 surface (sync) sitting alongside, and two Phase-4-Foundation additions on top (`benten-platform-foundation` for the v1 platform-shippable surface — schema-rendering + materializer + plugin manifest + admin UI v0 + `Renderer` trait — and `benten-renderer-tauri` for the embedded-webview engine extension per CLAUDE.md baked-in #19).
 
-**`benten-errors`** — The single, frozen list of every error the engine is allowed to emit. 118 named variants today; the strings are the contract that TypeScript classes, operator dashboards, and audit pipelines route on. The crate is `no_std + alloc` with zero workspace deps, no `thiserror`, no `strum` — deliberately the irreducible nucleus that every other crate can depend on without pulling Benten machinery along. It earns its keep by being the engine's "what compositions are illegal" vocabulary; growing the catalog is how the engine teaches itself new ways to say no. (`crates/benten-errors/INTERNALS.md`.)
+**`benten-errors`** — The single, frozen list of every error the engine is allowed to emit. 168 production-throwable named variants today (169 with the `Unknown(String)` forward-compat fallback; see `docs/ERROR-CATALOG.md` preamble for the four-count reconciliation); the strings are the contract that TypeScript classes, operator dashboards, and audit pipelines route on. The crate is `no_std + alloc` with zero workspace deps, no `thiserror`, no `strum` — deliberately the irreducible nucleus that every other crate can depend on without pulling Benten machinery along. It earns its keep by being the engine's "what compositions are illegal" vocabulary; growing the catalog is how the engine teaches itself new ways to say no. (`crates/benten-errors/INTERNALS.md`.)
 
 **`benten-core`** — The four shapes everything else agrees on: `Value` (DAG-CBOR-compatible value), `Node` (labelled, propertied, content-addressed graph node), `Edge` (content-addressed directed edge), `Cid` (CIDv1 newtype). Plus content hashing (BLAKE3 over canonical DAG-CBOR), two coexisting version-chain shapes, a Hybrid Logical Clock, and the `Subgraph` / `SubgraphBuilder` pair that gives a handler-as-graph its content-addressed identity. `no_std + alloc`, depends only on `benten-errors`. The hash contract is single-sourced here: every content-addressed type routes through the same encode path. The crate also enforces the arch-1 invariant — it does not, will not, and cannot depend on `benten-eval` (defended by a CI workflow + a unit test).
 
@@ -43,9 +43,16 @@ Twelve crates. Roughly stacked from foundational types at the bottom to the orch
 ## § 2. The dependency graph
 
 ```
-   benten-renderer-tauri ──> benten-platform-foundation ──> benten-engine  (12 crates,
-                              │                              │              top of stack)
-                              └── benten-core, errors, id   ┌┘
+   benten-renderer-tauri ──┐                                              (12 crates,
+       (prod deps:         │                                               top of stack)
+        engine + foundation)│
+                            ↓
+              benten-platform-foundation                ← prod deps: core + errors + id ONLY
+                  (engine is dev-dep only;                (dep direction is engine
+                   foundation does NOT depend             ← does-NOT-depend-on foundation;
+                   on engine in production builds)        foundation sits ABOVE engine;
+                                                          arrows above show "layered above,"
+                                                          NOT "depends on")
                                                             │
                               benten-engine        (orchestrator, depends on all
                              ╱  │  │  │  │  ╲       eight foundational crates)
