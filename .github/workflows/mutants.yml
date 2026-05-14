@@ -48,7 +48,7 @@ jobs:
       - name: Install cargo-mutants
         # Prebuilt binary via taiki-e — avoids the ~60s source compile of
         # `cargo install cargo-mutants --locked`.
-        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1 # v2
+        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
         with:
           tool: cargo-mutants
 
