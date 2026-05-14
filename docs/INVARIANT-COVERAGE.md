@@ -298,12 +298,18 @@ G24-D-FP-2) joins manifest-envelope-shape enforcement with the UCAN
 chain validator without introducing a sixth-class principal type at
 the evaluator boundary.
 
-The R4b-FP-1 Seam 3 `apply_atrium_merge` envelope-recheck (post-Q4
+The R4b-FP-1 Seam 3 `apply_atrium_merge` envelope-recheck-seam (post-Q4
 ratification 2026-05-13) is tracked as **Compromise #26 (Phase-4-Foundation
-manifest-envelope recheck on merge boundary)** — see
+manifest-envelope recheck on merge boundary) — PARTIALLY CLOSED** — see
 [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) "Compromise #26" for the
-full narrative. Inv-14 doesn't gain a new device-grain slot; the
-recheck happens before the AttributionFrame is constructed on the
+full seam-vs-adapter narrative (the `ManifestEnvelopeRechecker` port +
+default-flip ship; the production-default `NoopManifestEnvelopeRechecker`
+returns `NotApplicable` for every row at HEAD, so the substantive Layer-2
+defense is NOT live in shipped binaries yet; the
+`ProductionManifestEnvelopeRechecker` adapter is deferred to Phase-4-Meta
+per `docs/future/phase-4-backlog.md §4.36`). Inv-14 doesn't gain a new
+device-grain slot; the recheck (when live) happens AFTER the per-row
+cap-revocation check + before the AttributionFrame is constructed on the
 receiver side, so the frame remains the invariant's source of truth.
 
 ---

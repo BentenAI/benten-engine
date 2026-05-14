@@ -1,6 +1,6 @@
 //! Schema vocabulary types per D-4F-NEW-TYPED-FIELD-NODE-VOCAB.
 //!
-//! These are typed Rust mirrors of the 8 labels / 6 edges / 8 scalars / 4
+//! These are typed Rust mirrors of the 8 labels / 5 labeled edges / 8 scalars / 4
 //! mandatory field properties. Construction sites for these enums are the
 //! parser (`parse.rs`) + emitter (`emit.rs`); they're public so downstream
 //! consumers (G23-B materializer + tests) can pattern-match against them

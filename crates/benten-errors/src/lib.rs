@@ -902,8 +902,9 @@ pub enum ErrorCode {
     SchemaVocabInvalidLabel,
     /// Phase 4-Foundation G23-A schema_compiler canary: an edge in the
     /// schema connects vocabulary labels whose pairing is not in the
-    /// 6-edge set (`FIELD` / `ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` /
-    /// `REF_TARGET` / `VARIANT`). Maps to `E_SCHEMA_VOCAB_EDGE_MISMATCH`.
+    /// 5-labeled-edge set (`ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` /
+    /// `REF_TARGET` / `VARIANT`; object-to-field is implicit-via-recursion,
+    /// no `FIELD` label minted). Maps to `E_SCHEMA_VOCAB_EDGE_MISMATCH`.
     SchemaVocabEdgeMismatch,
     /// Phase 4-Foundation G23-A schema_compiler canary: a `FieldScalar`
     /// referenced a scalar name outside the 8-scalar vocabulary

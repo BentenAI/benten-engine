@@ -15,8 +15,9 @@
 //! 1. **`schema_compiler`** (G23-A wave-4) — schema-as-subgraph-of-primitive-typed-field-Nodes
 //!    parser using the RATIFIED VOCABULARY (D-4F-NEW-TYPED-FIELD-NODE-VOCAB):
 //!    8 labels (`SchemaRoot` / `FieldScalar` / `FieldObject` / `FieldList` /
-//!    `FieldMap` / `FieldRef` / `FieldEnum` / `FieldUnion`); 6 edges (`FIELD` /
-//!    `ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET` / `VARIANT`); 8
+//!    `FieldMap` / `FieldRef` / `FieldEnum` / `FieldUnion`); 5 labeled edges
+//!    (`ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET` / `VARIANT`;
+//!    object-to-field is implicit-via-recursion); 8
 //!    scalars (text/int/float/bool/bytes/bytes-cid/timestamp-hlc/null per
 //!    `benten-core::Value`); 4 mandatory field properties
 //!    (`name`/`required`/`default`/`scope` — `scope` schema-derived per

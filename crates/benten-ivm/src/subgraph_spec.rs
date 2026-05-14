@@ -97,7 +97,7 @@ pub enum TypedOutputProjection {
 ///
 /// **D-4F-NEW-TYPED-FIELD-NODE-VOCAB readiness:** the field shapes here
 /// mirror the typed-field-Node vocabulary the schema language lands at
-/// G23-A (8 labels / 6 edges / 8 scalars / 4 properties per Ben's
+/// G23-A (8 labels / 5 labeled edges / 8 scalars / 4 properties per Ben's
 /// post-R1-triage ratification). A future SubgraphSpec → typed-field-
 /// Node lowering pass converts this struct into Node form on persist.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -207,11 +207,14 @@ Per arch-r1-16 + br-r1-9: `Renderer` trait at `crates/benten-platform-foundation
 
 ```
 pub trait Renderer: Send + Sync {
-    fn render(&self, materializer_output: &MaterializerOutput) -> Result<Bytes, RenderError>;
+    fn render(&self, output: &MaterializerOutput) -> Result<(), RenderError>;
+    fn backend_name(&self) -> &'static str;
     // ... transport-agnostic methods only;
     // transport concerns (DOM mutation, IPC method invocation) live in concrete impls.
 }
 ```
+
+The unit-return `Result<(), RenderError>` reflects that the trait's render method drives side-effects into the renderer's owned transport (DOM writes for `BrowserRender`, Tauri IPC pushes for `TauriRenderer`); the materialized bytes belong to the concrete impl, not the trait return.
 
 `tauri-runtime-verso` swap-readiness committed: methods are minimal + transport-agnostic; Verso is post-v1 swap target.
 

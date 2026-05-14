@@ -6,7 +6,7 @@
 //!
 //! ## What this pin establishes
 //!
-//! D-4F-NEW-TYPED-FIELD-NODE-VOCAB resolved with 8 labels + 6 edges + 8
+//! D-4F-NEW-TYPED-FIELD-NODE-VOCAB resolved with 8 labels + 5 labeled edges + 8
 //! scalars + 4 mandatory field properties. Composability invariant (cag-r1-1):
 //! every vocabulary label maps to a composition over the existing 12
 //! primitives via the schema-compiler; no new PrimitiveKind variants. This
