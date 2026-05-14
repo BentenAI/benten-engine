@@ -11,9 +11,24 @@ description = "Phase-3 G14-A1 — Ed25519 keypair + did:key + UCAN chain validat
 [lints]
 workspace = true
 
+[features]
+# `testing` exposes test-only constructors (e.g.
+# `plugin_did::handle_with_did_for_test`) needed by integration-test
+# suites that exercise defensive-return paths which cannot be driven
+# via the production-only mint() API. NOT for production callers.
+testing = []
+
 [lib]
 # Disable the implicit libtest bench harness. Mirrors crates/benten-core/Cargo.toml.
 bench = false
+
+# R6-FP-3 cap-r6-r3-1 substantive test pin: requires `testing` feature to
+# expose `handle_with_did_for_test` constructor. Marked `required-features`
+# so `cargo test --workspace` silently skips it (rather than failing the
+# import) when the feature isn't enabled.
+[[test]]
+name = "plugin_did_store_insert_duplicate_rejected"
+required-features = ["testing"]
 
 # Per arch-r1-10: benten-id MUST NOT depend on benten-graph / benten-engine /
 # benten-eval / benten-caps. The `tests/dependency_edges.rs` pin enforces this
@@ -27,6 +42,12 @@ bench = false
 # benten-eval / benten-caps / benten-ivm / benten-sync / benten-dsl-compiler).
 # Mirrors the precedent at `crates/benten-caps/Cargo.toml` line 21.
 benten-core = { path = "../benten-core" }
+# R6-FP-3 (cap-r6-r3-1): `PluginDidStore::insert` returns
+# `Result<(), ErrorCode>` with `ErrorCode::PluginDidHandleDuplicate`
+# for defensive-return hardening. `benten-errors` is NOT in the
+# arch-r1-10 forbidden set; pure-data crate at the bottom of the
+# workspace dep graph.
+benten-errors = { workspace = true }
 # Ed25519 signing + verifying (plan §3 G14-A1 row).
 ed25519-dalek = { workspace = true }
 # Secret-bytes hygiene (crypto-blocker-1 BLOCKER): `Zeroize` +

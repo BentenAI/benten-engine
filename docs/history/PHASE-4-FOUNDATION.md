@@ -95,6 +95,6 @@ The 12-primitive irreducibility commitment held: zero new `PrimitiveKind` varian
 
 The three-deployment-shape commitment (baked-in #17) shipped concretely: (a) full peer via `benten-engine` native build; (b) thin compute surface via `benten-engine` wasm32 + `BrowserRender`; (c) embedded webview via `benten-renderer-tauri` wrapping the same wasm32 bundle. Tauri-shell vs browser-tab is a deployment choice, not an architectural shape change.
 
-The app-level-plugin + engine-extension trust model (baked-in #18 + #19) shipped concretely with `manifest_envelope_chain_validation` + `private_namespace_policy` + Class B β `read_node_as` + the four-identity-concept separation.
+The app-level-plugin + engine-extension trust model (baked-in #18 + #19) shipped concretely with `manifest_envelope_chain_validation` + `plugin_delegation::is_private_namespace_cap` + Class B β `read_node_as` + the four-identity-concept separation.
 
 *Skeleton drafted at R6-FP-G G26-A pre-tag sweep; full prose lands at `phase-4-foundation-close` tag.*

@@ -132,7 +132,7 @@ The contract surface: `crates/benten-platform-foundation/src/plugin_lifecycle.rs
 
 1. Receiver peer receives plugin bytes (out-of-band content-addressed-share over Atriums in Phase 4-Foundation; decentralized registry → Phase 4-Meta per post-R1-triage ratification #3).
 2. Receiver verifies: (a) bytes hash to declared content-CID; (b) peer-DID signature on content; (c) peer-DID is in user's `requires_plugin_authors` trust-list (else first-install prompt).
-3. Engine mints fresh plugin-DID keypair via OsRng at `benten-id::plugin_did::mint`.
+3. **Caller** mints fresh plugin-DID keypair via `benten_id::plugin_did::mint(rng)` + inserts the handle into `PluginDidStore` per the caller-mint-first contract above (§3 Plugin-DID minting protocol). The engine NEVER mints plugin-DIDs internally; install_plugin Step 8 asserts the pre-inserted handle is present.
 4. Admin UI surfaces manifest review screen (per `docs/ADMIN-UI.md`): plain English requires/shares, per-cap-grant decline option.
 5. On consent, user-DID signs `InstallRecord` + issues UCAN delegations from user-DID to plugin-DID for granted caps.
 6. Install record persisted to `ManifestStore` (in-memory `HashMap`-backed at Phase-4-Foundation v1 per `crates/benten-platform-foundation/src/manifest_store.rs` — see also `docs/future/phase-4-backlog.md §6.4` for the redb-durable persistence carry into Phase-4-Meta; the in-memory shape preserves the seam contract so the redb swap is a transparent backend lift).

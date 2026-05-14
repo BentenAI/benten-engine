@@ -151,11 +151,11 @@ R5 G23-A landed the `schema_compiler` canary (branch `r5/wave-g23-a`). The canar
 
 **Companion deferral — arbitrary-schema proptest:** `crates/benten-platform-foundation/tests/prop_schema_compile_is_idempotent_arbitrary_schemas.rs` remains `#[ignore]` at G23-A. The arbitrary-schema generator (`arbitrary_valid_schema_bytes(seed: u64) -> Vec<u8>` in `tests/common/schema_fixtures.rs`) needs the strict input-dialect grammar finalized before it can generate property-test inputs that exercise the dialect boundary, not just emit-side idempotency. The canary already covers fixed-fixture round-trip idempotency via `schema_compiler_round_trip_canonical_bytes_stable.rs` (un-ignored, PASS at G23-A); the proptest arm un-ignores when the strict 4-of-4 input-dialect lands per the carry-criterion above.
 
-**Tentative phase target:** Phase 4-Foundation wave-N (TBD) OR Phase 4-Meta. NOT a v1-blocker — fixed-fixture idempotency at G23-A canary + emit-side 4-of-4 enforcement together suffice for the schema-driven-rendering substantive arm.
+**Tentative phase target:** Phase 4-Meta (substantive landing). NOT a v1-blocker — fixed-fixture idempotency at G23-A canary + emit-side 4-of-4 enforcement together suffice for the schema-driven-rendering substantive arm.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination + the work obligation lands NOW. G23-A wave's `parse.rs` source comments + the proptest's `#[ignore]` message cite `docs/future/phase-4-backlog.md §4.6` instead of phantom destinations like "wave-4b".
 
-**Acceptance criteria addendum (added 2026-05-13 R6 R2 schema-language solo lens schema-lang-r6-r2-2):** the vocab-fixture coverage test pin `schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension.rs` currently exercises only 4 of the 8 declared `LabelType` variants (SchemaRoot / FieldScalar / FieldList / FieldRef). The remaining 4 (FieldObject / FieldMap / FieldEnum / FieldUnion) MUST be added to the fixture set when this row lands, alongside per-label assertions that the emit-side construction-site fires for each label and produces the corresponding vocab edges (FIELD for objects; KEY_TYPE+VALUE_TYPE for maps; VARIANT for enums/unions). Counts coverage gap closure as part of the same backlog row to keep the §4.6 destination self-contained.
+**Acceptance criteria addendum (added 2026-05-13 R6 R2 schema-language solo lens schema-lang-r6-r2-2):** the vocab-fixture coverage test pin `schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension.rs` currently exercises only 4 of the 8 declared `LabelType` variants (SchemaRoot / FieldScalar / FieldList / FieldRef). The remaining 4 (FieldObject / FieldMap / FieldEnum / FieldUnion) MUST be added to the fixture set when this row lands, alongside per-label assertions that the emit-side construction-site fires for each label and produces the corresponding vocab edges (implicit-via-recursion parent→child for objects per §2.2; KEY_TYPE+VALUE_TYPE for maps; VARIANT for enums/unions). Counts coverage gap closure as part of the same backlog row to keep the §4.6 destination self-contained.
 
 Closes G23-A R5 mini-review BLOCKER finding `g23a-mr-1` + MAJOR finding `g23a-mr-2` + R6 R2 schema-lang-r6-r2-2 acceptance-criteria gap.
 
@@ -525,11 +525,13 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — `i
 
 Estimated scope: ~200-400 LOC (materializer seam + 5 substantive byte-equivalence test arms).
 
-### §4.30 Mini-review JSON schema discipline + `disposition` field uniformity (Phase-4-Foundation pre-tag)
+### §4.30 Mini-review JSON schema discipline + `disposition` field uniformity (CLOSED at R6-FP-3 2026-05-13)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 methodology-critic meth-r6-r1-3 + meth-r6-r1-4). Lens JSON reports + mini-review JSONs should carry a uniform top-level shape: `disposition` field + `findings[]` array + optional `orchestrator_action_summary`. The `r6-r1-pim-n-meta-sweep.json` lacks `disposition`; some R5 mini-reviews lack `orchestrator_action_summary`. Codify uniform schema in `.addl/dispatch-conventions.md` §3.6c brief-template; bring legacy artifacts in line via pre-tag sweep.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 methodology-critic meth-r6-r1-3 + meth-r6-r1-4). Lens JSON reports + mini-review JSONs should carry a uniform top-level shape: `disposition` field + `findings[]` array + optional `orchestrator_action_summary`.
 
-Estimated scope: ~10-30 LOC dispatch-conventions + JSON patch for `pim-n-meta-sweep.json` (orchestrator-direct).
+**CLOSED at R6-FP-3 (2026-05-13):** Canonical schema codified at `.addl/dispatch-conventions.md §3.6i` (NEW section). 14 legacy mini-review JSONs + 17 R6 R3 lens JSONs swept `"verdict":` → `"disposition":` inline at R6-FP-3 wave. Original §4.30 cite of `§3.6c brief-template` was a mis-cite — §3.6c is "Mirror-precedent overshoot guard", unrelated. §3.6i is the actual live-discipline destination. R6 R3 methodology-critic `meth-r6-r3-1` MAJOR triggered the closure.
+
+Estimated scope (actuals): ~80 LOC dispatch-conventions (§3.6i) + 32 file sed (verdict→disposition) + 1 malformed-JSON inline fix at r6-r3-invariant-compromise.json line 70 (`]` → `}`).
 
 ### §4.32 `validate_schema_author_within_manifest_envelope` runtime production-wiring (Phase-4-Meta)
 
@@ -607,6 +609,72 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-6 MINOR + tmr-r6-r1-4 MA
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-5 MINOR + tmr-r6-r1-2 MAJOR R1 finding). `admin-ui-v0-threat-model.md` documents ratification #8 (cap-change-triggered fresh consent: silent within-lineage subset; full re-consent if `requires` GREW). `install_plugin` Step 7 currently enforces version-DAG-descendant ordering but does NOT compute the `new.requires \ prior.requires` delta and demand a fresh consent for that specific delta. Test pin `plugin_upgrade_requires_caps_grew_triggers_user_consent.rs` is referenced at threat-model.md:300 but un-ignore status uncertain.
 
 **Acceptance criteria.** (a) Add Step-7-extension at `install_plugin`: compute requires-delta; if non-empty, demand fresh consent (caller-supplied flag or new ErrorCode `E_PLUGIN_CAPS_GREW_REQUIRES_RECONSENT` propagating up to admin-UI). (b) Verify + un-ignore the test pin. (c) Update PLUGIN-MANIFEST.md §4.3 narrative once shipped. Couples to §4.21. ~50-150 LOC.
+
+### §4.42 `validate_chain_with_manifest_envelope` wasm32 unsupported-surface defensive companion (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 sec-r6r3-1 + sec-r6r3-2 MINOR, dedup'd; R6-R2 sec-r6r2-3 carry). `crates/benten-caps/src/manifest_envelope_chain_validation.rs:186+` gates `validate_chain_with_manifest_envelope` behind `#[cfg(not(target_arch = "wasm32"))]`. The wasm32 build path has `PhantomData<()>` `Did` stubs (lines 34-48) so the module type-shape is wasm-buildable, but the chain-validation function itself simply does not exist on wasm32 — leaving cryptic linker errors as the failure mode if a future feature pulls this surface in. **R6-FP-3 landed a defensive doc-comment companion** (`crates/benten-caps/src/manifest_envelope_chain_validation.rs:50+` "compile_error! companion mirror" block) citing CLAUDE.md baked-in #17(b) thin-client architecture. Substantive `#[cfg(target_arch = "wasm32")]` stub function with cite-bearing `unimplemented!()` panic (or actual `compile_error!` macro on a sentinel feature flag) deferred to Phase-4-Meta when wasm32 cap-evaluation scope clarifies.
+
+**Acceptance criteria.** Either (a) ship a wasm32 stub function with the same signature returning `ChainValidationOutcome::ChainInvalid` + an error citing CLAUDE.md #17(b); or (b) gate wasm32 build entirely with `#[cfg(target_arch = "wasm32")] compile_error!("...")` if benten-caps is determined not to compile for wasm32 at all (which the current state arguably already is — benten-graph fails to build wasm32). ~10-30 LOC.
+
+### §4.45 `PluginDidStore::insert` duplicate-DID defensive return — CLOSED at R6-FP-3 (2026-05-13)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 carry).
+
+**CLOSED at R6-FP-3 (2026-05-13).** Originally deferred under "ErrorCodes mint with feature waves" convention; on re-examination per Ben's "do whatever makes sense to do now vs in 4-meta" directive (2026-05-13), the new-ErrorCode-in-fix-pass scope (~80 LOC across 4-surface mirror) was bounded enough to land inline.
+
+**What shipped:**
+- `crates/benten-id/src/plugin_did.rs::PluginDidStore::insert` signature: `pub fn insert(&mut self, handle: PluginDidHandle) -> Result<(), ErrorCode>` returning `Err(ErrorCode::PluginDidHandleDuplicate)` when the same DID is already present.
+- New ErrorCode `E_PLUGIN_DID_HANDLE_DUPLICATE` minted with full 4-surface mirror: Rust enum + as_str + matches_static + ALL_CATALOG_VARIANTS + from_str + TS catalog + ERROR-CATALOG.md heading + preamble narrative reconciliation 167→168 (and 169→170 for catalog/TS retaining E_INV_ITERATE_NEST_DEPTH).
+- Caller-mint-first contract production arm at `crates/benten-platform-foundation/src/module_ecosystem.rs:211` now propagates the Result via `?`.
+- Test fixture at `crates/benten-platform-foundation/tests/common/manifest_fixtures.rs::mint_and_insert_plugin_did` adjusted for the new Result signature.
+- Test-only `plugin_did::handle_with_did_for_test(did)` constructor (gated behind `cfg(any(test, feature = "testing"))`) lets the duplicate-rejection path be exercised directly.
+- Substantive test pin at `crates/benten-id/tests/plugin_did_store_insert_duplicate_rejected.rs` (3 tests; required-features=["testing"]; pim-2 §3.6b PRODUCTION-ARM + OBSERVABLE-CONSEQUENCE + WOULD-FAIL-IF-NO-OP'd).
+
+No further obligation.
+
+### §4.46 `wasm-browser.yml` bundle-content audit grep semantics — DISAGREE-WITH-EXPLANATION (R6-FP-3 review)
+
+Per HARD RULE rule-12 (R6-R3 br-r6-r3-2 MINOR; R1 br-r6-r1-4 MAJOR carry-forward). **Originally proposed as a NAMED-NOW destination; on R6-FP-3 review the orchestrator DISAGREES with the agent's recommended fix shape (the row remains as a tracking pin only).**
+
+The R6-R3 finding proposed switching `grep -i -F -q '<sym>'` (case-insensitive fixed-string) at `.github/workflows/wasm-browser.yml:307` to `grep -E -q '\b(loro|iroh|wasmtime)\b'` (case-sensitive word-boundary regex). The orchestrator's DISAGREE rationale:
+
+1. **The case-insensitive matching is intentional, not accidental.** The inline comment at lines 299-303 explicitly documents: *"The grep is case-insensitive to catch both `Loro` (Rust type names) and `loro_` (function manglings)."* PascalCase Rust type names appear in wasm-objdump output for non-mangled symbols (`#[no_mangle]` or extern wrappers); lowercase forms appear in standard Rust name mangling. Switching to case-sensitive would miss the PascalCase form.
+2. **The substring (fixed-string) shape is intentional.** Rust mangling produces forms like `_ZN4loro8internal...` where the symbol's CRATE name is embedded as a length-prefixed segment without surrounding word boundaries. `\bloro` regex matches at `_ZN4|loro` (digit→letter boundary) which DOES work, but the substring form has been load-bearing through Phase-3 + Phase-4-Foundation with zero false-positive incidents — the proposed refinement is a theoretical improvement, not an empirical defect closure.
+3. **False-positive risk is hypothetical at this scope.** The forbidden symbols `loro` / `iroh` / `redb` / `wasmtime` are crate names; word-collisions in legitimate symbols (e.g. a symbol containing the substring "loro" as a legit suffix) have not been observed across multiple Phase-3 + Phase-4-Foundation builds.
+
+**Status: ROW PRESERVED for tracking** — if a future empirical false-positive surfaces, this row carries the refinement obligation. No work at HEAD; no Phase-4-Meta target; no v1-blocker.
+
+### §4.47 `admin_ui_v0_canonical_manifest()` production constructor — DISAGREE-WITH-EXPLANATION (R6-FP-3 re-examination)
+
+Per HARD RULE rule-12 (R6-R3 br-r6-r3-3 MINOR; R1 br-r6-r1-8 MINOR carry-forward). **Originally proposed as a NAMED-NOW destination; on R6-FP-3 re-examination the orchestrator DISAGREES — the production constructor already exists at a different location than the agent searched.**
+
+The R6 R3 finding claimed "no production `admin_ui_v0_canonical_manifest()` constructor in `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs`; only `admin_ui_v0_manifest()` in tests/common/." Verification at HEAD `6e10aea`:
+
+- **`admin_ui_v0_canonical_manifest()` DOES exist in production** at `tools/benten-admin-shell/src/lib.rs::admin_ui_v0_canonical_manifest`. The function's doc-comment explicitly cites the R1 closure: *"Closes the secondary half of `br-r6-r1-8` MINOR: 'No production `admin_ui_v0_manifest()` constructor in benten-platform-foundation' — the integrator binary is the named NOW destination + per-test drift is asserted by `tests/canonical_manifest_matches_ipc_binding`."*
+- The companion `ADMIN_UI_V0_CANONICAL_CAPS: &[&str]` constant at `tools/benten-admin-shell/src/lib.rs::ADMIN_UI_V0_CANONICAL_CAPS` enumerates the canonical 6-cap set the IPC method-cap-binding map references.
+- The R1 br-r6-r1-8 finding was closed by placing the constructor at the integrator-binary (admin shell) layer rather than the platform-foundation layer — that's where admin-UI-v0-specific code belongs (per CLAUDE.md baked-in #18: admin UI v0 IS a plugin, not engine infrastructure).
+
+The R6 R3 finding mis-searched the location. Row preserved as a tracking pin in case the production canonical-manifest constructor genuinely belongs in `benten-platform-foundation` for non-Tauri integrator consumers — but at HEAD that consumer category doesn't exist (browser-shape b consumers don't install plugins; embedded webview shape c uses the Tauri integrator's constructor).
+
+**Status: ROW PRESERVED for tracking** — no work at HEAD; no Phase-4-Meta target; no v1-blocker.
+
+### §4.48 `cite-drift-detector` historical-vs-current phrasing precision (Phase-4-Foundation pre-tag OR Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 r6r3-r7-1 MINOR). The cite-drift detector's token parser doesn't distinguish historical-narrative phrasing ("…retired Phase-2a id…" / "…earlier doc drafts cited…") from current-code construction-site claims, producing false-positive findings on doc bodies that reference deprecated/retired surfaces in historical context. Currently mitigated via the allowlist logic at `tools/cite-drift-detector/src/lib.rs` excluding `docs/history/` floor; refinement to the parser itself (e.g. "this token preceded by `(historical)` marker / `(retired)` marker / past-tense verb cluster") is the long-term fix.
+
+**Acceptance criteria.** Either (a) extend parser to recognize historical-narrative markers, OR (b) sentinel re-baseline with §6.7 narrative documenting the false-positive classes + accepting them as known-noise. ~30-80 LOC. Couples to §6.7 sentinel re-baseline.
+
+### §4.44 `tests/phase_3_workspace/architecture_md_g20b_final.rs` rename (10-crate→12-crate; Phase-4-Foundation pre-tag housekeeping)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 arch-r6-r3-3 MINOR). The Phase-3 R3-E RED-PHASE pin `tests/phase_3_workspace/architecture_md_g20b_final.rs` carries "10-crate FINAL" in test fn name + module-level comments. The actual assertion is a subset-check that still passes against the 12-crate doc state (no regression). Superseded by `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs` (Phase-4-Foundation R6-FP canary). Test name rename is a non-time-pressured housekeeping retense.
+
+**Acceptance criteria.** Rename file + test fn + module-level comments from "10-crate" to "12-crate" (or retire the Phase-3 R3-E pin entirely if the post-Phase-4-Foundation canary fully supersedes). ~5-10 LOC. Sibling carry to G26-A pre-tag docs retense wave.
+
+### §4.43 `Engine::get_node` engine-internal visibility tighten (`pub` → `pub(crate)`) per CLAUDE.md #18 baked-in intent (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cag-r6-r3-1 MINOR). CLAUDE.md baked-in #18 prose names `Engine::read_node(cid)` — `pub(crate)`, no permission check — as the engine-internal un-attributed read pathway. Actual shipped surface at `crates/benten-engine/src/engine_crud.rs:95` is `pub fn get_node` — name drift + visibility drift (public exposes an un-attributed read that is supposed to be engine-internal-only per the Class B β trust-model). Cross-cuts the security-API surface (external callers can call `get_node` without Class B β attribution today; the only attributed entry point that exists is `Engine::read_node_as`).
+
+**Acceptance criteria.** Two paths: (a) tighten visibility — rename `Engine::get_node` to `Engine::read_node` + change `pub` to `pub(crate)`; verify napi-rs surfaces don't break (`benten-napi` reaches into the engine's public API; `get_node` may be napi-exposed today). (b) Update CLAUDE.md #18 prose to match shipped surface (`Engine::get_node` — `pub` — engine-internal pathway not exposed via napi by convention). Path (a) is the bake-in-intent path; path (b) preserves the shipped surface. v1-assessment-window decision. ~20-100 LOC depending on path. Sibling carry to §4.19 (orchestrator's earlier brief mis-cited that destination).
 
 ---
 

@@ -57,9 +57,8 @@ pub const VOCAB_LABELS: &[&str] = &[
     "FieldUnion",
 ];
 
-/// 6-edge vocabulary.
+/// 5 labeled edges (parent→child is implicit-via-recursion; no FIELD label).
 pub const VOCAB_EDGES: &[&str] = &[
-    "FIELD",
     "ITEM_TYPE",
     "KEY_TYPE",
     "VALUE_TYPE",

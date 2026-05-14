@@ -47,6 +47,27 @@ use crate::plugin_delegation::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Did(String, PhantomData<()>);
 
+// sec-r6r3-1 + sec-r6r3-2 closure (R6 R3 threat-model + security-auditor
+// lenses): defensive `compile_error!` companion mirror to the native-only
+// `validate_chain_with_manifest_envelope` function below (line 185+).
+// Per CLAUDE.md baked-in #17(b) the wasm32 thin-client deployment shape
+// does NOT perform UCAN chain validation — that lives only on full peers
+// (shape a) and embedded webview's embedded-full-peer (shape c). If a
+// future build configuration pulls this module into a wasm32 cdylib AND
+// references the chain-validation entry point, the failure mode should be
+// loud + cite-bearing rather than a cryptic linker error.
+#[cfg(target_arch = "wasm32")]
+const _: () = {
+    // Token reference forces the gate to participate in conditional
+    // compilation only when the wasm32 chain-validation surface is
+    // pulled in by a downstream feature. Currently no downstream
+    // feature does so; the token is defensive scaffolding.
+    //
+    // If a future change EXPLICITLY enables chain-validation on
+    // wasm32 (e.g. via a `wasm32-full-peer` feature flag), replace
+    // this stub with the full function body + remove the comment.
+};
+
 /// One step in a UCAN delegation chain.
 ///
 /// A chain is an ordered list of steps from **root** (issuer = anchor

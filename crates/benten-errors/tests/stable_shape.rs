@@ -386,6 +386,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginInstallRecordConsentingUserMismatch,
     ErrorCode::PluginInstallRecordPluginDidMismatch,
     ErrorCode::PluginDidHandleNotPreInserted,
+    ErrorCode::PluginDidHandleDuplicate,
     ErrorCode::PluginDelegationOutsideManifestEnvelope,
     ErrorCode::PluginPrivateNamespaceDelegationForbidden,
     ErrorCode::PluginContentCidMismatch,
@@ -760,8 +761,12 @@ fn variant_count_is_pinned() {
     // Strategy-C batch reconciliation (r6/batch-fp-cluster): Wave-A's
     // 4 plugin-trust variants + Wave-C's 14 catalog-coverage variants
     // unioned into ALL_CATALOG_VARIANTS in this slot. Final count = 167.
+    //
+    // R6-FP-3 (R6 R3 close): +1 `PluginDidHandleDuplicate` (cap-r6-r3-1
+    // defensive-return hardening for `PluginDidStore::insert`).
+    // 167 + 1 = 168.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 167,
+        CATALOG_VARIANT_COUNT, 168,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -977,7 +982,8 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::PluginInstallRecordManifestCidMismatch
             | ErrorCode::PluginInstallRecordConsentingUserMismatch
             | ErrorCode::PluginInstallRecordPluginDidMismatch
-            | ErrorCode::PluginDidHandleNotPreInserted => true,
+            | ErrorCode::PluginDidHandleNotPreInserted
+            | ErrorCode::PluginDidHandleDuplicate => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

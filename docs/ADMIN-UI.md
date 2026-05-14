@@ -42,8 +42,8 @@ The substrate is unified: all four categories are subgraphs at the engine layer.
 When the user receives a plugin (out-of-band content-addressed-share over Atriums in v0; decentralized registry → Phase 4-Meta), admin UI surfaces a manifest review dialog:
 
 1. **Manifest display.** Plain English: "<plugin_name> wants to ..."
-   - For each `requires` entry: plain-English description (e.g., "read your notes labeled `tag/work`", "use the time host-fn", "execute SANDBOX modules").
-   - For each `shares` entry: plain-English delegation policy (e.g., "may share read-access for `notes:work` with any AI assistant plugin you install later" / "will NOT delegate any caps to other plugins").
+   - For each `requires` entry: plain-English description (e.g., "read your notes labeled `tag/work`", "use the time host-fn", "execute SANDBOX modules"). **Private-namespace caps** (shape `private:<plugin_did>:*`) are visually distinguished from cross-plugin-shared caps: render them in a separate "Private to this plugin" section with the disclosure "This plugin uses sovereign storage scoped to its own DID — no other plugin can read or write here, regardless of any `shares` policy below."
+   - For each `shares` entry: plain-English delegation policy (e.g., "may share read-access for `notes:work` with any AI assistant plugin you install later" / "will NOT delegate any caps to other plugins"). Private-namespace caps NEVER appear in this section by construction (cross-plugin delegation refused at the chain validator).
 2. **Per-cap-grant decline.** User can decline a single cap without aborting install (per ux-r1-2 BLOCKER closure). The plugin still installs; the declined cap is not granted; the plugin handles cap-absence gracefully (or fails at first use of the missing cap — handled by E_CAP_DENIED).
 3. **Identity disclosure.** Manifest review shows the four identity concepts (per D-4F-12):
    - Content-CID + canonical bytes hash
@@ -203,7 +203,7 @@ Both halves of br-r6-r1-3 are CLOSED at HEAD per HARD RULE rule-12 (path-a-FULL)
 
 ## §5. Renderer trait surface
 
-Per arch-r1-16 + br-r1-9: `Renderer` trait at `crates/benten-platform-foundation/src/renderer.rs`:
+Per arch-r1-16 + br-r1-9: `Renderer` trait at `crates/benten-platform-foundation/src/materializer.rs::Renderer`:
 
 ```
 pub trait Renderer: Send + Sync {

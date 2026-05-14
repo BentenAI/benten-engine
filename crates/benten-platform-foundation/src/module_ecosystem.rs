@@ -208,7 +208,7 @@ where
         installed_at_nanos,
         resolver,
     )?;
-    plugin_did_store.insert(result.plugin_did_handle);
+    plugin_did_store.insert(result.plugin_did_handle)?;
     Ok(result.entry)
 }
 

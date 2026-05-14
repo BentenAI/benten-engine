@@ -450,6 +450,7 @@ name = "benten-id"
 version = "0.1.0"
 dependencies = [
  "benten-core",
+ "benten-errors",
  "bs58",
  "ed25519-dalek 2.2.0",
  "getrandom 0.2.17",

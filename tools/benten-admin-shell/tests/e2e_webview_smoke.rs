@@ -77,6 +77,7 @@
 #![allow(clippy::print_stdout)]
 #![allow(clippy::too_many_lines)]
 
+use std::net::TcpStream;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -163,14 +164,34 @@ async fn e2e_webview_smoke_loads_index_html_and_invokes_ipc_command() {
                 binary.to_str().unwrap(),
             ])
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()
             .expect("tauri-driver should spawn"),
     );
 
-    // Wait for tauri-driver to be ready.
-    sleep(Duration::from_secs(3)).await;
+    // br-r6-r3-1 closure: active port-probe loop instead of a static 3-sec
+    // sleep. The earlier static sleep was racy — tauri-driver had not always
+    // bound port 4444 by the time fantoccini connected, surfacing as
+    // `ConnectionRefused`. This loop polls until the TCP listener accepts
+    // (up to ~10s), then proceeds. Combined with stdout/stderr inherit (above)
+    // so any tauri-driver startup error is visible in CI logs rather than
+    // silently lost.
+    let probe_deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        match TcpStream::connect(("127.0.0.1", TAURI_DRIVER_PORT)) {
+            Ok(_) => break,
+            Err(_) if std::time::Instant::now() < probe_deadline => {
+                sleep(Duration::from_millis(200)).await;
+            }
+            Err(e) => {
+                panic!(
+                    "tauri-driver did not bind port {TAURI_DRIVER_PORT} \
+                     within 10s of spawn — last connect error: {e}"
+                );
+            }
+        }
+    }
 
     // rustls 0.23+ requires an explicit `CryptoProvider` install since
     // no default is auto-selected when the feature-flag pinning is

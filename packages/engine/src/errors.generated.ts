@@ -190,6 +190,7 @@ export const CATALOG_CODES = [
   "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH",
   "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH",
   "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED",
+  "E_PLUGIN_DID_HANDLE_DUPLICATE",
   "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE",
   "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN",
   "E_PLUGIN_CONTENT_CID_MISMATCH",
@@ -2562,6 +2563,21 @@ export class EPluginDidHandleNotPreInserted extends BentenError {
 }
 
 /**
+ * E_PLUGIN_DID_HANDLE_DUPLICATE
+ *
+ * Thrown at: `crates/benten-id/src/plugin_did.rs::PluginDidStore::insert`.
+ * Message template: "PluginDidStore::insert refused duplicate plugin-DID handle — caller-mint-first contract presumes each plugin-DID is minted + inserted exactly once"
+ */
+export class EPluginDidHandleDuplicate extends BentenError {
+  static readonly code = "E_PLUGIN_DID_HANDLE_DUPLICATE";
+  static readonly fixHint = "Inspect the install path for double-mint or double-insert of the same `PluginDidHandle`. Each `benten_id::plugin_did::mint()` call MUST produce a fresh keypair → fresh DID; inserting the same handle twice indicates a caller bug. If the duplicate arose from re-installing the same plugin without a prior uninstall, call `PluginDidStore::revoke(did)` first.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_DID_HANDLE_DUPLICATE", "Inspect the install path for double-mint or double-insert of the same `PluginDidHandle`. Each `benten_id::plugin_did::mint()` call MUST produce a fresh keypair → fresh DID; inserting the same handle twice indicates a caller bug. If the duplicate arose from re-installing the same plugin without a prior uninstall, call `PluginDidStore::revoke(did)` first.", message, context);
+    this.name = "EPluginDidHandleDuplicate";
+  }
+}
+
+/**
  * E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
  *
  * Thrown at: `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
@@ -2907,6 +2923,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH": EPluginInstallRecordConsentingUserMismatch,
   "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH": EPluginInstallRecordPluginDidMismatch,
   "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED": EPluginDidHandleNotPreInserted,
+  "E_PLUGIN_DID_HANDLE_DUPLICATE": EPluginDidHandleDuplicate,
   "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE": EPluginDelegationOutsideManifestEnvelope,
   "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN": EPluginPrivateNamespaceDelegationForbidden,
   "E_PLUGIN_CONTENT_CID_MISMATCH": EPluginContentCidMismatch,
