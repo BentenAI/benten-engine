@@ -174,6 +174,7 @@ fn plugin_install_admits_bytes_when_peer_did_matches_signing_key() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt() {
     // **R4b-FP-1 Seam 1** un-ignore — substantive trust-list arm in
     // plugin_lifecycle::install_plugin. Two arms per pim-2 §3.6b:
