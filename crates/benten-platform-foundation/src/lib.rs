@@ -31,7 +31,7 @@
 //! 3. **`materializer`** (G23-B wave-5) — `Materializer` trait +
 //!    `HtmlJsonMaterializer` default impl + `PlaintextMaterializer` 2nd impl
 //!    (arch-r1-10 output-FORMAT pluggability validation per cag-r1-6);
-//!    `Renderer` trait abstraction; BrowserRender default impl. TauriRender
+//!    `Renderer` trait abstraction; BrowserRender default impl. TauriRenderer
 //!    lives in sibling crate `benten-renderer-tauri` per G24-E NEW wave.
 //!
 //! 4. **`plugin_manifest`** (G24-D wave-7) — FULL plugin manifest schema +

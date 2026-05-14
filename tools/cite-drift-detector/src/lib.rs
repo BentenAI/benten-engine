@@ -172,10 +172,25 @@ pub fn walk_doc_inputs(root: &Path) -> Vec<PathBuf> {
     // docs/**/*.md
     walk_md_recursive(&root.join("docs"), &mut out);
 
-    // .addl/**/*.md (when present locally)
-    let addl = root.join(".addl");
-    if addl.is_dir() {
-        walk_md_recursive(&addl, &mut out);
+    // .addl/dispatch-conventions.md ONLY (R6-FP-2 doc-retense, 2026-05-13
+    // — closes r6-r2-tc-1 MAJOR + planning-artifact-frozen-in-time
+    // disposition):
+    //
+    // `.addl/dispatch-conventions.md` is the LIVE standing-rules catalog
+    // for agent briefs. Every other file under `.addl/` is a planning
+    // artifact frozen in time at the phase/wave it documented (R1 lens
+    // JSONs, R2 test landscapes, HANDOFFs, mini-reviews, triage docs,
+    // implementation-plan snapshots, notes-* investigations). Cite-drift
+    // detection over those would re-flag every code-shape change made
+    // since the artifact was archived — but the artifacts are intentionally
+    // historical truth, NOT a load-bearing tracked-doc cluster. Same
+    // disposition as `_archive*` + `docs/history/` above.
+    //
+    // The dispatch-conventions doc IS load-bearing (governs agent
+    // briefs at HEAD) so its cites must stay accurate.
+    let dispatch_conv = root.join(".addl").join("dispatch-conventions.md");
+    if dispatch_conv.is_file() {
+        out.push(dispatch_conv);
     }
 
     // crates/*/src/**/*.rs (doc-comment cites)
@@ -227,10 +242,33 @@ fn walk_ext_recursive(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
             // as input would double-count those fixtures as real cites.
             // Self-exclusion is the simplest discipline that doesn't
             // require generic cfg-test awareness.
+            //
+            // ADDITIONAL EXCLUSIONS (R6-FP-2 doc-retense, 2026-05-13 —
+            // closes r6-r2-tc-1 MAJOR + ec-r6r2 doc/history floor):
+            //
+            // `_archive*` — `.addl/_archive` and `.addl/_archive-extraction`
+            // hold frozen-in-time historical round artifacts (R1-R6 lens
+            // JSONs from prior phases, mini-reviews, NIGHT-SHIFT-LOGs).
+            // Cite-drift detection over these would re-flag every code-
+            // shape change made since the artifact was archived (256+
+            // findings at Phase-4-Foundation HEAD). Per Wave-G disposition
+            // these are acceptable historical-floor: the archived artifact's
+            // cites were ACCURATE FOR THE PHASE/COMMIT they were written
+            // against. Active rules govern only LIVE planning artifacts
+            // (`.addl/phase-4-foundation/` planning docs) + tracked docs.
+            //
+            // `history` — `docs/history/PHASE-{1,2a,2b,3}.md` retrospectives
+            // describe phase state at THAT phase close (crate counts,
+            // invariant counts, ErrorCode counts are accurate-for-phase).
+            // Same disposition as _archive: cites are historical truth
+            // and re-flagging them when shape evolves is over-eager.
             let basename = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
             if basename == "target"
                 || basename == "node_modules"
                 || basename == "cite-drift-detector"
+                || basename == "_archive"
+                || basename == "_archive-extraction"
+                || basename == "history"
             {
                 continue;
             }

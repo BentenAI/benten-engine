@@ -92,8 +92,12 @@ pub trait ManifestEnvelopeRechecker: Send + Sync {
 
 /// Default rechecker — returns `NotApplicable` for every call.
 /// Behavior is observably identical to Phase-3 (no envelope recheck).
-/// Engines built without an explicit `.manifest_envelope_rechecker(...)`
-/// install this.
+/// Engines built at the default (post-R6-FP-A: `Engine::default` installs
+/// `Some(Arc::new(Noop))`) get this seam structurally wired so the
+/// recheck-path always fires; operators swap in a real adapter via
+/// `Engine::set_manifest_envelope_rechecker(Arc::new(<real>))`. A fluent
+/// `EngineBuilder::with_manifest_envelope_rechecker` setter is named
+/// at `docs/future/phase-4-backlog.md §4.36` as a Phase-4-Meta carry.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoopManifestEnvelopeRechecker;
 

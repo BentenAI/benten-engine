@@ -2,21 +2,21 @@
 
 **Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
 
-**Catalog count narrative (post Phase-4-Foundation R6-FP-C reconciliation, 2026-05-13):** three distinct counts coexist by design — each measures a different surface:
+**Catalog count narrative (post Phase-4-Foundation R6-FP-A batch-merge, 2026-05-13):** three distinct counts coexist by design — each measures a different surface:
 
-| Count | Source | Value (at HEAD post R6-FP-C) | Meaning |
+| Count | Source | Value (at HEAD post R6-FP-A batch-merge) | Meaning |
 |---|---|---|---|
-| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **163** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **163** | The round-trip-pinned list. Now matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
-| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **165** | = 163 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 165 \| rust codes: 164 \| ts codes: 165" line reflects this intentional retention. |
-| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **164** | = 163 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **167** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **167** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **169** | = 167 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 169 \| rust codes: 168 \| ts codes: 169" line reflects this intentional retention. |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **168** | = 167 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
-**Why four counts (163 / 163 / 164 / 165):** the Rust enum is the source of throwable variants (163); plus a forward-compat `Unknown(String)` fallback (= 164 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 165 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (163). Single canonical headline number: **163 production-throwable codes** at Phase-4-Foundation R6-FP-C HEAD.
+**Why four counts (167 / 167 / 168 / 169):** the Rust enum is the source of throwable variants (167); plus a forward-compat `Unknown(String)` fallback (= 168 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 169 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (167). Single canonical headline number: **167 production-throwable codes** at Phase-4-Foundation R6-FP-A batch-merge HEAD.
 
 **Cohort math (Phase-4-Foundation):**
 - **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.
-- **Phase-4-Foundation R5 mints:** 31 new codes across 4 cohorts (G24-F thin-client +4, G23-A schema +9, G24-D plugin +15, G23-B materializer +3). 132 + 31 = 163. The 4 cohorts:
-- **R6-FP closure cohort:** R6-FP-A added 4 plugin install-record / DID-handle codes (lands on `r6/fp-1-plugin-trust`; at strategy-C batch reconcile time the count moves 163 → 167).
+- **Phase-4-Foundation R5 canary mints:** 31 new codes across 4 cohorts (G24-F thin-client +4, G23-A schema +9, G24-D plugin +15, G23-B materializer +3). 132 + 31 = 163 (the post-R5-canary intermediate count).
+- **R6-FP-A closure cohort (post-batch-merge):** R6-FP-A added 4 plugin install-record / DID-handle codes (3 substitution-discriminating + 1 caller-mint-first pre-insert enforcement). 163 + 4 = **167 throwable at HEAD post R6-FP-A batch-merge**. The 6 cohorts:
 
 Authoritative count assertion lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length AND the exhaustive-match `catalog_variant_count_matches_enum` cross-check so adding a variant without updating this doc fails CI.
 
@@ -34,7 +34,7 @@ Phase 3 added five new codes for Atrium sync attack defenses, device-attestation
 | **Plugin consent-substitution (R6-FP-A split)** | R6-FP-A | `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` (3 codes; arch-r6-r1-5 split + sec-r6r1-1 BLOCKER closure — narrows `E_PLUGIN_INSTALL_CONSENT_REQUIRED` to null-consent + discriminates three substitution-attack arms) |
 | **Plugin caller-mint-first contract (R6-FP-A-fp)** | R6-FP-A-fp | `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` (1 code; mr-2 BLOCKER closure — enforces caller-mint-first pattern at install_plugin Step 8, eliminates the keypair-orphan failure mode where install succeeded without any handle in the PluginDidStore) |
 
-Total minted at canaries: 9 (G23-A) + 3 (G23-B) + 15 (G24-D) + 4 (G24-F thin-client session) = **31 new codes**. The actual `132 (pre-Phase-4-Foundation) → 163 (post-canary mints at R6-FP-C HEAD)` reconciliation is documented in the **preamble narrative table** above; this row-table is the cohort-level mint manifest, not the running total. (Pre-R6-FP-C narrative claimed `118 → 135` but mis-stated the pre-Phase-3-close baseline and omitted G24-F; the preamble table corrects.) Code-shape (message template + context fields + fix hint) for each new code lands per-canary in this catalog at the canary's companion-doc PR.
+Total minted at canaries: 9 (G23-A) + 3 (G23-B) + 15 (G24-D) + 4 (G24-F thin-client session) = **31 new canary codes**. Plus 4 R6-FP-A codes (3 substitution-discriminating + 1 caller-mint-first pre-insert enforcement; per the two cohort rows above) bring the Phase-4-Foundation R6-FP-A post-batch-merge total to **35 net new** (132 + 35 = 167 throwable at HEAD). The full `132 (pre-Phase-4-Foundation) → 163 (post-canary) → 167 (post R6-FP-A batch-merge)` reconciliation is documented in the **preamble narrative table** above; this row-table is the cohort-level mint manifest, not the running total. (Pre-R6-FP-C narrative claimed `118 → 135` but mis-stated the pre-Phase-3-close baseline and omitted G24-F; the preamble table corrects.) Code-shape (message template + context fields + fix hint) for each new code lands per-canary in this catalog at the canary's companion-doc PR.
 
 **Motivation:** The DX critic (2026-04-14 review) identified that the spec discussed error *edge types* (`ON_DENIED`, `ON_NOT_FOUND`, etc.) but had zero discussion of runtime error *messages* or codes. Meanwhile the 14 structural invariants will each fire rejection errors at registration time. Without a catalog, developers will hit "validation failed" with no context. This document is the contract.
 
@@ -1084,7 +1084,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 <!-- R6-FP-C ec-r6r1-5 closure (2026-05-13): reachability:ignore
      annotation removed. Construction site is LIVE in production at
-     `crates/benten-eval/src/primitives/subscribe.rs::publish_walk`
+     `crates/benten-eval/src/primitives/subscribe.rs::publish_change_event_with_labels`
      (the per-event delivery-time cap-recheck closure populates
      the termination-reason slot AND fires the typed
      `EvalError::SubscribeRevokedMidStream` notify callback when a

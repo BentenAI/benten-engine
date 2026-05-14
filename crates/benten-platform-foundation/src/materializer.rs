@@ -20,7 +20,7 @@
 //!
 //! 4. **[`Renderer`] trait** — transport-agnostic surface per arch-r1-16
 //!    NEW sub-section. Concrete `BrowserRender` default impl lives here.
-//!    `TauriRender` lives in the sibling crate `benten-renderer-tauri` per
+//!    `TauriRenderer` lives in the sibling crate `benten-renderer-tauri` per
 //!    G24-E. Future `tauri-runtime-verso` swap-readiness preserved by
 //!    keeping transport concerns inside concrete impls (per br-r1-9).
 //!
@@ -553,7 +553,7 @@ pub trait Renderer: Send + Sync {
     fn render(&self, output: &MaterializerOutput) -> Result<(), RenderError>;
 
     /// Renderer identity tag — used in tests + diagnostics to confirm
-    /// which backend is wired (BrowserRender / TauriRender / etc.).
+    /// which backend is wired (BrowserRender / TauriRenderer / etc.).
     fn backend_name(&self) -> &'static str;
 }
 
@@ -572,7 +572,7 @@ pub enum RenderError {
 /// wasm32-unknown-unknown bundle; reads-against-snapshot; writes via
 /// fetch to a full peer. This default impl is a no-op stub at G23-B; the
 /// admin UI v0 shell at G24-A fills the DOM render path. Used here to
-/// validate the trait is pluggable + the swap-target shape (TauriRender
+/// validate the trait is pluggable + the swap-target shape (TauriRenderer
 /// in `benten-renderer-tauri`) compiles against the same surface.
 #[derive(Debug, Default, Clone)]
 pub struct BrowserRender;
@@ -1316,7 +1316,7 @@ mod inline_canary {
 
     /// Defensive doc-test for the Renderer trait surface (arch-r1-16):
     /// the trait MUST NOT name a transport-specific method. This is
-    /// the structural assertion that BrowserRender + TauriRender +
+    /// the structural assertion that BrowserRender + TauriRenderer +
     /// future Verso/Slint/etc. impls compile against the same shape.
     #[test]
     fn renderer_trait_has_no_transport_specific_methods() {

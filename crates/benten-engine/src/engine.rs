@@ -992,9 +992,12 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// recheck port consulted from inside [`Self::apply_atrium_merge`]'s
     /// per-row recheck loop. `None` collapses to
     /// [`crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker`]
-    /// behavior (Phase-3 baseline; no envelope recheck). Engines built
-    /// WITHOUT [`crate::builder::EngineBuilder::manifest_envelope_rechecker`]
-    /// behave observably identically to Phase-3.
+    /// behavior (Phase-3 baseline; no envelope recheck). Default-built
+    /// engines (post-R6-FP-A) install `Some(Arc::new(Noop))` so the
+    /// recheck-path always fires; an operator swaps in a real
+    /// adapter post-build via [`Self::set_manifest_envelope_rechecker`].
+    /// A fluent `EngineBuilder::with_manifest_envelope_rechecker` setter
+    /// is named at `docs/future/phase-4-backlog.md §4.36` as a Phase-4-Meta carry.
     pub(crate) manifest_envelope_rechecker:
         Option<Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>>,
 }

@@ -560,6 +560,18 @@ pub struct InstallRecord {
 
 impl InstallRecord {
     /// Bytes signed by the user-DID.
+    ///
+    /// Note on `consenting_user_did` omit-by-design (r2-cp-5 doc-coupling):
+    /// `consenting_user_did` is NOT literal-bytes in this payload by
+    /// design. The signer's identity is recovered via pubkey-verify
+    /// (`verify_user_signature` resolves `consenting_user_did` to the
+    /// Ed25519 public key and verifies the signature against this
+    /// payload). Cross-DID substitution requires forging the
+    /// signature — which is computationally infeasible — so the
+    /// signer is bound via pubkey-binding rather than literal-bytes
+    /// inclusion. The fields that ARE in the payload (manifest_cid +
+    /// timestamp + nonce + plugin_did_bytes) are the ones that must
+    /// also be bound but cannot be recovered from the signature alone.
     #[must_use]
     pub fn signing_payload(&self) -> Vec<u8> {
         let plugin_did_bytes = self.plugin_did.as_str().as_bytes();
@@ -826,6 +838,13 @@ pub fn detect_cycle_in_subgraph(sg: &Subgraph, root_node_id: &str) -> Result<(),
 /// list, returns `E_PLUGIN_AUTHOR_NOT_TRUSTED` (re-uses the existing
 /// plugin-author trust-list ErrorCode — schema authorship is the same
 /// trust class).
+///
+/// **CALLER-INTENT (R6-R2 smc-r6-r2-2 doc-coupling):** production wiring
+/// lands at Phase-4-Meta `docs/future/phase-4-backlog.md §4.32`. At v1
+/// the admin UI ships default-empty trust-list so this helper is a no-op
+/// on v1 install paths; the helper exists at HEAD as a structurally-
+/// reachable surface (callable + tested) but operationally inert until
+/// the Phase-4-Meta wiring lands.
 ///
 /// **Where this should be called:** at schema-compile entry or at
 /// admin UI v0 install-time (when the install path knows the schema's

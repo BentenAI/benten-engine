@@ -107,7 +107,22 @@ SharesRule {
 
 Conservative default for v0 plugins: `shares: { default: none }`. Phase 4 ecosystem broadens cautiously.
 
-**Private-namespace data residency** is automatic: any cap-scope of shape `private:<plugin_did>:*` is implicitly `shares: none` regardless of declared policy. `crates/benten-caps/src/private_namespace_policy.rs` enforces.
+### Plugin-DID minting protocol — caller-mint-first contract (R6-FP-A)
+
+Plugin-DID identity at install is bound by a **caller-mint-first contract**: the engine NEVER mints plugin-DID keypairs internally. The caller protocol is:
+
+1. **Caller mints** a `PluginDidHandle` via `benten_id::plugin_did::mint(rng)` — generates a fresh Ed25519 keypair; the `did:key:` encoding is structurally derived from the public key (one-way; caller cannot synthesize a keypair matching an arbitrary chosen DID string).
+2. **Caller inserts the handle** into the engine's `PluginDidStore` via `plugin_did_store.insert(handle)` — establishes the DID as a known audience handle BEFORE install runs.
+3. **User signs** the `InstallRecord` binding `handle.did()` into the signed payload (alongside `manifest_cid` + `consenting_user_did` + `nonce`).
+4. **Caller passes** `expected_plugin_did = &handle.did()` through `InstallContext::expected_plugin_did` into `plugin_lifecycle::install_plugin`. Step 8 of install_plugin asserts BOTH `install_record.plugin_did == *ctx.expected_plugin_did` (rejects record-substitution; surfaces `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH`) AND `plugin_did_store.get(expected_plugin_did).is_some()` (rejects orphan-handle path; surfaces `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED`).
+
+The contract surface: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::InstallContext` documents the full 4-step caller protocol; `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` Step 8 carries the structural enforcement. Admin UI integrators consume this protocol per `docs/ADMIN-UI.md §3.1` consent flow.
+
+**Why caller-mint-first.** The Ed25519-derives-DID-from-public-key property makes the contract structurally adversary-resistant: even if a caller passes `expected_plugin_did = attacker_chosen_string`, Step 8 enforces that the signed `install_record.plugin_did` byte-equals `expected_plugin_did` AND that a handle for that DID is already in the store — to substitute identities, an attacker must (a) tamper the record (caught at Step 3 `UserSignatureInvalid` via signing-payload `plugin_did_bytes` binding) OR (b) mint a keypair whose `did:key:` encoding matches the chosen string (computationally infeasible).
+
+---
+
+**Private-namespace data residency** is automatic: any cap-scope of shape `private:<plugin_did>:*` is implicitly `shares: none` regardless of declared policy. Enforcement composes across two surfaces: (a) the `crates/benten-caps/src/plugin_delegation.rs::is_private_namespace_cap` shape predicate that classifies any cap-scope starting with `private:<plugin_did>:` as a private-namespace cap and refuses cross-plugin delegation (Phase-4-Foundation G24-D wiring; companion test at `crates/benten-caps/tests/private_namespace_scope_admits_only_plugin_did_actor.rs`); (b) the `crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope` per-step audit that rejects any UCAN delegation chain where a non-root step (`idx > 0`) targets a private-namespace cap pattern. The `SharesPolicy::validate` entry point at `crates/benten-platform-foundation/src/plugin_manifest.rs::SharesPolicy::validate` ensures install-time manifests with private-namespace requires never get widened by the manifest-envelope itself. (Earlier doc drafts cited a single `private_namespace_policy.rs` file; closure cluster lives at the two named surfaces above — historical phantom-destination retensed at R6-FP-2 doc-retense.)
 
 ---
 
@@ -120,7 +135,7 @@ Conservative default for v0 plugins: `shares: { default: none }`. Phase 4 ecosys
 3. Engine mints fresh plugin-DID keypair via OsRng at `benten-id::plugin_did::mint`.
 4. Admin UI surfaces manifest review screen (per `docs/ADMIN-UI.md`): plain English requires/shares, per-cap-grant decline option.
 5. On consent, user-DID signs `InstallRecord` + issues UCAN delegations from user-DID to plugin-DID for granted caps.
-6. Install record persisted to `ManifestStore` (redb backend, shares storage with GrantStore per cap-r1-15).
+6. Install record persisted to `ManifestStore` (in-memory `HashMap`-backed at Phase-4-Foundation v1 per `crates/benten-platform-foundation/src/manifest_store.rs` — see also `docs/future/phase-4-backlog.md §6.4` for the redb-durable persistence carry into Phase-4-Meta; the in-memory shape preserves the seam contract so the redb swap is a transparent backend lift).
 7. Plugin enters user's "plugin library" subgraph (per D-4F-14 — content-addressed; cheap; holds all installed versions + forks).
 8. Active reference (per ratification #2 — Loro Map per-device-keyed CURRENT) updates to point at this plugin-version.
 
@@ -142,13 +157,19 @@ The G24-D-FP-1 `uninstall_plugin` seam (forthcoming in `crates/benten-platform-f
 
 `upgrade(plugin_did, new_content_cid)` (per post-R1-triage ratification #8 cap-change-triggered fresh consent):
 
-1. Verify peer-DID signature on new content matches the previously-installed peer-DID (peer-DID change at upgrade = re-install, user re-consents per T10-upgrade).
-2. Verify DAG-shaped version chain monotonicity: new CID is a descendant of installed in the DAG (per D-4F-14 anchor + Version Node DAG extension). Older-version "upgrades" rejected.
-3. **Cap-change consent rule** (ratification #8):
+**v1 ships the consent half only:**
+
+1. **(SHIPPED at G24-D)** Verify peer-DID signature on new content matches the previously-installed peer-DID (peer-DID change at upgrade = re-install, user re-consents per T10-upgrade). Surface: `crates/benten-platform-foundation/src/module_ecosystem.rs::decide_upgrade_consent`.
+2. **(SHIPPED at G24-D)** Verify DAG-shaped version chain monotonicity: new CID is a descendant of installed in the DAG (per D-4F-14 anchor + Version Node DAG extension). Older-version "upgrades" rejected via `crates/benten-core/src/version_chain.rs::DagVersionChain` parent→child wiring (consumed by `crates/benten-platform-foundation/src/plugin_library.rs::PluginLibrary`) + reject-downgrade check at the upgrade entry point.
+
+**Phase-4-Meta carry — atomicity + caps-grew gate are NOT shipped at v1:**
+
+3. **(DEFERRED to Phase-4-Meta per `docs/future/phase-4-backlog.md §4.21`)** Cap-change consent rule (ratification #8):
    - Silent within-lineage upgrade if `requires` is a strict subset of installed manifest;
    - Full re-consent if `requires` GREW (any cap added or scope widened);
    - Cross-fork merge = user-initiated through same consent flow (no separate cross-fork merge surface).
-4. Atomic transaction: old reference dropped + new reference in plugin library + active-ref update in one commit.
+   - At v1 the comparison-against-prior-manifest pre-flight is not implemented; the consent-half (Step 1+2) is the substantive ratification surface. See `docs/future/phase-4-backlog.md §6.5` for the caps-grew gate seam tracking item.
+4. **(DEFERRED to Phase-4-Meta per `docs/future/phase-4-backlog.md §4.21`)** Atomic transaction: old reference dropped + new reference in plugin library + active-ref update in one commit. At v1 the library reference update + active-ref update execute sequentially without a save-point — partial-state-on-failure is possible if the second write fails between operations. The `install_plugin` Step-9 cap-cascade atomicity gap is the sibling concern; both close together at Phase-4-Meta §4.21.
 
 No manifest-schema-version check (per D-4F-13 — CID covers shape; pull-not-push obviates schema-version field).
 
@@ -178,7 +199,7 @@ Per D-4F-14, version chains extend the Phase-1 `Anchor + Version Node + CURRENT 
 
 CURRENT pointer can point at any reachable branch tip. Per-device-local CURRENT (ratification #2 — Loro Map per-device-keyed); user "switches active version" = updates the local CURRENT pointer; sync surface presents per-device-keyed map.
 
-The `version_chain.rs` extension is in `crates/benten-core`. New primitive mints? NO — uses existing 12-primitive vocabulary (NEXT / FORK_OF / CURRENT pointer; no new edge-label kinds minted per cag-r1-4).
+The `version_chain.rs` extension is in `crates/benten-core`. New primitive mints? NO — uses existing 12-primitive vocabulary (`LABEL_NEXT_VERSION` + `LABEL_CURRENT` edge labels at `crates/benten-core/src/version.rs`; no new edge-label kinds minted per cag-r1-4; DAG-shape supplied structurally via `crates/benten-core/src/version_chain.rs::DagVersionChain` parent→child wiring consumed by `crates/benten-platform-foundation/src/plugin_library.rs::PluginLibrary` — multiple children of one parent express forks without a `FORK_OF` constant).
 
 ---
 
