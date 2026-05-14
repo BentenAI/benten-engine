@@ -9,7 +9,7 @@
 //
 // ## RED-PHASE status
 //
-// `test.skip` until G24-F wave-7 ships the origin-bound session-token
+// `test.skip` until Phase-4-Meta thin-client bridge surface (per docs/future/phase-4-backlog.md §4.22) ships the origin-bound session-token
 // contract.
 //
 // ## Closes
@@ -18,7 +18,7 @@
 
 import { test, expect } from "@playwright/test";
 
-test.skip("session-token issued for origin A fails when replayed at origin B (RED-PHASE: closes at R5 G24-F wave-7)", async ({
+test.skip("session-token issued for origin A fails when replayed at origin B (RED-PHASE: closes at Phase-4-Meta thin-client bridge surface per docs/future/phase-4-backlog.md §4.22)", async ({
   browser,
 }) => {
   // Production arm (G24-F wave-7):

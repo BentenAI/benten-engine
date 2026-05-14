@@ -22,7 +22,7 @@
 
 import { test, expect } from "@playwright/test";
 
-test.skip("cross-origin POST against admin UI thin-client API is denied (RED-PHASE: closes at R5 G24-F wave-7)", async ({
+test.skip("cross-origin POST against admin UI thin-client API is denied (RED-PHASE: closes at Phase-4-Meta thin-client bridge surface per docs/future/phase-4-backlog.md §4.22)", async ({
   browser,
 }) => {
   // Production arm (G24-F wave-7):

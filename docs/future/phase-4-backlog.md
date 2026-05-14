@@ -448,6 +448,11 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 cluste
 - `crates/benten-engine/tests/admin_ui_v0_csrf_attempt_via_cross_origin_post_denied.rs` — T2 LOAD-BEARING end-to-end; origin pinning end-to-end.
 - `crates/benten-engine/tests/admin_ui_v0_no_cap_tokens_persisted_to_browser_storage.rs` — T2 defense 2; admin UI source grep-assert against cap-token write to browser storage.
 
+**TS Playwright sibling pins (added 2026-05-14 R6-FP-6 tca-r6r6-1 closure):** the corresponding TS Playwright e2e specs at `packages/admin-ui-v0/tests/e2e/` were originally named for R5 G24-E/G24-F wave-7 destinations; those waves shipped without un-ignoring + R6-FP-BF Rust-sibling sweep correctly retensed the Rust pins but missed the TS Playwright siblings. R6-FP-6 retensed all 3 TS specs' `test.skip` rationale to cite §4.22 directly:
+- `packages/admin-ui-v0/tests/e2e/tauri_webdriver_bidi_acceptance.spec.ts` — Tauri 2.x shape-(c) deployment dogfood (T2 defense end-to-end via real WebKit/WebKitGTK).
+- `packages/admin-ui-v0/tests/e2e/session_token_replay_across_origin_denied.spec.ts` — T2 defense 2 / origin-bound session-token replay defense.
+- `packages/admin-ui-v0/tests/e2e/cross_origin_csrf_attempt_denied.spec.ts` — T2 LOAD-BEARING cross-origin POST defense end-to-end.
+
 Estimated scope: ~500-800 LOC (bridge module + composed-engine harness extensions + Tauri/embedded-webview adapter glue for shape (c)). Couples to §4.20 (validate_with_clock e2e via EngineBuilder + IndexedDB).
 
 ### §4.23 `admin_ui_v0` user-DID root-chain write-boundary validator (Phase-4-Meta)
@@ -728,6 +733,46 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R5 schema-lang-r6-r5-1 pim-N candida
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R5 br-r6-r5-1 pim-N candidate, DEFER). pim-N candidate proposed by browser-runtime-reviewer at R6 R5: when a test fails inscrutably + Stdio::null was set "for clean test output," the FIRST debugging step is to restore Stdio::inherit + re-run before assuming the failure is environmental flakiness. R6-FP-3 demonstrated this: the original webview-e2e port-binding "race" was misdiagnosed because Stdio::null hid the actual `--native-binary` CLI flag error. 1-instance at HEAD; below 3+-recurrence threshold.
 
 **Acceptance criteria.** Re-evaluate at Phase-4-Meta on 2nd/3rd recurrence; if hits 3+-threshold, codify as testing-discipline addition (sibling: pim-18 §3.6f SHAPE-not-SUBSTANCE — this candidate is debugging-discipline analog: "before claiming env-flake, restore observability"). Composes with existing pim-18.
+
+### §4.55 Storage-mutating host-fn banned-list consolidation across 3 defense surfaces (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R6 cag-r6-r6-1 MINOR). Three independent defense surfaces encode the "no storage-mutating SANDBOX host-fn names" rule with drifted vocabularies:
+
+1. **Canonical regression pin** at `crates/benten-eval/tests/host_fn_no_storage_mutating_per_baked_in_16.rs::FORBIDDEN_HOST_FN_NAMES` — 9 names: `kv:write` / `kv:delete` / `kv:append` / `edge:create` / `edge:delete` / `edge:update` / `transaction:begin` / `transaction:commit` / `transaction:abort`.
+2. **Schema-compiler parse-time reject** at `crates/benten-platform-foundation/src/schema_compiler/parse.rs:132-139::FORBIDDEN_HOST_FNS` — 6 names: `kv:write` / `kv:delete` / `edges:add` / `edges:remove` / `graph:write` / `graph:delete`.
+3. **Materializer defense-in-depth re-check** at `crates/benten-platform-foundation/src/materializer.rs:909` (inline `banned` array; not a named const) — 4 names: `kv:write` / `kv:delete` / `edges:add` / `edges:remove`.
+
+The three lists share only 2 names (`kv:write`, `kv:delete`). Naming-convention disagreement (`edge:*` singular vs `edges:*` plural; `transaction:*` vs `graph:*`; `kv:append` present at canonical only). Architecturally HARMLESS at HEAD because the registration-check at `default_host_fns()` (4 entries only) catches any unregistered name — the named banned-lists are belt-AND-suspenders for clearer error-message-text on specific common-offender names. The MINOR-not-MAJOR severity flows from the registration-check floor defense + the unitary semantic enforcement across surfaces (every storage-mutation attempt is rejected; the drift is in *which named tokens get the specific better error message*, not in *what gets rejected*).
+
+**Acceptance criteria.** ~30-50 LOC consolidation:
+- (a) Define `pub const STORAGE_MUTATING_HOST_FN_NAMES: &[&str]` in `benten-eval::sandbox` covering the superset (~12 unique names after naming-convention normalization decision).
+- (b) Re-export through `benten_eval::sandbox` so `benten-platform-foundation::schema_compiler::parse` + `benten-platform-foundation::materializer` import the canonical const instead of carrying parallel lists.
+- (c) Update the canonical regression-pin (`host_fn_no_storage_mutating_per_baked_in_16.rs`) to import the const directly (drop the local copy).
+- (d) Verify all 3 historical defense-test files (`materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` + `schema_compiler_rejects_schema_referencing_sandbox_with_storage_mutating_host_fn_request.rs` + `materializer_rejects_subgraph_with_unregistered_sandbox_host_fn.rs`) continue to PASS unchanged.
+- (e) Naming-convention decision: standardize on the canonical-pin's `edge:*` singular + `transaction:*` (the broader vocabulary), OR on schema_compiler's `edges:*` plural + `graph:*` (the production-code precedent). Bundling note: aligns with §4.43 v1-API-stabilization sweep — combine into one wave if both land in the same phase.
+
+**Not v1-gate-blocker** because: (a) the registration-check at `default_host_fns()` is the floor defense and catches ANY name not in the 4-entry registered set; (b) the named banned-lists provide better error-message-text for specific common offenders but are not the enforcement surface; (c) CLAUDE.md baked-in #16 architectural commitment is honored end-to-end at HEAD via the three-surface defense-in-depth regardless of which named tokens are explicitly enumerated.
+
+### §4.56 `Renderer::render()` no-op stub production caller (Phase-4-Meta / Phase-5)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R6 mat-r6-r6-minor-2 MINOR). The `Renderer` trait at `crates/benten-platform-foundation/src/materializer.rs::Renderer` declares `fn render(&self, output: &MaterializerOutput) -> Result<(), RenderError>` + both production impls (`BrowserRender` + `TauriRenderer`) ship the body as a no-op stub at HEAD. No production caller invokes `Renderer::render(...)` at HEAD — the materializer pipeline drives side-effects through other paths.
+
+**Acceptance criteria.** Decide between two paths:
+- Path (a) — **un-stub at admin UI v0 DOM-mount**: `BrowserRender::render` writes the materialized HTML into the canonical DOM root; `TauriRenderer::render` pushes via Tauri IPC. Requires admin UI v0 → renderer-output wiring at Phase-4-Meta admin-UI-meta-circular work.
+- Path (b) — **refactor trait to accessor pattern**: drop `render(&self, ...)` from the trait + replace with accessor methods returning the materialized bytes for the caller to dispatch via owned transport. Less coupling; admin UI calls the accessor in its DOM-update event loop.
+
+v1-API-stabilization decision. Bundle with §4.43 v1-API-stabilization sweep + §4.50 `_for_test` suffix cleanup if all 3 land in the same Phase-4-Meta wave.
+
+### §4.57 Sweep-completeness self-verify discipline pim-N candidate (Phase-4-Meta DEFER, watch-list)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R6 r6r6-pi-1 pim-N candidate, DEFER 2-3 instance threshold). pim-N candidate proposed by pattern-induction-meta-sweep at R6 R6: when an orchestrator (or implementer) claims a sweep is COMPLETE in commit body / PR description / status update, the claim MUST be verified by running the actual validation tool that defines completeness BEFORE writing the claim. 2-3 instances at HEAD across the R6-cycle:
+- R6-FP-3 §3.6i verdict→disposition sweep claimed 32-file complete but R6-FP-4 found 2 R4 residuals
+- R6-FP-4 doc-cite 11-site sweep claimed complete but R6 R5 found 3 residuals (sdr-r6-r4-1)
+- R6-FP-5 §3.6i 49-JSON sweep claimed complete but R6 R6 found 4 JSONs lacking top-level disposition (meth-r6-r6-1 + r6r6-pi-1 cross-lens confirmed)
+
+**Pattern shape:** sweep tooling grepped for a literal pattern (`"verdict":`) but the validation criterion was semantic (top-level `disposition` field present per §3.6i schema). Claim-vs-validation-tool gap = the orchestrator's own §3.6h failure on its own scope.
+
+**Acceptance criteria.** Re-evaluate at Phase-4-Meta on 1-2 more recurrences (4+-instance promotion). If hits, codify as testing-discipline addition (sibling: §3.6h ratify-against-drift — this candidate is "claim-against-drift" + verify-with-tool-before-writing-claim). Composes with existing §3.6h + §3.5h pre-push gates.
 
 ---
 
