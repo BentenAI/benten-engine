@@ -81,11 +81,15 @@ pub const VOCAB_LABEL_NAMES: &[&str] = &[
     "FieldUnion",
 ];
 
-/// The 6 vocabulary edges.
+/// The 5 labeled vocabulary edges.
+///
+/// (Object-to-field relationships are implicit-via-recursion in
+/// `schema_compiler::emit` — each `SchemaRoot` / `FieldObject` walks its
+/// child `Field*` nodes during emit, so no `FIELD` edge label is minted.
+/// See `docs/SCHEMA-DRIVEN-RENDERING.md §2.2` for the parent-child
+/// recursion shape.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VocabEdge {
-    /// Object-to-field relationship; SchemaRoot/FieldObject → Field*.
-    Field,
     /// Element type of a FieldList / FieldMap.
     ItemType,
     /// Key type of a FieldMap; → FieldScalar.
@@ -99,11 +103,10 @@ pub enum VocabEdge {
 }
 
 impl VocabEdge {
-    /// Canonical string form (e.g. `"FIELD"`).
+    /// Canonical string form (e.g. `"ITEM_TYPE"`).
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            VocabEdge::Field => "FIELD",
             VocabEdge::ItemType => "ITEM_TYPE",
             VocabEdge::KeyType => "KEY_TYPE",
             VocabEdge::ValueType => "VALUE_TYPE",
@@ -116,7 +119,6 @@ impl VocabEdge {
     /// raw schema-JSON.
     pub fn from_str(s: &str) -> Result<Self, SchemaCompileError> {
         match s {
-            "FIELD" => Ok(VocabEdge::Field),
             "ITEM_TYPE" => Ok(VocabEdge::ItemType),
             "KEY_TYPE" => Ok(VocabEdge::KeyType),
             "VALUE_TYPE" => Ok(VocabEdge::ValueType),
@@ -133,7 +135,6 @@ impl VocabEdge {
 
 /// Static catalog of edge string-forms.
 pub const VOCAB_EDGE_NAMES: &[&str] = &[
-    "FIELD",
     "ITEM_TYPE",
     "KEY_TYPE",
     "VALUE_TYPE",

@@ -61,7 +61,7 @@ fn schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension() 
     // post-R5 schema_compiler vocab; the fixture helper carries the
     // expected lengths so a drift on either side surfaces immediately).
     assert_eq!(schema_fixtures::VOCAB_LABELS.len(), 8);
-    assert_eq!(schema_fixtures::VOCAB_EDGES.len(), 6);
+    assert_eq!(schema_fixtures::VOCAB_EDGES.len(), 5);
     assert_eq!(schema_fixtures::VOCAB_SCALARS.len(), 8);
     assert_eq!(schema_fixtures::VOCAB_FIELD_PROPS.len(), 4);
 

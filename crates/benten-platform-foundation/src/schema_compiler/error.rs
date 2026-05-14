@@ -51,9 +51,9 @@ pub enum SchemaCompileError {
         field_name: Option<String>,
     },
 
-    /// Edge outside the 6-set.
+    /// Edge outside the 5-labeled-edge set.
     #[error(
-        "schema_compiler: edge `{edge}` is not in the 6-edge set (source={source_label}, target={target_label})"
+        "schema_compiler: edge `{edge}` is not in the 5-labeled-edge set (source={source_label}, target={target_label})"
     )]
     VocabEdgeMismatch {
         /// Source label.

@@ -28,9 +28,11 @@
 //!   [`VocabLabel::FieldObject`] / [`VocabLabel::FieldList`] /
 //!   [`VocabLabel::FieldMap`] / [`VocabLabel::FieldRef`] /
 //!   [`VocabLabel::FieldEnum`] / [`VocabLabel::FieldUnion`].
-//! - 6 edges: [`VocabEdge::Field`] / [`VocabEdge::ItemType`] /
-//!   [`VocabEdge::KeyType`] / [`VocabEdge::ValueType`] /
-//!   [`VocabEdge::RefTarget`] / [`VocabEdge::Variant`].
+//! - 5 labeled edges: [`VocabEdge::ItemType`] / [`VocabEdge::KeyType`] /
+//!   [`VocabEdge::ValueType`] / [`VocabEdge::RefTarget`] /
+//!   [`VocabEdge::Variant`]. Object-to-field relationships are
+//!   implicit-via-recursion in `emit`; no `FIELD` edge label is minted.
+//!   See `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.
 //! - 8 scalars: [`Scalar::Text`] / [`Scalar::Int`] / [`Scalar::Float`] /
 //!   [`Scalar::Bool`] / [`Scalar::Bytes`] / [`Scalar::BytesCid`] /
 //!   [`Scalar::TimestampHlc`] / [`Scalar::Null`] (derived from
@@ -121,7 +123,7 @@ pub const VOCAB_LABEL_PROPERTY_KEY: &str = "schema_vocab_label";
 /// - [`SchemaCompileError::EmitNewPrimitiveRejected`] — defensive
 ///   regression-guard against 12-primitive commitment drift.
 /// - [`SchemaCompileError::VocabEdgeMismatch`] — edge-label pairing
-///   outside 6-edge vocabulary.
+///   outside the 5-labeled-edge vocabulary.
 pub fn compile(bytes: &[u8]) -> Result<SchemaSubgraphSpec, SchemaCompileError> {
     let parsed = parse::parse_schema_json(bytes)?;
     parse::validate_vocab(&parsed)?;

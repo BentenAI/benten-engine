@@ -610,6 +610,24 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 sec-r6r2-5 MINOR + tmr-r6-r1-2 MA
 
 **Acceptance criteria.** (a) Add Step-7-extension at `install_plugin`: compute requires-delta; if non-empty, demand fresh consent (caller-supplied flag or new ErrorCode `E_PLUGIN_CAPS_GREW_REQUIRES_RECONSENT` propagating up to admin-UI). (b) Verify + un-ignore the test pin. (c) Update PLUGIN-MANIFEST.md §4.3 narrative once shipped. Couples to §4.21. ~50-150 LOC.
 
+### §4.42 `validate_chain_with_manifest_envelope` wasm32 unsupported-surface defensive companion (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 sec-r6r3-1 + sec-r6r3-2 MINOR, dedup'd; R6-R2 sec-r6r2-3 carry). `crates/benten-caps/src/manifest_envelope_chain_validation.rs:186+` gates `validate_chain_with_manifest_envelope` behind `#[cfg(not(target_arch = "wasm32"))]`. The wasm32 build path has `PhantomData<()>` `Did` stubs (lines 34-48) so the module type-shape is wasm-buildable, but the chain-validation function itself simply does not exist on wasm32 — leaving cryptic linker errors as the failure mode if a future feature pulls this surface in. **R6-FP-3 landed a defensive doc-comment companion** (`crates/benten-caps/src/manifest_envelope_chain_validation.rs:50+` "compile_error! companion mirror" block) citing CLAUDE.md baked-in #17(b) thin-client architecture. Substantive `#[cfg(target_arch = "wasm32")]` stub function with cite-bearing `unimplemented!()` panic (or actual `compile_error!` macro on a sentinel feature flag) deferred to Phase-4-Meta when wasm32 cap-evaluation scope clarifies.
+
+**Acceptance criteria.** Either (a) ship a wasm32 stub function with the same signature returning `ChainValidationOutcome::ChainInvalid` + an error citing CLAUDE.md #17(b); or (b) gate wasm32 build entirely with `#[cfg(target_arch = "wasm32")] compile_error!("...")` if benten-caps is determined not to compile for wasm32 at all (which the current state arguably already is — benten-graph fails to build wasm32). ~10-30 LOC.
+
+### §4.44 `tests/phase_3_workspace/architecture_md_g20b_final.rs` rename (10-crate→12-crate; Phase-4-Foundation pre-tag housekeeping)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 arch-r6-r3-3 MINOR). The Phase-3 R3-E RED-PHASE pin `tests/phase_3_workspace/architecture_md_g20b_final.rs` carries "10-crate FINAL" in test fn name + module-level comments. The actual assertion is a subset-check that still passes against the 12-crate doc state (no regression). Superseded by `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs` (Phase-4-Foundation R6-FP canary). Test name rename is a non-time-pressured housekeeping retense.
+
+**Acceptance criteria.** Rename file + test fn + module-level comments from "10-crate" to "12-crate" (or retire the Phase-3 R3-E pin entirely if the post-Phase-4-Foundation canary fully supersedes). ~5-10 LOC. Sibling carry to G26-A pre-tag docs retense wave.
+
+### §4.43 `Engine::get_node` engine-internal visibility tighten (`pub` → `pub(crate)`) per CLAUDE.md #18 baked-in intent (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cag-r6-r3-1 MINOR). CLAUDE.md baked-in #18 prose names `Engine::read_node(cid)` — `pub(crate)`, no permission check — as the engine-internal un-attributed read pathway. Actual shipped surface at `crates/benten-engine/src/engine_crud.rs:95` is `pub fn get_node` — name drift + visibility drift (public exposes an un-attributed read that is supposed to be engine-internal-only per the Class B β trust-model). Cross-cuts the security-API surface (external callers can call `get_node` without Class B β attribution today; the only attributed entry point that exists is `Engine::read_node_as`).
+
+**Acceptance criteria.** Two paths: (a) tighten visibility — rename `Engine::get_node` to `Engine::read_node` + change `pub` to `pub(crate)`; verify napi-rs surfaces don't break (`benten-napi` reaches into the engine's public API; `get_node` may be napi-exposed today). (b) Update CLAUDE.md #18 prose to match shipped surface (`Engine::get_node` — `pub` — engine-internal pathway not exposed via napi by convention). Path (a) is the bake-in-intent path; path (b) preserves the shipped surface. v1-assessment-window decision. ~20-100 LOC depending on path. Sibling carry to §4.19 (orchestrator's earlier brief mis-cited that destination).
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

@@ -35,16 +35,17 @@ Per D-4F-NEW-TYPED-FIELD-NODE-VOCAB post-R1-triage resolution + Ben Q9 correctio
 | `FieldEnum` | An enumerated choice between named variants |
 | `FieldUnion` | A tagged union of variant types |
 
-### §2.2 Six edges
+### §2.2 Five labeled edges
 
 | Edge | Connects | Purpose |
 |---|---|---|
-| `FIELD` | `SchemaRoot` / `FieldObject` → `Field*` | Object-to-field relationship |
 | `ITEM_TYPE` | `FieldList` → `Field*` | Element type of a list (lists use a single element-type edge; maps use the `KEY_TYPE` + `VALUE_TYPE` pair below) |
 | `KEY_TYPE` | `FieldMap` → `FieldScalar` | Key type of a map |
 | `VALUE_TYPE` | `FieldMap` → `Field*` | Value type of a map |
 | `REF_TARGET` | `FieldRef` → (content CID) | Reference resolution (matches D-4F-14 cross-plugin content-CID shape) |
 | `VARIANT` | `FieldEnum` / `FieldUnion` → `Field*` | Variant type of an enum or union |
+
+(The Object-to-field relationship is implicit-via-recursion in `schema_compiler::emit`: each `SchemaRoot` / `FieldObject` walks its child `Field*` nodes during emit, so no explicit `FIELD` edge label is minted. The recursion structure carries the parent-child relationship without a labeled edge.)
 
 ### §2.3 Eight scalars
 
@@ -106,13 +107,13 @@ Phase 4-Foundation does NOT mint these. The vocabulary is intentionally minimal 
 
 Ingest dialects (JSON-Schema / TS DSL / Python / arbitrary text DSL) parse user-authored schema definitions into canonical typed-field-Node subgraphs. Per schema-r1-3 + post-R1-triage decision:
 
-**Parse locus = engine-side**, NOT browser-side. Ingest dialect parsers live at `crates/benten-platform-foundation/src/ingest_dialect/`. Browser submits either:
+**Parse locus = engine-side**, NOT browser-side. Ingest dialect parsers live at `crates/benten-platform-foundation/src/schema_compiler/ingest_dialect.rs`. Browser submits either:
 - Canonical-bytes (already a `SubgraphSpec`-shaped DAG-CBOR document), OR
 - Dialect-source-bytes (a JSON-Schema string, a TS DSL fragment, etc.) which the engine parses.
 
 This decision composes with threat-model §3 T1 (subgraph injection): all schema-validation runs at engine-side authoritative gate; browser-side validation (if present) is best-effort feedback only.
 
-Ingest dialects are **admin-plugin-owned workflows** — they can be added/replaced by ecosystem participants without requiring engine releases. Phase 4-Foundation ships an initial JSON-Schema dialect as a reference workflow.
+Ingest dialects are **admin-plugin-owned workflows** — they can be added/replaced by ecosystem participants without requiring engine releases. Phase 4-Foundation G23-A ships ONLY the `IngestDialect::Canonical` identity-translator dialect (consumes canonical-bytes input); JSON-Schema / TS-DSL / Python dialects are deferred to Phase-4-Meta (see `docs/future/phase-4-backlog.md §4.6`).
 
 ---
 

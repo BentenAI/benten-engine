@@ -1962,37 +1962,58 @@ implementations of `get_node_label_only` / `put_node` / `read_node_as`
 manifest schema work shipped independently of the Class B β surface; both
 landed in the same pre-Phase-4-Foundation-close window.
 
-### Compromise #26 — Manifest-envelope recheck at sync merge boundary — CLOSED at Phase-4-Foundation R4b-FP-1 (Seam 3)
+### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1
 
-**Status.** CLOSED at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4
-ratification 2026-05-13). The merge-receive boundary recomputes the
-manifest-envelope chain against the locally-stored manifest before
-admitting plugin-attributed writes, in addition to the per-row
-`CapabilityPolicy::pre_write` check that fires inside
-`apply_atrium_merge` (Compromise #2 sync-replica sub-narrative;
-G16-B-F PR #161).
+**Status.** **SEAM SHIPPED at R4b-FP-1 (Seam 3)** (post-Q4 ratification
+2026-05-13): the `apply_atrium_merge` path invokes a
+`ManifestEnvelopeRechecker::recheck_row(...)` port BEFORE the per-row
+`CapabilityPolicy::pre_write` check (which Compromise #2 sync-replica
+sub-narrative already covered via G16-B-F PR #161). The
+production-default backend is `NoopManifestEnvelopeRechecker` (returns
+`Outcome::NotApplicable` for every row) — so the seam fires + the
+contract surface is wired, but at HEAD the per-row decision is
+"recheck not applicable, defer to the per-row cap-policy check below."
+**Substantive adapter (a `ProductionManifestEnvelopeRechecker` that
+consults `PluginLibrary` + `UserDidRegistry` + invokes
+`manifest_envelope_chain_validation::validate_chain_with_manifest_envelope`)
+is DEFERRED to Phase-4-Meta** per `docs/future/phase-4-backlog.md §4.36`.
 
 **Class.** Cross-boundary policy-recheck on sync ingress. Sibling to
 Compromise #25 (HLC-monotonic at sync layer) but at the
 manifest-envelope-shape boundary rather than the wallclock-injection
 boundary. The cap-policy check already covered the leaf grant; the
-manifest-envelope recheck closes the loophole where a plugin-attributed
-write could arrive from a peer whose locally-stored manifest envelope
-no longer authorises the operation (e.g. user revoked + republished
-the manifest with `shares` narrowed between the peer's last-seen and
-the merge ingress).
+manifest-envelope recheck (once the substantive adapter lands) closes
+the loophole where a plugin-attributed write could arrive from a peer
+whose locally-stored manifest envelope no longer authorises the
+operation (e.g. user revoked + republished the manifest with `shares`
+narrowed between the peer's last-seen and the merge ingress).
 
-**Closure shape.** `apply_atrium_merge` calls
-`manifest_envelope_chain_validation::validate_against_local_manifest`
-before the per-row cap-recheck; failures reject with `E_CAP_DENIED`
-+ the `Layer: 2` tag in the failure trace so the operator log
-distinguishes envelope-shape denials from leaf-grant denials. The
-shape composes with Compromise #25 (HLC + envelope + nonce store
+**Closure shape (seam half).** `crates/benten-engine/src/engine.rs::Engine`
+holds a `manifest_envelope_rechecker: Arc<dyn ManifestEnvelopeRechecker>`
+defaulting to `Arc::new(NoopManifestEnvelopeRechecker::new())` (engine.rs
+~1729); `apply_atrium_merge` calls `recheck_row(...)` per row before the
+per-row cap-recheck; failures reject with `E_CAP_DENIED` + a `Layer: 2`
+tag distinguishing envelope-shape denials from leaf-grant denials.
+The seam composes with Compromise #25 (HLC + envelope + nonce store
 defenses) — the envelope verifies cryptographically THEN the manifest
-shape is rechecked THEN the per-row leaf grant is rechecked. No
-new ErrorCode required.
+shape is rechecked (via the rechecker port) THEN the per-row leaf grant
+is rechecked. No new ErrorCode required.
+
+**Substantive-adapter shape (Phase-4-Meta target).** The
+`ProductionManifestEnvelopeRechecker` implementation will live in
+`benten-platform-foundation`, consume `PluginLibrary` (for the source
+plugin's manifest `shares` policy) + `UserDidRegistry` (for chain root
+verification) + invoke
+`crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope`
+for per-step audit. See backlog §4.36 for acceptance criteria. Until
+then, the production-default `Noop` returning `NotApplicable` for every
+row means **the substantive defense at the merge boundary is NOT live
+in shipped binaries** — only the per-row `CapabilityPolicy::pre_write`
+check from Compromise #2 sync-replica sub-narrative is.
 
 **Cross-refs.** R4b-FP-1 implementer brief (`r4b/fp-1` branch); Inv-14
-plugin-DID principal extension (INVARIANT-COVERAGE.md); G24-D-FP-2
-manifest envelope chain validation seam
-(`crates/benten-caps/src/manifest_envelope_chain_validation.rs`).
+plugin-DID principal extension (`docs/INVARIANT-COVERAGE.md`);
+`crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`
+trait + `NoopManifestEnvelopeRechecker` default impl;
+`crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope`
+(the function the Phase-4-Meta production adapter will call into).
