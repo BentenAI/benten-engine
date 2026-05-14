@@ -763,16 +763,17 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R6 mat-r6-r6-minor-2 MINOR). The `Re
 
 v1-API-stabilization decision. Bundle with §4.43 v1-API-stabilization sweep + §4.50 `_for_test` suffix cleanup if all 3 land in the same Phase-4-Meta wave.
 
-### §4.57 Sweep-completeness self-verify discipline pim-N candidate (Phase-4-Meta DEFER, watch-list)
+### §4.57 Sweep-completeness self-verify discipline pim-N candidate (CLOSED at R6-FP-7 — promoted to §3.6j)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R6 r6r6-pi-1 pim-N candidate, DEFER 2-3 instance threshold). pim-N candidate proposed by pattern-induction-meta-sweep at R6 R6: when an orchestrator (or implementer) claims a sweep is COMPLETE in commit body / PR description / status update, the claim MUST be verified by running the actual validation tool that defines completeness BEFORE writing the claim. 2-3 instances at HEAD across the R6-cycle:
-- R6-FP-3 §3.6i verdict→disposition sweep claimed 32-file complete but R6-FP-4 found 2 R4 residuals
-- R6-FP-4 doc-cite 11-site sweep claimed complete but R6 R5 found 3 residuals (sdr-r6-r4-1)
-- R6-FP-5 §3.6i 49-JSON sweep claimed complete but R6 R6 found 4 JSONs lacking top-level disposition (meth-r6-r6-1 + r6r6-pi-1 cross-lens confirmed)
+**Status:** CLOSED at R6-FP-7 (2026-05-14). 4th-instance recurrence at R6 R7 fired the watch-list promotion criterion; codified as `.addl/dispatch-conventions.md §3.6j` per Path A INTENT (pattern-induction recommendation). Origin instances (r6r7-r7-1 / r6r7-meth-1 / doc-r6-r7-1 / r6r7-pi-1 / arch-r6-r7-1 — 5-lens cross-confirmation of the 4-JSON disposition gap) closed at the same R6-FP-7 wave; §3.6h "already-closed-before-ratification STRICTLY STRONGER" preserved.
 
-**Pattern shape:** sweep tooling grepped for a literal pattern (`"verdict":`) but the validation criterion was semantic (top-level `disposition` field present per §3.6i schema). Claim-vs-validation-tool gap = the orchestrator's own §3.6h failure on its own scope.
+4-instance trajectory across the Phase-4-Foundation R6 cycle:
+- R6-FP-3 §3.6i verdict→disposition sweep claimed 32-file complete but R6-FP-4 found 2 R4 residuals.
+- R6-FP-4 doc-cite 11-site sweep claimed complete but R6 R5 found 3 residuals (sdr-r6-r4-1).
+- R6-FP-5 §3.6i 49-JSON sweep claimed complete but R6 R6 found 4 JSONs lacking top-level disposition (meth-r6-r6-1 + r6r6-pi-1).
+- R6-FP-6 commit body claimed "79/79 R6 JSONs §3.6i conformant" but R6 R7 found the same 4 R6 R6 lens JSONs still lacking top-level `disposition`.
 
-**Acceptance criteria.** Re-evaluate at Phase-4-Meta on 1-2 more recurrences (4+-instance promotion). If hits, codify as testing-discipline addition (sibling: §3.6h ratify-against-drift — this candidate is "claim-against-drift" + verify-with-tool-before-writing-claim). Composes with existing §3.6h + §3.5h pre-push gates.
+See `.addl/dispatch-conventions.md §3.6j` for the ratified rule + brief-template mandate (output JSON authors mandate canonical top-level `disposition` at author-time to eliminate the orchestrator-catchup cycle).
 
 ---
 
@@ -818,7 +819,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 r7-r6-r1-2 PLUGIN-MANIFEST.md dri
 
 **Acceptance criteria.** Wire `RedbManifestStore` in `benten-platform-foundation` sharing storage with `GrantStore` (cap-r1-15). Add migration path for in-memory-state-at-restart scenarios. Update PLUGIN-MANIFEST.md §4.1 narrative once shipped. ~150-300 LOC.
 
-### §6.5 §3.6h "rule-ratification-against-drift mandatory-close" pim-N candidate (Phase-4-Foundation pre-tag — awaiting Ben ratification)
+### §6.5 §3.6h "rule-ratification-against-drift mandatory-close" pim-N candidate (RATIFIED at R6-FP-3; sharpened at R6-FP-4 + R6-FP-5)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 pim-n-r7-spec finding r6r2-new-1; 3+ recurrence threshold MET). When a new pim-N or §-codification names specific instance(s) as origin, the same PR/wave that lands the rule MUST close (or explicitly defer-with-named-destination) the originating instance(s). Otherwise the rule's ratification is decoupled from its origin — engineers reading the rule + accepting it as "live" while the origin remains unfixed produces a credibility gap.
 
@@ -827,7 +828,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 pim-n-r7-spec finding r6r2-new-1;
 2. Phase-4-Foundation R6 R1 §3.6g prior-pim-explicit-preflight: ratified with 5-instance Phase-4-Foundation R3-R5 recurrence table as origin; rule does NOT carry follow-on action to re-dispatch the affected briefs / sweep already-shipped wave residuals.
 3. Phase-3 / 2b precedent §3.5h MANDATORY-PRE-MERGE: ratified 2026-05-09 R6 R6-final naming 4 specific cite-drift fix-pass instances as origin; 2 of 4 closed inline; 2 already-closed before ratification (borderline counterexample).
 
-**Acceptance criteria.** Either (a) Ben ratify the §3.6h codification into `.addl/dispatch-conventions.md` with explicit text "When a pim-N or §-codification names specific instance(s) as origin, the same PR/wave that lands the rule MUST close (or explicitly defer-with-named-destination) the originating instance(s) — same PR, not next PR" + memory file `feedback_pim_n_ratification_must_close_origin.md`; OR (b) Ben rule-out as DISAGREE-WITH-EXPLANATION (existing HARD RULE rule-12 already covers; no additional codification needed). Surface to Ben at R6 R3 / R6-final.
+**Status:** RATIFIED at R6-FP-3 (Ben Q1 ratification 2026-05-13). Codified at `.addl/dispatch-conventions.md §3.6h` with "already-closed-before-ratification STRICTLY STRONGER" sharpening at R6-FP-4 + forward-fire-only exemption parenthetical at R6-FP-5. Memory at `feedback_pim_n_ratification_must_close_origin.md`. Section retained for historical traceability of the 3-instance recurrence trigger.
 
 **Sibling pim-N candidates from R6-R2 methodology lens (also awaiting Ben ratification):**
 - **pim-r6-fp-stable-clippy-cycle-1** — **RATIFIED at §3.5j (Ben 2026-05-13)**: `cargo +stable clippy --workspace --all-targets -- -D warnings` added to §3.5h workspace pre-push gate IN ADDITION to existing MSRV 1.95 clippy. Codified in `.addl/dispatch-conventions.md §3.5j` + `feedback_pim_n_stable_clippy_gate.md` memory + MEMORY.md index. 4-instance recurrence on PR #240 R6-FP batch was the trigger.

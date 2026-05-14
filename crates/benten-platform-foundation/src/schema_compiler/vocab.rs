@@ -115,8 +115,16 @@ impl VocabEdge {
         }
     }
 
-    /// Parse a string into a `VocabEdge`. Used by the parser when reading
-    /// raw schema-JSON.
+    /// Parse a string into a `VocabEdge`. Public defensive surface for
+    /// future schema-JSON shapes that emit edge labels directly. The
+    /// current parser drives edge creation via label-shape inside
+    /// `emit_vocabulary_edges` (which match-dispatches on the parsed
+    /// `VocabLabel` and constructs edges programmatically) — it does NOT
+    /// parse edge strings. The companion `SchemaCompileError::VocabEdgeMismatch`
+    /// (and its mirrored `ErrorCode::SchemaVocabEdgeMismatch`) is therefore
+    /// not produced by the current parser surface; it is reserved for
+    /// downstream / re-export consumers that hand-author schema-JSON with
+    /// explicit edge-label fields.
     pub fn from_str(s: &str) -> Result<Self, SchemaCompileError> {
         match s {
             "ITEM_TYPE" => Ok(VocabEdge::ItemType),

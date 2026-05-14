@@ -82,10 +82,13 @@ use std::collections::{BTreeMap, HashMap};
 /// Edge label connecting the library root to a per-plugin-name anchor.
 ///
 /// Reuses the schema-vocabulary [`crate::schema_compiler::VocabEdge::ItemType`]
-/// canonical string `"ITEM_TYPE"` — the library is conceptually a
-/// container of plugin-anchors, mirroring how `FieldList` / `FieldMap`
-/// use `ITEM_TYPE` for element relationships.
-pub const EDGE_LIBRARY_ANCHOR: &str = "ITEM_TYPE";
+/// canonical string — the library is conceptually a container of plugin-
+/// anchors, mirroring how `FieldList` / `FieldMap` use `ITEM_TYPE` for
+/// element relationships. Bound to the const-fn `as_str()` of the source-
+/// of-truth `VocabEdge::ItemType` variant per §3.5g cross-language rule-
+/// mirror (Rust-side same-language mirror): a future rename of the canonical
+/// string in `vocab.rs` cascades here automatically at compile time.
+pub const EDGE_LIBRARY_ANCHOR: &str = crate::schema_compiler::VocabEdge::ItemType.as_str();
 
 /// Edge label connecting an anchor to one of its Version Nodes (every
 /// installed CID under that plugin-name).
