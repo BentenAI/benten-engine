@@ -1,6 +1,17 @@
 //! R3-E RED-PHASE pin for G20-B FINAL 10-crate ARCHITECTURE.md transition
 //! (wave-8b; C-15 + arch-r1-3 final-state).
 //!
+//! **HISTORICAL ANCHOR (Phase-3 R3-E origin).** This pin asserts the
+//! 10-crate FINAL transition that landed at Phase-3 close. Phase-4-Foundation
+//! added 2 more crates (benten-platform-foundation + benten-renderer-tauri,
+//! making 12 total); the assertions in this file are subset-checks that
+//! continue to pass at the 12-crate doc state at HEAD (no regression). The
+//! authoritative post-Phase-4-Foundation pin is
+//! `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs`
+//! which carries the 12-crate count canary forward. This file is preserved
+//! as historical anchor for the G20-B transition + may be retired at a
+//! future pre-tag sweep per `docs/future/phase-4-backlog.md §4.44`.
+//!
 //! Pin sources (per `.addl/phase-3/r2-test-landscape.md` §2.8 G20-B):
 //!
 //! - `tests/architecture_md_lists_10_crates_with_benten_id_and_benten_sync` (FINAL state)

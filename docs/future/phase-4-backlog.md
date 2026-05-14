@@ -622,11 +622,17 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 
 
 **Acceptance criteria.** Either (a) change signature to `pub fn insert(&self, handle: PluginDidHandle) -> Result<(), PluginDidStoreError>` returning a duplicate-check error, OR (b) add `pub fn try_insert(...) -> Result<(), ...>` sibling while preserving the lenient `insert` method. Path (a) requires either minting a new ErrorCode `E_PLUGIN_DID_HANDLE_DUPLICATE` (bumps CATALOG_VARIANT_COUNT 167→168 + 4-surface mirror update + ERROR-CATALOG.md preamble narrative) OR reusing a structural-but-not-ErrorCode local error. Deferred because new-ErrorCode-in-fix-pass-wave breaks the established "ErrorCodes mint with feature waves" convention. ~30-80 LOC depending on path. Sibling carry to §4.43 (engine-internal API discipline).
 
-### §4.46 `wasm-browser.yml` bundle-content audit grep semantics (Phase-4-Foundation pre-tag housekeeping)
+### §4.46 `wasm-browser.yml` bundle-content audit grep semantics — DISAGREE-WITH-EXPLANATION (R6-FP-3 review)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 br-r6-r3-2 MINOR; R1 br-r6-r1-4 MAJOR carry-forward). `.github/workflows/wasm-browser.yml` bundle-content audit uses `grep -i -F -q` (case-insensitive fixed-string) to detect SANDBOX/Loro/iroh symbol presence in wasm32-unknown-unknown bundle artifacts. Case-insensitive matching produces false-positives (e.g. matching "loroduck" or "wasmtime-shim" comments) + fixed-string ignores word-boundary nuances. Phase-3 BLOCKER closure (`br-r6-r1-1`) shipped the baseline; the case-sensitive word-boundary refinement was deferred.
+Per HARD RULE rule-12 (R6-R3 br-r6-r3-2 MINOR; R1 br-r6-r1-4 MAJOR carry-forward). **Originally proposed as a NAMED-NOW destination; on R6-FP-3 review the orchestrator DISAGREES with the agent's recommended fix shape (the row remains as a tracking pin only).**
 
-**Acceptance criteria.** Switch to `grep -E -q '\b(loro|iroh|wasmtime)\b'` (or equivalent) with word-boundary anchors + case-sensitive match. Verify against a known-clean wasm32 bundle at HEAD that the new audit returns 0 hits. ~5 LOC workflow edit + verification.
+The R6-R3 finding proposed switching `grep -i -F -q '<sym>'` (case-insensitive fixed-string) at `.github/workflows/wasm-browser.yml:307` to `grep -E -q '\b(loro|iroh|wasmtime)\b'` (case-sensitive word-boundary regex). The orchestrator's DISAGREE rationale:
+
+1. **The case-insensitive matching is intentional, not accidental.** The inline comment at lines 299-303 explicitly documents: *"The grep is case-insensitive to catch both `Loro` (Rust type names) and `loro_` (function manglings)."* PascalCase Rust type names appear in wasm-objdump output for non-mangled symbols (`#[no_mangle]` or extern wrappers); lowercase forms appear in standard Rust name mangling. Switching to case-sensitive would miss the PascalCase form.
+2. **The substring (fixed-string) shape is intentional.** Rust mangling produces forms like `_ZN4loro8internal...` where the symbol's CRATE name is embedded as a length-prefixed segment without surrounding word boundaries. `\bloro` regex matches at `_ZN4|loro` (digit→letter boundary) which DOES work, but the substring form has been load-bearing through Phase-3 + Phase-4-Foundation with zero false-positive incidents — the proposed refinement is a theoretical improvement, not an empirical defect closure.
+3. **False-positive risk is hypothetical at this scope.** The forbidden symbols `loro` / `iroh` / `redb` / `wasmtime` are crate names; word-collisions in legitimate symbols (e.g. a symbol containing the substring "loro" as a legit suffix) have not been observed across multiple Phase-3 + Phase-4-Foundation builds.
+
+**Status: ROW PRESERVED for tracking** — if a future empirical false-positive surfaces, this row carries the refinement obligation. No work at HEAD; no Phase-4-Meta target; no v1-blocker.
 
 ### §4.47 `admin_ui_v0_canonical_manifest()` production constructor (Phase-4-Meta)
 
