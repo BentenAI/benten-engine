@@ -978,6 +978,18 @@ pub enum ErrorCode {
     /// plugin-DID. Closes the keypair-orphan failure mode where
     /// install_plugin succeeded but no handle ever entered the store.
     PluginDidHandleNotPreInserted,
+    /// `PluginDidStore::insert` rejected a defensive-return-form
+    /// attempt to insert a `PluginDidHandle` whose DID is already
+    /// present in the store. The caller-mint-first contract (per
+    /// `docs/PLUGIN-MANIFEST.md §3 Plugin-DID minting protocol`)
+    /// presumes each plugin-DID is minted exactly once + inserted
+    /// exactly once; a duplicate-insert attempt indicates either a
+    /// caller bug (double-mint or double-insert in the install path)
+    /// or an adversarial collision attempt (would require finding two
+    /// Ed25519 keypairs whose `did:key:` encodings collide, which is
+    /// computationally infeasible). Surfaces from R6-R3 cap-r6-r3-1
+    /// defensive-return hardening (Phase-4-Foundation R6-FP-3 close).
+    PluginDidHandleDuplicate,
     /// Runtime delegation request fell outside the source plugin's
     /// manifest `shares` envelope.
     PluginDelegationOutsideManifestEnvelope,
@@ -1287,6 +1299,7 @@ impl ErrorCode {
                 "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH"
             }
             ErrorCode::PluginDidHandleNotPreInserted => "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED",
+            ErrorCode::PluginDidHandleDuplicate => "E_PLUGIN_DID_HANDLE_DUPLICATE",
             ErrorCode::PluginDelegationOutsideManifestEnvelope => {
                 "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE"
             }
@@ -1700,6 +1713,7 @@ impl ErrorCode {
             | ErrorCode::PluginInstallRecordConsentingUserMismatch
             | ErrorCode::PluginInstallRecordPluginDidMismatch
             | ErrorCode::PluginDidHandleNotPreInserted
+            | ErrorCode::PluginDidHandleDuplicate
             | ErrorCode::PluginContentCidMismatch
             | ErrorCode::PluginNewVersionAvailable
             | ErrorCode::PluginHeterogeneityIncompatible
@@ -1938,6 +1952,7 @@ impl ErrorCode {
                 ErrorCode::PluginInstallRecordPluginDidMismatch
             }
             "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED" => ErrorCode::PluginDidHandleNotPreInserted,
+            "E_PLUGIN_DID_HANDLE_DUPLICATE" => ErrorCode::PluginDidHandleDuplicate,
             "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE" => {
                 ErrorCode::PluginDelegationOutsideManifestEnvelope
             }

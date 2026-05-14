@@ -6,12 +6,12 @@
 
 | Count | Source | Value (at HEAD post R6-FP-A batch-merge) | Meaning |
 |---|---|---|---|
-| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **167** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **167** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
-| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **169** | = 167 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 169 \| rust codes: 168 \| ts codes: 169" line reflects this intentional retention. |
-| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **168** | = 167 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **168** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **168** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **170** | = 168 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 170 \| rust codes: 169 \| ts codes: 170" line reflects this intentional retention. |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **169** | = 168 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
-**Why four counts (167 / 167 / 168 / 169):** the Rust enum is the source of throwable variants (167); plus a forward-compat `Unknown(String)` fallback (= 168 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 169 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (167). Single canonical headline number: **167 production-throwable codes** at Phase-4-Foundation R6-FP-A batch-merge HEAD.
+**Why four counts (168 / 168 / 169 / 170):** the Rust enum is the source of throwable variants (168); plus a forward-compat `Unknown(String)` fallback (= 169 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 170 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (168). Single canonical headline number: **168 production-throwable codes** at Phase-4-Foundation R6-FP-3 close.
 
 **Cohort math (Phase-4-Foundation):**
 - **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.
@@ -1448,6 +1448,15 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** Caller must mint `PluginDidHandle` via `benten_id::plugin_did::mint()` AND call `plugin_did_store.insert(handle)` BEFORE invoking `install_plugin`. The install path no longer mints on the caller's behalf; the handle is the caller's responsibility because only the caller can produce a real Ed25519 keypair backing an arbitrary DID string.
 - **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
 - **Phase:** 4-Foundation R6-FP-A-fp (mr-1 + mr-2 closure)
+
+### E_PLUGIN_DID_HANDLE_DUPLICATE
+
+> **Production firing path (Phase 4-Foundation R6-FP-3 — cap-r6-r3-1 defensive-return hardening):** `PluginDidStore::insert` rejects a duplicate handle whose DID byte-equals a handle already present in the store. The caller-mint-first contract (per `docs/PLUGIN-MANIFEST.md §3 Plugin-DID minting protocol`) presumes each plugin-DID is minted exactly once + inserted exactly once; a duplicate-insert attempt indicates either a caller bug (double-mint or double-insert in the install path) or an adversarial collision attempt (would require finding two Ed25519 keypairs whose `did:key:` encodings collide, which is computationally infeasible). Pre-R6-FP-3 the insert silently overwrote — the defensive-return surfaces the contract violation as a typed error.
+
+- **Message:** "PluginDidStore::insert refused duplicate plugin-DID handle — caller-mint-first contract presumes each plugin-DID is minted + inserted exactly once"
+- **Fix:** Inspect the install path for double-mint or double-insert of the same `PluginDidHandle`. Each `benten_id::plugin_did::mint()` call MUST produce a fresh keypair → fresh DID; inserting the same handle twice indicates a caller bug. If the duplicate arose from re-installing the same plugin without a prior uninstall, call `PluginDidStore::revoke(did)` first.
+- **Thrown at:** `crates/benten-id/src/plugin_did.rs::PluginDidStore::insert`.
+- **Phase:** 4-Foundation R6-FP-3 (cap-r6-r3-1 defensive-return hardening)
 
 ### E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
 

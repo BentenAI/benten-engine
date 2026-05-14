@@ -616,11 +616,21 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 sec-r6r3-1 + sec-r6r3-2 MINOR, de
 
 **Acceptance criteria.** Either (a) ship a wasm32 stub function with the same signature returning `ChainValidationOutcome::ChainInvalid` + an error citing CLAUDE.md #17(b); or (b) gate wasm32 build entirely with `#[cfg(target_arch = "wasm32")] compile_error!("...")` if benten-caps is determined not to compile for wasm32 at all (which the current state arguably already is — benten-graph fails to build wasm32). ~10-30 LOC.
 
-### §4.45 `PluginDidStore::insert` duplicate-DID defensive return (Phase-4-Meta)
+### §4.45 `PluginDidStore::insert` duplicate-DID defensive return — CLOSED at R6-FP-3 (2026-05-13)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 carry). `crates/benten-id/src/plugin_did.rs:124-126` currently has `pub fn insert(&self, handle: PluginDidHandle)` returning `()` — silently accepts duplicates (overwrite). Caller-mint-first contract (§3 of PLUGIN-MANIFEST.md) presumes caller checks before insert, but a defensive Result return guards against the contract being violated upstream.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 carry).
 
-**Acceptance criteria.** Either (a) change signature to `pub fn insert(&self, handle: PluginDidHandle) -> Result<(), PluginDidStoreError>` returning a duplicate-check error, OR (b) add `pub fn try_insert(...) -> Result<(), ...>` sibling while preserving the lenient `insert` method. Path (a) requires either minting a new ErrorCode `E_PLUGIN_DID_HANDLE_DUPLICATE` (bumps CATALOG_VARIANT_COUNT 167→168 + 4-surface mirror update + ERROR-CATALOG.md preamble narrative) OR reusing a structural-but-not-ErrorCode local error. Deferred because new-ErrorCode-in-fix-pass-wave breaks the established "ErrorCodes mint with feature waves" convention. ~30-80 LOC depending on path. Sibling carry to §4.43 (engine-internal API discipline).
+**CLOSED at R6-FP-3 (2026-05-13).** Originally deferred under "ErrorCodes mint with feature waves" convention; on re-examination per Ben's "do whatever makes sense to do now vs in 4-meta" directive (2026-05-13), the new-ErrorCode-in-fix-pass scope (~80 LOC across 4-surface mirror) was bounded enough to land inline.
+
+**What shipped:**
+- `crates/benten-id/src/plugin_did.rs::PluginDidStore::insert` signature: `pub fn insert(&mut self, handle: PluginDidHandle) -> Result<(), ErrorCode>` returning `Err(ErrorCode::PluginDidHandleDuplicate)` when the same DID is already present.
+- New ErrorCode `E_PLUGIN_DID_HANDLE_DUPLICATE` minted with full 4-surface mirror: Rust enum + as_str + matches_static + ALL_CATALOG_VARIANTS + from_str + TS catalog + ERROR-CATALOG.md heading + preamble narrative reconciliation 167→168 (and 169→170 for catalog/TS retaining E_INV_ITERATE_NEST_DEPTH).
+- Caller-mint-first contract production arm at `crates/benten-platform-foundation/src/module_ecosystem.rs:211` now propagates the Result via `?`.
+- Test fixture at `crates/benten-platform-foundation/tests/common/manifest_fixtures.rs::mint_and_insert_plugin_did` adjusted for the new Result signature.
+- Test-only `plugin_did::handle_with_did_for_test(did)` constructor (gated behind `cfg(any(test, feature = "testing"))`) lets the duplicate-rejection path be exercised directly.
+- Substantive test pin at `crates/benten-id/tests/plugin_did_store_insert_duplicate_rejected.rs` (3 tests; required-features=["testing"]; pim-2 §3.6b PRODUCTION-ARM + OBSERVABLE-CONSEQUENCE + WOULD-FAIL-IF-NO-OP'd).
+
+No further obligation.
 
 ### §4.46 `wasm-browser.yml` bundle-content audit grep semantics — DISAGREE-WITH-EXPLANATION (R6-FP-3 review)
 
@@ -634,11 +644,19 @@ The R6-R3 finding proposed switching `grep -i -F -q '<sym>'` (case-insensitive f
 
 **Status: ROW PRESERVED for tracking** — if a future empirical false-positive surfaces, this row carries the refinement obligation. No work at HEAD; no Phase-4-Meta target; no v1-blocker.
 
-### §4.47 `admin_ui_v0_canonical_manifest()` production constructor (Phase-4-Meta)
+### §4.47 `admin_ui_v0_canonical_manifest()` production constructor — DISAGREE-WITH-EXPLANATION (R6-FP-3 re-examination)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 br-r6-r3-3 MINOR; R1 br-r6-r1-8 MINOR carry-forward). `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs` currently exposes `admin_ui_v0_manifest()` as a test-fixture-only constructor (test/common path). No production constructor exists for "canonical admin UI v0 plugin manifest." Production callers that want to install the default admin UI v0 plugin must duplicate the test-fixture logic.
+Per HARD RULE rule-12 (R6-R3 br-r6-r3-3 MINOR; R1 br-r6-r1-8 MINOR carry-forward). **Originally proposed as a NAMED-NOW destination; on R6-FP-3 re-examination the orchestrator DISAGREES — the production constructor already exists at a different location than the agent searched.**
 
-**Acceptance criteria.** Add `pub fn admin_ui_v0_canonical_manifest() -> PluginManifest` in `admin_ui_v0/mod.rs` (production path) that returns the canonical admin UI v0 manifest used at engine-init. Move the test-fixture constructor to call into this production fn (DRY) + verify cite-drift sentinel + cross-ref doc retense. ~20-40 LOC.
+The R6 R3 finding claimed "no production `admin_ui_v0_canonical_manifest()` constructor in `crates/benten-platform-foundation/src/admin_ui_v0/mod.rs`; only `admin_ui_v0_manifest()` in tests/common/." Verification at HEAD `6e10aea`:
+
+- **`admin_ui_v0_canonical_manifest()` DOES exist in production** at `tools/benten-admin-shell/src/lib.rs::admin_ui_v0_canonical_manifest`. The function's doc-comment explicitly cites the R1 closure: *"Closes the secondary half of `br-r6-r1-8` MINOR: 'No production `admin_ui_v0_manifest()` constructor in benten-platform-foundation' — the integrator binary is the named NOW destination + per-test drift is asserted by `tests/canonical_manifest_matches_ipc_binding`."*
+- The companion `ADMIN_UI_V0_CANONICAL_CAPS: &[&str]` constant at `tools/benten-admin-shell/src/lib.rs::ADMIN_UI_V0_CANONICAL_CAPS` enumerates the canonical 6-cap set the IPC method-cap-binding map references.
+- The R1 br-r6-r1-8 finding was closed by placing the constructor at the integrator-binary (admin shell) layer rather than the platform-foundation layer — that's where admin-UI-v0-specific code belongs (per CLAUDE.md baked-in #18: admin UI v0 IS a plugin, not engine infrastructure).
+
+The R6 R3 finding mis-searched the location. Row preserved as a tracking pin in case the production canonical-manifest constructor genuinely belongs in `benten-platform-foundation` for non-Tauri integrator consumers — but at HEAD that consumer category doesn't exist (browser-shape b consumers don't install plugins; embedded webview shape c uses the Tauri integrator's constructor).
+
+**Status: ROW PRESERVED for tracking** — no work at HEAD; no Phase-4-Meta target; no v1-blocker.
 
 ### §4.48 `cite-drift-detector` historical-vs-current phrasing precision (Phase-4-Foundation pre-tag OR Phase-4-Meta)
 

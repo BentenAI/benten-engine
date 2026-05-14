@@ -23,6 +23,8 @@
 //!
 //! Per `docs/PLUGIN-MANIFEST.md` §2 "The four identity concepts".
 
+use benten_errors::ErrorCode;
+
 use crate::did::Did;
 use crate::keypair::Keypair;
 
@@ -69,6 +71,22 @@ impl PluginDidHandle {
 pub fn mint() -> PluginDidHandle {
     let keypair = Keypair::generate();
     let did = keypair.public_key().to_did();
+    PluginDidHandle { did, keypair }
+}
+
+/// Test-only constructor for `PluginDidHandle` that takes a caller-
+/// supplied DID + a fresh-mint keypair. The DID and keypair will NOT
+/// be cryptographically bound (the DID is supplied independently),
+/// which makes this constructor unsuitable for production code paths
+/// (production must use [`mint`] so the DID byte-derives from the
+/// keypair). Exists to test code paths that need two `PluginDidHandle`
+/// values with byte-equal DIDs — primarily the
+/// `PluginDidStore::insert` duplicate-rejection arm at
+/// [`ErrorCode::PluginDidHandleDuplicate`] (R6-FP-3 cap-r6-r3-1).
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn handle_with_did_for_test(did: Did) -> PluginDidHandle {
+    let keypair = Keypair::generate();
     PluginDidHandle { did, keypair }
 }
 
@@ -121,8 +139,25 @@ impl PluginDidStore {
     /// install path had nowhere to persist the handle, leaving the
     /// `plugin_did_revoked` observable structurally false (g24d
     /// substantive pipeline test simulation limitation).
-    pub fn insert(&mut self, handle: PluginDidHandle) {
+    ///
+    /// # Errors
+    ///
+    /// R6-FP-3 (cap-r6-r3-1 defensive-return hardening): returns
+    /// [`ErrorCode::PluginDidHandleDuplicate`] if a handle with the
+    /// same DID is already present in the store. The caller-mint-first
+    /// contract (per `docs/PLUGIN-MANIFEST.md §3 Plugin-DID minting
+    /// protocol`) presumes each plugin-DID is minted exactly once +
+    /// inserted exactly once; a duplicate-insert attempt indicates
+    /// either a caller bug (double-mint or double-insert in the install
+    /// path) or an adversarial collision attempt (would require finding
+    /// two Ed25519 keypairs whose `did:key:` encodings collide, which
+    /// is computationally infeasible).
+    pub fn insert(&mut self, handle: PluginDidHandle) -> Result<(), ErrorCode> {
+        if self.handles.iter().any(|h| h.did == handle.did) {
+            return Err(ErrorCode::PluginDidHandleDuplicate);
+        }
         self.handles.push(handle);
+        Ok(())
     }
 
     /// Look up a handle by DID.

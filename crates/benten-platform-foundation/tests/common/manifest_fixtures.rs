@@ -326,6 +326,8 @@ pub fn signed_install_record(
 pub fn mint_and_insert_plugin_did(store: &mut benten_id::plugin_did::PluginDidStore) -> Did {
     let handle = benten_id::plugin_did::mint();
     let did = handle.did().clone();
-    store.insert(handle);
+    store
+        .insert(handle)
+        .expect("test fixture should insert unique plugin-DID");
     did
 }
