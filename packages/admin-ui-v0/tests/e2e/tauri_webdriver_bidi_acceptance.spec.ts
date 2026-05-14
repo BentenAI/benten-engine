@@ -13,7 +13,7 @@
 //
 // ## RED-PHASE status
 //
-// `test.skip` until G24-E wave-7 ships the Tauri renderer + a
+// `test.skip` until Phase-4-Meta thin-client bridge surface (per docs/future/phase-4-backlog.md §4.22) ships the Tauri renderer + a
 // `tauri-driver`-equivalent test-harness binary that launches the
 // embedded webview against the Playwright WebDriver BiDi endpoint.
 //
@@ -24,7 +24,7 @@
 
 import { test, expect } from "@playwright/test";
 
-test.skip("Tauri 2.x shape-(c) deployment renders admin UI v0 + accepts canonical user flow (RED-PHASE: closes at R5 G24-E wave-7)", async () => {
+test.skip("Tauri 2.x shape-(c) deployment renders admin UI v0 + accepts canonical user flow (RED-PHASE: closes at Phase-4-Meta thin-client bridge surface per docs/future/phase-4-backlog.md §4.22)", async () => {
   // Production arm (G24-E wave-7):
   //
   //   // Launch the Tauri test binary (built with the
