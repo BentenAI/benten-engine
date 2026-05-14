@@ -247,10 +247,11 @@ fn emit_field(
         }
     }
 
-    // Emit the 5 vocabulary edges per D-4F-NEW-TYPED-FIELD-NODE-VOCAB
-    // (in addition to the implicit FIELD edge formed by parent → field
-    // recursion). The anchor for each edge is the READ primitive — the
-    // first stable walk target the materializer dispatches to for this
+    // Emit the 5 labeled vocabulary edges per D-4F-NEW-TYPED-FIELD-NODE-VOCAB
+    // (in addition to the implicit parent→child relationship formed by
+    // recursion; object-to-field is not a labeled edge). The anchor for each
+    // edge is the READ primitive — the first stable walk target the
+    // materializer dispatches to for this
     // field. Each edge terminates at a small TRANSFORM-shaped
     // type-descriptor primitive whose `properties` carry the
     // discriminator (scalar tag / ref-target-kind / variant name).
@@ -308,7 +309,7 @@ fn emit_vocabulary_edges(
             }
         }
         // FieldScalar / FieldObject / SchemaRoot — no vocabulary edges
-        // beyond the implicit FIELD edge formed by recursion.
+        // beyond the implicit parent→child relationship via recursion.
         _ => {}
     }
     Ok(())

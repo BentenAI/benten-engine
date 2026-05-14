@@ -910,9 +910,11 @@ impl SubgraphBuilder {
 
     /// Append an explicit edge between two existing handles with a
     /// caller-supplied edge label. Used by Phase 4-Foundation
-    /// `schema_compiler::emit` to wire the 6 vocabulary edges
-    /// (`FIELD` / `ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET`
-    /// / `VARIANT`) per D-4F-NEW-TYPED-FIELD-NODE-VOCAB. Defaults
+    /// `schema_compiler::emit` to wire the 5 labeled vocabulary edges
+    /// (`ITEM_TYPE` / `KEY_TYPE` / `VALUE_TYPE` / `REF_TARGET` /
+    /// `VARIANT`) per D-4F-NEW-TYPED-FIELD-NODE-VOCAB; object-to-field
+    /// relationships are implicit-via-recursion + don't mint an edge
+    /// label (see `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`). Defaults
     /// to `add_edge` (label = `"next"`) preserved for engine-internal
     /// chain-formation; the labeled variant is consumed by the
     /// materializer walk so collection / ref / variant edge types are

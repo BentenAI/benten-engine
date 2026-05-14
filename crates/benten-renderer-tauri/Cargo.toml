@@ -38,9 +38,11 @@ benten-platform-foundation = { path = "../benten-platform-foundation" }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 
-[dev-dependencies]
-benten-core = { path = "../benten-core" }
-benten-errors = { workspace = true }
-benten-engine = { path = "../benten-engine" }
-benten-platform-foundation = { path = "../benten-platform-foundation" }
-serde_json = { workspace = true }
+# [dev-dependencies] intentionally empty — all required deps are
+# already in [dependencies] above; tests/ + benches/ inherit them.
+# Prior R6-FP cycles had a redundant dev-dependencies block duplicating
+# the production-deps list (each crate showing up with both `kind: None`
+# and `kind: dev` in `cargo metadata`); R6-FP-5 arch-r6-r5-1 closure
+# removed it. Sister crate benten-platform-foundation correctly keeps
+# only test-specific deps (benten-engine as a real dev-only-cap-policy
+# test scaffold) in its [dev-dependencies] block.

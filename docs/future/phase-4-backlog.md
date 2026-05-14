@@ -681,11 +681,17 @@ Path (a) is the bake-in-intent path; path (b) preserves the shipped surface. v1-
 
 R6-FP-4 partial: SECURITY-POSTURE.md plugin-trust threat-model narrative + CLAUDE.md #18 prose now match shipped surface for `Engine::get_node`; rest of cluster narratives retain the original framing pending v1-API-stabilization decision.
 
-### §4.49 webview-e2e CI lane verify-against-actual-CI after orchestrator-direct fix (Phase-4-Foundation pre-tag housekeeping)
+### §4.49 webview-e2e CI lane — actual root cause surfaced; MUST-FIX-OR-EXPLICITLY-ACCEPT-AT-TAG (R6-FP-5 sharpening)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 br-r6-r4-1 MINOR). The R6-FP-3 br-r6-r3-1 port-binding race fix at `tools/benten-admin-shell/tests/e2e_webview_smoke.rs` (active port-probe loop + stdout/stderr=inherit) addresses the most-likely race-condition shape; whether webview-e2e ubuntu lane actually goes GREEN on subsequent PRs is an empirical question that pim-2 §3.6b OBSERVABLE-CONSEQUENCE discipline says we should verify against the actual CI surface. Currently webview-e2e is non-required + admin-bypassed; the obligation is to confirm the port-probe fix has the expected effect at next non-FP CI run on `main`.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 br-r6-r4-1 MINOR + R6-R5 br-r6-r5-1 MAJOR). The R6-FP-3 `br-r6-r3-1` Stdio::inherit-instead-of-null fix at `tools/benten-admin-shell/tests/e2e_webview_smoke.rs` SERVED ITS PURPOSE: it surfaced the previously-invisible actionable root cause via the next CI run. **The webview-e2e failure was NEVER a race condition** — it is an old test bug at `tools/benten-admin-shell/tests/e2e_webview_smoke.rs:159-171`.
 
-**Acceptance criteria.** Track the next 2-3 main CI runs that include webview-e2e; if it goes GREEN at HEAD without further intervention, close this row. If it stays RED, dispatch a follow-up to investigate the remaining race condition (likely Tauri webview startup vs fantoccini session-create timing, or X virtual framebuffer setup on the runner).
+**Actual root cause (R6 R5 br-r6-r5-1 finding):** the test invokes `tauri-driver --port 4444 --native-binary <path>` but the installed `tauri-driver` CLI **does NOT support `--native-binary`** — actual supported flags are `--port / --native-port / --native-host / --native-driver` per tauri-driver source. The test as-shipped CANNOT pass; the native-binary launch path must instead be specified via WebDriver session `tauri:options.application` capability (passed by fantoccini's `Capabilities`), OR via env var that `tauri-driver` recognizes.
+
+**Why not fixed inline at R6-FP-5:** the fix requires understanding tauri-driver's capability-passing API + WebKitGTK runtime setup; can't be validated locally without a Linux runner + tauri-driver installed. Speculative fixes would risk shipping a still-broken test. Better to name properly + decide at tag time.
+
+**Acceptance criteria (R6-FP-5 sharpening + tag-time decision).** Path (a) FIX: ~50-150 LOC test-harness rewrite: drop `--native-binary` from `Command::new("tauri-driver")` args; pass binary path via `fantoccini::Capabilities` with `tauri:options.application` key; verify the new shape against an actual tauri-driver subprocess on Linux + WebKitGTK. Path (b) EXPLICITLY-ACCEPT-AT-TAG: phase-4-foundation-close tag ships with webview-e2e ubuntu RED known-bug-non-required (matches the §4.46 / §4.47 DISAGREE-WITH-EXPLANATION precedent); the production integrator binary at `tools/benten-admin-shell/src/lib.rs` is UNAFFECTED — the bug is purely in E2E test subprocess invocation. **Decision deferred to phase-4-foundation-close pre-tag review.**
+
+**Not v1-gate-blocker** because: (a) admin-shell-e2e.yml documented non-required for merge; (b) production code path unaffected (Tauri integrator binary works correctly when launched directly); (c) test infrastructure issue, not platform-shippable defect.
 
 ### §4.50 `Engine::*` `_for_test` suffix in production-consumed APIs cleanup (Phase-4-Meta)
 
@@ -704,6 +710,24 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 arch-r6-r4-2 MINOR). `docs/CRATES
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 arch-r6-r3-3 MINOR). The Phase-3 R3-E RED-PHASE pin `tests/phase_3_workspace/architecture_md_g20b_final.rs` carries "10-crate FINAL" in test fn name + module-level comments. The actual assertion is a subset-check that still passes against the 12-crate doc state (no regression). Superseded by `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs` (Phase-4-Foundation R6-FP canary). R6-FP-3 inline closure: module-level doc-comment now carries "HISTORICAL ANCHOR (Phase-3 R3-E origin)" framing + names the post-Phase-4-Foundation canary as authoritative successor. File rename is a non-time-pressured housekeeping retense.
 
 **Acceptance criteria.** Rename file + test fn from "10-crate" to "12-crate" (or retire the Phase-3 R3-E pin entirely if the post-Phase-4-Foundation canary fully supersedes). ~5-10 LOC. Sibling carry to G26-A pre-tag docs retense wave.
+
+### §4.52 `VocabEdge::from_str` error-shape refinement (Phase-4-Meta)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R5 schema-lang-r6-r5-3 MINOR). `crates/benten-platform-foundation/src/schema_compiler/vocab.rs::VocabEdge::from_str` fallback uses `SchemaCompileError::VocabEdgeMismatch` (intended for source/target-label-pair mismatch) for the "unknown edge token" case with sentinel `"<unknown>"` source/target labels. Minor naming-drift; refactor either splits a new variant (e.g. `UnknownEdgeLabel`) or mints a new ErrorCode (`E_SCHEMA_VOCAB_UNKNOWN_EDGE_TOKEN`).
+
+**Acceptance criteria.** Either (a) split a new error variant in `schema_compiler/error.rs` with proper "unknown edge token" semantics, OR (b) mint a new ErrorCode (bumps catalog math). ~10-30 LOC depending on path. Bundle with §4.43 v1-API-stabilization sweep if it lands first.
+
+### §4.53 Vocabulary-cardinality cross-doc completeness pim-N candidate (Phase-4-Meta DEFER 1-instance)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R5 schema-lang-r6-r5-1 pim-N candidate, DEFER). pim-N candidate proposed by schema-language-reviewer at R6 R5: "when phase-close-fix-pass commits CLAIM an N-site sweep is STUCK, next-round lens MUST run exhaustive grep for the obsoleted term-form (don't trust the claimed count)." 1-instance at HEAD (R6-FP-4 sdr-r6-r4-1 claimed 11-site sweep STUCK but R6 R5 found 3 residuals); below 3+-recurrence threshold per Ben's deferral precedent for 1-instance candidates.
+
+**Acceptance criteria.** Re-evaluate at Phase-4-Meta on 2nd/3rd recurrence; if hits 3+-threshold, codify as §3.6j extension to §3.6h (sibling: §3.6h covers "rule-codification names origin instance(s) that must close"; this candidate covers "fix-pass claims N-site sweep that must verify all N sites"). Composes with existing pim-1 §3.5b HARDENED + pim-18 §3.6f.
+
+### §4.54 "Restore Stdio inheritance before assuming env-flake" pim-N candidate (Phase-4-Meta DEFER 1-instance)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R5 br-r6-r5-1 pim-N candidate, DEFER). pim-N candidate proposed by browser-runtime-reviewer at R6 R5: when a test fails inscrutably + Stdio::null was set "for clean test output," the FIRST debugging step is to restore Stdio::inherit + re-run before assuming the failure is environmental flakiness. R6-FP-3 demonstrated this: the original webview-e2e port-binding "race" was misdiagnosed because Stdio::null hid the actual `--native-binary` CLI flag error. 1-instance at HEAD; below 3+-recurrence threshold.
+
+**Acceptance criteria.** Re-evaluate at Phase-4-Meta on 2nd/3rd recurrence; if hits 3+-threshold, codify as testing-discipline addition (sibling: pim-18 §3.6f SHAPE-not-SUBSTANCE — this candidate is debugging-discipline analog: "before claiming env-flake, restore observability"). Composes with existing pim-18.
 
 ---
 

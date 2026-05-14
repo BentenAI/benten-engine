@@ -1994,9 +1994,12 @@ landed in the same pre-Phase-4-Foundation-close window.
 
 **Status.** **SEAM SHIPPED at R4b-FP-1 (Seam 3)** (post-Q4 ratification
 2026-05-13): the `apply_atrium_merge` path invokes a
-`ManifestEnvelopeRechecker::recheck_row(...)` port BEFORE the per-row
-`CapabilityPolicy::pre_write` check (which Compromise #2 sync-replica
-sub-narrative already covered via G16-B-F PR #161). The
+`ManifestEnvelopeRechecker::recheck_row(...)` port AFTER the per-row
+`CapabilityPolicy::pre_write` check (Layer-3 manifest-envelope refinement
+on Layer-1 revocation defense per CLAUDE.md #18; matches engine.rs:1396-
+1400 inline comment + the body Closure-shape section below). Compromise
+#2 sync-replica sub-narrative already covered the Layer-1 cap check via
+G16-B-F PR #161. The
 production-default backend is `NoopManifestEnvelopeRechecker` (returns
 `Outcome::NotApplicable` for every row) — so the seam fires + the
 contract surface is wired, but at HEAD the per-row decision is
