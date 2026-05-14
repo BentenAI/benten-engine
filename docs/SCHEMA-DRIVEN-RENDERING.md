@@ -40,7 +40,7 @@ Per D-4F-NEW-TYPED-FIELD-NODE-VOCAB post-R1-triage resolution + Ben Q9 correctio
 | Edge | Connects | Purpose |
 |---|---|---|
 | `FIELD` | `SchemaRoot` / `FieldObject` → `Field*` | Object-to-field relationship |
-| `ITEM_TYPE` | `FieldList` / `FieldMap` → `Field*` | Element type of a collection |
+| `ITEM_TYPE` | `FieldList` → `Field*` | Element type of a list (lists use a single element-type edge; maps use the `KEY_TYPE` + `VALUE_TYPE` pair below) |
 | `KEY_TYPE` | `FieldMap` → `FieldScalar` | Key type of a map |
 | `VALUE_TYPE` | `FieldMap` → `Field*` | Value type of a map |
 | `REF_TARGET` | `FieldRef` → (content CID) | Reference resolution (matches D-4F-14 cross-plugin content-CID shape) |

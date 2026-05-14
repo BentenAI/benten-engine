@@ -155,7 +155,9 @@ R5 G23-A landed the `schema_compiler` canary (branch `r5/wave-g23-a`). The canar
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination + the work obligation lands NOW. G23-A wave's `parse.rs` source comments + the proptest's `#[ignore]` message cite `docs/future/phase-4-backlog.md §4.6` instead of phantom destinations like "wave-4b".
 
-Closes G23-A R5 mini-review BLOCKER finding `g23a-mr-1` + MAJOR finding `g23a-mr-2`.
+**Acceptance criteria addendum (added 2026-05-13 R6 R2 schema-language solo lens schema-lang-r6-r2-2):** the vocab-fixture coverage test pin `schema_compiler_typed_field_vocab_composes_over_12_primitives_no_extension.rs` currently exercises only 4 of the 8 declared `LabelType` variants (SchemaRoot / FieldScalar / FieldList / FieldRef). The remaining 4 (FieldObject / FieldMap / FieldEnum / FieldUnion) MUST be added to the fixture set when this row lands, alongside per-label assertions that the emit-side construction-site fires for each label and produces the corresponding vocab edges (FIELD for objects; KEY_TYPE+VALUE_TYPE for maps; VARIANT for enums/unions). Counts coverage gap closure as part of the same backlog row to keep the §4.6 destination self-contained.
+
+Closes G23-A R5 mini-review BLOCKER finding `g23a-mr-1` + MAJOR finding `g23a-mr-2` + R6 R2 schema-lang-r6-r2-2 acceptance-criteria gap.
 
 ### §4.7 RED-PHASE-BODY status terminology (PROCESS NOTE)
 
@@ -664,6 +666,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R2 pim-n-r7-spec finding r6r2-new-1;
 **Sibling pim-N candidates from R6-R2 methodology lens (also awaiting Ben ratification):**
 - **pim-r6-fp-stable-clippy-cycle-1** — §3.5h sub-rule: orchestrator pre-merge MUST run `cargo +stable clippy --workspace --all-targets -- -D warnings` (IN ADDITION to existing `cargo +1.95 clippy --workspace` for MSRV compatibility). R6-FP batch required 4 successive CI fix-cycles for clippy lints firing only on stable Rust (commits `debdc0a` + `4b0369f` + `15de4b4`). ~30s additional pre-flight; collapses 3-4 CI fix-cycles → 0.
 - **pim-r6-fp-cargo-audit-mirror-2** — §3.5h gate-step addition (or §3.5g extension to cross-config rule-mirrors): `cargo audit` MUST run as a §3.5h workspace pre-merge step. R6-FP Wave-E required follow-up `2b96091` to mirror Tauri RUSTSEC ignores from `deny.toml` to `audit.toml` after the original PR shipped with cargo-audit failing.
+- **pim-r6-fp-rustls-bootstrap-3** (added 2026-05-13 R6-R2 methodology solo lens solo-4 sharpening): feature-flag-gated transitive deps that require runtime initialization (e.g. rustls 0.23+ `CryptoProvider::install_default()`) MUST be exercised by a build-only smoke OR a feature-test-pin at the SAME wave that ships the feature flag. R6-FP-E shipped `tools/benten-admin-shell/` with `fantoccini` (rustls-tls feature) but missed installing the rustls `CryptoProvider`; first CI cycle on PR #240's webview-e2e workflow surfaced `Could not automatically determine the process-level CryptoProvider`; closure at commit `911f486` added `let _ = rustls::crypto::ring::default_provider().install_default();`. This is the 3rd distinct CI fix-cycle class from R6-FP batch beyond stable-clippy + cargo-audit-mirror; propose §3.5h sub-rule: any feature-flag-gated transitive dep that owns a `*_default()` / `install_default()` / `init_*()` setup function MUST be exercised in the same PR (test pin OR build-only smoke) so CryptoProvider-class miss surfaces locally before push.
 
 ### §6.6 caps-grew gate seam tracking (cross-ref to §4.41)
 

@@ -97,7 +97,7 @@ pub trait ManifestEnvelopeRechecker: Send + Sync {
 /// recheck-path always fires; operators swap in a real adapter via
 /// `Engine::set_manifest_envelope_rechecker(Arc::new(<real>))`. A fluent
 /// `EngineBuilder::with_manifest_envelope_rechecker` setter is named
-/// at `docs/future/phase-4-backlog.md §4.19` as a Phase-4-Meta carry.
+/// at `docs/future/phase-4-backlog.md §4.36` as a Phase-4-Meta carry.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoopManifestEnvelopeRechecker;
 
