@@ -372,6 +372,46 @@ impl JsDeviceAttestation {
         Ok(Self { inner: attestation })
     }
 
+    /// Issue subject to a parent authority envelope (cap-r4-7
+    /// construction-time envelope-widening defense, #333). Rejects with
+    /// `E_DEVICE_ATTESTATION_ENVELOPE_WIDENING` if the device envelope
+    /// claims wider authority than the supplied parent-authority
+    /// envelope. This is the construction-time companion to the
+    /// chain-walker's consume-time `validate_chain_with_attestations`
+    /// envelope-attenuation gate — defense in depth at both ends.
+    #[napi(factory)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn issue_with_authority(
+        parent: &JsKeypair,
+        device_did: String,
+        runs_sandbox: bool,
+        holds_zones: String,
+        online_uptime: String,
+        runs_atrium_peer: bool,
+        parent_runs_sandbox: bool,
+        parent_holds_zones: String,
+        parent_online_uptime: String,
+        parent_runs_atrium_peer: bool,
+    ) -> Result<Self> {
+        let envelope =
+            envelope_from_str(runs_sandbox, holds_zones, online_uptime, runs_atrium_peer)?;
+        let parent_authority = envelope_from_str(
+            parent_runs_sandbox,
+            parent_holds_zones,
+            parent_online_uptime,
+            parent_runs_atrium_peer,
+        )?;
+        let device = RustDid::from_string_unchecked(device_did);
+        let attestation = RustDeviceAttestation::issue_with_authority(
+            &parent.inner,
+            device,
+            envelope,
+            &parent_authority,
+        )
+        .map_err(|e| Error::from_reason(format!("[{}] {e}", e.code())))?;
+        Ok(Self { inner: attestation })
+    }
+
     /// Convenience: issue browser-target minimum-capability envelope.
     #[napi(factory)]
     pub fn issue_for_browser_target(parent: &JsKeypair, device_did: String) -> Result<Self> {

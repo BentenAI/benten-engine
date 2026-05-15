@@ -527,8 +527,15 @@ impl Acceptor {
         now: u64,
     ) -> Result<(), DeviceAttestationError> {
         // 1. Expected parent (only if configured).
+        //    ct-eq per crypto-major-4 UNIFORMITY (#515). DIDs are
+        //    public so the leak surface is essentially zero, but the
+        //    project commits to ct-eq at EVERY security-decision
+        //    compare; this is the expected-parent rejection arm.
         if let Some(expected) = &self.expected_parent
-            && &attestation.parent_did != expected
+            && !crate::ucan::ct_signature_eq(
+                attestation.parent_did.as_bytes(),
+                expected.as_bytes(),
+            )
         {
             return Err(DeviceAttestationError::IssuerNotParent {
                 issuer: attestation.parent_did.clone(),
@@ -537,11 +544,28 @@ impl Acceptor {
         }
 
         // 2. Revocation check (ct-eq per crypto-major-4 UNIFORMITY).
+        //    AUTHENTICITY GATE (#336 / F-FWD-2-01 #1051): a device_did
+        //    match alone is NOT sufficient to honor a revocation — a
+        //    forged `DeviceRevocation` byte-blob with a bogus
+        //    signature must NOT be able to deny-of-service a device.
+        //    Verify the revocation is genuinely signed by the parent
+        //    keypair behind `parent_did` (self-resolving did:key)
+        //    before honoring it. A forged revocation (unresolvable
+        //    parent_did OR signature mismatch) is skipped (fail-CLOSED
+        //    against forged revocations: the bogus revocation does NOT
+        //    revoke the device).
         for r in &self.revocations {
             if crate::ucan::ct_signature_eq(
                 r.device_did.as_bytes(),
                 attestation.device_did.as_bytes(),
             ) {
+                let parent_did = Did::from_string_unchecked(r.parent_did.clone());
+                let Ok(parent_pk) = parent_did.resolve() else {
+                    continue;
+                };
+                if r.verify_signature_with(&parent_pk).is_err() {
+                    continue;
+                }
                 return Err(DeviceAttestationError::DeviceRevoked {
                     device_did: attestation.device_did.clone(),
                 });
