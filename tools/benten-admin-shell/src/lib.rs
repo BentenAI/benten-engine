@@ -56,7 +56,8 @@ use std::sync::Arc;
 
 use benten_engine::thin_client::{DidKeyedSession, SessionConfig, SessionToken};
 use benten_renderer_tauri::{
-    AdminUiManifest, InProcessSessionBridge, IpcError, IpcRequest, TauriRenderer, WEBVIEW_CSP_HEADER,
+    AdminUiManifest, InProcessSessionBridge, IpcError, IpcRequest, TauriRenderer,
+    WEBVIEW_CSP_HEADER,
 };
 
 /// Canonical cap-grant set the admin UI v0 plugin's `requires` envelope

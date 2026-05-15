@@ -668,5 +668,4 @@ mod tests {
         assert!(!cleaned.contains("'unsafe-eval'"));
         assert!(!WEBVIEW_CSP_HEADER.contains("'unsafe-inline'"));
     }
-
 }
