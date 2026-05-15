@@ -39,6 +39,13 @@
 //!   [`transport::TransportKind`] surface the connection state for
 //!   net-blocker-2 observability. Loopback round-trip is the
 //!   load-bearing canary that gates G16-A landing per Q7 RESOLVED.
+//! - [`transport_trait`] — RATIFIED 2026-05-15 (§15.3 #1 / umbrella
+//!   #1176) `trait Transport` + `TransportEndpoint` +
+//!   `TransportConnection` abstraction boundary over the iroh-concrete
+//!   connection layer; [`transport_trait::IrohTransport`] is the
+//!   pre-v1 concrete impl. Post-v1 alternate transports (Tor /
+//!   Nostr-relay / shaped relay per CLAUDE.md baked-in #19) implement
+//!   these traits as compile-time engine extensions.
 //! - [`errors`] — typed atrium-transport errors per net-blocker-2
 //!   BLOCKER: [`errors::AtriumTransportError::RelayUnreachable`] maps
 //!   to [`benten_errors::ErrorCode::AtriumRelayUnreachable`];
@@ -198,6 +205,19 @@ pub mod peer_id;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport;
+
+// RATIFIED 2026-05-15 (Ben §15.3 #1 / umbrella #1176) — the
+// `trait Transport` + `TransportEndpoint` + `TransportConnection`
+// abstraction boundary over the iroh-concrete connection layer.
+// `IrohTransport` is the pre-v1 concrete impl (delegates to
+// `transport::Endpoint` / `transport::Connection` with zero behavioral
+// change). Post-v1 alternate transports (Tor / Nostr-relay / shaped
+// relay per CLAUDE.md baked-in #19) implement these traits as
+// compile-time engine extensions. The boundary is compile-fenced
+// against accidental iroh-leak by
+// `crates/benten-sync/tests/transport_trait_boundary.rs`.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod transport_trait;
 
 // G16-B wave-6b — Loro CRDT integration at Node-property granularity per
 // D-PHASE-3-4 RESOLVED-at-R1. Native-only alongside iroh + Loro deps.
