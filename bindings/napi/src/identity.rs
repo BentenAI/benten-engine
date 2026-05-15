@@ -380,7 +380,13 @@ impl JsDeviceAttestation {
     /// chain-walker's consume-time `validate_chain_with_attestations`
     /// envelope-attenuation gate — defense in depth at both ends.
     #[napi(factory)]
+    // napi factory mirrors the Rust authority-envelope signature 1:1;
+    // the bool params are the device/parent capability-envelope flags
+    // (runs_sandbox / runs_atrium_peer / parent_runs_sandbox). Same
+    // architectural reason as the too_many_arguments allow above —
+    // restructuring to a struct would break the cross-language mirror.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::fn_params_excessive_bools)]
     pub fn issue_with_authority(
         parent: &JsKeypair,
         device_did: String,

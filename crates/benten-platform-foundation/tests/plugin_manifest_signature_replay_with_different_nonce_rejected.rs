@@ -56,26 +56,28 @@ fn plugin_manifest_rotation_event_nonce_swap_attack_rejected() {
         "T5 regression-guard: must surface VerbatimReplay typed err; got {dup_err:?}"
     );
 
-    // Attack 2: nonce-swap — attacker captures rotation_v1, mutates a
-    // payload bit (here we keep prev/next/hlc but flip the signature
-    // byte to simulate a re-signed-with-compromised-K1 mutation). Same
-    // HLC 100. Since HLC is NOT strictly greater than latest-known
-    // (which is 100), this MUST be rejected at the HLC-monotonic-strict
-    // layer.
+    // Attack 2: signature-mutation — attacker captures rotation_v1 and
+    // flips a signature byte to simulate a re-signed-payload mutation
+    // (prev/next/hlc kept identical; HLC stays 100). Post-#1171
+    // (umbrella trust-graph closure), `accept_rotation_event`'s step-0
+    // signature-verify gate fires BEFORE the HLC-monotonic-strict
+    // layer, so a signature-mutated event is rejected at the
+    // AUTHENTICITY layer (`BadSignature`) — strictly stronger
+    // defense-in-depth than the prior HLC-layer rejection: the attack
+    // is still rejected, now caught earlier and more specifically. The
+    // HLC-monotonic-strict layer remains the defense for
+    // valid-signature stale-HLC replays (covered elsewhere).
     let mut nonce_swapped = rotation_v1.clone();
-    // Flip a single signature byte to simulate the attacker's
-    // re-signed-payload mutation. The (prev_did, next_did, hlc) tuple
-    // stays identical — the HLC-monotonic-strict layer rejects on HLC
-    // alone, NOT on signature comparison.
     nonce_swapped.signature[0] ^= 0xFF;
     let nonce_swap_attempt = log.accept_rotation_event(&nonce_swapped);
     let nonce_err = nonce_swap_attempt.expect_err(
-        "T5 regression-guard: nonce-swap at same HLC MUST be rejected — HLC monotonicity \
-         is the primary defense; signature-mutation does NOT bypass it",
+        "T5 regression-guard: signature-mutated rotation event MUST be rejected — \
+         #1171 step-0 signature-verify gate is the authenticity defense",
     );
     assert!(
-        matches!(nonce_err, DidRotationError::HlcNotStrictlyMonotonic { .. }),
-        "T5 regression-guard: nonce-swap at same HLC must surface HlcNotStrictlyMonotonic; \
+        matches!(nonce_err, DidRotationError::BadSignature),
+        "T5 regression-guard: signature-mutation must surface BadSignature at the \
+         step-0 authenticity gate (stronger than the prior HLC-layer rejection); \
          got {nonce_err:?}"
     );
 
