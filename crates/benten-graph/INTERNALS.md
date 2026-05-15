@@ -1,7 +1,7 @@
 # benten-graph — Crate Internals
 
 A plain-English, code-grounded tour of the `benten-graph` crate as it stands at
-HEAD `c589ffe` (Phase-4-Foundation close, post tag `phase-4-foundation-close`).
+HEAD `8141b94` (Phase-4-Foundation close, post tag `phase-4-foundation-close`).
 The crate body has been substantively stable since the Phase-3 close window —
 the last source change was the `docs(phase-rename)` retense at `00f2784`
 2026-05-11, and the last code change was `dcd1275` (class-e bug fixes,

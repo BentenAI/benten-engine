@@ -1576,13 +1576,13 @@ export class ESandboxManifestUnknown extends BentenError {
  * E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED
  *
  * Thrown at: `ManifestRegistry::register_runtime`.
- * Message template: "Runtime manifest registration deferred to Phase 8"
+ * Message template: "Runtime manifest registration deferred to Phase-4-Meta plugin-install"
  */
 export class ESandboxManifestRegistrationDeferred extends BentenError {
   static readonly code = "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED";
-  static readonly fixHint = "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.";
+  static readonly fixHint = "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-4-Meta plugin-install work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase-4-Meta plugin-install ships. (The historical \"Phase 8 marketplace\" framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs — plugin installation at runtime is now a Phase-4-Meta concern, not a Phase 8 concern.)";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED", "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.", message, context);
+    super("E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED", "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-4-Meta plugin-install work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase-4-Meta plugin-install ships. (The historical \"Phase 8 marketplace\" framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs — plugin installation at runtime is now a Phase-4-Meta concern, not a Phase 8 concern.)", message, context);
     this.name = "ESandboxManifestRegistrationDeferred";
   }
 }

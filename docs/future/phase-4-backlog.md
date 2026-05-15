@@ -775,6 +775,24 @@ v1-API-stabilization decision. Bundle with §4.43 v1-API-stabilization sweep + �
 
 See `.addl/dispatch-conventions.md §3.6j` for the ratified rule + brief-template mandate (output JSON authors mandate canonical top-level `disposition` at author-time to eliminate the orchestrator-catchup cycle).
 
+### §4.58 Sync-attack 18-vector fabric — 15-of-18 missing (Phase-4-Meta / v1-platform-shippable; refinement-audit #1100)
+
+**Origin:** refinement-audit-2026-05 X10 compromise-registry cross-crate reviewer (#1100). `docs/history/PHASE-3.md:29` previously claimed Phase-3 R2 pinned "the 18 attack vectors as named adversarial fixtures (sync-attack-1..18 in `crates/benten-sync/tests/`)". At HEAD `8141b94` only **3 attack-test files exist** — `attack_hlc_skew_revocation_ordering.rs`, `attack_loro_op_log_inv_13.rs`, `attack_mst_diff_cid_mismatch.rs` (5 `#[test]` functions total). PHASE-3.md:29 retensed (this PR) to name the 3 files that exist + point here for the deferred 15.
+
+**Deferred work.** The remaining 15 sync-attack vectors specified in the archived Phase-3 R2 test-landscape (`.addl/_archive/phase-3/r2-test-landscape.md`) were never landed. They compose with Compromise #22 (peer-DID + connection-metadata leakage) / #23 (wire device-attestation envelope V2) / #25 (HLC-monotonic enforcement at sync layer) / #26 (manifest-envelope recheck at sync merge) — i.e. those four Compromises' CLOSED narratives lean on a "sync-attack test family" that is 3-of-18 wide at HEAD. Narrative-named classes include sync-attack-1 (peer-impersonation), sync-attack-7 (signature-substitution), sync-attack-11 (audience-rebinding), and 12 more.
+
+**Acceptance criteria.** Land the 15 missing adversarial fixtures per the R2-specified envelope construction + expected ErrorCode + file names, OR explicitly down-scope Compromise #22/#23/#25/#26 closure narratives in `docs/SECURITY-POSTURE.md` to match the 3-vector reality and re-scope the 15 as a named v1-assessment-window item. Ben architectural call on scope vs. down-scope. ~per-vector signed-envelope construction; estimated substantial (each vector is a full adversarial-peer integration scenario). Bundle with the META #684 / META #660 v1-platform-shippable BLOCKER cluster if it lands in the same window.
+
+### §4.59 Runtime contract at the Tauri integrator boundary (Phase-4-Meta; Ben architectural decision; refinement-audit #1110)
+
+**Origin:** refinement-audit-2026-05 X3 async-runtime cross-crate reviewer (#1110), sub-shape (b). `benten-renderer-tauri` is intentionally Tauri-runtime-agnostic (no tauri/tokio dep — the crate holds the IPC protocol + cap-binding + CSP only, per CLAUDE.md #19). The integrator binary (`tools/benten-admin-shell`, Phase-4-Meta) that wires `tauri::Builder` against the engine will be the workspace's 4th tokio-runtime-construction site, and the runtime-sharing contract has **no named destination at HEAD** (`docs/ARCHITECTURE.md` does not name tokio; CLAUDE.md #17 names Tauri-as-shape-(c) but not the runtime contract).
+
+**Decision needed (Ben architectural call) BEFORE Phase-4-Meta admin-shell wiring lands:**
+- **(1) Shared runtime context** — engine constructs the tokio runtime; Tauri attaches via `tauri::Builder::with_runtime(...)` (or the Tauri 2.x equivalent). Single runtime; simpler; risk = Tauri's internal runtime-ownership expectations.
+- **(2) Bridged dual runtime** — engine + Tauri each spawn their own runtime; communication crosses via channels. More isolation; better for the verso-swap-readiness goal; risk = bridging overhead + lifecycle coupling.
+
+Couples to #1101 (X3 workspace-tier architectural-commitment-to-tokio pim-N candidate) — that finding covers the workspace-tier discipline; this row is the per-crate Tauri-boundary manifestation. Sub-shape (a) of #1110 (the `Cargo.toml description` runtime-agnosticism disclaimer) is FIX-NOW and landed in this PR.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

@@ -5,8 +5,8 @@ contains, what it exposes, and what gaps / architectural questions it leaves
 open. Pair with `CLAUDE.md` item #2 (IVM Algorithm B + per-view strategy + the
 "engine names `Strategy` but not internals" boundary).
 
-State: HEAD `c589ffe` (post Phase-4-Foundation R6-FP-4 close; tag
-`phase-4-foundation-close`). Reflects G23-0a IVM kernel generalization +
+State: HEAD `8141b94` (post `phase-4-foundation-close` tag; PR #242–#250
+all merged). Reflects G23-0a IVM kernel generalization +
 G23-0b 5-view re-expression as `SubgraphSpec` consumers + `Strategy::C →
 Strategy::Reserved` rename + `Projection::AllProps` placeholder removal.
 

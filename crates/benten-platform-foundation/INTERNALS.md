@@ -1,6 +1,6 @@
 # benten-platform-foundation — Internals
 
-A plain-English, code-grounded tour of the `benten-platform-foundation` crate — the 11th workspace crate per Ben D-4F-2 ratification, and the substantive home of the **v1 platform-shippable surface** per CLAUDE.md baked-in #15. Read-only audit. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Snapshot: post-Phase-4-Foundation R5 + R6-FP-A admin-merge (main HEAD `85ecb69`); R6 R3 ready.
+A plain-English, code-grounded tour of the `benten-platform-foundation` crate — the 11th workspace crate per Ben D-4F-2 ratification, and the substantive home of the **v1 platform-shippable surface** per CLAUDE.md baked-in #15. Read-only audit. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Snapshot: post `phase-4-foundation-close` tag (main HEAD `8141b94`; PR #242–#250 all merged).
 
 ---
 

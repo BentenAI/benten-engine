@@ -7,9 +7,13 @@
 //!     into the registry.
 //!   - [`ManifestRegistry::register_runtime`] is RESERVED in 2b: it returns
 //!     `Err(ManifestError::RuntimeRegistrationDeferred)` (which routes to
-//!     `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`). Phase 8 marketplace
-//!     work lifts the deferral by replacing the body — the public surface
-//!     stays stable.
+//!     `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`). Phase-4-Meta plugin-install
+//!     work (per CLAUDE.md baked-in #15 v1-platform-shippable widening
+//!     ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs) lifts the
+//!     deferral by replacing the body — the public surface stays stable.
+//!     (The historical "Phase 8 marketplace" framing pre-dates the
+//!     v1-scope widening; plugin installation at runtime is now a
+//!     Phase-4-Meta concern, not a Phase 8 concern.)
 //!
 //! D9-RESOLVED canonical-bytes encoding:
 //!   - Bundle bytes are DAG-CBOR over a `BTreeMap<String, Vec<String>>`
@@ -156,8 +160,10 @@ pub enum ManifestError {
         name: String,
     },
     /// D2-RESOLVED hybrid — `register_runtime` is reserved as a typed-error
-    /// no-op in Phase 2b. Phase 8 marketplace work flips the body.
-    #[error("runtime manifest registration deferred to Phase 8")]
+    /// no-op in Phase 2b. Phase-4-Meta plugin-install work flips the body
+    /// (per CLAUDE.md baked-in #15 v1-platform-shippable widening +
+    /// baked-in #18 plugins-as-subgraphs).
+    #[error("runtime manifest registration deferred to Phase-4-Meta plugin-install")]
     RuntimeRegistrationDeferred,
     /// DAG-CBOR encode failure when computing canonical bytes.
     #[error("manifest canonical-bytes encode failure: {reason}")]
@@ -294,9 +300,12 @@ impl ManifestRegistry {
     }
 
     /// D2-RESOLVED — runtime registration is reserved as a typed-error
-    /// no-op in Phase 2b. Phase 8 marketplace work lifts the deferral
-    /// by replacing the body; the public surface is preserved across
-    /// the lift.
+    /// no-op in Phase 2b. Phase-4-Meta plugin-install work (per CLAUDE.md
+    /// baked-in #15 v1-platform-shippable widening ratified 2026-05-10 +
+    /// baked-in #18 plugins-as-subgraphs) lifts the deferral by replacing
+    /// the body; the public surface is preserved across the lift. (The
+    /// historical "Phase 8 marketplace" framing pre-dates the v1-scope
+    /// widening.)
     ///
     /// # Errors
     /// Always returns `Err(ManifestError::RuntimeRegistrationDeferred)`

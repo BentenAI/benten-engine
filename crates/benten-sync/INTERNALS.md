@@ -2,7 +2,7 @@
 
 Read-only crate-internals deep-dive. Plain-English. Aimed at a fresh agent who needs to understand the sync layer's shape before touching it.
 
-**State pinned to HEAD `c589ffe` (post-Phase-4-Foundation R4b-FP-1 + R6-FP-BF; Phase 3 substrate unchanged since `phase-3-close` tag).** All Phase-3 line counts in §3 below match `src/*.rs` byte-for-byte at this SHA; no Phase-4-Foundation work landed substantive sync-side changes (substrate preserved per all R6 R5-R8 distributed-systems lens CONVERGED). Three new test-files added in §5 cover Phase-4-Foundation R4b-FP-1 Seam 3 (`apply_atrium_merge` manifest-envelope-recheck integration) + R6-FP-BF admin-UI-v0 atrium-share defense pins (both T6a + T6b currently DESTINATION-REMAPPED to `docs/future/phase-4-backlog.md §4.25` per HARD RULE clause-(b)).
+**State pinned to HEAD `8141b94` (post-Phase-4-Foundation R4b-FP-1 + R6-FP-BF; Phase 3 substrate unchanged since `phase-3-close` tag).** All Phase-3 line counts in §3 below match `src/*.rs` byte-for-byte at this SHA; no Phase-4-Foundation work landed substantive sync-side changes (substrate preserved per all R6 R5-R8 distributed-systems lens CONVERGED). Three new test-files added in §5 cover Phase-4-Foundation R4b-FP-1 Seam 3 (`apply_atrium_merge` manifest-envelope-recheck integration) + R6-FP-BF admin-UI-v0 atrium-share defense pins (both T6a + T6b currently DESTINATION-REMAPPED to `docs/future/phase-4-backlog.md §4.25` per HARD RULE clause-(b)).
 
 ---
 
