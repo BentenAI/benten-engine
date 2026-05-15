@@ -2,7 +2,7 @@
 
 Plain-English deep-dive into the `benten-dsl-compiler` crate. Audience: a developer or AI agent who needs to understand what this crate is, why it exists, and what to expect when extending it. Read-only audit; no claims about Phase-4 plans beyond what is already pinned in the code or accompanying retrospective docs.
 
-**Last refreshed against `c589ffe` (Phase-4-Foundation tag-eve, 2026-05-14).** The crate is substantively unchanged since the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep); the only intervening edit was the Phase-3.5 → Phase-4-Foundation rename at `00f2784` (2026-05-11). Phase-4-Foundation R5+R6 work touched zero source files in this crate — the typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
+**Last refreshed against `8141b94` (Phase-4-Foundation tag-eve, 2026-05-14).** The crate is substantively unchanged since the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep); the only intervening edit was the Phase-3.5 → Phase-4-Foundation rename at `00f2784` (2026-05-11). Phase-4-Foundation R5+R6 work touched zero source files in this crate — the typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
 
 ---
 
@@ -156,7 +156,7 @@ No anti-patterns observed (no DSL feature creep, no engine-internal types leakin
 
 ## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
-**Phase-4-Foundation R5+R6 outcome (2026-05-13 → 2026-05-14):** this crate was NOT extended during the Phase-4-Foundation engineering window. R5's 17 waves + R4b-FP + R6-FP cluster + R6-FP-2 through R6-FP-7 touched zero source files in `benten-dsl-compiler/`. The substantive Phase-4-Foundation work (plugin manifest schema, decentralized registry, materializer scaffolding, admin-shell wiring) landed in `benten-platform-foundation` and adjacent crates; this crate sat unmodified at HEAD `c589ffe`. The mental model "MINIMAL-FOR-DEVSERVER" held through the phase.
+**Phase-4-Foundation R5+R6 outcome (2026-05-13 → 2026-05-14):** this crate was NOT extended during the Phase-4-Foundation engineering window. R5's 17 waves + R4b-FP + R6-FP cluster + R6-FP-2 through R6-FP-7 touched zero source files in `benten-dsl-compiler/`. The substantive Phase-4-Foundation work (plugin manifest schema, decentralized registry, materializer scaffolding, admin-shell wiring) landed in `benten-platform-foundation` and adjacent crates; this crate sat unmodified at HEAD `8141b94`. The mental model "MINIMAL-FOR-DEVSERVER" held through the phase.
 
 Two distinct things could happen to this crate going forward; both remain pinned in the brief, not in the code:
 

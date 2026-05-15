@@ -124,8 +124,13 @@ pub fn sandbox_target_supported() -> bool {
 // `#[napi] fn describe_sandbox_node` cfg-gated under the engine
 // crate's `test-helpers` feature (sec-r6r2-02 discipline).
 //
-// Cross-ref: `docs/SECURITY-POSTURE.md` Compromise #17
-// (sandbox-execution-metric-propagation).
+// Cross-ref: the metric-propagation gap is tracked at
+// `docs/future/phase-3-backlog.md` (SnapshotBlobBackend
+// metric-propagation entry, named two paragraphs above) — NOT a
+// `docs/SECURITY-POSTURE.md` named compromise. (Compromise #17 is
+// "in-memory module-bytes registry", an unrelated surface — the
+// prior cite here was a cross-ref error flagged by the X10
+// compromise-registry reviewer.)
 //
 // Visible TS contract today (the `sandbox_napi_bridge.test.ts`
 // symbol-presence pin): `sandbox_target_supported` probe above +

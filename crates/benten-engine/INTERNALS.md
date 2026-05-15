@@ -1,6 +1,6 @@
 # benten-engine — Internals
 
-Plain-English deep-dive of the `benten-engine` crate, the orchestrator that composes Benten's storage, evaluator, IVM, capability, identity, and sync layers into a single public API. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Snapshot HEAD: `c589ffe` (Phase-4-Foundation R6 R2 closed; R6-FP-2 in CI at PR #242).
+Plain-English deep-dive of the `benten-engine` crate, the orchestrator that composes Benten's storage, evaluator, IVM, capability, identity, and sync layers into a single public API. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Snapshot HEAD: `8141b94` (post `phase-4-foundation-close` tag; PR #242–#250 all merged).
 
 ---
 

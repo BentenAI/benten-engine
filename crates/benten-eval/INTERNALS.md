@@ -4,7 +4,7 @@ A plain-English deep-dive into `crates/benten-eval/`. Audience: a fresh agent or
 
 Total source: ~16.0k LOC across 51 `.rs` files (src) + 5 benches + 135 integration test files (~17.9k LOC of tests). This is the second-largest crate in the workspace after `benten-engine` and it is the crate where the project's load-bearing architectural commitments physically live.
 
-**Status at HEAD `c589ffe` (Phase 4-Foundation R6 R2 close-pending; main has advanced one commit since this doc snapshot).** Substantive Phase 4-Foundation work in this crate is bounded — exactly one source change landed (PR #210 / `f3930e1`: SUBSCRIBE per-event cap-recheck enum lift; see §10 below). Phase 4-Foundation platform layer (admin UI v0 + plugin manifest schema + materializer + schema-rendering) lands in the separate `benten-platform-foundation` crate, not here. The 12 primitives + the SANDBOX 4-host-fn floor + the arch-1 dep-break are unchanged at HEAD; all 14 invariants are production-runtime LIVE (Phase 2b + Phase 3 closure).
+**Status at HEAD `8141b94` (post `phase-4-foundation-close` tag; PR #242–#250 all merged).** Substantive Phase 4-Foundation work in this crate is bounded — exactly one source change landed (PR #210 / `f3930e1`: SUBSCRIBE per-event cap-recheck enum lift; see §10 below). Phase 4-Foundation platform layer (admin UI v0 + plugin manifest schema + materializer + schema-rendering) lands in the separate `benten-platform-foundation` crate, not here. The 12 primitives + the SANDBOX 4-host-fn floor + the arch-1 dep-break are unchanged at HEAD; all 14 invariants are production-runtime LIVE (Phase 2b + Phase 3 closure).
 
 ---
 
@@ -373,7 +373,7 @@ Per CLAUDE.md #19 engine-level extensions are Rust crates compile-time linked �
 
 ---
 
-## 10. Phase 4-Foundation delta (HEAD `c589ffe`)
+## 10. Phase 4-Foundation delta (HEAD `8141b94`)
 
 Substantive Phase-4-Foundation changes to this crate are bounded — the platform layer (admin UI v0, plugin manifest schema, materializer pipeline, schema-driven rendering) lands in the sibling `benten-platform-foundation` crate, not here. The single substantive source change in this crate during Phase-4-Foundation:
 

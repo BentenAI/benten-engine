@@ -2,7 +2,7 @@
 
 Plain-English deep-dive for the 9th workspace crate. Identity primitives: Ed25519 keypairs, `did:key` DIDs, UCAN delegation chains, Verifiable Credentials, DID rotation attestations, signed device-DID capability envelopes, **plugin-DID mint/store (G24-D)**, and the **sibling `GrantReader` trait with CID-keyed companion (G27-C)**. Read-only audit — no compile / no cargo / no claims about CI state.
 
-State as of HEAD `c589ffe` (2026-05-14). Substantive content added since the prior revision: Phase-3-close maturation (RotationLog HLC-monotonic-strict + verbatim-replay defense at G24-D-FP-2) + Phase-4-Foundation G24-D plugin-DID surface + G27-C sibling GrantReader trait.
+State as of HEAD `8141b94` (2026-05-14). Substantive content added since the prior revision: Phase-3-close maturation (RotationLog HLC-monotonic-strict + verbatim-replay defense at G24-D-FP-2) + Phase-4-Foundation G24-D plugin-DID surface + G27-C sibling GrantReader trait.
 
 ---
 
