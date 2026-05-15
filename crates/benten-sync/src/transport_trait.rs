@@ -97,7 +97,9 @@ pub trait Transport: Send + Sync + 'static {
 /// surface. The [`TransportEndpoint::Addr`] associated type is the seam
 /// that contains the iroh-`EndpointAddr` leak (Surf-1 #889): the trait
 /// signature names `Self::Addr`, never `iroh::EndpointAddr`.
-#[allow(async_fn_in_trait, reason = "\
+#[allow(
+    async_fn_in_trait,
+    reason = "\
     Pre-v1 boundary introduction (RATIFIED §15.3 #1 / umbrella #1176). \
     The trait is consumed in-crate by `IrohTransport` + the boundary \
     test mock; no `dyn TransportEndpoint` object is constructed (the \
@@ -105,7 +107,8 @@ pub trait Transport: Send + Sync + 'static {
     per the no-behavioral-regression constraint), so RPITIT \
     auto-trait-leakage across a `dyn` boundary is not a concern here. \
     Post-v1 generic-over-`T: Transport` migration (CLAUDE.md #19 \
-    alternate-transport work) can add `+ Send` bounds at that point.")]
+    alternate-transport work) can add `+ Send` bounds at that point."
+)]
 pub trait TransportEndpoint: Send + Sync {
     /// The established-connection type this endpoint produces.
     type Connection: TransportConnection;
@@ -169,10 +172,13 @@ pub trait TransportEndpoint: Send + Sync {
 /// Abstracts [`crate::transport::Connection`]'s engine-exercised method
 /// surface (the minimum-viable bytes round-trip + observability
 /// accessors). No iroh-concrete type appears in any signature.
-#[allow(async_fn_in_trait, reason = "\
+#[allow(
+    async_fn_in_trait,
+    reason = "\
     Pre-v1 boundary introduction (RATIFIED §15.3 #1 / umbrella #1176); \
     same rationale as TransportEndpoint — consumed in-crate only, no \
-    `dyn` object constructed.")]
+    `dyn` object constructed."
+)]
 pub trait TransportConnection: Send + Sync {
     /// Path-discriminator (Direct / Relay / Loopback) at
     /// connection-establishment time, for net-blocker-2 observability.
