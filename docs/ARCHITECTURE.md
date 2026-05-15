@@ -65,7 +65,12 @@ crates/
                         # `benten-engine`.
   benten-sync/          # 10th crate (Phase 3). Atrium P2P sync layer:
                         # iroh transport (loopback + relay + holepunch
-                        # fallback), Loro CRDT for per-property LWW
+                        # fallback) behind the `transport_trait::
+                        # Transport` abstraction boundary (RATIFIED
+                        # §15.3 #1; `IrohTransport` is the pre-v1
+                        # concrete impl, post-iroh swaps land as
+                        # engine extensions per CLAUDE.md #19), Loro
+                        # CRDT for per-property LWW
                         # with HLC ordering, MST diff for delta
                         # computation, DID handshake protocol with
                         # mutual auth, and the `host:atrium:*`
@@ -412,6 +417,8 @@ A plugin is a **subgraph of operation Nodes** — handlers, materializers, SANDB
 ### Engine-level extensions — Rust crates
 
 Compile-time linked into the engine binary. Rare. For custom IVM strategies, alternate transports (post-iroh — shaped relays, Nostr, Tor), alternate persistence backends (post-redb — sled, fjall, cloud-KV), custom signature schemes (post-Ed25519 — X25519, BLS, post-quantum), performance-critical primitives that need raw Rust speed beyond SANDBOX.
+
+**Transport abstraction boundary (P2P sync layer).** The alternate-transport extension point above (post-iroh — Tor / Nostr-relay / shaped relay) is named by the `benten_sync::transport_trait::{Transport, TransportEndpoint, TransportConnection}` traits (RATIFIED 2026-05-15, §15.3 #1). These abstract the connection layer the Atrium P2P sync runtime exercises (connect / accept / send-bytes / recv-bytes / status / close), routing the transport's address type through the `TransportEndpoint::Addr` associated type so no iroh-concrete type (`iroh::EndpointAddr`) appears in the trait contract. The pre-v1 concrete impl, `IrohTransport`, delegates to the existing iroh-backed `transport::Endpoint` / `transport::Connection` with zero behavioral change; the engine-facing API (`engine_sync.rs`) intentionally stays on the concrete newtypes pre-v1 (no behavioral regression) — the boundary existing pre-v1 is the load-bearing deliverable so the v1 surface contract names the abstraction rather than the concrete. A post-v1 `TorTransport` / `NostrRelayTransport` / `ShapedRelayTransport` implements the three traits as compile-time engine extensions per the trust model below. Mirrors the `Renderer`-trait swappability pattern (CLAUDE.md baked-in #17). Compile-fenced against accidental iroh-leak by `crates/benten-sync/tests/transport_trait_boundary.rs` (an iroh-free in-memory mock impl).
 
 **Trust model.** "You compiled this into your engine binary." Same trust posture as Benten core itself. No UCAN, no manifest, no `read_node_as` boundary. An engine extension that wants to violate invariants can — the boundary is `cargo` and code review, not the type system.
 
