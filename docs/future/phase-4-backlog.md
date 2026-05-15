@@ -783,6 +783,16 @@ See `.addl/dispatch-conventions.md §3.6j` for the ratified rule + brief-templat
 
 **Acceptance criteria.** Land the 15 missing adversarial fixtures per the R2-specified envelope construction + expected ErrorCode + file names, OR explicitly down-scope Compromise #22/#23/#25/#26 closure narratives in `docs/SECURITY-POSTURE.md` to match the 3-vector reality and re-scope the 15 as a named v1-assessment-window item. Ben architectural call on scope vs. down-scope. ~per-vector signed-envelope construction; estimated substantial (each vector is a full adversarial-peer integration scenario). Bundle with the META #684 / META #660 v1-platform-shippable BLOCKER cluster if it lands in the same window.
 
+### §4.59 Runtime contract at the Tauri integrator boundary (Phase-4-Meta; Ben architectural decision; refinement-audit #1110)
+
+**Origin:** refinement-audit-2026-05 X3 async-runtime cross-crate reviewer (#1110), sub-shape (b). `benten-renderer-tauri` is intentionally Tauri-runtime-agnostic (no tauri/tokio dep — the crate holds the IPC protocol + cap-binding + CSP only, per CLAUDE.md #19). The integrator binary (`tools/benten-admin-shell`, Phase-4-Meta) that wires `tauri::Builder` against the engine will be the workspace's 4th tokio-runtime-construction site, and the runtime-sharing contract has **no named destination at HEAD** (`docs/ARCHITECTURE.md` does not name tokio; CLAUDE.md #17 names Tauri-as-shape-(c) but not the runtime contract).
+
+**Decision needed (Ben architectural call) BEFORE Phase-4-Meta admin-shell wiring lands:**
+- **(1) Shared runtime context** — engine constructs the tokio runtime; Tauri attaches via `tauri::Builder::with_runtime(...)` (or the Tauri 2.x equivalent). Single runtime; simpler; risk = Tauri's internal runtime-ownership expectations.
+- **(2) Bridged dual runtime** — engine + Tauri each spawn their own runtime; communication crosses via channels. More isolation; better for the verso-swap-readiness goal; risk = bridging overhead + lifecycle coupling.
+
+Couples to #1101 (X3 workspace-tier architectural-commitment-to-tokio pim-N candidate) — that finding covers the workspace-tier discipline; this row is the per-crate Tauri-boundary manifestation. Sub-shape (a) of #1110 (the `Cargo.toml description` runtime-agnosticism disclaimer) is FIX-NOW and landed in this PR.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-4-Foundation Tauri 2.x renderer backend — engine extension per CLAUDE.md #19. Embedded-webview host for the wasm32-unknown-unknown admin UI v0 bundle via in-process IPC. Compile-time-linked Rust crate hosting an IpcAllowlist + per-method cap-binding + locked CSP, sharing the DidKeyedSession + SessionToken contract with the G24-F thin-client HTTP/fetch transport-swapped to in-process channel (br-r1-14)."
+description = "Phase-4-Foundation Tauri-runtime-agnostic IPC contract + per-method cap-binding + locked CSP for the embedded-webview deployment shape (c) — engine extension per CLAUDE.md #19. This crate holds the *protocol* (IpcAllowlist + cap-binding + CSP) and carries NO tauri/tokio dep; the integrator binary holds the actual Tauri runtime + tokio deps (and is the verso-swap point). Shares the DidKeyedSession + SessionToken contract with the G24-F thin-client HTTP/fetch transport-swapped to in-process channel (br-r1-14)."
 
 [lints]
 workspace = true
