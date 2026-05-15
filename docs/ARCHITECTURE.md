@@ -112,10 +112,15 @@ crates/
                         # baked-in #19: compile-time linked Rust crate
                         # implementing the `Renderer` trait for
                         # embedded-webview deployment shape (c).
-                        # IpcAllowlist + CSP + per-method cap-binding
-                        # + in-process IPC protocol. Trust = "you
-                        # compiled this in." NOT an app-level plugin
-                        # subgraph.
+                        # Single typed `IPC_METHODS` binding slice
+                        # (name + `CapRequirement`; co-located so the
+                        # allowlist-to-cap-binding bijection is
+                        # structural, not test-guarded) + locked CSP +
+                        # gate-only `dispatch_ipc`. T3 rung-2 fails
+                        # CLOSED by construction (no empty-string
+                        # sentinel, no fail-OPEN fallback). In-process
+                        # IPC protocol. Trust = "you compiled this in."
+                        # NOT an app-level plugin subgraph.
 
 bindings/
   napi/             # Node.js bindings via napi-rs v3. Compiles to a

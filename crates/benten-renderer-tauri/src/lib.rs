@@ -13,13 +13,13 @@
 //!
 //! ## Three defense rungs (T3 in `admin-ui-v0-threat-model.md`)
 //!
-//! 1. [`IpcAllowlist`] — explicit method-name allowlist. Methods NOT
-//!    in the allowlist reject with
+//! 1. [`IPC_METHODS`] — explicit method-name allowlist. Methods NOT
+//!    in the slice reject with
 //!    [`IpcError::MethodNotInAllowlist`].
 //! 2. [`TauriRenderer::dispatch_ipc`] — per-method capability binding.
-//!    Each allowed method declares its required cap; invocation rejects
-//!    with [`IpcError::CapabilityNotInManifest`] when the admin UI v0
-//!    manifest envelope does not grant the bound cap.
+//!    Each allowed method declares its [`CapRequirement`]; invocation
+//!    rejects with [`IpcError::CapabilityNotInManifest`] when the admin
+//!    UI v0 manifest envelope does not grant the required cap.
 //! 3. [`TauriRenderer::webview_csp_header`] — locked Content-Security-
 //!    Policy at webview load: `default-src 'none'`,
 //!    `script-src 'self' 'wasm-unsafe-eval'`,
@@ -60,7 +60,7 @@
 #![warn(missing_docs)]
 #![allow(clippy::module_name_repetitions)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use benten_engine::thin_client::{
@@ -73,99 +73,111 @@ use benten_platform_foundation::{MaterializerOutput, RenderError, Renderer};
 // IPC allowlist
 // ---------------------------------------------------------------------
 
-/// Canonical method-name allowlist for the Tauri 2.x in-process IPC
-/// channel. Must match
+/// Capability requirement for an IPC method. A typed sum replaces the
+/// former empty-string-as-sentinel idiom: `None` is structurally
+/// distinct from `Required(scope)`, so the "binding missing" case is
+/// unrepresentable at the call site and the fail-OPEN drift hazard
+/// (formerly `unwrap_or("")` in [`TauriRenderer::dispatch_ipc`]) is
+/// eliminated by construction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapRequirement {
+    /// Method is invokable without any cap (e.g. `ui.notify`, a
+    /// UI-only side effect inside the webview).
+    None,
+    /// Method requires the named cap scope; the admin UI v0 manifest
+    /// envelope MUST grant it or the dispatch rejects with
+    /// [`IpcError::CapabilityNotInManifest`].
+    Required(&'static str),
+}
+
+/// One IPC method's complete binding: its name + the cap it requires.
+///
+/// This typed slice element replaces the former parallel-array shape
+/// (`IPC_METHOD_NAME_ALLOWLIST: &[&str]` +
+/// `IPC_METHOD_CAP_BINDING: &[(&str, &str)]`). Co-locating the name
+/// and cap in one struct makes the cross-array synchronization
+/// invariant — every allowlisted method has exactly one cap binding,
+/// and every binding entry is on the allowlist — a structural
+/// guarantee rather than a runtime test pin. There is no longer a
+/// "reverse-completeness" direction to enforce: the bijection is the
+/// data shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IpcMethod {
+    /// Method name; the webview MUST request a name in [`IPC_METHODS`].
+    pub name: &'static str,
+    /// Cap scope this method requires (or [`CapRequirement::None`]).
+    pub cap: CapRequirement,
+}
+
+/// Canonical IPC method binding set for the Tauri 2.x in-process IPC
+/// channel — the single source of truth for the T3 defense rung 1
+/// (allowlist) AND rung 2 (per-method cap binding).
+///
+/// The method-name set (the `name` field of each entry) must match
 /// `docs/public-api/benten-renderer-tauri.json
-/// _ipc_method_name_allowlist_baseline._anticipated_method_set` byte-
-/// for-byte; a drift between this constant and the baseline file
-/// triggers the `ipc_method_name_set_at_head_matches_public_api_baseline`
-/// test (gap #1a closure).
+/// ._ipc_method_name_allowlist_baseline._anticipated_method_set`
+/// byte-for-byte; a drift triggers the
+/// `ipc_method_name_set_at_head_matches_public_api_baseline` test
+/// (gap #1a closure).
 ///
 /// Adding a method here REQUIRES an explicit baseline update + admin UI
 /// v0 manifest review (T3 defense — silent IPC surface expansion is a
-/// manifest-bypass risk).
-pub const IPC_METHOD_NAME_ALLOWLIST: &[&str] = &[
-    "engine.read_node_as",
-    "engine.call_as",
-    "engine.subscribe_via_on_change_as_with_cursor",
-    "engine.list_caps",
-    "engine.identity.user_did",
-    "plugin.manifest.review",
-    "plugin.install.consent",
-    "ui.notify",
+/// manifest-bypass risk). `ui.notify` carries
+/// [`CapRequirement::None`] (UI-only side effect; no cap gate).
+pub const IPC_METHODS: &[IpcMethod] = &[
+    IpcMethod {
+        name: "engine.read_node_as",
+        cap: CapRequirement::Required("graph:read"),
+    },
+    IpcMethod {
+        name: "engine.call_as",
+        cap: CapRequirement::Required("graph:write"),
+    },
+    IpcMethod {
+        name: "engine.subscribe_via_on_change_as_with_cursor",
+        cap: CapRequirement::Required("graph:read"),
+    },
+    IpcMethod {
+        name: "engine.list_caps",
+        cap: CapRequirement::Required("caps:read"),
+    },
+    IpcMethod {
+        name: "engine.identity.user_did",
+        cap: CapRequirement::Required("identity:read"),
+    },
+    IpcMethod {
+        name: "plugin.manifest.review",
+        cap: CapRequirement::Required("plugin:read"),
+    },
+    IpcMethod {
+        name: "plugin.install.consent",
+        cap: CapRequirement::Required("plugin:install"),
+    },
+    IpcMethod {
+        name: "ui.notify",
+        cap: CapRequirement::None,
+    },
 ];
 
-/// Per-method capability binding. Each allowlisted method names the cap
-/// scope it requires; the admin UI v0 manifest envelope MUST grant the
-/// scope or the dispatch rejects with
-/// [`IpcError::CapabilityNotInManifest`].
+/// Look up the [`IpcMethod`] binding for `name`, or `None` if the
+/// method is not on the allowlist.
 ///
-/// `ui.notify` requires no cap (UI-only side effect inside the
-/// webview); represented by the empty string.
-pub const IPC_METHOD_CAP_BINDING: &[(&str, &str)] = &[
-    ("engine.read_node_as", "graph:read"),
-    ("engine.call_as", "graph:write"),
-    (
-        "engine.subscribe_via_on_change_as_with_cursor",
-        "graph:read",
-    ),
-    ("engine.list_caps", "caps:read"),
-    ("engine.identity.user_did", "identity:read"),
-    ("plugin.manifest.review", "plugin:read"),
-    ("plugin.install.consent", "plugin:install"),
-    ("ui.notify", ""),
-];
-
-/// Allowlist enforcement seam (T3 defense rung 1). Methods absent from
-/// [`IPC_METHOD_NAME_ALLOWLIST`] are rejected at this gate.
-#[derive(Debug, Clone)]
-pub struct IpcAllowlist {
-    methods: BTreeSet<String>,
+/// This is the single lookup that serves BOTH T3 defense rungs: the
+/// presence of a result is rung 1 (allowlist membership); the result's
+/// [`CapRequirement`] is rung 2 (cap binding). The former shape forced
+/// three traversals per dispatch (a `BTreeSet::contains`, a redundant
+/// repeat inside `required_cap_for_method`, and a parallel-array linear
+/// scan); the typed slice collapses that to one linear scan over a
+/// cache-friendly `&'static` slice — allocation-free.
+#[must_use]
+pub fn ipc_method(name: &str) -> Option<&'static IpcMethod> {
+    IPC_METHODS.iter().find(|m| m.name == name)
 }
 
-impl Default for IpcAllowlist {
-    fn default() -> Self {
-        Self::canonical()
-    }
-}
-
-impl IpcAllowlist {
-    /// Build the canonical allowlist from [`IPC_METHOD_NAME_ALLOWLIST`].
-    #[must_use]
-    pub fn canonical() -> Self {
-        Self {
-            methods: IPC_METHOD_NAME_ALLOWLIST
-                .iter()
-                .map(|m| (*m).to_string())
-                .collect(),
-        }
-    }
-
-    /// True iff `method` is on the allowlist (T3 defense rung 1).
-    #[must_use]
-    pub fn method_permitted(&self, method: &str) -> bool {
-        self.methods.contains(method)
-    }
-
-    /// Iterate the live method-name set. Used by the drift-detector
-    /// pin to compare against
-    /// `docs/public-api/benten-renderer-tauri.json`.
-    pub fn methods(&self) -> impl Iterator<Item = &str> {
-        self.methods.iter().map(String::as_str)
-    }
-
-    /// Look up the cap-scope bound to `method`, or `None` if the method
-    /// is not allowlisted. Empty string indicates "no cap required"
-    /// (e.g. `ui.notify`).
-    #[must_use]
-    pub fn required_cap_for_method(&self, method: &str) -> Option<&'static str> {
-        if !self.method_permitted(method) {
-            return None;
-        }
-        IPC_METHOD_CAP_BINDING
-            .iter()
-            .find_map(|(m, cap)| if *m == method { Some(*cap) } else { None })
-    }
+/// Iterate the canonical method-name set. Used by the drift-detector
+/// pin to compare against `docs/public-api/benten-renderer-tauri.json`.
+pub fn ipc_method_names() -> impl Iterator<Item = &'static str> {
+    IPC_METHODS.iter().map(|m| m.name)
 }
 
 // ---------------------------------------------------------------------
@@ -209,7 +221,7 @@ font-src 'self'";
 /// framing is above this module".
 #[derive(Debug, Clone)]
 pub struct IpcRequest {
-    /// Method name; must appear in [`IPC_METHOD_NAME_ALLOWLIST`].
+    /// Method name; must appear in [`IPC_METHODS`].
     pub method: String,
     /// Method-specific payload.
     pub payload: serde_json::Value,
@@ -222,15 +234,6 @@ pub struct IpcRequest {
     pub session: Option<SessionToken>,
 }
 
-/// IPC response envelope returned to the webview. Carries no
-/// principal information (the webview already knows its principal
-/// from the session token).
-#[derive(Debug, Clone)]
-pub struct IpcResponse {
-    /// Method-specific response payload.
-    pub payload: serde_json::Value,
-}
-
 /// Typed IPC errors. Each variant maps to a stable [`ErrorCode`]; see
 /// [`IpcError::error_code`]. The four T3 defense rungs surface here:
 /// allowlist-miss (rung 1), cap-missing (rung 2), session-resolve-
@@ -239,9 +242,8 @@ pub struct IpcResponse {
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum IpcError {
-    /// Method is not in [`IPC_METHOD_NAME_ALLOWLIST`]. The webview
-    /// requested a method the native shell does not expose. T3
-    /// defense rung 1.
+    /// Method is not in [`IPC_METHODS`]. The webview requested a
+    /// method the native shell does not expose. T3 defense rung 1.
     #[error("ipc method not in allowlist: {method}")]
     MethodNotInAllowlist {
         /// Offending method name.
@@ -321,11 +323,20 @@ impl AdminUiManifest {
         }
     }
 
-    /// True iff the manifest grants `cap`. Empty cap (`""`) is the
-    /// "no cap required" sentinel and is always granted.
+    /// True iff the manifest satisfies `req`.
+    ///
+    /// [`CapRequirement::None`] is always satisfied (no cap gate —
+    /// e.g. `ui.notify`). [`CapRequirement::Required`]`(scope)` is
+    /// satisfied iff `scope` is in [`Self::granted_caps`]. The former
+    /// empty-string-as-"no cap" sentinel is gone: the two states are
+    /// now structurally distinct, so a missing binding can never be
+    /// confused with an intentional no-cap method.
     #[must_use]
-    pub fn grants_cap(&self, cap: &str) -> bool {
-        cap.is_empty() || self.granted_caps.contains(cap)
+    pub fn grants(&self, req: &CapRequirement) -> bool {
+        match req {
+            CapRequirement::None => true,
+            CapRequirement::Required(scope) => self.granted_caps.contains(*scope),
+        }
     }
 }
 
@@ -410,7 +421,6 @@ impl InProcessSessionBridge {
 /// Tauri 2.x command-invoke pipeline; every command first passes
 /// through [`Self::dispatch_ipc`] for the T3 three-rung defense.
 pub struct TauriRenderer {
-    allowlist: IpcAllowlist,
     manifest: AdminUiManifest,
     bridge: Option<InProcessSessionBridge>,
 }
@@ -418,7 +428,7 @@ pub struct TauriRenderer {
 impl std::fmt::Debug for TauriRenderer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TauriRenderer")
-            .field("allowlist_methods", &self.allowlist.methods.len())
+            .field("allowlist_methods", &IPC_METHODS.len())
             .field("bridge_attached", &self.bridge.is_some())
             .finish_non_exhaustive()
     }
@@ -431,7 +441,6 @@ impl TauriRenderer {
     #[must_use]
     pub fn new_with_manifest(manifest: AdminUiManifest) -> Self {
         Self {
-            allowlist: IpcAllowlist::canonical(),
             manifest,
             bridge: None,
         }
@@ -444,12 +453,6 @@ impl TauriRenderer {
     pub fn with_bridge(mut self, bridge: InProcessSessionBridge) -> Self {
         self.bridge = Some(bridge);
         self
-    }
-
-    /// Allowlist accessor — used by tests + the drift-detector pin.
-    #[must_use]
-    pub fn allowlist(&self) -> &IpcAllowlist {
-        &self.allowlist
     }
 
     /// Manifest accessor — used by tests.
@@ -471,18 +474,16 @@ impl TauriRenderer {
     /// file.
     #[must_use]
     pub fn ipc_method_allowlist() -> Vec<String> {
-        IPC_METHOD_NAME_ALLOWLIST
-            .iter()
-            .map(|m| (*m).to_string())
-            .collect()
+        ipc_method_names().map(str::to_string).collect()
     }
 
-    /// Dispatch an IPC request through the three T3 defense rungs:
+    /// Dispatch (gate) an IPC request through the three T3 defense
+    /// rungs:
     ///
     /// 1. Allowlist filter — method-name MUST be in
-    ///    [`IPC_METHOD_NAME_ALLOWLIST`] (rung 1).
+    ///    [`IPC_METHODS`] (rung 1).
     /// 2. Capability binding — admin UI v0 manifest envelope MUST
-    ///    grant the bound cap (rung 2).
+    ///    grant the method's [`CapRequirement`] (rung 2).
     /// 3. Session resolution — if a bridge is attached, the session
     ///    token resolves to the authoritative principal DID; origin
     ///    pinning + expiry check fire here (br-r1-14 cross-protocol
@@ -492,6 +493,15 @@ impl TauriRenderer {
     /// webview-load time via [`Self::webview_csp_header`], NOT here —
     /// CSP is a load-boundary defense, not a per-call defense.
     ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the request passes all three rungs. This crate's
+    /// job is purely to *gate* the request — it carries no response
+    /// data. The method-specific handler lives in the integrator
+    /// binary's Tauri command handler, which owns the response shape
+    /// entirely (it calls back into engine facade methods with the
+    /// resolved principal and returns the real payload to the webview).
+    ///
     /// # Errors
     ///
     /// Returns [`IpcError`] when any of the three rungs reject. The
@@ -499,28 +509,34 @@ impl TauriRenderer {
     /// opaque error code; no diagnostic reason crosses the IPC
     /// boundary (operator-only audit per
     /// [`benten_engine::thin_client`] module doc).
-    pub fn dispatch_ipc(&self, request: IpcRequest) -> Result<IpcResponse, IpcError> {
-        // (1) Allowlist filter (T3 rung 1). Rejects BEFORE any payload
-        // parse so an attacker-crafted payload can't pivot through a
-        // forbidden method.
-        if !self.allowlist.method_permitted(&request.method) {
+    pub fn dispatch_ipc(&self, request: IpcRequest) -> Result<(), IpcError> {
+        // (1) Allowlist filter (T3 rung 1) + (2) cap binding (T3 rung
+        // 2) share ONE lookup over the typed `IPC_METHODS` slice. The
+        // presence of a result IS rung 1 (allowlist membership); the
+        // result's `CapRequirement` IS rung 2. Rejects BEFORE any
+        // payload parse so an attacker-crafted payload can't pivot
+        // through a forbidden method.
+        let Some(method) = ipc_method(&request.method) else {
             return Err(IpcError::MethodNotInAllowlist {
                 method: request.method,
             });
-        }
+        };
 
-        // (2) Capability binding (T3 rung 2). The cap is bound to the
-        // method at the IpcAllowlist seam; the manifest envelope is
-        // consulted here. Empty cap = "no cap required" (e.g.
-        // `ui.notify`).
-        let cap = self
-            .allowlist
-            .required_cap_for_method(&request.method)
-            .unwrap_or("");
-        if !self.manifest.grants_cap(cap) {
+        // (2) Capability binding (T3 rung 2). The manifest envelope is
+        // consulted against the method's typed `CapRequirement`. There
+        // is no fail-OPEN fallback: a `CapRequirement::None` admits by
+        // construction (the `ui.notify` case), and a missing binding is
+        // unrepresentable — `ipc_method` either returns a fully-bound
+        // `IpcMethod` or `None` (rung 1 reject above). The former
+        // `unwrap_or("")` drift hazard cannot occur.
+        if !self.manifest.grants(&method.cap) {
+            let cap = match method.cap {
+                CapRequirement::Required(scope) => scope.to_string(),
+                CapRequirement::None => String::new(),
+            };
             return Err(IpcError::CapabilityNotInManifest {
                 method: request.method,
-                cap: cap.to_string(),
+                cap,
             });
         }
 
@@ -545,12 +561,9 @@ impl TauriRenderer {
         // Past the three rungs: the request is admitted. The
         // method-specific handler lives in the integrator binary
         // (Tauri command handlers), which calls back into engine
-        // facade methods with the resolved principal. This crate
-        // returns an empty success envelope; the integrator overwrites
-        // `payload` with the real response.
-        Ok(IpcResponse {
-            payload: serde_json::Value::Null,
-        })
+        // facade methods with the resolved principal and owns the
+        // response shape entirely.
+        Ok(())
     }
 }
 
@@ -592,28 +605,54 @@ where
 {
 }
 
-/// Public method-cap binding accessor as a stable map. Used by tests +
-/// the operator audit surface to enumerate the IPC surface without
-/// holding a `TauriRenderer` instance.
-#[must_use]
-pub fn ipc_method_cap_bindings() -> BTreeMap<String, String> {
-    IPC_METHOD_CAP_BINDING
-        .iter()
-        .map(|(m, c)| ((*m).to_string(), (*c).to_string()))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn allowlist_canonical_matches_constant() {
-        let allowlist = IpcAllowlist::canonical();
-        for method in IPC_METHOD_NAME_ALLOWLIST {
-            assert!(allowlist.method_permitted(method), "missing: {method}");
+    fn ipc_method_lookup_covers_every_entry_and_rejects_unknown() {
+        for m in IPC_METHODS {
+            assert_eq!(
+                ipc_method(m.name).map(|found| found.name),
+                Some(m.name),
+                "missing: {}",
+                m.name
+            );
         }
-        assert!(!allowlist.method_permitted("engine.arbitrary"));
+        assert!(ipc_method("engine.arbitrary").is_none());
+    }
+
+    #[test]
+    fn cap_requirement_none_only_for_ui_notify() {
+        // Structural invariant: `ui.notify` is the sole no-cap method;
+        // every other method carries `Required(scope)`. The former
+        // empty-string sentinel made this checkable only by string
+        // comparison; the typed sum makes it a `matches!`.
+        for m in IPC_METHODS {
+            match m.cap {
+                CapRequirement::None => assert_eq!(m.name, "ui.notify"),
+                CapRequirement::Required(scope) => {
+                    assert!(!scope.is_empty(), "{} has empty required scope", m.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn dispatch_rung2_fails_closed_for_required_cap_not_granted() {
+        // The structural fail-CLOSED guarantee (formerly Safe-1 #499's
+        // `unwrap_or("")` fail-OPEN hazard): a method with a required
+        // cap the manifest does NOT grant rejects, never admits.
+        let renderer = TauriRenderer::new_with_manifest(AdminUiManifest::default());
+        let result = renderer.dispatch_ipc(IpcRequest {
+            method: "engine.call_as".to_string(),
+            payload: serde_json::Value::Null,
+            session: None,
+        });
+        assert!(
+            matches!(result, Err(IpcError::CapabilityNotInManifest { .. })),
+            "rung-2 must fail CLOSED on ungranted required cap, got {result:?}"
+        );
     }
 
     #[test]
@@ -628,13 +667,5 @@ mod tests {
         let cleaned = WEBVIEW_CSP_HEADER.replace("'wasm-unsafe-eval'", "");
         assert!(!cleaned.contains("'unsafe-eval'"));
         assert!(!WEBVIEW_CSP_HEADER.contains("'unsafe-inline'"));
-    }
-
-    #[test]
-    fn cap_binding_covers_every_allowlisted_method() {
-        for method in IPC_METHOD_NAME_ALLOWLIST {
-            let found = IPC_METHOD_CAP_BINDING.iter().any(|(m, _)| m == method);
-            assert!(found, "method {method} has no cap binding");
-        }
     }
 }

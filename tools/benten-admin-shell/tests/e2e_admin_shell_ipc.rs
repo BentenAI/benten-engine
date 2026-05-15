@@ -14,10 +14,9 @@
 //!   surface their canonical [`IpcError`] envelopes when the
 //!   conditions are violated (allowlist miss / missing cap / origin
 //!   mismatch / expired session / missing session / replay), and
-//!   asserts the happy-path returns `Ok(IpcResponse{ payload: Null })`
-//!   per the renderer contract (the integrator-binary's per-method
-//!   handler then overwrites payload with the real response —
-//!   exercised in the webview-driven wave at
+//!   asserts the happy-path returns `Ok(())` per the renderer
+//!   gate-only contract (the integrator-binary's per-method handler
+//!   owns the real response — exercised in the webview-driven wave at
 //!   `tests/e2e_webview_smoke.rs` under the `tauri` feature).
 //!
 //! - **WOULD-FAIL-IF-NO-OP'd:** any of these regressions would surface
@@ -48,7 +47,7 @@ use benten_admin_shell::{ADMIN_SHELL_BOUND_ORIGIN, AdminShellState, ipc_request}
 use benten_engine::thin_client::{
     DidKeyedSession, SessionConfig, SessionToken, ThinClientSessionError,
 };
-use benten_renderer_tauri::{IPC_METHOD_NAME_ALLOWLIST, IpcError};
+use benten_renderer_tauri::{IpcError, ipc_method_names};
 
 /// Build an `AdminShellState` whose `DidKeyedSession` is wired with
 /// deterministic test hooks (always-accept verifier + monotonic RNG +
@@ -100,17 +99,15 @@ fn e2e_happy_path_dispatch_succeeds_for_every_allowlisted_method() {
     let (state, _clock) = deterministic_state();
     let token = handshake(&state);
 
-    for method in IPC_METHOD_NAME_ALLOWLIST {
-        let req = ipc_request(*method, serde_json::json!({}), Some(token.clone()));
-        let resp = state.dispatch(req).unwrap_or_else(|e| {
+    for method in ipc_method_names() {
+        let req = ipc_request(method, serde_json::json!({}), Some(token.clone()));
+        // Renderer contract: dispatch GATES only (returns `Ok(())`).
+        // The integrator-binary's per-method handler owns the real
+        // response. Webview-driven E2E at `tests/e2e_webview_smoke.rs`
+        // exercises the per-method handler under the `tauri` feature.
+        state.dispatch(req).unwrap_or_else(|e| {
             panic!("dispatch for allowlisted method {method} should succeed: {e:?}")
         });
-        // Renderer contract: happy-path returns `Null` payload — the
-        // integrator-binary's per-method handler overwrites with the
-        // real response. Webview-driven E2E at
-        // `tests/e2e_webview_smoke.rs` exercises the per-method
-        // handler under the `tauri` feature.
-        assert_eq!(resp.payload, serde_json::Value::Null);
     }
 }
 
@@ -359,8 +356,7 @@ fn e2e_handshake_and_dispatch_share_one_did_keyed_session_instance() {
     // Dispatch presenting the same token MUST succeed — proves the
     // renderer's bridge resolves against the same instance.
     let req = ipc_request("engine.list_caps", serde_json::json!({}), Some(token));
-    let resp = state.dispatch(req).expect("dispatch should succeed");
-    assert_eq!(resp.payload, serde_json::Value::Null);
+    state.dispatch(req).expect("dispatch should succeed");
     // And exactly one active session was minted.
     assert_eq!(state.session().active_session_count_for_test(), 1);
 }
