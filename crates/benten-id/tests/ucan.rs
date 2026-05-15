@@ -197,6 +197,24 @@ fn ucan_chain_walk_constant_time_comparison_audit() {
         "device_did ==",
         "parent_did ==",
         "nonce ==",
+        // #599 / #515 / F-FWD-2-01 #1051 — the two ct-eq UNIFORMITY
+        // drift sites (`rotate_keypair` line 141 + `Acceptor::accept_at`
+        // expected_parent) used `!=` / `.as_str() !=` forms that the
+        // `==`-only patterns above did NOT catch. Add the `!=` net so
+        // an early-rejection arm cannot silently re-drift. (`==`
+        // negation through `!ct_signature_eq(...)` is the sanctioned
+        // shape and contains no `!=` token.)
+        "previous_did !=",
+        "next_did !=",
+        "device_did !=",
+        "parent_did !=",
+        "nonce !=",
+        "signature !=",
+        "audience !=",
+        "proof_cid !=",
+        // The two specific drift sites' exact compare expressions.
+        ".as_str() != old_did.as_str()",
+        "attestation.parent_did != expected",
     ];
     for module in &modules {
         let src_path = src_root.join(module);

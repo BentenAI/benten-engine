@@ -138,7 +138,11 @@ pub fn rotate_keypair(
     superseded_at: u64,
 ) -> Result<RotationAttestation, DidRotationError> {
     let old_did = old_kp.public_key().to_did();
-    if did.as_str() != old_did.as_str() {
+    // ct-eq per crypto-major-4 UNIFORMITY (#599). DIDs are public so
+    // the leak surface is essentially zero, but the project commits to
+    // ct-eq at EVERY security-decision compare; this is the
+    // caller-DID-vs-derived-DID rejection arm.
+    if !crate::ucan::ct_signature_eq(did.as_str().as_bytes(), old_did.as_str().as_bytes()) {
         return Err(DidRotationError::PreviousDidMismatch {
             claimed: did.as_str().to_string(),
             actual: old_did.as_str().to_string(),
@@ -201,15 +205,45 @@ impl RotationLog {
     ///    replay event is the same as the original, so the strict-
     ///    monotonic check rejects it.
     ///
+    /// 3. **Authenticity (signature-verify)**: the attestation MUST
+    ///    carry a valid Ed25519 signature by the OLD keypair behind
+    ///    `previous_did`. The `previous_did` is a self-resolving
+    ///    `did:key` string (the public key is encoded in the DID per
+    ///    W3C did-method-key), so the verifying key is resolved from
+    ///    `previous_did` itself — no caller-supplied key parameter is
+    ///    needed (and no breaking API change). This is the
+    ///    **authenticity axis** the verbatim-replay + HLC-strict
+    ///    defenses presuppose: those gate the *ordering* of replay but
+    ///    assume the underlying attestation is genuine. Without this
+    ///    gate (Safe-1 #509 / F-FWD-2-01 #1051), a peer that
+    ///    synthesizes a `RotationAttestation` byte-blob with ANY
+    ///    64-byte signature could be `accept`-ed and silently revoke a
+    ///    recipient's view of an issuer-DID (fail-OPEN in the worst
+    ///    direction). Mirrors the [`crate::device_attestation::Acceptor::accept_at`]
+    ///    step-4 pattern (`device_attestation.rs:561-572`).
+    ///
     /// # Errors
     ///
-    /// Returns [`DidRotationError::VerbatimReplay`] on byte-identical
-    /// replay; [`DidRotationError::HlcNotStrictlyMonotonic`] on
-    /// at-or-before-HLC replay.
+    /// Returns [`DidRotationError::BadSignature`] when `previous_did`
+    /// is unresolvable OR the signature does not verify against the
+    /// resolved OLD public key; [`DidRotationError::VerbatimReplay`]
+    /// on byte-identical replay; [`DidRotationError::HlcNotStrictlyMonotonic`]
+    /// on at-or-before-HLC replay.
     pub fn accept_rotation_event(
         &mut self,
         attestation: &RotationAttestation,
     ) -> Result<(), crate::errors::DidRotationError> {
+        // AUTHENTICITY GATE (Safe-1 #509 / F-FWD-2-01 #1051): verify
+        // the attestation is genuinely signed by the OLD keypair
+        // BEFORE any ordering check. `previous_did` is a self-resolving
+        // did:key; resolve it to the OLD public key and verify the
+        // 64-byte Ed25519 signature. Resolution failure OR signature
+        // mismatch both map to BadSignature (matches Acceptor step-4).
+        let prev_did = Did::from_string_unchecked(attestation.previous_did.clone());
+        let old_pk = prev_did
+            .resolve()
+            .map_err(|_| crate::errors::DidRotationError::BadSignature)?;
+        attestation.verify_signature_with(&old_pk)?;
         // Verbatim replay defense — DID + signature compares routed
         // through ct_signature_eq per crypto-major-4 UNIFORMITY.
         if self.entries.iter().any(|e| {

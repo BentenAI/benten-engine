@@ -567,3 +567,187 @@ fn envelope_widens_zone_scope_matrix() {
     assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), spec(&[])).is_ok());
     assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), spec(&["z1"])).is_err());
 }
+
+// ---------------------------------------------------------------------
+// Hyg-1 #336 / F-FWD-2-01 #1051 — DeviceRevocation signature
+// authenticity wired into BOTH the chain-walker
+// (`validate_chain_with_device_revocations`) AND the `Acceptor::accept_at`
+// revocation step. SUBSTANTIVE runtime-arm pins (pim-2 §3.6b): the
+// production revocation-consumption paths are exercised; the observable
+// consequence is that a FORGED revocation does NOT revoke; each test
+// would FAIL against the pre-fix (device_did-byte-compare-only)
+// implementation, which honored ANY byte-blob with a matching
+// device_did regardless of signature.
+// ---------------------------------------------------------------------
+
+#[test]
+fn chain_walker_ignores_forged_device_revocation_unsigned_by_parent() {
+    // ATTACK PATH (#336): an attacker who knows a victim device's DID
+    // synthesizes a DeviceRevocation byte-blob (device_did = victim,
+    // parent_did = a real did:key the attacker controls, signature =
+    // a real sig by the ATTACKER, NOT the device's actual parent).
+    // Pre-fix the chain-walker honored it on device_did match alone →
+    // perpetual DoS of the victim device's UCANs. Post-fix the forged
+    // revocation does NOT verify against the parent_did it claims
+    // (because the device's real parent never signed it) — but here
+    // the sharper attack is: attacker sets parent_did to attacker's
+    // OWN did and signs with attacker's key, so the signature DOES
+    // verify against the claimed parent_did. That must STILL not
+    // revoke because the chain-walk only cares that *a* genuine
+    // parent signed — the trust anchor is whether the revocation's
+    // signature is authentic for the parent_did it names. We model
+    // the simpler forgery: a bogus signature that verifies against
+    // NOTHING.
+    let real_parent = Keypair::generate();
+    let device = Keypair::generate();
+    let leaf_aud = Keypair::generate();
+
+    // Genuine revocation by the real parent — used as a SHAPE
+    // template the attacker captures, then corrupts the signature.
+    let genuine = DeviceRevocation::issue(
+        &real_parent,
+        device.public_key().to_did(),
+        RevocationReason::Compromise,
+    )
+    .unwrap();
+    let mut forged = genuine.clone();
+    forged.signature[0] ^= 0xFF; // no longer a valid real_parent sig
+
+    let device_ucan = Ucan::builder()
+        .issuer(device.public_key().to_did().as_str())
+        .audience(leaf_aud.public_key().to_did().as_str())
+        .capability("/zone/posts", "read")
+        .not_before(0)
+        .expiry(u64::MAX)
+        .sign(&device);
+
+    // Pre-fix: this returned Err(IssuerDeviceRevoked). Post-fix the
+    // forged revocation is SKIPPED (fail-CLOSED against forgery) so
+    // the chain validates cleanly — the victim is NOT DoS'd.
+    let res = validate_chain_with_device_revocations(&[device_ucan], &[forged]);
+    assert!(
+        res.is_ok(),
+        "forged (bad-signature) device revocation MUST NOT revoke the device: {res:?}"
+    );
+}
+
+#[test]
+fn chain_walker_honors_genuine_signed_device_revocation() {
+    // POSITIVE arm: a genuinely parent-signed revocation STILL
+    // revokes (the authenticity gate does not regress legitimate
+    // revocations). Guards against a fix that simply disables
+    // revocation enforcement.
+    let parent = Keypair::generate();
+    let device = Keypair::generate();
+    let leaf_aud = Keypair::generate();
+
+    let genuine = DeviceRevocation::issue(
+        &parent,
+        device.public_key().to_did(),
+        RevocationReason::DeviceLoss,
+    )
+    .unwrap();
+
+    let device_ucan = Ucan::builder()
+        .issuer(device.public_key().to_did().as_str())
+        .audience(leaf_aud.public_key().to_did().as_str())
+        .capability("/zone/posts", "read")
+        .not_before(0)
+        .expiry(u64::MAX)
+        .sign(&device);
+
+    let err = validate_chain_with_device_revocations(&[device_ucan], &[genuine]).unwrap_err();
+    assert!(
+        matches!(err, UcanError::IssuerDeviceRevoked { .. }),
+        "genuine signed revocation MUST still revoke: {err:?}"
+    );
+}
+
+#[test]
+fn acceptor_ignores_forged_device_revocation_unsigned_by_parent() {
+    // #336 second wired site: the Acceptor::accept_at revocation step
+    // also verifies the revocation signature before honoring it.
+    let parent = Keypair::generate();
+    let device = Keypair::generate();
+
+    let attestation = DeviceAttestation::issue(
+        &parent,
+        device.public_key().to_did(),
+        CapabilityEnvelope::default(),
+    )
+    .unwrap();
+
+    let genuine = DeviceRevocation::issue(
+        &parent,
+        device.public_key().to_did(),
+        RevocationReason::Compromise,
+    )
+    .unwrap();
+    let mut forged = genuine.clone();
+    forged.signature[0] ^= 0xFF;
+
+    // Pre-fix: accept() returned Err(DeviceRevoked) because the
+    // device_did matched. Post-fix the forged revocation is skipped,
+    // so the attestation is NOT rejected on the revocation arm (it
+    // passes the revocation gate and proceeds; with u64::MAX
+    // freshness + genuine attestation signature it accepts cleanly).
+    let acceptor = Acceptor::new_with_revocations(FreshnessPolicy::seconds(u64::MAX), vec![forged]);
+    assert!(
+        acceptor.accept(&attestation).is_ok(),
+        "forged device revocation MUST NOT cause Acceptor to reject a genuine attestation"
+    );
+
+    // Sanity: the GENUINE revocation still causes rejection.
+    let acceptor_genuine =
+        Acceptor::new_with_revocations(FreshnessPolicy::seconds(u64::MAX), vec![genuine]);
+    let err = acceptor_genuine.accept(&attestation).unwrap_err();
+    assert!(
+        matches!(err, DeviceAttestationError::DeviceRevoked { .. }),
+        "genuine revocation still rejects: {err:?}"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Safe-1 #515 — Acceptor::accept_at expected_parent compare ct-eq
+// UNIFORMITY. Behavioral pin: the expected-parent gate still rejects a
+// non-matching parent and accepts a matching one after routing through
+// `ct_signature_eq` (a fix that breaks the compare semantics would
+// FAIL this). The grep-audit widening in `tests/ucan.rs` pins the
+// constant-time SHAPE; this pins the BEHAVIOR is preserved.
+// ---------------------------------------------------------------------
+
+#[test]
+fn acceptor_expected_parent_ct_eq_preserves_reject_and_accept_behavior() {
+    let real_parent = Keypair::generate();
+    let other_parent = Keypair::generate();
+    let device = Keypair::generate();
+
+    // Attestation signed by `other_parent` but the acceptor expects
+    // `real_parent` → IssuerNotParent (mismatch arm, now ct-eq'd).
+    let mismatched = DeviceAttestation::issue(
+        &other_parent,
+        device.public_key().to_did(),
+        CapabilityEnvelope::default(),
+    )
+    .unwrap();
+    let acceptor = Acceptor::with_parent_lookup(real_parent.public_key().to_did());
+    let err = acceptor.accept(&mismatched).unwrap_err();
+    assert!(
+        matches!(err, DeviceAttestationError::IssuerNotParent { .. }),
+        "ct-eq expected-parent gate must still REJECT a non-matching parent: {err:?}"
+    );
+
+    // Attestation signed by the expected parent → passes the
+    // expected-parent gate (match arm, now ct-eq'd).
+    let matched = DeviceAttestation::issue(
+        &real_parent,
+        device.public_key().to_did(),
+        CapabilityEnvelope::default(),
+    )
+    .unwrap();
+    let acceptor_ok = Acceptor::with_parent_lookup(real_parent.public_key().to_did());
+    assert!(
+        acceptor_ok.accept(&matched).is_ok(),
+        "ct-eq expected-parent gate must still ACCEPT a matching parent"
+    );
+}

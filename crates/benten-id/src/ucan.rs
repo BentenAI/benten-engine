@@ -576,6 +576,25 @@ pub fn validate_chain_with_device_revocations(
         for r in revocations {
             // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
             if ct_signature_eq(r.device_did.as_bytes(), token.claims.iss.as_bytes()) {
+                // AUTHENTICITY GATE (#336 / F-FWD-2-01 #1051): a
+                // device-DID match alone is NOT sufficient to honor a
+                // revocation — an attacker could synthesize a
+                // `DeviceRevocation` byte-blob for ANY device_did with
+                // a bogus signature and perpetually deny-of-service
+                // that device's UCANs. Verify the revocation is
+                // genuinely signed by the parent keypair behind
+                // `parent_did` (self-resolving did:key) BEFORE
+                // honoring it. Resolution failure OR signature
+                // mismatch ⇒ the revocation is forged ⇒ it does NOT
+                // revoke (fail-CLOSED against forged revocations:
+                // skip the bogus revocation, continue the walk).
+                let parent_did = Did::from_string_unchecked(r.parent_did.clone());
+                let Ok(parent_pk) = parent_did.resolve() else {
+                    continue;
+                };
+                if r.verify_signature_with(&parent_pk).is_err() {
+                    continue;
+                }
                 return Err(UcanError::IssuerDeviceRevoked {
                     issuer: token.claims.iss.clone(),
                 });
