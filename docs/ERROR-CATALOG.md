@@ -502,7 +502,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "IVM strategy `{strategy:?}` is reserved but not implemented in this phase (deferred to {deferred_to_phase})"
 - **Context:** `{ strategy: "A" | "B" | "C", deferred_to_phase: string }`
-- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).
+- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability.
 - **Thrown at:** IVM view registration (`benten_ivm::testing::try_construct_view_with_strategy`)
 - **Phase:** 2b (introduced)
 
@@ -698,7 +698,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_VIEW_STRATEGY_C_RESERVED
 
-- **Message:** "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+- **Message:** "user view '{view_id}' declared Strategy::Reserved — the Reserved strategy variant (Z-set / DBSP cancellation; renamed from Strategy::C at G23-0a) is refused at registration"
 - **Context:** `{ view_id: string }`
 - **Fix:** D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).
 - **Thrown at:** `Engine::create_view` registration (G8-B)

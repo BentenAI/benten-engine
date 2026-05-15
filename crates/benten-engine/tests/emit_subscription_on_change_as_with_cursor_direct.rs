@@ -89,7 +89,6 @@ fn yield_for_dispatch() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass."]
 fn on_change_as_with_cursor_rejects_empty_pattern_with_typed_error() {
     let (_dir, engine) = fresh_engine();
     let actor = engine.create_principal("alice").expect("seed principal");
@@ -113,7 +112,6 @@ fn on_change_as_with_cursor_rejects_empty_pattern_with_typed_error() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass."]
 fn on_change_as_with_cursor_registration_yields_active_subscription() {
     let (_dir, engine) = fresh_engine();
     let actor = engine.create_principal("alice").expect("seed principal");
@@ -134,7 +132,6 @@ fn on_change_as_with_cursor_registration_yields_active_subscription() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass."]
 fn on_change_as_with_cursor_actor_aware_cursor_resume_composition_under_noauth() {
     // §3.6b end-to-end production-arm pin: the actor-aware +
     // cursor-resume composition surface, NoAuth path. Under NoAuth

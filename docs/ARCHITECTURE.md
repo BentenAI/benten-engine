@@ -324,8 +324,9 @@ Callers extend IVM beyond the 5 canonical views by constructing a
 - **`UserViewSpec::builder()`** — fluent builder requiring `id` +
   `input_pattern`; `strategy` defaults to `Strategy::B`.
   `Strategy::A` is reserved for the 5 hand-written Phase-1 views and
-  `Strategy::C` for post-Phase-3; both are refused at registration
-  time with typed errors.
+  `Strategy::Reserved` for future algorithmic families (renamed from
+  `Strategy::C` at G23-0a per arch-r1-14); both are refused at
+  registration time with typed errors.
 - **`UserViewInputPattern`** — two-variant selector vocabulary:
   `Label(String)` (every change event whose Node carries the
   matching label) and `AnchorPrefix(String)` (every change event
