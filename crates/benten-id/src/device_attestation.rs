@@ -532,10 +532,7 @@ impl Acceptor {
         //    project commits to ct-eq at EVERY security-decision
         //    compare; this is the expected-parent rejection arm.
         if let Some(expected) = &self.expected_parent
-            && !crate::ucan::ct_signature_eq(
-                attestation.parent_did.as_bytes(),
-                expected.as_bytes(),
-            )
+            && !crate::ucan::ct_signature_eq(attestation.parent_did.as_bytes(), expected.as_bytes())
         {
             return Err(DeviceAttestationError::IssuerNotParent {
                 issuer: attestation.parent_did.clone(),

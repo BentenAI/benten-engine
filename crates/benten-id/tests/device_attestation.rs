@@ -691,8 +691,7 @@ fn acceptor_ignores_forged_device_revocation_unsigned_by_parent() {
     // so the attestation is NOT rejected on the revocation arm (it
     // passes the revocation gate and proceeds; with u64::MAX
     // freshness + genuine attestation signature it accepts cleanly).
-    let acceptor =
-        Acceptor::new_with_revocations(FreshnessPolicy::seconds(u64::MAX), vec![forged]);
+    let acceptor = Acceptor::new_with_revocations(FreshnessPolicy::seconds(u64::MAX), vec![forged]);
     assert!(
         acceptor.accept(&attestation).is_ok(),
         "forged device revocation MUST NOT cause Acceptor to reject a genuine attestation"
