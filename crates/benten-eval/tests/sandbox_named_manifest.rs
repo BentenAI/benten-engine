@@ -144,9 +144,11 @@ fn sandbox_register_runtime_returns_e_sandbox_manifest_registration_deferred() {
     // returns Err(ManifestError::RuntimeRegistrationDeferred), which
     // routes to E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED.
     //
-    // API-surface preservation: Phase 8 marketplace work flips
+    // API-surface preservation: Phase-4-Meta plugin-install work flips
     // `runtime_registration_enabled = true` and lifts the deferral
-    // without breaking callers.
+    // without breaking callers. (The historical "Phase 8 marketplace"
+    // framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable
+    // widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs.)
     let mut reg = ManifestRegistry::new();
     let result = reg.register_runtime("custom", CapBundle::new(vec![], None));
     assert!(matches!(
