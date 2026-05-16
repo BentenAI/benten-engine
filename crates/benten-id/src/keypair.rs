@@ -21,8 +21,8 @@
 //!
 //! ## Crypto-major-5 contract
 //!
-//! [`Keypair::from_seed_bytes`]
-//! consumes a DAG-CBOR envelope of shape
+//! [`Keypair::from_seed_bytes`] / [`Keypair::from_dag_cbor_envelope`]
+//! consume a DAG-CBOR envelope of shape
 //! `{version: u8, alg: "Ed25519", secret_bytes: Bytes(32)}`. Each
 //! failure mode (short / long / corrupted / unknown-version-tag /
 //! unknown-alg) returns a DISTINCT [`SeedImportError`] variant. The
@@ -162,7 +162,7 @@ impl PublicKey {
 /// Ed25519 keypair = secret + cached verifying key.
 ///
 /// Construct via [`Keypair::generate`] (CSPRNG path; `crypto-major-2`)
-/// or [`Keypair::from_seed_bytes`]
+/// or [`Keypair::from_seed_bytes`] / [`Keypair::from_dag_cbor_envelope`]
 /// (envelope-import path; `crypto-major-5`).
 ///
 /// **Does NOT implement [`Clone`].** Per `crypto-blocker-1`, the
@@ -261,7 +261,7 @@ impl Keypair {
     /// ```
     ///
     /// Round-trips byte-identical through
-    /// [`Keypair::from_seed_bytes`].
+    /// [`Keypair::from_dag_cbor_envelope`].
     pub fn export_seed_envelope(&self) -> Vec<u8> {
         let envelope = SeedEnvelope {
             version: ENVELOPE_VERSION,
@@ -288,12 +288,21 @@ impl Keypair {
         Self::from_seed_bytes_inner(bytes).map_err(KeypairError::SeedImport)
     }
 
-    // Qual-1 #686: the `from_dag_cbor_envelope` no-op alias of
-    // `from_seed_bytes` is removed (CLAUDE.md #5 — no deprecated
-    // aliases / no-op shims). It was preserved only for a
-    // device-mesh-exploration brief's naming; callers + the
-    // round-trip test use `from_seed_bytes` directly. Doc cross-refs
-    // swept in the same change (§3.5b doc-coupling).
+    /// **Qual-1 #686 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+    /// Not a dead no-op alias: this is a LIVE cross-crate / FFI
+    /// surface. Callers exist in `bindings/napi/src/identity.rs`
+    /// (`JsKeypair::duplicate_via_envelope`),
+    /// `crates/benten-engine/src/{engine_sync,typed_call_dispatch}.rs`,
+    /// `crates/benten-sync/src/{handshake_wire,peer_id}.rs` + several
+    /// integration tests. It is the audit-trail-shaped, name-explicit
+    /// envelope-import entry point referenced by the device-mesh
+    /// naming contract; the napi binding's docstring + `JsAtrium`
+    /// path pin this exact name. Deleting it broke
+    /// `cargo build -p benten-napi` (E0599 ×2). Retained as the
+    /// canonical public name; it forwards to [`Keypair::from_seed_bytes`].
+    pub fn from_dag_cbor_envelope(bytes: &[u8]) -> Result<Self, KeypairError> {
+        Self::from_seed_bytes(bytes)
+    }
 
     fn from_seed_bytes_inner(bytes: &[u8]) -> Result<Self, SeedImportError> {
         // Pre-check: short/long input rejected fast with typed
@@ -383,7 +392,7 @@ impl fmt::Debug for Keypair {
 /// stable across encoders. We rely on serde's `derive(Serialize)`
 /// emitting the fields in declaration order; the canonical-bytes
 /// round-trip test
-/// (`crates/benten-id/tests/keypair_seed.rs::keypair_from_seed_bytes_envelope_round_trip`)
+/// (`crates/benten-id/tests/keypair_seed.rs::keypair_from_dag_cbor_envelope_round_trip`)
 /// pins this.
 #[derive(Serialize, Deserialize)]
 struct SeedEnvelope {

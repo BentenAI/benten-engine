@@ -145,13 +145,13 @@ fn keypair_import_path_does_not_log_seed_bytes_via_tracing() {
 }
 
 #[test]
-fn keypair_from_seed_bytes_envelope_round_trip() {
-    // Qual-1 #686: was `keypair_from_dag_cbor_envelope_round_trip`,
-    // exercising the now-removed `from_dag_cbor_envelope` no-op alias;
-    // renamed + repointed to the canonical `from_seed_bytes`.
+fn keypair_from_dag_cbor_envelope_round_trip() {
+    // Qual-1 #686 DISAGREE-WITH-EXPLANATION: `from_dag_cbor_envelope`
+    // is a LIVE cross-crate / napi-FFI surface (not a dead alias) —
+    // restored. This pin exercises the canonical name end-to-end.
     let original = Keypair::generate();
     let envelope1 = original.export_seed_envelope();
-    let imported = Keypair::from_seed_bytes(&envelope1).unwrap();
+    let imported = Keypair::from_dag_cbor_envelope(&envelope1).unwrap();
     let envelope2 = imported.export_seed_envelope();
     assert_eq!(
         envelope1, envelope2,
