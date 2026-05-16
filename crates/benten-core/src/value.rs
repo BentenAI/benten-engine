@@ -258,4 +258,34 @@ impl Value {
             }
         }
     }
+
+    /// Returns `true` iff this value (recursively) needs no canonicalization:
+    /// it contains no `NaN`, no `±Infinity`, and no `-0.0`.
+    ///
+    /// This is the allocation-free fast-path predicate for the hash hot path
+    /// (Fwd-1 #932). When it returns `true`, `serde_ipld_dagcbor::to_vec`
+    /// applied directly to `&self` is byte-identical to encoding
+    /// `self.to_canonical().unwrap()` — `to_canonical` only ever (a) rejects
+    /// non-finite floats (none here) or (b) rewrites `-0.0 → +0.0` (no `-0.0`
+    /// here); every other variant is reproduced structurally unchanged. Callers
+    /// therefore skip the deep-clone walk entirely for the >99% clean-tree case
+    /// while preserving byte-identical canonical output.
+    ///
+    /// Returns `false` (forcing the slow `to_canonical` path, which surfaces
+    /// the typed `CoreError::FloatNan` / `FloatNonFinite`) when any float is
+    /// non-finite, so error semantics are unchanged.
+    #[must_use]
+    pub(crate) fn is_already_canonical(&self) -> bool {
+        match self {
+            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Text(_) | Value::Bytes(_) => true,
+            Value::Float(f) => {
+                // Non-finite → must take the slow path so it surfaces as a
+                // typed error. `-0.0` → must take the slow path so it is
+                // normalized to `+0.0` before hashing.
+                f.is_finite() && !(*f == 0.0 && f.is_sign_negative())
+            }
+            Value::List(items) => items.iter().all(Value::is_already_canonical),
+            Value::Map(entries) => entries.values().all(Value::is_already_canonical),
+        }
+    }
 }
