@@ -158,13 +158,6 @@ impl GrantReaderChain {
         }
     }
 
-    /// Override the config (test only).
-    #[must_use]
-    pub fn with_config(mut self, config: GrantReaderConfig) -> Self {
-        self.config = config;
-        self
-    }
-
     /// Combined constructor: chain + config in one call.
     #[must_use]
     pub fn with_chain_and_config_for_test(
