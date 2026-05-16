@@ -85,8 +85,9 @@ crates/
                         # authenticated thin-client protocol; they are
                         # not full Atrium peers themselves.
   benten-dsl-compiler/  # Compiles the textual handler-DSL grammar
-                        # into SubgraphSpec. Phase-2b addition; routes
-                        # from devserver into Engine.register_subgraph.
+                        # into benten_core::Subgraph. Phase-2b addition;
+                        # routes from devserver into
+                        # Engine.register_subgraph.
   benten-engine/        # Composes the above into a public API. Wires
                         # the capability hook, storage backend, IVM
                         # subscriber. Phase 3 added the Atrium DSL
@@ -381,7 +382,8 @@ The developer surface ships in two layers as of `phase-2b-close`:
 - `packages/engine-devserver` is the napi-rs-backed `BentenDevServer`
   TypeScript wrapper that wraps the real `Engine` (Phase 2b landed
   `benten-dsl-compiler` so devserver-side handler text now compiles
-  to `SubgraphSpec` and registers through `Engine::register_subgraph`
+  to `benten_core::Subgraph` and registers through
+  `Engine::register_subgraph`
   rather than running parallel in-memory infrastructure). Hot
   reload, grant preservation across reload, in-flight call ordering,
   suspension-handle survival across reload, and audit-sequence
