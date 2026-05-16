@@ -116,7 +116,7 @@ fn bench_read_threaded_grant_backed(c: &mut Criterion) {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
-        .with_grant_backed_policy()
+        .capability_policy_grant_backed()
         .build()
         .unwrap();
     let node = canonical_test_node();

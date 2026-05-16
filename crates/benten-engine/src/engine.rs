@@ -3100,23 +3100,6 @@ impl Engine {
         Ok(handler_id)
     }
 
-    /// PLACEHOLDER alias. **Phase 1 stub; behaves identically to
-    /// `register_crud`.**
-    ///
-    /// Grant-backed variant of `register_crud`. Phase 1 is a direct
-    /// pass-through — the capability-grant backing is a Phase-2 policy
-    /// concern and this method exists so tests that spell the
-    /// grant-backed intent survive across the Phase-1 / Phase-2
-    /// boundary.
-    // TODO(phase-3 — register_crud_with_grants GrantBackedPolicy
-    // routing): route through GrantBackedPolicy registration so the
-    // handler honours grants at call-time. Carried from Phase-2
-    // generic marker; pairs with the broader Phase-3 grant-backed
-    // policy work (§2.1 Durable UCAN backend).
-    pub fn register_crud_with_grants(&self, label: &str) -> Result<String, EngineError> {
-        self.register_crud(label)
-    }
-
     // -------- Evaluator-gated surfaces --------
 
     /// Call a registered handler with an op name and input.
@@ -4369,7 +4352,7 @@ pub(crate) fn derive_committed_scopes(ops: &[benten_caps::PendingOp]) -> Vec<Str
 /// only matters for tests that probe uncreated-but-canonical view ids.
 ///
 /// **Phase 2b G8-B:** user-registered IVM views (registered via
-/// [`Engine::create_user_view`]) are recognized by the live-subscriber
+/// [`Engine::register_user_view`]) are recognized by the live-subscriber
 /// branch in `read_view_with` (the subscriber's `view_ids()` set tracks
 /// every registered view). This whitelist remains for the 5 hand-written
 /// canonical ids that don't auto-register a live subscriber on engine

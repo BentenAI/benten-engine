@@ -193,13 +193,6 @@ impl EngineBuilder {
         self
     }
 
-    /// Phase 2a alias for [`Self::capability_policy_grant_backed`] used by
-    /// Option C bench fixtures.
-    #[must_use]
-    pub fn with_grant_backed_policy(self) -> Self {
-        self.capability_policy_grant_backed()
-    }
-
     /// Phase-3 G21-T2 — route the builder through the durable
     /// UCAN-backed capability policy (closes audit-6-1 +
     /// phase-3-backlog §2.3 + G21-T2 fp-mini-review BLOCKER-2).

@@ -125,7 +125,7 @@ impl UserViewSpecBuilder {
     /// when a required field was not set. The napi binding maps this to a
     /// typed `napi::Error::InvalidArg` at the FFI boundary
     /// (`bindings/napi/src/view.rs::parse_user_view_spec`); Rust callers see
-    /// the raw `String`. `Engine::create_user_view` does NOT wrap the builder
+    /// the raw `String`. `Engine::register_user_view` does NOT wrap the builder
     /// result — it consumes a constructed `UserViewSpec` directly.
     ///
     /// # Errors

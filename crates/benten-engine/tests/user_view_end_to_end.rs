@@ -11,7 +11,7 @@
 //! Three assertions:
 //!
 //!   1. `user_registered_view_end_to_end` — register a user-defined view
-//!      via `Engine::create_user_view(spec)`; assert the registration
+//!      via `Engine::register_user_view(spec)`; assert the registration
 //!      returns a CID for the persisted view-definition Node.
 //!
 //!   2. `user_view_pattern_mismatch_fires_typed_error` — a user view
@@ -30,7 +30,7 @@ use benten_engine::{Engine, UserViewInputPattern, UserViewSpec};
 
 /// `user_registered_view_end_to_end` — R2 §1.7 + plan §3 G8-B.
 ///
-/// Register a `UserViewSpec` via `Engine::create_user_view`. Assert the
+/// Register a `UserViewSpec` via `Engine::register_user_view`. Assert the
 /// registration returns a CID and that the spec's strategy resolves to
 /// `Strategy::B` per D8 default.
 ///
@@ -57,7 +57,7 @@ fn user_registered_view_end_to_end() {
 
     let cid = engine
         .register_user_view(spec)
-        .expect("create_user_view succeeds with default Strategy::B");
+        .expect("register_user_view succeeds with default Strategy::B");
     assert!(
         cid.to_base32().starts_with('b'),
         "view-definition CID must round-trip through the base32 encoder"
@@ -94,7 +94,7 @@ fn engine_create_view_removes_phase_1_todo() {
     assert!(
         !src.contains("TODO(phase-2-view-id-registry)"),
         "the Phase-1 view-id-registry TODO MUST be removed by G8-B \
-         (per-view definition registration via create_user_view replaces \
+         (per-view definition registration via register_user_view replaces \
          the 5-name whitelist for the dynamic-registration path)"
     );
 
