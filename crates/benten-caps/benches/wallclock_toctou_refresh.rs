@@ -36,11 +36,11 @@
 //!   re-anchored, and the HLC ride-along stamp is captured. This is
 //!   what happens once per 300s of cumulative ITERATE wall-time.
 //!
-//! ## Red-phase TDD
+//! ## Probe status
 //!
-//! `WallclockRefreshProbe` is a G9-A deliverable; at R3 the probe
-//! returns `todo!()`. The bench panics on first iteration until G9-A
-//! lands. Once landed, the numbers become real.
+//! `WallclockRefreshProbe` is the landed G9-A deliverable: the probe
+//! is real at HEAD (`benten_caps::testing::wallclock_refresh_probe_*`
+//! constructors + `check_elapsed`), so the numbers are real.
 //!
 //! ## Phase-3 forward-compat
 //!
@@ -77,7 +77,7 @@ fn bench_elapsed_check_no_refresh(c: &mut Criterion) {
 
     group.bench_function("elapsed_check_no_refresh", |b| {
         b.iter(|| {
-            // G9-A NOT LANDED — returns todo!() at R3.
+            // G9-A landed — real probe at HEAD.
             let needs_refresh = probe.check_elapsed(black_box(Duration::from_mins(5)));
             black_box(needs_refresh);
         });
