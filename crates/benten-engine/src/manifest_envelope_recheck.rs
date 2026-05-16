@@ -172,6 +172,21 @@ pub fn outcome_to_row_reject(
 /// a `runs_sandbox=false` ceiling — the only envelope dimension a
 /// sync row's cap-scope can exercise; broader dimensions ride P5's
 /// generalization).
+///
+/// **Native (full-peer) only — cfg-gated like `manifest_signing`.**
+/// The `benten_id::device_attestation::CapabilityEnvelope` ceiling
+/// type transitively pulls `getrandom`, which rejects the
+/// `wasm32-unknown-unknown` browser-backend bundle (this fn's sole
+/// production caller, `Engine::apply_atrium_merge`, is itself inside
+/// the `#[cfg(not(feature = "browser-backend"))] impl Engine` block).
+/// Per CLAUDE.md baked-in #17 + DECISION-RECORD §4: device-envelope
+/// ceiling-recheck is full-peer work; the thin/browser wasm32 client
+/// is a *view into* a full peer and does not perform device-envelope
+/// ceiling-recheck itself — the full peer still enforces, so excluding
+/// this surface from the browser bundle is architecturally correct,
+/// NOT a security regression. Mirrors the existing native-only
+/// `manifest_signing` module precedent (`lib.rs:204-210`).
+#[cfg(not(feature = "browser-backend"))]
 pub fn envelope_ceiling_admits_row(
     ceiling: Option<&benten_id::device_attestation::CapabilityEnvelope>,
     scope: &str,
