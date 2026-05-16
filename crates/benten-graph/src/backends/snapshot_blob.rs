@@ -292,6 +292,12 @@ impl KVBackend for SnapshotBlobBackend {
             operation: "put_batch",
         })
     }
+
+    /// Read-only memory-mapped snapshot — no write path, no fsync
+    /// semantic to honor. Surf-1 #860.
+    fn supports_durability(&self) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------

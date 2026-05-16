@@ -377,4 +377,30 @@ pub trait KVBackend: Send + Sync {
     /// # Errors
     /// Implementation-defined.
     fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), Self::Error>;
+
+    /// Whether this backend honors [`DurabilityMode`] preferences.
+    ///
+    /// `DurabilityMode` lives in this trait-surface module as the
+    /// cross-backend durability vocabulary, but the trait surface does
+    /// not thread a per-call durability tier through `put` / `put_batch`
+    /// (durability is configured per-backend at construction time — e.g.
+    /// `RedbBackend::open_or_create_with_durability` — and derived
+    /// per-call from `WriteAuthority` in the privileged path). This
+    /// accessor gives a generic `<B: GraphBackend>` consumer a runtime
+    /// signal of whether a configured durability preference will be
+    /// honored at all:
+    ///
+    /// - Disk-backed backends that map `DurabilityMode` to an fsync
+    ///   primitive (`RedbBackend`) return `true` (the default).
+    /// - In-RAM / read-only backends with no fsync semantic to honor
+    ///   (`BrowserBackend` thin-client cache, `SnapshotBlobBackend`
+    ///   read-only memory map, `NetworkFetchStubBackend`) return `false`
+    ///   — a configured `DurabilityMode::Immediate` is silently a no-op
+    ///   on these and callers that need a durability guarantee should
+    ///   refuse to wire such a backend.
+    ///
+    /// Default returns `true` (the disk-backed posture). Surf-1 #860.
+    fn supports_durability(&self) -> bool {
+        true
+    }
 }

@@ -166,6 +166,12 @@ impl KVBackend for NetworkFetchStubBackend {
             label: label_suffix(self.label.as_deref()),
         })
     }
+
+    /// Network-fetch stub — no local durable write path, no fsync
+    /// semantic to honor. Surf-1 #860.
+    fn supports_durability(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
