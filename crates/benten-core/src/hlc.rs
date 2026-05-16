@@ -188,12 +188,37 @@ pub type PhysicalClockFn = fn() -> u64;
 /// Bind one [`Hlc`] per process / per logical node identity. The state
 /// machine is `Send + Sync`: every mutating operation takes the internal
 /// `spin::Mutex`, so concurrent callers serialize cleanly.
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::hlc::Hlc;
+///
+/// fn frozen_clock() -> u64 { 1_000 }
+/// let hlc = Hlc::new(42, frozen_clock);
+///
+/// let a = hlc.now();
+/// let b = hlc.now();
+/// // Monotonic even when the physical clock does not advance: the
+/// // logical counter increments instead.
+/// assert!(b > a);
+/// ```
 pub struct Hlc {
     node_id: u64,
     skew_tolerance_ms: u64,
     physical_clock: PhysicalClockFn,
     last_emitted: Mutex<BentenHlc>,
 }
+
+// Safe-4 #636: compile-time pin for the `Hlc` docstring's "`Send + Sync`:
+// concurrent callers serialize cleanly" claim. If a future field breaks
+// either auto-trait this fails to compile rather than silently regressing
+// the documented concurrency contract. Zero-cost: the closure is never
+// called.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Hlc>();
+};
 
 impl Hlc {
     /// The default skew-tolerance window: 5 minutes (300 000 ms).

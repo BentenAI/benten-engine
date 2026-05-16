@@ -226,7 +226,13 @@ impl OperationNode {
         self.properties.get(k)
     }
 
-    /// Alias for [`Self::kind`] — back-compat name used by Phase 2a tests.
+    /// Returns this node's [`PrimitiveKind`]. Convenience accessor for the
+    /// already-`pub` [`Self::kind`] field; both spellings are load-bearing
+    /// at HEAD (production callers in `benten-platform-foundation`'s
+    /// schema-compiler emit path read `primitive_kind()`). Collapsing the
+    /// two spellings into one is a cross-crate rename deferred to a
+    /// coordinated decision (Surf-1 #697; not a Phase-2a test shim — the
+    /// earlier "back-compat for Phase 2a tests" framing was stale).
     #[must_use]
     pub fn primitive_kind(&self) -> PrimitiveKind {
         self.kind
@@ -247,6 +253,24 @@ impl OperationNode {
 pub struct NodeHandle(pub u32);
 
 /// A subgraph (set of OperationNodes + directed edges between them).
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::{OperationNode, PrimitiveKind, Subgraph};
+///
+/// let sg = Subgraph::new("crud:post")
+///     .with_node(OperationNode::new("r", PrimitiveKind::Read))
+///     .with_node(OperationNode::new("w", PrimitiveKind::Write))
+///     .with_edge("r", "w", "next");
+///
+/// // Content-addressed: construction order does not affect the CID.
+/// let reordered = Subgraph::new("crud:post")
+///     .with_node(OperationNode::new("w", PrimitiveKind::Write))
+///     .with_node(OperationNode::new("r", PrimitiveKind::Read))
+///     .with_edge("r", "w", "next");
+/// assert_eq!(sg.cid().unwrap(), reordered.cid().unwrap());
+/// ```
 ///
 /// **Phase 2b G12-C-cont relocation** brings this type from `benten-eval` to
 /// `benten-core`. Fields are `pub` so the `benten-eval` invariants module
@@ -320,12 +344,6 @@ impl Subgraph {
         self.deterministic
     }
 
-    /// Whether the Subgraph is classified deterministic (alias).
-    #[must_use]
-    pub fn is_deterministic(&self) -> bool {
-        self.deterministic
-    }
-
     /// Declare this finalized Subgraph's determinism context after the fact.
     pub fn set_deterministic(&mut self, value: bool) {
         self.deterministic = value;
@@ -385,6 +403,22 @@ impl Subgraph {
     }
 
     /// Builder-style: append a node and return self.
+    ///
+    /// # Invariant-14 attribution — NOT stamped here
+    ///
+    /// Unlike [`SubgraphBuilder::push`] (the canonical Inv-14 attribution
+    /// stamp surface, which defaults every emitted node to
+    /// `attribution: true` via [`ATTRIBUTION_PROPERTY_KEY`]), this raw
+    /// append does **not** stamp the attribution default. A production
+    /// caller that wants Inv-14-safe nodes must either go through
+    /// `SubgraphBuilder` or set [`ATTRIBUTION_PROPERTY_KEY`] explicitly on
+    /// the node before appending. Inv-14 reject-path tests deliberately
+    /// rely on this raw (un-stamped) shape to construct un-attributed
+    /// nodes. The two coexisting builder surfaces are therefore *not*
+    /// Inv-14-equivalent; closing that bypass by stamping here would
+    /// change the canonical bytes (and thus the CID) of every existing
+    /// `with_node` caller, so it is a content-addressing fork deferred to
+    /// a coordinated cross-crate decision (Surf-1 #843; surfaced for Ben).
     #[must_use]
     pub fn with_node(mut self, n: OperationNode) -> Self {
         self.nodes.push(n);
@@ -392,6 +426,11 @@ impl Subgraph {
     }
 
     /// Builder-style: append an edge and return self.
+    ///
+    /// Edges carry no Inv-14 attribution (the invariant gates
+    /// `OperationNode`s, not edges); this surface is the edge-only
+    /// counterpart to [`Subgraph::with_node`] and is fully equivalent to
+    /// the edge path in [`SubgraphBuilder`].
     #[must_use]
     pub fn with_edge(
         mut self,
@@ -794,11 +833,19 @@ impl SubgraphBuilder {
         self.push_chained(op, prev, nest)
     }
 
-    /// Append an ITERATE with declared `max` bound.
-    pub fn iterate(&mut self, prev: NodeHandle, _body: &str, max: u64) -> NodeHandle {
+    /// Append an ITERATE with a declared maximum loop-iteration bound.
+    ///
+    /// `max_iterations` is the Invariant-8 bounded-loop ceiling (how many
+    /// times the body may run). Distinct from
+    /// [`SubgraphBuilder::iterate_parallel`]'s `parallel_fanout`, which is
+    /// a fan-out width, not an iteration count — Surf-1 #766 disambiguates
+    /// the previously-identical `max` parameter name.
+    pub fn iterate(&mut self, prev: NodeHandle, _body: &str, max_iterations: u64) -> NodeHandle {
         let id = format!("iterate_{}", self.nodes.len());
-        let op = OperationNode::new(id, PrimitiveKind::Iterate)
-            .with_property("max", Value::Int(i64::try_from(max).unwrap_or(i64::MAX)));
+        let op = OperationNode::new(id, PrimitiveKind::Iterate).with_property(
+            "max",
+            Value::Int(i64::try_from(max_iterations).unwrap_or(i64::MAX)),
+        );
         let nest = self.iterate_depth_of(prev) + 1;
         self.push_chained(op, prev, nest)
     }
@@ -901,17 +948,27 @@ impl SubgraphBuilder {
         self
     }
 
-    /// Append an ITERATE with declared `parallel` fan-out (for Invariant-3
-    /// fan-out checks).
-    pub fn iterate_parallel(&mut self, prev: NodeHandle, _body: &str, max: usize) -> NodeHandle {
+    /// Append an ITERATE with a declared parallel fan-out width (for
+    /// Invariant-3 fan-out checks).
+    ///
+    /// `parallel_fanout` is the fan-out *width* (how many branches run in
+    /// parallel), NOT a loop-iteration count — contrast
+    /// [`SubgraphBuilder::iterate`]'s `max_iterations`. Surf-1 #766
+    /// disambiguates the previously-identical `max` parameter name.
+    pub fn iterate_parallel(
+        &mut self,
+        prev: NodeHandle,
+        _body: &str,
+        parallel_fanout: usize,
+    ) -> NodeHandle {
         let id = format!("iterate_par_{}", self.nodes.len());
         let op = OperationNode::new(id, PrimitiveKind::Iterate).with_property(
             "parallel",
-            Value::Int(i64::try_from(max).unwrap_or(i64::MAX)),
+            Value::Int(i64::try_from(parallel_fanout).unwrap_or(i64::MAX)),
         );
         let nest = self.iterate_depth_of(prev) + 1;
         let h = self.push_chained(op, prev, nest);
-        self.parallel_fanout[h.0 as usize] = max;
+        self.parallel_fanout[h.0 as usize] = parallel_fanout;
         h
     }
 

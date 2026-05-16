@@ -37,6 +37,21 @@ use crate::{Cid, CoreError, Value, format_err};
 ///
 /// Endpoint Node CIDs are never modified by Edge construction — see the
 /// module docs and ENGINE-SPEC §7.
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::{Cid, Edge};
+///
+/// let a = Cid::from_blake3_digest([1u8; 32]);
+/// let b = Cid::from_blake3_digest([2u8; 32]);
+/// let edge = Edge::new(a, b, "LIKES", None);
+///
+/// assert_eq!(edge.label, "LIKES");
+/// // Self-loops and arbitrary labels are allowed at construction time;
+/// // DAG-ness and label policy are subgraph-level (benten-eval).
+/// let _loop = Edge::new(a, a, "SELF", None);
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     /// Source endpoint Node CID.

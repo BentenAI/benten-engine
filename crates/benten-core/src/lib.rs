@@ -150,6 +150,22 @@ pub const CID_LEN: usize = 1 + 1 + 1 + 1 + BLAKE3_DIGEST_LEN as usize;
 /// explicitly excluded from the hash (per `ENGINE-SPEC.md` Section 7), because
 /// external edges point to anchors while content hashes must remain stable
 /// across renames.
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::{Node, Value};
+/// use std::collections::BTreeMap;
+///
+/// let mut props = BTreeMap::new();
+/// props.insert("title".to_string(), Value::text("hello"));
+/// let node = Node::new(vec!["Post".to_string()], props);
+///
+/// // The CID is a pure function of labels + properties; anchor_id is
+/// // excluded, so two Nodes with identical content hash identically.
+/// let same = Node::new(vec!["Post".to_string()], node.properties.clone());
+/// assert_eq!(node.cid().unwrap(), same.cid().unwrap());
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     /// Zero or more labels classifying the Node (e.g., `["Post"]`,
@@ -326,9 +342,25 @@ struct NodeHashView<'a> {
 /// A Benten content identifier — CIDv1 with multicodec `dag-cbor` and
 /// multihash `blake3`.
 ///
-/// This is intentionally a thin newtype for the spike. Phase 1 proper will
-/// migrate to the `cid` crate for full IPLD interop; the byte layout is
-/// compatible, so the migration is a drop-in.
+/// This is a `Copy` 36-byte fixed-layout newtype. The byte layout is
+/// wire-compatible with a general IPLD `cid::Cid`, but migrating the
+/// in-memory type is **not** a drop-in swap: `cid::Cid` is a heap-backed
+/// non-`Copy` shape, so adopting it would ripple through every callsite
+/// that relies on `Cid: Copy`. Whether to adopt the `cid` crate or freeze
+/// this newtype is a pre-v1 API-stabilization decision (tracked at the
+/// refinement-audit v1-API cluster); the byte layout is frozen either way.
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::Cid;
+///
+/// let cid = Cid::from_blake3_digest([7u8; 32]);
+/// // Round-trips through the canonical base32-multibase string form.
+/// let text = cid.to_base32();
+/// assert!(text.starts_with('b'));
+/// assert_eq!(Cid::from_str(&text).unwrap(), cid);
+/// ```
 ///
 /// ## Ordering note
 ///
@@ -372,6 +404,13 @@ mod serde_bytes_fixed {
 
 impl Cid {
     /// Construct a Benten CIDv1 from a 32-byte BLAKE3 digest.
+    ///
+    /// **Pre-v1 API note (Surf-1 #1033):** the `blake3` in this
+    /// constructor name hardcodes the hash-codec choice into what becomes
+    /// a v1-frozen surface. Whether to keep this name or adopt a
+    /// codec-neutral spelling (e.g. `from_digest`) is a pre-v1 API
+    /// decision deferred to Ben (coupled to the #995 Cid-shape decision);
+    /// the byte layout is frozen regardless of the spelling chosen.
     pub fn from_blake3_digest(digest: [u8; 32]) -> Self {
         let mut buf = [0u8; CID_LEN];
         buf[0] = CID_V1;
@@ -498,6 +537,40 @@ impl Cid {
         out.push('b');
         base32_lower_nopad_encode(&self.0, &mut out);
         out
+    }
+}
+
+// Surf-1 #840: idiomatic conversion traits. The inherent
+// `Cid::from_str` / `Cid::from_bytes` / `Cid::from_blake3_digest`
+// constructors are retained (deleting them would break cross-crate
+// production + test callers and CLAUDE.md #5 forbids deprecation shims);
+// these trait impls add the standard-library-conventional surface
+// (`str::parse`, `From`, `TryFrom`) so generic code can convert without
+// reaching for the inherent names. `FromStr` delegates to the inherent
+// `from_str` so there is exactly one parse implementation.
+impl core::str::FromStr for Cid {
+    type Err = CoreError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Cid::from_str(s)
+    }
+}
+
+impl From<[u8; 32]> for Cid {
+    /// Build a Benten CIDv1 from a raw 32-byte BLAKE3 digest (the digest,
+    /// not a full 36-byte CID — use `TryFrom<&[u8]>` for full CID bytes).
+    fn from(digest: [u8; 32]) -> Self {
+        Cid::from_blake3_digest(digest)
+    }
+}
+
+impl TryFrom<&[u8]> for Cid {
+    type Error = CoreError;
+
+    /// Parse a full 36-byte Benten CIDv1 byte layout. Delegates to the
+    /// inherent [`Cid::from_bytes`] (length + header validation).
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Cid::from_bytes(bytes)
     }
 }
 
@@ -701,9 +774,19 @@ impl CoreError {
 // threaded surface (see `src/version.rs`). The `u64`-id-based Anchor + free
 // functions exposed here at the crate root are the thinner compatibility
 // surface for the Phase 1 "simple" case where callers don't need to detect
-// concurrent appends. R5 keeps both; R5 G7 picks a canonical shape once the
-// evaluator lands (cov-f3 residual — `TODO(phase-3 — version surface
-// consolidation)`; carried from Phase-2 generic marker).
+// concurrent appends.
+//
+// PRE-V1 DECISION PENDING (Surf-1 #1003 / #849 / Qual-2 #757): this
+// u64-id Anchor surface has zero non-test callers at HEAD (only
+// `benten-core/tests/proptests.rs`) and coexists with two other Anchor
+// shapes (Cid-head linear `version::Anchor`, DAG-shape
+// `version_chain::DagVersionChain`) with no shared trait and three
+// different "CURRENT" semantics. The earlier "R5 G7 picks a canonical
+// shape" / `TODO(phase-3 — version surface consolidation)` marker is
+// stale (phase-3 shipped). Delete-or-freeze of this surface + whether to
+// introduce a shared Anchor trait is a v1-API-stabilization decision
+// deferred to Ben (refinement-audit v1-API cluster #1158); not changed
+// here because it is a public-surface removal requiring ratification.
 //
 // State storage: each u64-id anchor owns a `Vec<Cid>` of appended version
 // CIDs (oldest-first), held in a process-wide spinlocked table keyed by
@@ -755,6 +838,16 @@ static ANCHOR_COUNTER: core::sync::atomic::AtomicU64 = core::sync::atomic::Atomi
 /// `AnchorStore`. Carried from `phase-2-anchorstore` generic marker.
 static U64_CHAINS: spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>> =
     spin::Lazy::new(|| spin::Mutex::new(BTreeMap::new()));
+
+// Safe-4 #636: compile-time pin for the process-wide `U64_CHAINS` table's
+// concurrent-access contract — `append_version` / `current_version` /
+// `walk_versions` all `.lock()` it from arbitrary threads, so the static's
+// type must stay `Send + Sync`. Fails to compile if the inner type ever
+// regresses. Zero-cost: the closure is never called.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>>>();
+};
 
 impl Anchor {
     /// Allocate a fresh Anchor with a distinct id. Distinct calls never

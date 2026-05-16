@@ -45,6 +45,20 @@ use crate::CoreError;
 /// the on-wire canonical form is separately enforced by `serde_ipld_dagcbor`
 /// at encode time (DAG-CBOR length-first key sort).
 ///
+/// # Examples
+///
+/// ```
+/// use benten_core::Value;
+///
+/// let s = Value::text("hello");
+/// assert_eq!(s, Value::Text("hello".to_string()));
+///
+/// // Finite floats canonicalize to themselves; NaN / ±Inf are rejected
+/// // at hash time so a CID can never depend on a non-finite float.
+/// assert!(Value::Float(1.5).to_canonical().is_ok());
+/// assert!(Value::Float(f64::NAN).to_canonical().is_err());
+/// ```
+///
 /// ## Codec split: Serialize is derived, Deserialize is hand-written.
 ///
 /// **Serialization** uses `#[serde(untagged)]` and is safe because each

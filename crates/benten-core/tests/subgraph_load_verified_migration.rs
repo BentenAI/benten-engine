@@ -107,7 +107,7 @@ fn load_verified_roundtrip_preserves_deterministic_field() {
     let loaded = Subgraph::load_verified(&bytes).expect("re-decode must succeed");
 
     assert!(
-        loaded.is_deterministic(),
+        loaded.is_declared_deterministic(),
         "deterministic=true must survive DAG-CBOR round-trip through load_verified"
     );
 
@@ -117,7 +117,7 @@ fn load_verified_roundtrip_preserves_deterministic_field() {
     let bytes2 = sg2.to_dag_cbor().expect("encode must succeed");
     let loaded2 = Subgraph::load_verified(&bytes2).expect("re-decode must succeed");
     assert!(
-        !loaded2.is_deterministic(),
+        !loaded2.is_declared_deterministic(),
         "deterministic=false must survive DAG-CBOR round-trip"
     );
 }
