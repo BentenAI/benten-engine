@@ -279,10 +279,9 @@ fn apply_event(view: &mut dyn View, event: &ChangeEvent, applied: &mut usize) {
         }
         Ok(Err(other)) => {
             // PatternMismatch and similar are not fatal — log and keep
-            // fanning out. TODO(phase-3 — telemetry channel): route to
-            // a telemetry channel instead of stderr (carried from
-            // Phase-2 generic marker; pairs with the `tracing` dep
-            // landing on benten-ivm in Phase-3).
+            // fanning out. TODO(telemetry channel): route to a telemetry
+            // channel instead of stderr; pairs with a `tracing` dep
+            // landing on benten-ivm in a later phase.
             log_view_error(&view_id, &other);
         }
         Err(_panic_payload) => {
@@ -296,14 +295,13 @@ fn apply_event(view: &mut dyn View, event: &ChangeEvent, applied: &mut usize) {
 /// the sink (tracing, metrics, structured log) without touching the hot
 /// path.
 ///
-/// TODO(phase-3 — tracing wire-up): route to `tracing` once the
-/// engine wires a subscriber. For now we deliberately discard —
-/// PatternMismatch is the expected "this view doesn't handle this
-/// query shape" signal, not an alert. (Carried from Phase-2 generic
-/// marker.)
+/// TODO(tracing wire-up): route to `tracing` once the engine wires a
+/// subscriber. For now we deliberately discard — PatternMismatch is the
+/// expected "this view doesn't handle this query shape" signal, not an
+/// alert.
 #[allow(
     clippy::print_stderr,
-    reason = "stderr sink is the Phase 1 placeholder; Phase 2 wires tracing"
+    reason = "stderr sink is the current placeholder; a later phase wires tracing"
 )]
 fn log_view_error(view_id: &str, err: &dyn fmt::Display) {
     eprintln!("benten-ivm: view {view_id} returned non-fatal error: {err}");
@@ -313,7 +311,7 @@ fn log_view_error(view_id: &str, err: &dyn fmt::Display) {
 /// panicking view marks stale and the fan-out continues.
 #[allow(
     clippy::print_stderr,
-    reason = "stderr sink is the Phase 1 placeholder; Phase 2 wires tracing"
+    reason = "stderr sink is the current placeholder; a later phase wires tracing"
 )]
 fn log_view_panic(view_id: &str) {
     eprintln!("benten-ivm: view {view_id} panicked during update; marking stale");

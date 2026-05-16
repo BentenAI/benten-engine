@@ -42,7 +42,8 @@ const UNLIMITED_BUDGET: u64 = u64::MAX;
 #[derive(Debug)]
 pub struct GovernanceInheritanceView {
     /// Adjacency map: child → parent (single parent per child, matching the
-    /// Phase-1 `GovernedBy` cardinality; Phase 2 extends to multi-parent).
+    /// current `GovernedBy` cardinality; multi-parent is a later-phase
+    /// extension).
     parent: BTreeMap<Cid, Cid>,
     /// Shared budget tracker — see `crate::budget` (r6-ref R-major-02).
     budget: BudgetTracker,
@@ -88,7 +89,7 @@ impl GovernanceInheritanceView {
 
     /// Add a `GovernedBy` edge (child → parent). Test / engine surface for
     /// direct adjacency updates; the `ChangeEvent`-driven path defers this
-    /// to Phase 2 when edge-endpoint events land on the change stream.
+    /// to a later phase when edge-endpoint events land on the change stream.
     pub fn add_edge(&mut self, child: &Cid, parent: &Cid) {
         if self.budget.is_stale() {
             return;

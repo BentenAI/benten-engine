@@ -23,9 +23,10 @@
 //!   fan-out that dispatches change events to every registered view.
 //! - [`views`] — the five Phase 1 hand-written view implementations.
 //!
-//! The Phase-2 generalized Algorithm B (per-view strategy selection, Z-set
-//! cancellation, user-registered views) is deliberately out of scope —
-//! Phase 1 is hand-written maintainers for five concrete views.
+//! Beyond the five hand-written Phase-1 views, the crate also ships the
+//! generalized Algorithm B (per-view strategy selection, user-registered
+//! views via [`algorithm_b::AlgorithmBView`]); Z-set / DBSP cancellation
+//! remains reserved-not-implemented behind [`Strategy::Reserved`].
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -56,23 +57,21 @@ pub use view::{
     IvmError, View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState,
 };
 
-// TODO(phase-3 — IVM criterion benchmarks): criterion benchmarks
-// against RESULTS.md §1 targets — one target per view (capability
-// lookup, event dispatch, content listing, governance traversal,
-// version-current resolve). See mini-review g5-ivm-14. Carried from
-// Phase-2 generic marker; pairs with §5 IVM Algorithm B maturity work.
+// TODO(IVM criterion benchmarks): criterion benchmarks against
+// RESULTS.md §1 targets — one target per view (capability lookup,
+// event dispatch, content listing, governance traversal,
+// version-current resolve). See mini-review g5-ivm-14. Pairs with §5
+// IVM Algorithm B maturity work.
 //
-// TODO(phase-3 — IVM cascade-deletion integration test): construct a
-// small graph, feed Create events through the subscriber, then the
-// cascade of Delete events, and assert every view converges to empty
-// (RESULTS.md §3). See mini-review g5-ivm-13. Carried from Phase-2
-// generic marker.
+// TODO(IVM cascade-deletion integration test): construct a small
+// graph, feed Create events through the subscriber, then the cascade
+// of Delete events, and assert every view converges to empty
+// (RESULTS.md §3). See mini-review g5-ivm-13.
 //
-// TODO(phase-3 — IVM rebuild-equivalence event-replay): 4
-// rebuild-equivalence tests in view1/2/3/5 are R3 defects — they
-// construct an empty rebuilt view and assert equality with a
-// populated incremental one. Fixing requires event-replay, beyond
-// the Phase-2 fix-pass scope. Pairs with §5 IVM Algorithm B
+// TODO(IVM rebuild-equivalence event-replay): 4 rebuild-equivalence
+// tests in view1/2/3/5 are R3 defects — they construct an empty
+// rebuilt view and assert equality with a populated incremental one.
+// Fixing requires event-replay. Pairs with §5 IVM Algorithm B
 // maturity work. See mini-review g5-ivm-12.
 // ---------------------------------------------------------------------------
 // The five Phase 1 views — each in its own submodule under `src/views/`.

@@ -33,10 +33,10 @@ extern crate alloc;
 /// consumers (TS bindings, CLI) see the same string at every boundary.
 ///
 /// [`ErrorCode`]: benten_errors::ErrorCode
-/// `#[non_exhaustive]` (R6b bp-17) — Phase 2 adds user-registered IVM views
-/// with their own failure modes (e.g. `RegistrationConflict`, `BackfillFailed`);
-/// downstream matchers must include `_ =>` so adding variants is a minor
-/// version bump.
+/// `#[non_exhaustive]` (R6b bp-17) — user-registered IVM views may add their
+/// own failure modes (e.g. `RegistrationConflict`, `BackfillFailed`) at a
+/// later phase; downstream matchers must include `_ =>` so adding variants
+/// is a minor version bump.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ViewError {
@@ -68,7 +68,7 @@ pub enum ViewError {
     /// `Strategy::B` (Algorithm B; G23-0a generalizes to consume
     /// `SubgraphSpec`); `Strategy::Reserved` (Z-set / DBSP cancellation;
     /// renamed from the prior third-variant spelling at G23-0a per
-    /// arch-r1-14) is reserved for Phase 3+ (g8-concern-3). Surfaces from
+    /// arch-r1-14) is reserved-not-implemented (g8-concern-3). Surfaces from
     /// [`crate::testing::try_construct_view_with_strategy`]. Maps to
     /// [`ErrorCode::IvmStrategyNotImplemented`](benten_errors::ErrorCode::IvmStrategyNotImplemented).
     #[error(
@@ -105,7 +105,7 @@ impl ViewError {
             // for a Strategy variant that is reserved but not yet wired —
             // currently only `Strategy::Reserved` (Z-set / DBSP cancellation;
             // renamed from the prior third-variant spelling at G23-0a per
-            // arch-r1-14), deferred to Phase 3+. The dedicated catalog code
+            // arch-r1-14), reserved-not-implemented. The dedicated catalog code
             // keeps cross-language consumers from confusing this with the
             // runtime-stale `E_IVM_VIEW_STALE` family.
             ViewError::StrategyNotImplemented { .. } => {
@@ -127,9 +127,9 @@ pub type IvmError = ViewError;
 ///
 /// - `Fresh` — incremental maintenance is caught up; reads return live data.
 /// - `Stale` — the budget was exceeded mid-update. Strict reads return
-///   [`ViewError::Stale`]; relaxed reads return last-known-good. Phase 1 is
-///   terminal until an explicit [`View::rebuild`]; Phase 2 adds async
-///   background recompute.
+///   [`ViewError::Stale`]; relaxed reads return last-known-good. A stale
+///   view is terminal until an explicit [`View::rebuild`]; async
+///   background recompute is a later-phase enhancement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewState {
     /// Incremental maintenance is caught up; live reads succeed.
@@ -185,17 +185,17 @@ impl ViewBudget {
 // `DEFAULT = 1000` constant exported from this module was dead code that
 // claimed an "ENGINE-SPEC §8 default" it never actually wired into a view
 // constructor. ENGINE-SPEC §8 is updated in the DOCS lane to remove the
-// stale reference. Per-view budgeting remains a Phase-2b concern (the
-// `BudgetTracker` infrastructure is already in place; only a configurable
-// per-view budget plumbing wave is missing).
+// stale reference. Configurable per-view budgeting remains a future
+// enhancement (the `BudgetTracker` infrastructure is already in place;
+// only a configurable per-view budget plumbing wave is missing).
 
 // ---------------------------------------------------------------------------
 // ViewQuery / ViewResult
 // ---------------------------------------------------------------------------
 
-/// Per-view query shape. Phase 1 is a single un-typed record carrying every
-/// field any view needs; a typed-per-view variant lands in Phase 2 once the
-/// views themselves stabilize.
+/// Per-view query shape. Currently a single un-typed record carrying every
+/// field any view needs; a typed-per-view variant is a later-phase
+/// enhancement once the views themselves stabilize.
 #[derive(Debug, Clone, Default)]
 pub struct ViewQuery {
     /// Label filter (used by [`crate::views::ContentListingView`]).
