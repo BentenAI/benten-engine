@@ -286,9 +286,7 @@ pub(crate) fn extract_edge_to_json_emitted_keys(edge_rs: &str) -> Vec<String> {
                 let key_start = abs + qstart + 1;
                 // Find the closing `"` (no escapes in our keys).
                 if let Some(qend) = edge_rs[key_start..].find('"') {
-                    keys.push(
-                        edge_rs[key_start..key_start + qend].to_string(),
-                    );
+                    keys.push(edge_rs[key_start..key_start + qend].to_string());
                 }
             }
             search_from = abs;
