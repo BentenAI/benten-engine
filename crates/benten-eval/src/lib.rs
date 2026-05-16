@@ -1,11 +1,11 @@
-//! # benten-eval — Operation primitives + evaluator (Phase 1 stubs)
+//! # benten-eval — Operation primitives + evaluator
 //!
-//! Phase 1 ships all 12 operation primitive *types* (so stored subgraphs
-//! don't require re-registration when Phase 2 enables WAIT/STREAM/SUBSCRIBE/
-//! SANDBOX executors) and executes 8 primitives in the iterative evaluator:
-//! READ, WRITE, TRANSFORM, BRANCH, ITERATE, CALL, RESPOND, EMIT.
-//!
-//! R3 stub scaffold — R5 implementation lands in Phase 1 proper.
+//! All 12 operation primitive *types* are registered (so stored subgraphs
+//! never require re-registration) and all 12 execute in the iterative
+//! evaluator — READ, WRITE, TRANSFORM, BRANCH, ITERATE, WAIT, CALL,
+//! RESPOND, EMIT, SANDBOX, SUBSCRIBE, STREAM are production-runtime LIVE
+//! (SANDBOX/STREAM/SUBSCRIBE/WAIT executors shipped at Phase 2b; the full
+//! surface is carried through Phase 4-Foundation).
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -233,11 +233,11 @@ pub mod limits {
     pub const DEFAULT_MAX_EDGES: usize = 8192;
 }
 
-/// Evaluator error type (Phase 1 stub).
+/// Evaluator error type.
 ///
-/// `#[non_exhaustive]` (R6b bp-17) — Phase 2 adds STREAM / WAIT / SUBSCRIBE /
-/// SANDBOX runtime errors; downstream matchers must include `_ =>` so adding
-/// variants is a minor version bump.
+/// `#[non_exhaustive]` (R6b bp-17) — STREAM / WAIT / SUBSCRIBE / SANDBOX
+/// runtime errors landed at Phase 2b; downstream matchers must include
+/// `_ =>` so adding variants stays a minor version bump.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum EvalError {
@@ -1048,7 +1048,7 @@ impl TraceStep {
 }
 
 // ---------------------------------------------------------------------------
-// TRANSFORM grammar parser — Phase 1 stub. Tests drive the public shape.
+// TRANSFORM grammar parser. Tests drive the public shape.
 // ---------------------------------------------------------------------------
 
 pub mod transform {

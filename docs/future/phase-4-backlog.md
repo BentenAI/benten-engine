@@ -842,6 +842,25 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1004, u
 
 **Acceptance criteria.** The decision is forward-only — surface is **where**, not **what**. Decide at the §4.43 v1-API-stabilization sweep (before it locks `benten-graph`'s surface area): (a) extend `SnapshotBlob.schema_version: 1 → 2` for the mode-(c) checkpoint signature field (the existing `SchemaVersion` strict-mismatch error variant IS the backward-compatible migration path) + add a `MerkleRangeProofBackend` trait alongside `KVBackend` for mode-(b) IN `benten-graph`; OR (b) land both ABOVE the storage layer in `benten-sync` (native-only sync runtime + `benten-id` PeerDid signing) keeping the storage trait narrow — preferred per the foundational `engine_primitives_vs_application_layer` memory. ~no LOC now; ~300-600 LOC at Phase-4-Meta depending on (a)/(b).
 
+### §4.65 wasmtime core-wasm vs. Component-Model + `host:async` reservation v1-stabilization fork (Phase-4-Meta — Fwd-2 #1027, umbrella #1166)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1027, umbrella #1166). `Cargo.toml` pins wasmtime `43.0.2` with `component-model` OFF (wsa-3) and `async` ON-but-unused. `benten-eval::sandbox::host_fns::RESERVED_HOST_ASYNC_CAP` + the `requires_async: bool` field are declared-not-wired; Phase 3 + Phase 4-Foundation both SHIPPED without flipping `requires_async = true`. The in-source trajectory framings were retensed (Phase-3 → "through Phase 4-Foundation; keep/wire/retire is a Phase-4-Meta ratification") at umbrella #1166's ST-EVAL lane PR — the **substantive architectural decision** lands here.
+
+**Acceptance criteria (Ben architectural call, before any Phase-4-Meta SANDBOX-extensibility work):**
+- **(A) Keep core-wasm + reserved-cap indefinitely** — cheapest; preserves future-compat; `async` Cargo feature stays cold weight.
+- **(B) Wire the first async host-fn** — flip `requires_async`; the original D19 framing named an iroh-backed `kv:read`. Couples to CLAUDE.md #18 plugin-as-subgraph compute trajectory + #1016 `register_runtime` lift.
+- **(C) Retire the reservation** as a v1-API-stabilization no-op (drop `RESERVED_HOST_ASYNC_CAP` + `requires_async` field; ErrorCode/Cargo-feature trim). Couples to #1035 reading (α).
+
+Bundle the decision with §4.43 v1-API-stabilization sweep. wasmtime Component-Model re-evaluation (already named at §4 line 107) is the sibling axis — enumerate its acceptance criteria at the same sweep.
+
+### §4.66 SANDBOX host-fn extensibility — closed-set (α) vs. plugin-extensible (β) v1 ratification (Phase-4-Meta — Fwd-2 #1035, umbrella #1166)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1035, umbrella #1166). `host_fns.rs::HOST_FN_NAMES = &["time","log","kv:read","random"]` + the `host_fn_no_storage_mutating_per_baked_in_16.rs` regression pin structurally implement reading (α) (permanently-closed engine host-fn set). CLAUDE.md baked-in #16 forbids `kv:write`/`kv:delete` by name but does **not** enumerate the broader question of whether a plugin author at Phase 5+ may declare plugin-internal SANDBOX host-fns (`host:plugin:<cid>:<action>` shape) gated by per-plugin manifest+DID. OBS severity — no code change at HEAD; the trajectory commitment is unenumerated and blocks substantive CLAUDE.md #19 plugin-extensibility planning.
+
+**Acceptance criteria (Ben ratification — state explicitly in a CLAUDE.md #16 update OR a new commitment #20):**
+- **(α) Permanently closed:** the four host-fns are the ENGINE set forever; plugins needing more compute use raw wasm without host bridges. Lock the regression pin as a v1-API-stabilization commitment; couples to §4.65 path (C) (retire `host:async`).
+- **(β) Plugin-extensible at Phase 5+:** the four are the ENGINE baseline; PLUGIN-shipped host-fns are a separate Phase-4-Meta+ surface gated by per-plugin manifest (#18 install-time consent + per-plugin DID). Wire the existing `RuntimeRegistrationDeferred` typed-error to a `plugin-host-fn-registration-deferred` companion (couples to #1016 `register_runtime` re-eval).
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
