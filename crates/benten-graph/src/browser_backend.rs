@@ -304,6 +304,13 @@ impl KVBackend for BrowserBackend {
         }
         Ok(())
     }
+
+    /// In-RAM thin-client cache — no fsync semantic to honor (per
+    /// CLAUDE.md baked-in #17). A configured `DurabilityMode` is
+    /// silently ignored; signal that via `false`. Surf-1 #860.
+    fn supports_durability(&self) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ use benten_graph::{ErrorCode, GraphError};
 #[test]
 fn backend_not_found_display_does_not_leak_absolute_path() {
     let leaky = PathBuf::from("/Users/alice/secret/benten.redb");
-    let err = GraphError::BackendNotFound { path: leaky };
+    let err = GraphError::backend_not_found(leaky);
     let rendered = err.to_string();
     assert!(
         !rendered.contains("/Users/alice"),
@@ -40,12 +40,8 @@ fn graph_error_variants_all_have_catalog_codes() {
     let cases: Vec<GraphError> = vec![
         GraphError::Redb("stringified".into()),
         GraphError::Decode("decode failed".into()),
-        GraphError::BackendNotFound {
-            path: PathBuf::from("/tmp/x.redb"),
-        },
-        GraphError::SystemZoneWrite {
-            label: "system:CapabilityGrant".into(),
-        },
+        GraphError::backend_not_found(PathBuf::from("/tmp/x.redb")),
+        GraphError::system_zone_write("system:CapabilityGrant"),
         GraphError::NestedTransactionNotSupported {},
         GraphError::TxAborted {
             reason: "test".into(),
