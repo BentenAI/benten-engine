@@ -219,8 +219,9 @@ impl RotationLog {
     ///    synthesizes a `RotationAttestation` byte-blob with ANY
     ///    64-byte signature could be `accept`-ed and silently revoke a
     ///    recipient's view of an issuer-DID (fail-OPEN in the worst
-    ///    direction). Mirrors the [`crate::device_attestation::Acceptor::accept_at`]
-    ///    step-4 pattern (`device_attestation.rs:561-572`).
+    ///    direction). This is the same authenticity-gate step-4
+    ///    pattern the (COLLAPSE-deleted) device-attestation acceptance
+    ///    pipe enforced before its envelope-ceiling recheck.
     ///
     /// # Errors
     ///
