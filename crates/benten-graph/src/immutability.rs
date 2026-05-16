@@ -5,7 +5,7 @@
 //! This file lands the **infrastructure** G5-A's 5-row Inv-13 firing matrix
 //! composes on top of:
 //!
-//! - [`BloomFilter`] — simple bit-array Bloom filter keyed on
+//! - `BloomFilter` (crate-private) — simple bit-array Bloom filter keyed on
 //!   [`benten_core::Cid`] bytes, with a configurable target false-positive rate
 //!   (default `1 / 10_000`). The filter does not allocate after construction.
 //! - [`CidExistenceCache`] — thin wrapper over the Bloom filter plus:
@@ -57,7 +57,7 @@ use benten_core::Cid;
 /// Chosen to match the plan §3 G2-A wording (`default 1/10000`). A site with a
 /// tighter budget can call [`BloomFilter::for_expected_inserts`] directly with
 /// a custom rate.
-pub const DEFAULT_FALSE_POSITIVE_RATE: f64 = 1.0 / 10_000.0;
+pub(crate) const DEFAULT_FALSE_POSITIVE_RATE: f64 = 1.0 / 10_000.0;
 
 /// Default capacity (expected distinct inserts) when the caller has no better
 /// guess. Sized to keep the bit-array under a few kilobytes at the default
@@ -91,7 +91,7 @@ const WARMED_CAP: usize = 100_000;
 /// The filter is NOT threadsafe on its own — the backing `Vec<u64>` is only
 /// marked `&mut` on insert, so callers embed it behind a `Mutex` (see
 /// [`CidExistenceCache`]'s crate-private use).
-pub struct BloomFilter {
+pub(crate) struct BloomFilter {
     /// Packed bit array. Each `u64` holds 64 bits; bit index `b` lives in
     /// `bits[b / 64]` at position `b % 64`.
     bits: Vec<u64>,
@@ -110,7 +110,7 @@ impl BloomFilter {
     /// (0, 1, negative, NaN) collapse to [`DEFAULT_FALSE_POSITIVE_RATE`].
     /// `expected_inserts` is clamped to a minimum of 1.
     #[must_use]
-    pub fn for_expected_inserts(expected_inserts: usize, fp_rate: f64) -> Self {
+    pub(crate) fn for_expected_inserts(expected_inserts: usize, fp_rate: f64) -> Self {
         let expected_inserts = expected_inserts.max(1);
         let fp_rate = if fp_rate > 0.0 && fp_rate < 1.0 {
             fp_rate
@@ -154,8 +154,9 @@ impl BloomFilter {
     }
 
     /// Shortcut for `for_expected_inserts(expected_inserts, DEFAULT_FALSE_POSITIVE_RATE)`.
+    #[cfg(test)]
     #[must_use]
-    pub fn with_default_fp_rate(expected_inserts: usize) -> Self {
+    pub(crate) fn with_default_fp_rate(expected_inserts: usize) -> Self {
         Self::for_expected_inserts(expected_inserts, DEFAULT_FALSE_POSITIVE_RATE)
     }
 
@@ -228,7 +229,7 @@ fn double_hash_index(h1: u64, h2: u64, i: u32, num_bits: usize) -> usize {
 }
 
 /// CID-existence cache consumed by [`crate::redb_backend::RedbBackend`]'s
-/// Inv-13 fast-path. Wraps a [`BloomFilter`] plus the test-only collision /
+/// Inv-13 fast-path. Wraps a `BloomFilter` (crate-private) plus the test-only collision /
 /// positive-force hooks mandated by plan §9.11.
 ///
 /// # Thread-safety
