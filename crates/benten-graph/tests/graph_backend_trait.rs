@@ -121,3 +121,53 @@ fn graph_backend_snapshot_send_sync_static_for_all_backends() {
     }
     assert_snapshot_bounds::<RedbBackend>();
 }
+
+/// Surf-1 #832 boundary pin: the `where`-bound on `GraphBackend` is a
+/// **compile-time** guarantee that `<B as GraphBackend>::Error` is the
+/// SAME concrete type as the inherited `KVBackend::Error` /
+/// `NodeStore::Error` / `EdgeStore::Error`. Prior to this bound the
+/// alignment was documentation-only.
+///
+/// This generic function ONLY compiles if the four error projections
+/// unify (each function-pointer coercion forces the projected type). It
+/// is the type-system witness for the `D-PHASE-3-1a` "one unified
+/// typed-error surface" contract — a future backend whose sub-trait
+/// `Error` diverges from its umbrella `Error` would fail to satisfy
+/// `B: GraphBackend`.
+#[test]
+fn graph_backend_error_alignment_is_compile_time_enforced() {
+    // Type-equality witness: `Same<A, B>` is only implemented for
+    // `A == B`, so calling `assert_same::<X, Y>()` is a compile-time
+    // assertion that `X` and `Y` are the SAME concrete type.
+    trait Same<T> {}
+    impl<T> Same<T> for T {}
+    fn assert_same<A: Same<B>, B>() {}
+
+    fn assert_error_aligned<B: GraphBackend>() {
+        // The `where`-bound on `GraphBackend` forces each sub-trait
+        // `Error` projection to equal `<B as GraphBackend>::Error`.
+        // These assertions fail to compile if any diverges.
+        assert_same::<<B as KVBackend>::Error, <B as GraphBackend>::Error>();
+        assert_same::<<B as NodeStore>::Error, <B as GraphBackend>::Error>();
+        assert_same::<<B as EdgeStore>::Error, <B as GraphBackend>::Error>();
+    }
+    assert_error_aligned::<RedbBackend>();
+}
+
+/// Surf-1 #860 boundary pin: `KVBackend::supports_durability()` is the
+/// generic-consumer signal of whether a configured `DurabilityMode`
+/// preference is honored. Disk-backed `RedbBackend` returns `true` (the
+/// default).
+#[test]
+fn kv_backend_supports_durability_signal() {
+    fn probe<B: KVBackend>(b: &B) -> bool {
+        b.supports_durability()
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("g13a-supports-durability-pin.redb");
+    let backend = RedbBackend::create(&path).unwrap();
+    assert!(
+        probe(&backend),
+        "RedbBackend is disk-backed; supports_durability() must be true"
+    );
+}

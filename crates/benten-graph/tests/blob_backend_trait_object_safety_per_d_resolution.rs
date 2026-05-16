@@ -142,3 +142,29 @@ fn _compile_assert_get_put_futures_are_send<B: BlobBackend>(backend: &B, cid: &C
     let _gp: Pin<Box<dyn Future<Output = _> + Send>> = Box::pin(g);
     let _pp: Pin<Box<dyn Future<Output = _> + Send>> = Box::pin(p);
 }
+
+/// Fwd-2 #1012 boundary pin: `delete` + `list_cids` land as **additive
+/// default methods**. `StubBlobBackend` does NOT override either — it
+/// satisfies the (now-wider) trait unchanged, proving the documented
+/// additive-default evolution posture preserves existing impls. The
+/// defaults are: `delete` = idempotent `Ok(())` no-op; `list_cids` =
+/// `Ok(Vec::new())`. Their futures must also be `Send` (engine moves
+/// them across tokio worker threads).
+#[test]
+fn blob_backend_additive_default_delete_and_list_cids() {
+    fn assert_send<T: Send>(_: &T) {}
+    let backend = StubBlobBackend { persistent: true };
+    let cid = benten_core::testing::canonical_test_node().cid().unwrap();
+
+    let d = backend.delete(&cid);
+    assert_send(&d);
+    block_on_polling(d).expect("default delete is an idempotent no-op");
+
+    let l = backend.list_cids();
+    assert_send(&l);
+    let cids = block_on_polling(l).expect("default list_cids returns empty");
+    assert!(
+        cids.is_empty(),
+        "default list_cids must be empty for a backend without an enumeration index"
+    );
+}

@@ -431,6 +431,19 @@ impl Subgraph {
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
 
+    /// Fwd-1 #926: compute the CID **and** return the canonical bytes from a
+    /// single encode + hash pass (see [`crate::Node::cid_and_canonical_bytes`]
+    /// for the rationale). Avoids the duplicate node/edge sort + DAG-CBOR
+    /// encode that `cid()` then `canonical_bytes()` performs.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Serialize`] if DAG-CBOR encoding fails.
+    pub fn cid_and_canonical_bytes(&self) -> Result<(Cid, Vec<u8>), CoreError> {
+        let bytes = self.canonical_bytes()?;
+        let digest = blake3::hash(&bytes);
+        Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
+    }
+
     /// G12-C: DAG-CBOR encode (alias for [`Subgraph::canonical_bytes`]).
     /// The shorter name (no underscore) matches the round-trip-test
     /// convention `to_dagcbor` ↔ `from_dagcbor`.

@@ -621,6 +621,8 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 sec-r6r3-1 + sec-r6r3-2 MINOR, de
 
 **Acceptance criteria.** Either (a) ship a wasm32 stub function with the same signature returning `ChainValidationOutcome::ChainInvalid` + an error citing CLAUDE.md #17(b); or (b) gate wasm32 build entirely with `#[cfg(target_arch = "wasm32")] compile_error!("...")` if benten-caps is determined not to compile for wasm32 at all (which the current state arguably already is — benten-graph fails to build wasm32). ~10-30 LOC.
 
+**Sibling wasm32 sweep (benten-graph `backends/blob_backend.rs`, added 2026-05-15 per umbrella #1207 / mini-review-1237 MINOR):** the pre-existing wasm32 break has 3 sites at `crates/benten-graph/src/backends/blob_backend.rs:63/135/164`; umbrella #1207 added a 4th identical-pattern site at `crates/benten-graph/src/backends/blob_backend.rs:248` (disclosed, in an already-wasm32-broken non-wasm32 module — not a meaningful regression; note: #1207 also relocated this file from `crates/benten-graph/src/blob_backend.rs` to `crates/benten-graph/src/backends/blob_backend.rs`, so all cites use the new path). The eventual wasm32-gating fix MUST sweep all 4 sites together (not 3) — bundle with this §4.42 wave.
+
 ### §4.45 `PluginDidStore::insert` duplicate-DID defensive return — CLOSED at R6-FP-3 (2026-05-13)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 carry).
@@ -685,6 +687,13 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cag-r6-r3-1 MINOR + R6-R4 cag-r6-
 Path (a) is the bake-in-intent path; path (b) preserves the shipped surface. v1-API-stabilization decision. **~50-200 LOC depending on path** (widened scope from R6-R3's ~20-100 LOC single-function estimate). Sibling carry to §4.19 (orchestrator's earlier brief mis-cited that destination).
 
 R6-FP-4 partial: SECURITY-POSTURE.md plugin-trust threat-model narrative + CLAUDE.md #18 prose now match shipped surface for `Engine::get_node`; rest of cluster narratives retain the original framing pending v1-API-stabilization decision.
+
+**v1-API-stabilization sweep sub-bullets (refinement-audit-2026-05 umbrella #1207, benten-graph slice).** This sweep also adjudicates the following benten-graph trait/struct SemVer-locking decisions (each detailed at its own §4.x row; surface ALL at the sweep brief so a later phase does not silently lock a surface):
+
+- **`KVBackend` async-shape fork** — Path A (lock sync at v1 + `AsyncKVBackend` post-v1) vs. Path B (convert to RPITIT pre-v1). See §4.63. Couples to `NetworkFetchStubBackend` retirement (hyg-1 #305 Ben-call).
+- **`GraphBackend::snapshot()` + `register_subscriber()` Result-shape forks** — see §4.61 (SemVer-commitment docstring already landed; flip-vs-freeze decision pending). Couples safe-1 #501.
+- **`BlobBackend` additive-default vs. sub-trait-split** — see §4.62 (additive defaults already landed; lock-vs-split decision pending).
+- **`#[non_exhaustive]` struct-level discipline residual (Fwd-2 #997 partial).** Umbrella #1207 applied `#[non_exhaustive]` to **3 of 4** `GraphError` struct-variants — `BackendNotFound` / `SystemZoneWrite` / `InvImmutability` — safe because all their construction is in-crate and cross-crate matchers already use `{ .. }`. **`TxAborted` was deliberately EXCLUDED**: `GraphError::TxAborted { reason }` is constructed in cross-crate **production** code (`crates/benten-engine/src/engine_diagnostics.rs:87,105`), so a bare `#[non_exhaustive]` breaks the workspace build. The v1-stabilization wave decides: apply `#[non_exhaustive]` + add a `GraphError::tx_aborted(reason)` constructor + migrate the 2 benten-engine production sites (~10 LOC), OR accept the field-level lock with a written rationale. **`WriteContext` (struct, 3 `pub` fields) + `ChangeEvent` (struct, 9 `pub` fields) struct-level `#[non_exhaustive]` was NOT applied** at umbrella #1207: both are struct-literal-constructed in cross-crate **test** code (`crates/benten-engine/tests/system_zone_stopgap_and_full_coexist.rs` for `WriteContext`; `crates/benten-ivm/tests/*` for `benten_graph::ChangeEvent`-shaped events), so a bare struct-level `#[non_exhaustive]` would break the workspace test build (cascade beyond benten-graph — surfaced not chased per HARD RULE clause-(b)). The v1-stabilization wave decides per-struct: (a) apply `#[non_exhaustive]` + migrate the cross-crate test literals to the existing `WriteContext::new` / `ChangeEvent::new_node` constructors + add any missing `with_*` builders; (b) accept the field-level SemVer-lock with a written rationale; (c) collapse attribution fields (`actor_cid`/`handler_cid`/`capability_grant_cid`) to a typed `attribution: Option<Attribution>` substruct. ~50-150 LOC of test-literal migration if (a). Fwd-2 #997.
 
 ### §4.49 webview-e2e CI lane — actual root cause surfaced; MUST-FIX-OR-EXPLICITLY-ACCEPT-AT-TAG (R6-FP-5 sharpening)
 
@@ -792,6 +801,46 @@ See `.addl/dispatch-conventions.md §3.6j` for the ratified rule + brief-templat
 - **(2) Bridged dual runtime** — engine + Tauri each spawn their own runtime; communication crosses via channels. More isolation; better for the verso-swap-readiness goal; risk = bridging overhead + lifecycle coupling.
 
 Couples to #1101 (X3 workspace-tier architectural-commitment-to-tokio pim-N candidate) — that finding covers the workspace-tier discipline; this row is the per-crate Tauri-boundary manifestation. Sub-shape (a) of #1110 (the `Cargo.toml description` runtime-agnosticism disclaimer) is FIX-NOW and landed in this PR.
+
+### §4.60 `GraphBackend::Transaction` `run<F, R>` composability surface (Phase-4-Meta — Surf-1 #836)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Surf-1 #836, umbrella #1207). `GraphBackend::Transaction` + `transaction()` are an intentional **shape-lock-only marker** today — a generic `<B: GraphBackend>` caller obtains the handle but the handle drives nothing; batched transactional writes require dropping down to the per-backend inherent closure-based `RedbBackend::transaction(|tx| ...)`. The marker docstring at `crates/benten-graph/src/graph_backend.rs` now **explicitly** names this gap (closed inline at this PR per HARD RULE clause-(b) — the marker is the right shape-lock per `D-PHASE-3-1` RESOLVED; pulling the method now would be substantive work without a concrete second-backend driver).
+
+**Acceptance criteria.** When a second backend needs transactional composability (Phase-4-Meta or beyond), promote `Self::Transaction` to a real surface: add a `run<F, R>(self, f: F) -> Result<R, <Self as GraphBackend>::Error>` method delegating to the inherent closure-based path; each `*TransactionRunner` gains the driver. ~200-400 LOC across the trait + 3 impls + `benten-engine` transaction plumbing. Bundle with §4.43 v1-API-stabilization sweep if it lands first.
+
+### §4.61 `GraphBackend` umbrella SemVer-locking shape forks (Phase-4-Meta — Fwd-2 #1022 + safe-1 #501)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1022, umbrella #1207). The trait now carries a written **SemVer commitment** docstring (closed inline at this PR): (1) the trait remains non-object-safe post-v1 (removing any of `Snapshot`/`Error`/`Transaction` is a forbidden major break); (2)+(3) two shape forks are surfaced-not-resolved:
+
+- **`snapshot()` infallible-with-`expect`** vs. `Result<Self::Snapshot, Self::Error>`. Locking infallible at v1 means a Phase-4-Meta light-client `mode-(c)` signed-checkpoint backend whose snapshot can legitimately fail at open-time (cryptographic verification) has no clean path. Couples to safe-1 #501 (`.expect()` panic surface).
+- **`register_subscriber()` returns `()`** vs. `Result<(), Self::Error>`. Locking `()` at v1 means a future failure-surfacing subscriber (quota guard, duplicate-registration guard) has no trait path.
+
+**Acceptance criteria.** Pre-v1-stabilization decision per fork: (a) freeze current shape + the SemVer-commitment docstring (already landed) is the v1 record; (b) flip `snapshot()` and/or `register_subscriber()` to `Result<_, Self::Error>` pre-v1 (last chance before SemVer-lock) — ~50-150 LOC + every consumer site threads `?`. Same wave as §4.43 + §4.63.
+
+### §4.62 `BlobBackend` additive-default vs. sub-trait-split fork (Phase-4-Meta — Fwd-2 #1012)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1012, umbrella #1207). `BlobBackend::delete` + `list_cids` now land as **additive default methods** (closed inline at this PR — `delete` = idempotent `Ok(())` no-op; `list_cids` = `Ok(Vec::new())`; `RedbBlobBackend` overrides both with real impls; the `StubBlobBackend` test proves existing impls compile unchanged). This exercises the documented additive-default evolution posture ahead of v1-SemVer-lock so the evolution-cost is known (it is: zero — additive default methods).
+
+**Acceptance criteria.** v1-stabilization decision: (a) keep additive-default posture + lock it as the written v1 commitment (recommended — the cost is now known to be zero); OR (b) split `BlobBackend` (get/put/is_persistent) + `MutableBlobBackend: BlobBackend` (adds delete) + `EnumerableBlobBackend: BlobBackend` (adds list_cids) if a thin-client backend must NOT advertise mutate/enumerate capability at the type level. ~50-150 LOC if (b). Bundle with §4.43.
+
+### §4.63 `KVBackend` sync-only vs. RPITIT-async v1-stabilization fork (Phase-4-Meta — Surf-1 #855 + Fwd-2 #986)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Surf-1 #855 + Fwd-2 #986, umbrella #1207). `KVBackend` is sync-only (`fn get(&self, key) -> Result<...>`); `BlobBackend` is async via RPITIT (`impl Future + Send`). The asymmetry is LIVE in production: a future post-redb async-native backend (cloud-KV: DynamoDB/Cosmos/etcd per CLAUDE.md #19) cannot satisfy sync `KVBackend` without a runtime-blocking shim that re-introduces tokio into `benten-graph` (defying the no-tokio-dep architect decision at `lib.rs`). `NetworkFetchStubBackend` is the in-tree witness reserving the wrong trait shape for a Phase-3 iroh-fetch that cannot fit it. At v1-tag the public `KVBackend` shape SemVer-locks.
+
+**Acceptance criteria.** v1-stabilization fork (couples to §4.43 sub-bullet "`KVBackend` async-shape"):
+- **Path A (lock sync at v1):** ship `AsyncKVBackend` parallel trait post-v1 (non-breaking minor); network-fetch lives off-trait via inherent async until then. Optionally retire `NetworkFetchStubBackend` (removes the false promise — couples hyg-1 #305 Ben-call).
+- **Path B (convert to RPITIT pre-v1):** last chance before SemVer-lock; native impls use `core::future::ready(...)` shim like `RedbBlobBackend`. ~200 LOC + every `KVBackend` impl + consumer site.
+
+Surface the fork at the §4.43 v1-API-stabilization sweep brief so a later phase does not silently lock the sync surface.
+
+### §4.64 Light-client mode-(b) range-query-proof + mode-(c) signed-checkpoint trait-destination decision (Phase-4-Meta — Fwd-2 #1004)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1004, umbrella #1207). The Phase-3-deferred-to-Phase-4-Meta light-client primitives have **zero trait surface** in `benten-graph` today:
+
+1. **mode-(b) range-query proof.** `RedbBackend::get_by_property` returns `Vec<Cid>` with no Merkle proof; `LABEL_INDEX_TABLE`/`PROP_INDEX_TABLE` are redb multimaps (no Merkle tree, no range-query attestation). A thin-compute-surface client (CLAUDE.md #17 shape b) asking "all `Post` nodes with `category=Foo`" gets no verifiable answer.
+2. **mode-(c) signed checkpoint.** `SnapshotBlob` payload carries `schema_version + anchor_cid + nodes + system_zone_index` — no `committed_by: PeerDid`, no `signed_checkpoint: Signature`, no `hlc_clock`. CID-of-bytes is the only authentication; a recipient cannot validate "is THIS blob from the peer I asked."
+
+**Acceptance criteria.** The decision is forward-only — surface is **where**, not **what**. Decide at the §4.43 v1-API-stabilization sweep (before it locks `benten-graph`'s surface area): (a) extend `SnapshotBlob.schema_version: 1 → 2` for the mode-(c) checkpoint signature field (the existing `SchemaVersion` strict-mismatch error variant IS the backward-compatible migration path) + add a `MerkleRangeProofBackend` trait alongside `KVBackend` for mode-(b) IN `benten-graph`; OR (b) land both ABOVE the storage layer in `benten-sync` (native-only sync runtime + `benten-id` PeerDid signing) keeping the storage trait narrow — preferred per the foundational `engine_primitives_vs_application_layer` memory. ~no LOC now; ~300-600 LOC at Phase-4-Meta depending on (a)/(b).
 
 ---
 

@@ -484,6 +484,7 @@ pub enum GraphError {
     /// remains on the struct field for programmatic introspection and
     /// Debug rendering.
     #[error("backend not found: {}", redact_path_for_display(path))]
+    #[non_exhaustive]
     BackendNotFound {
         /// Path supplied to the failed `open_existing` call.
         path: std::path::PathBuf,
@@ -492,6 +493,7 @@ pub enum GraphError {
     /// A write was attempted on a system-zone label (label starting with
     /// `"system:"`) without the privileged flag set. Phase 1 SC1 stopgap.
     #[error("system-zone write not permitted from user path: {label}")]
+    #[non_exhaustive]
     SystemZoneWrite {
         /// The `system:` label the user-zone path tried to write.
         label: String,
@@ -525,6 +527,7 @@ pub enum GraphError {
     #[error(
         "immutability violation: CID {cid} already persisted (attempted_authority: {attempted_authority:?})"
     )]
+    #[non_exhaustive]
     InvImmutability {
         /// The CID the re-put targeted.
         cid: Cid,
@@ -539,6 +542,15 @@ pub enum GraphError {
 
     /// The transaction's closure returned `Err`, so the write batch was
     /// rolled back.
+    // Fwd-2 #997 / umbrella #1207: `#[non_exhaustive]` deliberately NOT
+    // applied to this variant — `GraphError::TxAborted { reason }` is
+    // constructed in cross-crate PRODUCTION code
+    // (`crates/benten-engine/src/engine_diagnostics.rs`), so a bare
+    // `#[non_exhaustive]` here would break the workspace build. Whether
+    // to apply it (plus a `GraphError::tx_aborted(reason)` constructor +
+    // migrate the benten-engine production sites) is named at
+    // `docs/future/phase-4-backlog.md §4.43` (v1-API-stabilization
+    // sweep). Cascade surfaced, not chased, per HARD RULE clause-(b).
     #[error("transaction aborted: {reason}")]
     TxAborted {
         /// Human-readable reason the closure returned `Err`.
@@ -547,6 +559,42 @@ pub enum GraphError {
 }
 
 impl GraphError {
+    /// Construct a [`GraphError::BackendNotFound`] for `path`.
+    ///
+    /// Controlled-surface-area constructor (Fwd-2 #997 / umbrella #1207):
+    /// the variant is `#[non_exhaustive]` so external crates (including
+    /// this crate's integration-test crates) construct it through this
+    /// builder rather than struct-literal syntax. Adding a future field
+    /// is then a non-breaking minor.
+    #[must_use]
+    pub fn backend_not_found(path: impl Into<std::path::PathBuf>) -> Self {
+        GraphError::BackendNotFound { path: path.into() }
+    }
+
+    /// Construct a [`GraphError::SystemZoneWrite`] for `label`.
+    ///
+    /// Controlled-surface-area constructor (Fwd-2 #997 / umbrella #1207)
+    /// — see [`GraphError::backend_not_found`] for the rationale.
+    #[must_use]
+    pub fn system_zone_write(label: impl Into<String>) -> Self {
+        GraphError::SystemZoneWrite {
+            label: label.into(),
+        }
+    }
+
+    /// Construct a [`GraphError::InvImmutability`] for `cid` under
+    /// `attempted_authority`.
+    ///
+    /// Controlled-surface-area constructor (Fwd-2 #997 / umbrella #1207)
+    /// — see [`GraphError::backend_not_found`] for the rationale.
+    #[must_use]
+    pub fn inv_immutability(cid: Cid, attempted_authority: WriteAuthority) -> Self {
+        GraphError::InvImmutability {
+            cid,
+            attempted_authority,
+        }
+    }
+
     /// Map a `GraphError` to its stable ERROR-CATALOG code.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
