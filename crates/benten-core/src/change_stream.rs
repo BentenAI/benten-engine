@@ -179,6 +179,44 @@ impl ChangeEvent {
             capability_grant_cid: None,
         }
     }
+
+    /// Full-fidelity constructor for the in-workspace production
+    /// graph→eval bridge (`benten-engine`'s `EngineBuilder` change-event
+    /// translation closure). Populates **every** field directly so
+    /// multi-label SUBSCRIBE matching and the three attribution CIDs are
+    /// not silently lost (the Phase-2b Round-2 Instance 6 BLOCKER shape).
+    ///
+    /// This is the cross-crate construction seam now that
+    /// [`ChangeEvent`] is `#[non_exhaustive]`: the struct-expression form
+    /// is no longer legal outside this crate, so the bridge calls this
+    /// instead. A future field add extends this signature (a controlled,
+    /// reviewable surface) rather than silently breaking every external
+    /// struct literal — exactly the `#[non_exhaustive]` contract.
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn for_bridge(
+        anchor_cid: Cid,
+        kind: ChangeKind,
+        seq: u64,
+        payload_bytes: Vec<u8>,
+        labels: Vec<String>,
+        tx_id: u64,
+        actor_cid: Option<Cid>,
+        handler_cid: Option<Cid>,
+        capability_grant_cid: Option<Cid>,
+    ) -> Self {
+        Self {
+            anchor_cid,
+            kind,
+            seq,
+            payload_bytes,
+            labels,
+            tx_id,
+            actor_cid,
+            handler_cid,
+            capability_grant_cid,
+        }
+    }
 }
 
 /// The change-stream port. SUBSCRIBE consumes this via DI; backends
