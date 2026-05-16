@@ -283,26 +283,27 @@ fn input_limit(msg: &str) -> napi::Error {
 
 /// Render a `benten_core::Node` as a JSON object matching `{ labels, properties }`.
 pub(crate) fn node_to_json(node: &Node) -> serde_json::Value {
-    let mut out = serde_json::Map::new();
-    out.insert(
-        "labels".to_string(),
-        serde_json::Value::Array(
-            node.labels
-                .iter()
-                .cloned()
-                .map(serde_json::Value::String)
-                .collect(),
-        ),
-    );
-    out.insert(
-        "properties".to_string(),
-        value_map_to_json(&node.properties),
-    );
-    serde_json::Value::Object(out)
+    crate::json_build::ObjBuilder::with_capacity(2)
+        .raw(
+            "labels",
+            serde_json::Value::Array(
+                node.labels
+                    .iter()
+                    .cloned()
+                    .map(serde_json::Value::String)
+                    .collect(),
+            ),
+        )
+        .raw("properties", value_map_to_json(&node.properties))
+        .build()
 }
 
 pub(crate) fn value_map_to_json(map: &BTreeMap<String, Value>) -> serde_json::Value {
-    let mut out = serde_json::Map::new();
+    // Dynamic-key projection (not a fixed-field object), so the
+    // ObjBuilder fixed-field shape does not apply — but prime the
+    // backing map for the known entry count (refinement-audit #1052:
+    // avoid the rehash chain bare `Map::new()` incurred).
+    let mut out = serde_json::Map::with_capacity(map.len());
     for (k, v) in map {
         out.insert(k.clone(), value_to_json(v));
     }
