@@ -1153,15 +1153,22 @@ impl AtriumHandle {
         self.inner.endpoint.peer_id()
     }
 
-    /// The local peer's loopback `EndpointAddr` for in-process
+    /// The local peer's loopback transport address for in-process
     /// two-peer test fixtures. Production peers discover each other
-    /// via iroh's relay-default + address-lookup path.
+    /// via the transport's relay-default + address-lookup path.
+    ///
+    /// Returns [`benten_sync::TransportAddr`] — the transport-neutral
+    /// public alias surfaced through `benten-sync`'s
+    /// `TransportEndpoint::Addr` seam (Surf-1 #889 / residual #1232).
+    /// The engine's public surface no longer names `iroh::EndpointAddr`
+    /// directly; the full `<T: Transport>` engine-generic migration
+    /// remains genuinely-post-v1 CLAUDE.md #19 work.
     ///
     /// # Errors
     ///
     /// Returns [`AtriumError::Transport`] if the underlying endpoint
     /// has no bound sockets.
-    pub fn loopback_addr(&self) -> AtriumResult<iroh::EndpointAddr> {
+    pub fn loopback_addr(&self) -> AtriumResult<benten_sync::TransportAddr> {
         Ok(self.inner.endpoint.loopback_addr()?)
     }
 
@@ -1208,7 +1215,7 @@ impl AtriumHandle {
     pub async fn sync_subgraph(
         &self,
         zone: &str,
-        remote_addr: iroh::EndpointAddr,
+        remote_addr: benten_sync::TransportAddr,
     ) -> AtriumResult<()> {
         self.ensure_active("sync_subgraph")?;
         let conn = self.inner.endpoint.connect_to_addr(remote_addr).await?;

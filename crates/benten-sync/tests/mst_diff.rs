@@ -101,7 +101,8 @@ fn mst_diff_two_peer_converges_in_log_n_rounds() {
     // documenting `n = total Node count`).
     let n = 1024usize;
     let (mut mst_a, mut mst_b) = build_diverged_msts(n);
-    let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b);
+    let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b)
+        .expect("benign corpus converges within MAX_ROUNDS");
     // Integer log2 (ceiling): for n that's a power of two, ilog2 is
     // exact; otherwise ilog2 + 1. Avoids `as f64` precision-loss
     // clippy warning.
@@ -127,7 +128,8 @@ fn mst_diff_convergence_under_divergent_node_count_n_definition() {
     let n_total = 4096;
     let n_divergent = 16;
     let (mut mst_a, mut mst_b) = build_diverged_msts_with_divergent_count(n_total, n_divergent);
-    let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b);
+    let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b)
+        .expect("benign corpus converges within MAX_ROUNDS");
     let log_n_div = if n_divergent.is_power_of_two() {
         n_divergent.ilog2() as usize
     } else {
@@ -151,7 +153,8 @@ fn mst_diff_convergence_o_log_n_for_corpus_with_depth_4_branch_8() {
     // one tree-level per round → log_2(4096) ~= 12 rounds at
     // canonical depth, with 4× constant giving 48-round headroom).
     let (mut mst_a, mut mst_b) = build_depth4_branch8_corpus();
-    let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b);
+    let rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b)
+        .expect("benign corpus converges within MAX_ROUNDS");
     // Tight bound: BTreeMap-flat shape resolves the entire divergence
     // in 1-2 rounds for n=4096. A regression that breaks the
     // O(1)-rounds property of the flat shape would trip this even

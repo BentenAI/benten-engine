@@ -94,6 +94,24 @@ pub const ATRIUM_ALPN: &[u8] = b"benten/atrium/1";
 /// G16-B/D consumers route `engine.atrium_status()` on this enum so
 /// operators can distinguish a happy direct path from a relay-fallback
 /// path from a degraded path.
+///
+/// ## Safe-3 #603 — establishment-time semantics (honest disclosure)
+///
+/// This discriminator is **captured at connection establishment and is
+/// NOT refreshed afterward**. iroh's holepunch may upgrade a
+/// Relay→Direct path mid-connection (D-PHASE-3-3 RESOLVED-at-R1's
+/// relay-default + best-effort holepunch), and a NAT rebind / holepunch
+/// timeout may degrade Direct→Relay; neither transition updates a live
+/// [`Connection`]'s kind. Operators reading `engine.atrium_status()`
+/// therefore see the *establishment-time* path classification, not the
+/// *current* one. The dynamic-refresh wiring (iroh
+/// `Connection::watch_conn_type` → background task → `Arc<Mutex<…>>`
+/// kind) is a Phase-4-Meta v1-assessment-window backlog row
+/// (`docs/future/phase-4-backlog.md`); until it lands, the
+/// Compromise #22 metadata-leakage observability story is
+/// establishment-time-accurate only. Honest disclosure (per
+/// Compromise #19 framing) is preferred over a docstring promise the
+/// code does not keep.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransportKind {
     /// Direct holepunched path. iroh has established a peer-to-peer
@@ -157,9 +175,15 @@ pub struct Endpoint {
     /// Peer identity. Identical to the iroh EndpointId per
     /// crypto-minor-4.
     peer_id: PeerId,
-    /// Last-observed transport status. Wrapped in `Mutex` because the
-    /// background relay-fallback task may update it independently of
-    /// the foreground connect/accept calls.
+    /// Last-observed transport status. Wrapped in `Mutex` so the
+    /// foreground connect/accept calls + the explicit `mark_degraded`
+    /// status-pipeline path can update it under shared ownership.
+    ///
+    /// Safe-3 #603: there is **no background relay-fallback task** at
+    /// HEAD — the prior comment promised one that does not exist. The
+    /// `Mutex` is load-bearing for the explicit status-update path
+    /// only; dynamic iroh-conn-type-driven refresh is the Phase-4-Meta
+    /// backlog item (`docs/future/phase-4-backlog.md`).
     status: Arc<Mutex<TransportStatus>>,
 }
 
@@ -478,9 +502,12 @@ impl Endpoint {
     /// up unchanged.
     ///
     /// Status defaults to `TransportKind::Direct` for `Disabled` /
-    /// `Relay` for the relay-default + custom-peer-list modes — the
-    /// background relay-handshake task will refine the kind once the
-    /// connection lands per G16-A's mark_degraded / status pipeline.
+    /// `Relay` for the relay-default + custom-peer-list modes. Safe-3
+    /// #603: this is the **establishment-time** classification and is
+    /// not subsequently refined — the prior comment promised a
+    /// background relay-handshake task that does not exist at HEAD.
+    /// Dynamic refinement (iroh `Connection::watch_conn_type`) is the
+    /// Phase-4-Meta backlog row (`docs/future/phase-4-backlog.md`).
     pub fn from_iroh_parts(
         inner: iroh::Endpoint,
         peer_id: PeerId,
@@ -594,8 +621,15 @@ impl std::fmt::Debug for Connection {
 }
 
 impl Connection {
-    /// Path-discriminator at connection-establishment time. G16-B/D
-    /// consumers route observability on this enum.
+    /// Path-discriminator **captured at connection-establishment time**
+    /// (Safe-3 #603 — honest naming). G16-B/D consumers route
+    /// observability on this enum.
+    ///
+    /// This value is NOT refreshed when iroh's holepunch upgrades a
+    /// Relay→Direct path mid-connection or a NAT rebind degrades
+    /// Direct→Relay. See [`TransportKind`]'s type-level docs for the
+    /// full establishment-time-semantics disclosure + the Phase-4-Meta
+    /// backlog row for the dynamic-refresh wiring.
     #[must_use]
     pub fn transport_kind(&self) -> TransportKind {
         self.kind
