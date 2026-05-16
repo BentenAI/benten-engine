@@ -404,6 +404,13 @@ mod serde_bytes_fixed {
 
 impl Cid {
     /// Construct a Benten CIDv1 from a 32-byte BLAKE3 digest.
+    ///
+    /// **Pre-v1 API note (Surf-1 #1033):** the `blake3` in this
+    /// constructor name hardcodes the hash-codec choice into what becomes
+    /// a v1-frozen surface. Whether to keep this name or adopt a
+    /// codec-neutral spelling (e.g. `from_digest`) is a pre-v1 API
+    /// decision deferred to Ben (coupled to the #995 Cid-shape decision);
+    /// the byte layout is frozen regardless of the spelling chosen.
     pub fn from_blake3_digest(digest: [u8; 32]) -> Self {
         let mut buf = [0u8; CID_LEN];
         buf[0] = CID_V1;
@@ -767,9 +774,19 @@ impl CoreError {
 // threaded surface (see `src/version.rs`). The `u64`-id-based Anchor + free
 // functions exposed here at the crate root are the thinner compatibility
 // surface for the Phase 1 "simple" case where callers don't need to detect
-// concurrent appends. R5 keeps both; R5 G7 picks a canonical shape once the
-// evaluator lands (cov-f3 residual — `TODO(phase-3 — version surface
-// consolidation)`; carried from Phase-2 generic marker).
+// concurrent appends.
+//
+// PRE-V1 DECISION PENDING (Surf-1 #1003 / #849 / Qual-2 #757): this
+// u64-id Anchor surface has zero non-test callers at HEAD (only
+// `benten-core/tests/proptests.rs`) and coexists with two other Anchor
+// shapes (Cid-head linear `version::Anchor`, DAG-shape
+// `version_chain::DagVersionChain`) with no shared trait and three
+// different "CURRENT" semantics. The earlier "R5 G7 picks a canonical
+// shape" / `TODO(phase-3 — version surface consolidation)` marker is
+// stale (phase-3 shipped). Delete-or-freeze of this surface + whether to
+// introduce a shared Anchor trait is a v1-API-stabilization decision
+// deferred to Ben (refinement-audit v1-API cluster #1158); not changed
+// here because it is a public-surface removal requiring ratification.
 //
 // State storage: each u64-id anchor owns a `Vec<Cid>` of appended version
 // CIDs (oldest-first), held in a process-wide spinlocked table keyed by
