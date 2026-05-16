@@ -219,6 +219,14 @@ pub mod transport;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod transport_trait;
 
+// Surf-1 #889 / residual #1232: the transport-neutral public name for
+// the connection address type. `benten-engine`'s public sync API names
+// `benten_sync::TransportAddr` instead of `iroh::EndpointAddr`, so the
+// engine's public surface no longer leaks an iroh-concrete type two
+// crates outward. Defined via the `TransportEndpoint::Addr` seam.
+#[cfg(not(target_arch = "wasm32"))]
+pub use transport_trait::TransportAddr;
+
 // G16-B wave-6b — Loro CRDT integration at Node-property granularity per
 // D-PHASE-3-4 RESOLVED-at-R1. Native-only alongside iroh + Loro deps.
 #[cfg(not(target_arch = "wasm32"))]

@@ -266,6 +266,28 @@ impl RevocationEntry {
     }
 }
 
+/// Deduplicate a synchronized-revocation union in place, preserving
+/// first-seen order (Safe-3 #613 closure).
+///
+/// The post-handshake `Session.synchronized_revocations` snapshot is
+/// built as `local ∪ remote` via `Vec::extend`, which keeps
+/// multiplicity. Across rejoin cycles under network churn the same
+/// `(target_peer_did, path)` pair can be re-advertised repeatedly,
+/// growing the Session-lifetime Vec multiplicatively and amplifying
+/// the per-row cap-recheck walk (`engine.apply_atrium_merge` walks
+/// this set per replicated row — O(N·K) instead of O(K)). A peer can
+/// also *deliberately* pack thousands of identical entries within the
+/// 4-MiB `recv_bytes` cap to amplify substrate growth in counterparties.
+///
+/// `Did` is `Hash + Eq` (not `Ord`) so we dedup via a `HashSet` of
+/// `(did_str, path)` keys + a single retained pass — O(N) time, stable
+/// order, no semantic reordering of the revocation set.
+fn dedup_synchronized_revocations(entries: &mut Vec<RevocationEntry>) {
+    let mut seen: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::with_capacity(entries.len());
+    entries.retain(|e| seen.insert((e.target_peer_did.as_str().to_string(), e.path.clone())));
+}
+
 // ---------------------------------------------------------------------------
 // Signing / verifying helpers
 // ---------------------------------------------------------------------------
@@ -595,6 +617,12 @@ impl Handshake {
         // gate consults.
         let mut synchronized_revocations = local_revocation_set.clone();
         synchronized_revocations.extend(remote_revocation_set);
+        // Safe-3 #613: collapse the local ∪ remote union to set
+        // semantics (first-seen order preserved). Without this, rejoin
+        // churn + adversarial duplicate-packing grow the
+        // Session-lifetime snapshot multiplicatively and amplify the
+        // per-row cap-recheck walk in `engine.apply_atrium_merge`.
+        dedup_synchronized_revocations(&mut synchronized_revocations);
         let session = Session::new_authenticated(
             local_did,
             initiate_frame.peer_did.clone(),
@@ -678,6 +706,9 @@ impl Handshake {
         let local_did = local_kp.public_key().to_did();
         let mut synchronized_revocations = local_revocation_set;
         synchronized_revocations.extend(remote_revocation_set);
+        // Safe-3 #613: initiator-side mirror of the responder-side
+        // dedup — set semantics on the local ∪ remote union.
+        dedup_synchronized_revocations(&mut synchronized_revocations);
         Ok(Session::new_authenticated(
             local_did,
             response_frame.peer_did.clone(),
@@ -1131,6 +1162,61 @@ mod tests {
         assert_eq!(
             sig_err.code(),
             benten_errors::ErrorCode::AtriumTransportDegraded
+        );
+    }
+
+    #[test]
+    fn dedup_synchronized_revocations_collapses_duplicates_first_seen_order() {
+        // Safe-3 #613 closure pin (unit): the helper collapses
+        // duplicate (target_peer_did, path) pairs to set semantics
+        // while preserving first-seen order. This is the surface the
+        // adversarial-duplicate-packing + rejoin-churn substrate-growth
+        // path relies on.
+        let d1 = Keypair::generate().public_key().to_did();
+        let d2 = Keypair::generate().public_key().to_did();
+        let mut v = vec![
+            RevocationEntry::new(d1.clone(), "/a/*"),
+            RevocationEntry::new(d2.clone(), "/b/*"),
+            RevocationEntry::new(d1.clone(), "/a/*"), // exact dup of [0]
+            RevocationEntry::new(d1.clone(), "/c/*"), // distinct path
+            RevocationEntry::new(d2.clone(), "/b/*"), // exact dup of [1]
+        ];
+        dedup_synchronized_revocations(&mut v);
+        assert_eq!(v.len(), 3, "two exact duplicates removed");
+        // First-seen order preserved: [d1,/a/*], [d2,/b/*], [d1,/c/*].
+        assert_eq!(v[0].path(), "/a/*");
+        assert_eq!(v[1].path(), "/b/*");
+        assert_eq!(v[2].path(), "/c/*");
+    }
+
+    #[test]
+    fn handshake_session_revocations_are_deduplicated() {
+        // Safe-3 #613 closure pin (substantive): a handshake where
+        // BOTH local + remote advertise the SAME revocation entry
+        // produces a Session whose synchronized_revocations snapshot
+        // contains it exactly ONCE (pre-#613: it appeared twice via
+        // the Vec::extend union, amplifying the per-row cap-recheck
+        // walk in engine.apply_atrium_merge).
+        let kp_a = Keypair::generate();
+        let kp_b = Keypair::generate();
+        let did_b = kp_b.public_key().to_did();
+        let target = Keypair::generate().public_key().to_did();
+        let shared = RevocationEntry::new(target.clone(), "/zone/posts/private/*");
+
+        // Initiator advertises `shared`; responder ALSO holds `shared`
+        // locally — the union would duplicate it without dedup.
+        let initiate = Handshake::initiate(&kp_a, did_b, None, vec![shared.clone()]).unwrap();
+        let (_response, session_b) =
+            Handshake::respond(&kp_b, &initiate, None, vec![shared.clone()]).unwrap();
+
+        let synced = session_b.synchronized_revocations_for_local_peer();
+        let occurrences = synced
+            .iter()
+            .filter(|r| r.target_peer_did() == &target && r.path() == "/zone/posts/private/*")
+            .count();
+        assert_eq!(
+            occurrences, 1,
+            "shared revocation must appear exactly once post-dedup (Safe-3 #613)"
         );
     }
 }

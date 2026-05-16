@@ -842,6 +842,12 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1004, u
 
 **Acceptance criteria.** The decision is forward-only — surface is **where**, not **what**. Decide at the §4.43 v1-API-stabilization sweep (before it locks `benten-graph`'s surface area): (a) extend `SnapshotBlob.schema_version: 1 → 2` for the mode-(c) checkpoint signature field (the existing `SchemaVersion` strict-mismatch error variant IS the backward-compatible migration path) + add a `MerkleRangeProofBackend` trait alongside `KVBackend` for mode-(b) IN `benten-graph`; OR (b) land both ABOVE the storage layer in `benten-sync` (native-only sync runtime + `benten-id` PeerDid signing) keeping the storage trait narrow — preferred per the foundational `engine_primitives_vs_application_layer` memory. ~no LOC now; ~300-600 LOC at Phase-4-Meta depending on (a)/(b).
 
+### §4.65 `Connection.transport_kind` dynamic-refresh wiring (Phase-4-Meta / v1-assessment-window — Safe-3 #603, umbrella #1181)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-3 #603, umbrella #1181). The pre-v1 closure landed **Path B** (honest disclosure): `crates/benten-sync/src/transport.rs` docstrings + the three over-promising inline comments (`Endpoint.status` "background relay-fallback task", `from_iroh_parts` "background relay-handshake task will refine", `Connection::transport_kind` accessor) now correctly state that `Connection.kind` is the **establishment-time** path classification and is NOT refreshed when iroh holepunch upgrades Relay→Direct mid-connection or a NAT rebind degrades Direct→Relay. `TransportKind`'s type-level docs carry the full Compromise #22 metadata-leakage establishment-time-accuracy disclosure.
+
+**Deferred Path A (this row).** Wire the real dynamic-refresh task: iroh exposes `Connection::watch_conn_type()` (iroh 0.98) which yields a stream of `ConnectionType::{Relay, Direct, Mixed}` transitions. Spawn a per-`Connection` tokio task that updates the kind (requires `Connection.kind` → `Arc<AtomicU8>` or `Arc<Mutex<TransportKind>>`) + propagates to `Endpoint.status`. ~40-60 LOC + a test pin asserting the kind flips when the iroh stream emits a transition. This is genuine net-new background-task wiring with behavioral surface — a v1-assessment-window candidate, not a pre-v1 doc fix. Bundle with the Compromise #22 metadata-leakage observability re-assessment if that lands in the same window.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
