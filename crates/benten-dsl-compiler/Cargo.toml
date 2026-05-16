@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-2b DSL-text → SubgraphSpec compiler. MINIMAL-FOR-DEVSERVER scope per arch-pre-r1-1: ~200-300 LOC, 4 public items (compile_str, compile_file, CompileError, Diagnostic). Sibling-of-engine; depends on benten-core only — MUST NOT depend on benten-eval or benten-graph (preserves arch-1)."
+description = "Phase-2b DSL-text → benten_core::Subgraph compiler. MINIMAL-FOR-DEVSERVER scope per arch-pre-r1-1: ~900 LOC, 7 public items (compile_str, compile_file, CompileError, Diagnostic, CompiledSubgraph, CompiledPrimitive, PrimitiveKind re-export). Sibling-of-engine; depends on benten-core only — MUST NOT depend on benten-eval or benten-graph (preserves arch-1)."
 publish = false
 
 [lints]
@@ -18,7 +18,7 @@ bench = false
 
 [dependencies]
 # Per arch-pre-r1-3 + plan §3.2 G12-B + r1-architect-reviewer.json:
-# benten-dsl-compiler depends on benten-core (Subgraph + SubgraphSpec types)
+# benten-dsl-compiler depends on benten-core (Subgraph + Value + PrimitiveKind)
 # and MUST NOT depend on benten-eval or benten-graph (preserves arch-1).
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }

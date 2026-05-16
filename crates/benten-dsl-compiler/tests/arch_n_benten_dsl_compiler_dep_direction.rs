@@ -3,7 +3,7 @@
 //! Per `r1-architect-reviewer.json` D-point G12-B-scope + plan §3.2 G12-B +
 //! `00-implementation-plan.md` line 582: `benten-dsl-compiler` sits as a
 //! sibling of `benten-engine`, depends on `benten-core` for `Subgraph` /
-//! `SubgraphSpec` types, and **MUST NOT depend on `benten-eval` or
+//! `Value` / `PrimitiveKind` types, and **MUST NOT depend on `benten-eval` or
 //! `benten-graph`** — preserves arch-1.
 //!
 //! Lifted from red-phase 2026-04-28 — file scans `Cargo.toml` for forbidden
