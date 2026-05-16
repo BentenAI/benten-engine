@@ -841,14 +841,14 @@ export class EGraphInternal extends BentenError {
 /**
  * E_GRAPH_SCHEMA_VERSION_MISMATCH
  *
- * Thrown at: redb backend open (#992 on-disk schema-version envelope)
+ * Thrown at: redb backend open (`RedbBackend::open_existing` / `open_or_create`)
  * Message template: "redb graph schema mismatch: this build expects version {expected}, file declared version {actual}"
  */
 export class EGraphSchemaVersionMismatch extends BentenError {
   static readonly code = "E_GRAPH_SCHEMA_VERSION_MISMATCH";
-  static readonly fixHint = "Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob `E_*` SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1. This fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration for the target version.";
+  static readonly fixHint = "Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1 (the 5-prefix layout that predates the envelope). Fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration. #992 (refinement-audit-2026-05 wire-format cluster).";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_GRAPH_SCHEMA_VERSION_MISMATCH", "Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob `E_*` SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1. This fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration for the target version.", message, context);
+    super("E_GRAPH_SCHEMA_VERSION_MISMATCH", "Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1 (the 5-prefix layout that predates the envelope). Fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration. #992 (refinement-audit-2026-05 wire-format cluster).", message, context);
     this.name = "EGraphSchemaVersionMismatch";
   }
 }
