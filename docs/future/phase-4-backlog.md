@@ -621,6 +621,8 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 sec-r6r3-1 + sec-r6r3-2 MINOR, de
 
 **Acceptance criteria.** Either (a) ship a wasm32 stub function with the same signature returning `ChainValidationOutcome::ChainInvalid` + an error citing CLAUDE.md #17(b); or (b) gate wasm32 build entirely with `#[cfg(target_arch = "wasm32")] compile_error!("...")` if benten-caps is determined not to compile for wasm32 at all (which the current state arguably already is — benten-graph fails to build wasm32). ~10-30 LOC.
 
+**Sibling wasm32 sweep (benten-graph `blob_backend.rs`, added 2026-05-15 per umbrella #1207 / mini-review-1237 MINOR):** the pre-existing wasm32 break has 3 sites at `crates/benten-graph/src/blob_backend.rs:63/135/164`; umbrella #1207 added a 4th identical-pattern site at `:248` (disclosed, in an already-wasm32-broken non-wasm32 module — not a meaningful regression). The eventual wasm32-gating fix MUST sweep all 4 sites together (not 3) — bundle with this §4.42 wave.
+
 ### §4.45 `PluginDidStore::insert` duplicate-DID defensive return — CLOSED at R6-FP-3 (2026-05-13)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 carry).
