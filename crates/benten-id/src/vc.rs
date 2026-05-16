@@ -216,13 +216,15 @@ impl CredentialBuilder {
         self
     }
 
-    /// Add a credential type (the base `VerifiableCredential` type is
-    /// auto-prepended at sign time).
-    #[must_use]
-    pub fn extra_type(mut self, t: impl Into<String>) -> Self {
-        self.types.push(t.into());
-        self
-    }
+    // Hyg-1 #340: the `extra_type` builder method is removed — zero
+    // callers (speculative pub surface that never grew a caller;
+    // CLAUDE.md #5 / META #355). The `types` field + sign-time
+    // base-type prepend are RETAINED (DISAGREE-WITH-EXPLANATION for
+    // the field, HARD RULE 12 (c)): they emit the W3C-mandated
+    // `"type": ["VerifiableCredential"]` array and are read on every
+    // `sign()`. Removing `extra_type` produces byte-identical
+    // canonical bytes for every current caller (none called it, so
+    // `self.types` was already always empty).
 
     /// Set the issuer DID.
     #[must_use]
@@ -341,10 +343,10 @@ impl TrustDomain {
         Self::default()
     }
 
-    /// Add an issuer DID to the allow-list.
-    pub fn allow(&mut self, did: &Did) {
-        self.issuers.insert(did.as_str().to_string());
-    }
+    // Hyg-1 #338: the `allow(&mut self, &Did)` mutator is removed —
+    // zero callers. Construction goes through `TrustDomain::new(Vec<Did>)`
+    // / `TrustDomain::empty()`; the incremental-mutate path never grew
+    // a caller (CLAUDE.md #5 / META #355).
 
     /// Check whether `issuer` is allow-listed.
     pub fn contains(&self, issuer: &str) -> bool {
@@ -352,9 +354,20 @@ impl TrustDomain {
     }
 }
 
-/// In-RAM revocation registry. Phase 3 G14-B replaces this with a
-/// durable backend; the trait surface here is intentionally minimal
-/// (the must-pass tests drive `revoke` + `is_revoked`).
+/// In-RAM revocation registry. Durable rehydration is named for
+/// Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`; the trait
+/// surface here is intentionally minimal (the must-pass tests drive
+/// `revoke` + `is_revoked`).
+///
+/// ## Concurrency contract (Safe-4 #642)
+///
+/// `RevocationRegistry` is interior-synchronized: `&self` methods
+/// (`revoke` / `is_revoked`) are safe to call concurrently from
+/// multiple threads. The internal `Mutex` is poison-tolerant — a
+/// panic in another thread while the lock is held does NOT
+/// permanently brick this security-critical revocation substrate
+/// (see [`RevocationRegistry::revoke`]). Callers do NOT need to wrap
+/// it in an outer lock.
 #[derive(Default)]
 pub struct RevocationRegistry {
     revoked: Mutex<HashSet<String>>,
@@ -367,18 +380,34 @@ impl RevocationRegistry {
     }
 
     /// Mark a `credentialStatus.id` as revoked.
+    ///
+    /// **Safe-1 #512 — mutex-poison hardening.** A `.expect()` on the
+    /// poisoned lock would permanently panic every subsequent
+    /// `revoke` / `is_revoked` call, silently failing OPEN (a revoked
+    /// credential would never be observed as revoked because the
+    /// revocation call panics before the insert). Recover the guard
+    /// via [`std::sync::PoisonError::into_inner`] instead: the
+    /// `HashSet` is a plain string set with no broken invariant on
+    /// poison, so continuing with the recovered guard is the
+    /// fail-CLOSED-preserving choice. Matches the `engine_caps`
+    /// poison-recovery posture (META #739).
     pub fn revoke(&self, status_id: impl Into<String>) {
         self.revoked
             .lock()
-            .expect("registry mutex poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(status_id.into());
     }
 
     /// Check whether a `credentialStatus.id` is revoked.
+    ///
+    /// Poison-tolerant for the same reason as
+    /// [`RevocationRegistry::revoke`] — a poisoned lock here would
+    /// panic the consult path, which a `verify_with_registry` caller
+    /// would observe as a hard crash rather than a revocation answer.
     pub fn is_revoked(&self, status_id: &str) -> bool {
         self.revoked
             .lock()
-            .expect("registry mutex poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .contains(status_id)
     }
 }

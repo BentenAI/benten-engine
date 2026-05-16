@@ -309,6 +309,17 @@ impl DeviceAttestation {
     }
 
     /// Decode from canonical bytes.
+    ///
+    /// **Hyg-1 #329 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)),
+    /// production-zero / test caller exists.** This is the decode half
+    /// of the canonical-bytes round-trip contract whose encode half
+    /// (`canonical_bytes`) is load-bearing in `issue_with_nonce` /
+    /// `verify_signature_with`. The `device_attestation.rs`
+    /// integration suite drives it (round-trip pin at
+    /// `tests/device_attestation.rs`). Deleting it would break
+    /// canonical-bytes symmetry (a wire-format-adjacent surface —
+    /// out of scope to mutate per the lane's wire-format rule).
+    /// T-3v-D wording sharpen: "production-zero", NOT "zero callers".
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, DeviceAttestationError> {
         serde_ipld_dagcbor::from_slice(bytes).map_err(|_| DeviceAttestationError::DecodeFailed)
     }

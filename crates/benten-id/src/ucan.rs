@@ -27,17 +27,19 @@
 //! exists in this file. (Look for the `// const-time-eq` markers in
 //! the source.)
 //!
-//! ## Out of scope at G14-A1 (G14-A2 / G14-B / wave-4b)
+//! ## Validate-side seams (SHIPPED)
 //!
-//! - `validate_chain_with_revocations` (G14-B durable backend).
-//! - `validate_chain_with_attestations` (G14-A2 device-attestation).
-//! - `validate_chain_with_rotation_log` (G14-A2 DID rotation).
-//! - `DurableBackend` / `RevocationSet` / `AuthoritySet` /
-//!   `DelegationError::AudienceEnvelopeIncompatibleWithCapability`.
+//! - [`validate_chain_with_attestations`] — device-attestation
+//!   envelope gate (the COLLAPSE-deleted device *acceptance* pipe is
+//!   gone; this validate-side runtime gate survives as the pure
+//!   primitive).
+//! - [`validate_chain_with_rotation_log`] — DID-rotation supersession
+//!   gate.
 //!
-//! These tests stay `#[ignore]`'d at G14-A1 with rationale strings
-//! pointing at the next wave. See `crates/benten-id/tests/ucan.rs` for the full pin
-//! catalogue.
+//! Durable rehydration of the rotation/revocation substrate at
+//! engine-open is named for Phase-4-Meta at
+//! `docs/future/phase-4-backlog.md §4.26`. See
+//! `crates/benten-id/tests/ucan.rs` for the full pin catalogue.
 
 use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
@@ -120,11 +122,10 @@ impl Ucan {
         check_time_window(&self.claims, now)
     }
 
-    /// Compute canonical-bytes for the claims payload (signature
-    /// input).
-    fn canonical_bytes(&self) -> Vec<u8> {
-        canonical_bytes(&self.claims)
-    }
+    // Hyg-1 #311: the private `Ucan::canonical_bytes(&self)` method is
+    // removed — a zero-caller no-op wrapper over the module free-fn
+    // `canonical_bytes(&UcanClaims)`. Call sites use the free-fn
+    // directly (CLAUDE.md #5 — no no-op wrappers).
 }
 
 fn canonical_bytes(claims: &UcanClaims) -> Vec<u8> {
@@ -374,6 +375,17 @@ pub fn validate_chain_for_capability(
 /// using the SAME relation the chain-walk uses internally — single
 /// source of truth.
 ///
+/// **Hyg-1 #304 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+/// Zero callers exist *within* `benten-id`, but this is an
+/// intentionally-public cross-crate API: the subsume-relation
+/// single-source-of-truth the `benten-engine` typed-CALL dispatch
+/// queries. Narrowing to `pub(crate)` or deleting it would either
+/// fork the subsume rule (the defense-in-depth hole this function
+/// closes) or break the engine consumer. Not speculative dead code —
+/// the in-crate caller is `validate_chain_for_capability` via the
+/// shared `caps_match_or_subsume` helper; the cross-crate caller is
+/// the engine dispatch path (out-of-lane to re-verify here).
+///
 /// Subsume relation:
 /// - exact match (`resource` AND `ability` equal), OR
 /// - `granted.ability` is `*` AND `resource` matches, OR
@@ -569,12 +581,15 @@ pub fn validate_chain_with_rotation_log(
 /// claimed capability (e.g. `host:sandbox:exec` from a
 /// `runs_sandbox=false` device).
 ///
-/// **G14-A2 scope (per g14-a2-mr-4 docstring sharpen):** currently
-/// enforces the `runs_sandbox` envelope dimension only. Broader
-/// envelope-dimension enforcement (`runs_atrium_peer`, `holds_zones`,
-/// `online_uptime`) lands at G14-B when atrium-peer + zone caps fully
-/// exist. Backlog: `docs/future/phase-3-backlog.md §2.1-followup` for
-/// the multi-dimension extension.
+/// **Scope (post-COLLAPSE):** this validate-side seam enforces the
+/// `runs_sandbox` envelope dimension only. Under COLLAPSE
+/// (DECISION-RECORD §4 RATIFIED) broader multi-dimension envelope
+/// enforcement (`runs_atrium_peer`, `holds_zones`, `online_uptime`)
+/// is NOT a benten-id concern — it collapses to the engine's single
+/// inbound-sync envelope-ceiling recheck plus user-root UCAN
+/// revocation. This function remains the pure benten-id-layer
+/// `runs_sandbox` gate; the unified ceiling-check lives at the
+/// engine/`benten-caps` seam.
 pub fn validate_chain_with_attestations(
     chain: &[Ucan],
     attestations: &[crate::device_attestation::DeviceAttestation],

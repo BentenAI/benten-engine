@@ -81,14 +81,10 @@ impl SecretKey {
         Self { bytes }
     }
 
-    /// Test-only accessor for memory-inspection in
-    /// `crates/benten-id/tests/keypair.rs::keypair_secret_bytes_zeroized_on_drop`.
-    /// Pointer into the SecretKey's storage so a post-drop
-    /// `read_volatile` can assert zeroize ran.
-    #[doc(hidden)]
-    pub fn bytes_ptr_for_test(&self) -> *const [u8; 32] {
-        &raw const self.bytes
-    }
+    // Hyg-1 #308: `bytes_ptr_for_test` removed — it had ZERO callers
+    // anywhere (including the test suite; the zeroize-on-drop pin uses
+    // `secret_bytes_for_test()` instead). Speculative test-accessor
+    // surface that never grew a caller (CLAUDE.md #5 / META #355).
 
     /// Test-only accessor for hex-comparison in
     /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
@@ -204,13 +200,11 @@ impl Keypair {
         &self.verifying
     }
 
-    /// Borrow this keypair's secret. Visibility is intentionally
-    /// crate-internal — external callers go through
-    /// [`Keypair::export_seed_envelope`] for the audit-trail-shaped
-    /// path.
-    pub(crate) fn secret(&self) -> &SecretKey {
-        &self.secret
-    }
+    // Hyg-1 #306: `Keypair::secret()` (pub(crate)) removed — zero
+    // crate-internal callers. The audit-trail-shaped external path is
+    // `Keypair::export_seed_envelope`; test inspection goes through
+    // `secret_bytes_for_test`. No SemVer impact (was already
+    // crate-private). CLAUDE.md #5.
 
     /// Test-only accessor mirroring [`SecretKey::bytes_for_test`] for
     /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
