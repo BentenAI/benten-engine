@@ -854,6 +854,32 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Surf-2 SF2-07 
 
 **Acceptance criteria.** Surface is *where + decision-shape*, not *what*. Each row resolves at Phase-4-Meta or the §4.43 v1-API-stabilization sweep. ~no LOC now; ~50-300 LOC at Phase-4-Meta depending on which rows take the implement-vs-close-as-intentional path.
 
+### §4.66 Capability-mutation surface organization: `EngineCapsHandle` vs `Engine`-direct asymmetry (Phase-4-Meta / §4.43 v1-API-stabilization — Qual-2 #820 / refinement-audit #1195)
+
+Per HARD RULE rule-12 DISAGREE-WITH-EXPLANATION + BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-2 #820, umbrella #1195). The capability-grant mutation surface is split: 2 pass-through methods (`install_proof` / `revoke`) on `EngineCapsHandle` (returned by `Engine::caps()`, rustdoc'd as "the production-equivalent grant-mutation handle") vs 8 methods on `Engine` directly — including the most-recently-landed `revoke_capability_by_grant_cid` (PR #199) and `delegate_capability` (Phase-4-Foundation, which IS on the handle at `engine_caps.rs:498` — the decision rule is unstable).
+
+**Why this is NOT executed in the #1195 mechanical bundle (DISAGREE-WITH-EXPLANATION on standalone execution):**
+
+1. **Public capability-mutation API is the most security-critical crate surface.** Relocating load-bearing methods between public surfaces (`Engine` ↔ `EngineCapsHandle`) is a v1-API-stabilization decision, not a mechanical alias-deletion. The issue itself names `docs/future/phase-4-backlog.md §4.43` (v1-API-stabilization sweep) as the destination and lists "Blocked by: Orchestrator confirmation of overlap with U05" as a hard dependency.
+2. **Cross-lane (napi) coupling.** `bindings/napi/src/lib.rs:703` + `:746` call `Engine::revoke_capability_by_grant_cid` + `Engine::delegate_capability` directly. Moving them onto `EngineCapsHandle` changes the napi binding signature — an out-of-lane (`bindings/napi`) cascade the benten-engine lane cannot land unilaterally.
+3. **U05 (#834) is a `bindings-napi` Surf-1 umbrella (napi_surface::Engine 50-method cohesion failure), NOT a benten-engine facet-handle split.** The #1195 body's "U05 part-1 owns CapsHandle migration" framing must be reconciled by the orchestrator: the napi-side facet split and the engine-side handle organization are sibling-but-distinct surfaces. Whichever lands first sets the canonical organizing principle.
+
+**The forced architectural choice (surfaced for Ben/orchestrator ratification at §4.43):** either (a) `EngineCapsHandle` IS the canonical production grant-mutation surface → migrate `revoke_capability_by_grant_cid` + `install_ucan_proof` + `grant_capability*` + `create_principal` onto it (8→0 on Engine direct; napi rebinds through `.caps()`); OR (b) `Engine`-direct IS canonical → `install_proof` / `revoke` on `EngineCapsHandle` are redundant CLAUDE.md-#5-class aliases and the handle is deleted. Option (b) is the simpler CLAUDE.md-#5-consistent end state but loses the sec-r4r1-2 RED-PHASE-pin consumer framing; option (a) is the larger refactor. ~0 LOC now; ~150-250 LOC at the chosen option, plus the coupled napi-lane rebind.
+
+### §4.67 ChangeBroadcast / patterned-subscriber fan-out prefilter (Phase-4-Meta — Fwd-2 #1038 / refinement-audit #1194)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW + OUT-OF-LANE-for-ST-ENGINE (refinement-audit-2026-05 Fwd-2 #1038, umbrella #1194). Forward-readiness: per-change-event subscriber fan-out is O(N) with no pattern prefilter; compounds at Phase-4-Meta self-composing admin (N panels × M writes/sec) + Phase-5+ AI-agent workloads.
+
+**Why this is NOT executed in the #1194 benten-engine lane (OUT-OF-LANE + DISAGREE-WITH-EXPLANATION on the issue's lane attribution):** the issue names three locations but the meaningful prefilter cannot live in any in-lane (`crates/benten-engine/`) surface:
+
+- `benten-engine::change.rs::ChangeBroadcast` (in-lane) stores `Vec<Arc<dyn Fn(&ChangeEvent)>>` with **zero pattern info** — its subscribers are IVM closures registered via `subscribe_fn`, not the patterned `on_change` path. There is nothing in-lane to prefilter ON.
+- `benten-engine::engine_subscribe.rs::register_on_change_internal` (in-lane) translates the string pattern to `ChangePattern` then delegates registration + the per-event match-walk to `benten_eval::primitives::subscribe::register_on_change` — **`crates/benten-eval/`, out-of-lane**.
+- The actual O(N) "for each entry whose pattern matches the event's anchor label" walk is in `crates/benten-eval/src/primitives/subscribe.rs` (~L938-947) — out-of-lane. `ChangePattern` validation/registry semantics there are wire-adjacent.
+
+A prefix-trie prefilter (the issue's sketch option (a)) must be built where the patterns are held: the `benten-eval` subscriber registry + its publish loop. Threading patterns down into the in-lane `ChangeBroadcast` would require a cross-crate `subscribe_fn` signature change AND the `benten-eval` registry rework — outside the ST-ENGINE single-crate lane.
+
+**Acceptance criteria (Phase-4-Meta, primarily `benten-eval` lane).** Add a `LabelGlob`/`AnchorPrefix` prefix-trie prefilter to the `benten_eval::primitives::subscribe` registry consulted before iterating subscribers; full-glob/arbitrary patterns fall back to current "call every subscriber"; criterion bench asserts O(1)-avg vs O(N) at N=1k subscribers; no semantic change (same subscribers receive same events); INTERNALS.md (both `benten-eval` and `benten-engine` where the `engine_subscribe` delegation is documented) updated. ~150-250 LOC at Phase-4-Meta. Surface this lane-attribution correction to the orchestrator at PR-open (the umbrella #1194 should be re-pointed at a `benten-eval` lane or a cross-lane wave).
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
