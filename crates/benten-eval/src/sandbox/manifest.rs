@@ -22,8 +22,10 @@
 //!     re-encodes.
 //!   - Reserved `signature: Option<ManifestSignature>` field is omitted
 //!     from canonical bytes when `None` (the canonical encoder strips
-//!     `None` Option fields). Phase-3 signed re-issuance gets a distinct
-//!     CID by virtue of the signature bytes joining the canonical map.
+//!     `None` Option fields). Signed re-issuance (the Phase-4-Meta
+//!     signed-manifest lift; Phase 3 SHIPPED without delivering it) gets
+//!     a distinct CID by virtue of the signature bytes joining the
+//!     canonical map.
 //!
 //! ESC-15 escape-vector closure: `lookup` of an unknown manifest name
 //! returns `Err(ManifestError::Unknown { .. })`. There is NO permissive
@@ -39,14 +41,17 @@ use std::collections::BTreeMap;
 /// Construction:
 /// - Default-bundled entries are loaded by [`ManifestRegistry::new`] from
 ///   the codegen-emitted [`default_manifests`] table.
-/// - Runtime-registered bundles are reserved for Phase 8 (see D2).
+/// - Runtime-registered bundles are reserved for the Phase-4-Meta
+///   plugin-install path (see D2 + [`ManifestRegistry::register_runtime`];
+///   the historical "Phase 8 marketplace" framing pre-dates the
+///   CLAUDE.md #15 v1-scope widening ratified 2026-05-10).
 ///
 /// **Intentionally NOT `Serialize` / `Deserialize`** (det-r4b-4 closure,
 /// wave-8e). Mirrors the cag-mr-g12c-cont-1 fix-pass applied to
 /// `Subgraph` / `NodeHandle`: the canonical encoding for a CapBundle
 /// flows through [`Self::canonical_bytes`] (a typed inner shape that
 /// honours the sorted-keys + skip-when-None discipline that defines
-/// CID-stability across the Phase-3 signed-bundle lift). A
+/// CID-stability across the Phase-4-Meta signed-bundle lift). A
 /// `serde_json::to_string(&bundle)` callsite would silently produce a
 /// SECOND encoding shape — fields in declaration order, no skip-on-
 /// `None` discipline, no DAG-CBOR canonicalisation — and any
@@ -323,8 +328,10 @@ impl ManifestRegistry {
     /// install-time bundles.
     ///
     /// This is a distinct surface from [`Self::register_runtime`]: the
-    /// runtime-registration path is reserved for Phase-8 marketplace
-    /// work, while this overlay path is the engine's `install_module`
+    /// runtime-registration path is reserved for the Phase-4-Meta
+    /// plugin-install work (per CLAUDE.md baked-in #15 + #18; the
+    /// historical "Phase 8 marketplace" framing pre-dates the v1-scope
+    /// widening), while this overlay path is the engine's `install_module`
     /// → SANDBOX-dispatch hydration channel. The engine's
     /// `manifest_registry()` accessor projects its `installed_modules`
     /// active-set into a `BTreeMap<String, CapBundle>` (one entry per
@@ -438,7 +445,8 @@ mod tests {
     }
 
     /// **sec-g7a-mr-3 fix-pass:** unsigned-bundle CID stability across
-    /// the Phase-3 signed-manifest lift.
+    /// the Phase-4-Meta signed-manifest lift (Phase 3 SHIPPED without
+    /// delivering signed re-issuance; the lift now lands at Phase-4-Meta).
     ///
     /// The encoder's `skip_serializing_if = "Option::is_none"` discipline
     /// for `signature` is what guarantees that an unsigned bundle's
