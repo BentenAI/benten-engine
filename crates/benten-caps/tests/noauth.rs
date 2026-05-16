@@ -6,7 +6,7 @@
 //!
 //! Canonicalized at R4 triage (M14) across `noauth.rs`, `noauth_proptest.rs`,
 //! and `production_refuses_noauth.rs`. All three use `NoAuthBackend::new()`
-//! constructor and a `WriteContext` with `label` / `is_privileged` /
+//! constructor and a `CapWriteContext` with `label` / `is_privileged` /
 //! `actor_hint` fields. The redundant `target_label` field was dropped at
 //! the G4 mini-review (g4-cr-10) — `label` is the single label axis now.
 //!
@@ -14,23 +14,23 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_caps::{CapabilityPolicy, NoAuthBackend, WriteContext};
+use benten_caps::{CapWriteContext, CapabilityPolicy, NoAuthBackend};
 
 #[test]
 fn noauth_permits_empty_context() {
     let policy = NoAuthBackend::new();
-    let ctx = WriteContext::default();
+    let ctx = CapWriteContext::default();
     assert!(policy.check_write(&ctx).is_ok());
 }
 
 #[test]
 fn noauth_permits_populated_context() {
     let policy = NoAuthBackend::new();
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "Post".to_string(),
         is_privileged: false,
         actor_hint: Some("alice".to_string()),
-        ..WriteContext::default()
+        ..CapWriteContext::default()
     };
     assert!(policy.check_write(&ctx).is_ok());
 }
@@ -38,13 +38,13 @@ fn noauth_permits_populated_context() {
 #[test]
 fn noauth_permits_system_zone_context() {
     // NoAuthBackend does NOT enforce system-zone labels — that's the graph
-    // layer's WriteContext::enforce_system_zone check. NoAuth is meant to be
+    // layer's CapWriteContext::enforce_system_zone check. NoAuth is meant to be
     // zero-cost at the capability layer.
     let policy = NoAuthBackend::new();
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "system:IVMView".to_string(),
         is_privileged: true,
-        ..WriteContext::default()
+        ..CapWriteContext::default()
     };
     assert!(policy.check_write(&ctx).is_ok());
 }

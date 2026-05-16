@@ -46,8 +46,9 @@ fn revoked_cap_routes_to_on_denied() {
         .expect("registration succeeds — invariants 1/2/3/5/6/9/10/12 pass");
 
     // WHEN: grant store:post:write, call post:create with input
-    let actor = engine.create_principal("alice").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
     let _grant = engine
+        .caps()
         .grant_capability(&actor, "store:post:write")
         .expect("grant succeeds via engine-privileged path");
 
@@ -58,6 +59,7 @@ fn revoked_cap_routes_to_on_denied() {
 
     // WHEN: revoke, then call again
     engine
+        .caps()
         .revoke_capability(&actor, "store:post:write")
         .unwrap();
 

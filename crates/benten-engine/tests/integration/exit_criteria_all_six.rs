@@ -162,8 +162,11 @@ fn exit_3_cap_denial_routes_on_denied() {
         .register_crud("post")
         .expect("grant-backed crud registers");
 
-    let actor = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&actor, "store:post:write").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&actor, "store:post:write")
+        .unwrap();
 
     let mut p = BTreeMap::new();
     p.insert("title".into(), Value::Text("first".into()));
@@ -177,6 +180,7 @@ fn exit_3_cap_denial_routes_on_denied() {
     assert!(ok.is_ok_edge());
 
     engine
+        .caps()
         .revoke_capability(&actor, "store:post:write")
         .unwrap();
     let denied = engine

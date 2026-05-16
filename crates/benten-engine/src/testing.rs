@@ -105,7 +105,10 @@ impl CountingPolicy {
 }
 
 impl benten_caps::CapabilityPolicy for CountingPolicy {
-    fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> {
+    fn check_write(
+        &self,
+        _ctx: &benten_caps::CapWriteContext,
+    ) -> Result<(), benten_caps::CapError> {
         self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }

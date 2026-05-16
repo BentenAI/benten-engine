@@ -8,7 +8,7 @@
 //!
 //! ## What this pin verifies
 //!
-//! G27-B threads `WriteContext::scope` through the derivation; the
+//! G27-B threads `CapWriteContext::scope` through the derivation; the
 //! immediate consequence is that NON-CRUD scope shapes flow through
 //! the policy correctly. Today's hard-coded `store:{label}:write`
 //! shape can only express CRUD-flavored writes; plugin manifest
@@ -22,12 +22,12 @@
 //!
 //! For each non-CRUD scope shape:
 //! 1. Mint a grant carrying the scope STRING exactly.
-//! 2. Construct a `WriteContext` with `scope` populated to the
+//! 2. Construct a `CapWriteContext` with `scope` populated to the
 //!    matching scope STRING (NOT a label that derives to it).
 //! 3. Assert `check_write(&ctx) == Ok(())` — the policy consults the
 //!    explicit scope + matches the grant.
 //!
-//! Would-FAIL-if-no-op'd: the policy ignores `WriteContext::scope` +
+//! Would-FAIL-if-no-op'd: the policy ignores `CapWriteContext::scope` +
 //! tries to derive from label; the label is empty (no CRUD label
 //! applicable for `private:` / `requires:` / `shares:` shapes), so
 //! the derivation falls back to `"store:write"`, which doesn't match
@@ -37,7 +37,7 @@
 
 use std::sync::Arc;
 
-use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, GrantBackedPolicy, GrantReader};
 
 struct MockGrants {
     grants: Vec<String>,
@@ -59,7 +59,7 @@ impl GrantReader for MockGrants {
 
 /// RED-PHASE: G27-B — non-CRUD scope round-trips (plugin manifest grammar).
 ///
-/// Verifies `WriteContext::scope`-threaded derivation supports
+/// Verifies `CapWriteContext::scope`-threaded derivation supports
 /// non-CRUD scope shapes that the hard-coded `store:{label}:write`
 /// derivation cannot express.
 #[test]
@@ -69,14 +69,14 @@ fn grant_backed_policy_non_crud_scope_round_trip_private_namespace() {
     let grants = MockGrants::new(&[scope.as_str()]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: String::new(), // no CRUD label applicable
         scope: scope.clone(),
         ..Default::default()
     };
 
     policy.check_write(&ctx).expect(
-        "RED-PHASE: G27-B — private-namespace scope must round-trip via WriteContext::scope",
+        "RED-PHASE: G27-B — private-namespace scope must round-trip via CapWriteContext::scope",
     );
 }
 
@@ -87,7 +87,7 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_requires() {
     let grants = MockGrants::new(&[scope.as_str()]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: String::new(),
         scope: scope.clone(),
         ..Default::default()
@@ -105,7 +105,7 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_shares() {
     let grants = MockGrants::new(&[scope.as_str()]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: String::new(),
         scope: scope.clone(),
         ..Default::default()
@@ -150,7 +150,7 @@ fn grant_backed_policy_scope_overrides_pending_op_label_derivation() {
     // derivation path).
     let stub_cid = Cid::from_blake3_digest(*blake3::hash(b"g27b-test-cid").as_bytes());
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".to_string(),
         scope: scope.to_string(),
         pending_ops: vec![PendingOp::PutNode {

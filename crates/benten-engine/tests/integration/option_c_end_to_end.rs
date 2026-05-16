@@ -62,8 +62,11 @@ fn crud_post_get_symmetric_none() {
         .expect("grant-backed crud registers");
 
     // Grant WRITE only — reads remain denied under the grant-backed policy.
-    let alice = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&alice, "store:post:write").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&alice, "store:post:write")
+        .unwrap();
 
     // Path 1: missing CID — symmetric None.
     let missing_cid = benten_core::Cid::from_blake3_digest(blake3::hash(b"not-in-backend").into());
@@ -139,8 +142,11 @@ fn crud_post_get_symmetric_none() {
 #[test]
 fn option_c_read_node_respects_check_read() {
     let (_dir, engine) = engine_with_read_denial();
-    let alice = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&alice, "store:post:write").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&alice, "store:post:write")
+        .unwrap();
     let cid = seed_denied_post(&engine);
 
     // Under the grant-backed policy, a caller without the read grant
@@ -162,8 +168,11 @@ fn option_c_read_node_respects_check_read() {
 #[test]
 fn option_c_get_by_label_respects_check_read() {
     let (_dir, engine) = engine_with_read_denial();
-    let alice = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&alice, "store:post:write").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&alice, "store:post:write")
+        .unwrap();
     let _cid = seed_denied_post(&engine);
 
     // With a grant-backed policy and no READ grant, the by-label probe
@@ -191,8 +200,11 @@ fn option_c_get_by_label_respects_check_read() {
 #[test]
 fn option_c_get_by_property_respects_check_read() {
     let (_dir, engine) = engine_with_read_denial();
-    let alice = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&alice, "store:post:write").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&alice, "store:post:write")
+        .unwrap();
     let _cid = seed_denied_post(&engine);
 
     // A by-property handler dispatched via the evaluator must also honour
@@ -225,8 +237,11 @@ fn option_c_get_by_property_respects_check_read() {
 #[test]
 fn option_c_read_view_respects_check_read_coarse_grained() {
     let (_dir, engine) = engine_with_read_denial();
-    let alice = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&alice, "store:post:write").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&alice, "store:post:write")
+        .unwrap();
     let _cid = seed_denied_post(&engine);
 
     // The handler used here dispatches through `read_view` internally and

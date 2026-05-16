@@ -75,7 +75,7 @@ impl Engine {
                         // per device per D-PHASE-3-25.
                         let device_cid =
                             *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                        let ctx = benten_caps::WriteContext {
+                        let ctx = benten_caps::CapWriteContext {
                             label: primary_label,
                             pending_ops: ops,
                             device_cid,
@@ -585,7 +585,7 @@ impl Engine {
 
     /// Phase-3 G16-B-prime (§6.12 item 3): set the local engine's
     /// device-DID-attestation CID. Subsequent
-    /// [`benten_caps::WriteContext`] / [`benten_caps::ReadContext`]
+    /// [`benten_caps::CapWriteContext`] / [`benten_caps::ReadContext`]
     /// constructions inside engine-internal call sites populate the
     /// `device_cid` field with this value, letting heterogeneous
     /// `CapabilityPolicy` impls dispatch per-device under the SAME

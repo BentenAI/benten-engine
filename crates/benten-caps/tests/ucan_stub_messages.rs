@@ -28,14 +28,14 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, LegacyUcanStubBackend, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, LegacyUcanStubBackend};
 use benten_errors::ErrorCode;
 
 /// The operator-hostile baseline: LegacyUcanStubBackend must cleanly error, not panic.
 #[test]
 fn ucan_stub_errors_cleanly() {
     let backend = LegacyUcanStubBackend::new();
-    let ctx = WriteContext::synthetic_for_test();
+    let ctx = CapWriteContext::synthetic_for_test();
     let err = backend
         .check_write(&ctx)
         .expect_err("LegacyUcanStubBackend in Phase 1 must reject all writes");
@@ -48,7 +48,7 @@ fn ucan_stub_errors_cleanly() {
 #[test]
 fn ucan_stub_error_message_names_phase_and_alternative() {
     let backend = LegacyUcanStubBackend::new();
-    let ctx = WriteContext::synthetic_for_test();
+    let ctx = CapWriteContext::synthetic_for_test();
     let err = backend.check_write(&ctx).unwrap_err();
     let msg = err.to_string();
 
@@ -74,7 +74,7 @@ fn ucan_stub_error_message_names_phase_and_alternative() {
 #[test]
 fn ucan_stub_error_code_is_distinct_from_denied() {
     let backend = LegacyUcanStubBackend::new();
-    let ctx = WriteContext::synthetic_for_test();
+    let ctx = CapWriteContext::synthetic_for_test();
     let err = backend.check_write(&ctx).unwrap_err();
     assert_eq!(err.code(), ErrorCode::CapNotImplemented);
     assert_ne!(err.code(), ErrorCode::CapDenied);
