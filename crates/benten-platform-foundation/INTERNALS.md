@@ -55,7 +55,7 @@ The crate is **not** the engine — it sits *atop* the engine via trait ports (`
 
 - **`workflow_to_plugin.rs`** (93 LOC) — `WorkflowHandle` + `promote_workflow_to_plugin` per CLAUDE.md baked-in #18 D-4F-14 unification. A workflow IS a plugin IS a subgraph; the only shape-change is attaching a `PluginManifest`. The returned manifest has `peer_signature` empty (caller signs after computing `content_cid`); the workflow's `subgraph_cid` is seeded but then OVERWRITTEN by `compute_content_cid()` — the manifest body IS the plugin identity post-promotion.
 
-- **`registry.rs`** (99 LOC) — **Phase-4-Meta-reserved** decentralized-registry trait shapes per ratification #3. `RegistryEntry`, `DiscoveryQuery` (3 variants: `ByAuthor` / `ByName` / `AcceptingContent`), `DiscoveryResult`, the `Registry` trait. `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode minted at G24-D wave but has no firing site until Phase 4-Meta. Zero production call sites at Phase-4-Foundation; pinned by `tests/registry_phase_4_meta_reserved_no_production_callsites.rs`.
+- **`registry.rs`** (~85 LOC) — **Phase-4-Meta-reserved** decentralized-registry concrete data shapes per ratification #3: `RegistryEntry`, `DiscoveryQuery` (3 variants: `ByAuthor` / `ByName` / `AcceptingContent`), `DiscoveryResult`. **No `Registry` trait** — the paper-only forward-architecture trait was retracted per Fwd-2 #1014 RATIFIED Path A (2026-05-15): it had zero v1 consumers and locked a publish-of-body / closed-enum / single-error-code shape that conflicts with the Phase-8 CID-keyed-announce + trust-graph trajectory; a trait abstraction is introduced at Phase-4-Meta/Phase-5+ only if a real second impl materializes (`docs/future/phase-4-backlog.md §3.1`). `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode minted at G24-D wave (in `benten-errors`) but has no firing site until Phase 4-Meta; surfaced via `timeout_error_code()`. Zero production call sites at Phase-4-Foundation; pinned by `tests/registry_phase_4_meta_reserved_no_production_callsites.rs`.
 
 ### 3b. `schema_compiler/` (G23-A; 6 files, ~1.7k LOC)
 
@@ -189,7 +189,7 @@ Internal walk machinery: `FormatBackend` enum (private), `SubscribeAttachToken` 
 
 ### 4h. Registry (Phase-4-Meta-reserved)
 
-- `Registry` trait + `RegistryEntry` / `DiscoveryQuery` / `DiscoveryResult`.
+- `RegistryEntry` / `DiscoveryQuery` / `DiscoveryResult` concrete data shapes (NO `Registry` trait — retracted per Fwd-2 #1014 RATIFIED Path A; see `docs/future/phase-4-backlog.md §3.1`).
 - `timeout_error_code()` — surfaces the reserved `E_REGISTRY_DISCOVERY_TIMEOUT` code.
 
 ---
@@ -285,7 +285,7 @@ This crate is where the **v1 platform-shippable surface** meets the engine, so l
 
 - **What's NOT here.** SANDBOX runtime (engine-side, native-only). IVM machinery (`benten-ivm`). Storage backends (`benten-graph`). Capability policy backends (`benten-caps`). Identity primitives (`benten-id`). Sync runtime (`benten-sync`). Engine evaluator (`benten-eval` + `benten-engine`). This crate ASSEMBLES those layers into a platform surface; it does not re-implement them.
 
-- **What's reserved.** Decentralized registry (Phase-4-Meta). Full Atrium-substrate publish/subscribe (Phase-4-Meta — the trait shapes are minted at G24-D + the timeout ErrorCode reserved). Self-composing admin meta-circular work (Phase-4-Meta). Plugin author-DID-based targeting in `SharesTarget` (rejected at R6-FP-A sec-r6r1-8; mint a NEW typed variant THEN if resolver-lookup wiring is added).
+- **What's reserved.** Decentralized registry (Phase-4-Meta). Full Atrium-substrate publish/subscribe (Phase-4-Meta — the concrete data shapes are minted at G24-D + the timeout ErrorCode reserved; the `Registry` trait abstraction is deliberately NOT shipped at v1 per Fwd-2 #1014 Path A and is reconsidered at Phase-4-Meta if a real second impl materializes). Self-composing admin meta-circular work (Phase-4-Meta). Plugin author-DID-based targeting in `SharesTarget` (rejected at R6-FP-A sec-r6r1-8; mint a NEW typed variant THEN if resolver-lookup wiring is added).
 
 ---
 
@@ -295,7 +295,7 @@ This crate is where the **v1 platform-shippable surface** meets the engine, so l
 - `module_ecosystem::install_plugin` legacy path is DEPRECATED but retained for three pre-R4b-FP-1 integration tests. Migration to `plugin_lifecycle::install_plugin` is in flight.
 - `ManifestStore` redb persistence is in-memory canonical at G24-D-FP-1; durable backing tracked at `docs/future/phase-4-backlog.md §4.11`.
 - `BrowserRender::render` is a no-op stub at G23-B; the admin UI v0 shell at G24-A fills the DOM-mount logic via the napi bridge.
-- Registry trait shapes exist + the `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode is reserved; the substrate ships at Phase-4-Meta.
+- Registry concrete data shapes exist (NO trait — Fwd-2 #1014 Path A) + the `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode is reserved; the substrate ships at Phase-4-Meta.
 - Per-device-local active reference in `PluginLibrary` is in-memory only at G24-D wave; production persistence parallels `ManifestStore`'s redb backing.
 - 2 plugin-manifest seam build issues + 2 enhancement seams that surfaced at R4b L1 are tracked at `docs/future/phase-4-meta.md §4.19`.
 
