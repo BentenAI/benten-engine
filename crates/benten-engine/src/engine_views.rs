@@ -135,7 +135,7 @@ impl Engine {
     /// `.without_ivm()`).
     ///
     /// Used by the IVM-B integration test to assert that a user view
-    /// registered via [`Self::create_user_view`] with the default
+    /// registered via [`Self::register_user_view`] with the default
     /// `Strategy::B` actually runs through [`benten_ivm::algorithm_b::AlgorithmBView`]
     /// at runtime — the audit surfaced that the prior code unconditionally
     /// fell back to `ContentListingView` (which reports `Strategy::A`).
@@ -924,26 +924,6 @@ impl Engine {
         Ok(cid)
     }
 
-    /// R6FP-Group-1 (r6-arch-2) deprecation alias —
-    /// [`Self::create_user_view`] was renamed to
-    /// [`Self::register_user_view`] to align with the engine's
-    /// `register_*` lifecycle verb (matches `register_subgraph`,
-    /// `register_subgraph_replace`, `register_subgraph_aggregate`,
-    /// `register_crud`, `register_module_bytes`). The alias is held
-    /// alive through one transition window so the TS-side rename in
-    /// Group 2 does not break the build; the alias will be removed in
-    /// a follow-up.
-    ///
-    /// # Errors
-    ///
-    /// See [`Self::register_user_view`].
-    #[deprecated(
-        note = "renamed to register_user_view (R6FP-G1 r6-arch-2); will be removed in a follow-up"
-    )]
-    pub fn create_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
-        self.register_user_view(spec)
-    }
-
     /// Internal helper mirroring `engine_caps::Engine::privileged_put_node`
     /// so the user-view registration path can write its system-zone Node
     /// without re-exporting the helper. The two implementations are
@@ -1049,13 +1029,13 @@ fn project_view_read_to_outcome(
 
 // `is_known_view_id` consultation note (Phase 2b G8-B partially closed
 // the prior user-view-registration TODO that lived in engine.rs):
-// user-view registration via [`Engine::create_user_view`] adds the
+// user-view registration via [`Engine::register_user_view`] adds the
 // user's view id into the IVM subscriber's `view_ids()` set. The
 // `read_view_with` path above already consults the live subscriber
 // FIRST (see the `if let Some(ivm) = ...` block) and only falls back
 // to the canonical-id whitelist when the subscriber has no live view
 // for the id — so user-registered views are observable through
-// `read_view*` immediately after `create_user_view` returns.
+// `read_view*` immediately after `register_user_view` returns.
 //
 // The user-view-registration TODO that previously lived in engine.rs
 // ("replace with a per-view definition registration pulled from

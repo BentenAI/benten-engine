@@ -34,6 +34,23 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
+fn engine_cargo_toml_no_longer_declares_envelope_cache_test_grade_feature() {
+    // refinement-audit-2026-05 #868 — the feature was retired as an empty
+    // no-op shell ("remove next phase"). Phase-3 + Phase-4-Foundation have
+    // SHIPPED; the no-op shell is deleted outright per CLAUDE.md rule #5
+    // ("no deprecated aliases or backward-compat shims — delete, don't
+    // comment"). This test pins ABSENCE, not no-op presence.
+    let engine_toml = workspace_root().join("crates/benten-engine/Cargo.toml");
+    let body = fs::read_to_string(&engine_toml).expect("read crates/benten-engine/Cargo.toml");
+    assert!(
+        !body.contains("envelope-cache-test-grade"),
+        "engine Cargo.toml MUST NOT declare or reference \
+         `envelope-cache-test-grade` post-#868 — the feature is deleted, \
+         not retired-as-no-op. CLAUDE.md rule #5."
+    );
+}
+
+#[test]
 fn napi_cargo_toml_no_longer_pulls_envelope_cache_test_grade() {
     let napi_toml = workspace_root().join("bindings/napi/Cargo.toml");
     let body = fs::read_to_string(&napi_toml).expect("read bindings/napi/Cargo.toml");

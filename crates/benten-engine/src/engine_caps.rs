@@ -353,7 +353,7 @@ impl Engine {
             // Phase 2b G8-A / D8-RESOLVED: hand-written canonical-id views
             // ALWAYS take Strategy::A (the 5-view fate hybrid keep-all-
             // parallel; Algorithm B is opt-in + ADDITIVE). User-registered
-            // views default to Strategy::B per `Engine::create_user_view`.
+            // views default to Strategy::B per `Engine::register_user_view`.
             strategy: benten_ivm::Strategy::A,
         };
         let node = def.as_node();
