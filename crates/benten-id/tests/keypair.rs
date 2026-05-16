@@ -257,3 +257,40 @@ fn keypair_generate_uses_os_csprng() {
         "Keypair::generate path MUST reference OsRng per crypto-major-2"
     );
 }
+
+#[test]
+fn secret_hygiene_no_clone_propagates_to_keypair_embedders() {
+    // Surf-1 #867: the !Clone + redacted-Debug secret-hygiene
+    // invariant (crypto-blocker-1) propagates to every type that
+    // embeds `Keypair`. Pin it explicitly (not by accident) for the
+    // two embedders that the audit flagged as relying on
+    // accident-not-pin: `PluginDidHandle` (plugin_did.rs) +
+    // `Ed25519SingleKey` (multi_sig.rs). Mirrors the source-grep pin
+    // pattern `keypair_secret_does_not_implement_clone` uses (a true
+    // static `assert_not_impl_all!` needs the `static_assertions`
+    // crate, intentionally not a dep — the absence of `Clone` in the
+    // derive list is the load-bearing compile-time evidence; this
+    // test asserts the consequence + guards against a future
+    // accidental `#[derive(Clone)]`).
+    let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for (file, ty) in [
+        ("plugin_did.rs", "pub struct PluginDidHandle"),
+        ("multi_sig.rs", "pub struct Ed25519SingleKey"),
+    ] {
+        let src = std::fs::read_to_string(manifest.join("src").join(file)).unwrap();
+        let idx = src
+            .find(ty)
+            .unwrap_or_else(|| panic!("{ty} definition present in {file}"));
+        let preceding = &src[idx.saturating_sub(160)..idx];
+        let derive_line = preceding
+            .lines()
+            .rev()
+            .find(|l| l.contains("#[derive("))
+            .unwrap_or("");
+        assert!(
+            !derive_line.contains("Clone"),
+            "{ty} MUST NOT derive Clone (crypto-blocker-1 secret-hygiene \
+             propagation via embedded Keypair); got derive line: {derive_line:?}"
+        );
+    }
+}

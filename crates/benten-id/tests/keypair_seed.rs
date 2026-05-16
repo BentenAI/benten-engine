@@ -146,6 +146,9 @@ fn keypair_import_path_does_not_log_seed_bytes_via_tracing() {
 
 #[test]
 fn keypair_from_dag_cbor_envelope_round_trip() {
+    // Qual-1 #686 DISAGREE-WITH-EXPLANATION: `from_dag_cbor_envelope`
+    // is a LIVE cross-crate / napi-FFI surface (not a dead alias) —
+    // restored. This pin exercises the canonical name end-to-end.
     let original = Keypair::generate();
     let envelope1 = original.export_seed_envelope();
     let imported = Keypair::from_dag_cbor_envelope(&envelope1).unwrap();

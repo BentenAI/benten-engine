@@ -68,6 +68,12 @@ mod error;
 // itself has no napi-rs dep, so it's reachable from both build modes.
 #[cfg(any(feature = "napi-export", feature = "in-process-test", test))]
 mod error_envelope;
+// Refinement-audit-2026-05 #1201: thin capacity-primed JSON-object
+// builder shared by the edge/node/subgraph/trace projectors. Gated
+// like its `napi-export` consumers; also reachable under `test` for
+// the in-crate unit test.
+#[cfg(any(feature = "napi-export", test))]
+mod json_build;
 #[cfg(feature = "napi-export")]
 mod node;
 #[cfg(feature = "napi-export")]
