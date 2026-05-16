@@ -779,9 +779,9 @@ fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
         for (k, v) in &p.properties {
             node = node.with_property(k.clone(), v.clone());
         }
-        sg = sg.with_node(node);
+        sg = sg.push_node_raw(node);
         if let Some(prev) = &prev_id {
-            sg = sg.with_edge(prev, &id, "next");
+            sg = sg.push_edge_raw(prev, &id, "next");
         }
         primitives.push(CompiledPrimitive {
             kind: p.kind,

@@ -260,15 +260,15 @@ pub struct NodeHandle(pub u32);
 /// use benten_core::{OperationNode, PrimitiveKind, Subgraph};
 ///
 /// let sg = Subgraph::new("crud:post")
-///     .with_node(OperationNode::new("r", PrimitiveKind::Read))
-///     .with_node(OperationNode::new("w", PrimitiveKind::Write))
-///     .with_edge("r", "w", "next");
+///     .push_node_raw(OperationNode::new("r", PrimitiveKind::Read))
+///     .push_node_raw(OperationNode::new("w", PrimitiveKind::Write))
+///     .push_edge_raw("r", "w", "next");
 ///
 /// // Content-addressed: construction order does not affect the CID.
 /// let reordered = Subgraph::new("crud:post")
-///     .with_node(OperationNode::new("w", PrimitiveKind::Write))
-///     .with_node(OperationNode::new("r", PrimitiveKind::Read))
-///     .with_edge("r", "w", "next");
+///     .push_node_raw(OperationNode::new("w", PrimitiveKind::Write))
+///     .push_node_raw(OperationNode::new("r", PrimitiveKind::Read))
+///     .push_edge_raw("r", "w", "next");
 /// assert_eq!(sg.cid().unwrap(), reordered.cid().unwrap());
 /// ```
 ///
@@ -402,37 +402,49 @@ impl Subgraph {
         NodeHandle(u32::try_from(idx).unwrap_or(u32::MAX))
     }
 
-    /// Builder-style: append a node and return self.
+    /// RAW node append — **bypasses Inv-14 attribution stamping**.
     ///
-    /// # Invariant-14 attribution — NOT stamped here
+    /// # ⚠ Invariant-14 attribution is NOT stamped here
     ///
-    /// Unlike [`SubgraphBuilder`] (the canonical Inv-14 attribution
-    /// stamp surface — its internal `push` defaults every emitted node to
-    /// `attribution: true` via [`ATTRIBUTION_PROPERTY_KEY`]), this raw
-    /// append does **not** stamp the attribution default. A production
-    /// caller that wants Inv-14-safe nodes must either go through
-    /// `SubgraphBuilder` or set [`ATTRIBUTION_PROPERTY_KEY`] explicitly on
-    /// the node before appending. Inv-14 reject-path tests deliberately
-    /// rely on this raw (un-stamped) shape to construct un-attributed
-    /// nodes. The two coexisting builder surfaces are therefore *not*
-    /// Inv-14-equivalent; closing that bypass by stamping here would
-    /// change the canonical bytes (and thus the CID) of every existing
-    /// `with_node` caller, so it is a content-addressing fork deferred to
-    /// a coordinated cross-crate decision (Surf-1 #843; surfaced for Ben).
+    /// This is **not** the canonical builder. [`SubgraphBuilder`] is the
+    /// canonical Inv-14 attribution stamp surface — its internal `push`
+    /// defaults every emitted node to `attribution: true` via
+    /// [`ATTRIBUTION_PROPERTY_KEY`]. This `push_node_raw` append does
+    /// **not** stamp the attribution default. A caller that wants
+    /// Inv-14-safe nodes (i.e. nodes that pass `validate_registration`)
+    /// MUST go through [`SubgraphBuilder`] or set
+    /// [`ATTRIBUTION_PROPERTY_KEY`] explicitly on the node before
+    /// appending.
+    ///
+    /// The two legitimate raw-construction callers are: (1) Inv-14
+    /// reject-path tests, which deliberately rely on this un-stamped
+    /// shape to construct un-attributed nodes that `validate_registration`
+    /// must reject; (2) `benten-dsl-compiler`, whose emitted `Subgraph` is
+    /// a content-addressed devserver-introspection artifact that is never
+    /// registered into the eval engine — stamping it would change its
+    /// frozen canonical bytes (wire-format item #604).
+    ///
+    /// Renamed from `with_node` (#843, Surf-1 ratified): the old name read
+    /// like the canonical Inv-14-safe builder while silently bypassing it.
+    /// The `_raw` suffix + this docstring make the bypass un-missable.
+    /// The method body is byte-for-byte unchanged — **zero canonical-byte
+    /// / CID churn**; this is a pure rename, not a stamping change.
     #[must_use]
-    pub fn with_node(mut self, n: OperationNode) -> Self {
+    pub fn push_node_raw(mut self, n: OperationNode) -> Self {
         self.nodes.push(n);
         self
     }
 
-    /// Builder-style: append an edge and return self.
+    /// RAW edge append — the edge-only counterpart to
+    /// [`Subgraph::push_node_raw`].
     ///
     /// Edges carry no Inv-14 attribution (the invariant gates
-    /// `OperationNode`s, not edges); this surface is the edge-only
-    /// counterpart to [`Subgraph::with_node`] and is fully equivalent to
-    /// the edge path in [`SubgraphBuilder`].
+    /// `OperationNode`s, not edges), so unlike `push_node_raw` there is no
+    /// attribution bypass here; the `_raw` suffix is kept only for naming
+    /// symmetry with its node counterpart. Fully equivalent to the edge
+    /// path in [`SubgraphBuilder`]. Renamed from `with_edge` (#843).
     #[must_use]
-    pub fn with_edge(
+    pub fn push_edge_raw(
         mut self,
         from: impl Into<String>,
         to: impl Into<String>,

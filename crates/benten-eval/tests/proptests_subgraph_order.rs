@@ -55,12 +55,12 @@ fn any_node() -> impl Strategy<Value = NodeSpec> {
 fn build(nodes: &[NodeSpec], edges: &[(usize, usize)]) -> Subgraph {
     let mut sg = Subgraph::new("proptest");
     for n in nodes {
-        sg = sg.with_node(OperationNode::new(n.id.clone(), n.kind));
+        sg = sg.push_node_raw(OperationNode::new(n.id.clone(), n.kind));
     }
     for (i, j) in edges {
         let from = nodes[*i].id.clone();
         let to = nodes[*j].id.clone();
-        sg = sg.with_edge(from, to, "next");
+        sg = sg.push_edge_raw(from, to, "next");
     }
     sg
 }

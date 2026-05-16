@@ -42,7 +42,7 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 /// RESPOND node — sufficient to trigger the namespace guard at
 /// registration time, which fires BEFORE invariant validation).
 fn subgraph_with_handler_id(handler_id: &str) -> Subgraph {
-    Subgraph::new(handler_id).with_node(OperationNode::new("r0", PrimitiveKind::Respond))
+    Subgraph::new(handler_id).push_node_raw(OperationNode::new("r0", PrimitiveKind::Respond))
 }
 
 #[test]
