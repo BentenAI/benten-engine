@@ -406,8 +406,8 @@ impl Subgraph {
     ///
     /// # Invariant-14 attribution — NOT stamped here
     ///
-    /// Unlike [`SubgraphBuilder::push`] (the canonical Inv-14 attribution
-    /// stamp surface, which defaults every emitted node to
+    /// Unlike [`SubgraphBuilder`] (the canonical Inv-14 attribution
+    /// stamp surface — its internal `push` defaults every emitted node to
     /// `attribution: true` via [`ATTRIBUTION_PROPERTY_KEY`]), this raw
     /// append does **not** stamp the attribution default. A production
     /// caller that wants Inv-14-safe nodes must either go through
