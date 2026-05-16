@@ -277,8 +277,11 @@ impl RateLimitPolicy for InMemoryRateLimitPolicy {
         let Some(budget) = self.actor_writes.get(&key).copied() else {
             return Ok(());
         };
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = (self.clock)();
-        let mut state = self.state.lock().expect("rate-limit state mutex poisoned");
         let bucket = state
             .actor_write_buckets
             .entry(key.clone())
@@ -306,8 +309,11 @@ impl RateLimitPolicy for InMemoryRateLimitPolicy {
         let Some(budget) = self.actor_reads.get(actor).copied() else {
             return Ok(());
         };
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = (self.clock)();
-        let mut state = self.state.lock().expect("rate-limit state mutex poisoned");
         let bucket = state
             .actor_read_buckets
             .entry(actor.to_string())
@@ -335,8 +341,11 @@ impl RateLimitPolicy for InMemoryRateLimitPolicy {
         let Some(budget) = self.peer_bandwidth.get(peer).copied() else {
             return Ok(());
         };
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = (self.clock)();
-        let mut state = self.state.lock().expect("rate-limit state mutex poisoned");
         let bucket = state
             .peer_bw_buckets
             .entry(peer.to_string())
@@ -366,8 +375,11 @@ impl RateLimitPolicy for InMemoryRateLimitPolicy {
         let Some(budget) = self.peer_bandwidth.get(peer).copied() else {
             return false;
         };
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = (self.clock)();
-        let state = self.state.lock().expect("rate-limit state mutex poisoned");
         let Some(bucket) = state.peer_bw_buckets.get(peer) else {
             return false;
         };
@@ -414,6 +426,49 @@ mod tests {
         for _ in 0..3 {
             p.check_writes_per_sec("did:test:a", "/zone/posts").unwrap();
         }
+        let err = p
+            .check_writes_per_sec("did:test:a", "/zone/posts")
+            .unwrap_err();
+        assert!(matches!(err, CapError::RateLimitExceeded { .. }));
+    }
+
+    // #503 / #631 closure pin: a poisoned state mutex MUST NOT
+    // permanently disable rate-limiting (the prior `.expect()` panicked
+    // on every subsequent call after one poisoning panic). This arm
+    // poisons the mutex via a panicking closure under
+    // `catch_unwind`, then asserts the policy still enforces the
+    // configured budget (recovers via `PoisonError::into_inner`,
+    // matching the `engine_caps` discipline). Would-FAIL if the
+    // `.expect("rate-limit state mutex poisoned")` were restored.
+    #[test]
+    fn poisoned_state_mutex_recovers_and_keeps_enforcing() {
+        use std::sync::Arc;
+
+        let p = Arc::new(
+            InMemoryRateLimitPolicy::builder()
+                .actor_writes_per_second("did:test:a", "/zone/posts", 1)
+                .build(),
+        );
+
+        // Poison the inner state mutex: acquire the lock then panic
+        // while holding it.
+        let p_poison = Arc::clone(&p);
+        let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = p_poison
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            panic!("intentional poison");
+        }));
+        assert!(poisoned.is_err(), "panic must have unwound");
+        assert!(
+            p.state.lock().is_err() || p.state.is_poisoned(),
+            "mutex should now be poisoned"
+        );
+
+        // Recovery path: still enforces the budget rather than
+        // panicking on the poisoned lock.
+        p.check_writes_per_sec("did:test:a", "/zone/posts").unwrap();
         let err = p
             .check_writes_per_sec("did:test:a", "/zone/posts")
             .unwrap_err();

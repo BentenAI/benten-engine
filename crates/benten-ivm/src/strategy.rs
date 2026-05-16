@@ -26,7 +26,7 @@
 //!   named-but-deferred item). The variant exists so the catalog is
 //!   stable; constructing a `Strategy::Reserved` view returns
 //!   [`crate::ViewError::StrategyNotImplemented`] with a deferral message
-//!   pointing at Phase 3+.
+//!   (the runtime payload string is a v1-error-catalog / #1084 decision).
 //!
 //! See `.addl/phase-2b/00-implementation-plan.md` §3 G8-A + §5 D8 and
 //! `.addl/phase-4-foundation/00-implementation-plan.md` §3 G23-0a.
@@ -34,8 +34,8 @@
 /// Per-view IVM maintenance strategy.
 ///
 /// `#[non_exhaustive]` is **deliberately omitted** — D8 pins the closed
-/// `{ A, B, Reserved }` set. A future Phase-3+ algorithm would land as a
-/// NEW enum (e.g. `StrategyV2`) so the runtime contract here stays stable.
+/// `{ A, B, Reserved }` set. A future maintenance algorithm would land as
+/// a NEW enum (e.g. `StrategyV2`) so the runtime contract here stays stable.
 /// Adding a fourth variant would be a breaking change; downstream matchers
 /// want the compiler to flag missing arms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,6 +62,6 @@ pub enum Strategy {
     /// Constructing a `Strategy::Reserved` view via
     /// [`crate::testing::try_construct_view_with_strategy`] returns
     /// [`crate::ViewError::StrategyNotImplemented`] with a deferral message
-    /// naming the Phase-3+ target.
+    /// (runtime payload string is a v1-error-catalog / #1084 decision).
     Reserved,
 }

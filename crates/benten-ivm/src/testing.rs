@@ -40,9 +40,13 @@ pub fn testing_construct_view_with_strategy(strategy: Strategy) -> Box<dyn View>
 /// # Errors
 ///
 /// Returns [`ViewError::StrategyNotImplemented`] when `strategy` is
-/// [`Strategy::Reserved`] (Z-set / DBSP cancellation, deferred to Phase 3+;
-/// renamed from the prior third-variant spelling at G23-0a per
-/// arch-r1-14). Strategy::A + Strategy::B always succeed.
+/// [`Strategy::Reserved`] (Z-set / DBSP cancellation, reserved-not-
+/// implemented; renamed from the prior third-variant spelling at G23-0a
+/// per arch-r1-14). Strategy::A + Strategy::B always succeed.
+///
+/// Note: the runtime `deferred_to_phase` payload still reads `"Phase 3+"`;
+/// re-targeting that observable error string is a v1-error-catalog
+/// (Fwd-2 / #1084) decision deferred to orchestrator adjudication.
 pub fn try_construct_view_with_strategy(strategy: Strategy) -> Result<Box<dyn View>, ViewError> {
     match strategy {
         Strategy::A => Ok(Box::new(CapabilityGrantsView::new())),

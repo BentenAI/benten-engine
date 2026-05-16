@@ -162,11 +162,12 @@ pub fn dispatch_for(view_id: &str) -> Strategy {
 
 /// Label-pattern selector consumed by the generalized kernel.
 ///
-/// Phase-3 G15-A ships `Exact` + `AnchorPrefix`; G15-B's `PrefixMatcher`
-/// selector type lifts the engine-side surface for `AnchorPrefix` to
-/// genuine prefix matching (the kernel here exposes the pattern surface
-/// disjoint from the engine-side selector type per `seq-blocker-3`
-/// repartition).
+/// Ships two variants: `Exact` (label equality) and `AnchorPrefix`
+/// (genuine prefix matching — NOT the Phase-2b stub that silently coerced
+/// to label equality). The kernel exposes this pattern surface directly;
+/// there is no separate engine-side selector type (the `PrefixMatcher`
+/// type named in earlier planning notes was never minted — `AnchorPrefix`
+/// here IS the prefix-matching surface).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LabelPattern {
     /// Exact label equality. `LabelPattern::Exact("post")` matches Nodes
@@ -249,7 +250,15 @@ impl Projection {
 /// Errors specific to the generalized Algorithm B kernel surface
 /// (`Algorithm::register` / `Algorithm::try_register`). Distinct from
 /// [`ViewError`] which surfaces from the per-event update path.
+///
+/// `#[non_exhaustive]` mirrors sibling [`ViewError`] (#917 — SemVer-policy
+/// symmetry across both error types this crate returns): future kernel
+/// failure modes (richer cycle-detection, materializer-pipeline registration
+/// faults) land as new variants at a minor version bump. Downstream matchers
+/// must include a `_ =>` arm. Construction within this crate continues to use
+/// struct-literal form (allowed in the defining crate).
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum AlgorithmError {
     /// Caller supplied a canonical view id with a label_pattern that
     /// disagrees with the canonical view's hardcoded label. The fail-loud
@@ -347,7 +356,7 @@ struct GenericKernel {
     label_pattern: LabelPattern,
     #[allow(
         dead_code,
-        reason = "projection currently no-op; placeholder for Phase-3+ narrowing"
+        reason = "projection currently no-op; placeholder for later-phase narrowing"
     )]
     projection: Projection,
     /// Maintained set of matched Node CIDs sorted by `Cid`'s `Ord` impl
@@ -471,7 +480,7 @@ impl View for GenericKernel {
     fn rebuild(&mut self) -> Result<(), ViewError> {
         // Rebuild in the generic kernel is a no-op: the kernel has no
         // external input source — it ingests events through `update` only.
-        // Flipping fresh is the contract. Phase-3+ event-replay rebuild
+        // Flipping fresh is the contract. A later-phase event-replay rebuild
         // wires the snapshot store; until then `rebuild` clears + resets
         // fresh so a previously stale-tripped view is observably re-armed.
         // The budget tracker's `rebuild` restores the original cap +
@@ -933,6 +942,10 @@ impl AlgorithmBView {
     /// - [`AlgorithmError::CanonicalIdAnchorPrefixRefused`] when
     ///   `spec.view_id` is canonical and `spec.label_pattern` is an
     ///   anchor-prefix (canonical kernels require `LabelPattern::Exact`).
+    /// - [`AlgorithmError::TypedOutputProjectionMismatch`] (G23-0b,
+    ///   mat-r1-1) when `spec.typed_output_projection` does not match the
+    ///   shape `spec.view_id` requires (`governance_inheritance` ⇒ Rules;
+    ///   `version_current` ⇒ Current; every other view-id ⇒ None).
     pub fn register_subgraph(spec: SubgraphSpec) -> Result<Self, AlgorithmError> {
         // Fail-fast cycle check FIRST — mat-r1-13. MUST run before any
         // inner-kernel construction or walk.

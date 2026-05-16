@@ -222,6 +222,23 @@ pub trait TransportConnection: Send + Sync {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct IrohTransport;
 
+/// The pre-v1 concrete transport address type, surfaced through the
+/// [`TransportEndpoint::Addr`] seam (Surf-1 #889 / residual #1232).
+///
+/// `benten-engine`'s public sync API (`AtriumHandle::loopback_addr` /
+/// `AtriumHandle::sync_subgraph`) names THIS alias instead of
+/// `iroh::EndpointAddr` directly, so the engine's public surface no
+/// longer leaks an `iroh::`-concrete type two crates outward. The
+/// alias is *defined as* `<Endpoint as TransportEndpoint>::Addr` — it
+/// is the same type the abstraction boundary already names via
+/// `Self::Addr`, just given a transport-neutral public name at the
+/// crate root. The full `<T: Transport>` engine-generic migration
+/// (which would make this an associated type the engine is generic
+/// over) remains the genuinely-post-v1 CLAUDE.md #19 alternate-
+/// transport work; this alias is the bounded pre-v1 closure that
+/// stops the leak without that migration.
+pub type TransportAddr = <Endpoint as TransportEndpoint>::Addr;
+
 impl Transport for IrohTransport {
     type Endpoint = Endpoint;
     type Connection = Connection;

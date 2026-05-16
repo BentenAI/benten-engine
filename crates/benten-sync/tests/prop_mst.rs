@@ -118,7 +118,7 @@ proptest! {
             // identical root-cid at MST layer (the load-bearing
             // contract for the missing-in-a / missing-in-b
             // exclusive-key shapes).
-            let _rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b);
+            let _rounds = run_mst_diff_to_convergence(&mut mst_a, &mut mst_b).expect("proptest corpus converges");
             prop_assert_eq!(
                 mst_a.root_cid(),
                 mst_b.root_cid(),

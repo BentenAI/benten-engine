@@ -159,7 +159,7 @@ fn exit_3_cap_denial_routes_on_denied() {
         .build()
         .unwrap();
     let handler_id = engine
-        .register_crud_with_grants("post")
+        .register_crud("post")
         .expect("grant-backed crud registers");
 
     let actor = engine.create_principal("alice").unwrap();
