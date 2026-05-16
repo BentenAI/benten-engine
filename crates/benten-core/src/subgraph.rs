@@ -320,12 +320,6 @@ impl Subgraph {
         self.deterministic
     }
 
-    /// Whether the Subgraph is classified deterministic (alias).
-    #[must_use]
-    pub fn is_deterministic(&self) -> bool {
-        self.deterministic
-    }
-
     /// Declare this finalized Subgraph's determinism context after the fact.
     pub fn set_deterministic(&mut self, value: bool) {
         self.deterministic = value;

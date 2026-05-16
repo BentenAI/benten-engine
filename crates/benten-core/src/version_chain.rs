@@ -89,8 +89,6 @@ impl VersionDagError {
 ///   - `current` — local active reference (optional).
 #[derive(Debug, Clone)]
 pub struct DagVersionChain {
-    /// Root of the chain (initial Anchor head).
-    root: Cid,
     /// `child -> {parents}`.
     parents: BTreeMap<Cid, BTreeSet<Cid>>,
     /// `parent -> {children}`.
@@ -108,7 +106,6 @@ impl DagVersionChain {
         let mut all = BTreeSet::new();
         all.insert(root_cid);
         Self {
-            root: root_cid,
             parents: BTreeMap::new(),
             children: BTreeMap::new(),
             all,
@@ -116,16 +113,18 @@ impl DagVersionChain {
         }
     }
 
-    /// Root CID (Anchor head).
-    #[must_use]
-    pub fn root(&self) -> &Cid {
-        &self.root
-    }
-
     /// Add a parent → child edge to the DAG.
     ///
     /// Multiple calls with the same `parent` create branches.
     /// Multiple parents for the same `child` create a merge node.
+    ///
+    /// # Idempotent on duplicate edges
+    ///
+    /// Adding the *same* `(parent, child)` pair a second time is a silent
+    /// no-op that returns `Ok(())`. The parent/child adjacency sets are
+    /// `BTreeSet`s, so a re-inserted edge does not duplicate the relation
+    /// and does not error — callers replaying a version log (e.g. Phase-3
+    /// sync re-delivery) can re-apply edges safely without dedup tracking.
     ///
     /// # Errors
     ///
@@ -186,30 +185,6 @@ impl DagVersionChain {
             .collect()
     }
 
-    /// Walk all descendants of `from` in BFS order.
-    #[must_use]
-    pub fn descendants(&self, from: &Cid) -> Vec<Cid> {
-        let mut out = Vec::new();
-        let mut stack: Vec<Cid> = vec![*from];
-        let mut visited: BTreeSet<Cid> = BTreeSet::new();
-        while let Some(cur) = stack.pop() {
-            if let Some(cs) = self.children.get(&cur) {
-                for c in cs {
-                    if visited.insert(*c) {
-                        out.push(*c);
-                        stack.push(*c);
-                    }
-                }
-            }
-        }
-        out
-    }
-
-    /// All CIDs in the DAG (root + every added version).
-    pub fn all_cids(&self) -> impl Iterator<Item = &Cid> {
-        self.all.iter()
-    }
-
     /// Number of versions including the root.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -223,12 +198,6 @@ impl DagVersionChain {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.all.is_empty()
-    }
-
-    /// Whether the DAG only has the root.
-    #[must_use]
-    pub fn is_singleton(&self) -> bool {
-        self.all.len() == 1
     }
 
     /// Local CURRENT pointer (per-device-local per ratification #2).

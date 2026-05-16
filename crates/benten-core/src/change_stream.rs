@@ -66,12 +66,6 @@ impl SubscriberId {
     pub fn as_cid(&self) -> &Cid {
         &self.0
     }
-
-    /// Consume the wrapper and return the underlying CID.
-    #[must_use]
-    pub fn into_cid(self) -> Cid {
-        self.0
-    }
 }
 
 impl core::fmt::Display for SubscriberId {
