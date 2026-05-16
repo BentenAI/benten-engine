@@ -248,6 +248,24 @@ pub struct NodeHandle(pub u32);
 
 /// A subgraph (set of OperationNodes + directed edges between them).
 ///
+/// # Examples
+///
+/// ```
+/// use benten_core::{OperationNode, PrimitiveKind, Subgraph};
+///
+/// let sg = Subgraph::new("crud:post")
+///     .with_node(OperationNode::new("r", PrimitiveKind::Read))
+///     .with_node(OperationNode::new("w", PrimitiveKind::Write))
+///     .with_edge("r", "w", "next");
+///
+/// // Content-addressed: construction order does not affect the CID.
+/// let reordered = Subgraph::new("crud:post")
+///     .with_node(OperationNode::new("w", PrimitiveKind::Write))
+///     .with_node(OperationNode::new("r", PrimitiveKind::Read))
+///     .with_edge("r", "w", "next");
+/// assert_eq!(sg.cid().unwrap(), reordered.cid().unwrap());
+/// ```
+///
 /// **Phase 2b G12-C-cont relocation** brings this type from `benten-eval` to
 /// `benten-core`. Fields are `pub` so the `benten-eval` invariants module
 /// (which previously reached into `pub(crate)` siblings) can keep working

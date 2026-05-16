@@ -87,6 +87,22 @@ impl VersionDagError {
 ///     "merge" nodes may have multiple).
 ///   - `children[parent]` — set of child CIDs (size 0 = tip).
 ///   - `current` — local active reference (optional).
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::{Cid, version_chain::DagVersionChain};
+///
+/// let root = Cid::from_blake3_digest([0u8; 32]);
+/// let v1 = Cid::from_blake3_digest([1u8; 32]);
+/// let mut chain = DagVersionChain::new(root);
+/// chain.add_version(root, v1).unwrap();
+///
+/// assert!(chain.is_ancestor_of(&root, &v1));
+/// // Idempotent: re-applying the same edge is a silent Ok no-op.
+/// assert!(chain.add_version(root, v1).is_ok());
+/// assert_eq!(chain.len(), 2);
+/// ```
 #[derive(Debug, Clone)]
 pub struct DagVersionChain {
     /// `child -> {parents}`.

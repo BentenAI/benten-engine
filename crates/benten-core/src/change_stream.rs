@@ -94,34 +94,21 @@ pub enum ChangeKind {
 
 /// A change event observed by the `ChangeStream` port.
 ///
-/// Carries the engine-assigned monotonic `seq` (load-bearing for D5
+/// Carries the engine-assigned monotonic `seq` (load-bearing for
 /// exactly-once-at-handler dedup) plus an opaque `payload_bytes` blob the
 /// SUBSCRIBE delivery layer decodes per the registered handler's signal-
 /// shape. The payload stays as raw bytes here so `benten-core` does not
 /// need to model `Value` round-tripping for the change-stream wire path.
 ///
-/// # R6FP-Group-1 (Round-2 Instance 6 BLOCKER) — multi-label parity
+/// # Multi-label matching contract
 ///
-/// The eval-side ChangeEvent originally carried a single `anchor_cid`
-/// + `kind` + `seq` + `payload_bytes` quartet. The graph-level
-/// `benten_graph::ChangeEvent` (the producer) carries `labels:
-/// Vec<String>` (full label set), `tx_id: u64`, and the three
-/// attribution CIDs (`actor_cid`, `handler_cid`,
-/// `capability_grant_cid`); the change-event bridge inside
-/// `crates/benten-engine/src/builder.rs::EngineBuilder` (the wave-8c
-/// closure subscribed via `ChangeBroadcast::subscribe_fn` inside
-/// `EngineBuilder::build` that translates `graph::ChangeEvent` →
-/// eval-side `subscribe::ChangeEvent`)
-/// silently dropped 6 of 9 fields, including collapsing `labels:
-/// Vec<String>` to a single `primary_label: String`. The
-/// CONSEQUENCE was a real BEHAVIORAL DEFECT: a multi-labeled Node
-/// `["User","Admin"]` would silently miss delivery to a SUBSCRIBE
-/// consumer whose pattern matches `Admin:*` because the matcher
-/// only consulted the (single) primary label.
-///
-/// R6FP-G1 (Round-2 Instance 6) widens the struct to forward all 9
-/// fields cleanly. The matcher at `subscribe.rs::publish_change_event_*`
-/// now walks every label in `labels` and fires when ANY one matches.
+/// `labels` carries the **full** label set of the affected Node at emit
+/// time, not a single primary label. The SUBSCRIBE matcher walks every
+/// entry and fires when ANY label matches the subscription pattern, so a
+/// multi-labeled Node `["User","Admin"]` is delivered to consumers
+/// matching either `User:*` or `Admin:*`. Producers MUST populate the
+/// complete label set; collapsing it to one label silently drops
+/// deliveries for the other labels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangeEvent {
     /// Anchor-level identity the change applies to.
@@ -134,38 +121,35 @@ pub struct ChangeEvent {
     /// Opaque event payload — DAG-CBOR or JSON bytes; the SUBSCRIBE
     /// delivery layer decodes it.
     pub payload_bytes: Vec<u8>,
-    /// R6FP-Group-1 (Round-2 Instance 6) — full label set of the
-    /// affected Node at the moment the event was emitted. Empty for a
-    /// delete that targeted an already-absent CID (idempotent-delete
-    /// miss). Walked by the SUBSCRIBE matcher so a multi-labeled Node
-    /// `["User","Admin"]` matches BOTH `User:*` and `Admin:*` glob
-    /// patterns.
+    /// Full label set of the affected Node at the moment the event was
+    /// emitted. Empty for a delete that targeted an already-absent CID
+    /// (idempotent-delete miss). Walked by the SUBSCRIBE matcher so a
+    /// multi-labeled Node `["User","Admin"]` matches BOTH `User:*` and
+    /// `Admin:*` glob patterns.
     pub labels: Vec<String>,
-    /// R6FP-Group-1 (Round-2 Instance 6) — monotonically increasing
-    /// transaction id assigned by the engine at commit time. Forwarded
-    /// from the graph-level ChangeEvent; SUBSCRIBE consumers use it to
-    /// reason about before/after ordering without wall-clock
-    /// timestamps.
+    /// Monotonically increasing transaction id assigned by the engine at
+    /// commit time. Forwarded from the graph-level ChangeEvent; SUBSCRIBE
+    /// consumers use it to reason about before/after ordering without
+    /// wall-clock timestamps.
     pub tx_id: u64,
-    /// R6FP-Group-1 (Round-2 Instance 6) — actor attribution. The
-    /// Node CID of the actor who performed the write, when the write
-    /// came through an attributed engine path; `None` for system /
-    /// privileged writes.
+    /// Actor attribution. The Node CID of the actor who performed the
+    /// write, when the write came through an attributed engine path;
+    /// `None` for system / privileged writes.
     pub actor_cid: Option<Cid>,
-    /// R6FP-Group-1 (Round-2 Instance 6) — handler attribution. The
-    /// handler subgraph CID that issued the write, when known.
+    /// Handler attribution. The handler subgraph CID that issued the
+    /// write, when known.
     pub handler_cid: Option<Cid>,
-    /// R6FP-Group-1 (Round-2 Instance 6) — capability-grant
-    /// attribution. The grant CID authorizing the write, when known.
+    /// Capability-grant attribution. The grant CID authorizing the
+    /// write, when known.
     pub capability_grant_cid: Option<Cid>,
 }
 
 impl ChangeEvent {
-    /// R6FP-Group-1 (Round-2 Instance 6) — minimal constructor for
-    /// the legacy 4-field shape. Sets `labels = vec![]`, `tx_id = 0`,
-    /// and the three attribution CIDs to `None`. Suitable for
-    /// test-grade event fabrication; production callers (the engine's
-    /// graph→eval bridge) must populate every field directly.
+    /// Minimal constructor: sets `labels = vec![]`, `tx_id = 0`, and the
+    /// three attribution CIDs to `None`. Suitable for test-grade event
+    /// fabrication; production callers (the engine's graph→eval bridge)
+    /// must populate every field directly so multi-label matching and
+    /// attribution are not silently lost.
     #[must_use]
     pub fn legacy_minimal(
         anchor_cid: Cid,
@@ -202,7 +186,13 @@ pub trait ChangeStream: Send + Sync {
     ///
     /// Returns the catalog code as a `String` so this trait stays free of
     /// any error-type dependency. SUBSCRIBE wraps the failure in its
-    /// typed error envelope at the call site.
+    /// typed error envelope at the call site. The codes a conforming
+    /// backend may return here:
+    ///
+    /// - `E_SUBSCRIBE_PATTERN_INVALID` — `pattern` is not a well-formed
+    ///   `Label:*` glob.
+    /// - `E_SUBSCRIBE_DELIVERY_FAILED` — the backend could not register
+    ///   the subscription (transient channel / storage failure).
     fn subscribe(&mut self, pattern: &str, id: SubscriberId) -> Result<(), String>;
 
     /// Poll the next event for `id`. `Ok(None)` means "no event ready
@@ -213,6 +203,16 @@ pub trait ChangeStream: Send + Sync {
     /// # Errors
     ///
     /// Catalog code as `String` per the same rationale as `subscribe`.
+    /// The codes a conforming backend may return here:
+    ///
+    /// - `E_SUBSCRIBE_CURSOR_LOST` — the requested cursor falls before
+    ///   the retained event window.
+    /// - `E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED` — equivalent surface raised
+    ///   at re-registration time rather than mid-stream.
+    /// - `E_SUBSCRIBE_REVOKED_MID_STREAM` — the subscriber's read-coverage
+    ///   capability no longer holds (per-event delivery-time cap-recheck).
+    /// - `E_SUBSCRIBE_DELIVERY_FAILED` — transient delivery-channel
+    ///   failure.
     fn next_event(&mut self, id: &SubscriberId) -> Result<Option<ChangeEvent>, String>;
 
     /// Release the subscription. Idempotent: a second unsubscribe of an
@@ -220,6 +220,9 @@ pub trait ChangeStream: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Catalog code as `String`.
+    /// Catalog code as `String`. Idempotent release does not error; the
+    /// only failure a conforming backend may surface is
+    /// `E_SUBSCRIBE_DELIVERY_FAILED` (transient channel / storage failure
+    /// while tearing down subscription resources).
     fn unsubscribe(&mut self, id: &SubscriberId) -> Result<(), String>;
 }
