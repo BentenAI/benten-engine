@@ -375,7 +375,17 @@
 - `.addl/phase-3/WAVE-G16-B-E-BRIEF.md` (wave brief; spec sources)
 - `.addl/phase-3/HANDOFF-2026-05-03-phase-3-kickoff.md` NS-T64 + NS-T65 (canary scope clarification 2026-05-08)
 
-### 3.3 napi `Acceptor` extension surface — revocation list + expected-parent gate
+### 3.3 napi `Acceptor` extension surface — revocation list + expected-parent gate — OBVIATED-BY-COLLAPSE (#1238, 2026-05-16)
+
+**Closure:** OBVIATED. The COLLAPSE P1/P3 device-trust deletion (Compromise #23
+SUPERSEDED-BY-COLLAPSE; DECISION-RECORD-trust-model-reframe.md §4, RATIFIED)
+deleted the entire `Acceptor` + `DeviceRevocation` cluster — there is no longer
+a standalone accept-time pipe to expose at the napi boundary. The device-trust
+authority job is now performed by the user-root-anchored UCAN capability chain
++ the unified envelope-ceiling seam; there is nothing left for this napi
+widening to surface. No follow-up; the item is dissolved by the collapse, not
+deferred. (Historical text retained below for provenance; the now-deleted
+`Acceptor`/`DeviceRevocation` ctor names below are pre-COLLAPSE.)
 
 **Source:** R6-FP Wave A Sub-A2 BELONGS-NAMED-NOW per HARD RULE rule-12.
 
@@ -2186,7 +2196,13 @@ The Phase-3-close pre-v1 cleanup window (post tag `phase-3-close` 2026-05-10) ra
 
 ---
 
-### 13.3 Phase-4 napi-surface widening: `Acceptor::new_with_revocations` + `DeviceRevocation::issue` + parent-lookup acceptor expose to napi
+### 13.3 Phase-4 napi-surface widening: Acceptor::new_with_revocations + DeviceRevocation::issue + parent-lookup acceptor expose to napi — OBVIATED-BY-COLLAPSE (#1238, 2026-05-16)
+
+**Closure:** OBVIATED, as the sibling of §3.3. The COLLAPSE P1/P3 device-trust
+deletion removed the `Acceptor` + `DeviceRevocation` cluster entirely; there is
+no Rust-side ctor surface left to mirror into napi. Dissolved by collapse, not
+deferred. Historical text retained for provenance; all `device_attestation`
+ctor names referenced below are pre-COLLAPSE and no longer exist in the tree.
 
 **Origin:** Phase-3-close pre-v1 triage (2026-05-10 doc-review `completeness.json::comp-r1-7`). §3.3 of this backlog already documents that `JsAtrium::set_acceptor` exposes ONLY the freshness-window-only `Acceptor::new` constructor — `Acceptor::new_with_revocations` + `Acceptor::with_parent_lookup` + the `DeviceRevocation::issue` constructor remain Rust-side only. Closure-shape for §3.3 (the parent entry) targets the napi widening; this entry registers the parity TS-side: `packages/engine/test/atrium.test.ts` carries a partial shim for `setAcceptor` but cannot exercise the revocation-aware variant.
 
@@ -2203,11 +2219,12 @@ The Phase-3-close pre-v1 cleanup window (post tag `phase-3-close` 2026-05-10) ra
 
 **Phase target:** v1-assessment-window per CLAUDE.md item #15. Couples to §3.3 (parent entry; closure-shape overlaps).
 
-**Cross-references:**
-- `crates/benten-id/src/device_attestation.rs::Acceptor::new_with_revocations` (the Rust-side ctor to mirror).
-- `crates/benten-id/src/device_attestation.rs::Acceptor::with_parent_lookup` (sibling ctor to mirror).
-- `crates/benten-id/src/device_attestation.rs::DeviceRevocation::issue` (the revocation constructor to expose).
-- `bindings/napi/src/atrium.rs` (the napi target surface).
+**Cross-references (all pre-COLLAPSE; symbols deleted by #1238):**
+- the pre-COLLAPSE `Acceptor::new_with_revocations` ctor in `benten-id`'s
+  device_attestation module (deleted — was the Rust-side ctor to mirror).
+- the pre-COLLAPSE `Acceptor::with_parent_lookup` sibling ctor (deleted).
+- the pre-COLLAPSE `DeviceRevocation::issue` revocation constructor (deleted).
+- `bindings/napi/src/atrium.rs` (the napi target surface; still present).
 - §3.3 (parent entry — same closure wave).
 - §13.2 (the user-facing doc home for these surfaces).
 

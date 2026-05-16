@@ -272,8 +272,11 @@ assumptions. Pinned end-to-end at:
   (multi-device GREEN-path with REAL signed attestations).
 - `tests/integration/atrium_two_device.rs::forged_device_did_rejected_at_envelope_verify`
   (DID forgery rejection — `E_DEVICE_ATTESTATION_FORGED`).
-- `tests/integration/atrium_two_device.rs::replayed_envelope_rejected_by_acceptor_nonce_store`
-  (parent-issued attestation nonce replay rejection).
+- `tests/integration/atrium_two_device.rs::replayed_stale_envelope_rejected_by_freshness_window`
+  (stale-envelope replay rejection via the freshness window re-homed onto the
+  unified spine per Compromise #23 SUPERSEDED-BY-COLLAPSE; the accept-time
+  nonce-store was deleted with the Acceptor cluster — durable replay-marker
+  re-home tracked P2/P5 per DECISION-RECORD §4b F3).
 - `tests/integration/atrium_two_device.rs::frame_pair_payload_swap_rejected_by_payload_hash_binding`
   (BLAKE3 frame-pair binding violation rejection).
 - `tests/integration/atrium_two_device.rs::future_wire_version_rejected_at_decode`

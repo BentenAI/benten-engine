@@ -185,7 +185,7 @@ pub fn outcome_to_row_reject(
 /// ceiling-recheck itself — the full peer still enforces, so excluding
 /// this surface from the browser bundle is architecturally correct,
 /// NOT a security regression. Mirrors the existing native-only
-/// `manifest_signing` module precedent (`lib.rs:204-210`).
+/// `manifest_signing` module precedent (`benten_engine::manifest_signing`).
 #[cfg(not(feature = "browser-backend"))]
 pub fn envelope_ceiling_admits_row(
     ceiling: Option<&benten_id::device_attestation::CapabilityEnvelope>,
