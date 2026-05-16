@@ -126,6 +126,12 @@ pub trait BlobBackend: Send + Sync + 'static {
 
     /// Fetch the bytes stored under `cid`. Returns `Ok(None)` on a clean
     /// miss — a missing CID is information, not a failure.
+    ///
+    /// # Errors
+    /// Returns `Self::Error` on a backend I/O failure (e.g. the underlying
+    /// `KVBackend` read fails, the durable side-table is unreadable, or a
+    /// stored payload fails to decode). A missing CID is `Ok(None)`, not an
+    /// error.
     fn get(&self, cid: &Cid) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 
     /// Store `bytes` under `cid`. Implementations MAY recompute
@@ -133,6 +139,11 @@ pub trait BlobBackend: Send + Sync + 'static {
     /// D-PHASE-3-12's authoritative validator lives at the engine call
     /// site (`Engine::register_module_bytes`), so the trait-level put
     /// permits but does not require local recomputation.
+    ///
+    /// # Errors
+    /// Returns `Self::Error` on a backend write failure (e.g. the
+    /// underlying `KVBackend` put fails) or, for impls that opt into
+    /// local recomputation, a typed `BLAKE3(bytes) != cid` mismatch.
     fn put(&self, cid: &Cid, bytes: &[u8]) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// True iff this backend persists across engine restarts. Native
