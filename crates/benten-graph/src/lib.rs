@@ -10,7 +10,7 @@
 //!
 //! ## Module layout
 //!
-//! - [`backend`] — the [`KVBackend`] trait, [`ScanResult`], [`BatchOp`],
+//! - [`backend`] — the [`KVBackend`] trait, [`ScanResult`],
 //!   [`DurabilityMode`].
 //! - [`store`] — [`NodeStore`] / [`EdgeStore`] traits plus the
 //!   [`ChangeSubscriber`] trait and [`ChangeEvent`] schema. Each backend
@@ -55,7 +55,7 @@ pub mod store;
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub mod transaction;
 
-pub use backend::{BatchOp, DurabilityMode, KVBackend, ScanIter, ScanResult};
+pub use backend::{DurabilityMode, KVBackend, ScanResult};
 pub use backends::{
     BlobBackend, NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
     SnapshotBlobError,
@@ -484,6 +484,7 @@ pub enum GraphError {
     /// remains on the struct field for programmatic introspection and
     /// Debug rendering.
     #[error("backend not found: {}", redact_path_for_display(path))]
+    #[non_exhaustive]
     BackendNotFound {
         /// Path supplied to the failed `open_existing` call.
         path: std::path::PathBuf,
@@ -492,6 +493,7 @@ pub enum GraphError {
     /// A write was attempted on a system-zone label (label starting with
     /// `"system:"`) without the privileged flag set. Phase 1 SC1 stopgap.
     #[error("system-zone write not permitted from user path: {label}")]
+    #[non_exhaustive]
     SystemZoneWrite {
         /// The `system:` label the user-zone path tried to write.
         label: String,
@@ -525,6 +527,7 @@ pub enum GraphError {
     #[error(
         "immutability violation: CID {cid} already persisted (attempted_authority: {attempted_authority:?})"
     )]
+    #[non_exhaustive]
     InvImmutability {
         /// The CID the re-put targeted.
         cid: Cid,
@@ -539,6 +542,15 @@ pub enum GraphError {
 
     /// The transaction's closure returned `Err`, so the write batch was
     /// rolled back.
+    // Fwd-2 #997 / umbrella #1207: `#[non_exhaustive]` deliberately NOT
+    // applied to this variant — `GraphError::TxAborted { reason }` is
+    // constructed in cross-crate PRODUCTION code
+    // (`crates/benten-engine/src/engine_diagnostics.rs`), so a bare
+    // `#[non_exhaustive]` here would break the workspace build. Whether
+    // to apply it (plus a `GraphError::tx_aborted(reason)` constructor +
+    // migrate the benten-engine production sites) is named at
+    // `docs/future/phase-4-backlog.md §4.43` (v1-API-stabilization
+    // sweep). Cascade surfaced, not chased, per HARD RULE clause-(b).
     #[error("transaction aborted: {reason}")]
     TxAborted {
         /// Human-readable reason the closure returned `Err`.
@@ -547,6 +559,42 @@ pub enum GraphError {
 }
 
 impl GraphError {
+    /// Construct a [`GraphError::BackendNotFound`] for `path`.
+    ///
+    /// Controlled-surface-area constructor (Fwd-2 #997 / umbrella #1207):
+    /// the variant is `#[non_exhaustive]` so external crates (including
+    /// this crate's integration-test crates) construct it through this
+    /// builder rather than struct-literal syntax. Adding a future field
+    /// is then a non-breaking minor.
+    #[must_use]
+    pub fn backend_not_found(path: impl Into<std::path::PathBuf>) -> Self {
+        GraphError::BackendNotFound { path: path.into() }
+    }
+
+    /// Construct a [`GraphError::SystemZoneWrite`] for `label`.
+    ///
+    /// Controlled-surface-area constructor (Fwd-2 #997 / umbrella #1207)
+    /// — see [`GraphError::backend_not_found`] for the rationale.
+    #[must_use]
+    pub fn system_zone_write(label: impl Into<String>) -> Self {
+        GraphError::SystemZoneWrite {
+            label: label.into(),
+        }
+    }
+
+    /// Construct a [`GraphError::InvImmutability`] for `cid` under
+    /// `attempted_authority`.
+    ///
+    /// Controlled-surface-area constructor (Fwd-2 #997 / umbrella #1207)
+    /// — see [`GraphError::backend_not_found`] for the rationale.
+    #[must_use]
+    pub fn inv_immutability(cid: Cid, attempted_authority: WriteAuthority) -> Self {
+        GraphError::InvImmutability {
+            cid,
+            attempted_authority,
+        }
+    }
+
     /// Map a `GraphError` to its stable ERROR-CATALOG code.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
@@ -641,10 +689,11 @@ impl From<redb::CommitError> for GraphError {
 /// snapshot was opened; concurrent writes to the backend are invisible until
 /// the handle is dropped.
 ///
-/// G3-A lands a partial shape: [`SnapshotHandle::get_node`] is implemented
-/// (thin wrapper over a `redb::ReadTransaction` held across the handle's
-/// lifetime). [`SnapshotHandle::scan_label`] stays a G6 stub — it depends
-/// on the label-index scan plumbing that G6 owns.
+/// Both accessors are fully wired: [`SnapshotHandle::get_node`] is a thin
+/// wrapper over a `redb::ReadTransaction` held across the handle's
+/// lifetime, and [`SnapshotHandle::scan_label`] reads the
+/// `LABEL_INDEX_TABLE` multimap (label-index scan plumbing landed in
+/// Phase-2a). Both observe the snapshot-instant state.
 ///
 /// Implements `Drop` so explicit `drop(handle)` in tests is the idiomatic
 /// way to release the snapshot's read-transaction lifetime.
@@ -728,8 +777,8 @@ impl SnapshotHandle {
 //
 // Per the implementation plan (R1 architect addendum, line ~605), the
 // channel concretion — tokio-broadcast on native, synchronous
-// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
-// `benten-engine::change`. The graph crate exposes only the
+// `Vec<Arc<dyn ChangeSubscriber>>` fan-out on WASM — lives in
+// `benten-engine`'s change module. The graph crate exposes only the
 // [`ChangeSubscriber`] callback trait ([`store::ChangeSubscriber`]) so it
 // carries no async-runtime dependency. Backends register subscribers via
 // `RedbBackend::register_subscriber(Arc<dyn ChangeSubscriber>)`; the

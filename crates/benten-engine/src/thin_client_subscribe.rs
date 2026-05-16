@@ -118,8 +118,9 @@ pub enum ThinClientError {
     #[error("thin-client connection rejected: device attestation required")]
     AttestationRequired,
     /// Connection attempt presented a valid attestation but the
-    /// attested device-DID has been revoked at the full peer (parent
-    /// DID emitted a [`benten_id::device_attestation::DeviceRevocation`]).
+    /// attested device-DID has been revoked at the full peer
+    /// (post-COLLAPSE: device revocation collapses to user-root UCAN
+    /// revocation — the distinct device revocation-list was deleted).
     #[error("thin-client connection rejected: device revoked")]
     DeviceRevoked,
     /// Other engine-layer error (e.g. attestation signature failed

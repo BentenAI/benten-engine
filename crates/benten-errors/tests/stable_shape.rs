@@ -76,7 +76,8 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::IvmPatternMismatch,
     ErrorCode::IvmStrategyNotImplemented,
     ErrorCode::VersionUnknownPrior,
-    // Phase-2a G1-B HostError discriminants (PHASE_2A_RESERVED_CODES). All
+    // Phase-2a G1-B HostError discriminants
+    // (RESERVED_CODES_AT_PHASE_2A_SNAPSHOT). All
     // five reserved for Phase-3 sync fires but already carry catalog
     // entries + as_str / as_static_str / from_str arms, so they belong on
     // the round-trip list.
@@ -85,8 +86,8 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::HostBackendUnavailable,
     ErrorCode::HostCapabilityRevoked,
     ErrorCode::HostCapabilityExpired,
-    // Phase-2a firing codes (PHASE_2A_FIRING_CODES). Added during the
-    // Phase-2a R5 wave and carry full catalog + round-trip wiring.
+    // Phase-2a firing codes (FIRING_CODES_AT_PHASE_2A_SNAPSHOT). Added
+    // during the Phase-2a R5 wave and carry full catalog + round-trip wiring.
     ErrorCode::ExecStateTampered,
     ErrorCode::ResumeActorMismatch,
     ErrorCode::ResumeSubgraphDrift,
@@ -518,7 +519,8 @@ fn variant_count_is_pinned() {
     //
     // G11-A Wave 3a sync: the earlier canary (43) predated the Phase-2a
     // R5 waves which introduced the 5 reserved HostError discriminants
-    // (PHASE_2A_RESERVED_CODES), the 10 firing codes (PHASE_2A_FIRING_CODES),
+    // (RESERVED_CODES_AT_PHASE_2A_SNAPSHOT), the 10 firing codes
+    // (FIRING_CODES_AT_PHASE_2A_SNAPSHOT),
     // and the ucca-7 `CapScopeLoneStarRejected` parse-time refusal. All
     // 16 additions already had `as_str` / `as_static_str` / `from_str`
     // coverage in `benten-errors/src/lib.rs` — the test list just hadn't
@@ -992,7 +994,7 @@ fn catalog_variant_count_matches_enum() {
             // ALL_CATALOG_VARIANTS classifies as `true`, and we cross-
             // check counts below, the test surfaces the gap as a
             // runtime length mismatch (rather than a compile error).
-            // The hard-coded `CATALOG_VARIANT_COUNT, 167` assertion in
+            // The hard-coded `CATALOG_VARIANT_COUNT` assertion in
             // `variant_count_is_pinned` above is the SECONDARY
             // tripwire — any author bumping the list must touch both.
             _ => false,

@@ -41,11 +41,16 @@ use crate::keypair::{Keypair, PublicKey};
 
 /// The load-bearing identity-recovery + multi-signature trait surface.
 ///
-/// Phase 3 ships [`Ed25519SingleKey`] as the only fully-implemented
-/// impl. Future post-Phase-3 work (after the v1-milestone-gate
-/// assessment per CLAUDE.md baked-in #15) will land additional impls
-/// (k-of-n threshold, social-recovery, etc.) without breaking this
-/// trait signature.
+/// [`Ed25519SingleKey`] is the only fully-implemented impl today.
+///
+/// **Hyg-3 #431 roadmap retense:** the concrete identity-recovery
+/// protocol choice (k-of-n threshold, social-recovery, etc.) is a
+/// **v1-assessment-window item resolved in Phase-4-Meta** per
+/// CLAUDE.md baked-in #15 ("resolve identity-recovery protocol
+/// choice" at the v1-assessment-window). The decentralized-identity
+/// working name is **Kith** (per CLAUDE.md Phase-4-Foundation
+/// ratification). Additional impls land without breaking this trait
+/// signature (the trait is not sealed).
 pub trait MultiSigSurface {
     /// Signature type produced by [`MultiSigSurface::sign`].
     type Signature;

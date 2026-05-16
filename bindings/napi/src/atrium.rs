@@ -702,42 +702,32 @@ impl JsAtrium {
         Ok(())
     }
 
-    /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — install a custom
-    /// [`benten_id::device_attestation::Acceptor`] for inbound envelope
-    /// verification, parameterised by a freshness window in seconds.
+    /// COLLAPSE (P3) — set the freshness window (seconds) applied to
+    /// inbound signed device-attestation envelopes.
     ///
-    /// Mirrors [`AtriumHandle::set_acceptor`] with a JS-friendly
-    /// constructor surface — the full Rust `Acceptor` struct (carrying
-    /// the nonce-store mutex + revocation list + optional expected-
-    /// parent gate) is not directly exposed across the napi boundary;
-    /// instead, this setter constructs a fresh acceptor with the given
-    /// `freshness_window_secs` (matching the existing
-    /// `JsDeviceAttestation::accept_at` pattern).
+    /// **Replaces the deleted `set_acceptor`.** Under COLLAPSE
+    /// (DECISION-RECORD §4 RATIFIED) the device-attestation
+    /// *acceptance* pipe (`benten_id::Acceptor` — nonce-store /
+    /// revocation-list / expected-parent gate) is DELETED: the device
+    /// envelope is no longer a distinct trust-root. Revocation
+    /// collapses to user-root UCAN revocation at the durable seam; the
+    /// J8 envelope-ceiling is ANDed once at the engine's single
+    /// inbound-sync recheck seam. The freshness window (the one
+    /// generic anti-replay control the operator still tunes) survives,
+    /// mirroring the engine-side
+    /// [`AtriumHandle::set_envelope_freshness_window`].
     ///
     /// `freshness_window_secs = 0` rejects any attestation older than
-    /// `now`; very large values (up to `u32::MAX` ≈ 136 years; the
-    /// engine-side `set_acceptor` accepts `u64` but the napi sig caps
-    /// at `u32` — sufficient for any realistic operator deployment)
-    /// accept-any-age.
-    /// Production deployments typically configure a window matching
-    /// the local UCAN backend's calibration (post-promotion) +
-    /// optionally seed a revocation list — the latter requires the
-    /// future `JsAtrium::set_acceptor_with_revocations` surface
-    /// which composes a `DeviceRevocation` napi shape (BELONGS-NAMED-
-    /// NOW per HARD RULE rule-12 to `docs/future/phase-3-backlog.md`
-    /// §3 acceptor-extension surface — kept out of this Wave to keep
-    /// the LOC budget honest).
+    /// `now`; large values (up to `u32::MAX` ≈ 136 years) accept-any-
+    /// age. The wire-envelope signature + payload-binding +
+    /// embedded-attestation→user-root signature defenses remain
+    /// load-bearing regardless of the window.
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
     #[napi]
-    pub fn set_acceptor(&self, freshness_window_secs: u32) -> Result<()> {
-        let handle = self.engine_atrium_or_err("set_acceptor")?;
-        let acceptor = benten_id::device_attestation::Acceptor::new(
-            benten_id::device_attestation::FreshnessPolicy::seconds(u64::from(
-                freshness_window_secs,
-            )),
-        );
-        js_atrium_runtime().block_on(handle.set_acceptor(acceptor));
+    pub fn set_envelope_freshness_window(&self, freshness_window_secs: u32) -> Result<()> {
+        let handle = self.engine_atrium_or_err("set_envelope_freshness_window")?;
+        handle.set_envelope_freshness_window(u64::from(freshness_window_secs));
         Ok(())
     }
 }

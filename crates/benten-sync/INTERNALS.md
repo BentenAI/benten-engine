@@ -2,6 +2,8 @@
 
 Read-only crate-internals deep-dive. Plain-English. Aimed at a fresh agent who needs to understand the sync layer's shape before touching it.
 
+**State pinned to HEAD `8141b94` (post-Phase-4-Foundation R4b-FP-1 + R6-FP-BF; Phase 3 substrate unchanged since `phase-3-close` tag).** All Phase-3 line counts in §3 below match `src/*.rs` byte-for-byte at this SHA; no Phase-4-Foundation work landed substantive sync-side changes (substrate preserved per all R6 R5-R8 distributed-systems lens CONVERGED). Three new test-files added in §5 cover Phase-4-Foundation R4b-FP-1 Seam 3 (`apply_atrium_merge` manifest-envelope-recheck integration) + R6-FP-BF admin-UI-v0 atrium-share defense pins (both T6a + T6b currently DESTINATION-REMAPPED to `docs/future/phase-4-backlog.md §4.25` per HARD RULE clause-(b)).
+
 ---
 
 ## 1. What this crate does
@@ -73,6 +75,16 @@ Key types:
 - **`ATRIUM_ALPN`** — `b"benten/atrium/1"`. iroh's accept-loop filters by this ALPN; future protocol revisions negotiate via `benten/atrium/2`.
 
 Test fixtures inside the module: `mark_degraded` (manual flip) + `simulate_packet_loss` (>10% → degraded).
+
+### Transport-trait module — `transport_trait.rs` (RATIFIED §15.3 #1 / umbrella #1176)
+
+The abstraction boundary over the iroh-concrete connection layer (resolves the Surf-1 #889 / §7 "iroh-specific transport baked deep" concern). Three traits:
+
+- **`Transport: Send + Sync + 'static`** — factory/namespace trait naming the `Endpoint` + `Connection` associated types the post-v1 sync runtime is (eventually) generic over.
+- **`TransportEndpoint`** — abstracts `transport::Endpoint`'s engine-exercised surface: `peer_id` / `loopback_addr` / `transport_status` / `connect` / `connect_to_addr` / `accept_next` / `close`. The **`Addr` associated type is the seam** that contains the iroh-`EndpointAddr` leak — the trait signature names `Self::Addr`, never `iroh::EndpointAddr`.
+- **`TransportConnection`** — abstracts `transport::Connection`: `transport_kind` / `remote_peer` / `send_bytes` / `recv_bytes` / `close`.
+
+`IrohTransport` (zero-sized marker) is the pre-v1 concrete impl: `Transport::Endpoint = transport::Endpoint`, `Transport::Connection = transport::Connection`, `TransportEndpoint::Addr = iroh::EndpointAddr`. Every method forwards to the existing concrete method (`Endpoint::connect(self, ...)` etc.) with **zero behavioral change**. `engine_sync.rs` is intentionally left on the concrete newtypes pre-v1 (no behavioral regression); the post-v1 generic-over-`T: Transport` migration + alternate-transport impls (Tor / Nostr-relay / shaped relay per CLAUDE.md #19) are the boundary's consumers. `#[allow(async_fn_in_trait)]` is applied because the trait is consumed in-crate only (no `dyn` object constructed pre-v1). Compile-fenced by `tests/transport_trait_boundary.rs` — an iroh-free in-memory channel-backed mock implementing all three traits; if a future edit reintroduces an iroh-concrete type into a trait signature, the mock stops compiling.
 
 ### CRDT module — `crdt.rs` (~947 lines)
 
@@ -161,7 +173,7 @@ Root computation (`root_cid()`): canonicalises to a sorted `Vec<(String, MstCid)
 
 **Application-layer rehash check** at `Mst::apply_entries` — for every entry, re-hashes `payload` locally and compares byte-for-byte against the declared `cid`. On mismatch: rejects with `MstError::EntryCidByteMismatch` WITHOUT applying. This is the production-runtime path the engine's `consume_sync_replica_mst_diff` (G16-B) will plumb after handshake-attesting frame integrity. Defends against sec-r4r2-1 attack: an adversarial peer crafts a frame whose declared CID doesn't match its payload bytes.
 
-**Merkle proof construction** at `Mst::merkle_proof_for(key) -> Option<MerkleProof>`. Returns `None` if the key is absent. The `MerkleProof { target_key, target_cid, sorted_pairs }` carries the (key, cid) of the target plus the (key, cid) pairs of every OTHER entry — sufficient for a verifier holding only the published root to reconstruct the canonical-bytes shape + recompute the root. Crate docs explicitly note this is O(n) in entry count (not the optimal O(log n) tree-shaped path); a Phase-4 optimisation replaces it. Even the O(n) shape proves the thin-client bandwidth saving because payload bytes are NOT included in the proof (saving payload-size × n bytes).
+**Merkle proof construction** at `Mst::merkle_proof_for(key) -> Option<MerkleProof>`. Returns `None` if the key is absent. The `MerkleProof { target_key, target_cid, sorted_pairs }` carries the (key, cid) of the target plus the (key, cid) pairs of every OTHER entry — sufficient for a verifier holding only the published root to reconstruct the canonical-bytes shape + recompute the root. Crate docs explicitly note this is O(n) in entry count (not the optimal O(log n) tree-shaped path); a Phase-4-Meta optimisation replaces it. Even the O(n) shape proves the thin-client bandwidth saving because payload bytes are NOT included in the proof (saving payload-size × n bytes).
 
 **Diff protocol**: `MstDiff::between(a, b) -> MstDiff { missing_in_a, missing_in_b }` walks the two BTreeMaps in parallel via merge. Same-key-different-CID is surfaced to BOTH sides (engine layer breaks the tie via HLC LWW at G16-B). `run_mst_diff_to_convergence(a, b)` is the round-driven convergence driver — capped at 64 rounds, currently converges in one round for the BTreeMap-flat API surface. The round-driven shape is preserved so it scales when G16-B's engine layer wraps the MST in a partial-sync cursor that exposes one tree level per round.
 
@@ -274,7 +286,7 @@ Re-exported via `pub mod` from `lib.rs`. Consumed by `benten-engine`'s `engine_s
 
 ## 5. Tests inventory
 
-35 test files. Roughly grouped:
+28 `.rs` test files at HEAD (plus 1 `prop_mst.proptest-regressions` regression-corpus). Roughly grouped:
 
 ### G16-A canary surface pins (transport / wire-format / peer-id / arch)
 
@@ -319,6 +331,12 @@ Re-exported via `pub mod` from `lib.rs`. Consumed by `benten-engine`'s `engine_s
 - **`host_atrium_publish_view_result_caps.rs`** (5 tests; some `#[ignore]`'d) — `host:atrium:publish_view_result` capability + 5 trust-mode patterns per D2 / D-PHASE-3-21 option (iii).
 - **`rate_limit_consumption.rs`** (1 test, `#[ignore]`'d) — G14-B → G16-B coordination handoff pin: Loro merge throttle consumes the `benten-caps` rate-limit policy. Originally a 25th p/c drift instance precursor (tcc-r1-2 R4 large-council finding).
 
+### Phase-4-Foundation R4b-FP-1 + R6-FP-BF additions (post-`phase-3-close`)
+
+- **`apply_atrium_merge_manifest_envelope_recheck.rs`** (R4b-FP-1 Seam 3) — substantive grep-walk pin asserting the Phase-3 PR #161 G16-B-F structural-always-on per-row cap-recheck path (sec-r4r1-2 BLOCKER closure, emits `E_SYNC_REVOKED_DURING_SESSION`) EXTENDS at Phase 4-Foundation to also consult the `ManifestEnvelopeRechecker` port for plugin-delegation-outside-manifest-envelope refinement on Layer-1 revocation. Verifies via grep-walk of `benten-engine/src/` (no benten-engine dep per `dependency_edges.rs` arch-r1-11): `manifest_envelope_recheck.rs` defines the trait + `outcome_to_row_reject` helper surfacing `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`; `engine.rs::apply_atrium_merge` consults the configured rechecker AFTER `policy.check_write`; `Engine::set_manifest_envelope_rechecker` exposes the setter. Closes pim-18 §3.6f vacuous-truth defense for the integration.
+- **`admin_ui_v0_atrium_share_bytes_dont_match_announced_cid_rejected.rs`** (T6a pin, R6-FP-BF) — DESTINATION-REMAPPED per HARD RULE clause-(b). Single-process `install_plugin` lifecycle verifies bytes against announced CID (R4b-FP-1 closure); the cross-Atrium sync-layer hydrate-time verifier that re-checks bytes BEFORE depositing into `ManifestStore` is NOT YET WIRED. Named destination: `docs/future/phase-4-backlog.md §4.25` (Phase-4-Meta Atrium-share CID + peer-DID verification at sync layer).
+- **`admin_ui_v0_atrium_share_substitution_with_different_author_rejected.rs`** (T6b pin, R6-FP-BF) — DESTINATION-REMAPPED per HARD RULE clause-(b). Single-process `install_plugin` lifecycle consults peer-DID signature (R4b-FP-1); the cross-Atrium sync-layer hydrate-time signature verifier is NOT YET WIRED. Same named destination as T6a.
+
 ---
 
 ## 6. Benches inventory
@@ -345,17 +363,17 @@ No `benches/` directory. `Cargo.toml` carries `bench = false` on the lib target,
 
 **Disclosure strings for relay modes.** `BootstrapMode::operator_observability_disclosure()` is the right place for the Compromise #22 trust-boundary disclosure surface — operator-readable text bound to the bootstrap choice, snapshot-asserted so UI consumers can lean on it.
 
-**Structural-always-on per-row cap-recheck.** Mentioned by CLAUDE.md as living at `apply_atrium_merge` in `benten-engine`, which is the right side of the layered seam — the engine is the trust-boundary owner; sync surfaces the bytes + the typed errors. The per-row recheck (PR #161 G16-B-F closure) is engine-side and consumes the sync-side primitives (`LoroDoc::op_log_targets`, etc.) cleanly. Sync exposes the surface; engine enforces.
+**Structural-always-on per-row cap-recheck.** Mentioned by CLAUDE.md as living at `apply_atrium_merge` in `benten-engine`, which is the right side of the layered seam — the engine is the trust-boundary owner; sync surfaces the bytes + the typed errors. The per-row recheck (Phase-3 PR #161 G16-B-F closure of sec-r4r1-2 BLOCKER; emits `E_SYNC_REVOKED_DURING_SESSION`) is engine-side and consumes the sync-side primitives (`LoroDoc::op_log_targets`, etc.) cleanly. **Phase-4-Foundation R4b-FP-1 extension:** the same `apply_atrium_merge` row-loop now ALSO consults a `ManifestEnvelopeRechecker` port (Layer-3 refinement on Layer-1 revocation) surfacing `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE` — covered by the new `tests/apply_atrium_merge_manifest_envelope_recheck.rs` grep-walk pin (§5 R4b-FP-1 row). Sync exposes the surface; engine enforces.
 
 ### Possible concerns / things to track
 
-**iroh-specific transport baked deep.** `transport.rs` directly imports iroh types (`iroh::Endpoint`, `iroh::EndpointAddr`, `iroh::SecretKey`, `iroh::endpoint::presets`). The `Endpoint` and `Connection` newtype wrappers exist, but the iroh-shaped surface leaks through: `loopback_addr()` returns `iroh::EndpointAddr`, `connect_to_addr` consumes `EndpointAddr`, `peer_discovery::bind_atrium_peer` builds `iroh::Endpoint` directly. CLAUDE.md #19 explicitly contemplates engine-level extensions for alternate transports (Tor / Nostr-relay / shaped relay). If a Phase-9+ extension wants to swap iroh for a different QUIC implementation, the swap target would need to either (a) provide iroh-compatible types or (b) require refactoring the public surface. There is no `trait Transport` abstraction layer in this crate. **Mitigation that already exists:** `BootstrapMode` is the seam for choosing between iroh's relay modes, and a future `Transport` trait could be introduced WITHOUT changing the engine-facing API since the engine only sees `Endpoint` / `Connection` newtype methods. Worth flagging for Phase-9+ engine-extension work but not a present-day defect.
+**iroh-specific transport baked deep — RESOLVED 2026-05-15 (§15.3 #1 / umbrella #1176 / Surf-1 #889).** `transport.rs` directly imports iroh types (`iroh::Endpoint`, `iroh::EndpointAddr`, `iroh::SecretKey`, `iroh::endpoint::presets`); the `Endpoint` / `Connection` newtype wrappers exist but the iroh-shaped surface leaked through (`loopback_addr()` returns `iroh::EndpointAddr`, `connect_to_addr` consumes it, `peer_discovery::bind_atrium_peer` builds `iroh::Endpoint` directly). The abstraction boundary is now introduced: `transport_trait.rs` ships `pub trait Transport` + `TransportEndpoint` + `TransportConnection`, with the transport address type routed through the `TransportEndpoint::Addr` associated type so the iroh-`EndpointAddr` leak is contained at the trait contract (no iroh-concrete type in any trait signature). `IrohTransport` is the pre-v1 concrete impl and delegates to the existing `transport::Endpoint` / `transport::Connection` methods with **zero behavioral change** (the unchanged sync-runtime suite + loopback canary verify this). The engine-facing API (`engine_sync.rs`) intentionally stays on the concrete newtypes pre-v1 per the no-behavioral-regression constraint — the boundary existing pre-v1 is the load-bearing deliverable so the v1 surface contract names the abstraction. Post-v1 alternate transports (Tor / Nostr-relay / shaped relay per CLAUDE.md #19) implement the three traits as compile-time engine extensions + the engine is then migrated generic-over-`T: Transport`. Compile-fenced against accidental iroh-leak by `crates/benten-sync/tests/transport_trait_boundary.rs` (iroh-free in-memory mock impl). `BootstrapMode` remains the seam for choosing between iroh's relay modes within `IrohTransport`.
 
 **Loro-specific shape baked into CRDT.** `crdt.rs` directly imports `loro::{LoroDoc, LoroList, LoroMap, LoroValue, ExportMode}`. The newtype `LoroDoc` wraps `Arc<loro::LoroDoc>` but the rich-type accessors (`list(name) -> loro::LoroList`, `map(name) -> loro::LoroMap`) expose Loro's types directly. A future swap to a different CRDT (Automerge, Yjs, hand-rolled) would face surface change. **Mitigation:** Loro was the chosen CRDT after the D-PHASE-3-4 decision; the choice is plausibly settled for the engine's life. The `winning_attribution` / `all_writes` / `op_log_targets` accessors are CRDT-agnostic in shape (return Benten-types not Loro-types) which is the right move at the engine-consumed boundary. Same as the iroh seam — if a `trait Crdt` abstraction is needed at Phase-9+, the engine-facing surface could absorb it without breaking changes.
 
-**The "OpLogTarget walks deep_value root names only" approximation.** `LoroDoc::op_log_targets()` currently returns a static set of container roots (`benten:properties` + the rich `benten:rich:*` prefix names visible at the deep value) rather than a finer-grained per-op container-id walk. The crate's comment acknowledges this is sufficient for the dispatch decision today (system-zone Nodes never share their property root with user-data Nodes) but flags a finer-grained walk as a wave-6b-r6-fp surface. **The defense-in-depth from the engine side** (`apply_atrium_merge` row-loop with structural-always-on per-row cap-recheck) compensates for the approximation. Worth surfacing if Phase-4 plugin work wants finer attribution granularity.
+**The "OpLogTarget walks deep_value root names only" approximation.** `LoroDoc::op_log_targets()` currently returns a static set of container roots (`benten:properties` + the rich `benten:rich:*` prefix names visible at the deep value) rather than a finer-grained per-op container-id walk. The crate's comment acknowledges this is sufficient for the dispatch decision today (system-zone Nodes never share their property root with user-data Nodes) but flags a finer-grained walk as a wave-6b-r6-fp surface. **The defense-in-depth from the engine side** (`apply_atrium_merge` row-loop with structural-always-on per-row cap-recheck + Phase-4-Foundation R4b-FP-1 manifest-envelope-recheck extension) compensates for the approximation. Worth surfacing if Phase-4-Foundation plugin-manifest-schema work surfaces a need for finer attribution granularity.
 
-**MerkleProof shape is O(n) not O(log n).** `mst.rs::Mst::merkle_proof_for` returns the full sorted `(key, cid)` set rather than a tree-shaped O(log n) Merkle path. Crate docs explicitly note this is a Phase-4 optimisation target. The thin-client bandwidth-saving still holds because payload bytes aren't in the proof — the saving is `payload-size × n` which dominates for any non-trivial Node. Future agent proposals for tree-shaped proofs (mode-(b) range-query) need to coordinate with the verifier surface in `light_client.rs`.
+**MerkleProof shape is O(n) not O(log n).** `mst.rs::Mst::merkle_proof_for` returns the full sorted `(key, cid)` set rather than a tree-shaped O(log n) Merkle path. Crate docs explicitly note this is a Phase-4-Meta optimisation target. The thin-client bandwidth-saving still holds because payload bytes aren't in the proof — the saving is `payload-size × n` which dominates for any non-trivial Node. Future agent proposals for tree-shaped proofs (mode-(b) range-query) need to coordinate with the verifier surface in `light_client.rs`.
 
 **`MessageKind` duplicated across `handshake.rs` + `mst_proto.rs`.** Both files note this is intentional (G16-D handshake-layer floor + G16-C mst-proto-layer ordering) and both pin `Revocation = 0` / `Data = 1` so the merged enum will be a serialised no-op. Reconciliation to a single source of truth is a tracked TODO in the file header. Today's risk is small (discriminants are asserted equal in tests; serde shape is identical) but the duplication is a future-drift surface.
 
@@ -370,8 +388,8 @@ No `benches/` directory. `Cargo.toml` carries `bench = false` on the lib target,
 The current shape:
 
 - mode-(a) **single-CID inclusion proof**: `MerkleProof { target_key, target_cid, sorted_pairs }` + `LightClient::verify(root, path, proof)`. The proof carries the full sorted pair set.
-- mode-(b) **range-query proof** (Phase 9+ per docs/future/phase-3-backlog.md §12): a tree-shaped Merkle path proving a range of keys.
-- mode-(c) **signed checkpoint** (Phase 9+): a quorum-signed assertion of root state at a wall-clock point.
+- mode-(b) **range-query proof** (Phase 4-Meta per `docs/future/phase-3-backlog.md` carries + CLAUDE.md Phase 4-Meta status row): a tree-shaped Merkle path proving a range of keys.
+- mode-(c) **signed checkpoint** (Phase 4-Meta): a quorum-signed assertion of root state at a wall-clock point.
 
 The seam is reasonably clean:
 
@@ -381,13 +399,15 @@ The seam is reasonably clean:
 
 Mode-(c) signed-checkpoint introduces a quorum-signature surface that doesn't exist today. It would likely live in a sibling module (`checkpoint.rs`) consumed by `LightClient::verify_checkpoint` or similar. Doesn't disturb the existing mode-(a) shape.
 
-The architectural-absence pins at `tests/light_client_distinct.rs` for modes (b) + (c) are doing the right thing: they intentionally fail to compile / cite the named destination (`docs/future/phase-3-backlog.md §12` + `docs/FULL-ROADMAP.md` Phase 4 deferred-items) so a future agent considering implementing modes (b/c) is forced through the named-destination registry. Clean.
+The architectural-absence pins at `tests/light_client_distinct.rs` for modes (b) + (c) are doing the right thing: they intentionally fail to compile / cite the named destination (`docs/future/phase-3-backlog.md §12` + `docs/FULL-ROADMAP.md` Phase 4-Meta deferred-items) so a future agent considering implementing modes (b/c) is forced through the named-destination registry. Clean.
 
 ---
 
 ## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
-**Admin UI v0 (Phase 4 v1 platform-shippable per CLAUDE.md #15).** The admin UI needs to be reachable across Atrium peers — so a user managing their personal Benten instance can pull up the same admin UI on their laptop, phone OS app, or a peer device they trust. This exercises:
+(Section renamed 2026-05-14 to reflect the 2026-05-11 phase-rename: former "Phase 3.5" → Phase 4-Foundation, former "Phase 4" → Phase 4-Meta. Phase 4-Foundation R4b-FP-1 already landed the `ManifestEnvelopeRechecker` integration into `apply_atrium_merge` per the §5 R4b-FP-1 row above; cross-Atrium sync-layer verification of plugin bytes + peer-DID stays Phase-4-Meta `docs/future/phase-4-backlog.md §4.25`.)
+
+**Admin UI v0 (Phase 4-Foundation v1 platform-shippable per CLAUDE.md #15).** The admin UI needs to be reachable across Atrium peers — so a user managing their personal Benten instance can pull up the same admin UI on their laptop, phone OS app, or a peer device they trust. This exercises:
 
 - The full peer↔full peer handshake: `Handshake::initiate / respond / finalise` exchanging UCAN grants for admin-scope capabilities.
 - The `BootstrapMode::CustomPeerList` Garden-relay surface so an operator who wants self-hosted relays (or no relays at all under Disabled mode for LAN-only deploys) has the option.
@@ -409,16 +429,16 @@ No surface in `benten-sync` needs to change to support plugin install across Atr
 - **Engine impl-block generic-cascade lift.** Tracks across the workspace; sync's wrappers are mostly concrete types (`Endpoint`, `LoroDoc`, `Mst`), so the impact here is minimal.
 - **Missing_docs sweep.** Crate uses `#![deny(missing_docs)]` so already compliant.
 
-**Phase 4 (the platform itself).** Decentralised self-discovered registry of plugins / modules / extensions. This pulls the `BootstrapMode::CustomPeerList` surface harder (operators choosing which Garden-relays / registry-relays to trust), pulls the light-client mode-(a) verification harder (verifying registry-published manifest CIDs without downloading the full registry), and may motivate mode-(b) range-query proofs (verifying a range of registry entries by category / author / version).
+**Phase 4-Foundation / Phase 4-Meta (the platform itself).** Decentralised self-discovered registry of plugins / modules / extensions. This pulls the `BootstrapMode::CustomPeerList` surface harder (operators choosing which Garden-relays / registry-relays to trust), pulls the light-client mode-(a) verification harder (verifying registry-published manifest CIDs without downloading the full registry), and may motivate mode-(b) range-query proofs (verifying a range of registry entries by category / author / version). The full plugin manifest schema + decentralised registry land in Phase 4-Foundation (per the post-2026-05-11 phase-rename CLAUDE.md status table); the self-composing admin meta-circular work + cross-Atrium plugin verifier (T6a/T6b destinations) land in Phase 4-Meta.
 
 ---
 
 ## 9. Open questions / unresolved internals
 
-- **When `MessageKind` reconciliation lands** (merging the duplicated `handshake.rs` + `mst_proto.rs` enums into a single source of truth) is currently flagged as a comment-level TODO. No concrete trigger / wave / phase named. Worth surfacing for Phase 4 plan.
-- **Compact-old-writes-on-checkpoint** in `crdt.rs`'s append-only property root List is flagged as a future R6-FP optimisation but not currently scheduled. Without it, long-lived Atriums accumulate unbounded property-write history. The doc notes "convergence is observed-correct under the 10 000-case proptest" but doesn't say anything about long-term memory growth. Worth a Phase 4 plan slot.
-- **MST proof shape is O(n).** Phase-4 tree-shaped O(log n) Merkle path is named in the docs but not in a backlog destination. Closer to a real Phase 9+ light-client extension surface.
-- **Real packet-loss detector.** `transport::Endpoint::simulate_packet_loss(fraction)` is a synthetic test fixture; the comment says "G16-B/D wires real degrade-detection (packet-loss-fraction over a sliding window) once the protocol body lands." The protocol body has landed; the real detector hasn't. Worth a Phase 4 backlog item or pre-v1 cleanup task.
+- **When `MessageKind` reconciliation lands** (merging the duplicated `handshake.rs` + `mst_proto.rs` enums into a single source of truth) is currently flagged as a comment-level TODO. No concrete trigger / wave / phase named. Worth surfacing for Phase 4-Meta plan.
+- **Compact-old-writes-on-checkpoint** in `crdt.rs`'s append-only property root List is flagged as a future R6-FP optimisation but not currently scheduled. Without it, long-lived Atriums accumulate unbounded property-write history. The doc notes "convergence is observed-correct under the 10 000-case proptest" but doesn't say anything about long-term memory growth. Worth a Phase 4-Meta plan slot.
+- **MST proof shape is O(n).** Phase-4-Meta tree-shaped O(log n) Merkle path is named in the docs but not in a concrete backlog destination row. Closer to a real Phase 9+ light-client extension surface.
+- **Real packet-loss detector.** `transport::Endpoint::simulate_packet_loss(fraction)` is a synthetic test fixture; the comment says "G16-B/D wires real degrade-detection (packet-loss-fraction over a sliding window) once the protocol body lands." The protocol body has landed; the real detector hasn't. Worth a Phase 4-Meta backlog item or v1-assessment-window cleanup task.
 - **`Endpoint::bind_with_relay_url` canary-scope arm** still returns `RelayUnreachable` for the well-formed-URL case. The wave-6b production path is `peer_discovery::bind_atrium_peer`. The canary surface's two-arm test pair stays in place; full retirement of the canary entry-point would simplify the surface but requires confirming no downstream consumer reaches `bind_with_relay_url` directly. Likely a Phase 9+ cleanup unless a v1-assessment-window pass catches it.
 - **Handshake nonce-cache for replay-protection.** The current `respond_with_window` check rejects frames whose HLC drift exceeds the window, but the **canonical** replay-detection mechanism — a per-peer nonce-cache recording previously-seen nonces for the window duration — is documented as "left for follow-up" by `handshake.rs`. The bounded-window math catches captured-off-wire replays older than the window; it does NOT catch a replay within the window if the nonce hasn't been cached. The ds-r4-3 pin asserts typed-error + bounded-window math; the nonce-cache mechanism is the next layer.
 - **UCAN chain `nbf`/`exp` time-checks deferred to G14-D delivery-time recheck.** `validate_chain_no_time_check` is called at handshake-time. The G14-D F6 SUBSCRIBE delivery-time gate re-evaluates caps including time windows on every delivery. The composition gives defense-in-depth but spread across two crates; a fresh agent reading only `handshake.rs` might miss the time-check half. Worth a cross-crate doc-comment pointer or eventual relocation.

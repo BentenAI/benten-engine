@@ -16,17 +16,17 @@ use crate::outcome::NestedTx;
 // Parallel transaction types
 // ---------------------------------------------------------------------------
 //
-// TODO(phase-3 — unify EngineTransaction + benten_graph::Transaction):
-// the engine currently exposes `EngineTransaction` (this module) while
-// `benten_graph::Transaction` remains the lower-level redb-bound handle
-// the closure actually drives. The two shapes coexist because
-// `EngineTransaction` also feeds the capability hook via
-// `ops_collector` — a side-channel the pure-graph `Transaction` doesn't
-// need. Arch-7 flagged the redundancy for Phase-2 unification but the
-// dual shape persisted through 2a + 2b; the Phase-3 decision will
-// either promote `ops_collector` into `benten_graph::Transaction` or
-// push the capability binding up into the engine closure wrapper.
-// Either way is additive; current shape stays as-is.
+// TODO(phase-4-meta — backlog §4.68 row 2): the engine exposes
+// `EngineTransaction` (this module) while `benten_graph::Transaction`
+// remains the lower-level redb-bound handle the closure actually
+// drives. The two shapes coexist because `EngineTransaction` also
+// feeds the capability hook via `ops_collector` — a side-channel the
+// pure-graph `Transaction` doesn't need. Arch-7 flagged the redundancy;
+// the dual shape persisted through 2a + 2b + 3. The §4.43
+// v1-API-stabilization sweep decides: promote `ops_collector` into
+// `benten_graph::Transaction` OR push the capability binding up into
+// the engine closure wrapper. Either way is additive; current shape is
+// correct as-is. See `docs/future/phase-4-backlog.md §4.65`.
 
 /// Engine-level transaction handle (passed into `Engine::transaction`).
 ///

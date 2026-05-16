@@ -37,6 +37,21 @@ use crate::{Cid, CoreError, Value, format_err};
 ///
 /// Endpoint Node CIDs are never modified by Edge construction — see the
 /// module docs and ENGINE-SPEC §7.
+///
+/// # Examples
+///
+/// ```
+/// use benten_core::{Cid, Edge};
+///
+/// let a = Cid::from_blake3_digest([1u8; 32]);
+/// let b = Cid::from_blake3_digest([2u8; 32]);
+/// let edge = Edge::new(a, b, "LIKES", None);
+///
+/// assert_eq!(edge.label, "LIKES");
+/// // Self-loops and arbitrary labels are allowed at construction time;
+/// // DAG-ness and label policy are subgraph-level (benten-eval).
+/// let _loop = Edge::new(a, a, "SELF", None);
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     /// Source endpoint Node CID.
@@ -87,6 +102,24 @@ impl Edge {
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
         // Canonicalize property floats up-front (same pattern as Node) so
         // NaN / ±Inf surface as typed errors instead of a Serialize wrap.
+        // Fwd-1 #932 fast path (mirrors `Node::canonical_bytes`): when every
+        // property is already canonical, encode the borrowed properties
+        // directly — byte-identical to encoding the cloned tree, no alloc.
+        let all_canonical = match &self.properties {
+            None => true,
+            Some(map) => map.values().all(Value::is_already_canonical),
+        };
+        if all_canonical {
+            let view = EdgeHashView {
+                source: &self.source,
+                target: &self.target,
+                label: &self.label,
+                properties: &self.properties,
+            };
+            return serde_ipld_dagcbor::to_vec(&view)
+                .map_err(|e| CoreError::Serialize(format_err(&e)));
+        }
+        // Slow path: a float needs normalization or rejection.
         let canonical_props = match &self.properties {
             None => None,
             Some(map) => {
@@ -115,6 +148,20 @@ impl Edge {
         let bytes = self.canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
+    }
+
+    /// Fwd-1 #926: compute the CID **and** return the canonical bytes from a
+    /// single encode + hash pass (see [`crate::Node::cid_and_canonical_bytes`]
+    /// for the rationale — Edge WRITE paths have the same double-encode).
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`CoreError::Serialize`] (and the typed float errors) from
+    /// [`Edge::canonical_bytes`].
+    pub fn cid_and_canonical_bytes(&self) -> Result<(Cid, Vec<u8>), CoreError> {
+        let bytes = self.canonical_bytes()?;
+        let digest = blake3::hash(&bytes);
+        Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
     }
 }
 

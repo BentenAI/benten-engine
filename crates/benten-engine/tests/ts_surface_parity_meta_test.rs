@@ -230,42 +230,67 @@ fn parse_field_name(line: &str) -> Option<String> {
     }
 }
 
+/// The set of `ObjBuilder` chained-call methods whose FIRST argument is
+/// the emitted JSON key string literal. Source-of-truth =
+/// `bindings/napi/src/json_build.rs` — keep this list in lockstep with
+/// the key-emitting methods declared there (`str`, `cid`, `opt_cid`,
+/// `opt_str`, `bool`, `u64`, `raw`, `opt_raw`). Adding a key-emitting
+/// `ObjBuilder` method without adding it here would silently shrink the
+/// extracted key set and weaken the §7.9 phantom-`cid` drift guard.
+const OBJBUILDER_KEY_METHODS: &[&str] = &[
+    "str", "cid", "opt_cid", "opt_str", "bool", "u64", "raw", "opt_raw",
+];
+
 /// Extract the literal field-name set the napi `edge_to_json` projector
-/// emits — walks for `out.insert("<name>", ...)` / `out.insert("<name>"`
-/// patterns, brace/depth-aware so multi-line `out.insert(\n  "key"\n  ...)`
-/// invocations are caught (the original single-line regex missed them).
+/// emits. Post-#1201 the projector uses the `ObjBuilder` chained-builder
+/// form — `.cid("source", ...)` / `.str("label", ...)` /
+/// `.opt_raw("properties", ...)` etc — so we walk each
+/// `.<key-method>(` call (methods enumerated in
+/// [`OBJBUILDER_KEY_METHODS`], mirroring `json_build.rs`) and pull the
+/// first string literal inside the parens as the emitted key. Tolerant
+/// of whitespace/newlines between `(` and the first `"`, so multi-line
+/// `.opt_raw(\n  "key",\n  ...)` invocations (the shape real `edge.rs`
+/// uses) are caught. A single-line regex would silently miss them and
+/// every downstream parity assertion would vacuously pass.
 pub(crate) fn extract_edge_to_json_emitted_keys(edge_rs: &str) -> Vec<String> {
     let mut keys = Vec::new();
-    // Find each `out.insert(` call, then walk to the first string literal
-    // inside the parens. Tolerates whitespace + newlines between `(` and
-    // the first `"`.
-    let needle = "out.insert(";
-    let mut search_from = 0usize;
-    while let Some(pos) = edge_rs[search_from..].find(needle) {
-        let abs = search_from + pos + needle.len();
-        // Walk forward until first `"` (string literal start).
-        let after = &edge_rs[abs..];
-        let chars = after.char_indices();
-        let mut quote_pos: Option<usize> = None;
-        for (i, c) in chars {
-            if c.is_whitespace() {
-                continue;
-            }
-            if c == '"' {
-                quote_pos = Some(i);
+    for method in OBJBUILDER_KEY_METHODS {
+        let needle = format!(".{method}(");
+        let mut search_from = 0usize;
+        while let Some(pos) = edge_rs[search_from..].find(&needle) {
+            let abs = search_from + pos + needle.len();
+            // Reject false positives where the matched text is the tail
+            // of a longer identifier (e.g. `.opt_str(` must not also
+            // match inside `.foo_str(`). The char immediately before the
+            // leading `.` is irrelevant; what matters is that the bytes
+            // right before `(` are exactly `method`, which `needle`
+            // already guarantees, and that the char before the `.` is
+            // not an identifier char fragment of a longer method —
+            // builder calls are always `.<method>(`, so the `.` anchor
+            // is sufficient. Walk forward to the first `"`.
+            let after = &edge_rs[abs..];
+            let mut quote_pos: Option<usize> = None;
+            for (i, c) in after.char_indices() {
+                if c.is_whitespace() {
+                    continue;
+                }
+                if c == '"' {
+                    quote_pos = Some(i);
+                    break;
+                }
+                // Anything else means the first arg isn't a string
+                // literal — not a `.<method>("key"` form — skip.
                 break;
             }
-            // Anything else means this isn't `out.insert("..."` — skip.
-            break;
-        }
-        if let Some(qstart) = quote_pos {
-            let key_start = abs + qstart + 1;
-            // Find the closing `"` (no escapes in our keys).
-            if let Some(qend) = edge_rs[key_start..].find('"') {
-                keys.push(edge_rs[key_start..key_start + qend].to_string());
+            if let Some(qstart) = quote_pos {
+                let key_start = abs + qstart + 1;
+                // Find the closing `"` (no escapes in our keys).
+                if let Some(qend) = edge_rs[key_start..].find('"') {
+                    keys.push(edge_rs[key_start..key_start + qend].to_string());
+                }
             }
+            search_from = abs;
         }
-        search_from = abs;
     }
     keys
 }
@@ -288,7 +313,8 @@ fn ts_surface_parity_meta_test_walks_napi_struct_surface_no_drift() {
     assert!(
         !napi_emitted.is_empty(),
         "extract_edge_to_json_emitted_keys returned empty — extractor \
-         regression. Check the multi-line `out.insert(...)` pattern."
+         regression. Check the multi-line `ObjBuilder` chained-call \
+         pattern (.cid/.str/.opt_raw/... in bindings/napi/src/edge.rs)."
     );
     assert!(
         !ts_edge_fields.is_empty(),
@@ -416,31 +442,38 @@ export interface Edge {
          path (mode-5 forward variant)"
     );
 
-    // Verify the extract_edge_to_json_emitted_keys extractor handles
-    // multi-line `out.insert(\n  "key",\n  ...)` invocations — the
-    // shape the actual edge.rs uses. A single-line regex would silently
-    // return an empty set + every assertion would vacuously pass.
+    // Verify the extract_edge_to_json_emitted_keys extractor handles the
+    // post-#1201 `ObjBuilder` chained-builder form, including multi-line
+    // `.opt_raw(\n  "key",\n  ...)` invocations — the shape the actual
+    // edge.rs uses. A single-line regex would silently return an empty
+    // set + every assertion would vacuously pass.
     let synthetic_rs = r#"
 pub fn edge_to_json(edge: &Edge) -> serde_json::Value {
-    let mut out = serde_json::Map::new();
-    out.insert(
-        "source".to_string(),
-        serde_json::Value::String(edge.source.to_base32()),
-    );
-    out.insert("target".to_string(), serde_json::Value::String(edge.target.to_base32()));
-    out
+    ObjBuilder::with_capacity(4)
+        .cid("source", &edge.source)
+        .str("label", edge.label.clone())
+        .opt_raw(
+            "properties",
+            edge.properties.as_ref().map(value_map_to_json),
+        )
+        .build()
 }
 "#;
     let extracted = extract_edge_to_json_emitted_keys(synthetic_rs);
     assert!(
         extracted.iter().any(|k| k == "source"),
-        "multi-line out.insert extractor SILENT NO-OP — `source` not \
+        "single-line ObjBuilder extractor SILENT NO-OP — `source` not \
          surfaced from synthetic Rust blob"
     );
     assert!(
-        extracted.iter().any(|k| k == "target"),
-        "single-line out.insert extractor SILENT NO-OP — `target` not \
+        extracted.iter().any(|k| k == "label"),
+        "single-line ObjBuilder extractor SILENT NO-OP — `label` not \
          surfaced from synthetic Rust blob"
+    );
+    assert!(
+        extracted.iter().any(|k| k == "properties"),
+        "multi-line ObjBuilder `.opt_raw(...)` extractor SILENT NO-OP — \
+         `properties` not surfaced from synthetic Rust blob"
     );
 }
 

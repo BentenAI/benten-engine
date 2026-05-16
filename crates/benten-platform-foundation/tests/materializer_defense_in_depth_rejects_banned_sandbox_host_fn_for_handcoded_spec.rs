@@ -84,9 +84,9 @@ fn materializer_rejects_handcoded_spec_referencing_kv_write_host_fn() {
             declared_requires: Vec::new(),
         })
         .expect_err("kv:write host-fn MUST trip defense-in-depth materializer entry-check");
+    assert_eq!(err.code(), ErrorCode::MaterializerSchemaMismatch);
     match err {
-        MaterializerError::SchemaMismatch { code, reason } => {
-            assert_eq!(code, ErrorCode::MaterializerSchemaMismatch);
+        MaterializerError::SchemaMismatch { reason } => {
             assert!(
                 reason.contains("kv:write"),
                 "diagnostic must name the banned host-fn: {reason}"
@@ -156,9 +156,9 @@ fn materializer_rejects_handcoded_spec_referencing_edges_remove_host_fn() {
             declared_requires: Vec::new(),
         })
         .expect_err("edges:remove host-fn MUST trip defense-in-depth materializer entry-check");
+    assert_eq!(err.code(), ErrorCode::MaterializerSchemaMismatch);
     match err {
-        MaterializerError::SchemaMismatch { code, reason } => {
-            assert_eq!(code, ErrorCode::MaterializerSchemaMismatch);
+        MaterializerError::SchemaMismatch { reason } => {
             assert!(
                 reason.contains("edges:remove"),
                 "diagnostic must name the banned host-fn: {reason}"

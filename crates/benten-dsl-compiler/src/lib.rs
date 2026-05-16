@@ -1,12 +1,19 @@
 //! `benten-dsl-compiler` — Phase-2b DSL-text → `Subgraph` compiler.
 //!
 //! **MINIMAL-FOR-DEVSERVER scope** per `r1-architect-reviewer.json` (G12-B-scope):
-//! ~200-400 LOC, exactly 4 public items intended for `tools/benten-dev`:
+//! ~900 LOC, 7 public items intended for `tools/benten-dev` (the literal LOC
+//! ceiling drifted from the original ~200-400 framing as the parser + the
+//! Phase-3 R6 `validate_shapes` pass + the 12-primitive dispatch landed; the
+//! spirit-of-the-rule — one source file, narrow surface, no engine/eval/graph
+//! deps — holds):
 //!
 //! 1. [`compile_str`] — compile a DSL source string into a [`CompiledSubgraph`].
 //! 2. [`compile_file`] — compile a DSL source file path into a [`CompiledSubgraph`].
 //! 3. [`CompileError`] — typed compile error enum.
 //! 4. [`Diagnostic`] — diagnostic shape devserver renders.
+//! 5. [`CompiledSubgraph`] — canonical [`Subgraph`] + per-primitive list.
+//! 6. [`CompiledPrimitive`] — one primitive declaration for introspection.
+//! 7. [`PrimitiveKind`] — re-export so consumers need no transitive `benten-core` dep.
 //!
 //! Everything else is `pub(crate)`. Surface stability is intentionally narrow
 //! so `cargo-public-api` baseline locked at G6 first push does not freeze
@@ -17,7 +24,10 @@
 //! - Depends on: `benten-core` (for `Subgraph` / `Value` / `PrimitiveKind`).
 //! - **Must not** depend on `benten-eval`, `benten-graph`, or `benten-engine` —
 //!   preserves arch-1.
-//! - Pinned at compile time by `tests/arch_n_benten_dsl_compiler_dep_direction.rs`.
+//! - Pinned at test time by `tests/arch_n_benten_dsl_compiler_dep_direction.rs`
+//!   (the four `#[test]` fns scan `Cargo.toml` source text on every
+//!   `cargo test` / `cargo nextest run` + CI run — a forbidden dep would
+//!   still compile but trips the next test invocation).
 //!
 //! ## Grammar (MINIMAL — Phase-2b devserver round-trip target)
 //!
@@ -45,6 +55,33 @@
 //! (the surface evaluator pins predicate semantics in a later phase). This
 //! keeps the parser dead-simple while still satisfying the round-trip
 //! property.
+//!
+//! ## Deliberate non-extensibility (no composability surfaces)
+//!
+//! This crate ships **zero** extension hooks by design — there is no
+//! `PrimitiveParser` trait, no `PropertyHandler` registrar, no custom-
+//! primitive-shorthand callback, no rule-registration surface on the
+//! `validate_shapes` pass. The 12-primitive dispatch in `parse_primitive`
+//! is a single hardcoded `match` with no extension arm. **This is
+//! intentional, not an oversight:**
+//!
+//! - **CLAUDE.md #1** — the 12 operation primitives are irreducible.
+//!   Extending the primitive set is rejected unless commitment #1 is
+//!   re-opened; there is therefore deliberately no runtime hook to add a
+//!   13th.
+//! - **CLAUDE.md #19** — engine-level extensions are Rust crates compiled
+//!   in, trusted because you compiled them. The DSL compiler is one such
+//!   crate: a new primitive keyword or property rule is added by editing
+//!   *this crate's source* (a reviewed `cargo` change), never by
+//!   registering a runtime plugin.
+//! - **CLAUDE.md #10** — the user-facing composability surface is the
+//!   TypeScript DSL (`crud('post')` zero-config). The Rust-side DSL exists
+//!   only for devserver inline compilation, not for end-user authoring.
+//!
+//! A reader asking "where do I register a custom primitive / property
+//! handler?" — the answer is "you don't; edit this crate." See
+//! `INTERNALS.md` §7 (MINIMAL-FOR-DEVSERVER scope) + §8 for the only
+//! sanctioned future-extension path (schema-driven-rendering option (c)).
 
 #![allow(clippy::needless_pass_by_value)]
 
@@ -81,8 +118,6 @@ pub struct CompiledSubgraph {
 /// One primitive declaration emitted by the DSL parser.
 #[derive(Debug, Clone)]
 pub struct CompiledPrimitive {
-    /// Stable per-primitive id within the subgraph (e.g. `"r0"`, `"w1"`).
-    pub id: String,
     /// Which of the 12 operation primitives this entry represents.
     pub kind: PrimitiveKind,
     /// Per-primitive configuration bag. Sorted by key (BTreeMap iteration
@@ -195,7 +230,9 @@ pub(crate) const E_DSL_MISSING_RESPOND: &str = "E_DSL_MISSING_RESPOND";
 /// TS-side `EDslInvalidShape` thrown from `packages/engine/src/dsl.ts`
 /// builder methods so a Rust callsite emitting this surfaces the same
 /// typed `BentenError` subclass on the wire. Drift-detect reachability
-/// path: `crates/benten-dsl-compiler/src/lib.rs::emit::validate_shapes`.
+/// path: `crates/benten-dsl-compiler/src/lib.rs::validate_shapes` (a
+/// crate-private free function, NOT a member of an `emit` module —
+/// `emit` and `validate_shapes` are sibling free functions).
 pub(crate) const E_DSL_INVALID_SHAPE: &str = "E_DSL_INVALID_SHAPE";
 
 // ---------------------------------------------------------------------------
@@ -689,7 +726,6 @@ fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
             sg = sg.with_edge(prev, &id, "next");
         }
         primitives.push(CompiledPrimitive {
-            id: id.clone(),
             kind: p.kind,
             properties: p.properties,
         });

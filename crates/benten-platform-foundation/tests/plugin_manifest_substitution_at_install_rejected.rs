@@ -182,7 +182,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     //      → typed PluginAuthorNotTrusted.
     //  (b) POSITIVE — same manifest, trust-list contains alice → admits.
     use benten_platform_foundation::plugin_lifecycle::{
-        InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+        InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
     };
 
     let alice = Keypair::generate();
@@ -226,9 +226,11 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list = vec![trusted_author.public_key().to_did()];
-    let mut ctx = InstallContext {
+    let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+    };
+    let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -241,6 +243,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
         &mut library,
         &mut store,
         &mut ctx,
+        &ctx_params,
         &bytes,
         &expected_cid,
         &install_record,
@@ -272,9 +275,11 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let trust_list_with_alice = vec![alice.public_key().to_did()];
-    let mut ctx2 = InstallContext {
+    let mut ctx2 = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
+    };
+    let ctx2_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list_with_alice,
@@ -287,6 +292,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
         &mut library2,
         &mut store2,
         &mut ctx2,
+        &ctx2_params,
         &bytes,
         &expected_cid,
         &install_record_arm_b,

@@ -55,9 +55,11 @@ crates/
                         # attestation chain, MultiSigSurface trait
                         # (Ed25519SingleKey default impl + threshold
                         # extension point), and the device-DID
-                        # capability-attestation surface
-                        # (replay-resistant via nonce + freshness
-                        # window + nonce-store). Dependency edges:
+                        # capability-attestation surface (a pure
+                        # signed-ceiling primitive; COLLAPSE P3 deleted
+                        # the Acceptor acceptance pipe — stale-frame
+                        # replay is bounded by a freshness window on
+                        # the consuming Atrium handle). Dependency edges:
                         # `ed25519-dalek`, `ssi`, `blake3`,
                         # `serde_ipld_dagcbor`, `zeroize`, `secrecy`,
                         # `subtle`, `getrandom` only — NO edges back to
@@ -65,7 +67,12 @@ crates/
                         # `benten-engine`.
   benten-sync/          # 10th crate (Phase 3). Atrium P2P sync layer:
                         # iroh transport (loopback + relay + holepunch
-                        # fallback), Loro CRDT for per-property LWW
+                        # fallback) behind the `transport_trait::
+                        # Transport` abstraction boundary (RATIFIED
+                        # §15.3 #1; `IrohTransport` is the pre-v1
+                        # concrete impl, post-iroh swaps land as
+                        # engine extensions per CLAUDE.md #19), Loro
+                        # CRDT for per-property LWW
                         # with HLC ordering, MST diff for delta
                         # computation, DID handshake protocol with
                         # mutual auth, and the `host:atrium:*`
@@ -80,8 +87,9 @@ crates/
                         # authenticated thin-client protocol; they are
                         # not full Atrium peers themselves.
   benten-dsl-compiler/  # Compiles the textual handler-DSL grammar
-                        # into SubgraphSpec. Phase-2b addition; routes
-                        # from devserver into Engine.register_subgraph.
+                        # into benten_core::Subgraph. Phase-2b addition;
+                        # routes from devserver into
+                        # Engine.register_subgraph.
   benten-engine/        # Composes the above into a public API. Wires
                         # the capability hook, storage backend, IVM
                         # subscriber. Phase 3 added the Atrium DSL
@@ -112,10 +120,15 @@ crates/
                         # baked-in #19: compile-time linked Rust crate
                         # implementing the `Renderer` trait for
                         # embedded-webview deployment shape (c).
-                        # IpcAllowlist + CSP + per-method cap-binding
-                        # + in-process IPC protocol. Trust = "you
-                        # compiled this in." NOT an app-level plugin
-                        # subgraph.
+                        # Single typed `IPC_METHODS` binding slice
+                        # (name + `CapRequirement`; co-located so the
+                        # allowlist-to-cap-binding bijection is
+                        # structural, not test-guarded) + locked CSP +
+                        # gate-only `dispatch_ipc`. T3 rung-2 fails
+                        # CLOSED by construction (no empty-string
+                        # sentinel, no fail-OPEN fallback). In-process
+                        # IPC protocol. Trust = "you compiled this in."
+                        # NOT an app-level plugin subgraph.
 
 bindings/
   napi/             # Node.js bindings via napi-rs v3. Compiles to a
@@ -314,8 +327,9 @@ Callers extend IVM beyond the 5 canonical views by constructing a
 - **`UserViewSpec::builder()`** — fluent builder requiring `id` +
   `input_pattern`; `strategy` defaults to `Strategy::B`.
   `Strategy::A` is reserved for the 5 hand-written Phase-1 views and
-  `Strategy::C` for post-Phase-3; both are refused at registration
-  time with typed errors.
+  `Strategy::Reserved` for future algorithmic families (renamed from
+  `Strategy::C` at G23-0a per arch-r1-14); both are refused at
+  registration time with typed errors.
 - **`UserViewInputPattern`** — two-variant selector vocabulary:
   `Label(String)` (every change event whose Node carries the
   matching label) and `AnchorPrefix(String)` (every change event
@@ -370,7 +384,8 @@ The developer surface ships in two layers as of `phase-2b-close`:
 - `packages/engine-devserver` is the napi-rs-backed `BentenDevServer`
   TypeScript wrapper that wraps the real `Engine` (Phase 2b landed
   `benten-dsl-compiler` so devserver-side handler text now compiles
-  to `SubgraphSpec` and registers through `Engine::register_subgraph`
+  to `benten_core::Subgraph` and registers through
+  `Engine::register_subgraph`
   rather than running parallel in-memory infrastructure). Hot
   reload, grant preservation across reload, in-flight call ordering,
   suspension-handle survival across reload, and audit-sequence
@@ -412,6 +427,8 @@ A plugin is a **subgraph of operation Nodes** — handlers, materializers, SANDB
 ### Engine-level extensions — Rust crates
 
 Compile-time linked into the engine binary. Rare. For custom IVM strategies, alternate transports (post-iroh — shaped relays, Nostr, Tor), alternate persistence backends (post-redb — sled, fjall, cloud-KV), custom signature schemes (post-Ed25519 — X25519, BLS, post-quantum), performance-critical primitives that need raw Rust speed beyond SANDBOX.
+
+**Transport abstraction boundary (P2P sync layer).** The alternate-transport extension point above (post-iroh — Tor / Nostr-relay / shaped relay) is named by the `benten_sync::transport_trait::{Transport, TransportEndpoint, TransportConnection}` traits (RATIFIED 2026-05-15, §15.3 #1). These abstract the connection layer the Atrium P2P sync runtime exercises (connect / accept / send-bytes / recv-bytes / status / close), routing the transport's address type through the `TransportEndpoint::Addr` associated type so no iroh-concrete type (`iroh::EndpointAddr`) appears in the trait contract. The pre-v1 concrete impl, `IrohTransport`, delegates to the existing iroh-backed `transport::Endpoint` / `transport::Connection` with zero behavioral change; the engine-facing API (`engine_sync.rs`) intentionally stays on the concrete newtypes pre-v1 (no behavioral regression) — the boundary existing pre-v1 is the load-bearing deliverable so the v1 surface contract names the abstraction rather than the concrete. A post-v1 `TorTransport` / `NostrRelayTransport` / `ShapedRelayTransport` implements the three traits as compile-time engine extensions per the trust model below. Mirrors the `Renderer`-trait swappability pattern (CLAUDE.md baked-in #17). Compile-fenced against accidental iroh-leak by `crates/benten-sync/tests/transport_trait_boundary.rs` (an iroh-free in-memory mock impl).
 
 **Trust model.** "You compiled this into your engine binary." Same trust posture as Benten core itself. No UCAN, no manifest, no `read_node_as` boundary. An engine extension that wants to violate invariants can — the boundary is `cargo` and code review, not the type system.
 

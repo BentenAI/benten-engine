@@ -32,9 +32,12 @@
 //! - [`did_rotation`] — [`did_rotation::rotate_keypair`] +
 //!   [`did_rotation::RotationAttestation`] +
 //!   [`did_rotation::RotationLog`] in-RAM chain-walk helper.
-//! - [`device_attestation`] — [`device_attestation::DeviceAttestation`] +
-//!   [`device_attestation::Acceptor`] (freshness + nonce-store +
-//!   revocation) + [`device_attestation::DeviceRevocation`] +
+//! - [`device_attestation`] — [`device_attestation::DeviceAttestation`]
+//!   pure primitive (device-DID survives only as an AttributionFrame
+//!   provenance label; COLLAPSE deleted the distinct device
+//!   trust-root — the former acceptance pipe, freshness/nonce-store,
+//!   and revocation-list collapse to the unified principal +
+//!   envelope-ceiling model recheck at the engine inbound-sync seam) +
 //!   `runs_sandbox=true`+browser-target rejection at construction
 //!   per `br-r4-r1-4` / `br-r4-r2-3` MAJOR.
 //!
@@ -87,3 +90,9 @@ pub use errors::{
     DeviceAttestationError, DidError, DidRotationError, KeypairError, MultiSigError,
     SeedImportError, UcanError, VcError,
 };
+// Surf-1 #854: `ReaderError` is the 9th typed-error enum; the other 8
+// are re-exported at the crate root above. `grant_reader::ReaderError`
+// was missing from the top-level surface (G27-C drift), forcing
+// consume sites to spell the module path. Restored for re-export
+// symmetry with the rest of the typed-error taxonomy.
+pub use grant_reader::ReaderError;

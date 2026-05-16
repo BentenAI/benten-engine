@@ -70,7 +70,7 @@
 //! - `ds-4` Inv-13 row-4 SPLIT.
 //! - `cag-6` (merged Node is graph-encoded, not opaque CRDT blob).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use loro::{ExportMode, LoroDoc as InnerLoroDoc, LoroList, LoroMap, LoroValue};
@@ -80,20 +80,23 @@ use benten_core::hlc::BentenHlc;
 
 /// Stable container-id for the LWW-property root List. Every
 /// [`LoroDoc`] carries one root List under this id; each entry is a
-/// flat-encoded `<key>\x1f<physical>:<logical>:<node>:<value>` string.
+/// `LoroValue::Binary` carrying the DAG-CBOR encoding of a
+/// `(String key, StampedValue)` tuple (per Qual-1 #667 + Safe-1 #511
+/// closure — typed canonical-bytes replaces the prior hand-rolled
+/// `<key>\x1f<physical>:<logical>:<node>:<value>` flat string; the
+/// length-prefixed CBOR boundaries remove the `splitn(4, ':')` /
+/// `\x1f`-separator parse-invariant burden and make a malformed entry
+/// a typed `serde_ipld_dagcbor` decode failure surfaced through
+/// `tracing::warn!` rather than a silent `continue`).
 ///
 /// The List shape (rather than per-property nested-containers) defends
 /// against Loro's documented "concurrent container creation at the
 /// same key may overwrite" hazard at the LoroMap layer — concurrent
 /// peers each appending to the SAME List have their entries preserved
 /// per Loro List CRDT semantics. Read-time scans the List and groups
-/// by key for HLC-LWW resolution.
+/// by key for HLC-LWW resolution (the per-key index below caches that
+/// grouping per Fwd-1 #999 O(n²) closure).
 const PROPERTY_ROOT: &str = "benten:properties";
-
-/// Separator between key and packed-stamped-value inside a single
-/// List entry. Unit separator (`\x1f`, ASCII 31) so it does not
-/// collide with the `:` HLC field separator inside the packed value.
-const KEY_VALUE_SEPARATOR: char = '\x1f';
 
 /// Stable container-id prefix for collaborative rich-type containers
 /// (Loro Lists, Loro Maps). Callers reach in via
@@ -118,7 +121,15 @@ pub enum CrdtError {
     },
 
     /// An HLC-stamped value failed to encode into / decode from the
-    /// canonical wire shape (`{value, hlc}`).
+    /// canonical wire shape (DAG-CBOR `(key, StampedValue)` tuple).
+    ///
+    /// On the WRITE path this is a hard error returned to the caller
+    /// (encode failures mean the value cannot be persisted). On the
+    /// READ path a per-entry decode failure is NOT promoted to this
+    /// error — it is surfaced via `tracing::warn!` and the entry is
+    /// skipped, so a single corrupt entry does not poison LWW
+    /// resolution for the rest of the document (Safe-1 #511: the skip
+    /// is now *observable* rather than silent).
     #[error("hlc-stamped value codec error: {reason}")]
     StampedValueCodec {
         /// Operator-readable reason.
@@ -249,14 +260,51 @@ pub struct OpLogTarget {
 /// from the Atrium-managed canonical document.
 pub struct LoroDoc {
     inner: Arc<InnerLoroDoc>,
+    /// Per-key LWW index cache (Fwd-1 #999 closure).
+    ///
+    /// The property root List is append-only; the LWW winner per key
+    /// is a pure function of the List contents. Rather than re-scanning
+    /// the entire O(N) List on every `get_property` / `get_stamped` /
+    /// `winning_attribution` / `all_writes` call (the 2× full-doc walks
+    /// per `apply_atrium_merge` row Fwd-1 #999 flagged), we cache the
+    /// resolved view and invalidate it whenever the underlying Loro
+    /// op-count changes (any local write, merge, or remote-update
+    /// import bumps `len_ops()`). Cache rebuild is the only O(N) scan;
+    /// reads against an unchanged document are O(log k) (BTreeMap).
+    ///
+    /// `Mutex` (not `RwLock`) because rebuild is rare relative to reads
+    /// and the critical section is tiny (a stamped-value clone). The
+    /// index is NOT part of canonical bytes — it is a pure derived
+    /// cache reconstructed on demand, so it never participates in the
+    /// CLAUDE.md #5 round-trip or cross-peer convergence assertion.
+    index: Arc<std::sync::Mutex<PropertyIndex>>,
+}
+
+/// Derived per-key LWW view + the op-count it was built at.
+#[derive(Default)]
+struct PropertyIndex {
+    /// `len_ops()` snapshot the `by_key` map was built against; `None`
+    /// means "never built".
+    built_at_ops: Option<usize>,
+    /// LWW winner per property key.
+    by_key: BTreeMap<String, StampedValue>,
+    /// Union of contributing peer `node_id`s across ALL writes (not
+    /// just LWW winners) — the `winning_attribution` seed per
+    /// arch-r1-4 D-C HYBRID / net-blocker-3.
+    all_node_ids: BTreeSet<u64>,
+    /// Every (key, stamped) write observed, in List order — the
+    /// `all_writes` engine-side AttributionFrame seed.
+    all_writes: Vec<(String, StampedValue)>,
 }
 
 impl std::fmt::Debug for LoroDoc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `index` is a pure derived cache (Fwd-1 #999) — intentionally
+        // omitted from Debug; finish_non_exhaustive marks that.
         f.debug_struct("LoroDoc")
             .field("op_count", &self.inner.len_ops())
             .field("change_count", &self.inner.len_changes())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -278,6 +326,7 @@ impl LoroDoc {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(InnerLoroDoc::new()),
+            index: Arc::new(std::sync::Mutex::new(PropertyIndex::default())),
         }
     }
 
@@ -294,6 +343,7 @@ impl LoroDoc {
         inner.set_peer_id(peer_id).ok()?;
         Some(Self {
             inner: Arc::new(inner),
+            index: Arc::new(std::sync::Mutex::new(PropertyIndex::default())),
         })
     }
 
@@ -310,9 +360,12 @@ impl LoroDoc {
     ///
     /// # Errors
     ///
-    /// Returns [`CrdtError::LoroInternal`] if the underlying Loro
-    /// insert fails (Loro's failure mode here is essentially
-    /// out-of-memory on the op-log allocator).
+    /// Returns [`CrdtError::StampedValueCodec`] if the
+    /// `(key, StampedValue)` tuple fails to DAG-CBOR encode (should
+    /// never happen for well-formed inputs — the fields are all
+    /// CBOR-representable scalars). Returns [`CrdtError::LoroInternal`]
+    /// if the underlying Loro insert fails (Loro's failure mode here
+    /// is essentially out-of-memory on the op-log allocator).
     pub fn set_property(
         &self,
         key: &str,
@@ -335,22 +388,24 @@ impl LoroDoc {
         // scans the List, groups by property key, and resolves LWW
         // per HLC.
         //
-        // The list is append-only; old writes accumulate. A future
-        // R6-FP optimization (compact-old-writes-on-checkpoint) can
-        // truncate stale entries once all peers observe the merge —
-        // the truncation itself is a Loro op that propagates to
-        // laggard peers via subsequent merges. For G16-B canary,
-        // append-only is the load-bearing simplicity; convergence
-        // is observed-correct under the 10 000-case proptest.
+        // Each entry is the DAG-CBOR encoding of a
+        // `(key, StampedValue)` tuple carried as `LoroValue::Binary`
+        // (Qual-1 #667 + Safe-1 #511 closure): typed, length-prefixed,
+        // symmetric with the workspace's CLAUDE.md #5 BLAKE3 +
+        // DAG-CBOR + CIDv1 commitment, and free of the prior
+        // hand-rolled `\x1f` + `splitn(4, ':')` parse-invariant
+        // burden. The append-only-list-with-compaction story (rather
+        // than truncate-on-every-write) is retained because the
+        // truncation must be a Loro op that converges across peers —
+        // see [`LoroDoc::compact_property_history`] (Hyg-2 #381
+        // closure: the compact op now exists rather than naming a
+        // phantom "future R6-FP optimization"). Reads are O(log k)
+        // against the per-key index cache, not O(N) List scans
+        // (Fwd-1 #999 closure).
         let writes: LoroList = self.inner.get_list(PROPERTY_ROOT);
-        let packed = format!(
-            "{key}{sep}{packed}",
-            key = key,
-            sep = KEY_VALUE_SEPARATOR,
-            packed = pack_stamped(&stamped)
-        );
+        let encoded = encode_entry(key, &stamped)?;
         writes
-            .insert(writes.len(), LoroValue::String(packed.into()))
+            .insert(writes.len(), LoroValue::from(encoded))
             .map_err(|e| CrdtError::LoroInternal {
                 reason: format!("insert(stamped): {e}"),
             })?;
@@ -389,51 +444,158 @@ impl LoroDoc {
     }
 
     fn read_stamped(&self, key: &str) -> Option<StampedValue> {
-        let writes: LoroList = self.inner.get_list(PROPERTY_ROOT);
-        let n = writes.len();
-        let mut best: Option<StampedValue> = None;
-        for i in 0..n {
-            let entry = match writes.get(i)? {
-                loro::ValueOrContainer::Value(LoroValue::String(s)) => (*s).to_string(),
-                _ => continue,
-            };
-            let (entry_key, packed) = match split_key_value(&entry) {
-                Some(x) => x,
-                None => continue,
-            };
-            if entry_key != key {
-                continue;
-            }
-            let stamped = match unpack_stamped(packed) {
-                Some(s) => s,
-                None => continue,
-            };
-            best = Some(match best {
-                None => stamped,
-                Some(prev) => {
-                    if stamped.hlc.cmp_lex(&prev.hlc) == std::cmp::Ordering::Greater {
-                        stamped
-                    } else {
-                        prev
-                    }
-                }
-            });
-        }
-        best
+        self.with_index(|idx| idx.by_key.get(key).cloned())
     }
 
     /// Iterate every key currently observed in the property root List.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn keys(&self) -> BTreeSet<String> {
+        self.with_index(|idx| idx.by_key.keys().cloned().collect())
+    }
+
+    /// Run `f` against the per-key LWW index, rebuilding it first if
+    /// the underlying Loro op-count has changed since the last build.
+    ///
+    /// This is the single O(N) List-scan choke point (Fwd-1 #999): a
+    /// document that has not been written-to or merged-into since the
+    /// last index build serves every read in O(log k) without
+    /// re-walking the append-only List. `apply_atrium_merge`'s prior
+    /// 2× full-doc walks per row (`all_writes` + `winning_attribution`)
+    /// now share ONE cached rebuild.
+    fn with_index<R>(&self, f: impl FnOnce(&PropertyIndex) -> R) -> R {
+        let current_ops = self.inner.len_ops();
+        let mut guard = self
+            .index
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if guard.built_at_ops != Some(current_ops) {
+            self.rebuild_index_into(&mut guard, current_ops);
+        }
+        f(&guard)
+    }
+
+    /// Rebuild the per-key LWW index from the property root List.
+    ///
+    /// The ONLY place a malformed entry is observed (Safe-1 #511): a
+    /// `serde_ipld_dagcbor` decode failure or a non-`Binary` List
+    /// value is `tracing::warn!`-logged with the offending index +
+    /// reason, then skipped — the skip is now *observable* (operators
+    /// see a warn line + can route on it) instead of the prior silent
+    /// `continue`. The CBOR boundaries are length-prefixed, so a
+    /// well-formed encoder cannot produce an entry that decodes to the
+    /// wrong shape; a decode failure here means genuine corruption or
+    /// an incompatible-version peer, which is exactly what an operator
+    /// needs to see.
+    fn rebuild_index_into(&self, idx: &mut PropertyIndex, at_ops: usize) {
+        idx.by_key.clear();
+        idx.all_node_ids.clear();
+        idx.all_writes.clear();
         let writes: LoroList = self.inner.get_list(PROPERTY_ROOT);
-        let mut out = BTreeSet::new();
-        for i in 0..writes.len() {
-            if let Some(loro::ValueOrContainer::Value(LoroValue::String(s))) = writes.get(i)
-                && let Some((k, _)) = split_key_value(&s)
-            {
-                out.insert(k.to_string());
+        let n = writes.len();
+        for i in 0..n {
+            let bytes = match writes.get(i) {
+                Some(loro::ValueOrContainer::Value(LoroValue::Binary(b))) => b,
+                Some(other) => {
+                    tracing::warn!(
+                        target: "benten_sync::crdt",
+                        entry_index = i,
+                        "crdt property entry is not LoroValue::Binary ({other:?}); \
+                         skipping (Safe-1 #511 observable-skip)"
+                    );
+                    continue;
+                }
+                None => {
+                    tracing::warn!(
+                        target: "benten_sync::crdt",
+                        entry_index = i,
+                        "crdt property List shrank during index rebuild; \
+                         skipping (Safe-1 #511 observable-skip)"
+                    );
+                    continue;
+                }
+            };
+            let (entry_key, stamped) = match decode_entry(&bytes) {
+                Ok(kv) => kv,
+                Err(reason) => {
+                    tracing::warn!(
+                        target: "benten_sync::crdt",
+                        entry_index = i,
+                        %reason,
+                        "crdt property entry failed DAG-CBOR decode; \
+                         skipping (Safe-1 #511 observable-skip — LWW \
+                         resolution diverges from writer intent for \
+                         this entry)"
+                    );
+                    continue;
+                }
+            };
+            idx.all_node_ids.insert(stamped.hlc.node_id);
+            idx.all_writes.push((entry_key.clone(), stamped.clone()));
+            match idx.by_key.get(&entry_key) {
+                Some(prev) if stamped.hlc.cmp_lex(&prev.hlc) != std::cmp::Ordering::Greater => {}
+                _ => {
+                    idx.by_key.insert(entry_key, stamped);
+                }
             }
         }
-        out
+        idx.built_at_ops = Some(at_ops);
+    }
+
+    /// Compact the append-only property history: retain only the
+    /// current LWW winner per key, deleting all superseded entries.
+    ///
+    /// Hyg-2 #381 closure — this is the concrete realization of the
+    /// previously-phantom "future R6-FP compact-old-writes-on-
+    /// checkpoint optimization". It is **safe to call only at a
+    /// checkpoint where all participating peers have observed the
+    /// merge** (a superseded entry that a laggard peer has not yet
+    /// seen would otherwise be lost): the truncation is itself a Loro
+    /// op (`LoroList::delete`) that propagates to laggard peers via
+    /// subsequent merges, so calling it post-quiescence preserves
+    /// convergence. Callers that cannot establish the all-peers-
+    /// observed precondition MUST NOT call this — append-only is the
+    /// safe default; compaction is the bounded-growth opt-in.
+    ///
+    /// Returns the number of entries removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrdtError::LoroInternal`] if a Loro `delete` /
+    /// `insert` op fails, or [`CrdtError::StampedValueCodec`] if a
+    /// retained winner fails to re-encode.
+    pub fn compact_property_history(&self) -> CrdtResult<usize> {
+        // Resolve the current LWW winners (forces an index rebuild if
+        // stale) BEFORE mutating the List.
+        let winners: Vec<(String, StampedValue)> = self.with_index(|idx| {
+            idx.by_key
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        });
+        let writes: LoroList = self.inner.get_list(PROPERTY_ROOT);
+        let before = writes.len();
+        if before == winners.len() {
+            // Already compact (one entry per key, all winners).
+            return Ok(0);
+        }
+        // Replace the entire List contents with exactly the winners.
+        // `clear` + re-`insert` is a deterministic Loro op sequence
+        // that converges across peers (Loro list ops are CRDT-merged;
+        // a laggard peer that later merges this doc applies the same
+        // clear+insert and arrives at the same compacted state).
+        writes.clear().map_err(|e| CrdtError::LoroInternal {
+            reason: format!("compact: clear: {e}"),
+        })?;
+        for (k, sv) in &winners {
+            let encoded = encode_entry(k, sv)?;
+            writes
+                .insert(writes.len(), LoroValue::from(encoded))
+                .map_err(|e| CrdtError::LoroInternal {
+                    reason: format!("compact: re-insert: {e}"),
+                })?;
+        }
+        self.inner.commit();
+        Ok(before.saturating_sub(winners.len()))
     }
 
     /// Return the union of contributing peer `node_id`s observed
@@ -448,17 +610,7 @@ impl LoroDoc {
     /// per net-blocker-3.
     #[must_use]
     pub fn winning_attribution(&self) -> BTreeSet<u64> {
-        let mut out = BTreeSet::new();
-        let writes: LoroList = self.inner.get_list(PROPERTY_ROOT);
-        for i in 0..writes.len() {
-            if let Some(loro::ValueOrContainer::Value(LoroValue::String(s))) = writes.get(i)
-                && let Some((_, packed)) = split_key_value(&s)
-                && let Some(sv) = unpack_stamped(packed)
-            {
-                out.insert(sv.hlc.node_id);
-            }
-        }
-        out
+        self.with_index(|idx| idx.all_node_ids.clone())
     }
 
     /// Surface the full list of stamped writes (across all properties)
@@ -468,17 +620,7 @@ impl LoroDoc {
     /// arch-r1-4 D-C HYBRID. Each entry is `(property_key, stamped)`.
     #[must_use]
     pub fn all_writes(&self) -> Vec<(String, StampedValue)> {
-        let writes: LoroList = self.inner.get_list(PROPERTY_ROOT);
-        let mut out = Vec::with_capacity(writes.len());
-        for i in 0..writes.len() {
-            if let Some(loro::ValueOrContainer::Value(LoroValue::String(s))) = writes.get(i)
-                && let Some((k, packed)) = split_key_value(&s)
-                && let Some(sv) = unpack_stamped(packed)
-            {
-                out.push((k.to_string(), sv));
-            }
-        }
-        out
+        self.with_index(|idx| idx.all_writes.clone())
     }
 
     /// Get a collaborative Loro List under the rich-type namespace.
@@ -606,6 +748,7 @@ impl LoroDoc {
             })?;
         Ok(Self {
             inner: Arc::new(doc),
+            index: Arc::new(std::sync::Mutex::new(PropertyIndex::default())),
         })
     }
 
@@ -671,6 +814,10 @@ impl Clone for LoroDoc {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::new(self.inner.fork()),
+            // Fresh derived cache — the fork has its own op-log so the
+            // parent's index would be stale against it; lazy rebuild
+            // on first read reconstructs it from the forked List.
+            index: Arc::new(std::sync::Mutex::new(PropertyIndex::default())),
         }
     }
 }
@@ -683,44 +830,35 @@ pub fn hlc_lww_winner(a: &HlcWire, b: &HlcWire) -> std::cmp::Ordering {
     a.cmp_lex(b)
 }
 
-/// Pack a stamped value into the on-wire flat string format
-/// `<physical>:<logical>:<node>:<value>`. The triple-`:`-prefix carries
-/// the HLC fields; everything after the third `:` is the (raw) value
-/// string. Multi-`:`-containing values are preserved because we only
-/// split on the first three.
-fn pack_stamped(s: &StampedValue) -> String {
-    format!(
-        "{}:{}:{}:{}",
-        s.hlc.physical_ms, s.hlc.logical, s.hlc.node_id, s.value
-    )
-}
-
-/// Inverse of [`pack_stamped`]. Returns `None` if the format is
-/// malformed (under-segmented or HLC fields fail to parse).
-fn unpack_stamped(packed: &str) -> Option<StampedValue> {
-    let mut iter = packed.splitn(4, ':');
-    let physical_ms: u64 = iter.next()?.parse().ok()?;
-    let logical: u32 = iter.next()?.parse().ok()?;
-    let node_id: u64 = iter.next()?.parse().ok()?;
-    let value = iter.next()?.to_string();
-    Some(StampedValue {
-        value,
-        hlc: HlcWire {
-            physical_ms,
-            logical,
-            node_id,
-        },
+/// DAG-CBOR encode a `(key, StampedValue)` tuple into the canonical
+/// on-wire bytes carried as a Loro `LoroValue::Binary` entry.
+///
+/// Replaces the prior hand-rolled `<key>\x1f<physical>:<logical>:
+/// <node>:<value>` flat-string packer (Qual-1 #667): `StampedValue`
+/// already derives `Serialize`, the workspace already commits to
+/// DAG-CBOR per CLAUDE.md #5, and the length-prefixed encoding has
+/// zero parse-invariant burden (no `\x1f` delimiter discipline, no
+/// `splitn(4, ':')` numeric-token assumption — every future
+/// `StampedValue::value` scalar variant just works).
+///
+/// # Errors
+///
+/// Returns [`CrdtError::StampedValueCodec`] if `serde_ipld_dagcbor`
+/// fails to serialize the tuple (not expected for well-formed inputs).
+fn encode_entry(key: &str, stamped: &StampedValue) -> CrdtResult<Vec<u8>> {
+    serde_ipld_dagcbor::to_vec(&(key, stamped)).map_err(|e| CrdtError::StampedValueCodec {
+        reason: format!("dag-cbor encode (key={key:?}): {e}"),
     })
 }
 
-/// Split a key-value entry `<key>\x1f<packed>` at the first
-/// [`KEY_VALUE_SEPARATOR`]. Returns `None` if the separator is absent.
-fn split_key_value(entry: &str) -> Option<(&str, &str)> {
-    let idx = entry.find(KEY_VALUE_SEPARATOR)?;
-    Some((
-        &entry[..idx],
-        &entry[idx + KEY_VALUE_SEPARATOR.len_utf8()..],
-    ))
+/// Inverse of [`encode_entry`]. Returns the decoded `(key,
+/// StampedValue)` tuple, or an operator-readable reason string on
+/// decode failure (Safe-1 #511: the caller logs the reason via
+/// `tracing::warn!` and skips the entry — the skip is *observable*,
+/// not silent).
+fn decode_entry(bytes: &[u8]) -> Result<(String, StampedValue), String> {
+    serde_ipld_dagcbor::from_slice::<(String, StampedValue)>(bytes)
+        .map_err(|e| format!("dag-cbor decode ({} bytes): {e}", bytes.len()))
 }
 
 #[cfg(test)]
@@ -929,6 +1067,142 @@ mod tests {
         let keys: std::collections::BTreeSet<_> = writes.iter().map(|(k, _)| k.clone()).collect();
         assert!(keys.contains("k1"));
         assert!(keys.contains("k2"));
+    }
+
+    // ---- Pattern-F bundle closure pins (#1179: #667 / #511 / #381 / #999) ----
+
+    #[test]
+    fn entries_are_cbor_binary_not_flat_string() {
+        // Qual-1 #667 closure pin: the property root List now carries
+        // DAG-CBOR `LoroValue::Binary` entries, NOT the prior
+        // hand-rolled `\x1f`-+`:`-delimited `LoroValue::String`. This
+        // would FAIL (assert hits the String arm) under the pre-#667
+        // flat-string encoding.
+        let doc = LoroDoc::new();
+        doc.set_property("title", "hello", fixture_hlc(7, 1, 0xFEED))
+            .unwrap();
+        let writes = doc.inner.get_list(PROPERTY_ROOT);
+        assert_eq!(writes.len(), 1);
+        match writes.get(0).unwrap() {
+            loro::ValueOrContainer::Value(LoroValue::Binary(b)) => {
+                // Round-trips through the typed decoder.
+                let (k, sv) = decode_entry(&b).expect("entry decodes as typed CBOR tuple");
+                assert_eq!(k, "title");
+                assert_eq!(sv.value, "hello");
+                assert_eq!(sv.hlc.node_id, 0xFEED);
+            }
+            other => panic!("expected LoroValue::Binary CBOR entry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn malformed_entry_is_skipped_not_silently_dropped_into_lww() {
+        // Safe-1 #511 closure pin: a corrupt (non-CBOR) entry injected
+        // directly into the List is SKIPPED at index-rebuild time
+        // (with a tracing::warn! the operator can observe) rather than
+        // silently poisoning LWW resolution. The well-formed entry
+        // still resolves; the corrupt one does not crash the read.
+        let doc = LoroDoc::new();
+        doc.set_property("k", "good", fixture_hlc(100, 0, 0xAAAA))
+            .unwrap();
+        // Inject a garbage Binary entry that is not valid CBOR for the
+        // (String, StampedValue) shape.
+        let writes = doc.inner.get_list(PROPERTY_ROOT);
+        writes
+            .insert(writes.len(), LoroValue::from(vec![0xFF, 0x00, 0x42]))
+            .unwrap();
+        doc.inner.commit();
+        // Read still works; the good value resolves; no panic, no
+        // silent substitution of the corrupt entry.
+        assert_eq!(doc.get_property("k").as_deref(), Some("good"));
+        // all_writes surfaces only the well-formed entry (the corrupt
+        // one was observably skipped, not counted).
+        assert_eq!(doc.all_writes().len(), 1);
+    }
+
+    #[test]
+    fn compact_property_history_retains_winners_drops_superseded() {
+        // Hyg-2 #381 closure pin: the previously-phantom
+        // "compact-old-writes-on-checkpoint" op now EXISTS and removes
+        // superseded entries while preserving the LWW winner.
+        let doc = LoroDoc::new();
+        doc.set_property("title", "v1", fixture_hlc(100, 0, 0xA))
+            .unwrap();
+        doc.set_property("title", "v2", fixture_hlc(200, 0, 0xA))
+            .unwrap();
+        doc.set_property("title", "v3", fixture_hlc(300, 0, 0xA))
+            .unwrap();
+        doc.set_property("other", "x", fixture_hlc(50, 0, 0xB))
+            .unwrap();
+        assert_eq!(doc.inner.get_list(PROPERTY_ROOT).len(), 4);
+        let removed = doc.compact_property_history().unwrap();
+        assert_eq!(removed, 2, "two superseded `title` writes removed");
+        assert_eq!(doc.inner.get_list(PROPERTY_ROOT).len(), 2);
+        // LWW winners preserved post-compaction.
+        assert_eq!(doc.get_property("title").as_deref(), Some("v3"));
+        assert_eq!(doc.get_property("other").as_deref(), Some("x"));
+        // Idempotent: a second compaction removes nothing.
+        assert_eq!(doc.compact_property_history().unwrap(), 0);
+    }
+
+    #[test]
+    fn compaction_preserves_cross_peer_convergence() {
+        // Hyg-2 #381 / convergence-preservation pin: compaction is a
+        // Loro op; a laggard peer that later merges the compacted doc
+        // converges to the same LWW answer (the truncation propagates
+        // and does not lose the winner).
+        let doc_a = LoroDoc::new();
+        let doc_b = LoroDoc::new();
+        doc_a
+            .set_property("color", "old1", fixture_hlc(100, 0, 0xA))
+            .unwrap();
+        doc_a
+            .set_property("color", "old2", fixture_hlc(200, 0, 0xA))
+            .unwrap();
+        doc_a
+            .set_property("color", "winner", fixture_hlc(300, 0, 0xA))
+            .unwrap();
+        // Peer A compacts at a checkpoint.
+        doc_a.compact_property_history().unwrap();
+        // Laggard peer B merges the compacted doc.
+        doc_b.merge(&doc_a).unwrap();
+        doc_a.merge(&doc_b).unwrap();
+        assert_eq!(doc_a.get_property("color"), doc_b.get_property("color"));
+        assert_eq!(doc_a.get_property("color").as_deref(), Some("winner"));
+    }
+
+    #[test]
+    fn index_cache_reused_across_reads_without_op_change() {
+        // Fwd-1 #999 closure pin: repeated reads against an unchanged
+        // document do not re-scan the List. We assert behavioral
+        // equivalence (the value is stable) AND that the index's
+        // built_at_ops snapshot is reused (a second read does not bump
+        // it because op-count is unchanged).
+        let doc = LoroDoc::new();
+        doc.set_property("k", "v", fixture_hlc(1, 0, 1)).unwrap();
+        assert_eq!(doc.get_property("k").as_deref(), Some("v"));
+        let snap1 = doc
+            .index
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .built_at_ops;
+        // Second read — no intervening write.
+        assert_eq!(doc.get_property("k").as_deref(), Some("v"));
+        let snap2 = doc
+            .index
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .built_at_ops;
+        assert_eq!(snap1, snap2, "index not rebuilt when op-count unchanged");
+        // A new write invalidates + rebuilds at the new op-count.
+        doc.set_property("k", "v2", fixture_hlc(2, 0, 1)).unwrap();
+        assert_eq!(doc.get_property("k").as_deref(), Some("v2"));
+        let snap3 = doc
+            .index
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .built_at_ops;
+        assert_ne!(snap2, snap3, "index rebuilt after a write");
     }
 
     #[test]

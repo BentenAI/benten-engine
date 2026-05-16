@@ -17,19 +17,22 @@
 //! attestation is consumed at UCAN delegation chain-walk so per-
 //! device cap policy can enforce envelope-derived limits.
 //!
-//! ## Replay-resistance (defect-class)
+//! ## Replay-resistance (defect-class) — COLLAPSE P3
 //!
 //! Per the device-DID-attestation-replay defect-class +
 //! `pim-r1-pim-induction-7`, attestations carry a 32-byte nonce +
-//! `issued_at` epoch second. The [`Acceptor`] enforces:
-//!
-//! 1. **Freshness**: `now - issued_at <= window` (rejected with
-//!    [`crate::errors::DeviceAttestationError::FreshnessExpired`]).
-//! 2. **Nonce-store**: `(parent_did, nonce)` tuples already accepted
-//!    within the freshness window are rejected with
-//!    [`crate::errors::DeviceAttestationError::NonceReplay`].
-//!
-//! G14-B replaces the in-RAM nonce store with a durable backing.
+//! `issued_at` epoch second. Under COLLAPSE (DECISION-RECORD §4
+//! RATIFIED) the device-attestation *acceptance* pipe (the former
+//! `Acceptor` — expected-parent gate / nonce-store / revocation-list)
+//! is DELETED: the device envelope is no longer a distinct
+//! trust-root. Stale-frame replay is now bounded by a plain freshness
+//! window on the consuming Atrium handle
+//! (`benten_engine::engine_sync::DeviceAttestationEnvelope::verify`);
+//! durable revocation collapses to user-root UCAN revocation
+//! (`benten_caps::revoke`). This module retains only the pure
+//! primitives: the `CapabilityEnvelope` ceiling type, the signed
+//! `DeviceAttestation` struct + `issue*` / `verify_signature_with` /
+//! `canonical_bytes`, `envelope_widens`, and `generate_fresh_nonce`.
 //!
 //! ## Br-r4-r1-4 / br-r4-r2-3 MAJOR — trust-graph-forgery defense
 //!
@@ -40,10 +43,7 @@
 //! `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME` per
 //! `crates/benten-id/tests/device_attestation.rs::browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time`.
 
-use std::collections::HashSet;
-use std::sync::Mutex;
-
-use ed25519_dalek::{Signature, Signer, Verifier};
+use ed25519_dalek::{Signature, Verifier};
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
@@ -118,16 +118,9 @@ pub enum RuntimeTarget {
     Browser,
 }
 
-/// Reason a device was revoked.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RevocationReason {
-    /// Device lost.
-    DeviceLoss,
-    /// Device compromised.
-    Compromise,
-    /// Voluntary decommission.
-    Decommissioned,
-}
+// COLLAPSE (P3): `RevocationReason` DELETED with `DeviceRevocation`
+// (J3 — the device-revocation parallel pipe). Revocation collapses to
+// user-root UCAN revocation (`benten_caps::revoke(ucan_cid)`).
 
 /// Signed device-DID capability attestation.
 ///
@@ -189,18 +182,30 @@ impl DeviceAttestation {
         Self::issue_at(parent_kp, device_did, envelope, 0)
     }
 
-    /// Issue at a specific epoch second (used by replay-resistance
-    /// tests). Generates a fresh OS-CSPRNG nonce.
+    /// Issue at a specific epoch second. Generates a fresh OS-CSPRNG
+    /// nonce.
+    ///
+    /// **Qual-1 #677 — production-zero externally / BELONGS-NAMED-NOW
+    /// (HARD RULE 12 (b)).** Called internally by [`Self::issue`]; the
+    /// COLLAPSE-deleted device-attestation replay tests were its only
+    /// external callers. Narrowing this + [`Self::issue_with_nonce`]
+    /// to `pub(crate)` is a SemVer-affecting visibility change that
+    /// belongs to the v1-API-stabilization cluster — campaign umbrella
+    /// **#1169** / `docs/future/phase-4-backlog.md §4.43` (the
+    /// timestamp/nonce-controlled-constructor visibility-tighten is
+    /// exactly that sweep's `_for_test`-escaped-to-public class, §4.50
+    /// sibling).
     pub fn issue_at(
         parent_kp: &Keypair,
         device_did: Did,
         envelope: CapabilityEnvelope,
         issued_at: u64,
     ) -> Result<Self, DeviceAttestationError> {
-        // Generate fresh nonce from OS CSPRNG. The buffer is zero-init
-        // ONLY as scratch space immediately overwritten by `OsRng::fill_bytes`;
-        // CodeQL pattern-match on `[0u8; 32]` is a false-positive that
-        // doesn't see the next-line randomization. Per crypto-major-2.
+        // Generate fresh nonce from OS CSPRNG via `generate_fresh_nonce`,
+        // which composes 4 `OsRng::next_u64()` reads (NOT `fill_bytes`
+        // into a zero-init buffer — that pattern was migrated away to
+        // avoid the CodeQL `[0u8; 32]` "hardcoded nonce" false-positive;
+        // see the `generate_fresh_nonce` docstring). Per crypto-major-2.
         let nonce = generate_fresh_nonce();
         Self::issue_with_nonce(parent_kp, device_did, envelope, issued_at, nonce)
     }
@@ -292,6 +297,19 @@ impl DeviceAttestation {
     }
 
     /// Verify the signature against the supplied parent public key.
+    ///
+    /// **Qual-1 #672 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+    /// The finding cited "4× duplicated `verify_signature_with` body".
+    /// Post-COLLAPSE only TWO remain (here +
+    /// `did_rotation::RotationAttestation::verify_signature_with`), and
+    /// they are NOT mechanical duplicates: each verifies a different
+    /// canonical-bytes `SigInput` shape and returns a different typed
+    /// error (`DeviceAttestationError::BadSignature` vs
+    /// `DidRotationError::BadSignature`). A shared generic helper would
+    /// need a SigInput-encoder trait + an error-mapping closure per
+    /// site — strictly more surface than the ~6-line bodies it would
+    /// replace, with no behavior gain. The duplication is the simpler
+    /// shape here.
     pub fn verify_signature_with(
         &self,
         parent_pk: &PublicKey,
@@ -316,6 +334,17 @@ impl DeviceAttestation {
     }
 
     /// Decode from canonical bytes.
+    ///
+    /// **Hyg-1 #329 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)),
+    /// production-zero / test caller exists.** This is the decode half
+    /// of the canonical-bytes round-trip contract whose encode half
+    /// (`canonical_bytes`) is load-bearing in `issue_with_nonce` /
+    /// `verify_signature_with`. The `device_attestation.rs`
+    /// integration suite drives it (round-trip pin at
+    /// `tests/device_attestation.rs`). Deleting it would break
+    /// canonical-bytes symmetry (a wire-format-adjacent surface —
+    /// out of scope to mutate per the lane's wire-format rule).
+    /// T-3v-D wording sharpen: "production-zero", NOT "zero callers".
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, DeviceAttestationError> {
         serde_ipld_dagcbor::from_slice(bytes).map_err(|_| DeviceAttestationError::DecodeFailed)
     }
@@ -381,212 +410,18 @@ fn canonical_bytes(attestation: &DeviceAttestation) -> Vec<u8> {
     .expect("DAG-CBOR encoding of fixed-shape SigInput cannot fail")
 }
 
-/// Freshness policy for [`Acceptor`] — bounds how old an attestation
-/// can be at acceptance time.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FreshnessPolicy {
-    /// Window in seconds.
-    pub window_secs: u64,
-}
-
-impl FreshnessPolicy {
-    /// Construct from a window in seconds.
-    pub fn seconds(window_secs: u64) -> Self {
-        Self { window_secs }
-    }
-}
-
-/// Signed device-DID revocation. Issued by the parent keypair when
-/// a device is lost / compromised / decommissioned.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DeviceRevocation {
-    /// The revoked device-DID.
-    pub device_did: String,
-    /// Parent-DID issuing the revocation.
-    pub parent_did: String,
-    /// Reason.
-    pub reason: RevocationReason,
-    /// 64-byte Ed25519 signature by the parent keypair.
-    pub signature: Vec<u8>,
-}
-
-impl DeviceRevocation {
-    /// Issue a revocation, signed by `parent_kp`.
-    pub fn issue(
-        parent_kp: &Keypair,
-        device_did: Did,
-        reason: RevocationReason,
-    ) -> Result<Self, DeviceAttestationError> {
-        let mut revocation = Self {
-            device_did: device_did.as_str().to_string(),
-            parent_did: parent_kp.public_key().to_did().as_str().to_string(),
-            reason,
-            signature: Vec::new(),
-        };
-        let bytes = revocation_canonical_bytes(&revocation);
-        let sig = parent_kp.sign(&bytes);
-        revocation.signature = sig.to_bytes().to_vec();
-        Ok(revocation)
-    }
-
-    /// Borrow the revoked device-DID.
-    pub fn device_did(&self) -> Did {
-        Did::from_string_unchecked(self.device_did.clone())
-    }
-
-    /// Borrow the reason.
-    pub fn reason(&self) -> RevocationReason {
-        self.reason
-    }
-
-    /// Verify the signature against the supplied parent public key.
-    pub fn verify_signature_with(
-        &self,
-        parent_pk: &PublicKey,
-    ) -> Result<(), DeviceAttestationError> {
-        let bytes = revocation_canonical_bytes(self);
-        let sig_bytes: [u8; 64] = self
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| DeviceAttestationError::BadSignature)?;
-        let sig = Signature::from_bytes(&sig_bytes);
-        parent_pk
-            .as_verifying_key()
-            .verify(&bytes, &sig)
-            .map_err(|_| DeviceAttestationError::BadSignature)
-    }
-}
-
-fn revocation_canonical_bytes(revocation: &DeviceRevocation) -> Vec<u8> {
-    #[derive(Serialize)]
-    struct SigInput<'a> {
-        device_did: &'a str,
-        parent_did: &'a str,
-        reason: &'a RevocationReason,
-    }
-    serde_ipld_dagcbor::to_vec(&SigInput {
-        device_did: &revocation.device_did,
-        parent_did: &revocation.parent_did,
-        reason: &revocation.reason,
-    })
-    .expect("DAG-CBOR encoding of fixed-shape SigInput cannot fail")
-}
-
-/// Attestation acceptor — gates [`Acceptor::accept`] /
-/// [`Acceptor::accept_at`] on freshness + nonce-store + revocation
-/// list. G14-B replaces the in-RAM nonce store + revocation list
-/// with durable backings.
-pub struct Acceptor {
-    freshness: FreshnessPolicy,
-    nonce_store: Mutex<HashSet<(String, [u8; 32])>>,
-    revocations: Vec<DeviceRevocation>,
-    expected_parent: Option<String>,
-}
-
-impl Acceptor {
-    /// Construct an acceptor with the given freshness policy.
-    pub fn new(freshness: FreshnessPolicy) -> Self {
-        Self {
-            freshness,
-            nonce_store: Mutex::new(HashSet::new()),
-            revocations: Vec::new(),
-            expected_parent: None,
-        }
-    }
-
-    /// Construct an acceptor with a pre-populated revocation list.
-    pub fn new_with_revocations(
-        freshness: FreshnessPolicy,
-        revocations: Vec<DeviceRevocation>,
-    ) -> Self {
-        Self {
-            freshness,
-            nonce_store: Mutex::new(HashSet::new()),
-            revocations,
-            expected_parent: None,
-        }
-    }
-
-    /// Construct an acceptor that requires the attestation issuer
-    /// to equal `expected_parent`. Used by
-    /// `device_attestation_runs_sandbox_false_cannot_be_widened_by_device_signed_re_attestation`.
-    pub fn with_parent_lookup(expected_parent: Did) -> Self {
-        Self {
-            freshness: FreshnessPolicy::seconds(u64::MAX),
-            nonce_store: Mutex::new(HashSet::new()),
-            revocations: Vec::new(),
-            expected_parent: Some(expected_parent.as_str().to_string()),
-        }
-    }
-
-    /// Accept at a given epoch second. Enforces all gates.
-    pub fn accept_at(
-        &self,
-        attestation: &DeviceAttestation,
-        now: u64,
-    ) -> Result<(), DeviceAttestationError> {
-        // 1. Expected parent (only if configured).
-        if let Some(expected) = &self.expected_parent
-            && &attestation.parent_did != expected
-        {
-            return Err(DeviceAttestationError::IssuerNotParent {
-                issuer: attestation.parent_did.clone(),
-                expected_parent: expected.clone(),
-            });
-        }
-
-        // 2. Revocation check (ct-eq per crypto-major-4 UNIFORMITY).
-        for r in &self.revocations {
-            if crate::ucan::ct_signature_eq(
-                r.device_did.as_bytes(),
-                attestation.device_did.as_bytes(),
-            ) {
-                return Err(DeviceAttestationError::DeviceRevoked {
-                    device_did: attestation.device_did.clone(),
-                });
-            }
-        }
-
-        // 3. Freshness gate (`now - issued_at <= window`).
-        let age = now.saturating_sub(attestation.issued_at);
-        if age > self.freshness.window_secs {
-            return Err(DeviceAttestationError::FreshnessExpired {
-                issued_at: attestation.issued_at,
-                now,
-                window: self.freshness.window_secs,
-            });
-        }
-
-        // 4. Signature verification (per g14-a2-mr-1): resolve the
-        //    parent_did to its public key + verify the attestation
-        //    signature. Without this gate, a forged attestation with a
-        //    valid (nonce, freshness, parent_did string) but corrupt
-        //    signature would pass acceptance — the signature is the
-        //    load-bearing assertion that parent_did actually authorized
-        //    the envelope.
-        let parent_did_obj = Did::from_string_unchecked(attestation.parent_did.clone());
-        let parent_pk = parent_did_obj
-            .resolve()
-            .map_err(|_| DeviceAttestationError::BadSignature)?;
-        attestation.verify_signature_with(&parent_pk)?;
-
-        // 5. Nonce-store replay defense.
-        let key = (attestation.parent_did.clone(), attestation.nonce);
-        let mut store = self.nonce_store.lock().expect("nonce store poisoned");
-        if !store.insert(key) {
-            return Err(DeviceAttestationError::NonceReplay);
-        }
-
-        Ok(())
-    }
-
-    /// Convenience: accept at `now = issued_at` (skips freshness
-    /// gate). Used by the revocation-only test paths.
-    pub fn accept(&self, attestation: &DeviceAttestation) -> Result<(), DeviceAttestationError> {
-        self.accept_at(attestation, attestation.issued_at)
-    }
-}
+// COLLAPSE (P3): `FreshnessPolicy` + `DeviceRevocation` +
+// `revocation_canonical_bytes` + `Acceptor` (the device-attestation
+// *acceptance* pipe — expected-parent gate / nonce-store replay /
+// revocation-list) DELETED per DECISION-RECORD §4 RATIFIED. The
+// device envelope is no longer a distinct trust-root. Revocation
+// collapses to user-root UCAN revocation (`benten_caps::revoke`);
+// the J8 envelope-ceiling is ANDed once at the engine's single
+// inbound-sync recheck seam; the receiver-side freshness window is
+// a plain `u64` on the Atrium handle (no `Acceptor` / no
+// `FreshnessPolicy` type). `envelope_widens` + the kept
+// `DeviceAttestation` struct + `generate_fresh_nonce` survive as
+// pure primitives.
 
 /// Generate a fresh 32-byte nonce from the OS CSPRNG (per crypto-major-2).
 ///
@@ -596,13 +431,17 @@ impl Acceptor {
 /// buffer is immediately overwritten. Each `next_u64` call pulls
 /// fresh entropy from the OS CSPRNG.
 fn generate_fresh_nonce() -> [u8; 32] {
-    let r0 = OsRng.next_u64().to_le_bytes();
-    let r1 = OsRng.next_u64().to_le_bytes();
-    let r2 = OsRng.next_u64().to_le_bytes();
-    let r3 = OsRng.next_u64().to_le_bytes();
-    [
-        r0[0], r0[1], r0[2], r0[3], r0[4], r0[5], r0[6], r0[7], r1[0], r1[1], r1[2], r1[3], r1[4],
-        r1[5], r1[6], r1[7], r2[0], r2[1], r2[2], r2[3], r2[4], r2[5], r2[6], r2[7], r3[0], r3[1],
-        r3[2], r3[3], r3[4], r3[5], r3[6], r3[7],
-    ]
+    // Qual-1 #699 / Fwd-1 #968: replace the hand-rolled 32-element
+    // array-index expression with a `from_fn` over the 4 LE-encoded
+    // `OsRng::next_u64()` reads. `std::array::from_fn` is NOT a
+    // `[0u8; 32]` zero-init literal, so the CodeQL "hardcoded nonce"
+    // pattern-match still does not fire; each byte is sourced from a
+    // fresh OS-CSPRNG `u64`.
+    let words = [
+        OsRng.next_u64().to_le_bytes(),
+        OsRng.next_u64().to_le_bytes(),
+        OsRng.next_u64().to_le_bytes(),
+        OsRng.next_u64().to_le_bytes(),
+    ];
+    std::array::from_fn(|i| words[i / 8][i % 8])
 }

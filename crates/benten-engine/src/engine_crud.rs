@@ -70,6 +70,50 @@ impl Engine {
 
     /// Retrieve a Node by CID. Returns `Ok(None)` on a clean miss.
     ///
+    /// # #593 — engine-internal read = read-as-the-engine-user-root principal (NOT an auth bypass)
+    ///
+    /// Per the post-Phase-4-Foundation trust-model reframe
+    /// (`DECISION-RECORD-trust-model-reframe.md` §4, RATIFIED) and
+    /// CLAUDE.md baked-in commitment #18: **there is no such thing as an
+    /// un-principal'd access.** This method is the engine-internal
+    /// un-attributed read pathway, and "un-attributed" here means
+    /// *attributed to the engine's own user-root principal* — the trust
+    /// anchor — NOT the absence of a principal. Engine-internal callers
+    /// (IVM incremental recompute, Atrium sync materialization, view
+    /// recompute, audit) are acting AS the engine's user-root; that is a
+    /// legitimate principal authorised by construction (it cannot be
+    /// attenuated below root because it *is* root). META #593 frames the
+    /// `get_node` / `read_node_as` split as a parallel "auth-bypass"
+    /// pathway; under the unified model the correct reading is the one
+    /// stated here: `get_node` is read-as-user-root, `read_node_as` is
+    /// read-as-an-attenuated-principal.
+    ///
+    /// **The contract this implies (containment, not a per-call check):**
+    /// the `read_node_as(principal, cid)` surface
+    /// ([`Engine::read_node_as`]) is the ONLY pathway any
+    /// external / untrusted / plugin / non-engine-root caller may use to
+    /// read a Node — it threads `actor_cid: Some(principal)` so the
+    /// cap policy attenuates below root. Adding a per-call permission
+    /// check to *this* method would be wrong (it would regress hot
+    /// paths and is semantically incorrect — the engine-internal
+    /// principal IS authorised). The security property is upheld by a
+    /// **containment proof**: no external/plugin call path reaches
+    /// `get_node` (or the raw backend read it wraps) without going
+    /// through a principal-gated seam. That containment is asserted by
+    /// `tests/engine_internal_get_node_is_read_as_user_root_containment.rs`
+    /// (a would-FAIL guard if a new external un-attributed caller — e.g.
+    /// a napi re-export of the raw backend read — were introduced).
+    /// Note this method *already* applies the Inv-11 system-zone probe
+    /// and the configured `policy.check_read` gate with
+    /// `actor_cid: None`; the genuinely un-gated read is the raw
+    /// `self.backend.get_node(cid)`, consumed only by engine internals.
+    ///
+    /// The visibility of this method (`pub` vs `pub(crate)`) is a
+    /// v1-API-stabilization decision tracked at
+    /// `docs/future/phase-4-backlog.md §4.43` (Phase-4-Meta) and is
+    /// intentionally **not** changed by the #593 re-scope — P6 is a
+    /// semantic-documentation + containment-assertion change only.
+    ///
     /// # Named compromise #2 (Option C, 5d-J workstream 1)
     ///
     /// When a capability policy is configured and `policy.check_read`

@@ -139,8 +139,7 @@ pub fn verify_signature(issuer_did: String, message: Buffer, signature: Buffer) 
 // applied at the module level in `bindings/napi/src/lib.rs`).
 
 use benten_id::device_attestation::{
-    Acceptor as RustAcceptor, CapabilityEnvelope as RustCapabilityEnvelope,
-    DeviceAttestation as RustDeviceAttestation, FreshnessPolicy as RustFreshnessPolicy,
+    CapabilityEnvelope as RustCapabilityEnvelope, DeviceAttestation as RustDeviceAttestation,
     RuntimeTarget as RustRuntimeTarget, UptimePolicy as RustUptimePolicy,
     ZoneScope as RustZoneScope,
 };
@@ -372,6 +371,52 @@ impl JsDeviceAttestation {
         Ok(Self { inner: attestation })
     }
 
+    /// Issue subject to a parent authority envelope (cap-r4-7
+    /// construction-time envelope-widening defense, #333). Rejects with
+    /// `E_DEVICE_ATTESTATION_ENVELOPE_WIDENING` if the device envelope
+    /// claims wider authority than the supplied parent-authority
+    /// envelope. This is the construction-time companion to the
+    /// chain-walker's consume-time `validate_chain_with_attestations`
+    /// envelope-attenuation gate — defense in depth at both ends.
+    #[napi(factory)]
+    // napi factory mirrors the Rust authority-envelope signature 1:1;
+    // the bool params are the device/parent capability-envelope flags
+    // (runs_sandbox / runs_atrium_peer / parent_runs_sandbox). Same
+    // architectural reason as the too_many_arguments allow above —
+    // restructuring to a struct would break the cross-language mirror.
+    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::fn_params_excessive_bools)]
+    pub fn issue_with_authority(
+        parent: &JsKeypair,
+        device_did: String,
+        runs_sandbox: bool,
+        holds_zones: String,
+        online_uptime: String,
+        runs_atrium_peer: bool,
+        parent_runs_sandbox: bool,
+        parent_holds_zones: String,
+        parent_online_uptime: String,
+        parent_runs_atrium_peer: bool,
+    ) -> Result<Self> {
+        let envelope =
+            envelope_from_str(runs_sandbox, holds_zones, online_uptime, runs_atrium_peer)?;
+        let parent_authority = envelope_from_str(
+            parent_runs_sandbox,
+            parent_holds_zones,
+            parent_online_uptime,
+            parent_runs_atrium_peer,
+        )?;
+        let device = RustDid::from_string_unchecked(device_did);
+        let attestation = RustDeviceAttestation::issue_with_authority(
+            &parent.inner,
+            device,
+            envelope,
+            &parent_authority,
+        )
+        .map_err(|e| Error::from_reason(format!("[{}] {e}", e.code())))?;
+        Ok(Self { inner: attestation })
+    }
+
     /// Convenience: issue browser-target minimum-capability envelope.
     #[napi(factory)]
     pub fn issue_for_browser_target(parent: &JsKeypair, device_did: String) -> Result<Self> {
@@ -421,21 +466,11 @@ impl JsDeviceAttestation {
         }
     }
 
-    /// Accept under a freshness policy (in seconds). Convenience
-    /// wrapper around `Acceptor::accept_at` using `now_secs`.
-    /// Returns `true` on accept; throws on rejection (carries the
-    /// typed error code in the message).
-    #[napi]
-    pub fn accept_at(&self, now_secs: i64, freshness_window_secs: i64) -> Result<bool> {
-        let acceptor = RustAcceptor::new(RustFreshnessPolicy::seconds(
-            freshness_window_secs.max(0) as u64,
-        ));
-        match acceptor.accept_at(&self.inner, now_secs.max(0) as u64) {
-            Ok(()) => Ok(true),
-            Err(e) => Err(Error::from_reason(format!(
-                "attestation reject: [{}] {e}",
-                e.code()
-            ))),
-        }
-    }
+    // COLLAPSE (P3): `accept_at` DELETED. The device-attestation
+    // *acceptance* pipe (`benten_id::Acceptor`) is removed — the
+    // device envelope is no longer a distinct trust-root. Provenance
+    // signature verification survives via `verify_signature` above
+    // (DECISION-RECORD §4 RATIFIED); the J8 envelope-ceiling is
+    // ANDed once at the engine's single inbound-sync recheck seam,
+    // not at a napi-exposed acceptor.
 }

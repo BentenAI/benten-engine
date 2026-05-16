@@ -2,13 +2,15 @@
 
 Plain-English deep-dive into the `benten-dsl-compiler` crate. Audience: a developer or AI agent who needs to understand what this crate is, why it exists, and what to expect when extending it. Read-only audit; no claims about Phase-4 plans beyond what is already pinned in the code or accompanying retrospective docs.
 
+**Last refreshed against `8141b94` (Phase-4-Foundation tag-eve, 2026-05-14).** The crate is substantively unchanged since the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep); the only intervening edit was the Phase-3.5 → Phase-4-Foundation rename at `00f2784` (2026-05-11). Phase-4-Foundation R5+R6 work touched zero source files in this crate — the typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
+
 ---
 
 ## 1. What this crate does
 
 `benten-dsl-compiler` takes a short string of DSL text — a sequence of operation-primitive calls chained with `->` — and produces a canonical `benten_core::Subgraph` that the engine knows how to load and execute. It is the bridge between "I want to write a handler in a tiny English-shaped language" and "the engine wants a content-addressed graph of `OperationNode`s." The output round-trips: the bytes the engine consumes hash to the same CID whether the handler arrived through this compiler, the TypeScript DSL surface, or hand-built builder calls.
 
-The crate is intentionally a runt. It was added in Phase-2b (Wave-6 / G12-B) to give the devserver a Rust-side way to compile inline DSL snippets without dragging in `benten-eval` or `benten-graph`. The whole crate is ~895 LOC of `src/lib.rs` plus four integration tests; the `Cargo.toml` description still labels it `MINIMAL-FOR-DEVSERVER ~200-300 LOC, 4 public items`, and while the LOC has grown past that estimate (mostly via R6 fp Wave C2's shape-validation pass), the four-public-item discipline is intact. The dependency direction is the load-bearing constraint: `benten-core` only, no engine or eval or graph.
+The crate is intentionally a runt. It was added in Phase-2b (Wave-6 / G12-B) to give the devserver a Rust-side way to compile inline DSL snippets without dragging in `benten-eval` or `benten-graph`. The whole crate is 894 LOC of `src/lib.rs` plus four integration tests totalling 287 LOC; the `Cargo.toml` description still labels it `MINIMAL-FOR-DEVSERVER ~200-300 LOC, 4 public items`, and while the LOC has grown past that estimate (mostly via R6 fp Wave C2's shape-validation pass), the four-public-item discipline is intact. The dependency direction is the load-bearing constraint: `benten-core` only, no engine or eval or graph.
 
 ---
 
@@ -43,17 +45,17 @@ Net shape: the compiler is a leaf consumer of `benten-core` and a sibling-not-pa
 
 There is one file.
 
-**`src/lib.rs` (~895 lines)** — the entire crate. Logical sections, in order of appearance:
+**`src/lib.rs` (894 lines)** — the entire crate. Logical sections, in order of appearance:
 
-- **Crate-level docs (lines 1-47):** scope note, dep-direction reminder, and the EBNF-shaped grammar block. The grammar block is the canonical reference for what tokens the parser accepts; everything below this comment should be implementing that grammar and nothing more.
-- **Public surface (lines 60-183):** `CompiledSubgraph`, `CompiledPrimitive`, `compile_str`, `compile_file`, `CompileError`, `Diagnostic`. The two functions are thin: trim-check, hand off to `Parser`, hand off to `emit`. All the complexity lives in `Parser` and `emit`.
-- **Stable error codes (lines 189-199):** four `pub(crate)` `&'static str` constants. They are NOT exposed as a public enum; the constants are written through `Diagnostic::error_code`. `E_DSL_INVALID_SHAPE` is the late arrival (Phase-3 R6 fp Wave C2) mirroring the TS-side `EDslInvalidShape`.
-- **AST (lines 206-216):** two `pub(crate)` structs — `HandlerAst` and `PrimitiveAst`. Never escape the crate. Properties are stored as `BTreeMap<String, Value>` so the eventual canonical-bytes encode is permutation-stable; that property is exercised by a dedicated round-trip test.
-- **`Parser` (lines 222-646):** a hand-written single-pass cursor parser. Tracks byte position, 1-indexed line, 1-indexed column. The dispatch table for the 12 primitives is intentionally one big `match` (the `#[allow(clippy::too_many_lines)]` is justified inline — splitting it would scatter the same call shape across 12 single-call helpers without making the table easier to read).
-- **`emit` (lines 652-703):** AST → `Subgraph`. Walks the primitive list, builds one `OperationNode` per entry, threads `next`-labeled edges between consecutive ops. Refuses to emit a handler missing `respond` (`E_DSL_MISSING_RESPOND`).
-- **`validate_shapes` (lines 723-766):** the Phase-3 R6 fp Wave C2 addition. Today it only enforces SANDBOX integer-typed property names (`fuel`, `wallclock_ms`, `output_limit`). Designed as a single pass with appended rules so future shape rules don't multiply the typed-error surface. Uses the canonical eval-side snake_case names — the TS surface translates camelCase to snake_case at `packages/engine/src/dsl.ts::translateSandboxArgs` BEFORE the napi boundary, so the Rust-side validator only ever sees the canonical form.
-- **`id_for` (lines 768-789):** maps `(PrimitiveKind, idx)` to a stable per-node id like `"r0"`, `"w1"`, `"resp3"`. `PrimitiveKind` is `#[non_exhaustive]`, so a fallback `op` prefix is in place for variants the parser does not yet have keywords for; that fallback is unreachable today.
-- **Inline `#[cfg(test)] mod inline_tests` (lines 791-894):** 9 in-crate tests covering the smoke shapes (minimal round-trip, empty source, missing-respond, unknown-primitive, unbalanced-brace, three SANDBOX shape-validation cases, plus a permutation-stable canonical-bytes property pin).
+- **Crate-level docs (lines 1-83):** scope note, dep-direction reminder, the EBNF-shaped grammar block, and the deliberate-non-extensibility note. The grammar block is the canonical reference for what tokens the parser accepts; everything below this comment should be implementing that grammar and nothing more.
+- **Public surface (lines 98-218):** `CompiledSubgraph`, `CompiledPrimitive`, `compile_str`, `compile_file`, `CompileError`, `Diagnostic`. The two functions are thin: trim-check, hand off to `Parser`, hand off to `emit`. All the complexity lives in `Parser` and `emit`.
+- **Stable error codes (lines 221-236):** four `pub(crate)` `&'static str` constants. They are NOT exposed as a public enum; the constants are written through `Diagnostic::error_code`. `E_DSL_INVALID_SHAPE` is the late arrival (Phase-3 R6 fp Wave C2) mirroring the TS-side `EDslInvalidShape`.
+- **AST (lines 239-254):** two `pub(crate)` structs — `HandlerAst` and `PrimitiveAst`. Never escape the crate. Properties are stored as `BTreeMap<String, Value>` so the eventual canonical-bytes encode is permutation-stable; that property is exercised by a dedicated round-trip test.
+- **`Parser` (lines 256-683):** a hand-written single-pass cursor parser. Tracks byte position, 1-indexed line, 1-indexed column. The dispatch table for the 12 primitives is intentionally one big `match` (the `#[allow(clippy::too_many_lines)]` is justified inline — splitting it would scatter the same call shape across 12 single-call helpers without making the table easier to read).
+- **`emit` (lines 686-739):** AST → `Subgraph`. Walks the primitive list, builds one `OperationNode` per entry, threads `next`-labeled edges between consecutive ops. Refuses to emit a handler missing `respond` (`E_DSL_MISSING_RESPOND`).
+- **`validate_shapes` (lines 759-802):** the Phase-3 R6 fp Wave C2 addition. Today it only enforces SANDBOX integer-typed property names (`fuel`, `wallclock_ms`, `output_limit`). Designed as a single pass with appended rules so future shape rules don't multiply the typed-error surface. Uses the canonical eval-side snake_case names — the TS surface translates camelCase to snake_case at `packages/engine/src/dsl.ts::translateSandboxArgs` BEFORE the napi boundary, so the Rust-side validator only ever sees the canonical form.
+- **`id_for` (lines 804-825):** maps `(PrimitiveKind, idx)` to a stable per-node id like `"r0"`, `"w1"`, `"resp3"`. `PrimitiveKind` is `#[non_exhaustive]`, so a fallback `op` prefix is in place for variants the parser does not yet have keywords for; that fallback is unreachable today.
+- **Inline `#[cfg(test)] mod inline_tests` (lines 828-930):** 9 in-crate tests covering the smoke shapes (minimal round-trip, empty source, missing-respond, unknown-primitive, unbalanced-brace, three SANDBOX shape-validation cases, plus a permutation-stable canonical-bytes property pin).
 
 No other source files exist.
 
@@ -82,7 +84,7 @@ The shape devserver renders. Five fields: a stable `error_code` string (one of f
 **Supporting publics (also part of the surface but not in the "4 public items" count):**
 
 - `CompiledSubgraph { subgraph: Subgraph, primitives: Vec<CompiledPrimitive> }` — the success payload.
-- `CompiledPrimitive { id: String, kind: PrimitiveKind, properties: BTreeMap<String, Value> }` — one per emitted node.
+- `CompiledPrimitive { kind: PrimitiveKind, properties: BTreeMap<String, Value> }` — one per emitted node. (The per-node stable id like `"r0"` lives on the canonical `Subgraph` node via `OperationNode::new`; it is NOT duplicated onto `CompiledPrimitive` — the formerly-present `id` field was dead data with zero read sites and was removed, refinement-audit #288.)
 - `pub use benten_core::PrimitiveKind` — re-exported so devserver consumers don't need a transitive `benten-core` dependency just to pattern-match on the kind.
 
 Everything else (`E_DSL_*` constants, `HandlerAst`, `PrimitiveAst`, the `Parser` struct, the `emit` and `validate_shapes` and `id_for` functions) is `pub(crate)` or private. That is the discipline; new exports should be challenged.
@@ -116,7 +118,7 @@ These are the load-bearing arch-1 pins. The scan parses only `[dependencies]`, `
 - Empty source → `Parse` with no line/column.
 - Syntax error on a specific line → diagnostic carries the correct 1-indexed line + column.
 
-**`tests/dsl_compiler_round_trips_5_primitive_fixtures.rs`** — six tests pinning round-trip CID-stability for the five MINIMAL-FOR-DEVSERVER fixtures (READ, WRITE, BRANCH, TRANSFORM, CALL) plus a property-shaped pin that compiles a handler, serializes via canonical bytes, deserializes back, and asserts CID equality. This is the Inv-13 collision-stability anchor for the compiler emission path.
+**`tests/dsl_compiler_round_trips_5_primitive_fixtures.rs`** — six tests pinning round-trip CID-stability for the five MINIMAL-FOR-DEVSERVER fixtures (READ, WRITE, BRANCH, TRANSFORM, CALL) plus a property-shaped pin that compiles a handler, serializes via canonical bytes, deserializes back, and asserts CID equality. This is the Inv-10 canonical-bytes collision-stability anchor for the compiler emission path (order-independent DAG-CBOR per `docs/INVARIANT-COVERAGE.md` row 10 — NOT Inv-13 immutability, which fires at engine `put_node_with_context` time, not at DSL emission).
 
 There are no proptest suites or fuzz harnesses in this crate. Everything is example-driven.
 
@@ -145,6 +147,7 @@ None. `Cargo.toml` carries `[lib] bench = false`. No `benches/` directory.
 - **`validate_shapes` only knows about SANDBOX.** The function is structured for appending rules but currently covers exactly one primitive's typed properties. Other primitives' typed-property constraints (e.g. WAIT's `ttl_hours` shape) flow through unchecked and would surface at the engine layer with a less-actionable error. If shape-validation becomes a regular pattern, the cost of NOT adding the rule here grows; if it stays one-off, the current shape is fine.
 - **The 4-public-items count is drifting in spirit.** The literal surface today is `compile_str` + `compile_file` + `CompileError` + `Diagnostic` + `CompiledSubgraph` + `CompiledPrimitive` + the re-exported `PrimitiveKind`. The Cargo.toml description still says "4 public items"; the wording could be sharpened to "4 entry points + 2 result structs + 1 re-export" so future readers don't think the spec is being violated.
 - **The crate is named `dsl-compiler` but compiles only the Phase-2b grammar.** A future agent reading just the name might assume the crate is the universal Rust-side DSL surface. It isn't — it is the devserver-shaped subset. The crate-level docstring is explicit about MINIMAL-FOR-DEVSERVER, but the name is broader than the scope. Worth keeping in mind when extension proposals land.
+- **Typed-CALL DSL surface lives at the TS layer, not here.** Phase-3 G21-T2 (PR #148, `7a6c36a`) added a `typedCall({ op, inputBinding? })` DSL helper at `packages/engine/src/dsl.ts` that composes into a regular `CALL` primitive with an `engine:typed:*` target string — the Rust dsl-compiler grammar has no new keyword; a `typedCall` written in raw Rust-side DSL text would trip `E_DSL_UNKNOWN_PRIMITIVE` (verified: `parse_primitive` at `src/lib.rs:312-465` has no `typedCall` arm). The deliberate placement is per CLAUDE.md #1 (typedCall composes via existing CALL — NOT a 13th primitive) AND per this crate's MINIMAL-FOR-DEVSERVER scope: typed-CALL is end-user DSL ergonomics; raw devserver inline-compile paths can still author the same shape by writing `call('engine:typed:<op>', { ... })` directly.
 - **No schema-driven-rendering shape lives here.** Per the request brief, the Phase 4-Foundation D-4F-3 option (c) proposes extending this crate for schema-rendering. As of this audit, nothing schema-rendering-shaped has landed — the crate is still strictly handler-DSL → Subgraph. The mental model "if it doesn't fit handler-DSL → Subgraph, it probably belongs in a sibling crate" is the right default until that decision is made.
 
 No anti-patterns observed (no DSL feature creep, no engine-internal types leaking, no premature schema-rendering shapes).
@@ -153,7 +156,9 @@ No anti-patterns observed (no DSL feature creep, no engine-internal types leakin
 
 ## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
-Two distinct things could happen to this crate going forward; both are pinned in the brief, not in the code:
+**Phase-4-Foundation R5+R6 outcome (2026-05-13 → 2026-05-14):** this crate was NOT extended during the Phase-4-Foundation engineering window. R5's 17 waves + R4b-FP + R6-FP cluster + R6-FP-2 through R6-FP-7 touched zero source files in `benten-dsl-compiler/`. The substantive Phase-4-Foundation work (plugin manifest schema, decentralized registry, materializer scaffolding, admin-shell wiring) landed in `benten-platform-foundation` and adjacent crates; this crate sat unmodified at HEAD `8141b94`. The mental model "MINIMAL-FOR-DEVSERVER" held through the phase.
+
+Two distinct things could happen to this crate going forward; both remain pinned in the brief, not in the code:
 
 **(a) Schema-driven-rendering compiler — Phase 4-Foundation D-4F-3 option (c).** The plan's option (c) proposes extending `benten-dsl-compiler` to host the schema-rendering compiler. If that path is chosen the crate roughly doubles in scope: it would gain a second compilation pipeline (schema-text → some renderable graph shape), likely a second public function pair (`compile_schema_str` / `compile_schema_file`), and possibly a second AST. The dependency on `benten-core` only would still need to hold; that's the load-bearing constraint that would have to be preserved. The current `validate_shapes` single-pass pattern would generalize naturally if multi-pipeline support is added.
 
@@ -182,3 +187,5 @@ Items worth flagging for whoever next touches this crate. None are bugs; all are
 6. **No fuzz / proptest coverage of the parser.** Every test is example-driven. The parser is hand-written and small enough that this is defensible, but it is the only attack surface where malformed text reaches Rust state machines, and a property test ("any string that parses → CompiledSubgraph round-trips through canonical-bytes with stable CID") would be cheap to add.
 
 7. **Comment claims `pinned at compile time by tests/arch_n_benten_dsl_compiler_dep_direction.rs`.** The phrase "pinned at compile time" is slightly loose — the dep-direction tests run at test time, not compile time. If `benten-eval` were added to `[dependencies]` the workspace would still compile; the test failure would catch it on the next `cargo test` run. The pin is mechanical and reliable, just not literally compile-time.
+
+8. **Typed-CALL grammar gap is deliberate, not an oversight.** A reader noticing that `parse_primitive` has no `typedCall` keyword while `packages/engine/src/dsl.ts` does might assume the Rust side is lagging. It isn't — typed-CALL is end-user DSL ergonomics layered on top of CALL; the canonical Subgraph the TS DSL emits has a regular `CALL` node with `_target` = `engine:typed:<op>`, which this crate already parses via the `call('engine:typed:<op>', { ... })` form. There is no class of subgraph the TS DSL can express that this crate cannot also express by writing the call-target literal. Adding a `typedCall` keyword here would gain nothing and would couple the dsl-compiler crate to the `engine:typed:*` prefix conventions defined in `benten-eval` — which would route around the arch-1 dep-direction tests.

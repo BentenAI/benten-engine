@@ -26,7 +26,14 @@ use crate::subgraph::outcome_to_json;
     reason = "single-function dispatch over the four TraceStep variants is the simplest read; splitting per-variant helpers would scatter the discriminant-name string literals across the file."
 )]
 fn trace_step_to_json(step: &TraceStep) -> serde_json::Value {
-    let mut obj = serde_json::Map::new();
+    // refinement-audit #975 (Fwd-1 hot path): `engine.trace()` walks N
+    // steps; this projector ran per step with an un-primed `Map`. The
+    // widest variant (`Step`) carries up to 9 top-level fields
+    // (type/nodeCid/durationUs/primitive/nodeId/inputs/outputs/error?/
+    // attribution?) — prime for it so no variant rehashes mid-build.
+    // The narrower variants over-allocate by a few slots; that is a
+    // strictly cheaper trade than the rehash chain on the hot path.
+    let mut obj = serde_json::Map::with_capacity(9);
     match step {
         TraceStep::Step {
             duration_us,
@@ -67,7 +74,11 @@ fn trace_step_to_json(step: &TraceStep) -> serde_json::Value {
                 );
             }
             if let Some(attr) = attribution {
-                let mut a = serde_json::Map::new();
+                // #975: attribution sub-map carries up to 6 fields
+                // (actorCid/handlerCid/capabilityGrantCid/sandboxDepth
+                // + optional peerDidSet/deviceDid/syncHopDepth) — prime
+                // so the optional Phase-3 widening fields never rehash.
+                let mut a = serde_json::Map::with_capacity(7);
                 a.insert(
                     "actorCid".to_string(),
                     serde_json::Value::String(attr.actor_cid.to_base32()),
@@ -233,12 +244,10 @@ fn trace_step_to_json(step: &TraceStep) -> serde_json::Value {
 
 pub(crate) fn trace_to_json(trace: &Trace) -> serde_json::Value {
     let steps = trace.steps().iter().map(trace_step_to_json).collect();
-    let mut out = serde_json::Map::new();
-    out.insert("steps".to_string(), serde_json::Value::Array(steps));
-    if let Some(outcome) = trace.outcome() {
-        out.insert("result".to_string(), outcome_to_json(outcome));
-    }
-    serde_json::Value::Object(out)
+    crate::json_build::ObjBuilder::with_capacity(2)
+        .raw("steps", serde_json::Value::Array(steps))
+        .opt_raw("result", trace.outcome().map(outcome_to_json))
+        .build()
 }
 
 #[cfg(test)]

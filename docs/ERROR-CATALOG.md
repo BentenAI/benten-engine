@@ -502,7 +502,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "IVM strategy `{strategy:?}` is reserved but not implemented in this phase (deferred to {deferred_to_phase})"
 - **Context:** `{ strategy: "A" | "B" | "C", deferred_to_phase: string }`
-- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).
+- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability.
 - **Thrown at:** IVM view registration (`benten_ivm::testing::try_construct_view_with_strategy`)
 - **Phase:** 2b (introduced)
 
@@ -698,7 +698,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_VIEW_STRATEGY_C_RESERVED
 
-- **Message:** "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+- **Message:** "user view '{view_id}' declared Strategy::Reserved — the Reserved strategy variant (Z-set / DBSP cancellation; renamed from Strategy::C at G23-0a) is refused at registration"
 - **Context:** `{ view_id: string }`
 - **Fix:** D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).
 - **Thrown at:** `Engine::create_view` registration (G8-B)
@@ -889,11 +889,11 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 ### E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED
 
-- **Message:** "Runtime manifest registration deferred to Phase 8"
+- **Message:** "Runtime manifest registration deferred to Phase-4-Meta plugin-install"
 - **Context:** `{ name: string }`
-- **Fix:** D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.
+- **Fix:** D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-4-Meta plugin-install work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase-4-Meta plugin-install ships. (The historical "Phase 8 marketplace" framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs — plugin installation at runtime is now a Phase-4-Meta concern, not a Phase 8 concern.)
 - **Thrown at:** `ManifestRegistry::register_runtime`.
-- **Phase:** 2b G7-A (deferral surface); Phase 8 (lift).
+- **Phase:** 2b G7-A (deferral surface); Phase-4-Meta (lift).
 
 ### E_SANDBOX_MODULE_INVALID
 
@@ -1116,7 +1116,8 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Context:** `{ reason: String, zone: String }`
 - **Fix:** An inbound on-the-wire `DeviceAttestationEnvelope` (Phase-3 G16-D wave-6b) failed cryptographic verification at the sync-merge boundary. Three failure modes surface this single typed code: (a) **DID forgery** — the envelope's signature does not verify against the public key resolved from the declared `attestation.device_did`; (b) **parent-attestation chain rejection** — the embedded `benten_id::DeviceAttestation` was rejected by the receiver's `Acceptor::accept_at` (bad parent signature, expired freshness window via `FreshnessPolicy`, replayed nonce, revoked device-DID); (c) **frame-pair binding violation** — the envelope's signed `payload_hash` does not match the BLAKE3 hash of the Loro export payload received in the same exchange (MITM frame-substitution defense). All three reject with this single code so audit pipelines route on the wire-attestation boundary uniformly. Re-handshake from a non-revoked, non-replayed device-DID issued by the local trust-store's parent. Distinct from `E_THIN_CLIENT_AUTH_REJECTED` (browser-tab attestation boundary) and `E_SYNC_REVOKED_DURING_SESSION` (mid-session local-grant revocation). Routes to `ON_DENIED`.
 - **Thrown at:** `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (Phase-3 G16-D wave-6b fix-pass; cryptographic-attestation closure for criterion 16 per Ben ratification 2026-05-09). Composes the existing hardened `benten_id::DeviceAttestation` + `Acceptor::accept_at` + `FreshnessPolicy` primitives at the wire boundary rather than introducing parallel unsigned transport (per pim-N-cand-crypto-attestation-transport-reuse).
-- **Phase:** 3 G16-D wave-6b fp
+- **⚠️ SUPERSEDED-BY-COLLAPSE narrative note (refinement-audit-2026-05 S3, owner-ratified 2026-05-15 — see `docs/SECURITY-POSTURE.md` Compromise #23).** The `E_DEVICE_ATTESTATION_FORGED` **code survives** — the envelope's provenance-binding signature still rejects a forged device-DID (failure mode (a) above) and the frame-pair `payload_hash` binding (failure mode (c)) is retained. **What changes:** the code no longer gates a *trust* decision — it now signals **provenance-integrity** failure only (the device-DID provenance label cannot be forged). Failure mode (b) "parent-attestation chain rejection via `Acceptor::accept_at`" is deleted with the `Acceptor`/`DeviceRevocation` pipe; device-key trust/revocation now flows through the unified user-root UCAN chain (`benten-caps::revoke`) + the retained envelope-ceiling attenuation, not a separate acceptance pipeline. The provenance-signature + payload-hash arms of `verify` remain; the `accept_at` arm is replaced by the spine ceiling-AND (the P3 `DeviceAttestationEnvelope::verify` rewire — DEFERRED to its own mini-review per the COLLAPSE PR sequence).
+- **Phase:** 3 G16-D wave-6b fp · COLLAPSE-superseded refinement-audit-2026-05 S3 (provenance-integrity-only)
 
 ### E_SYNC_HOP_DEPTH_EXCEEDED
 
@@ -1528,7 +1529,7 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 - **Message:** "decentralized registry discovery query timed out before any peer responded"
 - **Fix:** **Reserved at Phase 4-Foundation; first production firing at Phase 4-Meta** when registry-substrate lands per ratification #3. Phase 4-Foundation v0 uses direct content-addressed-share over Atriums (no registry).
-- **Thrown at:** `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
+- **Thrown at:** decentralized-registry discovery query path in `crates/benten-platform-foundation/src/registry.rs` (Phase 4-Meta fills). The paper-only `Registry` discovery trait was pulled at v1-API-stabilization per #1198/#1014; the production firing site lands when the registry substrate is implemented at Phase 4-Meta (drift-detector reachability is `ignore` until then).
 - **Phase:** 4-Foundation G24-D (reserved); 4-Meta (firing)
 
 ### E_MATERIALIZER_CAP_DENIED

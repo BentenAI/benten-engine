@@ -143,21 +143,27 @@ fn admin_ui_v0_benign_schema_renders_correctly() {
         out.cap_denials().len(),
     );
 
-    // Defense-in-depth: cap-recheck fired on every row in the walk
-    // (Compromise #11 closure floor; structural-always-on):
+    // Defense-in-depth: the materialization-layer per-row gate fired
+    // for the content-CID decision and its bool was CONSUMED (Safe-1
+    // #527 / Qual-1 #702). The previous `>= spec.nodes().len()`
+    // assertion pinned the discarded-bool per-primitive fan-out that
+    // provided no production enforcement and no production
+    // observability — that loop is removed (per-primitive cap-scope is
+    // enforced UPSTREAM by the T1 envelope check + schema-compile
+    // `derive_scope`); the authoritative materialization-layer
+    // cap-decision is now the single per-row gate call. WOULD-FAIL-IF-
+    // NO-OP: a regression re-introducing the discarded-bool fan-out
+    // would push this back to `>= primitive_count`; a predicate-gated
+    // check would record zero.
     let invocations = counter.load(Ordering::SeqCst);
-    assert!(
-        invocations > 0,
-        "T1 regression-guard: cap-recheck MUST fire structurally \
-         even on benign schema (Compromise #11 always-on); zero \
-         invocations means the check was predicate-gated and \
-         defense isn't actually live"
-    );
-    assert!(
-        invocations >= spec.as_subgraph().nodes().len(),
-        "T1 regression-guard: cap-recheck fan-out MUST fire at least \
-         once per emitted primitive (per-primitive boundary per G16-B-F \
-         + G23-B mr-8); spec has {} primitives, recorded {} invocations",
+    assert_eq!(
+        invocations,
+        1,
+        "T1 regression-guard: the authoritative materialization-layer \
+         cap-recheck MUST fire exactly once for the content-CID \
+         decision (single consumed-bool gate per Safe-1 #527 / Qual-1 \
+         #702; the discarded-bool per-primitive fan-out is removed). \
+         spec has {} primitives, recorded {} invocations",
         spec.as_subgraph().nodes().len(),
         invocations,
     );

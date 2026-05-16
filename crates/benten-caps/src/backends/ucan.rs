@@ -22,10 +22,17 @@
 //! - Revocations persist as empty markers under `g14b:revoked:<ucan_cid>`
 //!   (presence == revoked). Re-opening the backend at the same path
 //!   re-observes the marker, so revocation persists across engine
-//!   restarts.
-//! - Device-revocation entries persist under
-//!   `g14b:dev_revoke:<device_did>` and the validate path consults
-//!   them before chain-walk acceptance.
+//!   restarts. This per-UCAN-CID revocation marker is the single,
+//!   self-anchored, user-root-traced revocation mechanism.
+//! - **(COLLAPSE-WITH-RESIDUAL, refinement-audit-2026-05 S3 P1):** the
+//!   former parallel `g14b:dev_revoke:<device_did>` device-revocation
+//!   store + `record_revocation` + `validate_chain_with_durable_revocations`
+//!   were DELETED — the un-anchored bare-device-DID revocation pipe was
+//!   the #1230 perpetual-DoS BLOCKER. Device-key revocation now flows
+//!   through the per-UCAN-CID `g14b:revoked:<ucan_cid>` marker above
+//!   (user-root UCAN-grant revocation) — there is exactly one
+//!   revocation seam. See `docs/SECURITY-POSTURE.md` Compromise #23
+//!   SUPERSEDED-BY-COLLAPSE.
 //! - Rate-limit-policy plug per D-F + D-PHASE-3-26: an
 //!   `Arc<dyn RateLimitPolicy>` on the backend lets `pre_write_with_actor`
 //!   route through the configured plug. The default plug is
@@ -101,12 +108,9 @@ use std::sync::Arc;
 use benten_core::Cid;
 use benten_graph::GraphBackend;
 use benten_graph::backend::KVBackend;
-use benten_id::device_attestation::DeviceRevocation;
 use benten_id::did::Did;
 use benten_id::errors::UcanError;
-use benten_id::ucan::{
-    Ucan, validate_chain_at, validate_chain_for_audience, validate_chain_with_device_revocations,
-};
+use benten_id::ucan::{Ucan, validate_chain_at, validate_chain_for_audience};
 use serde_ipld_dagcbor as cbor;
 
 use crate::error::CapError;
@@ -114,7 +118,6 @@ use crate::rate_limit::{NullRateLimitPolicy, RateLimitPolicy};
 
 const KV_GRANT_PREFIX: &[u8] = b"g14b:grant:";
 const KV_REVOKED_PREFIX: &[u8] = b"g14b:revoked:";
-const KV_DEV_REVOKE_PREFIX: &[u8] = b"g14b:dev_revoke:";
 
 /// Compute the content CID of a UCAN envelope (claims + signature).
 ///
@@ -137,13 +140,6 @@ fn kv_key(prefix: &[u8], cid: &Cid) -> Vec<u8> {
     let mut key = Vec::with_capacity(prefix.len() + cid_bytes.len());
     key.extend_from_slice(prefix);
     key.extend_from_slice(cid_bytes);
-    key
-}
-
-fn dev_revoke_key(device_did: &str) -> Vec<u8> {
-    let mut key = Vec::with_capacity(KV_DEV_REVOKE_PREFIX.len() + device_did.len());
-    key.extend_from_slice(KV_DEV_REVOKE_PREFIX);
-    key.extend_from_slice(device_did.as_bytes());
     key
 }
 
@@ -322,31 +318,6 @@ impl<B: GraphBackend> UCANBackend<B> {
         self.install_proof(ucan)
     }
 
-    /// Persist a [`DeviceRevocation`] in the durable store keyed by
-    /// the revoked device-DID. Subsequent chain-walks consult this
-    /// entry via [`UCANBackend::validate_chain_with_durable_revocations`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`CapError::BackendStorage`] on encode or KV write
-    /// failure.
-    pub fn record_revocation(
-        &self,
-        revocation: &DeviceRevocation,
-        _ctx: &crate::policy::WriteContext,
-    ) -> Result<(), CapError> {
-        let bytes = cbor::to_vec(revocation).map_err(|e| CapError::BackendStorage {
-            reason: format!("encode device revocation: {e}"),
-        })?;
-        let key = dev_revoke_key(&revocation.device_did);
-        self.backend
-            .put(&key, &bytes)
-            .map_err(|e| CapError::BackendStorage {
-                reason: format!("KV put device revocation {}: {e}", revocation.device_did),
-            })?;
-        Ok(())
-    }
-
     /// Mark a previously-installed UCAN as revoked. The chain-walk
     /// path consults the marker on every validate call so a revoked
     /// UCAN observably rejects even when otherwise within its
@@ -506,53 +477,6 @@ impl<B: GraphBackend> UCANBackend<B> {
                 return Err(CapError::Revoked);
             }
         }
-        Ok(())
-    }
-
-    /// Validate a UCAN chain composing the durable revocation store
-    /// with the in-memory device-revocation list. The typed list
-    /// (`extra_revocations`) is composed on top of any device-DID
-    /// revocations recorded durably under `g14b:dev_revoke:<did>`.
-    ///
-    /// # Errors
-    ///
-    /// Returns the typed cap error for the failure mode.
-    pub fn validate_chain_with_durable_revocations(
-        &self,
-        chain: &[Ucan],
-        now: u64,
-        extra_revocations: &[DeviceRevocation],
-    ) -> Result<(), CapError> {
-        // 1. Standard chain-walk + time-window + signature.
-        validate_chain_at(chain, now).map_err(cap_err_from_ucan)?;
-        // 2. Durable per-token revocation.
-        for token in chain {
-            let cid = ucan_cid(token)?;
-            if self.is_revoked(&cid)? {
-                return Err(CapError::Revoked);
-            }
-        }
-        // 3. Durable device-revocation lookup composed with the
-        //    in-memory list. Reads each token's issuer DID and
-        //    probes the durable `g14b:dev_revoke:<did>` entry.
-        let mut all_revs: Vec<DeviceRevocation> = extra_revocations.to_vec();
-        for token in chain {
-            let key = dev_revoke_key(&token.claims.iss);
-            if let Some(bytes) = self
-                .backend
-                .get(&key)
-                .map_err(|e| CapError::BackendStorage {
-                    reason: format!("KV get device revocation {}: {e}", token.claims.iss),
-                })?
-            {
-                let r: DeviceRevocation =
-                    cbor::from_slice(&bytes).map_err(|e| CapError::BackendStorage {
-                        reason: format!("decode device revocation {}: {e}", token.claims.iss),
-                    })?;
-                all_revs.push(r);
-            }
-        }
-        validate_chain_with_device_revocations(chain, &all_revs).map_err(cap_err_from_ucan)?;
         Ok(())
     }
 }

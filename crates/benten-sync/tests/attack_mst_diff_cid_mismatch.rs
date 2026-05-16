@@ -1,3 +1,6 @@
+//! Compromise #25 closure pin (HLC-monotonic enforcement at sync layer —
+//! sub-defense at the MST application-layer CID-byte verification).
+//!
 //! R6-FP Wave-C1 (ds-r6-1 closure) — sec-r4r2-1 attack-vector pin
 //! un-ignored against the live production rehash check at
 //! [`benten_sync::mst::Mst::apply_entries`].

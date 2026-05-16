@@ -49,7 +49,7 @@ pub struct Did(String, PhantomData<()>);
 
 // sec-r6r3-1 + sec-r6r3-2 closure (R6 R3 threat-model + security-auditor
 // lenses): defensive `compile_error!` companion mirror to the native-only
-// `validate_chain_with_manifest_envelope` function below (line 185+).
+// `validate_chain_with_manifest_envelope` function below (line 207+).
 // Per CLAUDE.md baked-in #17(b) the wasm32 thin-client deployment shape
 // does NOT perform UCAN chain validation — that lives only on full peers
 // (shape a) and embedded webview's embedded-full-peer (shape c). If a

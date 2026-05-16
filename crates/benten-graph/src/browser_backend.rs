@@ -65,7 +65,7 @@
 //! `BrowserBackend` is gated behind the `browser-backend` cargo feature
 //! on `benten-graph`. Default-features builds (native targets) do NOT
 //! compile the module; the feature lights up the in-crate impl + the
-//! crate-level re-export at [`crate::lib`] (see the `#[cfg(feature =
+//! crate-level re-export at [`crate`] root (see the `#[cfg(feature =
 //! "browser-backend")]` re-export site).
 //!
 //! Enabling the feature on a non-wasm32 target compiles cleanly — the
@@ -86,7 +86,7 @@
 //! - Does NOT enforce content-addressing invariants beyond what callers
 //!   already enforce. The full peer validates CIDs at write-time;
 //!   `BrowserBackend` mirrors the validated bytes via
-//!   [`Self::put_node_with_context`].
+//!   [`BrowserBackend::put_node_with_context`].
 //!
 //! ## Wave-8j-bisect § Phase-3-followup cite (per pim-1 §3.5b doc-coupling)
 //!
@@ -225,19 +225,6 @@ impl BrowserBackend {
             inner: Mutex::new(BTreeMap::new()),
         }
     }
-
-    /// Number of entries currently in the in-RAM cache. Test-only —
-    /// production callers go through the trait surface.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.inner.lock().map_or(0, |g| g.len())
-    }
-
-    /// `true` if the in-RAM cache is empty.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.inner.lock().map_or(true, |g| g.is_empty())
-    }
 }
 
 #[inline]
@@ -304,6 +291,13 @@ impl KVBackend for BrowserBackend {
         }
         Ok(())
     }
+
+    /// In-RAM thin-client cache — no fsync semantic to honor (per
+    /// CLAUDE.md baked-in #17). A configured `DurabilityMode` is
+    /// silently ignored; signal that via `false`. Surf-1 #860.
+    fn supports_durability(&self) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +308,8 @@ impl NodeStore for BrowserBackend {
     type Error = GraphError;
 
     fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
-        let bytes = node.canonical_bytes().map_err(GraphError::from)?;
-        let cid = node.cid().map_err(GraphError::from)?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = node.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let key = node_key(&cid);
         let mut g = self.inner.lock().map_err(|_| poisoned())?;
         g.insert(key, bytes);
@@ -352,8 +346,8 @@ impl EdgeStore for BrowserBackend {
     type Error = GraphError;
 
     fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError> {
-        let bytes = edge.canonical_bytes().map_err(GraphError::from)?;
-        let cid = edge.cid().map_err(GraphError::from)?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = edge.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let body_key = edge_key(&cid);
         let src_idx = edge_src_index_key(&edge.source, &cid);
         let tgt_idx = edge_tgt_index_key(&edge.target, &cid);
@@ -544,8 +538,8 @@ impl GraphBackend for BrowserBackend {
 
         // Encode + insert. Cap-recheck is intentionally NOT consulted
         // here — see docstring.
-        let bytes = node.canonical_bytes().map_err(GraphError::from)?;
-        let cid = node.cid().map_err(GraphError::from)?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = node.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let key = node_key(&cid);
         let mut g = self.inner.lock().map_err(|_| poisoned())?;
         g.insert(key, bytes);

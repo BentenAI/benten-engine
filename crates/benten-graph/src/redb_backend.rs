@@ -378,6 +378,17 @@ impl RedbBackend {
             });
         }
         let db = Database::open(path)?;
+        Self::from_db(db, durability)
+    }
+
+    /// Assemble a `RedbBackend` from an already-opened [`Database`] + the
+    /// requested durability tier, then create the schema tables.
+    ///
+    /// Single shared field-initialization site for the three public
+    /// constructors (`open_existing_with_durability` /
+    /// `open_or_create_with_durability` / `open_in_memory`). A new field on
+    /// `RedbBackend` only needs to be wired here once.
+    fn from_db(db: Database, durability: DurabilityMode) -> Result<Self, GraphError> {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
@@ -449,22 +460,7 @@ impl RedbBackend {
     ) -> Result<Self, GraphError> {
         warn_if_group_durability_collapsed(durability);
         let db = Database::create(path.as_ref())?;
-        let backend = Self {
-            db,
-            durability: to_redb_durability(durability),
-            configured_durability: durability,
-            #[cfg(any(test, feature = "testing"))]
-            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
-            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
-            #[cfg(any(test, feature = "testing"))]
-            test_event_log: Arc::new(Mutex::new(Vec::new())),
-            subscribers: Arc::new(Mutex::new(Vec::new())),
-            tx_flag: Arc::new(Mutex::new(false)),
-            next_tx_id: Arc::new(AtomicU64::new(1)),
-            writes_committed: Arc::new(AtomicU64::new(0)),
-        };
-        backend.ensure_tables()?;
-        Ok(backend)
+        Self::from_db(db, durability)
     }
 
     /// Backward-compatible alias for [`Self::open_or_create`]. New code should
@@ -508,23 +504,7 @@ impl RedbBackend {
         let db = Database::builder()
             .create_with_backend(redb::backends::InMemoryBackend::new())
             .map_err(redb::Error::from)?;
-        let durability = DurabilityMode::Async;
-        let backend = Self {
-            db,
-            durability: to_redb_durability(durability),
-            configured_durability: durability,
-            #[cfg(any(test, feature = "testing"))]
-            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
-            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
-            #[cfg(any(test, feature = "testing"))]
-            test_event_log: Arc::new(Mutex::new(Vec::new())),
-            subscribers: Arc::new(Mutex::new(Vec::new())),
-            tx_flag: Arc::new(Mutex::new(false)),
-            next_tx_id: Arc::new(AtomicU64::new(1)),
-            writes_committed: Arc::new(AtomicU64::new(0)),
-        };
-        backend.ensure_tables()?;
-        Ok(backend)
+        Self::from_db(db, DurabilityMode::Async)
     }
 
     /// Wave-1 mini-review SEVERE-2: current value of the storage-layer
@@ -619,8 +599,9 @@ impl RedbBackend {
     /// `put_node_with_context`) enforce the guard before calling; this body
     /// runs the redb write and index maintenance under a single commit.
     fn put_node_unchecked(&self, node: &Node) -> Result<Cid, GraphError> {
-        let cid = node.cid()?;
-        let bytes = node.canonical_bytes()?;
+        // Fwd-1 #926: single encode+hash pass instead of cid() then
+        // canonical_bytes() (which double-encodes the same Node).
+        let (cid, bytes) = node.cid_and_canonical_bytes()?;
         let n_key = node_key(&cid);
 
         let write_txn = self.begin_write_txn()?;
@@ -847,8 +828,8 @@ impl RedbBackend {
     /// system-zone guard. Used by `put_edge` (guarded) and
     /// `put_edge_with_context` (context-driven guard).
     fn put_edge_unchecked(&self, edge: &Edge) -> Result<Cid, GraphError> {
-        let cid = edge.cid()?;
-        let bytes = edge.canonical_bytes()?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = edge.cid_and_canonical_bytes()?;
         // Body first, then indexes. The body/index pair is idempotent
         // (re-putting the same edge writes identical bytes to the same
         // keys), so ordering under the non-transactional path is not
@@ -1047,9 +1028,15 @@ impl RedbBackend {
     ) -> Result<Cid, GraphError> {
         guard_system_zone_node(node, ctx.is_privileged)?;
 
-        // Compute the CID once — reused by the in-txn existence check, the
-        // write path, and the post-commit bookkeeping.
-        let cid = node.cid()?;
+        // Compute the CID + canonical bytes in ONE encode pass (#926):
+        // both are needed unconditionally (cid for the in-txn existence
+        // check + bookkeeping, bytes for the write) and `bytes` was
+        // formerly re-encoded separately below the durability match —
+        // a double-encode on the primary engine WRITE path. Fusing here
+        // does not pessimize the dedup path: `bytes` was already computed
+        // unconditionally before the in-txn probe, so a dedup hit paid
+        // the encode cost regardless; this just makes it one pass not two.
+        let (cid, bytes) = node.cid_and_canonical_bytes()?;
 
         // Phase 2a G2-A: WriteAuthority-driven per-call durability tier.
         //
@@ -1097,7 +1084,6 @@ impl RedbBackend {
         // transactional `probe_cid_exists` path only.
 
         let n_key = node_key(&cid);
-        let bytes = node.canonical_bytes()?;
 
         let write_txn = self.begin_write_txn_with(effective_redb)?;
 
@@ -1626,8 +1612,8 @@ impl RedbBackend {
     ///
     /// Per the plan's R1 architect ratification (§line-605), the pull-shaped
     /// channel concretion — tokio-broadcast on native, synchronous
-    /// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
-    /// [`benten-engine::change`](https://docs.rs/benten-engine), not here.
+    /// `Vec<Arc<dyn ChangeSubscriber>>` fan-out on WASM — lives in
+    /// `benten-engine`'s change module, not here.
     /// `benten-graph` stays runtime-agnostic.
     ///
     /// # Ordering contract (mini-review g3-ce-10)

@@ -1,3 +1,6 @@
+//! Compromise #25 closure pin (HLC-monotonic enforcement at sync layer —
+//! Inv-13 row-4 SPLIT classifier sub-defense at the Loro op-log layer).
+//!
 //! R6-FP Wave-C1 (ds-r6-1 closure) — sec-r4r2-1 attack-vector pin
 //! un-ignored against the live production op-by-op Inv-13 row-4
 //! SPLIT classifier inside `LoroDoc::all_writes` consumers.

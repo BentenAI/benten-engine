@@ -965,9 +965,9 @@ export class EIvmPatternMismatch extends BentenError {
  */
 export class EIvmStrategyNotImplemented extends BentenError {
   static readonly code = "E_IVM_STRATEGY_NOT_IMPLEMENTED";
-  static readonly fixHint = "Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).";
+  static readonly fixHint = "Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_IVM_STRATEGY_NOT_IMPLEMENTED", "Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::C` (Z-set / DBSP cancellation) is reserved for Phase 3+ — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::C` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically).", message, context);
+    super("E_IVM_STRATEGY_NOT_IMPLEMENTED", "Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability.", message, context);
     this.name = "EIvmStrategyNotImplemented";
   }
 }
@@ -1246,7 +1246,7 @@ export class EViewStrategyARefused extends BentenError {
  * E_VIEW_STRATEGY_C_RESERVED
  *
  * Thrown at: `Engine::create_view` registration (G8-B)
- * Message template: "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+ * Message template: "user view '{view_id}' declared Strategy::Reserved — the Reserved strategy variant (Z-set / DBSP cancellation; renamed from Strategy::C at G23-0a) is refused at registration"
  */
 export class EViewStrategyCReserved extends BentenError {
   static readonly code = "E_VIEW_STRATEGY_C_RESERVED";
@@ -1576,13 +1576,13 @@ export class ESandboxManifestUnknown extends BentenError {
  * E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED
  *
  * Thrown at: `ManifestRegistry::register_runtime`.
- * Message template: "Runtime manifest registration deferred to Phase 8"
+ * Message template: "Runtime manifest registration deferred to Phase-4-Meta plugin-install"
  */
 export class ESandboxManifestRegistrationDeferred extends BentenError {
   static readonly code = "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED";
-  static readonly fixHint = "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.";
+  static readonly fixHint = "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-4-Meta plugin-install work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase-4-Meta plugin-install ships. (The historical \"Phase 8 marketplace\" framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs — plugin installation at runtime is now a Phase-4-Meta concern, not a Phase 8 concern.)";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED", "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-8 marketplace work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase 8 ships.", message, context);
+    super("E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED", "D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-4-Meta plugin-install work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase-4-Meta plugin-install ships. (The historical \"Phase 8 marketplace\" framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs — plugin installation at runtime is now a Phase-4-Meta concern, not a Phase 8 concern.)", message, context);
     this.name = "ESandboxManifestRegistrationDeferred";
   }
 }
@@ -2700,7 +2700,7 @@ export class EPluginLibraryIndexTamper extends BentenError {
 /**
  * E_REGISTRY_DISCOVERY_TIMEOUT
  *
- * Thrown at: `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
+ * Thrown at: decentralized-registry discovery query path in `crates/benten-platform-foundation/src/registry.rs` (Phase 4-Meta fills). The paper-only `Registry` discovery trait was pulled at v1-API-stabilization per #1198/#1014; the production firing site lands when the registry substrate is implemented at Phase 4-Meta (drift-detector reachability is `ignore` until then).
  * Message template: "decentralized registry discovery query timed out before any peer responded"
  */
 export class ERegistryDiscoveryTimeout extends BentenError {

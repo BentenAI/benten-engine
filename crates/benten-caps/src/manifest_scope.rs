@@ -300,15 +300,6 @@ pub fn private_namespace_scope_admits_actor(cap_scope: &str, owning_plugin_did: 
     false
 }
 
-/// Whether a given `SharesPolicy` permits delegating ANY cap. Audit
-/// surface for the LOAD-BEARING "manifest delegates nothing" claim.
-#[cfg(not(target_arch = "wasm32"))]
-#[must_use]
-pub fn manifest_delegates_anything(policy: &SharesPolicy) -> bool {
-    matches!(policy.default, SharesPolicyDefault::Any)
-        || policy.rules.as_ref().is_some_and(|r| !r.is_empty())
-}
-
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
@@ -538,26 +529,5 @@ mod tests {
 
         assert_eq!(install_time_requires, check_time_requires);
         assert_eq!(install_time_shares, check_time_shares);
-    }
-
-    #[test]
-    fn manifest_delegates_anything_audit_surface() {
-        let none_policy = SharesPolicy::none();
-        assert!(!manifest_delegates_anything(&none_policy));
-
-        let any_policy = SharesPolicy {
-            default: SharesPolicyDefault::Any,
-            rules: None,
-        };
-        assert!(manifest_delegates_anything(&any_policy));
-
-        let matching_policy = SharesPolicy {
-            default: SharesPolicyDefault::Matching,
-            rules: Some(vec![SharesRule {
-                cap_pattern: "store:notes:write".to_string(),
-                target: SharesTarget::Any,
-            }]),
-        };
-        assert!(manifest_delegates_anything(&matching_policy));
     }
 }

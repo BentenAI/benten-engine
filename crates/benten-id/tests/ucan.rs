@@ -66,7 +66,7 @@ fn ucan_chain_attenuation_rejects_overgrant() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation — production prerequisite NOT YET shipped at HEAD. `validate_chain_with_revocations` symbol does NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:32` + `:36` doc comments; no concrete `pub fn validate_chain_with_revocations(...)` in the file). The G14-A1 chain-walk (`validate_chain_at`) is in-memory + does NOT consult a durable revocation set. G14-B PR #109 shipped the durable `UCANBackend<B>` but did NOT extend the chain-walker with a `RevocationSet` consumption arm — that lift composes with §2.1-followup re-evaluation outcome (would `ssi`-integration re-shape the revocation surface? cryptography-reviewer dispatch pending)."]
+#[ignore = "Hyg-4 #478 trigger-retense: destination phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation STILL OPEN, but the prior 'Phase 3 G16 re-evaluation point' trigger has PASSED (Phase 3 + Phase-4-Foundation SHIPPED). Current trigger = the v1-assessment-window in Phase-4-Meta. `validate_chain_with_revocations` symbol does NOT exist (the prior cite to `ucan.rs:32-36` doc comments is itself stale — that out-of-scope doc-block was retensed to post-COLLAPSE reality; no concrete `pub fn validate_chain_with_revocations(...)` in the file). The G14-A1 chain-walk (`validate_chain_at`) is in-memory + does NOT consult a durable revocation set. G14-B PR #109 shipped the durable `UCANBackend<B>` but did NOT extend the chain-walker with a `RevocationSet` consumption arm — that lift composes with §2.1-followup re-evaluation outcome (would `ssi`-integration re-shape the revocation surface? cryptography-reviewer dispatch pending)."]
 fn ucan_chain_revocation_propagates() {
     // Stays #[ignore]'d until G14-B's UCANBackend lands the
     // revocation store + `validate_chain_with_revocations` entry
@@ -197,6 +197,24 @@ fn ucan_chain_walk_constant_time_comparison_audit() {
         "device_did ==",
         "parent_did ==",
         "nonce ==",
+        // #599 / #515 / F-FWD-2-01 #1051 — ct-eq UNIFORMITY `!=` net so
+        // an early-rejection arm cannot silently re-drift. (`==`
+        // negation through `!ct_signature_eq(...)` is the sanctioned
+        // shape and contains no `!=` token.) COLLAPSE (P3): the
+        // `Acceptor::accept_at` expected_parent drift site
+        // (`"attestation.parent_did != expected"`) was DELETED with
+        // `Acceptor`; only the `rotate_keypair` (`did_rotation.rs`)
+        // drift site remains.
+        "previous_did !=",
+        "next_did !=",
+        "device_did !=",
+        "parent_did !=",
+        "nonce !=",
+        "signature !=",
+        "audience !=",
+        "proof_cid !=",
+        // The remaining specific drift site's exact compare expression.
+        ".as_str() != old_did.as_str()",
     ];
     for module in &modules {
         let src_path = src_root.join(module);

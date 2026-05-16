@@ -29,7 +29,7 @@
 //! blob CIDs are computed as `BLAKE3(blob_bytes)` wrapped in the
 //! Benten CIDv1 envelope (matches `Cid::from_blake3_digest`). The
 //! authoritative CID-validation gate lives at the engine's
-//! [`Engine::register_module_bytes`](https://docs/) call site per
+//! `Engine::register_module_bytes` call site per
 //! D-PHASE-3-12 RESOLVED — the `BlobBackend::put` impl here recomputes
 //! defense-in-depth so an attacker writing into the backend directly
 //! cannot poison the cache (the CID stored in `properties.blob_cid`
@@ -111,7 +111,7 @@ impl RedbBlobBackend {
 
     /// List the CIDs of every blob currently persisted in the
     /// `system:ModuleBytes` zone. Used by
-    /// [`Engine::rehydrate_module_bytes_from_zone`](https://docs/) at
+    /// `Engine::rehydrate_module_bytes_from_zone` at
     /// engine-open time to repopulate the in-memory cache.
     ///
     /// # Errors
@@ -217,6 +217,43 @@ impl RedbBlobBackend {
             .map_err(BlobError::Graph)?;
         Ok(())
     }
+
+    /// Evict the blob stored under `cid` — synchronous inherent
+    /// counterpart to [`BlobBackend::delete`]. The async trait method
+    /// delegates here.
+    ///
+    /// Idempotent: a CID with no backing Node returns `Ok(())`. The
+    /// `system:ModuleBytes` zone is walked to locate the Node whose
+    /// `blob_cid` property matches `cid` (the two-CID dance — the Node's
+    /// CID hashes label + properties, NOT the blob bytes); the matching
+    /// Node is removed via the backend's privileged `delete_node`.
+    ///
+    /// # Errors
+    ///
+    /// Surfaces [`BlobError::Graph`] from the backend's index walk or
+    /// node-delete surface.
+    pub fn delete_sync(&self, cid: &Cid) -> Result<(), BlobError> {
+        let node_cids = self
+            .backend
+            .get_by_label(MODULE_BYTES_LABEL)
+            .map_err(BlobError::Graph)?;
+        let target = cid.to_base32();
+        for node_cid in node_cids {
+            let Some(node) = self.backend.get_node(&node_cid).map_err(BlobError::Graph)? else {
+                continue;
+            };
+            let Some(Value::Text(stored_cid)) = node.properties.get(BLOB_CID_PROPERTY) else {
+                continue;
+            };
+            if stored_cid != &target {
+                continue;
+            }
+            self.backend
+                .delete_node(&node_cid)
+                .map_err(BlobError::Graph)?;
+        }
+        Ok(())
+    }
 }
 
 impl BlobBackend for RedbBlobBackend {
@@ -234,6 +271,14 @@ impl BlobBackend for RedbBlobBackend {
 
     fn is_persistent(&self) -> bool {
         true
+    }
+
+    fn delete(&self, cid: &Cid) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        ready(self.delete_sync(cid))
+    }
+
+    fn list_cids(&self) -> impl Future<Output = Result<Vec<Cid>, Self::Error>> + Send {
+        ready(self.list_blob_cids().map_err(BlobError::Graph))
     }
 }
 

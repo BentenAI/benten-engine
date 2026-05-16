@@ -178,16 +178,18 @@ pub trait SubgraphExt: private::Sealed {
     /// [`benten_core::Subgraph::load_verified_with_cid`]) so existing eval-side
     /// callers don't need an error-conversion layer.
     ///
-    /// Spelled `load_verified_eval` (vs. plain `load_verified`) because the
-    /// core-side `Subgraph` already carries an inherent `load_verified(bytes)`
-    /// method (1-arg, no CID check, `CoreError`-typed); a same-named trait
-    /// method would be ambiguous at `Subgraph::load_verified` static-call
+    /// Named `load_verified_with_cid` to mirror the dispatch target
+    /// [`benten_core::Subgraph::load_verified_with_cid`] (same 2-arg
+    /// CID-checked shape, differing only in the `RegistrationError` vs.
+    /// `CoreError` return type). Distinct from the core-side inherent
+    /// `load_verified(bytes)` (1-arg, no CID check, `CoreError`-typed),
+    /// so no static-call ambiguity arises at `Subgraph::load_verified`
     /// sites.
     ///
     /// # Errors
     /// Returns a [`RegistrationError`] with `InvariantViolation::ContentHash`
     /// when the computed CID does not match the declared one.
-    fn load_verified_eval(cid: &Cid, bytes: &[u8]) -> Result<Subgraph, RegistrationError>;
+    fn load_verified_with_cid(cid: &Cid, bytes: &[u8]) -> Result<Subgraph, RegistrationError>;
 }
 
 impl SubgraphExt for Subgraph {
@@ -221,7 +223,7 @@ impl SubgraphExt for Subgraph {
         }
     }
 
-    fn load_verified_eval(cid: &Cid, bytes: &[u8]) -> Result<Subgraph, RegistrationError> {
+    fn load_verified_with_cid(cid: &Cid, bytes: &[u8]) -> Result<Subgraph, RegistrationError> {
         let digest = blake3::hash(bytes);
         let actual = Cid::from_blake3_digest(*digest.as_bytes());
         if actual != *cid {

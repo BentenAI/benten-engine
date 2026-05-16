@@ -1076,6 +1076,19 @@ impl Engine {
     /// surface passes `actor_cid: None` (no caller identity in scope);
     /// this surface is the explicit `_as`-principal entry point.
     ///
+    /// # #593 — the read-as-an-attenuated-principal half of the pair
+    ///
+    /// Under the unified trust model (CLAUDE.md baked-in #18; #593
+    /// re-scope), `read_node_as` and [`Engine::get_node`] are not a
+    /// "checked vs bypass" pair — they are
+    /// *read-as-an-attenuated-principal* (this surface) vs
+    /// *read-as-the-engine-user-root* ([`Engine::get_node`], whose
+    /// principal is root by construction). Every external / untrusted /
+    /// plugin read MUST reach `read_node_as`; the containment that no
+    /// such caller instead reaches the un-attributed engine-internal
+    /// read is asserted by
+    /// `tests/engine_internal_get_node_is_read_as_user_root_containment.rs`.
+    ///
     /// # Errors
     /// Returns [`EngineError`] on backend failure. Cap denial
     /// collapses to `Ok(None)`; it does NOT surface as an error.

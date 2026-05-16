@@ -34,7 +34,7 @@ the full retense.
 | 7 | **SANDBOX `output_max_bytes` range — ACTIVE (Phase 2b; PRIMARY+BACKSTOP)** | 2b | `invariants::sandbox_output::validate_registration` (registration); `CountedSink::write` (PRIMARY streaming) + `CountedSink::backstop_check` (return-value BACKSTOP), both wired through the host-fn trampoline + primitive boundary | `crates/benten-eval/tests/sandbox_output.rs`, `crates/benten-eval/tests/proptest_sandbox_output.rs`, `crates/benten-eval/tests/integration/inv_7_streaming.rs`, `crates/benten-eval/src/sandbox/counted_sink.rs` |
 | 8 | Multiplicative cumulative budget (CALL × ITERATE) | 2a | `invariants::budget` + `BudgetTracker` per evaluator step | `crates/benten-eval/src/invariants/budget.rs` (proptest cluster) |
 | 9 | Determinism — handlers declared deterministic reject non-determinism sources | 1 (decl) / 2a (rt) | `structural::validate_subgraph` declaration check + runtime fence | `structural.rs::determinism_*` |
-| 10 | Canonical byte encoding (order-independent DAG-CBOR) | 1 | `structural::canonical_bytes` order-independence proptest | `structural.rs::canonical_bytes_*` |
+| 10 | Canonical byte encoding (order-independent DAG-CBOR) | 1 | `structural::canonical_bytes` order-independence proptest | `structural.rs::canonical_bytes_*`, `crates/benten-dsl-compiler/tests/dsl_compiler_round_trips_5_primitive_fixtures.rs::dsl_compiler_round_trip_preserves_subgraph_spec_cid_across_compile_serialize_compile` (DSL emission-path canonical-bytes anchor) |
 | 11 | System-zone reserved-prefix reject — user code cannot READ/WRITE system labels | 2a | `invariants::system_zone` (G5-B-i) + Engine::put_node_with_context dispatch | `crates/benten-engine/tests/inv_11_*.rs` |
 | 12 | Aggregate validation catch-all — multi-invariant violations roll up | 1 | `RegistrationError::Invariant12Aggregate` | `structural.rs` aggregate-error tests |
 | 13 | Immutability — User WRITE re-puts of an already-persisted CID fire `E_INV_IMMUTABILITY` | 2a | `invariants::immutability` + `WriteAuthority` firing matrix | `crates/benten-engine/tests/inv_13_*.rs` |
@@ -215,6 +215,25 @@ construction sites (`engine_diagnostics.rs::transaction` commit hook
 `CapabilityPolicy` impls can dispatch per-device under the SAME
 logical-actor identity per D-PHASE-3-25.
 
+**⚠️ SUPERSEDED-BY-COLLAPSE (refinement-audit-2026-05 S3, owner-ratified
+2026-05-15 — see `docs/SECURITY-POSTURE.md` Compromise #23).** Under the
+ratified trust-model reframe (DECISION-RECORD-trust-model-reframe.md §4),
+**device-DID is a provenance label on the unified user-root-anchored
+capability spine, NOT a distinct trust-root.** Inv-14 device-grain
+attribution is **retained as an audit/provenance property** — the
+`AttributionFrame.device_did` slot is still populated and still
+cryptographically attributable via the retained envelope provenance-binding
+signature (a peer still cannot forge another device's DID without that
+device's key). What COLLAPSE deletes is the *trust decision* machinery
+(`Acceptor`/`accept_at`/`DeviceRevocation`); the *trust* now flows through
+the single chain-validation seam plus one retained envelope-ceiling
+attenuation. The device-grain provenance / compromised-device-quarantine
+audit trail survives; only the parallel device-trust-root pipe is removed.
+A post-COLLAPSE successor audit (#1234) confirms every remaining
+device-grain attribution use is elegant under the unified model. The
+Phase-3 narrative below is preserved for historical accuracy (it was
+correct for the model as it stood at Phase-3 close).
+
 **Phase-3 G16-D wave-6b on-the-wire device-DID-attestation envelope
 (plan §1 exit-criterion 16 closure) — cryptographic-attestation closure
 at G16-D wave-6b fix-pass.** The handle binds a signed
@@ -253,8 +272,11 @@ assumptions. Pinned end-to-end at:
   (multi-device GREEN-path with REAL signed attestations).
 - `tests/integration/atrium_two_device.rs::forged_device_did_rejected_at_envelope_verify`
   (DID forgery rejection — `E_DEVICE_ATTESTATION_FORGED`).
-- `tests/integration/atrium_two_device.rs::replayed_envelope_rejected_by_acceptor_nonce_store`
-  (parent-issued attestation nonce replay rejection).
+- `tests/integration/atrium_two_device.rs::replayed_stale_envelope_rejected_by_freshness_window`
+  (stale-envelope replay rejection via the freshness window re-homed onto the
+  unified spine per Compromise #23 SUPERSEDED-BY-COLLAPSE; the accept-time
+  nonce-store was deleted with the Acceptor cluster — durable replay-marker
+  re-home tracked P2/P5 per DECISION-RECORD §4b F3).
 - `tests/integration/atrium_two_device.rs::frame_pair_payload_swap_rejected_by_payload_hash_binding`
   (BLAKE3 frame-pair binding violation rejection).
 - `tests/integration/atrium_two_device.rs::future_wire_version_rejected_at_decode`

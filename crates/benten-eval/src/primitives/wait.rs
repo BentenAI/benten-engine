@@ -90,8 +90,15 @@ pub enum WaitOutcome {
 }
 
 impl WaitOutcome {
-    /// CID of the persisted state for the suspended case. Panics in
-    /// `Complete`; tests guard on the variant.
+    /// CID of the persisted state for the `Suspended` case.
+    ///
+    /// For `Complete` there is no persisted envelope, so this returns the
+    /// BLAKE3-zero sentinel CID (`Cid::from_blake3_digest([0u8; 32])`)
+    /// rather than panicking — callers MUST inspect the variant before
+    /// treating the returned CID as a real envelope key. `#[must_use]`
+    /// on the enum already enforces variant acknowledgment at the
+    /// call-site; this accessor is total (never panics) by design so a
+    /// `Complete` outcome cannot abort a resume-dispatch path.
     #[must_use]
     pub fn state_cid(&self) -> Cid {
         match self {

@@ -7,9 +7,13 @@
 //!     into the registry.
 //!   - [`ManifestRegistry::register_runtime`] is RESERVED in 2b: it returns
 //!     `Err(ManifestError::RuntimeRegistrationDeferred)` (which routes to
-//!     `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`). Phase 8 marketplace
-//!     work lifts the deferral by replacing the body — the public surface
-//!     stays stable.
+//!     `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`). Phase-4-Meta plugin-install
+//!     work (per CLAUDE.md baked-in #15 v1-platform-shippable widening
+//!     ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs) lifts the
+//!     deferral by replacing the body — the public surface stays stable.
+//!     (The historical "Phase 8 marketplace" framing pre-dates the
+//!     v1-scope widening; plugin installation at runtime is now a
+//!     Phase-4-Meta concern, not a Phase 8 concern.)
 //!
 //! D9-RESOLVED canonical-bytes encoding:
 //!   - Bundle bytes are DAG-CBOR over a `BTreeMap<String, Vec<String>>`
@@ -18,8 +22,10 @@
 //!     re-encodes.
 //!   - Reserved `signature: Option<ManifestSignature>` field is omitted
 //!     from canonical bytes when `None` (the canonical encoder strips
-//!     `None` Option fields). Phase-3 signed re-issuance gets a distinct
-//!     CID by virtue of the signature bytes joining the canonical map.
+//!     `None` Option fields). Signed re-issuance (the Phase-4-Meta
+//!     signed-manifest lift; Phase 3 SHIPPED without delivering it) gets
+//!     a distinct CID by virtue of the signature bytes joining the
+//!     canonical map.
 //!
 //! ESC-15 escape-vector closure: `lookup` of an unknown manifest name
 //! returns `Err(ManifestError::Unknown { .. })`. There is NO permissive
@@ -35,14 +41,17 @@ use std::collections::BTreeMap;
 /// Construction:
 /// - Default-bundled entries are loaded by [`ManifestRegistry::new`] from
 ///   the codegen-emitted [`default_manifests`] table.
-/// - Runtime-registered bundles are reserved for Phase 8 (see D2).
+/// - Runtime-registered bundles are reserved for the Phase-4-Meta
+///   plugin-install path (see D2 + [`ManifestRegistry::register_runtime`];
+///   the historical "Phase 8 marketplace" framing pre-dates the
+///   CLAUDE.md #15 v1-scope widening ratified 2026-05-10).
 ///
 /// **Intentionally NOT `Serialize` / `Deserialize`** (det-r4b-4 closure,
 /// wave-8e). Mirrors the cag-mr-g12c-cont-1 fix-pass applied to
 /// `Subgraph` / `NodeHandle`: the canonical encoding for a CapBundle
 /// flows through [`Self::canonical_bytes`] (a typed inner shape that
 /// honours the sorted-keys + skip-when-None discipline that defines
-/// CID-stability across the Phase-3 signed-bundle lift). A
+/// CID-stability across the Phase-4-Meta signed-bundle lift). A
 /// `serde_json::to_string(&bundle)` callsite would silently produce a
 /// SECOND encoding shape — fields in declaration order, no skip-on-
 /// `None` discipline, no DAG-CBOR canonicalisation — and any
@@ -156,8 +165,10 @@ pub enum ManifestError {
         name: String,
     },
     /// D2-RESOLVED hybrid — `register_runtime` is reserved as a typed-error
-    /// no-op in Phase 2b. Phase 8 marketplace work flips the body.
-    #[error("runtime manifest registration deferred to Phase 8")]
+    /// no-op in Phase 2b. Phase-4-Meta plugin-install work flips the body
+    /// (per CLAUDE.md baked-in #15 v1-platform-shippable widening +
+    /// baked-in #18 plugins-as-subgraphs).
+    #[error("runtime manifest registration deferred to Phase-4-Meta plugin-install")]
     RuntimeRegistrationDeferred,
     /// DAG-CBOR encode failure when computing canonical bytes.
     #[error("manifest canonical-bytes encode failure: {reason}")]
@@ -294,9 +305,12 @@ impl ManifestRegistry {
     }
 
     /// D2-RESOLVED — runtime registration is reserved as a typed-error
-    /// no-op in Phase 2b. Phase 8 marketplace work lifts the deferral
-    /// by replacing the body; the public surface is preserved across
-    /// the lift.
+    /// no-op in Phase 2b. Phase-4-Meta plugin-install work (per CLAUDE.md
+    /// baked-in #15 v1-platform-shippable widening ratified 2026-05-10 +
+    /// baked-in #18 plugins-as-subgraphs) lifts the deferral by replacing
+    /// the body; the public surface is preserved across the lift. (The
+    /// historical "Phase 8 marketplace" framing pre-dates the v1-scope
+    /// widening.)
     ///
     /// # Errors
     /// Always returns `Err(ManifestError::RuntimeRegistrationDeferred)`
@@ -314,8 +328,10 @@ impl ManifestRegistry {
     /// install-time bundles.
     ///
     /// This is a distinct surface from [`Self::register_runtime`]: the
-    /// runtime-registration path is reserved for Phase-8 marketplace
-    /// work, while this overlay path is the engine's `install_module`
+    /// runtime-registration path is reserved for the Phase-4-Meta
+    /// plugin-install work (per CLAUDE.md baked-in #15 + #18; the
+    /// historical "Phase 8 marketplace" framing pre-dates the v1-scope
+    /// widening), while this overlay path is the engine's `install_module`
     /// → SANDBOX-dispatch hydration channel. The engine's
     /// `manifest_registry()` accessor projects its `installed_modules`
     /// active-set into a `BTreeMap<String, CapBundle>` (one entry per
@@ -429,7 +445,8 @@ mod tests {
     }
 
     /// **sec-g7a-mr-3 fix-pass:** unsigned-bundle CID stability across
-    /// the Phase-3 signed-manifest lift.
+    /// the Phase-4-Meta signed-manifest lift (Phase 3 SHIPPED without
+    /// delivering signed re-issuance; the lift now lands at Phase-4-Meta).
     ///
     /// The encoder's `skip_serializing_if = "Option::is_none"` discipline
     /// for `signature` is what guarantees that an unsigned bundle's

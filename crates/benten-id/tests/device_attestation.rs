@@ -5,30 +5,29 @@
 //! MAJOR + the device-DID-attestation-replay defect-class +
 //! `pim-r1-pim-induction-7` + `cap-r4-7`):
 //!
+//! COLLAPSE (P3): the `Acceptor` / `DeviceRevocation` test families
+//! (replay-resistance / revocation-emission / forged-revocation /
+//! expected-parent / self-re-attestation) were DELETED with the
+//! device-attestation *acceptance* pipe — see the inline COLLAPSE
+//! notes below. Surviving pins exercise the kept primitives:
+//!
 //! - `device_attestation_round_trip`
 //! - `device_attestation_consumed_at_ucan_delegation_chain_walk`
-//! - `device_attestation_replay_resistant_within_freshness_window`
-//! - `device_attestation_replay_resistance_via_nonce_freshness_window`
-//! - `device_attestation_revocation_emitted_by_parent_did_on_loss_event`
-//! - `device_attestation_revoked_device_cannot_sign_new_ucan_delegation`
 //! - `device_attestation_envelope_must_be_attenuated_by_parent_did`
 //! - `device_attestation_widening_parent_authority_is_rejected`
-//! - `device_attestation_runs_sandbox_false_cannot_be_widened_by_device_signed_re_attestation`
 //! - `device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain`
 //! - `browser_target_auto_asserts_runs_sandbox_false`
 //! - `browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time`
+//! - `envelope_widens_zone_scope_matrix`
 //! - `ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation` — RED-PHASE (G14-B integration)
 
 #![allow(clippy::unwrap_used)]
 
 use benten_id::device_attestation::{
-    Acceptor, CapabilityEnvelope, DeviceAttestation, DeviceRevocation, FreshnessPolicy,
-    RevocationReason, RuntimeTarget, UptimePolicy, ZoneScope,
+    CapabilityEnvelope, DeviceAttestation, RuntimeTarget, UptimePolicy, ZoneScope,
 };
 use benten_id::keypair::Keypair;
-use benten_id::ucan::{
-    Ucan, validate_chain_with_attestations, validate_chain_with_device_revocations,
-};
+use benten_id::ucan::{Ucan, validate_chain_with_attestations};
 use benten_id::{DeviceAttestationError, UcanError};
 
 #[test]
@@ -102,156 +101,22 @@ fn device_attestation_consumed_at_ucan_delegation_chain_walk() {
     );
 }
 
-#[test]
-fn device_attestation_replay_resistant_within_freshness_window() {
-    // device-DID-attestation-replay defect-class — freshness window.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
+// COLLAPSE (P3): `device_attestation_replay_resistant_within_freshness_window`
+// + `device_attestation_replay_resistance_via_nonce_freshness_window`
+// DELETED with `Acceptor`. Freshness/stale-frame replay defense is
+// re-homed into `benten_engine::engine_sync::DeviceAttestationEnvelope`
+// `::verify` (covered by `benten-engine/tests/device_attestation_envelope_direct.rs`).
 
-    let issuance_secs: u64 = 1_000_000_000;
-    let attestation = DeviceAttestation::issue_at(
-        &parent,
-        device.public_key().to_did(),
-        CapabilityEnvelope::default(),
-        issuance_secs,
-    )
-    .unwrap();
+// COLLAPSE (P3): `device_attestation_revocation_emitted_by_parent_did_on_loss_event`
+// DELETED with `DeviceRevocation`. Device-key revocation flows through
+// user-root UCAN-grant revocation (`benten-caps::revoke`).
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(300));
-
-    // Within window: accepts.
-    acceptor
-        .accept_at(&attestation, issuance_secs + 60)
-        .unwrap();
-
-    // Outside window: rejects (use a fresh attestation to dodge the
-    // nonce-store double-spend rejection from the prior accept).
-    let attestation2 = DeviceAttestation::issue_at(
-        &parent,
-        device.public_key().to_did(),
-        CapabilityEnvelope::default(),
-        issuance_secs,
-    )
-    .unwrap();
-    let acceptor2 = Acceptor::new(FreshnessPolicy::seconds(300));
-    let err = acceptor2
-        .accept_at(&attestation2, issuance_secs + 600)
-        .unwrap_err();
-    assert!(
-        matches!(err, DeviceAttestationError::FreshnessExpired { .. }),
-        "{err:?}"
-    );
-}
-
-#[test]
-fn device_attestation_replay_resistance_via_nonce_freshness_window() {
-    // pattern-induction unnamed-defect-class — nonce store rejects
-    // duplicate attestations within freshness window.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-
-    let issuance_secs: u64 = 1_000_000_000;
-    let attestation = DeviceAttestation::issue_at(
-        &parent,
-        device.public_key().to_did(),
-        CapabilityEnvelope::default(),
-        issuance_secs,
-    )
-    .unwrap();
-
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(300));
-
-    // First presentation: accepts.
-    acceptor
-        .accept_at(&attestation, issuance_secs + 30)
-        .unwrap();
-
-    // Second presentation (replay) within window: rejects via nonce store.
-    let err = acceptor
-        .accept_at(&attestation, issuance_secs + 60)
-        .unwrap_err();
-    assert!(
-        matches!(err, DeviceAttestationError::NonceReplay),
-        "{err:?}"
-    );
-}
-
-#[test]
-fn device_attestation_revocation_emitted_by_parent_did_on_loss_event() {
-    // crypto-major-6 — parent revokes device on loss event.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-
-    let attestation = DeviceAttestation::issue(
-        &parent,
-        device.public_key().to_did(),
-        CapabilityEnvelope::default(),
-    )
-    .unwrap();
-
-    let revocation = DeviceRevocation::issue(
-        &parent,
-        device.public_key().to_did(),
-        RevocationReason::DeviceLoss,
-    )
-    .unwrap();
-
-    assert_eq!(
-        revocation.device_did().as_str(),
-        device.public_key().to_did().as_str()
-    );
-    assert_eq!(revocation.reason(), RevocationReason::DeviceLoss);
-    revocation
-        .verify_signature_with(parent.public_key())
-        .unwrap();
-
-    // Pre-revocation attestation now reads as superseded:
-    let acceptor =
-        Acceptor::new_with_revocations(FreshnessPolicy::seconds(u64::MAX), vec![revocation]);
-    let err = acceptor.accept(&attestation).unwrap_err();
-    assert!(
-        matches!(err, DeviceAttestationError::DeviceRevoked { .. }),
-        "{err:?}"
-    );
-}
-
-#[test]
-fn device_attestation_revoked_device_cannot_sign_new_ucan_delegation() {
-    // crypto-major-6 — revoked device cannot sign new UCANs.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-
-    let _attestation = DeviceAttestation::issue(
-        &parent,
-        device.public_key().to_did(),
-        CapabilityEnvelope::default(),
-    )
-    .unwrap();
-
-    let revocation = DeviceRevocation::issue(
-        &parent,
-        device.public_key().to_did(),
-        RevocationReason::DeviceLoss,
-    )
-    .unwrap();
-
-    // Attacker holds device kp; tries to issue post-revocation UCAN:
-    let post_revoke_ucan = Ucan::builder()
-        .issuer(device.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("/zone/posts", "read")
-        .not_before(0)
-        .expiry(u64::MAX)
-        .sign(&device);
-
-    let err =
-        validate_chain_with_device_revocations(&[post_revoke_ucan], &[revocation]).unwrap_err();
-    assert!(
-        matches!(err, UcanError::IssuerDeviceRevoked { .. }),
-        "{err:?}"
-    );
-}
+// NOTE (COLLAPSE-WITH-RESIDUAL, refinement-audit-2026-05 S3 P1): the
+// `device_attestation_revoked_device_cannot_sign_new_ucan_delegation`
+// test was deleted with the `validate_chain_with_device_revocations`
+// standalone walker (the #1230 un-anchored device-revocation pipe).
+// Device-key revocation now flows through user-root UCAN-grant
+// revocation (`benten-caps::revoke`); coverage moves there.
 
 #[test]
 fn device_attestation_envelope_must_be_attenuated_by_parent_did() {
@@ -315,32 +180,13 @@ fn device_attestation_widening_parent_authority_is_rejected() {
     );
 }
 
-#[test]
-fn device_attestation_runs_sandbox_false_cannot_be_widened_by_device_signed_re_attestation() {
-    // cap-r4-7 — self-re-attestation rejected at acceptor parent
-    // lookup.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-
-    // Compromised device tries to self-sign a wider envelope:
-    let widened = CapabilityEnvelope {
-        runs_sandbox: true,
-        ..CapabilityEnvelope::default()
-    };
-    let self_signed = DeviceAttestation::issue(
-        &device, // SELF-issued, not parent-issued
-        device.public_key().to_did(),
-        widened,
-    )
-    .unwrap();
-
-    let acceptor = Acceptor::with_parent_lookup(parent.public_key().to_did());
-    let err = acceptor.accept(&self_signed).unwrap_err();
-    assert!(
-        matches!(err, DeviceAttestationError::IssuerNotParent { .. }),
-        "{err:?}"
-    );
-}
+// COLLAPSE (P3): `device_attestation_runs_sandbox_false_cannot_be_widened_by_device_signed_re_attestation`
+// DELETED with `Acceptor::with_parent_lookup` (Option-B parent-lookup,
+// rejected per design-1230 §1). Envelope-widening at ISSUANCE is still
+// pinned by `device_attestation_widening_parent_authority_is_rejected`
+// (`issue_with_authority`); runtime ceiling-AND is pinned by the P3
+// closure-pin in `benten-engine` (inbound `runs_sandbox=false` rejects
+// `host:sandbox:*` at the single chain-validation seam).
 
 #[test]
 fn device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain()
@@ -436,7 +282,7 @@ fn browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construct
 }
 
 #[test]
-#[ignore = "phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation at G16 Atrium handshake — production prerequisite NOT YET shipped at HEAD. The `Ucan::builder().with_attestation_lookup(...)` construction-time gate + `DelegationError::AudienceEnvelopeIncompatibleWithCapability` typed error do NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:33-37` doc comment; no symbol). `validate_chain_with_attestations` (validate-side seam) DOES exist at `crates/benten-id/src/ucan.rs:602` — runtime gate before trust-graph dispatch. Construction-time rejection composes with §2.1-followup re-evaluation outcome (G16-D wave-6b PR #163 shipped 2026-05-09; cryptography-reviewer dispatch pending). Un-ignore at §2.1-followup re-evaluation that determines `ssi` integration is needed (or, if hand-rolled remains, the `with_attestation_lookup` chain-construction-time path lands as a benten-id-internal extension)."]
+#[ignore = "Hyg-4 #478 trigger-retense: destination phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation STILL OPEN, but the prior 'Phase 3 G16 Atrium-handshake re-evaluation point' trigger has PASSED (Phase 3 + Phase-4-Foundation SHIPPED). Note: under COLLAPSE the device-attestation *acceptance* pipe is deleted; the `with_attestation_lookup` construction-time gate referenced below is moot post-COLLAPSE (the surviving gate is the validate-side `validate_chain_with_attestations`). Current trigger = the v1-assessment-window in Phase-4-Meta. Un-ignore at that v1-assessment-window re-evaluation. — production prerequisite NOT YET shipped at HEAD. The `Ucan::builder().with_attestation_lookup(...)` construction-time gate + `DelegationError::AudienceEnvelopeIncompatibleWithCapability` typed error do NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:33-37` doc comment; no symbol). `validate_chain_with_attestations` (validate-side seam) DOES exist at `crates/benten-id/src/ucan.rs:602` — runtime gate before trust-graph dispatch. Construction-time rejection composes with §2.1-followup re-evaluation outcome (G16-D wave-6b PR #163 shipped 2026-05-09; cryptography-reviewer dispatch pending). Un-ignore at §2.1-followup re-evaluation that determines `ssi` integration is needed (or, if hand-rolled remains, the `with_attestation_lookup` chain-construction-time path lands as a benten-id-internal extension)."]
 fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation()
  {
     // br-r4-r1-4 / br-r4-r2-3 MAJOR cross-wave pin. The chain-
@@ -452,38 +298,11 @@ fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_const
     unreachable!("G14-B + G14-C wires this pin");
 }
 
-#[test]
-fn acceptor_rejects_attestation_with_forged_signature() {
-    // g14-a2-mr-1 MAJOR pin. Without signature verification inside
-    // `Acceptor::accept_at`, a forged attestation with valid (nonce,
-    // freshness, parent_did) but corrupted signature would pass
-    // acceptance — a footgun-shaped surface. This test pins the
-    // signature-verification gate END-TO-END per pim-2 §3.6b.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-
-    let envelope = CapabilityEnvelope {
-        runs_sandbox: false,
-        holds_zones: ZoneScope::CacheOnly,
-        online_uptime: UptimePolicy::SessionBounded,
-        runs_atrium_peer: false,
-    };
-    let mut attestation =
-        DeviceAttestation::issue(&parent, device.public_key().to_did(), envelope).unwrap();
-
-    // Mutate the signature — flip a single bit so the (nonce,
-    // freshness, parent_did) gates pass but the signature gate must
-    // reject.
-    assert_eq!(attestation.signature.len(), 64, "Ed25519 sig is 64 bytes");
-    attestation.signature[0] ^= 0x01;
-
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
-    let err = acceptor.accept(&attestation).unwrap_err();
-    assert!(
-        matches!(err, DeviceAttestationError::BadSignature),
-        "expected BadSignature, got {err:?}"
-    );
-}
+// COLLAPSE (P3): `acceptor_rejects_attestation_with_forged_signature`
+// DELETED with `Acceptor`. The embedded-attestation signature gate is
+// re-homed into `DeviceAttestationEnvelope::verify` (parent_did sig
+// verify); `DeviceAttestation::verify_signature_with` still has direct
+// coverage. Negative-path pinned in device_attestation_envelope_direct.rs.
 
 #[test]
 fn envelope_widens_zone_scope_matrix() {
@@ -567,3 +386,23 @@ fn envelope_widens_zone_scope_matrix() {
     assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), spec(&[])).is_ok());
     assert!(try_issue(&parent_keypair, &device_keypair, spec(&[]), spec(&["z1"])).is_err());
 }
+
+// ---------------------------------------------------------------------
+// COLLAPSE (P3) — DELETED device-trust *acceptance*-pipe pins:
+//
+// - Hyg-1 #336 / F-FWD-2-01 #1051 `DeviceRevocation` signature
+//   authenticity: both the chain-walker half (deleted at COLLAPSE P1
+//   with `validate_chain_with_device_revocations`) AND the
+//   `Acceptor::accept_at` revocation-step half
+//   (`acceptor_ignores_forged_device_revocation_unsigned_by_parent`)
+//   are gone — the device-revocation parallel pipe is dissolved;
+//   device-key revocation now flows through user-root UCAN-grant
+//   revocation (`benten-caps::revoke`).
+// - Safe-1 #515 `Acceptor::accept_at` expected_parent ct-eq behavior
+//   (`acceptor_expected_parent_ct_eq_preserves_reject_and_accept_behavior`):
+//   the expected-parent gate was never production-wired (design-1230
+//   §1 fact 3); the embedded attestation's parent_did is now verified
+//   as a delegation link inside
+//   `benten_engine::engine_sync::DeviceAttestationEnvelope::verify`
+//   (the ct-eq UNIFORMITY SHAPE remains pinned by `tests/ucan.rs`).
+// ---------------------------------------------------------------------

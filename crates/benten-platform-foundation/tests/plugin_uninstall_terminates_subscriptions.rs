@@ -38,7 +38,7 @@ use benten_id::did::Did;
 use benten_id::plugin_did::PluginDidStore;
 use benten_platform_foundation::plugin_library::{LibraryEntry, PluginLibrary};
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemorySubscription, InMemoryUninstallCascade, SubscriptionRegistry, UninstallContext,
+    InMemorySubscription, InMemoryUninstallCascade, SubscriptionRegistry, UninstallPorts,
     uninstall_plugin,
 };
 use benten_platform_foundation::plugin_manifest::{
@@ -103,7 +103,7 @@ fn plugin_uninstall_terminates_active_subscriptions_for_subscriber_did() {
     // Uninstall: T10-uninstall (c) terminates subscriptions.
     let mut cascade = InMemoryUninstallCascade::new();
     let mut private = InMemoryUninstallCascade::new();
-    let mut ctx = UninstallContext {
+    let mut ctx = UninstallPorts {
         cap_revoker: &mut cascade,
         private_ns: &mut private,
         subscriptions: &mut subs,

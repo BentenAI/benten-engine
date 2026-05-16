@@ -7,8 +7,8 @@
 //! reserved Phase-2a codes).
 //!
 //! R4 qa-r4-4 + qa-r4-5: the canonical Phase-2a firing + reserved lists
-//! live on `benten_errors::PHASE_2A_FIRING_CODES` /
-//! `PHASE_2A_RESERVED_CODES`. This test and
+//! live on `benten_errors::FIRING_CODES_AT_PHASE_2A_SNAPSHOT` /
+//! `RESERVED_CODES_AT_PHASE_2A_SNAPSHOT`. This test and
 //! `crates/benten-errors/tests/phase_2a_error_codes_present.rs` consume
 //! the same consts so drift is a compile-level impossibility.
 //!
@@ -22,7 +22,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_errors::{ErrorCode, PHASE_2A_FIRING_CODES, PHASE_2A_RESERVED_CODES};
+use benten_errors::{
+    ErrorCode, FIRING_CODES_AT_PHASE_2A_SNAPSHOT, RESERVED_CODES_AT_PHASE_2A_SNAPSHOT,
+};
 use std::fs;
 use std::path::PathBuf;
 
@@ -55,7 +57,7 @@ fn catalog_headings(catalog: &str) -> Vec<String> {
 #[test]
 fn error_catalog_has_every_phase_2a_firing_code() {
     let catalog = fs::read_to_string(catalog_path()).expect("read ERROR-CATALOG.md");
-    let missing: Vec<&str> = PHASE_2A_FIRING_CODES
+    let missing: Vec<&str> = FIRING_CODES_AT_PHASE_2A_SNAPSHOT
         .iter()
         .map(ErrorCode::as_str)
         .filter(|code| !catalog.contains(&format!("### {code}")))
@@ -76,7 +78,7 @@ fn error_catalog_has_every_phase_2a_firing_code() {
 #[test]
 fn error_catalog_has_every_phase_2a_reserved_code() {
     let catalog = fs::read_to_string(catalog_path()).expect("read ERROR-CATALOG.md");
-    let missing: Vec<&str> = PHASE_2A_RESERVED_CODES
+    let missing: Vec<&str> = RESERVED_CODES_AT_PHASE_2A_SNAPSHOT
         .iter()
         .map(ErrorCode::as_str)
         .filter(|code| !catalog.contains(&format!("### {code}")))
@@ -110,9 +112,9 @@ fn phase_2a_codes_round_trip_through_from_str() {
     let headings: std::collections::HashSet<String> =
         catalog_headings(&catalog).into_iter().collect();
 
-    let expected: Vec<&ErrorCode> = PHASE_2A_FIRING_CODES
+    let expected: Vec<&ErrorCode> = FIRING_CODES_AT_PHASE_2A_SNAPSHOT
         .iter()
-        .chain(PHASE_2A_RESERVED_CODES.iter())
+        .chain(RESERVED_CODES_AT_PHASE_2A_SNAPSHOT.iter())
         .collect();
 
     let mut failures = Vec::new();

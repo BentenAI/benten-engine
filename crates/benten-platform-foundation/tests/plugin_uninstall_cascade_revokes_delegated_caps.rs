@@ -33,7 +33,7 @@ use benten_id::did::Did;
 use benten_id::plugin_did::PluginDidStore;
 use benten_platform_foundation::plugin_library::{LibraryEntry, PluginLibrary};
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryGrant, InMemoryUninstallCascade, UninstallContext, uninstall_plugin,
+    InMemoryGrant, InMemoryUninstallCascade, UninstallPorts, uninstall_plugin,
 };
 use benten_platform_foundation::plugin_manifest::{
     CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault,
@@ -112,7 +112,7 @@ fn plugin_uninstall_cascade_revokes_caps_delegated_to_other_plugins() {
     // Uninstall A.
     let mut private = InMemoryUninstallCascade::new();
     let mut subs = InMemoryUninstallCascade::new();
-    let mut ctx = UninstallContext {
+    let mut ctx = UninstallPorts {
         cap_revoker: &mut cascade,
         private_ns: &mut private,
         subscriptions: &mut subs,

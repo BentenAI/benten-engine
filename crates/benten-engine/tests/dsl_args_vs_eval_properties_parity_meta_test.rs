@@ -916,34 +916,35 @@ fn extract_props_insert_keys(rust_src: &str, fn_name: &str) -> BTreeSet<String> 
 // `primary_label: String` collapse that caused multi-label SUBSCRIBE
 // delivery loss).
 
-#[test]
-fn parity_meta_test_consumer_projection_change_event_translation_no_drift() {
-    let builder_path = workspace_root()
-        .join("crates")
-        .join("benten-engine")
-        .join("src")
-        .join("builder.rs");
-    let builder = std::fs::read_to_string(&builder_path)
-        .unwrap_or_else(|e| panic!("builder.rs not found at {} ({})", builder_path.display(), e));
+// Required forwarded fields per Round-2 Instance 6 BLOCKER closure:
+// anchor_cid + kind + seq + payload_bytes + labels + tx_id + actor_cid +
+// handler_cid + capability_grant_cid (9; edge_endpoints stays out per the
+// in-tree comment, anchor-centric eval-side struct).
+const CHANGE_EVENT_REQUIRED_FIELDS: [&str; 9] = [
+    "anchor_cid",
+    "kind",
+    "seq",
+    "payload_bytes",
+    "labels",
+    "tx_id",
+    "actor_cid",
+    "handler_cid",
+    "capability_grant_cid",
+];
 
-    // The translation block is identifiable by the
-    // `subscribe::ChangeEvent {` constructor literal. Walk its body
-    // and extract every field-init identifier.
-    let needle = "subscribe::ChangeEvent {";
-    let Some(start) = builder.find(needle) else {
-        panic!(
-            "ChangeEvent translation block not found in builder.rs — \
-             SUBSCRIBE delivery wiring removed or refactored. If this \
-             is intentional, update this test."
-        );
-    };
+/// Extract the brace/paren/bracket-balanced body that follows `needle`
+/// inside `src` (the char immediately after `needle` is depth 1).
+fn balanced_body_after<'a>(src: &'a str, needle: &str, ctx: &str) -> &'a str {
+    let start = src
+        .find(needle)
+        .unwrap_or_else(|| panic!("{ctx}: `{needle}` not found"));
     let body_start = start + needle.len();
     let mut depth = 1i32;
     let mut end = body_start;
-    for (i, ch) in builder[body_start..].char_indices() {
+    for (i, ch) in src[body_start..].char_indices() {
         match ch {
-            '{' => depth += 1,
-            '}' => {
+            '(' | '{' | '[' => depth += 1,
+            ')' | '}' | ']' => {
                 depth -= 1;
                 if depth == 0 {
                     end = body_start + i;
@@ -953,67 +954,113 @@ fn parity_meta_test_consumer_projection_change_event_translation_no_drift() {
             _ => {}
         }
     }
-    let body = &builder[body_start..end];
+    &src[body_start..end]
+}
 
-    // Extract field-init names: each line `<name>: <expr>,` (top-depth).
+/// (1) builder.rs side: the bridge forwards all 9 source expressions
+/// positionally into `ChangeEvent::for_bridge`, in signature order, with
+/// the label + attribution args being real `event.*` sources (not a
+/// hardcoded empty/None — the exact lossy shape of the original BLOCKER).
+fn verify_bridge_call_forwards_all_9() {
+    let builder_path = workspace_root()
+        .join("crates")
+        .join("benten-engine")
+        .join("src")
+        .join("builder.rs");
+    let builder = std::fs::read_to_string(&builder_path)
+        .unwrap_or_else(|e| panic!("builder.rs not found at {} ({})", builder_path.display(), e));
+    let call_args = balanced_body_after(
+        &builder,
+        "subscribe::ChangeEvent::for_bridge(",
+        "builder.rs ChangeEvent::for_bridge call (SUBSCRIBE wiring removed/refactored?)",
+    );
+    let forwarded: Vec<String> = call_args
+        .split(',')
+        .map(|a| {
+            a.lines()
+                .map(str::trim)
+                .filter(|l| !l.starts_with("//") && !l.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim()
+                .to_string()
+        })
+        .filter(|a| !a.is_empty())
+        .collect();
+    assert_eq!(
+        forwarded.len(),
+        9,
+        "ChangeEvent::for_bridge call in builder.rs forwards {} args, \
+         expected 9. A dropped arg is a recurrence of Round-2 Instance 6 \
+         BLOCKER (multi-label SUBSCRIBE delivery loss). Args seen: {forwarded:?}",
+        forwarded.len()
+    );
+    for (idx, expected_substr) in [
+        (4usize, "event.labels"),
+        (5, "event.tx_id"),
+        (6, "event.actor_cid"),
+        (7, "event.handler_cid"),
+        (8, "event.capability_grant_cid"),
+    ] {
+        assert!(
+            forwarded[idx].contains(expected_substr),
+            "ChangeEvent::for_bridge arg {idx} = {:?} does not forward \
+             `{expected_substr}` — SUBSCRIBE delivery would silently \
+             lose it (Round-2 Instance 6 BLOCKER shape).",
+            forwarded[idx]
+        );
+    }
+}
+
+/// (2) benten-core side: `ChangeEvent::for_bridge` assigns all 9 fields
+/// in its `Self { .. }` body (no field silently dropped at the ctor).
+fn verify_for_bridge_ctor_assigns_all_9() {
+    let change_stream_path = workspace_root()
+        .join("crates")
+        .join("benten-core")
+        .join("src")
+        .join("change_stream.rs");
+    let change_stream = std::fs::read_to_string(&change_stream_path).unwrap_or_else(|e| {
+        panic!(
+            "change_stream.rs not found at {} ({})",
+            change_stream_path.display(),
+            e
+        )
+    });
+    let ctor_start = change_stream
+        .find("pub fn for_bridge(")
+        .expect("ChangeEvent::for_bridge constructor not found in benten-core change_stream.rs");
+    let self_body = balanced_body_after(
+        &change_stream[ctor_start..],
+        "Self {",
+        "for_bridge has no `Self { .. }` body",
+    );
     let mut fields = BTreeSet::new();
-    let mut depth = 0i32;
-    let mut buf = String::new();
-    for ch in body.chars() {
-        match ch {
-            '{' | '(' | '[' => {
-                depth += 1;
-                buf.push(ch);
-            }
-            '}' | ')' | ']' => {
-                depth -= 1;
-                buf.push(ch);
-            }
-            ',' if depth == 0 => {
-                if let Some(name) = parse_struct_field_init(buf.trim()) {
-                    fields.insert(name);
-                }
-                buf.clear();
-            }
-            _ => buf.push(ch),
+    for tok in self_body.split(',') {
+        if let Some(name) = parse_struct_field_init(tok.trim()) {
+            fields.insert(name);
         }
     }
-    if let Some(name) = parse_struct_field_init(buf.trim()) {
-        fields.insert(name);
-    }
-
-    // Required forwarded fields per Round-2 Instance 6 BLOCKER closure:
-    // anchor_cid + kind + seq + payload_bytes + labels + tx_id +
-    // actor_cid + handler_cid + capability_grant_cid (8 of 9; edge_endpoints
-    // stays out per the in-tree comment, anchor-centric eval-side struct).
-    let required: BTreeSet<&str> = [
-        "anchor_cid",
-        "kind",
-        "seq",
-        "payload_bytes",
-        "labels",
-        "tx_id",
-        "actor_cid",
-        "handler_cid",
-        "capability_grant_cid",
-    ]
-    .iter()
-    .copied()
-    .collect();
-
-    let mut missing: Vec<&str> = Vec::new();
-    for r in &required {
-        if !fields.contains(*r) {
-            missing.push(*r);
-        }
-    }
+    let required: BTreeSet<&str> = CHANGE_EVENT_REQUIRED_FIELDS.iter().copied().collect();
+    let missing: Vec<&&str> = required.iter().filter(|r| !fields.contains(**r)).collect();
     assert!(
         missing.is_empty(),
-        "ChangeEvent translation drops required fields {missing:?} — \
+        "ChangeEvent::for_bridge drops required fields {missing:?} — \
          SUBSCRIBE delivery would silently lose them. Recurrence of \
          Round-2 Instance 6 BLOCKER (multi-label SUBSCRIBE delivery loss) \
-         shape. Forwarded fields seen: {fields:?}"
+         shape. Constructor-assigned fields seen: {fields:?}"
     );
+}
+
+#[test]
+fn parity_meta_test_consumer_projection_change_event_translation_no_drift() {
+    // `benten_core::ChangeEvent` is `#[non_exhaustive]` (ST-CORE lane),
+    // so the cross-crate struct-expression form the bridge used is no
+    // longer legal; builder.rs now calls the full-fidelity `for_bridge`
+    // constructor. The no-field-drop guarantee (Round-2 Instance 6
+    // BLOCKER closure) therefore splits across two sites — verify both.
+    verify_bridge_call_forwards_all_9();
+    verify_for_bridge_ctor_assigns_all_9();
 }
 
 fn parse_struct_field_init(s: &str) -> Option<String> {

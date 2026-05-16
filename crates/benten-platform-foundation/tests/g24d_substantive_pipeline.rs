@@ -30,7 +30,7 @@ use benten_platform_foundation::module_ecosystem::{
 };
 use benten_platform_foundation::plugin_library::PluginLibrary;
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryUninstallCascade, UninstallContext, uninstall_plugin,
+    InMemoryUninstallCascade, UninstallPorts, uninstall_plugin,
 };
 use benten_platform_foundation::plugin_manifest::{
     CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
@@ -528,7 +528,7 @@ fn uninstall_removes_library_entry_and_revokes_plugin_did() {
     let mut cascade = InMemoryUninstallCascade::new();
     let mut private = InMemoryUninstallCascade::new();
     let mut subs = InMemoryUninstallCascade::new();
-    let mut ctx = UninstallContext {
+    let mut ctx = UninstallPorts {
         cap_revoker: &mut cascade,
         private_ns: &mut private,
         subscriptions: &mut subs,

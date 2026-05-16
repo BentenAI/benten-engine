@@ -332,7 +332,7 @@ wasmtime = { version = "43.0.2", default-features = false, features = ["runtime"
 # `cargo bench-wat-rebake` to regenerate fixtures + update
 # `tests/fixture_wasm_hashes_stable::PINNED_FIXTURES` in the SAME
 # commit.
-wat = "=1.248.0"
+wat = "=1.249.0"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 
 # Phase 3 (sync) — Atrium P2P transport. iroh wires at G16-A wave-6

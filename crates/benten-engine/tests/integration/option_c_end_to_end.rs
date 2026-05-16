@@ -16,7 +16,7 @@
 //! `qa-expert` per R2 landscape §8.5. TDD red-phase.
 
 #![cfg(feature = "phase_2a_pending_apis")]
-// R4 fix-pass: blocked on G4-A landing `register_crud_with_grants` +
+// R4 fix-pass: blocked on G4-A landing `register_crud` +
 // `call_as` dispatch + `testing_insert_user_post` + `Outcome::is_ok_edge` +
 // `Outcome::error_code` at the expected shape. See the
 // wait_resume_determinism.rs header for the rationale.
@@ -58,7 +58,7 @@ fn seed_denied_post(engine: &Engine) -> benten_core::Cid {
 fn crud_post_get_symmetric_none() {
     let (_dir, engine) = engine_with_read_denial();
     let handler_id = engine
-        .register_crud_with_grants("post")
+        .register_crud("post")
         .expect("grant-backed crud registers");
 
     // Grant WRITE only — reads remain denied under the grant-backed policy.
@@ -169,7 +169,7 @@ fn option_c_get_by_label_respects_check_read() {
     // With a grant-backed policy and no READ grant, the by-label probe
     // must return an empty list — not an error, not a populated list.
     let handler_id = engine
-        .register_crud_with_grants("post")
+        .register_crud("post")
         .expect("crud-with-grants registers");
 
     let outcome = engine
@@ -198,7 +198,7 @@ fn option_c_get_by_property_respects_check_read() {
     // A by-property handler dispatched via the evaluator must also honour
     // the gate and collapse to empty under denial.
     let handler_id = engine
-        .register_crud_with_grants("post")
+        .register_crud("post")
         .expect("crud-with-grants registers");
 
     let mut input = BTreeMap::new();
@@ -233,7 +233,7 @@ fn option_c_read_view_respects_check_read_coarse_grained() {
     // is gated by the same check_read_capability hook. Without the view's
     // read scope the caller sees an empty view (coarse-grained).
     let handler_id = engine
-        .register_crud_with_grants("post")
+        .register_crud("post")
         .expect("crud-with-grants registers");
 
     let outcome = engine
