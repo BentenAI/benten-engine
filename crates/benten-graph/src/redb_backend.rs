@@ -619,8 +619,9 @@ impl RedbBackend {
     /// `put_node_with_context`) enforce the guard before calling; this body
     /// runs the redb write and index maintenance under a single commit.
     fn put_node_unchecked(&self, node: &Node) -> Result<Cid, GraphError> {
-        let cid = node.cid()?;
-        let bytes = node.canonical_bytes()?;
+        // Fwd-1 #926: single encode+hash pass instead of cid() then
+        // canonical_bytes() (which double-encodes the same Node).
+        let (cid, bytes) = node.cid_and_canonical_bytes()?;
         let n_key = node_key(&cid);
 
         let write_txn = self.begin_write_txn()?;
@@ -847,8 +848,8 @@ impl RedbBackend {
     /// system-zone guard. Used by `put_edge` (guarded) and
     /// `put_edge_with_context` (context-driven guard).
     fn put_edge_unchecked(&self, edge: &Edge) -> Result<Cid, GraphError> {
-        let cid = edge.cid()?;
-        let bytes = edge.canonical_bytes()?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = edge.cid_and_canonical_bytes()?;
         // Body first, then indexes. The body/index pair is idempotent
         // (re-putting the same edge writes identical bytes to the same
         // keys), so ordering under the non-transactional path is not
@@ -1047,9 +1048,15 @@ impl RedbBackend {
     ) -> Result<Cid, GraphError> {
         guard_system_zone_node(node, ctx.is_privileged)?;
 
-        // Compute the CID once — reused by the in-txn existence check, the
-        // write path, and the post-commit bookkeeping.
-        let cid = node.cid()?;
+        // Compute the CID + canonical bytes in ONE encode pass (#926):
+        // both are needed unconditionally (cid for the in-txn existence
+        // check + bookkeeping, bytes for the write) and `bytes` was
+        // formerly re-encoded separately below the durability match —
+        // a double-encode on the primary engine WRITE path. Fusing here
+        // does not pessimize the dedup path: `bytes` was already computed
+        // unconditionally before the in-txn probe, so a dedup hit paid
+        // the encode cost regardless; this just makes it one pass not two.
+        let (cid, bytes) = node.cid_and_canonical_bytes()?;
 
         // Phase 2a G2-A: WriteAuthority-driven per-call durability tier.
         //
@@ -1097,7 +1104,6 @@ impl RedbBackend {
         // transactional `probe_cid_exists` path only.
 
         let n_key = node_key(&cid);
-        let bytes = node.canonical_bytes()?;
 
         let write_txn = self.begin_write_txn_with(effective_redb)?;
 

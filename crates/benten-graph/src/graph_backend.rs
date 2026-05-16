@@ -110,6 +110,23 @@ use crate::{GraphError, RedbBackend, SnapshotHandle};
 /// `run<F, R>(self, f: F) -> Result<R, B::Error>` method that
 /// delegates to the inherent closure-based path.
 ///
+/// ## Shape-only marker — composability gap is intentional + named
+///
+/// Today this is a **shape-lock-only marker**. A generic
+/// `fn f<B: GraphBackend>(b: &B)` can call `b.transaction()` and obtain
+/// this handle, but the handle exposes **no method to drive a
+/// transaction**. Generic `<B: GraphBackend>` callers that need *batched*
+/// transactional writes MUST drop down to the per-backend inherent
+/// closure-based method ([`RedbBackend::transaction`]); the umbrella
+/// `transaction()` return value is not yet a composability surface.
+/// Single-write composability (`put_node_with_context`) IS provided
+/// through the umbrella.
+///
+/// The `run<F, R>` evolution lands when a second backend needs
+/// transactional composability (Phase-4-Meta or beyond) — named at
+/// `docs/future/phase-4-backlog.md §4.59` per HARD RULE clause-(b).
+/// Surf-1 #836.
+///
 /// G13-C wave-3: gated to NON `wasm32-unknown-unknown` targets — the
 /// runner exists alongside [`RedbBackend`]. Browser thin-client builds
 /// substitute `crate::browser_backend::BrowserTransactionRunner`.
@@ -163,6 +180,48 @@ impl RedbTransactionRunner {
 /// landed at G13-B. See [`R3-A umbrella-trait scaffold
 /// docs`](crate::graph_backend) for the full design narrative.
 ///
+/// ## SemVer commitment (v1-stabilization — Fwd-2 #1022)
+///
+/// At the `v1` tag this trait's `pub` surface SemVer-locks. The
+/// following commitments are written here so future PRs do not silently
+/// drift the SemVer surface:
+///
+/// 1. **The trait remains non-object-safe post-v1.** The associated
+///    types `Snapshot` / `Error` / `Transaction` are load-bearing for
+///    the generic-cascade contract (`D-PHASE-3-1` RESOLVED). Adding a
+///    default-method (e.g. a future `fn ping_health(&self) ->
+///    Result<(), Self::Error>`) is a non-breaking minor; **removing any
+///    of the three associated types** (e.g. to make snapshots a returned
+///    trait object) is an object-safety-changing **major break** for the
+///    generic-cascade direction and is forbidden pre-v1-stabilization
+///    review. The `engine_does_not_reference_dyn_graph_backend_at_engine_boundary`
+///    integration pin defends the consumption direction.
+/// 2. **`snapshot()` infallible-with-`expect` shape** is a deliberate
+///    pre-v1 tradeoff (see [`snapshot`](Self::snapshot)). Whether to flip
+///    it to `Result<Self::Snapshot, Self::Error>` (so a Phase-4-Meta
+///    light-client `mode-(c)` signed-checkpoint backend whose snapshot
+///    can legitimately fail at open-time can surface that cleanly) is the
+///    v1-stabilization fork named at `docs/future/phase-4-backlog.md
+///    §4.53` + safe-1 #501.
+/// 3. **`register_subscriber()` returns `()`** by intentional design
+///    (see [`register_subscriber`](Self::register_subscriber)). Whether
+///    to flip it to `Result<(), Self::Error>` (so a future
+///    failure-surfacing subscriber — quota guard, duplicate-registration
+///    guard — has a trait path) is the v1-stabilization fork named at
+///    `docs/future/phase-4-backlog.md §4.60`.
+///
+/// ## Error-type alignment (Surf-1 #832)
+///
+/// `Self::Error` is constrained via supertrait `where`-bounds to be
+/// **the same concrete type** as the inherited
+/// [`KVBackend::Error`] / [`NodeStore::Error`] / [`EdgeStore::Error`].
+/// This converts the prior documentation-only "implementors must align
+/// all four by convention" into a compile-time guarantee: a backend
+/// whose `KVBackend::Error` diverges from its `GraphBackend::Error`
+/// fails to compile, preserving the `D-PHASE-3-1a` load-bearing contract
+/// that "all read/write paths through a single `B: GraphBackend` give
+/// you one unified typed-error surface."
+///
 /// ## Existing implementors
 ///
 /// - [`RedbBackend`] (G13-A) — native redb-backed production storage.
@@ -176,7 +235,11 @@ impl RedbTransactionRunner {
 /// All methods returning `Result<_, Self::Error>` use the per-backend
 /// associated `Error` type. RedbBackend uses [`GraphError`]; future
 /// backends declare their own.
-pub trait GraphBackend: KVBackend + NodeStore + EdgeStore {
+pub trait GraphBackend:
+    KVBackend<Error = <Self as GraphBackend>::Error>
+    + NodeStore<Error = <Self as GraphBackend>::Error>
+    + EdgeStore<Error = <Self as GraphBackend>::Error>
+{
     /// Owned MVCC snapshot handle. Must be `Send + Sync + 'static` so
     /// the engine can hold a snapshot across `.await` points + worker
     /// threads (per `arch-r1-6`).
@@ -216,6 +279,14 @@ pub trait GraphBackend: KVBackend + NodeStore + EdgeStore {
     /// (`BrowserBackend`'s in-RAM thin-client cache) implement this as
     /// a no-op — the trait shape is preserved so the engine can wire
     /// IVM views uniformly without conditional code paths per backend.
+    ///
+    /// **v1-stabilization fork (Fwd-2 #1022):** the `()` return is
+    /// intentional for Phase-3 (no production caller observes the
+    /// failure; `RedbBackend`'s inherent variant is infallible). Whether
+    /// to flip to `Result<(), Self::Error>` pre-v1 — so a future
+    /// failure-surfacing subscriber (quota guard / duplicate-registration
+    /// guard) has a trait path — is named at
+    /// `docs/future/phase-4-backlog.md §4.60`.
     fn register_subscriber(&self, subscriber: Arc<dyn ChangeSubscriber>);
 
     /// Open an MVCC snapshot. The returned handle observes the
@@ -237,6 +308,13 @@ pub trait GraphBackend: KVBackend + NodeStore + EdgeStore {
     /// unwraps. This narrow tradeoff keeps `Self::Snapshot` lifetime-free
     /// without forcing every consumer site into a `?`. Future waves may
     /// revisit if the failure-rate profile changes.
+    ///
+    /// **v1-stabilization fork (Fwd-2 #1022 + safe-1 #501):** whether to
+    /// flip this to `Result<Self::Snapshot, Self::Error>` pre-v1 — so a
+    /// Phase-4-Meta light-client `mode-(c)` signed-checkpoint backend
+    /// whose snapshot can legitimately fail at open-time (cryptographic
+    /// verification) can surface that cleanly — is named at
+    /// `docs/future/phase-4-backlog.md §4.60`.
     fn snapshot(&self) -> Self::Snapshot;
 
     /// Privileged put-node entry point threading [`WriteContext`].
