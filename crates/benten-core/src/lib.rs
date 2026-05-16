@@ -533,6 +533,40 @@ impl Cid {
     }
 }
 
+// Surf-1 #840: idiomatic conversion traits. The inherent
+// `Cid::from_str` / `Cid::from_bytes` / `Cid::from_blake3_digest`
+// constructors are retained (deleting them would break cross-crate
+// production + test callers and CLAUDE.md #5 forbids deprecation shims);
+// these trait impls add the standard-library-conventional surface
+// (`str::parse`, `From`, `TryFrom`) so generic code can convert without
+// reaching for the inherent names. `FromStr` delegates to the inherent
+// `from_str` so there is exactly one parse implementation.
+impl core::str::FromStr for Cid {
+    type Err = CoreError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Cid::from_str(s)
+    }
+}
+
+impl From<[u8; 32]> for Cid {
+    /// Build a Benten CIDv1 from a raw 32-byte BLAKE3 digest (the digest,
+    /// not a full 36-byte CID — use `TryFrom<&[u8]>` for full CID bytes).
+    fn from(digest: [u8; 32]) -> Self {
+        Cid::from_blake3_digest(digest)
+    }
+}
+
+impl TryFrom<&[u8]> for Cid {
+    type Error = CoreError;
+
+    /// Parse a full 36-byte Benten CIDv1 byte layout. Delegates to the
+    /// inherent [`Cid::from_bytes`] (length + header validation).
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Cid::from_bytes(bytes)
+    }
+}
+
 impl fmt::Display for Cid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_base32())

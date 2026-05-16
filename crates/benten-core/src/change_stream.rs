@@ -109,7 +109,17 @@ pub enum ChangeKind {
 /// matching either `User:*` or `Admin:*`. Producers MUST populate the
 /// complete label set; collapsing it to one label silently drops
 /// deliveries for the other labels.
+///
+/// # SemVer
+///
+/// `#[non_exhaustive]`: this struct has a documented widening trajectory
+/// (the R6FP-G1 expansion 4→9 fields already happened; Phase-4-Meta
+/// multi-device / Kith attribution will widen it again). External crates
+/// must construct via [`ChangeEvent::legacy_minimal`] (the production
+/// graph→eval bridge populates every field directly inside this
+/// workspace), so a future field add is not a major-version break.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ChangeEvent {
     /// Anchor-level identity the change applies to.
     pub anchor_cid: Cid,
