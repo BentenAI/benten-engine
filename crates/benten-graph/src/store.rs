@@ -34,9 +34,13 @@ use benten_core::{Cid, CoreError, Edge, Node};
 // Key schema
 // ---------------------------------------------------------------------------
 //
-// Every blanket impl routes through `KVBackend::put`/`get`/`scan` with the
-// prefixes below. A dedicated key-schema module would be overkill for the
-// four prefixes in play; we inline them here and document the layout.
+// Each backend's `put_node` / `put_edge` impl routes through
+// `KVBackend::put` / `get` / `scan` with the prefixes below (the blanket
+// `impl<T: KVBackend>` was dropped per the g2-cr-1 fix narrative above;
+// every backend opts in explicitly). A dedicated key-schema module would
+// be overkill for the prefixes in play; we inline them here and document
+// the layout. The key schema is shared across backends so a snapshot-blob
+// exported by one backend can be replayed against another.
 //
 // | Prefix   | What it stores                                     |
 // |----------|----------------------------------------------------|
@@ -365,31 +369,6 @@ impl ChangeEvent {
             edge_endpoints: None,
         }
     }
-
-    /// Construct an Edge-event [`ChangeEvent`]. `kind` must be
-    /// [`ChangeKind::EdgeCreated`] or [`ChangeKind::EdgeDeleted`] — anything
-    /// else is a caller-side misuse but is not runtime-checked.
-    #[must_use]
-    pub fn new_edge(
-        cid: Cid,
-        source: Cid,
-        target: Cid,
-        label: String,
-        kind: ChangeKind,
-        tx_id: u64,
-    ) -> Self {
-        Self {
-            cid,
-            labels: vec![label.clone()],
-            kind,
-            tx_id,
-            actor_cid: None,
-            handler_cid: None,
-            capability_grant_cid: None,
-            node: None,
-            edge_endpoints: Some((source, target, label)),
-        }
-    }
 }
 
 impl ChangeEvent {
@@ -431,9 +410,10 @@ impl ChangeEvent {
 /// the engine can share subscribers across the commit thread and the IVM
 /// worker thread without further wrapping.
 ///
-/// The trait is object-safe — subscribers are typically stored as
-/// `Box<dyn ChangeSubscriber>` inside the engine so heterogeneous IVM views
-/// can coexist.
+/// The trait is object-safe — subscribers are stored as
+/// `Arc<dyn ChangeSubscriber>` (the engine keeps its own handle while the
+/// backend's fan-out clones the `Arc` per dispatch) so heterogeneous IVM
+/// views can coexist.
 pub trait ChangeSubscriber: Send + Sync {
     /// Called once per committed change event. Must not panic (panics abort
     /// the engine's commit thread). Must not block indefinitely — long work

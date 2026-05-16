@@ -1,33 +1,29 @@
-//! Phase-2b G10-A-wasip1 typed-error-only network-fetch stub backend
-//! (Phase-2a §9.8).
+//! Typed-error-only network-fetch stub backend (origin: Phase-2b
+//! G10-A-wasip1 / Phase-2a §9.8).
 //!
 //! ## What this is
 //!
-//! Reserves the [`KVBackend`] shape for the Phase-3 iroh-fetch
-//! implementation. In Phase 2b every method surfaces a typed error
-//! (`Phase3DeferredFetch` for reads / scans, `BackendReadOnly` for writes)
-//! so any caller that wires the stub fails loud rather than silently
-//! serving zeros (or — worse — a default-constructed empty result that
-//! looks like a clean miss).
+//! A loud-fail anchor on the [`KVBackend`] storage waist for the wasm32
+//! runtime path that has no redb file to lean on. Every method surfaces a
+//! typed error (`Phase3DeferredFetch` for reads / scans, `BackendReadOnly`
+//! for writes) so any caller that wires the stub fails loud rather than
+//! silently serving zeros (or — worse — a default-constructed empty result
+//! that looks like a clean miss).
 //!
-//! Wave-2 G7 already cuts SANDBOX out on wasm32 builds; this stub closes
-//! the matching gap on the storage waist for the wasm32 runtime path
-//! that doesn't have a redb file to lean on.
+//! ## Status (post `phase-3-close` / `phase-4-foundation-close`)
 //!
-//! ## Why a stub
-//!
-//! The Phase-2b plan §3 G10-A-wasip1 row + Phase-2a §9.8 jointly resolve
-//! that the wasm32 KVBackend is **snapshot-blob first / network-fetch in
-//! Phase 3**. Shipping the network-fetch backend as a typed-error stub in
-//! 2b accomplishes three things:
-//!
-//! 1. The trait shape is locked at the right API boundary; Phase 3
-//!    swaps the body, not the type.
-//! 2. Tests that depend on "is the network-fetch path wired?" can answer
-//!    yes without needing a live peer.
-//! 3. Any production wire-up before Phase 3 lands fails loudly with a
-//!    typed error pointing at the deferred work rather than degrading
-//!    silently.
+//! This stub was originally minted in Phase-2b to reserve the
+//! `KVBackend` shape for an anticipated Phase-3 iroh-fetch body-swap. That
+//! swap **never happened**: P2P sync shipped in its own crate
+//! (`benten-sync`, iroh + Loro directly) rather than by hot-swapping a
+//! `KVBackend` implementation. The stub is retained as a typed-error
+//! loud-fail anchor — any future code that tries to wire a network-backed
+//! `KVBackend` into the engine before that path is genuinely built fails
+//! loudly with a typed error instead of degrading silently. Whether to
+//! retire the stub entirely (it has zero production callers) is tracked as
+//! a v1-API-stabilization decision in
+//! `docs/future/phase-4-backlog.md` (couples to the mode-(b)/(c)
+//! light-client trait surface).
 
 use benten_errors::ErrorCode;
 
@@ -73,20 +69,22 @@ impl NetworkFetchStubBackend {
 ///
 /// Two variants:
 ///
-/// - `Phase3DeferredFetch` for reads + scans — the actual iroh-fetch
-///   implementation lands in Phase 3; the stub fails loud rather than
-///   serving fabricated zeros.
+/// - `Phase3DeferredFetch` for reads + scans — a network-backed
+///   `KVBackend` was never built (P2P sync shipped in `benten-sync`
+///   instead); the stub fails loud rather than serving fabricated zeros.
 /// - `ReadOnly` for writes — even when the Phase-3 implementation lands,
 ///   network-fetch is a read-only consume side; the upstream peer is the
 ///   write authority.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum NetworkFetchStubError {
-    /// Read or scan was attempted against the network-fetch stub. The
-    /// real iroh-fetch implementation lands in Phase 3 (see
-    /// `docs/future/phase-2-backlog.md`); until then this is a typed
-    /// failure rather than a silent zero.
-    #[error("network-fetch backend not implemented in Phase 2b (stub{label}): {operation}")]
+    /// Read or scan was attempted against the network-fetch stub. A
+    /// network-backed `KVBackend` was never built — P2P sync shipped in
+    /// the `benten-sync` crate (iroh + Loro) instead of via a
+    /// `KVBackend` body-swap. Retire-vs-keep is tracked in
+    /// `docs/future/phase-4-backlog.md` (v1-API-stabilization). This
+    /// stays a typed failure rather than a silent zero.
+    #[error("network-fetch KVBackend not implemented (stub{label}): {operation}")]
     Phase3DeferredFetch {
         /// Which method was called (`"get"`, `"scan"`).
         operation: &'static str,
@@ -95,9 +93,9 @@ pub enum NetworkFetchStubError {
         /// without a custom Display.
         label: String,
     },
-    /// Write was attempted against the network-fetch stub. Even when the
-    /// Phase-3 implementation lands, network-fetch is a read-only consume
-    /// side; the upstream peer is the write authority.
+    /// Write was attempted against the network-fetch stub. A
+    /// network-fetch path is a read-only consume side by design; the
+    /// upstream peer is the write authority.
     #[error("backend is read-only: {operation} rejected (network-fetch-stub{label})")]
     ReadOnly {
         /// Which mutation method was called (`"put"`, `"delete"`,
@@ -110,9 +108,9 @@ pub enum NetworkFetchStubError {
 
 impl NetworkFetchStubError {
     /// Stable [`ErrorCode`] for the variant. Reads route through
-    /// `NotImplemented` because Phase-3 fetch is the answer; writes route
-    /// through `BackendReadOnly` because the network-fetch consume side
-    /// is read-only by design.
+    /// `NotImplemented` because no network-backed `KVBackend` was built;
+    /// writes route through `BackendReadOnly` because the network-fetch
+    /// consume side is read-only by design.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         match self {
