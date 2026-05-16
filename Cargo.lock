@@ -404,6 +404,9 @@ dependencies = [
 [[package]]
 name = "benten-errors"
 version = "0.1.0"
+dependencies = [
+ "criterion",
+]
 
 [[package]]
 name = "benten-eval"

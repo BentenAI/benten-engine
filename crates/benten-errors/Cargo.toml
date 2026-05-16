@@ -26,3 +26,14 @@ default = []
 # benten-core or any other Benten surface. thiserror et al. belong in
 # the consumers; this crate exposes a plain enum + string accessors only.
 
+# Dev-only criterion bench harness (Fwd-1 #939 / #944). Gated off wasm
+# targets to match the workspace pattern in benten-core/Cargo.toml — the
+# benches are native-only catalog-hot-path baselines and the runtime
+# crate stays zero-dependency.
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "catalog_baseline"
+harness = false
+
