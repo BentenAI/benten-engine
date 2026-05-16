@@ -556,6 +556,25 @@ pub enum GraphError {
         /// Human-readable reason the closure returned `Err`.
         reason: String,
     },
+
+    /// #992: the redb file carries an on-disk schema-version envelope
+    /// (`store::SCHEMA_VERSION_KEY`) whose value this build does not
+    /// understand. Refuse rather than silently mis-route reads against a
+    /// future prefix schema. Mirrors the `SnapshotBlobError::SchemaVersion`
+    /// posture for the content-addressed snapshot-blob payload.
+    ///
+    /// Absence of the key is NOT this error — a pre-envelope database is,
+    /// by definition, the v1 (5-prefix) layout and opens as implied-v1.
+    #[error(
+        "redb graph schema mismatch: this build expects version {expected}, file declared version {actual}"
+    )]
+    SchemaVersionMismatch {
+        /// Schema version the running build understands
+        /// (`store::GRAPH_SCHEMA_VERSION`).
+        expected: u32,
+        /// Schema version observed on the redb file.
+        actual: u32,
+    },
 }
 
 impl GraphError {
@@ -615,6 +634,7 @@ impl GraphError {
             }
             GraphError::InvImmutability { .. } => ErrorCode::InvImmutability,
             GraphError::TxAborted { .. } => ErrorCode::TxAborted,
+            GraphError::SchemaVersionMismatch { .. } => ErrorCode::GraphSchemaVersionMismatch,
         }
     }
 }

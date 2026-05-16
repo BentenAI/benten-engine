@@ -36,9 +36,9 @@ use crate::indexes::{
     value_index_bytes,
 };
 use crate::store::{
-    ChangeEvent, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore, NodeStore,
-    decode_err, edge_key, edge_src_index_key, edge_src_index_prefix, edge_tgt_index_key,
-    edge_tgt_index_prefix, node_key,
+    ChangeEvent, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore,
+    GRAPH_SCHEMA_VERSION, NodeStore, SCHEMA_VERSION_KEY, decode_err, edge_key, edge_src_index_key,
+    edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, node_key,
 };
 use crate::transaction::{TxGuard, fan_out};
 use crate::{GraphError, Transaction, WriteAuthority, WriteContext};
@@ -378,7 +378,8 @@ impl RedbBackend {
             });
         }
         let db = Database::open(path)?;
-        Self::from_db(db, durability)
+        // open-existing: read-only schema-envelope verify (absent ≡ v1).
+        Self::from_db(db, durability, false)
     }
 
     /// Assemble a `RedbBackend` from an already-opened [`Database`] + the
@@ -388,7 +389,17 @@ impl RedbBackend {
     /// constructors (`open_existing_with_durability` /
     /// `open_or_create_with_durability` / `open_in_memory`). A new field on
     /// `RedbBackend` only needs to be wired here once.
-    fn from_db(db: Database, durability: DurabilityMode) -> Result<Self, GraphError> {
+    /// `write_if_absent` distinguishes the open intent for the #992
+    /// schema-version envelope: open-or-create / in-memory paths stamp
+    /// v1 when the envelope is absent; open-existing is read-only and
+    /// treats an absent envelope as implied-v1 (a pre-envelope file IS
+    /// the v1 layout). Either way a present-but-mismatched version is
+    /// refused.
+    fn from_db(
+        db: Database,
+        durability: DurabilityMode,
+        write_if_absent: bool,
+    ) -> Result<Self, GraphError> {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
@@ -404,6 +415,7 @@ impl RedbBackend {
             writes_committed: Arc::new(AtomicU64::new(0)),
         };
         backend.ensure_tables()?;
+        backend.check_schema_version(write_if_absent)?;
         Ok(backend)
     }
 
@@ -460,7 +472,8 @@ impl RedbBackend {
     ) -> Result<Self, GraphError> {
         warn_if_group_durability_collapsed(durability);
         let db = Database::create(path.as_ref())?;
-        Self::from_db(db, durability)
+        // open-or-create: stamp the schema-version envelope if absent.
+        Self::from_db(db, durability, true)
     }
 
     /// Backward-compatible alias for [`Self::open_or_create`]. New code should
@@ -504,7 +517,8 @@ impl RedbBackend {
         let db = Database::builder()
             .create_with_backend(redb::backends::InMemoryBackend::new())
             .map_err(redb::Error::from)?;
-        Self::from_db(db, DurabilityMode::Async)
+        // in-memory: fresh DB every time → stamp the envelope.
+        Self::from_db(db, DurabilityMode::Async, true)
     }
 
     /// Wave-1 mini-review SEVERE-2: current value of the storage-layer
@@ -531,6 +545,114 @@ impl RedbBackend {
         }
         write_txn.commit()?;
         Ok(())
+    }
+
+    /// #992: on-disk schema-version envelope check. The redb file otherwise
+    /// has no whole-file format envelope (only redb's own page version),
+    /// unlike `SnapshotBlob` which carries `schema_version` + refuses
+    /// unknown versions. This closes that asymmetry.
+    ///
+    /// - **`write_if_absent == true`** (open-or-create): if the
+    ///   `SCHEMA_VERSION_KEY` meta-row is absent, stamp
+    ///   [`GRAPH_SCHEMA_VERSION`]. Covers fresh DBs AND pre-envelope DBs
+    ///   created by older builds — they acquire an explicit v1 stamp on
+    ///   first open-or-create by an envelope-aware build.
+    /// - **`write_if_absent == false`** (open-existing): read-only. Absence
+    ///   of the key means the file IS the v1 (5-prefix) layout by
+    ///   definition (it predates the envelope) — accept as implied-v1
+    ///   without writing.
+    /// - **Either mode:** a present value `!= GRAPH_SCHEMA_VERSION` is
+    ///   refused with [`GraphError::SchemaVersionMismatch`] rather than
+    ///   silently mis-routing reads against a future prefix schema.
+    ///
+    /// The meta-key is non-CID, never part of any Node/Edge/Subgraph
+    /// canonical bytes or index — purely a format envelope.
+    fn check_schema_version(&self, write_if_absent: bool) -> Result<(), GraphError> {
+        // Read phase.
+        let observed: Option<u32> = {
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_table(NODES_TABLE)?;
+            match table.get(SCHEMA_VERSION_KEY)? {
+                Some(v) => {
+                    let bytes = v.value();
+                    let arr: [u8; 4] = bytes.try_into().map_err(|_| {
+                        GraphError::Decode("schema-version envelope is not a 4-byte u32".into())
+                    })?;
+                    Some(u32::from_be_bytes(arr))
+                }
+                None => None,
+            }
+        };
+
+        match observed {
+            Some(v) if v == GRAPH_SCHEMA_VERSION => Ok(()),
+            Some(v) => Err(GraphError::SchemaVersionMismatch {
+                expected: GRAPH_SCHEMA_VERSION,
+                actual: v,
+            }),
+            None => {
+                if write_if_absent {
+                    let write_txn = self.begin_write_txn()?;
+                    {
+                        let mut table = write_txn.open_table(NODES_TABLE)?;
+                        table.insert(
+                            SCHEMA_VERSION_KEY,
+                            GRAPH_SCHEMA_VERSION.to_be_bytes().as_slice(),
+                        )?;
+                    }
+                    write_txn.commit()?;
+                }
+                // Absent + read-only open ⇒ implied-v1, accept.
+                Ok(())
+            }
+        }
+    }
+
+    /// Test-only: overwrite the on-disk schema-version envelope with a
+    /// raw `u32` (or, with `None`, delete the meta-key to simulate a
+    /// pre-envelope / implied-v1 file). Used exclusively by the #992
+    /// closure-pin to exercise the implied-v1 + version-mismatch arms
+    /// without depending on `redb` internals from the test crate.
+    ///
+    /// # Errors
+    /// Propagates redb transaction failures.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn force_schema_version_for_test(&self, value: Option<u32>) -> Result<(), GraphError> {
+        let write_txn = self.begin_write_txn()?;
+        {
+            let mut table = write_txn.open_table(NODES_TABLE)?;
+            match value {
+                Some(v) => {
+                    table.insert(SCHEMA_VERSION_KEY, v.to_be_bytes().as_slice())?;
+                }
+                None => {
+                    table.remove(SCHEMA_VERSION_KEY)?;
+                }
+            }
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    /// Test-only: read the raw on-disk schema-version envelope value
+    /// (`None` if the meta-key is absent). Used by the #992 closure-pin
+    /// to assert the open-or-create stamp landed.
+    ///
+    /// # Errors
+    /// Propagates redb read failures.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn read_schema_version_for_test(&self) -> Result<Option<u32>, GraphError> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(NODES_TABLE)?;
+        match table.get(SCHEMA_VERSION_KEY)? {
+            Some(v) => {
+                let arr: [u8; 4] = v.value().try_into().map_err(|_| {
+                    GraphError::Decode("schema-version envelope not 4-byte u32".into())
+                })?;
+                Ok(Some(u32::from_be_bytes(arr)))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Begin a write transaction with this backend's configured
@@ -1716,7 +1838,19 @@ impl KVBackend for RedbBackend {
         if prefix.is_empty() {
             for item in table.iter()? {
                 let (k, v) = item?;
-                out.push((k.value().to_vec(), v.value().to_vec()));
+                let key = k.value();
+                // #992: the schema-version envelope is a whole-file format
+                // header, NOT graph data. Exclude it from the full-store
+                // scan so `scan(b"")` continues to return exactly the
+                // Node/Edge/Subgraph/index entries (preserves the
+                // empty-store-is-empty contract + InMemoryBackend↔RedbBackend
+                // scan parity). Non-empty-prefix scans already exclude it:
+                // `_` (0x5F) sorts before every CID prefix (`e`/`n`/`s`,
+                // 0x65+) so no `[prefix, next)` range can reach it.
+                if key == SCHEMA_VERSION_KEY {
+                    continue;
+                }
+                out.push((key.to_vec(), v.value().to_vec()));
             }
         } else {
             let next = next_prefix(prefix);
