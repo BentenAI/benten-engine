@@ -40,7 +40,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # cancel-in-progress was true on PRs; combined with runner-backlog it cancelled
+  # slow required build+test legs before they could complete, making PR merge
+  # structurally impossible (same legs pass on main, which never self-cancels).
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
