@@ -88,7 +88,6 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass confirms the EngineCapsHandle surface."]
 fn cap_proof_new_constructor_leaves_proof_cid_none() {
     let (_dir, engine) = fresh_engine();
     let alice = engine.create_principal("alice").expect("seed principal");
@@ -106,7 +105,6 @@ fn cap_proof_new_constructor_leaves_proof_cid_none() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass confirms the EngineCapsHandle surface."]
 fn install_proof_populates_proof_cid_via_grant_capability() {
     let (_dir, engine) = fresh_engine();
     let alice = engine.create_principal("alice").expect("seed principal");
@@ -127,7 +125,6 @@ fn install_proof_populates_proof_cid_via_grant_capability() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass confirms the EngineCapsHandle surface."]
 fn install_proof_then_revoke_round_trips_without_error() {
     let (_dir, engine) = fresh_engine();
     let alice = engine.create_principal("alice").expect("seed principal");
@@ -150,7 +147,6 @@ fn install_proof_then_revoke_round_trips_without_error() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass confirms the EngineCapsHandle surface."]
 fn revoke_then_reinstall_re_mints_grant_and_lifts_in_memory_revocation() {
     let (_dir, engine) = fresh_engine();
     let alice = engine.create_principal("alice").expect("seed principal");
@@ -197,7 +193,6 @@ fn revoke_then_reinstall_re_mints_grant_and_lifts_in_memory_revocation() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass confirms the EngineCapsHandle surface."]
 fn install_proof_against_caps_disabled_engine_returns_subsystem_disabled() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()

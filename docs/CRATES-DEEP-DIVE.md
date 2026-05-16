@@ -246,7 +246,7 @@ This is the single most prominent "load-bearing-yet-placeholder" surface in the 
 ### Other named surface concerns
 
 - **`benten-ivm::ViewQuery`** is one un-typed record carrying every field any view needs (`label`, `limit`, `offset`, `anchor_id`, `entity_cid`, `event_name`). Every view ignores most of them. Pattern mismatches surface as `E_IVM_PATTERN_MISMATCH`. A typed-per-view variant is named in the docstring but hasn't landed. **v1-gate prominence: medium.**
-- **`benten-ivm`'s `Strategy::C` (Z-set / DBSP)** is reserved-not-implemented forever-deferred. Either commit to a phase or rename to `Strategy::Reserved`. **v1-gate prominence: low.**
+- **`benten-ivm`'s `Strategy::Reserved`** (renamed from `Strategy::C` at G23-0a per arch-r1-14) is the named-future-family placeholder. The closed-set `{A, B, Reserved}` is refused at registration time with typed errors for `A` + `Reserved`; future algorithmic families (Z-set / DBSP cancellation if a phase commits to it) replace the `Reserved` variant. **v1-gate prominence: low.**
 - **`benten-ivm`'s Phase-1 `rebuild()` doesn't replay events.** Every view's `rebuild` clears state and resets the budget; none replay the change-event log. The audit names this as a real correctness gap. **v1-gate prominence: medium.**
 - **`benten-sync` light-client `MerkleProof` is O(n) not O(log n).** Tree-shaped path is named for Phase 4-Meta (couples to light-client modes (b)+(c) deferral). The bandwidth-saving still holds because payload bytes aren't in the proof. **v1-gate prominence: low.**
 - **`benten-sync`'s handshake nonce-cache for replay-protection.** The bounded-window math catches captured-off-wire replays older than the window; it does NOT catch a replay within the window if the nonce hasn't been cached. **v1-gate prominence: medium.**
@@ -309,7 +309,7 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-ivm` | `ViewQuery` is one un-typed record over-broad | medium | Typed-per-view variant per docstring |
 | `benten-ivm` | `dispatch_for` + `is_canonical_view_id` are `pub` but documented INTERNAL | low | Narrow to `pub(crate)` after re-export sweep |
 | `benten-ivm` | Phase-1 `rebuild()` doesn't replay events | medium | Phase-3+ event-replay infrastructure |
-| `benten-ivm` | `Strategy::C` (Z-set / DBSP) reserved-not-implemented forever-deferred | low | Commit to phase OR rename to `Strategy::Reserved` |
+| `benten-ivm` | `Strategy::Reserved` is the named-future-family placeholder (renamed from `Strategy::C` at G23-0a) | low | CLOSED at G23-0a; future algorithmic families replace the variant |
 | `benten-ivm` | Subscriber pattern-based pre-filtering Phase-3 TODO unmoved | low (medium at Phase 4-Foundation scale) | Becomes load-bearing when N user views >> 5 |
 | `benten-ivm` | `Subscriber::on_change` uses `eprintln!` for non-fatal errors | low | `tracing` migration |
 | `benten-ivm` | `for_id_with_budget` for `content_listing` non-`"post"` label silently drops budget | low | Lift constructor to accept `(label, budget)` together |
@@ -473,7 +473,7 @@ These are gaps that won't block dispatch but will become tangible inside Phase 4
 
 - `trait Transport` / `trait Crdt` abstractions in `benten-sync` (CLAUDE.md #19 engine extensions).
 - Alternate signature schemes in `benten-id` (post-quantum / hardware-key).
-- `benten-ivm::Strategy::C` Z-set / DBSP implementation (or rename to `Strategy::Reserved`).
+- `benten-ivm::Strategy::Reserved` future-family commitment (Z-set / DBSP cancellation if a phase commits to it; rename from `Strategy::C` shipped at G23-0a).
 
 ---
 
@@ -499,7 +499,7 @@ Flat list of the most-impactful unresolved decisions across all 12 crates. Rough
 
 9. **`benten-core` two-Anchor-shape consolidation.** `u64`-id and Cid-head-threaded both ship; R5 G7 was supposed to pick a canonical shape and didn't. Phase 4-Foundation anchor-store-with-GC work (if introduced for the plugin / registry surfaces) would force the issue. Resolve in Phase 4-Foundation or in Phase 4-Meta alongside the anchor-store landing?
 
-10. **`benten-ivm::Strategy::C` disposition.** Reserved-not-implemented forever-deferred. Either commit to a phase (Z-set / DBSP is a real algorithmic family) or rename to `Strategy::Reserved` with a string payload so the variant doesn't accumulate semantic weight without a plan.
+10. **`benten-ivm::Strategy::Reserved` disposition.** CLOSED at G23-0a per arch-r1-14: renamed from `Strategy::C` to `Strategy::Reserved` so the variant carries explicit named-future-family semantics. Future algorithmic families (Z-set / DBSP cancellation if a phase commits) replace the variant rather than living alongside it. The closed-set `{A, B, Reserved}` invariant + typed-error rejection at registration are stable v1 surface.
 
 ---
 

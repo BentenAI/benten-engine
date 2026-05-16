@@ -1392,7 +1392,7 @@ R6 lens findings: `r6-arch-3` (no_dsl_compiler_dep.rs) + `r6-wsa-6` (sandbox_wal
 **Phase 2b state:** G8-B (`71dff61`) + wave-8h IVM Algorithm B production registration both landed. The view registry routes Strategy::B to AlgorithmBView for the 5 canonical view IDs; user-defined Strategy::A/C are now rejected at registration (the documented behaviour) but the test bodies are `todo!()`.
 
 **Files:**
-- `crates/benten-engine/tests/user_view_strategy_a_rejected_for_user.rs` — 2 tests (Strategy::A rejection + Strategy::C reserved-for-Phase-3 path)
+- `crates/benten-engine/tests/user_view_strategy_a_rejected_for_user.rs` — 2 tests (Strategy::A rejection + Strategy::Reserved (renamed from Strategy::C at G23-0a) reserved-for-Phase-3 path)
 - `crates/benten-engine/tests/view_id_label_hint_refactor.rs` — 2 tests (view registry-driven label hint + canonical Phase-1 view registry coverage)
 
 **What landing each requires:** test driver that constructs view specs with user-defined strategies and asserts the registration-time rejection error code; refactor of label-hint logic from string-prefix-strip to registry lookup.

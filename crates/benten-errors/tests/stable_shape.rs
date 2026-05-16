@@ -992,7 +992,7 @@ fn catalog_variant_count_matches_enum() {
             // ALL_CATALOG_VARIANTS classifies as `true`, and we cross-
             // check counts below, the test surfaces the gap as a
             // runtime length mismatch (rather than a compile error).
-            // The hard-coded `CATALOG_VARIANT_COUNT, 167` assertion in
+            // The hard-coded `CATALOG_VARIANT_COUNT` assertion in
             // `variant_count_is_pinned` above is the SECONDARY
             // tripwire — any author bumping the list must touch both.
             _ => false,

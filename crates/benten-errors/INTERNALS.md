@@ -1,6 +1,6 @@
 # `benten-errors` — Internals deep-dive
 
-*Read-only audit. Rewritten 2026-05-14 against HEAD `c589ffe` (post Phase-4-Foundation close — tag `phase-4-foundation-close` at `0ce98d0`).*
+*Read-only audit. Rewritten 2026-05-14 against HEAD `8141b94` (post Phase-4-Foundation close — tag `phase-4-foundation-close` at `0ce98d0`).*
 
 ## 1. What this crate does (plain English)
 
@@ -116,7 +116,7 @@ None. `Cargo.toml` explicitly disables the libtest bench harness (`bench = false
 
 Four distinct counts coexist by design at HEAD (per `docs/ERROR-CATALOG.md` preamble table):
 
-| Count | Source | Value at HEAD `c589ffe` | Meaning |
+| Count | Source | Value at HEAD `8141b94` | Meaning |
 |---|---|---|---|
 | Throwable enum variants | `src/lib.rs::ErrorCode` minus `Unknown(String)` | **168** | What the engine can actually emit at runtime |
 | Regression-list entries | `tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **168** | Round-trip-pinned list; matches throwable 1:1 post R6-FP-C |

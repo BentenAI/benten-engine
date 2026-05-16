@@ -2,7 +2,7 @@
 
 A plain-English deep-dive into the foundational crate of the Benten Engine. Read this when you need to understand what `benten-core` owns, how it sits in the workspace, and what philosophical lines it draws around itself. Audience: contributors who already know Rust but are new to the crate.
 
-Current as of HEAD `c589ffe` (post `phase-4-foundation-close` tag).
+Current as of HEAD `8141b94` (post `phase-4-foundation-close` tag).
 
 ---
 
