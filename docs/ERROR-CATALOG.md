@@ -1529,7 +1529,7 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 - **Message:** "decentralized registry discovery query timed out before any peer responded"
 - **Fix:** **Reserved at Phase 4-Foundation; first production firing at Phase 4-Meta** when registry-substrate lands per ratification #3. Phase 4-Foundation v0 uses direct content-addressed-share over Atriums (no registry).
-- **Thrown at:** `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
+- **Thrown at:** decentralized-registry discovery query path in `crates/benten-platform-foundation/src/registry.rs` (Phase 4-Meta fills). The paper-only `Registry` discovery trait was pulled at v1-API-stabilization per #1198/#1014; the production firing site lands when the registry substrate is implemented at Phase 4-Meta (drift-detector reachability is `ignore` until then).
 - **Phase:** 4-Foundation G24-D (reserved); 4-Meta (firing)
 
 ### E_MATERIALIZER_CAP_DENIED

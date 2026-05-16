@@ -1059,7 +1059,8 @@ pub enum ErrorCode {
 /// the name was formerly `PHASE_2A_FIRING_CODES` and read as "the
 /// firing-codes list we keep extending", which invited mis-extension. The
 /// scope is *frozen at Phase-2a-close*; later phases' firing-site coverage
-/// is pinned by `tests/stable_shape.rs::ALL_CATALOG_VARIANTS` +
+/// is pinned by
+/// `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` +
 /// `catalog_variant_count_matches_enum`, not by appending here. This list
 /// only ever shrinks if a Phase-2a code is retired.
 pub const FIRING_CODES_AT_PHASE_2A_SNAPSHOT: &[ErrorCode] = &[
