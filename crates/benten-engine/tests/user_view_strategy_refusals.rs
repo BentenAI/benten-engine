@@ -1,12 +1,12 @@
 //! Phase 2b G8-B (D8-RESOLVED): typed-error refusal tests for
-//! `Engine::create_user_view`.
+//! `Engine::register_user_view`.
 //!
 //! `Strategy::A` is reserved for the 5 hand-written Phase-1 IVM views
 //! (Rust-only). User-registered views must use `Strategy::B` (the
 //! default per D8). `Strategy::C` is reserved for Phase 3+ Z-set / DBSP
 //! cancellation and is refused at registration time in Phase 2b.
 //!
-//! These tests pin the engine boundary — `create_user_view` returns
+//! These tests pin the engine boundary — `register_user_view` returns
 //! `EngineError::ViewStrategyARefused` / `EngineError::ViewStrategyCReserved`
 //! BEFORE any subscriber side-effect. The error.code() round-trips to the
 //! catalog string `E_VIEW_STRATEGY_A_REFUSED` /
@@ -147,7 +147,7 @@ fn user_view_subsystem_disabled_when_ivm_off() {
 
     let err = engine
         .register_user_view(spec)
-        .expect_err("create_user_view must refuse when IVM disabled");
+        .expect_err("register_user_view must refuse when IVM disabled");
     match err {
         EngineError::SubsystemDisabled { subsystem } => assert_eq!(subsystem, "ivm"),
         other => panic!("expected SubsystemDisabled, got {other:?}"),

@@ -1,8 +1,8 @@
 //! G12-B green-phase: DSL → `Subgraph` → re-serialize round-trip across the
 //! 5 primitive fixtures the MINIMAL-FOR-DEVSERVER scope must support
-//! (per `r1-architect-reviewer.json` G12-B-scope: ~200-400 LOC, 4 primitives
-//! initially — this file pins 5 fixtures one of which uses primitive
-//! composition to keep round-trip surface honest).
+//! (per `r1-architect-reviewer.json` G12-B-scope: ~900 LOC at HEAD, 4
+//! primitives initially — this file pins 5 fixtures one of which uses
+//! primitive composition to keep round-trip surface honest).
 //!
 //! Lifted from red-phase 2026-04-28 (R5 G12-B implementer).
 //!
@@ -75,8 +75,10 @@ fn dsl_compiler_round_trips_call_respond_composition() {
 #[test]
 fn dsl_compiler_round_trip_preserves_subgraph_spec_cid_across_compile_serialize_compile() {
     // Property pin: compile(src1) -> sg1 -> serialize -> deserialize -> sg2;
-    // CID(sg1) == CID(sg2). Closes Inv-13 collision-stability for the
-    // compiler emission path.
+    // CID(sg1) == CID(sg2). Closes Inv-10 canonical-bytes collision-
+    // stability for the compiler emission path (order-independent
+    // DAG-CBOR; NOT Inv-13 immutability — that fires at engine
+    // put_node_with_context time, not at DSL emission).
     let src = "handler 'cid-stable' { read('post') -> respond }";
     let c = compile_str(src).unwrap();
     let cid_a = c.subgraph.cid().unwrap();

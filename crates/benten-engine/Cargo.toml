@@ -36,16 +36,6 @@ bench = false
 # `--features benten-eval/testing` so the `cargo test` / `cargo nextest
 # run` invocations continue to light the helpers up.
 default = []
-# Phase-2b G12-E (2026-04-27) — `envelope-cache-test-grade` RETIRED.
-# The feature gated the test-grade `engine_wait::ENVELOPE_CACHE` static
-# (a `LazyLock<Mutex<BTreeMap<Cid, ExecutionStateEnvelope>>>` with no
-# durability). G12-E lands a real persistence layer
-# (`benten_eval::SuspensionStore` + `crate::RedbSuspensionStore`); the
-# napi cdylib + workspace tests now route through the durable store and
-# the feature has nothing left to gate. Retired empty so any external
-# consumer that named the feature gets a no-op rather than a hard
-# Cargo error; remove next phase.
-envelope-cache-test-grade = []
 # G12-A: narrow feature that gates ONLY the
 # `Engine::testing_set_iteration_budget` setter (consumed by the napi
 # `bindings/napi/test/budget_exhausted_napi_round_trip.test.ts`
@@ -57,7 +47,7 @@ envelope-cache-test-grade = []
 # keep working unchanged. Production cdylib consumers do NOT see this
 # method unless they explicitly opt in.
 iteration-budget-test-grade = []
-test-helpers = ["envelope-cache-test-grade", "iteration-budget-test-grade"]
+test-helpers = ["iteration-budget-test-grade"]
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
 # for the 4 exit-gate composite files (wait_resume_determinism,

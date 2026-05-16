@@ -111,9 +111,12 @@ pub struct HostFnSpec {
     /// with `bypass_output_budget = true`.
     #[serde(default)]
     pub bypass_output_budget: bool,
-    /// D19 — Phase-3 iroh forward-compat. `false` in 2b for every entry
-    /// (no async host-fn ships in 2b). Reserved cap `host:async` is
-    /// declared but not wired.
+    /// D19 — async-host-fn forward-compat. `false` for every entry at
+    /// HEAD (no async host-fn ships through Phase 4-Foundation; Phase 3
+    /// SHIPPED without flipping this). Reserved cap `host:async` is
+    /// declared but not wired; the keep/wire/retire decision is a
+    /// Phase-4-Meta v1-API-stabilization ratification (see
+    /// `docs/future/phase-4-backlog.md`).
     #[serde(default)]
     pub requires_async: bool,
     /// One-line description (dev-time only; not part of canonical bytes).
@@ -287,8 +290,12 @@ fn build_default_host_fns() -> Arc<BTreeMap<String, HostFnSpec>> {
 }
 
 /// Reserved cap-string for D19 calibrated allow-async path.
-/// In Phase 2b: declared, not used (no async host-fn ships). Phase 3
-/// iroh `kv:read` flips `requires_async = true` and acquires this cap.
+/// Declared, not used at HEAD (no async host-fn ships through Phase
+/// 4-Foundation; the original D19 framing expected a Phase-3 iroh
+/// `kv:read` to flip `requires_async = true` and acquire this cap, but
+/// Phase 3 SHIPPED without it). The keep/wire/retire decision is a
+/// Phase-4-Meta v1-API-stabilization ratification (see
+/// `docs/future/phase-4-backlog.md`).
 pub const RESERVED_HOST_ASYNC_CAP: &str = "host:async";
 
 /// Init-snapshot intersection of a manifest's caps against a live

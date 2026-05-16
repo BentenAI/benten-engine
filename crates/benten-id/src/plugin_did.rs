@@ -31,9 +31,15 @@ use crate::keypair::Keypair;
 /// A minted plugin-DID handle.
 ///
 /// Holds the keypair (for issuance) + the resolved Did (for audience
-/// matching). Cloning the handle SHARES the keypair via the underlying
-/// SigningKey storage; production callers should NOT clone — the store
-/// owns the canonical instance.
+/// matching).
+///
+/// **Surf-2 #910 — `PluginDidHandle` is NOT `Clone`.** It embeds a
+/// [`Keypair`], which deliberately does not implement `Clone` per
+/// `crypto-blocker-1` secret-bytes hygiene; that !Clone property
+/// propagates here by construction. The store owns the canonical
+/// instance and hands out `&PluginDidHandle` borrows; there is no
+/// clone path to reason about. (The prior docstring described
+/// keypair-sharing-on-clone semantics for a clone that cannot exist.)
 #[derive(Debug)]
 pub struct PluginDidHandle {
     /// The DID string form (`did:key:z...`).
@@ -50,6 +56,19 @@ impl PluginDidHandle {
     }
 
     /// Borrow the keypair for signing-issuance.
+    ///
+    /// **Hyg-1 #313 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+    /// This accessor has no production caller AT HEAD, but it is NOT
+    /// speculative dead code: per CLAUDE.md baked-in #18, plugin-DID
+    /// is a *constrained issuer* — it "issues UCAN delegations to
+    /// OTHER plugin-DIDs WITHIN the manifest envelope." That issuance
+    /// call site (the `benten-caps` manifest-envelope-chain issuer
+    /// path) is Phase-4-Meta scope. The keypair MUST be reachable for
+    /// that wiring; deleting it now would force a SemVer-breaking
+    /// re-add at the exact moment the constrained-issuer path lands.
+    /// The `keypair` field is read solely through this accessor by
+    /// design (the store owns the canonical instance; production
+    /// callers must not clone — see the struct docstring).
     #[must_use]
     pub fn keypair(&self) -> &Keypair {
         &self.keypair
@@ -97,6 +116,15 @@ pub fn handle_with_did_for_test(did: Did) -> PluginDidHandle {
 /// `benten-caps::manifest_envelope_chain_validation` walks the actual
 /// UCAN chain; this function just confirms the audience field
 /// matches the plugin-DID's resolved string form.
+///
+/// **Hyg-1 #320 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)),
+/// production-zero / test caller exists.** Per CLAUDE.md baked-in #18,
+/// plugin-DID is a UCAN *audience handle*; this is the canonical
+/// audience-binding shape-check the manifest-envelope chain validator
+/// composes with. The chain-validator wiring is Phase-4-Meta scope —
+/// deleting the shape-check now would force a re-add when that path
+/// lands. T-3v-D wording: "production-zero", not "zero callers"
+/// (inline tests exercise it).
 #[must_use]
 pub fn audience_matches_plugin_did(audience: &Did, plugin_did: &Did) -> bool {
     audience == plugin_did
@@ -104,9 +132,12 @@ pub fn audience_matches_plugin_did(audience: &Did, plugin_did: &Did) -> bool {
 
 /// An in-memory store of minted plugin-DIDs.
 ///
-/// Production code persists this via redb (Phase 4-Foundation
-/// `ManifestStore` — shares storage with `GrantStore` per cap-r1-15).
-/// At G24-D wave the in-memory shape is the canonical type.
+/// **Hyg-2 #379 retense:** at HEAD this store is in-memory only — it
+/// is NOT yet persisted via redb. The prior docstring stated redb
+/// persistence (`ManifestStore` sharing storage with `GrantStore`)
+/// as present-tense fact; that durable backing is named for
+/// Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`. The
+/// in-memory shape here is the canonical type today.
 #[derive(Debug, Default)]
 pub struct PluginDidStore {
     handles: Vec<PluginDidHandle>,
@@ -121,6 +152,16 @@ impl PluginDidStore {
 
     /// Mint a new plugin-DID + persist into the store. Returns the
     /// minted DID for the caller to embed in `InstallRecord`.
+    ///
+    /// **Hyg-1 #318 — production-zero / test caller exists.** The
+    /// production install path uses [`mint`] + [`PluginDidStore::insert`]
+    /// (caller-mint-first contract per `docs/PLUGIN-MANIFEST.md §3`);
+    /// `mint_and_store` is the test-convenience that fuses both for
+    /// store round-trip tests. Retained (DISAGREE-WITH-EXPLANATION,
+    /// HARD RULE 12 (c)): it is the documented mint+persist convenience
+    /// the store-roundtrip pins drive; deleting it would force those
+    /// pins to inline the two-step dance. T-3v-D wording sharpen:
+    /// "production-zero" (NOT "zero callers" — a test caller exists).
     pub fn mint_and_store(&mut self) -> Did {
         let handle = mint();
         let did = handle.did.clone();
@@ -166,10 +207,10 @@ impl PluginDidStore {
         self.handles.iter().find(|h| h.did == *did)
     }
 
-    /// Iterate over all minted plugin-DIDs.
-    pub fn iter(&self) -> impl Iterator<Item = &Did> {
-        self.handles.iter().map(|h| &h.did)
-    }
+    // Hyg-1 #318: `PluginDidStore::iter()` removed — ZERO callers
+    // anywhere (production or test). Speculative enumeration surface
+    // that never grew a caller (CLAUDE.md #5 / META #355). Lookups go
+    // through `get(&Did)`; the uninstall path uses `revoke(&Did)`.
 
     /// Remove a plugin-DID from the store (uninstall path).
     pub fn revoke(&mut self, did: &Did) -> bool {
@@ -179,12 +220,22 @@ impl PluginDidStore {
     }
 
     /// Count of minted plugin-DIDs.
+    ///
+    /// **Hyg-1 #318 — production-zero / test caller exists.** Driven
+    /// by the `plugin_did_store_insert_duplicate_rejected` integration
+    /// pin (asserts the duplicate-insert arm does NOT grow the store).
+    /// T-3v-D wording sharpen: "production-zero" not "zero callers".
     #[must_use]
     pub fn len(&self) -> usize {
         self.handles.len()
     }
 
     /// Whether the store is empty.
+    ///
+    /// **Hyg-1 #318 — retained for `clippy::len_without_is_empty`.**
+    /// No direct caller, but a public `len()` without a paired
+    /// `is_empty()` is a clippy lint; this is the idiomatic pairing,
+    /// not speculative surface.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()

@@ -138,12 +138,13 @@ impl ContentListingView {
     /// Force a full rebuild from scratch. Phase-1 semantics: clears the
     /// indexed state and resets `state` to `Fresh`. The view is "empty but
     /// consistent" post-rebuild; a real rebuild would replay historical
-    /// events — Phase 2 wires that against the change-event log.
+    /// events — a later-phase enhancement wires that against the
+    /// change-event log.
     ///
     /// # Errors
     ///
-    /// Infallible in Phase 1; returns `Result` for forward-compat with
-    /// Phase-2 event-log replay which can fail.
+    /// Infallible today; returns `Result` for forward-compat with
+    /// later-phase event-log replay which can fail.
     pub fn rebuild_from_scratch(&mut self) -> Result<(), ViewError> {
         self.entries.clear();
         self.next_disambiguator = 0;
@@ -269,7 +270,7 @@ impl View for ContentListingView {
     /// the emitter populate `event.node`.
     #[allow(
         clippy::print_stderr,
-        reason = "Phase 1 fallback warn; Phase 2 routes to tracing"
+        reason = "current fallback warn; a later phase routes to tracing"
     )]
     fn update(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
         if self.budget.is_stale() {
@@ -351,7 +352,7 @@ impl View for ContentListingView {
                 self.budget.try_consume(cost, VIEW_ID)?;
                 self.remove_all_with_cid(&event.cid);
                 if self.budget.remaining() == 0 && !self.entries.is_empty() {
-                    // Optional Phase-2 perf upgrade: `cid → sort_key`
+                    // Optional later-phase perf upgrade: `cid → sort_key`
                     // reverse map makes this O(log n). Deferred.
                 }
             }

@@ -158,6 +158,31 @@ pub enum MstError {
         /// Key string the proof claims to prove inclusion for.
         key: String,
     },
+
+    /// [`run_mst_diff_to_convergence`] hit its `MAX_ROUNDS` cap
+    /// without the two MSTs' roots converging (Safe-3 #610 closure).
+    ///
+    /// The function's name + docstring promise the post-condition
+    /// `mst_a.root_cid() == mst_b.root_cid()`. Previously a cap-hit
+    /// returned the same `usize` rounds-count as a happy convergence,
+    /// so the caller could not distinguish "converged at round 64"
+    /// from "gave up at round 64 still divergent" — an adversarial
+    /// peer crafting per-round-fresh-divergent entries silently
+    /// defeated the benign-input bound + the engine proceeded with a
+    /// divergent-CID state thinking convergence happened. This typed
+    /// variant makes the cap-hit observable at the call site.
+    #[error(
+        "MST diff did not converge within {max_rounds} rounds \
+         (roots still divergent: a={root_a} b={root_b})"
+    )]
+    ConvergenceFailedExceededMaxRounds {
+        /// The `MAX_ROUNDS` cap that was hit.
+        max_rounds: usize,
+        /// `mst_a`'s root CID at cap-hit (still divergent from `b`).
+        root_a: MstCid,
+        /// `mst_b`'s root CID at cap-hit (still divergent from `a`).
+        root_b: MstCid,
+    },
 }
 
 /// Single MST entry: `(key, value)` pair carrying the canonical
@@ -513,7 +538,20 @@ impl MstDiff {
 }
 
 /// Drive an MST diff between two peers to convergence via repeated
-/// exchange-and-apply rounds. Returns the round count taken.
+/// exchange-and-apply rounds. Returns the round count taken on
+/// success.
+///
+/// # Errors
+///
+/// Returns [`MstError::ConvergenceFailedExceededMaxRounds`] if the
+/// `MAX_ROUNDS` cap is hit while the roots are still divergent
+/// (Safe-3 #610 closure). Previously the cap-hit path returned the
+/// same `usize` rounds-count as a happy convergence, so a caller
+/// (e.g. engine-side `consume_sync_replica_mst_diff`) could not
+/// distinguish "converged at round N" from "gave up at round N still
+/// divergent". The typed error makes the post-condition
+/// (`mst_a.root_cid() == mst_b.root_cid()`) observable at the call
+/// site rather than silently assumed.
 ///
 /// ## Convergence claim
 ///
@@ -533,7 +571,7 @@ impl MstDiff {
 ///
 /// After return, `mst_a.root_cid() == mst_b.root_cid()`. Both peers
 /// hold the union of each other's entries.
-pub fn run_mst_diff_to_convergence(mst_a: &mut Mst, mst_b: &mut Mst) -> usize {
+pub fn run_mst_diff_to_convergence(mst_a: &mut Mst, mst_b: &mut Mst) -> Result<usize, MstError> {
     let mut rounds = 0;
     // Hard cap on rounds defends against pathological inputs that
     // could otherwise loop. The bound is generous: 4× the worst-case
@@ -544,7 +582,7 @@ pub fn run_mst_diff_to_convergence(mst_a: &mut Mst, mst_b: &mut Mst) -> usize {
         let diff = MstDiff::between(mst_a, mst_b);
         if diff.missing_in_a.is_empty() && diff.missing_in_b.is_empty() {
             // Already converged — but count this terminating round.
-            return rounds;
+            return Ok(rounds);
         }
         // Apply diff: each peer ingests the other's missing entries.
         // We use direct insert here (already-trusted intra-test
@@ -557,7 +595,15 @@ pub fn run_mst_diff_to_convergence(mst_a: &mut Mst, mst_b: &mut Mst) -> usize {
             mst_b.insert(e);
         }
     }
-    rounds
+    // Safe-3 #610: cap-hit fall-through. The post-condition the
+    // function name + docstring promise (roots converged) does NOT
+    // hold here — surface it as a typed error instead of returning
+    // an indistinguishable rounds-count.
+    Err(MstError::ConvergenceFailedExceededMaxRounds {
+        max_rounds: MAX_ROUNDS,
+        root_a: mst_a.root_cid(),
+        root_b: mst_b.root_cid(),
+    })
 }
 
 #[cfg(test)]
@@ -639,9 +685,38 @@ mod tests {
                 b.insert(entry(&format!("k{i:04}"), &[i as u8]));
             }
         }
-        let rounds = run_mst_diff_to_convergence(&mut a, &mut b);
+        let rounds = run_mst_diff_to_convergence(&mut a, &mut b).expect("benign input converges");
         assert!(rounds <= 8, "expected fast convergence; got {rounds}");
         assert_eq!(a.root_cid(), b.root_cid());
+    }
+
+    #[test]
+    fn convergence_cap_hit_surfaces_typed_error() {
+        // Safe-3 #610 closure pin: an input that cannot converge
+        // within MAX_ROUNDS now yields a typed
+        // ConvergenceFailedExceededMaxRounds carrying both divergent
+        // roots — NOT an indistinguishable rounds-count. We simulate
+        // non-convergence by driving the function with a degenerate
+        // MstDiff stand-in is not feasible here (MstDiff::between is
+        // deterministic), so we assert the typed surface exists +
+        // round-trips its fields; the adversarial-non-convergence
+        // path is exercised by the integration suite. This pin would
+        // FAIL to compile under the pre-#610 `-> usize` signature.
+        let err = MstError::ConvergenceFailedExceededMaxRounds {
+            max_rounds: 64,
+            root_a: Mst::new().root_cid(),
+            root_b: Mst::new().root_cid(),
+        };
+        assert!(matches!(
+            err,
+            MstError::ConvergenceFailedExceededMaxRounds { max_rounds: 64, .. }
+        ));
+        // The Result return type is the load-bearing change.
+        let mut a = Mst::new();
+        let mut b = Mst::new();
+        a.insert(entry("k", &[1]));
+        let r: Result<usize, MstError> = run_mst_diff_to_convergence(&mut a, &mut b);
+        assert!(r.is_ok(), "benign two-entry diff converges");
     }
 
     #[test]

@@ -9,12 +9,15 @@
 //! keypair (proving the rotation was authorized by whoever held the
 //! old secret).
 //!
-//! Cross-wave integration: the durable UCAN backend (G14-B) consumes
-//! [`RotationAttestation`] events to revoke pre-rotation UCANs. The
-//! G14-A2 surface lands the in-memory primitive + the
-//! [`RotationLog`] in-RAM helper that the chain-walker
-//! [`is_did_superseded`] consults; G14-B replaces the log with a
-//! durable backing store.
+//! Cross-wave integration: the durable UCAN backend consumes
+//! [`RotationAttestation`] events to revoke pre-rotation UCANs. This
+//! surface lands the in-memory primitive + the [`RotationLog`] in-RAM
+//! helper that the chain-walker consults via
+//! [`RotationLog::is_superseded`]. Durable rehydration of the log at
+//! engine-open (replacing the in-RAM helper with a persistent backing
+//! store) is named for Phase-4-Meta at
+//! `docs/future/phase-4-backlog.md §4.26` (RotationLog rehydration at
+//! engine open).
 //!
 //! ## Logical-DID stability under rotation
 //!
@@ -30,8 +33,8 @@
 //! is what UCAN audience fields bind to. The rotation attestation
 //! lets verifiers walk forward from the OLD DID to discover the
 //! NEW keypair without breaking long-lived audience references.
-//! G14-B's durable backend replaces this in-memory walk with a
-//! persistent rotation log.
+//! Durable rehydration of this in-memory walk is named for
+//! Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`.
 
 use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
@@ -67,6 +70,16 @@ pub struct RotationAttestation {
 ///
 /// Phase-3 lands a single kind (`SupersededBy`); the enum keeps a
 /// stable shape across post-Phase-3 extensions.
+///
+/// **Qual-1 #722 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+/// The "1-variant enum + `kind()` returning a constant" is not
+/// premature flexibility to collapse: `AttestationKind` is a
+/// `Serialize`/`Deserialize` discriminator that a must-pass test pins
+/// (`did_rotation.rs:29`). Collapsing it to a unit would (a) break
+/// that pin and (b) force a wire-shape change when a second kind
+/// lands post-Phase-3 — the deliberate forward-stable shape is the
+/// point. Wire-format-adjacent; out of scope to mutate per the lane
+/// rule regardless.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AttestationKind {
     /// "Old DID is superseded by new DID" — the only kind in Phase 3.
@@ -79,12 +92,23 @@ impl RotationAttestation {
         AttestationKind::SupersededBy
     }
 
-    /// Borrow the previous keypair's `did:key`.
+    /// Borrow the previous keypair's `did:key` as a typed [`Did`].
+    ///
+    /// **Qual-1 #711 — DISAGREE-WITH-EXPLANATION, production-zero /
+    /// test caller exists.** These two accessors wrap the pub `String`
+    /// fields into the typed [`Did`] newtype; the `did_rotation.rs`
+    /// integration suite (`:31`, `:35`) relies on them. They are not
+    /// redundant re-wraps to delete (CLAUDE.md #5): the typed-`Did`
+    /// return is the safe handle callers should use rather than
+    /// touching the raw `String`; deleting them would push every
+    /// consumer to re-implement `Did::from_string_unchecked` inline.
     pub fn previous_keypair_did(&self) -> Did {
         Did::from_string_unchecked(self.previous_did.clone())
     }
 
-    /// Borrow the next keypair's `did:key`.
+    /// Borrow the next keypair's `did:key` as a typed [`Did`]. See
+    /// [`RotationAttestation::previous_keypair_did`] for the Qual-1
+    /// #711 disposition.
     pub fn next_keypair_did(&self) -> Did {
         Did::from_string_unchecked(self.next_did.clone())
     }
@@ -163,8 +187,9 @@ pub fn rotate_keypair(
 
 /// In-RAM rotation log for chain-walk consultation.
 ///
-/// G14-B replaces this with a durable backing store. The shape here
-/// (a flat list of [`RotationAttestation`] entries) is sufficient
+/// Durable rehydration of this log at engine-open is named for
+/// Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`. The shape
+/// here (a flat list of [`RotationAttestation`] entries) is sufficient
 /// for the must-pass tests — chain-walkers consult [`Self::is_superseded`]
 /// to determine whether a UCAN issuer DID has been rotated.
 #[derive(Default, Debug, Clone)]
@@ -304,8 +329,9 @@ impl RotationLog {
     }
 }
 
-/// Convenience: returns `true` if `did` has been superseded by any
-/// attestation in `log`. Equivalent to [`RotationLog::is_superseded`].
-pub fn is_did_superseded(did: &Did, log: &RotationLog) -> bool {
-    log.is_superseded(did)
-}
+// Hyg-1 #301: the `is_did_superseded(did, log)` free-fn alias is
+// removed — it was a no-op wrapper over `RotationLog::is_superseded`
+// with zero callers (only a module-doc backreference, fixed in #428).
+// CLAUDE.md #5 (no deprecated aliases / no-op shims). Callers use
+// `RotationLog::is_superseded` (or `is_did_superseded`'s prior
+// behavior via `log.is_superseded(did)`) directly.

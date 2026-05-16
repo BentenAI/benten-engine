@@ -163,16 +163,6 @@ impl WriteContext {
             device_cid: None,
         }
     }
-
-    /// Builder: set the [`WriteAuthority`] on a context. Phase 2a G2-B.
-    #[must_use]
-    pub fn with_authority(mut self, authority: WriteAuthority) -> Self {
-        if matches!(authority, WriteAuthority::EnginePrivileged) {
-            self.is_privileged = true;
-        }
-        self.authority = authority;
-        self
-    }
 }
 
 /// Context handed to the capability policy at read time.

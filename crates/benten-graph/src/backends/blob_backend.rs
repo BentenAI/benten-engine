@@ -29,7 +29,7 @@
 //! blob CIDs are computed as `BLAKE3(blob_bytes)` wrapped in the
 //! Benten CIDv1 envelope (matches `Cid::from_blake3_digest`). The
 //! authoritative CID-validation gate lives at the engine's
-//! [`Engine::register_module_bytes`](https://docs/) call site per
+//! `Engine::register_module_bytes` call site per
 //! D-PHASE-3-12 RESOLVED — the `BlobBackend::put` impl here recomputes
 //! defense-in-depth so an attacker writing into the backend directly
 //! cannot poison the cache (the CID stored in `properties.blob_cid`
@@ -111,7 +111,7 @@ impl RedbBlobBackend {
 
     /// List the CIDs of every blob currently persisted in the
     /// `system:ModuleBytes` zone. Used by
-    /// [`Engine::rehydrate_module_bytes_from_zone`](https://docs/) at
+    /// `Engine::rehydrate_module_bytes_from_zone` at
     /// engine-open time to repopulate the in-memory cache.
     ///
     /// # Errors

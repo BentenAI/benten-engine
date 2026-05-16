@@ -378,6 +378,17 @@ impl RedbBackend {
             });
         }
         let db = Database::open(path)?;
+        Self::from_db(db, durability)
+    }
+
+    /// Assemble a `RedbBackend` from an already-opened [`Database`] + the
+    /// requested durability tier, then create the schema tables.
+    ///
+    /// Single shared field-initialization site for the three public
+    /// constructors (`open_existing_with_durability` /
+    /// `open_or_create_with_durability` / `open_in_memory`). A new field on
+    /// `RedbBackend` only needs to be wired here once.
+    fn from_db(db: Database, durability: DurabilityMode) -> Result<Self, GraphError> {
         let backend = Self {
             db,
             durability: to_redb_durability(durability),
@@ -449,22 +460,7 @@ impl RedbBackend {
     ) -> Result<Self, GraphError> {
         warn_if_group_durability_collapsed(durability);
         let db = Database::create(path.as_ref())?;
-        let backend = Self {
-            db,
-            durability: to_redb_durability(durability),
-            configured_durability: durability,
-            #[cfg(any(test, feature = "testing"))]
-            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
-            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
-            #[cfg(any(test, feature = "testing"))]
-            test_event_log: Arc::new(Mutex::new(Vec::new())),
-            subscribers: Arc::new(Mutex::new(Vec::new())),
-            tx_flag: Arc::new(Mutex::new(false)),
-            next_tx_id: Arc::new(AtomicU64::new(1)),
-            writes_committed: Arc::new(AtomicU64::new(0)),
-        };
-        backend.ensure_tables()?;
-        Ok(backend)
+        Self::from_db(db, durability)
     }
 
     /// Backward-compatible alias for [`Self::open_or_create`]. New code should
@@ -508,23 +504,7 @@ impl RedbBackend {
         let db = Database::builder()
             .create_with_backend(redb::backends::InMemoryBackend::new())
             .map_err(redb::Error::from)?;
-        let durability = DurabilityMode::Async;
-        let backend = Self {
-            db,
-            durability: to_redb_durability(durability),
-            configured_durability: durability,
-            #[cfg(any(test, feature = "testing"))]
-            last_durability_by_label: Arc::new(Mutex::new(HashMap::new())),
-            immutability_cache: Arc::new(Mutex::new(CidExistenceCache::new())),
-            #[cfg(any(test, feature = "testing"))]
-            test_event_log: Arc::new(Mutex::new(Vec::new())),
-            subscribers: Arc::new(Mutex::new(Vec::new())),
-            tx_flag: Arc::new(Mutex::new(false)),
-            next_tx_id: Arc::new(AtomicU64::new(1)),
-            writes_committed: Arc::new(AtomicU64::new(0)),
-        };
-        backend.ensure_tables()?;
-        Ok(backend)
+        Self::from_db(db, DurabilityMode::Async)
     }
 
     /// Wave-1 mini-review SEVERE-2: current value of the storage-layer
@@ -1632,8 +1612,8 @@ impl RedbBackend {
     ///
     /// Per the plan's R1 architect ratification (§line-605), the pull-shaped
     /// channel concretion — tokio-broadcast on native, synchronous
-    /// `Vec<Box<dyn ChangeSubscriber>>` fan-out on WASM — lives in
-    /// [`benten-engine::change`](https://docs.rs/benten-engine), not here.
+    /// `Vec<Arc<dyn ChangeSubscriber>>` fan-out on WASM — lives in
+    /// `benten-engine`'s change module, not here.
     /// `benten-graph` stays runtime-agnostic.
     ///
     /// # Ordering contract (mini-review g3-ce-10)

@@ -1,4 +1,4 @@
-//! [`KVBackend`] trait + supporting types ([`ScanResult`], [`BatchOp`],
+//! [`KVBackend`] trait + supporting types ([`ScanResult`],
 //! [`DurabilityMode`]).
 //!
 //! The trait is the narrow storage waist the rest of the Benten graph layer
@@ -34,28 +34,6 @@
 //!     transaction primitive, not on `put_batch`.
 
 use core::slice::Iter;
-
-/// A batch operation enqueued into [`KVBackend::put_batch`] or the transaction
-/// primitive.
-///
-/// Phase 1 only uses `Put` in the batch path; `Delete` is exposed so that
-/// future hetereogeneous write sets (index update + node put + edge delete in
-/// a single commit) can all round-trip through the trait.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BatchOp {
-    /// Insert or overwrite `key` with `value`.
-    Put {
-        /// Storage key (opaque bytes).
-        key: Vec<u8>,
-        /// Stored value (opaque bytes).
-        value: Vec<u8>,
-    },
-    /// Remove `key`. Idempotent — a `Delete` of an absent key commits cleanly.
-    Delete {
-        /// Storage key to remove.
-        key: Vec<u8>,
-    },
-}
 
 /// Durability knob for a backend commit.
 ///
@@ -369,10 +347,10 @@ pub trait KVBackend: Send + Sync {
 
     /// Commit multiple puts atomically. Either every pair lands or none do.
     ///
-    /// Phase 1 signature is a slice of `(key, value)` pairs rather than a
-    /// slice of [`BatchOp`] because every current call site is pure-Put.
-    /// When hetereogeneous write sets land in G3 the transaction primitive
-    /// will consume [`BatchOp`] directly; this method stays put-only.
+    /// Signature is a slice of `(key, value)` pairs because every call site
+    /// is pure-Put. Heterogeneous write sets (node put + edge delete + index
+    /// remove in a single commit) live on the G3 transaction primitive
+    /// (`crate::transaction`), not here; this method stays put-only.
     ///
     /// # Errors
     /// Implementation-defined.

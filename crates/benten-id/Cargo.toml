@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Phase-3 G14-A1 — Ed25519 keypair + did:key + UCAN chain validation. G14-A2 wave-4a' adds VC + multi_sig + DID rotation + device-DID attestation."
+description = "Identity primitives for the Benten engine — Ed25519 keypair + did:key + UCAN chain validation + VC + multi-sig surface + DID rotation + device-attestation primitive (post-COLLAPSE: pure primitive, no acceptance pipe) + plugin-DID mint/store + sibling GrantReader trait."
 
 [lints]
 workspace = true
@@ -16,6 +16,20 @@ workspace = true
 # `plugin_did::handle_with_did_for_test`) needed by integration-test
 # suites that exercise defensive-return paths which cannot be driven
 # via the production-only mint() API. NOT for production callers.
+#
+# Surf-1 #862 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)). The
+# finding proposed either removing the feature or making it default-on.
+# Both are rejected: (a) the feature DOES have a consumer — the
+# `plugin_did_store_insert_duplicate_rejected` required-features test
+# below (R6-FP-3 cap-r6-r3-1 substantive arm); removing it deletes a
+# real security-pin's only construction path; (b) default-on would
+# expose `handle_with_did_for_test` (an intentionally-unsound
+# DID/keypair-unbound constructor) to production builds — the exact
+# hazard this feature gate exists to prevent. The genuine residual
+# (a feature-less `cargo test --workspace` silently skips the gated
+# arm) is a workspace CI-config concern OUTSIDE benten-id's lane and
+# is NOT a defect of this feature's design. `cargo test -p benten-id
+# --features testing` runs the arm green (verified).
 testing = []
 
 [lib]

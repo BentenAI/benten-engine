@@ -7,7 +7,7 @@
 //!
 //! ## Pre-fix behaviour (the bug)
 //!
-//! `crates/benten-engine/src/engine_views.rs::create_user_view` at
+//! `crates/benten-engine/src/engine_views.rs::register_user_view` at
 //! lines 282-291 (pre-wave-8h) unconditionally constructed a
 //! [`benten_ivm::views::ContentListingView`] regardless of the spec's
 //! declared `Strategy::B`. The strategy declaration was persisted on
@@ -44,7 +44,7 @@ use benten_engine::{Engine, UserViewSpec};
 /// the EngineBuilder auto-registers a `ContentListingView` for label
 /// `"post"` at engine open (see `crates/benten-engine/src/builder.rs`
 /// lines ~348-354), and the dedupe-by-id check inside
-/// `create_user_view` would skip our registration. `"capability_grants"`
+/// `register_user_view` would skip our registration. `"capability_grants"`
 /// is one of the 5 canonical view ids (so AlgorithmBView::for_id
 /// dispatches cleanly) but is NOT auto-registered by the builder.
 ///
@@ -71,10 +71,10 @@ fn ivm_strategy_b_user_view_registers_as_algorithm_b() {
 
     engine
         .register_user_view(spec)
-        .expect("create_user_view with Strategy::B + canonical id must succeed");
+        .expect("register_user_view with Strategy::B + canonical id must succeed");
 
     let observed = engine.view_strategy("capability_grants").expect(
-        "after create_user_view, the view MUST be queryable by id — \
+        "after register_user_view, the view MUST be queryable by id — \
              None here means the IVM subscriber didn't see the registration",
     );
 

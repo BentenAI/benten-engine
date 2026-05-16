@@ -16,7 +16,7 @@ use benten_core::Value;
 use benten_engine::{PrimitiveKind, PrimitiveSpec, SubgraphSpec, WriteSpec};
 use napi::bindgen_prelude::*;
 
-use crate::node::{json_to_props, value_to_json};
+use crate::node::json_to_props;
 
 /// Map a DSL `primitive` string to an evaluator [`PrimitiveKind`]. Returns
 /// `None` on unknown kinds so the caller can surface `InvalidArg`.
@@ -306,72 +306,44 @@ fn decode_legacy_shape(
 /// Shape: `{ ok, edge?, errorCode?, errorMessage?, createdCid?, list?,
 /// completedIterations?, successfulWriteCount }`.
 pub(crate) fn outcome_to_json(outcome: &benten_engine::Outcome) -> serde_json::Value {
-    let mut out = serde_json::Map::new();
-    let ok = outcome.is_ok_edge();
-    out.insert("ok".to_string(), serde_json::Value::Bool(ok));
-    if let Some(edge) = outcome.edge_taken() {
-        out.insert("edge".to_string(), serde_json::Value::String(edge));
-    }
-    if let Some(code) = outcome.error_code() {
-        out.insert(
-            "errorCode".to_string(),
-            serde_json::Value::String(code.to_string()),
-        );
-    }
-    if let Some(msg) = outcome.error_message() {
-        out.insert("errorMessage".to_string(), serde_json::Value::String(msg));
-    }
-    if let Some(cid) = outcome.created_cid() {
-        let s = cid.to_base32();
-        // Both `createdCid` (spec) and the shorter `cid` alias so the R3 test
-        // `expect(typeof outcome.cid).toBe("string")` is satisfied without
-        // forcing a rename on the TS side.
-        out.insert(
-            "createdCid".to_string(),
-            serde_json::Value::String(s.clone()),
-        );
-        out.insert("cid".to_string(), serde_json::Value::String(s));
-    }
-    if let Some(list) = outcome.as_list() {
-        let json_list = list
-            .iter()
-            .map(|n| {
-                let mut obj = serde_json::Map::new();
-                obj.insert(
-                    "labels".to_string(),
-                    serde_json::Value::Array(
-                        n.labels
-                            .iter()
-                            .cloned()
-                            .map(serde_json::Value::String)
-                            .collect(),
-                    ),
-                );
-                obj.insert(
-                    "properties".to_string(),
-                    serde_json::Value::Object(
-                        n.properties
-                            .iter()
-                            .map(|(k, v)| (k.clone(), value_to_json(v)))
-                            .collect(),
-                    ),
-                );
-                serde_json::Value::Object(obj)
-            })
-            .collect();
-        out.insert("list".to_string(), serde_json::Value::Array(json_list));
-    }
-    if let Some(iter) = outcome.completed_iterations() {
-        out.insert(
-            "completedIterations".to_string(),
-            serde_json::Value::Number(u64::from(iter).into()),
-        );
-    }
-    out.insert(
-        "successfulWriteCount".to_string(),
-        serde_json::Value::Number(u64::from(outcome.successful_write_count()).into()),
-    );
-    serde_json::Value::Object(out)
+    use crate::json_build::ObjBuilder;
+
+    // Spec shape: `{ ok, edge?, errorCode?, errorMessage?, createdCid?,
+    // cid?, list?, completedIterations?, successfulWriteCount }` — 9
+    // possible fields (refinement-audit #1052: prime for the max).
+    let created = outcome.created_cid().map(|c| c.to_base32());
+    ObjBuilder::with_capacity(9)
+        .bool("ok", outcome.is_ok_edge())
+        .opt_str("edge", outcome.edge_taken())
+        .opt_str("errorCode", outcome.error_code().map(|c| c.to_string()))
+        .opt_str("errorMessage", outcome.error_message())
+        // Both `createdCid` (spec) and the shorter `cid` alias so the R3
+        // test `expect(typeof outcome.cid).toBe("string")` is satisfied
+        // without forcing a rename on the TS side.
+        .opt_str("createdCid", created.clone())
+        .opt_str("cid", created)
+        .opt_raw(
+            "list",
+            outcome.as_list().map(|list| {
+                // #812 missed-extract-helper: this list-row was a
+                // verbatim copy of `node::node_to_json`'s
+                // `{ labels, properties }` shape — reuse it.
+                serde_json::Value::Array(
+                    list.iter().map(crate::node::node_to_json).collect(),
+                )
+            }),
+        )
+        .opt_raw(
+            "completedIterations",
+            outcome
+                .completed_iterations()
+                .map(|iter| serde_json::Value::Number(u64::from(iter).into())),
+        )
+        .u64(
+            "successfulWriteCount",
+            u64::from(outcome.successful_write_count()),
+        )
+        .build()
 }
 
 /// R6FP-tail (Round-2 Instance 10) — project a
@@ -384,33 +356,12 @@ pub(crate) fn outcome_to_json(outcome: &benten_engine::Outcome) -> serde_json::V
 pub(crate) fn register_replace_outcome_to_json(
     outcome: &benten_engine::RegisterReplaceOutcome,
 ) -> serde_json::Value {
-    let mut out = serde_json::Map::new();
-    out.insert(
-        "handlerId".to_string(),
-        serde_json::Value::String(outcome.handler_id.clone()),
-    );
-    out.insert(
-        "cid".to_string(),
-        serde_json::Value::String(outcome.cid.to_base32()),
-    );
-    out.insert(
-        "previousCid".to_string(),
-        match &outcome.previous_cid {
-            Some(c) => serde_json::Value::String(c.to_base32()),
-            None => serde_json::Value::Null,
-        },
-    );
-    out.insert(
-        "chainDepth".to_string(),
-        serde_json::Value::Number(serde_json::Number::from(outcome.chain_depth as u64)),
-    );
-    out.insert(
-        "versionTag".to_string(),
-        serde_json::Value::String(outcome.version_tag()),
-    );
-    out.insert(
-        "replaced".to_string(),
-        serde_json::Value::Bool(outcome.replaced()),
-    );
-    serde_json::Value::Object(out)
+    crate::json_build::ObjBuilder::with_capacity(6)
+        .str("handlerId", outcome.handler_id.clone())
+        .cid("cid", &outcome.cid)
+        .opt_cid("previousCid", outcome.previous_cid.as_ref())
+        .u64("chainDepth", outcome.chain_depth as u64)
+        .str("versionTag", outcome.version_tag())
+        .bool("replaced", outcome.replaced())
+        .build()
 }

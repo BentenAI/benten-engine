@@ -11,9 +11,12 @@
 /// intentionally a slice — test grep + phf-table-codegen both consume it as
 /// an ordered-by-insertion sequence.
 ///
-/// TODO(phase-3 — system-zone phf-table codegen): populate the phf
-/// table from this const at build time. Carried from Phase-2a G5-B-i
-/// (didn't land); pairs with the Phase-3 first-wave CI-hygiene pass.
+/// TODO(phase-4-meta — backlog §4.68 row 5): Phase-2a G5-B-i intended
+/// a build-time phf-table codegen from this const that didn't land.
+/// Phase-4-Meta lands the codegen IF the prefix set grows enough to
+/// make linear scan a hot-path concern; otherwise closes the row as
+/// "slice is correct for the current small fixed set — codegen is
+/// premature optimization". See `docs/future/phase-4-backlog.md §4.65`.
 pub const SYSTEM_ZONE_PREFIXES: &[&str] = &[
     "system:CapabilityGrant",
     "system:IVMView",

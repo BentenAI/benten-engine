@@ -125,7 +125,7 @@ impl UserViewSpecBuilder {
     /// when a required field was not set. The napi binding maps this to a
     /// typed `napi::Error::InvalidArg` at the FFI boundary
     /// (`bindings/napi/src/view.rs::parse_user_view_spec`); Rust callers see
-    /// the raw `String`. `Engine::create_user_view` does NOT wrap the builder
+    /// the raw `String`. `Engine::register_user_view` does NOT wrap the builder
     /// result — it consumes a constructed `UserViewSpec` directly.
     ///
     /// # Errors
@@ -712,10 +712,11 @@ pub struct DiagnosticInfo {
 
 /// Nested-transaction handle. **Phase 1 stub.**
 ///
-/// TODO(phase-3 — nested-tx sub-transaction state): Phase-1/2 always
-/// rejects nested begin; Phase-3 populates this with the real
-/// sub-transaction state (R-nit-07). Carried from Phase-2 generic
-/// marker.
+/// TODO(phase-4-meta — backlog §4.68 row 1): Phase-1/2/3 always
+/// reject nested begin; Phase-4-Meta either populates this with real
+/// sub-transaction state (origin R-nit-07) or closes the row as
+/// intentionally-unimplemented per the DAG-only transaction model
+/// (CLAUDE.md #4/#6). See `docs/future/phase-4-backlog.md §4.65`.
 #[derive(Debug)]
 pub struct NestedTx {
     #[allow(

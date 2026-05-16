@@ -90,3 +90,9 @@ pub use errors::{
     DeviceAttestationError, DidError, DidRotationError, KeypairError, MultiSigError,
     SeedImportError, UcanError, VcError,
 };
+// Surf-1 #854: `ReaderError` is the 9th typed-error enum; the other 8
+// are re-exported at the crate root above. `grant_reader::ReaderError`
+// was missing from the top-level surface (G27-C drift), forcing
+// consume sites to spell the module path. Restored for re-export
+// symmetry with the rest of the typed-error taxonomy.
+pub use grant_reader::ReaderError;

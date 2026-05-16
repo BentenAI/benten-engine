@@ -230,8 +230,8 @@ impl CapabilityGrantsView {
 /// Extract the `grantee` property from a Node as a `Cid`. Returns `None`
 /// when the property is absent or not CID-shaped.
 ///
-/// Phase 1 encodes CID-valued properties as `Value::Bytes` carrying the raw
-/// CID byte representation (`Cid::as_bytes`). A Phase-2 string-CID parse
+/// CID-valued properties are encoded as `Value::Bytes` carrying the raw
+/// CID byte representation (`Cid::as_bytes`). A later-phase string-CID parse
 /// path (`Cid::from_str`, currently deferred — see benten-core) will accept
 /// `Value::Text` too; until then the bytes form is canonical.
 fn extract_grantee(node: &benten_core::Node) -> Option<Cid> {

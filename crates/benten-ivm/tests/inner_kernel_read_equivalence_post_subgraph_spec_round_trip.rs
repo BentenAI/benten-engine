@@ -54,9 +54,9 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-A wave un-ignores) — inner-kernel-read byte-equivalence arm. \
-The G23-0b round-trip pins prove wrapper-construction-equivalence only (by construction-identity); the inner-kernel-read equivalence arm requires the G24-A materializer pipeline to wire the inner-read seam. \
-DESTINATION-REMAPPED at R6-FP-BF to docs/future/phase-4-backlog.md §4.31 (Phase-4-Meta IVM inner-kernel-read byte-equivalence arms post-SubgraphSpec round-trip) per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW. The G24-A materializer wave shipped HtmlJson/Plaintext materializers but the `materialize_inner_kernel_read` seam that produces byte-equivalent raw output is Phase-4-Meta scope; couples to §4.24 recursive materializer walk."]
+#[ignore = "RED-PHASE deferred to docs/future/phase-4-backlog.md §4.31 (Phase-4-Meta IVM inner-kernel-read byte-equivalence arms post-SubgraphSpec round-trip) per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW — inner-kernel-read byte-equivalence arm. \
+The G23-0b round-trip pins prove wrapper-construction-equivalence only (by construction-identity); the inner-kernel-read equivalence arm requires the materializer pipeline to wire the inner-read seam. \
+The materializer wave shipped HtmlJson/Plaintext materializers but the `materialize_inner_kernel_read` seam that produces byte-equivalent raw output is Phase-4-Meta scope; couples to §4.24 recursive materializer walk."]
 fn inner_kernel_read_equivalence_post_subgraph_spec_round_trip_view_1_capability_grants() {
     // G24-A implementer wires this when the materializer pipeline lands.
     // Substantive shape:
@@ -74,29 +74,25 @@ fn inner_kernel_read_equivalence_post_subgraph_spec_round_trip_view_1_capability
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-A wave un-ignores) — same shape as view_1 arm for view_2 event_dispatch. \
-DESTINATION-REMAPPED at R6-FP-BF to docs/future/phase-4-backlog.md §4.31."]
+#[ignore = "RED-PHASE deferred to docs/future/phase-4-backlog.md §4.31 (Phase-4-Meta) — same shape as view_1 arm for view_2 event_dispatch."]
 fn inner_kernel_read_equivalence_post_subgraph_spec_round_trip_view_2_event_dispatch() {
     // DESTINATION-REMAPPED to §4.31; body deferred.
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-A wave un-ignores) — same shape as view_1 arm for view_3 content_listing. \
-DESTINATION-REMAPPED at R6-FP-BF to docs/future/phase-4-backlog.md §4.31."]
+#[ignore = "RED-PHASE deferred to docs/future/phase-4-backlog.md §4.31 (Phase-4-Meta) — same shape as view_1 arm for view_3 content_listing."]
 fn inner_kernel_read_equivalence_post_subgraph_spec_round_trip_view_3_content_listing() {
     // DESTINATION-REMAPPED to §4.31; body deferred.
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-A wave un-ignores) — same shape as view_1 arm for view_4 governance_inheritance (ViewResult::Rules emission). \
-DESTINATION-REMAPPED at R6-FP-BF to docs/future/phase-4-backlog.md §4.31."]
+#[ignore = "RED-PHASE deferred to docs/future/phase-4-backlog.md §4.31 (Phase-4-Meta) — same shape as view_1 arm for view_4 governance_inheritance (ViewResult::Rules emission)."]
 fn inner_kernel_read_equivalence_post_subgraph_spec_round_trip_view_4_governance_inheritance() {
     // DESTINATION-REMAPPED to §4.31; body deferred.
 }
 
 #[test]
-#[ignore = "RED-PHASE (Phase 4-Foundation R5 G24-A wave un-ignores) — same shape as view_1 arm for view_5 version_current (ViewResult::Current emission). \
-DESTINATION-REMAPPED at R6-FP-BF to docs/future/phase-4-backlog.md §4.31."]
+#[ignore = "RED-PHASE deferred to docs/future/phase-4-backlog.md §4.31 (Phase-4-Meta) — same shape as view_1 arm for view_5 version_current (ViewResult::Current emission)."]
 fn inner_kernel_read_equivalence_post_subgraph_spec_round_trip_view_5_version_current() {
     // DESTINATION-REMAPPED to §4.31; body deferred.
 }
