@@ -739,14 +739,18 @@ pub(crate) fn fan_out(subscribers: &[Arc<dyn ChangeSubscriber>], ops: &[PendingO
     let events: Vec<ChangeEvent> = ops.iter().map(|op| op.to_change_event(tx_id)).collect();
     for sub in subscribers {
         for event in &events {
-            let sub_clone = Arc::clone(sub);
-            let event_clone = event.clone();
             // Ignore panics from individual subscribers — they must not
             // take down the commit thread. Phase 2 will replace the stderr
             // breadcrumb with tracing::warn! when tracing lands.
+            //
+            // `AssertUnwindSafe` asserts the captured types are sound under
+            // unwind; it does not require ownership. Capture `sub` + `event`
+            // by reference (no `move`) so the per-dispatch `Arc::clone` +
+            // `ChangeEvent::clone` (N×M allocations) are eliminated
+            // (Qual-1 #710).
             if let Err(_panic_payload) =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                    sub_clone.on_change(&event_clone);
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    sub.on_change(event);
                 }))
             {
                 eprintln!(
