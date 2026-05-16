@@ -1408,6 +1408,30 @@ impl Engine {
                 let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
                 crate::manifest_envelope_recheck::outcome_to_row_reject(outcome, zone, key)?;
             }
+
+            // **COLLAPSE (P3) — J8 envelope-ceiling AND.** The single
+            // chain-validation seam ANDs the verified inbound device
+            // `CapabilityEnvelope` ceiling into the inbound writer's
+            // effective caps. This REPLACES the deleted
+            // `benten_id::Acceptor` trust pipe: the device envelope is
+            // no longer a distinct trust-root; it is a ceiling the one
+            // seam enforces (DECISION-RECORD §4 RATIFIED). Runs in the
+            // SAME per-row loop, AFTER the manifest-envelope recheck —
+            // both are the ONE ceiling seam (build-constraint iii;
+            // P5/#669 generalizes `envelope_ceiling_admits_row` over
+            // device + manifest, NOT a parallel pipe). The scope is
+            // the row's zone-write scope (mirrors the `check_write`
+            // ctx scope above); a `runs_sandbox=false` ceiling rejects
+            // a `host:sandbox:*`-scoped row — CLAUDE.md #17 thin-shape
+            // property preserved through the COLLAPSE rewire.
+            let row_scope = format!("{zone}:write");
+            let verified_ceiling = atrium.last_received_remote_envelope(zone).await.flatten();
+            crate::manifest_envelope_recheck::envelope_ceiling_admits_row(
+                verified_ceiling.as_ref(),
+                &row_scope,
+                zone,
+                key,
+            )?;
         }
 
         // 4. Build the merge Version Node. Properties carry the merged
@@ -1450,6 +1474,10 @@ impl Engine {
         // re-populated by the next `sync_subgraph` /
         // `accept_sync_subgraph` exchange.
         atrium.clear_last_received_remote_device_did(zone).await;
+        // COLLAPSE (P3): clear the per-zone verified-ceiling slot so a
+        // subsequent merge without a fresh wire envelope cannot
+        // inherit the prior envelope's J8 ceiling.
+        atrium.clear_last_received_remote_envelope(zone).await;
         // Phase-3 G16-B-prime fp (cap-g16bp-1 / Ben's RATIFIED Option A
         // 2026-05-08): source the AttributionFrame.actor_cid from
         // `effective_actor_cid` — falls back to device_cid when no
