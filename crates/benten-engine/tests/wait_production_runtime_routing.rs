@@ -488,7 +488,7 @@ fn wait_resume_deadline_fires_against_real_clock() {
     use benten_eval::Outcome as EvalOutcome;
     match result {
         EvalOutcome::Err(e) => assert_eq!(
-            e.code(),
+            e,
             benten_errors::ErrorCode::WaitTimeout,
             "post-deadline resume must fire E_WAIT_TIMEOUT (Wave-8i \
              elapsed_ms() override stamps a real start reference; \

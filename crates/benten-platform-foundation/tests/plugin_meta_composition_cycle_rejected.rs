@@ -71,7 +71,7 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
     use benten_id::keypair::Keypair;
     use benten_platform_foundation::plugin_library::PluginLibrary;
     use benten_platform_foundation::plugin_lifecycle::{
-        InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+        InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
     };
     use benten_platform_foundation::plugin_manifest::{
         CapRequirement, PluginManifest, SharesPolicy, sign_manifest,
@@ -207,9 +207,11 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
     let mut cascade_minter = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
-    let mut ctx = InstallContext {
+    let mut ctx = InstallPorts {
         cap_minter: &mut cascade_minter,
         private_ns: &mut private_ns,
+    };
+    let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -223,6 +225,7 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
         &mut library,
         &mut store,
         &mut ctx,
+        &ctx_params,
         &bytes,
         &a_final_cid,
         &install_record,

@@ -49,7 +49,6 @@ impl<'a> MaterializerEngine for EngineAdapter<'a> {
         self.0
             .read_node_as(principal, cid)
             .map_err(|e| MaterializerError::SchemaMismatch {
-                code: benten_errors::ErrorCode::MaterializerSchemaMismatch,
                 reason: format!("engine read_node_as: {e}"),
             })
     }

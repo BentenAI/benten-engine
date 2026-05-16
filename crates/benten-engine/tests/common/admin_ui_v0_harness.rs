@@ -359,7 +359,6 @@ impl<'a> MaterializerEngine for HarnessEngineAdapter<'a> {
         self.engine
             .read_node_as(principal, cid)
             .map_err(|e| MaterializerError::SchemaMismatch {
-                code: benten_errors::ErrorCode::MaterializerSchemaMismatch,
                 reason: format!("harness engine read_node_as backend error: {e}"),
             })
     }

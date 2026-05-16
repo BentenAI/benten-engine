@@ -1,5 +1,17 @@
-//! G23-B GREEN: materializer walk fires cap-policy at each primitive
-//! boundary (§3.6b pim-2 end-to-end; would-FAIL-if-no-op'd).
+//! G23-B GREEN: the materializer walk's per-row cap gate is the
+//! authoritative materialization-layer admit/deny boundary — invoked
+//! for the content-CID decision and CONSUMED (Safe-1 #527 / Qual-1
+//! #702 closure — Pattern F Bundle 5; §3.6b pim-2 end-to-end;
+//! would-FAIL-if-no-op'd).
+//!
+//! The prior contract here ("fires cap-policy at EACH primitive
+//! boundary") pinned the discarded-bool per-primitive fan-out that
+//! #702/#527 identified as observability-theater: it invoked the gate
+//! N times and `let _`-discarded every result, giving no production
+//! enforcement (per-primitive cap-scope is enforced upstream by the T1
+//! envelope check + schema-compile `derive_scope`) and no production
+//! observability. That loop is removed; this pin now asserts the
+//! substantive contract.
 
 #![allow(clippy::unwrap_used)]
 
@@ -36,9 +48,9 @@ fn materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_pri
     let cid = engine.put_node(Node::new(vec!["Note".into()], props));
     let alice = materializer_fixtures::actor_principal_alice_cid();
 
-    // Recording cap_recheck — counts every invocation. The materializer
-    // walk fires this closure once per emitted primitive boundary +
-    // once for the final content-CID read disposition.
+    // Recording cap_recheck — counts every invocation. After the
+    // theater-loop removal the materializer fires this closure exactly
+    // once: the authoritative content-CID per-row gate decision.
     let count = Arc::new(AtomicUsize::new(0));
     let recorder: MaterializerCapRecheck = {
         let count = Arc::clone(&count);
@@ -49,7 +61,7 @@ fn materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_pri
     };
 
     let mat = HtmlJsonMaterializer;
-    let _out = mat
+    let out = mat
         .materialize_with_gate(MaterializerWalkInputs {
             engine: &engine,
             spec: &spec,
@@ -60,14 +72,22 @@ fn materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_pri
         })
         .unwrap();
 
-    // OBSERVABLE CONSEQUENCE: every primitive boundary fired the
-    // cap_recheck closure. WOULD-FAIL-IF-NO-OP: a dispatch that skipped
-    // cap-checks would leave the counter at 0 (or 1, the per-row
-    // disposition only).
+    // OBSERVABLE CONSEQUENCE: the per-row gate is invoked exactly once
+    // for the authoritative content-CID decision (NOT N-times in a
+    // discarded-bool fan-out). WOULD-FAIL-IF-NO-OP: a dispatch that
+    // skipped the cap-check entirely would leave the counter at 0; a
+    // regression re-introducing the discarded-bool per-primitive
+    // fan-out would push it back to >= primitive_count.
     let observed = count.load(Ordering::SeqCst);
-    assert!(
-        observed >= primitive_count,
-        "materializer walk MUST fire cap-policy at each primitive boundary; \
-         primitive_count={primitive_count}, observed={observed}"
+    assert_eq!(
+        observed, 1,
+        "the per-row gate fires exactly once (authoritative content-CID \
+         decision); the discarded-bool per-primitive fan-out is removed \
+         per #527/#702. primitive_count={primitive_count}, observed={observed}"
     );
+
+    // The admitting bool was CONSUMED end-to-end: exactly one
+    // materialized row + zero denial frames.
+    assert_eq!(out.materialized_row_cids().len(), 1);
+    assert!(out.cap_denials().is_empty());
 }

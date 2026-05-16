@@ -156,10 +156,10 @@ fn wait_signal_shape_mismatch_fires_typed_error_routed_on_error() {
     };
     // Shape-mismatch is a runtime-registration-boundary error.
     assert_eq!(
-        err.code(),
+        err,
         ErrorCode::InvRegistration,
         "signal_shape mismatch must fire E_INV_REGISTRATION (runtime shape check), got {:?}",
-        err.code()
+        err
     );
     assert_eq!(
         err.routed_edge_label(),

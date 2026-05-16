@@ -320,7 +320,7 @@ pub fn signed_install_record(
 /// Use this everywhere a test would otherwise build an `InstallRecord`
 /// with a `Did::from_string_unchecked` placeholder — the new
 /// `install_plugin` Step 8 enforces that `install_record.plugin_did`
-/// is present in the store + matches `InstallContext::expected_plugin_did`,
+/// is present in the store + matches `InstallParams::expected_plugin_did`,
 /// so placeholder DIDs no longer work.
 #[allow(dead_code)]
 pub fn mint_and_insert_plugin_did(store: &mut benten_id::plugin_did::PluginDidStore) -> Did {

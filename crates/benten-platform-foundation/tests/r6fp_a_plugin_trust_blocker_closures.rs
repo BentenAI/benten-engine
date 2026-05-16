@@ -14,7 +14,7 @@ use benten_id::did::Did;
 use benten_id::keypair::Keypair;
 use benten_platform_foundation::plugin_library::PluginLibrary;
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+    InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
 };
 use benten_platform_foundation::plugin_manifest::{
     SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget,
@@ -62,13 +62,16 @@ fn r6fp_a_arch_r6_r1_5_consenting_user_mismatch_surfaces_typed_consenting_user_c
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<Did> = vec![];
-    let mut ctx = InstallContext {
+    let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+    };
+    let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
-        user_did: &user_did, // !=  record.consenting_user_did
+        user_did: &user_did,
+        // !=  record.consenting_user_did
         version_chain: None,
         prior_installed_cid: None,
         expected_plugin_did: &plugin_did,
@@ -77,6 +80,7 @@ fn r6fp_a_arch_r6_r1_5_consenting_user_mismatch_surfaces_typed_consenting_user_c
         &mut library,
         &mut store,
         &mut ctx,
+        &ctx_params,
         &bytes,
         &expected_cid,
         &record,
@@ -99,7 +103,7 @@ fn r6fp_a_arch_r6_r1_5_consenting_user_mismatch_surfaces_typed_consenting_user_c
 fn r6fp_a_sec_r6r1_1_blocker_plugin_did_binding_load_bearing() {
     // sec-r6r1-1 BLOCKER closure (R6-FP-A + R6-FP-A-fp): the install
     // record's signed plugin_did is now LOAD-BEARING — it becomes the
-    // install identity AND must equal `InstallContext::expected_plugin_did`
+    // install identity AND must equal `InstallParams::expected_plugin_did`
     // (caller's claim of which DID the user signed for). Previously
     // install_plugin silently minted a fresh DID via OsRng and the
     // record's plugin_did was signed-but-ignored, defeating the
@@ -139,9 +143,11 @@ fn r6fp_a_sec_r6r1_1_blocker_plugin_did_binding_load_bearing() {
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<Did> = vec![];
-    let mut ctx = InstallContext {
+    let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+    };
+    let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -154,6 +160,7 @@ fn r6fp_a_sec_r6r1_1_blocker_plugin_did_binding_load_bearing() {
         &mut library,
         &mut store,
         &mut ctx,
+        &ctx_params,
         &bytes,
         &expected_cid,
         &record_a,
@@ -246,9 +253,11 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     let mut cascade_a = InMemoryInstallCascade::new();
     let mut private_ns_a = InMemoryInstallCascade::new();
     let trust_list: Vec<Did> = vec![];
-    let mut ctx_a = InstallContext {
+    let mut ctx_a = InstallPorts {
         cap_minter: &mut cascade_a,
         private_ns: &mut private_ns_a,
+    };
+    let ctx_a_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -261,6 +270,7 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
         &mut library_a,
         &mut store_a,
         &mut ctx_a,
+        &ctx_a_params,
         &bytes,
         &expected_cid,
         &record_tampered,
@@ -294,9 +304,11 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     let mut library_b = PluginLibrary::new();
     let mut cascade_b = InMemoryInstallCascade::new();
     let mut private_ns_b = InMemoryInstallCascade::new();
-    let mut ctx_b = InstallContext {
+    let mut ctx_b = InstallPorts {
         cap_minter: &mut cascade_b,
         private_ns: &mut private_ns_b,
+    };
+    let ctx_b_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -309,6 +321,7 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
         &mut library_b,
         &mut store_b,
         &mut ctx_b,
+        &ctx_b_params,
         &bytes,
         &expected_cid,
         &record_legit,
@@ -346,9 +359,11 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     let mut library_c = PluginLibrary::new();
     let mut cascade_c = InMemoryInstallCascade::new();
     let mut private_ns_c = InMemoryInstallCascade::new();
-    let mut ctx_c = InstallContext {
+    let mut ctx_c = InstallPorts {
         cap_minter: &mut cascade_c,
         private_ns: &mut private_ns_c,
+    };
+    let ctx_c_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -361,6 +376,7 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
         &mut library_c,
         &mut store_c,
         &mut ctx_c,
+        &ctx_c_params,
         &bytes,
         &expected_cid,
         &record_orphan,

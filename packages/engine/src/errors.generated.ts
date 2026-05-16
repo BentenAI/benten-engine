@@ -2700,7 +2700,7 @@ export class EPluginLibraryIndexTamper extends BentenError {
 /**
  * E_REGISTRY_DISCOVERY_TIMEOUT
  *
- * Thrown at: `crates/benten-platform-foundation/src/registry.rs::Registry::discover` (Phase 4-Meta fills).
+ * Thrown at: decentralized-registry discovery query path in `crates/benten-platform-foundation/src/registry.rs` (Phase 4-Meta fills). The paper-only `Registry` discovery trait was pulled at v1-API-stabilization per #1198/#1014; the production firing site lands when the registry substrate is implemented at Phase 4-Meta (drift-detector reachability is `ignore` until then).
  * Message template: "decentralized registry discovery query timed out before any peer responded"
  */
 export class ERegistryDiscoveryTimeout extends BentenError {

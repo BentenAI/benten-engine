@@ -30,7 +30,6 @@
 //! passes Phase 1 tests without leaking state between unrelated
 //! anchors. (Carried from `phase-2-anchorstore` generic marker.)
 
-use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -59,6 +58,15 @@ pub struct Anchor {
     /// separate `Anchor::new` calls.
     chain: Arc<Mutex<Vec<(Cid, Cid)>>>,
 }
+
+// Safe-4 #636: compile-time pin for the concurrent-correctness claim — the
+// `Arc<Mutex<..>>` chain is shared across clones of the same Anchor, so
+// `Anchor` must stay `Send + Sync`. Fails to compile if a future field
+// breaks either auto-trait. Zero-cost: the closure is never called.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Anchor>();
+};
 
 // Two anchors are equal iff they point to the same chain instance (same
 // `Arc` allocation) AND have the same head. Independent `Anchor::new`

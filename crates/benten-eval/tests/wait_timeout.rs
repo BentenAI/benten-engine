@@ -101,7 +101,7 @@ fn wait_duration_past_deadline_fires_e_wait_timeout() {
         Outcome::Err(e) => e,
         other => panic!("expected E_WAIT_TIMEOUT, got {other:?}"),
     };
-    assert_eq!(err.code(), ErrorCode::WaitTimeout);
+    assert_eq!(err, ErrorCode::WaitTimeout);
 
     // Error-edge routing pin: WAIT-timeout routes through ON_ERROR, not
     // ON_DENIED.
@@ -138,7 +138,7 @@ fn wait_signal_arrives_after_timeout_fires_e_wait_timeout() {
         other => panic!("expected timeout, got {other:?}"),
     };
     assert_eq!(
-        err.code(),
+        err,
         ErrorCode::WaitTimeout,
         "signal arriving after timeout must fire E_WAIT_TIMEOUT, not resume"
     );
@@ -184,9 +184,9 @@ fn wait_timeout_error_is_distinct_from_denial() {
         other => panic!("expected Err, got {other:?}"),
     };
 
-    assert_ne!(err.code(), ErrorCode::CapDenied);
-    assert_ne!(err.code(), ErrorCode::CapDeniedRead);
-    assert_eq!(err.code().as_str(), "E_WAIT_TIMEOUT");
+    assert_ne!(err, ErrorCode::CapDenied);
+    assert_ne!(err, ErrorCode::CapDeniedRead);
+    assert_eq!(err.as_str(), "E_WAIT_TIMEOUT");
 }
 
 // Small adaptor to keep assertions concise where we assume the suspend path.

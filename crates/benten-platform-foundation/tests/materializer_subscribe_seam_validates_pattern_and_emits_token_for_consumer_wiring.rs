@@ -58,13 +58,8 @@ fn materializer_subscribe_seam_validates_pattern_and_emits_token_for_consumer_wi
     // guard — sec-3.5-r1-9 seam invariant).
     let err = mat.subscribe_with_gate("").unwrap_err();
     assert!(
-        matches!(
-            &err,
-            MaterializerError::SubscribeSeamFailure {
-                code: ErrorCode::MaterializerSubscribeSeamFailure,
-                ..
-            }
-        ),
+        matches!(&err, MaterializerError::SubscribeSeamFailure { .. })
+            && err.code() == ErrorCode::MaterializerSubscribeSeamFailure,
         "empty pattern surfaces E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE: got {err:?}"
     );
 

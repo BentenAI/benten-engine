@@ -13,7 +13,7 @@ use benten_errors::ErrorCode;
 use benten_id::keypair::Keypair;
 use benten_platform_foundation::plugin_library::PluginLibrary;
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+    InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
 };
 
 #[test]
@@ -63,9 +63,11 @@ fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
     let mut private_ns = InMemoryInstallCascade::new();
     // User's trust-list contains alice only (NOT attacker).
     let trust_list = vec![alice.public_key().to_did()];
-    let mut ctx = InstallContext {
+    let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+    };
+    let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -79,6 +81,7 @@ fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
         &mut library,
         &mut store,
         &mut ctx,
+        &ctx_params,
         &bytes,
         &expected_cid,
         &install_record,

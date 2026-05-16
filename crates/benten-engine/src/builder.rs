@@ -508,17 +508,26 @@ impl EngineBuilder {
             // eval ChangeEvent is anchor-centric; edge events ride
             // the anchor_cid/labels with no separate endpoint
             // surface). All other 8 fields forward.
-            let translated = benten_eval::primitives::subscribe::ChangeEvent {
-                anchor_cid: event.cid,
+            //
+            // `ChangeEvent` is `#[non_exhaustive]` (ST-CORE lane
+            // change_stream.rs:122) so the cross-crate struct-expression
+            // form is no longer legal here; the bridge uses the
+            // full-fidelity `ChangeEvent::for_bridge` constructor, which
+            // forwards every one of the 9 fields with their real values
+            // (NOT the lossy `legacy_minimal`). Argument order mirrors
+            // the field order so the no-field-drop drift guard still
+            // covers all forwarded fields.
+            let translated = benten_eval::primitives::subscribe::ChangeEvent::for_bridge(
+                event.cid,
                 kind,
-                seq: benten_eval::primitives::subscribe::next_engine_seq(),
+                benten_eval::primitives::subscribe::next_engine_seq(),
                 payload_bytes,
-                labels: event.labels.clone(),
-                tx_id: event.tx_id,
-                actor_cid: event.actor_cid,
-                handler_cid: event.handler_cid,
-                capability_grant_cid: event.capability_grant_cid,
-            };
+                event.labels.clone(),
+                event.tx_id,
+                event.actor_cid,
+                event.handler_cid,
+                event.capability_grant_cid,
+            );
             benten_eval::primitives::subscribe::publish_change_event_with_labels(
                 &event.labels,
                 translated,
