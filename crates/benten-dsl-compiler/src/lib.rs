@@ -95,6 +95,61 @@ use thiserror::Error;
 pub use benten_core::PrimitiveKind;
 
 // ---------------------------------------------------------------------------
+// #604 / #782 — canonical property-key namespace (scheme-(a))
+// ---------------------------------------------------------------------------
+//
+// Pre-v1 canonical-bytes normalization. Before this, the DSL compiler emitted
+// underscore-prefixed property keys (`_target`, `_module`, `_body`, …) that
+// DIVERGED from the keys `benten_core::SubgraphBuilder` stamps for the same
+// `PrimitiveKind` (`handler`, `module`, `max`, …). The canonical bytes are a
+// function of these keys (DAG-CBOR over the sorted `properties` BTreeMap), so
+// the same logical handler authored via the Rust DSL vs the builder produced
+// DIFFERENT CIDs — an Inv-10 cross-surface gap (#604) and an in-crate
+// `_body`-overload (#782, Map for transform vs Text for iterate).
+//
+// Scheme-(a): the DSL conforms to the `SubgraphBuilder` canonical key names
+// so both authoring surfaces yield byte-identical canonical encodings. These
+// constants are the single source of truth; they mirror the literal keys in
+// `benten_core::subgraph::SubgraphBuilder` (`call_handler` → "handler",
+// `sandbox` → "module", `iterate` → "max", `transform` → "body", WAIT
+// `wait_signal`/`wait_duration` → "signal"/"duration_ms"). The cross-doc
+// type/name mirror discipline (dispatch-conventions §3.5g) couples these to
+// the builder definitions.
+//
+// MUST land pre-v1 — CID churn of every DSL-authored handler is free now,
+// catastrophic after the v1 wire-format freeze.
+
+/// Canonical label key (READ/WRITE/STREAM target). Mirrors the structural
+/// label semantics of `SubgraphBuilder::read`/`write` (no underscore).
+const KEY_LABEL: &str = "label";
+/// Canonical user-properties bag key (WRITE). Mirrors `SubgraphBuilder`
+/// WRITE user-properties (no underscore).
+const KEY_USER_PROPERTIES: &str = "user_properties";
+/// Canonical TRANSFORM body key (Map). Mirrors `SubgraphBuilder::transform`.
+const KEY_TRANSFORM_BODY: &str = "body";
+/// Canonical BRANCH predicate key (Text).
+const KEY_PREDICATE: &str = "predicate";
+/// Canonical CALL target key. Mirrors `SubgraphBuilder::call_handler`'s
+/// `"handler"` property.
+const KEY_CALL_HANDLER: &str = "handler";
+/// Canonical CALL args bag key.
+const KEY_CALL_ARGS: &str = "args";
+/// Canonical SANDBOX module key. Mirrors `SubgraphBuilder::sandbox`'s
+/// `"module"` property.
+const KEY_SANDBOX_MODULE: &str = "module";
+/// Canonical EMIT topic key.
+const KEY_EMIT_TOPIC: &str = "topic";
+/// Canonical SUBSCRIBE pattern key.
+const KEY_SUBSCRIBE_PATTERN: &str = "pattern";
+/// Canonical ITERATE body key. The DSL captures an opaque body *expression*
+/// (Text), which is a DISTINCT concept from `SubgraphBuilder::iterate`'s
+/// numeric `max` bound (Int) — they are not the same payload, so this is NOT
+/// emitted as `"max"`. A distinct non-underscore key keeps #782's overload
+/// closed (different from TRANSFORM's `"body"`) without a false semantic
+/// equation. (Within-scheme-(a) naming refinement; see design-wireformat-1.)
+const KEY_ITERATE_BODY: &str = "iter_body";
+
+// ---------------------------------------------------------------------------
 // Public surface
 // ---------------------------------------------------------------------------
 
@@ -321,7 +376,7 @@ impl<'a> Parser<'a> {
                 let label = self.parse_string()?;
                 self.skip_ws();
                 self.expect_char(')')?;
-                props.insert("_label".to_string(), Value::Text(label));
+                props.insert(KEY_LABEL.to_string(), Value::Text(label));
                 PrimitiveKind::Read
             }
             "write" => {
@@ -329,13 +384,13 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let label = self.parse_string()?;
-                props.insert("_label".to_string(), Value::Text(label));
+                props.insert(KEY_LABEL.to_string(), Value::Text(label));
                 self.skip_ws();
                 if self.peek() == Some(',') {
                     self.advance();
                     self.skip_ws();
                     let body = self.parse_object()?;
-                    props.insert("_user_properties".to_string(), Value::Map(body));
+                    props.insert(KEY_USER_PROPERTIES.to_string(), Value::Map(body));
                 }
                 self.skip_ws();
                 self.expect_char(')')?;
@@ -346,7 +401,7 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let body = self.parse_object()?;
-                props.insert("_body".to_string(), Value::Map(body));
+                props.insert(KEY_TRANSFORM_BODY.to_string(), Value::Map(body));
                 self.skip_ws();
                 self.expect_char(')')?;
                 PrimitiveKind::Transform
@@ -356,7 +411,7 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 let expr = self.read_until_balanced(')')?;
                 props.insert(
-                    "_predicate".to_string(),
+                    KEY_PREDICATE.to_string(),
                     Value::Text(expr.trim().to_string()),
                 );
                 self.expect_char(')')?;
@@ -379,13 +434,13 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let target = self.parse_string()?;
-                props.insert("_target".to_string(), Value::Text(target));
+                props.insert(KEY_CALL_HANDLER.to_string(), Value::Text(target));
                 self.skip_ws();
                 if self.peek() == Some(',') {
                     self.advance();
                     self.skip_ws();
                     let body = self.parse_object()?;
-                    props.insert("_args".to_string(), Value::Map(body));
+                    props.insert(KEY_CALL_ARGS.to_string(), Value::Map(body));
                 }
                 self.skip_ws();
                 self.expect_char(')')?;
@@ -396,7 +451,7 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let module = self.parse_string()?;
-                props.insert("_module".to_string(), Value::Text(module));
+                props.insert(KEY_SANDBOX_MODULE.to_string(), Value::Text(module));
                 self.skip_ws();
                 if self.peek() == Some(',') {
                     self.advance();
@@ -416,7 +471,7 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let topic = self.parse_string()?;
-                props.insert("_topic".to_string(), Value::Text(topic));
+                props.insert(KEY_EMIT_TOPIC.to_string(), Value::Text(topic));
                 self.skip_ws();
                 self.expect_char(')')?;
                 PrimitiveKind::Emit
@@ -426,7 +481,7 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let pattern = self.parse_string()?;
-                props.insert("_pattern".to_string(), Value::Text(pattern));
+                props.insert(KEY_SUBSCRIBE_PATTERN.to_string(), Value::Text(pattern));
                 self.skip_ws();
                 self.expect_char(')')?;
                 PrimitiveKind::Subscribe
@@ -436,7 +491,7 @@ impl<'a> Parser<'a> {
                 self.expect_char('(')?;
                 self.skip_ws();
                 let label = self.parse_string()?;
-                props.insert("_label".to_string(), Value::Text(label));
+                props.insert(KEY_LABEL.to_string(), Value::Text(label));
                 self.skip_ws();
                 self.expect_char(')')?;
                 PrimitiveKind::Stream
@@ -445,7 +500,10 @@ impl<'a> Parser<'a> {
                 self.skip_ws();
                 self.expect_char('(')?;
                 let body = self.read_until_balanced(')')?;
-                props.insert("_body".to_string(), Value::Text(body.trim().to_string()));
+                props.insert(
+                    KEY_ITERATE_BODY.to_string(),
+                    Value::Text(body.trim().to_string()),
+                );
                 self.expect_char(')')?;
                 PrimitiveKind::Iterate
             }
@@ -802,19 +860,26 @@ fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
 }
 
 fn id_for(kind: PrimitiveKind, idx: usize) -> String {
+    // #798 scheme-(a): uniform 2-char prefixes. The per-node id is hashed
+    // into the canonical bytes (`Subgraph::canonical_view` sorts by
+    // `(id, kind)`), so the prefix scheme is wire-stable — it MUST be
+    // normalized pre-v1. The prior scheme mixed 1-char (`r`/`w`) and
+    // 4-char (`wait`/`resp`) prefixes; uniform 2-char removes the
+    // irregularity and disambiguates Sandbox/Subscribe/Stream without
+    // 3-/4-char outliers.
     let prefix = match kind {
-        PrimitiveKind::Read => "r",
-        PrimitiveKind::Write => "w",
-        PrimitiveKind::Transform => "t",
-        PrimitiveKind::Branch => "b",
-        PrimitiveKind::Iterate => "i",
-        PrimitiveKind::Wait => "wait",
-        PrimitiveKind::Call => "c",
-        PrimitiveKind::Respond => "resp",
-        PrimitiveKind::Emit => "e",
+        PrimitiveKind::Read => "re",
+        PrimitiveKind::Write => "wr",
+        PrimitiveKind::Transform => "tr",
+        PrimitiveKind::Branch => "br",
+        PrimitiveKind::Iterate => "it",
+        PrimitiveKind::Wait => "wt",
+        PrimitiveKind::Call => "ca",
+        PrimitiveKind::Respond => "rs",
+        PrimitiveKind::Emit => "em",
         PrimitiveKind::Sandbox => "sb",
-        PrimitiveKind::Subscribe => "sub",
-        PrimitiveKind::Stream => "st",
+        PrimitiveKind::Subscribe => "su",
+        PrimitiveKind::Stream => "sm",
         // PrimitiveKind is `#[non_exhaustive]`. New variants added in later
         // phases fall back to a generic `op` prefix; the DSL grammar does
         // not yet have keywords for them, so this branch is unreachable
