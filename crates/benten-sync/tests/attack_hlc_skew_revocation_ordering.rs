@@ -1,3 +1,5 @@
+//! Compromise #25 closure pin (HLC-monotonic enforcement at sync layer).
+//!
 //! R6-FP Wave-C1 (ds-r6-1 / hlc-r6-r1-1 closure) — sec-r4r2-1
 //! attack-vector pin un-ignored against the live production
 //! `Hlc::update` skew classifier.

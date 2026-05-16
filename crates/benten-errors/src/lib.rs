@@ -1082,9 +1082,11 @@ impl ErrorCode {
     ///
     /// For [`ErrorCode::Unknown`] the stored string is returned verbatim;
     /// every known variant delegates through [`ErrorCode::as_static_str`]
-    /// so the 44-arm catalog mapping lives in exactly one place
-    /// (5d-K triple-match dedup). `&'static str` coerces to the shorter
-    /// `&self`-bound `&str` without runtime cost.
+    /// so the catalog mapping lives in exactly one place (5d-K triple-match
+    /// dedup; the authoritative variant count is pinned by
+    /// `CATALOG_VARIANT_COUNT` in `tests/stable_shape.rs`).
+    /// `&'static str` coerces to the shorter `&self`-bound `&str`
+    /// without runtime cost.
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {

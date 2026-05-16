@@ -45,17 +45,18 @@ The Cargo.toml's `[dev-dependencies]` block is intentionally empty — the R6-FP
 
 ## 3. Files in `src/`
 
-Single-file crate. `lib.rs` is 640 LOC. Reads naturally in four sections:
+Single-file crate. Reads naturally in four sections:
 
-### `lib.rs` §1 — IPC allowlist (T3 defense rung 1)
+### `lib.rs` §1 — IPC method binding slice (T3 defense rung 1 + 2)
 
-Two `pub const` arrays + one `IpcAllowlist` struct.
+One typed `pub const` slice + two helper free functions (umbrella #1188 Pattern F flagship lifted the former parallel-array shape).
 
-- **`IPC_METHOD_NAME_ALLOWLIST: &[&str]`** (lib.rs:87-96) — 8 entries: `engine.read_node_as`, `engine.call_as`, `engine.subscribe_via_on_change_as_with_cursor`, `engine.list_caps`, `engine.identity.user_did`, `plugin.manifest.review`, `plugin.install.consent`, `ui.notify`. The drift-detector pin at `tests/ipc_method_name_stability_drift_detector.rs` couples this set byte-for-byte to `docs/public-api/benten-renderer-tauri.json::_ipc_method_name_allowlist_baseline._anticipated_method_set`. Adding a method requires explicit baseline update + admin UI v0 manifest review — silent IPC surface expansion is a manifest-bypass risk.
-- **`IPC_METHOD_CAP_BINDING: &[(&str, &str)]`** (lib.rs:105-117) — pairs each method with its required cap scope: `engine.read_node_as → graph:read`, `engine.call_as → graph:write`, `engine.list_caps → caps:read`, `engine.identity.user_did → identity:read`, `plugin.manifest.review → plugin:read`, `plugin.install.consent → plugin:install`, subscribe → `graph:read`. **`ui.notify → ""`** is the "no cap required" sentinel (UI-only side-effect inside the webview; `AdminUiManifest::grants_cap` treats empty cap as always granted).
-- **`IpcAllowlist`** (lib.rs:122-169) — wraps a `BTreeSet<String>` for fast membership; `canonical()` constructor mirrors the const array. `method_permitted` is rung-1 enforcement; `required_cap_for_method` returns the bound cap or `None` for non-allowlisted methods. `methods()` iterator powers the drift-detector pin.
+- **`IPC_METHODS: &[IpcMethod]`** — the single source of truth for the 8-method IPC surface. Each `IpcMethod { name: &'static str, cap: CapRequirement }` co-locates the method name (rung-1 allowlist membership) with its cap binding (rung-2). The 8 entries: `engine.read_node_as → Required("graph:read")`, `engine.call_as → Required("graph:write")`, `engine.subscribe_via_on_change_as_with_cursor → Required("graph:read")`, `engine.list_caps → Required("caps:read")`, `engine.identity.user_did → Required("identity:read")`, `plugin.manifest.review → Required("plugin:read")`, `plugin.install.consent → Required("plugin:install")`, **`ui.notify → CapRequirement::None`** (UI-only side-effect inside the webview; no cap gate). The drift-detector pin at `tests/ipc_method_name_stability_drift_detector.rs` couples the name set byte-for-byte to `docs/public-api/benten-renderer-tauri.json::_ipc_method_name_allowlist_baseline._anticipated_method_set` via `TauriRenderer::ipc_method_allowlist()`. Adding a method requires explicit baseline update + admin UI v0 manifest review — silent IPC surface expansion is a manifest-bypass risk.
+- **`CapRequirement`** — typed sum (`None` | `Required(&'static str)`) replacing the former empty-string-as-sentinel. `None` is structurally distinct from `Required(scope)`, so a missing binding is unrepresentable and the prior `unwrap_or("")` fail-OPEN drift hazard (Safe-1 #499) cannot occur.
+- **`ipc_method(name) -> Option<&'static IpcMethod>`** — the single lookup serving BOTH rungs: a `Some(_)` result is rung-1 allowlist admission; the result's `cap` is rung-2. Replaces the former triple traversal (`BTreeSet::contains` × 2 + parallel-array scan) with one allocation-free linear scan over the `&'static` slice (Fwd-1 #933).
+- **`ipc_method_names() -> impl Iterator<Item = &'static str>`** — name iterator powering the drift-detector pin.
 
-The unit test `cap_binding_covers_every_allowlisted_method` (lib.rs:633-639) is the bake-in: every method in the allowlist MUST appear in the cap-binding table — adding to one and not the other is a compile-test-survival shape that the unit test catches.
+The former `IpcAllowlist` struct (`BTreeSet<String>` over 8 `&'static str`), the `cap_binding_covers_every_allowlisted_method` reverse-completeness test, and the `ipc_method_cap_bindings()` free fn are all **deleted**: the typed-slice shape makes the parallel-array drift surface (forward AND reverse) structurally unrepresentable rather than runtime-test-guarded. Inline unit tests now assert the lookup covers every entry + rejects unknowns, the `None` cap is unique to `ui.notify`, and dispatch rung-2 fails CLOSED on an ungranted required cap.
 
 ### `lib.rs` §2 — Locked CSP (T3 defense rung 3)
 
@@ -77,9 +78,9 @@ CSP is a load-boundary defense, not a per-call defense. The integrator binary wi
 
 Three small structs + one error enum.
 
-- **`IpcRequest`** (lib.rs:210-223) — `method: String` + `payload: serde_json::Value` + `session: Option<SessionToken>`. The wire framing belongs above this layer; `dispatch_ipc` operates on the already-parsed shape, following the `benten_engine::thin_client` "wire framing is above this module" precedent.
-- **`IpcResponse`** (lib.rs:228-232) — `payload: serde_json::Value`. No principal information returned; the webview already knows its principal from the session token.
-- **`IpcError`** (lib.rs:239-270) — 4 variants, `#[non_exhaustive]`:
+- **`IpcRequest`** — `method: String` + `payload: serde_json::Value` + `session: Option<SessionToken>`. The wire framing belongs above this layer; `dispatch_ipc` operates on the already-parsed shape, following the `benten_engine::thin_client` "wire framing is above this module" precedent.
+- **No `IpcResponse` envelope.** `dispatch_ipc` is gate-only: `Result<(), IpcError>`. Per umbrella #1188 Qual-1 #670 the former single-field `IpcResponse { payload }` always returned `serde_json::Value::Null` (the integrator binary owns the real response); the type promised payload-bearing semantics it structurally could not deliver, so it was removed. The integrator's Tauri command handler owns the response shape entirely.
+- **`IpcError`** — 4 variants, `#[non_exhaustive]`:
   - `MethodNotInAllowlist { method }` — T3 rung 1 reject.
   - `CapabilityNotInManifest { method, cap }` — T3 rung 2 reject.
   - `SessionResolve(#[from] ThinClientSessionError)` — wraps the shape (b) thin-client error type, preserving diagnostic surface continuity across shapes.
@@ -89,25 +90,25 @@ Three small structs + one error enum.
 
 ### `lib.rs` §4 — Manifest envelope + session bridge + `TauriRenderer`
 
-- **`AdminUiManifest`** (lib.rs:303-330) — minimal projection of the full plugin manifest schema (`benten_platform_foundation::PluginManifest` from G24-D) containing only the `requires` envelope's granted cap-scope set. `grants_cap(cap)` returns true for empty cap (the no-cap-required sentinel) or any scope in `granted_caps`. Forwards-compat: the full manifest may be passed in later with extra fields ignored.
+- **`AdminUiManifest`** — minimal projection of the full plugin manifest schema (`benten_platform_foundation::PluginManifest` from G24-D) containing only the `requires` envelope's granted cap-scope set. `grants(&CapRequirement)` returns true for `CapRequirement::None` (no cap gate) or a `Required(scope)` whose scope is in `granted_caps`. The empty-string sentinel is gone — the no-cap and missing-binding cases are now structurally distinct. Forwards-compat: the full manifest may be passed in later with extra fields ignored.
 
 - **`InProcessSessionBridge`** (lib.rs:345-399) — owns an `Arc<DidKeyedSession>` from `benten-engine`. The cross-protocol-contract br-r1-14 surface: shape (b) browser-tab and shape (c) embedded-webview share the SAME `DidKeyedSession` cryptographic state machine; only the wire transport is swapped (HTTP for (b); in-process IPC for (c)). `transport()` returns `Transport::Ipc`. `resolve(token, presented_origin)` delegates to `DidKeyedSession::resolve` with `"tauri://localhost"` as the canonical synthetic origin — the same value the handshake was minted against. Origin recheck is per-request (Family F1 gap #2 mid-session defense). The `tests/in_process_ipc_session_token_contract_matches_thin_client.rs` pin asserts the byte-shape identity end-to-end + the per-request origin recheck rejects hostile origins.
 
-- **`TauriRenderer`** (lib.rs:412-555) — the public surface. Composes an `IpcAllowlist` + `AdminUiManifest` + optional `InProcessSessionBridge`. Three constructors: `new_with_manifest(manifest)`, `with_bridge(bridge)` (builder), and `ipc_method_allowlist()` (static accessor for the drift-detector).
+- **`TauriRenderer`** — the public surface. Composes an `AdminUiManifest` + optional `InProcessSessionBridge` (the allowlist is now the `&'static IPC_METHODS` slice, not an owned struct). Constructors: `new_with_manifest(manifest)`, `with_bridge(bridge)` (builder), and `ipc_method_allowlist()` (static accessor for the drift-detector).
 
   **`dispatch_ipc(request)`** (lib.rs:502-554) is the T3 defense composition:
 
-  1. **Rung 1 — allowlist filter.** `method_permitted` check BEFORE any payload parse, so attacker-crafted payloads can't pivot through a forbidden method. Rejects with `MethodNotInAllowlist`.
-  2. **Rung 2 — cap binding.** Look up `required_cap_for_method`; manifest's `grants_cap` consulted. Empty cap auto-admits. Rejects with `CapabilityNotInManifest { method, cap }`.
+  1. **Rung 1 — allowlist filter.** A single `ipc_method(&request.method)` lookup BEFORE any payload parse, so attacker-crafted payloads can't pivot through a forbidden method. A `None` result rejects with `MethodNotInAllowlist`.
+  2. **Rung 2 — cap binding.** The same lookup's `IpcMethod::cap` is consulted against `manifest.grants(&cap)`. `CapRequirement::None` auto-admits (`ui.notify`); a `Required(scope)` the manifest does not grant rejects with `CapabilityNotInManifest { method, cap }`. **Fails CLOSED by construction** — there is no fallback path that could admit on a missing binding.
   3. **Session resolution (br-r1-14).** Only fires when a bridge is attached. Token absent → `MissingSession`. Token present → `bridge.resolve(token, "tauri://localhost")` resolves to the principal DID (origin recheck + expiry check fire inside `DidKeyedSession::resolve`).
 
-  Past the three rungs the method-specific handler lives in the integrator binary's Tauri command handler, which calls back into engine facade methods with the resolved principal. This crate returns an empty success envelope (`payload: Null`); the integrator overwrites `payload` with the real response. CSP (rung 3 of the T3 composition) does NOT fire here — it's a load-boundary defense via `webview_csp_header`.
+  Past the three rungs `dispatch_ipc` returns `Ok(())` — it is gate-only. The method-specific handler lives in the integrator binary's Tauri command handler, which calls back into engine facade methods with the resolved principal and owns the response shape entirely. CSP (rung 3 of the T3 composition) does NOT fire here — it's a load-boundary defense via `webview_csp_header`.
 
 - **`impl Renderer for TauriRenderer`** (lib.rs:566-579) — `render(&self, _output)` returns `Ok(())` and the integrator binary's Tauri command handler mounts the materializer output via Tauri 2.x's `emit` API. This crate stays runtime-agnostic; the actual emit call lives in the integrator. `backend_name()` returns `"tauri-2.x"`.
 
 - **`_assert_renderer_object_safety`** (lib.rs:589-593) — `#[doc(hidden)]` compile-time assertion that `TauriRenderer: Renderer + Send + Sync`. Used by the verso swap-readiness pin to prove the trait doesn't leak Tauri-2.x-specific associated types.
 
-- **`ipc_method_cap_bindings() -> BTreeMap<String, String>`** (lib.rs:598-604) — public accessor returning the bindings as a stable map; tests + operator audit surfaces use it without holding a `TauriRenderer` instance.
+- **`ipc_method(name)` + `ipc_method_names()`** — free functions over `IPC_METHODS`. The operator-audit / Tauri-command surface that needs an owned-string JSON map (`tools/benten-admin-shell/src/main.rs`'s `ipc_method_cap_bindings_command`) builds it inline at that single call site — the renderer crate keeps only the allocation-free typed slice as its public surface (umbrella #1188 Qual-1 #693).
 
 ---
 
@@ -115,23 +116,23 @@ Three small structs + one error enum.
 
 Grouped by intent:
 
-**IPC allowlist + cap-binding (T3 defense rung 1 + 2).** `IPC_METHOD_NAME_ALLOWLIST` (const) / `IPC_METHOD_CAP_BINDING` (const) / `IpcAllowlist::canonical` / `method_permitted` / `methods` / `required_cap_for_method` / `ipc_method_cap_bindings` free function.
+**IPC method binding (T3 defense rung 1 + 2).** `CapRequirement` (enum) / `IpcMethod` (struct) / `IPC_METHODS` (const typed slice) / `ipc_method` free function / `ipc_method_names` free function.
 
 **CSP (T3 defense rung 3).** `WEBVIEW_CSP_HEADER` (const) / `TauriRenderer::webview_csp_header`.
 
-**IPC envelopes + errors.** `IpcRequest` / `IpcResponse` / `IpcError` (4 variants, `#[non_exhaustive]`) / `IpcError::error_code`.
+**IPC envelopes + errors.** `IpcRequest` / `IpcError` (4 variants, `#[non_exhaustive]`) / `IpcError::error_code`. (No `IpcResponse` — `dispatch_ipc` is gate-only.)
 
-**Manifest envelope.** `AdminUiManifest::with_caps` / `AdminUiManifest::default` / `grants_cap`.
+**Manifest envelope.** `AdminUiManifest::with_caps` / `AdminUiManifest::default` / `grants`.
 
 **In-process session bridge (br-r1-14).** `InProcessSessionBridge::new` / `transport` / `resolve` / `session`.
 
-**`TauriRenderer`.** `new_with_manifest` / `with_bridge` / `allowlist` / `manifest` / `dispatch_ipc` / `webview_csp_header` / `ipc_method_allowlist` static. Plus `Renderer` trait impl: `render` / `backend_name`.
+**`TauriRenderer`.** `new_with_manifest` / `with_bridge` / `manifest` / `dispatch_ipc` / `webview_csp_header` / `ipc_method_allowlist` static. Plus `Renderer` trait impl: `render` / `backend_name`.
 
 ---
 
 ## 5. Tests inventory
 
-9 test files; 910 LOC of test surface against 640 LOC of source. The crate is correctness-pinned end-to-end on the three T3 defense rungs:
+9 test files of test surface against ~670 LOC of source. The crate is correctness-pinned end-to-end on the three T3 defense rungs:
 
 - **`arch_n_benten_renderer_tauri_dep_direction.rs` (153 LOC)** — arch-N regression-guard. Reads its own Cargo.toml and asserts `benten-renderer-tauri` is not a dep of `benten-engine` / `benten-platform-foundation` / `benten-graph` (reverse-coupling forbidden); permits `benten-engine` as upstream (engine-extension trust posture). Multi-finding pin closing r4-arch-3.
 - **`compromised_webview_cannot_escalate_to_native_filesystem.rs` (125 LOC)** — **T3 LOAD-BEARING substantive end-to-end.** Simulates XSS-amplified IPC against `fs:write` (rejects at rung 1) + `engine.call_as` with `graph:write` withheld from manifest (rejects at rung 2) + happy-path regression-guard.
@@ -143,7 +144,7 @@ Grouped by intent:
 - **`three_rung_baked_in_17_defense_extension_pin.rs` (146 LOC)** — gap #1c closure (br-r1-4 + br-r1-13). Extends PR #166's 3-rung baked-in-#17 defense to this crate's wasm32 build. Rung 1 wasm-objdump forbidden-prefix sweep (runtime-arm); rung 2 Cargo.toml dep-name assertion; rung 3 module-doc engine-extension reference grep.
 - **`webview_csp_locked_no_unsafe_eval.rs` (63 LOC)** — T3 defense rung 3 LOAD-BEARING pin (br-r1-11).
 
-Three inline `mod tests` units in lib.rs (allowlist construction round-trip + CSP forbidden-token check + cap-binding-covers-every-allowlisted-method).
+Four inline `mod tests` units in lib.rs: `ipc_method` lookup covers every entry + rejects unknowns; `CapRequirement::None` is unique to `ui.notify`; dispatch rung-2 fails CLOSED on an ungranted required cap (the structural Safe-1 #499 guarantee); CSP forbidden-token check. The former `cap_binding_covers_every_allowlisted_method` reverse-completeness pin is deleted — the typed slice makes the bijection structural, not test-guarded.
 
 ---
 
@@ -195,9 +196,9 @@ Several knowable forward-looking surfaces touch this crate:
 
 A handful of things worth surfacing for retrospective:
 
-1. **Single-file crate, 640 LOC.** Could split into modules (`allowlist.rs` / `session_bridge.rs` / `renderer.rs`) but at this size the single-file shape is honest about the crate's narrow surface. Worth revisiting if Phase-4-Meta grows the surface materially.
+1. **Single-file crate, ~670 LOC.** Could split into modules (`allowlist.rs` / `session_bridge.rs` / `renderer.rs`) but at this size the single-file shape is honest about the crate's narrow surface. Worth revisiting if Phase-4-Meta grows the surface materially.
 
-2. **`IpcResponse::payload` always returns `serde_json::Value::Null` from `dispatch_ipc`.** The integrator binary overwrites it with the real response after passing the three rungs. This shape is a clean separation of concerns (this crate enforces defense; integrator returns data) but might surprise a fresh reader who expects `dispatch_ipc` to be the end-to-end handler. The module doc + `dispatch_ipc` docstring narrate this; flagging because the assertion lives in commentary, not the type.
+2. **`dispatch_ipc` is gate-only (`Result<(), IpcError>`).** RESOLVED at umbrella #1188 (Qual-1 #670): the former `IpcResponse { payload }` envelope always returned `serde_json::Value::Null` and the type promised payload-bearing semantics it structurally could not deliver. It was removed; the gate-only signature now matches the function's actual semantics, and the integrator binary's Tauri command handler owns the response shape entirely. No commentary-vs-type mismatch remains.
 
 3. **`presented_origin` hardcoded as `"tauri://localhost"`.** `InProcessSessionBridge::resolve` uses this synthetic origin for every Tauri-shape request, matching what `emit_challenge` was minted against. If Tauri 2.x's IPC framing exposes a real origin string the bridge could thread through, that would be a tighter binding — at HEAD it's hardcoded inside `TauriRenderer::dispatch_ipc` step (3). Documented in the bridge docstring.
 

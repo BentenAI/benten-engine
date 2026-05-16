@@ -79,7 +79,6 @@ use benten_engine::atrium_api::AtriumConfig;
 use benten_engine::engine_sync::AtriumHandle;
 
 #[tokio::test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass."]
 async fn last_received_remote_device_did_returns_none_for_unknown_zone_pre_merge() {
     let atrium = AtriumHandle::open(AtriumConfig::for_test())
         .await
@@ -102,7 +101,6 @@ async fn last_received_remote_device_did_returns_none_for_unknown_zone_pre_merge
 }
 
 #[tokio::test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass."]
 async fn last_received_remote_device_did_returns_none_for_registered_zone_pre_merge() {
     let atrium = AtriumHandle::open(AtriumConfig::for_test())
         .await
@@ -122,7 +120,6 @@ async fn last_received_remote_device_did_returns_none_for_registered_zone_pre_me
 }
 
 #[tokio::test]
-#[ignore = "RED-PHASE: closes at R5 G22-C (§13.8 direct-test verify). Un-ignore after G22-C verification pass."]
 async fn last_received_remote_device_did_partitions_per_zone() {
     let atrium = AtriumHandle::open(AtriumConfig::for_test())
         .await

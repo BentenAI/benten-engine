@@ -2,7 +2,7 @@
 
 A plain-English deep-dive on the `benten-caps` crate. Companion to the public `lib.rs` docs; written for fresh agents coming into Phase 4-Foundation / Phase 4-Meta / v1-assessment-window work. Treats *why* and *what's load-bearing* as first-class.
 
-Last refreshed: 2026-05-14 against main HEAD `c589ffe` post Phase-4-Foundation R6-FP cluster admin-merge.
+Last refreshed: 2026-05-14 against main HEAD `8141b94` post Phase-4-Foundation R6-FP cluster admin-merge.
 
 ---
 
@@ -48,7 +48,7 @@ Per CLAUDE.md baked-in #7, the capability system is *pluggable policy*, not a fi
 
 ## 3. Files inventory in `src/`
 
-LOC counts as of HEAD `c589ffe`:
+LOC counts as of HEAD `8141b94`:
 
 - **`lib.rs`** (220 LOC) — crate root. Module declarations, public re-exports, and three small in-tree items: `evaluator_delegation` (a helper module the evaluator calls into for `iterate_batch_boundary` + `wallclock_refresh_ceiling`, structured so test mocks can count invocations), `HlcStampedRefreshEvent` + `emit_refresh_event_for_test` (the §9.13 dual-source refresh-event shape and a test synthesiser), the `DEFAULT_BATCH_BOUNDARY` constant (`100`), and a `testing::` back-compat re-export module that preserves the historical `benten_caps::testing::check_attenuation` import path. Native-only `cfg(not(target_arch = "wasm32"))` gates: `ucan_grounded`, `plugin_delegation` (G24-D), `manifest_scope` (G27-D), `manifest_envelope_chain_validation` (G24-D-FP-2).
 - **`policy.rs`** (362 LOC) — the `CapabilityPolicy` trait, the `WriteContext` / `ReadContext` structs, the `PendingOp` enum (`PutNode` / `PutEdge` / `DeleteNode` / `DeleteEdge`, sealed behind `#[non_exhaustive]` so future SANDBOX `HostFunctionCall` variants are a minor bump), and the re-export of `WriteAuthority` from `benten-core`. Both contexts are deliberately public-field structs so a policy implementor can write a single match expression. Both carry a `device_cid: Option<Cid>` (Phase-3 G16-B canary, r4b-cap-3 closure) so heterogeneous policies can dispatch per-device under the same logical actor identity. `ReadContext` exposes two typed constructors (`by_cid_only` + `by_label_only`) so the "empty-label means CID-only" convention is no longer an unwritten rule.

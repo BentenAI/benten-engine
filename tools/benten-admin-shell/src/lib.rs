@@ -56,14 +56,14 @@ use std::sync::Arc;
 
 use benten_engine::thin_client::{DidKeyedSession, SessionConfig, SessionToken};
 use benten_renderer_tauri::{
-    AdminUiManifest, InProcessSessionBridge, IpcError, IpcRequest, IpcResponse, TauriRenderer,
+    AdminUiManifest, InProcessSessionBridge, IpcError, IpcRequest, TauriRenderer,
     WEBVIEW_CSP_HEADER,
 };
 
 /// Canonical cap-grant set the admin UI v0 plugin's `requires` envelope
-/// MUST publish for the IPC method-cap-binding map (per
-/// [`benten_renderer_tauri::ipc_method_cap_bindings`]) to admit every
-/// allowlisted method.
+/// MUST publish for the IPC method-cap-binding slice (per
+/// [`benten_renderer_tauri::IPC_METHODS`]) to admit every allowlisted
+/// method.
 ///
 /// Closes the secondary half of `br-r6-r1-8` MINOR: "No production
 /// `admin_ui_v0_manifest()` constructor in benten-platform-foundation"
@@ -73,8 +73,9 @@ use benten_renderer_tauri::{
 /// The empty-cap sentinel `""` (used by `ui.notify`) is intentionally
 /// NOT in this list — manifests don't need to publish the no-op cap.
 ///
-/// The 6 cap scopes are the union of distinct non-empty values in
-/// [`benten_renderer_tauri::IPC_METHOD_CAP_BINDING`].
+/// The 6 cap scopes are the union of distinct
+/// [`benten_renderer_tauri::CapRequirement::Required`] scopes in
+/// [`benten_renderer_tauri::IPC_METHODS`].
 pub const ADMIN_UI_V0_CANONICAL_CAPS: &[&str] = &[
     "graph:read",
     "graph:write",
@@ -161,13 +162,18 @@ impl AdminShellState {
     /// The integrator binary's Tauri command handler calls this; the
     /// default-mode E2E test driver calls this directly.
     ///
+    /// Returns `Ok(())` when the request passes all three rungs. The
+    /// renderer only gates; the per-method handler (and its response
+    /// payload) is owned by the integrator binary's Tauri command
+    /// handler.
+    ///
     /// # Errors
     ///
     /// Returns the same [`IpcError`] envelope the renderer surfaces;
     /// callers map the error to a Tauri response shape (the wire
     /// framing is the integrator's responsibility — this crate stays
     /// transport-agnostic).
-    pub fn dispatch(&self, request: IpcRequest) -> Result<IpcResponse, IpcError> {
+    pub fn dispatch(&self, request: IpcRequest) -> Result<(), IpcError> {
         self.renderer.dispatch_ipc(request)
     }
 
@@ -230,41 +236,41 @@ pub const ADMIN_SHELL_WEBVIEW_CSP_HEADER: &str = WEBVIEW_CSP_HEADER;
 // ---------------------------------------------------------------------
 
 /// Compile-time pin: the integrator binary's canonical cap-grant set
-/// equals the distinct non-empty cap-values in the IPC method-cap-
-/// binding map (per `IPC_METHOD_CAP_BINDING` at
+/// equals the distinct `Required` cap scopes in the IPC method binding
+/// slice (per `IPC_METHODS` at
 /// `crates/benten-renderer-tauri/src/lib.rs`). Drift on either side is
 /// caught at unit-test time.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use benten_renderer_tauri::{IPC_METHOD_CAP_BINDING, IPC_METHOD_NAME_ALLOWLIST};
+    use benten_renderer_tauri::{CapRequirement, IPC_METHODS};
     use std::collections::BTreeSet;
 
     #[test]
     fn canonical_manifest_matches_ipc_binding() {
-        let from_binding: BTreeSet<&str> = IPC_METHOD_CAP_BINDING
+        let from_binding: BTreeSet<&str> = IPC_METHODS
             .iter()
-            .map(|(_, cap)| *cap)
-            .filter(|c| !c.is_empty())
+            .filter_map(|m| match m.cap {
+                CapRequirement::Required(scope) => Some(scope),
+                CapRequirement::None => None,
+            })
             .collect();
         let from_canonical: BTreeSet<&str> = ADMIN_UI_V0_CANONICAL_CAPS.iter().copied().collect();
         assert_eq!(
             from_binding, from_canonical,
-            "ADMIN_UI_V0_CANONICAL_CAPS drift vs IPC_METHOD_CAP_BINDING distinct non-empty values"
+            "ADMIN_UI_V0_CANONICAL_CAPS drift vs IPC_METHODS distinct Required cap scopes"
         );
     }
 
     #[test]
     fn manifest_grants_every_allowlisted_methods_cap() {
         let manifest = admin_ui_v0_canonical_manifest();
-        for method in IPC_METHOD_NAME_ALLOWLIST {
-            let cap = IPC_METHOD_CAP_BINDING
-                .iter()
-                .find_map(|(m, c)| if m == method { Some(*c) } else { None })
-                .unwrap_or("");
+        for m in IPC_METHODS {
             assert!(
-                manifest.grants_cap(cap),
-                "canonical manifest must grant cap {cap:?} for method {method}"
+                manifest.grants(&m.cap),
+                "canonical manifest must satisfy {:?} for method {}",
+                m.cap,
+                m.name
             );
         }
     }

@@ -4,7 +4,7 @@ A plain-English deep-dive into `crates/benten-eval/`. Audience: a fresh agent or
 
 Total source: ~16.0k LOC across 51 `.rs` files (src) + 5 benches + 135 integration test files (~17.9k LOC of tests). This is the second-largest crate in the workspace after `benten-engine` and it is the crate where the project's load-bearing architectural commitments physically live.
 
-**Status at HEAD `c589ffe` (Phase 4-Foundation R6 R2 close-pending; main has advanced one commit since this doc snapshot).** Substantive Phase 4-Foundation work in this crate is bounded — exactly one source change landed (PR #210 / `f3930e1`: SUBSCRIBE per-event cap-recheck enum lift; see §10 below). Phase 4-Foundation platform layer (admin UI v0 + plugin manifest schema + materializer + schema-rendering) lands in the separate `benten-platform-foundation` crate, not here. The 12 primitives + the SANDBOX 4-host-fn floor + the arch-1 dep-break are unchanged at HEAD; all 14 invariants are production-runtime LIVE (Phase 2b + Phase 3 closure).
+**Status at HEAD `8141b94` (post `phase-4-foundation-close` tag; PR #242–#250 all merged).** Substantive Phase 4-Foundation work in this crate is bounded — exactly one source change landed (PR #210 / `f3930e1`: SUBSCRIBE per-event cap-recheck enum lift; see §10 below). Phase 4-Foundation platform layer (admin UI v0 + plugin manifest schema + materializer + schema-rendering) lands in the separate `benten-platform-foundation` crate, not here. The 12 primitives + the SANDBOX 4-host-fn floor + the arch-1 dep-break are unchanged at HEAD; all 14 invariants are production-runtime LIVE (Phase 2b + Phase 3 closure).
 
 ---
 
@@ -332,7 +332,7 @@ I did not find: a new primitive sneaking in (none); SANDBOX host-fn surface expa
 ## 8. Phase 4-Foundation + Phase 4-Meta expectations
 
 ### Materializer pipeline
-The materializer pipeline (turning declarative view definitions into IVM strategies the engine can run incrementally) is LIKELY to land either here, in a new sibling crate, or split across this crate + `benten-ivm`. Two reasons it might end up here: (a) materializers compile to subgraph specs that the existing evaluator walks (composition-through-primitives discipline); (b) the evaluator already owns the TRANSFORM expression compiler in `src/expr/`, which is the natural place to extend with a "compile expr to IVM strategy" pass. Two reasons it might NOT end up here: (a) the evaluator stays ignorant of `benten-ivm`'s internals by design (`Strategy` is named at the engine boundary but the per-strategy logic lives in `benten-ivm`); (b) materialization is conceptually a phase that happens AHEAD of evaluation, not during it. If the materializer compiles down to operation Node subgraphs the evaluator walks (rather than to runtime IVM strategy objects), Phase 4-Foundation work physically lives in `src/materializer/` here or in a new `benten-materializer` crate that imports `benten-eval` + `benten-ivm` and produces subgraph specs.
+**Crate-placement choice closed at G23-B (Phase-4-Foundation R5):** the sibling-crate path was chosen. The materializer pipeline lives at `crates/benten-platform-foundation/src/materializer.rs` (1379 LOC; the largest file in `benten-platform-foundation` per its own INTERNALS §3c). Future schema-compilation-shape extensions should follow the same sibling-crate pattern rather than widening this evaluator. The two "lives here" forks (eval-owned vs benten-ivm-owned) are CLOSED; the trade-offs that drove the decision (evaluator stays ignorant of `benten-ivm` internals by design; materialization is conceptually a phase ahead of evaluation, not during it) are preserved as decision-rationale at `docs/history/PHASE-4-FOUNDATION.md`. This evaluator's downstream coupling: it walks the operation Node subgraphs that materializers emit, no different from any other handler graph.
 
 ### Schema-driven rendering compiler
 The Phase-4 rendering compiler (declarative schema → handler subgraph) is the same composition shape as the materializer. It emits subgraph specs; this evaluator walks them. The right question at Phase-4 design time is whether the compiler lives in a sibling crate (clean separation; depends on `benten-eval` for the subgraph types) or whether it lives in the DSL layer (`bindings/dsl` or equivalent TypeScript) and produces JSON which gets deserialised on the Rust side. Either way `benten-eval`'s public shape doesn't change.
@@ -373,7 +373,7 @@ Per CLAUDE.md #19 engine-level extensions are Rust crates compile-time linked �
 
 ---
 
-## 10. Phase 4-Foundation delta (HEAD `c589ffe`)
+## 10. Phase 4-Foundation delta (HEAD `8141b94`)
 
 Substantive Phase-4-Foundation changes to this crate are bounded — the platform layer (admin UI v0, plugin manifest schema, materializer pipeline, schema-driven rendering) lands in the sibling `benten-platform-foundation` crate, not here. The single substantive source change in this crate during Phase-4-Foundation:
 

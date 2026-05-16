@@ -38,7 +38,7 @@
 #![allow(clippy::print_stderr)]
 
 use benten_admin_shell::{ADMIN_SHELL_BOUND_ORIGIN, AdminShellState};
-use benten_renderer_tauri::IPC_METHOD_CAP_BINDING;
+use benten_renderer_tauri::{CapRequirement, IPC_METHODS};
 
 fn main() -> std::process::ExitCode {
     // Default-mode boot path. Constructs the production state shape
@@ -50,9 +50,12 @@ fn main() -> std::process::ExitCode {
     println!("  bound_origin: {ADMIN_SHELL_BOUND_ORIGIN}");
     println!("  webview_csp:  {}", state.webview_csp_header());
     println!("  ipc methods:");
-    for (method, cap) in IPC_METHOD_CAP_BINDING {
-        let cap_display = if cap.is_empty() { "(no cap)" } else { *cap };
-        println!("    - {method:48}  ->  {cap_display}");
+    for m in IPC_METHODS {
+        let cap_display = match m.cap {
+            CapRequirement::None => "(no cap)",
+            CapRequirement::Required(scope) => scope,
+        };
+        println!("    - {:48}  ->  {cap_display}", m.name);
     }
     println!(
         "  active sessions: {}",
@@ -82,7 +85,7 @@ mod tauri_boot {
     use std::sync::Arc;
 
     use benten_admin_shell::AdminShellState;
-    use benten_renderer_tauri::{IpcRequest, ipc_method_cap_bindings};
+    use benten_renderer_tauri::{CapRequirement, IPC_METHODS, IpcRequest};
     use tauri::Manager;
 
     /// Tauri command: dispatch an IPC envelope through
@@ -106,7 +109,12 @@ mod tauri_boot {
             session: None,
         };
         match state.dispatch(request) {
-            Ok(response) => Ok(response.payload),
+            // The renderer gates only; past the three rungs the
+            // integrator owns the response shape. At HEAD the
+            // webview-driven smoke exercises the rejection branches,
+            // so the admitted path returns `Null` (no per-method
+            // handler wired in this default scaffold).
+            Ok(()) => Ok(serde_json::Value::Null),
             Err(err) => Err(format!("{:?}", err.error_code())),
         }
     }
@@ -117,7 +125,21 @@ mod tauri_boot {
     /// command framing + JSON serialization end-to-end).
     #[tauri::command]
     fn ipc_method_cap_bindings_command() -> std::collections::BTreeMap<String, String> {
-        ipc_method_cap_bindings()
+        // JSON-serializable owned-string projection of the canonical
+        // `IPC_METHODS` slice for the webview's surface sanity-check.
+        // The owned-string map shape is needed here for Tauri's
+        // `invoke` JSON framing; the renderer crate keeps only the
+        // allocation-free typed slice as its public surface.
+        IPC_METHODS
+            .iter()
+            .map(|m| {
+                let cap = match m.cap {
+                    CapRequirement::None => String::new(),
+                    CapRequirement::Required(scope) => scope.to_string(),
+                };
+                (m.name.to_string(), cap)
+            })
+            .collect()
     }
 
     /// Tauri command: return the canonical bound-origin string for
