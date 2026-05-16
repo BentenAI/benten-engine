@@ -148,14 +148,15 @@ impl EngineBuilder {
 
     /// Configure an explicit capability policy.
     ///
-    /// TODO(phase-3 — PolicyKind enum for napi-bridgeable variants):
-    /// napi v3 cannot serialize `Box<dyn CapabilityPolicy>` across the
-    /// JS boundary. Phase-3 will wrap this surface in a `PolicyKind`
-    /// enum (`NoAuth | GrantBacked | Ucan(...) | Custom(Box<dyn...>)`)
-    /// so the native-only `Custom` variant is gated behind
+    /// TODO(phase-4-meta — backlog §4.65 row 3): napi v3 cannot
+    /// serialize `Box<dyn CapabilityPolicy>` across the JS boundary.
+    /// Phase-4-Meta wraps this surface in a `PolicyKind` enum
+    /// (`NoAuth | GrantBacked | Ucan(...) | Custom(Box<dyn...>)`) so
+    /// the native-only `Custom` variant is gated behind
     /// `#[cfg(not(target_arch = "wasm32"))]` while `NoAuth` /
-    /// `GrantBacked` stay reachable from TypeScript. Carried from
-    /// Phase-2 generic marker; see code-reviewer finding `g7-cr-3`.
+    /// `GrantBacked` stay reachable from TypeScript (origin
+    /// code-reviewer finding `g7-cr-3`; couples to §4.63 KVBackend
+    /// v1-stabilization fork). See `docs/future/phase-4-backlog.md §4.65`.
     #[must_use]
     pub fn capability_policy(mut self, p: Box<dyn CapabilityPolicy>) -> Self {
         self.policy = Some(p);
@@ -532,13 +533,12 @@ impl EngineBuilder {
         // `.with_test_ivm_budget(b)` is set the view is constructed with
         // that budget so stale-view regression tests can trip it.
         //
-        // TODO(phase-3 — content-listing auto-registration unification):
-        // arch-6 flagged the "post" auto-registration +
-        // register_crud auto-registration as two paths that both
-        // materialise `content_listing_<label>` views; Phase-3
-        // collapses to a single `register_content_listing(label)`
-        // entry point the builder calls on demand. Carried from
-        // Phase-2 generic marker.
+        // TODO(phase-4-meta — backlog §4.65 row 4): arch-6 flagged
+        // the "post" auto-registration + register_crud auto-registration
+        // as two paths that both materialise `content_listing_<label>`
+        // views; Phase-4-Meta collapses to a single
+        // `register_content_listing(label)` builder entry point called
+        // on demand. See `docs/future/phase-4-backlog.md §4.65`.
         let ivm: Option<Arc<benten_ivm::Subscriber>> = if self.without_ivm {
             None
         } else {
