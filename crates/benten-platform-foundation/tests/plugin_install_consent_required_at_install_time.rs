@@ -95,7 +95,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     use benten_id::keypair::Keypair;
     use benten_platform_foundation::plugin_library::PluginLibrary;
     use benten_platform_foundation::plugin_lifecycle::{
-        InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+        InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
     };
 
     let alice = Keypair::generate();
@@ -132,10 +132,13 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
-    let mut ctx = InstallContext {
+    let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
-        now_secs: 1_700_000_000, // valid clock (non-sentinel)
+    };
+    let ctx_params = InstallParams {
+        now_secs: 1_700_000_000,
+        // valid clock (non-sentinel)
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
         user_did: &user_did,
@@ -148,6 +151,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         &mut library,
         &mut store,
         &mut ctx,
+        &ctx_params,
         &bytes,
         &expected_cid,
         &bad_record,
@@ -196,9 +200,11 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let _ = mismatched_record; // silence unused (replaced by *_b)
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
-    let mut ctx2 = InstallContext {
+    let mut ctx2 = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
+    };
+    let ctx2_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -212,6 +218,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         &mut library2,
         &mut store2,
         &mut ctx2,
+        &ctx2_params,
         &bytes,
         &expected_cid,
         &mismatched_record_b,
@@ -249,9 +256,11 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut library3 = PluginLibrary::new();
     let mut cascade3 = InMemoryInstallCascade::new();
     let mut private_ns3 = InMemoryInstallCascade::new();
-    let mut ctx3 = InstallContext {
+    let mut ctx3 = InstallPorts {
         cap_minter: &mut cascade3,
         private_ns: &mut private_ns3,
+    };
+    let ctx3_params = InstallParams {
         now_secs: 1_700_000_000,
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
@@ -264,6 +273,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
         &mut library3,
         &mut store3,
         &mut ctx3,
+        &ctx3_params,
         &bytes,
         &expected_cid,
         &good_record,
