@@ -182,10 +182,17 @@ fn admin_ui_v0_render_dual_gate_deny_from_materialization_layer_wins_end_to_end(
 }
 
 #[test]
-fn admin_ui_v0_render_dual_gate_invocation_count_observability() {
-    // mr-8 OBSERVATION arm: each per-primitive walk fires the
-    // cap-recheck closure for invocation-count observability. Counts
-    // > 0 across the schema's emitted primitives.
+fn admin_ui_v0_render_dual_gate_authoritative_invocation_consumed() {
+    // Safe-1 #527 / Qual-1 #702 closure (Pattern F Bundle 5): the
+    // discarded-bool per-primitive fan-out (observability-theater that
+    // invoked the gate N times and `let _`-discarded each result) is
+    // REMOVED. The substantive contract that replaces it: the
+    // materialization-layer per-row gate is invoked for its
+    // authoritative content-CID decision AND that bool governs
+    // admission (consumed, not swallowed). Per-primitive cap-scope
+    // enforcement is upstream (T1 envelope check + schema-compile
+    // derive_scope), so a count-per-primitive assertion would re-pin
+    // the deleted theater.
     let engine = Engine::open(":memory:").unwrap();
     let cid = engine.create_node(&make_note_node("observe")).unwrap();
     let spec = compile_schema(schema_fixtures::canonical_note_type_schema_bytes()).unwrap();
@@ -201,7 +208,7 @@ fn admin_ui_v0_render_dual_gate_invocation_count_observability() {
         },
     );
 
-    let _out = benten_platform_foundation::HtmlJsonMaterializer
+    let out = benten_platform_foundation::HtmlJsonMaterializer
         .materialize_with_gate(MaterializerWalkInputs {
             engine: &adapter,
             spec: &spec,
@@ -212,11 +219,15 @@ fn admin_ui_v0_render_dual_gate_invocation_count_observability() {
         })
         .unwrap();
     let invocations = counter.load(Ordering::SeqCst);
-    assert!(
-        invocations >= spec.as_subgraph().nodes().len(),
-        "per-primitive cap-recheck must fire at least once per emitted primitive; \
-         spec has {} primitives, recorded {} invocations",
-        spec.as_subgraph().nodes().len(),
-        invocations,
+    assert_eq!(
+        invocations, 1,
+        "the authoritative per-row gate fires exactly once for the \
+         content-CID decision (the discarded-bool per-primitive \
+         fan-out is removed per #527/#702); recorded {invocations}",
     );
+    // The admitting bool was CONSUMED: exactly one materialized row +
+    // zero denials. (Would-FAIL if the bool were swallowed and render
+    // ran off an unconditional admit AND if the row weren't counted.)
+    assert_eq!(out.materialized_row_cids().len(), 1);
+    assert!(out.cap_denials().is_empty());
 }
