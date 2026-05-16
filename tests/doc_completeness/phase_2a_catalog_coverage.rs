@@ -22,7 +22,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_errors::{ErrorCode, FIRING_CODES_AT_PHASE_2A_SNAPSHOT, RESERVED_CODES_AT_PHASE_2A_SNAPSHOT};
+use benten_errors::{
+    ErrorCode, FIRING_CODES_AT_PHASE_2A_SNAPSHOT, RESERVED_CODES_AT_PHASE_2A_SNAPSHOT,
+};
 use std::fs;
 use std::path::PathBuf;
 
