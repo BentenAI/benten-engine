@@ -65,22 +65,26 @@
 //! independent of the JSON-LD layer and is fully covered by the
 //! hand-rolled surface here.
 //!
-//! ## Cag-r4-2 (graph-encoding) — RED-PHASE-deferred
+//! ## Cag-r4-2 (graph-encoding) — durable-persistence-deferred
 //!
 //! Per `cag-r4-2` MAJOR, VC receipts MUST persist as graph Nodes with
-//! label `id:vc-receipt` + structured properties. That pin requires
-//! `benten_core::Node` / `benten_core::Edge` reach, which is a
-//! cross-crate seam — `benten-core` is upstream of `benten-id` per
-//! `arch-r1-10`'s dependency-edge contract (`benten-id` cannot depend
-//! on `benten-graph`; `benten-core` carries `Node` / `Edge` types).
+//! label `id:vc-receipt` + structured properties. **Hyg-3 #435
+//! retense:** the prior narrative claimed this needed
+//! `benten_core::Node` / `benten_core::Edge` "reach" that `benten-id`
+//! lacked. That is stale — at HEAD `benten-core` IS a direct
+//! dependency of this crate (added for the G27-C `GrantReader` CID
+//! handle; `benten-core` is NOT in the `arch-r1-10` forbidden set,
+//! which forbids `benten-graph` / `benten-engine` / `benten-eval` /
+//! `benten-caps`). The Node/Edge types ARE reachable here today. What
+//! remains deferred is the *durable graph-side persistence backend*
+//! (the receipt must land in a real store, not just be constructible)
+//! — named for Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`.
 //! The graph-encoding test pin
 //! (`benten_id_vc_issuance_receipt_persisted_as_graph_node`) stays
-//! `#[ignore]`'d at G14-A2 with rationale routing it to G14-B (where
-//! the durable backend lands the graph-side persistence layer). Per
-//! HARD RULE rule-12 disposition (b), the BELONGS-ELSEWHERE entry
-//! lives at `crates/benten-id/tests/graph_encoded.rs` (named
-//! destination) with the rationale string anchored on the test
-//! body's `#[ignore = "..."]` attribute.
+//! `#[ignore]`'d with its rationale string anchored on the test
+//! body's `#[ignore = "..."]` attribute at
+//! `crates/benten-id/tests/graph_encoded.rs` (named destination per
+//! HARD RULE rule-12 disposition (b)).
 
 use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
@@ -216,13 +220,15 @@ impl CredentialBuilder {
         self
     }
 
-    /// Add a credential type (the base `VerifiableCredential` type is
-    /// auto-prepended at sign time).
-    #[must_use]
-    pub fn extra_type(mut self, t: impl Into<String>) -> Self {
-        self.types.push(t.into());
-        self
-    }
+    // Hyg-1 #340: the `extra_type` builder method is removed — zero
+    // callers (speculative pub surface that never grew a caller;
+    // CLAUDE.md #5 / META #355). The `types` field + sign-time
+    // base-type prepend are RETAINED (DISAGREE-WITH-EXPLANATION for
+    // the field, HARD RULE 12 (c)): they emit the W3C-mandated
+    // `"type": ["VerifiableCredential"]` array and are read on every
+    // `sign()`. Removing `extra_type` produces byte-identical
+    // canonical bytes for every current caller (none called it, so
+    // `self.types` was already always empty).
 
     /// Set the issuer DID.
     #[must_use]
@@ -341,10 +347,10 @@ impl TrustDomain {
         Self::default()
     }
 
-    /// Add an issuer DID to the allow-list.
-    pub fn allow(&mut self, did: &Did) {
-        self.issuers.insert(did.as_str().to_string());
-    }
+    // Hyg-1 #338: the `allow(&mut self, &Did)` mutator is removed —
+    // zero callers. Construction goes through `TrustDomain::new(Vec<Did>)`
+    // / `TrustDomain::empty()`; the incremental-mutate path never grew
+    // a caller (CLAUDE.md #5 / META #355).
 
     /// Check whether `issuer` is allow-listed.
     pub fn contains(&self, issuer: &str) -> bool {
@@ -352,9 +358,20 @@ impl TrustDomain {
     }
 }
 
-/// In-RAM revocation registry. Phase 3 G14-B replaces this with a
-/// durable backend; the trait surface here is intentionally minimal
-/// (the must-pass tests drive `revoke` + `is_revoked`).
+/// In-RAM revocation registry. Durable rehydration is named for
+/// Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`; the trait
+/// surface here is intentionally minimal (the must-pass tests drive
+/// `revoke` + `is_revoked`).
+///
+/// ## Concurrency contract (Safe-4 #642)
+///
+/// `RevocationRegistry` is interior-synchronized: `&self` methods
+/// (`revoke` / `is_revoked`) are safe to call concurrently from
+/// multiple threads. The internal `Mutex` is poison-tolerant — a
+/// panic in another thread while the lock is held does NOT
+/// permanently brick this security-critical revocation substrate
+/// (see [`RevocationRegistry::revoke`]). Callers do NOT need to wrap
+/// it in an outer lock.
 #[derive(Default)]
 pub struct RevocationRegistry {
     revoked: Mutex<HashSet<String>>,
@@ -367,18 +384,34 @@ impl RevocationRegistry {
     }
 
     /// Mark a `credentialStatus.id` as revoked.
+    ///
+    /// **Safe-1 #512 — mutex-poison hardening.** A `.expect()` on the
+    /// poisoned lock would permanently panic every subsequent
+    /// `revoke` / `is_revoked` call, silently failing OPEN (a revoked
+    /// credential would never be observed as revoked because the
+    /// revocation call panics before the insert). Recover the guard
+    /// via [`std::sync::PoisonError::into_inner`] instead: the
+    /// `HashSet` is a plain string set with no broken invariant on
+    /// poison, so continuing with the recovered guard is the
+    /// fail-CLOSED-preserving choice. Matches the `engine_caps`
+    /// poison-recovery posture (META #739).
     pub fn revoke(&self, status_id: impl Into<String>) {
         self.revoked
             .lock()
-            .expect("registry mutex poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(status_id.into());
     }
 
     /// Check whether a `credentialStatus.id` is revoked.
+    ///
+    /// Poison-tolerant for the same reason as
+    /// [`RevocationRegistry::revoke`] — a poisoned lock here would
+    /// panic the consult path, which a `verify_with_registry` caller
+    /// would observe as a hard crash rather than a revocation answer.
     pub fn is_revoked(&self, status_id: &str) -> bool {
         self.revoked
             .lock()
-            .expect("registry mutex poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .contains(status_id)
     }
 }

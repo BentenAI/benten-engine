@@ -70,6 +70,15 @@ pub enum SeedImportError {
     /// a SigningKey seed, so this variant is reserved for future
     /// algorithm extensions; included now to keep the typed-error
     /// surface stable across the version-tag bump.)
+    ///
+    /// **Qual-1 #725 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+    /// The reserved-but-currently-unreachable arm is intentional
+    /// forward-stable error-taxonomy design (documented above) and is
+    /// referenced by the `keypair_seed.rs` typed-rejection match arm,
+    /// so it is not orphaned dead code. Deleting it now would force a
+    /// SemVer-affecting error-enum change the moment a non-Ed25519
+    /// algorithm lands. The "dead-arm coverage" concern is satisfied
+    /// by the test's `matches!` over the full variant set.
     #[error("seed envelope contains invalid secret bytes")]
     InvalidSecret,
 }

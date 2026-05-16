@@ -39,27 +39,40 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::{KeypairError, SeedImportError};
 
-/// Current envelope version (per `crypto-major-5`). Future schema
-/// changes bump this; older verifiers reject newer versions with
-/// [`SeedImportError::UnknownVersion`].
+/// Current **seed-envelope** version (per `crypto-major-5`). Future
+/// schema changes bump this; older verifiers reject newer versions
+/// with [`SeedImportError::UnknownVersion`].
+///
+/// **Qual-2 #801 — BELONGS-NAMED-NOW (HARD RULE 12 (b)).** This +
+/// [`ENVELOPE_ALG`] are `pub` consts; the cross-envelope-shape name
+/// ambiguity (seed-envelope vs device-attestation envelope vs the
+/// other DAG-CBOR envelope shapes) is fixed by a `SEED_ENVELOPE_*`
+/// prefix rename, which is SemVer-affecting on the public surface.
+/// It belongs to the v1-API-stabilization cluster — campaign umbrella
+/// **#1169** / `docs/future/phase-4-backlog.md §4.43`. The two
+/// private bounds consts below ARE renamed in-lane now (no SemVer
+/// surface) to demonstrate + de-risk the prefix scheme.
 pub const ENVELOPE_VERSION: u8 = 1;
 
-/// Algorithm tag (per `crypto-major-5`). Other algorithms (post-Phase-3
-/// MultiSig extension) get their own tag; older verifiers reject
-/// unknown tags with [`SeedImportError::UnknownAlg`].
+/// Algorithm tag for the **seed envelope** (per `crypto-major-5`).
+/// Other algorithms (post-Phase-3 MultiSig extension) get their own
+/// tag; older verifiers reject unknown tags with
+/// [`SeedImportError::UnknownAlg`]. See [`ENVELOPE_VERSION`] for the
+/// Qual-2 #801 pub-const-rename disposition.
 pub const ENVELOPE_ALG: &str = "Ed25519";
 
-/// Minimum/maximum envelope size for the import path's structural
-/// pre-check. The DAG-CBOR encoding of
+/// Minimum/maximum **seed-envelope** size for the import path's
+/// structural pre-check. The DAG-CBOR encoding of
 /// `{version: 1, alg: "Ed25519", secret_bytes: <32 bytes>}` is
 /// approximately 50-55 bytes; we keep generous bounds so future schema
 /// extensions (e.g. additional metadata fields) stay backward-
 /// compatible. Per `crypto-major-5`'s "fuzz the import path
 /// end-to-end" requirement, the pre-check rejects pathologically
 /// short/long input fast (typed error) before invoking the CBOR
-/// decoder.
-const MIN_ENVELOPE_BYTES: usize = 32;
-const MAX_ENVELOPE_BYTES: usize = 256;
+/// decoder. (Qual-2 #801: private consts prefixed `SEED_ENVELOPE_*`
+/// for cross-shape disambiguation — in-lane, no SemVer surface.)
+const SEED_ENVELOPE_MIN_BYTES: usize = 32;
+const SEED_ENVELOPE_MAX_BYTES: usize = 256;
 
 /// 32-byte Ed25519 secret seed wrapper.
 ///
@@ -81,14 +94,10 @@ impl SecretKey {
         Self { bytes }
     }
 
-    /// Test-only accessor for memory-inspection in
-    /// `crates/benten-id/tests/keypair.rs::keypair_secret_bytes_zeroized_on_drop`.
-    /// Pointer into the SecretKey's storage so a post-drop
-    /// `read_volatile` can assert zeroize ran.
-    #[doc(hidden)]
-    pub fn bytes_ptr_for_test(&self) -> *const [u8; 32] {
-        &raw const self.bytes
-    }
+    // Hyg-1 #308: `bytes_ptr_for_test` removed — it had ZERO callers
+    // anywhere (including the test suite; the zeroize-on-drop pin uses
+    // `secret_bytes_for_test()` instead). Speculative test-accessor
+    // surface that never grew a caller (CLAUDE.md #5 / META #355).
 
     /// Test-only accessor for hex-comparison in
     /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
@@ -204,13 +213,11 @@ impl Keypair {
         &self.verifying
     }
 
-    /// Borrow this keypair's secret. Visibility is intentionally
-    /// crate-internal — external callers go through
-    /// [`Keypair::export_seed_envelope`] for the audit-trail-shaped
-    /// path.
-    pub(crate) fn secret(&self) -> &SecretKey {
-        &self.secret
-    }
+    // Hyg-1 #306: `Keypair::secret()` (pub(crate)) removed — zero
+    // crate-internal callers. The audit-trail-shaped external path is
+    // `Keypair::export_seed_envelope`; test inspection goes through
+    // `secret_bytes_for_test`. No SemVer impact (was already
+    // crate-private). CLAUDE.md #5.
 
     /// Test-only accessor mirroring [`SecretKey::bytes_for_test`] for
     /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
@@ -281,8 +288,18 @@ impl Keypair {
         Self::from_seed_bytes_inner(bytes).map_err(KeypairError::SeedImport)
     }
 
-    /// Alias of [`Keypair::from_seed_bytes`] preserved for
-    /// device-mesh exploration brief naming.
+    /// **Qual-1 #686 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+    /// Not a dead no-op alias: this is a LIVE cross-crate / FFI
+    /// surface. Callers exist in `bindings/napi/src/identity.rs`
+    /// (`JsKeypair::duplicate_via_envelope`),
+    /// `crates/benten-engine/src/{engine_sync,typed_call_dispatch}.rs`,
+    /// `crates/benten-sync/src/{handshake_wire,peer_id}.rs` + several
+    /// integration tests. It is the audit-trail-shaped, name-explicit
+    /// envelope-import entry point referenced by the device-mesh
+    /// naming contract; the napi binding's docstring + `JsAtrium`
+    /// path pin this exact name. Deleting it broke
+    /// `cargo build -p benten-napi` (E0599 ×2). Retained as the
+    /// canonical public name; it forwards to [`Keypair::from_seed_bytes`].
     pub fn from_dag_cbor_envelope(bytes: &[u8]) -> Result<Self, KeypairError> {
         Self::from_seed_bytes(bytes)
     }
@@ -291,16 +308,16 @@ impl Keypair {
         // Pre-check: short/long input rejected fast with typed
         // variant — defends against pathological inputs hitting the
         // CBOR decoder.
-        if bytes.len() < MIN_ENVELOPE_BYTES {
+        if bytes.len() < SEED_ENVELOPE_MIN_BYTES {
             return Err(SeedImportError::ShortInput {
                 got: bytes.len(),
-                min: MIN_ENVELOPE_BYTES,
+                min: SEED_ENVELOPE_MIN_BYTES,
             });
         }
-        if bytes.len() > MAX_ENVELOPE_BYTES {
+        if bytes.len() > SEED_ENVELOPE_MAX_BYTES {
             return Err(SeedImportError::LongInput {
                 got: bytes.len(),
-                max: MAX_ENVELOPE_BYTES,
+                max: SEED_ENVELOPE_MAX_BYTES,
             });
         }
 
