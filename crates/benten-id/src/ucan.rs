@@ -256,6 +256,17 @@ pub(crate) fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
 
 /// Validate a UCAN delegation chain (no time check).
 ///
+/// **Qual-1 #691 — BELONGS-NAMED-NOW (HARD RULE 12 (b)).** The
+/// ambiguity smell (this entry point intentionally skips nbf/exp,
+/// which its own body comment flags as "ambiguous") is a public-API
+/// naming/shape concern: renaming or splitting this `pub fn` is a
+/// SemVer-affecting change. It belongs to the v1-API-stabilization
+/// cluster — campaign umbrella **#1169**, named destination
+/// `docs/future/phase-4-backlog.md §4.43` (the umbrella established
+/// this destination per HARD RULE clause-(b) at campaign level). NOT
+/// dead code (a real test caller + two internal callers exist); the
+/// disposition is the rename/split decision, deferred to that cluster.
+///
 /// The chain ordering is **leaf-first**: `chain[0]` is the leaf
 /// (most-recently-issued) token; `chain[1..]` are progressively
 /// older parents. Equivalent to [`validate_chain_at`] with `now =

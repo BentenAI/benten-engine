@@ -21,8 +21,8 @@
 //!
 //! ## Crypto-major-5 contract
 //!
-//! [`Keypair::from_seed_bytes`] / [`Keypair::from_dag_cbor_envelope`]
-//! consume a DAG-CBOR envelope of shape
+//! [`Keypair::from_seed_bytes`]
+//! consumes a DAG-CBOR envelope of shape
 //! `{version: u8, alg: "Ed25519", secret_bytes: Bytes(32)}`. Each
 //! failure mode (short / long / corrupted / unknown-version-tag /
 //! unknown-alg) returns a DISTINCT [`SeedImportError`] variant. The
@@ -39,27 +39,40 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::errors::{KeypairError, SeedImportError};
 
-/// Current envelope version (per `crypto-major-5`). Future schema
-/// changes bump this; older verifiers reject newer versions with
-/// [`SeedImportError::UnknownVersion`].
+/// Current **seed-envelope** version (per `crypto-major-5`). Future
+/// schema changes bump this; older verifiers reject newer versions
+/// with [`SeedImportError::UnknownVersion`].
+///
+/// **Qual-2 #801 — BELONGS-NAMED-NOW (HARD RULE 12 (b)).** This +
+/// [`ENVELOPE_ALG`] are `pub` consts; the cross-envelope-shape name
+/// ambiguity (seed-envelope vs device-attestation envelope vs the
+/// other DAG-CBOR envelope shapes) is fixed by a `SEED_ENVELOPE_*`
+/// prefix rename, which is SemVer-affecting on the public surface.
+/// It belongs to the v1-API-stabilization cluster — campaign umbrella
+/// **#1169** / `docs/future/phase-4-backlog.md §4.43`. The two
+/// private bounds consts below ARE renamed in-lane now (no SemVer
+/// surface) to demonstrate + de-risk the prefix scheme.
 pub const ENVELOPE_VERSION: u8 = 1;
 
-/// Algorithm tag (per `crypto-major-5`). Other algorithms (post-Phase-3
-/// MultiSig extension) get their own tag; older verifiers reject
-/// unknown tags with [`SeedImportError::UnknownAlg`].
+/// Algorithm tag for the **seed envelope** (per `crypto-major-5`).
+/// Other algorithms (post-Phase-3 MultiSig extension) get their own
+/// tag; older verifiers reject unknown tags with
+/// [`SeedImportError::UnknownAlg`]. See [`ENVELOPE_VERSION`] for the
+/// Qual-2 #801 pub-const-rename disposition.
 pub const ENVELOPE_ALG: &str = "Ed25519";
 
-/// Minimum/maximum envelope size for the import path's structural
-/// pre-check. The DAG-CBOR encoding of
+/// Minimum/maximum **seed-envelope** size for the import path's
+/// structural pre-check. The DAG-CBOR encoding of
 /// `{version: 1, alg: "Ed25519", secret_bytes: <32 bytes>}` is
 /// approximately 50-55 bytes; we keep generous bounds so future schema
 /// extensions (e.g. additional metadata fields) stay backward-
 /// compatible. Per `crypto-major-5`'s "fuzz the import path
 /// end-to-end" requirement, the pre-check rejects pathologically
 /// short/long input fast (typed error) before invoking the CBOR
-/// decoder.
-const MIN_ENVELOPE_BYTES: usize = 32;
-const MAX_ENVELOPE_BYTES: usize = 256;
+/// decoder. (Qual-2 #801: private consts prefixed `SEED_ENVELOPE_*`
+/// for cross-shape disambiguation — in-lane, no SemVer surface.)
+const SEED_ENVELOPE_MIN_BYTES: usize = 32;
+const SEED_ENVELOPE_MAX_BYTES: usize = 256;
 
 /// 32-byte Ed25519 secret seed wrapper.
 ///
@@ -149,7 +162,7 @@ impl PublicKey {
 /// Ed25519 keypair = secret + cached verifying key.
 ///
 /// Construct via [`Keypair::generate`] (CSPRNG path; `crypto-major-2`)
-/// or [`Keypair::from_seed_bytes`] / [`Keypair::from_dag_cbor_envelope`]
+/// or [`Keypair::from_seed_bytes`]
 /// (envelope-import path; `crypto-major-5`).
 ///
 /// **Does NOT implement [`Clone`].** Per `crypto-blocker-1`, the
@@ -248,7 +261,7 @@ impl Keypair {
     /// ```
     ///
     /// Round-trips byte-identical through
-    /// [`Keypair::from_dag_cbor_envelope`].
+    /// [`Keypair::from_seed_bytes`].
     pub fn export_seed_envelope(&self) -> Vec<u8> {
         let envelope = SeedEnvelope {
             version: ENVELOPE_VERSION,
@@ -275,26 +288,27 @@ impl Keypair {
         Self::from_seed_bytes_inner(bytes).map_err(KeypairError::SeedImport)
     }
 
-    /// Alias of [`Keypair::from_seed_bytes`] preserved for
-    /// device-mesh exploration brief naming.
-    pub fn from_dag_cbor_envelope(bytes: &[u8]) -> Result<Self, KeypairError> {
-        Self::from_seed_bytes(bytes)
-    }
+    // Qual-1 #686: the `from_dag_cbor_envelope` no-op alias of
+    // `from_seed_bytes` is removed (CLAUDE.md #5 — no deprecated
+    // aliases / no-op shims). It was preserved only for a
+    // device-mesh-exploration brief's naming; callers + the
+    // round-trip test use `from_seed_bytes` directly. Doc cross-refs
+    // swept in the same change (§3.5b doc-coupling).
 
     fn from_seed_bytes_inner(bytes: &[u8]) -> Result<Self, SeedImportError> {
         // Pre-check: short/long input rejected fast with typed
         // variant — defends against pathological inputs hitting the
         // CBOR decoder.
-        if bytes.len() < MIN_ENVELOPE_BYTES {
+        if bytes.len() < SEED_ENVELOPE_MIN_BYTES {
             return Err(SeedImportError::ShortInput {
                 got: bytes.len(),
-                min: MIN_ENVELOPE_BYTES,
+                min: SEED_ENVELOPE_MIN_BYTES,
             });
         }
-        if bytes.len() > MAX_ENVELOPE_BYTES {
+        if bytes.len() > SEED_ENVELOPE_MAX_BYTES {
             return Err(SeedImportError::LongInput {
                 got: bytes.len(),
-                max: MAX_ENVELOPE_BYTES,
+                max: SEED_ENVELOPE_MAX_BYTES,
             });
         }
 
@@ -369,7 +383,7 @@ impl fmt::Debug for Keypair {
 /// stable across encoders. We rely on serde's `derive(Serialize)`
 /// emitting the fields in declaration order; the canonical-bytes
 /// round-trip test
-/// (`crates/benten-id/tests/keypair_seed.rs::keypair_from_dag_cbor_envelope_round_trip`)
+/// (`crates/benten-id/tests/keypair_seed.rs::keypair_from_seed_bytes_envelope_round_trip`)
 /// pins this.
 #[derive(Serialize, Deserialize)]
 struct SeedEnvelope {

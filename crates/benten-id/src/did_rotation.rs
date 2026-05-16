@@ -70,6 +70,16 @@ pub struct RotationAttestation {
 ///
 /// Phase-3 lands a single kind (`SupersededBy`); the enum keeps a
 /// stable shape across post-Phase-3 extensions.
+///
+/// **Qual-1 #722 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
+/// The "1-variant enum + `kind()` returning a constant" is not
+/// premature flexibility to collapse: `AttestationKind` is a
+/// `Serialize`/`Deserialize` discriminator that a must-pass test pins
+/// (`did_rotation.rs:29`). Collapsing it to a unit would (a) break
+/// that pin and (b) force a wire-shape change when a second kind
+/// lands post-Phase-3 — the deliberate forward-stable shape is the
+/// point. Wire-format-adjacent; out of scope to mutate per the lane
+/// rule regardless.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AttestationKind {
     /// "Old DID is superseded by new DID" — the only kind in Phase 3.
@@ -82,12 +92,23 @@ impl RotationAttestation {
         AttestationKind::SupersededBy
     }
 
-    /// Borrow the previous keypair's `did:key`.
+    /// Borrow the previous keypair's `did:key` as a typed [`Did`].
+    ///
+    /// **Qual-1 #711 — DISAGREE-WITH-EXPLANATION, production-zero /
+    /// test caller exists.** These two accessors wrap the pub `String`
+    /// fields into the typed [`Did`] newtype; the `did_rotation.rs`
+    /// integration suite (`:31`, `:35`) relies on them. They are not
+    /// redundant re-wraps to delete (CLAUDE.md #5): the typed-`Did`
+    /// return is the safe handle callers should use rather than
+    /// touching the raw `String`; deleting them would push every
+    /// consumer to re-implement `Did::from_string_unchecked` inline.
     pub fn previous_keypair_did(&self) -> Did {
         Did::from_string_unchecked(self.previous_did.clone())
     }
 
-    /// Borrow the next keypair's `did:key`.
+    /// Borrow the next keypair's `did:key` as a typed [`Did`]. See
+    /// [`RotationAttestation::previous_keypair_did`] for the Qual-1
+    /// #711 disposition.
     pub fn next_keypair_did(&self) -> Did {
         Did::from_string_unchecked(self.next_did.clone())
     }
