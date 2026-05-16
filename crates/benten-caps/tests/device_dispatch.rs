@@ -24,9 +24,10 @@
 //! exists, dispatch on the field works, missing field maintains
 //! backward-compat. The (c) end-to-end production-runtime test pin
 //! requires engine-side write-path threading of `device_cid` through
-//! the `WriteContext` construction sites; that wiring lands in the
-//! G16-B-B/C/D parallel wave. Until then (c) stays `#[ignore]`'d with
-//! a note pointing at the wave that closes it.
+//! the `WriteContext` construction sites; that wiring landed and (c)
+//! was relocated to (and is GREEN at HEAD in)
+//! `crates/benten-engine/tests/device_cid_runtime_arm.rs` (it requires
+//! the `benten-engine` dependency). It is no longer `#[ignore]`'d.
 
 #![allow(clippy::unwrap_used)]
 

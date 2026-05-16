@@ -325,9 +325,9 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // batch (e.g., regular op + `system:*` op) MUST audit whether the
         // higher-grain override is the intended semantic — the policy no
         // longer enforces caps per-op when both are set. See
-        // `tests/grant_backed_policy_scope_overrides_pending_op_label_derivation.rs`
-        // for the substantive arm of the override-with-non-empty-pending_ops
-        // path.
+        // `tests/grant_backed_policy_derives_scope_from_write_context.rs`
+        // for the substantive arm of the explicit-`ctx.scope`-overrides-
+        // label-derived-default path.
         let scopes: Vec<String> = if !ctx.scope.is_empty() {
             vec![ctx.scope.clone()]
         } else if ctx.pending_ops.is_empty() {
