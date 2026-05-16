@@ -16,8 +16,10 @@
 //!   - `to_canonical_bytes()` — DAG-CBOR serialization
 //!   - `from_canonical_bytes(...)` — DAG-CBOR deserialization + version
 //!     validation
-//!   - `verify(...)` — composition of envelope-signature check +
-//!     `Acceptor::accept_at` + payload-hash binding
+//!   - `verify(...)` — COLLAPSE P3: envelope-signature check +
+//!     embedded-attestation→user-root signature + freshness gate +
+//!     payload-hash binding; returns the verified ceiling (no
+//!     `Acceptor`)
 //!
 //! ## Coverage matrix
 //!
@@ -26,7 +28,8 @@
 //! - Round-trip (new_unsigned → to_canonical_bytes → from_canonical_bytes).
 //! - Signature-tamper failure-path → `E_DEVICE_ATTESTATION_FORGED`.
 //! - Payload-tamper failure-path → `E_DEVICE_ATTESTATION_FORGED`.
-//! - Acceptor failure-path (replay via nonce store) →
+//! - Stale-frame failure-path (attestation older than the freshness
+//!   window; COLLAPSE P3 re-homed J5 anti-replay, no Acceptor) →
 //!   `E_DEVICE_ATTESTATION_FORGED`.
 //! - Version validation: V3+ rejected at decode with
 //!   `AtriumError::InvalidState`.
@@ -37,7 +40,6 @@
 //!
 //!   - `tests/integration/atrium_two_device.rs` —
 //!     `forged_device_did_rejected_at_envelope_verify` /
-//!     `replayed_envelope_rejected_by_acceptor_nonce_store` /
 //!     `frame_pair_payload_swap_rejected_by_payload_hash_binding` /
 //!     `future_wire_version_rejected_at_decode` — INTEGRATION shape
 //!     drives the same failure-mode contracts through the full
@@ -49,7 +51,7 @@
 
 use benten_engine::engine_sync::DeviceAttestationEnvelope;
 use benten_id::device_attestation::{
-    Acceptor, CapabilityEnvelope, DeviceAttestation, FreshnessPolicy, UptimePolicy, ZoneScope,
+    CapabilityEnvelope, DeviceAttestation, UptimePolicy, ZoneScope,
 };
 use benten_id::did::Did;
 use benten_id::keypair::Keypair;
@@ -147,10 +149,16 @@ fn verify_succeeds_for_signed_envelope_with_matching_payload_and_acceptor() {
     let envelope =
         DeviceAttestationEnvelope::new_signed(attestation, loro_payload, &device_kp).unwrap();
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
-    envelope
-        .verify(loro_payload, &acceptor, 0)
+    let ceiling = envelope
+        .verify(loro_payload, u64::MAX, 0)
         .expect("freshly-constructed signed envelope MUST verify");
+    // COLLAPSE (P3): verify returns the verified ceiling so the single
+    // chain-validation seam can AND it (J8). issue_attestation grants
+    // runs_sandbox=true here.
+    assert!(
+        ceiling.is_some_and(|e| e.runs_sandbox),
+        "verify MUST return the verified CapabilityEnvelope ceiling"
+    );
 }
 
 /// §13.8 verify-success pin: an `attestation = None` envelope skips
@@ -159,14 +167,18 @@ fn verify_succeeds_for_signed_envelope_with_matching_payload_and_acceptor() {
 #[test]
 fn verify_is_noop_for_unsigned_envelope_backward_compat() {
     let envelope = DeviceAttestationEnvelope::new_unsigned();
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
-    // Any payload + any timestamp must pass — the verify is a no-op
-    // for the legacy attestation=None path.
+    // Any payload + any timestamp must pass + return `None` (no
+    // ceiling) — the verify is a no-op for the legacy attestation=None
+    // path.
+    assert!(
+        envelope
+            .verify(b"any-payload", u64::MAX, 0)
+            .expect("attestation=None envelope verify MUST be a no-op (legacy fallback)")
+            .is_none(),
+        "unsigned envelope carries no ceiling"
+    );
     envelope
-        .verify(b"any-payload", &acceptor, 0)
-        .expect("attestation=None envelope verify MUST be a no-op (legacy fallback)");
-    envelope
-        .verify(b"another-payload", &acceptor, 1_000_000_000)
+        .verify(b"another-payload", u64::MAX, 1_000_000_000)
         .expect("attestation=None envelope verify MUST be no-op regardless of time");
 }
 
@@ -189,9 +201,8 @@ fn verify_rejects_tampered_envelope_signature_with_forged_code() {
         *byte = !*byte;
     }
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
     let err = envelope
-        .verify(loro_payload, &acceptor, 0)
+        .verify(loro_payload, u64::MAX, 0)
         .expect_err("tampered envelope_signature MUST reject");
 
     assert_eq!(
@@ -217,9 +228,8 @@ fn verify_rejects_swapped_payload_with_forged_code_frame_pair_binding() {
     let envelope =
         DeviceAttestationEnvelope::new_signed(attestation, signed_payload, &device_kp).unwrap();
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
     let err = envelope
-        .verify(swapped_payload, &acceptor, 0)
+        .verify(swapped_payload, u64::MAX, 0)
         .expect_err("payload swap MUST reject via payload_hash binding");
 
     assert_eq!(
@@ -229,40 +239,46 @@ fn verify_rejects_swapped_payload_with_forged_code_frame_pair_binding() {
     );
 }
 
-/// §13.8 verify-failure pin: Acceptor rejection (here via parent-issued
-/// attestation-nonce replay) surfaces as `E_DEVICE_ATTESTATION_FORGED`.
-/// The same attestation cannot be successfully verified twice against
-/// the same Acceptor — the nonce-store catches the replay.
+/// §13.8 verify-failure pin (COLLAPSE P3 — re-homed J5 anti-replay):
+/// the deleted `Acceptor` nonce-store is replaced by a freshness
+/// window. A stale attestation (issued_at older than the window)
+/// rejects with `E_DEVICE_ATTESTATION_FORGED`. This is the
+/// stale-frame replay defense that survives the COLLAPSE rewire —
+/// FAILs if `verify`'s freshness gate is no-op'd.
 #[test]
-fn verify_rejects_replayed_attestation_nonce_with_forged_code() {
+fn verify_rejects_stale_attestation_outside_freshness_window_with_forged_code() {
     let parent_kp = Keypair::generate();
     let device_kp = Keypair::generate();
     let device_did = Did::from_public_key(device_kp.public_key());
+    // issue_attestation uses issued_at = 0 (DeviceAttestation::issue).
     let attestation = issue_attestation(&parent_kp, device_did);
 
-    let loro_payload = b"replay-test-payload";
-    // Two envelopes sharing the same attestation (the parent-issued
-    // nonce is reused). Each envelope has a fresh session_nonce + a
-    // fresh signature; the Acceptor's nonce-store is the binding.
-    let envelope_1 =
-        DeviceAttestationEnvelope::new_signed(attestation.clone(), loro_payload, &device_kp)
-            .unwrap();
-    let envelope_2 =
+    let loro_payload = b"stale-frame-payload";
+    let envelope =
         DeviceAttestationEnvelope::new_signed(attestation, loro_payload, &device_kp).unwrap();
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
-    envelope_1
-        .verify(loro_payload, &acceptor, 0)
-        .expect("first verify must succeed (consumes the attestation nonce)");
-    let err = envelope_2
-        .verify(loro_payload, &acceptor, 0)
-        .expect_err("replayed attestation nonce MUST reject via Acceptor nonce-store");
-
+    // window = 300s, now = 1000s, issued_at = 0 → age 1000 > 300 →
+    // reject. A no-op'd freshness gate would (wrongly) accept.
+    let err = envelope
+        .verify(loro_payload, 300, 1_000)
+        .expect_err("attestation older than the freshness window MUST reject");
     assert_eq!(
         err.code(),
         benten_engine::ErrorCode::DeviceAttestationForged,
-        "replay rejection MUST surface E_DEVICE_ATTESTATION_FORGED; got {err:?}"
+        "stale-frame rejection MUST surface E_DEVICE_ATTESTATION_FORGED; got {err:?}"
     );
+
+    // Sanity: the same envelope WITHIN the window verifies (proves the
+    // rejection above is the freshness gate, not an unrelated failure).
+    let envelope_ok = DeviceAttestationEnvelope::new_signed(
+        issue_attestation(&parent_kp, Did::from_public_key(device_kp.public_key())),
+        loro_payload,
+        &device_kp,
+    )
+    .unwrap();
+    envelope_ok
+        .verify(loro_payload, 300, 100)
+        .expect("attestation within the freshness window MUST verify");
 }
 
 /// §13.8 version-rejection pin: future-version envelopes (V3+) MUST

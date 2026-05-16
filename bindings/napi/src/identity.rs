@@ -139,8 +139,7 @@ pub fn verify_signature(issuer_did: String, message: Buffer, signature: Buffer) 
 // applied at the module level in `bindings/napi/src/lib.rs`).
 
 use benten_id::device_attestation::{
-    Acceptor as RustAcceptor, CapabilityEnvelope as RustCapabilityEnvelope,
-    DeviceAttestation as RustDeviceAttestation, FreshnessPolicy as RustFreshnessPolicy,
+    CapabilityEnvelope as RustCapabilityEnvelope, DeviceAttestation as RustDeviceAttestation,
     RuntimeTarget as RustRuntimeTarget, UptimePolicy as RustUptimePolicy,
     ZoneScope as RustZoneScope,
 };
@@ -467,21 +466,11 @@ impl JsDeviceAttestation {
         }
     }
 
-    /// Accept under a freshness policy (in seconds). Convenience
-    /// wrapper around `Acceptor::accept_at` using `now_secs`.
-    /// Returns `true` on accept; throws on rejection (carries the
-    /// typed error code in the message).
-    #[napi]
-    pub fn accept_at(&self, now_secs: i64, freshness_window_secs: i64) -> Result<bool> {
-        let acceptor = RustAcceptor::new(RustFreshnessPolicy::seconds(
-            freshness_window_secs.max(0) as u64,
-        ));
-        match acceptor.accept_at(&self.inner, now_secs.max(0) as u64) {
-            Ok(()) => Ok(true),
-            Err(e) => Err(Error::from_reason(format!(
-                "attestation reject: [{}] {e}",
-                e.code()
-            ))),
-        }
-    }
+    // COLLAPSE (P3): `accept_at` DELETED. The device-attestation
+    // *acceptance* pipe (`benten_id::Acceptor`) is removed — the
+    // device envelope is no longer a distinct trust-root. Provenance
+    // signature verification survives via `verify_signature` above
+    // (DECISION-RECORD §4 RATIFIED); the J8 envelope-ceiling is
+    // ANDed once at the engine's single inbound-sync recheck seam,
+    // not at a napi-exposed acceptor.
 }

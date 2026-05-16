@@ -55,9 +55,11 @@ crates/
                         # attestation chain, MultiSigSurface trait
                         # (Ed25519SingleKey default impl + threshold
                         # extension point), and the device-DID
-                        # capability-attestation surface
-                        # (replay-resistant via nonce + freshness
-                        # window + nonce-store). Dependency edges:
+                        # capability-attestation surface (a pure
+                        # signed-ceiling primitive; COLLAPSE P3 deleted
+                        # the Acceptor acceptance pipe — stale-frame
+                        # replay is bounded by a freshness window on
+                        # the consuming Atrium handle). Dependency edges:
                         # `ed25519-dalek`, `ssi`, `blake3`,
                         # `serde_ipld_dagcbor`, `zeroize`, `secrecy`,
                         # `subtle`, `getrandom` only — NO edges back to

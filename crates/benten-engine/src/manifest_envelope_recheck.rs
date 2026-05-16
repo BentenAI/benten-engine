@@ -142,3 +142,78 @@ pub fn outcome_to_row_reject(
         }),
     }
 }
+
+/// COLLAPSE (P3) — the **single** J8 envelope-ceiling AND, applied
+/// inside [`crate::Engine::apply_atrium_merge`]'s per-row recheck.
+///
+/// DECISION-RECORD §4 RATIFIED: the device-attestation pipe is no
+/// longer a distinct trust-root. A signed device
+/// [`benten_id::device_attestation::CapabilityEnvelope`] declares a
+/// *ceiling* on what the inbound writer's effective caps may include.
+/// The unified chain-validation seam ANDs that ceiling into the
+/// writer's effective authority. This function IS that AND for the
+/// device-envelope shape.
+///
+/// **One code path, unified with #669 (build-constraint iii).** The
+/// `runs_sandbox=false → reject host:sandbox:*` rule is the
+/// load-bearing CLAUDE.md #17 thin-shape property. It lived in the
+/// (un-wired) `benten_id::ucan::validate_chain_with_attestations`
+/// before COLLAPSE; the deleted `Acceptor::accept_at` never enforced
+/// it on inbound sync. P5 (`feat(#669)`) GENERALIZES this same
+/// predicate over device-envelope **and** plugin-manifest `shares`
+/// (the CONSOLIDATE move per impl-design-COLLAPSE §2) so the manifest
+/// path calls THIS primitive, not a parallel one — the seam stays
+/// single (the #707 parallel-pipe shape the COLLAPSE exists to kill).
+///
+/// Returns `Ok(())` when the row's `scope` is within the ceiling (or
+/// no ceiling is present — legacy unsigned envelope / non-wire merge);
+/// `Err(EngineError::Other { DeviceAttestationForged, .. })` when the
+/// ceiling forbids the scope (currently: `host:sandbox:*` scope under
+/// a `runs_sandbox=false` ceiling — the only envelope dimension a
+/// sync row's cap-scope can exercise; broader dimensions ride P5's
+/// generalization).
+///
+/// **Native (full-peer) only — cfg-gated like `manifest_signing`.**
+/// The `benten_id::device_attestation::CapabilityEnvelope` ceiling
+/// type transitively pulls `getrandom`, which rejects the
+/// `wasm32-unknown-unknown` browser-backend bundle (this fn's sole
+/// production caller, `Engine::apply_atrium_merge`, is itself inside
+/// the `#[cfg(not(feature = "browser-backend"))] impl Engine` block).
+/// Per CLAUDE.md baked-in #17 + DECISION-RECORD §4: device-envelope
+/// ceiling-recheck is full-peer work; the thin/browser wasm32 client
+/// is a *view into* a full peer and does not perform device-envelope
+/// ceiling-recheck itself — the full peer still enforces, so excluding
+/// this surface from the browser bundle is architecturally correct,
+/// NOT a security regression. Mirrors the existing native-only
+/// `manifest_signing` module precedent (`benten_engine::manifest_signing`).
+#[cfg(not(feature = "browser-backend"))]
+pub fn envelope_ceiling_admits_row(
+    ceiling: Option<&benten_id::device_attestation::CapabilityEnvelope>,
+    scope: &str,
+    zone: &str,
+    key: &str,
+) -> Result<(), EngineError> {
+    let Some(env) = ceiling else {
+        // No verified ceiling for this merge (legacy unsigned
+        // envelope, or a non-wire merge path) — nothing to AND.
+        return Ok(());
+    };
+    // J8: a `runs_sandbox=false`-attested inbound writer MUST NOT be
+    // able to land a row that exercises `host:sandbox:*`. ct-eq is
+    // unnecessary here (the scope string is the public cap schema, and
+    // this is a prefix structural test, not a secret compare) — the
+    // project's ct-eq UNIFORMITY commitment applies to identity/secret
+    // compares, not cap-schema prefix routing.
+    if scope.starts_with("host:sandbox:") && !env.runs_sandbox {
+        return Err(EngineError::Other {
+            code: ErrorCode::DeviceAttestationForged,
+            message: format!(
+                "apply_atrium_merge: inbound row exceeds verified device \
+                 envelope-ceiling (zone='{zone}' key='{key}' scope='{scope}'): a \
+                 runs_sandbox=false-attested writer cannot exercise host:sandbox:* — \
+                 J8 ceiling-AND (CLAUDE.md #17 thin-shape property; COLLAPSE single seam)"
+            ),
+        });
+    }
+    Ok(())
+}

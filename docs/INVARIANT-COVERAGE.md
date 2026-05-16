@@ -215,6 +215,25 @@ construction sites (`engine_diagnostics.rs::transaction` commit hook
 `CapabilityPolicy` impls can dispatch per-device under the SAME
 logical-actor identity per D-PHASE-3-25.
 
+**⚠️ SUPERSEDED-BY-COLLAPSE (refinement-audit-2026-05 S3, owner-ratified
+2026-05-15 — see `docs/SECURITY-POSTURE.md` Compromise #23).** Under the
+ratified trust-model reframe (DECISION-RECORD-trust-model-reframe.md §4),
+**device-DID is a provenance label on the unified user-root-anchored
+capability spine, NOT a distinct trust-root.** Inv-14 device-grain
+attribution is **retained as an audit/provenance property** — the
+`AttributionFrame.device_did` slot is still populated and still
+cryptographically attributable via the retained envelope provenance-binding
+signature (a peer still cannot forge another device's DID without that
+device's key). What COLLAPSE deletes is the *trust decision* machinery
+(`Acceptor`/`accept_at`/`DeviceRevocation`); the *trust* now flows through
+the single chain-validation seam plus one retained envelope-ceiling
+attenuation. The device-grain provenance / compromised-device-quarantine
+audit trail survives; only the parallel device-trust-root pipe is removed.
+A post-COLLAPSE successor audit (#1234) confirms every remaining
+device-grain attribution use is elegant under the unified model. The
+Phase-3 narrative below is preserved for historical accuracy (it was
+correct for the model as it stood at Phase-3 close).
+
 **Phase-3 G16-D wave-6b on-the-wire device-DID-attestation envelope
 (plan §1 exit-criterion 16 closure) — cryptographic-attestation closure
 at G16-D wave-6b fix-pass.** The handle binds a signed
@@ -253,8 +272,11 @@ assumptions. Pinned end-to-end at:
   (multi-device GREEN-path with REAL signed attestations).
 - `tests/integration/atrium_two_device.rs::forged_device_did_rejected_at_envelope_verify`
   (DID forgery rejection — `E_DEVICE_ATTESTATION_FORGED`).
-- `tests/integration/atrium_two_device.rs::replayed_envelope_rejected_by_acceptor_nonce_store`
-  (parent-issued attestation nonce replay rejection).
+- `tests/integration/atrium_two_device.rs::replayed_stale_envelope_rejected_by_freshness_window`
+  (stale-envelope replay rejection via the freshness window re-homed onto the
+  unified spine per Compromise #23 SUPERSEDED-BY-COLLAPSE; the accept-time
+  nonce-store was deleted with the Acceptor cluster — durable replay-marker
+  re-home tracked P2/P5 per DECISION-RECORD §4b F3).
 - `tests/integration/atrium_two_device.rs::frame_pair_payload_swap_rejected_by_payload_hash_binding`
   (BLAKE3 frame-pair binding violation rejection).
 - `tests/integration/atrium_two_device.rs::future_wire_version_rejected_at_decode`

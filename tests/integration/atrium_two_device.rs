@@ -32,10 +32,15 @@
 //!    DID without holding that device's secret key (envelope-signature
 //!    verification at receive against the public key resolved from
 //!    `attestation.device_did`).
-//! 3. **Replay** — a captured envelope cannot be replayed verbatim
-//!    against a different sync session (parent-issued attestation
-//!    nonce consumed by the receiver's `Acceptor::accept_at`
-//!    nonce-store).
+//! 3. **Replay** — a captured valid envelope cannot be replayed
+//!    indefinitely. COLLAPSE (P3, ratified —
+//!    `.addl/refinement-audit-2026-05/impl-design-COLLAPSE.md` §1.5 +
+//!    §1.1a) DELETED the ephemeral `Acceptor` nonce-store; the
+//!    surviving anti-replay seam is the freshness window
+//!    (`now - issued_at <= freshness_window_secs`). The durable
+//!    replay-marker that would re-home the per-nonce defense is a
+//!    NAMED P2/P5 deliverable (mini-review-1238 F3). See
+//!    `replayed_stale_envelope_rejected_by_freshness_window`.
 //! 4. **Frame-pair binding violation** — a MITM cannot swap the
 //!    Loro payload while preserving the envelope (the envelope's
 //!    signed `payload_hash` is BLAKE3 of the upcoming payload).
@@ -70,9 +75,10 @@
 //! The forgery / replay / frame-pair-binding pins ALSO observably
 //! fail-fast: a forged envelope (mismatched device-DID vs
 //! envelope-signing keypair) rejects with
-//! `E_DEVICE_ATTESTATION_FORGED`; a replayed parent-issued nonce
-//! rejects via the receiver's nonce-store; a swapped payload rejects
-//! via constant-time BLAKE3 comparison.
+//! `E_DEVICE_ATTESTATION_FORGED`; a captured envelope replayed past
+//! its freshness window rejects via the freshness gate (post-COLLAPSE
+//! surviving anti-replay seam); a swapped payload rejects via
+//! constant-time BLAKE3 comparison.
 
 #![allow(clippy::unwrap_used, clippy::too_many_lines)]
 #![cfg(not(target_arch = "wasm32"))]
@@ -84,8 +90,16 @@ use benten_core::hlc::BentenHlc;
 use benten_engine::Engine;
 use benten_engine::atrium_api::AtriumConfig;
 use benten_engine::engine_sync::DeviceAttestationEnvelope;
+// COLLAPSE (P3, ratified — `.addl/refinement-audit-2026-05/impl-design-COLLAPSE.md`
+// §1.5 / DECISION-RECORD-trust-model-reframe.md §4/§4a): the device-acceptance
+// pipe (`Acceptor` / `FreshnessPolicy` / `DeviceRevocation`) is DELETED from
+// benten-id. The wire envelope's signature + payload-binding +
+// embedded-attestation→user-root signature gates are KEPT in
+// `DeviceAttestationEnvelope::verify`; the freshness window collapsed to a
+// plain `u64` set via `AtriumHandle::set_envelope_freshness_window`. These
+// tests are re-homed onto that post-COLLAPSE spine below.
 use benten_id::device_attestation::{
-    Acceptor, CapabilityEnvelope, DeviceAttestation, FreshnessPolicy, UptimePolicy, ZoneScope,
+    CapabilityEnvelope, DeviceAttestation, UptimePolicy, ZoneScope,
 };
 use benten_id::did::Did;
 use benten_id::keypair::Keypair;
@@ -157,10 +171,16 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
 
     // Step 2: Both devices join the same Atrium. Bind the SIGNED
     // attestation + device-keypair so outbound envelopes are V2 shape
-    // (signed; payload-hash bound; session-nonce replay-defended).
-    // Install permissive Acceptor on each side (test scope: parent-DID
-    // is the trusted issuer; freshness window is u64::MAX so the
-    // issued_at=0 attestations don't expire under wall-clock).
+    // (signed; payload-hash bound).
+    //
+    // COLLAPSE (P3, ratified): the deleted `Acceptor` install is
+    // replaced by `set_envelope_freshness_window`. Test scope keeps the
+    // window at u64::MAX so the issued_at=0 attestations don't expire
+    // under wall-clock — the load-bearing security gates this test
+    // exercises (envelope signature vs device-DID, embedded-attestation
+    // signature vs parent/user-root, payload-hash frame-pair binding)
+    // are ALL retained in the rewired `verify` and are independent of
+    // the freshness window.
     let atrium_laptop = engine_laptop
         .open_atrium(AtriumConfig::for_test())
         .await
@@ -181,13 +201,10 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
     atrium_phone
         .set_local_device_keypair(Some(seed_clone(&phone_kp)))
         .await;
-    // Each side accepts attestations from the parent identity.
-    atrium_laptop
-        .set_acceptor(Acceptor::new(FreshnessPolicy::seconds(u64::MAX)))
-        .await;
-    atrium_phone
-        .set_acceptor(Acceptor::new(FreshnessPolicy::seconds(u64::MAX)))
-        .await;
+    // Each side accepts any-age attestations (test scope); the
+    // signature + payload-binding gates remain load-bearing.
+    atrium_laptop.set_envelope_freshness_window(u64::MAX);
+    atrium_phone.set_envelope_freshness_window(u64::MAX);
 
     atrium_laptop.register_zone(ZONE).await;
     atrium_phone.register_zone(ZONE).await;
@@ -231,8 +248,9 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
     // last_received_remote_device_did slot so apply_atrium_merge can
     // populate AttributionFrame.device_did from the ORIGINATING device.
     // Per fix-pass, the envelope is signed (V2 shape); receiver
-    // verifies signature + parent-chain Acceptor + payload-hash before
-    // populating the slot.
+    // verifies envelope-signature + embedded-attestation→user-root
+    // signature + freshness window + payload-hash before populating
+    // the slot (post-COLLAPSE rewired `verify`; no `Acceptor`).
     let phone_addr = atrium_phone.loopback_addr().unwrap();
     let atrium_phone_clone = atrium_phone.clone();
     let zone_owned = ZONE.to_string();
@@ -386,12 +404,14 @@ async fn forged_device_did_rejected_at_envelope_verify() {
     let envelope =
         DeviceAttestationEnvelope::new_signed(victim_attestation, loro_payload, &attacker_kp)
             .unwrap();
-    // Receiver verifies — must reject. (Acceptor configured permissive
-    // so the failure is unambiguously the envelope-signature check,
-    // not a freshness-window edge case.)
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
+    // Receiver verifies — must reject. (Freshness window u64::MAX so
+    // the failure is unambiguously the envelope-signature check, not a
+    // freshness-window edge case. COLLAPSE: the `&Acceptor` arg is
+    // replaced by a plain `freshness_window_secs: u64`; the
+    // envelope-signature gate this asserts is KEPT verbatim in the
+    // rewired `verify`.)
     let now_secs = 0u64;
-    let result = envelope.verify(loro_payload, &acceptor, now_secs);
+    let result = envelope.verify(loro_payload, u64::MAX, now_secs);
     let err = result.expect_err(
         "forged envelope MUST reject — attacker keypair cannot sign for victim's device-DID",
     );
@@ -408,52 +428,74 @@ async fn forged_device_did_rejected_at_envelope_verify() {
     );
 }
 
-/// G16-D wave-6b fp — replay rejection at the wire boundary.
+/// G16-D wave-6b fp — replay rejection at the wire boundary
+/// (RE-HOMED under COLLAPSE P3).
 ///
-/// A captured envelope from session A is replayed against the same
-/// receiver in session B. The receiver's `Acceptor::accept_at`
-/// nonce-store insertion fails on the second call (the parent-issued
-/// attestation nonce is already in the store) so the replayed
-/// envelope rejects with `E_DEVICE_ATTESTATION_FORGED`. Load-bearing
-/// observable-consequence pin for cryptography MAJOR-2.
+/// ## COLLAPSE design change (ratified — do NOT re-litigate)
+///
+/// The original pin asserted that a captured envelope reusing the same
+/// parent-issued attestation *nonce* is rejected by the receiver's
+/// `Acceptor::accept_at` ephemeral nonce-store. Under the RATIFIED
+/// COLLAPSE (`.addl/refinement-audit-2026-05/impl-design-COLLAPSE.md`
+/// §1.5 + §1.1a; `DECISION-RECORD-trust-model-reframe.md` §4/§4a), the
+/// `Acceptor` cluster — including the ephemeral per-handle nonce-store —
+/// is DELETED. The nonce-store half of the anti-replay defense did NOT
+/// equivalently re-home at P3: the durable replay-marker that would
+/// carry it is a NAMED P2/P5 deliverable (impl-design §1.1a; tracked as
+/// mini-review-1238 finding F3). This is a design-acknowledged
+/// consequence of COLLAPSE, NOT a regression — pre-COLLAPSE the
+/// nonce-store still required a parent-signed attestation, and the
+/// signature + payload-binding + user-root delegation gates that bound
+/// authenticity are ALL retained in the rewired `verify`.
+///
+/// What COLLAPSE *keeps* as the anti-replay defense at this seam is the
+/// **freshness window**: a captured envelope replayed outside
+/// `now - issued_at <= freshness_window_secs` is rejected with
+/// `E_DEVICE_ATTESTATION_FORGED`. This test is re-homed onto that
+/// surviving property so the captured-envelope replay-defense intent is
+/// preserved (not deleted) under the new model — plus a positive
+/// in-window control proving the gate does not over-reject.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn replayed_envelope_rejected_by_acceptor_nonce_store() {
+async fn replayed_stale_envelope_rejected_by_freshness_window() {
     let parent_kp = Keypair::generate();
     let device_kp = Keypair::generate();
     let device_did = Did::from_public_key(device_kp.public_key());
+    // `issue` stamps `issued_at` from the issuing clock; for the test
+    // we treat the attestation as captured at t=0 and replayed later.
     let attestation = issue_full_peer_attestation(&parent_kp, device_did);
+    let issued_at = attestation.issued_at;
 
     let loro_payload = b"replay-test-payload";
-    // The same attestation is reused across two envelope constructions
-    // (production: two consecutive sync_subgraph calls with the same
-    // bound attestation). Each envelope carries a fresh session_nonce
-    // and a fresh signature, but the parent-issued attestation nonce
-    // is shared — that's what the Acceptor's nonce-store catches.
-    let envelope_1 =
-        DeviceAttestationEnvelope::new_signed(attestation.clone(), loro_payload, &device_kp)
-            .unwrap();
-    let envelope_2 =
+    let captured_envelope =
         DeviceAttestationEnvelope::new_signed(attestation, loro_payload, &device_kp).unwrap();
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
-    let now_secs = 0u64;
-    // First envelope verifies (consumes the attestation nonce).
-    envelope_1
-        .verify(loro_payload, &acceptor, now_secs)
-        .expect("first envelope must verify");
-    // Second envelope replays the same parent-issued attestation
-    // nonce — must reject.
-    let err = envelope_2
-        .verify(loro_payload, &acceptor, now_secs)
-        .expect_err("replayed envelope MUST reject via Acceptor nonce-store");
+    let freshness_window_secs: u64 = 300;
+    // Positive control: within the freshness window the captured
+    // envelope still verifies (the freshness gate does not over-reject;
+    // the kept signature + payload-binding gates pass).
+    captured_envelope
+        .verify(loro_payload, freshness_window_secs, issued_at + 10)
+        .expect("captured envelope within freshness window must verify");
+
+    // Replay defense: the SAME captured envelope replayed AFTER the
+    // freshness window has elapsed is rejected. This is the surviving
+    // (post-COLLAPSE) anti-replay seam — a captured valid envelope
+    // cannot be indefinitely replayed.
+    let err = captured_envelope
+        .verify(
+            loro_payload,
+            freshness_window_secs,
+            issued_at + freshness_window_secs + 1,
+        )
+        .expect_err("replayed envelope past the freshness window MUST reject");
     assert_eq!(
         err.code(),
         benten_engine::ErrorCode::DeviceAttestationForged,
-        "replay rejection MUST surface E_DEVICE_ATTESTATION_FORGED"
+        "stale-replay rejection MUST surface E_DEVICE_ATTESTATION_FORGED"
     );
     assert!(
-        format!("{err}").contains("attestation chain rejected"),
-        "expected attestation-chain rejection (NonceReplay), got {err}"
+        format!("{err}").contains("attestation stale"),
+        "expected freshness-window staleness rejection, got {err}"
     );
 }
 
@@ -477,18 +519,22 @@ async fn frame_pair_payload_swap_rejected_by_payload_hash_binding() {
     let envelope =
         DeviceAttestationEnvelope::new_signed(attestation, payload_a, &device_kp).unwrap();
 
-    let acceptor = Acceptor::new(FreshnessPolicy::seconds(u64::MAX));
+    // COLLAPSE: `&Acceptor` → `freshness_window_secs: u64`. The
+    // payload-hash frame-pair binding gate this asserts is KEPT
+    // verbatim in the rewired `verify`.
+    let freshness_window_secs = u64::MAX;
     let now_secs = 0u64;
     // Verifying against the original payload succeeds.
     envelope
-        .verify(payload_a, &acceptor, now_secs)
+        .verify(payload_a, freshness_window_secs, now_secs)
         .expect("envelope must verify against the payload it signed over");
     // Verifying against a SWAPPED payload must reject (the BLAKE3
-    // mismatch is the load-bearing assertion).
-    //
-    // Note: build a SECOND envelope so the Acceptor's nonce-store
-    // doesn't reject for replay reasons (we want the failure to be
-    // unambiguously the payload-hash binding, not the nonce store).
+    // mismatch is the load-bearing assertion). A SECOND independent
+    // envelope is used so the failure is unambiguously the
+    // payload-hash binding. (Under COLLAPSE the ephemeral nonce-store
+    // is gone — see `replayed_stale_envelope_rejected_by_freshness_window`
+    // — so this is no longer needed for replay-isolation, but keeping
+    // an independent envelope keeps the assertion crisply scoped.)
     let parent_kp2 = Keypair::generate();
     let device_kp2 = Keypair::generate();
     let device_did2 = Did::from_public_key(device_kp2.public_key());
@@ -496,7 +542,7 @@ async fn frame_pair_payload_swap_rejected_by_payload_hash_binding() {
     let envelope2 =
         DeviceAttestationEnvelope::new_signed(attestation2, payload_a, &device_kp2).unwrap();
     let err = envelope2
-        .verify(payload_b, &acceptor, now_secs)
+        .verify(payload_b, freshness_window_secs, now_secs)
         .expect_err("swapped payload MUST reject via payload_hash binding");
     assert_eq!(
         err.code(),

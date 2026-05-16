@@ -149,9 +149,13 @@ pub enum AtriumError {
     /// verification. Three failure modes surface this single variant:
     /// (a) device-DID forgery (envelope signature does not verify
     /// against the public key resolved from the declared
-    /// `attestation.device_did`); (b) parent-attestation chain
-    /// rejection via `benten_id::Acceptor::accept_at`; (c) frame-pair
-    /// payload-hash binding violation (MITM swap defense).
+    /// `attestation.device_did`); (b) embedded-attestation →
+    /// user-root (`parent_did`) signature / freshness rejection
+    /// ([`DeviceAttestationEnvelope::verify`] — COLLAPSE P3, no
+    /// `Acceptor`); (c) frame-pair payload-hash binding violation
+    /// (MITM swap defense). Also surfaced at the
+    /// [`crate::Engine::apply_atrium_merge`] J8 ceiling-AND when an
+    /// inbound row exceeds the verified device envelope-ceiling.
     /// Maps to [`benten_errors::ErrorCode::DeviceAttestationForged`].
     #[error("atrium device-attestation envelope verification failed: {reason}")]
     DeviceAttestationForged {
@@ -265,16 +269,19 @@ pub struct SyncMergeAttribution {
 ///      from `attestation.device_did` (links the wire frame to the
 ///      keypair the attestation names — a peer cannot impersonate
 ///      another device's DID without holding that device's secret key).
-///    - Verifies the embedded attestation via
-///      `benten_id::Acceptor::accept_at` (parent signature, freshness
-///      window, nonce-store replay defense, revocation list).
+///    - Verifies the embedded attestation against its `parent_did`
+///      (the user-root delegation link) + a freshness window
+///      ([`DeviceAttestationEnvelope::verify`] — COLLAPSE P3; the
+///      `benten_id::Acceptor` trust pipe is deleted, revocation
+///      collapses to user-root UCAN revocation at the durable seam).
 /// 2. **Replay defense**: each envelope carries a fresh 32-byte
 ///    `session_nonce` (independent of the attestation's parent-issued
 ///    nonce). The signed `envelope_signature` covers `session_nonce`,
 ///    so a captured envelope cannot be replayed verbatim against a
-///    different sync session — the receiver-side `Acceptor::accept_at`
-///    additionally rejects replay of the same parent-issued
-///    attestation nonce.
+///    different sync session; stale-frame replay is bounded by the
+///    receiver-side freshness window (the per-handle ephemeral
+///    nonce-store collapsed under COLLAPSE — durable replay defense
+///    rides the single chain-validation seam).
 /// 3. **Frame-pair binding defense**: the envelope's signed
 ///    `payload_hash` is `BLAKE3(loro_export_bytes)` for the Loro
 ///    payload that follows on the wire. The receiver computes the
@@ -310,9 +317,10 @@ pub struct DeviceAttestationEnvelope {
     pub version: u8,
     /// Signed parent → device-DID attestation, or `None` when the
     /// local handle has not been bound to a device-attestation envelope
-    /// (pre-G16-D-fp legacy / test fixture path). Composes the existing
-    /// hardened `benten_id::DeviceAttestation` + `Acceptor::accept_at`
-    /// surface; not a parallel transport.
+    /// (pre-G16-D-fp legacy / test fixture path). Carries the signed
+    /// `benten_id::DeviceAttestation` whose `envelope` is the J8
+    /// ceiling ANDed at the single chain-validation seam (COLLAPSE
+    /// P3); not a parallel transport, not a distinct trust-root.
     pub attestation: Option<benten_id::device_attestation::DeviceAttestation>,
     /// `BLAKE3(loro_export_bytes)` for the Loro payload that follows
     /// this envelope on the wire. The signed `envelope_signature`
@@ -377,9 +385,11 @@ impl DeviceAttestationEnvelope {
     /// peers + the two pre-existing pinned-CID fixtures
     /// (`sync_replica_attribution.rs::sync_replica_*`) that bypass the
     /// wire envelope path. Production deployments with adversarial-
-    /// peer threat models SHOULD override the receiver-side
-    /// `set_acceptor` with a `FreshnessPolicy` that rejects stale
-    /// attestations + a parent-DID expected-issuer gate. The
+    /// peer threat models SHOULD narrow the receiver-side freshness
+    /// window via [`AtriumHandle::set_envelope_freshness_window`] so
+    /// stale attestations reject (COLLAPSE P3 — the deleted Acceptor's
+    /// expected-parent / revocation-list gates collapse to the single
+    /// user-root chain-validation seam). The
     /// heterogeneous-cap-envelope filter at phase-3-backlog §6.12
     /// item 9 will additionally enforce an envelope-required
     /// per-zone write filter — at that point, `attestation = None`
@@ -420,8 +430,11 @@ impl DeviceAttestationEnvelope {
         let payload_hash: [u8; 32] = *blake3::hash(loro_payload).as_bytes();
         let mut session_nonce = [0u8; 32];
         // Fresh per-envelope OS-CSPRNG nonce — defends against verbatim
-        // envelope replay across sessions. Composes with the parent-
-        // issued attestation nonce that `Acceptor::accept_at` consumes.
+        // envelope replay across sessions (covered by the signed
+        // envelope_signature). COLLAPSE P3: the parent-issued
+        // attestation nonce is no longer consumed by an Acceptor
+        // nonce-store; stale-frame replay is bounded by the
+        // receiver-side freshness window.
         getrandom::getrandom(&mut session_nonce).map_err(|e| AtriumError::InvalidState {
             reason: format!("DeviceAttestationEnvelope nonce generation failed: {e}"),
         })?;
@@ -508,36 +521,58 @@ impl DeviceAttestationEnvelope {
     }
 
     /// Verify the envelope cryptographically + assert frame-pair
-    /// binding to the inbound Loro payload.
+    /// binding to the inbound Loro payload, returning the verified
+    /// device [`benten_id::device_attestation::CapabilityEnvelope`]
+    /// ceiling (when the envelope is signed) so the inbound-sync seam
+    /// can AND it into the writer's effective caps.
     ///
-    /// Three failure modes all surface
-    /// [`AtriumError::DeviceAttestationForged`]:
+    /// **COLLAPSE rewire (P3 — DECISION-RECORD §4 RATIFIED):** the
+    /// device-attestation pipe is no longer a *distinct* trust-root.
+    /// The provenance-binding signature verify is KEPT (device-DID is
+    /// retained as an `AttributionFrame` provenance label, not a
+    /// trust decision). The deleted `Acceptor::accept_at` is REPLACED
+    /// by inline (a) embedded-attestation→user-root signature verify
+    /// + (b) freshness gate (the J5 anti-replay re-home per
+    /// impl-design-COLLAPSE §1.1a — the per-handle ephemeral
+    /// nonce-store collapsed; replay defense folds into the single
+    /// chain-validation seam's time-window machinery). The
+    /// envelope-ceiling AND (J8) is enforced ONCE at the unified
+    /// inbound-sync recheck seam (`Engine::apply_atrium_merge`),
+    /// NOT here — `verify` returns the verified ceiling so the seam
+    /// can AND it. This keeps the J8 ceiling-check a single code
+    /// path, unified with the #669 manifest ceiling-check (the
+    /// `apply_atrium_merge` recheck loop is the one seam both ride).
+    ///
+    /// Failure modes surface [`AtriumError::DeviceAttestationForged`]:
     ///
     /// 1. `envelope_signature` does not verify against the public key
     ///    resolved from `attestation.device_did`.
-    /// 2. `acceptor.accept_at(&attestation, now)` rejects the
-    ///    parent-attestation chain (bad parent signature, expired
-    ///    freshness window, replayed nonce, revoked device).
-    /// 3. `BLAKE3(loro_payload) != self.payload_hash` (frame-pair
+    /// 2. The embedded attestation signature does not verify against
+    ///    the public key resolved from `attestation.parent_did`
+    ///    (= the user-root delegation link — the same op the unified
+    ///    chain-walk performs per link).
+    /// 3. The attestation is older than `freshness_window_secs`
+    ///    (stale-frame anti-replay).
+    /// 4. `BLAKE3(loro_payload) != self.payload_hash` (frame-pair
     ///    swap defense).
     ///
     /// `attestation = None` envelopes (pre-G16-D-fp legacy / test
-    /// fixture path) skip verification — backward-compat with the
-    /// V1-shipped wire shape; the receiver falls back to its own
-    /// `device_cid` per `Engine::apply_atrium_merge` semantics.
+    /// fixture path) skip verification + return `None` — backward-compat
+    /// with the V1-shipped wire shape; the receiver falls back to its
+    /// own `device_cid` per `Engine::apply_atrium_merge` semantics.
     ///
     /// # Errors
     ///
     /// Returns [`AtriumError::DeviceAttestationForged`] on any of the
-    /// three failure modes above.
+    /// four failure modes above.
     pub fn verify(
         &self,
         loro_payload: &[u8],
-        acceptor: &benten_id::device_attestation::Acceptor,
+        freshness_window_secs: u64,
         now_secs: u64,
-    ) -> AtriumResult<()> {
+    ) -> AtriumResult<Option<benten_id::device_attestation::CapabilityEnvelope>> {
         let Some(attestation) = self.attestation.as_ref() else {
-            return Ok(());
+            return Ok(None);
         };
         // (1) Envelope signature against device-DID's resolved pubkey.
         let device_did = benten_id::did::Did::from_string_unchecked(attestation.device_did.clone());
@@ -567,14 +602,43 @@ impl DeviceAttestationEnvelope {
                     .into(),
             },
         )?;
-        // (2) Parent-attestation chain via Acceptor (signature +
-        //     freshness + nonce-store replay + revocation).
-        acceptor.accept_at(attestation, now_secs).map_err(|e| {
+        // (2) Embedded-attestation → user-root signature verify.
+        //     COLLAPSE: this is now "verify a delegation link" — the
+        //     same op the unified chain-walk performs per link. The
+        //     attestation's `parent_did` is read as "the user-root
+        //     that issued this ceiling" (CLAUDE.md #18 concept-4).
+        //     `Acceptor::accept_at`'s expected-parent gate (never
+        //     production-wired) + revocation list (J3 — collapsed to
+        //     user-root UCAN revocation at the durable seam) are
+        //     intentionally NOT re-homed here.
+        let parent_did = benten_id::did::Did::from_string_unchecked(attestation.parent_did.clone());
+        let parent_pk = parent_did
+            .resolve()
+            .map_err(|_| AtriumError::DeviceAttestationForged {
+                reason: "attestation parent_did resolution failed (forged / non-did:key parent)"
+                    .into(),
+            })?;
+        attestation.verify_signature_with(&parent_pk).map_err(|_| {
             AtriumError::DeviceAttestationForged {
-                reason: format!("attestation chain rejected: {e:?}"),
+                reason: "embedded attestation signature does not verify against parent_did's \
+                         pubkey (user-root delegation-link forgery)"
+                    .into(),
             }
         })?;
-        // (3) Frame-pair payload-hash binding.
+        // (3) Freshness gate (J5 anti-replay re-home, impl-design
+        //     §1.1a): `now - issued_at <= window`. The per-handle
+        //     ephemeral nonce-store collapsed under COLLAPSE; durable
+        //     replay defense rides the single chain-validation seam's
+        //     time-window machinery.
+        if now_secs.saturating_sub(attestation.issued_at) > freshness_window_secs {
+            return Err(AtriumError::DeviceAttestationForged {
+                reason: format!(
+                    "attestation stale: issued_at={} now={} exceeds freshness window {}s",
+                    attestation.issued_at, now_secs, freshness_window_secs
+                ),
+            });
+        }
+        // (4) Frame-pair payload-hash binding.
         let observed: [u8; 32] = *blake3::hash(loro_payload).as_bytes();
         // Constant-time equality on the hash defends against subtle
         // timing-channel inference of the expected hash bytes.
@@ -586,7 +650,10 @@ impl DeviceAttestationEnvelope {
                     .into(),
             });
         }
-        Ok(())
+        // Return the verified ceiling so the single inbound-sync
+        // recheck seam (`Engine::apply_atrium_merge`) can AND it into
+        // the inbound writer's effective caps (J8 ceiling-AND).
+        Ok(Some(attestation.envelope.clone()))
     }
 }
 
@@ -713,16 +780,34 @@ struct AtriumInner {
     /// forgery test with mismatched device-DID vs envelope-signing
     /// keypair).
     local_device_keypair: Mutex<Option<benten_id::keypair::Keypair>>,
-    /// Phase-3 G16-D wave-6b fix-pass: the local Acceptor used to
-    /// verify inbound [`DeviceAttestationEnvelope`] attestation chains
-    /// (signature + freshness + nonce-store replay defense + revocation
-    /// list). Defaults to a `FreshnessPolicy::seconds(u64::MAX)` accept-
-    /// any-age acceptor — production deployments override via
-    /// [`AtriumHandle::set_acceptor`] with the trust-store's parent-DID
-    /// + a calibrated freshness window. The Acceptor's nonce-store is
-    /// replay-defense state for the Atrium handle's lifetime; cross-
-    /// handle replay is bounded by per-attestation issuance scope.
-    acceptor: Mutex<benten_id::device_attestation::Acceptor>,
+    /// COLLAPSE (P3): freshness window (seconds) applied to inbound
+    /// signed [`DeviceAttestationEnvelope`]s by
+    /// [`DeviceAttestationEnvelope::verify`]'s J5 anti-replay re-home
+    /// (impl-design-COLLAPSE §1.1a). Replaces the deleted per-handle
+    /// `benten_id::device_attestation::Acceptor`. Defaults to
+    /// `u64::MAX` (accept-any-age — the wire-envelope signature +
+    /// payload-binding + embedded-attestation→user-root signature
+    /// defenses remain load-bearing). Production deployments narrow
+    /// via [`AtriumHandle::set_envelope_freshness_window`] once the
+    /// local UCAN backend promotes. The device-trust *acceptance*
+    /// pipe (expected-parent / revocation-list) is DELETED — revocation
+    /// collapses to user-root UCAN revocation at the durable seam;
+    /// the J8 envelope-ceiling is ANDed once at
+    /// [`crate::Engine::apply_atrium_merge`]'s recheck (the single
+    /// chain-validation seam, unified with the #669 manifest check).
+    envelope_freshness_window_secs: std::sync::atomic::AtomicU64,
+    /// COLLAPSE (P3): most-recently-verified remote device
+    /// [`benten_id::device_attestation::CapabilityEnvelope`] ceiling,
+    /// keyed by zone. Populated post-verification by
+    /// [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`]; consumed by
+    /// [`crate::Engine::apply_atrium_merge`]'s per-row recheck to AND
+    /// the ceiling into the inbound writer's effective caps (J8). A
+    /// `runs_sandbox=false` ceiling here rejects an inbound row that
+    /// would exercise `host:sandbox:*` — the load-bearing CLAUDE.md
+    /// #17 thin-shape property preserved through the COLLAPSE rewire.
+    last_received_remote_envelope:
+        Mutex<BTreeMap<String, Option<benten_id::device_attestation::CapabilityEnvelope>>>,
     /// Phase-3 G16-D wave-6b: most-recently-received remote
     /// device-DID-envelope keyed by zone. Populated by
     /// [`AtriumHandle::sync_subgraph`] /
@@ -864,13 +949,13 @@ impl AtriumHandle {
                 last_received_remote_device_did: Mutex::new(BTreeMap::new()),
                 local_device_attestation: Mutex::new(None),
                 local_device_keypair: Mutex::new(None),
-                // Default Acceptor: accept-any-age + no revocations + no
-                // expected-parent gate (replay defense via nonce-store
-                // is always-on regardless). Production deployments
-                // override via `set_acceptor`.
-                acceptor: Mutex::new(benten_id::device_attestation::Acceptor::new(
-                    benten_id::device_attestation::FreshnessPolicy::seconds(u64::MAX),
-                )),
+                // COLLAPSE (P3): accept-any-age default freshness
+                // window; production deployments narrow via
+                // `set_envelope_freshness_window`. The Acceptor
+                // (expected-parent / nonce-store / revocation-list)
+                // is DELETED — see field docs.
+                envelope_freshness_window_secs: std::sync::atomic::AtomicU64::new(u64::MAX),
+                last_received_remote_envelope: Mutex::new(BTreeMap::new()),
                 local_hlc,
                 inbound_hlc_skew_classifier_count: std::sync::atomic::AtomicU64::new(0),
             }),
@@ -938,21 +1023,24 @@ impl AtriumHandle {
         *self.inner.local_device_keypair.lock().await = keypair;
     }
 
-    /// Phase-3 G16-D wave-6b fix-pass: install a custom
-    /// `benten_id::Acceptor` for inbound envelope verification.
+    /// COLLAPSE (P3): set the freshness window (seconds) applied to
+    /// inbound signed [`DeviceAttestationEnvelope`]s.
     ///
-    /// The Acceptor governs (a) freshness policy (`now - issued_at <=
-    /// window`); (b) nonce-store replay defense; (c) revocation list;
-    /// (d) optional expected-parent gate. Production deployments
-    /// configure the Acceptor with the trust-store's parent-DID + a
-    /// calibrated freshness window after the local UCAN backend
-    /// promotes — pre-promotion the default
-    /// `FreshnessPolicy::seconds(u64::MAX)` accept-any-age acceptor
-    /// keeps the wire-envelope signature + payload-binding defenses
-    /// load-bearing while leaving freshness-window enforcement to the
-    /// caller's discretion.
-    pub async fn set_acceptor(&self, acceptor: benten_id::device_attestation::Acceptor) {
-        *self.inner.acceptor.lock().await = acceptor;
+    /// Replaces the deleted `AtriumHandle::set_acceptor`. The device
+    /// *acceptance* pipe (expected-parent / nonce-store / revocation-
+    /// list) is DELETED under COLLAPSE — revocation collapses to
+    /// user-root UCAN revocation at the durable seam; the J8
+    /// envelope-ceiling is ANDed once at
+    /// [`crate::Engine::apply_atrium_merge`]'s recheck. Production
+    /// deployments narrow this window from the `u64::MAX`
+    /// accept-any-age default once the local UCAN backend promotes;
+    /// the wire-envelope signature + payload-binding +
+    /// embedded-attestation→user-root signature defenses remain
+    /// load-bearing regardless of the window.
+    pub fn set_envelope_freshness_window(&self, window_secs: u64) {
+        self.inner
+            .envelope_freshness_window_secs
+            .store(window_secs, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Build the outbound envelope for a given Loro payload — signed
@@ -983,20 +1071,38 @@ impl AtriumHandle {
         }
     }
 
-    /// Verify an inbound envelope against the upcoming Loro payload +
-    /// the handle's installed Acceptor. Returns the verified
-    /// device-DID (if signed) or `None` (legacy unsigned).
-    async fn verify_inbound_envelope(
+    /// Verify an inbound envelope against the upcoming Loro payload.
+    /// Returns the verified `(device-DID, ceiling)` pair — both `None`
+    /// for legacy unsigned envelopes.
+    ///
+    /// COLLAPSE (P3): the deleted `Acceptor` is replaced by the
+    /// handle's freshness window; the returned ceiling is stashed by
+    /// the caller so `Engine::apply_atrium_merge`'s single recheck
+    /// seam can AND it (J8 ceiling-AND, unified with the #669
+    /// manifest check — one code path, not a parallel pipe).
+    // COLLAPSE (P3): no longer `async` — the deleted `Acceptor` was
+    // behind a `Mutex` (`.lock().await`); the freshness window is now
+    // a synchronous `AtomicU64` load, so this is a plain fn.
+    fn verify_inbound_envelope(
         &self,
         envelope: &DeviceAttestationEnvelope,
         loro_payload: &[u8],
-    ) -> AtriumResult<Option<String>> {
-        let acceptor = self.inner.acceptor.lock().await;
+    ) -> AtriumResult<(
+        Option<String>,
+        Option<benten_id::device_attestation::CapabilityEnvelope>,
+    )> {
+        let window = self
+            .inner
+            .envelope_freshness_window_secs
+            .load(std::sync::atomic::Ordering::Relaxed);
         let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
-        envelope.verify(loro_payload, &acceptor, now_secs)?;
-        Ok(envelope.declared_device_did().map(|s| s.to_string()))
+        let ceiling = envelope.verify(loro_payload, window, now_secs)?;
+        Ok((
+            envelope.declared_device_did().map(|s| s.to_string()),
+            ceiling,
+        ))
     }
 
     /// Phase-3 G16-D wave-6b: read the most-recently-received remote
@@ -1069,6 +1175,37 @@ impl AtriumHandle {
     /// envelope's device-DID.
     pub(crate) async fn clear_last_received_remote_device_did(&self, zone: &str) {
         let mut g = self.inner.last_received_remote_device_did.lock().await;
+        g.remove(zone);
+    }
+
+    /// COLLAPSE (P3): the per-zone verified remote device
+    /// [`benten_id::device_attestation::CapabilityEnvelope`] ceiling
+    /// stashed by [`Self::sync_subgraph`] / [`Self::accept_sync_subgraph`]
+    /// after [`DeviceAttestationEnvelope::verify`]. Consumed by
+    /// [`crate::Engine::apply_atrium_merge`]'s per-row recheck to AND
+    /// the ceiling into the inbound writer's effective caps (J8). The
+    /// outer `Option` distinguishes "no merge driven through the wire
+    /// path for this zone" (`None`) from "verified, but legacy
+    /// unsigned envelope carried no ceiling" (`Some(None)`).
+    pub(crate) async fn last_received_remote_envelope(
+        &self,
+        zone: &str,
+    ) -> Option<Option<benten_id::device_attestation::CapabilityEnvelope>> {
+        self.inner
+            .last_received_remote_envelope
+            .lock()
+            .await
+            .get(zone)
+            .cloned()
+    }
+
+    /// COLLAPSE (P3): clear the per-zone verified-ceiling slot. Called
+    /// by [`crate::Engine::apply_atrium_merge`] after the per-row
+    /// recheck has consumed the slot, so a subsequent merge that did
+    /// NOT get a fresh wire envelope cannot inherit the prior
+    /// envelope's ceiling.
+    pub(crate) async fn clear_last_received_remote_envelope(&self, zone: &str) {
+        let mut g = self.inner.last_received_remote_envelope.lock().await;
         g.remove(zone);
     }
 
@@ -1257,20 +1394,25 @@ impl AtriumHandle {
             DeviceAttestationEnvelope::from_canonical_bytes(&remote_envelope_bytes)?;
         // Receive remote state.
         let remote_bytes = conn.recv_bytes().await?;
-        // G16-D wave-6b fp: cryptographic verification at receive —
-        // signature + parent-chain Acceptor + payload-hash binding.
-        // Surfaces `AtriumError::DeviceAttestationForged` on any of the
-        // three failure modes; legacy unsigned envelopes (attestation
-        // = None) skip verification per backward-compat contract.
-        let verified_remote_did = self
-            .verify_inbound_envelope(&remote_envelope, &remote_bytes)
-            .await?;
-        // Stash the remote-device-DID (post-verification) before merge
-        // so apply_atrium_merge can consume it via
-        // `last_received_remote_device_did`.
+        // COLLAPSE P3: cryptographic verification at receive —
+        // envelope signature + embedded-attestation→user-root
+        // signature + freshness + payload-hash binding (no Acceptor).
+        // Surfaces `AtriumError::DeviceAttestationForged` on any
+        // failure mode; legacy unsigned envelopes (attestation = None)
+        // skip verification per backward-compat contract.
+        let (verified_remote_did, verified_ceiling) =
+            self.verify_inbound_envelope(&remote_envelope, &remote_bytes)?;
+        // Stash the remote-device-DID + verified ceiling (post-
+        // verification) before merge so apply_atrium_merge can consume
+        // them via `last_received_remote_device_did` /
+        // `last_received_remote_envelope` (J8 ceiling-AND seam).
         {
             let mut tbl = self.inner.last_received_remote_device_did.lock().await;
             tbl.insert(zone.to_string(), verified_remote_did);
+        }
+        {
+            let mut tbl = self.inner.last_received_remote_envelope.lock().await;
+            tbl.insert(zone.to_string(), verified_ceiling);
         }
         // Apply via merge-dispatch (fires Inv-13 row-4 SPLIT).
         self.merge_remote_change(zone, &remote_bytes).await?;
@@ -1300,16 +1442,22 @@ impl AtriumHandle {
             DeviceAttestationEnvelope::from_canonical_bytes(&remote_envelope_bytes)?;
         let remote_bytes = conn.recv_bytes().await?;
         // G16-D wave-6b fp: cryptographic verification at receive —
-        // signature + parent-chain Acceptor + payload-hash binding.
-        let verified_remote_did = self
-            .verify_inbound_envelope(&remote_envelope, &remote_bytes)
-            .await?;
-        // Stash the remote-device-DID (post-verification) before merge
-        // so apply_atrium_merge can consume it via
-        // `last_received_remote_device_did`.
+        // envelope signature + embedded-attestation→user-root
+        // signature + freshness + payload-hash binding (COLLAPSE P3
+        // rewire — no Acceptor).
+        let (verified_remote_did, verified_ceiling) =
+            self.verify_inbound_envelope(&remote_envelope, &remote_bytes)?;
+        // Stash the remote-device-DID + verified ceiling (post-
+        // verification) before merge so apply_atrium_merge can consume
+        // them via `last_received_remote_device_did` /
+        // `last_received_remote_envelope` (J8 ceiling-AND seam).
         {
             let mut tbl = self.inner.last_received_remote_device_did.lock().await;
             tbl.insert(zone.to_string(), verified_remote_did);
+        }
+        {
+            let mut tbl = self.inner.last_received_remote_envelope.lock().await;
+            tbl.insert(zone.to_string(), verified_ceiling);
         }
         // Phase-3 G16-D wave-6b: emit local envelope BEFORE the Loro
         // export, mirroring connect-side ordering. Build the envelope
