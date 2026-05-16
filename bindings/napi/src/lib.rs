@@ -1187,10 +1187,11 @@ mod napi_surface {
         ///
         /// Returns `null` when no SANDBOX invocation has been recorded
         /// for the named handler — the TS-side wrapper at
-        /// `packages/engine/src/engine.ts::describeSandboxNode` falls
-        /// back to the synthesized "unknown" sentinel shape in that case
-        /// (the operator must call the handler at least once before the
-        /// metric record exists).
+        /// `packages/engine/src/engine.ts::describeSandboxNode` surfaces
+        /// each metric field as the structural `null` value in that case
+        /// (the legacy `"unknown"` string sentinel was dropped at the
+        /// §7.1-closure wave; the operator must call the handler at least
+        /// once before the metric record exists).
         ///
         /// cfg-gated under `feature = "test-helpers"` matching the
         /// engine-side accessor's gate. Production cdylib builds DO NOT
