@@ -65,22 +65,26 @@
 //! independent of the JSON-LD layer and is fully covered by the
 //! hand-rolled surface here.
 //!
-//! ## Cag-r4-2 (graph-encoding) — RED-PHASE-deferred
+//! ## Cag-r4-2 (graph-encoding) — durable-persistence-deferred
 //!
 //! Per `cag-r4-2` MAJOR, VC receipts MUST persist as graph Nodes with
-//! label `id:vc-receipt` + structured properties. That pin requires
-//! `benten_core::Node` / `benten_core::Edge` reach, which is a
-//! cross-crate seam — `benten-core` is upstream of `benten-id` per
-//! `arch-r1-10`'s dependency-edge contract (`benten-id` cannot depend
-//! on `benten-graph`; `benten-core` carries `Node` / `Edge` types).
+//! label `id:vc-receipt` + structured properties. **Hyg-3 #435
+//! retense:** the prior narrative claimed this needed
+//! `benten_core::Node` / `benten_core::Edge` "reach" that `benten-id`
+//! lacked. That is stale — at HEAD `benten-core` IS a direct
+//! dependency of this crate (added for the G27-C `GrantReader` CID
+//! handle; `benten-core` is NOT in the `arch-r1-10` forbidden set,
+//! which forbids `benten-graph` / `benten-engine` / `benten-eval` /
+//! `benten-caps`). The Node/Edge types ARE reachable here today. What
+//! remains deferred is the *durable graph-side persistence backend*
+//! (the receipt must land in a real store, not just be constructible)
+//! — named for Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`.
 //! The graph-encoding test pin
 //! (`benten_id_vc_issuance_receipt_persisted_as_graph_node`) stays
-//! `#[ignore]`'d at G14-A2 with rationale routing it to G14-B (where
-//! the durable backend lands the graph-side persistence layer). Per
-//! HARD RULE rule-12 disposition (b), the BELONGS-ELSEWHERE entry
-//! lives at `crates/benten-id/tests/graph_encoded.rs` (named
-//! destination) with the rationale string anchored on the test
-//! body's `#[ignore = "..."]` attribute.
+//! `#[ignore]`'d with its rationale string anchored on the test
+//! body's `#[ignore = "..."]` attribute at
+//! `crates/benten-id/tests/graph_encoded.rs` (named destination per
+//! HARD RULE rule-12 disposition (b)).
 
 use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};

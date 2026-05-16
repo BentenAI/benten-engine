@@ -31,9 +31,15 @@ use crate::keypair::Keypair;
 /// A minted plugin-DID handle.
 ///
 /// Holds the keypair (for issuance) + the resolved Did (for audience
-/// matching). Cloning the handle SHARES the keypair via the underlying
-/// SigningKey storage; production callers should NOT clone — the store
-/// owns the canonical instance.
+/// matching).
+///
+/// **Surf-2 #910 — `PluginDidHandle` is NOT `Clone`.** It embeds a
+/// [`Keypair`], which deliberately does not implement `Clone` per
+/// `crypto-blocker-1` secret-bytes hygiene; that !Clone property
+/// propagates here by construction. The store owns the canonical
+/// instance and hands out `&PluginDidHandle` borrows; there is no
+/// clone path to reason about. (The prior docstring described
+/// keypair-sharing-on-clone semantics for a clone that cannot exist.)
 #[derive(Debug)]
 pub struct PluginDidHandle {
     /// The DID string form (`did:key:z...`).
@@ -126,9 +132,12 @@ pub fn audience_matches_plugin_did(audience: &Did, plugin_did: &Did) -> bool {
 
 /// An in-memory store of minted plugin-DIDs.
 ///
-/// Production code persists this via redb (Phase 4-Foundation
-/// `ManifestStore` — shares storage with `GrantStore` per cap-r1-15).
-/// At G24-D wave the in-memory shape is the canonical type.
+/// **Hyg-2 #379 retense:** at HEAD this store is in-memory only — it
+/// is NOT yet persisted via redb. The prior docstring stated redb
+/// persistence (`ManifestStore` sharing storage with `GrantStore`)
+/// as present-tense fact; that durable backing is named for
+/// Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`. The
+/// in-memory shape here is the canonical type today.
 #[derive(Debug, Default)]
 pub struct PluginDidStore {
     handles: Vec<PluginDidHandle>,

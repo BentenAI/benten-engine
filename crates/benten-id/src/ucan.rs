@@ -453,16 +453,21 @@ fn validate_chain_inner(
         // token's `iss` (audience-binding within the chain).
         if let Some(parent) = chain.get(idx + 1) {
             // const-time-eq: chain-link aud↔iss comparison
-            // per crypto-major-4.
-            let aud_bytes = token.claims.aud.as_bytes();
-            // The chain ordering is leaf-first, so chain[idx]'s
-            // PARENT is chain[idx+1]. The parent's audience MUST
-            // equal the child's issuer (the parent delegated TO
-            // the child).
+            // per crypto-major-4. The chain ordering is leaf-first,
+            // so chain[idx]'s PARENT is chain[idx+1]. The parent's
+            // audience MUST equal the child's issuer (the parent
+            // delegated TO the child).
+            //
+            // Surf-2 #908 / Qual-1 #717: the prior `let aud_bytes =
+            // token.claims.aud.as_bytes();` + `let _ = aud_bytes;`
+            // discard pair is removed. It was framed as a
+            // "defense-in-depth" second check but was inert dead
+            // code (the binding was never read; the discard only
+            // silenced the unused-variable lint). The load-bearing
+            // chain-link assertion is the single `parent.aud ==
+            // child.iss` check below.
             let parent_aud = parent.claims.aud.as_bytes();
             let child_iss = token.claims.iss.as_bytes();
-            // Two binding checks compose the chain integrity. First:
-            // parent.aud == this.iss (parent delegated TO this issuer).
             if !ct_signature_eq(parent_aud, child_iss) {
                 return Err(UcanError::ChainLinkBroken {
                     link_index: idx + 1,
@@ -470,13 +475,6 @@ fn validate_chain_inner(
                     next_iss: token.claims.iss.clone(),
                 });
             }
-            // Second (defense-in-depth): suppress the unused
-            // `aud_bytes` variable warning. (Variable bound for
-            // potential future tightening: a four-way check that
-            // also pins `child.aud` is downstream, but the parent
-            // chain-link check above is the load-bearing assertion
-            // here.)
-            let _ = aud_bytes;
 
             // 4. Attenuation check: every capability in the child
             // MUST be a subset of (resource:ability == match OR

@@ -190,10 +190,11 @@ impl DeviceAttestation {
         envelope: CapabilityEnvelope,
         issued_at: u64,
     ) -> Result<Self, DeviceAttestationError> {
-        // Generate fresh nonce from OS CSPRNG. The buffer is zero-init
-        // ONLY as scratch space immediately overwritten by `OsRng::fill_bytes`;
-        // CodeQL pattern-match on `[0u8; 32]` is a false-positive that
-        // doesn't see the next-line randomization. Per crypto-major-2.
+        // Generate fresh nonce from OS CSPRNG via `generate_fresh_nonce`,
+        // which composes 4 `OsRng::next_u64()` reads (NOT `fill_bytes`
+        // into a zero-init buffer — that pattern was migrated away to
+        // avoid the CodeQL `[0u8; 32]` "hardcoded nonce" false-positive;
+        // see the `generate_fresh_nonce` docstring). Per crypto-major-2.
         let nonce = generate_fresh_nonce();
         Self::issue_with_nonce(parent_kp, device_did, envelope, issued_at, nonce)
     }
