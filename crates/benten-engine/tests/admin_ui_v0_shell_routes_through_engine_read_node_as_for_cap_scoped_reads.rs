@@ -63,7 +63,6 @@ impl<'a> MaterializerEngine for TracingAdapter<'a> {
         self.engine
             .read_node_as(principal, cid)
             .map_err(|e| MaterializerError::SchemaMismatch {
-                code: benten_errors::ErrorCode::MaterializerSchemaMismatch,
                 reason: format!("engine read_node_as: {e}"),
             })
     }

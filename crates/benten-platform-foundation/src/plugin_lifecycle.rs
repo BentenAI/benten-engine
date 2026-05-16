@@ -152,7 +152,13 @@ pub trait SubscriptionRegistry {
 
 /// Bundle of the three engine-side ports — passed to
 /// [`uninstall_plugin`] so the cascade can drive each concern in turn.
-pub struct UninstallContext<'a, R, P, S>
+///
+/// **Symmetric with [`InstallPorts`]** (Surf-1 #888): both lifecycle
+/// entry-points take a pure-port bundle (`*Ports`) for swappable
+/// engine-side adapters, keeping non-port scalar data in a separate
+/// `*Params` bundle. This is the composability seam a future
+/// install-then-rollback-on-failure lifecycle (#635) composes against.
+pub struct UninstallPorts<'a, R, P, S>
 where
     R: CapRevoker,
     P: PrivateNamespaceTeardown,
@@ -191,7 +197,7 @@ where
 pub fn uninstall_plugin<R, P, S>(
     library: &mut PluginLibrary,
     plugin_did_store: &mut PluginDidStore,
-    ctx: &mut UninstallContext<'_, R, P, S>,
+    ports: &mut UninstallPorts<'_, R, P, S>,
     manifest_cid: &Cid,
 ) -> Result<UninstallOutcome, ErrorCode>
 where
@@ -209,19 +215,21 @@ where
         .ok_or(ErrorCode::PluginManifestInvalid)?;
 
     // 1. Revoke held caps (T10-uninstall (a)).
-    let held_caps_revoked = ctx.cap_revoker.revoke_grants_with_audience(&plugin_did)?;
+    let held_caps_revoked = ports.cap_revoker.revoke_grants_with_audience(&plugin_did)?;
 
     // 2. Cascade-revoke downstream delegations (T10-uninstall (b)).
-    let delegations_cascade_revoked = ctx
+    let delegations_cascade_revoked = ports
         .cap_revoker
         .cascade_revoke_grants_with_issuer(&plugin_did)?;
 
     // 3. Terminate live subscriptions (T10-uninstall (c) LOAD-BEARING).
-    let subscriptions_terminated = ctx.subscriptions.terminate_subscriptions_for(&plugin_did)?;
+    let subscriptions_terminated = ports
+        .subscriptions
+        .terminate_subscriptions_for(&plugin_did)?;
 
     // 4. Tear down private namespace.
     let private_namespace_rows_deleted =
-        ctx.private_ns.delete_private_namespace_for(&plugin_did)?;
+        ports.private_ns.delete_private_namespace_for(&plugin_did)?;
 
     // 5. Remove library entry + revoke plugin-DID.
     let library_entry_removed = library.remove(manifest_cid).is_some();
@@ -616,7 +624,23 @@ pub trait PrivateNamespaceProvisioner {
 }
 
 /// Bundle of the engine-side ports — passed to [`install_plugin`].
-pub struct InstallContext<'a, M, P>
+///
+/// **Symmetric with [`UninstallPorts`]** (Surf-1 #888): a pure-port
+/// bundle for swappable engine-side adapters. Non-port scalar data
+/// (clock, trust-list, version-chain, user/plugin DIDs, …) lives in the
+/// separate [`InstallParams`] bundle so the two lifecycle entry-points
+/// share the same composable shape.
+///
+/// **No `SubscriptionRegistry` port here (scoped DISAGREE w/ #888
+/// sub-point):** the v1 install path has no subscription-registration
+/// step — a plugin's reactive SUBSCRIBE handles are attached lazily by
+/// the engine when the plugin subgraph is first walked, not at install
+/// time (uninstall *terminates* them, which is why uninstall carries
+/// the port). Adding a never-driven port at install would be dead
+/// surface (a Hyg-2 finding). The real asymmetry #888 names — the
+/// missing common abstraction — is resolved by the `*Ports` / `*Params`
+/// split, not by a dead port.
+pub struct InstallPorts<'a, M, P>
 where
     M: CapMinter,
     P: PrivateNamespaceProvisioner,
@@ -625,6 +649,13 @@ where
     pub cap_minter: &'a mut M,
     /// Private-namespace provisioner port.
     pub private_ns: &'a mut P,
+}
+
+/// Non-port install parameters — the scalar / borrowed inputs the
+/// install cascade consumes (symmetric counterpart kept distinct from
+/// [`InstallPorts`] per Surf-1 #888 so a future install-then-rollback
+/// lifecycle (#635) can compose ports + params independently).
+pub struct InstallParams<'a> {
     /// Engine-injected wall-clock (seconds since UNIX epoch). Pass
     /// [`MANIFEST_CLOCK_NOT_INJECTED_SENTINEL`] when the engine builder
     /// did NOT inject a clock — Seam 2 fail-closes for manifests with
@@ -711,7 +742,7 @@ pub struct InstallOutcome {
 /// 7. **Upgrade DAG-descendant check** (T10-upgrade (b)) when
 ///    `prior_installed_cid` + `version_chain` are supplied.
 /// 8. **Plugin-DID adoption (caller-mint-first)** — assert
-///    `install_record.plugin_did == *ctx.expected_plugin_did`
+///    `install_record.plugin_did == *params.expected_plugin_did`
 ///    (`E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` on mismatch); then
 ///    assert `plugin_did_store.get(expected_plugin_did).is_some()`
 ///    (`E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` if the caller did not
@@ -729,7 +760,8 @@ pub struct InstallOutcome {
 pub fn install_plugin<F, M, P>(
     library: &mut PluginLibrary,
     plugin_did_store: &mut PluginDidStore,
-    ctx: &mut InstallContext<'_, M, P>,
+    ports: &mut InstallPorts<'_, M, P>,
+    params: &InstallParams<'_>,
     received_bytes: &[u8],
     expected_cid: &Cid,
     install_record: &InstallRecord,
@@ -752,7 +784,7 @@ where
     }
 
     // 2. Trust-list check (R4b-FP-1: T5b user-trust-list arm).
-    if !ctx.user_trust_list.is_empty() && !ctx.user_trust_list.contains(&manifest.peer_did) {
+    if !params.user_trust_list.is_empty() && !params.user_trust_list.contains(&manifest.peer_did) {
         return Err(ErrorCode::PluginAuthorNotTrusted);
     }
 
@@ -776,7 +808,7 @@ where
     if install_record.manifest_cid != *expected_cid {
         return Err(ErrorCode::PluginInstallRecordManifestCidMismatch);
     }
-    if install_record.consenting_user_did != *ctx.user_did {
+    if install_record.consenting_user_did != *params.user_did {
         return Err(ErrorCode::PluginInstallRecordConsentingUserMismatch);
     }
 
@@ -789,10 +821,11 @@ where
     // docs/future/phase-4-backlog.md §4.10 — at v1 a rotated peer-DID
     // still passes install (D-4F-12: rotation → WARNING not hard-reject)
     // but the WARNING-emitting path isn't called yet.
-    let validation = manifest.validate_with_clock(ctx.now_secs)?;
+    let validation = manifest.validate_with_clock(params.now_secs)?;
 
     // 5. Heterogeneity check.
-    if matches!(ctx.installer_shape, InstallerShape::ThinClient) && manifest.requires_sandbox_exec()
+    if matches!(params.installer_shape, InstallerShape::ThinClient)
+        && manifest.requires_sandbox_exec()
     {
         return Err(ErrorCode::PluginHeterogeneityIncompatible);
     }
@@ -801,7 +834,7 @@ where
     detect_composition_cycle(*expected_cid, &manifest, resolver)?;
 
     // 7. Upgrade DAG-descendant check (T10-upgrade (b)).
-    if let (Some(chain), Some(prior_cid)) = (ctx.version_chain, ctx.prior_installed_cid) {
+    if let (Some(chain), Some(prior_cid)) = (params.version_chain, params.prior_installed_cid) {
         // Same CID = re-install (no-op upgrade); otherwise must be
         // a strict descendant.
         if prior_cid != *expected_cid && !chain.is_ancestor_of(&prior_cid, expected_cid) {
@@ -820,7 +853,7 @@ where
     //
     //    The post-fp path enforces:
     //
-    //    (a) `install_record.plugin_did == *ctx.expected_plugin_did`
+    //    (a) `install_record.plugin_did == *params.expected_plugin_did`
     //        — the caller's claim about which plugin-DID the user
     //        signed for. Mismatch surfaces typed
     //        `PluginInstallRecordPluginDidMismatch` (sec-r6r1-1
@@ -845,10 +878,10 @@ where
     //    the new Step 8 checks add defense-in-depth via the caller's
     //    explicit `expected_plugin_did` claim + store-membership
     //    assertion.
-    if install_record.plugin_did != *ctx.expected_plugin_did {
+    if install_record.plugin_did != *params.expected_plugin_did {
         return Err(ErrorCode::PluginInstallRecordPluginDidMismatch);
     }
-    if plugin_did_store.get(ctx.expected_plugin_did).is_none() {
+    if plugin_did_store.get(params.expected_plugin_did).is_none() {
         return Err(ErrorCode::PluginDidHandleNotPreInserted);
     }
     let plugin_did = install_record.plugin_did.clone();
@@ -856,13 +889,14 @@ where
     // 9. Cap cascade — mint root grants from user_did → plugin_did.
     let mut grants_minted = 0usize;
     for req in &manifest.requires {
-        ctx.cap_minter
-            .mint_root_grant(ctx.user_did, &plugin_did, &req.scope)?;
+        ports
+            .cap_minter
+            .mint_root_grant(params.user_did, &plugin_did, &req.scope)?;
         grants_minted += 1;
     }
 
     // 10. Provision private namespace.
-    ctx.private_ns.provision_private_namespace(&plugin_did)?;
+    ports.private_ns.provision_private_namespace(&plugin_did)?;
 
     // 11. Insert into library + set active reference.
     let entry = LibraryEntry {
@@ -1002,12 +1036,13 @@ mod tests {
         let mut cascade = InMemoryUninstallCascade::new();
         let mut private = InMemoryUninstallCascade::new();
         let mut subs = InMemoryUninstallCascade::new();
-        let mut ctx = UninstallContext {
+        let mut ports = UninstallPorts {
             cap_revoker: &mut cascade,
             private_ns: &mut private,
             subscriptions: &mut subs,
         };
-        let err = uninstall_plugin(&mut library, &mut store, &mut ctx, &fake_cid(99)).unwrap_err();
+        let err =
+            uninstall_plugin(&mut library, &mut store, &mut ports, &fake_cid(99)).unwrap_err();
         assert_eq!(err, ErrorCode::PluginManifestInvalid);
         // No revocation log entries — cascade not driven on bogus CID.
         assert!(cascade.revocation_log().is_empty());
@@ -1047,12 +1082,12 @@ mod tests {
         // for all 3 ports.
         let mut private = InMemoryUninstallCascade::new();
         let mut subs = InMemoryUninstallCascade::new();
-        let mut ctx = UninstallContext {
+        let mut ports = UninstallPorts {
             cap_revoker: &mut cascade,
             private_ns: &mut private,
             subscriptions: &mut subs,
         };
-        let outcome = uninstall_plugin(&mut library, &mut store, &mut ctx, &cid).unwrap();
+        let outcome = uninstall_plugin(&mut library, &mut store, &mut ports, &cid).unwrap();
         assert_eq!(outcome.held_caps_revoked, 2);
         // Distractor untouched.
         assert!(
@@ -1082,17 +1117,101 @@ mod tests {
         });
         let mut private = InMemoryUninstallCascade::new();
         let mut subs = InMemoryUninstallCascade::new();
-        let mut ctx = UninstallContext {
+        let mut ports = UninstallPorts {
             cap_revoker: &mut cascade,
             private_ns: &mut private,
             subscriptions: &mut subs,
         };
-        let outcome = uninstall_plugin(&mut library, &mut store, &mut ctx, &cid_a).unwrap();
+        let outcome = uninstall_plugin(&mut library, &mut store, &mut ports, &cid_a).unwrap();
         assert_eq!(outcome.delegations_cascade_revoked, 1);
         let log = cascade.revocation_log();
         assert!(
             log.iter()
                 .any(|r| r.cascade_source == Some(plugin_a.clone()) && r.audience == plugin_b)
+        );
+    }
+
+    /// Surf-1 #888 regression (Refs #1199): the uninstall cascade keys
+    /// off the *install-time* provenance — the library entry's
+    /// plugin-DID + the manifest `requires` envelope minted at install.
+    /// This pins that the InstallPorts/InstallParams ↔ UninstallPorts
+    /// symmetry split preserves the provenance chain end-to-end: every
+    /// grant minted under the manifest's `requires` envelope at install
+    /// is exactly the set the uninstall cascade revokes (and a
+    /// distractor grant under an unrelated DID is untouched).
+    ///
+    /// WOULD-FAIL if uninstall keyed off anything other than the
+    /// install-recorded plugin-DID, or if the manifest-envelope→grant
+    /// provenance were dropped across the lifecycle boundary.
+    #[test]
+    fn uninstall_cascade_preserves_install_time_manifest_envelope_provenance() {
+        let plugin_did = fake_did("ProvenancePlugin");
+        let user_did = fake_did("ProvenanceUser");
+        let other_did = fake_did("UnrelatedPlugin");
+        let cid = fake_cid(42);
+
+        // Manifest envelope declared at install: two `requires` scopes.
+        let mut library = PluginLibrary::new();
+        let mut store = PluginDidStore::new();
+        let envelope = ["store:notes:read", "store:notes:write"];
+        library.insert(fake_library_entry(plugin_did.clone(), cid));
+
+        // The install-time cap cascade mints one grant per `requires`
+        // scope under audience=plugin_did (mirrors install_plugin step
+        // 9). Recorded with issuer=user_did = the Layer-1 trust anchor.
+        let mut cascade = InMemoryUninstallCascade::new();
+        for (i, scope) in envelope.iter().enumerate() {
+            cascade.insert_grant(InMemoryGrant {
+                grant_cid: fake_cid(100 + i as u8),
+                audience: plugin_did.clone(),
+                issuer: user_did.clone(),
+                scope: (*scope).to_string(),
+            });
+        }
+        // Distractor: a grant under an unrelated plugin-DID that shares
+        // an identical scope string — MUST survive (provenance is
+        // keyed on the install-recorded plugin-DID, not the scope).
+        cascade.insert_grant(InMemoryGrant {
+            grant_cid: fake_cid(200),
+            audience: other_did.clone(),
+            issuer: user_did.clone(),
+            scope: "store:notes:read".to_string(),
+        });
+
+        let mut private = InMemoryUninstallCascade::new();
+        let mut subs = InMemoryUninstallCascade::new();
+        let mut ports = UninstallPorts {
+            cap_revoker: &mut cascade,
+            private_ns: &mut private,
+            subscriptions: &mut subs,
+        };
+        let outcome = uninstall_plugin(&mut library, &mut store, &mut ports, &cid).unwrap();
+
+        // Exactly the install-envelope grants (keyed on the
+        // install-recorded plugin-DID) were revoked.
+        assert_eq!(outcome.held_caps_revoked, envelope.len());
+        assert_eq!(
+            cascade
+                .revocation_log()
+                .iter()
+                .filter(|r| r.audience == plugin_did)
+                .count(),
+            envelope.len(),
+            "every manifest-envelope grant minted at install MUST be revoked"
+        );
+        // The unrelated-DID grant (identical scope, different
+        // provenance) survives — provenance is keyed on the
+        // install-recorded plugin-DID, not the scope string.
+        assert!(
+            !cascade
+                .revocation_log()
+                .iter()
+                .any(|r| r.audience == other_did),
+            "unrelated-DID grant (same scope, different provenance) MUST survive"
+        );
+        assert!(
+            !cascade.active_grants_for_audience(&other_did).is_empty(),
+            "distractor grant MUST remain active post-uninstall"
         );
     }
 }

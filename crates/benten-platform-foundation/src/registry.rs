@@ -1,18 +1,30 @@
-//! Phase-4-Foundation G24-D — decentralized registry surface.
+//! Phase-4-Foundation G24-D — decentralized registry reserved shapes.
 //!
 //! Per post-R1-triage ratification #3: **decentralized registry →
 //! Phase 4-Meta**. Phase 4-Foundation v0 uses direct content-addressed-
 //! share over Atriums (out-of-band handshake; user pulls from peer
-//! they trust). This module is the RESERVED placeholder + type-shapes
-//! that Phase 4-Meta fills with the Atrium-substrate publish /
-//! subscribe wiring.
+//! they trust). This module declares the *concrete data shapes*
+//! ([`RegistryEntry`], [`DiscoveryQuery`], [`DiscoveryResult`]) +
+//! reserves the `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode via
+//! [`timeout_error_code`] so Phase 4-Meta's Atrium-substrate wiring has
+//! stable anchors.
+//!
+//! **No `Registry` trait at v1 (Fwd-2 #1014 RATIFIED Path A,
+//! 2026-05-15).** The earlier paper-only `trait Registry` was a
+//! forward-architecture abstraction with zero v1 consumers; it locked
+//! a publish-of-body / closed-enum / single-error-code shape pre-Atrium-
+//! substrate that would conflict with the Phase-8 decentralized-
+//! discovery trajectory named in `docs/VISION.md` (CID-keyed announce,
+//! trust-graph-keyed discovery, signed publish receipts). Per Path A
+//! ("match docs to code"): the trait is retracted and NOT part of the
+//! v1 public API surface. Phase 4-Meta / Phase-5+ introduces a trait
+//! *if and when* a real second impl materializes (e.g. an Atrium-
+//! substrate registry whose shape genuinely differs from an in-memory
+//! one) — tracked at `docs/future/phase-4-backlog.md §3.1`.
 //!
 //! At G24-D the module has zero production call sites — only test
 //! pins enumerate the reserved surface (per
 //! `tests/registry_phase_4_meta_reserved_no_production_callsites.rs`).
-//!
-//! The `E_REGISTRY_DISCOVERY_TIMEOUT` ErrorCode is minted here at
-//! G24-D wave but has no firing site until Phase 4-Meta.
 
 use crate::plugin_manifest::PluginManifest;
 use benten_core::Cid;
@@ -53,27 +65,12 @@ pub struct DiscoveryResult {
     pub matches: Vec<RegistryEntry>,
 }
 
-/// The registry trait — Phase 4-Meta implementations land in
-/// `benten-sync` (Atrium-substrate publish/subscribe) and an
-/// alternative in-memory test backend lands alongside.
-///
-/// **Phase 4-Foundation: trait declared; no production impl.**
-pub trait Registry {
-    /// Publish a manifest to the registry. Returns the published CID.
-    ///
-    /// # Errors
-    ///
-    /// Implementation-defined; Phase 4-Meta defines the typed shapes.
-    fn publish(&mut self, entry: RegistryEntry) -> Result<Cid, ErrorCode>;
-
-    /// Discover entries matching the query.
-    ///
-    /// # Errors
-    ///
-    /// `E_REGISTRY_DISCOVERY_TIMEOUT` if the underlying transport
-    /// times out before any peer responds.
-    fn discover(&self, query: &DiscoveryQuery) -> Result<DiscoveryResult, ErrorCode>;
-}
+// NOTE (Fwd-2 #1014 RATIFIED Path A, 2026-05-15): there is intentionally
+// NO `trait Registry` here. The paper-only forward-architecture trait
+// was retracted to keep the v1 public API surface honest — the
+// concrete publish/discover wiring (and the decision of whether a trait
+// abstraction is warranted, given Phase-8's CID-keyed-announce shape)
+// lands at Phase 4-Meta. See `docs/future/phase-4-backlog.md §3.1`.
 
 /// Reserved registry-discovery-timeout error helper.
 ///

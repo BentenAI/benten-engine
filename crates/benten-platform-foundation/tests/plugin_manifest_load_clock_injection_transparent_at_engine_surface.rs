@@ -19,7 +19,7 @@ use benten_errors::ErrorCode;
 use benten_id::keypair::Keypair;
 use benten_platform_foundation::plugin_library::PluginLibrary;
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryInstallCascade, InstallContext, InstallerShape, install_plugin,
+    InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
 };
 use benten_platform_foundation::plugin_manifest::MANIFEST_CLOCK_NOT_INJECTED_SENTINEL;
 
@@ -115,10 +115,13 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
 
-    let mut ctx_no_clock = InstallContext {
+    let mut ctx_no_clock = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
-        now_secs: MANIFEST_CLOCK_NOT_INJECTED_SENTINEL, // engine built WITHOUT clock injection
+    };
+    let ctx_no_clock_params = InstallParams {
+        now_secs: MANIFEST_CLOCK_NOT_INJECTED_SENTINEL,
+        // engine built WITHOUT clock injection
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
         user_did: &user_did,
@@ -131,6 +134,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
         &mut library,
         &mut store,
         &mut ctx_no_clock,
+        &ctx_no_clock_params,
         &bytes,
         &expected_cid,
         &install_record,
@@ -182,10 +186,13 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
     );
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
-    let mut ctx_with_clock = InstallContext {
+    let mut ctx_with_clock = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
-        now_secs: 1_700_000_000, // real clock injected
+    };
+    let ctx_with_clock_params = InstallParams {
+        now_secs: 1_700_000_000,
+        // real clock injected
         installer_shape: InstallerShape::FullPeer,
         user_trust_list: &trust_list,
         user_did: &user_did,
@@ -197,6 +204,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
         &mut library2,
         &mut store2,
         &mut ctx_with_clock,
+        &ctx_with_clock_params,
         &bytes,
         &expected_cid,
         &install_record_b,

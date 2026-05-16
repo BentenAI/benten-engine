@@ -23,9 +23,9 @@
 //! declared scope. The materializer's T1 envelope-recheck rule at
 //! `crates/benten-platform-foundation/src/materializer.rs:884-904`
 //! fires: any primitive carrying `cap_scope` outside `declared_requires`
-//! returns `MaterializerError::SchemaMismatch { code:
-//! ErrorCode::MaterializerSchemaMismatch }` BEFORE the walk reaches the
-//! READ fanout or EMIT-to-sink boundary.
+//! returns `MaterializerError::SchemaMismatch { reason }` (typed code
+//! `ErrorCode::MaterializerSchemaMismatch` via `.code()`) BEFORE the walk
+//! reaches the READ fanout or EMIT-to-sink boundary.
 //!
 //! ## Would-FAIL-if-no-op'd
 //!
@@ -159,11 +159,7 @@ fn admin_ui_v0_hostile_schema_with_read_emit_chain_outside_envelope_denied() {
     // contract: a typed denial, not a generic Backend / Other code.
     // ------------------------------------------------------------------
     match err {
-        MaterializerError::SchemaMismatch {
-            ref code,
-            ref reason,
-        } => {
-            assert_eq!(*code, ErrorCode::MaterializerSchemaMismatch);
+        MaterializerError::SchemaMismatch { ref reason } => {
             // Defense-in-depth diagnostic: the rejection MUST name the
             // attempted scope for forensic visibility. The materializer
             // wraps the offending primitive's cap_scope in the reason

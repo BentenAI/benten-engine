@@ -57,13 +57,8 @@ fn materializer_rejects_subgraph_whose_runtime_composition_exceeds_declared_cap_
              MUST be REJECTED at materializer entry",
         );
     assert!(
-        matches!(
-            &err,
-            MaterializerError::SchemaMismatch {
-                code: ErrorCode::MaterializerSchemaMismatch,
-                ..
-            }
-        ),
+        matches!(&err, MaterializerError::SchemaMismatch { .. })
+            && err.code() == ErrorCode::MaterializerSchemaMismatch,
         "T1 negative: must surface typed E_MATERIALIZER_SCHEMA_MISMATCH per \
          arch-r1-3 mint; got {err:?}"
     );

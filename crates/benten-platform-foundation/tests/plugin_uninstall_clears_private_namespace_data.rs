@@ -19,7 +19,7 @@ use benten_id::did::Did;
 use benten_id::plugin_did::PluginDidStore;
 use benten_platform_foundation::plugin_library::{LibraryEntry, PluginLibrary};
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryUninstallCascade, UninstallContext, uninstall_plugin,
+    InMemoryUninstallCascade, UninstallPorts, uninstall_plugin,
 };
 use benten_platform_foundation::plugin_manifest::{
     CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault,
@@ -95,7 +95,7 @@ fn uninstall_deletes_private_namespace_rows_for_plugin_did() {
     // Uninstall.
     let mut cascade = InMemoryUninstallCascade::new();
     let mut subs = InMemoryUninstallCascade::new();
-    let mut ctx = UninstallContext {
+    let mut ctx = UninstallPorts {
         cap_revoker: &mut cascade,
         private_ns: &mut private,
         subscriptions: &mut subs,

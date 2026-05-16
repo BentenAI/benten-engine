@@ -177,23 +177,26 @@ pub fn deny_all_cap_recheck() -> MaterializerCapRecheck {
 // ---------------------------------------------------------------------
 
 /// Error type for the materializer walk surface.
+///
+/// Each variant's identity uniquely determines its typed [`ErrorCode`]
+/// (surfaced via [`MaterializerError::code`]) — there is no per-variant
+/// `code` field, since the variant IS the code (Qual-1 #732: a redundant
+/// `code: ErrorCode` field that is structurally constant per variant is
+/// duplicate state).
 #[derive(Debug, Error)]
 pub enum MaterializerError {
     /// Materializer's entry validation refused the spec.
-    #[error("materializer rejected SubgraphSpec at entry ({code:?}): {reason}")]
+    /// Surfaces [`ErrorCode::MaterializerSchemaMismatch`].
+    #[error("materializer rejected SubgraphSpec at entry: {reason}")]
     SchemaMismatch {
-        /// Always [`ErrorCode::MaterializerSchemaMismatch`] but carried
-        /// for downstream pattern-matching symmetry.
-        code: ErrorCode,
         /// Diagnostic.
         reason: String,
     },
 
     /// Materializer's reactive subscribe seam failed to attach.
-    #[error("materializer subscribe seam failed ({code:?}): pattern={pattern} reason={reason}")]
+    /// Surfaces [`ErrorCode::MaterializerSubscribeSeamFailure`].
+    #[error("materializer subscribe seam failed: pattern={pattern} reason={reason}")]
     SubscribeSeamFailure {
-        /// Always [`ErrorCode::MaterializerSubscribeSeamFailure`].
-        code: ErrorCode,
         /// The pattern that was being attached.
         pattern: String,
         /// Diagnostic.
@@ -201,36 +204,22 @@ pub enum MaterializerError {
     },
 
     /// UCAN clock-not-injected inheritance per sec-3.5-r1-7.
+    /// Surfaces [`ErrorCode::UcanClockNotInjected`].
     #[error("UCAN chain-walker invoked without clock injection (E_UCAN_CLOCK_NOT_INJECTED)")]
     UcanClockNotInjected,
-
-    /// Engine-side backend failure (passthrough).
-    #[error("engine backend: {0}")]
-    Backend(String),
-
-    /// Catch-all with a typed [`ErrorCode`] payload — used for unexpected
-    /// shapes from the engine seam.
-    #[error("materializer: {code:?} — {message}")]
-    Other {
-        /// Typed error code.
-        code: ErrorCode,
-        /// Diagnostic message.
-        message: String,
-    },
 }
 
 impl MaterializerError {
-    /// Return the typed [`ErrorCode`] this error surfaces.
+    /// Return the typed [`ErrorCode`] this error surfaces. The variant
+    /// identity alone determines the code.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         match self {
-            MaterializerError::SchemaMismatch { code, .. } => code.clone(),
-            MaterializerError::SubscribeSeamFailure { code, .. } => code.clone(),
-            MaterializerError::UcanClockNotInjected => ErrorCode::UcanClockNotInjected,
-            MaterializerError::Backend(_) => {
-                ErrorCode::Unknown("E_MATERIALIZER_BACKEND".to_string())
+            MaterializerError::SchemaMismatch { .. } => ErrorCode::MaterializerSchemaMismatch,
+            MaterializerError::SubscribeSeamFailure { .. } => {
+                ErrorCode::MaterializerSubscribeSeamFailure
             }
-            MaterializerError::Other { code, .. } => code.clone(),
+            MaterializerError::UcanClockNotInjected => ErrorCode::UcanClockNotInjected,
         }
     }
 }
@@ -363,17 +352,12 @@ impl MaterializerOutput {
         &self.denials
     }
 
-    /// CIDs the walk admitted past the per-row gate.
+    /// CIDs the walk admitted past the per-row gate. The v1 walk is
+    /// single-row (`content_cid` is singular), so this holds at most
+    /// one element — Phase-4-Meta IVM-view materialization (one view =
+    /// N rows) is where a true multi-row return materializes.
     #[must_use]
     pub fn materialized_row_cids(&self) -> &[Cid] {
-        &self.materialized_cids
-    }
-
-    /// Alias — delivery-side CIDs after composition with the delivery
-    /// layer. Mirrors `materialized_row_cids` semantics for the
-    /// non-delivery-gated path.
-    #[must_use]
-    pub fn delivered_row_cids(&self) -> &[Cid] {
         &self.materialized_cids
     }
 
@@ -421,8 +405,7 @@ pub trait Materializer: Send + Sync {
     /// Returns [`MaterializerError::SchemaMismatch`] if the spec's
     /// runtime cap-scope envelope exceeds the declared `requires`.
     /// Returns [`MaterializerError::UcanClockNotInjected`] when the
-    /// engine has not had a clock injected. Returns
-    /// [`MaterializerError::Backend`] for engine-seam failures.
+    /// engine has not had a clock injected.
     fn materialize_with_gate<E: MaterializerEngine>(
         &self,
         inputs: MaterializerWalkInputs<'_, E>,
@@ -494,7 +477,6 @@ impl HtmlJsonMaterializer {
         // commitment. The trait surface here pins the seam shape.
         if pattern.is_empty() {
             return Err(MaterializerError::SubscribeSeamFailure {
-                code: ErrorCode::MaterializerSubscribeSeamFailure,
                 pattern: String::new(),
                 reason: "pattern must be a non-empty event-name glob".into(),
             });
@@ -683,50 +665,129 @@ impl PlaintextMaterializer {
     }
 }
 
-fn render_value_html(v: &Value) -> String {
+/// Per-format leaf-rendering rules. The recursive [`Value`]-tree walk
+/// (List / Map descent) is shared across HTML / plaintext / JSON via
+/// [`render_value`] — only the per-variant leaf rules + container
+/// composition differ (Qual-1 #730: 4 near-identical Value walkers
+/// collapsed to one walker + three rule impls). A future Phase-4-Meta
+/// `Value` scalar mint (e.g. `Decimal` / `Timestamp`) touches exactly
+/// one place (the `render_value` dispatch + each rule's new arm via the
+/// trait), not 3-4 duplicated dispatch sites.
+trait ValueRender {
+    fn text(&self, s: &str) -> String;
+    fn int(&self, i: i64) -> String {
+        i.to_string()
+    }
+    fn float(&self, f: f64) -> String {
+        f.to_string()
+    }
+    fn boolean(&self, b: bool) -> String {
+        b.to_string()
+    }
+    fn null(&self) -> String;
+    fn bytes(&self, len: usize) -> String;
+    /// Join already-rendered list items into the list representation.
+    fn list(&self, items: &[String]) -> String;
+    /// Compose an already-rendered map of `(key, rendered_value)` pairs.
+    fn map(&self, pairs: &[(String, String)]) -> String;
+}
+
+/// Shared recursive [`Value`]-tree walk. Leaf + container rules come
+/// from `R`; the List/Map descent structure is written once here.
+fn render_value<R: ValueRender>(v: &Value, r: &R) -> String {
     match v {
-        Value::Text(s) => html_escape(s),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Null => String::new(),
-        Value::Bytes(b) => format!("[bytes:{}]", b.len()),
-        Value::List(l) => l
-            .iter()
-            .map(render_value_html)
-            .collect::<Vec<_>>()
-            .join(", "),
+        Value::Text(s) => r.text(s),
+        Value::Int(i) => r.int(*i),
+        Value::Float(f) => r.float(*f),
+        Value::Bool(b) => r.boolean(*b),
+        Value::Null => r.null(),
+        Value::Bytes(b) => r.bytes(b.len()),
+        Value::List(l) => {
+            let items: Vec<String> = l.iter().map(|x| render_value(x, r)).collect();
+            r.list(&items)
+        }
         Value::Map(m) => {
-            let mut out = String::new();
-            for (k, vv) in m {
-                let _ = write!(out, "{k}={}", render_value_html(vv));
-            }
-            out
+            let pairs: Vec<(String, String)> = m
+                .iter()
+                .map(|(k, vv)| (k.clone(), render_value(vv, r)))
+                .collect();
+            r.map(&pairs)
         }
     }
 }
 
-fn render_value_plaintext(v: &Value) -> String {
-    match v {
-        Value::Text(s) => s.clone(),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Null => "null".into(),
-        Value::Bytes(b) => format!("[bytes:{}]", b.len()),
-        Value::List(l) => l
-            .iter()
-            .map(render_value_plaintext)
-            .collect::<Vec<_>>()
-            .join(", "),
-        Value::Map(m) => {
-            let mut out = String::new();
-            for (k, vv) in m {
-                let _ = write!(out, "{k}={}", render_value_plaintext(vv));
-            }
-            out
-        }
+struct HtmlRender;
+impl ValueRender for HtmlRender {
+    fn text(&self, s: &str) -> String {
+        html_escape(s)
     }
+    fn null(&self) -> String {
+        String::new()
+    }
+    fn bytes(&self, len: usize) -> String {
+        format!("[bytes:{len}]")
+    }
+    fn list(&self, items: &[String]) -> String {
+        items.join(", ")
+    }
+    fn map(&self, pairs: &[(String, String)]) -> String {
+        let mut out = String::new();
+        for (k, v) in pairs {
+            let _ = write!(out, "{k}={v}");
+        }
+        out
+    }
+}
+
+struct PlaintextRender;
+impl ValueRender for PlaintextRender {
+    fn text(&self, s: &str) -> String {
+        s.to_string()
+    }
+    fn null(&self) -> String {
+        "null".into()
+    }
+    fn bytes(&self, len: usize) -> String {
+        format!("[bytes:{len}]")
+    }
+    fn list(&self, items: &[String]) -> String {
+        items.join(", ")
+    }
+    fn map(&self, pairs: &[(String, String)]) -> String {
+        let mut out = String::new();
+        for (k, v) in pairs {
+            let _ = write!(out, "{k}={v}");
+        }
+        out
+    }
+}
+
+struct JsonRender;
+impl ValueRender for JsonRender {
+    fn text(&self, s: &str) -> String {
+        format!("\"{}\"", json_escape(s))
+    }
+    fn null(&self) -> String {
+        "null".into()
+    }
+    fn bytes(&self, len: usize) -> String {
+        format!("\"[bytes:{len}]\"")
+    }
+    fn list(&self, items: &[String]) -> String {
+        format!("[{}]", items.join(","))
+    }
+    fn map(&self, pairs: &[(String, String)]) -> String {
+        let body: Vec<String> = pairs.iter().map(|(k, v)| format!("\"{k}\":{v}")).collect();
+        format!("{{{}}}", body.join(","))
+    }
+}
+
+fn render_value_html(v: &Value) -> String {
+    render_value(v, &HtmlRender)
+}
+
+fn render_value_plaintext(v: &Value) -> String {
+    render_value(v, &PlaintextRender)
 }
 
 fn html_escape(s: &str) -> String {
@@ -824,25 +885,7 @@ fn json_projection_redacted(spec: &SchemaSubgraphSpec) -> String {
 }
 
 fn value_to_json(v: &Value) -> String {
-    match v {
-        Value::Text(s) => format!("\"{}\"", json_escape(s)),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Null => "null".into(),
-        Value::Bytes(b) => format!("\"[bytes:{}]\"", b.len()),
-        Value::List(l) => {
-            let items: Vec<String> = l.iter().map(value_to_json).collect();
-            format!("[{}]", items.join(","))
-        }
-        Value::Map(m) => {
-            let items: Vec<String> = m
-                .iter()
-                .map(|(k, vv)| format!("\"{k}\":{}", value_to_json(vv)))
-                .collect();
-            format!("{{{}}}", items.join(","))
-        }
-    }
+    render_value(v, &JsonRender)
 }
 
 fn json_escape(s: &str) -> String {
@@ -892,7 +935,6 @@ fn materialize_format<E: MaterializerEngine>(
             if let Some(Value::Text(scope)) = op.property(CAP_SCOPE_PROPERTY_KEY) {
                 if !declared.contains(scope.as_str()) {
                     return Err(MaterializerError::SchemaMismatch {
-                        code: ErrorCode::MaterializerSchemaMismatch,
                         reason: format!(
                             "primitive `{}` requires cap-scope `{}` outside declared envelope ({:?})",
                             op.id, scope, inputs.declared_requires
@@ -909,7 +951,6 @@ fn materialize_format<E: MaterializerEngine>(
                 let banned = ["kv:write", "kv:delete", "edges:add", "edges:remove"];
                 if banned.iter().any(|b| host_fn == b) {
                     return Err(MaterializerError::SchemaMismatch {
-                        code: ErrorCode::MaterializerSchemaMismatch,
                         reason: format!(
                             "SANDBOX primitive `{}` requests storage-mutating host-fn `{}` — forbidden per CLAUDE.md baked-in #16",
                             op.id, host_fn
@@ -919,30 +960,25 @@ fn materialize_format<E: MaterializerEngine>(
             }
         }
     }
-    // (4) Per-primitive cap-recheck fan-out — fires the gate ONCE per
-    // schema-emitted primitive boundary (per-primitive cap-policy
-    // dispatch per Phase-3 G16-B-F shape). The cap_recheck closure
-    // observes one invocation per emitted primitive's cap-scope.
+    // (4) Materialization-layer per-row gate.
     //
-    // **Semantic (per G23-B mr-8 OBSERVATION):** the fan-out fires for
-    // INVOCATION-COUNT observability — the recording cap-policy /
-    // RecordingCapPolicy counts these invocations to prove the
-    // primitive-boundary walk happens. The fan-out passes the SAME
-    // `content_cid` + `zone_hint` to all N invocations (NOT per-
-    // primitive cap-scope); the per-primitive scope is captured in
-    // `_scope` from the spec but intentionally not threaded into the
-    // closure signature (changing `MaterializerCapRecheck` to take
-    // per-op scope would break G24-A's consumer wiring). The
-    // **authoritative cap-decision** lives in the per-row gate
-    // disposition below (line ~941), which is the substantive
-    // admit / deny boundary at the READ-fanout layer.
+    // Per-primitive cap-scope enforcement is performed UPSTREAM of this
+    // walk: the T1 envelope check at step (2) above rejects any emitted
+    // primitive whose `CAP_SCOPE_PROPERTY_KEY` falls outside the
+    // declared `requires` envelope BEFORE any READ fanout, and the
+    // schema-compile / workflow-editor save path
+    // (`schema_compiler::derive_scope` + `validate_subgraph_within_
+    // manifest_envelope`) derives + bounds per-primitive scopes before
+    // a SubgraphSpec ever reaches the materializer. The previous
+    // per-primitive fan-out loop discarded both the read scope and the
+    // gate bool (Qual-1 #702 / Safe-1 #527 — "observability-theater
+    // discarding a security-shaped bool"); it provided no production
+    // enforcement and no production observability and is removed.
+    //
+    // The authoritative materialization-layer cap-decision for the
+    // content CID is this single gate call — its bool is consumed (NOT
+    // discarded); a deny collapses the walk to the redacted view below.
     let zone_hint = inputs.spec.schema_name();
-    for op in inputs.spec.as_subgraph().nodes() {
-        let _scope = op.property(CAP_SCOPE_PROPERTY_KEY);
-        let _ = (inputs.cap_recheck)(&inputs.walk_principal, zone_hint, &inputs.content_cid);
-    }
-    // The materialization-layer per-row gate's final disposition for
-    // the content CID — composes with the per-primitive fan-out above.
     let admitted_by_gate =
         (inputs.cap_recheck)(&inputs.walk_principal, zone_hint, &inputs.content_cid);
     // (5) Engine read via read_node_as. NEVER read_node.
@@ -1191,6 +1227,57 @@ mod inline_canary {
         );
     }
 
+    /// Safe-1 #527 closure pin (Pattern F Bundle 5): the
+    /// materialization-layer per-row gate's bool MUST be consumed, not
+    /// silently swallowed. Would-FAIL if a regression re-introduced the
+    /// discarded-bool fan-out (`let _ = (cap_recheck)(...)`) and routed
+    /// the render off an unconditional admit: a denying gate must
+    /// produce zero materialized rows + a denial frame + redacted
+    /// bytes, and an admitting gate must produce exactly one row.
+    #[test]
+    fn per_row_gate_bool_is_consumed_not_swallowed() {
+        let spec = compile(CANONICAL_NOTE).unwrap();
+        let engine = InMemoryMaterializerEngine::new();
+        let cid = engine.put_node(make_note("classified"));
+        let alice = principal_cid();
+        let denied = materialize_html_json(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: cid,
+            walk_principal: alice,
+            cap_recheck: deny_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .unwrap();
+        assert!(
+            denied.materialized_row_cids().is_empty(),
+            "deny gate MUST NOT materialize the row (bool was swallowed if it does)"
+        );
+        assert_eq!(denied.cap_denials().len(), 1);
+        assert!(
+            !std::str::from_utf8(denied.html_bytes())
+                .unwrap()
+                .contains("classified"),
+            "denied content MUST NOT leak"
+        );
+
+        let admitted = materialize_html_json(MaterializerWalkInputs {
+            engine: &engine,
+            spec: &spec,
+            content_cid: cid,
+            walk_principal: alice,
+            cap_recheck: allow_all_cap_recheck(),
+            declared_requires: Vec::new(),
+        })
+        .unwrap();
+        assert_eq!(
+            admitted.materialized_row_cids().len(),
+            1,
+            "admit gate MUST materialize exactly one row"
+        );
+        assert!(admitted.cap_denials().is_empty());
+    }
+
     #[test]
     fn wallclock_fail_closed_when_no_clock_injected() {
         let spec = compile(CANONICAL_NOTE).unwrap();
@@ -1227,13 +1314,8 @@ mod inline_canary {
             declared_requires: vec!["read:Note".into()],
         };
         let err = materialize_html_json(inputs).unwrap_err();
-        assert!(matches!(
-            err,
-            MaterializerError::SchemaMismatch {
-                code: ErrorCode::MaterializerSchemaMismatch,
-                ..
-            }
-        ));
+        assert!(matches!(err, MaterializerError::SchemaMismatch { .. }));
+        assert_eq!(err.code(), ErrorCode::MaterializerSchemaMismatch);
     }
 
     #[test]
@@ -1305,11 +1387,9 @@ mod inline_canary {
         let err = mat.subscribe_with_gate("").unwrap_err();
         assert!(matches!(
             err,
-            MaterializerError::SubscribeSeamFailure {
-                code: ErrorCode::MaterializerSubscribeSeamFailure,
-                ..
-            }
+            MaterializerError::SubscribeSeamFailure { .. }
         ));
+        assert_eq!(err.code(), ErrorCode::MaterializerSubscribeSeamFailure);
         let token = mat.subscribe_with_gate("note:*").unwrap();
         assert_eq!(token.pattern, "note:*");
     }
