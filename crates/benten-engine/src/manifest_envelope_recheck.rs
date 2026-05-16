@@ -165,13 +165,37 @@ pub fn outcome_to_row_reject(
 /// path calls THIS primitive, not a parallel one — the seam stays
 /// single (the #707 parallel-pipe shape the COLLAPSE exists to kill).
 ///
-/// Returns `Ok(())` when the row's `scope` is within the ceiling (or
-/// no ceiling is present — legacy unsigned envelope / non-wire merge);
+/// **P5 / #1241 / F2 — capability-predicate completion.** This now
+/// discriminates on the inbound writer's effective **cap-resources**
+/// (`writer_cap_resources`) — the literal CLAUDE.md #17 predicate
+/// (*"a `runs_sandbox=false` principal must not exercise
+/// `host:sandbox:*`"*) — NOT a synthetic `{zone}:write` zone-scope.
+/// The COLLAPSE-P3 shipped a zone-scoped proxy
+/// (`sec-review-1238 F2`); that proxy was verified INERT at HEAD
+/// (`F2-exploitability-investigation.md` — a `host:sandbox:*` cap
+/// does nothing on the inbound data-zone write path), so completing
+/// the predicate to the literal cap.resource is strictly-more-
+/// enforcement of a baked-in commitment, not a regression. The
+/// zone-write scope is still passed + checked (defense-in-depth: a
+/// `host:sandbox:*`-named zone is also caught) but the cap.resource
+/// arm is the load-bearing #17 predicate.
+///
+/// **One mechanism, two callers** (DECISION-RECORD §4
+/// build-constraint iii): this routes through the ONE
+/// `benten_caps::plugin_delegation::ceiling_admits_cap` —
+/// the SAME function the plugin-manifest delegation gate
+/// (`Engine::delegate_capability` →
+/// `benten_caps::plugin_delegation::check_delegation_within_envelope`)
+/// calls. There is NO parallel device-vs-manifest ceiling pipe (the
+/// #707 / META-#1140 shape the COLLAPSE exists to kill).
+///
+/// Returns `Ok(())` when every checked cap-resource is within the
+/// ceiling (or no ceiling is present — legacy unsigned envelope /
+/// non-wire merge);
 /// `Err(EngineError::Other { DeviceAttestationForged, .. })` when the
-/// ceiling forbids the scope (currently: `host:sandbox:*` scope under
-/// a `runs_sandbox=false` ceiling — the only envelope dimension a
-/// sync row's cap-scope can exercise; broader dimensions ride P5's
-/// generalization).
+/// ceiling forbids a cap-resource (a `host:sandbox:*` cap-resource —
+/// or `host:sandbox:*`-prefixed zone-scope — under a
+/// `runs_sandbox=false` ceiling).
 ///
 /// **Native (full-peer) only — cfg-gated like `manifest_signing`.**
 /// The `benten_id::device_attestation::CapabilityEnvelope` ceiling
@@ -190,6 +214,7 @@ pub fn outcome_to_row_reject(
 pub fn envelope_ceiling_admits_row(
     ceiling: Option<&benten_id::device_attestation::CapabilityEnvelope>,
     scope: &str,
+    writer_cap_resources: &[&str],
     zone: &str,
     key: &str,
 ) -> Result<(), EngineError> {
@@ -198,22 +223,79 @@ pub fn envelope_ceiling_admits_row(
         // envelope, or a non-wire merge path) — nothing to AND.
         return Ok(());
     };
-    // J8: a `runs_sandbox=false`-attested inbound writer MUST NOT be
-    // able to land a row that exercises `host:sandbox:*`. ct-eq is
-    // unnecessary here (the scope string is the public cap schema, and
-    // this is a prefix structural test, not a secret compare) — the
-    // project's ct-eq UNIFORMITY commitment applies to identity/secret
-    // compares, not cap-schema prefix routing.
-    if scope.starts_with("host:sandbox:") && !env.runs_sandbox {
+    // The ONE unified ceiling-check (build-constraint iii). The device
+    // envelope's `runs_sandbox` dimension is the input; the plugin-
+    // manifest delegation gate calls the SAME `ceiling_admits_cap`
+    // with an `EnvelopeCeiling::PluginShares` ceiling.
+    let device_ceiling: benten_caps::plugin_delegation::EnvelopeCeiling<
+        '_,
+        // No `shares` policy on the device arm — the type parameter is
+        // unused for `EnvelopeCeiling::Device`; a zero-sized stub
+        // satisfies the `SharesPolicyView` bound.
+        DeviceArmSharesStub,
+    > = benten_caps::plugin_delegation::EnvelopeCeiling::Device {
+        runs_sandbox: env.runs_sandbox,
+    };
+
+    // #1241 / F2 — the load-bearing CLAUDE.md #17 predicate: check the
+    // inbound writer's actual cap-RESOURCES (not a synthetic zone
+    // proxy). A `runs_sandbox=false` writer self-delegating
+    // `host:sandbox:exec` is rejected here even if it targets an
+    // ordinary data zone (the gap sec-review-1238 F2 flagged; INERT at
+    // HEAD per F2-exploitability-investigation.md, completed here so
+    // the baked-in commitment is enforced regardless of inertness).
+    for cap_resource in writer_cap_resources {
+        if benten_caps::plugin_delegation::ceiling_admits_cap(&device_ceiling, cap_resource)
+            .is_err()
+        {
+            return Err(EngineError::Other {
+                code: ErrorCode::DeviceAttestationForged,
+                message: format!(
+                    "apply_atrium_merge: inbound row exceeds verified device \
+                     envelope-ceiling (zone='{zone}' key='{key}' \
+                     cap_resource='{cap_resource}'): a runs_sandbox=false-attested \
+                     writer cannot exercise host:sandbox:* — unified J8 ceiling-AND \
+                     (CLAUDE.md #17 thin-shape property; #1241 cap.resource predicate; \
+                     COLLAPSE single seam)"
+                ),
+            });
+        }
+    }
+
+    // Defense-in-depth: also reject when the row's zone-write scope
+    // itself names the sandbox-authority dimension (the P3-shipped
+    // proxy — kept so a `host:sandbox:*`-named zone is still caught
+    // even if the writer's cap-resources were not threaded). Routes
+    // through the SAME unified mechanism.
+    if benten_caps::plugin_delegation::ceiling_admits_cap(&device_ceiling, scope).is_err() {
         return Err(EngineError::Other {
             code: ErrorCode::DeviceAttestationForged,
             message: format!(
                 "apply_atrium_merge: inbound row exceeds verified device \
                  envelope-ceiling (zone='{zone}' key='{key}' scope='{scope}'): a \
                  runs_sandbox=false-attested writer cannot exercise host:sandbox:* — \
-                 J8 ceiling-AND (CLAUDE.md #17 thin-shape property; COLLAPSE single seam)"
+                 unified J8 ceiling-AND (CLAUDE.md #17 thin-shape property; \
+                 COLLAPSE single seam)"
             ),
         });
     }
     Ok(())
+}
+
+/// Zero-sized `SharesPolicyView` stub for the device arm of the
+/// unified ceiling type. The device-envelope ceiling
+/// (`EnvelopeCeiling::Device`) never consults a `shares` policy — the
+/// type parameter exists only because the unified `EnvelopeCeiling`
+/// enum is generic over the plugin-manifest arm. `permits` is
+/// unreachable for the device arm; it conservatively denies (fail-
+/// closed) if ever called.
+#[cfg(not(feature = "browser-backend"))]
+#[doc(hidden)]
+pub struct DeviceArmSharesStub;
+
+#[cfg(not(feature = "browser-backend"))]
+impl benten_caps::plugin_delegation::SharesPolicyView for DeviceArmSharesStub {
+    fn permits(&self, _cap_pattern: &str, _target_plugin_did: &benten_id::did::Did) -> bool {
+        false
+    }
 }

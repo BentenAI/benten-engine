@@ -99,6 +99,7 @@ fn runs_sandbox_false_inbound_writer_rejected_from_host_sandbox_via_spine_ceilin
         // (`apply_atrium_merge` builds `{zone}:write` for the row;
         // a `host:sandbox:exec` zone yields this scope.)
         "host:sandbox:exec:write",
+        &["host:sandbox:exec:write"],
         "host:sandbox:exec",
         "row-key-7",
     )
@@ -126,10 +127,83 @@ fn runs_sandbox_true_inbound_writer_admitted_for_host_sandbox_row() {
     envelope_ceiling_admits_row(
         Some(&ceiling),
         "host:sandbox:exec:write",
+        &["host:sandbox:exec:write"],
         "host:sandbox:exec",
         "row-key-7",
     )
     .expect("a runs_sandbox=true ceiling MUST admit a host:sandbox:* row");
+}
+
+/// **MANDATORY closure-pin — #1241 / F2 capability-predicate
+/// completion (would-FAIL-if-no-op'd).** This is the REAL production
+/// arm sec-review-1238 F2 demanded: a `runs_sandbox=false` principal
+/// self-delegating `host:sandbox:exec` and writing into an *ordinary
+/// data zone* (`store:notes`) MUST be rejected by the unified ceiling
+/// at the seam — discriminating on the writer's actual cap-RESOURCE
+/// (the per-row key), NOT the synthetic `{zone}:write` zone-scope.
+///
+/// The P3-shipped seam passed only `row_scope = "store:notes:write"`
+/// here — which does NOT start with `host:sandbox:`, so the ceiling-AND
+/// did NOT fire (sec-review-1238 F2 SHAPE-not-substance gap; verified
+/// INERT at HEAD per F2-exploitability-investigation.md but a baked-in
+/// commitment must be enforced regardless). P5 threads the writer's
+/// real cap-resource (the per-row key); this pin asserts the rejection
+/// on that real arm and FAILs if the cap-resource discrimination is
+/// dropped (pim-2 §3.6b would-FAIL-if-no-op'd).
+#[test]
+fn runs_sandbox_false_self_delegating_host_sandbox_into_ordinary_zone_rejected_real_arm() {
+    let ceiling = thin_envelope();
+
+    // The attacker writes into an ORDINARY data zone (`store:notes`) —
+    // the zone-write scope is `store:notes:write` (NOT host:sandbox:*),
+    // exactly the synthetic-scope blind spot. But the writer's actual
+    // exercised cap-resource (the per-row key) is `host:sandbox:exec`.
+    let err = envelope_ceiling_admits_row(
+        Some(&ceiling),
+        // zone-write scope: ordinary data zone (the P3 proxy that
+        // would NOT catch this — the F2 blind spot).
+        "store:notes:write",
+        // writer's REAL effective cap-resource (the per-row key): the
+        // sandbox-exec cap it self-delegated.
+        &["host:sandbox:exec"],
+        "store:notes",
+        "host:sandbox:exec",
+    )
+    .expect_err(
+        "#1241/F2 REGRESSION: a runs_sandbox=false principal self-delegating \
+         host:sandbox:exec into an ordinary data zone was ADMITTED — the unified \
+         ceiling is discriminating only on the synthetic {zone}:write scope, NOT \
+         the writer's real cap.resource. This is the exact sec-review-1238 F2 \
+         SHAPE-not-substance gap the P5 capability-predicate completion closes \
+         (pim-2 §3.6b would-FAIL-if-no-op'd; CLAUDE.md #17 baked-in).",
+    );
+
+    assert_eq!(
+        err.code(),
+        benten_engine::ErrorCode::DeviceAttestationForged,
+        "real-cap.resource ceiling-AND rejection MUST surface \
+         E_DEVICE_ATTESTATION_FORGED; got {err:?}"
+    );
+}
+
+/// Negative control for the #1241 real arm: a `runs_sandbox=false`
+/// writer whose real cap-resources are all ordinary (no sandbox-exec)
+/// writing into an ordinary zone is ADMITTED — proving the rejection
+/// above is the cap.resource predicate, not a blanket deny.
+#[test]
+fn runs_sandbox_false_ordinary_cap_resources_into_ordinary_zone_admitted() {
+    let ceiling = thin_envelope();
+    envelope_ceiling_admits_row(
+        Some(&ceiling),
+        "store:notes:write",
+        &["store:notes:write", "store:notes:read"],
+        "store:notes",
+        "row-key-ordinary",
+    )
+    .expect(
+        "a runs_sandbox=false ceiling MUST admit a writer exercising only ordinary \
+         cap-resources into an ordinary zone (cap.resource predicate, not blanket deny)",
+    );
 }
 
 /// Negative-control 2: a `runs_sandbox=false` writer is NOT blocked
@@ -142,6 +216,7 @@ fn runs_sandbox_false_inbound_writer_admitted_for_ordinary_zone_row() {
     envelope_ceiling_admits_row(
         Some(&ceiling),
         "store:notes:write",
+        &["store:notes:write"],
         "store:notes",
         "row-key-9",
     )
@@ -158,6 +233,7 @@ fn absent_ceiling_admits_any_row_backward_compat() {
     envelope_ceiling_admits_row(
         None,
         "host:sandbox:exec:write",
+        &["host:sandbox:exec"],
         "host:sandbox:exec",
         "row-key",
     )

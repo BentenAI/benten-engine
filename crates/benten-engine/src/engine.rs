@@ -1409,26 +1409,40 @@ impl Engine {
                 crate::manifest_envelope_recheck::outcome_to_row_reject(outcome, zone, key)?;
             }
 
-            // **COLLAPSE (P3) — J8 envelope-ceiling AND.** The single
-            // chain-validation seam ANDs the verified inbound device
-            // `CapabilityEnvelope` ceiling into the inbound writer's
-            // effective caps. This REPLACES the deleted
-            // `benten_id::Acceptor` trust pipe: the device envelope is
-            // no longer a distinct trust-root; it is a ceiling the one
-            // seam enforces (DECISION-RECORD §4 RATIFIED). Runs in the
-            // SAME per-row loop, AFTER the manifest-envelope recheck —
-            // both are the ONE ceiling seam (build-constraint iii;
-            // P5/#669 generalizes `envelope_ceiling_admits_row` over
-            // device + manifest, NOT a parallel pipe). The scope is
-            // the row's zone-write scope (mirrors the `check_write`
-            // ctx scope above); a `runs_sandbox=false` ceiling rejects
-            // a `host:sandbox:*`-scoped row — CLAUDE.md #17 thin-shape
-            // property preserved through the COLLAPSE rewire.
+            // **COLLAPSE (P5 / #1241 / #669) — unified J8 envelope-
+            // ceiling AND.** The single chain-validation seam ANDs the
+            // verified inbound device `CapabilityEnvelope` ceiling into
+            // the inbound writer's effective caps via the ONE
+            // `benten_caps::plugin_delegation::ceiling_admits_cap`
+            // mechanism — the SAME function the plugin-manifest
+            // delegation gate (`Engine::delegate_capability`) calls
+            // (DECISION-RECORD §4 build-constraint iii; NOT a parallel
+            // device-vs-manifest pipe — the #707/META-#1140 shape the
+            // COLLAPSE exists to kill).
+            //
+            // #1241 / F2 capability-predicate completion: the
+            // load-bearing CLAUDE.md #17 predicate is the inbound
+            // writer's actual cap-RESOURCE, not a synthetic
+            // `{zone}:write` proxy. The writer's exercised cap-resource
+            // on THIS merge is the per-row write `key` (a
+            // `host:sandbox:exec` write surfaces as a row whose key
+            // targets `host:sandbox:*`). We pass the real per-row key
+            // as the writer's effective cap-resource (the REAL
+            // production arm — sec-review-1238 F2's SHAPE-not-substance
+            // critique was that only the synthetic zone-scope was
+            // checked). The zone-write scope is still passed as
+            // defense-in-depth (a `host:sandbox:*`-named zone is also
+            // caught). The P3 zone-scoped proxy was verified INERT at
+            // HEAD (F2-exploitability-investigation.md); completing the
+            // predicate here enforces the baked-in commitment
+            // regardless of inertness.
             let row_scope = format!("{zone}:write");
+            let writer_cap_resources: [&str; 1] = [key.as_str()];
             let verified_ceiling = atrium.last_received_remote_envelope(zone).await.flatten();
             crate::manifest_envelope_recheck::envelope_ceiling_admits_row(
                 verified_ceiling.as_ref(),
                 &row_scope,
+                &writer_cap_resources,
                 zone,
                 key,
             )?;

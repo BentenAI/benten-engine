@@ -118,6 +118,23 @@ use crate::rate_limit::{NullRateLimitPolicy, RateLimitPolicy};
 
 const KV_GRANT_PREFIX: &[u8] = b"g14b:grant:";
 const KV_REVOKED_PREFIX: &[u8] = b"g14b:revoked:";
+/// COLLAPSE F3 — durable replay-marker re-home (DECISION-RECORD §4b /
+/// impl-design-COLLAPSE §1.1a). The Phase-3 device-attestation
+/// envelope's anti-replay defense had two halves: a freshness window
+/// (`now - issued_at <= window`) AND an ephemeral per-handle
+/// nonce-store. The COLLAPSE P3 rewire deleted the ephemeral
+/// nonce-store (it collapsed with the `Acceptor`); only the
+/// freshness window survived inline at
+/// `engine_sync::DeviceAttestationEnvelope::verify`. SECURITY-POSTURE
+/// Compromise #23 (owner-ratified) states the nonce-replay defense is
+/// *"re-homed … not dropped"*. This prefix is that durable re-home:
+/// a captured-but-still-in-window envelope nonce, once observed, is
+/// recorded durably here so a verbatim replay inside the freshness
+/// window is rejected (the gap a freshness-window-only check leaves).
+/// Keyed by the 32-byte envelope/attestation nonce wrapped as a Cid
+/// digest (the existing `kv_key` grammar — one source of truth for
+/// durable-marker key shape).
+const KV_REPLAY_PREFIX: &[u8] = b"g14b:replay-nonce:";
 
 /// Compute the content CID of a UCAN envelope (claims + signature).
 ///
@@ -380,6 +397,61 @@ impl<B: GraphBackend> UCANBackend<B> {
             }
         }
         Ok(proofs)
+    }
+
+    /// COLLAPSE F3 — record a device-attestation envelope nonce as
+    /// observed (durable replay-marker re-home).
+    ///
+    /// `nonce` is the 32-byte attestation/session nonce carried on the
+    /// signed wire envelope. The first time a fresh, signature-valid,
+    /// in-window envelope is verified the inbound-sync seam calls this
+    /// to persist the nonce; a subsequent verbatim replay of the SAME
+    /// signed envelope (still inside its freshness window — the case
+    /// the freshness-only check cannot catch) is then rejected via
+    /// [`Self::is_envelope_nonce_seen`]. This is the durable half of
+    /// the anti-replay defense SECURITY-POSTURE Compromise #23 (owner-
+    /// ratified) states is *re-homed, not dropped* — see
+    /// `DECISION-RECORD-trust-model-reframe.md §4b` (F3) +
+    /// `impl-design-COLLAPSE.md §1.1a`. Persists across engine
+    /// restarts via the underlying KV (same durability contract as
+    /// `revoke`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::BackendStorage`] on KV write failure.
+    pub fn record_seen_envelope_nonce(&self, nonce: &[u8; 32]) -> Result<(), CapError> {
+        let cid = Cid::from_blake3_digest(*blake3::hash(nonce).as_bytes());
+        let key = kv_key(KV_REPLAY_PREFIX, &cid);
+        self.backend
+            .put(&key, &[])
+            .map_err(|e| CapError::BackendStorage {
+                reason: format!("KV put replay-nonce marker: {e}"),
+            })
+    }
+
+    /// COLLAPSE F3 — probe whether a device-attestation envelope nonce
+    /// was already observed (durable replay defense).
+    ///
+    /// Returns `true` iff `nonce` was previously recorded via
+    /// [`Self::record_seen_envelope_nonce`] — i.e. the signed envelope
+    /// carrying it is a replay. The inbound-sync seam rejects on
+    /// `true` even when the envelope is otherwise inside its freshness
+    /// window (the precise gap a freshness-window-only check leaves;
+    /// Compromise #23 nonce-replay defense, durably re-homed).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::BackendStorage`] on KV read failure.
+    pub fn is_envelope_nonce_seen(&self, nonce: &[u8; 32]) -> Result<bool, CapError> {
+        let cid = Cid::from_blake3_digest(*blake3::hash(nonce).as_bytes());
+        let key = kv_key(KV_REPLAY_PREFIX, &cid);
+        let opt = self
+            .backend
+            .get(&key)
+            .map_err(|e| CapError::BackendStorage {
+                reason: format!("KV get replay-nonce marker: {e}"),
+            })?;
+        Ok(opt.is_some())
     }
 
     /// Probe whether `ucan_cid` is recorded as revoked.
