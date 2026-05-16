@@ -104,9 +104,10 @@ impl VersionCurrentView {
 
     /// Resolve `anchor → current-version Cid`. Accepts either a `u64`
     /// anchor id or a `Cid` / `&Cid` root head. For `Cid`-based lookup the
-    /// Phase-1 implementation falls back to `DEFAULT_ANCHOR_ID` (matches
-    /// the `stale_on_budget_exceeded` test's single-anchor scenario); a
-    /// proper `Cid → anchor_id` reverse map lands in Phase 2.
+    /// The current implementation falls back to `DEFAULT_ANCHOR_ID`
+    /// (matches the `stale_on_budget_exceeded` test's single-anchor
+    /// scenario); a proper `Cid → anchor_id` reverse map is a later-phase
+    /// enhancement.
     ///
     /// # Errors
     ///
@@ -130,9 +131,9 @@ impl Default for VersionCurrentView {
 ///
 /// Implementations:
 /// - `u64` — direct anchor id lookup.
-/// - `Cid` / `&Cid` — Phase-1 fallback: looks up the default anchor. A full
-///   `Cid → anchor_id` reverse index ships in Phase 2 alongside the widened
-///   `ChangeEvent` that carries anchor identity.
+/// - `Cid` / `&Cid` — current fallback: looks up the default anchor. A full
+///   `Cid → anchor_id` reverse index is a later-phase enhancement alongside
+///   a widened `ChangeEvent` that carries anchor identity.
 pub trait AnchorRef {
     /// Reduce the anchor handle to a `u64` lookup key.
     fn to_anchor_id(&self) -> u64;
@@ -194,14 +195,14 @@ impl View for VersionCurrentView {
                     // anchor remains indexed under DEFAULT_ANCHOR_ID (no
                     // reverse-lookup of source → anchor yet); the edge
                     // source could be used as an anchor-identity hint in
-                    // Phase 2 once a source→anchor map lands.
+                    // a later phase once a source→anchor map lands.
                     self.current.insert(DEFAULT_ANCHOR_ID, *target);
                 }
             }
             ChangeKind::EdgeDeleted => {
                 // A NEXT_VERSION edge deletion rolls back the default
-                // anchor's head — a conservative Phase-1 choice; Phase 2
-                // does proper anchor identity tracking.
+                // anchor's head — a conservative current choice; proper
+                // anchor identity tracking is a later-phase enhancement.
                 //
                 // ivm-r6-7 (R6 fix-pass): defensively gate the rollback on
                 // the edge actually pointing at the head we currently

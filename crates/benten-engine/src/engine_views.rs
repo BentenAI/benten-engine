@@ -901,6 +901,22 @@ impl Engine {
                             got_label: format!("typed_output_projection={declared:?}"),
                         });
                     }
+                    // `benten_ivm::AlgorithmError` is `#[non_exhaustive]`
+                    // (#917 SemVer-policy symmetry with `ViewError`): a future
+                    // kernel registration failure mode could land as a new
+                    // variant. Per the same single-typed-boundary rationale as
+                    // the explicit arms above, surface any not-yet-modelled
+                    // kernel failure through `E_VIEW_LABEL_MISMATCH` rather
+                    // than swallowing it — the Debug form of the error is
+                    // preserved in `got_label` so the failure stays
+                    // observable. `spec.id()` is the registration view id.
+                    Err(other) => {
+                        return Err(EngineError::ViewLabelMismatch {
+                            view_id: spec.id().to_string(),
+                            expected_label: "<modelled AlgorithmError variant>".to_string(),
+                            got_label: format!("{other:?}"),
+                        });
+                    }
                 }
             }
         }
