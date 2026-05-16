@@ -299,10 +299,12 @@ struct PropertyIndex {
 
 impl std::fmt::Debug for LoroDoc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `index` is a pure derived cache (Fwd-1 #999) — intentionally
+        // omitted from Debug; finish_non_exhaustive marks that.
         f.debug_struct("LoroDoc")
             .field("op_count", &self.inner.len_ops())
             .field("change_count", &self.inner.len_changes())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
