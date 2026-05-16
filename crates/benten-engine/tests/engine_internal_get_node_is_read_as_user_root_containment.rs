@@ -30,7 +30,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn workspace_root() -> PathBuf {
     // crates/benten-engine -> workspace root
@@ -42,7 +42,7 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn collect_rs_files(root: &PathBuf) -> Vec<PathBuf> {
+fn collect_rs_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {
