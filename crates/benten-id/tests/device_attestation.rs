@@ -26,9 +26,7 @@ use benten_id::device_attestation::{
     RevocationReason, RuntimeTarget, UptimePolicy, ZoneScope,
 };
 use benten_id::keypair::Keypair;
-use benten_id::ucan::{
-    Ucan, validate_chain_with_attestations, validate_chain_with_device_revocations,
-};
+use benten_id::ucan::{Ucan, validate_chain_with_attestations};
 use benten_id::{DeviceAttestationError, UcanError};
 
 #[test]
@@ -215,43 +213,12 @@ fn device_attestation_revocation_emitted_by_parent_did_on_loss_event() {
     );
 }
 
-#[test]
-fn device_attestation_revoked_device_cannot_sign_new_ucan_delegation() {
-    // crypto-major-6 — revoked device cannot sign new UCANs.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-
-    let _attestation = DeviceAttestation::issue(
-        &parent,
-        device.public_key().to_did(),
-        CapabilityEnvelope::default(),
-    )
-    .unwrap();
-
-    let revocation = DeviceRevocation::issue(
-        &parent,
-        device.public_key().to_did(),
-        RevocationReason::DeviceLoss,
-    )
-    .unwrap();
-
-    // Attacker holds device kp; tries to issue post-revocation UCAN:
-    let post_revoke_ucan = Ucan::builder()
-        .issuer(device.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("/zone/posts", "read")
-        .not_before(0)
-        .expiry(u64::MAX)
-        .sign(&device);
-
-    let err =
-        validate_chain_with_device_revocations(&[post_revoke_ucan], &[revocation]).unwrap_err();
-    assert!(
-        matches!(err, UcanError::IssuerDeviceRevoked { .. }),
-        "{err:?}"
-    );
-}
+// NOTE (COLLAPSE-WITH-RESIDUAL, refinement-audit-2026-05 S3 P1): the
+// `device_attestation_revoked_device_cannot_sign_new_ucan_delegation`
+// test was deleted with the `validate_chain_with_device_revocations`
+// standalone walker (the #1230 un-anchored device-revocation pipe).
+// Device-key revocation now flows through user-root UCAN-grant
+// revocation (`benten-caps::revoke`); coverage moves there.
 
 #[test]
 fn device_attestation_envelope_must_be_attenuated_by_parent_did() {
@@ -570,98 +537,18 @@ fn envelope_widens_zone_scope_matrix() {
 
 // ---------------------------------------------------------------------
 // Hyg-1 #336 / F-FWD-2-01 #1051 — DeviceRevocation signature
-// authenticity wired into BOTH the chain-walker
-// (`validate_chain_with_device_revocations`) AND the `Acceptor::accept_at`
-// revocation step. SUBSTANTIVE runtime-arm pins (pim-2 §3.6b): the
-// production revocation-consumption paths are exercised; the observable
-// consequence is that a FORGED revocation does NOT revoke; each test
-// would FAIL against the pre-fix (device_did-byte-compare-only)
-// implementation, which honored ANY byte-blob with a matching
-// device_did regardless of signature.
+// authenticity. The chain-walker half
+// (`chain_walker_ignores_forged_device_revocation_unsigned_by_parent`
+// + `chain_walker_honors_genuine_signed_device_revocation`) was DELETED
+// with the `validate_chain_with_device_revocations` standalone walker
+// (COLLAPSE-WITH-RESIDUAL, refinement-audit-2026-05 S3 P1 — the #1230
+// un-anchored device-revocation pipe is dissolved; device-key revocation
+// now flows through user-root UCAN-grant revocation `benten-caps::revoke`).
+// The `Acceptor::accept_at` revocation-step authenticity pin
+// (`acceptor_ignores_forged_device_revocation_unsigned_by_parent`)
+// remains below — it is P3-coupled (engine_sync::DeviceAttestationEnvelope
+// ::verify rewire) and intentionally retained until that deferred PR.
 // ---------------------------------------------------------------------
-
-#[test]
-fn chain_walker_ignores_forged_device_revocation_unsigned_by_parent() {
-    // ATTACK PATH (#336): an attacker who knows a victim device's DID
-    // synthesizes a DeviceRevocation byte-blob (device_did = victim,
-    // parent_did = a real did:key the attacker controls, signature =
-    // a real sig by the ATTACKER, NOT the device's actual parent).
-    // Pre-fix the chain-walker honored it on device_did match alone →
-    // perpetual DoS of the victim device's UCANs. Post-fix the forged
-    // revocation does NOT verify against the parent_did it claims
-    // (because the device's real parent never signed it) — but here
-    // the sharper attack is: attacker sets parent_did to attacker's
-    // OWN did and signs with attacker's key, so the signature DOES
-    // verify against the claimed parent_did. That must STILL not
-    // revoke because the chain-walk only cares that *a* genuine
-    // parent signed — the trust anchor is whether the revocation's
-    // signature is authentic for the parent_did it names. We model
-    // the simpler forgery: a bogus signature that verifies against
-    // NOTHING.
-    let real_parent = Keypair::generate();
-    let device = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-
-    // Genuine revocation by the real parent — used as a SHAPE
-    // template the attacker captures, then corrupts the signature.
-    let genuine = DeviceRevocation::issue(
-        &real_parent,
-        device.public_key().to_did(),
-        RevocationReason::Compromise,
-    )
-    .unwrap();
-    let mut forged = genuine.clone();
-    forged.signature[0] ^= 0xFF; // no longer a valid real_parent sig
-
-    let device_ucan = Ucan::builder()
-        .issuer(device.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("/zone/posts", "read")
-        .not_before(0)
-        .expiry(u64::MAX)
-        .sign(&device);
-
-    // Pre-fix: this returned Err(IssuerDeviceRevoked). Post-fix the
-    // forged revocation is SKIPPED (fail-CLOSED against forgery) so
-    // the chain validates cleanly — the victim is NOT DoS'd.
-    let res = validate_chain_with_device_revocations(&[device_ucan], &[forged]);
-    assert!(
-        res.is_ok(),
-        "forged (bad-signature) device revocation MUST NOT revoke the device: {res:?}"
-    );
-}
-
-#[test]
-fn chain_walker_honors_genuine_signed_device_revocation() {
-    // POSITIVE arm: a genuinely parent-signed revocation STILL
-    // revokes (the authenticity gate does not regress legitimate
-    // revocations). Guards against a fix that simply disables
-    // revocation enforcement.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-
-    let genuine = DeviceRevocation::issue(
-        &parent,
-        device.public_key().to_did(),
-        RevocationReason::DeviceLoss,
-    )
-    .unwrap();
-
-    let device_ucan = Ucan::builder()
-        .issuer(device.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("/zone/posts", "read")
-        .not_before(0)
-        .expiry(u64::MAX)
-        .sign(&device);
-
-    let err = validate_chain_with_device_revocations(&[device_ucan], &[genuine]).unwrap_err();
-    assert!(
-        matches!(err, UcanError::IssuerDeviceRevoked { .. }),
-        "genuine signed revocation MUST still revoke: {err:?}"
-    );
-}
 
 #[test]
 fn acceptor_ignores_forged_device_revocation_unsigned_by_parent() {

@@ -32,7 +32,6 @@
 //! - `validate_chain_with_revocations` (G14-B durable backend).
 //! - `validate_chain_with_attestations` (G14-A2 device-attestation).
 //! - `validate_chain_with_rotation_log` (G14-A2 DID rotation).
-//! - `validate_chain_with_device_revocations` (G14-A2 + G14-B).
 //! - `DurableBackend` / `RevocationSet` / `AuthoritySet` /
 //!   `DelegationError::AudienceEnvelopeIncompatibleWithCapability`.
 //!
@@ -557,48 +556,6 @@ pub fn validate_chain_with_rotation_log(
             return Err(UcanError::IssuerKeypairSuperseded {
                 issuer: token.claims.iss.clone(),
             });
-        }
-    }
-    Ok(())
-}
-
-/// Validate a chain against a list of [`crate::device_attestation::DeviceRevocation`]s.
-///
-/// Per `crates/benten-id/tests/device_attestation.rs::device_attestation_revoked_device_cannot_sign_new_ucan_delegation`,
-/// any UCAN whose issuer DID has been revoked rejects with
-/// [`UcanError::IssuerDeviceRevoked`].
-pub fn validate_chain_with_device_revocations(
-    chain: &[Ucan],
-    revocations: &[crate::device_attestation::DeviceRevocation],
-) -> Result<(), UcanError> {
-    validate_chain_inner(chain, None, None)?;
-    for token in chain {
-        for r in revocations {
-            // ct-eq per crypto-major-4 UNIFORMITY (g14-a2-mr-2 fix-pass).
-            if ct_signature_eq(r.device_did.as_bytes(), token.claims.iss.as_bytes()) {
-                // AUTHENTICITY GATE (#336 / F-FWD-2-01 #1051): a
-                // device-DID match alone is NOT sufficient to honor a
-                // revocation — an attacker could synthesize a
-                // `DeviceRevocation` byte-blob for ANY device_did with
-                // a bogus signature and perpetually deny-of-service
-                // that device's UCANs. Verify the revocation is
-                // genuinely signed by the parent keypair behind
-                // `parent_did` (self-resolving did:key) BEFORE
-                // honoring it. Resolution failure OR signature
-                // mismatch ⇒ the revocation is forged ⇒ it does NOT
-                // revoke (fail-CLOSED against forged revocations:
-                // skip the bogus revocation, continue the walk).
-                let parent_did = Did::from_string_unchecked(r.parent_did.clone());
-                let Ok(parent_pk) = parent_did.resolve() else {
-                    continue;
-                };
-                if r.verify_signature_with(&parent_pk).is_err() {
-                    continue;
-                }
-                return Err(UcanError::IssuerDeviceRevoked {
-                    issuer: token.claims.iss.clone(),
-                });
-            }
         }
     }
     Ok(())
