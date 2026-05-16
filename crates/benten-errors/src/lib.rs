@@ -36,7 +36,6 @@
 extern crate alloc;
 
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 
 /// Stable error-catalog discriminants.
 ///
@@ -48,7 +47,15 @@ use alloc::vec::Vec;
 /// minor version bump rather than a breaking change. The existing
 /// `ErrorCode::Unknown(String)` variant covers forward-compat on the
 /// parse-side; `non_exhaustive` covers forward-compat on the match-side.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Hash` + `Ord` are derived (Fwd-2 #1007 v1-API-stabilization sweep) so
+/// `ErrorCode` can be used as a `HashMap` / `BTreeMap` key and sorted into
+/// a stable display order without the consumer reaching for `.as_str()`.
+/// The derived `Ord` follows enum declaration (mint) order — stable across
+/// the v1 API freeze because variants are append-only by the
+/// adding-a-variant checklist; the string `as_static_str` ordering is
+/// intentionally NOT used so the key ordering is allocation-free.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum ErrorCode {
     /// Registration-time: subgraph contains a cycle (invariant 1 violation).
@@ -1042,14 +1049,20 @@ pub enum ErrorCode {
     Unknown(String),
 }
 
-/// Phase-2a firing codes — the canonical, single-source-of-truth list that
-/// both the R3 catalog-coverage test and the R3 presence test consume. Kept
+/// **Frozen Phase-2a-close snapshot** of the firing codes that existed when
+/// Phase 2a closed — the canonical, single-source-of-truth list that both
+/// the R3 catalog-coverage test and the R3 presence test consume. Kept
 /// alongside the enum so drift between the two tests becomes a compile-level
 /// impossibility (R4 qa-r4-5 fix).
 ///
-/// R5 groups landing new firing sites append to this list; there is exactly
-/// one place to update.
-pub const PHASE_2A_FIRING_CODES: &[ErrorCode] = &[
+/// **Do NOT extend this with Phase-2b/3/4+ firing codes** (Qual-2 #736):
+/// the name was formerly `PHASE_2A_FIRING_CODES` and read as "the
+/// firing-codes list we keep extending", which invited mis-extension. The
+/// scope is *frozen at Phase-2a-close*; later phases' firing-site coverage
+/// is pinned by `tests/stable_shape.rs::ALL_CATALOG_VARIANTS` +
+/// `catalog_variant_count_matches_enum`, not by appending here. This list
+/// only ever shrinks if a Phase-2a code is retired.
+pub const FIRING_CODES_AT_PHASE_2A_SNAPSHOT: &[ErrorCode] = &[
     ErrorCode::ExecStateTampered,
     ErrorCode::ResumeActorMismatch,
     ErrorCode::ResumeSubgraphDrift,
@@ -1065,11 +1078,16 @@ pub const PHASE_2A_FIRING_CODES: &[ErrorCode] = &[
     ErrorCode::SandboxNestedDispatchDepthExceeded,
 ];
 
-/// Phase-2a reserved HostError discriminants — G1-B reserves slots that
-/// Phase 3 sync wires fire sites for. The catalog documents them as
-/// "reserved — fires in Phase 3" so operators reading the catalog don't
-/// confuse them with active codes.
-pub const PHASE_2A_RESERVED_CODES: &[ErrorCode] = &[
+/// **Frozen Phase-2a-close snapshot** of the reserved HostError
+/// discriminants — G1-B reserved slots that Phase 3 sync later wired fire
+/// sites for. The catalog documents them as "reserved — fires in Phase 3"
+/// so operators reading the catalog don't confuse them with active codes.
+///
+/// **Do NOT extend this with later-phase reservations** (Qual-2 #736): the
+/// name was formerly `PHASE_2A_RESERVED_CODES`; scope is *frozen at
+/// Phase-2a-close* (the 5 G1-B HostError reservations Phase-2a anticipated
+/// for Phase-3 firing). Later reservations are not tracked here.
+pub const RESERVED_CODES_AT_PHASE_2A_SNAPSHOT: &[ErrorCode] = &[
     ErrorCode::HostNotFound,
     ErrorCode::HostWriteConflict,
     ErrorCode::HostBackendUnavailable,
@@ -1323,16 +1341,6 @@ impl ErrorCode {
             ErrorCode::MaterializerSubscribeSeamFailure => "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
-    }
-
-    /// Identity accessor — convenience for code paths that surface an
-    /// `ErrorCode` directly and still want `.code()` to be callable. Phase 2a
-    /// dx-r1-add: lots of tests bind `let err = ErrorCode::...;` and then
-    /// call `err.code()` as if `err` were a typed error; this makes those
-    /// sites compile without changing test semantics.
-    #[must_use]
-    pub fn code(&self) -> ErrorCode {
-        self.clone()
     }
 
     /// Phase 2a dx-r1 (test-spec follow-up): the edge label a typed error
@@ -1986,9 +1994,11 @@ impl core::fmt::Display for ErrorCode {
 }
 
 // Phase 2a consolidation: let tests write `assert_eq!(err.code(),
-// ErrorCode::X)` where `err.code()` returns `&'static str`. The two
-// `PartialEq` directions cover both `&str == ErrorCode` and
-// `ErrorCode == &str`.
+// "E_X")` where the wrapper-error `code()` returns an `ErrorCode`.
+// The two `PartialEq` directions cover both `&str == ErrorCode` and
+// `ErrorCode == &str`. The bare-`str` direction (`impl PartialEq<ErrorCode>
+// for str`) was removed (Hyg-1 #291) — zero callers; every assert path uses
+// an `&str` literal or `err.code().as_str()` which is already `&str`.
 impl PartialEq<ErrorCode> for &str {
     fn eq(&self, other: &ErrorCode) -> bool {
         *self == other.as_str()
@@ -1998,56 +2008,4 @@ impl PartialEq<&str> for ErrorCode {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }
-}
-impl PartialEq<ErrorCode> for str {
-    fn eq(&self, other: &ErrorCode) -> bool {
-        self == other.as_str()
-    }
-}
-
-/// Parsed 3-segment cap-string. Phase 2a r1-cr-13 / arch-r1-10 locked shape.
-///
-/// `"prefix:domain:action"` → `CapString { prefix, domain, action,
-/// reserved_extension_namespace }`. The flag is set when `prefix == "custom"`
-/// per arch-r1-10's reserved-extension-namespace escape hatch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CapString {
-    /// First segment.
-    pub prefix: String,
-    /// Second segment.
-    pub domain: String,
-    /// Third segment.
-    pub action: String,
-    /// arch-r1-10 flag: `"custom:*"` strings set this to `true` so downstream
-    /// tooling can gate on the reserved-extension-namespace.
-    pub reserved_extension_namespace: bool,
-}
-
-/// Phase 2a stub for the cap-string-format parser (r1-cr-13, arch-7).
-///
-/// Accepts well-formed `"prefix:domain:action"` strings; returns
-/// `Err(ErrorCode::CapScopeLoneStarRejected)` for lone-star (`"*"`). Real
-/// parser lands in G4-A.
-///
-/// # Errors
-/// Returns a stable [`ErrorCode`] on parse failure.
-pub fn parse_cap_string(s: &str) -> Result<CapString, ErrorCode> {
-    if s == "*" {
-        return Err(ErrorCode::CapScopeLoneStarRejected);
-    }
-    if s.is_empty() {
-        return Err(ErrorCode::CapDenied);
-    }
-    let segs: alloc::vec::Vec<&str> = s.split(':').collect();
-    if segs.len() != 3 || segs.iter().any(|s| s.is_empty()) {
-        return Err(ErrorCode::CapDenied);
-    }
-    let prefix = segs[0].to_string();
-    let reserved = prefix == "custom";
-    Ok(CapString {
-        prefix,
-        domain: segs[1].to_string(),
-        action: segs[2].to_string(),
-        reserved_extension_namespace: reserved,
-    })
 }
