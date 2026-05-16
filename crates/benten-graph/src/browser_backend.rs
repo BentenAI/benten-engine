@@ -314,8 +314,8 @@ impl NodeStore for BrowserBackend {
     type Error = GraphError;
 
     fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
-        let bytes = node.canonical_bytes().map_err(GraphError::from)?;
-        let cid = node.cid().map_err(GraphError::from)?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = node.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let key = node_key(&cid);
         let mut g = self.inner.lock().map_err(|_| poisoned())?;
         g.insert(key, bytes);
@@ -352,8 +352,8 @@ impl EdgeStore for BrowserBackend {
     type Error = GraphError;
 
     fn put_edge(&self, edge: &Edge) -> Result<Cid, GraphError> {
-        let bytes = edge.canonical_bytes().map_err(GraphError::from)?;
-        let cid = edge.cid().map_err(GraphError::from)?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = edge.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let body_key = edge_key(&cid);
         let src_idx = edge_src_index_key(&edge.source, &cid);
         let tgt_idx = edge_tgt_index_key(&edge.target, &cid);
@@ -544,8 +544,8 @@ impl GraphBackend for BrowserBackend {
 
         // Encode + insert. Cap-recheck is intentionally NOT consulted
         // here — see docstring.
-        let bytes = node.canonical_bytes().map_err(GraphError::from)?;
-        let cid = node.cid().map_err(GraphError::from)?;
+        // Fwd-1 #926: single encode+hash pass.
+        let (cid, bytes) = node.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let key = node_key(&cid);
         let mut g = self.inner.lock().map_err(|_| poisoned())?;
         g.insert(key, bytes);

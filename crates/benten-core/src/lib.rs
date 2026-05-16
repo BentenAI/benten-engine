@@ -200,6 +200,23 @@ impl Node {
         // `E_VALUE_FLOAT_*` code) rather than a `Serialize` variant holding a
         // `serde` error message, and normalize `-0.0 → +0.0` so the CID is
         // stable across the sign of zero.
+        // Fwd-1 #932 fast path: the deep-clone canonicalization walk only ever
+        // (a) rejects non-finite floats or (b) rewrites `-0.0 → +0.0`. When
+        // every property is already canonical (the >99% case — no floats, or
+        // only finite non-negative-zero floats), encoding the borrowed
+        // properties directly is byte-identical to encoding the cloned tree.
+        // We skip the BTreeMap + per-key String + deep-Value clones entirely.
+        if self.properties.values().all(Value::is_already_canonical) {
+            let view = NodeHashView {
+                labels: &self.labels,
+                properties: &self.properties,
+            };
+            return serde_ipld_dagcbor::to_vec(&view)
+                .map_err(|e| CoreError::Serialize(format_err(&e)));
+        }
+        // Slow path: at least one float needs normalization or rejection.
+        // `to_canonical` surfaces `CoreError::FloatNan` / `FloatNonFinite` as
+        // typed errors and normalizes `-0.0 → +0.0`.
         let mut canonical_props = BTreeMap::new();
         for (k, v) in &self.properties {
             canonical_props.insert(k.clone(), v.to_canonical()?);
@@ -227,6 +244,27 @@ impl Node {
         let bytes = self.canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
+    }
+
+    /// Fwd-1 #926: compute the CID **and** return the canonical bytes from a
+    /// single encode + hash pass.
+    ///
+    /// Production WRITE hot paths (`redb_backend`, `browser_backend`) need
+    /// both the CID (the storage key) and the canonical bytes (the stored
+    /// value). Calling `cid()` then `canonical_bytes()` runs the full
+    /// DAG-CBOR encode (and the property-tree canonicalization walk) twice.
+    /// This method encodes once and hashes those exact bytes — behavior is
+    /// identical (`cid == blake3(canonical_bytes)` in both shapes) with ~50%
+    /// of the per-WRITE encode cost.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`CoreError::Serialize`] (and the typed float errors) from
+    /// [`Node::canonical_bytes`].
+    pub fn cid_and_canonical_bytes(&self) -> Result<(Cid, Vec<u8>), CoreError> {
+        let bytes = self.canonical_bytes()?;
+        let digest = blake3::hash(&bytes);
+        Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
     }
 
     /// Phase 2a C4 / G2-A: load a Node from DAG-CBOR bytes, verifying that
