@@ -56,8 +56,9 @@ fn inv_11_read_from_user_code_to_system_zone_denied() {
         .unwrap();
 
     // Step 1: engine-privileged path mints a system-zone grant Node.
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     let grant_cid = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("engine-privileged grant succeeds");
 

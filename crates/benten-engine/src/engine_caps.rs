@@ -1,10 +1,16 @@
 //! Capability + IVM-view mutation surface for [`crate::engine::Engine`].
 //!
-//! Split from `engine.rs` for file-size hygiene. Houses the privileged
-//! system-zone writes: `create_principal`, `grant_capability`,
-//! `revoke_capability`, `create_view`, plus the private
-//! `privileged_put_node` helper that routes writes through the engine's
-//! privileged `WriteContext`. Every method is a plain `impl Engine` item.
+//! Split from `engine.rs` for file-size hygiene. The capability-grant
+//! mutation surface (`create_principal`, `grant_capability`,
+//! `grant_capability_with_proof`, `revoke_capability`,
+//! `revoke_capability_by_grant_cid`, `install_ucan_proof`,
+//! `delegate_capability`, plus the `CapProof`-based `install_proof` /
+//! `revoke`) lives **exclusively** on [`EngineCapsHandle`] — the sole
+//! canonical capability-mutation surface, returned by
+//! [`crate::engine::Engine::caps`]. The IVM-view registration surface
+//! (`create_view`) + the `pub(crate)` `privileged_put_node` helper
+//! (the shared system-zone write substrate) remain plain `impl Engine`
+//! items.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -20,7 +26,7 @@ use crate::subgraph_spec::{GrantSubject, RevokeScope, RevokeSubject};
 /// mutation handle returned by [`Engine::caps`]. Wraps a borrow of the
 /// engine + exposes thin `install_proof` / `revoke` surfaces that route
 /// through the engine's existing privileged
-/// [`Engine::grant_capability`] / [`Engine::revoke_capability`] paths.
+/// [`EngineCapsHandle::grant_capability`] / [`EngineCapsHandle::revoke_capability`] paths.
 ///
 /// The handle is the production-equivalent surface the sec-r4r1-2
 /// RED-PHASE pins consume. Distinct from the test-only
@@ -40,7 +46,7 @@ pub struct EngineCapsHandle<'eng> {
 ///
 /// Carries the `(actor_cid, scope)` pair the grant authorizes. The
 /// scope string mirrors the scope handed to
-/// [`Engine::grant_capability`] (e.g. `"/zone/posts:write"` or the
+/// [`EngineCapsHandle::grant_capability`] (e.g. `"/zone/posts:write"` or the
 /// Phase-1 `"store:<label>:write"` form). The `proof_cid` slot is the
 /// CID of the durable grant Node minted by `grant_capability` when
 /// `install_proof` runs — callers retain it to address `revoke`
@@ -74,7 +80,7 @@ impl CapProof {
 
 impl<'eng> EngineCapsHandle<'eng> {
     /// Install a capability proof — routes through
-    /// [`Engine::grant_capability`] internally to mint a
+    /// [`EngineCapsHandle::grant_capability`] internally to mint a
     /// `system:CapabilityGrant` Node.
     ///
     /// On success, populates `proof.proof_cid` with the minted grant's
@@ -82,13 +88,11 @@ impl<'eng> EngineCapsHandle<'eng> {
     ///
     /// # Errors
     ///
-    /// Forwards [`EngineError`] from [`Engine::grant_capability`] —
+    /// Forwards [`EngineError`] from [`EngineCapsHandle::grant_capability`] —
     /// most commonly [`EngineError::SubsystemDisabled`] when the
     /// engine was built with `.without_caps()`.
     pub fn install_proof(&self, proof: &mut CapProof) -> Result<Cid, EngineError> {
-        let cid = self
-            .engine
-            .grant_capability(&proof.actor_cid, &proof.scope)?;
+        let cid = self.grant_capability(&proof.actor_cid, &proof.scope)?;
         proof.proof_cid = Some(cid);
         // Recover from any prior revocation: an install observed AFTER
         // a revoke for the same `(actor, scope)` pair lifts the in-memory
@@ -106,16 +110,15 @@ impl<'eng> EngineCapsHandle<'eng> {
 
     /// Revoke a previously-installed proof. Updates BOTH the durable
     /// `system:CapabilityRevocation` zone (via
-    /// [`Engine::revoke_capability`]) AND the in-memory
+    /// [`EngineCapsHandle::revoke_capability`]) AND the in-memory
     /// `(actor_cid, scope)` revocation pair set consulted by
     /// [`Engine::apply_atrium_merge`]'s per-row cap-recheck.
     ///
     /// # Errors
     ///
-    /// Forwards [`EngineError`] from [`Engine::revoke_capability`].
+    /// Forwards [`EngineError`] from [`EngineCapsHandle::revoke_capability`].
     pub fn revoke(&self, proof: &CapProof) -> Result<(), EngineError> {
-        self.engine
-            .revoke_capability(&proof.actor_cid, proof.scope.as_str())?;
+        self.revoke_capability(&proof.actor_cid, proof.scope.as_str())?;
         // Mark the in-memory mirror so the next sync-replica merge
         // boundary observes the revocation synchronously per the
         // sec-r4r1-2 BLOCKER closure pattern.
@@ -124,9 +127,7 @@ impl<'eng> EngineCapsHandle<'eng> {
             .mark_actor_revoked_for_zone(&proof.actor_cid, proof.scope.clone());
         Ok(())
     }
-}
 
-impl Engine {
     // -------- System-zone privileged API (N7) --------
 
     /// Create an actor principal. Phase 1: the principal is stored as a
@@ -136,7 +137,7 @@ impl Engine {
         let mut props: BTreeMap<String, Value> = BTreeMap::new();
         props.insert("name".into(), Value::Text(name.into()));
         let node = Node::new(vec!["system:Principal".into()], props);
-        self.privileged_put_node(&node)
+        self.engine.privileged_put_node(&node)
     }
 
     /// Grant a capability. Writes a `system:CapabilityGrant` Node via the
@@ -176,7 +177,7 @@ impl Engine {
         A: GrantSubject,
         S: AsRef<str>,
     {
-        if !self.caps_enabled {
+        if !self.engine.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
             });
@@ -193,7 +194,7 @@ impl Engine {
             props.insert("hlc".into(), Value::Int(stamp));
         }
         let node = Node::new(vec!["system:CapabilityGrant".into()], props);
-        self.privileged_put_node(&node)
+        self.engine.privileged_put_node(&node)
     }
 
     /// Revoke a capability. Phase 1: writes a `system:CapabilityRevocation`
@@ -205,7 +206,7 @@ impl Engine {
         A: RevokeSubject,
         S: RevokeScope,
     {
-        if !self.caps_enabled {
+        if !self.engine.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
             });
@@ -214,14 +215,14 @@ impl Engine {
         props.insert("actor".into(), actor.as_value());
         props.insert("scope".into(), Value::Text(scope.as_scope_string()));
         let node = Node::new(vec!["system:CapabilityRevocation".into()], props);
-        self.privileged_put_node(&node)?;
+        self.engine.privileged_put_node(&node)?;
         Ok(())
     }
 
     /// Phase-3.5 §13.11 closure: revoke a previously-granted capability
     /// identified by its grant CID. Resolves the grant Node by CID,
     /// extracts its `scope` property, then writes the matching
-    /// `system:CapabilityRevocation` Node via [`Engine::revoke_capability`].
+    /// `system:CapabilityRevocation` Node via [`EngineCapsHandle::revoke_capability`].
     ///
     /// This is the canonical seam for callers that hold a grant CID
     /// (e.g. the napi binding's `revokeCapability(grantCid, actor)`
@@ -251,16 +252,17 @@ impl Engine {
     where
         A: RevokeSubject,
     {
-        if !self.caps_enabled {
+        if !self.engine.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
             });
         }
         // Engine-privileged backend read — `Engine::get_node` would
         // collapse system-zone Nodes to `Ok(None)` per Inv-11 runtime
-        // probe. We reach through `self.backend.get_node` directly
+        // probe. We reach through `self.engine.backend.get_node` directly
         // (same pattern as the system-zone privileged write path).
         let Some(node) = self
+            .engine
             .backend
             .get_node(grant_cid)
             .map_err(EngineError::Graph)?
@@ -299,93 +301,6 @@ impl Engine {
         };
         self.revoke_capability(actor, scope.as_str())
     }
-
-    /// Create an IVM view registration. Writes a `system:IVMView` Node via the
-    /// engine-privileged path AND — when IVM is enabled AND the view id
-    /// names the content-listing view family — registers a live
-    /// [`benten_ivm::views::ContentListingView`] instance with the subscriber
-    /// so future change events flow into it (code-reviewer g7-cr-8).
-    ///
-    /// Idempotent: same `view_id` returns the same content-addressed CID.
-    ///
-    /// # Live-view registration scope
-    ///
-    /// - **Content-listing view family** (`view_id == "content_listing"` or
-    ///   `view_id` matches `content_listing_<label>`): the view is
-    ///   instantiated with the trailing label (or `"post"` for the bare
-    ///   `"content_listing"` id) as its input pattern, AND a live view
-    ///   instance is registered with the IVM subscriber. The definition
-    ///   Node is also persisted.
-    /// - **The 4 other canonical Phase-1 view ids** (`capability_grants`,
-    ///   `event_dispatch`, `governance_inheritance`, `version_current`):
-    ///   the definition Node is persisted via the privileged write path,
-    ///   but **no live view instance is registered with the subscriber**.
-    ///   A subsequent `read_view(<id>)` falls through to the canonical-id
-    ///   whitelist and returns `IvmViewStale` (in strict) or empty
-    ///   last-known-good (in allow-stale). This is because those views
-    ///   require additional constructor parameters the Phase-1
-    ///   `ViewCreateOptions` API doesn't yet surface.
-    ///
-    /// Lift to live-view registration for the 4 other canonical ids is
-    /// `phase-3-backlog.md` §5.1 (R6FP-tail NEW-2 named destination —
-    /// non-content-listing canonical view auto-registration). User-
-    /// defined views go through [`Engine::register_user_view`] which
-    /// IS wired through `AlgorithmBView::for_id` for the canonical ids
-    /// (Strategy::B path) — the legacy `create_view` surface is the
-    /// Strategy::A entry point for the 5 hand-written views. R6FP-tail
-    /// NEW-2 corrects the prior docstring claim that "other canonical
-    /// ids register their own view" (which read as "all 5 canonical
-    /// ids get a live view instance" — only `content_listing` does).
-    pub fn create_view(&self, view_id: &str, _opts: ViewCreateOptions) -> Result<Cid, EngineError> {
-        // Derive the input pattern label for content-listing views so the
-        // stored definition is stable regardless of subscriber state.
-        let input_pattern_label = if let Some(label) = view_id.strip_prefix("content_listing_") {
-            Some(label.to_string())
-        } else if view_id == "content_listing" {
-            Some("post".to_string())
-        } else {
-            None
-        };
-        let def = benten_ivm::ViewDefinition {
-            view_id: view_id.to_string(),
-            input_pattern_label: input_pattern_label.clone(),
-            output_label: "system:IVMView".to_string(),
-            // Phase 2b G8-A / D8-RESOLVED: hand-written canonical-id views
-            // ALWAYS take Strategy::A (the 5-view fate hybrid keep-all-
-            // parallel; Algorithm B is opt-in + ADDITIVE). User-registered
-            // views default to Strategy::B per `Engine::register_user_view`.
-            strategy: benten_ivm::Strategy::A,
-        };
-        let node = def.as_node();
-        let cid = self.privileged_put_node(&node)?;
-
-        // Register the live view with the IVM subscriber so change events
-        // propagate. Skipped when IVM is disabled. We dedupe by view id —
-        // re-registering the same id is a no-op at the subscriber level.
-        if let Some(ivm) = self.ivm.as_ref() {
-            let already_registered = ivm.view_ids().iter().any(|id| id == view_id);
-            if !already_registered && let Some(label) = input_pattern_label.as_deref() {
-                let view = benten_ivm::views::ContentListingView::new(label);
-                ivm.register_view(Box::new(view));
-                // Non-content-listing canonical view ids (capability_grants,
-                // event_dispatch, governance_inheritance, version_current) are
-                // Phase-2 scope for automatic instantiation — the definition
-                // Node is still written, but the live view isn't constructed
-                // here because those views have additional constructor
-                // parameters the Phase-1 API doesn't yet surface.
-            }
-        }
-        Ok(cid)
-    }
-
-    /// Internal: write a system-zone Node via the privileged context.
-    fn privileged_put_node(&self, node: &Node) -> Result<Cid, EngineError> {
-        Ok(self.backend.put_node_with_context(
-            node,
-            &benten_graph::WriteContext::privileged_for_engine_api(),
-        )?)
-    }
-
     /// Phase-3 G21-T2 fp-mini-review BLOCKER-3 closure — install a
     /// signed UCAN proof into the durable
     /// [`benten_caps::UCANBackend`] proof-store (`g14b:grant:<cid>`
@@ -410,7 +325,7 @@ impl Engine {
     /// disabled or the durable store rejects the write.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn install_ucan_proof(&self, ucan: &benten_id::ucan::Ucan) -> Result<Cid, EngineError> {
-        if !self.caps_enabled {
+        if !self.engine.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
             });
@@ -421,7 +336,7 @@ impl Engine {
         // `UcanGroundedPolicy::typed_cap_permitted_by_proof` reads at
         // write-check time. Constructing a fresh wrapper per call is
         // cheap (the wrapper holds an Arc ref + the rate-limit plug).
-        let backend = benten_caps::UCANBackend::new(Arc::clone(&self.backend));
+        let backend = benten_caps::UCANBackend::new(Arc::clone(&self.engine.backend));
         backend.install_proof(ucan).map_err(|e| EngineError::Other {
             code: e.code(),
             message: format!("install_ucan_proof: {e}"),
@@ -433,7 +348,7 @@ impl Engine {
     ///
     /// Consumed by the napi `delegateCapability(grantCid, pluginDid,
     /// attenuatedCaps)` binding. Mirrors the resolve-by-CID discipline
-    /// of [`Engine::revoke_capability_by_grant_cid`]: the napi caller
+    /// of [`EngineCapsHandle::revoke_capability_by_grant_cid`]: the napi caller
     /// passes the SOURCE grant's CID; this seam resolves the grant
     /// Node + extracts its actual `scope` text + then writes the
     /// delegation grant carrying that **resolved** scope. The CID is
@@ -506,7 +421,7 @@ impl Engine {
         };
         use benten_id::did::Did;
 
-        if !self.caps_enabled {
+        if !self.engine.caps_enabled {
             return Err(EngineError::SubsystemDisabled {
                 subsystem: "capabilities",
             });
@@ -515,6 +430,7 @@ impl Engine {
         // Step 1 — resolve source grant Node, extract scope (mirrors
         // `revoke_capability_by_grant_cid` class-of-bug defense).
         let Some(node) = self
+            .engine
             .backend
             .get_node(source_grant_cid)
             .map_err(EngineError::Graph)?
@@ -616,6 +532,94 @@ impl Engine {
             props.insert("attenuation".into(), Value::Text(attenuation_json));
         }
         let new_grant = Node::new(vec!["system:CapabilityGrant".into()], props);
-        self.privileged_put_node(&new_grant)
+        self.engine.privileged_put_node(&new_grant)
+    }
+}
+
+impl Engine {
+    /// Create an IVM view registration. Writes a `system:IVMView` Node via the
+    /// engine-privileged path AND — when IVM is enabled AND the view id
+    /// names the content-listing view family — registers a live
+    /// [`benten_ivm::views::ContentListingView`] instance with the subscriber
+    /// so future change events flow into it (code-reviewer g7-cr-8).
+    ///
+    /// Idempotent: same `view_id` returns the same content-addressed CID.
+    ///
+    /// # Live-view registration scope
+    ///
+    /// - **Content-listing view family** (`view_id == "content_listing"` or
+    ///   `view_id` matches `content_listing_<label>`): the view is
+    ///   instantiated with the trailing label (or `"post"` for the bare
+    ///   `"content_listing"` id) as its input pattern, AND a live view
+    ///   instance is registered with the IVM subscriber. The definition
+    ///   Node is also persisted.
+    /// - **The 4 other canonical Phase-1 view ids** (`capability_grants`,
+    ///   `event_dispatch`, `governance_inheritance`, `version_current`):
+    ///   the definition Node is persisted via the privileged write path,
+    ///   but **no live view instance is registered with the subscriber**.
+    ///   A subsequent `read_view(<id>)` falls through to the canonical-id
+    ///   whitelist and returns `IvmViewStale` (in strict) or empty
+    ///   last-known-good (in allow-stale). This is because those views
+    ///   require additional constructor parameters the Phase-1
+    ///   `ViewCreateOptions` API doesn't yet surface.
+    ///
+    /// Lift to live-view registration for the 4 other canonical ids is
+    /// `phase-3-backlog.md` §5.1 (R6FP-tail NEW-2 named destination —
+    /// non-content-listing canonical view auto-registration). User-
+    /// defined views go through [`Engine::register_user_view`] which
+    /// IS wired through `AlgorithmBView::for_id` for the canonical ids
+    /// (Strategy::B path) — the legacy `create_view` surface is the
+    /// Strategy::A entry point for the 5 hand-written views. R6FP-tail
+    /// NEW-2 corrects the prior docstring claim that "other canonical
+    /// ids register their own view" (which read as "all 5 canonical
+    /// ids get a live view instance" — only `content_listing` does).
+    pub fn create_view(&self, view_id: &str, _opts: ViewCreateOptions) -> Result<Cid, EngineError> {
+        // Derive the input pattern label for content-listing views so the
+        // stored definition is stable regardless of subscriber state.
+        let input_pattern_label = if let Some(label) = view_id.strip_prefix("content_listing_") {
+            Some(label.to_string())
+        } else if view_id == "content_listing" {
+            Some("post".to_string())
+        } else {
+            None
+        };
+        let def = benten_ivm::ViewDefinition {
+            view_id: view_id.to_string(),
+            input_pattern_label: input_pattern_label.clone(),
+            output_label: "system:IVMView".to_string(),
+            // Phase 2b G8-A / D8-RESOLVED: hand-written canonical-id views
+            // ALWAYS take Strategy::A (the 5-view fate hybrid keep-all-
+            // parallel; Algorithm B is opt-in + ADDITIVE). User-registered
+            // views default to Strategy::B per `Engine::register_user_view`.
+            strategy: benten_ivm::Strategy::A,
+        };
+        let node = def.as_node();
+        let cid = self.privileged_put_node(&node)?;
+
+        // Register the live view with the IVM subscriber so change events
+        // propagate. Skipped when IVM is disabled. We dedupe by view id —
+        // re-registering the same id is a no-op at the subscriber level.
+        if let Some(ivm) = self.ivm.as_ref() {
+            let already_registered = ivm.view_ids().iter().any(|id| id == view_id);
+            if !already_registered && let Some(label) = input_pattern_label.as_deref() {
+                let view = benten_ivm::views::ContentListingView::new(label);
+                ivm.register_view(Box::new(view));
+                // Non-content-listing canonical view ids (capability_grants,
+                // event_dispatch, governance_inheritance, version_current) are
+                // Phase-2 scope for automatic instantiation — the definition
+                // Node is still written, but the live view isn't constructed
+                // here because those views have additional constructor
+                // parameters the Phase-1 API doesn't yet surface.
+            }
+        }
+        Ok(cid)
+    }
+
+    /// Internal: write a system-zone Node via the privileged context.
+    pub(crate) fn privileged_put_node(&self, node: &Node) -> Result<Cid, EngineError> {
+        Ok(self.backend.put_node_with_context(
+            node,
+            &benten_graph::WriteContext::privileged_for_engine_api(),
+        )?)
     }
 }

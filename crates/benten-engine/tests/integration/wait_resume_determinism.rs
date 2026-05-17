@@ -192,7 +192,7 @@ fn resume_after_engine_restart_preserves_attribution_chain() {
 
     let engine_a = Engine::builder().path(&db_path).build().unwrap();
     let handler_id = engine_a.register_subgraph(wait_handler_spec()).unwrap();
-    let actor_a = engine_a.create_principal("alice").unwrap();
+    let actor_a = engine_a.caps().create_principal("alice").unwrap();
 
     let outcome = engine_a
         .call_with_suspension_as(
@@ -207,7 +207,7 @@ fn resume_after_engine_restart_preserves_attribution_chain() {
     drop(engine_a);
 
     let engine_b = Engine::builder().path(&db_path).build().unwrap();
-    let eve = engine_b.create_principal("eve").unwrap();
+    let eve = engine_b.caps().create_principal("eve").unwrap();
 
     let mut payload = BTreeMap::new();
     payload.insert("payload".into(), Value::Text("v".into()));
@@ -227,7 +227,7 @@ fn resume_after_engine_restart_preserves_attribution_chain() {
         "resume-principal mismatch must fire E_RESUME_ACTOR_MISMATCH; got {err:?}"
     );
 
-    let alice_again = engine_b.create_principal("alice").unwrap();
+    let alice_again = engine_b.caps().create_principal("alice").unwrap();
     let ok = engine_b
         .resume_from_bytes_as(
             &bytes,

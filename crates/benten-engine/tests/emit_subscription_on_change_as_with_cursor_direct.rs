@@ -91,7 +91,10 @@ fn yield_for_dispatch() {
 #[test]
 fn on_change_as_with_cursor_rejects_empty_pattern_with_typed_error() {
     let (_dir, engine) = fresh_engine();
-    let actor = engine.create_principal("alice").expect("seed principal");
+    let actor = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
     let cb: OnChangeCallback = Arc::new(|_seq, _chunk| {});
 
     let err = engine
@@ -114,7 +117,10 @@ fn on_change_as_with_cursor_rejects_empty_pattern_with_typed_error() {
 #[test]
 fn on_change_as_with_cursor_registration_yields_active_subscription() {
     let (_dir, engine) = fresh_engine();
-    let actor = engine.create_principal("alice").expect("seed principal");
+    let actor = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
     let cb: OnChangeCallback = Arc::new(|_seq, _chunk| {});
 
     let sub = engine
@@ -139,7 +145,10 @@ fn on_change_as_with_cursor_actor_aware_cursor_resume_composition_under_noauth()
     // callback observes the published event regardless of the
     // threaded actor.
     let (_dir, engine) = fresh_engine();
-    let actor = engine.create_principal("alice").expect("seed principal");
+    let actor = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
 
     let received = Arc::new(AtomicU64::new(0));
     let received_cb = Arc::clone(&received);

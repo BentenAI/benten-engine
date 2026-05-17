@@ -294,7 +294,7 @@ impl<B: GraphBackend> UCANBackend<B> {
         Ok(cid)
     }
 
-    /// Persist a UCAN as a grant with explicit `WriteContext`. The
+    /// Persist a UCAN as a grant with explicit `CapWriteContext`. The
     /// rate-limit policy plug fires for non-privileged contexts (the
     /// engine-privileged path skips the check, consistent with the
     /// [`crate::policy::WriteAuthority::EnginePrivileged`] Inv-13
@@ -308,7 +308,7 @@ impl<B: GraphBackend> UCANBackend<B> {
     pub fn record_grant(
         &self,
         ucan: &Ucan,
-        ctx: &crate::policy::WriteContext,
+        ctx: &crate::policy::CapWriteContext,
     ) -> Result<Cid, CapError> {
         if !ctx.is_privileged
             && let Some(actor) = &ctx.actor_hint

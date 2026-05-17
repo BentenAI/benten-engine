@@ -662,7 +662,7 @@ mod napi_surface {
         /// optional `issuer` (DID string) + `hlc` (numeric stamp) for
         /// UCAN-grounded grants — these flow through to the durable
         /// backend's chain-walker via
-        /// [`benten_engine::Engine::grant_capability_with_proof`].
+        /// [`benten_engine::engine_caps::EngineCapsHandle::grant_capability_with_proof`].
         /// Phase-1 callers passing only `{ actor, scope }` continue
         /// to work unchanged (the Node persisted has no `issuer` /
         /// `hlc` properties; the durable backend treats the grant as
@@ -672,6 +672,7 @@ mod napi_surface {
             let parsed = parse_grant_json(grant)?;
             let cid = self
                 .inner
+                .caps()
                 .grant_capability_with_proof(
                     parsed.actor.as_str(),
                     parsed.scope.as_str(),
@@ -706,6 +707,7 @@ mod napi_surface {
             // grant-CID-resolving seam so the revocation Node carries
             // the grant's actual `scope` property.
             self.inner
+                .caps()
                 .revoke_capability_by_grant_cid(&grant, actor.as_str())
                 .map_err(engine_err)
         }
@@ -749,6 +751,7 @@ mod napi_surface {
             let source = parse_cid(&source_grant_cid)?;
             let cid = self
                 .inner
+                .caps()
                 .delegate_capability(&source, plugin_did.as_str(), &attenuated_caps)
                 .map_err(engine_err)?;
             Ok(cid.to_base32())

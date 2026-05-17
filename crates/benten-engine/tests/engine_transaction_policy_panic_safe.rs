@@ -19,7 +19,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, WriteContext as CapWriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy};
 use benten_core::{Node, Value};
 use benten_engine::Engine;
 use std::collections::BTreeMap;

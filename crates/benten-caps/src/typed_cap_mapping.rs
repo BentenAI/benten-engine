@@ -30,12 +30,20 @@
 //! `cap:typed:*` string; unknown pairs return `None` (the caller
 //! falls through to the existing scope-string attenuation logic).
 
-/// Closed-set typed-cap groups corresponding to the 8 distinct
-/// `cap:typed:*` strings produced by
-/// `benten_eval::TypedCallOp::required_cap`. Mirrors the closed
-/// set; extending requires adding a variant here AND a corresponding
-/// `TypedCallOp::required_cap` arm.
+/// Typed-cap groups corresponding to the 8 distinct `cap:typed:*`
+/// strings produced by `benten_eval::TypedCallOp::required_cap`.
+/// Mirrors that set; extending requires adding a variant here AND a
+/// corresponding `TypedCallOp::required_cap` arm.
+///
+/// `#[non_exhaustive]` (v1-API-stabilization, #998): post-Ed25519
+/// signature schemes (CLAUDE.md #19), Kith multi-signature surfaces
+/// (Phase-5+), and future plugin-minted typed caps will extend this
+/// set. Marking the enum non-exhaustive lets those land as a minor
+/// SemVer bump rather than a major break — consistent with the
+/// sibling `CapError` / `PendingOp` non-exhaustive discipline.
+/// Downstream `match` over this enum must carry a wildcard arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TypedCapGroup {
     /// `cap:typed:crypto-sign`.
     CryptoSign,

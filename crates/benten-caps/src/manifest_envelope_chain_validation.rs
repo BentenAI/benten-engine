@@ -24,12 +24,29 @@
 //!
 //! ## Dep-direction
 //!
-//! Per arch invariants, `benten-caps` MUST NOT depend on
-//! `benten-platform-foundation` in production. The chain validator is
-//! parameterized over a [`ManifestEnvelopeLookup`] trait + a
-//! [`UserDidRegistry`] trait + a [`SharesPolicyView`] (from
-//! [`crate::plugin_delegation`]) so concrete manifest / user-store types stay
-//! out of this crate.
+//! `benten-caps` DOES carry a native-only (`cfg(not(wasm32))`)
+//! production dep on `benten-platform-foundation` — the prod edge was
+//! added at G27-D / batch-3 (Cargo-cycle-safe: foundation's reverse
+//! edge stays dev-only; see this crate's INTERNALS.md §2). An earlier
+//! revision of this doc-comment claimed "`benten-caps` MUST NOT depend
+//! on `benten-platform-foundation` in production" — that statement was
+//! a stale invariant carried forward from the pre-G27-D / pre-FP-2
+//! mr-1 era when the trait surface was abstractly parameterized; it is
+//! retracted here (Surf-1 #883 doc-lie closure).
+//!
+//! The trait abstraction is nonetheless still load-bearing and
+//! deliberately retained: this chain validator stays parameterized
+//! over a [`ManifestEnvelopeLookup`] trait + a [`UserDidRegistry`]
+//! trait + a [`SharesPolicyView`] (from [`crate::plugin_delegation`])
+//! so that (a) the wasm32 thin-client surface compiles without the
+//! foundation dep, and (b) test fixtures can inject synthetic lookups.
+//! The blanket `impl SharesPolicyView for
+//! benten_platform_foundation::SharesPolicy` at
+//! [`crate::plugin_delegation`] is the FP-2 mr-1 ergonomics decision
+//! for production callers; whether to retire the prod edge entirely
+//! and push that blanket impl into `benten-platform-foundation`
+//! itself is a v1-API-stabilization arch question tracked at
+//! `docs/future/phase-4-backlog.md` §4.43 (issue #883 option (b)).
 
 #[cfg(not(target_arch = "wasm32"))]
 use benten_id::did::Did;

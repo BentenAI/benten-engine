@@ -73,6 +73,7 @@ fn inv_11_transform_constructed_cid_with_system_label_rejected() {
     // sketched in the earlier red-phase commentary referenced a
     // principal-first signature that was never introduced.
     let grant_cid = engine
+        .caps()
         .grant_capability("store:post:write", "attacker-controlled-subject")
         .unwrap();
 
@@ -137,7 +138,7 @@ proptest! {
         // the engine computes; the test doesn't control the textual form.
         let scope = format!("store:seed_{seed}:write");
         let subject = format!("seed-{seed}");
-        let sys_cid = engine.grant_capability(&scope, &subject).unwrap();
+        let sys_cid = engine.caps().grant_capability(&scope, &subject).unwrap();
 
         // User-zone seed: a Post Node routed through the standard
         // user-facing `create_node` path.

@@ -243,7 +243,7 @@ fn invariant_14_structural_attribution_end_to_end() {
         .respond(|r| r.body("$result"))
         .build();
     let handler_id = engine.register_subgraph(sg).unwrap();
-    let actor = engine.create_principal("inv14_actor").unwrap();
+    let actor = engine.caps().create_principal("inv14_actor").unwrap();
 
     let trace = engine
         .trace_as(&handler_id, "inv14:run", Node::empty(), &actor)

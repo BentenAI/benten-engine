@@ -40,7 +40,7 @@ mod schema_fixtures;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
 
 /// §3.6b end-to-end recording cap-policy. Counts every check_write + check_read
 /// invocation; the schema-emitted SubgraphSpec walk MUST surface a non-zero
@@ -62,7 +62,7 @@ impl RecordingCapPolicy {
 }
 
 impl CapabilityPolicy for RecordingCapPolicy {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         self.writes.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }

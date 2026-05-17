@@ -36,7 +36,10 @@ use std::sync::Arc;
 struct DenyAllReadsPolicy;
 
 impl benten_caps::CapabilityPolicy for DenyAllReadsPolicy {
-    fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> {
+    fn check_write(
+        &self,
+        _ctx: &benten_caps::CapWriteContext,
+    ) -> Result<(), benten_caps::CapError> {
         Ok(())
     }
 
@@ -106,7 +109,7 @@ fn diagnose_read_requires_debug_read_capability() {
     impl benten_caps::CapabilityPolicy for DenyEverything {
         fn check_write(
             &self,
-            _ctx: &benten_caps::WriteContext,
+            _ctx: &benten_caps::CapWriteContext,
         ) -> Result<(), benten_caps::CapError> {
             Ok(())
         }

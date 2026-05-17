@@ -3,7 +3,7 @@
 //! attestation CID through the production write-path call sites
 //! ([`engine_diagnostics.rs::transaction`] commit hook +
 //! [`primitive_host.rs::check_capability`]) into the
-//! [`benten_caps::WriteContext`] passed to the configured
+//! [`benten_caps::CapWriteContext`] passed to the configured
 //! [`benten_caps::CapabilityPolicy`].
 //!
 //! Pin source: predecessor RED-PHASE pin in
@@ -16,16 +16,16 @@
 //! Per D-PHASE-3-25, heterogeneous policies dispatch on `device_cid` to
 //! surface different decisions for "desktop X writes" vs "phone X
 //! writes" under the SAME logical actor identity. G16-B canary landed
-//! the structural surface (the `device_cid` field on `WriteContext` /
+//! the structural surface (the `device_cid` field on `CapWriteContext` /
 //! `ReadContext`); G16-B-prime threads the field at the engine's
-//! production WriteContext-construction sites (per pim-2: not just a
+//! production CapWriteContext-construction sites (per pim-2: not just a
 //! struct field that no production caller populates).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::{Arc, Mutex};
 
-use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_core::{Cid, Node, Value};
 use benten_engine::Engine;
 
@@ -38,7 +38,7 @@ struct RecordingDevicePolicy {
 }
 
 impl CapabilityPolicy for RecordingDevicePolicy {
-    fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
         self.observed.lock().unwrap().push(ctx.device_cid);
         Ok(())
     }
@@ -55,7 +55,7 @@ struct RecordingDeviceReadPolicy {
 }
 
 impl CapabilityPolicy for RecordingDeviceReadPolicy {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Ok(())
     }
     fn check_read(&self, ctx: &ReadContext) -> Result<(), CapError> {
@@ -70,7 +70,7 @@ fn capability_policy_per_device_cid_dispatch_observable_in_runtime_arm() {
     //
     // OBSERVABLE consequence: a policy registered on an engine that
     // has called `set_device_cid(Some(cid))` observes `device_cid:
-    // Some(cid)` on every WriteContext at check_write time. Defends
+    // Some(cid)` on every CapWriteContext at check_write time. Defends
     // against the failure shape where the field exists structurally
     // but no production write-path callsite populates it.
     let observed = Arc::new(Mutex::new(Vec::new()));
@@ -100,7 +100,7 @@ fn capability_policy_per_device_cid_dispatch_observable_in_runtime_arm() {
     let node = Node::new(vec!["post".into()], props);
     // Drive through Engine::transaction — the production write path
     // that exercises the engine_diagnostics.rs::transaction commit
-    // hook where WriteContext.device_cid is populated.
+    // hook where CapWriteContext.device_cid is populated.
     engine
         .transaction(|tx| {
             let _cid = tx.create_node(&node)?;
@@ -115,10 +115,10 @@ fn capability_policy_per_device_cid_dispatch_observable_in_runtime_arm() {
         "engine.create_node MUST drive the policy's check_write at \
          commit time per the post-G3-A surface contract"
     );
-    // EVERY observed WriteContext carries Some(device_cid).
+    // EVERY observed CapWriteContext carries Some(device_cid).
     assert!(
         captures.iter().all(|d| *d == Some(device_cid)),
-        "production-runtime WriteContext MUST carry device_cid populated \
+        "production-runtime CapWriteContext MUST carry device_cid populated \
          from Engine::set_device_cid per cap-r4-4 (c). Captures: {captures:?}"
     );
 }
@@ -126,7 +126,7 @@ fn capability_policy_per_device_cid_dispatch_observable_in_runtime_arm() {
 #[test]
 fn legacy_engine_without_device_cid_observes_none_in_writecontext() {
     // Backward-compat counter-pin: an engine that NEVER called
-    // set_device_cid leaves WriteContext.device_cid == None per
+    // set_device_cid leaves CapWriteContext.device_cid == None per
     // cap-r4-4 (b). Defends against a regression where the threading
     // would synthesize a non-None placeholder.
     let observed = Arc::new(Mutex::new(Vec::new()));
@@ -146,7 +146,7 @@ fn legacy_engine_without_device_cid_observes_none_in_writecontext() {
     let node = Node::new(vec!["post".into()], props);
     // Drive through Engine::transaction — the production write path
     // that exercises the engine_diagnostics.rs::transaction commit
-    // hook where WriteContext.device_cid is populated.
+    // hook where CapWriteContext.device_cid is populated.
     engine
         .transaction(|tx| {
             let _cid = tx.create_node(&node)?;

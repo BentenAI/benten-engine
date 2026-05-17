@@ -32,7 +32,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_engine::{Engine, ReadViewOptions, UserViewInputPattern, UserViewSpec};
 
 /// Test policy: deny ALL reads against a configured label string;
@@ -40,7 +40,7 @@ use benten_engine::{Engine, ReadViewOptions, UserViewInputPattern, UserViewSpec}
 struct DenyReadsForLabel(&'static str);
 
 impl CapabilityPolicy for DenyReadsForLabel {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Ok(())
     }
 

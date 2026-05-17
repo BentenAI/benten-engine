@@ -116,7 +116,7 @@ fn ucan_grounded_audience_some_arm_routes_through_audience_walker() {
         "expected `None => ... validate_chain_at(chain, self.now_secs)` \
          match arm in ucan_grounded.rs: the audience-less fallback \
          preserves Phase-1/2 fixtures + engine-internal typed-CALL paths \
-         that don't yet thread actor (per WriteContext {{ actor_hint: \
+         that don't yet thread actor (per CapWriteContext {{ actor_hint: \
          None, .. }} at engine_wait.rs:881-891).",
     );
 }

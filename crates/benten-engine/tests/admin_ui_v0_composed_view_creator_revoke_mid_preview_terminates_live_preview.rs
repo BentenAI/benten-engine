@@ -100,6 +100,13 @@ fn mk_preview_event(label: &str, seq_payload: u64) -> ChangeEvent {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "single end-to-end revoke-mid-preview scenario; crossed the 100-line \
+              threshold by 2 purely from the v1-API-caps mechanical migration \
+              (#820: Engine-direct cap calls re-routed through engine.caps()). \
+              Splitting the scenario would reduce its readability for no behavioral gain."
+)]
 fn admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview_engine_side() {
     // ------------------------------------------------------------------
     // (1) Build engine with `GrantBackedPolicy` so the per-event
@@ -116,6 +123,7 @@ fn admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview_
         .expect("engine builds with GrantBackedPolicy");
 
     let admin_ui_principal = engine
+        .caps()
         .create_principal("admin-ui-v0-revoke-mid-preview-principal")
         .expect("seed admin-UI plugin principal");
 
@@ -169,6 +177,7 @@ fn admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview_
     //     need a grant covering the preview label.
     // ------------------------------------------------------------------
     let _grant_cid = engine
+        .caps()
         .grant_capability(
             &admin_ui_principal,
             format!("store:{ADMIN_UI_V0_PREVIEW_LABEL}:read"),
