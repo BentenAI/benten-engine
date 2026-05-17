@@ -998,6 +998,14 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW + DISAGREE-WITH-EXPLANATION on benten-ev
 
 **Acceptance criteria.** Resolved at the §4.43 v1-API-stabilization sweep as one coordinated cross-crate batch. Surface forks (1) and (3) for Ben ratification before §4.43 locks the affected public surfaces. ~varies (≥63 callsites for #807; ~27 files for #802; ~catalog-bump + TS-mirror for #1042) at §4.43.
 
+### §4.79 benten-core Anchor-shape unification — ONE `VersionDag` with a strict/linear mode (Phase-4-Meta D3 — refinement-audit #849, umbrella #1158/#1142)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Surf-1 #849; umbrella **#1158** v1-API-stabilization cluster, coupled to **#1142** Subgraph/Anchor canonicalization). This is the named Phase-4-Meta destination for the **#849** "three coexisting Anchor shapes" finding. The third (legacy crate-root `u64`-id) shape was DELETED for **#1003** in the #1142 lane (RATIFIED 2026-05-17 — zero non-test callers; CLAUDE.md rule #5). The remaining TWO shapes — `benten_core::version::Anchor` (Cid-head prior-head-threaded linear) and `benten_core::version_chain::DagVersionChain` (DAG-shape, branches/merges native) — still coexist with no shared trait and two different "CURRENT" semantics.
+
+**Ratified design (RATIFIED-decisions-2026-05-17.md D3, Phase-4-Meta-windowed, NON-blocking).** There is ONE version data structure (the DAG). "Linear" is NOT a subtype or degenerate child — it is an opt-in **strict mode/policy** on the one structure (single-parent invariant + fork-rejected-as-typed-error). `version.rs`'s contribution (its `VersionError::Branched`/`UnknownPrior` + "re-read & re-attempt" optimistic-concurrency contract) is carried into the unified DAG as opt-in strict mode; the DAG is structurally strictly more capable (rejects only cycles). Error surfaces already align (`VersionError::code()` ≡ `VersionDagError::code()` → `ErrorCode::VersionBranched`). Decision: one `VersionDag` type; strict/linear is a mode on it (not two types, not a subtype); one shared trait; one CURRENT semantic.
+
+**Acceptance criteria (Phase-4-Meta; Ben-ratified D3 — implementation-only, the shape is locked).** Collapse `version::Anchor` + `version_chain::DagVersionChain` into one `VersionDag` type carrying a strict/linear mode flag; migrate callers (`benten-platform-foundation` plugin-library, `benten-engine` handler-versions/diagnostics, `benten-core` tests) to the unified surface; preserve `ErrorCode::VersionBranched`/`VersionUnknownPrior` mapping; the strict-mode fork-rejection pin (`tests/version_branched.rs`) carries forward unchanged. Couples #1142 + #1158. ~150-300 LOC at Phase-4-Meta. The shape decision is NOT re-litigated (D3 ratified); only the mechanical unification + caller migration is Phase-4-Meta-windowed.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)

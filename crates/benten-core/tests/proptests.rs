@@ -74,21 +74,10 @@ proptest! {
         prop_assert_eq!(cid_before, decoded.cid().unwrap());
     }
 
-    /// `prop_version_chain_linearizable` — walk_versions produces a total
-    /// order compatible with the NEXT_VERSION DAG (R2 landscape §3 row 5).
-    #[test]
-    fn prop_version_chain_linearizable(len in 1usize..8) {
-        use benten_core::{append_version, walk_versions, Anchor};
-        let anchor = Anchor::new();
-        let mut expected = Vec::new();
-        for i in 0..len {
-            let mut p = BTreeMap::new();
-            p.insert("seq".to_string(), Value::Int(i as i64));
-            let node = Node::new(vec!["Post".to_string()], p);
-            let cid = append_version(&anchor, &node).unwrap();
-            expected.push(cid);
-        }
-        let chain = walk_versions(&anchor).unwrap();
-        prop_assert_eq!(chain, expected);
-    }
+    // `prop_version_chain_linearizable` (R2 landscape §3 row 5) exercised
+    // the crate-root `u64`-id `Anchor` + `append_version` / `walk_versions`
+    // surface, DELETED for #1003 (RATIFIED 2026-05-17 — zero non-test
+    // callers). The prior-head-threaded `version::Anchor` linearizability +
+    // branch-detection contract is covered by `tests/anchor_version.rs` +
+    // `tests/version_branched.rs`.
 }
