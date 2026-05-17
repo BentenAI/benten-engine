@@ -2,7 +2,7 @@
 //!
 //! Pluggable capability policy for the Benten graph engine. Phase 1 ships:
 //!
-//! - The [`CapabilityPolicy`] pre-write hook trait + [`WriteContext`] +
+//! - The [`CapabilityPolicy`] pre-write hook trait + [`CapWriteContext`] +
 //!   [`ReadContext`].
 //! - [`NoAuthBackend`] — the zero-cost Phase 1 default; permits every write
 //!   and every read.
@@ -107,7 +107,7 @@ pub use grant::{
 };
 pub use grant_backed::{GrantBackedPolicy, GrantReader, GrantReaderChain, GrantReaderConfig};
 pub use noauth::NoAuthBackend;
-pub use policy::{CapabilityPolicy, PendingOp, ReadContext, WriteAuthority, WriteContext};
+pub use policy::{CapWriteContext, CapabilityPolicy, PendingOp, ReadContext, WriteAuthority};
 pub use rate_limit::{
     InMemoryRateLimitPolicy, InMemoryRateLimitPolicyBuilder, NullRateLimitPolicy, RateLimitPolicy,
 };
@@ -115,6 +115,32 @@ pub use typed_cap_mapping::{TypedCapGroup, typed_cap_for_ucan_claim};
 #[cfg(not(target_arch = "wasm32"))]
 pub use ucan_grounded::UcanGroundedPolicy;
 pub use ucan_stub::LegacyUcanStubBackend;
+
+// Surf-1 #884 (v1-API-stabilization): the three plugin-trust modules
+// (Layer 2 + Layer 3 of CLAUDE.md #18) now follow the same crate-root
+// re-export convention as every other public composable surface above.
+// Consumers write `benten_caps::check_delegation_within_envelope`
+// rather than the asymmetric `benten_caps::plugin_delegation::*`
+// long-path import. The module-local `Did` newtypes are intentionally
+// NOT re-exported (they collide across the two modules + the canonical
+// identity type is `benten_id::did::Did`); `ChainAnchor` is excluded
+// per the #816 zero-consumer disposition. Native-only, mirroring the
+// `#[cfg(not(target_arch = "wasm32"))]` gate on the modules themselves.
+#[cfg(not(target_arch = "wasm32"))]
+pub use manifest_envelope_chain_validation::{
+    ChainValidationOutcome, DelegationStep, ManifestEnvelopeLookup, UserDidRegistry,
+    validate_chain_with_manifest_envelope,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use manifest_scope::{
+    PRIVATE_PREFIX, REQUIRES_PREFIX, SHARES_PREFIX, check_scope_within_envelope,
+    manifest_requires_to_scope, manifest_shares_to_scope, private_namespace_scope_admits_actor,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use plugin_delegation::{
+    DelegationDecision, SharesPolicyView, check_delegation_within_envelope,
+    is_private_namespace_cap,
+};
 
 /// Phase 2a G9-A / P2 test-harness: helper surface the evaluator consults
 /// for iteration-batch + wall-clock refresh delegation. Split into its own

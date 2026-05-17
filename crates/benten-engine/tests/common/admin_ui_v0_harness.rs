@@ -155,9 +155,11 @@ impl AdminUiV0TestHarness {
             .open(tempdir.path().join("admin-ui-v0-harness.redb"))
             .expect("harness: engine opens with grant-backed policy");
         let admin_ui_plugin_principal = engine
+            .caps()
             .create_principal("admin-ui-v0-plugin-harness-principal")
             .expect("harness: admin-UI plugin principal");
         let hostile_plugin_principal = engine
+            .caps()
             .create_principal("hostile-plugin-harness-principal")
             .expect("harness: hostile plugin principal");
         Self {
@@ -234,7 +236,9 @@ impl AdminUiV0TestHarness {
         actor_plugin_did: &str,
         scope: &str,
     ) -> Result<Cid, EngineError> {
-        self.engine().grant_capability(actor_plugin_did, scope)
+        self.engine()
+            .caps()
+            .grant_capability(actor_plugin_did, scope)
     }
 
     /// Grant the admin-UI principal a cap-scope keyed to its principal
@@ -248,7 +252,7 @@ impl AdminUiV0TestHarness {
     /// Surfaces [`EngineError`] verbatim.
     pub fn grant_admin_ui_read_scope(&self, scope: &str) -> Result<Cid, EngineError> {
         let principal = self.admin_ui_plugin_principal_cid();
-        self.engine().grant_capability(&principal, scope)
+        self.engine().caps().grant_capability(&principal, scope)
     }
 
     /// Attempt to delegate a capability across plugin boundaries via
@@ -268,6 +272,7 @@ impl AdminUiV0TestHarness {
         target_plugin_did: &str,
     ) -> Result<Cid, EngineError> {
         self.engine()
+            .caps()
             .delegate_capability(source_grant_cid, target_plugin_did, &[])
     }
 

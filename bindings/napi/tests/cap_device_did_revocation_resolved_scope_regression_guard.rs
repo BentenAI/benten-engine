@@ -135,11 +135,13 @@ fn device_did_revocation_napi_routes_through_rotation_log_not_cap_revoke_seam() 
     // seam). The class-of-bug failure mode would be: the napi binding
     // accidentally writes through the device-DID substrate. We assert
     // RotationLog state is unaltered by the cap-revoke cycle.
-    let actor = engine.create_principal("device-owner").unwrap();
+    let actor = engine.caps().create_principal("device-owner").unwrap();
     let grant_cid = engine
+        .caps()
         .grant_capability(&actor, "store:notes:write")
         .expect("grant via privileged path");
     engine
+        .caps()
         .revoke_capability_by_grant_cid(&grant_cid, &actor)
         .expect("revoke via resolving seam");
     assert!(

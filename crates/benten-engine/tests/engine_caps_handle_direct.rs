@@ -90,7 +90,10 @@ fn fresh_engine() -> (tempfile::TempDir, Engine) {
 #[test]
 fn cap_proof_new_constructor_leaves_proof_cid_none() {
     let (_dir, engine) = fresh_engine();
-    let alice = engine.create_principal("alice").expect("seed principal");
+    let alice = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
     let proof = CapProof::new(alice, "store:post:write");
     assert!(
         proof.proof_cid.is_none(),
@@ -107,7 +110,10 @@ fn cap_proof_new_constructor_leaves_proof_cid_none() {
 #[test]
 fn install_proof_populates_proof_cid_via_grant_capability() {
     let (_dir, engine) = fresh_engine();
-    let alice = engine.create_principal("alice").expect("seed principal");
+    let alice = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
     let mut proof = CapProof::new(alice, "store:post:write");
 
     let cid = engine
@@ -127,7 +133,10 @@ fn install_proof_populates_proof_cid_via_grant_capability() {
 #[test]
 fn install_proof_then_revoke_round_trips_without_error() {
     let (_dir, engine) = fresh_engine();
-    let alice = engine.create_principal("alice").expect("seed principal");
+    let alice = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
     let mut proof = CapProof::new(alice, "store:post:write");
 
     engine
@@ -149,7 +158,10 @@ fn install_proof_then_revoke_round_trips_without_error() {
 #[test]
 fn revoke_then_reinstall_re_mints_grant_and_lifts_in_memory_revocation() {
     let (_dir, engine) = fresh_engine();
-    let alice = engine.create_principal("alice").expect("seed principal");
+    let alice = engine
+        .caps()
+        .create_principal("alice")
+        .expect("seed principal");
 
     let mut proof = CapProof::new(alice, "store:post:write");
     let first_cid = engine
@@ -204,6 +216,7 @@ fn install_proof_against_caps_disabled_engine_returns_subsystem_disabled() {
     // create_principal goes through the privileged-put path which is
     // independent of the caps subsystem; it MUST still succeed.
     let alice = engine
+        .caps()
         .create_principal("alice")
         .expect("create_principal does not require caps subsystem");
 

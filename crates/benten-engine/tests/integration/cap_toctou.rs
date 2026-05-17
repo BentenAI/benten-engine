@@ -26,7 +26,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use benten_caps::{CapError, CapabilityPolicy, DEFAULT_BATCH_BOUNDARY, ReadContext, WriteContext};
+use benten_caps::{
+    CapError, CapWriteContext, CapabilityPolicy, DEFAULT_BATCH_BOUNDARY, ReadContext,
+};
 use benten_core::{Node, Value};
 use benten_engine::Engine;
 
@@ -59,7 +61,7 @@ impl RevokeAfterNPolicy {
 }
 
 impl CapabilityPolicy for RevokeAfterNPolicy {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         let mut calls = self.calls.lock().unwrap();
         *calls += 1;
         if *calls <= self.permit_first {

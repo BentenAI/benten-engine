@@ -136,6 +136,7 @@ fn fixture_setup_path_still_compiles() {
         .build()
         .unwrap();
     let alice = engine
+        .caps()
         .create_principal("alice")
         .expect("principal creation succeeds");
     // Sanity read (no WAIT involved).

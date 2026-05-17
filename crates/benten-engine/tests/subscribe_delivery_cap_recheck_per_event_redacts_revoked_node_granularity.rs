@@ -82,6 +82,7 @@ fn subscribe_delivery_cap_recheck_per_event_redacts_revoked_node_granularity() {
     // Create actor-A as a principal; the principal CID is the actor_cid
     // threaded into `on_change_as` + the grant binding.
     let actor_a = engine
+        .caps()
         .create_principal("subscribe-cap-recheck-actor-a")
         .expect("seed principal");
 
@@ -92,9 +93,11 @@ fn subscribe_delivery_cap_recheck_per_event_redacts_revoked_node_granularity() {
     // variant logic in `wildcard_variants` enumerates 2^N alternatives;
     // we grant the exact concrete `store:<label>:read` scopes here.
     let post_grant_cid = engine
+        .caps()
         .grant_capability(&actor_a, "store:post:created:read")
         .expect("post grant must succeed");
     let _comment_grant_cid = engine
+        .caps()
         .grant_capability(&actor_a, "store:comment:created:read")
         .expect("comment grant must succeed");
 
@@ -144,6 +147,7 @@ fn subscribe_delivery_cap_recheck_per_event_redacts_revoked_node_granularity() {
     // Step 3: revoke the post:created grant mid-session. Actor-A no
     // longer covers post:created, but still covers comment:created.
     engine
+        .caps()
         .revoke_capability_by_grant_cid(&post_grant_cid, &actor_a)
         .expect("revoke post grant");
 

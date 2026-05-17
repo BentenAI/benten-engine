@@ -29,7 +29,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_core::{Cid, Node, Value};
 use benten_engine::Engine;
 
@@ -98,6 +98,7 @@ fn read_node_as_returns_node_under_noauth_policy() {
     let node = make_post("read_node_as_happy_path");
     let cid = engine.put_node(&node).expect("seed");
     let principal = engine
+        .caps()
         .create_principal("test-principal-happy")
         .expect("seed principal");
 
@@ -128,10 +129,14 @@ fn read_node_as_collapses_to_none_under_inv_11_system_zone() {
     let (_dir, engine) = fresh_engine();
     // `create_principal` writes a `system:Principal`-labeled Node
     // via the privileged path; the resulting CID is our probe target.
-    let principal_cid = engine.create_principal("inv11-probe-target").expect("seed");
+    let principal_cid = engine
+        .caps()
+        .create_principal("inv11-probe-target")
+        .expect("seed");
     // Read attributed to a different principal — Inv-11 fires
     // regardless.
     let alice = engine
+        .caps()
         .create_principal("alice-reader")
         .expect("seed reader");
 
@@ -163,6 +168,7 @@ fn read_node_as_collapses_to_none_under_grant_backed_denial() {
     let cid = engine.put_node(&node).expect("seed");
     // No `store:post:read` grant for `alice` — denial expected.
     let alice = engine
+        .caps()
         .create_principal("alice-no-read-grant")
         .expect("seed principal");
 
@@ -189,7 +195,7 @@ struct RecordingPolicy {
 }
 
 impl CapabilityPolicy for RecordingPolicy {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Ok(())
     }
     fn check_read(&self, ctx: &ReadContext) -> Result<(), CapError> {
@@ -222,6 +228,7 @@ fn read_node_as_threads_principal_into_read_context() {
     let node = make_post("principal_thread_fixture");
     let cid = engine.put_node(&node).expect("seed");
     let alice = engine
+        .caps()
         .create_principal("alice-principal-probe")
         .expect("seed");
 
@@ -261,6 +268,7 @@ fn grant_read_capability_for_testing_permits_read_after_grant() {
     // Before the grant: a fresh reader sees None (denied collapses
     // to None per Option C).
     let reader = engine
+        .caps()
         .create_principal("grant-helper-reader-before")
         .expect("seed");
     let pre = engine
@@ -278,6 +286,7 @@ fn grant_read_capability_for_testing_permits_read_after_grant() {
     // helper signature carries the principal arg explicitly to make
     // this binding visible.
     let reader_after = engine
+        .caps()
         .create_principal("grant-helper-reader-after")
         .expect("seed");
     let grant_cid = engine

@@ -142,6 +142,13 @@ pub enum ErrorCode {
     /// `#[source]`-preserving `redb::Error` chain; this code survives the
     /// refactor.
     GraphInternal,
+    /// #992: the redb on-disk graph file declares a schema-version
+    /// envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value
+    /// this build does not understand. The open is refused rather than
+    /// silently mis-routing reads against a future prefix schema. Mirrors
+    /// the snapshot-blob `SchemaVersion` posture. Absence of the envelope
+    /// is NOT this code — a pre-envelope file is implied-v1.
+    GraphSchemaVersionMismatch,
     /// DAG-CBOR serialization failure at the hash path (e.g. encoder
     /// integer-overflow). Distinct from the catalog's registration-time
     /// invariants; the payload is a human-readable message held on the
@@ -1164,6 +1171,7 @@ impl ErrorCode {
             ErrorCode::NotFound => "E_NOT_FOUND",
             ErrorCode::Serialize => "E_SERIALIZE",
             ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
+            ErrorCode::GraphSchemaVersionMismatch => "E_GRAPH_SCHEMA_VERSION_MISMATCH",
             ErrorCode::DuplicateHandler => "E_DUPLICATE_HANDLER",
             ErrorCode::NoCapabilityPolicyConfigured => "E_NO_CAPABILITY_POLICY_CONFIGURED",
             ErrorCode::ProductionRequiresCaps => "E_PRODUCTION_REQUIRES_CAPS",
@@ -1455,8 +1463,13 @@ impl ErrorCode {
             // shaping. R6 fp Wave C2: `DslUnregisteredHandler` joins the
             // family — the handler-id namespace miss is a registry lookup
             // failure shape-matching `BackendNotFound`.
+            // #992: a schema-version-mismatched redb file is present-but-
+            // unusable — the same "the store you asked for cannot be
+            // served" shape as `BackendNotFound` (open-time refusal, not
+            // an in-graph runtime edge), so it joins the not-found family.
             ErrorCode::NotFound
             | ErrorCode::BackendNotFound
+            | ErrorCode::GraphSchemaVersionMismatch
             | ErrorCode::HostNotFound
             | ErrorCode::VersionUnknownPrior
             | ErrorCode::UnknownView
@@ -1801,6 +1814,7 @@ impl ErrorCode {
             "E_NOT_FOUND" => ErrorCode::NotFound,
             "E_SERIALIZE" => ErrorCode::Serialize,
             "E_GRAPH_INTERNAL" => ErrorCode::GraphInternal,
+            "E_GRAPH_SCHEMA_VERSION_MISMATCH" => ErrorCode::GraphSchemaVersionMismatch,
             "E_DUPLICATE_HANDLER" => ErrorCode::DuplicateHandler,
             "E_NO_CAPABILITY_POLICY_CONFIGURED" => ErrorCode::NoCapabilityPolicyConfigured,
             "E_PRODUCTION_REQUIRES_CAPS" => ErrorCode::ProductionRequiresCaps,

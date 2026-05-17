@@ -73,8 +73,9 @@ fn resume_with_revoked_grant_denies() {
     // `scope = "wait:resume"` (see `engine_wait.rs` ~line 500); the
     // grant-backed policy permits when an unrevoked grant exists for that
     // scope, denies otherwise.
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     let _grant_cid = engine
+        .caps()
         .grant_capability(&alice, "wait:resume")
         .expect("grant succeeds");
 
@@ -112,6 +113,7 @@ fn resume_with_revoked_grant_denies() {
     // resume during which an admin (or a Garden approval flow) flips
     // authority.
     engine
+        .caps()
         .revoke_capability(&alice, "wait:resume")
         .expect("revoke succeeds");
 

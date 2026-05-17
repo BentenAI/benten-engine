@@ -2,7 +2,7 @@
 //!
 //! Two gaps surfaced in the R6 pass:
 //!
-//! 1. **Empty-batch permissiveness.** A `WriteContext` arriving at the policy
+//! 1. **Empty-batch permissiveness.** A `CapWriteContext` arriving at the policy
 //!    with no `pending_ops`, an empty `label`, and an empty `scope` used to
 //!    return `Ok(())` by default. Under GrantBackedPolicy this is a
 //!    fail-open — an unstructured context reaching the policy is an error
@@ -24,7 +24,7 @@
 use std::sync::Arc;
 
 use benten_caps::{
-    CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, PendingOp, WriteContext,
+    CapError, CapWriteContext, CapabilityPolicy, GrantBackedPolicy, GrantReader, PendingOp,
 };
 use benten_core::Cid;
 
@@ -68,10 +68,10 @@ fn grant_backed_policy_denies_unstructured_empty_context() {
     let grants = MockGrants::new(&["store:post:read", "store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext::default();
+    let ctx = CapWriteContext::default();
     let err = policy
         .check_write(&ctx)
-        .expect_err("empty/unstructured WriteContext must be denied");
+        .expect_err("empty/unstructured CapWriteContext must be denied");
     assert!(
         matches!(err, CapError::Denied { .. }),
         "empty-batch must be denied (not permit-by-default); got {err:?}"
@@ -84,7 +84,7 @@ fn grant_backed_policy_permits_empty_batch_with_matching_fallback_label() {
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         ..Default::default()
     };
@@ -105,7 +105,7 @@ fn grant_backed_policy_denies_unauthorized_delete() {
     let grants = MockGrants::new(&["store:post:read"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::DeleteNode {
             cid: fake_cid(),
@@ -133,7 +133,7 @@ fn grant_backed_policy_permits_authorized_delete() {
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::DeleteNode {
             cid: fake_cid(),
@@ -156,7 +156,7 @@ fn grant_backed_policy_permits_idempotent_miss_delete() {
     let grants = MockGrants::new(&[]); // no grants at all
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: String::new(),
         pending_ops: vec![PendingOp::DeleteNode {
             cid: fake_cid(),
@@ -176,7 +176,7 @@ fn grant_backed_policy_denies_unauthorized_edge_delete() {
     let grants = MockGrants::new(&["store:post:read"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "AUTHORED_BY".into(),
         pending_ops: vec![PendingOp::DeleteEdge {
             cid: fake_cid(),
@@ -209,7 +209,7 @@ fn grant_backed_policy_wildcard_permits_create_get_list_delete_under_same_label(
     let policy = GrantBackedPolicy::new(grants);
 
     // Create path — derived required scope is `store:post:write`.
-    let create_ctx = WriteContext {
+    let create_ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::PutNode {
             cid: fake_cid(),
@@ -222,7 +222,7 @@ fn grant_backed_policy_wildcard_permits_create_get_list_delete_under_same_label(
         .expect("wildcard `store:post:*` must permit `store:post:write`");
 
     // Delete path — same derived required scope via captured labels.
-    let delete_ctx = WriteContext {
+    let delete_ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::DeleteNode {
             cid: fake_cid(),
@@ -251,7 +251,7 @@ fn grant_backed_policy_bare_wildcard_permits_everything() {
     let grants = MockGrants::new(&["*"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::PutNode {
             cid: fake_cid(),
@@ -271,7 +271,7 @@ fn grant_backed_policy_wildcard_denies_wrong_label() {
     let grants = MockGrants::new(&["store:comment:*"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::PutNode {
             cid: fake_cid(),
@@ -307,7 +307,7 @@ fn grant_backed_policy_denies_put_node_to_label_outside_grant_scope() {
     let grants = MockGrants::new(&["store:post:read"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         // Primary label of the write batch is `admin` — the field the
         // policy uses as its fallback derivation source. Even if this were
         // `post` (to mimic an attacker attempting to spoof the batch as a
@@ -347,7 +347,7 @@ fn grant_backed_policy_permits_put_node_within_grant_scope() {
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         pending_ops: vec![PendingOp::PutNode {
             cid: fake_cid(),

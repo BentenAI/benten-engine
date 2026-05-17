@@ -84,7 +84,7 @@ fn thinness_preserved_after_arch_1_dep_break_delete_roundtrip() {
 fn thin_engine_still_refuses_grants_post_arch_1() {
     let (_dir, engine) = thin_engine();
     let actor = Cid::from_blake3_digest([0u8; 32]);
-    let result = engine.grant_capability(&actor, "store:post:write");
+    let result = engine.caps().grant_capability(&actor, "store:post:write");
     let err = result.expect_err("grant_capability on no-caps thin engine must fail honestly");
     assert_eq!(err.code(), ErrorCode::SubsystemDisabled);
 }

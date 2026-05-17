@@ -333,7 +333,7 @@ pub(crate) struct EngineInner {
 
     /// Phase-3 G16-B-prime (§6.12 item 3): the local engine's
     /// device-DID-attestation CID, used to populate
-    /// [`benten_caps::WriteContext::device_cid`] +
+    /// [`benten_caps::CapWriteContext::device_cid`] +
     /// [`benten_caps::ReadContext::device_cid`] at engine-internal
     /// construction sites. `None` for non-attested / legacy / pre-
     /// device-attestation engines; `Some(cid)` for engines whose owner
@@ -1353,7 +1353,7 @@ impl Engine {
             // mirror.
             if let Some(policy) = self.policy.as_ref() {
                 let scope = format!("{zone}:write");
-                let ctx = benten_caps::WriteContext {
+                let ctx = benten_caps::CapWriteContext {
                     label: zone.to_string(),
                     actor_cid: peer_actor_cid,
                     scope: scope.clone(),
@@ -1587,10 +1587,14 @@ impl Engine {
 
     /// Phase-3 G16-B-F — capability-grant mutation handle, returned by
     /// the `caps()` accessor on the engine. Wraps a borrow of the
-    /// engine + exposes thin `install_proof` / `revoke` surfaces that
-    /// route through the engine's existing privileged
-    /// [`Engine::grant_capability`] / [`Engine::revoke_capability`]
-    /// paths.
+    /// engine + exposes the engine's sole canonical capability-grant
+    /// mutation surface: `create_principal`, `grant_capability`,
+    /// `grant_capability_with_proof`, `revoke_capability`,
+    /// `revoke_capability_by_grant_cid`, `install_ucan_proof`,
+    /// `delegate_capability`, plus the `CapProof`-based `install_proof`
+    /// / `revoke`. The privileged system-zone
+    /// `system:CapabilityGrant` / `system:CapabilityRevocation` Node
+    /// writes are reached only through this handle.
     ///
     /// The handle is the surface the sec-r4r1-2 RED-PHASE pins
     /// consume (per

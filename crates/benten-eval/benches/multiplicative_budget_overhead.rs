@@ -73,18 +73,18 @@ fn bench_boundary_check_per_node(c: &mut Criterion) {
         use benten_core::Value;
         use benten_eval::{OperationNode, PrimitiveKind, Subgraph};
         let mut sg = Subgraph::new("bench_multiplicative");
-        sg = sg.with_node(
+        sg = sg.push_node_raw(
             OperationNode::new("outer", PrimitiveKind::Iterate)
                 .with_property("max", Value::Int(10)),
         );
-        sg = sg.with_node(
+        sg = sg.push_node_raw(
             OperationNode::new("mid", PrimitiveKind::Iterate).with_property("max", Value::Int(5)),
         );
-        sg = sg.with_node(
+        sg = sg.push_node_raw(
             OperationNode::new("inner", PrimitiveKind::Iterate).with_property("max", Value::Int(2)),
         );
-        sg = sg.with_edge("outer", "mid", "next");
-        sg.with_edge("mid", "inner", "next")
+        sg = sg.push_edge_raw("outer", "mid", "next");
+        sg.push_edge_raw("mid", "inner", "next")
     };
 
     group.bench_function("boundary_check_per_node", |b| {

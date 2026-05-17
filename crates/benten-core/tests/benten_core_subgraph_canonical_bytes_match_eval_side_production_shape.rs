@@ -59,11 +59,11 @@ fn migrated_subgraph_canonical_bytes_round_trip_stable_for_minimal_handler() {
 #[test]
 fn migrated_subgraph_cid_inv10_order_independent_over_node_construction_order() {
     let sg1 = Subgraph::new("inv10-pin")
-        .with_node(OperationNode::new("a", PrimitiveKind::Read))
-        .with_node(OperationNode::new("b", PrimitiveKind::Respond));
+        .push_node_raw(OperationNode::new("a", PrimitiveKind::Read))
+        .push_node_raw(OperationNode::new("b", PrimitiveKind::Respond));
     let sg2 = Subgraph::new("inv10-pin")
-        .with_node(OperationNode::new("b", PrimitiveKind::Respond))
-        .with_node(OperationNode::new("a", PrimitiveKind::Read));
+        .push_node_raw(OperationNode::new("b", PrimitiveKind::Respond))
+        .push_node_raw(OperationNode::new("a", PrimitiveKind::Read));
 
     assert_eq!(
         canonical_subgraph_bytes(&sg1).expect("enc1"),
@@ -96,10 +96,11 @@ fn migrated_subgraph_cid_changes_when_deterministic_flag_differs() {
 
 #[test]
 fn migrated_subgraph_cid_changes_when_node_set_differs() {
-    let sg_one = Subgraph::new("node-pin").with_node(OperationNode::new("a", PrimitiveKind::Read));
+    let sg_one =
+        Subgraph::new("node-pin").push_node_raw(OperationNode::new("a", PrimitiveKind::Read));
     let sg_two = Subgraph::new("node-pin")
-        .with_node(OperationNode::new("a", PrimitiveKind::Read))
-        .with_node(OperationNode::new("b", PrimitiveKind::Respond));
+        .push_node_raw(OperationNode::new("a", PrimitiveKind::Read))
+        .push_node_raw(OperationNode::new("b", PrimitiveKind::Respond));
     assert_ne!(
         sg_one.cid().expect("cid one"),
         sg_two.cid().expect("cid two"),
@@ -110,9 +111,9 @@ fn migrated_subgraph_cid_changes_when_node_set_differs() {
 #[test]
 fn migrated_subgraph_cid_changes_when_edge_set_differs() {
     let base = Subgraph::new("edge-pin")
-        .with_node(OperationNode::new("a", PrimitiveKind::Read))
-        .with_node(OperationNode::new("b", PrimitiveKind::Respond));
-    let with_edge = base.clone().with_edge("a", "b", "next");
+        .push_node_raw(OperationNode::new("a", PrimitiveKind::Read))
+        .push_node_raw(OperationNode::new("b", PrimitiveKind::Respond));
+    let with_edge = base.clone().push_edge_raw("a", "b", "next");
     assert_ne!(
         base.cid().expect("cid base"),
         with_edge.cid().expect("cid with-edge"),
@@ -128,12 +129,12 @@ fn migrated_subgraph_inv13_collision_stability_two_handlers_with_same_id_and_det
     // the stub shape both subgraphs would CID-collide because the encoder
     // would only see `(handler_id="x", deterministic=true)`. The
     // production shape includes nodes + edges, so they MUST differ.
-    let mut sg_lhs =
-        Subgraph::new("inv13-pin").with_node(OperationNode::new("op_left", PrimitiveKind::Read));
+    let mut sg_lhs = Subgraph::new("inv13-pin")
+        .push_node_raw(OperationNode::new("op_left", PrimitiveKind::Read));
     sg_lhs.set_deterministic(true);
 
-    let mut sg_rhs =
-        Subgraph::new("inv13-pin").with_node(OperationNode::new("op_right", PrimitiveKind::Write));
+    let mut sg_rhs = Subgraph::new("inv13-pin")
+        .push_node_raw(OperationNode::new("op_right", PrimitiveKind::Write));
     sg_rhs.set_deterministic(true);
 
     assert_eq!(sg_lhs.handler_id(), sg_rhs.handler_id());
@@ -155,9 +156,9 @@ fn migrated_subgraph_inv13_collision_stability_two_handlers_with_same_id_and_det
 #[test]
 fn migrated_subgraph_dagcbor_round_trip_preserves_full_shape() {
     let mut sg = Subgraph::new("dagcbor-rt")
-        .with_node(OperationNode::new("a", PrimitiveKind::Read))
-        .with_node(OperationNode::new("b", PrimitiveKind::Respond))
-        .with_edge("a", "b", "next");
+        .push_node_raw(OperationNode::new("a", PrimitiveKind::Read))
+        .push_node_raw(OperationNode::new("b", PrimitiveKind::Respond))
+        .push_edge_raw("a", "b", "next");
     sg.set_deterministic(true);
 
     let bytes = sg.to_dagcbor().expect("encode");

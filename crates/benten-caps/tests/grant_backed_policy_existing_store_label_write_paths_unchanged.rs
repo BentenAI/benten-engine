@@ -8,22 +8,22 @@
 //!
 //! ## What this pin verifies
 //!
-//! G27-B threads `WriteContext::scope` through derivation. The
+//! G27-B threads `CapWriteContext::scope` through derivation. The
 //! REGRESSION risk: callers that DO NOT populate `scope` (Phase-1
 //! `crud('<label>')` zero-config callers + their existing tests +
 //! the engine's own privileged-write call sites) must continue to
 //! see the EXACT same label-derived `store:<label>:write` shape.
 //!
 //! Pin shape:
-//! 1. Construct a `WriteContext` with `label = "post"` + `scope = ""`
-//!    (the Phase-1 default — `WriteContext::default()` shape).
+//! 1. Construct a `CapWriteContext` with `label = "post"` + `scope = ""`
+//!    (the Phase-1 default — `CapWriteContext::default()` shape).
 //! 2. Mint a grant for `"store:post:write"` (the derived shape).
 //! 3. Assert `check_write(&ctx) == Ok(())` — the policy still
 //!    derives the canonical CRUD scope from the label when `scope`
 //!    is empty.
 //!
 //! Would-FAIL-if-no-op'd: G27-B implementer makes
-//! `WriteContext::scope` REQUIRED (drops the label-derivation
+//! `CapWriteContext::scope` REQUIRED (drops the label-derivation
 //! fallback); every Phase-1 caller flips to deny. This pin catches
 //! that regression at G27-B mini-review time.
 //!
@@ -37,7 +37,7 @@
 
 use std::sync::Arc;
 
-use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, GrantBackedPolicy, GrantReader};
 
 struct MockGrants {
     grants: Vec<String>,
@@ -60,27 +60,27 @@ impl GrantReader for MockGrants {
 /// RED-PHASE: G27-B backward-compat regression guard.
 ///
 /// Verifies that the canonical Phase-1 `crud('<label>')` flow continues
-/// to derive `store:<label>:write` from `WriteContext::label` when
-/// `WriteContext::scope` is empty.
+/// to derive `store:<label>:write` from `CapWriteContext::label` when
+/// `CapWriteContext::scope` is empty.
 #[test]
 fn grant_backed_policy_existing_store_label_write_paths_unchanged_when_scope_unset() {
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
 
     // Phase-1 caller shape: label populated, scope left empty (default).
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "post".into(),
         // scope: "" (default)
         ..Default::default()
     };
 
     // Backward-compat: the label-derived `store:post:write` MUST
-    // still match the granted scope when `WriteContext::scope` is
+    // still match the granted scope when `CapWriteContext::scope` is
     // empty. Would-FAIL: G27-B implementer makes scope required;
     // every Phase-1 caller flips to deny.
     policy
         .check_write(&ctx)
-        .expect("Phase-1 label-derived store:<label>:write shape MUST remain functional when WriteContext::scope is empty");
+        .expect("Phase-1 label-derived store:<label>:write shape MUST remain functional when CapWriteContext::scope is empty");
 }
 
 /// RED-PHASE: empty-label + empty-scope continues to be a fail-closed
@@ -91,10 +91,10 @@ fn grant_backed_policy_empty_label_empty_scope_continues_to_deny_unstructured() 
     let grants = MockGrants::new(&["store:post:write"]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext::default();
+    let ctx = CapWriteContext::default();
     let err = policy
         .check_write(&ctx)
-        .expect_err("empty/unstructured WriteContext must continue to deny");
+        .expect_err("empty/unstructured CapWriteContext must continue to deny");
     assert!(
         matches!(err, CapError::Denied { .. }),
         "G27-B backward-compat: empty-batch must still be denied (r6-sec-8 (a) inheritance); got {err:?}"

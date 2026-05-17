@@ -54,14 +54,16 @@ fn inv_13_dedup_path_does_not_advance_audit_sequence() {
         .build()
         .unwrap();
 
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
 
     let _cid_1 = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("first issuance");
 
     let seq_before = engine.audit_sequence();
     let _cid_2 = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("dedup path");
     let seq_after = engine.audit_sequence();
@@ -91,7 +93,7 @@ fn inv_13_first_put_advances_audit_sequence() {
         .unwrap();
 
     let seq_initial = engine.audit_sequence();
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     let seq_after_principal = engine.audit_sequence();
     assert!(
         seq_after_principal > seq_initial,
@@ -101,6 +103,7 @@ fn inv_13_first_put_advances_audit_sequence() {
 
     let seq_before_grant = engine.audit_sequence();
     let _cid = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("first issuance must succeed");
     let seq_after_grant = engine.audit_sequence();

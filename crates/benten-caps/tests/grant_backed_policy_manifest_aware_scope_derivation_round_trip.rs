@@ -41,7 +41,7 @@ use std::sync::Arc;
 use benten_caps::manifest_scope::{
     REQUIRES_PREFIX, manifest_requires_to_scope, manifest_shares_to_scope,
 };
-use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, GrantBackedPolicy, GrantReader};
 use benten_id::did::Did;
 use benten_platform_foundation::{
     CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget,
@@ -131,7 +131,7 @@ fn manifest_aware_scope_derivation_round_trip() {
         .find(|s| s.starts_with(REQUIRES_PREFIX))
         .expect("at least one requires-prefixed scope")
         .clone();
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: String::new(),
         scope: scope.clone(),
         ..Default::default()
@@ -143,7 +143,7 @@ fn manifest_aware_scope_derivation_round_trip() {
     // Step 3: inverse arm — scope outside envelope denies.
     let empty_grants = Arc::new(MockGrants { grants: vec![] });
     let policy_2 = GrantBackedPolicy::new(empty_grants);
-    let ctx_2 = WriteContext {
+    let ctx_2 = CapWriteContext {
         label: String::new(),
         scope: scope.clone(),
         ..Default::default()

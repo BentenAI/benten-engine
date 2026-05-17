@@ -1,4 +1,4 @@
-//! The [`CapabilityPolicy`] pre-write hook trait + [`WriteContext`] +
+//! The [`CapabilityPolicy`] pre-write hook trait + [`CapWriteContext`] +
 //! [`ReadContext`].
 //!
 //! The policy fires at commit time (not per-WRITE) so a multi-write
@@ -27,7 +27,7 @@ pub use benten_core::WriteAuthority;
 /// DID / VC identity. Phase 3 `benten-id` replaces it with a typed principal.
 ///
 /// A pending write enqueued inside the transaction primitive's batch.
-/// G3-A landed the [`WriteContext::pending_ops`] surface (R4 pass-2 residual
+/// G3-A landed the [`CapWriteContext::pending_ops`] surface (R4 pass-2 residual
 /// g4-uc-5) so commit-time policies can reason about the whole batch — not
 /// just the "primary" op reflected in the convenience fields.
 ///
@@ -96,10 +96,10 @@ pub enum PendingOp {
 /// privileged-flag for engine-internal writes. Backends inspect these to
 /// decide whether to authorize the transaction.
 #[derive(Debug, Clone, Default)]
-pub struct WriteContext {
+pub struct CapWriteContext {
     /// Label of the Node about to be written. For multi-op batches this
     /// carries the primary label of the first op (convenience field;
-    /// structured routing should use [`WriteContext::pending_ops`]).
+    /// structured routing should use [`CapWriteContext::pending_ops`]).
     pub label: String,
     /// Actor CID identity (Phase 3). `None` in Phase 1; reserved so the
     /// struct shape is stable across phases.
@@ -140,13 +140,13 @@ pub struct WriteContext {
     ///
     /// Engine-side production-runtime threading lands in the post-canary
     /// wave (the engine write-path call sites populate the field at
-    /// `WriteContext`-construction time per the
+    /// `CapWriteContext`-construction time per the
     /// `crates/benten-engine/tests/device_cid_runtime_arm.rs::capability_policy_per_device_cid_dispatch_observable_in_runtime_arm`
     /// pin's concrete-shape narrative).
     pub device_cid: Option<Cid>,
 }
 
-impl WriteContext {
+impl CapWriteContext {
     /// Construct a lightweight synthetic context for unit tests. Fields are
     /// stable-but-synthetic placeholders so the unit-test surface does not
     /// depend on the evaluator being wired in.
@@ -185,7 +185,7 @@ pub struct ReadContext {
     /// Actor CID identity (Phase 3). Reserved.
     pub actor_cid: Option<Cid>,
     /// Phase-3 G16-B canary (r4b-cap-3 BLOCKER closure): device-grain
-    /// CID context paired with [`WriteContext::device_cid`]. `None` for
+    /// CID context paired with [`CapWriteContext::device_cid`]. `None` for
     /// non-attested reads; `Some(cid)` for reads originating from a
     /// device that presented a `DeviceAttestation` envelope at the
     /// thin-client / sync seam. Per D-PHASE-3-25, heterogeneous policies
@@ -265,7 +265,7 @@ pub trait CapabilityPolicy: Send + Sync {
     ///
     /// Implementations return [`CapError`] for any denial or backend failure.
     /// The default [`crate::NoAuthBackend`] always returns `Ok(())`.
-    fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError>;
+    fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError>;
 
     /// Permit or deny an incoming read.
     ///
@@ -273,13 +273,31 @@ pub trait CapabilityPolicy: Send + Sync {
     ///
     /// A backend that chooses to DENY a read returns
     /// [`CapError::DeniedRead`], which surfaces "this CID exists but you
-    /// cannot see it" — leaking existence to an unauthorized caller. Phase 3
-    /// `benten-id` revisits once the identity surface lands and silent-`None`
-    /// (indistinguishable from not-found) becomes safe to attribute.
+    /// cannot see it" — leaking existence to an unauthorized caller. The
+    /// identity surface this was waiting on HAS shipped:
+    /// `Engine::read_node_as` (Class B β, PR #184) + the Phase-4-Foundation
+    /// R1 cap-r1-2 principal-aware read path on
+    /// [`crate::GrantBackedPolicy`]. The named-compromise-#2 disposition
+    /// (silent-`None` vs `DeniedRead`) post-identity-surface is a
+    /// v1-API-stabilization decision tracked at
+    /// `docs/future/phase-4-backlog.md` §4.43 (issue #887).
     ///
-    /// Phase 1 default: permit every read. Embedded and local-only
-    /// deployments pay nothing; capability-scoped reads are an opt-in
-    /// backend concern.
+    /// **Default: PERMIT EVERY READ.** This is correct ONLY for
+    /// permit-all dev/embedded policies (e.g. [`crate::NoAuthBackend`]).
+    ///
+    /// # ⚠️ WARNING for production policy authors
+    ///
+    /// Reads are a cap-bearing surface. If you implement a non-trivial
+    /// [`CapabilityPolicy::check_write`] but DO NOT override `check_read`,
+    /// every read silently fail-OPENs through your policy — the engine's
+    /// identity surface (`Engine::read_node_as` + cap-r1-2 principal-aware
+    /// path on [`crate::GrantBackedPolicy`]) IS shipped, so a forgotten
+    /// `check_read` override is now a real authorization gap, not a
+    /// Phase-1 placeholder. Any policy that gates writes by principal
+    /// MUST also gate reads (or explicitly opt into permit-all reads with
+    /// a comment documenting the intent). [`crate::GrantBackedPolicy`] +
+    /// [`crate::UcanGroundedPolicy`] override this correctly; use one of
+    /// them as the reference shape.
     ///
     /// # Errors
     ///

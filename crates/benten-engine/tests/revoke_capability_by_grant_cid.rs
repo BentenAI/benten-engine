@@ -61,8 +61,9 @@ fn revoke_capability_by_grant_cid_denies_post_revoke_write() {
         .expect("engine opens with grant-backed policy");
 
     let handler_id = engine.register_crud("post").unwrap();
-    let actor = engine.create_principal("carol").unwrap();
+    let actor = engine.caps().create_principal("carol").unwrap();
     let grant_cid = engine
+        .caps()
         .grant_capability(&actor, "store:post:write")
         .expect("grant via privileged path");
 
@@ -74,6 +75,7 @@ fn revoke_capability_by_grant_cid_denies_post_revoke_write() {
 
     // Revoke by grant CID — the seam the napi surface consumes.
     engine
+        .caps()
         .revoke_capability_by_grant_cid(&grant_cid, &actor)
         .expect("revoke by grant CID resolves scope + writes revocation");
 
@@ -106,7 +108,7 @@ fn revoke_capability_by_grant_cid_unknown_cid_errors_not_found() {
         .build()
         .expect("engine opens with grant-backed policy");
 
-    let actor = engine.create_principal("mallory").unwrap();
+    let actor = engine.caps().create_principal("mallory").unwrap();
     // A CID that is well-formed but does not resolve to any stored Node.
     // We mint one by hashing an arbitrary throwaway Node and then NOT
     // writing it to the backend.
@@ -114,6 +116,7 @@ fn revoke_capability_by_grant_cid_unknown_cid_errors_not_found() {
     let synthetic_cid = throwaway.cid().expect("cid mint");
 
     let err = engine
+        .caps()
         .revoke_capability_by_grant_cid(&synthetic_cid, &actor)
         .expect_err("unknown grant CID MUST surface a typed not-found error");
     let code = err.code();
@@ -137,10 +140,11 @@ fn revoke_capability_by_grant_cid_wrong_label_errors_not_found() {
         .build()
         .expect("engine opens with grant-backed policy");
 
-    let actor = engine.create_principal("eve").unwrap();
+    let actor = engine.caps().create_principal("eve").unwrap();
     // The principal Node IS in the backend (we just created it) but its
     // label is `system:Principal`, not `system:CapabilityGrant`.
     let err = engine
+        .caps()
         .revoke_capability_by_grant_cid(&actor, &actor)
         .expect_err("non-grant CID MUST surface a typed not-found error");
     assert_eq!(

@@ -102,7 +102,7 @@ pub fn build_five_step_handler_for_test() -> Subgraph {
         let id = format!("n{idx}");
         let op =
             OperationNode::new(id, kind).with_property(ATTRIBUTION_PROPERTY_KEY, Value::Bool(true));
-        sg = sg.with_node(op);
+        sg = sg.push_node_raw(op);
     }
     sg
 }
@@ -118,8 +118,8 @@ pub fn build_subgraph_with_undeclared_attribution_for_test() -> Subgraph {
     let declared = OperationNode::new("n1", PrimitiveKind::Respond)
         .with_property(ATTRIBUTION_PROPERTY_KEY, Value::Bool(true));
     Subgraph::new("inv14:undeclared")
-        .with_node(bad)
-        .with_node(declared)
+        .push_node_raw(bad)
+        .push_node_raw(declared)
 }
 
 #[cfg(test)]

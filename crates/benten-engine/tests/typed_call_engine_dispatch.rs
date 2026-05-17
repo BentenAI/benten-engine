@@ -770,7 +770,7 @@ fn vc_verify_returns_false_when_credential_is_expired_at_now() {
 /// at runtime — pim-2 §3.6b end-to-end requirement.
 #[test]
 fn typed_call_cap_denied_via_capability_policy_returns_on_denied_edge() {
-    use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+    use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
     use benten_eval::primitives::call;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -783,7 +783,7 @@ fn typed_call_cap_denied_via_capability_policy_returns_on_denied_edge() {
         denied_count: Arc<AtomicU32>,
     }
     impl CapabilityPolicy for DenyTypedCryptoSign {
-        fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError> {
+        fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
             if ctx.label == "cap:typed:crypto-sign" {
                 self.denied_count.fetch_add(1, Ordering::SeqCst);
                 return Err(CapError::Denied {
@@ -882,7 +882,7 @@ fn typed_call_cap_denied_routes_on_denied_other_three_route_on_error() {
 /// valid signature.
 #[test]
 fn dispatch_typed_call_public_napi_entry_gates_on_capability_policy() {
-    use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+    use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
     use benten_engine::EngineError;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -893,7 +893,7 @@ fn dispatch_typed_call_public_napi_entry_gates_on_capability_policy() {
         denied_count: Arc<AtomicU32>,
     }
     impl CapabilityPolicy for DenyTypedCryptoSign {
-        fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError> {
+        fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
             if ctx.label == "cap:typed:crypto-sign" {
                 self.denied_count.fetch_add(1, Ordering::SeqCst);
                 return Err(CapError::Denied {

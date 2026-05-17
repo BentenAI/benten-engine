@@ -62,8 +62,8 @@
 use std::sync::Arc;
 
 use benten_caps::{
-    CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, UCANBackend, UcanGroundedPolicy,
-    WriteContext,
+    CapError, CapWriteContext, CapabilityPolicy, GrantBackedPolicy, GrantReader, UCANBackend,
+    UcanGroundedPolicy,
 };
 use benten_graph::RedbBackend;
 use benten_id::keypair::Keypair;
@@ -132,7 +132,7 @@ fn valid_audience_plus_valid_time_window_permits() {
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 1_000_000_000);
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "cap:typed:crypto-sign".to_string(),
         scope: "cap:typed:crypto-sign".to_string(),
         actor_hint: Some(active_did.clone()),
@@ -175,7 +175,7 @@ fn wrong_audience_plus_valid_time_window_rejects() {
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 1_000_000_000);
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "cap:typed:crypto-sign".to_string(),
         scope: "cap:typed:crypto-sign".to_string(),
         actor_hint: Some(attacker_did.clone()),
@@ -234,8 +234,8 @@ fn missing_principal_did_with_typed_cap_requirement_falls_back_to_audience_less_
     // Preserves engine-internal typed-CALL paths that don't yet thread
     // actor (e.g., `Engine::dispatch_typed_call_public` at
     // `engine_wait.rs::881-891`). Full actor-threading is the
-    // cap-r1-16 + WriteContext::now follow-up at G24-D files-owned.
-    let ctx = WriteContext {
+    // cap-r1-16 + CapWriteContext::now follow-up at G24-D files-owned.
+    let ctx = CapWriteContext {
         label: "cap:typed:crypto-sign".to_string(),
         scope: "cap:typed:crypto-sign".to_string(),
         actor_hint: None,
@@ -267,7 +267,7 @@ fn valid_audience_plus_expired_time_window_rejects_via_time_check() {
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 200);
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "cap:typed:crypto-sign".to_string(),
         scope: "cap:typed:crypto-sign".to_string(),
         actor_hint: Some(active_did.clone()),

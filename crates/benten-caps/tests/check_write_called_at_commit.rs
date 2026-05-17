@@ -11,7 +11,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, NoAuthBackend, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, NoAuthBackend};
 use std::sync::{Arc, Mutex};
 
 /// Capability policy that counts how many times `check_write` is called.
@@ -34,7 +34,7 @@ impl CountingPolicy {
 }
 
 impl CapabilityPolicy for CountingPolicy {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         *self.count.lock().unwrap() += 1;
         if self.should_deny {
             // g4-cr-5: `DeniedDetail` merged into `Denied`.

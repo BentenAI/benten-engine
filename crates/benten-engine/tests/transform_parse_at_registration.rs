@@ -22,9 +22,9 @@ fn build_subgraph_with_transform_expr(expr: &str, handler_id: &str) -> Subgraph 
         .with_property("expr", Value::Text(expr.to_string()));
     let respond_node = OperationNode::new("r0", PrimitiveKind::Respond);
     Subgraph::new(handler_id)
-        .with_node(transform_node)
-        .with_node(respond_node)
-        .with_edge("t0", "r0", "ok")
+        .push_node_raw(transform_node)
+        .push_node_raw(respond_node)
+        .push_edge_raw("t0", "r0", "ok")
 }
 
 #[test]
@@ -66,9 +66,9 @@ fn transform_without_expr_property_registers_cleanly() {
     let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
 
     let sg = Subgraph::new("no_expr")
-        .with_node(OperationNode::new("t0", PrimitiveKind::Transform))
-        .with_node(OperationNode::new("r0", PrimitiveKind::Respond))
-        .with_edge("t0", "r0", "ok");
+        .push_node_raw(OperationNode::new("t0", PrimitiveKind::Transform))
+        .push_node_raw(OperationNode::new("r0", PrimitiveKind::Respond))
+        .push_edge_raw("t0", "r0", "ok");
     engine
         .register_subgraph(sg)
         .expect("missing `expr` is a runtime ON_ERROR, not a registration-time failure");

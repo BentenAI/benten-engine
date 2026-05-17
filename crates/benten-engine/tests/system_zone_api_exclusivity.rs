@@ -79,6 +79,7 @@ fn grant_capability_only_via_engine_api() {
 
     // The privileged API path.
     let cid = engine
+        .caps()
         .grant_capability("post:write", "test-subject")
         .expect("engine.grant_capability must succeed as privileged path");
 
@@ -129,10 +130,12 @@ fn revoke_capability_only_via_engine_api() {
         .unwrap();
 
     let grant_cid = engine
+        .caps()
         .grant_capability("post:write", "test-subject")
         .unwrap();
     // Privileged revocation — must succeed.
     engine
+        .caps()
         .revoke_capability(grant_cid, "post:write")
         .expect("engine.revoke_capability is a privileged path");
 }

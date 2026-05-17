@@ -16,7 +16,7 @@
 //! evaluator (G6) honors it.
 
 use crate::error::CapError;
-use crate::policy::{CapabilityPolicy, WriteContext};
+use crate::policy::{CapWriteContext, CapabilityPolicy};
 
 /// Phase-1 UCAN capability backend stub. Every `check_write` call
 /// returns [`CapError::NotImplemented`] with `backend = "UCANBackend"`
@@ -44,7 +44,7 @@ impl LegacyUcanStubBackend {
 }
 
 impl CapabilityPolicy for LegacyUcanStubBackend {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Err(CapError::NotImplemented {
             backend: "UCANBackend",
             lands_in_phase: 3,
