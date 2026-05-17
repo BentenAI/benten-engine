@@ -4,6 +4,13 @@
 //! (integration tests in this crate, the bench-gate `tests/algorithm_b_within_20pct_gate.rs`)
 //! need to call into them. The module is documented as test/dev surface;
 //! production code paths construct views via the per-view `::new()` ctors.
+//!
+//! **refinement-audit #921 (v1 SemVer disposition):** the helpers here ARE
+//! intentionally part of the permanent published API — the cross-crate
+//! test-harness surface, by design, not an accidental leak. This is an
+//! explicit decision, not a defect: v1 SemVer-locks `pub mod testing` as a
+//! supported (dev-oriented) surface; removing it would break in-workspace
+//! integration + bench-gate test crates.
 
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};

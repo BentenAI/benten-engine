@@ -28,6 +28,14 @@ use alloc::string::{String, ToString};
 
 use crate::ViewError;
 
+/// The "effectively unbounded" budget sentinel — the common case for
+/// production views, which run without a per-update work cap.
+///
+/// refinement-audit #701: every Phase-1 view previously declared its own
+/// `const UNLIMITED_BUDGET: u64 = u64::MAX;`. Lifted here as the single
+/// shared definition (`pub(crate)` — internal helper, not published API).
+pub(crate) const UNLIMITED_BUDGET: u64 = u64::MAX;
+
 /// Per-view runtime budget + stale flag bundle.
 ///
 /// See module docs for the contract.
@@ -53,6 +61,13 @@ impl BudgetTracker {
             original: max,
             stale: false,
         }
+    }
+
+    /// Construct an effectively-unbounded tracker — the common case for
+    /// production views. Equivalent to `BudgetTracker::new(UNLIMITED_BUDGET)`.
+    #[must_use]
+    pub const fn unlimited() -> Self {
+        Self::new(UNLIMITED_BUDGET)
     }
 
     /// Remaining budget. Primarily useful for diagnostics.

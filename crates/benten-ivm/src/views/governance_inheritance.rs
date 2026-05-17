@@ -36,7 +36,6 @@ use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResul
 pub const MAX_GOVERNANCE_DEPTH: usize = 5;
 
 const VIEW_ID: &str = "governance_inheritance";
-const UNLIMITED_BUDGET: u64 = u64::MAX;
 
 /// View 4 — governance inheritance transitive closure.
 #[derive(Debug)]
@@ -55,7 +54,7 @@ impl GovernanceInheritanceView {
     pub fn new() -> Self {
         Self {
             parent: BTreeMap::new(),
-            budget: BudgetTracker::new(UNLIMITED_BUDGET),
+            budget: BudgetTracker::unlimited(),
         }
     }
 

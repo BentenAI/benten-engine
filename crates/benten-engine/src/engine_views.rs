@@ -820,7 +820,13 @@ impl Engine {
                     benten_ivm::Projection::all_props(),
                 ) {
                     Ok(view) => {
-                        ivm.register_view(Box::new(view));
+                        // refinement-audit #628: atomic check-and-append.
+                        // The `view_ids().any(...)` above is a cheap
+                        // fast-path; the registration itself dedupes under
+                        // the subscriber lock to close the TOCTOU window
+                        // (a concurrent registrar could append the same id
+                        // between the check and here).
+                        ivm.register_view_if_absent(Box::new(view));
                     }
                     Err(benten_ivm::AlgorithmError::ViewLabelMismatch {
                         view_id,

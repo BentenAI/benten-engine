@@ -19,8 +19,8 @@
 //!   [`ViewDefinition`], and the shared query/result shapes.
 //! - [`budget`] — [`BudgetTracker`], the shared `remaining/original/stale`
 //!   state machine used by every Phase-1 view (r6-ref R-major-02).
-//! - [`subscriber`] — [`Subscriber`] / [`ChangeStreamSubscriber`], the
-//!   fan-out that dispatches change events to every registered view.
+//! - [`subscriber`] — [`Subscriber`], the fan-out that dispatches change
+//!   events to every registered view.
 //! - [`views`] — the five Phase 1 hand-written view implementations.
 //!
 //! Beyond the five hand-written Phase-1 views, the crate also ships the
@@ -49,13 +49,17 @@ pub use algorithm_b::{
     Algorithm, AlgorithmBView, AlgorithmError, LabelPattern, Projection, dispatch_for,
     hardcoded_label_for_id, is_canonical_view_id,
 };
-pub use budget::BudgetTracker;
+// refinement-audit #346: `BudgetTracker` has zero external callers — it is
+// an internal per-view helper. The crate-root re-export is narrowed to
+// `pub(crate)` so the type stays reachable as `crate::BudgetTracker` for the
+// view submodules without being part of the published API surface. (The
+// `pub` on the struct in `mod budget` is retained for crate-internal module
+// reachability; the v1 published surface no longer includes it.)
+pub(crate) use budget::BudgetTracker;
 pub use strategy::Strategy;
 pub use subgraph_spec::{KernelInput, KernelOutput, SubgraphSpec, TypedOutputProjection};
-pub use subscriber::{ChangeStreamSubscriber, Subscriber};
-pub use view::{
-    IvmError, View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState,
-};
+pub use subscriber::Subscriber;
+pub use view::{View, ViewBudget, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 // TODO(IVM criterion benchmarks): criterion benchmarks against
 // RESULTS.md §1 targets — one target per view (capability lookup,

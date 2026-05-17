@@ -366,6 +366,14 @@ impl Engine {
             let already_registered = ivm.view_ids().iter().any(|id| id == view_id);
             if !already_registered && let Some(label) = input_pattern_label.as_deref() {
                 let view = benten_ivm::views::ContentListingView::new(label);
+                // refinement-audit #628: NOT migrated to register_view_if_absent
+                // here, for the same reason engine.rs:3097 was deliberately left
+                // un-migrated — `ContentListingView::id()` returns a constant
+                // ("content_listing"), so id-keyed atomic dedup would collapse
+                // distinct per-label content-listing views into one (the
+                // `already_registered` fast-path above keys on the per-label
+                // semantic `view_id`, which is the real discriminator). The
+                // unconditional append preserves correct per-label registration.
                 ivm.register_view(Box::new(view));
                 // Non-content-listing canonical view ids (capability_grants,
                 // event_dispatch, governance_inheritance, version_current) are
