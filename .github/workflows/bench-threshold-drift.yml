@@ -66,6 +66,7 @@ jobs:
             # one value per file.
             ["crates/benten-caps/benches/wallclock_toctou_refresh.rs"]="informational"
             ["crates/benten-engine/benches/option_c_evaluator_path_overhead.rs"]="informational"
+            ["crates/benten-engine/benches/change_broadcast_prefilter.rs"]="informational"
             ["crates/benten-engine/benches/change_event_fanout.rs"]="informational"
             ["crates/benten-engine/benches/end_to_end_create.rs"]="informational"
             ["crates/benten-engine/benches/roundtrip.rs"]="informational"
