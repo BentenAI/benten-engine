@@ -66,7 +66,9 @@ pub struct Did(String, PhantomData<()>);
 
 // sec-r6r3-1 + sec-r6r3-2 closure (R6 R3 threat-model + security-auditor
 // lenses): defensive `compile_error!` companion mirror to the native-only
-// `validate_chain_with_manifest_envelope` function below (line 207+).
+// `validate_chain_with_manifest_envelope` function defined later in this
+// module (Hyg-3 #453: brittle "line 207+" cite removed — line numbers
+// drift on every edit; reference the symbol, not a line).
 // Per CLAUDE.md baked-in #17(b) the wasm32 thin-client deployment shape
 // does NOT perform UCAN chain validation — that lives only on full peers
 // (shape a) and embedded webview's embedded-full-peer (shape c). If a
@@ -100,18 +102,14 @@ pub struct DelegationStep {
     pub cap_pattern: String,
 }
 
-/// Anchor of a delegation chain — the root principal.
-///
-/// Per CLAUDE.md #18 clause-(a) the anchor MUST be a user-DID.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ChainAnchor {
-    /// User-DID — the only legitimate root anchor.
-    UserDid(Did),
-    /// Non-user root — rejected with [`ErrorCode::PluginManifestInvalid`]
-    /// (see [`validate_chain_with_manifest_envelope`] for the explicit
-    /// surface error).
-    NonUser(Did),
-}
+// Qual-2 #816 (umbrella #1154): the `ChainAnchor` enum
+// (`UserDid`/`NonUser`) was authored for a structural classification
+// step that `validate_chain_with_manifest_envelope` then inlined — it
+// emits the `RootNotUserDid` / `Admitted` outcome variants directly
+// and never constructed a `ChainAnchor`. Zero consumers crate-wide
+// (already excluded from the lib.rs re-export per the disposition
+// comment there). Deleted per CLAUDE.md #5 (fresh project — delete,
+// don't comment) + META #355 speculative-pub-surface cleanup.
 
 /// Trait for resolving a plugin-DID to its manifest's `shares` policy
 /// view.
@@ -143,11 +141,31 @@ pub trait UserDidRegistry {
     fn is_user_did(&self, did: &Did) -> bool;
 }
 
+/// Maximum delegation-chain depth the manifest-envelope walker will
+/// process. Bounds the multiplicative-DoS surface called out in
+/// Safe-2 #543: `iter_installed_proofs × chain.len()` had no input
+/// bound at the security-sensitive Layer-2↔Layer-3 walker, while the
+/// sibling [`crate::grant_backed::GrantReaderConfig::max_chain_depth`]
+/// (default 64) already disciplined the UCAN reader path. Mirrors that
+/// 64-step ceiling so the two security-relevant chain walkers share
+/// one bound. A chain longer than this rejects with
+/// [`ChainValidationOutcome::ChainTooDeep`] BEFORE any per-step
+/// manifest lookup runs (fail-CLOSED, O(1) on the attack input).
+pub const MAX_CHAIN_DEPTH: usize = 64;
+
 /// Outcome of a full-chain validation walk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChainValidationOutcome {
     /// All steps fit the envelope; root anchors at user-DID.
     Admitted,
+    /// Chain length exceeds [`MAX_CHAIN_DEPTH`] — rejected before any
+    /// per-step manifest lookup runs (Safe-2 #543 DoS bound).
+    ChainTooDeep {
+        /// Observed chain length.
+        depth: usize,
+        /// Configured ceiling ([`MAX_CHAIN_DEPTH`]).
+        limit: usize,
+    },
     /// Root is not a user-DID — CLAUDE.md #18 clause-(a) violation.
     RootNotUserDid,
     /// An intermediate plugin-DID's manifest `shares` policy does not
@@ -178,6 +196,7 @@ impl ChainValidationOutcome {
     pub fn into_result(self) -> Result<(), ErrorCode> {
         match self {
             ChainValidationOutcome::Admitted => Ok(()),
+            ChainValidationOutcome::ChainTooDeep { .. } => Err(ErrorCode::CapChainTooDeep),
             ChainValidationOutcome::RootNotUserDid => Err(ErrorCode::PluginManifestInvalid),
             ChainValidationOutcome::StepOutsideEnvelope { .. } => {
                 Err(ErrorCode::PluginDelegationOutsideManifestEnvelope)
@@ -190,6 +209,24 @@ impl ChainValidationOutcome {
             }
             ChainValidationOutcome::Empty => Err(ErrorCode::PluginManifestInvalid),
         }
+    }
+}
+
+/// Fwd-1 #946 (umbrella #1143): single construction site for the
+/// `StepOutsideEnvelope` denial outcome. The pre-fix walker built this
+/// variant at TWO call sites with identical field shape but different
+/// source step (the chain-integrity check used `next`; the
+/// envelope-decision mapping used `step`). Consolidating to one helper
+/// keeps the clone localized + the error-attribution shape uniform.
+/// The clones are inherent (the outcome carries owned `Did`/`String`
+/// for the `'static` `ErrorCode` mapping boundary) and remain on the
+/// DENIAL path only — the happy path stays zero-alloc.
+#[cfg(not(target_arch = "wasm32"))]
+#[inline]
+fn step_outside_envelope(step: &DelegationStep) -> ChainValidationOutcome {
+    ChainValidationOutcome::StepOutsideEnvelope {
+        issuer_did: step.issuer_did.clone(),
+        cap_pattern: step.cap_pattern.clone(),
     }
 }
 
@@ -234,6 +271,19 @@ where
         return ChainValidationOutcome::Empty;
     }
 
+    // Safe-2 #543 DoS bound: reject an over-long chain BEFORE any
+    // per-step manifest lookup runs. Without this, a caller could feed
+    // an arbitrarily long `chain` and force `chain.len()` manifest
+    // lookups per `iter_installed_proofs` proof — a multiplicative
+    // walk with no input ceiling. Fail-CLOSED, O(1) on the attack
+    // input. Mirrors `GrantReaderConfig::max_chain_depth`.
+    if chain.len() > MAX_CHAIN_DEPTH {
+        return ChainValidationOutcome::ChainTooDeep {
+            depth: chain.len(),
+            limit: MAX_CHAIN_DEPTH,
+        };
+    }
+
     // Layer 1 — root must be a user-DID.
     let root_issuer = &chain[0].issuer_did;
     if !user_registry.is_user_did(root_issuer) {
@@ -248,10 +298,9 @@ where
         if let Some(next) = chain.get(idx + 1)
             && step.audience_did != next.issuer_did
         {
-            return ChainValidationOutcome::StepOutsideEnvelope {
-                issuer_did: next.issuer_did.clone(),
-                cap_pattern: next.cap_pattern.clone(),
-            };
+            // The NEXT step's issuer can't issue a cap it didn't
+            // receive — attribute the denial to `next` (#946 helper).
+            return step_outside_envelope(next);
         }
 
         // Private-namespace caps NEVER cross plugin boundaries —
@@ -282,10 +331,9 @@ where
         match decision {
             DelegationDecision::Permitted => {}
             DelegationDecision::OutsideEnvelope => {
-                return ChainValidationOutcome::StepOutsideEnvelope {
-                    issuer_did: step.issuer_did.clone(),
-                    cap_pattern: step.cap_pattern.clone(),
-                };
+                // This step's own issuer delegated outside its
+                // manifest envelope — attribute to `step` (#946 helper).
+                return step_outside_envelope(step);
             }
             DelegationDecision::PrivateNamespaceForbidden => {
                 return ChainValidationOutcome::PrivateNamespaceLeaked {
@@ -575,10 +623,29 @@ mod tests {
         let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
         // Integrity violation surfaces as StepOutsideEnvelope (the next
         // step's issuer can't issue what it didn't receive).
-        assert!(matches!(
-            outcome,
-            ChainValidationOutcome::StepOutsideEnvelope { .. }
-        ));
+        //
+        // Fwd-1 #946 (umbrella #1143) Track-1 regression pin: the
+        // chain-integrity path attributes the denial to the NEXT step
+        // (via `step_outside_envelope(next)`), distinct from the
+        // envelope-decision path (`two_step_chain_outside_envelope_
+        // rejected`, which attributes to `step`). Asserting the
+        // attributed `issuer_did`/`cap_pattern` here (not just a
+        // `matches!`) pins that the two-call-site → one-helper
+        // consolidation preserved the per-site source-step semantics.
+        match outcome {
+            ChainValidationOutcome::StepOutsideEnvelope {
+                issuer_did,
+                cap_pattern,
+            } => {
+                assert_eq!(
+                    issuer_did, plugin_x,
+                    "chain-integrity violation attributes to the NEXT \
+                     step's issuer (#946 helper `next` path)"
+                );
+                assert_eq!(cap_pattern, "store:notes:write");
+            }
+            other => panic!("expected StepOutsideEnvelope, got {other:?}"),
+        }
     }
 
     #[test]
@@ -613,5 +680,78 @@ mod tests {
         .into_result()
         .unwrap_err();
         assert_eq!(err, ErrorCode::PluginPrivateNamespaceDelegationForbidden);
+    }
+
+    // ---------------------------------------------------------------
+    // Safe-2 #543 closure-pin (umbrella #1148): the chain walker has a
+    // MAX_CHAIN_DEPTH bound. These exercise the real arm — a chain of
+    // (MAX_CHAIN_DEPTH + 1) steps rejects with `ChainTooDeep` BEFORE
+    // any per-step manifest lookup runs; a chain of exactly
+    // MAX_CHAIN_DEPTH steps is NOT rejected on the depth axis. If the
+    // depth check is reverted, the over-long-chain test fails (the
+    // walk would instead surface a per-step / Admitted outcome).
+    // ---------------------------------------------------------------
+
+    /// Build a user-rooted chain of `n` steps where every hop is
+    /// `user_did → user_did` (so the only thing under test is the
+    /// length bound, not the envelope semantics — step 0 is user-root,
+    /// and a self-issued audience keeps chain-integrity satisfied).
+    fn user_self_chain(n: usize) -> Vec<DelegationStep> {
+        (0..n)
+            .map(|_| DelegationStep {
+                issuer_did: user_did(),
+                audience_did: user_did(),
+                cap_pattern: "store:notes:write".into(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn chain_over_max_depth_rejected_before_lookup_543() {
+        let chain = user_self_chain(MAX_CHAIN_DEPTH + 1);
+        // An empty manifest map proves the rejection happens BEFORE any
+        // per-step manifest lookup — if the walker reached the lookup
+        // it would surface `NoManifestForIssuer`/`StepOutsideEnvelope`,
+        // not `ChainTooDeep`.
+        let lookup = TestManifestLookup {
+            map: HashMap::new(),
+        };
+        let reg = user_registry_with(user_did());
+        let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
+        assert_eq!(
+            outcome,
+            ChainValidationOutcome::ChainTooDeep {
+                depth: MAX_CHAIN_DEPTH + 1,
+                limit: MAX_CHAIN_DEPTH,
+            },
+            "over-long chain MUST reject on the depth bound (#543)"
+        );
+        assert_eq!(
+            outcome.into_result().unwrap_err(),
+            ErrorCode::CapChainTooDeep,
+            "ChainTooDeep maps to the existing E_CAP_CHAIN_TOO_DEEP code"
+        );
+    }
+
+    #[test]
+    fn chain_at_exactly_max_depth_not_rejected_on_depth_543() {
+        let chain = user_self_chain(MAX_CHAIN_DEPTH);
+        let lookup = TestManifestLookup {
+            map: HashMap::new(),
+        };
+        let reg = user_registry_with(user_did());
+        let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
+        // Exactly-at-limit is allowed PAST the depth gate — the bound
+        // is `>`, not `>=`. The walker then proceeds to the normal
+        // per-step semantics (here it surfaces `NoManifestForIssuer`
+        // at the first non-root step because the test fixture installs
+        // no manifests — that is the expected envelope outcome, NOT a
+        // depth rejection). The load-bearing assertion: a chain of
+        // exactly MAX_CHAIN_DEPTH does NOT trip `ChainTooDeep`.
+        assert!(
+            !matches!(outcome, ChainValidationOutcome::ChainTooDeep { .. }),
+            "a chain of exactly MAX_CHAIN_DEPTH must NOT trip the depth \
+             bound (boundary is `>`, not `>=`); got {outcome:?}"
+        );
     }
 }
