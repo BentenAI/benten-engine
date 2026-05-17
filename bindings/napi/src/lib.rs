@@ -749,6 +749,37 @@ mod napi_surface {
             attenuated_caps: Vec<String>,
         ) -> napi::Result<String> {
             let source = parse_cid(&source_grant_cid)?;
+            // #1206 closure (refinement-audit-2026-05) — napi-side
+            // plugin-DID format validation at the cdylib boundary
+            // (the Compromise #21 / #684 surface class). Pre-fix the
+            // raw `plugin_did` String was forwarded straight into the
+            // engine seam with NO inspection; a malformed audience DID
+            // (not a resolvable `did:key:z…`) would persist a
+            // delegation grant whose `actor` is un-resolvable junk —
+            // it could never match at policy-check time, silently
+            // dead-ending the delegation (the napi face of the
+            // META #593 auth-bypass cluster). `Did::resolve()` is the
+            // canonical validation primitive (W3C did:key:
+            // prefix + base58btc + Ed25519 multicodec + 32-byte
+            // pubkey round-trip). Rejected with a stable
+            // `E_PLUGIN_DID_MALFORMED:`-prefixed message; the catalog
+            // ErrorCode variant + TS mirror is a §3.5g
+            // cross-language-mirror mint deferred to the
+            // orchestrator-serialized post-COLLAPSE workspace sweep
+            // (P-II) — NOT minted in this single-crate lane.
+            {
+                use benten_id::did::Did;
+                let candidate = Did::from_string_unchecked(plugin_did.clone());
+                candidate.resolve().map_err(|e| {
+                    napi::Error::new(
+                        napi::Status::InvalidArg,
+                        format!(
+                            "E_PLUGIN_DID_MALFORMED: delegateCapability `pluginDid` \
+                             is not a resolvable did:key DID: {e}"
+                        ),
+                    )
+                })?;
+            }
             let cid = self
                 .inner
                 .caps()
@@ -1584,13 +1615,16 @@ mod napi_surface {
                     )
                 })?;
             let parsed_cid = parse_cid(&expected_cid)?;
-            // g14-c-mr-1: napi bridge currently runs through the
-            // unsigned-development verify path. Phase-3 G17-C wave-5b
-            // (TS-side SANDBOX named-manifest resolution) extends this
-            // surface with structured signing args (ucan chain bytes,
-            // registry pubkey, audience) — until then the napi caller
-            // explicitly opts into the unsigned relaxation, matching
-            // the pre-G14-C behavior.
+            // g14-c-mr-1: this convenience bridge runs through the
+            // UNSIGNED development verify path. #1206 closure
+            // (refinement-audit-2026-05): the signature-verifying
+            // surface is `installModuleSigned` below — production
+            // callers that install third-party / registry-published
+            // modules MUST use that surface. `installModule` stays as
+            // the explicit unsigned-development opt-in (matching the
+            // pre-G14-C behavior); the signed path is no longer
+            // paper-only at the cdylib boundary (the Compromise #21 /
+            // #684 / META #684 surface).
             let installed = self
                 .inner
                 .install_module(
@@ -1598,6 +1632,109 @@ mod napi_surface {
                     parsed_cid,
                     benten_engine::manifest_signing::ManifestVerifyArgs::unsigned_development(),
                 )
+                .map_err(engine_err)?;
+            Ok(installed.to_base32())
+        }
+
+        /// #1206 closure (refinement-audit-2026-05) — registry-signed
+        /// module install at the napi cdylib boundary.
+        ///
+        /// Pre-fix the napi binding exposed ONLY the unsigned
+        /// `installModule`, so EVERY module installed through the
+        /// Node.js binding bypassed signature verification regardless
+        /// of whether the manifest was signed — the live face of
+        /// Compromise #21 / #684 (napi cdylib install_module bypass)
+        /// at HEAD. This surface threads the publisher-registry trust
+        /// anchor through to the engine's existing
+        /// [`benten_engine::manifest_signing::ManifestVerifyArgs::registry`]
+        /// verifier (the v1 "defends anyone-can-publish" path per the
+        /// `manifest_signing` module contract — Ed25519 verify of the
+        /// manifest signature against an operator-deployed registry
+        /// public key, audience-bound to this engine's DID).
+        ///
+        /// `registry_pubkey_bytes` is the 32-byte Ed25519 registry
+        /// public key. `engine_audience_did` is this engine's
+        /// `did:key:z…` audience DID (cross-atrium replay defense).
+        /// `now_unix_secs` is the caller-supplied clock reading used
+        /// for proof-freshness (injected per the engine's
+        /// no-implicit-wall-clock discipline).
+        ///
+        /// The UCAN-chain + dual-path verification modes
+        /// (`ManifestVerifyArgs::ucan_chain` / `::dual`) are NOT
+        /// surfaced here — they require a napi UCAN-bytes parse
+        /// surface that does not yet exist; that extension is named
+        /// for the orchestrator-serialized engine+napi follow-on
+        /// (multi-crate, P-II), NOT this single-crate lane.
+        ///
+        /// Returns the installed manifest's CID.
+        #[napi(js_name = "installModuleSigned")]
+        pub fn install_module_signed(
+            &self,
+            manifest_json: serde_json::Value,
+            expected_cid: String,
+            registry_pubkey_bytes: Vec<u8>,
+            engine_audience_did: String,
+            now_unix_secs: i64,
+        ) -> napi::Result<String> {
+            use benten_id::did::Did;
+            use benten_id::keypair::PublicKey;
+
+            let manifest: benten_engine::ModuleManifest = serde_json::from_value(manifest_json)
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::InvalidArg,
+                        format!("installModuleSigned: malformed manifest JSON: {e}"),
+                    )
+                })?;
+            let parsed_cid = parse_cid(&expected_cid)?;
+
+            let pk_arr: [u8; 32] = registry_pubkey_bytes.as_slice().try_into().map_err(|_| {
+                napi::Error::new(
+                    Status::InvalidArg,
+                    format!(
+                        "E_REGISTRY_PUBKEY_MALFORMED: installModuleSigned `registryPubkeyBytes` \
+                         must be exactly 32 bytes (got {})",
+                        registry_pubkey_bytes.len()
+                    ),
+                )
+            })?;
+            let registry_pubkey = PublicKey::from_bytes(&pk_arr).ok_or_else(|| {
+                napi::Error::new(
+                    Status::InvalidArg,
+                    "E_REGISTRY_PUBKEY_MALFORMED: installModuleSigned `registryPubkeyBytes` \
+                     is not a valid Ed25519 public key"
+                        .to_string(),
+                )
+            })?;
+
+            let audience = Did::from_string_unchecked(engine_audience_did.clone());
+            audience.resolve().map_err(|e| {
+                napi::Error::new(
+                    Status::InvalidArg,
+                    format!(
+                        "E_PLUGIN_DID_MALFORMED: installModuleSigned `engineAudienceDid` \
+                         is not a resolvable did:key DID: {e}"
+                    ),
+                )
+            })?;
+
+            let now_u64 = u64::try_from(now_unix_secs).map_err(|_| {
+                napi::Error::new(
+                    Status::InvalidArg,
+                    "installModuleSigned `nowUnixSecs` must be a non-negative \
+                     unix-seconds integer"
+                        .to_string(),
+                )
+            })?;
+
+            let verify_args = benten_engine::manifest_signing::ManifestVerifyArgs::registry(
+                &registry_pubkey,
+                &audience,
+                now_u64,
+            );
+            let installed = self
+                .inner
+                .install_module(manifest, parsed_cid, verify_args)
                 .map_err(engine_err)?;
             Ok(installed.to_base32())
         }

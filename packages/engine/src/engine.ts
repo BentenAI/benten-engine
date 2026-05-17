@@ -238,6 +238,24 @@ interface NativeEngine {
   ) => NativeEmitSubscriptionJs;
   // Phase 2b wave-8c — module-manifest lifecycle bridges.
   installModule?: (manifestJson: unknown, expectedCid: string) => string;
+  // #1206 closure (refinement-audit-2026-05) — registry-signed
+  // module install at the napi cdylib boundary. `installModule`
+  // above runs the UNSIGNED development verify path; production
+  // callers installing third-party / registry-published modules
+  // MUST use this surface, which threads the publisher-registry
+  // trust anchor (32-byte Ed25519 pubkey + engine audience DID +
+  // caller clock) through to the engine's signature verifier.
+  // Closes the Compromise #21 / #684 napi cdylib install bypass for
+  // the registry-signed path (the v1 "defends anyone-can-publish"
+  // trust anchor). UCAN-chain / dual-path modes are a named
+  // engine+napi follow-on (multi-crate; not this single-crate lane).
+  installModuleSigned?: (
+    manifestJson: unknown,
+    expectedCid: string,
+    registryPubkeyBytes: Buffer,
+    engineAudienceDid: string,
+    nowUnixSecs: number,
+  ) => string;
   uninstallModule?: (cid: string) => void;
   computeManifestCid?: (manifestJson: unknown) => string;
   // Phase-3 G17-C wave-5b — module-BYTES registration (paired with

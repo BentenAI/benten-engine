@@ -39,6 +39,7 @@
 use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 
+use crate::CanonicalBytes;
 use crate::did::Did;
 use crate::errors::DidRotationError;
 use crate::keypair::{Keypair, PublicKey};
@@ -117,7 +118,7 @@ impl RotationAttestation {
     /// public key. Returns [`DidRotationError::BadSignature`] on
     /// mismatch.
     pub fn verify_signature_with(&self, old_pk: &PublicKey) -> Result<(), DidRotationError> {
-        let bytes = canonical_bytes(self);
+        let bytes = self.canonical_bytes();
         let sig_bytes: [u8; 64] = self
             .signature
             .as_slice()
@@ -133,20 +134,29 @@ impl RotationAttestation {
 
 /// Canonical-bytes encoding of the rotation attestation's signature
 /// input — `(previous_did, next_did, superseded_at)`. The signature
-/// field is intentionally excluded.
-fn canonical_bytes(attestation: &RotationAttestation) -> Vec<u8> {
-    #[derive(Serialize)]
-    struct SigInput<'a> {
-        previous_did: &'a str,
-        next_did: &'a str,
-        superseded_at: u64,
+/// field is intentionally excluded (signature self-reference hygiene
+/// per the [`CanonicalBytes`] contract).
+///
+/// Qual-2 #759: byte-identical reproduction of the prior free-fn
+/// `canonical_bytes(&RotationAttestation)` body, lifted onto the
+/// shared trait. The `SigInput` projection + DAG-CBOR encoding are
+/// unchanged (v1-wire-adjacent — §3.5m P-III; covered by the
+/// byte-equality pin in `tests/canonical_bytes_trait.rs`).
+impl crate::CanonicalBytes for RotationAttestation {
+    fn canonical_bytes(&self) -> Vec<u8> {
+        #[derive(Serialize)]
+        struct SigInput<'a> {
+            previous_did: &'a str,
+            next_did: &'a str,
+            superseded_at: u64,
+        }
+        serde_ipld_dagcbor::to_vec(&SigInput {
+            previous_did: &self.previous_did,
+            next_did: &self.next_did,
+            superseded_at: self.superseded_at,
+        })
+        .expect("DAG-CBOR encoding of fixed-shape SigInput cannot fail")
     }
-    serde_ipld_dagcbor::to_vec(&SigInput {
-        previous_did: &attestation.previous_did,
-        next_did: &attestation.next_did,
-        superseded_at: attestation.superseded_at,
-    })
-    .expect("DAG-CBOR encoding of fixed-shape SigInput cannot fail")
 }
 
 /// Rotate a keypair, producing a [`RotationAttestation`] signed by
@@ -179,7 +189,7 @@ pub fn rotate_keypair(
         superseded_at,
         signature: Vec::new(),
     };
-    let bytes = canonical_bytes(&attestation);
+    let bytes = attestation.canonical_bytes();
     let sig = old_kp.sign(&bytes);
     attestation.signature = sig.to_bytes().to_vec();
     Ok(attestation)

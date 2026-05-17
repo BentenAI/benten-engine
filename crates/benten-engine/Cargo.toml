@@ -291,3 +291,7 @@ harness = false
 [[bench]]
 name = "change_event_fanout"
 harness = false
+
+[[bench]]
+name = "change_broadcast_prefilter"
+harness = false
