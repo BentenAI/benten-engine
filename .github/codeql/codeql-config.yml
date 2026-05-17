@@ -1,0 +1,39 @@
+# CodeQL configuration for the Benten Engine (Rust).
+#
+# WHY THIS FILE EXISTS — test code is excluded repo-wide from CodeQL.
+#
+# Test fixtures legitimately use hard-coded cryptographic values. The F3
+# durable-replay-marker tests (e.g.
+# `crates/benten-caps/tests/collapse_p5_unified_ceiling.rs`) MUST present
+# a FIXED nonce twice to assert the replay marker REJECTS the replay — a
+# random nonce cannot exercise the replay-detection property at all. The
+# hard-coded `[0xA5u8; 32]` / `[0x5Au8; 32]` fixtures are correct and
+# required test methodology, NOT production crypto. Every production frame
+# nonce is CSPRNG-generated (`benten_sync::handshake::random_nonce` →
+# `SigningKey::generate(&mut OsRng)`); there is no hard-coded nonce on any
+# production path (independently re-verified). CodeQL's
+# `rust/hard-coded-cryptographic-value` query flags these test fixtures as
+# false positives.
+#
+# Excluding test code from static-analysis security scanning is standard
+# practice (test code is not a deployed attack surface) and prevents this
+# false positive from recurring campaign-wide across every replay /
+# signature / handshake fixture. Inline `// codeql[...]` suppression
+# comments are NOT honored by this repository's github/codeql-action
+# setup, so the fix is this config-level path exclusion (wired into
+# .github/workflows/codeql.yml via the init step's `config-file:` input).
+#
+# Rust is a compiled language for CodeQL; `paths-ignore` filters which
+# alerts are REPORTED by their source path (alerts originating in an
+# ignored path are dropped). That is exactly the desired behaviour here:
+# suppress alerts whose source location is test code.
+
+paths-ignore:
+  # Rust integration / e2e tests live in per-crate `tests/` directories.
+  - "**/tests/**"
+  # Conventional unit-test module / helper file naming.
+  - "**/*_test.rs"
+  - "**/test_*.rs"
+  # Benchmarks and examples are likewise not a deployed attack surface.
+  - "**/benches/**"
+  - "**/examples/**"
