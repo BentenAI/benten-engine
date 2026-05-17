@@ -14,8 +14,9 @@
 //! - [`RunResult`] — the terminal outcome of walking a whole subgraph.
 //! - [`Evaluator::run`] — iterative `step` loop that follows edge labels and
 //!   enforces Invariant 8's stopgap iteration budget.
-//! - [`Evaluator::run_with_trace`] — the tracing variant that records per-
-//!   node microsecond timings for `engine.trace(...)` (G8's DX deliverable).
+//! - [`Evaluator::run_with`] — the configurable variant ([`RunOptions`])
+//!   that records per-node microsecond timings for `engine.trace(...)`
+//!   (G8's DX deliverable) when `collect_trace` is set.
 //!
 //! Per Validated Design Decision #4, this walker is NOT Turing-complete —
 //! subgraphs are DAGs by invariant 1, iteration is bounded by invariant 8,
@@ -68,11 +69,78 @@ pub struct RunResult {
 
 /// Budget cap for [`Evaluator::run`] — covers Invariant 8's Phase-1 stopgap
 /// ("cumulative iteration budget"). Defaults to 100 000 primitive
-/// evaluations; callers override via [`Evaluator::run_with_budget`].
-///
-/// The full multiplicative-through-ITERATE form ships in Phase 2 once the
-/// iteration-budget plumbing is wired end-to-end.
+/// evaluations; callers override via [`RunOptions::budget`].
 pub const DEFAULT_ITERATION_BUDGET: u64 = 100_000;
+
+/// Options for [`Evaluator::run_with`] (v1-API-stabilization,
+/// refinement-audit #1145 / Qual-2 #763).
+///
+/// Collapses the former five suffix-stacked entry points
+/// (`run_with_budget` / `run_with_trace` / `run_with_trace_attributed` /
+/// `run_with_trace_attributed_capturing_with_budget`) — whose longest name
+/// read as a wave-decorated changelog rather than a Rust API — into a
+/// single builder. Every old method delegated to the private `run_inner`
+/// with different default-arg fillers; this surface makes the orthogonal
+/// axes explicit:
+///
+/// - `budget` — Inv-8 cumulative-step cap (default
+///   [`DEFAULT_ITERATION_BUDGET`]).
+/// - `attribution` — Inv-14 `(actor, handler, grant)` frame stamped onto
+///   every emitted [`TraceStep::Step`]; `None` = unattributed (in-crate
+///   structural suites only — production traces MUST attribute).
+/// - `collect_trace` — record per-step [`TraceStep`] rows.
+/// - `capture_on_err` — return the recorded trace ALONGSIDE any
+///   [`EvalError`] instead of dropping it on the error path (G12-A: the
+///   terminal `TraceStep::BudgetExhausted` row must reach the
+///   `engine.trace(...)` consumer). Only meaningful with `collect_trace`.
+///
+/// Use [`Evaluator::run`] for the all-defaults case; [`Evaluator::run_with`]
+/// otherwise.
+#[derive(Debug, Clone, Default)]
+pub struct RunOptions {
+    budget: Option<u64>,
+    attribution: Option<AttributionFrame>,
+    collect_trace: bool,
+    capture_on_err: bool,
+}
+
+impl RunOptions {
+    /// A fresh options set: default budget, no attribution, no trace.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Override the Inv-8 cumulative-step budget.
+    #[must_use]
+    pub fn budget(mut self, budget: u64) -> Self {
+        self.budget = Some(budget);
+        self
+    }
+
+    /// Stamp the supplied Inv-14 [`AttributionFrame`] onto every emitted
+    /// trace step.
+    #[must_use]
+    pub fn attribution(mut self, frame: AttributionFrame) -> Self {
+        self.attribution = Some(frame);
+        self
+    }
+
+    /// Record per-step [`TraceStep`] rows.
+    #[must_use]
+    pub fn collect_trace(mut self, yes: bool) -> Self {
+        self.collect_trace = yes;
+        self
+    }
+
+    /// Return the recorded trace alongside any [`EvalError`] rather than
+    /// dropping it on the error path (implies the trace is collected).
+    #[must_use]
+    pub fn capture_on_err(mut self, yes: bool) -> Self {
+        self.capture_on_err = yes;
+        self
+    }
+}
 
 impl Evaluator {
     /// Walk a subgraph iteratively from the entry node until a terminal edge
@@ -93,117 +161,62 @@ impl Evaluator {
         input: Value,
         host: &dyn PrimitiveHost,
     ) -> Result<RunResult, EvalError> {
-        self.run_with_budget(subgraph, input, host, DEFAULT_ITERATION_BUDGET)
-    }
-
-    /// Variant of [`Evaluator::run`] with a caller-supplied iteration budget.
-    ///
-    /// The budget caps how many primitive evaluations may run before the
-    /// walker aborts with the iteration-budget stopgap error. Provided so
-    /// hot-path benchmarks and deterministic-replay tests can pin the cap
-    /// explicitly.
-    ///
-    /// # Errors
-    ///
-    /// See [`Evaluator::run`].
-    pub fn run_with_budget(
-        &mut self,
-        subgraph: &Subgraph,
-        input: Value,
-        host: &dyn PrimitiveHost,
-        budget: u64,
-    ) -> Result<RunResult, EvalError> {
-        let (result, _trace) = self.run_inner(subgraph, input, host, budget, false, None);
+        let (result, _trace) =
+            self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, false, None);
         result
     }
 
-    /// Walk a subgraph and record per-step trace metadata.
+    /// Walk a subgraph under explicit [`RunOptions`].
     ///
-    /// Each returned [`TraceStep`] carries the node id, the microsecond
-    /// duration of its primitive execution, and any typed error edge the
-    /// step routed through. G8's `engine.trace` wraps this into the
-    /// developer-facing trace object.
+    /// v1-API-stabilization (refinement-audit #1145 / Qual-2 #763): this
+    /// single entry point replaces the former five suffix-stacked methods
+    /// (`run_with_budget` / `run_with_trace` / `run_with_trace_attributed`
+    /// / `run_with_trace_attributed_capturing_with_budget`). The orthogonal
+    /// axes (budget / attribution / trace-collection / capture-on-error)
+    /// are now explicit fields on [`RunOptions`] rather than encoded in the
+    /// method name.
     ///
-    /// Phase 2a G5-B-ii: Inv-14 runtime threading. Callers that have an
-    /// `(actor, handler, grant)` triple in scope should prefer
-    /// [`Evaluator::run_with_trace_attributed`] so every emitted
-    /// [`TraceStep::Step`] carries the originating
-    /// [`AttributionFrame`]. This unattributed entry point exists for
-    /// in-crate unit tests + the structural-only invariant suites that
-    /// drive the evaluator without an engine-side capability surface;
-    /// production traces must go through the attributed entry point.
+    /// Returns `(result, trace)` uniformly:
+    /// - `trace` is empty unless [`RunOptions::collect_trace`] was set.
+    /// - On the error path the trace is **retained** only if
+    ///   [`RunOptions::capture_on_err`] was set (G12-A: the terminal
+    ///   `TraceStep::BudgetExhausted` / typed-error rows must reach the
+    ///   `engine.trace(...)` consumer); otherwise it is dropped (empty
+    ///   `Vec`) to match the prior non-capturing variants' behaviour.
     ///
-    /// # Errors
-    ///
-    /// See [`Evaluator::run`].
-    pub fn run_with_trace(
-        &mut self,
-        subgraph: &Subgraph,
-        input: Value,
-        host: &dyn PrimitiveHost,
-    ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
-        let (result, trace) =
-            self.run_inner(subgraph, input, host, DEFAULT_ITERATION_BUDGET, true, None);
-        result.map(|r| (r, trace))
-    }
-
-    /// G12-A: trace-preserving + budget-parameterized variant of
-    /// [`Evaluator::run_with_trace_attributed`] that returns the recorded
-    /// trace ALONGSIDE any [`EvalError`] rather than dropping it on the
-    /// error path. Engine-side callers in trace mode use this so the
-    /// terminal [`TraceStep::BudgetExhausted`] / typed-error rows pushed
-    /// by `run_inner` (private; cannot intra-doc-link without
-    /// `--document-private-items`) reach the user-facing
-    /// `engine.trace(...)` consumer (§9.12 / the
-    /// `crates/benten-eval/src/lib.rs::TraceStep` Phase-3 TODO closure
-    /// above the enum definition). The explicit `budget` lets the engine thread its
-    /// `Engine::testing_set_iteration_budget` override through without
-    /// adding a second method.
-    pub fn run_with_trace_attributed_capturing_with_budget(
-        &mut self,
-        subgraph: &Subgraph,
-        input: Value,
-        host: &dyn PrimitiveHost,
-        frame: AttributionFrame,
-        budget: u64,
-    ) -> (Result<RunResult, EvalError>, Vec<TraceStep>) {
-        self.run_inner(subgraph, input, host, budget, true, Some(frame))
-    }
-
-    /// G5-B-ii / Inv-14: trace variant that stamps the supplied
-    /// [`AttributionFrame`] onto every emitted [`TraceStep::Step`] row.
-    /// Callers (notably `Engine::dispatch_call` in `benten-engine`)
-    /// construct the frame from the in-flight `(actor, handler, grant)`
-    /// triple and pass it here so trace consumers can walk back to the
-    /// authorising context.
+    /// Inv-14: callers with an `(actor, handler, grant)` triple in scope
+    /// MUST pass [`RunOptions::attribution`] so every emitted
+    /// [`TraceStep::Step`] carries the originating [`AttributionFrame`];
+    /// the unattributed path exists only for in-crate structural-invariant
+    /// suites that drive the evaluator without an engine-side capability
+    /// surface.
     ///
     /// Phase-2a contract: boundary variants
     /// ([`TraceStep::SuspendBoundary`] / [`TraceStep::ResumeBoundary`] /
-    /// [`TraceStep::BudgetExhausted`]) do not yet carry attribution — the
+    /// [`TraceStep::BudgetExhausted`]) do not carry attribution — the
     /// shape-pin in `crates/benten-eval/tests/inv_8_11_13_14_firing.rs` is
-    /// the source of truth. Phase-2b broadens the contract per plan §5
-    /// "required on every variant" once the boundary-variant shapes are
-    /// reopened.
-    ///
-    /// # Errors
-    ///
-    /// See [`Evaluator::run`].
-    pub fn run_with_trace_attributed(
+    /// the source of truth.
+    pub fn run_with(
         &mut self,
         subgraph: &Subgraph,
         input: Value,
         host: &dyn PrimitiveHost,
-        frame: AttributionFrame,
-    ) -> Result<(RunResult, Vec<TraceStep>), EvalError> {
+        options: RunOptions,
+    ) -> (Result<RunResult, EvalError>, Vec<TraceStep>) {
+        let budget = options.budget.unwrap_or(DEFAULT_ITERATION_BUDGET);
         let (result, trace) = self.run_inner(
             subgraph,
             input,
             host,
-            DEFAULT_ITERATION_BUDGET,
-            true,
-            Some(frame),
+            budget,
+            options.collect_trace,
+            options.attribution,
         );
-        result.map(|r| (r, trace))
+        if result.is_err() && !options.capture_on_err {
+            (result, Vec::new())
+        } else {
+            (result, trace)
+        }
     }
 
     fn run_inner(
@@ -303,7 +316,7 @@ impl Evaluator {
             // mac+Linux the monotonic clock is typically 1–10ns granular, so
             // this only triggers on zero-work primitives.
             //
-            // TODO(phase-3 — trace-timing-non-determinism doc): document
+            // TODO(phase-4-meta — backlog §4.75; trace-timing-non-determinism doc): document
             // in `diag/trace.rs` that trace timing is NOT included in
             // any content-addressed hash; a trace artifact is an
             // observability output, not a deterministic-replay fixture.

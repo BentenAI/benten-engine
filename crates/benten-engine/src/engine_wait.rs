@@ -695,7 +695,7 @@ impl Engine {
         // path (shape 3) doesn't false-positive — caught by
         // `engine_wait_api_shape.rs` regressing on the initial
         // fix-pass.
-        let state_cid = envelope.envelope_cid().map_err(EngineError::Core)?;
+        let state_cid = envelope.envelope_cid();
         let meta_lookup = self.suspension_store.get_wait(&state_cid);
         let envelope_lookup = self.suspension_store.get_envelope(&state_cid);
         let envelope_record_present = matches!(envelope_lookup, Ok(Some(_)));

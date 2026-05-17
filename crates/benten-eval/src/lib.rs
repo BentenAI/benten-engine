@@ -66,6 +66,7 @@ pub use subgraph_ext::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 pub use typed_call::{TYPED_CALL_PREFIX, TypedCallOp};
 
 pub use context::EvalContext;
+pub use evaluator::{RunOptions, RunResult};
 pub use exec_state::{AttributionFrame, ExecutionStateEnvelope, ExecutionStatePayload, Frame};
 pub use host::{NullHost, PrimitiveHost, ViewQuery};
 pub use host_error::HostError;
@@ -151,39 +152,32 @@ static TEST_CALLEE_REGISTRY: std::sync::LazyLock<
 pub fn evaluate(sg: &Subgraph, ctx: &mut EvalContext, input: benten_core::Value) -> Outcome {
     match primitives::wait::evaluate(sg, ctx, input) {
         Ok(WaitOutcome::Complete(v)) => Outcome::Complete(v),
-        Ok(wo @ WaitOutcome::Suspended(_)) => Outcome::Suspended(wo),
+        Ok(WaitOutcome::Suspended(h)) => Outcome::Suspended(h),
         Err(e) => Outcome::Err(e.code()),
     }
 }
 
-/// Phase 2a G3-B: crate-root alias for [`primitives::wait::resume`]. The
-/// `handle` arg accepts a [`WaitOutcome`] so test harnesses that pipe
-/// `evaluate(...).expect_suspended()` through `resume` compile without
-/// mapping the `Outcome::Suspended(h)` arm back to a raw `SuspendedHandle`.
+/// Phase 2a G3-B: crate-root alias for [`primitives::wait::resume`].
 ///
-/// # G3-B-cont guard (Complete-variant rejection)
-///
-/// The alias accepts only a `WaitOutcome::Suspended(_)` payload — passing
-/// a `WaitOutcome::Complete(_)` is API misuse (there is no suspended
-/// frame to resume, and the `Complete` arm's `state_cid()` returns a
-/// zero-derived CID that would consult an unrelated metadata slot). We
-/// surface `Outcome::Err(ErrorCode::InvRegistration)` for that case
-/// rather than silently succeeding or panicking.
+/// v1-API-stabilization (refinement-audit #878): the `handle` arg now
+/// accepts a raw [`SuspendedHandle`] directly (the payload of
+/// `Outcome::Suspended` post-collapse), so test harnesses pipe
+/// `evaluate(...)` → `Outcome::Suspended(h)` → `resume(.., h, ..)` with no
+/// re-wrap. The old `handle: WaitOutcome` shape required a runtime
+/// `WaitOutcome::Complete(_)` rejection guard because the type permitted a
+/// state the API forbids; the collapsed shape makes that state
+/// unrepresentable, so the guard (and its `InvRegistration` error path)
+/// is deleted as dead code rather than preserved.
 ///
 /// # Errors
-/// See [`primitives::wait::resume`]. Additionally returns
-/// `Outcome::Err(ErrorCode::InvRegistration)` when `handle` is a
-/// `WaitOutcome::Complete(_)`.
+/// See [`primitives::wait::resume`].
 pub fn resume(
     _sg: &Subgraph,
     ctx: &mut EvalContext,
-    handle: WaitOutcome,
+    handle: SuspendedHandle,
     signal: WaitResumeSignal,
 ) -> Outcome {
-    if matches!(handle, WaitOutcome::Complete(_)) {
-        return Outcome::Err(ErrorCode::InvRegistration);
-    }
-    let state_cid = handle.state_cid();
+    let state_cid = *handle.state_cid();
     // Phase-2b G12-E: prefer the EvalContext's configured store
     // (engine-wired durable backend) over the process-default
     // singleton. The fallback path retains the prior behaviour for
@@ -191,7 +185,7 @@ pub fn resume(
     let meta = ctx.suspension_store().get_wait(&state_cid).ok().flatten();
     match primitives::wait::resume_with_meta(meta, signal, ctx.elapsed_ms()) {
         Ok(WaitOutcome::Complete(v)) => Outcome::Complete(v),
-        Ok(wo @ WaitOutcome::Suspended(_)) => Outcome::Suspended(wo),
+        Ok(WaitOutcome::Suspended(h)) => Outcome::Suspended(h),
         Err(e) => Outcome::Err(e.code()),
     }
 }
@@ -201,22 +195,30 @@ pub fn resume(
 /// `SuspendedHandle`. Phase-1 owns the real type in `benten-engine`; the
 /// re-export is a narrow proxy whose variants match the expected surface.
 ///
-/// `Suspended` carries a [`WaitOutcome`] — not a raw [`SuspendedHandle`] —
-/// so test harnesses that pipe `evaluate(...).expect_suspended()` (declared
-/// `-> WaitOutcome`) compile without mapping.
+/// `Suspended` carries a raw [`SuspendedHandle`] (v1-API-stabilization,
+/// refinement-audit #878): the prior shape was
+/// `Outcome::Suspended(WaitOutcome::Suspended(handle))` — a redundant
+/// double-nest where the inner `WaitOutcome` could *only ever* be its
+/// `Suspended` arm (the `Complete` arm is already routed to
+/// `Outcome::Complete`). Collapsing to `Suspended(SuspendedHandle)` makes
+/// the unrepresentable state unrepresentable and removes the dead
+/// `WaitOutcome::Complete(_)` rejection guard that the old `resume` shape
+/// needed.
 ///
-/// TODO(phase-3 — eval/engine Outcome unification): the WAIT surface
-/// shipped end-to-end at phase-2b-close (3d0f018), but the eval-side
-/// and engine-side `Outcome`s remain distinct shapes. Carried from
-/// Phase-2a G3-B for consolidation in Phase-3 alongside the broader
-/// host-boundary cleanup.
+/// TODO(phase-4-meta — backlog §4.43 v1-API-stabilization, eval/engine
+/// Outcome unification): the WAIT surface shipped end-to-end at
+/// phase-2b-close (3d0f018), but the eval-side and engine-side `Outcome`s
+/// remain distinct shapes. Carried from Phase-2a G3-B for consolidation
+/// alongside the broader host-boundary cleanup. (Retargeted from the
+/// pre-2026-05-11-phase-rename `phase-3` marker per §4.68 in-source
+/// trajectory sweep, refinement-audit #1166.)
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// Handler ran to completion.
     Complete(benten_core::Value),
-    /// Handler suspended at a WAIT primitive. Carries the full
-    /// [`WaitOutcome`] so multi-variant tests can re-inspect the shape.
-    Suspended(WaitOutcome),
+    /// Handler suspended at a WAIT primitive. Carries the
+    /// [`SuspendedHandle`] needed to resume.
+    Suspended(SuspendedHandle),
     /// Terminal error.
     Err(ErrorCode),
 }
@@ -948,7 +950,7 @@ pub struct StepResult {
 /// an enum so the boundary/budget variants coexist with the per-primitive
 /// `Step` rows.
 ///
-/// TODO(phase-3 — TraceStep boundary-variant + attribution-threading
+/// TODO(phase-4-meta — backlog §4.75; TraceStep boundary-variant + attribution-threading
 /// completion): boundary variants exist on the enum and attribution
 /// threads onto Step rows; full `SuspendBoundary` / `ResumeBoundary` /
 /// `BudgetExhausted` firing + uniform `attribution` threading on

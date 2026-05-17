@@ -711,14 +711,38 @@ impl Engine {
     /// privileged NoAuth backend path so cap-policy regression suites
     /// can populate state without round-tripping through the public
     /// `Engine::call` surface. Returns the inserted Node's CID.
+    ///
+    /// refinement-audit-2026-05 #615/#617 (ST-GRAPH lane, umbrella
+    /// #1208, META #660 Inv-13 5-row matrix) — cross-lane contract
+    /// propagation, the §3.5l cross-crate-consumer class the disjoint
+    /// single-crate review could not reach. The pre-bypass-close helper
+    /// minted a FIXED `post` Node (constant CID) and relied on the bare
+    /// `put_node` REPLACE-on-collision path so callers could invoke it
+    /// repeatedly (e.g. `view_stale_count_tallies`' 128-insert burst).
+    /// With Inv-13 Row-1 closed, the 2nd+ identical-content insert under
+    /// `WriteAuthority::User` is now correctly an immutability violation.
+    /// Each call now embeds a process-global monotonic discriminator so
+    /// every insert is genuinely-distinct content (a real new write that
+    /// drives view churn) — the helper's contract ("returns a freshly
+    /// inserted fixture Node's CID") is preserved and strengthened (no
+    /// silent REPLACE was ever the intent). Single-call sites are
+    /// unaffected: they consume *a* valid fixture CID, not a specific
+    /// deterministic one.
     #[cfg(any(test, feature = "test-helpers"))]
     #[allow(
         clippy::expect_used,
         reason = "test-only helper; NoAuth backend cannot deny a plain post"
     )]
     pub fn testing_insert_privileged_fixture(&self) -> Cid {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static FIXTURE_SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = FIXTURE_SEQ.fetch_add(1, Ordering::Relaxed);
         let mut props: BTreeMap<String, Value> = BTreeMap::new();
         props.insert("title".into(), Value::Text("secret".into()));
+        // Distinct per-call discriminator so each invocation is a
+        // genuinely-new content-addressed write (post Inv-13 Row-1
+        // bypass close — no silent REPLACE of identical content).
+        props.insert("_fixture_seq".into(), Value::Text(format!("fixture-{seq}")));
         let node = Node::new(vec!["post".into()], props);
         self.create_node(&node)
             .expect("fixture insertion via NoAuth backend")

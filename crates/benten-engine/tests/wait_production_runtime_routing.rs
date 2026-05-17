@@ -41,7 +41,7 @@
 
 use benten_core::{Node, Value};
 use benten_engine::{Engine, EngineError, PrimitiveSpec, SubgraphSpec, SuspensionOutcome};
-use benten_eval::{PrimitiveKind, SuspensionStore, WaitOutcome, WaitResumeSignal};
+use benten_eval::{PrimitiveKind, SuspensionStore, WaitResumeSignal};
 use std::collections::BTreeMap;
 
 fn open_engine() -> (tempfile::TempDir, Engine) {
@@ -482,9 +482,8 @@ fn wait_resume_deadline_fires_against_real_clock() {
     let mut ctx = benten_eval::EvalContext::with_clock(clock);
     ctx = ctx.with_suspension_store(engine.suspension_store());
 
-    let outcome = WaitOutcome::Suspended(handle);
     let signal = WaitResumeSignal::signal("user:click", Value::Int(0));
-    let result = benten_eval::resume(&dummy_subgraph_for_resume(), &mut ctx, outcome, signal);
+    let result = benten_eval::resume(&dummy_subgraph_for_resume(), &mut ctx, handle, signal);
     use benten_eval::Outcome as EvalOutcome;
     match result {
         EvalOutcome::Err(e) => assert_eq!(

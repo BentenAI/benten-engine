@@ -37,9 +37,6 @@ use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResul
 /// Stable view identifier used in error messages and `View::id`.
 const VIEW_ID: &str = "capability_grants";
 
-/// Default budget — large enough that unit tests using `new()` never trip.
-const UNLIMITED_BUDGET: u64 = u64::MAX;
-
 /// View 1 — capability grants indexed by entity.
 #[derive(Debug)]
 pub struct CapabilityGrantsView {
@@ -52,16 +49,13 @@ pub struct CapabilityGrantsView {
     budget: BudgetTracker,
 }
 
-/// Back-compat alias. Some tests / docs write `CapGrants` for brevity.
-pub type CapGrants = CapabilityGrantsView;
-
 impl CapabilityGrantsView {
     /// Construct a fresh view with an effectively unlimited budget.
     #[must_use]
     pub fn new() -> Self {
         Self {
             by_entity: BTreeMap::new(),
-            budget: BudgetTracker::new(UNLIMITED_BUDGET),
+            budget: BudgetTracker::unlimited(),
         }
     }
 
@@ -147,7 +141,13 @@ impl CapabilityGrantsView {
     /// when the event is a no-op (wrong label) so the subscriber's per-event
     /// accounting stays simple.
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        self.budget.try_consume(1, VIEW_ID)?;
+        // ivm-r6-6 (refinement-audit #594): charge the budget only for
+        // events this view actually processes. The earlier code charged
+        // `try_consume(1)` unconditionally before the label/kind gate, so a
+        // flood of unrelated change events would push the view to Stale
+        // despite doing zero work. Each processed arm charges exactly once;
+        // the no-op early-returns below skip the consume — matching the
+        // GovernanceInheritanceView discipline so all 5 views are uniform.
 
         // Edge path: GRANTED_TO edge wiring — source is grant, target is entity.
         if matches!(
@@ -157,6 +157,7 @@ impl CapabilityGrantsView {
             if !event.has_label("GRANTED_TO") {
                 return Ok(());
             }
+            self.budget.try_consume(1, VIEW_ID)?;
             if let Some((source, target, _)) = &event.edge_endpoints {
                 match event.kind {
                     ChangeKind::EdgeCreated => {
@@ -187,6 +188,7 @@ impl CapabilityGrantsView {
         if !event.has_label("system:CapabilityGrant") {
             return Ok(());
         }
+        self.budget.try_consume(1, VIEW_ID)?;
         match event.kind {
             ChangeKind::Created | ChangeKind::Updated => {
                 // Prefer the node's `grantee` property as entity key. When

@@ -46,8 +46,11 @@ pub mod snapshot_blob;
 
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub use blob_backend::{
-    BLOB_BYTES_PROPERTY, BLOB_CID_PROPERTY, BlobError, MODULE_BYTES_LABEL, RedbBlobBackend,
+    BLOB_BYTES_PROPERTY, BLOB_CID_PROPERTY, BlobError, MAX_MODULE_BYTES_ZONE_SCAN,
+    MODULE_BYTES_LABEL, RedbBlobBackend,
 };
 pub use blob_backend_trait::BlobBackend;
 pub use network_fetch_stub::{NetworkFetchStubBackend, NetworkFetchStubError};
-pub use snapshot_blob::{SnapshotBlob, SnapshotBlobBackend, SnapshotBlobError};
+pub use snapshot_blob::{
+    MAX_SNAPSHOT_BLOB_BYTES, SnapshotBlob, SnapshotBlobBackend, SnapshotBlobError,
+};

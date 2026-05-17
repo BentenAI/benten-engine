@@ -57,8 +57,8 @@ pub mod transaction;
 
 pub use backend::{DurabilityMode, KVBackend, ScanResult};
 pub use backends::{
-    BlobBackend, NetworkFetchStubBackend, NetworkFetchStubError, SnapshotBlob, SnapshotBlobBackend,
-    SnapshotBlobError,
+    BlobBackend, MAX_SNAPSHOT_BLOB_BYTES, NetworkFetchStubBackend, NetworkFetchStubError,
+    SnapshotBlob, SnapshotBlobBackend, SnapshotBlobError,
 };
 #[cfg(feature = "browser-backend")]
 pub use browser_backend::{BrowserBackend, BrowserSnapshot, BrowserTransactionRunner};
@@ -540,6 +540,21 @@ pub enum GraphError {
         attempted_authority: WriteAuthority,
     },
 
+    /// An untrusted-input decode exceeded the configured byte cap before any
+    /// allocation-amplifying deserialization ran. Closes the META #629
+    /// DoS-via-unbounded-decode benten-graph slice (#553): peer-supplied
+    /// snapshot-blob bytes are size-checked BEFORE
+    /// `serde_ipld_dagcbor::from_slice` so a CBOR-bomb cannot inflate a
+    /// small wire payload into an OOM.
+    #[error("decode rejected: input is {actual} bytes, exceeds cap of {limit} bytes")]
+    #[non_exhaustive]
+    DecodeTooLarge {
+        /// Size of the rejected input in bytes.
+        actual: usize,
+        /// Configured maximum accepted size in bytes.
+        limit: usize,
+    },
+
     /// The transaction's closure returned `Err`, so the write batch was
     /// rolled back.
     // Fwd-2 #997 / umbrella #1207: `#[non_exhaustive]` deliberately NOT
@@ -633,6 +648,13 @@ impl GraphError {
                 ErrorCode::NestedTransactionNotSupported
             }
             GraphError::InvImmutability { .. } => ErrorCode::InvImmutability,
+            // A size-cap rejection is a decode-class refusal — it surfaces
+            // through the same `E_SERIALIZE` catalog code the
+            // `Core(CoreError::Serialize)` decode-failure path uses, so
+            // cross-language consumers see one decode-rejection code rather
+            // than a new minted variant (CATALOG_VARIANT_COUNT unchanged;
+            // single-crate scope preserved).
+            GraphError::DecodeTooLarge { .. } => ErrorCode::Serialize,
             GraphError::TxAborted { .. } => ErrorCode::TxAborted,
             GraphError::SchemaVersionMismatch { .. } => ErrorCode::GraphSchemaVersionMismatch,
         }

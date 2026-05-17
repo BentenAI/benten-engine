@@ -35,15 +35,11 @@ use benten_graph::{ChangeEvent, ChangeKind};
 use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
 
 const VIEW_ID: &str = "event_dispatch";
-const UNLIMITED_BUDGET: u64 = u64::MAX;
 
 /// Event-name bucket used when the event doesn't carry an explicit
 /// `subscribes_to` list. Keeps the back-compat single-set path for the
 /// identity-only test harness on a clearly-labeled key.
 const GLOBAL_BUCKET: &str = "";
-
-/// Back-compat alias used by some R3 tests.
-pub type EventHandlerDispatchView = EventDispatchView;
 
 /// View 2 — event handler dispatch table.
 #[derive(Debug)]
@@ -61,7 +57,7 @@ impl EventDispatchView {
     pub fn new() -> Self {
         Self {
             by_event: BTreeMap::new(),
-            budget: BudgetTracker::new(UNLIMITED_BUDGET),
+            budget: BudgetTracker::unlimited(),
         }
     }
 
@@ -125,7 +121,12 @@ impl EventDispatchView {
     }
 
     fn apply_event(&mut self, event: &ChangeEvent) -> Result<(), ViewError> {
-        self.budget.try_consume(1, VIEW_ID)?;
+        // ivm-r6-6 (refinement-audit #594): charge the budget only for
+        // events this view actually processes. The earlier code charged
+        // `try_consume(1)` unconditionally before the label/kind gate, so a
+        // flood of unrelated change events would push the view to Stale
+        // despite doing zero work. Matches the GovernanceInheritanceView
+        // discipline so all 5 views are uniform.
 
         // Edge path: SubscribesTo edges route into the global bucket for
         // Phase 1 — edge events don't carry a property payload.
@@ -136,6 +137,7 @@ impl EventDispatchView {
             if !event.has_label("SubscribesTo") {
                 return Ok(());
             }
+            self.budget.try_consume(1, VIEW_ID)?;
             if let Some((source, _target, _label)) = &event.edge_endpoints {
                 match event.kind {
                     ChangeKind::EdgeCreated => {
@@ -158,6 +160,7 @@ impl EventDispatchView {
         if !event.has_label("SubscribesTo") {
             return Ok(());
         }
+        self.budget.try_consume(1, VIEW_ID)?;
         // Determine bucket set: prefer the node's subscribes_to list; fall
         // back to the global bucket.
         let buckets: Vec<String> = event

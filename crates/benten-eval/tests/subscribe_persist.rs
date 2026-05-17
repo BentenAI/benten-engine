@@ -135,5 +135,5 @@ fn subscribe_retention_window_exceeded_fires_e_subscribe_replay_window_exceeded(
 
     let result = testing_subscribe_register_with_store(anchor_prefix_spec(id), store);
     let err = result.expect_err("re-registration past retention must surface typed error");
-    assert_eq!(err.error_code(), ErrorCode::SubscribeReplayWindowExceeded);
+    assert_eq!(err.code(), ErrorCode::SubscribeReplayWindowExceeded);
 }

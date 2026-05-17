@@ -106,6 +106,7 @@ use benten_core::{Cid, Edge, Node};
 
 use crate::backend::{KVBackend, ScanResult};
 use crate::graph_backend::GraphBackend;
+use crate::mutex_ext::MutexExt;
 use crate::prefix_helpers::next_prefix;
 use crate::store::{
     ChangeSubscriber, EdgeStore, NodeStore, decode_err, edge_key, edge_src_index_key,
@@ -181,16 +182,29 @@ impl BrowserSnapshot {
     /// a clean miss.
     ///
     /// # Errors
-    /// Returns [`GraphError::Core`] (carrying a `CoreError::Serialize`)
-    /// if the stored bytes fail to decode as a [`Node`].
+    /// - [`GraphError::Core`] (carrying a `CoreError::Serialize`) if the
+    ///   stored bytes fail to decode as a [`Node`].
+    /// - A content-hash mismatch from the W9-T6 verify-on-read
+    ///   (`benten_core::Node::load_verified`) surfaces if a tampered cache
+    ///   entry re-hashes to a different CID than the one it is keyed under
+    ///   (#620 / META #660 slice).
     pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
         let key = node_key(cid);
         match self.pairs.get(&key) {
             None => Ok(None),
             Some(bytes) => {
-                let node: Node = serde_ipld_dagcbor::from_slice(bytes)
-                    .map_err(decode_err)
-                    .map_err(GraphError::from)?;
+                // #620 (Safe-3): verify-on-read parity with
+                // `RedbBackend::get_node`. The prior body did a bare
+                // `from_slice` decode with NO content-hash check, so a
+                // tampered in-RAM cache entry (the browser thin-client is
+                // an attacker-adjacent surface — JS heap, devtools,
+                // malicious extensions) produced a wrong-but-decodable Node
+                // SILENTLY. `Node::load_verified` hashes the stored bytes
+                // FIRST and refuses if they don't re-hash to `cid`,
+                // surfacing the integrity failure rather than masking it.
+                // Mirrors the W9-T6 closure already in `RedbBackend`.
+                let node =
+                    benten_core::Node::load_verified(cid, bytes).map_err(GraphError::from)?;
                 Ok(Some(node))
             }
         }
@@ -227,10 +241,12 @@ impl BrowserBackend {
     }
 }
 
-#[inline]
-fn poisoned() -> GraphError {
-    GraphError::Redb("browser-backend: lock poisoned".into())
-}
+// #637 (Safe-4, META #707 slice): the `poisoned()` helper that built a
+// `GraphError::Redb("...lock poisoned")` for the
+// `.lock().map_err(|_| poisoned())?` idiom is deleted — every
+// `BrowserBackend` Mutex site now uses the workspace `lock_recover()`
+// discipline (recover-and-proceed) instead of propagating a typed poison
+// error, matching the 35+ other sites and `transaction.rs`'s `TxGuard`.
 
 // ---------------------------------------------------------------------------
 // KVBackend — byte-level get/put/delete/scan/put_batch
@@ -240,24 +256,24 @@ impl KVBackend for BrowserBackend {
     type Error = GraphError;
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, GraphError> {
-        let g = self.inner.lock().map_err(|_| poisoned())?;
+        let g = self.inner.lock_recover();
         Ok(g.get(key).cloned())
     }
 
     fn put(&self, key: &[u8], value: &[u8]) -> Result<(), GraphError> {
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         g.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
     fn delete(&self, key: &[u8]) -> Result<(), GraphError> {
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         g.remove(key);
         Ok(())
     }
 
     fn scan(&self, prefix: &[u8]) -> Result<ScanResult, GraphError> {
-        let g = self.inner.lock().map_err(|_| poisoned())?;
+        let g = self.inner.lock_recover();
 
         // Mirror the InMemoryBackend / RedbBackend prefix semantics:
         //  - empty prefix → full table iter
@@ -285,7 +301,7 @@ impl KVBackend for BrowserBackend {
         // Atomic by virtue of holding the coarse `Mutex` for the whole
         // batch — every pair lands or none do (the only failure path is
         // lock poisoning, which fires before any mutation).
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         for (k, v) in pairs {
             g.insert(k.clone(), v.clone());
         }
@@ -311,20 +327,26 @@ impl NodeStore for BrowserBackend {
         // Fwd-1 #926: single encode+hash pass.
         let (cid, bytes) = node.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let key = node_key(&cid);
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         g.insert(key, bytes);
         Ok(cid)
     }
 
     fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
         let key = node_key(cid);
-        let g = self.inner.lock().map_err(|_| poisoned())?;
+        let g = self.inner.lock_recover();
         match g.get(&key) {
             None => Ok(None),
             Some(bytes) => {
-                let node: Node = serde_ipld_dagcbor::from_slice(bytes)
-                    .map_err(decode_err)
-                    .map_err(GraphError::from)?;
+                // #620 (Safe-3): W9-T6 verify-on-read parity with
+                // `RedbBackend::get_node`. The `NodeStore` trait impl is
+                // the generic-cascade-reachable read path; a bare decode
+                // here let a tampered in-RAM cache entry surface as a
+                // wrong-but-decodable Node silently. `Node::load_verified`
+                // re-hashes the stored bytes and refuses on mismatch
+                // (`E_INV_CONTENT_HASH`).
+                let node =
+                    benten_core::Node::load_verified(cid, bytes).map_err(GraphError::from)?;
                 Ok(Some(node))
             }
         }
@@ -332,7 +354,7 @@ impl NodeStore for BrowserBackend {
 
     fn delete_node(&self, cid: &Cid) -> Result<(), GraphError> {
         let key = node_key(cid);
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         g.remove(&key);
         Ok(())
     }
@@ -351,7 +373,7 @@ impl EdgeStore for BrowserBackend {
         let body_key = edge_key(&cid);
         let src_idx = edge_src_index_key(&edge.source, &cid);
         let tgt_idx = edge_tgt_index_key(&edge.target, &cid);
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         g.insert(body_key, bytes);
         // Index entries store the edge CID bytes so `edges_from` / `edges_to`
         // can resolve back to the body. Mirror RedbBackend's index payload
@@ -363,7 +385,7 @@ impl EdgeStore for BrowserBackend {
 
     fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError> {
         let key = edge_key(cid);
-        let g = self.inner.lock().map_err(|_| poisoned())?;
+        let g = self.inner.lock_recover();
         match g.get(&key) {
             None => Ok(None),
             Some(bytes) => {
@@ -379,7 +401,7 @@ impl EdgeStore for BrowserBackend {
         // Read the edge body first so we can clean up the index entries.
         // Idempotent — a missing edge is `Ok(())`.
         let key = edge_key(cid);
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         if let Some(bytes) = g.get(&key).cloned() {
             let edge: Edge = serde_ipld_dagcbor::from_slice(&bytes)
                 .map_err(decode_err)
@@ -393,7 +415,7 @@ impl EdgeStore for BrowserBackend {
 
     fn edges_from(&self, source: &Cid) -> Result<Vec<Edge>, GraphError> {
         let prefix = edge_src_index_prefix(source);
-        let g = self.inner.lock().map_err(|_| poisoned())?;
+        let g = self.inner.lock_recover();
         let upper = next_prefix(&prefix);
         let iter: Box<dyn Iterator<Item = (&Vec<u8>, &Vec<u8>)>> = match upper {
             Some(u) => Box::new(g.range(prefix.clone()..u)),
@@ -417,7 +439,7 @@ impl EdgeStore for BrowserBackend {
 
     fn edges_to(&self, target: &Cid) -> Result<Vec<Edge>, GraphError> {
         let prefix = edge_tgt_index_prefix(target);
-        let g = self.inner.lock().map_err(|_| poisoned())?;
+        let g = self.inner.lock_recover();
         let upper = next_prefix(&prefix);
         let iter: Box<dyn Iterator<Item = (&Vec<u8>, &Vec<u8>)>> = match upper {
             Some(u) => Box::new(g.range(prefix.clone()..u)),
@@ -482,16 +504,18 @@ impl GraphBackend for BrowserBackend {
     /// independence-from-live-writes guarantee is the load-bearing
     /// shape.
     fn snapshot(&self) -> Self::Snapshot {
-        let g = self.inner.lock();
-        let pairs = match g {
-            Ok(guard) => guard.clone(),
-            // A poisoned lock means a previous holder panicked; we still
-            // surface a usable (empty) snapshot rather than panicking
-            // again at the trait boundary. The inherent KVBackend path
-            // surfaces the typed error; trait-level snapshot has no
-            // Result shape per `arch-r1-6`.
-            Err(_) => BTreeMap::new(),
-        };
+        // #627 (Safe-4, META #707 slice): the prior body returned an EMPTY
+        // `BTreeMap` on lock poisoning, which masks a poisoned cache as an
+        // empty-graph view to every `GraphBackend` generic-cascade caller —
+        // a poisoned mutex (a previous holder panicked mid-write) silently
+        // became "the graph is empty", a correctness landmine. The
+        // workspace `lock_recover()` discipline (35+ sites) is to recover
+        // the guard and proceed with whatever state the poisoned holder
+        // left, exactly as the now-converted KVBackend paths do — a
+        // partially-written cache is strictly more truthful than a
+        // fabricated empty one, and the `Snapshot` trait shape has no
+        // `Result` to surface the poison through (`arch-r1-6`).
+        let pairs = self.inner.lock_recover().clone();
         BrowserSnapshot { pairs }
     }
 
@@ -541,7 +565,7 @@ impl GraphBackend for BrowserBackend {
         // Fwd-1 #926: single encode+hash pass.
         let (cid, bytes) = node.cid_and_canonical_bytes().map_err(GraphError::from)?;
         let key = node_key(&cid);
-        let mut g = self.inner.lock().map_err(|_| poisoned())?;
+        let mut g = self.inner.lock_recover();
         g.insert(key, bytes);
         Ok(cid)
     }

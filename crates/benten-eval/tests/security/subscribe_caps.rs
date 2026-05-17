@@ -34,12 +34,12 @@ fn subscribe_capability_gated_at_register() {
     let result = testing_subscribe_register_as(&principal, spec("/posts/"));
     let err = result.expect_err("registration without caps must fail");
     // G6-A landed cap-denial mapping: register-time cap failures map to
-    // `SubscribeDeliveryFailed` per `SubscribeError::error_code()`. The
+    // `SubscribeDeliveryFailed` per `SubscribeError::code()`. The
     // test's R3-A accepted-set was written speculatively before the
     // mapping landed; we widen it to include the actual code.
     assert!(
         matches!(
-            err.error_code(),
+            err.code(),
             ErrorCode::SubscribeDeliveryFailed
                 | ErrorCode::SubscribePatternInvalid
                 | ErrorCode::HostBackendUnavailable
@@ -87,7 +87,7 @@ fn subscribe_capability_gated_at_delivery() {
     let outcome = sub.next_outcome_blocking(std::time::Duration::from_millis(100));
     let err = outcome.expect_err("delivery after revoke must fail closed");
     let observed_outcome_err = matches!(
-        err.error_code(),
+        err.code(),
         ErrorCode::SubscribeDeliveryFailed | ErrorCode::SubscribeCursorLost
     );
     assert!(
@@ -133,7 +133,7 @@ fn subscribe_pattern_cannot_exfiltrate_cross_zone_data_inv_11() {
     // System-zone label prefix from user code must be denied.
     let result = testing_subscribe_register_as(&principal, spec("system:/secrets/"));
     let err = result.expect_err("system: prefix from user code must fail Inv-11");
-    assert_eq!(err.error_code(), ErrorCode::Inv11SystemZoneRead);
+    assert_eq!(err.code(), ErrorCode::Inv11SystemZoneRead);
 }
 
 /// Option-C READ cap-check is NOT bypassed by the SUBSCRIBE delivery path —
@@ -156,7 +156,7 @@ fn subscribe_does_not_bypass_option_c_read_cap_check() {
     // satisfies the Option-C contract — both surface as typed errors.
     assert!(
         matches!(
-            err.error_code(),
+            err.code(),
             ErrorCode::SubscribeDeliveryFailed
                 | ErrorCode::Inv11SystemZoneRead
                 | ErrorCode::SubscribePatternInvalid

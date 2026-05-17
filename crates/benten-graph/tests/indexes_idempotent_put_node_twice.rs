@@ -1,12 +1,22 @@
-//! Regression test (G2 mini-review finding g2-ar-5): putting the same Node
-//! twice must leave exactly one label-index entry and one property-index
-//! entry per `(label, prop_name)` triple, not two.
+//! Regression test (G2 mini-review finding g2-ar-5), RETARGETED at
+//! refinement-audit-2026-05 #615/#617 (umbrella #1208, META #660 Inv-13
+//! slice).
 //!
-//! `MultimapTable::insert(k, v)` has set-semantics — re-inserting `(k, v)`
-//! is a no-op — so the current code is correct. But that correctness is a
-//! property of redb's multimap table, not something the tests prove. This
-//! test pins the contract so a future swap of the index storage does not
-//! silently regress duplicate-insert behaviour.
+//! **Original contract (now corrected):** the prior version asserted that
+//! calling the bare inherent `RedbBackend::put_node` twice with the same
+//! Node returned `Ok` both times. That `Ok`-on-second-put was the
+//! **Inv-13 bypass** #615/#617 closed — the bare `put_node` routed to
+//! `put_node_unchecked` whose `nodes.insert(...)` has redb REPLACE
+//! semantics, so a `User`-authority re-put of an already-stored CID
+//! silently overwrote instead of refusing.
+//!
+//! **Corrected contract (Inv-13 5-row matrix, Row 1):** the bare
+//! `put_node` now routes through `put_node_with_context` with the default
+//! `User` `WriteContext`; a `User` re-put of an already-present CID is an
+//! immutability violation → `Err(GraphError::InvImmutability)`. The
+//! index-integrity property still holds and is still pinned: the rejected
+//! re-put leaves exactly ONE index entry (no duplicate, no corruption
+//! from the refused write).
 
 #![allow(clippy::unwrap_used)]
 
@@ -29,33 +39,47 @@ fn canonical_post() -> Node {
 }
 
 #[test]
-fn put_node_twice_same_cid_leaves_single_label_index_entry() {
+fn put_node_twice_same_cid_rejects_second_and_leaves_single_label_index_entry() {
     let (b, _d) = temp();
     let node = canonical_post();
     let cid_first = b.put_node(&node).unwrap();
-    let cid_second = b.put_node(&node).unwrap();
 
-    // Content-addressed: second put returns the same CID.
-    assert_eq!(cid_first, cid_second);
+    // #615/#617: the SECOND User-authority put of an already-present CID
+    // is an Inv-13 immutability violation, NOT a silent idempotent
+    // overwrite (the old REPLACE-semantics bypass).
+    let err = b.put_node(&node).expect_err(
+        "second put of an identical CID must be refused by Inv-13 \
+         (User authority, Row 1) — not silently REPLACE",
+    );
+    match err {
+        benten_graph::GraphError::InvImmutability { cid, .. } => {
+            assert_eq!(cid, cid_first, "the violation names the colliding CID");
+        }
+        other => panic!("expected GraphError::InvImmutability, got {other:?}"),
+    }
 
-    // And the label index has exactly one entry, not two.
+    // Index-integrity property (the load-bearing pin survives the
+    // contract correction): the refused re-put left exactly one
+    // label-index entry — no duplicate, no corruption.
     let hits = b.get_by_label("Post").unwrap();
     assert_eq!(
         hits.len(),
         1,
-        "put_node is idempotent at the label-index level",
+        "rejected re-put must not duplicate or corrupt the label index",
     );
     assert_eq!(hits[0], cid_first);
 }
 
 #[test]
-fn put_node_twice_leaves_single_property_index_entry() {
+fn put_node_twice_rejected_reput_leaves_single_property_index_entry() {
     let (b, _d) = temp();
     let node = canonical_post();
     let cid = b.put_node(&node).unwrap();
-    b.put_node(&node).unwrap();
+    // Second put is correctly refused (Inv-13 Row 1); the index must
+    // remain single-entry regardless.
+    b.put_node(&node)
+        .expect_err("second User put must be refused by Inv-13");
 
-    // Both properties must show exactly one hit.
     let by_title = b
         .get_by_property("Post", "title", &Value::text("idempotent"))
         .unwrap();

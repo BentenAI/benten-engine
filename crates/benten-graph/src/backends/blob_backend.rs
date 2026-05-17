@@ -79,6 +79,23 @@ pub const BLOB_CID_PROPERTY: &str = "blob_cid";
 /// round-trips through DAG-CBOR.
 pub const BLOB_BYTES_PROPERTY: &str = "blob_bytes";
 
+/// Hard cap on the number of `system:ModuleBytes` Nodes a single
+/// [`RedbBlobBackend::get_sync`] / [`RedbBlobBackend::list_blob_cids`]
+/// scan will decode before refusing (#567, META #629 DoS-via-unbounded-
+/// decode benten-graph slice).
+///
+/// Both methods do an O(N) linear scan that decodes every Node body in the
+/// `system:ModuleBytes` zone. The zone is system-zone (privileged-write
+/// only — see [`MODULE_BYTES_LABEL`]) so an *unprivileged* peer cannot
+/// inflate it directly, but the O(N)-decode-per-fetch amplification is a
+/// real cost ceiling for legitimately-large module sets and a defense-in-
+/// depth bound should a privileged-write path ever be reached unexpectedly.
+/// 100k modules is far beyond any realistic deployment (modules are
+/// operator-curated, not user-generated) while still bounding the worst-
+/// case decode work a single scan can perform. Exceeding it surfaces
+/// [`GraphError::DecodeTooLarge`] rather than silently doing unbounded work.
+pub const MAX_MODULE_BYTES_ZONE_SCAN: usize = 100_000;
+
 /// Concrete redb-native [`BlobBackend`] implementation closing
 /// **Compromise #17**.
 ///
@@ -124,6 +141,12 @@ impl RedbBlobBackend {
         // the `blob_cid` property. The two-CID dance preserves the
         // blob CID = BLAKE3(blob_bytes) invariant per #4 baked-in.
         let node_cids = self.backend.get_by_label(MODULE_BYTES_LABEL)?;
+        if node_cids.len() > MAX_MODULE_BYTES_ZONE_SCAN {
+            return Err(GraphError::DecodeTooLarge {
+                actual: node_cids.len(),
+                limit: MAX_MODULE_BYTES_ZONE_SCAN,
+            });
+        }
         let mut blob_cids = Vec::with_capacity(node_cids.len());
         for node_cid in node_cids {
             let Some(node) = self.backend.get_node(&node_cid)? else {
@@ -151,8 +174,17 @@ impl RedbBlobBackend {
     pub fn get_sync(&self, cid: &Cid) -> Result<Option<Vec<u8>>, GraphError> {
         // Linear scan over the system:ModuleBytes zone — fine in
         // Phase-3 (operator-bounded module count), Phase-4+ may add
-        // a CID-keyed property index if profiling demands.
+        // a CID-keyed property index if profiling demands. The scan is
+        // bounded by `MAX_MODULE_BYTES_ZONE_SCAN` so a pathologically
+        // large zone cannot turn a single fetch into unbounded
+        // per-Node-decode work (#567, META #629 slice).
         let node_cids = self.backend.get_by_label(MODULE_BYTES_LABEL)?;
+        if node_cids.len() > MAX_MODULE_BYTES_ZONE_SCAN {
+            return Err(GraphError::DecodeTooLarge {
+                actual: node_cids.len(),
+                limit: MAX_MODULE_BYTES_ZONE_SCAN,
+            });
+        }
         let target = cid.to_base32();
         for node_cid in node_cids {
             let Some(node) = self.backend.get_node(&node_cid)? else {

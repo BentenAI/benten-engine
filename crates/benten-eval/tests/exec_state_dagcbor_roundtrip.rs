@@ -70,8 +70,8 @@ fn exec_state_cid_deterministic() {
         "byte-level determinism required for DAG-CBOR round-trip"
     );
 
-    let cid1 = e1.envelope_cid().expect("cid1");
-    let cid2 = e2.envelope_cid().expect("cid2");
+    let cid1 = e1.envelope_cid();
+    let cid2 = e2.envelope_cid();
     assert_eq!(cid1, cid2, "envelope CID must be stable across re-encodes");
 }
 

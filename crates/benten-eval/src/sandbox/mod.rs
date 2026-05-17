@@ -19,7 +19,7 @@
 //! `BudgetExhausted` runtime emission for `sandbox_fuel` /
 //! `sandbox_memory` / `sandbox_wallclock` / `sandbox_output` budget_type
 //! mirrors G12-A's `inv_8_iteration` pattern at
-//! `evaluator.rs::run_with_trace_attributed` (the
+//! `evaluator.rs::run_with` (the
 //! `TraceStep::BudgetExhausted` push immediately before the
 //! `IterateBudget` Err return; per wsa-17 R3 carry; symbol form per
 //! R6-R4 r6-r4-cp-2 + `dispatch-conventions.md` §3.5b high-churn-surface

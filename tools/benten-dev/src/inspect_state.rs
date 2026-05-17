@@ -33,9 +33,11 @@ pub fn pretty_print_envelope_bytes(bytes: &[u8]) -> Result<String, ErrorCode> {
     let env = ExecutionStateEnvelope::from_dagcbor(bytes)
         .map_err(|e| ErrorCode::Unknown(format!("inspect_state_decode: {e}")))?;
 
-    let envelope_cid = env
-        .envelope_cid()
-        .map_err(|e| ErrorCode::Unknown(format!("inspect_state_envelope_cid: {e}")))?;
+    // refinement-audit #794 (ST-EVAL lane): `envelope_cid()` is now
+    // infallible (`-> Cid`) — `payload_cid` is precomputed + stored at
+    // `ExecutionStateEnvelope::new`. The genuinely-fallible re-encode lives
+    // in the separate `recompute_payload_cid()` below (still `-> Result`).
+    let envelope_cid = env.envelope_cid();
     let recomputed_payload_cid = env
         .recompute_payload_cid()
         .map_err(|e| ErrorCode::Unknown(format!("inspect_state_payload_cid: {e}")))?;

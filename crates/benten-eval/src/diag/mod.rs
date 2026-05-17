@@ -7,7 +7,8 @@
 //!   Pure function, no evaluation required. See [`mermaid`].
 //! - `engine.trace(handler, input)` — step-by-step evaluation trace with
 //!   per-node microsecond timings. Backed by
-//!   [`Evaluator::run_with_trace`](crate::Evaluator::run_with_trace) and
+//!   [`Evaluator::run_with`](crate::Evaluator::run_with) (with
+//!   [`RunOptions::collect_trace`](crate::RunOptions::collect_trace)) and
 //!   rendered by [`trace`].
 //!
 //! Both are behind the `diag` Cargo feature so the thin-engine path

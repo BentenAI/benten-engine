@@ -81,6 +81,31 @@ impl Subscriber {
         guard.push(view);
     }
 
+    /// Atomically register `view` iff no view with the same `id()` is
+    /// already registered. Returns `true` when the view was appended,
+    /// `false` when a same-id view already existed (the supplied `view`
+    /// is dropped).
+    ///
+    /// refinement-audit #628 (META #707): the engine-side
+    /// `view_ids().iter().any(...)` then `register_view(...)` pattern is a
+    /// TOCTOU — two threads can both observe "absent" and both append,
+    /// admitting a duplicate-id registration. This method closes that
+    /// window by performing the existence check and the append under a
+    /// single lock acquisition. Callers that need duplicate-rejection MUST
+    /// use this method rather than the check-then-`register_view` pair.
+    pub fn register_view_if_absent(&self, view: Box<dyn View>) -> bool {
+        let mut guard = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let id = view.id();
+        if guard.iter().any(|v| v.id() == id) {
+            return false;
+        }
+        guard.push(view);
+        true
+    }
+
     /// Number of registered views. Useful for introspection and for
     /// assertions in tests.
     #[must_use]
@@ -347,12 +372,3 @@ impl ChangeSubscriber for Subscriber {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Alias: ChangeStreamSubscriber
-// ---------------------------------------------------------------------------
-
-/// Canonical G5-A name for the subscriber. Alias for [`Subscriber`] so the
-/// "new module, new name" shape requested in the G5-A brief coexists with
-/// the `Subscriber` name the R3 test suite already uses.
-pub type ChangeStreamSubscriber = Subscriber;

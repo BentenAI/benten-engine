@@ -410,7 +410,7 @@ impl StreamHandle {
                 Err(err) => {
                     self.closed = true;
                     return Err(EngineError::Other {
-                        code: err.error_code(),
+                        code: err.code(),
                         message: err.to_string(),
                     });
                 }
