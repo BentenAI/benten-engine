@@ -62,7 +62,7 @@
 //! Only once all four steps pass does the evaluator take the resume path
 //! and produce a terminal `Outcome`.
 
-use benten_caps::{CapError, CapWriteContext, ReadContext};
+use benten_caps::CapWriteContext;
 use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{
@@ -1111,35 +1111,16 @@ impl Engine {
     /// Returns [`EngineError`] on backend failure. Cap denial
     /// collapses to `Ok(None)`; it does NOT surface as an error.
     pub fn read_node_as(&self, principal: &Cid, cid: &Cid) -> Result<Option<Node>, EngineError> {
-        let Some(node) = self.backend().get_node(cid)? else {
-            return Ok(None);
-        };
-        // Phase-2a Inv-11 runtime probe (mirror of `Engine::get_node`):
-        // probe the RESOLVED Node's first label against the engine-side
-        // system-zone prefix list. Applied before the cap-policy gate
-        // so the policy's verdict cannot override Inv-11.
-        let label = node.labels.first().cloned().unwrap_or_default();
-        if crate::primitive_host::is_system_zone_label(&label) {
-            return Ok(None);
-        }
-        if let Some(policy) = self.policy() {
-            // Thread the engine's configured device-DID-attestation
-            // CID (D-PHASE-3-25 heterogeneous-policy dispatch) AND
-            // the caller's principal CID into the read-gate
-            // ReadContext.
-            let device_cid = self.device_cid();
-            let ctx = ReadContext {
-                label,
-                target_cid: Some(*cid),
-                actor_cid: Some(*principal),
-                device_cid,
-                ..Default::default()
-            };
-            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
-                return Ok(None);
-            }
-        }
-        Ok(Some(node))
+        // Refinement-audit-2026-05 D1 #1189 (Qual-1 #695 + Safe-1 #534 /
+        // META #593, Class-B-β per CLAUDE.md baked-in #18): the
+        // attributed read = the canonical `read_node_inner` seam with
+        // `Some(*principal)` threaded onto the `ReadContext.actor_cid`.
+        // Inv-11 probe + Option-C `DeniedRead` collapse + fail-CLOSED on
+        // every other `CapError` denial variant (Revoked /
+        // RevokedMidEval / future `#[non_exhaustive]`) all live there —
+        // this was the most load-bearing of the three near-duplicate
+        // sites for the silent-permit auth-bypass class.
+        self.read_node_inner(cid, Some(*principal))
     }
 
     /// Phase 2a G2-B test-only: resolve `(handler_id, op)` to its registered
