@@ -475,13 +475,29 @@ impl JsAtrium {
     /// For the test-only `JsAtrium::create(...)` path (no engine-side
     /// handle), reflects the in-memory `joined_no_engine` flag so the
     /// existing TS pins keep working without an engine instance.
+    ///
+    /// Safe-4 #704 closure (refinement-audit-2026-05): the engine-side
+    /// `AtriumHandle` is cloned OUT of the sync `state` lock BEFORE
+    /// `handle.is_active()` is called, rather than calling it while the
+    /// lock is held. `AtriumHandle::is_active` is a bare atomic load
+    /// today so holding the lock across it is presently safe, but the
+    /// lock-held-across-handle-call shape is a latent re-entrancy /
+    /// deadlock hazard if `is_active` ever evolves to acquire an
+    /// engine-side `tokio::sync::Mutex` (or becomes `async`). This
+    /// brings `is_active` into shape-conformance with the 6 R6-FP
+    /// Wave A Sub-A2 setters + `engine_atrium_or_err`, all of which
+    /// clone the handle out of the lock before driving any handle call.
+    /// `Arc<AtriumInner>` clone is cheap (refcount bump); the lock is
+    /// released before the (currently trivial) handle read.
     #[napi(getter)]
     pub fn is_active(&self) -> bool {
-        let state = self.state.lock().expect("atrium state mutex");
-        if let Some(handle) = state.engine_atrium.as_ref() {
-            handle.is_active()
-        } else {
-            state.joined_no_engine
+        let (handle_opt, joined_no_engine) = {
+            let state = self.state.lock().expect("atrium state mutex");
+            (state.engine_atrium.clone(), state.joined_no_engine)
+        };
+        match handle_opt {
+            Some(handle) => handle.is_active(),
+            None => joined_no_engine,
         }
     }
 
@@ -767,5 +783,115 @@ impl JsAtrium {
                 ),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod is_active_lock_scope_704_tests {
+    //! #704 closure-pin (refinement-audit-2026-05).
+    //!
+    //! `JsAtrium::is_active` MUST clone the engine-side `AtriumHandle`
+    //! out of the sync `state` mutex BEFORE dispatching the handle
+    //! call — NOT call it while the `state` lock is held.
+    //!
+    //! Pre-fix shape (the regression this pin guards against):
+    //!
+    //! ```ignore
+    //! let state = self.state.lock().expect("atrium state mutex");
+    //! if let Some(handle) = state.engine_atrium.as_ref() {
+    //!     handle.is_active()        // <-- lock HELD across handle call
+    //! } else {
+    //!     state.joined_no_engine
+    //! }
+    //! ```
+    //!
+    //! `AtriumHandle::is_active` is a bare atomic load today so holding
+    //! the lock across it is presently safe, but the
+    //! lock-held-across-handle-call SHAPE is a latent re-entrancy /
+    //! deadlock hazard if `is_active` ever evolves to acquire an
+    //! engine-side `tokio::sync::Mutex` or becomes `async`. Every
+    //! other `JsAtrium` accessor + the 6 R6-FP Wave A Sub-A2 setters +
+    //! `engine_atrium_or_err` already clone the handle out of the lock
+    //! first; `is_active` was the inconsistent outlier.
+    //!
+    //! This pin drives the test-only `JsAtrium::create(...)` path (no
+    //! engine handle, so `is_active` returns the in-memory
+    //! `joined_no_engine` flag) and hammers `is_active` from many
+    //! threads while other threads mutate `state` via `trust_peer` +
+    //! flip the joined flag via `join`. With the post-fix
+    //! clone-out-then-release shape this completes promptly. It would
+    //! FAIL (hang → harness timeout) if `is_active` were reverted to
+    //! hold the `state` lock across the handle dispatch AND that
+    //! dispatch ever contended the same lock class — the structural
+    //! guard the fix establishes.
+
+    use super::*;
+    use std::sync::Arc;
+    use std::thread;
+
+    #[test]
+    fn is_active_does_not_hold_state_lock_across_handle_dispatch() {
+        let atrium = Arc::new(JsAtrium::create(AtriumConfig {
+            atrium_id: "test-704".to_string(),
+        }));
+
+        // Pre-join the create()-path handle has no engine-side
+        // AtriumHandle, so `is_active` returns `joined_no_engine`
+        // (false).
+        assert!(
+            !atrium.is_active(),
+            "pre-join create()-path handle must report is_active == false"
+        );
+
+        let mut handles = Vec::new();
+
+        for _ in 0..8 {
+            let a = Arc::clone(&atrium);
+            handles.push(thread::spawn(move || {
+                for _ in 0..2_000 {
+                    // Read path under test.
+                    let _ = a.is_active();
+                }
+            }));
+        }
+
+        for i in 0..4 {
+            let a = Arc::clone(&atrium);
+            handles.push(thread::spawn(move || {
+                for j in 0..500 {
+                    // Concurrent `state`-lock mutators — the same lock
+                    // the pre-fix `is_active` held across the handle
+                    // call.
+                    a.trust_peer(format!("did:key:peer-{i}-{j}"))
+                        .expect("trust_peer must not fail");
+                }
+            }));
+        }
+
+        {
+            let a = Arc::clone(&atrium);
+            handles.push(thread::spawn(move || {
+                for _ in 0..200 {
+                    // Flips `joined_no_engine` true on the
+                    // create()-path — exercises the branch `is_active`
+                    // reads.
+                    a.join().expect("create()-path join must not fail");
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().expect("worker thread must not panic / deadlock");
+        }
+
+        // Post create()-path `join()`, `joined_no_engine` is true, so
+        // `is_active` observes the flipped flag — proving the read
+        // path returned the correct branch value through the
+        // lock-scoped clone-out.
+        assert!(
+            atrium.is_active(),
+            "post create()-path join(), is_active must report true via \
+             the lock-released joined_no_engine read (#704)"
+        );
     }
 }
