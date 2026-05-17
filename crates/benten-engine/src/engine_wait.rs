@@ -900,8 +900,20 @@ impl Engine {
     /// Phase 2a test-only hook — fabricate a suspension envelope for
     /// negative-path testing.
     ///
+    /// Refinement-audit-2026-05 D1 #1153 (MOST-ACUTE pre-v1 BLOCKER):
+    /// gated behind `cfg(any(test, feature = "test-helpers"))` — mirrors
+    /// the `backend_for_test` / `register_wait_reference_handler` gate.
+    /// Shipping this `pub` in the production cdylib let any engine-handle
+    /// holder (or hostile plugin per CLAUDE.md #18) forge an
+    /// `ExecutionStateEnvelope` attributing writes to an arbitrary
+    /// principal, bypassing the UCAN delegation chain + Inv-13 firing
+    /// matrix + manifest-envelope rechecker. The production build
+    /// (default features, no `test-helpers`) compiles this method out
+    /// entirely so it is absent at the napi boundary.
+    ///
     /// # Errors
     /// Returns [`EngineError`] on encode failure.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn fabricate_test_suspend_envelope(&self, principal: &Cid) -> Result<Vec<u8>, EngineError> {
         // Deterministic synthetic attribution so two calls at the same
         // principal produce bit-identical bytes.
@@ -943,8 +955,14 @@ impl Engine {
     /// is then attempted by the test, which expects a typed
     /// `CidParse` / `ExecStateTampered` / `Serialize` code.
     ///
+    /// Refinement-audit-2026-05 D1 #1153 (MOST-ACUTE pre-v1 BLOCKER):
+    /// gated behind `cfg(any(test, feature = "test-helpers"))` — same
+    /// rationale + gate as [`Self::fabricate_test_suspend_envelope`]
+    /// (which it delegates to). Absent from the production cdylib.
+    ///
     /// # Errors
     /// Returns [`EngineError`] on encode failure.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn fabricate_test_suspend_envelope_with_attribution_cid_bytes(
         &self,
         principal: &Cid,

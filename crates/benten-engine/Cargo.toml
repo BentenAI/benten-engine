@@ -259,6 +259,22 @@ required-features = ["test-helpers"]
 name = "admin_ui_v0_composed_view_creator_revoke_mid_preview_terminates_live_preview"
 required-features = ["test-helpers"]
 
+# Refinement-audit-2026-05 D1 #1153 (MOST-ACUTE pre-v1 BLOCKER) — these
+# two integration tests consume `Engine::fabricate_test_suspend_envelope*`
+# which are now gated behind `cfg(any(test, feature = "test-helpers"))`
+# (the prior UNGATED `pub` was the cdylib leak fixed by #1153). The
+# integration-test crate compiles separately from the lib so the lib's
+# `cfg(test)` arm is NOT visible here; pinning `required-features` opts
+# the symbol in at link time (same discipline as `sandbox_metrics` /
+# `ivm_view_subscribe_compose` above).
+[[test]]
+name = "g14_d_wave_5a_closed_claims"
+required-features = ["test-helpers"]
+
+[[test]]
+name = "resume_decode_failure_not_panic"
+required-features = ["test-helpers"]
+
 [[bench]]
 name = "roundtrip"
 harness = false

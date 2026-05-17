@@ -217,3 +217,72 @@ fn g12c_parse_counter_cfg_gate_preserved_post_subgraph_migration() {
          silently pass"
     );
 }
+
+/// Refinement-audit-2026-05 D1 #1153 closure-pin (sibling closures #1075
+/// + #870; MOST-ACUTE pre-v1 BLOCKER).
+///
+/// `fabricate_test_suspend_envelope` + its `_with_attribution_cid_bytes`
+/// companion synthesise a valid `ExecutionStateEnvelope` attributing
+/// writes to a caller-chosen principal. Shipping them UNGATED `pub` in
+/// the production cdylib was a credentialed-write bypass for any
+/// engine-handle holder (or hostile plugin per CLAUDE.md #18) — they
+/// could `fabricate_test_suspend_envelope(<victim DID>)` then
+/// `resume_from_bytes(...)` to forge attribution past the UCAN chain +
+/// Inv-13 firing matrix + manifest-envelope rechecker.
+///
+/// These methods do NOT match the `pub fn testing_*` prefix the
+/// engine-wide scan above keys on, so this by-name pin is the
+/// load-bearing closure check. It FAILS if either gate is removed
+/// (reverting #1153), if a method is renamed without updating this pin,
+/// or if either method's declaration disappears entirely (which would
+/// indicate a wholesale removal that must update this pin deliberately
+/// rather than let it pass vacuously — same discipline as the
+/// parse-counter pin above).
+#[test]
+fn fabricate_test_suspend_envelope_methods_are_cfg_gated_d1_1153() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let engine_wait = Path::new(&manifest_dir).join("src/engine_wait.rs");
+    let content = fs::read_to_string(&engine_wait).expect("read engine_wait.rs");
+    let lines: Vec<&str> = content.lines().collect();
+
+    // The two security-relevant fabrication entry points. Each MUST be
+    // preceded (within 8 lines) by a recognised cfg-gate so the
+    // production cdylib (default features, no `test-helpers`) compiles
+    // them out entirely.
+    let targets = [
+        "pub fn fabricate_test_suspend_envelope(",
+        "pub fn fabricate_test_suspend_envelope_with_attribution_cid_bytes(",
+    ];
+
+    for target in targets {
+        let decl_line = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with(target))
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected `{target}` declaration in engine_wait.rs — if this \
+                     method was intentionally renamed or removed, update this \
+                     #1153 closure-pin deliberately rather than letting it pass \
+                     vacuously (the cdylib-leak threat-model still applies to \
+                     any successor surface)"
+                )
+            });
+
+        let start = decl_line.saturating_sub(8);
+        let preceding = &lines[start..decl_line];
+        let has_gate = preceding
+            .iter()
+            .any(|l| ENGINE_RECOGNISED_GATES.contains(&l.trim()));
+
+        assert!(
+            has_gate,
+            "engine_wait.rs:{}: `{target}` lacks a recognised \
+             `#[cfg(any(test, feature = \"test-helpers\"))]` (or equivalent) \
+             gate within 8 preceding lines — refinement-audit D1 #1153 \
+             (MOST-ACUTE pre-v1 BLOCKER) was reverted: this method ships in \
+             the production cdylib and is a credentialed-write bypass for any \
+             engine-handle holder. Re-apply the gate.",
+            decl_line + 1
+        );
+    }
+}
