@@ -275,10 +275,28 @@ impl JsAtrium {
     ///
     /// G21-T2 §C audit-6-2 closure: when the JsAtrium was
     /// constructed via `Engine.atrium(...)`, this method drives
-    /// `Engine::open_atrium(AtriumConfig::for_test()).await` to
+    /// `Engine::open_atrium(AtriumConfig::production()).await` to
     /// produce a real engine-side `AtriumHandle` (iroh `Endpoint`
     /// bound + per-zone Loro CRDT machinery ready). The handle is
     /// stored under `state.engine_atrium`.
+    ///
+    /// #1187 closure (refinement-audit-2026-05): pre-fix this path
+    /// unconditionally drove `AtriumConfig::for_test()`
+    /// (= `AtriumMode::Loopback`) for engine-bound callers, so any
+    /// production JS caller invoking `engine.atrium(id).join()`
+    /// silently bound a loopback (no-relay, no-holepunch) transport
+    /// regardless of intent — a deployed production-invariant
+    /// violation invisible in default-feature builds. The original
+    /// #869 finding prescribed threading `atriumId` through
+    /// `EngineAtriumConfig::from_id(...)`, but post-COLLAPSE the
+    /// engine-side `AtriumConfig` carries NO atrium-id field
+    /// (`AtriumConfig { mode }` only — see
+    /// `benten_engine::atrium_api::AtriumConfig`); atrium identity is
+    /// tracked solely in this layer's `JsAtrium.config.atrium_id`.
+    /// The genuine residual is the transport-mode mis-wire: the
+    /// engine-bound path is the real-peer path and MUST drive
+    /// `production()`. The test-only `create()` path (no engine
+    /// reference) is unaffected.
     ///
     /// The test-only `JsAtrium::create()` path falls through to a
     /// no-op success (the engine-side handle stays `None`); the
@@ -302,7 +320,7 @@ impl JsAtrium {
             // would deadlock once real engine-side delegation
             // arrives.
             let handle = js_atrium_runtime()
-                .block_on(engine.open_atrium(EngineAtriumConfig::for_test()))
+                .block_on(engine.open_atrium(EngineAtriumConfig::production()))
                 .map_err(|e| {
                     napi::Error::new(
                         Status::GenericFailure,
