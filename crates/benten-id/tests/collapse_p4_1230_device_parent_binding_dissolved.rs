@@ -117,14 +117,19 @@ fn collapse_p4_no_bare_device_did_revocation_pipe_in_benten_id_production_source
     );
 }
 
-/// Behavioral corollary: the surviving `validate_chain_with_*`
-/// authority walkers in benten-id (`validate_chain_with_rotation_log`
-/// + `validate_chain_with_attestations`) take NO `revocations`
-/// argument — there is no longer ANY benten-id chain-walker that
-/// consults a bare device-DID-keyed revocation list. This is the
-/// type-level proof the #1230 forge is structurally unconstructible:
-/// you cannot call an API that does not exist with a shape that was
-/// deleted.
+/// Behavioral corollary: post-COLLAPSE-P2 (CONSOLIDATE) the
+/// policy-bearing authority walkers MOVED out of benten-id to
+/// `benten_caps::chain_authority` (`validate_chain_with_rotation_log`
+/// + `validate_chain_with_envelope_ceiling`, was
+/// `validate_chain_with_attestations`); benten-id keeps only the pure
+/// crypto/structural `validate_chain_*` primitives. NONE of the moved
+/// or surviving walkers take a `revocations` argument — there is no
+/// longer ANY chain-walker (in benten-id OR benten-caps) that consults
+/// a bare device-DID-keyed revocation list. This grep pins the
+/// benten-id half: no `&[DeviceRevocation]`-shaped parameter may
+/// return to benten-id/src/ucan.rs. This is the type-level proof the
+/// #1230 forge is structurally unconstructible: you cannot call an API
+/// that does not exist with a shape that was deleted.
 ///
 /// If a `revocations: &[DeviceRevocation]`-shaped parameter were
 /// re-added to a benten-id chain-walker, this grep FAILs (the

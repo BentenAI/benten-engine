@@ -159,11 +159,14 @@ pub fn outcome_to_row_reject(
 /// load-bearing CLAUDE.md #17 thin-shape property. It lived in the
 /// (un-wired) `benten_id::ucan::validate_chain_with_attestations`
 /// before COLLAPSE; the deleted `Acceptor::accept_at` never enforced
-/// it on inbound sync. P5 (`feat(#669)`) GENERALIZES this same
-/// predicate over device-envelope **and** plugin-manifest `shares`
-/// (the CONSOLIDATE move per impl-design-COLLAPSE §2) so the manifest
-/// path calls THIS primitive, not a parallel one — the seam stays
-/// single (the #707 parallel-pipe shape the COLLAPSE exists to kill).
+/// it on inbound sync. COLLAPSE P2 (CONSOLIDATE) MOVED + generalized
+/// it to `benten_caps::chain_authority::validate_chain_with_envelope_ceiling`
+/// (factored predicate `envelope_ceiling_rejects_cap`). P5
+/// (`feat(#669)`) GENERALIZES this same factored predicate over
+/// device-envelope **and** plugin-manifest `shares` (per
+/// impl-design-COLLAPSE §2) so the manifest path calls THIS primitive,
+/// not a parallel one — the seam stays single (the #707 parallel-pipe
+/// shape the COLLAPSE exists to kill).
 ///
 /// Returns `Ok(())` when the row's `scope` is within the ceiling (or
 /// no ceiling is present — legacy unsigned envelope / non-wire merge);
