@@ -1000,6 +1000,23 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW + DISAGREE-WITH-EXPLANATION on benten-ev
 
 ---
 
+### §4.79 `Ucan::from_canonical_bytes_bounded` cross-crate untrusted-decode callsite migration (P-II ONE post-COLLAPSE workspace sweep — refinement-audit #549, umbrella #1172, META #629)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW + standing principle **P-II** (cross-crate mechanical sweeps = ONE orchestrator-serialized post-COLLAPSE workspace pass, NOT a disjoint single-crate lane), `RATIFIED-decisions-2026-05-17.md`.
+
+**Landed in the D1 #1172 lane (benten-id-local, this PR):** the depth-bounded untrusted-decode entry point `benten_id::ucan::Ucan::from_canonical_bytes_bounded(bytes, max_depth)` + `MAX_UCAN_PROOF_DEPTH` const + `UcanError::ProofChainTooDeep { depth, max }` typed variant + a non-recursive CBOR-nesting pre-walk that rejects an over-deep `prf` chain at the byte boundary BEFORE `serde`'s recursive `Deserialize` runs (closure-pinned in `crates/benten-id/tests/dos_unbounded_decode_safe2_1172.rs`).
+
+**Still owed (the P-II workspace sweep — NOT this disjoint lane):** the two untrusted-input call sites #549 enumerated must migrate from the bare `serde_ipld_dagcbor::from_slice::<Ucan>` to `Ucan::from_canonical_bytes_bounded(bytes, MAX_UCAN_PROOF_DEPTH)`:
+
+1. `crates/benten-engine/src/typed_call_dispatch.rs` — the typed-CALL `ucan_validate_chain` op (`bytes` is a graph `Value::Bytes` payload, caller-controlled).
+2. `crates/benten-caps/src/backends/ucan.rs` — the durable UCAN backend read path (`value` is a redb-stored blob; adversarial input can land via any cap-grant path that doesn't pre-validate depth).
+
+Both crates are COLLAPSE-spine-owned (benten-engine + benten-caps); editing them from the disjoint benten-id lane would break Strategy-C consolidation (FULL-EXECUTION-PLAN §6.2 disjoint-crate rule). The migration is mechanical (swap one decode call + map the new `ProofChainTooDeep` variant onto the existing decode-failure error surface at each site) and rides the next orchestrator-serialized workspace sweep that frees those crates. The DoS surface is NOT closed until both call sites adopt the bounded entry point — the benten-id-local API existing is necessary but not sufficient.
+
+**Acceptance criteria.** Both call sites use `Ucan::from_canonical_bytes_bounded`; a closure-pin at each site asserts an over-deep blob is rejected (not aborted) with the depth-bound error mapped to that site's typed failure; `serde_ipld_dagcbor::from_slice::<Ucan>` has zero remaining production callers (verify via workspace grep). Bundled into the P-II post-COLLAPSE workspace sweep alongside the other META #629 cross-crate slices.
+
+---
+
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
 
 R1-FP work items that emerged from R1 critic round (production-vs-plan gaps). These are Phase 4-Foundation implementation, not deferred carries — listed here for traceability.

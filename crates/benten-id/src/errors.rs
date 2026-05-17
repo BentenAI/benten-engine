@@ -5,7 +5,56 @@
 //! the failure mode (short input / long input / corrupted bytes /
 //! unknown version tag / envelope malformed / invalid secret).
 
+use core::fmt::Write as _;
+
 use thiserror::Error;
+
+/// Maximum rendered length of an untrusted DID / capability string
+/// inside an error `Display` (safe-2 #555).
+const MAX_RENDERED_UNTRUSTED_LEN: usize = 96;
+
+/// Sanitize an untrusted, attacker-influenceable string for inclusion
+/// in an operator-facing error `Display` / `Debug` (safe-2 #555).
+///
+/// `UcanError` variants such as `AudienceMismatch` / `ChainLinkBroken`
+/// carry `aud` / `iss` fields lifted verbatim from a deserialized,
+/// caller-controlled `UcanClaims`. Those strings reach `Display`,
+/// `Debug`, and structured-log sinks before any DID-shape gate fires
+/// (the signature gate is the load-bearing assertion, but it runs
+/// AFTER these error values can be constructed). An adversarial chain
+/// whose `aud` is 100 KB of bytes — or embeds control characters /
+/// newlines — would otherwise propagate into operator logs
+/// unredacted (log-injection / log-flooding shape).
+///
+/// This renders non-printable / non-ASCII bytes as `\xNN`, collapses
+/// the result to at most [`MAX_RENDERED_UNTRUSTED_LEN`] chars, and
+/// appends a truncation marker carrying the original byte length so
+/// the operator still sees that *something* oversized arrived without
+/// the raw bytes hitting the log.
+pub(crate) fn sanitize_untrusted(s: &str) -> String {
+    let mut out = String::with_capacity(s.len().min(MAX_RENDERED_UNTRUSTED_LEN) + 16);
+    let mut escaped = false;
+    for ch in s.chars().take(MAX_RENDERED_UNTRUSTED_LEN) {
+        if ch.is_ascii_graphic() || ch == ' ' {
+            out.push(ch);
+        } else {
+            // Render every non-printable / non-ASCII char as an
+            // escaped byte sequence so newlines / NUL / control bytes
+            // cannot inject into log lines.
+            escaped = true;
+            let mut buf = [0u8; 4];
+            for b in ch.encode_utf8(&mut buf).as_bytes() {
+                // Infallible: writing to a String never errors.
+                let _ = write!(out, "\\x{b:02x}");
+            }
+        }
+    }
+    let truncated = s.chars().count() > MAX_RENDERED_UNTRUSTED_LEN;
+    if truncated || escaped {
+        let _ = write!(out, "…<{} bytes total>", s.len());
+    }
+    out
+}
 
 /// Errors emitted by [`crate::keypair::Keypair`] construction paths.
 #[derive(Debug, Error)]
@@ -138,7 +187,11 @@ pub enum UcanError {
     /// Audience-DID does not match the validation context's expected
     /// audience. Defends against cross-atrium replay (a UCAN issued
     /// to atrium A replayed at atrium B).
-    #[error("UCAN audience mismatch: token aud {token_aud} != expected {expected}")]
+    #[error(
+        "UCAN audience mismatch: token aud {} != expected {}",
+        sanitize_untrusted(.token_aud),
+        sanitize_untrusted(.expected)
+    )]
     AudienceMismatch {
         /// The audience the token names.
         token_aud: String,
@@ -156,7 +209,11 @@ pub enum UcanError {
     /// Issuer-audience binding violated between adjacent chain links.
     /// Each layer's `aud` MUST equal the next layer's `iss` so the
     /// chain forms a coherent delegation path.
-    #[error("UCAN chain link {link_index} aud {aud} != next link iss {next_iss}")]
+    #[error(
+        "UCAN chain link {link_index} aud {} != next link iss {}",
+        sanitize_untrusted(.aud),
+        sanitize_untrusted(.next_iss)
+    )]
     ChainLinkBroken {
         /// Chain index of the parent link.
         link_index: usize,
@@ -169,7 +226,8 @@ pub enum UcanError {
     /// contract: a delegated UCAN MUST NOT widen the authority of its
     /// parent.
     #[error(
-        "UCAN attenuation violated at chain link {link_index}: child grants {child_cap} but parent only grants {parent_caps:?}"
+        "UCAN attenuation violated at chain link {link_index}: child grants {} but parent only grants {parent_caps:?}",
+        sanitize_untrusted(.child_cap)
     )]
     AttenuationViolated {
         /// Chain index of the offending child.
@@ -185,16 +243,32 @@ pub enum UcanError {
     /// Token CBOR could not be decoded.
     #[error("UCAN token decode failed")]
     DecodeFailed,
+    /// The CBOR nesting depth of an untrusted-input `Ucan` blob
+    /// exceeded [`crate::ucan::MAX_UCAN_PROOF_DEPTH`]. `Ucan::prf` is
+    /// a directly-recursive proof-chain field; an adversarial blob can
+    /// nest it arbitrarily deep, and `serde`'s derived recursive
+    /// deserialize routine consumes one stack frame per level — a
+    /// stack-overflow DoS. Rejected at the byte boundary BEFORE serde
+    /// is invoked (per safe-2 #549). `depth` is the observed nesting
+    /// at the point the bound was tripped; `max` is the configured
+    /// ceiling.
+    #[error("UCAN proof chain too deep: depth={depth} exceeds max={max}")]
+    ProofChainTooDeep {
+        /// Observed CBOR container-nesting depth when the bound tripped.
+        depth: usize,
+        /// The configured maximum.
+        max: usize,
+    },
     /// Issuer keypair has been rotated; post-rotation UCANs reject
     /// per `crypto-major-3`.
-    #[error("UCAN issuer keypair superseded by rotation: issuer={issuer}")]
+    #[error("UCAN issuer keypair superseded by rotation: issuer={}", sanitize_untrusted(.issuer))]
     IssuerKeypairSuperseded {
         /// Superseded issuer DID.
         issuer: String,
     },
     /// Issuer device has been revoked by its parent DID per
     /// `crypto-major-6`.
-    #[error("UCAN issuer device revoked: issuer={issuer}")]
+    #[error("UCAN issuer device revoked: issuer={}", sanitize_untrusted(.issuer))]
     IssuerDeviceRevoked {
         /// Revoked device DID.
         issuer: String,
@@ -202,7 +276,11 @@ pub enum UcanError {
     /// Device envelope does not authorize the capability the UCAN
     /// grants (e.g. `host:sandbox:exec` from a device whose
     /// envelope says `runs_sandbox=false`).
-    #[error("UCAN device envelope violated: issuer={issuer} cap={cap}")]
+    #[error(
+        "UCAN device envelope violated: issuer={} cap={}",
+        sanitize_untrusted(.issuer),
+        sanitize_untrusted(.cap)
+    )]
     DeviceEnvelopeViolated {
         /// Issuer DID.
         issuer: String,
