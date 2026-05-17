@@ -214,6 +214,24 @@ impl ChainValidationOutcome {
     }
 }
 
+/// Fwd-1 #946 (umbrella #1143): single construction site for the
+/// `StepOutsideEnvelope` denial outcome. The pre-fix walker built this
+/// variant at TWO call sites with identical field shape but different
+/// source step (the chain-integrity check used `next`; the
+/// envelope-decision mapping used `step`). Consolidating to one helper
+/// keeps the clone localized + the error-attribution shape uniform.
+/// The clones are inherent (the outcome carries owned `Did`/`String`
+/// for the `'static` `ErrorCode` mapping boundary) and remain on the
+/// DENIAL path only — the happy path stays zero-alloc.
+#[cfg(not(target_arch = "wasm32"))]
+#[inline]
+fn step_outside_envelope(step: &DelegationStep) -> ChainValidationOutcome {
+    ChainValidationOutcome::StepOutsideEnvelope {
+        issuer_did: step.issuer_did.clone(),
+        cap_pattern: step.cap_pattern.clone(),
+    }
+}
+
 /// Validate a full UCAN delegation chain against the three-layer trust
 /// model.
 ///
@@ -282,10 +300,9 @@ where
         if let Some(next) = chain.get(idx + 1)
             && step.audience_did != next.issuer_did
         {
-            return ChainValidationOutcome::StepOutsideEnvelope {
-                issuer_did: next.issuer_did.clone(),
-                cap_pattern: next.cap_pattern.clone(),
-            };
+            // The NEXT step's issuer can't issue a cap it didn't
+            // receive — attribute the denial to `next` (#946 helper).
+            return step_outside_envelope(next);
         }
 
         // Private-namespace caps NEVER cross plugin boundaries —
@@ -316,10 +333,9 @@ where
         match decision {
             DelegationDecision::Permitted => {}
             DelegationDecision::OutsideEnvelope => {
-                return ChainValidationOutcome::StepOutsideEnvelope {
-                    issuer_did: step.issuer_did.clone(),
-                    cap_pattern: step.cap_pattern.clone(),
-                };
+                // This step's own issuer delegated outside its
+                // manifest envelope — attribute to `step` (#946 helper).
+                return step_outside_envelope(step);
             }
             DelegationDecision::PrivateNamespaceForbidden => {
                 return ChainValidationOutcome::PrivateNamespaceLeaked {
@@ -609,10 +625,29 @@ mod tests {
         let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
         // Integrity violation surfaces as StepOutsideEnvelope (the next
         // step's issuer can't issue what it didn't receive).
-        assert!(matches!(
-            outcome,
-            ChainValidationOutcome::StepOutsideEnvelope { .. }
-        ));
+        //
+        // Fwd-1 #946 (umbrella #1143) Track-1 regression pin: the
+        // chain-integrity path attributes the denial to the NEXT step
+        // (via `step_outside_envelope(next)`), distinct from the
+        // envelope-decision path (`two_step_chain_outside_envelope_
+        // rejected`, which attributes to `step`). Asserting the
+        // attributed `issuer_did`/`cap_pattern` here (not just a
+        // `matches!`) pins that the two-call-site → one-helper
+        // consolidation preserved the per-site source-step semantics.
+        match outcome {
+            ChainValidationOutcome::StepOutsideEnvelope {
+                issuer_did,
+                cap_pattern,
+            } => {
+                assert_eq!(
+                    issuer_did, plugin_x,
+                    "chain-integrity violation attributes to the NEXT \
+                     step's issuer (#946 helper `next` path)"
+                );
+                assert_eq!(cap_pattern, "store:notes:write");
+            }
+            other => panic!("expected StepOutsideEnvelope, got {other:?}"),
+        }
     }
 
     #[test]
