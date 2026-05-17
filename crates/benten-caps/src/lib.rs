@@ -77,7 +77,26 @@ pub mod manifest_scope;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod manifest_envelope_chain_validation;
 
+// COLLAPSE P2 CONSOLIDATE — policy-bearing UCAN chain-authority
+// consultation (rotation-log-as-authority + the single generalized
+// envelope-ceiling seam). Moved from `benten_id::ucan` per
+// impl-design-COLLAPSE.md §2 (RATIFIED DECISION-RECORD §4); the pure
+// crypto/structural chain primitive stays in `benten-id`. Native-only
+// (depends on the native-only `benten-id` device-attestation +
+// rotation-log primitive types). COLLAPSE P5 (#669) extends
+// `validate_chain_with_envelope_ceiling`'s factored
+// `envelope_ceiling_rejects_cap` predicate with the plugin-manifest
+// ceiling as a second caller — ONE code path (build-constraint iii).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod chain_authority;
+
 pub use attenuation::check_attenuation;
+// COLLAPSE P2 — the single moved authority seam (native-only).
+#[cfg(not(target_arch = "wasm32"))]
+pub use chain_authority::{
+    envelope_ceiling_rejects_cap, validate_chain_with_envelope_ceiling,
+    validate_chain_with_rotation_log,
+};
 // G14-B durable UCAN backend is native-only (see `backends/mod.rs`).
 #[cfg(not(target_arch = "wasm32"))]
 pub use backends::UCANBackend;

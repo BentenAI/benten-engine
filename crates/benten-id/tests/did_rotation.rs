@@ -11,10 +11,17 @@
 
 #![allow(clippy::unwrap_used)]
 
+use benten_id::DidRotationError;
 use benten_id::did_rotation::{AttestationKind, RotationLog, rotate_keypair};
 use benten_id::keypair::Keypair;
-use benten_id::ucan::{Ucan, validate_chain_with_rotation_log};
-use benten_id::{DidRotationError, UcanError};
+
+// COLLAPSE P2 CONSOLIDATE: `superseded_did_cannot_sign_new_ucan_delegations`
+// (which called the now-moved `validate_chain_with_rotation_log`)
+// relocated to `benten-caps/tests/collapse_p2_consolidate_chain_authority.rs`
+// — benten-id cannot call the moved function (the crate dependency
+// arrow is benten-caps → benten-id, never the reverse). The
+// `RotationLog` *type* + `rotate_keypair` + `accept_rotation_event`
+// stay benten-id primitives and keep full coverage here.
 
 #[test]
 fn did_rotate_keypair_emits_superseded_by_attestation_chain() {
@@ -59,35 +66,11 @@ fn did_rotation_propagates_revocation_to_ucan_backend() {
     unreachable!("G14-B wires this pin");
 }
 
-#[test]
-fn superseded_did_cannot_sign_new_ucan_delegations() {
-    // crypto-major-3 — post-rotation old-key UCAN rejected at
-    // chain-walk via rotation log.
-    let old_kp = Keypair::generate();
-    let new_kp = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-    let did = old_kp.public_key().to_did();
-    let now = 1_000_000_000;
-
-    // Rotate:
-    let attestation = rotate_keypair(&did, &old_kp, &new_kp, now).unwrap();
-    let log = RotationLog::from_entries(vec![attestation]);
-
-    // Attacker holding old_kp tries to issue a new UCAN AFTER rotation:
-    let post_rotation_ucan = Ucan::builder()
-        .issuer(old_kp.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("/zone/posts", "read")
-        .not_before(now + 100)
-        .expiry(now + 3600)
-        .sign(&old_kp);
-
-    let err = validate_chain_with_rotation_log(&[post_rotation_ucan], &log).unwrap_err();
-    assert!(
-        matches!(err, UcanError::IssuerKeypairSuperseded { .. }),
-        "{err:?}"
-    );
-}
+// COLLAPSE P2 CONSOLIDATE: `superseded_did_cannot_sign_new_ucan_delegations`
+// moved to `benten-caps/tests/collapse_p2_consolidate_chain_authority.rs`
+// with `validate_chain_with_rotation_log` (the rotation-log-as-authority
+// chain-walk is policy-bearing → benten-caps; the `RotationLog`
+// primitive type stays here).
 
 #[test]
 fn did_rotate_keypair_preserves_did_under_canonical_bytes() {

@@ -12,23 +12,31 @@
 //! notes below. Surviving pins exercise the kept primitives:
 //!
 //! - `device_attestation_round_trip`
-//! - `device_attestation_consumed_at_ucan_delegation_chain_walk`
 //! - `device_attestation_envelope_must_be_attenuated_by_parent_did`
 //! - `device_attestation_widening_parent_authority_is_rejected`
-//! - `device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain`
 //! - `browser_target_auto_asserts_runs_sandbox_false`
 //! - `browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time`
 //! - `envelope_widens_zone_scope_matrix`
 //! - `ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation` — RED-PHASE (G14-B integration)
+//!
+//! COLLAPSE (P2 CONSOLIDATE): the two consume-time chain-walk pins
+//! (`device_attestation_consumed_at_ucan_delegation_chain_walk` +
+//! `device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain`)
+//! moved to `benten-caps/tests/collapse_p2_consolidate_chain_authority.rs`
+//! with the `validate_chain_with_attestations` function (renamed
+//! `validate_chain_with_envelope_ceiling`). benten-id cannot call the
+//! moved function (the crate dependency arrow is benten-caps →
+//! benten-id). The `DeviceAttestation` / `CapabilityEnvelope` *types*
+//! + `issue*` / `envelope_widens` / round-trip stay benten-id
+//! primitives and keep full coverage here.
 
 #![allow(clippy::unwrap_used)]
 
+use benten_id::DeviceAttestationError;
 use benten_id::device_attestation::{
     CapabilityEnvelope, DeviceAttestation, RuntimeTarget, UptimePolicy, ZoneScope,
 };
 use benten_id::keypair::Keypair;
-use benten_id::ucan::{Ucan, validate_chain_with_attestations};
-use benten_id::{DeviceAttestationError, UcanError};
 
 #[test]
 fn device_attestation_round_trip() {
@@ -70,36 +78,11 @@ fn device_attestation_round_trip() {
     ));
 }
 
-#[test]
-fn device_attestation_consumed_at_ucan_delegation_chain_walk() {
-    // exploration-device-mesh — chain-walker rejects UCANs that
-    // exceed the device's declared envelope.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-
-    let envelope = CapabilityEnvelope {
-        runs_sandbox: false,
-        ..CapabilityEnvelope::default()
-    };
-    let attestation =
-        DeviceAttestation::issue(&parent, device.public_key().to_did(), envelope).unwrap();
-
-    // Device tries to issue a UCAN granting host:sandbox:exec:
-    let ucan = Ucan::builder()
-        .issuer(device.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("host:sandbox:exec", "*")
-        .not_before(0)
-        .expiry(u64::MAX)
-        .sign(&device);
-
-    let err = validate_chain_with_attestations(&[ucan], &[attestation]).unwrap_err();
-    assert!(
-        matches!(err, UcanError::DeviceEnvelopeViolated { .. }),
-        "{err:?}"
-    );
-}
+// COLLAPSE P2 CONSOLIDATE: `device_attestation_consumed_at_ucan_delegation_chain_walk`
+// moved to `benten-caps/tests/collapse_p2_consolidate_chain_authority.rs`
+// with `validate_chain_with_attestations` (renamed
+// `validate_chain_with_envelope_ceiling`). The `DeviceAttestation`
+// issue/round-trip/envelope primitives stay pinned here.
 
 // COLLAPSE (P3): `device_attestation_replay_resistant_within_freshness_window`
 // + `device_attestation_replay_resistance_via_nonce_freshness_window`
@@ -188,38 +171,12 @@ fn device_attestation_widening_parent_authority_is_rejected() {
 // closure-pin in `benten-engine` (inbound `runs_sandbox=false` rejects
 // `host:sandbox:*` at the single chain-validation seam).
 
-#[test]
-fn device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain()
- {
-    // sec-r4r1-6 — runtime re-check against attestation envelope.
-    let parent = Keypair::generate();
-    let device = Keypair::generate();
-    let leaf_aud = Keypair::generate();
-
-    let downgrade_envelope = CapabilityEnvelope {
-        runs_sandbox: false,
-        holds_zones: ZoneScope::CacheOnly,
-        ..CapabilityEnvelope::default()
-    };
-    let attestation =
-        DeviceAttestation::issue(&parent, device.public_key().to_did(), downgrade_envelope)
-            .unwrap();
-
-    // Device attempts host:sandbox:exec (NOT in envelope):
-    let invocation_ucan = Ucan::builder()
-        .issuer(device.public_key().to_did().as_str())
-        .audience(leaf_aud.public_key().to_did().as_str())
-        .capability("host:sandbox:exec", "*")
-        .not_before(0)
-        .expiry(u64::MAX)
-        .sign(&device);
-
-    let err = validate_chain_with_attestations(&[invocation_ucan], &[attestation]).unwrap_err();
-    assert!(
-        matches!(err, UcanError::DeviceEnvelopeViolated { .. }),
-        "{err:?}"
-    );
-}
+// COLLAPSE P2 CONSOLIDATE: `device_attestation_capability_envelope_downgrade_attack_blocked_by_runtime_recheck_against_parent_chain`
+// moved to `benten-caps/tests/collapse_p2_consolidate_chain_authority.rs`
+// with `validate_chain_with_attestations` (renamed
+// `validate_chain_with_envelope_ceiling`). The runtime ceiling-AND is
+// now pinned at the consolidated benten-caps seam (+ the P2
+// would-FAIL-if-reverted §3.6b closure-pin there).
 
 #[test]
 fn browser_target_auto_asserts_runs_sandbox_false() {
@@ -282,7 +239,7 @@ fn browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construct
 }
 
 #[test]
-#[ignore = "Hyg-4 #478 trigger-retense: destination phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation STILL OPEN, but the prior 'Phase 3 G16 Atrium-handshake re-evaluation point' trigger has PASSED (Phase 3 + Phase-4-Foundation SHIPPED). Note: under COLLAPSE the device-attestation *acceptance* pipe is deleted; the `with_attestation_lookup` construction-time gate referenced below is moot post-COLLAPSE (the surviving gate is the validate-side `validate_chain_with_attestations`). Current trigger = the v1-assessment-window in Phase-4-Meta. Un-ignore at that v1-assessment-window re-evaluation. — production prerequisite NOT YET shipped at HEAD. The `Ucan::builder().with_attestation_lookup(...)` construction-time gate + `DelegationError::AudienceEnvelopeIncompatibleWithCapability` typed error do NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:33-37` doc comment; no symbol). `validate_chain_with_attestations` (validate-side seam) DOES exist at `crates/benten-id/src/ucan.rs:602` — runtime gate before trust-graph dispatch. Construction-time rejection composes with §2.1-followup re-evaluation outcome (G16-D wave-6b PR #163 shipped 2026-05-09; cryptography-reviewer dispatch pending). Un-ignore at §2.1-followup re-evaluation that determines `ssi` integration is needed (or, if hand-rolled remains, the `with_attestation_lookup` chain-construction-time path lands as a benten-id-internal extension)."]
+#[ignore = "Hyg-4 #478 trigger-retense: destination phase-3-backlog §2.1-followup `ssi` external UCAN/VC spec compatibility re-evaluation STILL OPEN, but the prior 'Phase 3 G16 Atrium-handshake re-evaluation point' trigger has PASSED (Phase 3 + Phase-4-Foundation SHIPPED). Note: under COLLAPSE the device-attestation *acceptance* pipe is deleted; the `with_attestation_lookup` construction-time gate referenced below is moot post-COLLAPSE (the surviving gate is the validate-side `validate_chain_with_attestations`). Current trigger = the v1-assessment-window in Phase-4-Meta. Un-ignore at that v1-assessment-window re-evaluation. — production prerequisite NOT YET shipped at HEAD. The `Ucan::builder().with_attestation_lookup(...)` construction-time gate + `DelegationError::AudienceEnvelopeIncompatibleWithCapability` typed error do NOT exist (only mentioned in `crates/benten-id/src/ucan.rs:33-37` doc comment; no symbol). the validate-side envelope-ceiling seam DOES exist (post-COLLAPSE-P2 CONSOLIDATE it MOVED from `benten-id::ucan::validate_chain_with_attestations` to `benten_caps::chain_authority::validate_chain_with_envelope_ceiling`) — runtime gate before trust-graph dispatch. Construction-time rejection composes with §2.1-followup re-evaluation outcome (G16-D wave-6b PR #163 shipped 2026-05-09; cryptography-reviewer dispatch pending). Un-ignore at §2.1-followup re-evaluation that determines `ssi` integration is needed (or, if hand-rolled remains, the `with_attestation_lookup` chain-construction-time path lands as a benten-id-internal extension)."]
 fn ucan_delegation_to_browser_target_for_sandbox_handler_rejected_at_chain_construction_not_invocation()
  {
     // br-r4-r1-4 / br-r4-r2-3 MAJOR cross-wave pin. The chain-
