@@ -376,8 +376,11 @@ impl JsDeviceAttestation {
     /// `E_DEVICE_ATTESTATION_ENVELOPE_WIDENING` if the device envelope
     /// claims wider authority than the supplied parent-authority
     /// envelope. This is the construction-time companion to the
-    /// chain-walker's consume-time `validate_chain_with_attestations`
-    /// envelope-attenuation gate — defense in depth at both ends.
+    /// chain-walker's consume-time
+    /// `benten_caps::chain_authority::validate_chain_with_envelope_ceiling`
+    /// envelope-attenuation gate (post-COLLAPSE-P2 CONSOLIDATE; formerly
+    /// `benten_id::ucan::validate_chain_with_attestations`) — defense in
+    /// depth at both ends.
     #[napi(factory)]
     // napi factory mirrors the Rust authority-envelope signature 1:1;
     // the bool params are the device/parent capability-envelope flags
