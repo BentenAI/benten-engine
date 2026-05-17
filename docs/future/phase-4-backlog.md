@@ -907,6 +907,29 @@ A prefix-trie prefilter (the issue's sketch option (a)) must be built where the 
 
 **Acceptance criteria (Phase-4-Meta, primarily `benten-eval` lane).** Add a `LabelGlob`/`AnchorPrefix` prefix-trie prefilter to the `benten_eval::primitives::subscribe` registry consulted before iterating subscribers; full-glob/arbitrary patterns fall back to current "call every subscriber"; criterion bench asserts O(1)-avg vs O(N) at N=1k subscribers; no semantic change (same subscribers receive same events); INTERNALS.md (both `benten-eval` and `benten-engine` where the `engine_subscribe` delegation is documented) updated. ~150-250 LOC at Phase-4-Meta. Surface this lane-attribution correction to the orchestrator at PR-open (the umbrella #1194 should be re-pointed at a `benten-eval` lane or a cross-lane wave).
 
+### §4.71 `benten-sync` `Cargo.toml` `[features]` table + `#[non_exhaustive]` enum sweep (Phase-4-Meta — Fwd-2 #1077 + #1072, umbrella #1186)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2 #1077 + #1072, umbrella #1186 — `phase-4-meta-deferred`). This row IS the named destination for the W20-deferred umbrella #1186; the umbrella stays open as the Phase-4-Meta tracking row.
+
+`crates/benten-sync/Cargo.toml` has no `[features]` table (5th instance of META #924 root-position crate feature-flag absence). The absence is *intentional* for the native-only Layer-1 sync crate at v1 (Surf-1 NEW-4 OBS-positive: the wasm32-native-only 5-rung defense + Cargo.toml architectural-intent narration are exemplary). The surface needs evolution at Phase-4-Meta, NOT pre-v1:
+
+1. **`testing` feature.** `MstEntry::new_with_explicit_cid_for_testing` is a `pub fn` with `_for_testing` suffix (Qual-2 #771). Mirror the `crates/benten-id/Cargo.toml` testing-feature precedent — gate the `_for_testing` surfaces behind a `testing` feature.
+2. **`tracing` feature** (default-on, off-able for embedded/wasm32). Safe-1 #511 names 10 silent-skip arms in `crdt.rs` with zero `tracing::` calls; #511 itself closes via the LoroDoc Pattern-F bundle #1179 — the `tracing` feature-gate here is *defense-in-depth*, not the #511 closure.
+3. **Future post-iroh transport features.** If #889 Path A lands (umbrella #1176), individual transport backends ship as features (`iroh-transport` / `tor-transport` / `nostr-relay`).
+4. **`#[non_exhaustive]` discipline (Fwd-2 #1072).** 5 public enums lack `#[non_exhaustive]` despite INTERNALS naming future-extension targets. NOTE: the design-D8 carve-out is Ben-ratified — deliberately-exhaustive enums (where exhaustive match in cross-crate consumers is the intended SemVer contract) stay closed; this row applies `#[non_exhaustive]` only to the genuinely future-extensible subset per the #1072 enumeration + couples to META #907.
+
+**Acceptance criteria (Phase-4-Meta).** `[features]` table with `testing` + `tracing` (default-on); `_for_testing` surfaces gated behind `testing` (closes Qual-2 #771); `#[non_exhaustive]` applied to the future-extensible enum subset per #1072 (design-D8 carve-out respected); Cargo.toml architectural-intent narration retained per Surf-1 NEW-4; `cargo-public-api` baseline updated (additive — preserves SemVer). ~50-100 LOC at Phase-4-Meta.
+
+### §4.72 `benten-sync` `Mst` cached-root wrapper (Phase-4-Meta — Fwd-1 #1011, META #486, umbrella #1184)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-1 #1011, META #486 5th instance, umbrella #1184 — `phase-4-meta-deferred`). This row IS the named destination for the W20-deferred umbrella #1184; the umbrella stays open as the Phase-4-Meta tracking row.
+
+`Mst::root_cid()` is O(n) per call (DAG-CBOR encode + BLAKE3 hash of the full entry set) with a docstring promise that "production-callers layer a cached-root wrapper" — the cache layer was never wired. At HEAD `Engine::apply_atrium_merge` (engine crate, out-of-lane) calls `mst.root_cid()` repeatedly during convergence without caching. This is the "INTERNALS-acknowledged-but-not-delivered" pattern (META #486 5th instance in this crate: #375 + #378 + #381 + F4 + this F3 cached-root). Couples to the `apply_atrium_merge` cluster (#1181, the benten-sync slice of which is already closed on main) + LoroDoc Pattern-F #1179.
+
+Forward-readiness rationale (Fwd-2 §C): as plugin ecosystems scale (Phase 6+ AI agents + Phase 8 decentralized registry), per-zone MST cardinality grows from "tens" to "thousands"; uncached O(n) per root-CID call becomes a real cost ceiling. Pre-v1 it is not on a hot path that materially regresses (current MST cardinalities are small + the convergence loop is already round-bounded by §4.67's MAX_ROUNDS cap).
+
+**Acceptance criteria (Phase-4-Meta perf-pass).** Cached-root wrapper struct over `Mst` exposing a memoized `root_cid()` with invalidation on `insert`/`remove`; `Engine::apply_atrium_merge` consumes the wrapped MST (engine-side touch — cross-lane, coordinate with the engine lane at Phase-4-Meta); INTERNALS.md §6 retense to name the cached-root wrapper as the production-callers shape (closes the phantom-destination docstring); META #486 sub-instance count reduced 5 → 4 in this crate; Criterion bench baseline added (couples to META #1062). ~80-150 LOC at Phase-4-Meta.
+
 ---
 
 ## §5. Phase 4-Foundation Track A (implementation work surfaced post-R1)
