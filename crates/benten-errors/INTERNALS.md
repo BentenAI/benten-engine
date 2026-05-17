@@ -153,7 +153,7 @@ This crate is one of the cleanest expressions of the thin-engine principle in th
 
 ### Heavy-handed / inelegant / flag-for-review
 
-- **`PartialEq<ErrorCode> for str` + `for &str` + reverse** (`src/lib.rs:1990-2004`). These exist to make Phase-2a test ergonomics happy (`assert_eq!(err.code(), "E_CAP_DENIED")`). The `PartialEq<ErrorCode> for str` impl in particular is unusual — it crosses the bare-`str` / `&str` boundary, and the doc comment doesn't fully justify keeping both `&str` and `str` impls. A future cleanup could pin which test sites depend on which direction and drop the unused half; the surface is small but the asymmetry feels like leftover from a refactor.
+- **`PartialEq<ErrorCode> for &str` + reverse `PartialEq<&str> for ErrorCode`** (`src/lib.rs:2002-2012`). These exist to make Phase-2a test ergonomics happy (`assert_eq!(err.code(), "E_CAP_DENIED")`). The asymmetric bare-`str` direction (`impl PartialEq<ErrorCode> for str`) that used to accompany these was leftover refactor scaffolding with zero callers and **was removed (Hyg-1 #291, ST-ERRORS lane)**; only the two `&str` directions remain, which is the symmetric shape the test sites actually depend on.
 
 - ~~**`code(&self) -> ErrorCode` is an identity method**~~ **RESOLVED** (Hyg-1 #286, ST-ERRORS lane): the test-shim identity method was deleted (option (c) — zero callers; tests use the value directly). Consumer-crate wrapper-error `code()` methods (`CoreError::code()`, etc.) are a different surface and are unaffected.
 
