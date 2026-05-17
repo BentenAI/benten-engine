@@ -55,6 +55,24 @@
 use std::sync::Arc;
 
 use benten_core::{Cid, CoreError, Edge, Node, WriteAuthority};
+
+/// Default maximum accepted size, in bytes, for an **untrusted**
+/// snapshot-blob payload handed to [`SnapshotBlobBackend::from_bytes`].
+///
+/// META #629 (DoS-via-unbounded-decode) benten-graph slice / #553: a
+/// peer-supplied DAG-CBOR snapshot-blob is decoded via
+/// `serde_ipld_dagcbor::from_slice`, which allocates eagerly while parsing.
+/// A small wire payload describing a deeply-nested or
+/// huge-map structure (a "CBOR bomb") can inflate into an OOM. Rejecting
+/// inputs larger than this cap BEFORE decode bounds the worst-case
+/// allocation a single malicious peer can induce.
+///
+/// 256 MiB is generous for a legitimate Phase-3 snapshot handoff (Node
+/// bodies are small; the cap exists to stop pathological inputs, not to
+/// constrain real graphs) while still being orders of magnitude below the
+/// memory a CBOR-bomb could otherwise demand. Callers with a tighter
+/// deployment budget use [`SnapshotBlobBackend::from_bytes_with_cap`].
+pub const MAX_SNAPSHOT_BLOB_BYTES: usize = 256 * 1024 * 1024;
 use benten_errors::ErrorCode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -102,6 +120,15 @@ impl SnapshotBlob {
 
     /// Decode canonical DAG-CBOR bytes into a [`SnapshotBlob`].
     ///
+    /// This is the unbounded form — it does NOT enforce the
+    /// [`MAX_SNAPSHOT_BLOB_BYTES`] DoS cap. Construction from
+    /// **untrusted peer bytes** MUST go through
+    /// [`SnapshotBlobBackend::from_bytes`] (or
+    /// [`SnapshotBlobBackend::from_bytes_with_cap`]), which size-checks
+    /// before any allocation-amplifying deserialization runs (#553, META
+    /// #629 slice). This bare form is retained for trusted in-process
+    /// round-trips where the bytes were just produced by [`Self::to_dag_cbor`].
+    ///
     /// # Errors
     /// [`CoreError::Serialize`] on decode failure (malformed CBOR, schema
     /// drift, etc.).
@@ -142,6 +169,16 @@ pub enum SnapshotBlobError {
     /// Snapshot-blob bytes failed to decode as canonical DAG-CBOR.
     #[error("snapshot-blob decode: {0}")]
     Decode(#[from] CoreError),
+    /// The untrusted input exceeded the configured byte cap and was
+    /// rejected BEFORE any allocation-amplifying deserialization ran
+    /// (#553 / META #629 DoS-via-unbounded-decode slice).
+    #[error("snapshot-blob too large: {actual} bytes exceeds cap of {limit} bytes")]
+    TooLarge {
+        /// Size of the rejected input in bytes.
+        actual: usize,
+        /// Configured maximum accepted size in bytes.
+        limit: usize,
+    },
     /// The decoded blob carries a `schema_version` this build does not
     /// understand. Refuse rather than silently mis-decode.
     #[error(
@@ -163,6 +200,7 @@ impl SnapshotBlobError {
         match self {
             SnapshotBlobError::ReadOnly { .. } => ErrorCode::BackendReadOnly,
             SnapshotBlobError::Decode(e) => e.code(),
+            SnapshotBlobError::TooLarge { .. } => ErrorCode::Serialize,
             SnapshotBlobError::SchemaVersion { .. } => ErrorCode::Serialize,
         }
     }
@@ -186,14 +224,44 @@ impl SnapshotBlobBackend {
         }
     }
 
-    /// Decode a snapshot-blob-bytes payload (DAG-CBOR) and wrap it as a
-    /// read-only backend.
+    /// Decode an **untrusted** snapshot-blob-bytes payload (DAG-CBOR) and
+    /// wrap it as a read-only backend, enforcing the default
+    /// [`MAX_SNAPSHOT_BLOB_BYTES`] DoS cap.
+    ///
+    /// The size check runs BEFORE `serde_ipld_dagcbor::from_slice` so a
+    /// CBOR-bomb cannot inflate a small wire payload into an OOM (#553 /
+    /// META #629 DoS-via-unbounded-decode benten-graph slice). This is the
+    /// surface every peer-bytes import path MUST use.
     ///
     /// # Errors
+    /// - [`SnapshotBlobError::TooLarge`] if `bytes.len()` exceeds
+    ///   [`MAX_SNAPSHOT_BLOB_BYTES`] (checked before any decode).
     /// - [`SnapshotBlobError::Decode`] on DAG-CBOR decode failure.
     /// - [`SnapshotBlobError::SchemaVersion`] if the blob's
     ///   `schema_version` doesn't match this build.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SnapshotBlobError> {
+        Self::from_bytes_with_cap(bytes, MAX_SNAPSHOT_BLOB_BYTES)
+    }
+
+    /// Like [`Self::from_bytes`] but with a caller-supplied byte cap, for
+    /// deployments with a tighter memory budget than the
+    /// [`MAX_SNAPSHOT_BLOB_BYTES`] default.
+    ///
+    /// # Errors
+    /// - [`SnapshotBlobError::TooLarge`] if `bytes.len() > limit` (checked
+    ///   before any allocation-amplifying decode).
+    /// - [`SnapshotBlobError::Decode`] on DAG-CBOR decode failure.
+    /// - [`SnapshotBlobError::SchemaVersion`] if the blob's
+    ///   `schema_version` doesn't match this build.
+    pub fn from_bytes_with_cap(bytes: &[u8], limit: usize) -> Result<Self, SnapshotBlobError> {
+        // Size-check BEFORE decode — the whole point of the cap is to
+        // refuse before `serde_ipld_dagcbor::from_slice` allocates.
+        if bytes.len() > limit {
+            return Err(SnapshotBlobError::TooLarge {
+                actual: bytes.len(),
+                limit,
+            });
+        }
         let blob = SnapshotBlob::from_dag_cbor(bytes)?;
         if blob.schema_version != SNAPSHOT_BLOB_SCHEMA_VERSION {
             return Err(SnapshotBlobError::SchemaVersion {
@@ -247,12 +315,18 @@ impl KVBackend for SnapshotBlobBackend {
         let Some(rest) = key.strip_prefix(b"n:") else {
             return Ok(None);
         };
-        let cid = match Cid::from_bytes(rest) {
-            Ok(cid) => cid,
-            // A non-CID-suffixed `n:` key is not addressable against the
-            // snapshot-blob shape; treat as a clean miss.
-            Err(_) => return Ok(None),
-        };
+        // #570 (Safe-2): a malformed CID suffix under a well-formed `n:`
+        // prefix is a CORRUPTION / protocol-violation signal, not a clean
+        // miss. The prior `Err(_) => Ok(None)` silently masked it, which is
+        // asymmetric with `BrowserBackend::edges_from/edges_to` (they
+        // propagate `Cid::from_bytes` failure) and lets a tampered key
+        // present as "node simply absent". Propagate it so callers can
+        // distinguish "not present" from "the store handed me garbage".
+        let cid = Cid::from_bytes(rest).map_err(|e| {
+            SnapshotBlobError::Decode(CoreError::Serialize(format!(
+                "snapshot-blob: malformed CID under n: key: {e}"
+            )))
+        })?;
         Ok(self.blob.nodes.get(&cid).cloned())
     }
 

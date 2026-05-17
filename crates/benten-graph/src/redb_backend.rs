@@ -585,13 +585,21 @@ impl RedbBackend {
     /// assert!(b.get_by_label("Post").unwrap().contains(&cid));
     /// ```
     pub fn put_node(&self, node: &Node) -> Result<Cid, GraphError> {
-        // Fail-closed on the inherent path: the `NodeStore::put_node` trait
-        // delegate and any direct user/binding call route here, so the
-        // system-zone guard MUST fire before any redb write. Engine-internal
-        // privileged paths go through `put_node_with_context` with a
-        // privileged `WriteContext`.
-        guard_system_zone_node(node, /* is_privileged= */ false)?;
-        self.put_node_unchecked(node)
+        // #617 (Safe-3, META #660 Inv-13 slice): the bare inherent
+        // `put_node` (and the `NodeStore::put_node` trait delegate that
+        // routes here) MUST enforce the Inv-13 5-row dispatch matrix, not
+        // just the system-zone guard. The prior body called
+        // `put_node_unchecked`, whose `nodes.insert(...)` has redb REPLACE
+        // semantics — a `User`-authority re-put of an already-stored CID
+        // silently overwrote instead of returning `E_INV_IMMUTABILITY`,
+        // so `Engine::create_node`-style re-puts reaching the inherent
+        // path bypassed immutability entirely. Routing through
+        // `put_node_with_context` with the default `User` `WriteContext`
+        // puts this path on the SAME in-txn existence-check + authority
+        // dispatch as every other write surface (Row 1: User+present →
+        // E_INV_IMMUTABILITY). The system-zone guard still fires first
+        // inside `put_node_with_context`.
+        self.put_node_with_context(node, &WriteContext::default())
     }
 
     /// Internal helper: the indexed put without the system-zone guard.
@@ -721,19 +729,53 @@ impl RedbBackend {
         //
         // r6b-ivm-1 cascade: delete every edge whose source or target is
         // `cid` first, so the Node delete doesn't leave orphaned edges
-        // pointing at an absent CID. Each cascaded edge delete runs through
-        // `delete_edge` (itself a separate redb write-txn), so the cascade
-        // is NOT atomic with the node delete on this direct-API path —
-        // callers who need atomicity go through `transaction(|tx| ...)`,
-        // which holds all removals inside one commit.
+        // pointing at an absent CID.
+        //
+        // #562 (Safe-2, META #629/#660 coupled): the cascade-edge removals,
+        // the node body removal, and the index removals now ALL run inside a
+        // SINGLE redb write transaction. The prior shape ran each cascaded
+        // `delete_edge` in its own txn, then opened a SEPARATE txn for the
+        // node delete — a TOCTOU window in which a concurrent `put_edge`
+        // could insert a new edge referencing `cid` AFTER the cascade scan
+        // but BEFORE the node delete committed, re-introducing the
+        // r6b-ivm-1 orphaned-edge regression class. Folding the scan +
+        // every removal into one commit eliminates that window: redb's
+        // single-writer lock serializes the whole operation, so any racing
+        // edge insert is ordered strictly before or strictly after the
+        // entire cascade.
         //
         // The `Engine::delete_node` path always routes through the
         // transactional variant (`Transaction::delete_node`); this direct
         // path exists for tests and non-engine consumers and matches the
-        // rest of the `RedbBackend::delete_*` API shape.
+        // rest of the `RedbBackend::delete_*` API shape — but now with the
+        // same atomicity guarantee.
         let cascade_edges = self.collect_edges_referencing_node(cid)?;
+
+        // Resolve each cascaded edge's source/target index keys BEFORE
+        // opening the write txn (reads only; the authoritative removal
+        // happens in-txn below). A concurrent mutation between this read and
+        // the commit is harmless: the edge body removal in-txn is
+        // idempotent (redb `remove` of an absent key is a no-op) and the
+        // node-existence-defining state is the in-txn node-table view.
+        struct CascadeEdge {
+            body: Vec<u8>,
+            src_index: Option<Vec<u8>>,
+            tgt_index: Option<Vec<u8>>,
+        }
+        let mut cascade: Vec<CascadeEdge> = Vec::with_capacity(cascade_edges.len());
         for edge_cid in &cascade_edges {
-            self.delete_edge(edge_cid)?;
+            let (src_index, tgt_index) = match self.get_edge(edge_cid)? {
+                Some(edge) => (
+                    Some(edge_src_index_key(&edge.source, edge_cid)),
+                    Some(edge_tgt_index_key(&edge.target, edge_cid)),
+                ),
+                None => (None, None),
+            };
+            cascade.push(CascadeEdge {
+                body: edge_key(edge_cid),
+                src_index,
+                tgt_index,
+            });
         }
 
         let existing = self.get_node(cid)?;
@@ -742,6 +784,16 @@ impl RedbBackend {
         let write_txn = self.begin_write_txn()?;
         {
             let mut nodes = write_txn.open_table(NODES_TABLE)?;
+            // Cascade edge removals — same txn as the node delete (#562).
+            for ce in &cascade {
+                if let Some(k) = &ce.src_index {
+                    nodes.remove(k.as_slice())?;
+                }
+                if let Some(k) = &ce.tgt_index {
+                    nodes.remove(k.as_slice())?;
+                }
+                nodes.remove(ce.body.as_slice())?;
+            }
             nodes.remove(n_key.as_slice())?;
         }
         if let Some(node) = existing {
@@ -1489,10 +1541,20 @@ impl RedbBackend {
     /// 3. Run the closure against a [`Transaction`] wrapper. Writes go
     ///    straight to the inner redb txn AND accumulate in a pending-ops
     ///    list used for post-commit change-event fan-out.
-    /// 4. On closure `Ok`: commit the redb txn, then fan
-    ///    [`crate::ChangeEvent`]s to every registered subscriber. Events
-    ///    are only emitted after commit succeeds — a commit-time I/O
-    ///    failure swallows the batch.
+    /// 4. On closure `Ok`: commit the redb txn, release the
+    ///    in-transaction guard, then fan [`crate::ChangeEvent`]s to every
+    ///    registered subscriber. Events are only emitted after commit
+    ///    succeeds — a commit-time I/O failure swallows the batch.
+    ///
+    /// **Subscriber contract (#645):** subscriber `on_change` callbacks
+    /// run SYNCHRONOUSLY on the committing thread. The in-transaction
+    /// guard is released before fan-out so a slow subscriber no longer
+    /// stalls other writers' `.transaction()` calls — but a subscriber
+    /// that blocks indefinitely still blocks the thread that committed.
+    /// Subscribers MUST NOT block (no synchronous network I/O, no
+    /// unbounded waits); offload slow work to the subscriber's own
+    /// queue/thread. `benten-graph` is deliberately runtime-free, so it
+    /// cannot dispatch callbacks off-thread for you.
     /// 5. On closure `Err`: drop the txn (redb aborts automatically),
     ///    return [`GraphError::TxAborted`] wrapping the inner reason.
     /// 6. On closure panic: the txn drops cleanly, the guard releases via
@@ -1507,7 +1569,11 @@ impl RedbBackend {
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,
     {
-        let _guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
+        // #645: bound to a NAMED (non-underscore) binding because it is
+        // explicitly `drop`'d before subscriber fan-out below — a slow
+        // subscriber must not stall subsequent `.transaction()` calls
+        // through a still-held in-transaction guard.
+        let tx_guard = TxGuard::try_acquire(Arc::clone(&self.tx_flag))?;
         // G11-A authority wiring: pick the redb durability via
         // `Transaction::durability_for_authority` so the authority field
         // on `Transaction` actually drives per-write-class durability —
@@ -1543,6 +1609,25 @@ impl RedbBackend {
                         }
                     };
                     if !subs.is_empty() {
+                        // #645 (Safe-4, META #707 slice): release the
+                        // in-transaction `TxGuard` BEFORE fanning out to
+                        // subscribers. `fan_out` invokes subscriber
+                        // callbacks SYNCHRONOUSLY on this writer thread; the
+                        // redb commit has already succeeded, so the only
+                        // thing the guard still protects is the
+                        // "no concurrent .transaction()" lifecycle flag.
+                        // Holding it across a slow/blocking subscriber
+                        // callback stalled EVERY subsequent .transaction()
+                        // workspace-wide behind one badly-behaved
+                        // subscriber. Dropping the guard here scopes that
+                        // back-pressure to the subscriber itself: a slow
+                        // subscriber can no longer wedge unrelated writers.
+                        // (benten-graph is intentionally runtime-free — no
+                        // async/tracing dep — so off-thread dispatch is not
+                        // available here; the caller-contract that
+                        // subscribers MUST NOT block is documented on
+                        // `subscribe` and on this method.)
+                        drop(tx_guard);
                         fan_out(&subs, &pending, tx_id);
                     }
                 }
@@ -1626,6 +1711,16 @@ impl RedbBackend {
     /// first and read second to avoid double-applying events in the race
     /// window.
     ///
+    /// # Subscriber contract (#645)
+    ///
+    /// `on_change` is invoked SYNCHRONOUSLY on the thread that committed
+    /// the triggering transaction. The committing thread releases the
+    /// in-transaction guard before fan-out (so a slow subscriber does NOT
+    /// stall other writers' `.transaction()` calls), but a subscriber that
+    /// blocks indefinitely still blocks the committing thread. Subscribers
+    /// MUST NOT block — no synchronous network I/O, no unbounded waits.
+    /// Offload slow work onto the subscriber's own queue/thread.
+    ///
     /// # Subscriber lifecycle
     ///
     /// Phase 1 has no deregister path — subscribers live for the backend's
@@ -1653,7 +1748,14 @@ impl RedbBackend {
     /// disabled.
     #[must_use]
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.lock().map_or(0, |g| g.len())
+        // #508 (Safe-1, META #707 slice): `.lock().map_or(0, ...)` silently
+        // returned 0 on poisoning — a poisoned subscribers mutex made the
+        // backend report "no subscribers", which would cause IVM/sync
+        // wiring to believe fan-out is unnecessary and skip it. The
+        // workspace `lock_recover()` idiom (also used by `transaction()`
+        // and `fan_out`'s snapshot just below) recovers the guard so the
+        // real count is reported even after a prior holder panicked.
+        self.subscribers.lock_recover().len()
     }
 
     /// Open a MVCC snapshot handle. The handle captures redb's read-txn at
