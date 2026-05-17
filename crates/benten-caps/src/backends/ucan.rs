@@ -257,17 +257,6 @@ impl<B: GraphBackend> UCANBackend<B> {
         self.backend.as_ref()
     }
 
-    /// Compute and return a UCAN's content CID without persisting.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`CapError::BackendStorage`] if the UCAN cannot be
-    /// DAG-CBOR encoded (the only failure path on a fixed-shape
-    /// envelope is encoder integer-overflow on adversarial input).
-    pub fn cid_of(&self, ucan: &Ucan) -> Result<Cid, CapError> {
-        ucan_cid(ucan)
-    }
-
     /// Persist a UCAN as a grant in the durable store. Returns the
     /// content CID of the persisted token.
     ///
