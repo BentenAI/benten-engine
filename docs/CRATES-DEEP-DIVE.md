@@ -140,7 +140,7 @@ The **`CapRecheckFn` shared scaffold** in `benten-engine::cap_recheck.rs` is the
 
 The **`HandlerRoute` enum** in `benten-engine::handler_router.rs` lives in one place. EMIT and SUBSCRIBE both consume it; future producer/consumer drift is structurally impossible because the variant lives in one place.
 
-`benten-id`'s **`capability_satisfies_requirement`** is the single subsume relation exposed for engine-side queries. The chain-walker uses it internally; the engine asks the same question through the same function. No parallel implementation in `benten-engine` that could drift.
+`benten-id`'s **`validate_chain_for_capability`** is the single subsume-relation surface exposed for engine-side queries: it wraps the private `caps_match_or_subsume` that the chain-walker uses internally, so the engine asks the same question through the same relation. No parallel implementation in `benten-engine` that could drift. (Hyg-1 #304: a redundant public `capability_satisfies_requirement` wrapper with zero callers workspace-wide was removed; it added a second exported name for the same relation without any consumer.)
 
 ### Test-shape pins
 
