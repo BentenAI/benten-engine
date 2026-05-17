@@ -63,7 +63,7 @@ fn stream_producer_wallclock_kills_blocked_send() {
         err,
         ChunkSinkError::ProducerWallclockExceeded { .. }
     ));
-    assert_eq!(err.error_code(), ErrorCode::StreamProducerWallclockExceeded);
+    assert_eq!(err.code(), ErrorCode::StreamProducerWallclockExceeded);
 
     // Upper bound: 4× the budget = 800ms. Pins "wallclock fires near the
     // configured budget, not hangs indefinitely" — the WALLCLOCK semantic.

@@ -133,7 +133,7 @@ fn resume_with_meta_fails_closed_when_metadata_missing() {
     let outcome = benten_eval::resume(
         &benten_eval::SubgraphBuilder::new("g12e-bogus").build_unvalidated_for_test(),
         &mut ctx,
-        benten_eval::WaitOutcome::Suspended(handle),
+        handle,
         WaitResumeSignal::Signal {
             value: Value::Text("attacker-payload".into()),
         },

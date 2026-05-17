@@ -549,7 +549,7 @@ impl Engine {
             Arc::clone(&termination_reason),
         )
         .map_err(|e| EngineError::Other {
-            code: e.error_code(),
+            code: e.code(),
             message: format!("on_change: registration failed: {e}"),
         })?;
 
@@ -701,7 +701,7 @@ impl Engine {
             Arc::clone(&termination_reason),
         )
         .map_err(|e| EngineError::Other {
-            code: e.error_code(),
+            code: e.code(),
             message: format!(
                 "testing_subscribe_observable_change_events: registration failed: {e}"
             ),

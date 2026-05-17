@@ -61,5 +61,5 @@ fn subscribe_pattern_invalid_fires_e_subscribe_pattern_invalid() {
     };
     let result = testing_subscribe_register(spec);
     let err = result.expect_err("malformed pattern must fail registration");
-    assert_eq!(err.error_code(), ErrorCode::SubscribePatternInvalid);
+    assert_eq!(err.code(), ErrorCode::SubscribePatternInvalid);
 }

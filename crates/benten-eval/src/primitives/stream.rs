@@ -18,7 +18,7 @@
 //!   the call stack; the evaluator emits
 //!   `TraceStep::BudgetExhausted { budget_type: "stream_backpressure", .. }`
 //!   BEFORE propagating, mirroring G12-A's `inv_8_iteration` pattern at
-//!   `evaluator.rs::run_with_trace_attributed` (the
+//!   `evaluator.rs::run_with` (the
 //!   `TraceStep::BudgetExhausted` push immediately before the
 //!   `IterateBudget` Err return; symbol form per R6-R4 r6-r4-cp-2 +
 //!   `dispatch-conventions.md` §3.5b high-churn-surface preference —

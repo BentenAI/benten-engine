@@ -94,6 +94,6 @@ fn stream_consumer_drop_surfaces_e_stream_closed_by_peer() {
 
     let err = result.expect_err("producer must surface typed error after consumer drop");
     assert!(matches!(err, ChunkSinkError::ClosedByPeer { .. }));
-    let code: ErrorCode = err.error_code();
+    let code: ErrorCode = err.code();
     assert_eq!(code, ErrorCode::StreamClosedByPeer);
 }

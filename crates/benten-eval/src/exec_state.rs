@@ -385,15 +385,22 @@ impl ExecutionStateEnvelope {
             .map_err(|e| CoreError::Serialize(format!("exec-state envelope decode: {e}")))
     }
 
-    /// Envelope CID accessor. In Phase 2a this is the `payload_cid` — the
-    /// envelope wrapper itself is not separately hashed. `Result` is
-    /// preserved so call sites can chain `.expect()` uniformly; future
-    /// phases may compute an outer envelope CID lazily here.
+    /// Envelope CID accessor. The envelope wrapper itself is not separately
+    /// hashed; the envelope CID **is** the `payload_cid` (computed once at
+    /// [`ExecutionStateEnvelope::new`] from the canonical DAG-CBOR bytes of
+    /// the payload). This is a pure infallible field accessor — it returns
+    /// the precomputed value and never re-encodes.
     ///
-    /// # Errors
-    /// Returns [`CoreError`] on encode failure.
-    pub fn envelope_cid(&self) -> Result<Cid, CoreError> {
-        Ok(self.payload_cid)
+    /// v1-API-stabilization (refinement-audit #794): the prior
+    /// `Result<Cid, CoreError>` was an aspirational shape — the body was
+    /// `Ok(self.payload_cid)` with no fallible path, forcing every caller
+    /// through a `.expect()`/`?` that could never fire. Returning `Cid`
+    /// directly removes the lying boundary. If a future phase introduces a
+    /// separately-hashed outer envelope CID it will be a distinct fallible
+    /// constructor, not a silent re-Result of this accessor.
+    #[must_use]
+    pub fn envelope_cid(&self) -> Cid {
+        self.payload_cid
     }
 
     /// Recompute the payload CID from the current payload bytes (resume

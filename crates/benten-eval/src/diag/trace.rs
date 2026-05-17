@@ -1,7 +1,8 @@
 //! Trace rendering helpers (diag feature).
 //!
 //! The primary trace collection happens in
-//! [`Evaluator::run_with_trace`](crate::Evaluator::run_with_trace); this
+//! [`Evaluator::run_with`](crate::Evaluator::run_with) (with
+//! [`RunOptions::collect_trace`](crate::RunOptions::collect_trace)); this
 //! module provides convenience accessors and a pretty printer for CLI use.
 //! G8's `engine.trace()` wraps these in the user-facing API.
 

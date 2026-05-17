@@ -3,10 +3,16 @@
 //! Three targeted regression tests introduced by the G11-A EVAL wave-1
 //! minors sweep:
 //!
-//! 1. `benten_eval_resume_alias_rejects_complete_variant` — the
-//!    crate-root `resume` alias rejects a `WaitOutcome::Complete`
-//!    handle with `E_INV_REGISTRATION` (API-misuse guard, per D12.7
-//!    Decision 1's sibling G3-B-cont minor).
+//! 1. `resume_alias_only_accepts_suspended_handle_by_type` — the
+//!    `Outcome::Suspended(WaitOutcome)` → `Outcome::Suspended(SuspendedHandle)`
+//!    double-nest collapse (v1-API-stabilization, refinement-audit #878)
+//!    makes the prior `WaitOutcome::Complete`-into-`resume` misuse
+//!    *unrepresentable at the type level*. This test is the §3.6b
+//!    closure-pin: it asserts the collapsed shape end-to-end (a real
+//!    suspend → `Outcome::Suspended(handle)` → `resume(handle)` round
+//!    trip with NO re-wrap) and documents that the old runtime
+//!    `E_INV_REGISTRATION` guard is deleted as dead code, not lost
+//!    coverage — the compiler now rejects the misuse.
 //! 2. `wait_negative_duration_rejected_at_registration` — a WAIT node
 //!    declaring a negative `duration_ms` / `timeout_ms` trips
 //!    `E_INV_REGISTRATION` at `build_validated` time.
@@ -29,38 +35,63 @@
 use benten_core::Value;
 use benten_errors::ErrorCode;
 use benten_eval::{
-    EvalContext, Outcome, SubgraphBuilder, WaitOutcome, WaitResumeSignal,
+    EvalContext, InMemorySuspensionStore, MockTimeSource, Outcome, SubgraphBuilder,
+    SuspendedHandle, SuspensionStore, WaitResumeSignal,
     invariants::attribution::ATTRIBUTION_PROPERTY_KEY,
 };
 use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
+use std::sync::Arc;
+use std::time::Duration;
 
 #[test]
-fn benten_eval_resume_alias_rejects_complete_variant() {
-    // Construct a WaitOutcome::Complete(_) and hand it to the crate-root
-    // `resume` alias. The alias must reject with E_INV_REGISTRATION
-    // rather than silently consulting the zero-derived CID's
-    // (nonexistent) metadata slot or panicking. This guards the
-    // API-misuse case where a caller accidentally pipes a completed
-    // WAIT outcome into the resume path.
-    let mut sb = SubgraphBuilder::new("handler_for_complete_guard");
-    let r = sb.read("r");
-    sb.respond(r);
-    let sg = sb.build_validated().expect("trivial subgraph builds");
+fn resume_alias_only_accepts_suspended_handle_by_type() {
+    // §3.6b closure-pin for refinement-audit #878 (Outcome /
+    // WaitOutcome::Suspended double-nest collapse).
+    //
+    // Pre-collapse, `Outcome::Suspended` carried a whole `WaitOutcome`
+    // (which could ONLY ever be its `Suspended` arm here) and `resume`
+    // accepted `handle: WaitOutcome`, requiring a runtime
+    // `WaitOutcome::Complete(_)` → `E_INV_REGISTRATION` rejection guard
+    // for a state the API forbids. The collapse to
+    // `Outcome::Suspended(SuspendedHandle)` + `resume(handle:
+    // SuspendedHandle)` makes that misuse UNREPRESENTABLE — the old
+    // runtime guard is deleted as dead code, and the compiler now
+    // enforces what the guard used to check at run time.
+    //
+    // This test asserts the collapsed shape end-to-end: a real WAIT
+    // suspend yields `Outcome::Suspended(handle)` whose payload binds
+    // directly as a `SuspendedHandle` (no inner `WaitOutcome` to
+    // unwrap), and that same handle pipes straight into `resume` with
+    // no re-wrap. If a future change re-introduced the double-nest the
+    // `let handle: SuspendedHandle = h;` binding below would fail to
+    // compile.
+    let mut sb = SubgraphBuilder::new("handler_878_collapse_pin");
+    let start = sb.read("x");
+    let w = sb.wait_signal(start, "go");
+    sb.respond(w);
+    let sg = sb.build_validated().expect("suspending subgraph builds");
 
-    let mut ctx = EvalContext::with_input(Value::unit());
-    let handle = WaitOutcome::Complete(Value::Null);
-    let signal = WaitResumeSignal::signal("irrelevant", Value::unit());
+    let clock = MockTimeSource::at(Duration::ZERO);
+    let store: Arc<dyn SuspensionStore> = Arc::new(InMemorySuspensionStore::new());
+    let mut ctx = EvalContext::with_clock(clock).with_suspension_store(store);
 
-    let outcome = benten_eval::resume(&sg, &mut ctx, handle, signal);
+    let h = match benten_eval::evaluate(&sg, &mut ctx, Value::unit()) {
+        Outcome::Suspended(h) => h,
+        other => panic!("WAIT must suspend, got {other:?}"),
+    };
+    // Type-level assertion of the collapse: the payload IS a
+    // `SuspendedHandle`, not a `WaitOutcome` needing an inner match.
+    let handle: SuspendedHandle = h;
+
+    let outcome = benten_eval::resume(
+        &sg,
+        &mut ctx,
+        handle,
+        WaitResumeSignal::signal("go", Value::Int(7)),
+    );
     match outcome {
-        Outcome::Err(code) => {
-            assert_eq!(
-                code,
-                ErrorCode::InvRegistration,
-                "Complete-variant misuse must surface E_INV_REGISTRATION"
-            );
-        }
-        other => panic!("expected Outcome::Err, got {other:?}"),
+        Outcome::Complete(v) => assert_eq!(v, Value::Int(7), "resume delivers the signal value"),
+        other => panic!("expected Outcome::Complete after resume, got {other:?}"),
     }
 }
 

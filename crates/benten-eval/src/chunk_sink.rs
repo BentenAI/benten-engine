@@ -149,8 +149,12 @@ pub enum ChunkSinkError {
 
 impl ChunkSinkError {
     /// Map the typed error to its stable catalog code.
+    ///
+    /// Named `code` to match the benten-eval `*Error::code()` convention
+    /// (`SubscribeError`, `SandboxError`, `BudgetError`, …); the prior
+    /// `error_code` spelling was a verb-mirror drift outlier.
     #[must_use]
-    pub fn error_code(&self) -> ErrorCode {
+    pub fn code(&self) -> ErrorCode {
         match self {
             ChunkSinkError::CapacityZero => ErrorCode::InputLimit,
             ChunkSinkError::BackpressureDropped { .. } => ErrorCode::StreamBackpressureDropped,
