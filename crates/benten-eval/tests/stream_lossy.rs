@@ -51,7 +51,7 @@ fn stream_lossy_mode_try_send_emits_e_stream_backpressure_dropped_in_trace() {
         dropped,
         ChunkSinkError::BackpressureDropped { .. }
     ));
-    assert_eq!(dropped.error_code(), ErrorCode::StreamBackpressureDropped);
+    assert_eq!(dropped.code(), ErrorCode::StreamBackpressureDropped);
 
     // Trace must surface the drop loudly — observable to the consumer's
     // tracing pipeline. The exact mechanism (TraceStep::StreamChunk with

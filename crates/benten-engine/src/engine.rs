@@ -3048,7 +3048,7 @@ impl Engine {
     /// dispatcher synthesises a per-op Subgraph (five arms:
     /// `<label>:create`, `<label>:get`, `<label>:list`, `<label>:update`,
     /// `<label>:delete`) and walks it end-to-end through
-    /// [`benten_eval::Evaluator::run_with_trace`] with `self as &dyn
+    /// [`benten_eval::Evaluator::run_with`] with `self as &dyn
     /// PrimitiveHost` as the backend/capability surface. Compromise #8
     /// (CRUD fast-path bypass) is CLOSED — `Engine::call` is the sole
     /// dispatch path and no handler arm short-circuits the evaluator.
@@ -3105,7 +3105,7 @@ impl Engine {
     /// Call a registered handler with an op name and input.
     ///
     /// Dispatch walks the handler's Subgraph end-to-end through
-    /// [`benten_eval::Evaluator::run_with_trace`] with the Engine itself
+    /// [`benten_eval::Evaluator::run_with`] with the Engine itself
     /// acting as the [`PrimitiveHost`]. CRUD handlers synthesise a per-op
     /// shape (`<label>:{create,get,list,update,delete}`); SubgraphSpec
     /// handlers walk their recorded primitive list. Buffered host-side
@@ -3151,7 +3151,7 @@ impl Engine {
 
     /// Return a per-step trace of the evaluation.
     ///
-    /// Delegates to [`benten_eval::Evaluator::run_with_trace`], so every
+    /// Delegates to [`benten_eval::Evaluator::run_with`], so every
     /// returned step is a real per-primitive record with a distinct
     /// `node_cid` (derived from the handler-scoped OperationNode id, not
     /// from the outcome's created CID) and a per-step duration sampled
@@ -3172,7 +3172,7 @@ impl Engine {
     /// graph.
     pub fn trace(&self, handler_id: &str, op: &str, input: Node) -> Result<Trace, EngineError> {
         // r6b-dx-C4 + r6b-dx-C6: delegate to the evaluator's real
-        // `run_with_trace` so every returned step is a genuine per-primitive
+        // `run_with` (collect_trace) so every returned step is a genuine per-primitive
         // record — distinct `node_cid` per OperationNode, distinct per-step
         // microsecond duration, primitive kind reflecting what the walk
         // actually executed. The per-step `node_cid` is derived from the
@@ -3339,7 +3339,7 @@ impl Engine {
     /// Variant of [`Self::dispatch_call_with_mode`] that optionally populates
     /// a per-step trace buffer during the walk (r6b-dx-C4). When
     /// `trace_steps_out` is `Some`, the engine invokes
-    /// [`benten_eval::Evaluator::run_with_trace`] and converts each recorded
+    /// [`benten_eval::Evaluator::run_with`] and converts each recorded
     /// [`benten_eval::TraceStep`] into the engine-level [`TraceStep`] the
     /// public `Engine::trace` surface consumes. The per-step `node_cid` is
     /// derived from the handler-scoped OperationNode id via BLAKE3 so the
@@ -3479,7 +3479,7 @@ impl Engine {
         // rationale.
         //
         // When tracing (trace_steps_out.is_some()) we call
-        // `run_with_trace` so the evaluator records a real per-step entry
+        // `run_with` so the evaluator records a real per-step entry
         // for every primitive it executed; the resulting TraceStep list
         // replaces the synthetic-step fabrication r6b-dx-C4 retired.
         let input_value = Value::Map(input.properties.clone());
@@ -3496,7 +3496,7 @@ impl Engine {
         let (eval_result, raw_trace) = if trace_steps_out.is_some() {
             // G5-B-ii / Inv-14: construct the runtime AttributionFrame from
             // the active call's `(actor, handler, grant)` triple and thread
-            // it through `run_with_trace_attributed` so every emitted
+            // it through `run_with` so every emitted
             // `TraceStep::Step` carries the originating audit context.
             // Symmetric with the WRITE-path stamping in
             // `impl PrimitiveHost::put_node` — same `noauth_pseudo_actor_cid`
@@ -3518,30 +3518,32 @@ impl Engine {
                 sandbox_depth: 0,
                 ..Default::default()
             };
-            // G12-A: route through the budget-aware capturing variant so
-            // the terminal `TraceStep::BudgetExhausted` row pushed by the
-            // evaluator before short-circuiting on Inv-8 cumulative-step
-            // exhaustion (and any future runtime emissions on error paths)
-            // reaches the user-visible `engine.trace(...)` consumer instead
-            // of being dropped here. The `iteration_budget` resolves to the
+            // G12-A: capture the trace ALONGSIDE any error so the terminal
+            // `TraceStep::BudgetExhausted` row pushed by the evaluator
+            // before short-circuiting on Inv-8 cumulative-step exhaustion
+            // (and any future runtime emissions on error paths) reaches the
+            // user-visible `engine.trace(...)` consumer instead of being
+            // dropped here. The `iteration_budget` resolves to the
             // production default unless `Engine::testing_set_iteration_budget`
-            // applied a test override.
-            evaluator.run_with_trace_attributed_capturing_with_budget(
+            // applied a test override. (v1-API-stabilization #1145: the
+            // former `run_with_trace_attributed_capturing_with_budget`
+            // collapsed into `run_with` + `RunOptions`.)
+            evaluator.run_with(
                 &subgraph,
                 input_value,
                 self as &dyn PrimitiveHost,
-                frame,
-                iteration_budget,
+                benten_eval::RunOptions::new()
+                    .budget(iteration_budget)
+                    .attribution(frame)
+                    .collect_trace(true)
+                    .capture_on_err(true),
             )
         } else {
-            (
-                evaluator.run_with_budget(
-                    &subgraph,
-                    input_value,
-                    self as &dyn PrimitiveHost,
-                    iteration_budget,
-                ),
-                Vec::new(),
+            evaluator.run_with(
+                &subgraph,
+                input_value,
+                self as &dyn PrimitiveHost,
+                benten_eval::RunOptions::new().budget(iteration_budget),
             )
         };
 

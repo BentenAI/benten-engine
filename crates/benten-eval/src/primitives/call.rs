@@ -30,7 +30,7 @@
 //! with the policy's error code in the edge payload — same shape as a
 //! mid-iteration revocation observed at an ITERATE batch boundary.
 //!
-//! TODO(phase-3 — CALL depth counter + multiplicative budget
+//! TODO(phase-4-meta — backlog §4.71; CALL depth counter + multiplicative budget
 //! propagation): add an `Evaluator.call_depth: usize` counter that
 //! increments on CALL entry and decrements on callee terminate, and
 //! propagate remaining iteration budget multiplicatively through the

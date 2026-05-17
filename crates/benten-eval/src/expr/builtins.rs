@@ -23,7 +23,7 @@
 //! nondeterminism (time, RNG, locale-sensitive case folding) are rejected
 //! by the grammar or omitted.
 //!
-//! TODO(phase-3 — DSL-SPECIFICATION audit): audit
+//! TODO(phase-4-meta — backlog §4.71; DSL-SPECIFICATION audit): audit
 //! docs/DSL-SPECIFICATION.md against this dispatch table. Pairs with
 //! the broader Phase-3 DSL-SPECIFICATION public-rewrite workstream.
 //! `formatDate(date_str, format_str)` is currently absent; decide whether
