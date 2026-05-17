@@ -218,7 +218,7 @@ pub fn execute_for_test_signal(signal: &str) -> Result<WaitOutcome, EvalError> {
     let payload = placeholder_payload_for_signal(signal);
     let envelope = ExecutionStateEnvelope::new(payload)?;
     Ok(WaitOutcome::Suspended(SuspendedHandle {
-        state_cid: envelope.envelope_cid()?,
+        state_cid: envelope.envelope_cid(),
         signal: signal.to_string(),
     }))
 }
@@ -391,7 +391,7 @@ fn evaluate_op_with_handler_id(
         payload.resumption_principal_cid = *p;
     }
     let envelope = ExecutionStateEnvelope::new(payload)?;
-    let state_cid = envelope.envelope_cid()?;
+    let state_cid = envelope.envelope_cid();
 
     // Phase-2b G12-E: route through the configured `SuspensionStore` so
     // cross-process resume can hydrate the deadline + shape from durable
@@ -442,7 +442,7 @@ pub fn resume(
     signal: WaitResumeSignal,
     ctx: &crate::EvalContext,
 ) -> Result<WaitOutcome, EvalError> {
-    let state_cid = envelope.envelope_cid()?;
+    let state_cid = envelope.envelope_cid();
     // Phase-2b G12-E: WAIT metadata lookup now routes through the
     // configured `SuspensionStore`, which closes the Phase-2a cross-
     // process gap (Compromise #10). When the resuming process opened a

@@ -263,8 +263,11 @@ pub enum SubscribeError {
 
 impl SubscribeError {
     /// Stable catalog code mapping.
+    ///
+    /// Named `code` to match the benten-eval `*Error::code()` convention;
+    /// the prior `error_code` spelling was a verb-mirror drift outlier.
     #[must_use]
-    pub fn error_code(&self) -> ErrorCode {
+    pub fn code(&self) -> ErrorCode {
         match self {
             SubscribeError::PatternInvalid => ErrorCode::SubscribePatternInvalid,
             SubscribeError::SystemZoneRead => ErrorCode::Inv11SystemZoneRead,
@@ -1542,7 +1545,7 @@ pub fn execute(op: &OperationNode, host: &dyn PrimitiveHost) -> Result<StepResul
         Err(e) => Ok(StepResult {
             next: None,
             edge_label: e
-                .error_code()
+                .code()
                 .routed_edge_label()
                 .unwrap_or("ON_ERROR")
                 .to_string(),

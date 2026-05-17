@@ -885,7 +885,7 @@ pub fn testing_inspect_wait_metadata(
     envelope_bytes: &[u8],
 ) -> Option<benten_eval::WaitMetadata> {
     let envelope = benten_eval::ExecutionStateEnvelope::from_dagcbor(envelope_bytes).ok()?;
-    let cid = envelope.envelope_cid().ok()?;
+    let cid = envelope.envelope_cid();
     engine.suspension_store().get_wait(&cid).ok().flatten()
 }
 

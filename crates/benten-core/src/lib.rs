@@ -491,6 +491,21 @@ impl Cid {
         // Any other leading char — including the common mistakes `B`
         // (base32 upper), `z` (base58btc), `f` (base16), `m` (base64) —
         // is rejected rather than silently accepted.
+        // Boundary hardening (Safe-2 / META #629 DoS-via-unbounded-decode):
+        // a well-formed Benten CIDv1 base32 body is exactly
+        // `CID_LEN * 8 / 5` (≈58) chars; the `b` prefix makes ~59. Reject
+        // any string longer than a generous fixed ceiling *before* decode
+        // so adversarial multi-hundred-MB input cannot drive an unbounded
+        // `Vec::with_capacity` allocation (or, on wasm32 where `usize` is
+        // 32-bit, a `len * 5` capacity overflow). The ceiling is well
+        // above any legitimate CID string and below DoS-relevant sizes.
+        const MAX_CID_STR_LEN: usize = 256;
+        if s.len() > MAX_CID_STR_LEN {
+            return Err(CoreError::CidParse(
+                "CID string exceeds the maximum length for a Benten CIDv1 \
+                 base32 encoding",
+            ));
+        }
         let body = s.strip_prefix('b').ok_or(CoreError::CidParse(
             "CID string must use multibase base32-lower-nopad ('b' prefix)",
         ))?;
@@ -618,9 +633,14 @@ fn base32_lower_nopad_encode(input: &[u8], out: &mut String) {
 /// Kept `no_std`-compatible: returns `Vec<u8>` from `alloc`, no external deps.
 fn base32_lower_nopad_decode(input: &str) -> Result<Vec<u8>, CoreError> {
     // Capacity upper bound: each char contributes 5 bits, so byte count is
-    // `(chars * 5) / 8`. `div_ceil` overshoots by at most one; a one-byte
-    // over-allocation is fine.
-    let mut out: Vec<u8> = Vec::with_capacity(input.len() * 5 / 8);
+    // `(chars * 5) / 8`. Use `checked_mul` so an adversarially-large input
+    // cannot overflow the `len * 5` product (relevant on wasm32 where
+    // `usize` is 32-bit — 858+MB input overflows a 32-bit product). On
+    // overflow, fall back to a zero pre-allocation: the push loop still
+    // produces correct output (Vec grows as needed); we only lose the
+    // single up-front reservation. (#560 Safe-2 / META #629)
+    let cap = input.len().checked_mul(5).map_or(0, |bits| bits / 8);
+    let mut out: Vec<u8> = Vec::with_capacity(cap);
     let mut buffer: u32 = 0;
     let mut bits: u32 = 0;
     for c in input.chars() {

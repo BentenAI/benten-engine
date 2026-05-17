@@ -160,7 +160,7 @@ fn resume_against_real_envelope_with_evicted_metadata_fires_e_wait_metadata_miss
 
     let env =
         benten_eval::ExecutionStateEnvelope::from_dagcbor(&envelope).expect("envelope round-trips");
-    let state_cid = env.envelope_cid().expect("envelope_cid computes");
+    let state_cid = env.envelope_cid();
     let store = benten_engine::testing::testing_get_suspension_store(&engine_b);
 
     // Pre-condition: the envelope record IS present (the eval-side

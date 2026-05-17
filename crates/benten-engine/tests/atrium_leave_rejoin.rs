@@ -43,8 +43,10 @@ use benten_engine::engine_sync::AtriumHandle;
 /// 5. Peer B calls `rejoin()`; flag flips to active.
 /// 6. Peer A's NEW Loro export is applied at peer B via
 ///    `apply_atrium_merge` (post-rejoin).
-/// 7. Re-apply the SAME bytes a second time (CRDT replay safety —
-///    Loro merge is idempotent on identical state).
+/// 7. Re-apply the SAME bytes a second time (replay safety — post
+///    #615/#617 Inv-13 Row-1 close, the identical-content re-persist
+///    is now a hard immutability refusal, not a silent REPLACE; the
+///    chain stays uncorrupted + the handle stays active).
 ///
 /// Observable consequences asserted:
 /// - (i) post-rejoin `apply_atrium_merge` succeeds + advances peer B's
@@ -53,8 +55,9 @@ use benten_engine::engine_sync::AtriumHandle;
 ///   `peer_did_set` + `sync_hop_depth` slots populated (continuity of
 ///   peer-DID provenance across the leave-rejoin window via the
 ///   surviving trust-store).
-/// - (iii) re-applying the same bytes a second time succeeds (CRDT
-///   replay safety; tail-of-pin idempotency anchor).
+/// - (iii) re-applying the same bytes a second time is refused by
+///   Inv-13 Row-1 (replay safety via hard refusal; chain uncorrupted;
+///   handle still active — tail-of-pin replay-safety anchor).
 #[tokio::test]
 async fn peer_leave_then_rejoin_reconciles_state_via_loro_merge() {
     let dir = tempfile::tempdir().unwrap();
@@ -222,19 +225,37 @@ async fn peer_leave_then_rejoin_reconciles_state_via_loro_merge() {
          but resolve returned: {resolved:?}"
     );
 
-    // OBSERVABLE consequence (iii): re-applying the SAME bytes a
-    // second time is idempotent (Loro CRDT replay safety). Without
-    // the post-rejoin reconciliation arm, this re-apply would either
-    // refuse (handle-state corruption) or mint a divergent Version.
-    let second_apply = engine_b
+    // OBSERVABLE consequence (iii): re-applying the SAME bytes a second
+    // time. refinement-audit-2026-05 #615/#617 (ST-GRAPH Inv-13 Row-1
+    // bypass close, §3.5l cross-crate-consumer class): the replay
+    // re-mints the same post-rejoin merged Version Node CID; re-persisting
+    // it under User authority is now an Inv-13 Row-1 immutability
+    // violation (was a silent REPLACE under the closed bare `put_node`
+    // bypass). The load-bearing property — replay does NOT poison further
+    // sync activity / does NOT mint a divergent Version — is preserved by
+    // the hard refusal (no chain corruption) + the post-cycle
+    // `is_active()` guard below. Mirrors the engine-lane's
+    // create_node_identical_content_second_put_is_inv13_refused precedent.
+    let second_apply_err = engine_b
         .apply_atrium_merge(&peer_b, &anchor, zone, &post_rejoin_bytes, 0)
         .await
-        .expect("CRDT replay safety: re-applying same bytes MUST be idempotent");
-    // The second apply may produce a structurally-identical merge
-    // (same CRDT state → same encoded Loro doc → same merge CID
-    // candidate); regardless of CID-equality outcome, the apply MUST
-    // succeed so the lifecycle does not poison further sync activity.
-    let _ = second_apply;
+        .expect_err(
+            "replay of identical post-rejoin bytes re-persists the \
+             already-present merged Version Node under User authority — \
+             must be refused by Inv-13 (Row 1), not silently REPLACE",
+        );
+    match second_apply_err {
+        benten_engine::EngineError::Graph(g) => {
+            let reason = g.to_string();
+            assert!(
+                reason.contains("immutability violation")
+                    && reason.contains("attempted_authority: User"),
+                "expected Inv-13 Row-1 immutability violation under User \
+                 authority on identical-bytes replay, got: {reason}"
+            );
+        }
+        other => panic!("expected EngineError::Graph (Inv-13 Row-1), got {other:?}"),
+    }
 
     // Final guard: peer B is still active after the full leave →
     // rejoin → multi-merge cycle.

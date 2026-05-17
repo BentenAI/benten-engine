@@ -25,7 +25,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::ToString;
 
-use benten_core::{Cid, Node};
+use benten_core::{Cid, LABEL_NEXT_VERSION, Node};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
@@ -63,7 +63,7 @@ impl VersionCurrentView {
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
             view_id: VIEW_ID.into(),
-            input_pattern_label: Some("NEXT_VERSION".into()),
+            input_pattern_label: Some(LABEL_NEXT_VERSION.into()),
             output_label: "system:IVMView".into(),
             strategy: crate::Strategy::A,
         }
@@ -81,12 +81,31 @@ impl VersionCurrentView {
     /// Ingest a Node-level change directly. Uses `node.anchor_id` when set
     /// (version-chain Nodes carry one per ENGINE-SPEC §6); otherwise falls
     /// back to `DEFAULT_ANCHOR_ID`.
+    #[allow(
+        clippy::print_stderr,
+        reason = "refinement-audit #498 cid-failure surfacing; a later phase routes to tracing"
+    )]
     pub fn on_change(&mut self, node: Node) {
         if self.budget.try_consume(1, VIEW_ID).is_err() {
             return;
         }
-        let Ok(cid) = node.cid() else {
-            return;
+        // refinement-audit #498: a `Node::cid()` failure here used to be
+        // silently swallowed (no log, no counter) — an emitter bug that
+        // dropped a version-chain update would be invisible. The ingress
+        // path is infallible by signature, so the budget-trip discipline
+        // is preserved; the failure is surfaced on stderr (matching the
+        // content_listing identity-only-event defense-in-depth pattern) so
+        // operators can notice a malformed Node reaching the view.
+        let cid = match node.cid() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!(
+                    "benten-ivm: version_current dropped a change event whose \
+                     Node::cid() failed ({e:?}) — the emitter produced a Node \
+                     that could not be content-addressed (see module docs)"
+                );
+                return;
+            }
         };
         let anchor_id = node.anchor_id.unwrap_or(DEFAULT_ANCHOR_ID);
         self.current.insert(anchor_id, cid);
@@ -129,26 +148,20 @@ impl Default for VersionCurrentView {
 
 /// Polymorphic anchor-handle trait for [`VersionCurrentView::resolve`].
 ///
+/// refinement-audit #337: the `u64` and owned-`Cid` impls had zero callers
+/// across the workspace (the only `resolve` call site passes `&Cid`).
+/// Removed per CLAUDE.md rule #5 (delete dead code, don't comment it). The
+/// trait stays generic so a future `u64`/owned-`Cid` impl can be reintroduced
+/// alongside a real `Cid → anchor_id` reverse index without changing the
+/// `resolve` signature.
+///
 /// Implementations:
-/// - `u64` — direct anchor id lookup.
-/// - `Cid` / `&Cid` — current fallback: looks up the default anchor. A full
+/// - `&Cid` — current fallback: looks up the default anchor. A full
 ///   `Cid → anchor_id` reverse index is a later-phase enhancement alongside
 ///   a widened `ChangeEvent` that carries anchor identity.
 pub trait AnchorRef {
     /// Reduce the anchor handle to a `u64` lookup key.
     fn to_anchor_id(&self) -> u64;
-}
-
-impl AnchorRef for u64 {
-    fn to_anchor_id(&self) -> u64 {
-        *self
-    }
-}
-
-impl AnchorRef for Cid {
-    fn to_anchor_id(&self) -> u64 {
-        DEFAULT_ANCHOR_ID
-    }
 }
 
 impl AnchorRef for &Cid {
@@ -166,7 +179,7 @@ impl View for VersionCurrentView {
         if self.budget.is_stale() {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
-        if !event.labels.iter().any(|l| l == "NEXT_VERSION") {
+        if !event.labels.iter().any(|l| l == LABEL_NEXT_VERSION) {
             return Ok(());
         }
         match event.kind {

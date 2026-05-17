@@ -394,12 +394,21 @@ impl Subgraph {
         self.nodes.get(h.0 as usize)
     }
 
-    /// Phase 2a G4-A test helper: return the `NodeHandle` for an operation
-    /// node id.
+    /// Resolve a node `id` to its [`NodeHandle`].
+    ///
+    /// Returns `None` when no node with `id` exists. Boundary hardening
+    /// (Safe-1 #495): the prior implementation silently mapped an unknown
+    /// id to `NodeHandle(0)` (the first node), which misroutes downstream
+    /// handle-keyed lookups to an unrelated node rather than surfacing the
+    /// miss. Callers that require the node to exist should `.expect(...)`
+    /// or propagate the `None`.
     #[must_use]
-    pub fn handle_of(&self, id: &str) -> NodeHandle {
-        let idx = self.nodes.iter().position(|n| n.id == id).unwrap_or(0);
-        NodeHandle(u32::try_from(idx).unwrap_or(u32::MAX))
+    pub fn handle_of(&self, id: &str) -> Option<NodeHandle> {
+        self.nodes
+            .iter()
+            .position(|n| n.id == id)
+            .and_then(|idx| u32::try_from(idx).ok())
+            .map(NodeHandle)
     }
 
     /// RAW node append — **bypasses Inv-14 attribution stamping**.
@@ -513,12 +522,39 @@ impl Subgraph {
         self.canonical_bytes()
     }
 
+    /// Maximum accepted DAG-CBOR payload size for a subgraph decode at an
+    /// untrusted boundary (sync / napi). Boundary hardening (Safe-2 /
+    /// META #629 DoS-via-unbounded-decode): the raw `from_slice` decode
+    /// has no intrinsic recursion-depth or allocation ceiling, so an
+    /// adversarial payload can drive a stack-overflow (deeply-nested
+    /// CBOR) or an unbounded heap allocation. Capping the *input* byte
+    /// length bounds both: DAG-CBOR nesting depth and total decoded
+    /// allocation are each `O(input_len)`, so a fixed input ceiling is a
+    /// sufficient (and cheap, pre-decode) boundary guard. 16 MiB is far
+    /// above any legitimate subgraph (the canonical encoding is a flat
+    /// node+edge list) and well below DoS-relevant sizes.
+    pub const MAX_DECODE_BYTES: usize = 16 * 1024 * 1024;
+
     /// G12-C: load a Subgraph from DAG-CBOR bytes (no CID check). Decodes
     /// the canonical-bytes shape produced by [`canonical_subgraph_bytes`].
     ///
+    /// Enforces [`Subgraph::MAX_DECODE_BYTES`] *before* decode so an
+    /// adversarial payload at an untrusted boundary cannot drive an
+    /// unbounded allocation or a deep-recursion stack overflow.
+    ///
     /// # Errors
-    /// Returns [`CoreError::Serialize`] on decode failure.
+    /// - [`CoreError::Serialize`] if `bytes.len()` exceeds
+    ///   [`Subgraph::MAX_DECODE_BYTES`] (boundary guard).
+    /// - [`CoreError::Serialize`] on decode failure.
     pub fn load_verified(bytes: &[u8]) -> Result<Self, CoreError> {
+        if bytes.len() > Self::MAX_DECODE_BYTES {
+            return Err(CoreError::Serialize(format!(
+                "subgraph DAG-CBOR payload {} bytes exceeds the decode \
+                 boundary ceiling of {} bytes (META #629 boundary guard)",
+                bytes.len(),
+                Self::MAX_DECODE_BYTES
+            )));
+        }
         let owned: CanonViewOwned = serde_ipld_dagcbor::from_slice(bytes)
             .map_err(|e| CoreError::Serialize(format!("{e}")))?;
         Self::from_canonical_owned(owned)

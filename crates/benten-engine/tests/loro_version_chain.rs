@@ -48,6 +48,7 @@
 
 use benten_core::hlc::BentenHlc;
 use benten_engine::Engine;
+use benten_engine::EngineError;
 use benten_engine::atrium_api::AtriumConfig;
 use benten_engine::engine_sync::AtriumHandle;
 
@@ -377,6 +378,7 @@ async fn loro_merged_node_is_graph_encoded_not_opaque_crdt_blob() {
 // =====================================================================
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)] // Multi-anchor CRDT-merge + cross-anchor isolation + replay-safety scenario is the single test contract; splitting harms the end-to-end narrative.
 async fn loro_merge_produces_new_version_node_in_anchor_chain() {
     // G16-B-D LOAD-BEARING multi-Anchor pin (cross-lens visibility for
     // the multi-Anchor cross-Atrium harness shape, complementing the
@@ -496,19 +498,44 @@ async fn loro_merge_produces_new_version_node_in_anchor_chain() {
          (cross-anchor isolation): comments_chain={comments_chain:?}"
     );
 
-    // OBSERVABLE consequence (iii): replay safety — re-applying the
-    // SAME remote bytes to the same anchor is idempotent at the CRDT
-    // level. CURRENT does not advance further (Loro merge of
-    // already-applied bytes is a no-op).
-    let _replay = engine
+    // OBSERVABLE consequence (iii): replay safety — re-applying the SAME
+    // remote bytes to the same anchor. refinement-audit-2026-05 #615/#617
+    // (ST-GRAPH Inv-13 Row-1 bypass close, §3.5l cross-crate-consumer
+    // class): the replay still mints the same merged Version Node CID;
+    // re-persisting it under User authority is now an Inv-13 Row-1
+    // immutability violation (was a silent REPLACE under the closed bare
+    // `put_node` bypass). Mirrors the engine-lane's
+    // `create_node_identical_content_second_put_is_inv13_refused`. NOT a
+    // coverage weakening — the load-bearing replay-safety property (the
+    // refused replay MUST NOT advance/corrupt CURRENT) is still pinned.
+    let replay_err = engine
         .apply_atrium_merge(&peer_a, &anchor_posts, zone_posts, &posts_bytes, 0)
         .await
-        .expect("idempotent replay must succeed");
+        .expect_err(
+            "replay of identical Loro bytes re-persists the already-present \
+             merged Version Node under User authority — must be refused by \
+             Inv-13 (Row 1), not silently REPLACE",
+        );
+    match replay_err {
+        EngineError::Graph(g) => {
+            let reason = g.to_string();
+            assert!(
+                reason.contains("immutability violation")
+                    && reason.contains("attempted_authority: User"),
+                "expected Inv-13 Row-1 immutability violation under User \
+                 authority on identical-bytes replay, got: {reason}"
+            );
+        }
+        other => panic!("expected EngineError::Graph (Inv-13 Row-1), got {other:?}"),
+    }
+    // Load-bearing replay-safety property survives the contract
+    // correction: CURRENT still points at the original merged Version —
+    // the refused replay did NOT advance or corrupt the chain.
     let posts_current_after_replay = engine.read_current_version(&anchor_posts).unwrap().unwrap();
     assert_eq!(
         posts_current_after_replay, merged_posts_cid,
-        "replay safety: re-applying the same Loro update bytes MUST NOT \
-         advance CURRENT past the original merged Version"
+        "replay safety: a refused re-apply of the same Loro update bytes \
+         MUST NOT advance CURRENT past the original merged Version"
     );
 }
 

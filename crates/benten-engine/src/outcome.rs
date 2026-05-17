@@ -385,7 +385,7 @@ pub enum TraceStep {
         /// Inv-14 attribution. The slot remains `Option` on the public
         /// shape so downstream callers can rely on the field being
         /// present, but at Phase 2b close the runtime threading IS wired
-        /// (sec-r6r1-01 landed the eval-side `run_with_trace` carry that
+        /// (sec-r6r1-01 landed the eval-side traced-run carry that
         /// populates `AttributionFrame` through the engine + napi wire);
         /// `Engine::trace` emits `Some(...)` for every `Step` variant on
         /// every primitive row. The TS regression at

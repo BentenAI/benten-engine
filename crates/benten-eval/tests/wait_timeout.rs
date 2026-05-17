@@ -32,7 +32,7 @@ use benten_core::Value;
 use benten_errors::ErrorCode;
 use benten_eval::{
     EvalContext, InMemorySuspensionStore, MockTimeSource, Outcome, SubgraphBuilder,
-    SuspensionStore, WaitOutcome, WaitResumeSignal,
+    SuspendedHandle, SuspensionStore, WaitResumeSignal,
 };
 use benten_eval::{NodeHandleExt, SubgraphBuilderExt, SubgraphExt};
 use std::sync::Arc;
@@ -191,11 +191,11 @@ fn wait_timeout_error_is_distinct_from_denial() {
 
 // Small adaptor to keep assertions concise where we assume the suspend path.
 trait OutcomeExt {
-    fn expect_suspended(self) -> WaitOutcome;
+    fn expect_suspended(self) -> SuspendedHandle;
 }
 
 impl OutcomeExt for Outcome {
-    fn expect_suspended(self) -> WaitOutcome {
+    fn expect_suspended(self) -> SuspendedHandle {
         match self {
             Outcome::Suspended(h) => h,
             other => panic!("expected suspend, got {other:?}"),

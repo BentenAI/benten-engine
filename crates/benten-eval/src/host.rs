@@ -48,6 +48,29 @@ pub struct ViewQuery {
 /// types or `&dyn`-compatible shapes, and the trait has no generic methods.
 /// `Send + Sync` supertraits let the host be stored behind an `Arc` or
 /// referenced from parallel `ITERATE` bodies in Phase 2.
+///
+/// # SemVer contract (v1-API-stabilization, refinement-audit #1008)
+///
+/// `PrimitiveHost` is a **CLAUDE.md #19 engine-extension trait point**:
+/// out-of-tree engine extensions (alternate hosts, custom backends) are
+/// expected to `impl PrimitiveHost`. It is therefore **deliberately NOT
+/// sealed and NOT `#[non_exhaustive]`** — those mechanisms would block the
+/// out-of-tree implementations CLAUDE.md #19 explicitly sanctions, and
+/// `#[non_exhaustive]` is not even applicable to a `trait` (it applies to
+/// structs/enums only). The SemVer discipline that #1008 asks for is
+/// instead expressed as an **explicit written contract**, mirroring the
+/// `BlobBackend` "additive-default posture locked as the v1 commitment"
+/// pattern (`docs/future/phase-4-backlog.md §4.62`):
+///
+/// - Adding a **required** method is a **breaking change** (every external
+///   impl must be updated) — permitted only at a major version bump.
+/// - Adding a method **with a default body** is additive/non-breaking and
+///   is the preferred evolution path (see `iterate_batch_boundary` /
+///   `check_read_capability` / `suspension_store` precedents below).
+/// - Changing an existing method signature is breaking.
+///
+/// New host capabilities should be introduced as defaulted methods so the
+/// trait stays SemVer-stable for the out-of-tree extension surface.
 pub trait PrimitiveHost: Send + Sync {
     /// READ primitive: fetch a Node by CID. `Ok(None)` on a clean miss.
     ///

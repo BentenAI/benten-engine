@@ -81,6 +81,25 @@ pub enum ViewError {
         /// `"Phase 3+"` for `Strategy::Reserved`).
         deferred_to_phase: String,
     },
+
+    /// Computing the content-address (`Node::cid`) of an incoming change
+    /// event failed — a DAG-CBOR serialization error in the graph layer.
+    /// Distinct from [`ViewError::PatternMismatch`]: the query/pattern is
+    /// fine; the event payload could not be content-addressed (refinement-
+    /// audit #498 + #502 — previously this was either silently swallowed in
+    /// the `on_change` ingress or mis-categorized as `PatternMismatch` in
+    /// `AlgorithmBView::walk_writes`). Carries the view id + the underlying
+    /// detail. `.code()` maps to
+    /// [`ErrorCode::GraphInternal`](benten_errors::ErrorCode::GraphInternal)
+    /// — cid computation is a graph-layer serialization concern, not an
+    /// IVM-query shape error.
+    #[error("node cid computation failed for view {view_id}: {detail}")]
+    NodeCidComputeFailed {
+        /// Stable view identifier (e.g. `"content_listing"`).
+        view_id: String,
+        /// Human-readable detail of the underlying `CoreError`.
+        detail: String,
+    },
 }
 
 impl ViewError {
@@ -111,13 +130,17 @@ impl ViewError {
             ViewError::StrategyNotImplemented { .. } => {
                 benten_errors::ErrorCode::IvmStrategyNotImplemented
             }
+            // NodeCidComputeFailed (#498 + #502): a `Node::cid()` DAG-CBOR
+            // serialization failure surfaced at an IVM ingress/walk path.
+            // Maps to the existing graph-layer internal code rather than
+            // minting a new ErrorCode (no CATALOG_VARIANT_COUNT bump, no
+            // cross-language mirror churn) — cid computation is a
+            // graph-serialization concern, semantically closest to
+            // `E_GRAPH_INTERNAL`.
+            ViewError::NodeCidComputeFailed { .. } => benten_errors::ErrorCode::GraphInternal,
         }
     }
 }
-
-/// Back-compat alias for [`ViewError`]. Some R3 test files name the type
-/// `IvmError`; the alias keeps both compile paths working.
-pub type IvmError = ViewError;
 
 // ---------------------------------------------------------------------------
 // ViewState
@@ -293,8 +316,22 @@ pub trait View: Send + Sync + core::fmt::Debug {
         self.read(query)
     }
 
-    /// Rebuild the view from scratch. Used for bootstrap and for recovery
-    /// after a stale trip. On success, the view is [`ViewState::Fresh`].
+    /// Recover the view after a stale trip. Used for bootstrap and for
+    /// recovery. On success, the view is [`ViewState::Fresh`].
+    ///
+    /// **refinement-audit #1089 — actual Phase-1 semantics (docstring
+    /// corrected to match the shipped implementation):** the name "rebuild"
+    /// historically suggested "replay every input from scratch", but the
+    /// Phase-1 hand-written views do NOT re-derive state from a replayed
+    /// event log. They **clear their indexed state, reset the
+    /// [`crate::BudgetTracker`] to its original cap, and clear the stale
+    /// flag** (see [`crate::BudgetTracker::rebuild`]). Re-population happens
+    /// lazily as subsequent change events arrive through the subscriber.
+    /// Callers MUST NOT assume a `rebuild()` call reconstructs prior state
+    /// from history — it is a clear-and-reset, not an event-replay. (A
+    /// true from-history rebuild is a later-phase enhancement; the v1
+    /// SemVer disposition of whether to keep "rebuild" as the name for
+    /// clear-and-reset semantics is tracked in arch-anchor umbrella #1219.)
     ///
     /// # Errors
     ///

@@ -113,11 +113,12 @@ pub enum ChangeKind {
 /// # SemVer
 ///
 /// `#[non_exhaustive]`: this struct has a documented widening trajectory
-/// (the R6FP-G1 expansion 4→9 fields already happened; Phase-4-Meta
-/// multi-device / Kith attribution will widen it again). External crates
-/// must construct via [`ChangeEvent::legacy_minimal`] (the production
-/// graph→eval bridge populates every field directly inside this
-/// workspace), so a future field add is not a major-version break.
+/// (it has grown from 4 to 9 fields as attribution and tx-ordering data
+/// were threaded through; multi-device / Kith attribution is expected to
+/// widen it further). External crates must construct via
+/// [`ChangeEvent::legacy_minimal`] or [`ChangeEvent::for_bridge`] (the
+/// production graph→eval bridge populates every field directly inside
+/// this workspace), so a future field add is not a major-version break.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ChangeEvent {
@@ -184,7 +185,8 @@ impl ChangeEvent {
     /// graph→eval bridge (`benten-engine`'s `EngineBuilder` change-event
     /// translation closure). Populates **every** field directly so
     /// multi-label SUBSCRIBE matching and the three attribution CIDs are
-    /// not silently lost (the Phase-2b Round-2 Instance 6 BLOCKER shape).
+    /// not silently lost (a collapsed-label / dropped-attribution bridge
+    /// is a correctness defect, not a cosmetic one).
     ///
     /// This is the cross-crate construction seam now that
     /// [`ChangeEvent`] is `#[non_exhaustive]`: the struct-expression form
