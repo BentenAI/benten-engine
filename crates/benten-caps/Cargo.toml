@@ -39,6 +39,14 @@ serde_ipld_dagcbor = { workspace = true }
 # pins the same minor version at this layer for any future cap-side
 # security-decision compares (see r1-cap-2 brief carry-forward).
 subtle = { workspace = true }
+# Safe-1 #492 / #497: observability for the two security-adjacent
+# silent-error paths in the UCAN proof surface (cbor-decode drop in
+# `iter_installed_proofs`; chain-validation error swallow in
+# `UcanGroundedPolicy::typed_cap_permitted_by_proof`). These emit a
+# `tracing::warn!` so a corrupt/forward-compat envelope or a
+# backend-storage failure is operator-visible rather than indistinct
+# from a clean "no chain grants this cap" disposition.
+tracing = { workspace = true }
 
 # G14-B durable UCAN backend (wave-4b) — `benten-id` is native-only
 # because it transitively pulls `getrandom` for OS CSPRNG, which

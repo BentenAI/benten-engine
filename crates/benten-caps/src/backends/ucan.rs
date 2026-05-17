@@ -369,14 +369,32 @@ impl<B: GraphBackend> UCANBackend<B> {
                 reason: format!("KV scan grants: {e}"),
             })?;
         let mut proofs = Vec::new();
-        for (_key, value) in scan.iter() {
+        for (key, value) in scan.iter() {
             // Decode failures are skipped rather than aborting the
             // policy check — a corrupt or forward-compat-shaped entry
             // should not cause every cap-check to fail-closed at the
             // backend layer. The cap policy fails-closed at the
             // higher-level "no chain grants this cap" disposition.
-            if let Ok(token) = cbor::from_slice::<Ucan>(value) {
-                proofs.push(token);
+            //
+            // Safe-1 #492: emit observability on the skip. A silent
+            // drop made a corrupt durable grant indistinguishable from
+            // "no such grant" — there was NO operator-visible signal
+            // that an installed proof failed to decode. The skip
+            // behavior is preserved (non-fatal by design); the
+            // `tracing::warn!` makes it forensically auditable.
+            match cbor::from_slice::<Ucan>(value) {
+                Ok(token) => proofs.push(token),
+                Err(decode_err) => {
+                    tracing::warn!(
+                        target: "benten_caps::ucan_backend",
+                        error_code = "E_CAP_BACKEND_STORAGE",
+                        key = %String::from_utf8_lossy(key),
+                        error = %decode_err,
+                        "skipping un-decodable installed UCAN proof \
+                         (corrupt or forward-compat envelope); proof \
+                         excluded from the cap-check chain set (#492)"
+                    );
+                }
             }
         }
         Ok(proofs)

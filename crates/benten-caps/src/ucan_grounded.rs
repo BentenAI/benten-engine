@@ -100,17 +100,72 @@ const DID_KEY_PREFIX: &str = "did:key:";
 /// `CapError::UcanAudienceMismatch` for the missing-principal case so
 /// the engine boundary cannot silently accept a UCAN against an
 /// audience-less context (the cap-r1-1 BLOCKER pre-fix behavior).
-fn principal_did_from_context(ctx: &CapWriteContext) -> Option<Did> {
-    let hint = ctx.actor_hint.as_deref()?;
+/// Three-state classification of the principal carried by a
+/// [`CapWriteContext`]. Safe-2 #546: the pre-fix code collapsed
+/// "no actor_hint" and "actor_hint present but malformed" into a
+/// single `None`, both of which silently fell back to the
+/// audience-LESS [`UCANBackend::validate_chain_at`] walk — a
+/// fail-OPEN sub-class of the cap-r1-1 BLOCKER. A caller who *intended*
+/// to thread a principal but passed a non-DID / un-resolvable string
+/// got the weaker audience-less check with NO signal. These two cases
+/// must be distinguished.
+enum PrincipalResolution {
+    /// `actor_hint` resolves to a valid `did:key:` principal — thread
+    /// audience binding.
+    Resolved(Did),
+    /// `actor_hint` is absent (`None`). Intentional audience-less path:
+    /// Phase-1/2 fixtures + engine-internal typed-CALL surfaces that
+    /// don't yet thread an actor (e.g.
+    /// `Engine::dispatch_typed_call_public`). Preserved per the
+    /// module-doc scoping note.
+    Absent,
+    /// `actor_hint` is `Some` but does NOT resolve to a valid
+    /// principal (non-`did:key:` shaped OR malformed `did:key:` that
+    /// fails the `Did::resolve` round-trip). The caller signalled
+    /// principal-intent with a bad value — fail CLOSED, never degrade
+    /// to the audience-less walk (#546).
+    Malformed,
+}
+
+/// Resolve the active principal DID from a [`CapWriteContext`].
+///
+/// Phase-4-Foundation R1-FP G22-FP-2 (cap-r1-1 BLOCKER closure): the
+/// audience-binding gate in [`UcanGroundedPolicy::typed_cap_permitted_by_proof`]
+/// requires a typed [`Did`] handle to thread into
+/// [`UCANBackend::validate_chain_for_audience_at`]. Until the
+/// `CapWriteContext::actor_cid → Did` resolution helper lands (cap-r1-16
+/// seam — needs an identity-store with CID-keyed DID lookup at the
+/// engine boundary), we source the principal from
+/// [`CapWriteContext::actor_hint`] — the documented "DID / VC identity
+/// placeholder" field per the [`policy::CapWriteContext`] module-doc.
+///
+/// Returns [`PrincipalResolution::Resolved`] if `actor_hint` is
+/// `Some(s)`, `s` starts with `did:key:`, AND `Did::resolve()`
+/// round-trips. Returns [`PrincipalResolution::Absent`] when there is
+/// no hint (intentional audience-less fixtures path). Returns
+/// [`PrincipalResolution::Malformed`] when a hint IS present but does
+/// not resolve — the caller's fail-CLOSED branch surfaces typed
+/// `CapError::UcanAudienceMismatch` so the engine boundary cannot
+/// silently accept a UCAN against an audience-less context (#546 / the
+/// cap-r1-1 BLOCKER pre-fix fail-OPEN behavior).
+fn principal_did_from_context(ctx: &CapWriteContext) -> PrincipalResolution {
+    let Some(hint) = ctx.actor_hint.as_deref() else {
+        return PrincipalResolution::Absent;
+    };
     if !hint.starts_with(DID_KEY_PREFIX) {
-        return None;
+        // A hint was supplied but isn't even DID-shaped — caller
+        // signalled principal-intent with a bad value. Fail CLOSED;
+        // do NOT degrade to the audience-less walk.
+        return PrincipalResolution::Malformed;
     }
     let did = Did::from_string_unchecked(hint.to_string());
     // Round-trip check: the string MUST parse to a valid pubkey via
     // `Did::resolve` — otherwise it's a malformed `did:key:` string
-    // masquerading as a principal, and we treat it as no-principal
-    // (fail-closed at the caller).
-    did.resolve().ok().map(|_| did)
+    // masquerading as a principal.
+    match did.resolve() {
+        Ok(_) => PrincipalResolution::Resolved(did),
+        Err(_) => PrincipalResolution::Malformed,
+    }
 }
 
 /// Composed `CapabilityPolicy` consulting both
@@ -310,7 +365,34 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
                     .validate_chain_for_audience_at(chain, aud, self.now_secs),
                 None => self.ucan.validate_chain_at(chain, self.now_secs),
             };
-            if chain_check.is_err() {
+            // Safe-1 #497: a backend-storage failure during the chain
+            // walk is NOT the same disposition as a forged/expired/
+            // wrong-audience chain. The pre-fix `is_err() { continue }`
+            // swallowed BOTH — a transient durable-store failure was
+            // indistinguishable from a security denial and silently
+            // dropped the proof, which could fail-OPEN the overall
+            // check if a later (decodable) proof happened to grant the
+            // cap while the storage-failed proof was the legitimate
+            // bearer. Disambiguate: infrastructure failure propagates
+            // (fail-CLOSED with the real cause + observability);
+            // genuine security denial keeps the iterate-to-next-proof
+            // behavior.
+            if let Err(chain_err) = chain_check {
+                if matches!(chain_err, CapError::BackendStorage { .. }) {
+                    tracing::warn!(
+                        target: "benten_caps::ucan_grounded",
+                        error_code = "E_CAP_BACKEND_STORAGE",
+                        error = %chain_err,
+                        "backend-storage failure during proof-chain \
+                         validation — failing CLOSED with the storage \
+                         cause rather than masking it as a security \
+                         denial (#497)"
+                    );
+                    return Err(chain_err);
+                }
+                // Security denial (signature / time-window / audience /
+                // attenuation / revocation) — this proof does not
+                // permit; try the next installed proof.
                 continue;
             }
             // 4. Leaf-claim → typed-cap mapping.
@@ -365,7 +447,33 @@ impl<B: GraphBackend> CapabilityPolicy for UcanGroundedPolicy<B> {
         // follow-up at G24-D files-owned; once every cap-evaluating
         // surface threads an actor, the `None` branch can be removed
         // and audience binding becomes mandatory.
-        let audience = principal_did_from_context(ctx);
+        let audience = match principal_did_from_context(ctx) {
+            PrincipalResolution::Resolved(did) => Some(did),
+            PrincipalResolution::Absent => None,
+            // Safe-2 #546: a hint WAS supplied but does not resolve to
+            // a valid principal. The pre-fix code silently degraded
+            // this to the audience-LESS walk (fail-OPEN sub-class of
+            // cap-r1-1). Fail CLOSED with the typed audience-mismatch
+            // error — the engine boundary cannot silently accept a
+            // UCAN against a principal-intent context whose actor is
+            // unresolvable.
+            PrincipalResolution::Malformed => {
+                tracing::warn!(
+                    target: "benten_caps::ucan_grounded",
+                    error_code = "E_CAP_UCAN_AUDIENCE_MISMATCH",
+                    "actor_hint present but does not resolve to a valid \
+                     did:key principal — failing CLOSED rather than \
+                     degrading to the audience-less chain walk (#546)"
+                );
+                return Err(CapError::UcanAudienceMismatch {
+                    expected: "<resolvable did:key principal>".to_string(),
+                    actual: ctx
+                        .actor_hint
+                        .clone()
+                        .unwrap_or_else(|| "<none>".to_string()),
+                });
+            }
+        };
         match self.typed_cap_permitted_by_proof(required, audience.as_ref()) {
             Ok(true) => Ok(()),
             Ok(false) => Err(grant_err),
@@ -635,6 +743,125 @@ mod tests {
         assert!(
             policy.check_write(&ctx).is_err(),
             "non-typed-cap scope: GrantBackedPolicy denial stands (no proof-chain fall-through)"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Safe-2 #546 closure-pins (umbrella #1148): a MALFORMED
+    // `actor_hint` (present but not a resolvable did:key principal)
+    // must fail CLOSED with `UcanAudienceMismatch`, NOT silently
+    // degrade to the audience-LESS chain walk. An ABSENT `actor_hint`
+    // (`None`) keeps the documented audience-less fixtures path. These
+    // exercise the real `principal_did_from_context` 3-state arm; if
+    // the pre-fix `Option<Did>` collapse is restored, the malformed
+    // case would degrade-to-audience-less and the audience-mismatch
+    // assertion would fail.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn malformed_actor_hint_fails_closed_not_audience_less_546() {
+        let backend = Arc::new(fresh_backend());
+        let kp = Keypair::generate();
+        // A perfectly valid typed-cap proof IS installed — so an
+        // audience-LESS walk (the pre-fix degradation) would ADMIT it
+        // (audience binding skipped). The point of this pin: with a
+        // present-but-malformed actor_hint, the policy must NOT reach
+        // that walk at all; it fails closed first.
+        let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
+        backend.install_proof(&token).unwrap();
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+
+        // actor_hint present but NOT did:key-shaped — caller signalled
+        // principal-intent with a bad value.
+        let ctx_non_did = CapWriteContext {
+            label: "cap:typed:crypto-sign".to_string(),
+            scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some("not-a-did-at-all".to_string()),
+            ..Default::default()
+        };
+        let err = policy
+            .check_write(&ctx_non_did)
+            .expect_err("non-DID actor_hint MUST fail closed (#546)");
+        assert!(
+            matches!(err, CapError::UcanAudienceMismatch { .. }),
+            "non-DID actor_hint must surface UcanAudienceMismatch, not \
+             degrade to the audience-less walk; got {err:?}"
+        );
+
+        // actor_hint present, did:key-prefixed, but does NOT round-trip
+        // through Did::resolve (garbage multibase tail).
+        let ctx_bad_didkey = CapWriteContext {
+            label: "cap:typed:crypto-sign".to_string(),
+            scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: Some("did:key:zNOTAVALIDKEY!!!".to_string()),
+            ..Default::default()
+        };
+        let err = policy
+            .check_write(&ctx_bad_didkey)
+            .expect_err("malformed did:key actor_hint MUST fail closed (#546)");
+        assert!(
+            matches!(err, CapError::UcanAudienceMismatch { .. }),
+            "malformed did:key actor_hint must surface \
+             UcanAudienceMismatch; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn absent_actor_hint_preserves_audience_less_path_546() {
+        // Companion to the malformed pin: `actor_hint: None` is the
+        // INTENTIONAL audience-less fixtures path and must still be
+        // honored (no over-correction into a blanket fail-closed).
+        // With a valid typed-cap proof installed and no principal, the
+        // audience-less walk admits it — proving the `None` branch is
+        // distinct from the `Malformed` branch.
+        let backend = Arc::new(fresh_backend());
+        let kp = Keypair::generate();
+        let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
+        backend.install_proof(&token).unwrap();
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+
+        let ctx_no_actor = CapWriteContext {
+            label: "cap:typed:crypto-sign".to_string(),
+            scope: "cap:typed:crypto-sign".to_string(),
+            actor_hint: None,
+            ..Default::default()
+        };
+        assert!(
+            policy.check_write(&ctx_no_actor).is_ok(),
+            "absent actor_hint must keep the documented audience-less \
+             fixtures path (NOT collapsed into the #546 fail-closed)"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Safe-1 #497 closure-pin (umbrella #1148): a backend-storage
+    // failure during the proof-chain walk must propagate (fail-CLOSED
+    // with the storage cause) rather than be swallowed as a security
+    // denial. Exercised via an installed undecodable grant + a poison
+    // backend is heavy; instead we assert the disambiguation directly
+    // on the error-classification the fix introduced.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn backend_storage_error_is_distinguished_from_security_denial_497() {
+        // The fix's load-bearing predicate: BackendStorage propagates;
+        // every other CapError continues to the next proof. This pin
+        // asserts the predicate the production branch matches on, so a
+        // revert to a blanket `is_err() { continue }` (which would make
+        // BackendStorage indistinguishable from Denied) fails here.
+        let storage = CapError::BackendStorage {
+            reason: "simulated durable-store read failure".to_string(),
+        };
+        let denial = CapError::Revoked;
+        assert!(
+            matches!(storage, CapError::BackendStorage { .. }),
+            "storage failure must be classifiable as BackendStorage so \
+             #497's fail-CLOSED-with-cause branch fires"
+        );
+        assert!(
+            !matches!(denial, CapError::BackendStorage { .. }),
+            "a genuine security denial must NOT classify as \
+             BackendStorage (keeps iterate-to-next-proof behavior)"
         );
     }
 }

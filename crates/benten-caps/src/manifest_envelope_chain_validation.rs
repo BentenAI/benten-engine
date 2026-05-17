@@ -143,11 +143,31 @@ pub trait UserDidRegistry {
     fn is_user_did(&self, did: &Did) -> bool;
 }
 
+/// Maximum delegation-chain depth the manifest-envelope walker will
+/// process. Bounds the multiplicative-DoS surface called out in
+/// Safe-2 #543: `iter_installed_proofs × chain.len()` had no input
+/// bound at the security-sensitive Layer-2↔Layer-3 walker, while the
+/// sibling [`crate::grant_backed::GrantReaderConfig::max_chain_depth`]
+/// (default 64) already disciplined the UCAN reader path. Mirrors that
+/// 64-step ceiling so the two security-relevant chain walkers share
+/// one bound. A chain longer than this rejects with
+/// [`ChainValidationOutcome::ChainTooDeep`] BEFORE any per-step
+/// manifest lookup runs (fail-CLOSED, O(1) on the attack input).
+pub const MAX_CHAIN_DEPTH: usize = 64;
+
 /// Outcome of a full-chain validation walk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChainValidationOutcome {
     /// All steps fit the envelope; root anchors at user-DID.
     Admitted,
+    /// Chain length exceeds [`MAX_CHAIN_DEPTH`] — rejected before any
+    /// per-step manifest lookup runs (Safe-2 #543 DoS bound).
+    ChainTooDeep {
+        /// Observed chain length.
+        depth: usize,
+        /// Configured ceiling ([`MAX_CHAIN_DEPTH`]).
+        limit: usize,
+    },
     /// Root is not a user-DID — CLAUDE.md #18 clause-(a) violation.
     RootNotUserDid,
     /// An intermediate plugin-DID's manifest `shares` policy does not
@@ -178,6 +198,7 @@ impl ChainValidationOutcome {
     pub fn into_result(self) -> Result<(), ErrorCode> {
         match self {
             ChainValidationOutcome::Admitted => Ok(()),
+            ChainValidationOutcome::ChainTooDeep { .. } => Err(ErrorCode::CapChainTooDeep),
             ChainValidationOutcome::RootNotUserDid => Err(ErrorCode::PluginManifestInvalid),
             ChainValidationOutcome::StepOutsideEnvelope { .. } => {
                 Err(ErrorCode::PluginDelegationOutsideManifestEnvelope)
@@ -232,6 +253,19 @@ where
 {
     if chain.is_empty() {
         return ChainValidationOutcome::Empty;
+    }
+
+    // Safe-2 #543 DoS bound: reject an over-long chain BEFORE any
+    // per-step manifest lookup runs. Without this, a caller could feed
+    // an arbitrarily long `chain` and force `chain.len()` manifest
+    // lookups per `iter_installed_proofs` proof — a multiplicative
+    // walk with no input ceiling. Fail-CLOSED, O(1) on the attack
+    // input. Mirrors `GrantReaderConfig::max_chain_depth`.
+    if chain.len() > MAX_CHAIN_DEPTH {
+        return ChainValidationOutcome::ChainTooDeep {
+            depth: chain.len(),
+            limit: MAX_CHAIN_DEPTH,
+        };
     }
 
     // Layer 1 — root must be a user-DID.
@@ -613,5 +647,78 @@ mod tests {
         .into_result()
         .unwrap_err();
         assert_eq!(err, ErrorCode::PluginPrivateNamespaceDelegationForbidden);
+    }
+
+    // ---------------------------------------------------------------
+    // Safe-2 #543 closure-pin (umbrella #1148): the chain walker has a
+    // MAX_CHAIN_DEPTH bound. These exercise the real arm — a chain of
+    // (MAX_CHAIN_DEPTH + 1) steps rejects with `ChainTooDeep` BEFORE
+    // any per-step manifest lookup runs; a chain of exactly
+    // MAX_CHAIN_DEPTH steps is NOT rejected on the depth axis. If the
+    // depth check is reverted, the over-long-chain test fails (the
+    // walk would instead surface a per-step / Admitted outcome).
+    // ---------------------------------------------------------------
+
+    /// Build a user-rooted chain of `n` steps where every hop is
+    /// `user_did → user_did` (so the only thing under test is the
+    /// length bound, not the envelope semantics — step 0 is user-root,
+    /// and a self-issued audience keeps chain-integrity satisfied).
+    fn user_self_chain(n: usize) -> Vec<DelegationStep> {
+        (0..n)
+            .map(|_| DelegationStep {
+                issuer_did: user_did(),
+                audience_did: user_did(),
+                cap_pattern: "store:notes:write".into(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn chain_over_max_depth_rejected_before_lookup_543() {
+        let chain = user_self_chain(MAX_CHAIN_DEPTH + 1);
+        // An empty manifest map proves the rejection happens BEFORE any
+        // per-step manifest lookup — if the walker reached the lookup
+        // it would surface `NoManifestForIssuer`/`StepOutsideEnvelope`,
+        // not `ChainTooDeep`.
+        let lookup = TestManifestLookup {
+            map: HashMap::new(),
+        };
+        let reg = user_registry_with(user_did());
+        let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
+        assert_eq!(
+            outcome,
+            ChainValidationOutcome::ChainTooDeep {
+                depth: MAX_CHAIN_DEPTH + 1,
+                limit: MAX_CHAIN_DEPTH,
+            },
+            "over-long chain MUST reject on the depth bound (#543)"
+        );
+        assert_eq!(
+            outcome.into_result().unwrap_err(),
+            ErrorCode::CapChainTooDeep,
+            "ChainTooDeep maps to the existing E_CAP_CHAIN_TOO_DEEP code"
+        );
+    }
+
+    #[test]
+    fn chain_at_exactly_max_depth_not_rejected_on_depth_543() {
+        let chain = user_self_chain(MAX_CHAIN_DEPTH);
+        let lookup = TestManifestLookup {
+            map: HashMap::new(),
+        };
+        let reg = user_registry_with(user_did());
+        let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
+        // Exactly-at-limit is allowed PAST the depth gate — the bound
+        // is `>`, not `>=`. The walker then proceeds to the normal
+        // per-step semantics (here it surfaces `NoManifestForIssuer`
+        // at the first non-root step because the test fixture installs
+        // no manifests — that is the expected envelope outcome, NOT a
+        // depth rejection). The load-bearing assertion: a chain of
+        // exactly MAX_CHAIN_DEPTH does NOT trip `ChainTooDeep`.
+        assert!(
+            !matches!(outcome, ChainValidationOutcome::ChainTooDeep { .. }),
+            "a chain of exactly MAX_CHAIN_DEPTH must NOT trip the depth \
+             bound (boundary is `>`, not `>=`); got {outcome:?}"
+        );
     }
 }
