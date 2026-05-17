@@ -41,6 +41,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use benten_core::testing::canonical_test_node;
+use benten_core::{Node, Value};
 use benten_graph::RedbBackend;
 use tempfile::tempdir;
 
@@ -75,8 +76,25 @@ fn concurrent_reader_writer_soak_no_corruption_no_deadlock() {
         let stop = Arc::clone(&stop);
         let writes = Arc::clone(&writes);
         thread::spawn(move || {
+            // refinement-audit #615/#617: each iteration writes a DISTINCT
+            // Node (unique `soak_seq` property → unique CID). The prior
+            // loop re-put `canonical_test_node()` (one fixed CID) every
+            // iteration and relied on `RedbBackend::put_node`'s old
+            // REPLACE-on-collision behaviour — which was exactly the Inv-13
+            // bypass those findings closed. Now that the inherent
+            // `put_node` correctly routes through the Inv-13 5-row dispatch
+            // matrix (User + already-present → `E_INV_IMMUTABILITY`), a
+            // soak that wants sustained write activity MUST produce fresh
+            // CIDs; re-putting an identical CID is a (correctly) rejected
+            // immutability violation, not a write. Distinct Nodes also
+            // stress the index/commit path harder, which is the point.
+            let mut seq: u64 = 0;
             while !stop.load(Ordering::Relaxed) {
-                let _cid = backend.put_node(&canonical_test_node()).expect("put");
+                seq += 1;
+                let mut props = std::collections::BTreeMap::new();
+                props.insert("soak_seq".to_string(), Value::Int(seq as i64));
+                let node = Node::new(vec!["SoakDoc".to_string()], props);
+                let _cid = backend.put_node(&node).expect("put");
                 writes.fetch_add(1, Ordering::Relaxed);
             }
         })

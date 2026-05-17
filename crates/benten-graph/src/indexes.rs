@@ -46,14 +46,34 @@ pub(crate) const PROP_INDEX_TABLE: redb::MultimapTableDefinition<&[u8], &[u8]> =
     redb::MultimapTableDefinition::new("benten_prop_index");
 
 /// Encode a `Value` to its canonical DAG-CBOR bytes for use as an index key
-/// component. Shares the encoder used by Nodes and Edges so that equality in
-/// the index aligns with equality in canonical storage.
+/// component. Shares the *canonical* form used by `Node::canonical_bytes`
+/// (the CID input) so that equality in the index aligns with equality in
+/// canonical storage.
+///
+/// refinement-audit-2026-05 (ST-GRAPH lane, adjacent to #548): the prior
+/// body called `serde_ipld_dagcbor::to_vec(value)` on the RAW value
+/// without first normalizing via [`Value::to_canonical`]. That broke the
+/// docstring's own promised invariant for `Value::Float(-0.0)`:
+/// `Node::canonical_bytes` collapses `-0.0 → +0.0` (so two Nodes that
+/// differ only by the sign of a zero share ONE CID), but the index key
+/// did NOT — a Node stored under a `+0.0` property was unfindable by a
+/// `-0.0` query (and vice-versa) even though they are the SAME content-
+/// addressed Node. Canonicalizing here realigns the index with the CID
+/// contract. The pre-existing
+/// `indexes_float_zero_parity::neg_zero_and_pos_zero_share_cid_and_share_index_bucket`
+/// test pins this (it only ever passed before because it wrote BOTH signs,
+/// masking the asymmetry).
 ///
 /// # Errors
-/// Returns [`CoreError::Serialize`] if `serde_ipld_dagcbor::to_vec` fails —
-/// in practice impossible for the `Value` type but surfaced for safety.
+/// - [`CoreError::FloatNan`] / [`CoreError::FloatNonFinite`] if the value
+///   contains a non-finite float (same rejection `Node::canonical_bytes`
+///   applies — an un-indexable value is not silently mis-indexed).
+/// - [`CoreError::Serialize`] if `serde_ipld_dagcbor::to_vec` fails —
+///   in practice impossible for the canonicalized `Value` type but
+///   surfaced for safety.
 pub(crate) fn value_index_bytes(value: &Value) -> Result<Vec<u8>, CoreError> {
-    serde_ipld_dagcbor::to_vec(value).map_err(|e| CoreError::Serialize(format!("value: {e}")))
+    let canonical = value.to_canonical()?;
+    serde_ipld_dagcbor::to_vec(&canonical).map_err(|e| CoreError::Serialize(format!("value: {e}")))
 }
 
 /// Pack `(label, prop_name, value_bytes)` into a single key for
@@ -65,14 +85,32 @@ pub(crate) fn value_index_bytes(value: &Value) -> Result<Vec<u8>, CoreError> {
 /// u32 is ample (labels and property names are ≤ 64 KiB in practice) and
 /// big-endian keeps keys comparable under redb's lexicographic ordering if we
 /// ever want range scans.
+///
+/// # Panics
+/// Panics (via the explicit `len.try_into()` check, #548 / META #629) if a
+/// label or property name is ≥ 4 GiB. The prior `len() as u32` cast
+/// silently truncated such inputs — a >4 GiB label whose low 32 bits
+/// collided with a short label's length would pack into the SAME key
+/// prefix, aliasing two distinct `(label, prop)` splits into one index
+/// bucket (a content-addressed-index integrity break). A panic on a
+/// ≥4 GiB string is the correct fail-stop: such an input is never a
+/// legitimate Node label (the engine rejects oversized labels far earlier)
+/// and silently mis-indexing is strictly worse than aborting.
 pub(crate) fn property_index_key(label: &str, prop_name: &str, value_bytes: &[u8]) -> Vec<u8> {
     let label_bytes = label.as_bytes();
     let prop_bytes = prop_name.as_bytes();
+    let label_len: u32 = label_bytes
+        .len()
+        .try_into()
+        .expect("property_index_key: label length must fit in u32 (≥4 GiB label rejected — #548)");
+    let prop_len: u32 = prop_bytes.len().try_into().expect(
+        "property_index_key: property-name length must fit in u32 (≥4 GiB name rejected — #548)",
+    );
     let mut out =
         Vec::with_capacity(4 + label_bytes.len() + 4 + prop_bytes.len() + value_bytes.len());
-    out.extend_from_slice(&(label_bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(&label_len.to_be_bytes());
     out.extend_from_slice(label_bytes);
-    out.extend_from_slice(&(prop_bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(&prop_len.to_be_bytes());
     out.extend_from_slice(prop_bytes);
     out.extend_from_slice(value_bytes);
     out

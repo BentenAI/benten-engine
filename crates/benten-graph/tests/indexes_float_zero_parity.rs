@@ -44,12 +44,34 @@ fn neg_zero_and_pos_zero_share_cid_and_share_index_bucket() {
     );
 
     let cid = b.put_node(&pos).unwrap();
-    // Re-put via the negative-zero Node — idempotent at the node body
-    // (same CID) AND at the property index (same encoded value bytes).
-    let cid_again = b.put_node(&neg).unwrap();
-    assert_eq!(cid, cid_again);
+    // refinement-audit-2026-05 (ST-GRAPH lane): two coupled corrections
+    // converge here.
+    //
+    // 1. #615/#617 (umbrella #1208, Inv-13): the negative-zero Node hits
+    //    the SAME CID (parity pin above), so the second User-authority put
+    //    is correctly REFUSED by Inv-13 Row 1 — not silently REPLACE'd.
+    // 2. `value_index_bytes` canonicalization fix (adjacent to #548): the
+    //    property index now canonicalizes `-0.0 → +0.0` before encoding
+    //    the key (matching `Node::canonical_bytes`), so the `+0.0`-stored
+    //    entry IS findable by a `-0.0` query — the load-bearing
+    //    "same index bucket" contract this test pins. Previously this only
+    //    passed because the test wrote BOTH signs, masking the asymmetry.
+    let err = b
+        .put_node(&neg)
+        .expect_err("second put of the parity-equal CID must be Inv-13-refused");
+    match err {
+        benten_graph::GraphError::InvImmutability { cid: violated, .. } => {
+            assert_eq!(
+                violated, cid,
+                "the -0.0 re-put collides with the +0.0 CID (parity holds)"
+            );
+        }
+        other => panic!("expected GraphError::InvImmutability, got {other:?}"),
+    }
 
-    // Query by either sign — both must return the same single CID.
+    // Query by either sign — both must return the same single CID, EVEN
+    // THOUGH only the `+0.0` Node was actually persisted (the index key
+    // is canonicalized, so the sign of zero collapses at the bucket).
     let by_pos = b
         .get_by_property("Metric", "score", &Value::Float(0.0))
         .unwrap();
@@ -58,5 +80,9 @@ fn neg_zero_and_pos_zero_share_cid_and_share_index_bucket() {
     let by_neg = b
         .get_by_property("Metric", "score", &Value::Float(-0.0))
         .unwrap();
-    assert_eq!(by_neg, vec![cid]);
+    assert_eq!(
+        by_neg,
+        vec![cid],
+        "-0.0 query must find the +0.0-stored Node (canonical index bucket)"
+    );
 }

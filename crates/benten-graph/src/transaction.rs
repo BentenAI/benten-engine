@@ -382,10 +382,43 @@ impl<'a> Transaction<'a> {
         };
         let bytes = node.canonical_bytes()?;
         let n_key = node_key(&cid);
+        // #615 (Safe-3, META #660 Inv-13 slice): the transactional
+        // put-path MUST route through the Inv-13 5-row dispatch matrix, not
+        // `nodes.insert(...)` unconditionally. redb `insert` has REPLACE
+        // semantics, so before this fix a `User`-authority re-put of an
+        // already-stored CID silently overwrote the body (and re-inserted
+        // index entries) instead of refusing with `E_INV_IMMUTABILITY` —
+        // `Engine::create_node` re-puts routed through `transaction(|tx|
+        // tx.put_node(..))` bypassed immutability. The existence probe runs
+        // inside THIS write txn (redb's single-writer lock serializes it
+        // against every other in-flight transaction), then we branch on the
+        // transaction's `authority` exactly like `put_node_with_context`:
+        //   - Row 1/2: User + present        → E_INV_IMMUTABILITY
+        //   - Row 3:   EnginePrivileged + present → dedup Ok(cid), no write,
+        //              no pending op (sec-r1-4 "dedup is a pure read")
+        //   - Row 4:   SyncReplica + present  → dedup Ok(cid) (Phase-3
+        //              receiver)
+        let authority = self.authority;
         let txn = self
             .inner
             .as_mut()
             .ok_or_else(|| GraphError::Redb("put_node after commit/abort".into()))?;
+        let already_present = {
+            let nodes = txn.open_table(NODES_TABLE)?;
+            nodes.get(n_key.as_slice())?.is_some()
+        };
+        if already_present {
+            return match authority {
+                WriteAuthority::User => Err(GraphError::InvImmutability {
+                    cid,
+                    attempted_authority: authority,
+                }),
+                // Dedup: no write, no index churn, NO pending op (so no
+                // ChangeEvent and no audit-sequence advance — the dedup
+                // branch must be observably a pure read per sec-r1-4).
+                WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
+            };
+        }
         {
             let mut nodes = txn.open_table(NODES_TABLE)?;
             nodes.insert(n_key.as_slice(), bytes.as_slice())?;
@@ -685,11 +718,21 @@ impl<'a> Transaction<'a> {
 ///
 /// `prefix_len` is the length of the index-prefix header (`es:` / `et:`
 /// bytes) PLUS the source/target CID the prefix encodes — everything after
-/// that offset is the edge's own CID. A malformed entry (key shorter than
-/// the expected prefix, or an un-parseable CID suffix) is skipped silently;
-/// on-disk corruption at the index level manifests as a missed cascade
-/// rather than an aborted delete, which is the same degradation model the
-/// rest of the scan paths use.
+/// that offset is the edge's own CID.
+///
+/// #501 (Safe-1, META #707 slice): a malformed index entry (key shorter
+/// than the expected prefix, or an un-parseable CID suffix) is now
+/// PROPAGATED as [`GraphError`] rather than skipped silently. This is the
+/// cascade-delete scan path; a silently-skipped corrupt entry meant a
+/// dangling edge survived a `delete_node` cascade (the r6b-ivm-1
+/// regression class) WITHOUT any error surfacing — strictly worse than
+/// aborting the delete. The symmetric scan paths (`edges_from` /
+/// `edges_to`) already propagate `Cid::from_bytes` failure; this closes
+/// the asymmetry. The trait-level `GraphBackend::snapshot()` infallible-
+/// shape fork that the related #1022 finding raises is a v1-API
+/// SemVer-lock decision named at `docs/future/phase-4-backlog.md §4.61`
+/// (flip-vs-freeze pending Ben ratification) — out of scope for this
+/// internal-helper hardening.
 fn scan_edge_index(
     table: &redb::Table<'_, &[u8], &[u8]>,
     prefix: &[u8],
@@ -706,12 +749,18 @@ fn scan_edge_index(
     for item in iter {
         let (k, _v) = item?;
         let key = k.value();
-        let Some(edge_cid_bytes) = key.get(full_header_len..) else {
-            continue;
-        };
-        let Ok(edge_cid) = Cid::from_bytes(edge_cid_bytes) else {
-            continue;
-        };
+        let edge_cid_bytes = key.get(full_header_len..).ok_or_else(|| {
+            GraphError::Decode(format!(
+                "edge-index key shorter than expected header ({full_header_len} bytes) — \
+                 on-disk index corruption in cascade-delete scan"
+            ))
+        })?;
+        let edge_cid = Cid::from_bytes(edge_cid_bytes).map_err(|e| {
+            GraphError::Decode(format!(
+                "edge-index key suffix is not a valid CID ({e}) — \
+                 on-disk index corruption in cascade-delete scan"
+            ))
+        })?;
         out.insert(edge_cid);
     }
     Ok(())
