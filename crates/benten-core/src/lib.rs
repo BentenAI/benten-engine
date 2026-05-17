@@ -15,18 +15,19 @@
 //! - [`Cid`] — a thin CIDv1 newtype (multicodec `0x71` dag-cbor, multihash
 //!   `0x1e` blake3) produced by [`Node::cid`] / [`Edge::cid`].
 //!
-//! Version chains ship in **two coexisting shapes** (R4 triage cov-f3; R5 G7
-//! picks a canonical one):
+//! Version chains ship in **two shapes** (the legacy crate-root `u64`-id
+//! `Anchor` compatibility surface was deleted for #1003 — zero non-test
+//! callers; RATIFIED 2026-05-17):
 //!
-//! - [`crate::Anchor`] + [`crate::append_version`] / [`crate::current_version`]
-//!   / [`crate::walk_versions`] — thin `u64`-id surface keyed by a
-//!   process-unique monotonic counter. Simplest shape; no prior-head
-//!   declaration; cannot detect concurrent-fork hazards.
 //! - [`version::Anchor`] + [`version::append_version`] /
-//!   [`version::walk_versions`] — prior-head-threaded surface. Each append
-//!   names the head the caller observed, so concurrent writers forking the
-//!   chain surface as [`version::VersionError::Branched`] /
+//!   [`version::walk_versions`] — prior-head-threaded linear surface. Each
+//!   append names the head the caller observed, so concurrent writers
+//!   forking the chain surface as [`version::VersionError::Branched`] /
 //!   [`version::VersionError::UnknownPrior`].
+//! - [`version_chain::DagVersionChain`] — DAG-shape version chain
+//!   supporting branches/merges natively. The Phase-4-Meta D3 unification
+//!   of these two surfaces into one `VersionDag` with a strict/linear mode
+//!   is named in `docs/future/phase-4-backlog.md` (#849).
 //!
 //! The [`Node::anchor_id`] field is version-chain identity; it is **excluded
 //! from the content hash** so the same content under a different anchor
@@ -87,7 +88,7 @@ pub use subgraph::{
     ATTRIBUTION_PROPERTY_KEY, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder,
     canonical_subgraph_bytes,
 };
-pub use value::Value;
+pub use value::{MAX_VALUE_DECODE_DEPTH, Value};
 
 /// Phase 2a ucca-9 / arch-r1-2 frozen shape — lifted into `benten-core` so
 /// both `benten-graph::WriteAuthority` and `benten-caps::WriteAuthority`
@@ -790,28 +791,19 @@ impl CoreError {
 // ---------------------------------------------------------------------------
 // Anchor + version-chain helpers (C6)
 //
-// R4 triage (M21): `benten_core::version::*` is the canonical prior-head-
-// threaded surface (see `src/version.rs`). The `u64`-id-based Anchor + free
-// functions exposed here at the crate root are the thinner compatibility
-// surface for the Phase 1 "simple" case where callers don't need to detect
-// concurrent appends.
+// ---------------------------------------------------------------------------
+// Version-chain edge-label contract.
 //
-// PRE-V1 DECISION PENDING (Surf-1 #1003 / #849 / Qual-2 #757): this
-// u64-id Anchor surface has zero non-test callers at HEAD (only
-// `benten-core/tests/proptests.rs`) and coexists with two other Anchor
-// shapes (Cid-head linear `version::Anchor`, DAG-shape
-// `version_chain::DagVersionChain`) with no shared trait and three
-// different "CURRENT" semantics. The earlier "R5 G7 picks a canonical
-// shape" / `TODO(phase-3 — version surface consolidation)` marker is
-// stale (phase-3 shipped). Delete-or-freeze of this surface + whether to
-// introduce a shared Anchor trait is a v1-API-stabilization decision
-// deferred to Ben (refinement-audit v1-API cluster #1158); not changed
-// here because it is a public-surface removal requiring ratification.
-//
-// State storage: each u64-id anchor owns a `Vec<Cid>` of appended version
-// CIDs (oldest-first), held in a process-wide spinlocked table keyed by
-// `Anchor::id`. This matches the Cid-head surface's storage strategy and is
-// sufficient for Phase 1 (in-process only).
+// `benten_core::version::*` (Cid-head linear, see `src/version.rs`) and
+// `benten_core::version_chain::DagVersionChain` (DAG-shape) are the canonical
+// version-chain surfaces. The earlier crate-root `u64`-id `Anchor` +
+// `append_version` / `current_version` / `walk_versions` compatibility
+// surface (Phase-1 "simple" case) was DELETED for #1003 (refinement-audit
+// 2026-05; RATIFIED 2026-05-17 — zero non-test callers; superseded by the
+// Cid-head + DAG surfaces; CLAUDE.md rule #5 = delete dead surface, don't
+// freeze-and-shim). The DAG-shape unification of the two remaining Anchor
+// surfaces (#849) is a Phase-4-Meta D3 design item — see
+// `docs/future/phase-4-backlog.md`.
 // ---------------------------------------------------------------------------
 
 /// The `CURRENT` edge label — anchor → current-version Node pointer.
@@ -819,123 +811,6 @@ pub const LABEL_CURRENT: &str = "CURRENT";
 
 /// The `NEXT_VERSION` edge label — previous-version → next-version Node.
 pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
-
-/// Top-level opt-in version-chain Anchor identity (u64-id shape).
-///
-/// Each call to [`Anchor::new`] allocates a fresh monotonically-increasing
-/// id from a process-wide counter, so two independent anchors never collide.
-/// The id itself is not content-addressed (see ENGINE-SPEC §7) — it is
-/// identity only, and [`Node::anchor_id`] is excluded from the Node CID.
-///
-/// The id field is `pub(crate)` so external callers cannot hand-construct an
-/// anchor that collides with the counter's live range or with the reserved
-/// sentinel `0`. Read access is via [`Anchor::id`].
-#[derive(Debug, Clone, PartialEq)]
-pub struct Anchor {
-    /// Monotonic process-unique id. Allocated by [`Anchor::new`] only.
-    pub(crate) id: u64,
-}
-
-/// Counter for [`Anchor::new`]. Starts at 1 so `0` remains a sentinel value
-/// for future "unset" / "null-anchor" encodings if they become useful.
-///
-/// `Ordering::Relaxed` is the correct ordering here: the counter's sole
-/// correctness requirement is that `fetch_add` produces a distinct value for
-/// each call within the process. No other state is synchronized through the
-/// counter (the `U64_CHAINS` table is separately protected by a `Mutex`), so
-/// the stronger Acquire/Release / SeqCst orderings would be paying for a
-/// happens-before edge nothing consumes.
-static ANCHOR_COUNTER: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
-
-/// Per-process u64-id version-chain table. `BTreeMap<id, Vec<Cid>>` keyed by
-/// anchor id; vec stores version CIDs in oldest-first insertion order.
-///
-/// `TODO(phase-3 — anchorstore + GC)`: this table grows unbounded for
-/// the life of the process — every [`Anchor::new`] + [`append_version`]
-/// call adds entries, and there is no `drop_anchor` or GC. Fine for
-/// Phase 1 (short test runs, bounded integration tests); a long-running
-/// bench or the eventual evaluator with churn would want a caller-owned
-/// `AnchorStore`. Carried from `phase-2-anchorstore` generic marker.
-static U64_CHAINS: spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>> =
-    spin::Lazy::new(|| spin::Mutex::new(BTreeMap::new()));
-
-// Safe-4 #636: compile-time pin for the process-wide `U64_CHAINS` table's
-// concurrent-access contract — `append_version` / `current_version` /
-// `walk_versions` all `.lock()` it from arbitrary threads, so the static's
-// type must stay `Send + Sync`. Fails to compile if the inner type ever
-// regresses. Zero-cost: the closure is never called.
-const _: fn() = || {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>>>();
-};
-
-impl Anchor {
-    /// Allocate a fresh Anchor with a distinct id. Distinct calls never
-    /// produce equal ids (monotonic u64 counter, wraps after 2^64-1 calls —
-    /// practically unreachable).
-    #[must_use]
-    pub fn new() -> Self {
-        let id = ANCHOR_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-        Self { id }
-    }
-
-    /// The anchor's process-unique identity. Stable for the life of the
-    /// `Anchor` value; use as a chain-lookup key.
-    #[must_use]
-    pub fn id(&self) -> u64 {
-        self.id
-    }
-}
-
-impl Default for Anchor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Append a Version Node to an Anchor's chain, returning the Node's CID.
-///
-/// The appended Node's CID becomes the anchor's new [`current_version`].
-/// Per ENGINE-SPEC §6 / §7, chain membership is expressed via edges
-/// (`CURRENT`, `NEXT_VERSION`); the Node's own content hash is unaffected
-/// by position in the chain.
-///
-/// # Errors
-///
-/// Propagates [`CoreError::Serialize`] from [`Node::cid`] if the version
-/// Node fails to encode.
-pub fn append_version(anchor: &Anchor, version: &Node) -> Result<Cid, CoreError> {
-    let cid = version.cid()?;
-    let mut table = U64_CHAINS.lock();
-    table.entry(anchor.id).or_default().push(cid);
-    Ok(cid)
-}
-
-/// Resolve the Anchor's current (latest) version Cid.
-///
-/// # Errors
-///
-/// Returns [`CoreError::NotFound`] if the anchor has no appended versions.
-pub fn current_version(anchor: &Anchor) -> Result<Cid, CoreError> {
-    let table = U64_CHAINS.lock();
-    table
-        .get(&anchor.id)
-        .and_then(|chain| chain.last().copied())
-        .ok_or(CoreError::NotFound)
-}
-
-/// Walk an Anchor's version chain, yielding Version Node CIDs in oldest-first
-/// order.
-///
-/// # Errors
-///
-/// Currently infallible (returns an empty `Vec` for a never-appended anchor).
-/// The `Result` return type reserves space for future revocation / backend
-/// failures without a breaking API change.
-pub fn walk_versions(anchor: &Anchor) -> Result<Vec<Cid>, CoreError> {
-    let table = U64_CHAINS.lock();
-    Ok(table.get(&anchor.id).cloned().unwrap_or_default())
-}
 
 /// Format any `Display`able error into an owned `String`.
 ///
