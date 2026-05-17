@@ -58,6 +58,7 @@ use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 
+use crate::CanonicalBytes;
 use crate::did::Did;
 use crate::errors::UcanError;
 use crate::keypair::{Keypair, PublicKey};
@@ -141,9 +142,17 @@ impl Ucan {
     // directly (CLAUDE.md #5 — no no-op wrappers).
 }
 
-fn canonical_bytes(claims: &UcanClaims) -> Vec<u8> {
-    serde_ipld_dagcbor::to_vec(claims)
-        .expect("DAG-CBOR encoding of UcanClaims fixed shape cannot fail")
+/// Qual-2 #759: byte-identical reproduction of the prior free-fn
+/// `canonical_bytes(&UcanClaims)` body, lifted onto the shared
+/// [`CanonicalBytes`](crate::CanonicalBytes) trait. Whole-struct
+/// DAG-CBOR encoding unchanged (v1-wire-adjacent — §3.5m P-III;
+/// covered by the byte-equality pin in
+/// `tests/canonical_bytes_trait.rs`).
+impl crate::CanonicalBytes for UcanClaims {
+    fn canonical_bytes(&self) -> Vec<u8> {
+        serde_ipld_dagcbor::to_vec(self)
+            .expect("DAG-CBOR encoding of UcanClaims fixed shape cannot fail")
+    }
 }
 
 fn check_time_window(claims: &UcanClaims, now: u64) -> Result<(), UcanError> {
@@ -240,7 +249,7 @@ impl UcanBuilder {
             exp: self.exp,
             prf: self.prf,
         };
-        let bytes = canonical_bytes(&claims);
+        let bytes = claims.canonical_bytes();
         let sig = keypair.sign(&bytes);
         Ucan {
             claims,
@@ -327,8 +336,8 @@ pub fn validate_chain_for_audience(
 /// + a leaf-claim check that the leaf token's `att` array actually
 /// grants the requested `(resource, ability)` capability. The leaf-
 /// claim check uses the same subsume relation as
-/// [`validate_chain_at`]'s attenuation walk
-/// ([`capability_satisfies_requirement`]) so the engine's own
+/// [`validate_chain_at`]'s attenuation walk (the private
+/// `caps_match_or_subsume` helper) so the engine's own
 /// internal subsume rule is the SAME relation external callers
 /// query.
 ///
@@ -391,34 +400,21 @@ pub fn validate_chain_for_capability(
     Ok(())
 }
 
-/// Test whether `granted` subsumes `required` per the same subsume
-/// relation `validate_chain_at`'s internal attenuation walk uses.
-///
-/// Public so engine-side code (typed-CALL dispatch in
-/// `benten-engine`) can answer "does this chain grant `required`?"
-/// using the SAME relation the chain-walk uses internally — single
-/// source of truth.
-///
-/// **Hyg-1 #304 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
-/// Zero callers exist *within* `benten-id`, but this is an
-/// intentionally-public cross-crate API: the subsume-relation
-/// single-source-of-truth the `benten-engine` typed-CALL dispatch
-/// queries. Narrowing to `pub(crate)` or deleting it would either
-/// fork the subsume rule (the defense-in-depth hole this function
-/// closes) or break the engine consumer. Not speculative dead code —
-/// the in-crate caller is `validate_chain_for_capability` via the
-/// shared `caps_match_or_subsume` helper; the cross-crate caller is
-/// the engine dispatch path (out-of-lane to re-verify here).
-///
-/// Subsume relation:
-/// - exact match (`resource` AND `ability` equal), OR
-/// - `granted.ability` is `*` AND `resource` matches, OR
-/// - `granted.resource` is a path-prefix of `required.resource` AND
-///   ability matches per the wildcard rule above.
-#[must_use]
-pub fn capability_satisfies_requirement(granted: &Capability, required: &Capability) -> bool {
-    caps_match_or_subsume(granted, required)
-}
+// Hyg-1 #304: `capability_satisfies_requirement` (a zero-body wrapper
+// over `caps_match_or_subsume`) is removed. The prior on-main rationale
+// claimed a `benten-engine` typed-CALL cross-crate caller; concrete
+// re-verification at HEAD `f68d94fd` (workspace-wide grep) shows ZERO
+// callers anywhere — the engine dispatch path
+// (`typed_call_dispatch.rs` → `benten_id::ucan::validate_chain_for_capability`)
+// consumes the *real* public single-source-of-truth API
+// (`validate_chain_for_capability`), which itself wraps the private
+// `caps_match_or_subsume`. The public wrapper was speculative pub
+// surface that never grew callers (META #355). CLAUDE.md #5 + HARD
+// RULE 12: deleting it does NOT fork the subsume rule (it is a pure
+// delegation to `caps_match_or_subsume`, which remains the single
+// source of truth) and does NOT break the engine consumer (engine
+// never referenced it). DISAGREE-WITH-EXPLANATION overturned by
+// concrete evidence.
 
 fn validate_chain_inner(
     chain: &[Ucan],
@@ -464,7 +460,7 @@ fn validate_chain_inner(
         let pk: PublicKey = iss_did
             .resolve()
             .map_err(|_| UcanError::BadSignature { link_index: idx })?;
-        let bytes = canonical_bytes(&token.claims);
+        let bytes = token.claims.canonical_bytes();
         // ed25519-dalek's verify is itself constant-time on the
         // signature bytes (ed25519 verification has no early-exit on
         // signature mismatch); we still flow the result through a

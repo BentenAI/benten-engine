@@ -75,6 +75,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod canonical_bytes;
 pub mod device_attestation;
 pub mod did;
 pub mod did_rotation;
@@ -86,6 +87,7 @@ pub mod plugin_did;
 pub mod ucan;
 pub mod vc;
 
+pub use canonical_bytes::CanonicalBytes;
 pub use errors::{
     DeviceAttestationError, DidError, DidRotationError, KeypairError, MultiSigError,
     SeedImportError, UcanError, VcError,

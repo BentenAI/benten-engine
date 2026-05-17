@@ -172,7 +172,7 @@ impl Credential {
 
     /// Compute canonical-bytes for the claims payload (signature input).
     fn canonical_bytes(&self) -> Vec<u8> {
-        canonical_bytes(&self.claims)
+        crate::CanonicalBytes::canonical_bytes(&self.claims)
     }
 
     /// Borrow the issuer DID string.
@@ -194,9 +194,18 @@ impl Credential {
     }
 }
 
-fn canonical_bytes(claims: &CredentialClaims) -> Vec<u8> {
-    serde_ipld_dagcbor::to_vec(claims)
-        .expect("DAG-CBOR encoding of fixed-shape CredentialClaims cannot fail")
+/// Qual-2 #759: byte-identical reproduction of the prior free-fn
+/// `canonical_bytes(&CredentialClaims)` body, lifted onto the shared
+/// [`CanonicalBytes`](crate::CanonicalBytes) trait. Whole-struct
+/// DAG-CBOR encoding unchanged (v1-wire-adjacent — §3.5m P-III;
+/// covered by the byte-equality pin in
+/// `tests/canonical_bytes_trait.rs`). `Credential::canonical_bytes`
+/// remains the inherent accessor and now delegates here.
+impl crate::CanonicalBytes for CredentialClaims {
+    fn canonical_bytes(&self) -> Vec<u8> {
+        serde_ipld_dagcbor::to_vec(self)
+            .expect("DAG-CBOR encoding of fixed-shape CredentialClaims cannot fail")
+    }
 }
 
 /// Builder for issuing [`Credential`] values.
@@ -312,7 +321,7 @@ impl CredentialBuilder {
             credential_status: self.credential_status,
         };
 
-        let bytes = canonical_bytes(&claims);
+        let bytes = crate::CanonicalBytes::canonical_bytes(&claims);
         let sig = issuer_kp.sign(&bytes);
         Ok(Credential {
             claims,
