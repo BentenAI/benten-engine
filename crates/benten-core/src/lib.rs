@@ -87,7 +87,7 @@ pub use subgraph::{
     ATTRIBUTION_PROPERTY_KEY, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder,
     canonical_subgraph_bytes,
 };
-pub use value::Value;
+pub use value::{MAX_VALUE_DECODE_DEPTH, Value};
 
 /// Phase 2a ucca-9 / arch-r1-2 frozen shape — lifted into `benten-core` so
 /// both `benten-graph::WriteAuthority` and `benten-caps::WriteAuthority`
