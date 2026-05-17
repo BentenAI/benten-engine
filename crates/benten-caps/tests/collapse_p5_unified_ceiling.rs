@@ -249,6 +249,17 @@ fn collapse_p5_f3_durable_replay_marker_rejects_replayed_frame() {
         Arc::new(benten_graph::RedbBackend::open_in_memory().expect("redb in-memory open"));
     let marker = FrameReplayMarker::new(Arc::clone(&backend));
 
+    // SAFETY/WHY: This is a deliberate fixed test-fixture nonce, NOT a
+    // production cryptographic value. The F3 durable-replay-marker test
+    // MUST present the SAME nonce twice to assert the marker REJECTS the
+    // replay — a random nonce cannot exercise the replay-detection
+    // property. Production frame nonces are CSPRNG-generated
+    // (`benten_sync::handshake::random_nonce` → `Keypair::generate` →
+    // `SigningKey::generate(&mut OsRng)`); `FrameReplayMarker` itself
+    // only CONSUMES a caller-supplied `&[u8]` and never generates a
+    // nonce. There is no hard-coded nonce on any production path. CodeQL
+    // false-positive on intentional replay-test methodology.
+    // codeql[rust/hard-coded-cryptographic-value]
     let nonce = [0xA5u8; 32];
 
     // First observation: NOT a replay — the marker records it.
@@ -290,6 +301,10 @@ fn collapse_p5_f3_durable_replay_marker_rejects_replayed_frame() {
     );
 
     // A DIFFERENT nonce is independent (no false-positive replay).
+    // SAFETY/WHY: deliberate fixed test-fixture nonce (see the WHY note
+    // above) — asserts a distinct nonce does NOT false-positive as a
+    // replay. Not a production crypto value; production uses CSPRNG.
+    // codeql[rust/hard-coded-cryptographic-value]
     let other = [0x5Au8; 32];
     assert!(
         !marker
