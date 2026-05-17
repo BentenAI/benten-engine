@@ -371,6 +371,86 @@ fn browser_backend_get_node_rejects_tampered_cache_bytes_with_content_hash_error
     );
 }
 
+#[test]
+fn browser_backend_lock_discipline_uses_lock_recover_no_poison_propagation() {
+    // #1210 / #627 + #637 (Safe-4, META #707 slice) closure-pin.
+    //
+    // #627: `BrowserBackend::snapshot` previously returned an EMPTY
+    //       BTreeMap on Mutex poison — masking a poisoned cache as an
+    //       empty-graph view to every GraphBackend generic-cascade
+    //       caller (a correctness landmine).
+    // #637: 16+ BrowserBackend Mutex sites previously used
+    //       `.lock().map_err(|_| poisoned())` propagating a typed poison
+    //       error, inconsistent with the workspace `lock_recover()`
+    //       recover-and-proceed discipline (35+ sites).
+    //
+    // The internal `Mutex` is not poisonable from the public API (no
+    // backend method panics while holding the guard — same constraint
+    // documented on `subscriber_count_uses_lock_recover`). So this pin
+    // combines the established crate pattern: (1) a SOURCE assertion
+    // that the regressed idioms are GONE and the recover idiom is
+    // present (a revert to `map_err(|_| poisoned())` or an empty-on-
+    // poison snapshot re-fires here), plus (2) a healthy-path
+    // behavioural assertion that `snapshot()` reflects real state (the
+    // #627 empty-snapshot bug would also fail consequence #2 if the
+    // poison branch were re-introduced as an unconditional empty).
+    //
+    // Would-FAIL-if-reverted: re-introducing `map_err(|_| poisoned())`
+    // (the #637 idiom) or a `BTreeMap::new()` poison fallback in
+    // `snapshot` (the #627 bug) trips the source assertions below.
+    let src =
+        std::fs::read_to_string("src/browser_backend.rs").expect("read src/browser_backend.rs");
+    // Scan only NON-comment code lines — the file's own #637 docstring
+    // legitimately quotes the deleted idiom while explaining the fix.
+    let code: String = src
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // #637: the typed-poison idiom must be fully eradicated from CODE.
+    assert!(
+        !code.contains("map_err(|_| poisoned())"),
+        "#637: BrowserBackend MUST NOT propagate typed poison — \
+         every Mutex site uses the workspace lock_recover() discipline"
+    );
+    assert!(
+        !code.contains("fn poisoned()"),
+        "#637: the `poisoned()` GraphError-builder helper must be deleted"
+    );
+    // The recover idiom must be the one actually in use.
+    assert!(
+        code.contains(".lock_recover()"),
+        "#637: BrowserBackend Mutex sites must use lock_recover()"
+    );
+
+    // #627: snapshot() must NOT have an empty-BTreeMap poison fallback;
+    // it clones the recovered guard's real contents.
+    assert!(
+        code.contains("self.inner.lock_recover().clone()"),
+        "#627: snapshot() must clone the lock_recover()'d real map, \
+         not fabricate an empty BTreeMap on poison"
+    );
+
+    // (2) Healthy-path behavioural consequence: a populated cache's
+    // snapshot reflects the real entries (a re-introduced empty-on-
+    // poison branch that ever fired here would surface as len()==0).
+    let backend = BrowserBackend::new();
+    let node = canonical_test_node();
+    let cid = backend.put_node(&node).unwrap();
+    let snap = GraphBackend::snapshot(&backend);
+    assert_eq!(
+        snap.len(),
+        1,
+        "snapshot must reflect the one persisted node (not an empty poison view)"
+    );
+    assert_eq!(
+        snap.get_node(&cid).unwrap().as_ref(),
+        Some(&node),
+        "snapshot must surface the real node, proving lock_recover() returned live state"
+    );
+}
+
 proptest! {
     // The plan-§4 budget is 2 000 cases × 0-16 keys = up to 32 000
     // put/get operations over arbitrary byte sequences. Every case
