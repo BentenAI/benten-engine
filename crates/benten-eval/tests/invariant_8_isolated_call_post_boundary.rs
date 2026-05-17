@@ -48,7 +48,9 @@ fn isolated_call_followed_by_iterate_does_not_inherit_callee_bound() {
     // The caller's running product of 10 must be what propagates past
     // the CALL to the trailing ITERATE.
     let sg = caller_iterate_isolated_call_iterate(10, 5, 3);
-    let handle_after = sg.handle_of("iterate_3");
+    let handle_after = sg
+        .handle_of("iterate_3")
+        .expect("node 'iterate_3' must exist");
     let cumulative = sg
         .cumulative_budget_for_handle_for_test(handle_after)
         .expect("trailing ITERATE cumulative must be computed");
@@ -59,7 +61,7 @@ fn isolated_call_followed_by_iterate_does_not_inherit_callee_bound() {
     );
 
     // The isolated-CALL node itself carries the callee bound (reset).
-    let handle_call = sg.handle_of("call_2");
+    let handle_call = sg.handle_of("call_2").expect("node 'call_2' must exist");
     let cum_call = sg
         .cumulative_budget_for_handle_for_test(handle_call)
         .expect("isolated-CALL cumulative must be computed");

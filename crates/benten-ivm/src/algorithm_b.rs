@@ -50,7 +50,7 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
-use benten_core::{Cid, Node, Value};
+use benten_core::{Cid, LABEL_NEXT_VERSION, Node, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::Strategy;
@@ -84,7 +84,7 @@ const CANONICAL_VIEW_IDS: &[&str] = &[
 /// Phase-3 G15-A preserves the same fail-loud guard).
 const CANONICAL_HARDCODED_LABELS: &[(&str, &str)] = &[
     ("capability_grants", "system:CapabilityGrant"),
-    ("version_current", "NEXT_VERSION"),
+    ("version_current", LABEL_NEXT_VERSION),
     ("event_dispatch", "system:EventDispatch"),
     ("governance_inheritance", "system:GovernanceInheritance"),
 ];
@@ -591,7 +591,7 @@ fn definition_input_pattern_label_owned(view_id: &str) -> String {
         "event_dispatch" => "system:EventDispatch".to_string(),
         "content_listing" => "post".to_string(),
         "governance_inheritance" => "system:GovernanceInheritance".to_string(),
-        "version_current" => "NEXT_VERSION".to_string(),
+        "version_current" => LABEL_NEXT_VERSION.to_string(),
         // Default: same value used by user-defined views when no label
         // override is supplied.
         _ => "post".to_string(),

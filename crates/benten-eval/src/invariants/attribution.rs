@@ -24,7 +24,15 @@ use crate::{
 /// Phase-6 seeds at `.addl/phase-6/00-scope-seeds.md`). Absence of the
 /// key, a non-`Bool` typed value, or `Bool(false)` all fail registration
 /// with [`crate::ErrorCode::InvAttribution`].
-pub const ATTRIBUTION_PROPERTY_KEY: &str = "attribution";
+///
+/// Inv-14 string-mirror discipline (Safe-3 #597): this is **re-exported**
+/// from [`benten_core`] rather than independently declared. The constant
+/// has a single source of truth (`benten_core::ATTRIBUTION_PROPERTY_KEY`)
+/// so the `benten-core` `SubgraphBuilder` stamp surface and the
+/// `benten-eval` registration validator can never drift apart on the wire
+/// string. Drift-defense pin:
+/// `crates/benten-core/tests/attribution_mirror.rs`.
+pub use benten_core::ATTRIBUTION_PROPERTY_KEY;
 
 /// Registration-time declaration validator. Rejects a subgraph whose
 /// primitives fail to declare their attribution source.

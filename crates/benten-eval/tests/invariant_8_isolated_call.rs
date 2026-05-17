@@ -66,7 +66,9 @@ fn invariant_8_isolated_call_resets_to_callee_grant() {
     // Explicit semantic pin: the cumulative-budget on the CALL's subgraph
     // for the callee-path is `callee_bound` (5), NOT `iter_max × callee`.
     let cumulative = sg
-        .cumulative_budget_for_handle_for_test(sg.handle_of("call_2"))
+        .cumulative_budget_for_handle_for_test(
+            sg.handle_of("call_2").expect("node 'call_2' must exist"),
+        )
         .expect("cumulative budget must be computed");
     assert_eq!(
         cumulative, 5,
@@ -98,7 +100,9 @@ fn invariant_8_non_isolated_call_inherits_parent_remaining_within_bound() {
     let sg = caller_subgraph_with_iterate_then_call(3, &callee, false)
         .expect("product 3×2=6 must be within default Inv-8 bound");
     let cumulative = sg
-        .cumulative_budget_for_handle_for_test(sg.handle_of("call_2"))
+        .cumulative_budget_for_handle_for_test(
+            sg.handle_of("call_2").expect("node 'call_2' must exist"),
+        )
         .unwrap();
     assert_eq!(
         cumulative, 6,

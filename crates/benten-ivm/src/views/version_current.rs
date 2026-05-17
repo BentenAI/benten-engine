@@ -25,7 +25,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::ToString;
 
-use benten_core::{Cid, Node};
+use benten_core::{Cid, LABEL_NEXT_VERSION, Node};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
@@ -63,7 +63,7 @@ impl VersionCurrentView {
     pub fn definition() -> ViewDefinition {
         ViewDefinition {
             view_id: VIEW_ID.into(),
-            input_pattern_label: Some("NEXT_VERSION".into()),
+            input_pattern_label: Some(LABEL_NEXT_VERSION.into()),
             output_label: "system:IVMView".into(),
             strategy: crate::Strategy::A,
         }
@@ -166,7 +166,7 @@ impl View for VersionCurrentView {
         if self.budget.is_stale() {
             return Err(BudgetTracker::stale_error(VIEW_ID));
         }
-        if !event.labels.iter().any(|l| l == "NEXT_VERSION") {
+        if !event.labels.iter().any(|l| l == LABEL_NEXT_VERSION) {
             return Ok(());
         }
         match event.kind {

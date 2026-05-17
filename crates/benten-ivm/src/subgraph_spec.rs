@@ -164,7 +164,7 @@ impl SubgraphSpec {
             "event_dispatch" => LabelPattern::exact("system:EventDispatch"),
             "content_listing" => LabelPattern::exact("post"),
             "governance_inheritance" => LabelPattern::exact("system:GovernanceInheritance"),
-            "version_current" => LabelPattern::exact("NEXT_VERSION"),
+            "version_current" => LabelPattern::exact(benten_core::LABEL_NEXT_VERSION),
             // Unreachable per CANONICAL_VIEW_IDS contains-check above; the
             // contains-check is the authoritative gate.
             other => {
