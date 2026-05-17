@@ -45,12 +45,6 @@ pub struct EngineBuilder {
     /// flag routes the policy construction through [`GrantBackedPolicy`]
     /// with a reader pointing at the engine's own backend.
     use_grant_backed: bool,
-    /// Set by `.with_policy_allowing_revocation()`. Phase-1 alias for
-    /// `.capability_policy_grant_backed()` — the revocation-aware policy
-    /// is the grant-backed one. Phase-2 tightens this to a per-iteration
-    /// cap refresh policy (see named compromise #1 / R4b finding
-    /// `g4-p2-uc-2`).
-    allow_revocation: bool,
     /// Set by `.capability_policy_ucan_durable()`. When true, the
     /// builder wraps the grant-backed surface in
     /// [`benten_caps::UcanGroundedPolicy`] composing the durable
@@ -110,7 +104,6 @@ impl EngineBuilder {
             test_ivm_budget: None,
             backend: None,
             use_grant_backed: false,
-            allow_revocation: false,
             use_ucan_grounded: false,
             ucan_grounded_now_secs: None,
             change_stream_capacity: None,
@@ -176,20 +169,6 @@ impl EngineBuilder {
     /// tightens to principal-scoped lookups.
     #[must_use]
     pub fn capability_policy_grant_backed(mut self) -> Self {
-        self.use_grant_backed = true;
-        self
-    }
-
-    /// Phase-1 alias for [`Self::capability_policy_grant_backed`]: the
-    /// revocation-aware policy shape IS the grant-backed one (revocation is
-    /// observed as a `system:CapabilityRevocation` Node matching an existing
-    /// grant's scope). The name is preserved so tests that spell the
-    /// revocation-aware intent keep compiling; the Phase-2 per-iteration
-    /// wall-clock refresh policy (R4b finding `g4-p2-uc-2`) replaces the
-    /// body when it lands.
-    #[must_use]
-    pub fn with_policy_allowing_revocation(mut self) -> Self {
-        self.allow_revocation = true;
         self.use_grant_backed = true;
         self
     }
