@@ -79,6 +79,9 @@ fn create_node_identical_content_second_put_is_inv13_refused() {
 
     // Content-addressing property survives the contract correction: the
     // first write persisted under the canonical CID and is still readable.
-    let fetched = engine.get_node(&c1).unwrap().expect("first write persisted");
+    let fetched = engine
+        .get_node(&c1)
+        .unwrap()
+        .expect("first write persisted");
     assert_eq!(fetched, node);
 }
