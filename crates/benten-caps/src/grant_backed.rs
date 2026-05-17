@@ -112,6 +112,65 @@ pub trait GrantReader: Send + Sync {
         let _ = actor_cid;
         self.has_unrevoked_grant_for_scope(scope)
     }
+
+    /// refinement-audit-2026-05 #1141 (Pattern F: Qual-1 #694 + Safe-2
+    /// #552 + Fwd-1 #928) — the **single wildcard-aware grant-match
+    /// seam**.
+    ///
+    /// Answers: does the backend hold an unrevoked grant whose stored
+    /// scope is `required_scope` itself OR any ancestor-wildcard
+    /// spelling that `attenuation::check_attenuation` would admit
+    /// (e.g. a stored `store:post:*` satisfies a required
+    /// `store:post:write`), optionally filtered by `actor_cid`?
+    ///
+    /// # Why this method exists (the Pattern-F structural close)
+    ///
+    /// Pre-#1141, `GrantBackedPolicy::check_write` / `check_read`
+    /// inlined a `for candidate in wildcard_variants(scope)` 2^N
+    /// bit-iteration loop in the per-write hot path, calling the
+    /// exact-match reader once per candidate. That coupled three
+    /// independently-surfaced problems at the call site:
+    ///
+    /// - **Qual-1 #694:** the 2^N bit-iter + `BTreeSet` dedup +
+    ///   trailing-`*` collapse is unaudit-friendly inlined into the
+    ///   policy hot path; it now lives in exactly one named,
+    ///   single-responsibility method (this one + its default body).
+    /// - **Safe-2 #552:** the wildcard expansion had an asymmetric
+    ///   `n > 6` silent-drop vs `check_attenuation`; the canonical
+    ///   expansion ([`wildcard_variants`]) is now fixed in one place
+    ///   so every consumer of this seam shares the corrected semantics.
+    /// - **Fwd-1 #928:** the `O(C·O·G)` per-write cost cascade — a
+    ///   backend with an index (the engine's `BackendGrantReader`)
+    ///   can now **override** this method to resolve the wildcard
+    ///   match with a single indexed lookup instead of `2^N`
+    ///   exact-match reader calls. The default impl below preserves
+    ///   the prior behavior exactly (no forced cross-crate cascade),
+    ///   so existing implementations keep working unchanged while the
+    ///   pushdown seam is available.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::Denied`] when the backend read fails (the
+    /// same fail-closed posture as the underlying exact-match
+    /// methods).
+    fn has_unrevoked_grant_matching(
+        &self,
+        required_scope: &str,
+        actor_cid: Option<&Cid>,
+    ) -> Result<bool, CapError> {
+        // Default impl: enumerate the canonical wildcard parent
+        // spellings (one place — the #552-fixed `wildcard_variants`)
+        // and probe the exact-match actor-aware reader for each. This
+        // is byte-for-byte the behavior `check_write` / `check_read`
+        // had inlined pre-#1141; backends with an indexed grant store
+        // override this for the Fwd-1 #928 single-lookup close.
+        for candidate in wildcard_variants(required_scope) {
+            if self.has_unrevoked_grant_for_scope_and_actor(&candidate, actor_cid)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
 }
 
 /// Phase 2a ucca-6: `GrantReader` configuration overrides (plan §3 G9-A).
@@ -375,22 +434,19 @@ impl CapabilityPolicy for GrantBackedPolicy {
         };
 
         for scope in &scopes {
-            // r6b-dx-C1: wildcard-aware match. A stored grant whose scope is
-            // an ancestor wildcard of `scope` (e.g. stored `store:post:*`
-            // satisfies required `store:post:write`) must permit. We
-            // enumerate every wildcard variant of the required concrete scope
-            // and check whether the reader has any of them. This preserves
-            // the opaque `has_unrevoked_grant_for_scope(exact)` reader
-            // contract while letting the policy share the wildcard semantics
-            // used by `attenuation::check_attenuation`.
-            let mut granted = false;
-            for candidate in wildcard_variants(scope) {
-                if self.grants.has_unrevoked_grant_for_scope(&candidate)? {
-                    granted = true;
-                    break;
-                }
-            }
-            if !granted {
+            // refinement-audit-2026-05 #1141 (Qual-1 #694 + Safe-2 #552
+            // + Fwd-1 #928): wildcard-aware match through the SINGLE
+            // `has_unrevoked_grant_matching` seam. A stored grant whose
+            // scope is an ancestor wildcard of `scope` (e.g. stored
+            // `store:post:*` satisfies required `store:post:write`)
+            // permits. The 2^N enumeration + dedup + trailing-`*`
+            // collapse logic that used to be inlined here now lives in
+            // exactly one place (the seam's default body / a backend's
+            // indexed override) so the policy hot path no longer
+            // carries it. `check_write` is the original scope-only call
+            // site (no actor binding — Phase-1 write-gate posture);
+            // pass `None`.
+            if !self.grants.has_unrevoked_grant_matching(scope, None)? {
                 return Err(CapError::Denied {
                     required: scope.clone(),
                     entity: ctx.label.clone(),
@@ -429,17 +485,16 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // collapses to the scope-only path (default-trait-impl
         // delegation), which preserves NoAuthBackend semantics and the
         // Phase-1 / Phase-2 fixtures that pre-date actor threading.
-        let mut granted = false;
-        for candidate in wildcard_variants(&scope) {
-            if self
-                .grants
-                .has_unrevoked_grant_for_scope_and_actor(&candidate, ctx.actor_cid.as_ref())?
-            {
-                granted = true;
-                break;
-            }
-        }
-        if granted {
+        // refinement-audit-2026-05 #1141: same single
+        // `has_unrevoked_grant_matching` seam as `check_write`, here
+        // WITH the read-side actor binding (cap-r1-2 / cap-r1-10
+        // dual-gate) — `ctx.actor_cid` is threaded so user-A who lacks
+        // `store:post:read` is not falsely permitted by user-B's
+        // same-scope grant under a shared backend.
+        if self
+            .grants
+            .has_unrevoked_grant_matching(&scope, ctx.actor_cid.as_ref())?
+        {
             Ok(())
         } else {
             Err(CapError::DeniedRead {
@@ -472,11 +527,38 @@ fn wildcard_variants(required: &str) -> Vec<String> {
     let n = segments.len();
     // Small-N path: N is typically 2-4 for Phase 1 scopes
     // (`store:<label>:write` is 3; future namespaced scopes might reach 5).
-    // 2^5 = 32 candidates — cheap to enumerate. For unexpectedly large N we
-    // bail out to just the exact match + bare `"*"` to avoid quadratic
-    // reader traffic.
+    // 2^5 = 32 candidates — cheap to enumerate. For unexpectedly large N
+    // the full 2^N cross-product is avoided (quadratic reader traffic);
+    // instead we emit the linear set of trailing-wildcard parent
+    // spellings.
+    //
+    // #552 (Safe-2 boundary) closure: the prior `n > 6` branch returned
+    // ONLY `[required, "*"]`, silently dropping every intermediate
+    // trailing-wildcard parent (`a:b:c:*`, `a:b:*`, …). That made a
+    // legitimately-stored ancestor-wildcard grant un-matchable at
+    // `check_write` even though `attenuation::check_attenuation` WOULD
+    // admit it — an asymmetric semantic drift between the two wildcard
+    // surfaces. The trailing-wildcard prefix set is O(N) (linear, not
+    // 2^N), so it is always safe to enumerate it even for large N: the
+    // dominant matching mode for deep scopes IS the trailing wildcard
+    // (`private:<did>:*`), which is exactly what `check_attenuation`'s
+    // trailing-`*` rule admits. Non-trailing interior-wildcard spellings
+    // (`a:*:c`) are the combinatorial part that is bounded out for
+    // large N — those are rare in practice and the 2^N path still
+    // covers them for the common small-N case below.
     if n > 6 {
-        return vec![required.to_string(), "*".to_string()];
+        let mut out: Vec<String> = Vec::with_capacity(n + 2);
+        out.push(required.to_string());
+        // Trailing-wildcard parents: `a:b:c:*`, `a:b:*`, …, `a:*`.
+        for keep in (1..n).rev() {
+            let mut parts: Vec<&str> = segments[..keep].to_vec();
+            parts.push("*");
+            out.push(parts.join(":"));
+        }
+        out.push("*".to_string());
+        let mut seen = std::collections::BTreeSet::new();
+        out.retain(|s| seen.insert(s.clone()));
+        return out;
     }
     let total = 1_usize << n;
     let mut out: Vec<String> = Vec::with_capacity(total);
@@ -537,5 +619,46 @@ mod wildcard_tests {
     #[test]
     fn empty_input_yields_single_empty_candidate() {
         assert_eq!(wildcard_variants(""), vec![String::new()]);
+    }
+
+    // refinement-audit-2026-05 #552 (Safe-2 boundary) closure-pin: a
+    // >6-segment required scope MUST still enumerate its trailing-
+    // wildcard parent spellings, not silently collapse to
+    // `[exact, "*"]`. Would-FAIL against the pre-#1141 `n > 6` branch
+    // which dropped every intermediate `a:b:c:*` parent (asymmetric
+    // drift vs `attenuation::check_attenuation`'s trailing-`*` rule).
+    #[test]
+    fn deep_scope_keeps_trailing_wildcard_parents_not_just_exact_and_star() {
+        // 8 segments — well past the old `n > 6` silent-drop boundary.
+        let deep = "private:did:key:z6MkAbc:resource:sub:detail:leaf";
+        let got = wildcard_variants(deep);
+        assert!(got.contains(&deep.to_string()), "exact must be present");
+        assert!(got.contains(&"*".to_string()), "bare catch-all present");
+        // The load-bearing #552 assertions: the intermediate
+        // trailing-wildcard parents a real stored grant would use.
+        assert!(
+            got.contains(&"private:did:key:z6MkAbc:resource:sub:detail:*".to_string()),
+            "deepest trailing-* parent MUST be enumerated (#552)"
+        );
+        assert!(
+            got.contains(&"private:did:key:z6MkAbc:*".to_string()),
+            "mid trailing-* parent MUST be enumerated (#552)"
+        );
+        assert!(
+            got.contains(&"private:*".to_string()),
+            "shallow trailing-* parent MUST be enumerated (#552)"
+        );
+        // Bounded: linear (n trailing parents + exact + "*"), NOT 2^8.
+        assert!(
+            got.len() <= deep.split(':').count() + 2,
+            "deep-scope candidate set must stay linear (no 2^N blowup)"
+        );
+    }
+
+    #[test]
+    fn deep_scope_exact_match_still_first() {
+        let deep = "a:b:c:d:e:f:g:h";
+        let got = wildcard_variants(deep);
+        assert_eq!(got[0], deep);
     }
 }
