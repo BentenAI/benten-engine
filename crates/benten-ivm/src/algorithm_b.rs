@@ -50,7 +50,7 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
-use benten_core::{Cid, Node, Value};
+use benten_core::{Cid, LABEL_NEXT_VERSION, Node, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::Strategy;
@@ -116,8 +116,12 @@ const CANONICAL_VIEW_META: &[CanonicalViewMeta] = &[
     },
     CanonicalViewMeta {
         id: "version_current",
-        hardcoded_label: Some("NEXT_VERSION"),
-        legacy_input_pattern_label: "NEXT_VERSION",
+        // refinement-audit #601: route through `benten_core::LABEL_NEXT_VERSION`
+        // (single-source-of-truth for the NEXT_VERSION wire label) rather than
+        // a bare literal — preserves the ST-CORE #601 zero-production-literal
+        // intent inside the ST-IVM #682 CanonicalViewMeta SSoT table.
+        hardcoded_label: Some(LABEL_NEXT_VERSION),
+        legacy_input_pattern_label: LABEL_NEXT_VERSION,
         typed_output_projection: Some(TypedOutputProjection::Current),
     },
 ];
@@ -626,6 +630,11 @@ impl core::fmt::Debug for AlgorithmBView {
 // — the `_owned` suffix encoded the return type (`String`) in the name,
 // which Rust naming convention leaves to the signature. Now derives from the
 // single-source-of-truth `CANONICAL_VIEW_META` table (no duplicate match).
+// refinement-audit #601: the `version_current` NEXT_VERSION wire label is
+// now sourced from `benten_core::LABEL_NEXT_VERSION` via the SSoT table's
+// `legacy_input_pattern_label` field — the ST-CORE #601 zero-production-
+// literal intent is preserved transitively through the table (no per-arm
+// literal remains here after the #767 match-collapse).
 fn legacy_input_pattern_label_for(view_id: &str) -> String {
     canonical_meta_for(view_id).map_or_else(
         // Default: same value user-defined views use when no label
