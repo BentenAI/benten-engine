@@ -110,6 +110,13 @@ pub const MAX_MODULE_BYTES_ZONE_SCAN: usize = 100_000;
 #[derive(Clone)]
 pub struct RedbBlobBackend {
     backend: Arc<RedbBackend>,
+    /// Test-only override of [`MAX_MODULE_BYTES_ZONE_SCAN`] so the #567
+    /// DoS-cap closure-pin can trip the guard with a tiny seed instead
+    /// of materialising 100 000+ Nodes. `None` in every production
+    /// build (the `cfg`-gated setter is the only writer); production
+    /// callers always observe the real constant.
+    #[cfg(any(test, feature = "testing"))]
+    scan_cap_override: Option<usize>,
 }
 
 impl RedbBlobBackend {
@@ -123,7 +130,36 @@ impl RedbBlobBackend {
     /// concern at engine-open time).
     #[must_use]
     pub fn new(backend: Arc<RedbBackend>) -> Self {
-        Self { backend }
+        Self {
+            backend,
+            #[cfg(any(test, feature = "testing"))]
+            scan_cap_override: None,
+        }
+    }
+
+    /// Effective `system:ModuleBytes` scan cap. The real
+    /// [`MAX_MODULE_BYTES_ZONE_SCAN`] constant in every production
+    /// build; a test-only override when one has been installed via
+    /// [`Self::with_scan_cap_for_test`].
+    #[inline]
+    fn effective_scan_cap(&self) -> usize {
+        #[cfg(any(test, feature = "testing"))]
+        {
+            if let Some(cap) = self.scan_cap_override {
+                return cap;
+            }
+        }
+        MAX_MODULE_BYTES_ZONE_SCAN
+    }
+
+    /// Test-only: install a reduced `system:ModuleBytes` scan cap so the
+    /// #567 (META #629) DoS-amplification guard can be exercised without
+    /// seeding 100 000+ Nodes. Not compiled into production builds.
+    #[cfg(any(test, feature = "testing"))]
+    #[must_use]
+    pub fn with_scan_cap_for_test(mut self, cap: usize) -> Self {
+        self.scan_cap_override = Some(cap);
+        self
     }
 
     /// List the CIDs of every blob currently persisted in the
@@ -141,10 +177,11 @@ impl RedbBlobBackend {
         // the `blob_cid` property. The two-CID dance preserves the
         // blob CID = BLAKE3(blob_bytes) invariant per #4 baked-in.
         let node_cids = self.backend.get_by_label(MODULE_BYTES_LABEL)?;
-        if node_cids.len() > MAX_MODULE_BYTES_ZONE_SCAN {
+        let cap = self.effective_scan_cap();
+        if node_cids.len() > cap {
             return Err(GraphError::DecodeTooLarge {
                 actual: node_cids.len(),
-                limit: MAX_MODULE_BYTES_ZONE_SCAN,
+                limit: cap,
             });
         }
         let mut blob_cids = Vec::with_capacity(node_cids.len());
@@ -179,10 +216,11 @@ impl RedbBlobBackend {
         // large zone cannot turn a single fetch into unbounded
         // per-Node-decode work (#567, META #629 slice).
         let node_cids = self.backend.get_by_label(MODULE_BYTES_LABEL)?;
-        if node_cids.len() > MAX_MODULE_BYTES_ZONE_SCAN {
+        let cap = self.effective_scan_cap();
+        if node_cids.len() > cap {
             return Err(GraphError::DecodeTooLarge {
                 actual: node_cids.len(),
-                limit: MAX_MODULE_BYTES_ZONE_SCAN,
+                limit: cap,
             });
         }
         let target = cid.to_base32();
@@ -417,5 +455,83 @@ mod tests {
         assert!(cids.contains(&cid_a));
         assert!(cids.contains(&cid_b));
         assert_eq!(cids.len(), 2);
+    }
+
+    // -----------------------------------------------------------------
+    // #1209 / #567 (Safe-2, META #629 DoS-via-unbounded-decode slice)
+    // closure-pin: the `system:ModuleBytes` zone scan is BOUNDED so a
+    // pathologically large zone cannot turn one fetch into unbounded
+    // per-Node decode work. Pre-#567 both `get_sync` + `list_blob_cids`
+    // did an uncapped O(N) decode-every-body scan. The test-cap override
+    // lets us trip the SAME production guard with a 2-Node seed instead
+    // of materialising 100 000+ Nodes (keeps the pin fast).
+    //
+    // Would-FAIL-if-reverted: with the `node_cids.len() > cap` guard
+    // removed, both calls would scan/decode all 2 entries and return
+    // `Ok(_)`; the `expect_err` + `DecodeTooLarge` assertions below
+    // would panic.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn get_sync_refuses_oversized_module_bytes_zone_before_unbounded_scan() {
+        let backend = open_backend();
+        let blob = RedbBlobBackend::new(backend).with_scan_cap_for_test(1);
+        // Seed 2 blobs → zone size (2) exceeds the test cap (1).
+        for tag in [b"alpha".as_slice(), b"beta".as_slice()] {
+            let cid = Cid::from_blake3_digest(*blake3::hash(tag).as_bytes());
+            blob.put_sync(&cid, tag).unwrap();
+        }
+        // A fetch (even for an absent CID) must refuse BEFORE the
+        // per-Node decode scan — the DoS-amplification guard.
+        let probe = Cid::from_blake3_digest(*blake3::hash(b"absent").as_bytes());
+        let err = blob
+            .get_sync(&probe)
+            .expect_err("oversized ModuleBytes zone MUST refuse before unbounded scan (#567)");
+        match err {
+            GraphError::DecodeTooLarge { actual, limit } => {
+                assert_eq!(actual, 2, "actual zone size surfaced");
+                assert_eq!(
+                    limit, 1,
+                    "effective (test) cap surfaced, not the raw constant"
+                );
+            }
+            other => panic!("expected DecodeTooLarge, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn list_blob_cids_refuses_oversized_module_bytes_zone() {
+        let backend = open_backend();
+        let blob = RedbBlobBackend::new(backend).with_scan_cap_for_test(1);
+        for tag in [b"one".as_slice(), b"two".as_slice()] {
+            let cid = Cid::from_blake3_digest(*blake3::hash(tag).as_bytes());
+            blob.put_sync(&cid, tag).unwrap();
+        }
+        let err = blob
+            .list_blob_cids()
+            .expect_err("oversized ModuleBytes zone MUST refuse list_blob_cids (#567)");
+        assert!(
+            matches!(
+                err,
+                GraphError::DecodeTooLarge {
+                    actual: 2,
+                    limit: 1
+                }
+            ),
+            "expected DecodeTooLarge{{actual:2,limit:1}}, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn within_cap_module_bytes_zone_still_scans_normally() {
+        // Over-broad-fix guard: a zone AT-OR-UNDER the cap must NOT
+        // error — the guard is a DoS ceiling, not a blanket reject.
+        let backend = open_backend();
+        let blob = RedbBlobBackend::new(backend).with_scan_cap_for_test(4);
+        let bytes = b"under-cap".to_vec();
+        let cid = Cid::from_blake3_digest(*blake3::hash(&bytes).as_bytes());
+        blob.put_sync(&cid, &bytes).unwrap();
+        assert_eq!(blob.get_sync(&cid).unwrap(), Some(bytes));
+        assert_eq!(blob.list_blob_cids().unwrap().len(), 1);
     }
 }

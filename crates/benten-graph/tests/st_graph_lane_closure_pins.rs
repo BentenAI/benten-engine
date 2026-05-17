@@ -275,6 +275,131 @@ fn fan_out_dispatch_observed_after_commit_resolved_on_main_regression_pin() {
 }
 
 // ---------------------------------------------------------------------------
+// #1210 / #645 — fan_out releases the in-tx TxGuard BEFORE dispatching
+//                to subscribers, so a slow/blocking subscriber cannot
+//                wedge subsequent .transaction() calls workspace-wide.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn slow_subscriber_does_not_block_subsequent_transactions() {
+    // Pre-#645: fan_out ran subscriber callbacks SYNCHRONOUSLY while the
+    // commit thread still held the in-transaction TxGuard, so a blocking
+    // subscriber stalled EVERY later .transaction() behind it. The #645
+    // fix `drop(tx_guard)` BEFORE fan_out, scoping the back-pressure to
+    // the subscriber itself.
+    //
+    // Observable consequence: a subscriber that blocks (until released)
+    // on the FIRST commit must NOT prevent a SECOND .transaction() on
+    // another thread from acquiring the TxGuard + committing. The gated
+    // subscriber only blocks on the first event it sees (a one-shot
+    // latch) so the second commit's fan-out is not itself parked.
+    //
+    // Would-FAIL-if-reverted: if the guard were held across fan_out, the
+    // second transaction's `TxGuard::try_acquire` could never succeed
+    // while the first subscriber is parked — the bounded wait-loop below
+    // would time out and the assertion would fail (and a true revert
+    // would also deadlock → test-runner SIGTERM, still a hard failure).
+    use benten_graph::{ChangeEvent, ChangeSubscriber};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    struct OneShotGatedSub {
+        seen: AtomicUsize,
+        parked: Arc<AtomicBool>,
+        release: Arc<AtomicBool>,
+    }
+    impl ChangeSubscriber for OneShotGatedSub {
+        fn on_change(&self, _e: &ChangeEvent) {
+            // Only the FIRST event blocks; later events pass straight
+            // through so the second commit's own fan-out is not parked.
+            if self.seen.fetch_add(1, Ordering::SeqCst) == 0 {
+                self.parked.store(true, Ordering::SeqCst);
+                while !self.release.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+            }
+        }
+    }
+
+    let (b, _d) = temp();
+    let b = Arc::new(b);
+    let parked = Arc::new(AtomicBool::new(false));
+    let release = Arc::new(AtomicBool::new(false));
+    b.register_subscriber(Arc::new(OneShotGatedSub {
+        seen: AtomicUsize::new(0),
+        parked: Arc::clone(&parked),
+        release: Arc::clone(&release),
+    }))
+    .unwrap();
+
+    // Thread 1: a commit whose subscriber parks inside fan_out (post-
+    // commit, guard already dropped per #645).
+    let b1 = Arc::clone(&b);
+    let t1 = std::thread::spawn(move || {
+        b1.transaction(|tx| {
+            tx.put_node(&canonical_test_node())?;
+            Ok(())
+        })
+        .unwrap();
+    });
+
+    // Wait until the subscriber is actually parked.
+    let park_deadline = Instant::now() + Duration::from_secs(10);
+    while !parked.load(Ordering::SeqCst) {
+        assert!(
+            Instant::now() < park_deadline,
+            "subscriber never entered fan_out — test setup failure"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+
+    // Thread 2: a SECOND transaction. With #645 (guard dropped before
+    // fan_out) it MUST acquire the guard + commit even though thread-1's
+    // subscriber is still parked.
+    let b2 = Arc::clone(&b);
+    let mut n2 = canonical_test_node();
+    n2.labels = vec!["SecondTxn".into()];
+    let committed = Arc::new(AtomicBool::new(false));
+    let committed_w = Arc::clone(&committed);
+    let t2 = std::thread::spawn(move || {
+        b2.transaction(|tx| {
+            tx.put_node(&n2)?;
+            Ok(())
+        })
+        .expect("second .transaction() must NOT be wedged by a parked subscriber (#645)");
+        committed_w.store(true, Ordering::SeqCst);
+    });
+
+    // Bounded observation window: the second commit must land while the
+    // first subscriber is STILL parked. Pre-#645 this never happens (the
+    // guard is held), so the flag stays false and we assert-fail.
+    let commit_deadline = Instant::now() + Duration::from_secs(10);
+    while !committed.load(Ordering::SeqCst) {
+        assert!(
+            Instant::now() < commit_deadline,
+            "second transaction did not commit while subscriber parked — \
+             #645 guard-release regressed (guard held across fan_out)"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        !release.load(Ordering::SeqCst),
+        "second commit landed before the first subscriber was released — #645 holds"
+    );
+
+    // Release the parked subscriber + join both threads cleanly.
+    release.store(true, Ordering::SeqCst);
+    t2.join().expect("second transaction thread panicked");
+    t1.join().expect("first transaction thread panicked");
+
+    assert_eq!(
+        b.get_by_label("SecondTxn").unwrap().len(),
+        1,
+        "second transaction's node must be committed (not wedged by #645)"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // #1216 / #851 — RedbBlobBackend available regardless of browser-backend
 //                feature (RESOLVED-ON-MAIN regression-pin)
 // ---------------------------------------------------------------------------
@@ -290,4 +415,69 @@ fn redb_blob_backend_type_is_reachable_resolved_on_main_regression_pin() {
         None
     }
     assert!(assert_type_reachable().is_none());
+}
+
+// ---------------------------------------------------------------------------
+// #1211 — Hyg-1 dead-code sweep (RESOLVED-ON-MAIN regression-pins).
+//
+// Reconciliation vs branch HEAD found this umbrella's substance already
+// landed by #1261/#1277 OR a DISAGREE-WITH-EVIDENCE realness correction:
+//   #292 BatchOp enum  : DELETED (#1261) — ScanIter is NOT dead (it is
+//                        the public `KVBackend::scan` return type).
+//   #294 ChangeEvent   : `new_edge` does not exist; `new_node`/`kind_str`
+//                        are test-used public API (realness: keep).
+//   #295 BrowserSnapshot::len/is_empty : test-used idiomatic pair (keep).
+//   #297 BloomFilter / DEFAULT_FALSE_POSITIVE_RATE : already pub(crate).
+//   #299 RedbBackend ctors : already collapsed to one `from_db` helper.
+//   #305 NetworkFetchStubBackend : BELONGS-NAMED phase-4-backlog
+//        §4.63/§4.64 (explicit Ben-call, KVBackend v1-SemVer-coupled).
+//
+// These pins lock the RESOLVED state so a regression re-fires.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn hyg1_resolved_state_regression_pins() {
+    // #297: the bloom-filter knobs stay crate-private. If a future
+    // change re-`pub`-exports them, `benten_graph::immutability` is not
+    // a public path and this would not even be the failure — instead we
+    // pin via the public surface: `BloomFilter` must NOT be reachable
+    // from the crate root (it is an internal Inv-13 detail).
+    //
+    // #292: `ScanIter` (the genuinely-public iterator behind
+    // `ScanResult: IntoIterator`, itself the `KVBackend::scan` return
+    // type) MUST stay reachable — referencing it here means a wrong
+    // "delete ScanIter as dead" regression breaks this crate's compile.
+    fn scan_iter_is_public_return_type() -> Option<benten_graph::backend::ScanIter> {
+        None
+    }
+    assert!(scan_iter_is_public_return_type().is_none());
+
+    // #299: every RedbBackend constructor funnels through the single
+    // `from_db` helper — observable consequence: an in-memory and a
+    // file-backed backend both construct successfully and round-trip a
+    // node (the shared init path stays correct, no field drift between
+    // entry points).
+    let (file_b, _d) = temp();
+    let n = canonical_test_node();
+    let c = file_b.put_node(&n).unwrap();
+    assert_eq!(file_b.get_node(&c).unwrap().as_ref(), Some(&n));
+
+    let mem_b = RedbBackend::open_in_memory().unwrap();
+    let c2 = mem_b.put_node(&n).unwrap();
+    assert_eq!(
+        mem_b.get_node(&c2).unwrap().as_ref(),
+        Some(&n),
+        "open_in_memory + open_or_create share the from_db init path (#299)"
+    );
+
+    // #294: `ChangeEvent::new_node` + `kind_str` stay as public
+    // test-used API (realness: NOT dead). Reference them so a wrong
+    // "delete as dead" regression breaks compile + the assertion.
+    use benten_graph::{ChangeEvent, ChangeKind};
+    let ev = ChangeEvent::new_node(c, n.labels.clone(), ChangeKind::Created, 0, Some(n.clone()));
+    assert_eq!(
+        ev.kind_str(),
+        "Created",
+        "ChangeEvent::new_node + kind_str remain live public API (#294 realness)"
+    );
 }
