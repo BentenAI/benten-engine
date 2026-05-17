@@ -89,8 +89,9 @@ fn napi_revoke_binding_routes_through_resolving_seam_post_revoke_write_denied() 
         .expect("engine opens with grant-backed policy");
 
     let handler_id = engine.register_crud("post").unwrap();
-    let actor = engine.create_principal("carol").unwrap();
+    let actor = engine.caps().create_principal("carol").unwrap();
     let grant_cid = engine
+        .caps()
         .grant_capability(&actor, "store:post:write")
         .expect("grant via privileged path");
 
@@ -106,6 +107,7 @@ fn napi_revoke_binding_routes_through_resolving_seam_post_revoke_write_denied() 
     // pre-3.5 shape with the scope arg being the CID), the
     // post-revoke write below routes via OK edge instead of denied.
     engine
+        .caps()
         .revoke_capability_by_grant_cid(&grant_cid, &actor)
         .expect("revoke via resolving seam");
 

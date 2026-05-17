@@ -71,8 +71,9 @@ fn wallclock_toctou_revokes_mid_iterate() {
         .unwrap();
 
     let handler_id = engine.register_subgraph(long_iterate_handler()).unwrap();
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     engine
+        .caps()
         .grant_capability(&alice, "store:audit_entry:write")
         .unwrap();
 
@@ -91,6 +92,7 @@ fn wallclock_toctou_revokes_mid_iterate() {
             ticker.tick_batches(1);
             mono.tick(Duration::from_secs(100));
             engine
+                .caps()
                 .revoke_capability(&alice, "store:audit_entry:write")
                 .unwrap();
             mono.tick(Duration::from_secs(250));
@@ -122,8 +124,9 @@ fn wallclock_refresh_ntp_slew_doesnt_skip() {
         .unwrap();
 
     let handler_id = engine.register_subgraph(long_iterate_handler()).unwrap();
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     engine
+        .caps()
         .grant_capability(&alice, "store:audit_entry:write")
         .unwrap();
 

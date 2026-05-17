@@ -20,8 +20,8 @@
 //! `UcanGroundedPolicy` closes that gap for **typed-CALL `cap:typed:*`
 //! capabilities**. The full per-write proof-chain enforcement for
 //! arbitrary scope-strings (with audience threading + actor binding
-//! through `WriteContext`) is wider scope — it requires
-//! `WriteContext::actor_hint`-as-DID propagation, which is its own
+//! through `CapWriteContext`) is wider scope — it requires
+//! `CapWriteContext::actor_hint`-as-DID propagation, which is its own
 //! architectural lift. That extension is named in
 //! `docs/future/phase-3-backlog.md §2.3 (i)` (created at this
 //! fix-pass per HARD RULE clause-b).
@@ -46,7 +46,7 @@
 //!
 //! ## Why `cap:typed:*`-only
 //!
-//! `WriteContext` does not currently carry an audience DID — the
+//! `CapWriteContext` does not currently carry an audience DID — the
 //! grant-backed surface is principal-coarse (any unrevoked grant
 //! permits). Threading per-actor audience DIDs through every CRUD
 //! write is its own work item. The `cap:typed:*` namespace is the
@@ -73,25 +73,25 @@ use benten_id::did::Did;
 use crate::backends::UCANBackend;
 use crate::error::CapError;
 use crate::grant_backed::GrantBackedPolicy;
-use crate::policy::{CapabilityPolicy, ReadContext, WriteContext};
+use crate::policy::{CapWriteContext, CapabilityPolicy, ReadContext};
 use crate::typed_cap_mapping::typed_cap_for_ucan_claim;
 
 /// `did:key:` URI prefix; used by [`principal_did_from_context`] to
-/// recognize when [`WriteContext::actor_hint`] carries a DID-shaped
+/// recognize when [`CapWriteContext::actor_hint`] carries a DID-shaped
 /// principal identifier vs a non-DID hint string.
 const DID_KEY_PREFIX: &str = "did:key:";
 
-/// Resolve the active principal DID from a [`WriteContext`].
+/// Resolve the active principal DID from a [`CapWriteContext`].
 ///
 /// Phase-4-Foundation R1-FP G22-FP-2 (cap-r1-1 BLOCKER closure): the
 /// audience-binding gate in [`UcanGroundedPolicy::typed_cap_permitted_by_proof`]
 /// requires a typed [`Did`] handle to thread into
 /// [`UCANBackend::validate_chain_for_audience_at`]. Until the
-/// `WriteContext::actor_cid → Did` resolution helper lands (cap-r1-16
+/// `CapWriteContext::actor_cid → Did` resolution helper lands (cap-r1-16
 /// seam — needs an identity-store with CID-keyed DID lookup at the
 /// engine boundary), we source the principal from
-/// [`WriteContext::actor_hint`] — the documented "DID / VC identity
-/// placeholder" field per the [`policy::WriteContext`] module-doc.
+/// [`CapWriteContext::actor_hint`] — the documented "DID / VC identity
+/// placeholder" field per the [`policy::CapWriteContext`] module-doc.
 ///
 /// Returns `Some(did)` if `actor_hint` is `Some(s)`, `s` starts with
 /// `did:key:`, AND `Did::resolve()` round-trips (the bytes parse to a
@@ -100,7 +100,7 @@ const DID_KEY_PREFIX: &str = "did:key:";
 /// `CapError::UcanAudienceMismatch` for the missing-principal case so
 /// the engine boundary cannot silently accept a UCAN against an
 /// audience-less context (the cap-r1-1 BLOCKER pre-fix behavior).
-fn principal_did_from_context(ctx: &WriteContext) -> Option<Did> {
+fn principal_did_from_context(ctx: &CapWriteContext) -> Option<Did> {
     let hint = ctx.actor_hint.as_deref()?;
     if !hint.starts_with(DID_KEY_PREFIX) {
         return None;
@@ -124,7 +124,7 @@ pub struct UcanGroundedPolicy<B: GraphBackend> {
     /// `now` (epoch seconds) sourced for chain-walker time-window
     /// validation. Phase-3-G21-T2-pre-real-clock: a static fixture
     /// "now" so the chain-walker has SOMETHING to compare against; a
-    /// real clock injection lands at the `WriteContext::now`
+    /// real clock injection lands at the `CapWriteContext::now`
     /// threading work named in phase-3-backlog §2.3 (i). This default
     /// is far in the future (year 9999) so present-day proofs with
     /// reasonable `exp` accept; tests inject custom values via the
@@ -148,7 +148,7 @@ impl<B: GraphBackend> std::fmt::Debug for UcanGroundedPolicy<B> {
 /// distinguish "caller injected `now=0`" from "caller did not inject
 /// at all" — by convention production callers MUST inject a positive
 /// epoch-seconds value via [`UcanGroundedPolicy::with_now_for_test`]
-/// (or the eventual `WriteContext::now` threading per
+/// (or the eventual `CapWriteContext::now` threading per
 /// phase-3-backlog §2.3 (i)). A test that explicitly wants the
 /// sentinel-driven fail-closed path leaves the default; a test that
 /// wants successful chain-walk against time-bounded chains injects
@@ -199,7 +199,7 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
     /// values to exercise expired / not-yet-valid token rejection.
     ///
     /// Production callers leave this at the default (year-9999
-    /// fixture) until `WriteContext::now` threading lands per
+    /// fixture) until `CapWriteContext::now` threading lands per
     /// phase-3-backlog §2.3 (i).
     #[must_use]
     pub fn with_now_for_test(mut self, now_secs: u64) -> Self {
@@ -258,7 +258,7 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
         for proof in &proofs {
             // 1. Single-token chain treated as `[proof]`. Multi-token
             //    chains are an extension axis that lights up when
-            //    `WriteContext` carries an explicit chain reference;
+            //    `CapWriteContext` carries an explicit chain reference;
             //    today the durable store holds singleton tokens via
             //    `install_proof`.
             let chain = std::slice::from_ref(proof);
@@ -301,8 +301,8 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
             //    actor (e.g.,
             //    `Engine::dispatch_typed_call_public` at
             //    `engine_wait.rs::881-891` constructs
-            //    `WriteContext { actor_hint: None, .. }`). Full
-            //    actor-threading is the cap-r1-16 + WriteContext::now
+            //    `CapWriteContext { actor_hint: None, .. }`). Full
+            //    actor-threading is the cap-r1-16 + CapWriteContext::now
             //    follow-up at G24-D files-owned.
             let chain_check = match audience {
                 Some(aud) => self
@@ -327,7 +327,7 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
 }
 
 impl<B: GraphBackend> CapabilityPolicy for UcanGroundedPolicy<B> {
-    fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
         // Fast path: the Phase-2b revocation-aware grant-backed surface.
         let grant_err = match self.inner.check_write(ctx) {
             Ok(()) => return Ok(()),
@@ -361,7 +361,7 @@ impl<B: GraphBackend> CapabilityPolicy for UcanGroundedPolicy<B> {
         // `engine_wait.rs::881-891`). This mirrors FP-3's
         // default-collapses-to-scope-only-when-actor-None pattern at
         // `GrantReader::has_unrevoked_grant_for_scope_and_actor`. Full
-        // actor-threading is the cap-r1-16 + WriteContext::now
+        // actor-threading is the cap-r1-16 + CapWriteContext::now
         // follow-up at G24-D files-owned; once every cap-evaluating
         // surface threads an actor, the `None` branch can be removed
         // and audience binding becomes mandatory.
@@ -441,7 +441,7 @@ mod tests {
         // active principal DID; the chain's audience MUST match this
         // DID for the gate to permit. Using the keypair's own DID
         // matches `build_ucan`'s audience.
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
             actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
@@ -469,7 +469,7 @@ mod tests {
         // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
         // audience so the test exercises the typed-cap mapping path
         // (NOT the upstream audience-mismatch path).
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
             actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
@@ -496,7 +496,7 @@ mod tests {
         // the upstream audience-mismatch path). The audience-binding
         // gate passes; the chain-walker time-window check then rejects
         // (expired) per the original BLOCKER-2 assertion.
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
             actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
@@ -518,7 +518,7 @@ mod tests {
         // fire (no chain to walk). The grant-backed denial bubbles via
         // `typed_cap_permitted_by_proof` returning `Ok(false)`.
         let kp = Keypair::generate();
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
             actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
@@ -555,7 +555,7 @@ mod tests {
         // chain audience so the audience-mismatch gate passes through
         // to the time-bound clock-not-injected check (the path this
         // test pins).
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
             actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
@@ -602,7 +602,7 @@ mod tests {
         // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
         // chain audience so the audience-binding gate passes; this
         // test pins the no-time-bounds clean-walk path.
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
             scope: "cap:typed:crypto-sign".to_string(),
             actor_hint: Some(kp.public_key().to_did().as_str().to_string()),
@@ -627,7 +627,7 @@ mod tests {
         // module-doc scoping note.
         let backend = Arc::new(fresh_backend());
         let policy = fresh_policy(Arc::clone(&backend));
-        let ctx = WriteContext {
+        let ctx = CapWriteContext {
             label: "post".to_string(),
             scope: "store:post:write".to_string(),
             ..Default::default()

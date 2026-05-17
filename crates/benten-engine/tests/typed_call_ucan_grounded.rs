@@ -78,7 +78,7 @@ fn ucan_grounded_permits_typed_call_when_proof_grants_required_cap() {
     // Valid proof: leaf-claim grants `typed:crypto:sign` → maps to
     // `cap:typed:crypto-sign` (the Ed25519Sign required-cap).
     let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
-    engine.install_ucan_proof(&token).unwrap();
+    engine.caps().install_ucan_proof(&token).unwrap();
 
     // The dispatch input has a structurally-VALID 32-byte all-zero
     // private_key; the underlying op succeeds at signing it (the
@@ -98,7 +98,7 @@ fn ucan_grounded_denies_typed_call_when_proof_grants_wrong_cap() {
     let kp = Keypair::generate();
     // Proof grants `typed:crypto:VERIFY` (NOT sign) — wrong cap.
     let token = build_ucan(&kp, "typed:crypto", "verify", 0, 253_402_300_798);
-    engine.install_ucan_proof(&token).unwrap();
+    engine.caps().install_ucan_proof(&token).unwrap();
 
     let result = engine.dispatch_typed_call_public(TypedCallOp::Ed25519Sign, &ed25519_sign_input());
     let err = result.expect_err("forged-cap-claim proof MUST be rejected (BLOCKER-2)");

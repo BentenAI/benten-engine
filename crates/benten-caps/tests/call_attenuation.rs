@@ -14,7 +14,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, GrantScope, NoAuthBackend, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, GrantScope, NoAuthBackend};
 use benten_errors::ErrorCode;
 
 #[test]
@@ -45,6 +45,6 @@ fn noauth_backend_does_not_fire_attenuation() {
     // Under NoAuth, the attenuation check is never consulted — every write
     // is permitted. This is the baseline contract.
     let backend = NoAuthBackend::new();
-    let ctx = WriteContext::default();
+    let ctx = CapWriteContext::default();
     assert!(backend.check_write(&ctx).is_ok());
 }

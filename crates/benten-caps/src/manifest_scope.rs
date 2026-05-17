@@ -213,7 +213,7 @@ pub fn manifest_shares_to_scope(manifest: &PluginManifest, plugin_did: &Did) -> 
 /// # `target_plugin_did`
 ///
 /// The audience plugin-DID — the principal whose `actor_cid` is in
-/// the inbound `WriteContext`. The check verifies whether the source
+/// the inbound `CapWriteContext`. The check verifies whether the source
 /// manifest's `shares` policy permits delegating `cap_scope` to this
 /// specific audience.
 ///

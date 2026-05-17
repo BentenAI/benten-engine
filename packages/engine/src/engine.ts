@@ -1922,29 +1922,34 @@ export class Engine {
    * per-node DSL knobs uses `fuel = 1_000_000`, `wallclockMs = 30_000`,
    * `outputLimitBytes = 1_048_576`.
    *
-   * # Honest Phase-2b state (r6-mpc-3 + r6-napi-3 + r6-dx-10)
+   * # Metric values (Phase-3 §7.1 — fully closed)
    *
-   * `fuelConsumedHighWater` + `lastInvocationMs` are returned as the
-   * literal `"unknown"` sentinel — **metrics are NOT tracked in Phase
-   * 2b**. `SandboxResult.fuelConsumed` + `output_consumed` are dropped
-   * at the eval-engine boundary (`primitive_host.rs::execute_sandbox`
-   * only propagates `output`); the per-handler metric record needed
-   * to surface real values is a Phase-3 wiring (named destination:
-   * `docs/future/phase-3-backlog.md` SnapshotBlobBackend
-   * metric-propagation entry, R6-FP Group 4 enrichment). Returning the
-   * `"unknown"` sentinel rather than a synthesized `null` (the prior
-   * shape) lets callers distinguish "metric is structurally not
-   * tracked in 2b" from "node hasn't been invoked yet".
+   * `fuelConsumedHighWater` + `outputConsumedHighWater` +
+   * `lastInvocationMs` are populated end-to-end:
+   * `primitive_host.rs::execute_sandbox` records each invocation's
+   * measurements into `EngineInner::sandbox_metrics`;
+   * `Engine::describe_sandbox_node_for_handler` reads the tracker; the
+   * napi bridge JSON template serializes the real numeric values; this
+   * wrapper parses them back into the typed `SandboxNodeDescription`.
    *
-   * Cross-ref: `docs/SECURITY-POSTURE.md` Compromise #17
-   * (sandbox-execution-metric-propagation).
+   * Returned shape:
+   * - `number` — real measured value from a recorded invocation.
+   * - `null` — no SANDBOX invocation has been recorded yet for this
+   *   handler (the metric record is created lazily on first call),
+   *   OR the underlying napi cdylib was built without the
+   *   `test-helpers` feature so the bridge method is absent.
    *
    * The remaining fields (`moduleCid` / `manifestId` / `fuel` /
    * `wallclockMs` / `outputLimitBytes`) are synthesized client-side
-   * from the registered subgraph spec; sufficient for the
-   * omitting-knobs-uses-defaults test pin.
+   * from the registered subgraph spec when the cdylib bridge is absent
+   * (production builds); otherwise they round-trip from the native
+   * description.
    *
-   * Pinned by `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`.
+   * Pinned by `packages/engine/test/sandbox.test.ts::"SandboxArgs defaults — omitting fuel / wallclockMs / outputLimitBytes uses 1M / 30s / 1MB"`
+   * (default-resolution arm) +
+   * `packages/engine/test/sandbox.test.ts::"describeSandboxNode returns real numeric metrics after invocation (§7.1 closure)"`
+   * (the closure-pin per pim-2 §3.6b that would FAIL if metric
+   * propagation were no-op'd).
    */
   public async describeSandboxNode(
     handlerId: string,
@@ -2000,22 +2005,28 @@ export class Engine {
             fuel: parsed.fuel ?? 1_000_000,
             wallclockMs: parsed.wallclockMs ?? 30_000,
             outputLimitBytes: parsed.outputLimitBytes ?? 1_048_576,
+            // Phase-3 §7.1 closure: real numeric metric values flow
+            // through the napi bridge JSON template. `null` surfaces
+            // when no SANDBOX invocation has been recorded yet (the
+            // metric record is created lazily on first call). Was
+            // previously the `"unknown"` string sentinel — replaced
+            // with `null` per §7.1 fully-closed shape.
             fuelConsumedHighWater:
               typeof parsed.fuelConsumedHighWater === "number"
                 ? parsed.fuelConsumedHighWater
-                : "unknown",
+                : null,
             // R6 fp Wave C2 (obs-r6r1-1 closure): closes the Phase-3
-            // §7.1 trio — output_consumed_high_water now flows through
+            // §7.1 trio — output_consumed_high_water flows through
             // the napi bridge instead of being dropped at
             // describe_sandbox_node_for_handler.
             outputConsumedHighWater:
               typeof parsed.outputConsumedHighWater === "number"
                 ? parsed.outputConsumedHighWater
-                : "unknown",
+                : null,
             lastInvocationMs:
               typeof parsed.lastInvocationMs === "number"
                 ? parsed.lastInvocationMs
-                : "unknown",
+                : null,
           };
         } catch {
           // Fall through to the legacy synthesized shape on parse fail.
@@ -2028,13 +2039,15 @@ export class Engine {
       fuel: 1_000_000,
       wallclockMs: 30_000,
       outputLimitBytes: 1_048_576,
-      // Honest "unknown" sentinel per r6-mpc-3 — fall-through shape
-      // when the native cdylib lacks the test-helpers describeSandboxNode
-      // bridge OR when no SANDBOX invocation has been recorded for the
-      // handler yet (the metric record is created lazily on first call).
-      fuelConsumedHighWater: "unknown",
-      outputConsumedHighWater: "unknown",
-      lastInvocationMs: "unknown",
+      // Phase-3 §7.1 closure: fall-through shape when the native
+      // cdylib lacks the test-helpers describeSandboxNode bridge.
+      // `null` distinguishes "no metric available" structurally; the
+      // bridge-present-but-no-invocation case ALSO surfaces `null`
+      // (the engine accessor returns Err before any call lands, so
+      // the napi bridge returns its outer `null` and we land here too).
+      fuelConsumedHighWater: null,
+      outputConsumedHighWater: null,
+      lastInvocationMs: null,
     };
   }
 

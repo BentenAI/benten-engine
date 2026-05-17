@@ -1,12 +1,12 @@
 //! [`NoAuthBackend`] — Phase 1 default capability policy.
 //!
 //! Zero-cost: [`NoAuthBackend::check_write`] always returns `Ok(())`, no
-//! allocations, no branches that depend on the [`crate::WriteContext`] fields.
+//! allocations, no branches that depend on the [`crate::CapWriteContext`] fields.
 //! This is the out-of-the-box default for Engine builders so the 10-minute DX
 //! path in `docs/QUICKSTART.md` holds.
 
 use crate::error::CapError;
-use crate::policy::{CapabilityPolicy, WriteContext};
+use crate::policy::{CapWriteContext, CapabilityPolicy};
 
 /// The default zero-auth backend. Permits every write unconditionally.
 ///
@@ -35,7 +35,7 @@ impl NoAuthBackend {
 
 impl CapabilityPolicy for NoAuthBackend {
     #[inline]
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Ok(())
     }
 }

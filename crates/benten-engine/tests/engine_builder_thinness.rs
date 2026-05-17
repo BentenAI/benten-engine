@@ -65,7 +65,7 @@ fn thin_engine_rejects_caps_dependent_apis() {
         .build()
         .unwrap();
 
-    let result = engine.grant_capability(
+    let result = engine.caps().grant_capability(
         &benten_core::Cid::from_blake3_digest([0u8; 32]),
         "store:post:write",
     );

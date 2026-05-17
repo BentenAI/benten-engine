@@ -63,6 +63,7 @@ fn capability_revoked_mid_iteration_denies_subsequent_batches() {
 
     // Grant the cap, then schedule a revocation at iter 50 (mid batch 1).
     let grant_cid = engine
+        .caps()
         .grant_capability("post:write", "test-subject")
         .unwrap();
     engine
@@ -115,6 +116,7 @@ fn writes_in_current_batch_are_not_retroactively_denied() {
     let handler = iterate_write_handler(250);
     let handler_id = engine.register_subgraph(&handler).unwrap();
     let grant = engine
+        .caps()
         .grant_capability("post:write", "test-subject")
         .unwrap();
 

@@ -279,6 +279,6 @@ pub trait NodeHandleExt: private::Sealed {
 impl NodeHandleExt for NodeHandle {
     #[cfg(any(test, feature = "testing"))]
     fn build_validated_for_corruption_test(self) -> Subgraph {
-        Subgraph::new("corruption_test").with_node(OperationNode::new("r", PrimitiveKind::Read))
+        Subgraph::new("corruption_test").push_node_raw(OperationNode::new("r", PrimitiveKind::Read))
     }
 }

@@ -10,7 +10,7 @@
 //! a silent bug.
 //!
 //! This proptest exhaustively fuzzes `check_write` with structurally-valid
-//! `WriteContext`s and asserts it returns `Ok(())` unconditionally.
+//! `CapWriteContext`s and asserts it returns `Ok(())` unconditionally.
 //!
 //! G4 mini-review (g4-cr-8): the second proptest (a "zero-alloc" assertion
 //! that compared `alloc_count() before` vs `after`) was removed. The helper
@@ -20,7 +20,7 @@
 //! global allocator decision (mimalloc vs snmalloc-rs).
 //!
 //! G4 mini-review (g4-cr-10): the redundant `target_label` field on
-//! `WriteContext` was dropped; this generator now populates `label` only.
+//! `CapWriteContext` was dropped; this generator now populates `label` only.
 //!
 //! Cross-refs:
 //! - `.addl/phase-1/r1-security-auditor.json` finding #2 (critical — the
@@ -30,19 +30,19 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_caps::{CapabilityPolicy, NoAuthBackend, WriteContext};
+use benten_caps::{CapWriteContext, CapabilityPolicy, NoAuthBackend};
 use proptest::prelude::*;
 
 /// Strategy generating arbitrary-but-structurally-valid WriteContexts. Any
 /// context NoAuth rejects would be a bug.
-fn any_write_context() -> impl Strategy<Value = WriteContext> {
+fn any_write_context() -> impl Strategy<Value = CapWriteContext> {
     (
         proptest::string::string_regex("[a-z0-9:_-]{1,64}").unwrap(),
         any::<bool>(),
         proptest::option::of(proptest::string::string_regex("[a-z0-9]{4,32}").unwrap()),
     )
         .prop_map(|(label, is_priv, actor)| {
-            let mut ctx = WriteContext::default();
+            let mut ctx = CapWriteContext::default();
             ctx.label = label;
             ctx.is_privileged = is_priv;
             ctx.actor_hint = actor;

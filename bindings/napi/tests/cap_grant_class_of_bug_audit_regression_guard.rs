@@ -117,7 +117,7 @@ fn napi_grant_entry_point_persists_scope_string_not_cid() {
         .expect("engine opens with grant-backed policy");
 
     let handler_id = engine.register_crud("post").unwrap();
-    let actor = engine.create_principal("alice").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
 
     // Substantive arm #1 — minted CIDs distinct for distinct scopes.
     // Mint two grants for the SAME actor with DISTINCT scope strings.
@@ -127,9 +127,11 @@ fn napi_grant_entry_point_persists_scope_string_not_cid() {
     // the actor + the eventual CID are content-addressed inputs that
     // wouldn't differ between the two writes pre-mint).
     let grant_post: Cid = engine
+        .caps()
         .grant_capability_with_proof(&actor, "store:post:write", None, None)
         .expect("post-scope grant via privileged path");
     let grant_comment: Cid = engine
+        .caps()
         .grant_capability_with_proof(&actor, "store:comment:write", None, None)
         .expect("comment-scope grant via privileged path");
     assert_ne!(
@@ -147,6 +149,7 @@ fn napi_grant_entry_point_persists_scope_string_not_cid() {
     // through verbatim (no mangling, no normalization, no CID-
     // substitution masking the class-of-bug).
     let grant_post_repeat: Cid = engine
+        .caps()
         .grant_capability_with_proof(&actor, "store:post:write", None, None)
         .expect("idempotent re-mint of same scope");
     assert_eq!(
@@ -216,7 +219,7 @@ fn napi_grant_entry_point_passes_plugin_manifest_scope_shape_through_verbatim() 
         .build()
         .expect("engine opens with grant-backed policy");
 
-    let actor = engine.create_principal("plugin-issuer").unwrap();
+    let actor = engine.caps().create_principal("plugin-issuer").unwrap();
 
     // Plugin manifest grammar scope (G24-D + G27-D land the manifest
     // surface; this pin verifies the napi grant entry point doesn't
@@ -229,6 +232,7 @@ fn napi_grant_entry_point_passes_plugin_manifest_scope_shape_through_verbatim() 
     // (or the napi binding pre-validated scope syntax before calling
     // through), this mint would error.
     let grant_cid_a: Cid = engine
+        .caps()
         .grant_capability_with_proof(&actor, &scope, None, None)
         .expect("plugin-manifest scope grant should mint successfully");
 
@@ -242,6 +246,7 @@ fn napi_grant_entry_point_passes_plugin_manifest_scope_shape_through_verbatim() 
     let other_plugin_did = "did:key:zAnotherPluginDidPlaceholder";
     let other_scope = format!("private:{other_plugin_did}:notes");
     let grant_cid_b: Cid = engine
+        .caps()
         .grant_capability_with_proof(&actor, &other_scope, None, None)
         .expect("sibling plugin-manifest scope grant should mint successfully");
     assert_ne!(
@@ -259,6 +264,7 @@ fn napi_grant_entry_point_passes_plugin_manifest_scope_shape_through_verbatim() 
     // scope-string identity produces identical CIDs. Together they
     // pin that the scope-string flows through verbatim (no mangling).
     let grant_cid_a_repeat: Cid = engine
+        .caps()
         .grant_capability_with_proof(&actor, &scope, None, None)
         .expect("idempotent re-mint of same scope succeeds");
     assert_eq!(

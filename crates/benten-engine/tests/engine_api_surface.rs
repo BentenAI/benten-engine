@@ -102,11 +102,15 @@ fn snapshot_is_point_in_time() {
 #[test]
 fn grant_and_revoke_capability_roundtrip() {
     let (_dir, engine) = fresh_engine();
-    let actor = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&actor, "store:post:write").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&actor, "store:post:write")
+        .unwrap();
     // Revocation must succeed without error; absence of capability is
     // surfaced on subsequent call attempts (tested in exit_3).
     engine
+        .caps()
         .revoke_capability(&actor, "store:post:write")
         .unwrap();
 }

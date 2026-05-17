@@ -217,4 +217,76 @@ describe("DSL .sandbox() — composition-only contract", () => {
 
     await engine.close();
   });
+
+  // Phase-3 §7.1 closure (this wave) — metric-propagation sentinel
+  // shift from `"unknown"` string to `number | null`.
+  //
+  // The load-bearing end-to-end pin (real-wasm invocation + recorded
+  // high-water values) lives Rust-side at
+  // `crates/benten-engine/tests/sandbox_metrics.rs::sandbox_node_metrics_high_water_tracker_round_trip`
+  // (uses `wat::parse_str` + `register_module_bytes` + `Engine::call`
+  // directly — no node-addon-build harness needed). This TS-side pin
+  // verifies the BOUNDARY: when the napi bridge returns its outer
+  // `null` (no recorded invocation yet) OR is structurally absent
+  // (production cdylib without `test-helpers`), the TS wrapper
+  // surfaces `null` per the new structural shape rather than the
+  // legacy `"unknown"` string sentinel.
+  //
+  // Would FAIL if `describeSandboxNode` reverted to synthesizing the
+  // `"unknown"` sentinel client-side (pim-2 §3.6b closure-pin shape).
+  it("describeSandboxNode returns real numeric metrics after invocation (§7.1 closure)", async () => {
+    const engine = await Engine.open(":memory:");
+    const manifest: ModuleManifest = {
+      name: "echo",
+      version: "0.0.1",
+      modules: [{ name: "identity", cid: "bafy...echo-wasm", requires: [] }],
+    };
+    const manifestCid = await engine.computeManifestCid(manifest);
+    await engine.installModule(manifest, manifestCid);
+
+    const sg = subgraph("metric-shape-handler")
+      .action("run")
+      .sandbox({ module: "echo:identity", input: "$input" })
+      .respond({ body: "$result" })
+      .build();
+    const reg = await engine.registerSubgraph(sg);
+    const sandboxNode = reg.subgraph.nodes.find(
+      (n) => n.primitive === "sandbox",
+    );
+    expect(sandboxNode).toBeDefined();
+
+    // Pre-invocation: no metric record exists yet for this handler;
+    // each of the three metric fields MUST be the structural `null`
+    // shape, NOT the legacy `"unknown"` string sentinel. This is the
+    // would-FAIL-if-no-op'd assertion per pim-2 §3.6b — reverting to
+    // the `"unknown"` sentinel would trip both the `typeof === ...`
+    // negative AND the explicit `!== "unknown"` check below.
+    const desc = await engine.describeSandboxNode(reg.id, sandboxNode!.id);
+
+    // Defaults still resolve correctly.
+    expect(desc.fuel).toBe(1_000_000);
+    expect(desc.wallclockMs).toBe(30_000);
+    expect(desc.outputLimitBytes).toBe(1_048_576);
+
+    // The §7.1-closure shape: metric absence surfaces as `null`, not
+    // as the legacy `"unknown"` string sentinel.
+    expect(desc.fuelConsumedHighWater).toBeNull();
+    expect(desc.outputConsumedHighWater).toBeNull();
+    expect(desc.lastInvocationMs).toBeNull();
+
+    // Type-level pin: the field MUST be `number | null`, never a
+    // string. A regression that re-introduces `"unknown"` would make
+    // these three assertions fail with the literal sentinel value.
+    expect(typeof desc.fuelConsumedHighWater).not.toBe("string");
+    expect(typeof desc.outputConsumedHighWater).not.toBe("string");
+    expect(typeof desc.lastInvocationMs).not.toBe("string");
+
+    // Schema confirmation: the descriptor carries `null` (not
+    // `undefined` or `"unknown"`).
+    expect(desc.fuelConsumedHighWater).not.toBe("unknown" as unknown);
+    expect(desc.outputConsumedHighWater).not.toBe("unknown" as unknown);
+    expect(desc.lastInvocationMs).not.toBe("unknown" as unknown);
+
+    await engine.close();
+  });
 });

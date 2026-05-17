@@ -215,12 +215,12 @@ pub enum CapError {
     /// accepting whichever default disposition.
     ///
     /// See `crates/benten-caps/src/ucan_grounded.rs::DEFAULT_NOW_SECS`
-    /// + phase-3-backlog §2.3 (i) for the `WriteContext::now`-threading
+    /// + phase-3-backlog §2.3 (i) for the `CapWriteContext::now`-threading
     /// work that lights up the real-clock production path.
     #[error(
         "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a \
          chain with time-bounded delegations; inject a real clock via with_now_for_test \
-         (or wait for WriteContext::now threading per phase-3-backlog §2.3 (i))"
+         (or wait for CapWriteContext::now threading per phase-3-backlog §2.3 (i))"
     )]
     UcanClockNotInjected,
 

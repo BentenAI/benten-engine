@@ -22,7 +22,7 @@
 //!  2. A suspended ExecutionState persists; payload references G in
 //!     every attribution frame.
 //!  3. Alice's admin revokes the grant.
-//!  4. Resume-side: the engine re-derives a `WriteContext` whose `scope
+//!  4. Resume-side: the engine re-derives a `CapWriteContext` whose `scope
 //!     = store:post:write` and calls `CapabilityPolicy::check_write(ctx)`.
 //!  5. Mitigation: policy observes the revocation via its grant reader,
 //!     returns `Err(CapError::Revoked)` / `Err(CapError::RevokedMidEval)`.
@@ -32,13 +32,13 @@
 //! (grant-backed batched lookup under revocation). Phase-1 HEAD
 //! `GrantBackedPolicy` already reads the current grant state through
 //! `system:CapabilityRevocation` Nodes; the test exercises that path via
-//! a synthesised `WriteContext` whose scope matches a just-revoked grant.
+//! a synthesised `CapWriteContext` whose scope matches a just-revoked grant.
 //!
 //! R3 writer: `rust-test-writer-security` (Phase 2a).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy};
 use benten_engine::Engine;
 
 /// ucca-3 / sec-r1-1 / §9.13 refresh-point-4: the grant-backed policy MUST
@@ -56,8 +56,9 @@ fn resume_revocation_denies_write_on_revoked_grant() {
 
     // Mint a grant. In the full attack scenario this CID is the one a
     // persisted ExecutionState's `capability_grant_cid` references.
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     let _grant_cid = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("grant succeeds");
 
@@ -81,6 +82,7 @@ fn resume_revocation_denies_write_on_revoked_grant() {
 
     // Revoke the grant (simulates the window between suspend and resume).
     engine
+        .caps()
         .revoke_capability(&alice, "store:post:write")
         .expect("revoke succeeds");
 
@@ -113,7 +115,7 @@ fn resume_revocation_denies_write_on_revoked_grant() {
     );
 }
 
-/// Direct policy-level variant: construct a synthetic `WriteContext`
+/// Direct policy-level variant: construct a synthetic `CapWriteContext`
 /// after revocation and call `check_write`. Avoids the engine.call path
 /// so we can assert the specific CapError variant.
 #[test]
@@ -125,9 +127,13 @@ fn grant_backed_policy_check_write_denies_after_revoke() {
         .build()
         .unwrap();
 
-    let alice = engine.create_principal("alice").unwrap();
-    let _grant_cid = engine.grant_capability(&alice, "store:post:write").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
+    let _grant_cid = engine
+        .caps()
+        .grant_capability(&alice, "store:post:write")
+        .unwrap();
     engine
+        .caps()
         .revoke_capability(&alice, "store:post:write")
         .expect("revoke");
 
@@ -159,10 +165,10 @@ fn grant_backed_policy_check_write_denies_after_revoke() {
          refinement narrows to RevokedMidEval via refresh-point-4"
     );
 
-    // Belt-and-suspenders: exercise a synthetic WriteContext at the
+    // Belt-and-suspenders: exercise a synthetic CapWriteContext at the
     // CapabilityPolicy trait surface directly against NoAuth (the baseline
     // sanity check that the trait shape compiles as G3-B will use it).
-    let synth = WriteContext::synthetic_for_test();
+    let synth = CapWriteContext::synthetic_for_test();
     let noauth = benten_caps::NoAuthBackend::new();
     match noauth.check_write(&synth) {
         Ok(()) => {} // NoAuth permits
