@@ -79,7 +79,10 @@ pub const CANONICAL_VIEW_IDS: &[&str] = &[
 /// `Projection` placeholder variant was removed at G23-0b per CRATES-DEEP-DIVE
 /// §4; Family C's `projection_all_props_placeholder_removed_no_remaining_references`
 /// pin guards the removal).
-#[derive(Debug, Clone, PartialEq, Eq)]
+// `Copy` (refinement-audit #682): all variants are unit — `Copy` lets the
+// single-source-of-truth `CANONICAL_VIEW_META` table return the projection
+// by value without a clone, and is a non-breaking additive trait impl.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypedOutputProjection {
     /// View 4 emits rule sets (a map of governance-rules, not Cids).
     Rules,

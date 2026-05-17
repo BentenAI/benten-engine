@@ -366,7 +366,10 @@ impl Engine {
             let already_registered = ivm.view_ids().iter().any(|id| id == view_id);
             if !already_registered && let Some(label) = input_pattern_label.as_deref() {
                 let view = benten_ivm::views::ContentListingView::new(label);
-                ivm.register_view(Box::new(view));
+                // refinement-audit #628: atomic check-and-append closes the
+                // TOCTOU between the `view_ids()` fast-path check above and
+                // this append under concurrent registration.
+                ivm.register_view_if_absent(Box::new(view));
                 // Non-content-listing canonical view ids (capability_grants,
                 // event_dispatch, governance_inheritance, version_current) are
                 // Phase-2 scope for automatic instantiation — the definition

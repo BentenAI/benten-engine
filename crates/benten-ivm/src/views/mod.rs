@@ -43,6 +43,6 @@ pub mod version_current;
 
 pub use capability_grants::CapabilityGrantsView;
 pub use content_listing::ContentListingView;
-pub use event_handler_dispatch::{EventDispatchView, EventHandlerDispatchView};
+pub use event_handler_dispatch::EventDispatchView;
 pub use governance_inheritance::GovernanceInheritanceView;
 pub use version_current::VersionCurrentView;

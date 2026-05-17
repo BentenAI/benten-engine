@@ -272,9 +272,8 @@ pub fn register_and_walk_to_completion(
 /// `SelfReferentialSubgraphRejected`).
 ///
 /// On successful registration this returns the registered
-/// `AlgorithmBView` ready for callers to drive directly (e.g. to
-/// observe the post-walk shape via `materialize_full` instead of
-/// `walk_writes` + materialize).
+/// `AlgorithmBView` ready for callers to drive directly via
+/// `walk_writes` + `materialize`.
 pub fn register_subgraph_returning_algorithm_error(
     spec: &CanarySubgraphSpec,
 ) -> Result<benten_ivm::AlgorithmBView, AlgorithmError> {

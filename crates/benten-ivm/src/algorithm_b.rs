@@ -62,32 +62,75 @@ use crate::views::{
     VersionCurrentView,
 };
 
-/// Canonical view ids the dispatch router classifies as [`Strategy::A`]
-/// (canonical fast-path). User-defined view ids route to [`Strategy::B`]
-/// (generic kernel).
-const CANONICAL_VIEW_IDS: &[&str] = &[
-    "capability_grants",
-    "event_dispatch",
-    "content_listing",
-    "governance_inheritance",
-    "version_current",
+/// refinement-audit #682: SINGLE SOURCE OF TRUTH for per-canonical-view
+/// metadata. Pre-#682 the crate carried 4 parallel tables (a `&[&str]` id
+/// list, a `&[(&str,&str)]` hardcoded-label map, plus two `match` statements
+/// for the typed-output projection and the legacy input-pattern-label) which
+/// could drift independently. Every per-canonical-view accessor now derives
+/// from this one table.
+///
+/// Columns:
+/// - `id` — the canonical view id (dispatch-router fast-path key).
+/// - `hardcoded_label` — `Some(label)` for the 4 views whose hand-written
+///   dispatch arm IGNORES the caller-supplied label and uses a fixed value;
+///   `None` for `content_listing` (which honors the caller's label).
+/// - `legacy_input_pattern_label` — the value the legacy `for_id`
+///   constructor seeds into the wrapper `label_pattern` field. Equals
+///   `hardcoded_label` for the 4 hardcoded views; `"post"` (canonical
+///   default) for `content_listing`.
+/// - `typed_output_projection` — the load-bearing typed-output declaration
+///   the kernel validates at materialisation (G23-0b mat-r1-1).
+struct CanonicalViewMeta {
+    id: &'static str,
+    hardcoded_label: Option<&'static str>,
+    legacy_input_pattern_label: &'static str,
+    typed_output_projection: Option<TypedOutputProjection>,
+}
+
+const CANONICAL_VIEW_META: &[CanonicalViewMeta] = &[
+    CanonicalViewMeta {
+        id: "capability_grants",
+        hardcoded_label: Some("system:CapabilityGrant"),
+        legacy_input_pattern_label: "system:CapabilityGrant",
+        typed_output_projection: None,
+    },
+    CanonicalViewMeta {
+        id: "event_dispatch",
+        hardcoded_label: Some("system:EventDispatch"),
+        legacy_input_pattern_label: "system:EventDispatch",
+        typed_output_projection: None,
+    },
+    CanonicalViewMeta {
+        id: "content_listing",
+        // `content_listing` honors the caller-supplied label — no hardcoded
+        // value. Its legacy default is the canonical `"post"`.
+        hardcoded_label: None,
+        legacy_input_pattern_label: "post",
+        typed_output_projection: None,
+    },
+    CanonicalViewMeta {
+        id: "governance_inheritance",
+        hardcoded_label: Some("system:GovernanceInheritance"),
+        legacy_input_pattern_label: "system:GovernanceInheritance",
+        typed_output_projection: Some(TypedOutputProjection::Rules),
+    },
+    CanonicalViewMeta {
+        id: "version_current",
+        hardcoded_label: Some("NEXT_VERSION"),
+        legacy_input_pattern_label: "NEXT_VERSION",
+        typed_output_projection: Some(TypedOutputProjection::Current),
+    },
 ];
 
-/// Stable mapping from canonical view id → hardcoded `input_pattern_label`
-/// for the four canonical views whose hand-written dispatch arms IGNORE
-/// caller-supplied label and use a fixed value. `content_listing` is
-/// intentionally absent — its arm honors `definition.input_pattern_label`.
-///
-/// Surfaced as a `pub` accessor (`hardcoded_label_for_id`) so the engine's
-/// `register_user_view` boundary can fail-loud when a caller supplies a
-/// canonical id + a mismatching label (Phase-2b R6-R3 `r6-r3-ivm-1` closure;
-/// Phase-3 G15-A preserves the same fail-loud guard).
-const CANONICAL_HARDCODED_LABELS: &[(&str, &str)] = &[
-    ("capability_grants", "system:CapabilityGrant"),
-    ("version_current", "NEXT_VERSION"),
-    ("event_dispatch", "system:EventDispatch"),
-    ("governance_inheritance", "system:GovernanceInheritance"),
-];
+fn canonical_meta_for(view_id: &str) -> Option<&'static CanonicalViewMeta> {
+    CANONICAL_VIEW_META.iter().find(|m| m.id == view_id)
+}
+
+/// The canonical view ids, derived from the single-source-of-truth table.
+/// Used in fail-loud error messages + the dispatch-routing test.
+fn canonical_view_ids() -> impl Iterator<Item = &'static str> {
+    CANONICAL_VIEW_META.iter().map(|m| m.id)
+}
 
 /// Return the hardcoded `input_pattern_label` for one of the four canonical
 /// view ids whose hand-written dispatch arm ignores caller-supplied label.
@@ -100,9 +143,7 @@ const CANONICAL_HARDCODED_LABELS: &[(&str, &str)] = &[
 /// a label that disagrees with the hardcoded value.
 #[must_use]
 pub fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
-    CANONICAL_HARDCODED_LABELS
-        .iter()
-        .find_map(|(id, label)| (*id == view_id).then_some(*label))
+    canonical_meta_for(view_id).and_then(|m| m.hardcoded_label)
 }
 
 /// Derive the typed-output projection a canonical view_id is expected to
@@ -115,11 +156,7 @@ pub fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
 /// load-bearing declaration the kernel validates at materialisation.
 #[must_use]
 pub fn canonical_typed_output_projection_for(view_id: &str) -> Option<TypedOutputProjection> {
-    match view_id {
-        "governance_inheritance" => Some(TypedOutputProjection::Rules),
-        "version_current" => Some(TypedOutputProjection::Current),
-        _ => None,
-    }
+    canonical_meta_for(view_id).and_then(|m| m.typed_output_projection)
 }
 
 /// Is `view_id` one of the 5 canonical Phase-1 view ids?
@@ -131,7 +168,7 @@ pub fn canonical_typed_output_projection_for(view_id: &str) -> Option<TypedOutpu
 /// internals leak through").
 #[must_use]
 pub fn is_canonical_view_id(view_id: &str) -> bool {
-    CANONICAL_VIEW_IDS.contains(&view_id)
+    canonical_meta_for(view_id).is_some()
 }
 
 /// INTERNAL Strategy::A vs Strategy::B dispatch router.
@@ -585,17 +622,17 @@ impl core::fmt::Debug for AlgorithmBView {
 /// `content_listing` (which honors the caller's supplied label) this is
 /// `"post"` (the canonical default), but the caller's `register` path
 /// supplies the actual label via the wrapper-construction route.
-fn definition_input_pattern_label_owned(view_id: &str) -> String {
-    match view_id {
-        "capability_grants" => "system:CapabilityGrant".to_string(),
-        "event_dispatch" => "system:EventDispatch".to_string(),
-        "content_listing" => "post".to_string(),
-        "governance_inheritance" => "system:GovernanceInheritance".to_string(),
-        "version_current" => "NEXT_VERSION".to_string(),
-        // Default: same value used by user-defined views when no label
+// refinement-audit #767: renamed from `definition_input_pattern_label_owned`
+// — the `_owned` suffix encoded the return type (`String`) in the name,
+// which Rust naming convention leaves to the signature. Now derives from the
+// single-source-of-truth `CANONICAL_VIEW_META` table (no duplicate match).
+fn legacy_input_pattern_label_for(view_id: &str) -> String {
+    canonical_meta_for(view_id).map_or_else(
+        // Default: same value user-defined views use when no label
         // override is supplied.
-        _ => "post".to_string(),
-    }
+        || "post".to_string(),
+        |m| m.legacy_input_pattern_label.to_string(),
+    )
 }
 
 impl AlgorithmBView {
@@ -654,7 +691,7 @@ impl AlgorithmBView {
                     "AlgorithmBView::for_id: unknown canonical view id `{unknown}` \
                      (canonical ids: {known:?}). Use AlgorithmBView::register for \
                      user-defined view ids.",
-                    known = CANONICAL_VIEW_IDS
+                    known = canonical_view_ids().collect::<Vec<_>>()
                 )));
             }
         };
@@ -666,7 +703,7 @@ impl AlgorithmBView {
             // for_id / for_id_with_budget legacy entry — label_pattern
             // is derived from the supplied definition.input_pattern_label
             // (or a sane default).
-            LabelPattern::exact(definition_input_pattern_label_owned(view_id)),
+            LabelPattern::exact(legacy_input_pattern_label_for(view_id)),
         ))
     }
 
@@ -691,30 +728,18 @@ impl AlgorithmBView {
             "capability_grants" => Box::new(CapabilityGrantsView::with_budget_for_testing(budget)),
             "event_dispatch" => Box::new(EventDispatchView::with_budget_for_testing(budget)),
             "content_listing" => {
-                // ContentListingView::with_budget_for_testing hard-codes
-                // label "post"; respect the supplied label by calling
-                // ContentListingView::new(label) and then overriding the
-                // budget through its private setter via the test surface.
-                // Fall back to with_budget_for_testing's "post" default
-                // when the supplied label is missing or "post".
+                // refinement-audit #690: honor BOTH the supplied label and
+                // the budget. The prior code fell back to
+                // `ContentListingView::new(label)` for non-`"post"` labels,
+                // which installs an unbounded `u64::MAX` budget — silently
+                // DROPPING the caller's `budget`. `with_label_and_budget`
+                // closes that gap (also closes `phase-3-backlog.md`
+                // §5.1-followup-e residual).
                 let label = definition
                     .input_pattern_label
                     .clone()
                     .unwrap_or_else(|| "post".to_string());
-                if label == "post" {
-                    Box::new(ContentListingView::with_budget_for_testing(budget))
-                } else {
-                    // Use try_with_budget which respects label="post" only;
-                    // for non-"post" labels we synthesise via new + observe
-                    // the unbounded budget (the canonical kernel's
-                    // budget-aware constructor is hard-coded to "post";
-                    // honoring an arbitrary label requires the same surface
-                    // as `ContentListingView::new(label)`. Closing this
-                    // shape requires lifting the canonical constructor to
-                    // accept (label, budget) — named in
-                    // `phase-3-backlog.md` §5.1-followup-e residual).
-                    Box::new(ContentListingView::new(label))
-                }
+                Box::new(ContentListingView::with_label_and_budget(label, budget))
             }
             "governance_inheritance" => {
                 Box::new(GovernanceInheritanceView::with_budget_for_testing(budget))
@@ -725,7 +750,7 @@ impl AlgorithmBView {
                     "AlgorithmBView::for_id_with_budget: unknown canonical view id \
                      `{unknown}` (canonical ids: {known:?}). Use \
                      AlgorithmBView::register_with_budget for user-defined view ids.",
-                    known = CANONICAL_VIEW_IDS
+                    known = canonical_view_ids().collect::<Vec<_>>()
                 )));
             }
         };
@@ -737,7 +762,7 @@ impl AlgorithmBView {
             // for_id / for_id_with_budget legacy entry — label_pattern
             // is derived from the supplied definition.input_pattern_label
             // (or a sane default).
-            LabelPattern::exact(definition_input_pattern_label_owned(view_id)),
+            LabelPattern::exact(legacy_input_pattern_label_for(view_id)),
         ))
     }
 
@@ -904,21 +929,6 @@ impl AlgorithmBView {
         Self::register(view_id, label_pattern, projection)
     }
 
-    /// Materialize the kernel's current set of CIDs as a flat list.
-    ///
-    /// Phase-3 G15-A surface — the per-row READ gate composition lives at
-    /// `crates/benten-engine/src/ivm_view_read_gate.rs`; this method is
-    /// the unfiltered materialization the gate then row-filters.
-    #[must_use]
-    pub fn materialize_full(&self) -> Vec<Cid> {
-        match self.inner.read(&ViewQuery::default()) {
-            Ok(ViewResult::Cids(cids)) => cids,
-            Ok(ViewResult::Current(Some(cid))) => vec![cid],
-            Ok(ViewResult::Current(None) | ViewResult::Rules(_)) => Vec::new(),
-            Err(_) => Vec::new(),
-        }
-    }
-
     /// G23-0a: register an Algorithm B view from a [`SubgraphSpec`] —
     /// the generalized-kernel input shape. Routes through the same
     /// `dispatch_for` classification as [`Self::register`] (canonical
@@ -1012,9 +1022,15 @@ impl AlgorithmBView {
             // increasing distinct values so the kernel's BudgetTracker
             // observes distinct events.
             let node = Node::new(vec![input.label.clone()], props);
-            let cid = node
-                .cid()
-                .map_err(|e| ViewError::PatternMismatch(alloc::format!("cid: {e:?}")))?;
+            // refinement-audit #502: a `Node::cid()` failure is a
+            // serialization error, NOT a query/pattern-shape mismatch.
+            // Surface the correctly-categorized `NodeCidComputeFailed`
+            // (maps to `E_GRAPH_INTERNAL`) instead of conflating it with
+            // `PatternMismatch` (`E_IVM_PATTERN_MISMATCH`).
+            let cid = node.cid().map_err(|e| ViewError::NodeCidComputeFailed {
+                view_id: self.view_id.clone(),
+                detail: alloc::format!("{e:?}"),
+            })?;
             // G23-0b walk observable: if the kernel-input's first label
             // matches the wrapper's stored `label_pattern`, record the
             // event Cid in the wrapper's walk_observable BTreeSet. This
@@ -1053,7 +1069,27 @@ impl AlgorithmBView {
     }
 
     /// G23-0a/G23-0b: materialise the current view state into a
-    /// [`KernelOutput`]. The discriminator is selected per the wrapper's
+    /// [`KernelOutput`].
+    ///
+    /// **refinement-audit #662 — three deliberately-distinct sources, each
+    /// load-bearing for a SPECIFIC consumer (not redundant):**
+    ///
+    /// 1. `self.walk_observable` (wrapper BTreeSet) — the *canary
+    ///    observable*. It is the ONLY source whose bytes are emitted,
+    ///    because it is identical across the two registration paths
+    ///    (`register` / `register_subgraph`) for the same write sequence,
+    ///    which the Family B/C round-trip pins depend on.
+    /// 2. `self.inner.read(...)` (inner kernel index) — *shape
+    ///    confirmation only*. Its bytes are intentionally discarded; only
+    ///    the `ViewResult` variant is consulted, to assert it agrees with
+    ///    the declared projection (fail-loud `assert!` below).
+    /// 3. `self.typed_output_projection` (declared) — the *register-time
+    ///    contract* that selects which `KernelOutput` variant is produced.
+    ///
+    /// Collapsing these would break the cross-registration-path
+    /// determinism guarantee; they are kept distinct by design.
+    ///
+    /// The discriminator is selected per the wrapper's
     /// declared `typed_output_projection` field (load-bearing
     /// post-G23-0b per mat-r1-1 + g23-0a-mr-3); the inner kernel's
     /// `ViewResult` variant MUST match the declared shape or
@@ -1283,7 +1319,7 @@ mod tests {
 
     #[test]
     fn dispatch_for_canonical_routes_to_strategy_a() {
-        for id in CANONICAL_VIEW_IDS {
+        for id in canonical_view_ids() {
             assert_eq!(dispatch_for(id), Strategy::A, "canonical id {id} -> A");
         }
     }

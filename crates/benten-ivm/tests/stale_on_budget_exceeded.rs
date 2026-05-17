@@ -13,8 +13,8 @@
 use benten_core::{Node, Value};
 use benten_ivm::views::{
     capability_grants::CapabilityGrantsView, content_listing::ContentListingView,
-    event_handler_dispatch::EventHandlerDispatchView,
-    governance_inheritance::GovernanceInheritanceView, version_current::VersionCurrentView,
+    event_handler_dispatch::EventDispatchView, governance_inheritance::GovernanceInheritanceView,
+    version_current::VersionCurrentView,
 };
 use benten_ivm::{View, ViewError, ViewState};
 
@@ -60,7 +60,7 @@ fn each_view_stale_on_budget_exceeded() {
     assert_stale_error(&err);
 
     // --- View 2: event-handler dispatch ---
-    let mut v2 = EventHandlerDispatchView::with_budget_for_testing(1);
+    let mut v2 = EventDispatchView::with_budget_for_testing(1);
     v2.on_change(oversized_node(1));
     v2.on_change(oversized_node(2));
     assert_eq!(v2.state(), ViewState::Stale);

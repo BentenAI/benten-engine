@@ -121,6 +121,22 @@ impl ContentListingView {
         v
     }
 
+    /// Construct a view watching `label` with an explicit per-update
+    /// `budget`.
+    ///
+    /// refinement-audit #690: `AlgorithmBView::for_id_with_budget` used to
+    /// silently DROP the caller-supplied budget for `content_listing` views
+    /// whose label was not `"post"` (it fell back to `new(label)`, which
+    /// installs an effectively-unbounded `u64::MAX` budget). This
+    /// constructor honors BOTH the label and the budget so no budget is
+    /// dropped regardless of label.
+    #[must_use]
+    pub fn with_label_and_budget(label: impl Into<String>, budget: u64) -> Self {
+        let mut v = Self::new(label);
+        v.budget = BudgetTracker::new(budget);
+        v
+    }
+
     /// Fallible constructor — refuses `budget == 0` (no room for the first
     /// update, which would produce a view that's `Stale` before any data
     /// arrives).
@@ -175,6 +191,10 @@ impl ContentListingView {
     /// - Label mismatch: no-op.
     /// - Missing / wrong-typed `createdAt`: no-op.
     /// - Match: insert under composite sort key.
+    #[allow(
+        clippy::print_stderr,
+        reason = "refinement-audit #498 cid-failure surfacing; a later phase routes to tracing"
+    )]
     pub fn on_change(&mut self, node: Node) {
         if self.budget.is_stale() {
             return;
@@ -195,8 +215,21 @@ impl ContentListingView {
         let Some(created_at) = extract_created_at(&node) else {
             return;
         };
-        let Ok(cid) = node.cid() else {
-            return;
+        // refinement-audit #498: a `Node::cid()` failure here used to be
+        // silently swallowed (no log, no counter). The ingress path is
+        // infallible by signature, so we surface the failure on stderr
+        // (same defense-in-depth posture as the identity-only-event
+        // fallback below) instead of dropping it invisibly.
+        let cid = match node.cid() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!(
+                    "benten-ivm: content_listing dropped a change event whose \
+                     Node::cid() failed ({e:?}) — the emitter produced a Node \
+                     that could not be content-addressed (see module docs)"
+                );
+                return;
+            }
         };
         let disambiguator = self.next_disambiguator;
         self.next_disambiguator = self.next_disambiguator.wrapping_add(1);
@@ -311,12 +344,19 @@ impl View for ContentListingView {
                              defense-in-depth path (see module docs)",
                             event.tx_id
                         );
-                        // Cast to i64 before biasing: tx_ids are small
-                        // monotonic u64 in practice, so reinterpretation
-                        // through `as i64` preserves ordering within the
-                        // operating range; the bias puts them in the same
-                        // `u64` half as non-negative createdAt values.
-                        bias_i64_to_u64(event.tx_id as i64)
+                        // refinement-audit #544: the prior code did
+                        // `bias_i64_to_u64(event.tx_id as i64)`. For
+                        // `tx_id > i64::MAX` the `as i64` cast wraps to a
+                        // negative value, which `bias_i64_to_u64` then maps
+                        // into the LOWER `u64` half — inverting the sort key
+                        // for very large tx_ids (unreachable in practice but
+                        // a latent ordering-inversion bug). Bias the `u64`
+                        // tx_id directly into the same upper half as
+                        // non-negative `createdAt` values (`2^63 + c`),
+                        // saturating at `u64::MAX` so monotonicity is
+                        // preserved across the full `u64` range with no
+                        // wrap-around.
+                        SORT_BIAS.saturating_add(event.tx_id)
                     }
                 };
                 let disambiguator = self.next_disambiguator;

@@ -1,5 +1,22 @@
 //! IVM strategy enum + per-view strategy selection (G8-A; G23-0a rename).
 //!
+//! ## The three distinct roles of a [`Strategy`] value (refinement-audit #673)
+//!
+//! The same `Strategy` discriminator is read in three different contexts —
+//! keep them distinct when reasoning about a value:
+//!
+//! 1. **Engine-boundary classification** — `dispatch_for(view_id)` returns
+//!    `Strategy::A` for the 5 canonical fast-path ids and `Strategy::B`
+//!    otherwise. Here `Strategy` is a *routing label*, the ONLY IVM type the
+//!    engine names (CLAUDE.md baked-in #2 — no `View`/algorithm internals
+//!    leak through this seam).
+//! 2. **Per-view implementation selection** — `View::strategy()` reports how
+//!    a concrete view maintains itself. The 5 hand-written views report
+//!    `Strategy::A`; `AlgorithmBView` reports `Strategy::B`.
+//! 3. **Reserved-catalog completeness** — `Strategy::Reserved` is a
+//!    named-but-unimplemented option so the closed `{A, B, Reserved}` set is
+//!    stable; constructing one is a typed `StrategyNotImplemented` error.
+//!
 //! ## D8-RESOLVED EXPLICIT-OPT-IN
 //!
 //! The IVM crate ships three strategies for view maintenance, exposed via a
