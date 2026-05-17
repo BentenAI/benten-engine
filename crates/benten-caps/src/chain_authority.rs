@@ -400,7 +400,7 @@ impl<B: benten_graph::GraphBackend> FrameReplayMarker<B> {
     ///
     /// # Errors
     ///
-    /// Returns [`CapError::BackendStorage`] on KV read/write failure.
+    /// Returns [`crate::CapError::BackendStorage`] on KV read/write failure.
     pub fn mark_and_check_frame(&self, nonce: &[u8]) -> Result<bool, crate::CapError> {
         let key = Self::nonce_key(nonce);
         let already = self

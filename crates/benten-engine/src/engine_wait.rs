@@ -1347,7 +1347,8 @@ impl Engine {
     /// `test-read-grant-helper` principal and granted to that actor.
     /// Callers then read with a *different* principal and the
     /// scope-only `check_read` would still permit — because the
-    /// pre-fix [`benten_caps::GrantBackedPolicy::check_read`] ignored
+    /// pre-fix [`benten_caps::CapabilityPolicy::check_read`] (as
+    /// implemented by `benten_caps::GrantBackedPolicy`) ignored
     /// `actor_cid`. The cap-r1-2 closure made `check_read`
     /// principal-aware (filtering by stored `grantee` property), so
     /// granting to a synthetic helper-actor no longer permits reads as
