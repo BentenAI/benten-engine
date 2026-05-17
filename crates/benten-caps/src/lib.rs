@@ -156,15 +156,17 @@ pub mod evaluator_delegation {
     /// Consult the policy's iteration-batch boundary override. The engine's
     /// evaluator calls this helper once per batch; test mocks can count
     /// invocations to assert the delegation path is active.
+    ///
+    /// Qual-1 #674 (umbrella #1154): DISAGREE-WITH-EVIDENCE on the
+    /// "delete zero-value wrapper" recommendation for THIS function —
+    /// it is a LIVE production accessor consumed by
+    /// `benten_engine::primitive_host` (dep-direction-safe seam: the
+    /// engine cannot name `CapabilityPolicy::iterate_batch_boundary`
+    /// across the trait-object boundary as ergonomically). The sibling
+    /// `wallclock_refresh_ceiling_for` WAS a true zero-consumer wrapper
+    /// and is deleted per #674.
     pub fn iterate_batch_boundary_for<P: CapabilityPolicy + ?Sized>(policy: &P) -> usize {
         policy.iterate_batch_boundary()
-    }
-
-    /// Consult the policy's wall-clock refresh ceiling (§9.13 refresh-point-5).
-    pub fn wallclock_refresh_ceiling_for<P: CapabilityPolicy + ?Sized>(
-        policy: &P,
-    ) -> core::time::Duration {
-        policy.wallclock_refresh_ceiling()
     }
 }
 

@@ -361,9 +361,11 @@ pub trait CapabilityPolicy: Send + Sync {
     /// land); registered at `phase-3-backlog §2.3 (ii)` (v1-assessment-
     /// window co-routed with §10.1 Compromise #1 TOCTOU window bound;
     /// shared iterate-batch-boundary cap-recheck cadence mechanism).
-    /// Helper at `benten_caps::lib::wallclock_refresh_ceiling_for`
-    /// exists; consumer impl on `PrimitiveHost` is the §2.3 (ii)
-    /// deliverable.
+    /// (Qual-1 #674 / umbrella #1154: the
+    /// `evaluator_delegation::wallclock_refresh_ceiling_for` zero-
+    /// consumer wrapper that previously fronted this method was
+    /// deleted; callers consult this trait method directly once the
+    /// §2.3 (ii) `PrimitiveHost` consumer impl lands.)
     fn wallclock_refresh_ceiling(&self) -> core::time::Duration {
         core::time::Duration::from_mins(5)
     }

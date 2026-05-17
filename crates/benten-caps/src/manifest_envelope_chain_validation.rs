@@ -102,18 +102,14 @@ pub struct DelegationStep {
     pub cap_pattern: String,
 }
 
-/// Anchor of a delegation chain — the root principal.
-///
-/// Per CLAUDE.md #18 clause-(a) the anchor MUST be a user-DID.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ChainAnchor {
-    /// User-DID — the only legitimate root anchor.
-    UserDid(Did),
-    /// Non-user root — rejected with [`ErrorCode::PluginManifestInvalid`]
-    /// (see [`validate_chain_with_manifest_envelope`] for the explicit
-    /// surface error).
-    NonUser(Did),
-}
+// Qual-2 #816 (umbrella #1154): the `ChainAnchor` enum
+// (`UserDid`/`NonUser`) was authored for a structural classification
+// step that `validate_chain_with_manifest_envelope` then inlined — it
+// emits the `RootNotUserDid` / `Admitted` outcome variants directly
+// and never constructed a `ChainAnchor`. Zero consumers crate-wide
+// (already excluded from the lib.rs re-export per the disposition
+// comment there). Deleted per CLAUDE.md #5 (fresh project — delete,
+// don't comment) + META #355 speculative-pub-surface cleanup.
 
 /// Trait for resolving a plugin-DID to its manifest's `shares` policy
 /// view.
