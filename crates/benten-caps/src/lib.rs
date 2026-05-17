@@ -94,8 +94,9 @@ pub use attenuation::check_attenuation;
 // COLLAPSE P2 — the single moved authority seam (native-only).
 #[cfg(not(target_arch = "wasm32"))]
 pub use chain_authority::{
-    envelope_ceiling_rejects_cap, validate_chain_with_envelope_ceiling,
-    validate_chain_with_rotation_log,
+    FrameReplayMarker, envelope_ceiling_first_rejected_resource, envelope_ceiling_rejects_cap,
+    manifest_to_envelope_ceiling, validate_chain_with_envelope_ceiling,
+    validate_chain_with_manifest_ceiling, validate_chain_with_rotation_log,
 };
 // G14-B durable UCAN backend is native-only (see `backends/mod.rs`).
 #[cfg(not(target_arch = "wasm32"))]
