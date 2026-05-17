@@ -1434,6 +1434,45 @@ impl Engine {
             )?;
         }
 
+        // COLLAPSE P5 / F3 — durable replay-marker re-home. The
+        // ratified Compromise #23 wording promises anti-replay is
+        // "re-homed into the unified chain-validation seam … not
+        // dropped" (DECISION-RECORD §4b: tracked P2/P5). The P3
+        // `DeviceAttestationEnvelope::verify` step-(3) freshness gate
+        // is ephemeral-only — it cannot catch a frame *replayed within
+        // its still-valid freshness window*. Here, once per merge, the
+        // verified frame's per-envelope `session_nonce` is recorded
+        // through the single-seam durable `benten_caps::FrameReplayMarker`
+        // (the SAME durable-KV grammar `UCANBackend::revoke`/`is_revoked`
+        // use — one durable store, no parallel pipe). A second
+        // presentation of the same nonce is observably rejected even
+        // inside the freshness window.
+        if let Some(session_nonce) = atrium.last_received_session_nonce(zone).await {
+            let marker = benten_caps::FrameReplayMarker::new(std::sync::Arc::clone(&self.backend));
+            let replayed =
+                marker
+                    .mark_and_check_frame(&session_nonce)
+                    .map_err(|e| EngineError::Other {
+                        code: ErrorCode::DeviceAttestationForged,
+                        message: format!(
+                            "apply_atrium_merge: F3 durable replay-marker store error \
+                         (zone='{zone}'): {e}"
+                        ),
+                    })?;
+            if replayed {
+                return Err(EngineError::Other {
+                    code: ErrorCode::DeviceAttestationForged,
+                    message: format!(
+                        "apply_atrium_merge: inbound frame session-nonce already \
+                         observed (zone='{zone}') — replayed-frame reject via the \
+                         single-seam durable replay-marker (F3 re-home; the \
+                         ephemeral freshness gate cannot catch an in-window \
+                         replay). Compromise #23 anti-replay re-homed, not dropped."
+                    ),
+                });
+            }
+        }
+
         // 4. Build the merge Version Node. Properties carry the merged
         //    string values + a serialized AttributionFrame slot ("attribution_frame_cid")
         //    that future readers consult to verify peer-DID provenance.
@@ -1478,6 +1517,11 @@ impl Engine {
         // subsequent merge without a fresh wire envelope cannot
         // inherit the prior envelope's J8 ceiling.
         atrium.clear_last_received_remote_envelope(zone).await;
+        // COLLAPSE P5 / F3: clear the per-zone verified session-nonce
+        // slot symmetrically — the durable marker is now persisted, so
+        // the ephemeral slot must not leak into a later merge that did
+        // not receive a fresh wire frame.
+        atrium.clear_last_received_session_nonce(zone).await;
         // Phase-3 G16-B-prime fp (cap-g16bp-1 / Ben's RATIFIED Option A
         // 2026-05-08): source the AttributionFrame.actor_cid from
         // `effective_actor_cid` — falls back to device_cid when no

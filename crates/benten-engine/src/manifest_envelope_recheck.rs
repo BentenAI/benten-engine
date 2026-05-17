@@ -220,3 +220,63 @@ pub fn envelope_ceiling_admits_row(
     }
     Ok(())
 }
+
+/// COLLAPSE P5 — the **#1241 / F2 cap-predicate-complete** ceiling-AND.
+///
+/// DECISION-RECORD §4b RATIFIED: the F2 ceiling-predicate is shipped
+/// **(a) zone-scoped for v1** at the inbound-merge surface
+/// ([`envelope_ceiling_admits_row`] above — the gap was verified
+/// *INERT* at HEAD by `F2-exploitability-investigation.md`: the
+/// inbound data-zone write path never dispatches a SANDBOX host-fn, so
+/// a `host:sandbox:*` cap on that path is an unused string). The
+/// **cap-predicate completion (#1241)** "lands WITH P5's
+/// #669-unified-ceiling — ONE mechanism, not parallel."
+///
+/// This function IS that ONE mechanism on the engine side: it
+/// discriminates on the inbound writer's **actual delegated
+/// `cap.resource` strings** (not the synthetic `{zone}:write` scope
+/// `envelope_ceiling_admits_row` uses), delegating to the single
+/// shared predicate
+/// [`benten_caps::envelope_ceiling_first_rejected_resource`] — the
+/// SAME `envelope_ceiling_rejects_cap` core the device chain-walk
+/// ([`benten_caps::validate_chain_with_envelope_ceiling`]) and the
+/// #669 plugin-manifest chain-walk
+/// ([`benten_caps::validate_chain_with_manifest_ceiling`]) call. ONE
+/// code path, build-constraint iii — NOT a parallel pipe.
+///
+/// **v1 wiring posture (per §4b):** the inbound-sync wire frame does
+/// not currently thread the inbound writer's full UCAN delegation
+/// chain to the per-row merge seam (threading it is a *new wire
+/// surface* — a genuine arch change §4b explicitly deferred past v1
+/// given the INERT verdict). The engine inbound-merge therefore
+/// continues to call the (a) zone-scoped [`envelope_ceiling_admits_row`]
+/// for v1; THIS cap-resource-complete seam is the ready, shared
+/// mechanism every surface that *does* have the writer's cap-resource
+/// set (the chain-walk validators; future wire-chain-threaded merge in
+/// Phase-4-Meta) enforces through — so when #1241's wire-threading
+/// lands there is no second predicate to write. The completion is the
+/// predicate; the wiring is mechanical and §4b-deferred.
+#[cfg(not(feature = "browser-backend"))]
+pub fn envelope_ceiling_admits_cap_resources<'a>(
+    ceiling: Option<&benten_id::device_attestation::CapabilityEnvelope>,
+    cap_resources: impl IntoIterator<Item = &'a str>,
+    zone: &str,
+    key: &str,
+) -> Result<(), EngineError> {
+    if let Some(offending) =
+        benten_caps::envelope_ceiling_first_rejected_resource(ceiling, cap_resources)
+    {
+        return Err(EngineError::Other {
+            code: ErrorCode::DeviceAttestationForged,
+            message: format!(
+                "apply_atrium_merge: inbound writer's delegated capability \
+                 '{offending}' exceeds the verified envelope-ceiling (zone='{zone}' \
+                 key='{key}'): a runs_sandbox=false principal cannot exercise \
+                 host:sandbox:* even via an otherwise-valid chain — #1241/F2 \
+                 cap-predicate-complete ceiling-AND (CLAUDE.md #17 thin-shape \
+                 property; COLLAPSE P5 single shared predicate)"
+            ),
+        });
+    }
+    Ok(())
+}

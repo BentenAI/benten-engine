@@ -65,6 +65,14 @@ jobs:
         uses: github/codeql-action/init@7fd177fa680c9881b53cdab4d346d32574c9f7f4
         with:
           languages: ${{ matrix.language }}
+          # Repo-wide CodeQL config. `paths-ignore` excludes test/bench/
+          # example code from alert reporting — test fixtures legitimately
+          # use hard-coded crypto values (fixed nonces are REQUIRED to
+          # assert replay-rejection; production paths use CSPRNG). See the
+          # WHY block in the config file. Standard practice; stops the
+          # rust/hard-coded-cryptographic-value false positive recurring
+          # campaign-wide.
+          config-file: ./.github/codeql/codeql-config.yml
           # `none` skips a build; CodeQL extracts Rust directly. Avoids
           # paying for a workspace build twice (CI already builds in
           # ci.yml). If we ever need autobuild semantics (e.g. for a

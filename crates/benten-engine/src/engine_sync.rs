@@ -808,6 +808,19 @@ struct AtriumInner {
     /// #17 thin-shape property preserved through the COLLAPSE rewire.
     last_received_remote_envelope:
         Mutex<BTreeMap<String, Option<benten_id::device_attestation::CapabilityEnvelope>>>,
+    /// COLLAPSE P5 / F3 durable-replay-marker re-home: the verified
+    /// per-envelope `session_nonce` of the most-recently-received
+    /// inbound frame, keyed by zone. Populated post-verification by
+    /// [`AtriumHandle::sync_subgraph`] /
+    /// [`AtriumHandle::accept_sync_subgraph`]; consumed by
+    /// [`crate::Engine::apply_atrium_merge`], which records it through
+    /// the single-seam durable [`benten_caps::FrameReplayMarker`] so a
+    /// *replayed* frame (same session-nonce re-presented inside the
+    /// ephemeral freshness window — which the [`DeviceAttestationEnvelope::verify`]
+    /// step-(3) freshness gate cannot catch) is observably rejected.
+    /// This re-homes the anti-replay defense the Compromise #23 rewrite
+    /// promises is "re-homed … not dropped" (DECISION-RECORD §4b).
+    last_received_session_nonce: Mutex<BTreeMap<String, [u8; 32]>>,
     /// Phase-3 G16-D wave-6b: most-recently-received remote
     /// device-DID-envelope keyed by zone. Populated by
     /// [`AtriumHandle::sync_subgraph`] /
@@ -956,6 +969,7 @@ impl AtriumHandle {
                 // is DELETED — see field docs.
                 envelope_freshness_window_secs: std::sync::atomic::AtomicU64::new(u64::MAX),
                 last_received_remote_envelope: Mutex::new(BTreeMap::new()),
+                last_received_session_nonce: Mutex::new(BTreeMap::new()),
                 local_hlc,
                 inbound_hlc_skew_classifier_count: std::sync::atomic::AtomicU64::new(0),
             }),
@@ -1090,6 +1104,7 @@ impl AtriumHandle {
     ) -> AtriumResult<(
         Option<String>,
         Option<benten_id::device_attestation::CapabilityEnvelope>,
+        [u8; 32],
     )> {
         let window = self
             .inner
@@ -1099,9 +1114,16 @@ impl AtriumHandle {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
         let ceiling = envelope.verify(loro_payload, window, now_secs)?;
+        // COLLAPSE P5 / F3 durable-replay-marker re-home: surface the
+        // verified frame's per-envelope `session_nonce` so the engine's
+        // durable seam (`apply_atrium_merge`) can reject a *replayed*
+        // frame even within the ephemeral freshness window — the
+        // anti-replay defense the Compromise #23 rewrite promises is
+        // "re-homed … not dropped" (DECISION-RECORD §4b: tracked P2/P5).
         Ok((
             envelope.declared_device_did().map(|s| s.to_string()),
             ceiling,
+            envelope.session_nonce,
         ))
     }
 
@@ -1206,6 +1228,31 @@ impl AtriumHandle {
     /// envelope's ceiling.
     pub(crate) async fn clear_last_received_remote_envelope(&self, zone: &str) {
         let mut g = self.inner.last_received_remote_envelope.lock().await;
+        g.remove(zone);
+    }
+
+    /// COLLAPSE P5 / F3: read the per-zone verified inbound frame
+    /// `session_nonce` stashed post-verification by
+    /// [`Self::sync_subgraph`] / [`Self::accept_sync_subgraph`].
+    /// Consumed by [`crate::Engine::apply_atrium_merge`] for the
+    /// single-seam durable-replay-marker check. `None` when no wire
+    /// frame was verified for the zone (legacy / non-wire merge path).
+    pub(crate) async fn last_received_session_nonce(&self, zone: &str) -> Option<[u8; 32]> {
+        self.inner
+            .last_received_session_nonce
+            .lock()
+            .await
+            .get(zone)
+            .copied()
+    }
+
+    /// COLLAPSE P5 / F3: clear the per-zone verified-session-nonce
+    /// slot after the merge has consumed it (symmetrical with
+    /// [`Self::clear_last_received_remote_envelope`]) so a subsequent
+    /// merge without a fresh wire frame cannot re-trigger the marker
+    /// on a stale nonce.
+    pub(crate) async fn clear_last_received_session_nonce(&self, zone: &str) {
+        let mut g = self.inner.last_received_session_nonce.lock().await;
         g.remove(zone);
     }
 
@@ -1407,12 +1454,14 @@ impl AtriumHandle {
         // Surfaces `AtriumError::DeviceAttestationForged` on any
         // failure mode; legacy unsigned envelopes (attestation = None)
         // skip verification per backward-compat contract.
-        let (verified_remote_did, verified_ceiling) =
+        let (verified_remote_did, verified_ceiling, verified_session_nonce) =
             self.verify_inbound_envelope(&remote_envelope, &remote_bytes)?;
-        // Stash the remote-device-DID + verified ceiling (post-
-        // verification) before merge so apply_atrium_merge can consume
-        // them via `last_received_remote_device_did` /
-        // `last_received_remote_envelope` (J8 ceiling-AND seam).
+        // Stash the remote-device-DID + verified ceiling + verified
+        // session-nonce (post-verification) before merge so
+        // apply_atrium_merge can consume them via
+        // `last_received_remote_device_did` /
+        // `last_received_remote_envelope` (J8 ceiling-AND seam) /
+        // `last_received_session_nonce` (F3 durable-replay-marker seam).
         {
             let mut tbl = self.inner.last_received_remote_device_did.lock().await;
             tbl.insert(zone.to_string(), verified_remote_did);
@@ -1420,6 +1469,10 @@ impl AtriumHandle {
         {
             let mut tbl = self.inner.last_received_remote_envelope.lock().await;
             tbl.insert(zone.to_string(), verified_ceiling);
+        }
+        {
+            let mut tbl = self.inner.last_received_session_nonce.lock().await;
+            tbl.insert(zone.to_string(), verified_session_nonce);
         }
         // Apply via merge-dispatch (fires Inv-13 row-4 SPLIT).
         self.merge_remote_change(zone, &remote_bytes).await?;
@@ -1452,12 +1505,14 @@ impl AtriumHandle {
         // envelope signature + embedded-attestation→user-root
         // signature + freshness + payload-hash binding (COLLAPSE P3
         // rewire — no Acceptor).
-        let (verified_remote_did, verified_ceiling) =
+        let (verified_remote_did, verified_ceiling, verified_session_nonce) =
             self.verify_inbound_envelope(&remote_envelope, &remote_bytes)?;
-        // Stash the remote-device-DID + verified ceiling (post-
-        // verification) before merge so apply_atrium_merge can consume
-        // them via `last_received_remote_device_did` /
-        // `last_received_remote_envelope` (J8 ceiling-AND seam).
+        // Stash the remote-device-DID + verified ceiling + verified
+        // session-nonce (post-verification) before merge so
+        // apply_atrium_merge can consume them via
+        // `last_received_remote_device_did` /
+        // `last_received_remote_envelope` (J8 ceiling-AND seam) /
+        // `last_received_session_nonce` (F3 durable-replay-marker seam).
         {
             let mut tbl = self.inner.last_received_remote_device_did.lock().await;
             tbl.insert(zone.to_string(), verified_remote_did);
@@ -1465,6 +1520,10 @@ impl AtriumHandle {
         {
             let mut tbl = self.inner.last_received_remote_envelope.lock().await;
             tbl.insert(zone.to_string(), verified_ceiling);
+        }
+        {
+            let mut tbl = self.inner.last_received_session_nonce.lock().await;
+            tbl.insert(zone.to_string(), verified_session_nonce);
         }
         // Phase-3 G16-D wave-6b: emit local envelope BEFORE the Loro
         // export, mirroring connect-side ordering. Build the envelope
