@@ -6,18 +6,19 @@
 
 | Count | Source | Value (at HEAD post R6-FP-A batch-merge) | Meaning |
 |---|---|---|---|
-| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **168** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **168** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
-| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **170** | = 168 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 170 \| rust codes: 169 \| ts codes: 170" line reflects this intentional retention. |
-| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **169** | = 168 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **169** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **169** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **171** | = 169 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 171 \| rust codes: 170 \| ts codes: 171" line reflects this intentional retention. |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **170** | = 169 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
-**Why four counts (168 / 168 / 169 / 170):** the Rust enum is the source of throwable variants (168); plus a forward-compat `Unknown(String)` fallback (= 169 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 170 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (168). Single canonical headline number: **168 production-throwable codes** at Phase-4-Foundation R6-FP-3 close.
+**Why four counts (169 / 169 / 170 / 171):** the Rust enum is the source of throwable variants (169); plus a forward-compat `Unknown(String)` fallback (= 170 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 171 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (169). Single canonical headline number: **169 production-throwable codes** at the refinement-audit-2026-05 wire-format cluster close (+1 `E_GRAPH_SCHEMA_VERSION_MISMATCH` over the Phase-4-Foundation R6-FP-3 baseline of 168).
 
 **Cohort math (Phase-4-Foundation):**
 - **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.
 - **Phase-4-Foundation R5 canary mints:** 31 new codes across 4 cohorts (G24-F thin-client +4, G23-A schema +9, G24-D plugin +15, G23-B materializer +3). 132 + 31 = 163 (the post-R5-canary intermediate count).
 - **R6-FP-A closure cohort:** R6-FP-A added 4 plugin install-record / DID-handle codes (3 substitution-discriminating + 1 caller-mint-first pre-insert enforcement). 163 + 4 = **167 throwable post R6-FP-A batch-merge**.
-- **R6-FP-3 closure cohort (cap-r6-r3-1 defensive-return hardening):** R6-FP-3 added 1 plugin-DID handle duplicate-rejection code at `PluginDidStore::insert`. 167 + 1 = **168 throwable at HEAD post R6-FP-3 close**. The 7 cohorts:
+- **R6-FP-3 closure cohort (cap-r6-r3-1 defensive-return hardening):** R6-FP-3 added 1 plugin-DID handle duplicate-rejection code at `PluginDidStore::insert`. 167 + 1 = **168 throwable at Phase-4-Foundation R6-FP-3 close**. The 7 cohorts:
+- **refinement-audit-2026-05 wire-format cluster (#992):** +1 `E_GRAPH_SCHEMA_VERSION_MISMATCH` (redb on-disk schema-version envelope; refuse a version this build doesn't understand rather than silently mis-route reads). 168 + 1 = **169 throwable at HEAD**.
 
 Authoritative count assertion lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length AND the exhaustive-match `catalog_variant_count_matches_enum` cross-check so adding a variant without updating this doc fails CI.
 
@@ -425,6 +426,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Fix:** Stable code for `GraphError::RedbSource` / `GraphError::Redb` / `GraphError::Decode` — a storage-layer failure (redb I/O, transactional abort, DAG-CBOR decode of a stored Node). The underlying `std::error::Error::source()` chain is preserved on the Rust side for diagnostics; at the TS boundary only the stable code is surfaced. Inspect logs or retry; persistent errors indicate on-disk corruption and should prompt a restore from backup.
 - **Thrown at:** Graph backend (storage I/O)
 - **Phase:** 1
+
+### E_GRAPH_SCHEMA_VERSION_MISMATCH
+
+- **Message:** "redb graph schema mismatch: this build expects version {expected}, file declared version {actual}"
+- **Context:** `{ expected: number, actual: number }`
+- **Fix:** Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1 (the 5-prefix layout that predates the envelope). Fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration. #992 (refinement-audit-2026-05 wire-format cluster).
+- **Thrown at:** redb backend open (`RedbBackend::open_existing` / `open_or_create`)
+- **Phase:** 4-Meta (pre-v1 wire-format freeze)
 
 ### E_UNKNOWN
 

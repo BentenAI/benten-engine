@@ -59,6 +59,35 @@ pub(crate) const EDGE_SRC_PREFIX: &[u8] = b"es:";
 pub(crate) const EDGE_TGT_PREFIX: &[u8] = b"et:";
 pub(crate) const SUBGRAPH_PREFIX: &[u8] = b"s:";
 
+// #992 — on-disk schema-version envelope.
+//
+// The 5 prefixes above are all CID-suffixed; the redb file otherwise has NO
+// schema-version envelope (only redb's own page-format version). The
+// `SnapshotBlob` payload DOES carry an explicit `schema_version: u32` and
+// REFUSES to open a blob whose version it doesn't understand — the redb
+// graph file had no parallel, so a future build that adds prefixes (plugin-
+// DID-namespaced shards per CLAUDE.md #18, light-client storage, per-actor
+// index) opening a v1 file would silently mis-route reads. This reserved
+// meta-key closes that asymmetry.
+//
+// `__benten_schema_version` is OUTSIDE every CID-suffixed prefix namespace
+// (`n:`/`e:`/`es:`/`et:`/`s:` are 2-3 ASCII chars + CID bytes; the
+// `__benten_` literal collides with none) and is documented-reserved. The
+// value is a 4-byte big-endian `u32`. It is NEVER part of any Node/Edge/
+// Subgraph canonical bytes or index — purely a whole-file format envelope.
+//
+// WIRE-FORMAT FREEZE ITEM: the "absence ≡ v1" rule is only safe to
+// establish while every existing DB IS genuinely the v1 (5-prefix) layout
+// — i.e. pre-v1. Post-v1 prefix additions bump `GRAPH_SCHEMA_VERSION` and a
+// version-mismatched open fails cleanly instead of silently mis-routing.
+pub(crate) const SCHEMA_VERSION_KEY: &[u8] = b"__benten_schema_version";
+
+/// The on-disk redb graph schema version this build writes + understands.
+/// Mirrors the `SnapshotBlob` `SNAPSHOT_BLOB_SCHEMA_VERSION` precedent.
+/// Frozen at v1; a future prefix-schema change bumps this + adds a
+/// version-gated migration shim.
+pub(crate) const GRAPH_SCHEMA_VERSION: u32 = 1;
+
 /// `"n:" ++ cid_bytes`. Single source of truth for the Node key schema —
 /// crate-private so `RedbBackend`'s inherent put/delete and the trait impl
 /// can share one definition and cannot drift.
