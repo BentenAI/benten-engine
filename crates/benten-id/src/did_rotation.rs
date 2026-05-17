@@ -135,7 +135,7 @@ impl RotationAttestation {
 /// Canonical-bytes encoding of the rotation attestation's signature
 /// input — `(previous_did, next_did, superseded_at)`. The signature
 /// field is intentionally excluded (signature self-reference hygiene
-/// per the [`CanonicalBytes`](crate::CanonicalBytes) contract).
+/// per the [`CanonicalBytes`] contract).
 ///
 /// Qual-2 #759: byte-identical reproduction of the prior free-fn
 /// `canonical_bytes(&RotationAttestation)` body, lifted onto the

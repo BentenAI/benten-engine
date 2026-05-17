@@ -144,7 +144,7 @@ impl Ucan {
 
 /// Qual-2 #759: byte-identical reproduction of the prior free-fn
 /// `canonical_bytes(&UcanClaims)` body, lifted onto the shared
-/// [`CanonicalBytes`](crate::CanonicalBytes) trait. Whole-struct
+/// [`CanonicalBytes`] trait. Whole-struct
 /// DAG-CBOR encoding unchanged (v1-wire-adjacent — §3.5m P-III;
 /// covered by the byte-equality pin in
 /// `tests/canonical_bytes_trait.rs`).

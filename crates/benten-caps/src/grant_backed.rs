@@ -137,7 +137,7 @@ pub trait GrantReader: Send + Sync {
     ///   single-responsibility method (this one + its default body).
     /// - **Safe-2 #552:** the wildcard expansion had an asymmetric
     ///   `n > 6` silent-drop vs `check_attenuation`; the canonical
-    ///   expansion ([`wildcard_variants`]) is now fixed in one place
+    ///   expansion (`wildcard_variants`) is now fixed in one place
     ///   so every consumer of this seam shares the corrected semantics.
     /// - **Fwd-1 #928:** the `O(C·O·G)` per-write cost cascade — a
     ///   backend with an index (the engine's `BackendGrantReader`)
