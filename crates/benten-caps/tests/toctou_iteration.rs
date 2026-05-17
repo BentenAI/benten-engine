@@ -54,7 +54,7 @@ const DEFAULT_BATCH_BOUNDARY: u32 = benten_caps::DEFAULT_BATCH_BOUNDARY as u32;
 fn capability_revoked_mid_iteration_denies_subsequent_batches() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
-        .with_policy_allowing_revocation()
+        .capability_policy_grant_backed()
         .open(dir.path().join("benten.redb"))
         .unwrap();
 
@@ -109,7 +109,7 @@ fn capability_revoked_mid_iteration_denies_subsequent_batches() {
 fn writes_in_current_batch_are_not_retroactively_denied() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::builder()
-        .with_policy_allowing_revocation()
+        .capability_policy_grant_backed()
         .open(dir.path().join("benten.redb"))
         .unwrap();
 
