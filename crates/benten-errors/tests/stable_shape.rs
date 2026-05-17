@@ -1082,3 +1082,70 @@ fn as_static_str_known_and_unknown() {
         "E_UNKNOWN"
     );
 }
+
+// ---------------------------------------------------------------------------
+// v1-API-stabilization closure-pins (ST-ERRORS lane — Refs #1180/#1007).
+//
+// §3.6b behavioral guarantees: each of these would FAIL if the prior
+// ST-ERRORS v1-API-stabilization work were reverted. They lock the
+// pre-v1-tag public-surface contract so a future refactor cannot silently
+// re-introduce the dead surfaces (#283/#286/#291) or drop the
+// forward-readiness derives (#1007 items 10+11) or the snapshot-frozen
+// const renames (#736) without tripping CI.
+// ---------------------------------------------------------------------------
+
+/// #1007 item 10 — `Hash` is derived so `ErrorCode` is usable as a
+/// `HashMap` / `HashSet` key for Phase-5+ ErrorCode-keyed routing tables
+/// WITHOUT hashing via `.as_str()`. Reverting the `Hash` derive fails to
+/// compile this test (the `HashSet<ErrorCode>` instantiation requires it).
+#[test]
+fn errorcode_is_hashable_for_keyed_routing() {
+    use std::collections::HashSet;
+    let mut seen: HashSet<ErrorCode> = HashSet::new();
+    seen.insert(ErrorCode::CapDenied);
+    seen.insert(ErrorCode::Unknown("E_PLUGIN_FOO".into()));
+    assert!(seen.contains(&ErrorCode::CapDenied));
+    assert!(!seen.contains(&ErrorCode::InvCycle));
+}
+
+/// #1007 item 11 — `Ord` / `PartialOrd` are derived so consumers get a
+/// deterministic catalog total-order for v1-API freeze regardless of
+/// internal variant reshuffles (Fwd-2 #1039 inline-reshuffle is then
+/// safe). Reverting the `Ord` derive fails to compile `.sort()`.
+#[test]
+fn errorcode_has_total_order_for_deterministic_iteration() {
+    let mut v = vec![
+        ErrorCode::WriteConflict,
+        ErrorCode::CapDenied,
+        ErrorCode::InvCycle,
+    ];
+    v.sort();
+    // Derived Ord follows declaration order; the exact order is not the
+    // contract — the *existence* of a stable total order is. Asserting
+    // the sort is idempotent pins the guarantee without coupling to
+    // declaration order.
+    let mut again = v.clone();
+    again.sort();
+    assert_eq!(v, again);
+    assert_eq!(v.len(), 3);
+}
+
+/// #736 — the Phase-2a snapshot consts are reachable under their
+/// snapshot-frozen names (`*_AT_PHASE_2A_SNAPSHOT`), NOT the former
+/// mis-extension-inviting `PHASE_2A_*` names. This pins the rename so a
+/// future agent cannot silently re-introduce the open-scope-implying
+/// names. Reverting the rename fails to resolve these paths.
+#[test]
+fn phase_2a_snapshot_consts_use_frozen_names() {
+    use benten_errors::{FIRING_CODES_AT_PHASE_2A_SNAPSHOT, RESERVED_CODES_AT_PHASE_2A_SNAPSHOT};
+    assert_eq!(FIRING_CODES_AT_PHASE_2A_SNAPSHOT.len(), 13);
+    assert_eq!(RESERVED_CODES_AT_PHASE_2A_SNAPSHOT.len(), 5);
+    // Every snapshot entry must still round-trip (the snapshot is a
+    // subset of the live catalog, never drifting out of it).
+    for code in FIRING_CODES_AT_PHASE_2A_SNAPSHOT
+        .iter()
+        .chain(RESERVED_CODES_AT_PHASE_2A_SNAPSHOT)
+    {
+        assert_eq!(ErrorCode::from_str(code.as_static_str()), *code);
+    }
+}
