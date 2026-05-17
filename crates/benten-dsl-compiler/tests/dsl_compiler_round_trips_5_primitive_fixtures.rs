@@ -37,7 +37,11 @@ fn dsl_compiler_round_trips_write_respond_handler() {
     let c = compile_str(src).unwrap();
     assert_eq!(c.primitives.len(), 2);
     assert_eq!(c.primitives[0].kind, PrimitiveKind::Write);
-    assert!(c.primitives[0].properties.contains_key("_label"));
+    // #604 scheme-(a): canonical `SubgraphBuilder` key namespace (no
+    // underscore) so DSL-authored and builder-authored handlers produce
+    // byte-identical canonical bytes.
+    assert!(c.primitives[0].properties.contains_key("label"));
+    assert!(!c.primitives[0].properties.contains_key("_label"));
 }
 
 #[test]
@@ -48,7 +52,7 @@ fn dsl_compiler_round_trips_branch_handler() {
     let c = compile_str(src).unwrap();
     assert_eq!(c.primitives.len(), 3);
     assert_eq!(c.primitives[1].kind, PrimitiveKind::Branch);
-    assert!(c.primitives[1].properties.contains_key("_predicate"));
+    assert!(c.primitives[1].properties.contains_key("predicate"));
 }
 
 #[test]
@@ -58,7 +62,10 @@ fn dsl_compiler_round_trips_transform_handler() {
     let c = compile_str(src).unwrap();
     assert_eq!(c.primitives.len(), 3);
     assert_eq!(c.primitives[1].kind, PrimitiveKind::Transform);
-    assert!(c.primitives[1].properties.contains_key("_body"));
+    // #782: TRANSFORM body is canonical `body` (Map); ITERATE body is the
+    // distinct `iter_body` (Text) — the shared-`_body` overload is gone.
+    assert!(c.primitives[1].properties.contains_key("body"));
+    assert!(!c.primitives[1].properties.contains_key("_body"));
 }
 
 #[test]
@@ -68,8 +75,11 @@ fn dsl_compiler_round_trips_call_respond_composition() {
     let c = compile_str(src).unwrap();
     assert_eq!(c.primitives.len(), 2);
     assert_eq!(c.primitives[0].kind, PrimitiveKind::Call);
-    assert!(c.primitives[0].properties.contains_key("_target"));
-    assert!(c.primitives[0].properties.contains_key("_args"));
+    // #604 scheme-(a): CALL target is the canonical `handler` key (mirrors
+    // `SubgraphBuilder::call_handler`), args under canonical `args`.
+    assert!(c.primitives[0].properties.contains_key("handler"));
+    assert!(c.primitives[0].properties.contains_key("args"));
+    assert!(!c.primitives[0].properties.contains_key("_target"));
 }
 
 #[test]

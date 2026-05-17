@@ -419,7 +419,7 @@ mod tests {
     fn run_single_respond_terminates() {
         let mut ev = Evaluator::new();
         let sg = Subgraph::new("single_respond")
-            .with_node(OperationNode::new("r", PrimitiveKind::Respond));
+            .push_node_raw(OperationNode::new("r", PrimitiveKind::Respond));
         let r = ev
             .run(&sg, Value::Null, &NullHost)
             .expect("single respond terminates cleanly");
