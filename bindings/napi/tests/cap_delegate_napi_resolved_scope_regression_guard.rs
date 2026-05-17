@@ -149,9 +149,10 @@ fn napi_delegate_binding_routes_through_resolving_seam_full_4_step_substantive_a
     // actor we pass to `call_as` is the principal Cid; the grant we
     // mint stores `actor=<source plugin-DID text>` for audit but the
     // policy gate fires on the scope-string match.
-    let source_principal = engine.create_principal("source-plugin").unwrap();
+    let source_principal = engine.caps().create_principal("source-plugin").unwrap();
     let source_plugin_did = "did:key:z6MkSourcePluginA1234567890abcdefghi";
     let source_grant_cid = engine
+        .caps()
         .grant_capability(source_plugin_did, "store:post:write")
         .expect("grant via privileged path");
 
@@ -177,9 +178,10 @@ fn napi_delegate_binding_routes_through_resolving_seam_full_4_step_substantive_a
     // carries the resolved source scope (`store:post:write`) verbatim.
     // The class-of-bug discipline pins that the new grant's `scope`
     // is the resolved TEXT, never the source CID's base32 string.
-    let plugin_b_principal = engine.create_principal("plugin-b").unwrap();
+    let plugin_b_principal = engine.caps().create_principal("plugin-b").unwrap();
     let plugin_b_did = "did:key:z6MkPluginAudienceB1234567890abcdefg";
     let delegation_cid = engine
+        .caps()
         .delegate_capability(&source_grant_cid, plugin_b_did, &[])
         .expect("delegate via FP-3 seam");
 
@@ -253,6 +255,7 @@ fn napi_delegate_binding_routes_through_resolving_seam_full_4_step_substantive_a
     // + delegation scopes match → walker fires → subsequent write
     // routes to ON_DENIED with E_CAP_DENIED.
     engine
+        .caps()
         .revoke_capability_by_grant_cid(&delegation_cid, plugin_b_did)
         .expect("revoke delegation via resolving seam");
 
@@ -311,11 +314,13 @@ fn napi_delegate_private_namespace_cap_unconditionally_forbidden() {
     let source_plugin_did = "did:key:z6MkPrivateOwnerPlugin1234567890abc";
     let private_scope = format!("private:{source_plugin_did}:notes");
     let source_grant_cid = engine
+        .caps()
         .grant_capability(source_plugin_did, private_scope.as_str())
         .expect("private-namespace grant minted (intra-plugin)");
 
     let other_plugin_did = "did:key:z6MkOtherPluginAudienceB12345abcdefg";
     let err = engine
+        .caps()
         .delegate_capability(&source_grant_cid, other_plugin_did, &[])
         .expect_err("private-namespace cross-plugin delegation MUST fail");
 

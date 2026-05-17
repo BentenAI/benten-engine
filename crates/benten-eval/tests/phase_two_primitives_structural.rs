@@ -22,7 +22,7 @@ use benten_eval::{
 };
 
 fn single_primitive_subgraph(kind: PrimitiveKind) -> Subgraph {
-    Subgraph::new("h").with_node(OperationNode::new("n", kind))
+    Subgraph::new("h").push_node_raw(OperationNode::new("n", kind))
 }
 
 #[test]

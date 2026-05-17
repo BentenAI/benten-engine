@@ -77,7 +77,7 @@ fn attribution_property_contributes_to_canonical_bytes_post_g12c_relocation() {
     // Subgraph B: identical structure but with raw OperationNode (no attribution
     // property) — the typical Inv-14-reject-path construction.
     let raw = OperationNode::new("post", PrimitiveKind::Read);
-    let sg_without_attribution = Subgraph::new("inv14-cid-pin").with_node(raw);
+    let sg_without_attribution = Subgraph::new("inv14-cid-pin").push_node_raw(raw);
 
     let cid_a = sg_with_attribution.cid().expect("cid a");
     let cid_b = sg_without_attribution.cid().expect("cid b");

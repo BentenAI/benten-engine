@@ -67,6 +67,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::NotFound,
     ErrorCode::Serialize,
     ErrorCode::GraphInternal,
+    ErrorCode::GraphSchemaVersionMismatch,
     ErrorCode::DuplicateHandler,
     ErrorCode::NoCapabilityPolicyConfigured,
     ErrorCode::ProductionRequiresCaps,
@@ -767,8 +768,11 @@ fn variant_count_is_pinned() {
     // R6-FP-3 (R6 R3 close): +1 `PluginDidHandleDuplicate` (cap-r6-r3-1
     // defensive-return hardening for `PluginDidStore::insert`).
     // 167 + 1 = 168.
+    // #992 (refinement-audit-2026-05 wire-format cluster): +1
+    // `GraphSchemaVersionMismatch` (redb on-disk schema-version envelope).
+    // 168 + 1 = 169.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 168,
+        CATALOG_VARIANT_COUNT, 169,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -874,6 +878,7 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::NotFound
             | ErrorCode::Serialize
             | ErrorCode::GraphInternal
+            | ErrorCode::GraphSchemaVersionMismatch
             | ErrorCode::DuplicateHandler
             | ErrorCode::NoCapabilityPolicyConfigured
             | ErrorCode::ProductionRequiresCaps

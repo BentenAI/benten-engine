@@ -112,8 +112,9 @@ fn denied_writes_surface_on_denied_metric() {
         .expect("engine opens");
 
     let handler_id = engine.register_crud("post").unwrap();
-    let actor = engine.create_principal("alice").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
     let _grant = engine
+        .caps()
         .grant_capability(&actor, "store:post:write")
         .expect("grant succeeds");
 
@@ -125,6 +126,7 @@ fn denied_writes_surface_on_denied_metric() {
     // Revoke, then the next call should route through ON_DENIED and bump
     // the denied counter.
     engine
+        .caps()
         .revoke_capability(&actor, "store:post:write")
         .unwrap();
     let denied_outcome = engine

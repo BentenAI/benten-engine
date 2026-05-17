@@ -74,8 +74,9 @@ fn engine_privileged_api_can_write_system_zone() {
         .unwrap();
 
     // Engine.grant_capability is the ONLY path that can write system-labeled nodes.
-    let actor = engine.create_principal("alice").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
     let grant_cid = engine
+        .caps()
         .grant_capability(&actor, "store:post:write")
         .expect("privileged path permitted");
     // Phase 2a G5-B-i: the user-facing `Engine::get_node` now collapses
@@ -110,8 +111,11 @@ fn system_write_does_not_emit_change_event_to_user_views() {
     // rather than the test-only helper — the test must exercise the same
     // surface end-users see.
     let probe = engine.subscribe_change_events();
-    let actor = engine.create_principal("alice").unwrap();
-    let _ = engine.grant_capability(&actor, "store:post:write").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
+    let _ = engine
+        .caps()
+        .grant_capability(&actor, "store:post:write")
+        .unwrap();
     let events = probe.drain();
     let post_events: Vec<_> = events.iter().filter(|e| e.has_label("post")).collect();
     assert!(

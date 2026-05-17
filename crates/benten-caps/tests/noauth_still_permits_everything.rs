@@ -4,7 +4,7 @@
 //! R2 landscape §2.4 row "`NoAuthBackend::check_write` unchanged by Phase 2a".
 //!
 //! Concern: G2-B introduces the `WriteAuthority` enum (`User`,
-//! `EnginePrivileged`, `SyncReplica { .. }`) on `WriteContext`. NoAuth must
+//! `EnginePrivileged`, `SyncReplica { .. }`) on `CapWriteContext`. NoAuth must
 //! ignore the new field and permit every write unconditionally — that's its
 //! whole purpose as the zero-cost default.
 //!
@@ -13,12 +13,12 @@
 //! returning Err for any of them, the thinness contract is broken.
 //!
 //! R3 red-phase contract: R5 (G2-B) adds the `authority` field to
-//! `WriteContext`. This test compiles; it fails because the field does not
+//! `CapWriteContext`. This test compiles; it fails because the field does not
 //! exist yet.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapabilityPolicy, NoAuthBackend, WriteContext};
+use benten_caps::{CapWriteContext, CapabilityPolicy, NoAuthBackend};
 use benten_core::Cid;
 use benten_graph::WriteAuthority;
 
@@ -27,10 +27,10 @@ fn noauth_still_permits_everything_after_phase2a_changes() {
     let policy = NoAuthBackend::new();
 
     // User authority — the Phase-1 default path.
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "Post".into(),
         authority: WriteAuthority::User,
-        ..WriteContext::default()
+        ..CapWriteContext::default()
     };
     assert!(
         policy.check_write(&ctx).is_ok(),
@@ -38,10 +38,10 @@ fn noauth_still_permits_everything_after_phase2a_changes() {
     );
 
     // EnginePrivileged — version-chain append path.
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "Version".into(),
         authority: WriteAuthority::EnginePrivileged,
-        ..WriteContext::default()
+        ..CapWriteContext::default()
     };
     assert!(
         policy.check_write(&ctx).is_ok(),
@@ -51,12 +51,12 @@ fn noauth_still_permits_everything_after_phase2a_changes() {
     // SyncReplica — Phase-3 reserved but the enum variant must not trip the
     // policy today.
     let origin = Cid::from_blake3_digest([0x7e; 32]);
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "Doc".into(),
         authority: WriteAuthority::SyncReplica {
             origin_peer: origin,
         },
-        ..WriteContext::default()
+        ..CapWriteContext::default()
     };
     assert!(
         policy.check_write(&ctx).is_ok(),
@@ -66,15 +66,15 @@ fn noauth_still_permits_everything_after_phase2a_changes() {
 
 #[test]
 fn noauth_permits_empty_context_with_default_authority() {
-    // A fully-default `WriteContext` (post-Phase-2a) has authority = User.
+    // A fully-default `CapWriteContext` (post-Phase-2a) has authority = User.
     // NoAuth permits; this pins that default authority does not accidentally
     // become EnginePrivileged or anything else downstream code relies on.
     let policy = NoAuthBackend::new();
-    let ctx = WriteContext::default();
+    let ctx = CapWriteContext::default();
     assert_eq!(
         ctx.authority,
         WriteAuthority::User,
-        "WriteContext::default().authority must be User (Phase-2a pin)"
+        "CapWriteContext::default().authority must be User (Phase-2a pin)"
     );
     assert!(policy.check_write(&ctx).is_ok());
 }

@@ -604,7 +604,7 @@ impl PrimitiveHost for Engine {
             // policies can dispatch per-device per D-PHASE-3-25.
             // `None` for legacy / non-attested engines.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::WriteContext {
+            let ctx = benten_caps::CapWriteContext {
                 label: required.to_string(),
                 device_cid,
                 ..Default::default()

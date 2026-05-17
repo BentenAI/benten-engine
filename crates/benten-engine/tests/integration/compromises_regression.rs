@@ -52,8 +52,11 @@ fn compromise_1_toctou_window_bound_at_100_iter_batch() {
         .respond()
         .build();
     let handler_id = engine.register_subgraph(sg).unwrap();
-    let actor = engine.create_principal("alice").unwrap();
-    engine.grant_capability(&actor, "store:post:write").unwrap();
+    let actor = engine.caps().create_principal("alice").unwrap();
+    engine
+        .caps()
+        .grant_capability(&actor, "store:post:write")
+        .unwrap();
 
     let outcome = engine
         .call_with_revocation_at(
@@ -92,7 +95,7 @@ fn compromise_2_option_c_symmetric_none_plus_diagnose_read() {
     impl benten_caps::CapabilityPolicy for DenyReadsPermitDebug {
         fn check_write(
             &self,
-            _ctx: &benten_caps::WriteContext,
+            _ctx: &benten_caps::CapWriteContext,
         ) -> Result<(), benten_caps::CapError> {
             Ok(())
         }
@@ -145,7 +148,7 @@ fn compromise_2_option_c_symmetric_none_plus_diagnose_read() {
     impl benten_caps::CapabilityPolicy for DenyAllIncludingDebug {
         fn check_write(
             &self,
-            _ctx: &benten_caps::WriteContext,
+            _ctx: &benten_caps::CapWriteContext,
         ) -> Result<(), benten_caps::CapError> {
             Ok(())
         }

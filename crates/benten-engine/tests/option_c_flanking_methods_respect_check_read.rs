@@ -52,7 +52,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{CapError, CapabilityPolicy, ReadContext, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_core::{Node, Value};
 use benten_engine::Engine;
 use benten_eval::host::{PrimitiveHost, ViewQuery};
@@ -64,7 +64,7 @@ use std::collections::BTreeMap;
 struct DenyAllReads;
 
 impl CapabilityPolicy for DenyAllReads {
-    fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Ok(())
     }
     fn check_read(&self, _ctx: &ReadContext) -> Result<(), CapError> {

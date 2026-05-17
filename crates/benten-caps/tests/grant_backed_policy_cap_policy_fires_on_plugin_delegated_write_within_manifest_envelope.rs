@@ -43,7 +43,7 @@
 use std::sync::Arc;
 
 use benten_caps::manifest_scope::check_scope_within_envelope;
-use benten_caps::{CapError, CapabilityPolicy, GrantBackedPolicy, GrantReader, WriteContext};
+use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, GrantBackedPolicy, GrantReader};
 use benten_id::did::Did;
 use benten_platform_foundation::{
     CapRequirement, PluginManifest, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget,
@@ -114,7 +114,7 @@ fn cap_policy_fires_on_plugin_delegated_write_within_manifest_envelope() {
     });
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = WriteContext {
+    let ctx = CapWriteContext {
         label: "notes".into(),
         scope: "store:notes:write".into(),
         ..Default::default()

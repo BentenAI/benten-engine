@@ -95,34 +95,35 @@ pub fn sandbox_target_supported() -> bool {
 // `describe_sandbox_node` — diagnostic accessor (ts-r4-3)
 // ---------------------------------------------------------------------------
 //
-// HONEST IMPLEMENTATION STATE (R6 Round 1 reconciliation, post-G7-A merged):
+// METRIC-PROPAGATION STATE (Phase-3 §7.1 closure — fully wired
+// end-to-end; R5 wave-7 G19-C2 + R6 fp Wave C2 obs-r6r1-1 + final
+// "unknown" → `null` sentinel-drop at this wave):
 //
-// The TS-side `engine.describeSandboxNode(handlerId, nodeId)` is
-// SYNTHESIZED CLIENT-SIDE in `packages/engine/src/engine.ts` — it does
-// NOT call into a native napi method. It returns a typed
-// `SandboxNodeDescription` shape constructed from the registered
-// subgraph spec the wrapper has cached, with the literal `"unknown"`
-// sentinel for `fuelConsumedHighWater` + `lastInvocationMs` to make
-// the not-tracked-in-2b state explicit at the type level.
+// The native napi bridge for `describeSandboxNode` lives in `lib.rs`
+// alongside the `EngineNapi` impl block (search:
+// `describe_sandbox_node_napi`). It is cfg-gated under the engine
+// crate's `test-helpers` feature (sec-r6r2-02 discipline) and:
 //
-// **R6-Round-1 corrective:** this comment block previously claimed the
-// native bridge would land "alongside G7-A's executor body". G7-A
-// shipped (PR #30, `a9758f8`) WITHOUT adding the bridge — the wave-8
-// SANDBOX wire-through closure landed the eval-side execute body but
-// did NOT extend `Engine::describe_sandbox_node` to surface per-call
-// metrics. The metric drop happens upstream of any potential napi
-// bridge: `primitive_host.rs::execute_sandbox` propagates only
-// `SandboxResult.output` into `StepResult`, dropping `fuel_consumed` +
-// `output_consumed` at the eval-engine boundary (r6-mpc-3 finding).
+// 1. Calls `Engine::describe_sandbox_node_for_handler(&handler_id)`
+//    which reads from `EngineInner::sandbox_metrics`.
+// 2. The metrics map is populated by `primitive_host::execute_sandbox`
+//    on each successful invocation — `SandboxResult.fuel_consumed` +
+//    `SandboxResult.output_consumed` + wall-clock duration are
+//    captured into a `SandboxNodeMetrics` observation + merged
+//    monotonically via `EngineInner::record_sandbox_metric`.
+// 3. Serializes the resulting `SandboxNodeDescription` to a JSON
+//    template the TS wrapper parses back into the typed shape.
+// 4. Returns `Ok(None)` (-> JS `null`) when no SANDBOX invocation
+//    has been recorded yet for the handler; the TS wrapper surfaces
+//    `null` for each metric field in that case (was `"unknown"`
+//    string sentinel pre-§7.1-closure; replaced by structural
+//    `number | null` per the cross-language rule-mirror discipline
+//    §3.5g).
 //
-// The metric-propagation work (extend `StepResult` + add a
-// per-handler metric record on `Engine` + back-fill `describe_sandbox_node`
-// against it) is named-destination-NOW Phase 3 — see
-// `docs/future/phase-3-backlog.md` SnapshotBlobBackend
-// metric-propagation entry (R6-FP Group 4 enrichment). When that
-// lands, this comment block will be replaced by the real
-// `#[napi] fn describe_sandbox_node` cfg-gated under the engine
-// crate's `test-helpers` feature (sec-r6r2-02 discipline).
+// Cross-ref: `docs/SECURITY-POSTURE.md` Compromise #17 (separate
+// concern — durable module-bytes registry, CLOSED at G14-C wave-4b).
+// The metric-propagation gap was a SIBLING of Compromise #17 (same
+// reinforcement narrative pre-closure); both are closed.
 //
 // Cross-ref: the metric-propagation gap is tracked at
 // `docs/future/phase-3-backlog.md` (SnapshotBlobBackend
@@ -132,10 +133,17 @@ pub fn sandbox_target_supported() -> bool {
 // prior cite here was a cross-ref error flagged by the X10
 // compromise-registry reviewer.)
 //
-// Visible TS contract today (the `sandbox_napi_bridge.test.ts`
-// symbol-presence pin): `sandbox_target_supported` probe above +
-// client-synthesized `describeSandboxNode` for shape-pinning. The
-// `"unknown"` sentinel return for `fuelConsumedHighWater` /
-// `lastInvocationMs` is the type-level signal that the value is
-// structurally not tracked in 2b (distinct from "node not yet
-// invoked" which would have been the prior `null` reading).
+// Visible TS contract today: the `sandbox_target_supported` probe
+// above + the typed `describeSandboxNode` accessor. Each metric
+// field is `number | null` — `null` means "node not yet invoked"
+// (no SANDBOX observation recorded for the handler). The legacy
+// `"unknown"` string sentinel was dropped at this wave per the
+// cross-language rule-mirror discipline §3.5g (§7.1 closure).
+//
+// Load-bearing pins:
+// - Rust side (engine production-runtime path):
+//   `crates/benten-engine/tests/sandbox_metrics.rs::sandbox_node_metrics_high_water_tracker_round_trip`
+// - napi side (source-cite diagnostic):
+//   `bindings/napi/tests/describe_sandbox.rs::describe_sandbox_node_napi_returns_real_metric_values_not_unknown_placeholder`
+// - TS side (vitest end-to-end closure-pin per pim-2 §3.6b):
+//   `packages/engine/test/sandbox.test.ts::"describeSandboxNode returns real numeric metrics after invocation (§7.1 closure)"`

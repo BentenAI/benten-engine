@@ -16,7 +16,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_caps::CapError;
-use benten_caps::{CapabilityPolicy, NoAuthBackend, WriteContext};
+use benten_caps::{CapWriteContext, CapabilityPolicy, NoAuthBackend};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -38,7 +38,7 @@ fn caps_wallclock_bound_refreshes_at_300s_default() {
 fn caps_wallclock_refresh_ceiling_cap_grant_configurable() {
     struct TightPolicy;
     impl CapabilityPolicy for TightPolicy {
-        fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+        fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
             Ok(())
         }
         fn wallclock_refresh_ceiling(&self) -> Duration {
@@ -64,7 +64,7 @@ fn caps_iterate_batch_delegation_end_to_end() {
         boundary: usize,
     }
     impl CapabilityPolicy for CountingPolicy {
-        fn check_write(&self, _ctx: &WriteContext) -> Result<(), CapError> {
+        fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
             Ok(())
         }
         fn iterate_batch_boundary(&self) -> usize {
@@ -143,7 +143,7 @@ fn policy_iterate_batch_boundary_evaluator_delegation_observable_in_runtime_arm(
     // Concrete shape:
     //   struct OverridePolicy { boundary: usize }
     //   impl benten_caps::CapabilityPolicy for OverridePolicy {
-    //       fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> { Ok(()) }
+    //       fn check_write(&self, _ctx: &benten_caps::CapWriteContext) -> Result<(), benten_caps::CapError> { Ok(()) }
     //       fn iterate_batch_boundary(&self) -> usize { self.boundary }
     //   }
     //
@@ -183,7 +183,7 @@ fn policy_wallclock_refresh_ceiling_evaluator_delegation_observable_in_runtime_a
     // Concrete shape:
     //   struct ShortRefreshPolicy;
     //   impl benten_caps::CapabilityPolicy for ShortRefreshPolicy {
-    //       fn check_write(&self, _ctx: &benten_caps::WriteContext) -> Result<(), benten_caps::CapError> { Ok(()) }
+    //       fn check_write(&self, _ctx: &benten_caps::CapWriteContext) -> Result<(), benten_caps::CapError> { Ok(()) }
     //       fn wallclock_refresh_ceiling(&self) -> Duration { Duration::from_secs(30) }
     //   }
     //

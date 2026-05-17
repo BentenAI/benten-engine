@@ -52,11 +52,12 @@ fn inv_13_dedup_does_not_emit_changeevent() {
         .build()
         .unwrap();
 
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
 
     // Attach the probe BEFORE the second grant so we see only the dedup
     // emission (or, under Phase-2a's mitigation, nothing).
     let cid_1 = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("first issuance");
 
@@ -64,6 +65,7 @@ fn inv_13_dedup_does_not_emit_changeevent() {
     let probe = engine.subscribe_change_events();
 
     let cid_2 = engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("second issuance — dedup path");
 

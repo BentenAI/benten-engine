@@ -54,7 +54,7 @@
 //!    suspend and resume fires [`ErrorCode::ResumeSubgraphDrift`] (§9.11
 //!    row 5 / Major #4).
 //! 4. **Capability re-check.** Consult the configured `CapabilityPolicy`
-//!    with a synthesized `WriteContext` derived from the persisted
+//!    with a synthesized `CapWriteContext` derived from the persisted
 //!    `attribution_chain`. The grant may have been revoked while the
 //!    bytes sat on disk; revocation surfaces
 //!    [`ErrorCode::CapRevokedMidEval`] per §9.13 refresh point #4.
@@ -62,7 +62,7 @@
 //! Only once all four steps pass does the evaluator take the resume path
 //! and produce a terminal `Outcome`.
 
-use benten_caps::{CapError, ReadContext, WriteContext as CapWriteContext};
+use benten_caps::{CapError, CapWriteContext, ReadContext};
 use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
 use benten_eval::{
@@ -1335,7 +1335,8 @@ impl Engine {
     /// [`Engine::get_node_label_only`], derives the
     /// `store:<label>:read` scope (mirroring
     /// [`benten_caps::GrantBackedPolicy`]'s `derive_read_scope`), and
-    /// installs the grant via [`Engine::grant_capability`] against the
+    /// installs the grant via
+    /// [`crate::engine_caps::EngineCapsHandle::grant_capability`] against the
     /// supplied principal. The returned `Cid` is the minted
     /// `system:CapabilityGrant` Node's CID so callers can revoke
     /// surgically.
@@ -1380,7 +1381,7 @@ impl Engine {
         } else {
             format!("store:{label}:read")
         };
-        self.grant_capability(principal, scope)
+        self.caps().grant_capability(principal, scope)
     }
 
     // ---- Benchmark helpers (Phase 2a G2-B subgraph_cache_hit) ------------

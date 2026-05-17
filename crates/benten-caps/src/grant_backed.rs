@@ -12,7 +12,7 @@
 //!   property through the evaluator (per-primitive `requires` enforcement is
 //!   Phase-2 scope per R1 triage SC4).
 //! - **Actor is not yet checked.** Phase-1 `Engine::call` does not yet thread
-//!   an actor through `WriteContext`; the policy treats any unrevoked grant
+//!   an actor through `CapWriteContext`; the policy treats any unrevoked grant
 //!   for the derived scope as sufficient. Phase-3 `benten-id` swaps in a
 //!   typed principal and the policy tightens to actor-scoped lookups.
 //! - **Revocation is observed via presence of a `system:CapabilityRevocation`
@@ -32,7 +32,7 @@ use std::sync::Arc;
 use benten_core::Cid;
 
 use crate::error::CapError;
-use crate::policy::{CapabilityPolicy, PendingOp, ReadContext, WriteContext};
+use crate::policy::{CapWriteContext, CapabilityPolicy, PendingOp, ReadContext};
 
 /// Read-only handle into the backing store used by [`GrantBackedPolicy`] to
 /// resolve grants at commit time.
@@ -202,7 +202,7 @@ impl GrantBackedPolicy {
         Self { grants }
     }
 
-    /// Derive the required write scope from a [`WriteContext`].
+    /// Derive the required write scope from a [`CapWriteContext`].
     ///
     /// # G27-B scope-derivation lift (Phase 4-Foundation)
     ///
@@ -232,7 +232,7 @@ impl GrantBackedPolicy {
     /// surface lets those shapes flow through `check_write` without
     /// expanding the label derivation grammar (which would couple the
     /// caps crate to plugin-manifest semantics).
-    fn derive_write_scope_from_ctx(ctx: &WriteContext) -> String {
+    fn derive_write_scope_from_ctx(ctx: &CapWriteContext) -> String {
         if !ctx.scope.is_empty() {
             return ctx.scope.clone();
         }
@@ -245,7 +245,7 @@ impl GrantBackedPolicy {
     ///
     /// Retained as the per-`PendingOp` derivation helper for batch shapes
     /// where each op contributes its own label-derived scope; the explicit
-    /// [`WriteContext::scope`] override (G27-B lift) is handled by
+    /// [`CapWriteContext::scope`] override (G27-B lift) is handled by
     /// [`Self::derive_write_scope_from_ctx`].
     fn derive_write_scope(label: &str) -> String {
         if label.is_empty() {
@@ -273,7 +273,7 @@ impl std::fmt::Debug for GrantBackedPolicy {
 }
 
 impl CapabilityPolicy for GrantBackedPolicy {
-    fn check_write(&self, ctx: &WriteContext) -> Result<(), CapError> {
+    fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
         // Engine-privileged writes bypass the policy entirely (system-zone
         // API). The privileged flag is set only by the Engine's internal
         // grant / revoke / create_view path.
@@ -286,7 +286,7 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // to the convenience `label` / `scope` fields. r6-sec-8: when the
         // caller arrives with neither pending ops nor any scope hint, the
         // grant-backed policy DENIES rather than permit-by-default — an
-        // unstructured WriteContext reaching the policy is an error mode,
+        // unstructured CapWriteContext reaching the policy is an error mode,
         // not a legitimate no-op, and denying closes the fail-open surface.
         //
         // G27-B scope-derivation lift: when `ctx.scope` is explicitly
@@ -303,7 +303,7 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // for the plugin-manifest grammar shapes that depend on this
         // override path. Per-op derivation remains the default fallback
         // for the Phase-1 `crud('<label>')` shape (every existing caller
-        // leaves `ctx.scope` empty per `WriteContext::default()`); see
+        // leaves `ctx.scope` empty per `CapWriteContext::default()`); see
         // `tests/grant_backed_policy_existing_store_label_write_paths_unchanged.rs`
         // for the backward-compat regression guard.
         //

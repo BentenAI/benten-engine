@@ -94,6 +94,7 @@ fn bench_read_threaded_noauth(c: &mut Criterion) {
     // NoAuth policy ignores it but we still need a concrete CID for
     // the type-shape contract.
     let principal = engine
+        .caps()
         .create_principal("bench-noauth-reader")
         .expect("seed principal");
 
@@ -126,6 +127,7 @@ fn bench_read_threaded_grant_backed(c: &mut Criterion) {
     // grants now bind to a specific actor; the bench seeds the grant
     // for the same principal that will read.
     let principal = engine
+        .caps()
         .create_principal("bench-grant-backed-reader")
         .expect("seed principal");
     engine

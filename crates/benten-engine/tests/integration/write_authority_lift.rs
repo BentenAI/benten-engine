@@ -1,4 +1,4 @@
-//! Phase 2a R3 integration — `WriteContext::privileged` bool → `WriteAuthority`
+//! Phase 2a R3 integration — `CapWriteContext::privileged` bool → `WriteAuthority`
 //! enum migration.
 //!
 //! Traces to: `.addl/phase-2a/00-implementation-plan.md` §3 G2-B
@@ -6,7 +6,7 @@
 //! (SyncReplica) + §8 cross-2a/2b frozen interface item 8 + ucca-9 /
 //! arch-r1-2 (enum lift).
 //!
-//! Phase-1 exposed `WriteContext::is_privileged: bool`. Phase 2a G2-B lifts
+//! Phase-1 exposed `CapWriteContext::is_privileged: bool`. Phase 2a G2-B lifts
 //! the two-valued field to a three-valued enum:
 //!
 //!     WriteAuthority::{ User, EnginePrivileged, SyncReplica { origin_peer } }
@@ -15,12 +15,12 @@
 
 #![cfg(feature = "phase_2a_pending_apis")]
 // R4 fix-pass: gated under `phase_2a_pending_apis` until G2-B lands the
-// `WriteContext::synthetic_for_test` + closure-style SubgraphBuilder
+// `CapWriteContext::synthetic_for_test` + closure-style SubgraphBuilder
 // methods (`.write(|w| ...)`, `.respond(|r| ...)`). The file still
 // compiles standalone under the feature once R5 lands the APIs.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_caps::{WriteAuthority, WriteContext};
+use benten_caps::{CapWriteContext, WriteAuthority};
 use benten_core::{Cid, Node, Value};
 use benten_engine::{Engine, SubgraphSpec};
 use std::collections::BTreeMap;
@@ -75,8 +75,9 @@ fn write_authority_user_preserves_phase1_semantics() {
 #[test]
 fn write_authority_engine_privileged_preserves_phase1_semantics() {
     let (_dir, engine) = fresh_engine();
-    let alice = engine.create_principal("alice").unwrap();
+    let alice = engine.caps().create_principal("alice").unwrap();
     engine
+        .caps()
         .grant_capability(&alice, "store:post:write")
         .expect("engine-privileged system-zone write must succeed");
 }
@@ -104,10 +105,10 @@ fn write_authority_sync_replica_shape_round_trips() {
     }
 }
 
-/// `WriteContext::authority` enum field presence check.
+/// `CapWriteContext::authority` enum field presence check.
 #[test]
 fn write_context_authority_field_discriminates_three_variants() {
-    let mut ctx = WriteContext::synthetic_for_test();
+    let mut ctx = CapWriteContext::synthetic_for_test();
     ctx.authority = WriteAuthority::User;
     assert!(matches!(ctx.authority, WriteAuthority::User));
     ctx.authority = WriteAuthority::EnginePrivileged;
