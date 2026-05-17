@@ -1092,6 +1092,14 @@ The `benten-caps` crate ships exactly ONE Criterion bench (`benches/wallclock_to
 
 **Acceptance criteria (Phase-4-Meta perf-pass).** Add 3-4 Criterion benches under `crates/benten-caps/benches/` (informational-only, matching the `wallclock_toctou_refresh` pattern) covering the four critical-path surfaces above, landed together with the `wildcard_variants` pushdown so the pushdown PR carries a before/after baseline. Couples to §4.76 (benten-eval Fwd-1 bench-coverage cluster) + META #1062 as one Phase-4-Meta bench-harness baseline pass. ~120-180 LOC of bench targets. Note: #946 Track 2's original recommendation cited `crates/benten-caps/INTERNALS.md §6` as the alternate destination; INTERNALS.md is a local-only (gitignored) doc, so this tracked-doc backlog row is the canonical HARD-RULE clause-(b) named destination.
 
+### §4.80 benten-caps retire Phase-2a test-readability conveniences (Phase-4-Meta — refinement-audit Qual-1 #683 + #674-residual, umbrella #1154)
+
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-1 #683, umbrella **#1154**; sibling of §4.79 + the benten-eval §4.76 cluster). The ST-CAPS crate-drain (#1154 commit) fully drained the self-contained items (#816 dead-enum delete; #803 scope-derivation extraction; #674 `wallclock_refresh_ceiling_for` zero-consumer delete) and marked the cross-crate-cascade renames P-II (#661 / #793). The residual is a **production-wiring-gated** cleanup that cannot drain in the disjoint single-crate lane without removing currently-live test/bench surfaces:
+
+`testing::WallclockProbe` (Qual-1 #683) is a 2-method struct over a `Duration` whose `force_refresh()` returns a hardcoded `1`; it is consumed live by `benches/wallclock_toctou_refresh.rs` + `tests/wallclock_refresh_typed_error_fires.rs`. Per the Qual-1 report's own disposition, this surface (together with the `evaluator_delegation` accessors + the `with_now_for_test` seam) only retires when the **production `WriteContext::now` threading + wallclock-refresh-ceiling consumer wire-up** lands (registered at `docs/future/phase-3-backlog.md §2.3 (i)+(ii)`; co-routed with §10.1 Compromise #1 TOCTOU window bound). Deleting the probe now would strand the bench + integration test with no production replacement.
+
+**Acceptance criteria (Phase-4-Meta).** When the §2.3 (i)+(ii) production wire-up lands: replace `WallclockProbe::force_refresh`'s hardcoded `1` with the real refresh-event surface (or delete `testing::WallclockProbe` outright + migrate the bench/integration-test to the real seam); retire `evaluator_delegation::iterate_batch_boundary_for` only if the engine's `primitive_host` consumer is simultaneously re-pointed at the trait method (cross-crate, P-II-coordinated). One cohesive "retire Phase-2a test-readability conveniences" change folded into the §4.79 / §2.3 wire-up wave. ~60-120 LOC at Phase-4-Meta.
+
 ---
 
 (Section structure additive; entries land as Phase 4-Foundation work surfaces them.)
