@@ -366,25 +366,32 @@ impl<'eng> EngineCapsHandle<'eng> {
     ///    the **resolved scope**.
     /// 2. Run the single-step manifest-envelope check via
     ///    [`benten_caps::plugin_delegation::check_delegation_within_envelope`]
-    ///    against the resolved scope + audience plugin-DID. Today this
-    ///    uses an `AllPermit` policy-view because:
-    ///    - **Manifest `shares` policy lookup** wiring lands at G27-D
-    ///      (manifest-aware scope derivation; see phase-4-foundation-
-    ///      backlog §4.8 + plan §3 G27-D row).
-    ///    - **Full chain-walk integration** through G24-D-FP-2's
-    ///      [`benten_caps::manifest_envelope_chain_validation::validate_chain_with_manifest_envelope`]
-    ///      lands at phase-4-foundation-backlog §4.8.1 (named NOW —
-    ///      this wave shipped the single-step envelope check + the
-    ///      chain-walk validator surface ALREADY exists from FP-2;
-    ///      the integration is a follow-up wave coupling delegate's
-    ///      `derived_from` ancestor traversal with the chain-walker
-    ///      + an end-to-end pin asserting chain-walk fires + denies
-    ///      a multi-step delegation whose intermediate hop violates
-    ///      the source plugin's shares policy).
+    ///    against the resolved scope + audience plugin-DID.
     ///
-    ///    The private-namespace forbidden clause STILL fires here —
-    ///    that's the class-of-bug defense for `private:<plugin_did>:*`
-    ///    source grants per CLAUDE.md baked-in #18.
+    ///    **Wave-E HELD #1197/#1146 (refinement-audit-2026-05):** the
+    ///    pre-Wave-E `AllPermit` policy-view shim is DELETED. The check
+    ///    now consults the installed
+    ///    [`crate::shares_policy_resolver::SharesPolicyResolver`] port,
+    ///    keyed on the resolved source grant's `actor` (the issuing
+    ///    principal). The port's concrete impl (in
+    ///    `benten-platform-foundation`) resolves the source plugin's
+    ///    signed, user-consented manifest `shares` policy. **Fail-
+    ///    CLOSED:** a plugin-principal whose manifest cannot be
+    ///    resolved, or whose `shares` policy denies the step, is
+    ///    REJECTED with
+    ///    [`benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope`].
+    ///    A user-root principal (Layer 1 anchor) is classified
+    ///    `NotPluginPrincipal` and proceeds (user-issued caps are
+    ///    bounded by attenuation only, per CLAUDE.md #18). Engines with
+    ///    no resolver installed fall back to the default no-op
+    ///    (observably identical to the old `AllPermit` shim — zero v1
+    ///    behavior delta until the platform layer installs the
+    ///    adapter).
+    ///
+    ///    The private-namespace forbidden clause STILL fires here
+    ///    (BEFORE the resolver) — that's the class-of-bug defense for
+    ///    `private:<plugin_did>:*` source grants per CLAUDE.md baked-in
+    ///    #18.
     /// 3. Determine the effective scope for the new delegation grant:
     ///    - If `attenuated_caps` is empty → use the resolved source
     ///      scope unchanged (identity delegation).
@@ -410,6 +417,15 @@ impl<'eng> EngineCapsHandle<'eng> {
     ///   `benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope`
     ///   when the envelope check denies the delegation.
     #[cfg(not(target_arch = "wasm32"))]
+    // Wave-E HELD #1197/#1146: the Layer-3 manifest-`shares` resolver
+    // wire-up (private-namespace clause + resolver consultation +
+    // fail-CLOSED error mapping) is a single linear security-critical
+    // decision sequence — splitting it across helpers would scatter the
+    // fail-CLOSED audit trail. The function stays well under the real
+    // cognitive-complexity concern; the lint trips on the doc-heavy
+    // line count, not branching depth. Same disposition as the
+    // Phase-3 C1-fp3 `too_many_lines` precedent.
+    #[allow(clippy::too_many_lines)]
     pub fn delegate_capability(
         &self,
         source_grant_cid: &Cid,
@@ -467,36 +483,75 @@ impl<'eng> EngineCapsHandle<'eng> {
                 });
             }
         };
+        // The source grant's `actor` is the issuing principal — the
+        // user-root for a directly-user-issued grant, or a plugin-DID
+        // for a delegated (`derived_from`-bearing) grant. This is the
+        // key the Layer-3 resolver consults to find the source plugin's
+        // manifest `shares` policy. A grant with no `actor` text is
+        // treated as un-attributable → fail-CLOSED at the resolver
+        // (`NoManifest` if the resolver is real; the pre-Wave-E no-op
+        // path treats the empty principal as `NotPluginPrincipal`).
+        let source_principal_did = match node.properties.get("actor") {
+            Some(Value::Text(s)) => s.clone(),
+            _ => String::new(),
+        };
 
-        // Step 2 — single-step envelope check. Today consults an
-        // `AllPermit` policy-view (manifest lookup lands at G27-D);
-        // private-namespace clause still fires.
-        struct AllPermit;
-        impl SharesPolicyView for AllPermit {
+        // Step 2a — always-on private-namespace clause. Fires BEFORE
+        // the manifest-`shares` resolver: `private:<plugin_did>:*` caps
+        // NEVER cross plugin boundaries regardless of any `shares`
+        // policy (CLAUDE.md baked-in #18 private-namespace clause).
+        // `check_delegation_within_envelope` with the unconditional
+        // `DenyAllSharesPolicyView` isolates exactly the private-
+        // namespace decision; the manifest-`shares` admit/deny call is
+        // the Wave-E resolver path below (NOT this always-true/false
+        // shim — the shim ONLY exercises the private-namespace branch,
+        // which is policy-independent).
+        struct DenyAllSharesPolicyView;
+        impl SharesPolicyView for DenyAllSharesPolicyView {
             fn permits(&self, _cap: &str, _target: &Did) -> bool {
-                true
+                false
             }
         }
         let audience = Did::from_string_unchecked(plugin_did.to_string());
-        let decision =
-            check_delegation_within_envelope(resolved_scope.as_str(), &audience, &AllPermit);
-        match decision {
-            DelegationDecision::Permitted => {}
-            DelegationDecision::OutsideEnvelope => {
+        if check_delegation_within_envelope(
+            resolved_scope.as_str(),
+            &audience,
+            &DenyAllSharesPolicyView,
+        ) == DelegationDecision::PrivateNamespaceForbidden
+        {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden,
+                message: format!(
+                    "delegate_capability: private-namespace cap `{resolved_scope}` cannot \
+                     cross plugin boundaries (CLAUDE.md #18 private-namespace clause)",
+                ),
+            });
+        }
+
+        // Step 2b — Wave-E HELD #1197/#1146 Layer-3 manifest-`shares`
+        // envelope enforcement. Consult the installed
+        // `SharesPolicyResolver` keyed on the source grant's `actor`.
+        // Fail-CLOSED: `Denied` / `NoManifest` reject; only an explicit
+        // `Admitted`, or a `NotPluginPrincipal` classification (the
+        // source is the Layer-1 user-root), permits the delegation.
+        // Engines with no resolver installed fall back to the default
+        // `Some(Noop)` (observably identical to the deleted `AllPermit`
+        // shim — zero v1 behavior delta until the platform layer
+        // installs the real adapter).
+        if let Some(resolver) = self.engine.shares_policy_resolver.as_ref() {
+            let resolution = resolver.resolve_delegation(
+                source_principal_did.as_str(),
+                resolved_scope.as_str(),
+                plugin_did,
+            );
+            if let Err(code) = resolution.clone().into_result() {
                 return Err(EngineError::Other {
-                    code: benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope,
+                    code,
                     message: format!(
-                        "delegate_capability: delegation of `{resolved_scope}` to `{plugin_did}` \
-                         denied by source plugin's manifest `shares` envelope",
-                    ),
-                });
-            }
-            DelegationDecision::PrivateNamespaceForbidden => {
-                return Err(EngineError::Other {
-                    code: benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden,
-                    message: format!(
-                        "delegate_capability: private-namespace cap `{resolved_scope}` cannot \
-                         cross plugin boundaries (CLAUDE.md #18 private-namespace clause)",
+                        "delegate_capability: delegation of `{resolved_scope}` to \
+                         `{plugin_did}` denied by source principal \
+                         `{source_principal_did}`'s manifest `shares` envelope \
+                         (Layer-3 enforcement; resolution={resolution:?})",
                     ),
                 });
             }
