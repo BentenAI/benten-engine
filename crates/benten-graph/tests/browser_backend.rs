@@ -292,6 +292,165 @@ fn browser_backend_put_node_with_context_thin_client_cache_semantic_pinned() {
     );
 }
 
+#[test]
+fn browser_backend_get_node_rejects_tampered_cache_bytes_with_content_hash_error() {
+    // #1208 / #620 (Safe-3, META #660 W9-T6 slice) closure-pin.
+    //
+    // `BrowserBackend::get_node` MUST verify the stored bytes re-hash to
+    // the requested CID (W9-T6 verify-on-read parity with
+    // `RedbBackend::get_node`). The browser thin-client cache is an
+    // attacker-adjacent surface — the in-RAM `BTreeMap` is reachable from
+    // the JS heap / DevTools console / a malicious extension. Before the
+    // #620 fix both `get_node` surfaces did a bare
+    // `serde_ipld_dagcbor::from_slice` with NO content-hash check, so a
+    // tampered cache entry produced a wrong-but-decodable Node SILENTLY.
+    //
+    // Threat-model reproduction: seed a Node, then overwrite the value
+    // bytes under its `n:<cid>` key with the bytes of a DIFFERENT
+    // (decodable) Node via the byte-level `KVBackend` surface — exactly
+    // the shape a cache-tampering attacker achieves. The decode still
+    // succeeds; only the content-hash recomputation catches the swap.
+    //
+    // Would-FAIL-if-reverted: pre-#620 `get_node` returned
+    // `Ok(Some(node_b))` for `cid_a`; the `expect_err` below would panic
+    // and the `ErrorCode::InvContentHash` assertion would never run.
+    use benten_graph::ErrorCode;
+
+    let backend = BrowserBackend::new();
+
+    // Two distinct Nodes → distinct canonical bytes + distinct CIDs.
+    let node_a = canonical_test_node();
+    let cid_a = backend.put_node(&node_a).unwrap();
+
+    let mut node_b = canonical_test_node();
+    node_b.labels = vec!["TamperedSubstitute".into()];
+    let (cid_b, bytes_b) = node_b.cid_and_canonical_bytes().unwrap();
+    assert_ne!(cid_a, cid_b, "fixtures must differ for a real substitution");
+
+    // Cache-tamper: write node_b's bytes UNDER node_a's key. `node_key`
+    // is the `n:<cid>` schema both `get_node` surfaces resolve.
+    let tampered_key = {
+        let mut k = b"n:".to_vec();
+        k.extend_from_slice(cid_a.as_bytes());
+        k
+    };
+    backend.put(&tampered_key, &bytes_b).unwrap();
+
+    // (1) NodeStore trait surface (generic-cascade-reachable read path).
+    let err = NodeStore::get_node(&backend, &cid_a).expect_err(
+        "tampered cache bytes MUST fail NodeStore::get_node — this is the #620 W9-T6 defense",
+    );
+    assert_eq!(
+        err.code(),
+        ErrorCode::InvContentHash,
+        "trait get_node tamper MUST fire E_INV_CONTENT_HASH (got {:?})",
+        err.code()
+    );
+
+    // (2) Snapshot surface (`BrowserSnapshot::get_node`) — the same
+    // verify-on-read parity must hold for the owned-clone read path.
+    let snap = GraphBackend::snapshot(&backend);
+    let snap_err = snap.get_node(&cid_a).expect_err(
+        "tampered cache bytes MUST fail BrowserSnapshot::get_node — #620 verify-on-read",
+    );
+    assert_eq!(
+        snap_err.code(),
+        ErrorCode::InvContentHash,
+        "snapshot get_node tamper MUST fire E_INV_CONTENT_HASH (got {:?})",
+        snap_err.code()
+    );
+
+    // Sanity: an UN-tampered entry still round-trips (the verify is a
+    // gate on corruption, not a blanket reject — guards against an
+    // over-broad fix that always errors).
+    let cid_clean = backend.put_node(&node_b).unwrap();
+    assert_eq!(
+        NodeStore::get_node(&backend, &cid_clean).unwrap().as_ref(),
+        Some(&node_b),
+        "a correctly-keyed entry must still verify + decode"
+    );
+}
+
+#[test]
+fn browser_backend_lock_discipline_uses_lock_recover_no_poison_propagation() {
+    // #1210 / #627 + #637 (Safe-4, META #707 slice) closure-pin.
+    //
+    // #627: `BrowserBackend::snapshot` previously returned an EMPTY
+    //       BTreeMap on Mutex poison — masking a poisoned cache as an
+    //       empty-graph view to every GraphBackend generic-cascade
+    //       caller (a correctness landmine).
+    // #637: 16+ BrowserBackend Mutex sites previously used
+    //       `.lock().map_err(|_| poisoned())` propagating a typed poison
+    //       error, inconsistent with the workspace `lock_recover()`
+    //       recover-and-proceed discipline (35+ sites).
+    //
+    // The internal `Mutex` is not poisonable from the public API (no
+    // backend method panics while holding the guard — same constraint
+    // documented on `subscriber_count_uses_lock_recover`). So this pin
+    // combines the established crate pattern: (1) a SOURCE assertion
+    // that the regressed idioms are GONE and the recover idiom is
+    // present (a revert to `map_err(|_| poisoned())` or an empty-on-
+    // poison snapshot re-fires here), plus (2) a healthy-path
+    // behavioural assertion that `snapshot()` reflects real state (the
+    // #627 empty-snapshot bug would also fail consequence #2 if the
+    // poison branch were re-introduced as an unconditional empty).
+    //
+    // Would-FAIL-if-reverted: re-introducing `map_err(|_| poisoned())`
+    // (the #637 idiom) or a `BTreeMap::new()` poison fallback in
+    // `snapshot` (the #627 bug) trips the source assertions below.
+    let src =
+        std::fs::read_to_string("src/browser_backend.rs").expect("read src/browser_backend.rs");
+    // Scan only NON-comment code lines — the file's own #637 docstring
+    // legitimately quotes the deleted idiom while explaining the fix.
+    let code: String = src
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // #637: the typed-poison idiom must be fully eradicated from CODE.
+    assert!(
+        !code.contains("map_err(|_| poisoned())"),
+        "#637: BrowserBackend MUST NOT propagate typed poison — \
+         every Mutex site uses the workspace lock_recover() discipline"
+    );
+    assert!(
+        !code.contains("fn poisoned()"),
+        "#637: the `poisoned()` GraphError-builder helper must be deleted"
+    );
+    // The recover idiom must be the one actually in use.
+    assert!(
+        code.contains(".lock_recover()"),
+        "#637: BrowserBackend Mutex sites must use lock_recover()"
+    );
+
+    // #627: snapshot() must NOT have an empty-BTreeMap poison fallback;
+    // it clones the recovered guard's real contents.
+    assert!(
+        code.contains("self.inner.lock_recover().clone()"),
+        "#627: snapshot() must clone the lock_recover()'d real map, \
+         not fabricate an empty BTreeMap on poison"
+    );
+
+    // (2) Healthy-path behavioural consequence: a populated cache's
+    // snapshot reflects the real entries (a re-introduced empty-on-
+    // poison branch that ever fired here would surface as len()==0).
+    let backend = BrowserBackend::new();
+    let node = canonical_test_node();
+    let cid = backend.put_node(&node).unwrap();
+    let snap = GraphBackend::snapshot(&backend);
+    assert_eq!(
+        snap.len(),
+        1,
+        "snapshot must reflect the one persisted node (not an empty poison view)"
+    );
+    assert_eq!(
+        snap.get_node(&cid).unwrap().as_ref(),
+        Some(&node),
+        "snapshot must surface the real node, proving lock_recover() returned live state"
+    );
+}
+
 proptest! {
     // The plan-§4 budget is 2 000 cases × 0-16 keys = up to 32 000
     // put/get operations over arbitrary byte sequences. Every case

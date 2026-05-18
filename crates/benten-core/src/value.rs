@@ -99,101 +99,235 @@ pub enum Value {
     Map(BTreeMap<String, Value>),
 }
 
+/// Maximum DAG-CBOR structural nesting depth accepted by [`Value`]'s
+/// hand-written deserializer at an untrusted decode boundary.
+///
+/// Boundary hardening (Safe-2 / META #629 DoS-via-unbounded-decode, issue
+/// #554): `Value::deserialize` is the leaf of every DAG-CBOR decode path in
+/// the workspace (node bodies, subgraph payloads, sync handshake/MST frames,
+/// UCAN bytes at the napi boundary). Its visitor recurses through nested
+/// arrays + maps with one Rust stack frame per CBOR level. A per-payload
+/// **byte** ceiling (e.g. [`Subgraph::MAX_DECODE_BYTES`](crate::Subgraph::MAX_DECODE_BYTES))
+/// bounds total *allocation* but NOT recursion *depth*: a pure
+/// nested-array payload costs ~1 wire byte per level, so a 16 MiB payload
+/// encodes ~16 million levels — far beyond the ~10k–50k frames an 8 MiB
+/// thread stack holds. Rust does not unwind on stack overflow
+/// (`catch_unwind` does not save you); the process aborts. A structural
+/// depth cap is therefore a *necessary* boundary guard the byte ceiling
+/// cannot subsume.
+///
+/// 64 is well above any legitimate Benten payload (canonical subgraph
+/// encoding is a flat node+edge list; property values are shallow) and far
+/// below the depth that risks a stack overflow. Issue #554 proposes this
+/// value explicitly; protobuf defaults to 100.
+///
+/// **Relation to the codec's own guard:** `serde_ipld_dagcbor` (via
+/// `cbor4ii`'s `SliceReader`) *already* enforces an intrinsic recursion
+/// limit (≈256) and clamps decode-time `Vec::with_capacity` to ≤256, so the
+/// raw `from_slice` path is not unguarded at HEAD. This benten-owned cap is
+/// **deliberate defense-in-depth**: it is strictly tighter than the codec's
+/// default, so it is the *deterministic, version-pinned* gate — the
+/// guarantee no longer depends on a transitive-dependency default that
+/// could change silently on a `cbor4ii` bump (exactly the contract gap
+/// issue #554 calls out: "the contract is documented per-codec, not in
+/// benten-core; the wrapper does not defend against a future codec
+/// change"). A payload exceeding this surfaces as a `serde` custom error,
+/// wrapped by the calling decoder into
+/// [`CoreError::Serialize`] — the same typed
+/// surface the byte ceiling uses. No new `ErrorCode` and no canonical-bytes
+/// change (decode-side rejection only; P-III wire/CID format untouched).
+pub const MAX_VALUE_DECODE_DEPTH: usize = 64;
+
 // Custom `Deserialize` impl. `#[serde(untagged)]` alone is ambiguous for CBOR
 // because the `serde` data model collapses CBOR byte strings and text strings
 // into the same `visit_bytes`/`visit_str` channels — control-byte payloads
 // round-trip as `Text`, and small-integer arrays round-trip as `Bytes`. The
 // visitor below dispatches on the actual data-model type the CBOR decoder
 // surfaces, preserving the variant identity.
+//
+// Depth guard (issue #554): the visitor carries the *remaining* depth budget.
+// Each structural descent (`visit_seq` / `visit_map` / `visit_some`) recurses
+// by deserializing the inner `Value` through `DepthBudgeted`, a newtype whose
+// `Deserialize` impl installs a `ValueVisitor` with `remaining - 1`. When the
+// budget reaches zero the next descent is rejected with a `serde` custom
+// error before another stack frame is sunk. `no_std`-clean, no `unsafe`, no
+// shared/thread-local state (so no parallel-test isolation hazard per the
+// per-test-static discipline) — the budget rides the call stack itself.
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct ValueVisitor;
+        deserializer.deserialize_any(ValueVisitor {
+            remaining_depth: MAX_VALUE_DECODE_DEPTH,
+        })
+    }
+}
 
-        impl<'de> Visitor<'de> for ValueVisitor {
-            type Value = Value;
+/// Carrier for the depth-budgeted `Value` decode entry point. Threads an
+/// explicit remaining-depth budget through serde's `next_element_seed` /
+/// `next_value_seed` re-entry, which would otherwise construct a fresh
+/// full-budget [`ValueVisitor`] and defeat the depth guard.
+struct DepthBudgeted;
 
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a DAG-CBOR value")
-            }
+impl DepthBudgeted {
+    fn deserialize_with<'de, D: Deserializer<'de>>(
+        deserializer: D,
+        remaining_depth: usize,
+    ) -> Result<Value, D::Error> {
+        deserializer.deserialize_any(ValueVisitor { remaining_depth })
+    }
+}
 
-            fn visit_unit<E: serde::de::Error>(self) -> Result<Value, E> {
-                Ok(Value::Null)
-            }
+struct ValueVisitor {
+    /// Remaining structural descents permitted before the depth cap fires.
+    /// Decremented on each `visit_seq` / `visit_map` / `visit_some` recursion.
+    remaining_depth: usize,
+}
 
-            fn visit_none<E: serde::de::Error>(self) -> Result<Value, E> {
-                Ok(Value::Null)
-            }
+impl<'de> Visitor<'de> for ValueVisitor {
+    type Value = Value;
 
-            fn visit_some<D: Deserializer<'de>>(self, d: D) -> Result<Value, D::Error> {
-                Value::deserialize(d)
-            }
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a DAG-CBOR value")
+    }
 
-            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Value, E> {
-                Ok(Value::Bool(v))
-            }
+    fn visit_unit<E: serde::de::Error>(self) -> Result<Value, E> {
+        Ok(Value::Null)
+    }
 
-            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Value, E> {
-                Ok(Value::Int(v))
-            }
+    fn visit_none<E: serde::de::Error>(self) -> Result<Value, E> {
+        Ok(Value::Null)
+    }
 
-            fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Value, E> {
-                i64::try_from(v).map(Value::Int).map_err(E::custom)
-            }
+    fn visit_some<D: Deserializer<'de>>(self, d: D) -> Result<Value, D::Error> {
+        // `Option::Some` is a structural descent: the inner value can itself
+        // be a nested seq/map. Charge it against the depth budget so a
+        // chain of `some(some(some(...)))` cannot bypass the cap.
+        let remaining = self
+            .remaining_depth
+            .checked_sub(1)
+            .ok_or_else(|| <D::Error as serde::de::Error>::custom(depth_exceeded_msg()))?;
+        DepthBudgeted::deserialize_with(d, remaining)
+    }
 
-            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Value, E> {
-                i64::try_from(v).map(Value::Int).map_err(E::custom)
-            }
+    fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Value, E> {
+        Ok(Value::Bool(v))
+    }
 
-            fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Value, E> {
-                i64::try_from(v).map(Value::Int).map_err(E::custom)
-            }
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Value, E> {
+        Ok(Value::Int(v))
+    }
 
-            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Value, E> {
-                Ok(Value::Float(v))
-            }
+    fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Value, E> {
+        i64::try_from(v).map(Value::Int).map_err(E::custom)
+    }
 
-            fn visit_f32<E: serde::de::Error>(self, v: f32) -> Result<Value, E> {
-                Ok(Value::Float(f64::from(v)))
-            }
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Value, E> {
+        i64::try_from(v).map(Value::Int).map_err(E::custom)
+    }
 
-            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Value, E> {
-                Ok(Value::Text(v.into()))
-            }
+    fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Value, E> {
+        i64::try_from(v).map(Value::Int).map_err(E::custom)
+    }
 
-            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Value, E> {
-                Ok(Value::Text(v))
-            }
+    fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Value, E> {
+        Ok(Value::Float(v))
+    }
 
-            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Value, E> {
-                Ok(Value::Bytes(v.to_vec()))
-            }
+    fn visit_f32<E: serde::de::Error>(self, v: f32) -> Result<Value, E> {
+        Ok(Value::Float(f64::from(v)))
+    }
 
-            fn visit_byte_buf<E: serde::de::Error>(self, v: Vec<u8>) -> Result<Value, E> {
-                Ok(Value::Bytes(v))
-            }
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Value, E> {
+        Ok(Value::Text(v.into()))
+    }
 
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
-                let mut out = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-                while let Some(v) = seq.next_element()? {
-                    out.push(v);
-                }
-                Ok(Value::List(out))
-            }
+    fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Value, E> {
+        Ok(Value::Text(v))
+    }
 
-            /// DAG-CBOR restricts map keys to strings (see [`Value::Map`]);
-            /// `next_entry::<String, Value>` lets serde's type system reject
-            /// non-string keys at decode time — a non-string key surfaces as
-            /// a `Custom` deserializer error rather than silently coercing.
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
-                let mut out = BTreeMap::new();
-                while let Some((k, v)) = map.next_entry::<String, Value>()? {
-                    out.insert(k, v);
-                }
-                Ok(Value::Map(out))
-            }
+    fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Value, E> {
+        Ok(Value::Bytes(v.to_vec()))
+    }
+
+    fn visit_byte_buf<E: serde::de::Error>(self, v: Vec<u8>) -> Result<Value, E> {
+        Ok(Value::Bytes(v))
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
+        // Descending into an array sinks a stack frame per level. Reject
+        // before recursing once the budget is exhausted (issue #554).
+        let remaining = self
+            .remaining_depth
+            .checked_sub(1)
+            .ok_or_else(|| <A::Error as serde::de::Error>::custom(depth_exceeded_msg()))?;
+        // `size_hint` is an untrusted-decoder hint; cap the pre-allocation so
+        // an adversarial hint cannot drive a giant `Vec::with_capacity`
+        // (the element decode still grows `out` as needed).
+        let cap = seq.size_hint().unwrap_or(0).min(SEQ_PREALLOC_CAP);
+        let mut out = Vec::with_capacity(cap);
+        while let Some(DepthBudgetedSeed { value }) =
+            seq.next_element_seed(DepthBudgetedSeed::seed(remaining))?
+        {
+            out.push(value);
         }
+        Ok(Value::List(out))
+    }
 
-        deserializer.deserialize_any(ValueVisitor)
+    /// DAG-CBOR restricts map keys to strings (see [`Value::Map`]);
+    /// `next_entry::<String, _>` lets serde's type system reject
+    /// non-string keys at decode time — a non-string key surfaces as
+    /// a `Custom` deserializer error rather than silently coercing.
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
+        let remaining = self
+            .remaining_depth
+            .checked_sub(1)
+            .ok_or_else(|| <A::Error as serde::de::Error>::custom(depth_exceeded_msg()))?;
+        let mut out = BTreeMap::new();
+        while let Some(k) = map.next_key::<String>()? {
+            let DepthBudgetedSeed { value } =
+                map.next_value_seed(DepthBudgetedSeed::seed(remaining))?;
+            out.insert(k, value);
+        }
+        Ok(Value::Map(out))
+    }
+}
+
+/// Error message surfaced (via `serde::de::Error::custom`) when a payload
+/// exceeds [`MAX_VALUE_DECODE_DEPTH`]. Calling decoders wrap this into
+/// [`CoreError::Serialize`](crate::CoreError::Serialize).
+fn depth_exceeded_msg() -> &'static str {
+    "DAG-CBOR nesting depth exceeds the decode boundary ceiling \
+     (MAX_VALUE_DECODE_DEPTH; META #629 / issue #554 boundary guard)"
+}
+
+/// Upper bound on `Vec::with_capacity` pre-allocation driven by an untrusted
+/// `SeqAccess::size_hint` (issue #554 — an adversarial decoder hint must not
+/// drive an unbounded reservation). The decode still grows past this if the
+/// payload genuinely contains more elements (bounded by the byte ceiling).
+const SEQ_PREALLOC_CAP: usize = 4096;
+
+/// Seed that threads the remaining depth budget through serde's
+/// `next_element_seed` / `next_value_seed` so re-entry into `Value` decode
+/// keeps decrementing rather than resetting to the full budget.
+struct DepthBudgetedSeed {
+    value: Value,
+}
+
+impl DepthBudgetedSeed {
+    fn seed(remaining_depth: usize) -> DepthBudgetSeedCtor {
+        DepthBudgetSeedCtor { remaining_depth }
+    }
+}
+
+struct DepthBudgetSeedCtor {
+    remaining_depth: usize,
+}
+
+impl<'de> serde::de::DeserializeSeed<'de> for DepthBudgetSeedCtor {
+    type Value = DepthBudgetedSeed;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        let value = DepthBudgeted::deserialize_with(deserializer, self.remaining_depth)?;
+        Ok(DepthBudgetedSeed { value })
     }
 }
 

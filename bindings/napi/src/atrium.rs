@@ -475,13 +475,49 @@ impl JsAtrium {
     /// For the test-only `JsAtrium::create(...)` path (no engine-side
     /// handle), reflects the in-memory `joined_no_engine` flag so the
     /// existing TS pins keep working without an engine instance.
+    ///
+    /// Safe-4 #704 closure (refinement-audit-2026-05): the engine-side
+    /// `AtriumHandle` is cloned OUT of the sync `state` lock BEFORE
+    /// `handle.is_active()` is called, rather than calling it while the
+    /// lock is held. `AtriumHandle::is_active` is a bare atomic load
+    /// today so holding the lock across it is presently safe, but the
+    /// lock-held-across-handle-call shape is a latent re-entrancy /
+    /// deadlock hazard if `is_active` ever evolves to acquire an
+    /// engine-side `tokio::sync::Mutex` (or becomes `async`). This
+    /// brings `is_active` into shape-conformance with the 6 R6-FP
+    /// Wave A Sub-A2 setters + `engine_atrium_or_err`, all of which
+    /// clone the handle out of the lock before driving any handle call.
+    /// `Arc<AtriumInner>` clone is cheap (refcount bump); the lock is
+    /// released before the (currently trivial) handle read.
     #[napi(getter)]
     pub fn is_active(&self) -> bool {
-        let state = self.state.lock().expect("atrium state mutex");
-        if let Some(handle) = state.engine_atrium.as_ref() {
-            handle.is_active()
-        } else {
-            state.joined_no_engine
+        // #704 invariant (refinement-audit-2026-05): the engine-side
+        // `AtriumHandle` is cloned OUT of the `state` mutex BEFORE any
+        // `handle.is_active()` dispatch — never called while the lock is
+        // held. Reverting to a lock-held-across-handle-call shape
+        // reintroduces the latent re-entrancy / deadlock hazard #704
+        // closed. There is no inline `#[cfg(test)]` pin for this: the
+        // whole `atrium` module is `#[cfg(all(feature = "napi-export",
+        // not(target_arch = "wasm32")))]` (see `lib.rs`), so `JsAtrium`
+        // exists ONLY on the `napi-export` cdylib surface. A plain
+        // `cargo test` lib-unit-test binary that linked a `JsAtrium`
+        // test would pull napi-rs's `Error<S>` Drop glue
+        // (`napi_reference_unref` / `napi_delete_reference`) with no
+        // Node runtime at link time and fail to link. Every other
+        // `JsAtrium`-constructing test in this crate therefore lives in
+        // the `bindings/napi/tests/` build-harness suite under the
+        // no-`napi-export` `in-process-test` rlib path — and `JsAtrium`
+        // is not reachable on that surface, so this invariant is
+        // compile-proven by the clone-out shape below + was
+        // substantively verified by mini-review-1288, not by a runtime
+        // pin.
+        let (handle_opt, joined_no_engine) = {
+            let state = self.state.lock().expect("atrium state mutex");
+            (state.engine_atrium.clone(), state.joined_no_engine)
+        };
+        match handle_opt {
+            Some(handle) => handle.is_active(),
+            None => joined_no_engine,
         }
     }
 

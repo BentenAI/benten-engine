@@ -31,7 +31,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use benten_caps::CapError;
 use benten_core::{Cid, Node, Value};
 
 use crate::change_probe::ChangeProbe;
@@ -304,26 +303,43 @@ impl Engine {
         // §7.3.A.3): derive read-gate label from the view registry
         // (closes Compromise #11 sub-block "view-id-prefix heuristic").
         let label_hint = self.resolve_read_view_label_hint(view_id);
-        if let Some(policy) = self.policy.as_deref()
-            && !label_hint.is_empty()
-        {
+        if !label_hint.is_empty() {
             // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
             // cap-g16bp-3): thread the engine's configured device-DID-
             // attestation CID into the IVM read-gate ReadContext so
             // heterogeneous policies dispatch per-device on read-paths
-            // per D-PHASE-3-25.
-            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
+            // per D-PHASE-3-25. (`check_read_gate` short-circuits to
+            // `Permitted` when no policy is configured, so the prior
+            // explicit `self.policy.as_deref()` presence guard is now
+            // subsumed — behaviour is identical for the no-policy case.)
+            let device_cid = self.device_cid();
             let ctx = benten_caps::ReadContext {
                 label: label_hint.clone(),
                 target_cid: None,
                 device_cid,
                 ..Default::default()
             };
-            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
-                return Ok(Outcome {
-                    list: Some(Vec::new()),
-                    ..Outcome::default()
-                });
+            // Refinement-audit-2026-05 D1 #1189 (Safe-1 #534 / META #593):
+            // route the IVM view-read gate through the canonical
+            // fail-CLOSED `check_read_gate`. The pre-fix `if let
+            // Err(CapError::DeniedRead { .. })` shape silently returned
+            // the view's FULL row set on every non-`DeniedRead` denial
+            // (Revoked / RevokedMidEval / future `#[non_exhaustive]`).
+            // `DeniedRead` keeps the Option-C empty-Outcome collapse per
+            // named compromise #2; any other denial now surfaces a typed
+            // `Err(EngineError::Cap(..))` instead of leaking rows. This
+            // site can't share `read_node_inner` (no resolved Node — the
+            // gate label is the view-registry hint, `target_cid: None`,
+            // and the fall-through is an empty `Outcome` not `Ok(None)`)
+            // but it MUST share the fail-CLOSED decision.
+            match self.check_read_gate(&ctx)? {
+                crate::engine_crud::ReadGate::Permitted => {}
+                crate::engine_crud::ReadGate::DeniedReadCollapse => {
+                    return Ok(Outcome {
+                        list: Some(Vec::new()),
+                        ..Outcome::default()
+                    });
+                }
             }
         }
         // Normalize the namespaced alias `system:ivm:<id>` → `<id>`.

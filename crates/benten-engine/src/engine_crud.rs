@@ -137,42 +137,15 @@ impl Engine {
     /// to inspect system-zone Nodes reach through
     /// `self.backend.get_node(cid)` directly.
     pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
-        let node = self.backend.get_node(cid)?;
-        let Some(node) = node else {
-            return Ok(None);
-        };
-        // Phase-2a Inv-11 runtime probe (code-as-graph Major #1): probe
-        // the RESOLVED Node's first label — NOT a passing `Value` payload
-        // — against the engine-side system-zone prefix list. Applied
-        // before the cap-policy gate so the policy's verdict cannot
-        // override Inv-11.
-        let label = node.labels.first().cloned().unwrap_or_default();
-        if crate::primitive_host::is_system_zone_label(&label) {
-            return Ok(None);
-        }
-        // Gate on the primary label. A Node with no labels collapses to
-        // an empty-label ReadContext; GrantBackedPolicy permits the
-        // empty-label path (introspection reads) so this stays
-        // backwards-compatible for hand-constructed Nodes.
-        if let Some(policy) = self.policy.as_deref() {
-            // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
-            // cap-g16bp-3): thread the engine's configured device-DID-
-            // attestation CID into get_node's primary read-gate
-            // ReadContext so heterogeneous policies dispatch per-device
-            // per D-PHASE-3-25. Default-None for legacy / non-attested
-            // engines.
-            let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::ReadContext {
-                label,
-                target_cid: Some(*cid),
-                device_cid,
-                ..Default::default()
-            };
-            if let Err(CapError::DeniedRead { .. }) = policy.check_read(&ctx) {
-                return Ok(None);
-            }
-        }
-        Ok(Some(node))
+        // Refinement-audit-2026-05 D1 #1189 (Qual-1 #695 + Safe-1 #534 /
+        // META #593): the user-facing default read = the canonical
+        // `read_node_inner` seam with no attributed principal. Inv-11
+        // probe + Option-C `DeniedRead` collapse + fail-CLOSED on every
+        // other `CapError` denial variant all live there now. A Node
+        // with no labels collapses to an empty-label `ReadContext`;
+        // `GrantBackedPolicy` permits the empty-label introspection path
+        // so this stays backwards-compatible for hand-constructed Nodes.
+        self.read_node_inner(cid, None)
     }
 
     /// Update an existing Node. The old CID entry is deleted and the new node
@@ -245,31 +218,136 @@ impl Engine {
     }
 
     /// Internal helper: does `policy.check_read` deny a read against the
-    /// Node stored at `cid`? Looks up the Node's primary label and runs
-    /// it through the policy. Returns `Ok(false)` when the backend has
+    /// Node stored at `cid`? Returns `Ok(false)` when the backend has
     /// no Node at `cid` (no leakage signal — we fall through to the
     /// normal empty-list / None path).
+    ///
+    /// Refinement-audit-2026-05 D1 #1189 (Pattern-F Bundle 1; closes
+    /// Qual-1 #695 + Safe-1 #534 / META #593): this is now a thin
+    /// composition over the canonical [`Self::read_node_inner`] seam —
+    /// the prior hand-rolled `ReadContext` + `matches!(.., DeniedRead)`
+    /// body was one of three near-duplicate sites that silently
+    /// permitted reads on every non-`DeniedRead` `CapError` (Revoked /
+    /// RevokedMidEval / future `#[non_exhaustive]` variants). The
+    /// canonical path fails CLOSED. A non-`DeniedRead` denial now
+    /// propagates as `Err(EngineError::Cap(..))` from `read_node_inner`
+    /// rather than being collapsed to a permitted read; the `?` here
+    /// surfaces it to the edge-read caller (correct — a revoked actor
+    /// must not silently observe an empty edge list as if permitted).
     fn read_denied_for_cid(&self, cid: &Cid) -> Result<bool, EngineError> {
+        if self.policy.as_deref().is_none() {
+            return Ok(false);
+        }
+        // The Node-resolution + Inv-11 probe + Option-C cap collapse all
+        // live in the canonical helper. `read_node_inner` returns
+        // `Ok(None)` for a clean backend miss, an Inv-11 system-zone
+        // reject, OR an Option-C `DeniedRead` collapse — all three are
+        // "denied / absent" for edge-read symmetry purposes. A clean
+        // backend miss must NOT report "denied" (no leakage signal), so
+        // we additionally confirm the Node actually exists.
+        let denied_or_absent = self.read_node_inner(cid, None)?.is_none();
+        Ok(denied_or_absent && self.backend.get_node(cid)?.is_some())
+    }
+
+    /// Canonical fail-CLOSED capability read-gate decision.
+    ///
+    /// Refinement-audit-2026-05 D1 #1189 (Safe-1 #534 / META #593
+    /// class-B-β auth-bypass closure-pin). The pre-fix read paths all
+    /// pattern-matched ONLY `Err(CapError::DeniedRead { .. })` and let
+    /// every other `check_read` `Err` fall through to a permitted read.
+    /// `CapError` is `#[non_exhaustive]` with multiple denial variants
+    /// (`Denied`, `Revoked`, `RevokedMidEval`, `NotImplemented`, the
+    /// Phase-3 UCAN variants, plus any future addition) — so the old
+    /// shape silently permitted access whenever a policy denied via any
+    /// non-`DeniedRead` variant.
+    ///
+    /// This single canonical arm fails CLOSED:
+    /// - `Ok(())` → [`ReadGate::Permitted`]
+    /// - `Err(CapError::DeniedRead { .. })` → [`ReadGate::DeniedReadCollapse`]
+    ///   — the Option-C posture per Phase-1 named compromise #2
+    ///   (CID-existence-leak defense: a denied read is indistinguishable
+    ///   from a clean miss, so callers collapse to `None` / empty).
+    /// - `Err(other)` → propagated as `Err(EngineError::Cap(other))`.
+    ///   Revocation, mid-eval revocation, and any future denial variant
+    ///   surface a typed error rather than a silent permit.
+    pub(crate) fn check_read_gate(
+        &self,
+        ctx: &benten_caps::ReadContext,
+    ) -> Result<ReadGate, EngineError> {
         let Some(policy) = self.policy.as_deref() else {
-            return Ok(false);
+            return Ok(ReadGate::Permitted);
         };
+        match policy.check_read(ctx) {
+            Ok(()) => Ok(ReadGate::Permitted),
+            Err(CapError::DeniedRead { .. }) => Ok(ReadGate::DeniedReadCollapse),
+            Err(other) => Err(EngineError::Cap(other)),
+        }
+    }
+
+    /// Canonical Node read pathway: backend resolve → Inv-11 runtime
+    /// probe → Option-C capability gate → optional principal threading.
+    ///
+    /// Refinement-audit-2026-05 D1 #1189 (Qual-1 #695 closure-pin). This
+    /// collapses the three near-duplicate read bodies (`get_node`,
+    /// `read_node_as`, `read_denied_for_cid`) into one canonical seam so
+    /// the Safe-1 #534 fail-CLOSED fix lands ONCE rather than thrice,
+    /// and so the `self.device_cid()` accessor is the single
+    /// device-CID access pattern (closing the prior drift where
+    /// `read_node_as` used `self.device_cid()` while `get_node` reached
+    /// `*MutexExt::lock_recover(&self.inner.device_cid)` raw — the two
+    /// are semantically identical today; the accessor is the canonical
+    /// surface if it ever gains caching / refresh / observability).
+    ///
+    /// Returns `Ok(None)` for: a clean backend miss, an Inv-11
+    /// system-zone reject (Inv-11 cannot be overridden by the policy —
+    /// probed before the cap gate), OR an Option-C `DeniedRead`
+    /// collapse. Returns `Err(EngineError::Cap(..))` for any non-
+    /// `DeniedRead` denial (fail CLOSED). `principal` is `None` for the
+    /// user-facing default read and `Some(cid)` for the Class-B-β
+    /// attributed read (`read_node_as`, CLAUDE.md baked-in #18).
+    pub(crate) fn read_node_inner(
+        &self,
+        cid: &Cid,
+        principal: Option<Cid>,
+    ) -> Result<Option<Node>, EngineError> {
         let Some(node) = self.backend.get_node(cid)? else {
-            return Ok(false);
+            return Ok(None);
         };
+        // Phase-2a Inv-11 runtime probe (code-as-graph Major #1): probe
+        // the RESOLVED Node's first label against the engine-side
+        // system-zone prefix list, BEFORE the cap-policy gate so the
+        // policy's verdict cannot override Inv-11.
         let label = node.labels.first().cloned().unwrap_or_default();
-        // Phase-3 G16-B-prime fp (consumer-audit closure of cor-1 /
-        // cap-g16bp-3): thread device-DID-attestation CID into
-        // edge-read symmetric denial-probe ReadContext.
-        let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
+        if crate::primitive_host::is_system_zone_label(&label) {
+            return Ok(None);
+        }
+        // Phase-3 G16-B-prime fp (cor-1 / cap-g16bp-3): thread the
+        // engine's configured device-DID-attestation CID (D-PHASE-3-25
+        // heterogeneous-policy per-device dispatch) and, for the
+        // attributed-read path, the caller's principal CID.
         let ctx = benten_caps::ReadContext {
             label,
             target_cid: Some(*cid),
-            device_cid,
+            actor_cid: principal,
+            device_cid: self.device_cid(),
             ..Default::default()
         };
-        Ok(matches!(
-            policy.check_read(&ctx),
-            Err(CapError::DeniedRead { .. })
-        ))
+        match self.check_read_gate(&ctx)? {
+            ReadGate::Permitted => Ok(Some(node)),
+            ReadGate::DeniedReadCollapse => Ok(None),
+        }
     }
+}
+
+/// Outcome of the canonical fail-CLOSED capability read-gate
+/// ([`Engine::check_read_gate`]). Non-`DeniedRead` denials never reach
+/// this enum — they propagate as `Err(EngineError::Cap(..))`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReadGate {
+    /// Policy permitted the read (or no policy is configured).
+    Permitted,
+    /// Policy denied via `CapError::DeniedRead` — Option-C posture per
+    /// named compromise #2: caller collapses to `None` / empty so a
+    /// denied read is indistinguishable from a clean miss.
+    DeniedReadCollapse,
 }

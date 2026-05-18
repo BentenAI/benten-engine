@@ -63,6 +63,27 @@ use crate::did::Did;
 use crate::errors::UcanError;
 use crate::keypair::{Keypair, PublicKey};
 
+/// Maximum CBOR container-nesting depth accepted for an untrusted
+/// `Ucan` byte blob (safe-2 #549).
+///
+/// `UcanClaims::prf: Vec<Ucan>` is a directly-recursive proof-chain
+/// field. `serde`'s derived `Deserialize` for `Ucan` emits a routine
+/// that consumes one (or more) stack frame(s) per nesting level, and
+/// `serde_ipld_dagcbor` 0.6.4 imposes NO recursion-depth bound of its
+/// own. An attacker who can land a `Ucan` blob at an untrusted-input
+/// site (the typed-CALL `ucan_validate_chain` op, the durable UCAN
+/// backend read path) can encode an arbitrarily-deep `prf` chain in a
+/// few hundred KB and abort the process via stack overflow.
+///
+/// Real-world UCAN delegation chains are shallow (≤5). `32` leaves
+/// generous headroom for legitimate composition while keeping the
+/// worst-case serde recursion bounded well under the 8 MB default
+/// thread stack. Enforced at the byte boundary by
+/// [`Ucan::from_canonical_bytes_bounded`] BEFORE serde runs, so the
+/// recursive deserialize routine is never reached for an
+/// over-deep blob.
+pub const MAX_UCAN_PROOF_DEPTH: usize = 32;
+
 /// Capability grant pair: `(resource, ability)`.
 ///
 /// Example: `Capability::new("/zone/posts", "read")`. The
@@ -140,6 +161,192 @@ impl Ucan {
     // removed — a zero-caller no-op wrapper over the module free-fn
     // `canonical_bytes(&UcanClaims)`. Call sites use the free-fn
     // directly (CLAUDE.md #5 — no no-op wrappers).
+
+    /// Decode a `Ucan` from untrusted canonical bytes with a hard
+    /// CBOR-nesting-depth ceiling (safe-2 #549).
+    ///
+    /// This is the **canonical untrusted-input entry point** for any
+    /// caller that deserializes a `Ucan` from caller- / wire- /
+    /// storage-controlled bytes (the typed-CALL `ucan_validate_chain`
+    /// op + the durable UCAN backend read path). It walks the CBOR
+    /// major-type header stream **iteratively** (no recursion — the
+    /// pre-walk itself cannot stack-overflow) and rejects with
+    /// [`UcanError::ProofChainTooDeep`] the moment container nesting
+    /// exceeds `max_depth`, BEFORE `serde`'s derived recursive
+    /// deserialize routine is ever invoked. An over-deep blob therefore
+    /// never reaches the recursive path that would consume the thread
+    /// stack.
+    ///
+    /// Use [`MAX_UCAN_PROOF_DEPTH`] as `max_depth` unless a call site
+    /// has a documented reason to differ.
+    ///
+    /// Malformed CBOR (truncated / wrong-shape) surfaces
+    /// [`UcanError::DecodeFailed`], matching the existing decode
+    /// failure contract.
+    pub fn from_canonical_bytes_bounded(bytes: &[u8], max_depth: usize) -> Result<Self, UcanError> {
+        // Iterative pre-walk: reject over-deep nesting at the byte
+        // boundary so serde's recursive deserialize never runs on a
+        // pathological blob.
+        let observed = max_cbor_container_depth(bytes, max_depth)?;
+        if observed > max_depth {
+            return Err(UcanError::ProofChainTooDeep {
+                depth: observed,
+                max: max_depth,
+            });
+        }
+        serde_ipld_dagcbor::from_slice(bytes).map_err(|_| UcanError::DecodeFailed)
+    }
+}
+
+/// Iteratively scan a CBOR byte stream and return the maximum
+/// container-nesting depth, short-circuiting as soon as `limit` is
+/// exceeded (returns `limit + 1` in that case so the caller can
+/// reject without walking the rest of an adversarial blob).
+///
+/// This intentionally does NOT recurse: it maintains an explicit
+/// work stack of "remaining child count" frames, so a pathological
+/// blob cannot stack-overflow the pre-check itself. It handles the
+/// CBOR major types `serde_ipld_dagcbor` emits for our types
+/// (unsigned/negative ints, byte/text strings, arrays, maps; tags
+/// and simple/float are skipped over without contributing depth).
+/// Indefinite-length items are rejected as malformed
+/// ([`UcanError::DecodeFailed`]) — DAG-CBOR forbids them, so a
+/// well-formed `Ucan` never uses them, and treating them as a decode
+/// failure keeps the pre-check conservative.
+/// Read a CBOR argument given the additional-info bits (`ai`, the low
+/// 5 bits of the initial byte). Returns `(value, new_pos)`. Rejects
+/// indefinite-length (`ai == 31`) and reserved (`28..=30`) — DAG-CBOR
+/// forbids indefinite items, so an `Ucan` blob never uses them.
+fn read_cbor_arg(bytes: &[u8], pos: usize, ai: u8) -> Result<(u64, usize), UcanError> {
+    match ai {
+        0..=23 => Ok((u64::from(ai), pos)),
+        24 => bytes
+            .get(pos)
+            .map(|b| (u64::from(*b), pos + 1))
+            .ok_or(UcanError::DecodeFailed),
+        25 => bytes
+            .get(pos..pos + 2)
+            .map(|s| (u64::from(u16::from_be_bytes([s[0], s[1]])), pos + 2))
+            .ok_or(UcanError::DecodeFailed),
+        26 => bytes
+            .get(pos..pos + 4)
+            .map(|s| {
+                (
+                    u64::from(u32::from_be_bytes([s[0], s[1], s[2], s[3]])),
+                    pos + 4,
+                )
+            })
+            .ok_or(UcanError::DecodeFailed),
+        27 => bytes
+            .get(pos..pos + 8)
+            .map(|s| {
+                (
+                    u64::from_be_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]),
+                    pos + 8,
+                )
+            })
+            .ok_or(UcanError::DecodeFailed),
+        // 28..=30 reserved; 31 = indefinite (DAG-CBOR forbids).
+        _ => Err(UcanError::DecodeFailed),
+    }
+}
+
+fn max_cbor_container_depth(bytes: &[u8], limit: usize) -> Result<usize, UcanError> {
+    // Each stack frame = number of remaining items in an open
+    // container. `depth` = current open-container count; `max` tracks
+    // the high-water mark.
+    let mut stack: Vec<u64> = Vec::new();
+    let mut max: usize = 0;
+    let mut pos: usize = 0;
+
+    loop {
+        // Close any containers whose child-count has reached zero.
+        while let Some(remaining) = stack.last_mut() {
+            if *remaining == 0 {
+                stack.pop();
+            } else {
+                break;
+            }
+        }
+        if pos >= bytes.len() {
+            // End of input. Well-formed iff all containers closed; if
+            // a container is still open the blob is truncated.
+            if stack.is_empty() {
+                return Ok(max);
+            }
+            return Err(UcanError::DecodeFailed);
+        }
+
+        let initial = bytes[pos];
+        pos += 1;
+        let major = initial >> 5;
+        let ai = initial & 0x1f;
+
+        // This data item is one child of the innermost open container.
+        if let Some(remaining) = stack.last_mut() {
+            *remaining -= 1;
+        }
+
+        match major {
+            // 0/1 unsigned/negative int — argument only, no payload.
+            0 | 1 => {
+                let (_, new_pos) = read_cbor_arg(bytes, pos, ai)?;
+                pos = new_pos;
+            }
+            // 2/3 byte/text string — argument = length, then skip bytes.
+            2 | 3 => {
+                let (len, new_pos) = read_cbor_arg(bytes, pos, ai)?;
+                pos = new_pos
+                    .checked_add(usize::try_from(len).map_err(|_| UcanError::DecodeFailed)?)
+                    .ok_or(UcanError::DecodeFailed)?;
+                if pos > bytes.len() {
+                    return Err(UcanError::DecodeFailed);
+                }
+            }
+            // 4 array — argument = element count; opens a container.
+            4 => {
+                let (count, new_pos) = read_cbor_arg(bytes, pos, ai)?;
+                pos = new_pos;
+                stack.push(count);
+                if stack.len() > max {
+                    max = stack.len();
+                    if max > limit {
+                        // Short-circuit: caller rejects without
+                        // finishing an adversarial blob.
+                        return Ok(max);
+                    }
+                }
+            }
+            // 5 map — argument = pair count; opens a container with
+            // 2*count children (keys + values).
+            5 => {
+                let (pairs, new_pos) = read_cbor_arg(bytes, pos, ai)?;
+                pos = new_pos;
+                let children = pairs.checked_mul(2).ok_or(UcanError::DecodeFailed)?;
+                stack.push(children);
+                if stack.len() > max {
+                    max = stack.len();
+                    if max > limit {
+                        return Ok(max);
+                    }
+                }
+            }
+            // 6 tag — DAG-CBOR only permits tag 42 (CID), and no
+            // field of `UcanClaims` / `Ucan` is CID-typed, so a
+            // well-formed UCAN blob carries NO tags. Reject as
+            // malformed (conservative — keeps the pre-check from
+            // having to model tag-content nesting).
+            6 => return Err(UcanError::DecodeFailed),
+            // 7 simple/float/break — argument-only; no payload, no
+            // container. (`break` only valid for indefinite items,
+            // which we reject above.)
+            7 => {
+                let (_, new_pos) = read_cbor_arg(bytes, pos, ai)?;
+                pos = new_pos;
+            }
+            _ => return Err(UcanError::DecodeFailed),
+        }
+    }
 }
 
 /// Qual-2 #759: byte-identical reproduction of the prior free-fn

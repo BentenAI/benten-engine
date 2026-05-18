@@ -298,6 +298,87 @@ impl GrantBackedPolicy {
         Self::derive_write_scope(&ctx.label)
     }
 
+    /// Qual-2 #803 (umbrella #1154): the required-scope list a
+    /// non-privileged write must hold a grant for, derived from the
+    /// `CapWriteContext`. Extracted verbatim from the ~50-LOC inline
+    /// match that used to live in [`CapabilityPolicy::check_write`] so
+    /// the policy method reads as the three-line intent (privileged
+    /// bypass → derive scopes → assert each is granted) and the
+    /// derivation precedence is independently testable.
+    ///
+    /// Precedence (unchanged from the inline form):
+    ///
+    /// 1. Explicit [`CapWriteContext::scope`] populated → the G27-B
+    ///    higher-grain override SHORT-CIRCUITS per-op derivation
+    ///    (mirrors `UcanGroundedPolicy` keying off `ctx.scope`).
+    /// 2. No pending ops + empty `label` → r6-sec-8 fail-CLOSED
+    ///    (`CapError::Denied`): an unstructured context reaching the
+    ///    policy is an error mode, not a legitimate no-op.
+    /// 3. No pending ops + non-empty `label` → single label-derived
+    ///    scope (the Phase-1 `crud('<label>')` shape).
+    /// 4. Pending ops → per-op label-derived scopes, skipping
+    ///    `system:*` writes + idempotent-miss deletes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapError::Denied`] for the case-2 fail-CLOSED path.
+    fn derive_scopes_for_pending_ops(ctx: &CapWriteContext) -> Result<Vec<String>, CapError> {
+        if !ctx.scope.is_empty() {
+            return Ok(vec![ctx.scope.clone()]);
+        }
+        if ctx.pending_ops.is_empty() {
+            if ctx.label.is_empty() {
+                return Err(CapError::Denied {
+                    required: "store:write".to_string(),
+                    entity: String::new(),
+                });
+            }
+            return Ok(vec![Self::derive_write_scope_from_ctx(ctx)]);
+        }
+        let mut v = Vec::new();
+        for op in &ctx.pending_ops {
+            match op {
+                PendingOp::PutNode { labels, .. } => {
+                    // Skip system-zone writes — they reach the policy
+                    // only if something went wrong higher up; denying
+                    // them here would double-fire the guard. Be
+                    // conservative.
+                    let primary = labels.first().cloned().unwrap_or_default();
+                    if primary.starts_with("system:") {
+                        continue;
+                    }
+                    v.push(Self::derive_write_scope(&primary));
+                }
+                PendingOp::PutEdge { label, .. } => {
+                    v.push(Self::derive_write_scope(label));
+                }
+                PendingOp::DeleteNode { labels, .. } => {
+                    // r6-sec-8: labels captured via read-before-delete
+                    // in benten-graph are threaded through the caps
+                    // PendingOp so the policy can derive the same
+                    // store:<label>:write scope used for the create
+                    // side. Empty labels means an idempotent-miss
+                    // delete — no scope needed.
+                    let primary = labels.first().cloned().unwrap_or_default();
+                    if primary.is_empty() || primary.starts_with("system:") {
+                        continue;
+                    }
+                    v.push(Self::derive_write_scope(&primary));
+                }
+                PendingOp::DeleteEdge { label, .. } => {
+                    let Some(label) = label else {
+                        continue; // idempotent miss
+                    };
+                    if label.starts_with("system:") {
+                        continue;
+                    }
+                    v.push(Self::derive_write_scope(label));
+                }
+            }
+        }
+        Ok(v)
+    }
+
     /// Derive the Phase-1 required scope from a label. The mapping is the
     /// canonical `"store:<label>:write"` form used by the Phase-1 zero-config
     /// `crud('<label>')` path. An empty label collapses to `"store:write"`.
@@ -380,58 +461,7 @@ impl CapabilityPolicy for GrantBackedPolicy {
         // `tests/grant_backed_policy_derives_scope_from_write_context.rs`
         // for the substantive arm of the explicit-`ctx.scope`-overrides-
         // label-derived-default path.
-        let scopes: Vec<String> = if !ctx.scope.is_empty() {
-            vec![ctx.scope.clone()]
-        } else if ctx.pending_ops.is_empty() {
-            if ctx.label.is_empty() {
-                return Err(CapError::Denied {
-                    required: "store:write".to_string(),
-                    entity: String::new(),
-                });
-            }
-            vec![Self::derive_write_scope_from_ctx(ctx)]
-        } else {
-            let mut v = Vec::new();
-            for op in &ctx.pending_ops {
-                match op {
-                    PendingOp::PutNode { labels, .. } => {
-                        // Skip system-zone writes — they reach the policy only
-                        // if something went wrong higher up; denying them here
-                        // would double-fire the guard. Be conservative.
-                        let primary = labels.first().cloned().unwrap_or_default();
-                        if primary.starts_with("system:") {
-                            continue;
-                        }
-                        v.push(Self::derive_write_scope(&primary));
-                    }
-                    PendingOp::PutEdge { label, .. } => {
-                        v.push(Self::derive_write_scope(label));
-                    }
-                    PendingOp::DeleteNode { labels, .. } => {
-                        // r6-sec-8: labels captured via read-before-delete in
-                        // benten-graph are threaded through the caps PendingOp
-                        // so the policy can derive the same store:<label>:write
-                        // scope used for the create side. Empty labels means
-                        // an idempotent-miss delete — no scope needed.
-                        let primary = labels.first().cloned().unwrap_or_default();
-                        if primary.is_empty() || primary.starts_with("system:") {
-                            continue;
-                        }
-                        v.push(Self::derive_write_scope(&primary));
-                    }
-                    PendingOp::DeleteEdge { label, .. } => {
-                        let Some(label) = label else {
-                            continue; // idempotent miss
-                        };
-                        if label.starts_with("system:") {
-                            continue;
-                        }
-                        v.push(Self::derive_write_scope(label));
-                    }
-                }
-            }
-            v
-        };
+        let scopes = Self::derive_scopes_for_pending_ops(ctx)?;
 
         for scope in &scopes {
             // refinement-audit-2026-05 #1141 (Qual-1 #694 + Safe-2 #552
@@ -660,5 +690,103 @@ mod wildcard_tests {
         let deep = "a:b:c:d:e:f:g:h";
         let got = wildcard_variants(deep);
         assert_eq!(got[0], deep);
+    }
+}
+
+// Qual-2 #803 (umbrella #1154) closure-pins: the scope-derivation
+// match extracted out of `check_write` into
+// `GrantBackedPolicy::derive_scopes_for_pending_ops` MUST preserve the
+// exact precedence + skip semantics of the pre-extraction inline form.
+// These exercise the extracted fn directly across all four precedence
+// cases; a regression in the extraction (wrong precedence, dropped
+// system:* skip, lost fail-CLOSED) fails here.
+#[cfg(test)]
+mod derive_scopes_803_tests {
+    use super::GrantBackedPolicy;
+    use crate::error::CapError;
+    use crate::policy::{CapWriteContext, PendingOp};
+    use benten_core::Cid;
+
+    fn cid() -> Cid {
+        Cid::from_blake3_digest([1u8; 32])
+    }
+
+    #[test]
+    fn explicit_scope_short_circuits_per_op_derivation_803() {
+        let ctx = CapWriteContext {
+            scope: "private:did:key:zP:notes".to_string(),
+            // Pending ops present but the explicit scope must WIN
+            // (G27-B higher-grain override precedence).
+            pending_ops: vec![PendingOp::PutNode {
+                cid: cid(),
+                labels: vec!["post".to_string()],
+            }],
+            ..Default::default()
+        };
+        let scopes = GrantBackedPolicy::derive_scopes_for_pending_ops(&ctx).unwrap();
+        assert_eq!(
+            scopes,
+            vec!["private:did:key:zP:notes".to_string()],
+            "explicit ctx.scope must SHORT-CIRCUIT per-op derivation"
+        );
+    }
+
+    #[test]
+    fn no_ops_empty_label_fails_closed_803() {
+        let ctx = CapWriteContext::default();
+        let err = GrantBackedPolicy::derive_scopes_for_pending_ops(&ctx)
+            .expect_err("no pending ops + empty label MUST fail CLOSED (r6-sec-8)");
+        assert!(
+            matches!(err, CapError::Denied { .. }),
+            "unstructured context is an error mode, not a permit-by-default; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn no_ops_with_label_single_derived_scope_803() {
+        let ctx = CapWriteContext {
+            label: "post".to_string(),
+            ..Default::default()
+        };
+        let scopes = GrantBackedPolicy::derive_scopes_for_pending_ops(&ctx).unwrap();
+        assert_eq!(scopes, vec!["store:post:write".to_string()]);
+    }
+
+    #[test]
+    fn pending_ops_derive_per_op_and_skip_system_803() {
+        let ctx = CapWriteContext {
+            pending_ops: vec![
+                PendingOp::PutNode {
+                    cid: cid(),
+                    labels: vec!["post".to_string()],
+                },
+                // system:* write MUST be skipped (no scope emitted).
+                PendingOp::PutNode {
+                    cid: cid(),
+                    labels: vec!["system:CapabilityGrant".to_string()],
+                },
+                PendingOp::PutEdge {
+                    cid: cid(),
+                    label: "AUTHORED_BY".to_string(),
+                },
+                // idempotent-miss delete MUST be skipped.
+                PendingOp::DeleteEdge {
+                    cid: cid(),
+                    label: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let scopes = GrantBackedPolicy::derive_scopes_for_pending_ops(&ctx).unwrap();
+        assert_eq!(
+            scopes,
+            vec![
+                "store:post:write".to_string(),
+                "store:AUTHORED_BY:write".to_string()
+            ],
+            "per-op derivation must emit non-system scopes only + skip \
+             idempotent-miss deletes (#803 extraction preserves the \
+             system:* skip semantics)"
+        );
     }
 }

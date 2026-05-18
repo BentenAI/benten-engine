@@ -123,3 +123,94 @@ fn durable_revocation_is_monotonic_so_n_plus_1_race_is_fail_closed_only_1143_641
          fail-CLOSED-only safety argument"
     );
 }
+
+/// #1148 #559 RESOLVED-ON-MAIN pin: the `dev_revoke_key` surface (which
+/// prepended raw untrusted `device_did` bytes into a KV key with no
+/// length-prefix/hash, enabling a `g14b:` cross-namespace collision)
+/// was DELETED by the COLLAPSE spine (#1251 — "collapse device-
+/// revocation/recheck parallel pipes into single chain-validation
+/// seam"). Revocation now flows through the per-UCAN-CID
+/// `g14b:revoked:<ucan_cid>` marker only, where `<ucan_cid>` is a
+/// fixed-width BLAKE3 digest (not attacker-influenced DID bytes). This
+/// pin locks the resolved state: revoking by CID and probing by the
+/// SAME CID round-trips, and the key derivation is CID-shaped (no
+/// untrusted-DID-bytes prefix path remains to collide).
+#[test]
+fn revocation_keyed_by_blake3_cid_no_untrusted_did_prefix_1148_559() {
+    use benten_caps::UCANBackend;
+    use benten_core::Cid;
+
+    let inner = benten_graph::RedbBackend::open_in_memory().expect("redb in-memory open");
+    let backend = UCANBackend::new(Arc::new(inner));
+
+    // Two distinct CIDs (the only revocation-key input post-#1251).
+    let cid_a = Cid::from_blake3_digest([0xAAu8; 32]);
+    let cid_b = Cid::from_blake3_digest([0xBBu8; 32]);
+
+    backend.revoke(&cid_a).unwrap();
+    assert!(
+        backend.is_revoked(&cid_a).unwrap(),
+        "revoke(cid_a) then is_revoked(cid_a) must be true"
+    );
+    // A different CID is NOT collaterally revoked — proves the key is
+    // a function of the (collision-resistant) CID alone, not of any
+    // attacker-influenced DID-bytes prefix.
+    assert!(
+        !backend.is_revoked(&cid_b).unwrap(),
+        "a distinct CID must NOT be collaterally revoked — the #559 \
+         cross-namespace collision surface (dev_revoke_key DID-prefix) \
+         is gone post-#1251"
+    );
+}
+
+/// #1148 #492 closure-pin: `iter_installed_proofs` skips un-decodable
+/// durable entries (non-fatal by design) but the skip is now
+/// observable (`tracing::warn!`). This pin exercises the real arm: a
+/// well-formed proof + a deliberately-corrupt grant entry under the
+/// `g14b:grant:` prefix. The well-formed proof is still returned (skip
+/// is non-fatal), and the corrupt entry is excluded. If the fix were
+/// reverted to a silent `if let Ok` drop, behavior is unchanged for
+/// the caller — so this pin asserts the *observable* contract the fix
+/// guarantees: a corrupt entry does NOT poison the whole scan AND a
+/// valid entry survives alongside it.
+#[test]
+fn iter_installed_proofs_skips_corrupt_entry_keeps_valid_1148_492() {
+    use benten_caps::UCANBackend;
+    use benten_graph::KVBackend;
+    use benten_id::keypair::Keypair;
+    use benten_id::ucan::Ucan;
+
+    let inner = benten_graph::RedbBackend::open_in_memory().expect("redb in-memory open");
+    let backend = UCANBackend::new(Arc::new(inner));
+
+    // 1. Install a well-formed proof the normal way.
+    let kp = Keypair::generate();
+    let did = kp.public_key().to_did();
+    let token = Ucan::builder()
+        .issuer(did.as_str().to_string())
+        .audience(did.as_str().to_string())
+        .capability("typed:crypto", "sign")
+        .not_before(0)
+        .expiry(253_402_300_798)
+        .sign(&kp);
+    backend.install_proof(&token).unwrap();
+
+    // 2. Inject a deliberately-corrupt entry under the SAME grant
+    //    prefix so the scan sees it. `g14b:grant:` is the production
+    //    prefix; the value is not valid DAG-CBOR for a `Ucan`.
+    backend
+        .graph_backend()
+        .put(b"g14b:grant:CORRUPT", b"\xff\xff not dag-cbor \x00\x01")
+        .unwrap();
+
+    // 3. The valid proof is still returned; the corrupt entry is
+    //    silently excluded from the chain set (non-fatal skip) — and
+    //    per the fix it is now `tracing::warn!`-observable.
+    let proofs = backend.iter_installed_proofs().unwrap();
+    assert_eq!(
+        proofs.len(),
+        1,
+        "the corrupt grant entry must be skipped (non-fatal) while the \
+         well-formed proof survives — #492 observable-skip contract"
+    );
+}
