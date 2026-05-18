@@ -113,7 +113,7 @@ impl SnapshotBlob {
     /// # Errors
     /// [`CoreError::Serialize`] if `serde_ipld_dagcbor` cannot encode the
     /// struct.
-    pub fn to_dag_cbor(&self) -> Result<Vec<u8>, CoreError> {
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
         serde_ipld_dagcbor::to_vec(self)
             .map_err(|e| CoreError::Serialize(format!("snapshot-blob encode: {e}")))
     }
@@ -127,12 +127,12 @@ impl SnapshotBlob {
     /// [`SnapshotBlobBackend::from_bytes_with_cap`]), which size-checks
     /// before any allocation-amplifying deserialization runs (#553, META
     /// #629 slice). This bare form is retained for trusted in-process
-    /// round-trips where the bytes were just produced by [`Self::to_dag_cbor`].
+    /// round-trips where the bytes were just produced by [`Self::to_canonical_bytes`].
     ///
     /// # Errors
     /// [`CoreError::Serialize`] on decode failure (malformed CBOR, schema
     /// drift, etc.).
-    pub fn from_dag_cbor(bytes: &[u8]) -> Result<Self, CoreError> {
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, CoreError> {
         serde_ipld_dagcbor::from_slice(bytes)
             .map_err(|e| CoreError::Serialize(format!("snapshot-blob decode: {e}")))
     }
@@ -151,7 +151,7 @@ impl SnapshotBlob {
 ///
 /// `ReadOnly` is the dominant variant — every mutation method surfaces it
 /// because the snapshot-blob is a content-addressed handoff, not a
-/// mutable store. `Decode` flows from `SnapshotBlob::from_dag_cbor`
+/// mutable store. `Decode` flows from `SnapshotBlob::from_canonical_bytes`
 /// failures during construction; `SchemaVersion` flows from a successfully-
 /// decoded blob whose `schema_version` field doesn't match the version
 /// this build understands.
@@ -262,7 +262,7 @@ impl SnapshotBlobBackend {
                 limit,
             });
         }
-        let blob = SnapshotBlob::from_dag_cbor(bytes)?;
+        let blob = SnapshotBlob::from_canonical_bytes(bytes)?;
         if blob.schema_version != SNAPSHOT_BLOB_SCHEMA_VERSION {
             return Err(SnapshotBlobError::SchemaVersion {
                 expected: SNAPSHOT_BLOB_SCHEMA_VERSION,
@@ -289,7 +289,7 @@ impl SnapshotBlobBackend {
     /// [`CoreError::Serialize`] if `serde_ipld_dagcbor` cannot encode the
     /// struct.
     pub fn export_blob(&self) -> Result<Vec<u8>, CoreError> {
-        self.blob.to_dag_cbor()
+        self.blob.to_canonical_bytes()
     }
 
     /// Compute the CID of the encoded snapshot-blob bytes (BLAKE3 wrapped
@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn snapshot_blob_round_trip_byte_identical_at_backend_layer() {
         let blob = one_node_blob();
-        let bytes_a = blob.to_dag_cbor().unwrap();
+        let bytes_a = blob.to_canonical_bytes().unwrap();
         let backend = SnapshotBlobBackend::from_bytes(&bytes_a).unwrap();
         let bytes_b = backend.export_blob().unwrap();
         assert_eq!(
@@ -603,8 +603,8 @@ mod tests {
     /// (BTreeMap-sorted-by-key discipline; sec-pre-r1-09 Inv-13).
     #[test]
     fn snapshot_blob_btreemap_canonical_bytes_stable_at_backend_layer() {
-        let bytes1 = one_node_blob().to_dag_cbor().unwrap();
-        let bytes2 = one_node_blob().to_dag_cbor().unwrap();
+        let bytes1 = one_node_blob().to_canonical_bytes().unwrap();
+        let bytes2 = one_node_blob().to_canonical_bytes().unwrap();
         assert_eq!(bytes1, bytes2);
     }
 
@@ -612,7 +612,7 @@ mod tests {
     #[test]
     fn snapshot_blob_cid_stable_across_round_trip() {
         let blob = one_node_blob();
-        let bytes_a = blob.to_dag_cbor().unwrap();
+        let bytes_a = blob.to_canonical_bytes().unwrap();
         let cid_a = SnapshotBlob::compute_cid(&bytes_a);
 
         let backend = SnapshotBlobBackend::from_bytes(&bytes_a).unwrap();
@@ -626,7 +626,7 @@ mod tests {
     fn snapshot_blob_schema_version_mismatch_rejected() {
         let mut blob = one_node_blob();
         blob.schema_version = SNAPSHOT_BLOB_SCHEMA_VERSION + 1;
-        let bytes = blob.to_dag_cbor().unwrap();
+        let bytes = blob.to_canonical_bytes().unwrap();
         let err = SnapshotBlobBackend::from_bytes(&bytes).unwrap_err();
         assert!(matches!(err, SnapshotBlobError::SchemaVersion { .. }));
     }

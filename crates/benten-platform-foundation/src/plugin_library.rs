@@ -96,7 +96,12 @@ pub const EDGE_VERSION_OF: &str = "VERSION_OF";
 
 /// Edge label connecting an anchor to the CURRENT pointer (active
 /// reference per CLAUDE.md #18 + ratification #2 per-device-local).
-pub const EDGE_CURRENT: &str = "CURRENT";
+///
+/// Single-sourced from [`benten_core::LABEL_CURRENT`] (#601: the
+/// version-chain wire-label contract is owned by benten-core; this is
+/// the production mint site and must not carry an independent literal
+/// that can silently drift from the canonical constant).
+pub const EDGE_CURRENT: &str = benten_core::LABEL_CURRENT;
 
 /// Property key on a library_anchor Node: the plugin_name string.
 pub const PROP_ANCHOR_PLUGIN_NAME: &str = "plugin_name";

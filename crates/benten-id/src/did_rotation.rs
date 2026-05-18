@@ -118,7 +118,7 @@ impl RotationAttestation {
     /// public key. Returns [`DidRotationError::BadSignature`] on
     /// mismatch.
     pub fn verify_signature_with(&self, old_pk: &PublicKey) -> Result<(), DidRotationError> {
-        let bytes = self.canonical_bytes();
+        let bytes = self.to_canonical_bytes();
         let sig_bytes: [u8; 64] = self
             .signature
             .as_slice()
@@ -138,12 +138,12 @@ impl RotationAttestation {
 /// per the [`CanonicalBytes`] contract).
 ///
 /// Qual-2 #759: byte-identical reproduction of the prior free-fn
-/// `canonical_bytes(&RotationAttestation)` body, lifted onto the
+/// `to_canonical_bytes(&RotationAttestation)` body, lifted onto the
 /// shared trait. The `SigInput` projection + DAG-CBOR encoding are
 /// unchanged (v1-wire-adjacent — §3.5m P-III; covered by the
 /// byte-equality pin in `tests/canonical_bytes_trait.rs`).
 impl crate::CanonicalBytes for RotationAttestation {
-    fn canonical_bytes(&self) -> Vec<u8> {
+    fn to_canonical_bytes(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SigInput<'a> {
             previous_did: &'a str,
@@ -189,7 +189,7 @@ pub fn rotate_keypair(
         superseded_at,
         signature: Vec::new(),
     };
-    let bytes = attestation.canonical_bytes();
+    let bytes = attestation.to_canonical_bytes();
     let sig = old_kp.sign(&bytes);
     attestation.signature = sig.to_bytes().to_vec();
     Ok(attestation)

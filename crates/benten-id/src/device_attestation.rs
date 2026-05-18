@@ -32,7 +32,7 @@
 //! (`benten_caps::revoke`). This module retains only the pure
 //! primitives: the `CapabilityEnvelope` ceiling type, the signed
 //! `DeviceAttestation` struct + `issue*` / `verify_signature_with` /
-//! `canonical_bytes`, `envelope_widens`, and `generate_fresh_nonce`.
+//! `to_canonical_bytes`, `envelope_widens`, and `generate_fresh_nonce`.
 //!
 //! ## Br-r4-r1-4 / br-r4-r2-3 MAJOR — trust-graph-forgery defense
 //!
@@ -228,7 +228,7 @@ impl DeviceAttestation {
             issued_at,
             signature: Vec::new(),
         };
-        let bytes = crate::CanonicalBytes::canonical_bytes(&attestation);
+        let bytes = crate::CanonicalBytes::to_canonical_bytes(&attestation);
         let sig = parent_kp.sign(&bytes);
         attestation.signature = sig.to_bytes().to_vec();
         Ok(attestation)
@@ -314,7 +314,7 @@ impl DeviceAttestation {
         &self,
         parent_pk: &PublicKey,
     ) -> Result<(), DeviceAttestationError> {
-        let bytes = crate::CanonicalBytes::canonical_bytes(self);
+        let bytes = crate::CanonicalBytes::to_canonical_bytes(self);
         let sig_bytes: [u8; 64] = self
             .signature
             .as_slice()
@@ -328,7 +328,7 @@ impl DeviceAttestation {
     }
 
     /// Encode to canonical bytes (DAG-CBOR).
-    pub fn canonical_bytes(&self) -> Vec<u8> {
+    pub fn to_canonical_bytes(&self) -> Vec<u8> {
         serde_ipld_dagcbor::to_vec(self)
             .expect("DAG-CBOR encoding of fixed-shape DeviceAttestation cannot fail")
     }
@@ -338,7 +338,7 @@ impl DeviceAttestation {
     /// **Hyg-1 #329 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)),
     /// production-zero / test caller exists.** This is the decode half
     /// of the canonical-bytes round-trip contract whose encode half
-    /// (`canonical_bytes`) is load-bearing in `issue_with_nonce` /
+    /// (`to_canonical_bytes`) is load-bearing in `issue_with_nonce` /
     /// `verify_signature_with`. The `device_attestation.rs`
     /// integration suite drives it (round-trip pin at
     /// `tests/device_attestation.rs`). Deleting it would break
@@ -394,21 +394,21 @@ fn envelope_widens(device: &CapabilityEnvelope, parent: &CapabilityEnvelope) -> 
 /// [`CanonicalBytes`](crate::CanonicalBytes) contract.
 ///
 /// Qual-2 #759: byte-identical reproduction of the prior free-fn
-/// `canonical_bytes(&DeviceAttestation)` body, lifted onto the shared
+/// `to_canonical_bytes(&DeviceAttestation)` body, lifted onto the shared
 /// trait. The `SigInput` projection + DAG-CBOR encoding are unchanged
 /// (v1-wire-adjacent — §3.5m P-III; covered by the byte-equality pin
 /// in `tests/canonical_bytes_trait.rs`).
 ///
-/// **Distinct from the inherent [`DeviceAttestation::canonical_bytes`]
+/// **Distinct from the inherent [`DeviceAttestation::to_canonical_bytes`]
 /// / [`DeviceAttestation::from_canonical_bytes`] pair**, which is the
 /// *whole-struct round-trip* serialization (includes `signature`;
 /// #329 round-trip symmetry). This trait impl is the *signature-input
 /// projection* (excludes `signature`) and is reached via UFCS
-/// (`crate::CanonicalBytes::canonical_bytes(&att)`) so the two never
+/// (`crate::CanonicalBytes::to_canonical_bytes(&att)`) so the two never
 /// silently alias — the inherent method wins in method-call position
 /// and remains the round-trip encoder.
 impl crate::CanonicalBytes for DeviceAttestation {
-    fn canonical_bytes(&self) -> Vec<u8> {
+    fn to_canonical_bytes(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SigInput<'a> {
             device_did: &'a str,

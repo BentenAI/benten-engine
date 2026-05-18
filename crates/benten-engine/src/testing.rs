@@ -368,7 +368,7 @@ pub fn subgraph_bytes_for_handler(
         .map_err(|e| format!("subgraph_bytes_for_handler: mermaid: {e}"))?;
     // The mermaid render is deterministic per handler — a stand-in for
     // the eval-side canonical bytes path. G12-C added the core-side
-    // `Subgraph::to_dagcbor` round-trip on `benten_core::Subgraph` (see
+    // `Subgraph::to_canonical_bytes` round-trip on `benten_core::Subgraph` (see
     // `crates/benten-core/src/lib.rs`); the eval-side rich Subgraph (used
     // here for handler dispatch) keeps `canonical_subgraph_bytes` for the
     // registration / immutability path. The mermaid stand-in is retained
@@ -884,7 +884,8 @@ pub fn testing_inspect_wait_metadata(
     engine: &crate::engine::Engine,
     envelope_bytes: &[u8],
 ) -> Option<benten_eval::WaitMetadata> {
-    let envelope = benten_eval::ExecutionStateEnvelope::from_dagcbor(envelope_bytes).ok()?;
+    let envelope =
+        benten_eval::ExecutionStateEnvelope::from_canonical_bytes(envelope_bytes).ok()?;
     let cid = envelope.envelope_cid();
     engine.suspension_store().get_wait(&cid).ok().flatten()
 }
@@ -951,7 +952,7 @@ pub fn testing_make_unregistered_envelope() -> Vec<u8> {
     };
     let envelope = ExecutionStateEnvelope::new(payload).expect("envelope encode");
     envelope
-        .to_dagcbor()
+        .to_canonical_bytes()
         .expect("envelope encode (DAG-CBOR infallible for this shape)")
 }
 

@@ -97,12 +97,12 @@ impl Edge {
     ///
     /// Returns [`CoreError::Serialize`] if `serde_ipld_dagcbor` cannot encode
     /// the edge (e.g., a non-finite float in the property tree — this mirrors
-    /// [`crate::Node::canonical_bytes`] in spirit, though floats in edge
+    /// [`crate::Node::to_canonical_bytes`] in spirit, though floats in edge
     /// properties are rare).
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
         // Canonicalize property floats up-front (same pattern as Node) so
         // NaN / ±Inf surface as typed errors instead of a Serialize wrap.
-        // Fwd-1 #932 fast path (mirrors `Node::canonical_bytes`): when every
+        // Fwd-1 #932 fast path (mirrors `Node::to_canonical_bytes`): when every
         // property is already canonical, encode the borrowed properties
         // directly — byte-identical to encoding the cloned tree, no alloc.
         let all_canonical = match &self.properties {
@@ -143,9 +143,9 @@ impl Edge {
     ///
     /// # Errors
     ///
-    /// Propagates [`CoreError::Serialize`] from [`Edge::canonical_bytes`].
+    /// Propagates [`CoreError::Serialize`] from [`Edge::to_canonical_bytes`].
     pub fn cid(&self) -> Result<Cid, CoreError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
@@ -157,9 +157,9 @@ impl Edge {
     /// # Errors
     ///
     /// Propagates [`CoreError::Serialize`] (and the typed float errors) from
-    /// [`Edge::canonical_bytes`].
+    /// [`Edge::to_canonical_bytes`].
     pub fn cid_and_canonical_bytes(&self) -> Result<(Cid, Vec<u8>), CoreError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
     }

@@ -324,8 +324,11 @@ impl<'a> Transaction<'a> {
     ) -> Durability {
         match authority {
             WriteAuthority::EnginePrivileged => Durability::Immediate,
-            WriteAuthority::User => configured,
             WriteAuthority::SyncReplica { .. } => Durability::None,
+            // `WriteAuthority` is `#[non_exhaustive]` (#837): `User` and
+            // any future authority class get the operator-configured
+            // durability (never weaker than the chosen default).
+            WriteAuthority::User | _ => configured,
         }
     }
 
@@ -380,7 +383,7 @@ impl<'a> Transaction<'a> {
             Some(c) => c,
             None => node.cid()?,
         };
-        let bytes = node.canonical_bytes()?;
+        let bytes = node.to_canonical_bytes()?;
         let n_key = node_key(&cid);
         // #615 (Safe-3, META #660 Inv-13 slice): the transactional
         // put-path MUST route through the Inv-13 5-row dispatch matrix, not
@@ -409,14 +412,18 @@ impl<'a> Transaction<'a> {
         };
         if already_present {
             return match authority {
-                WriteAuthority::User => Err(GraphError::InvImmutability {
-                    cid,
-                    attempted_authority: authority,
-                }),
                 // Dedup: no write, no index churn, NO pending op (so no
                 // ChangeEvent and no audit-sequence advance — the dedup
                 // branch must be observably a pure read per sec-r1-4).
                 WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
+                // `User` and any future `#[non_exhaustive]` authority
+                // (#837) take the conservative immutability-enforcing
+                // path — only the two explicitly-privileged classes are
+                // exempt from the Inv-2 content-immutability rejection.
+                WriteAuthority::User | _ => Err(GraphError::InvImmutability {
+                    cid,
+                    attempted_authority: authority,
+                }),
             };
         }
         {
@@ -470,7 +477,7 @@ impl<'a> Transaction<'a> {
             });
         }
         let cid = edge.cid()?;
-        let bytes = edge.canonical_bytes()?;
+        let bytes = edge.to_canonical_bytes()?;
         let txn = self
             .inner
             .as_mut()

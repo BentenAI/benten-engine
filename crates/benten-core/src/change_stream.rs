@@ -116,7 +116,7 @@ pub enum ChangeKind {
 /// (it has grown from 4 to 9 fields as attribution and tx-ordering data
 /// were threaded through; multi-device / Kith attribution is expected to
 /// widen it further). External crates must construct via
-/// [`ChangeEvent::legacy_minimal`] or [`ChangeEvent::for_bridge`] (the
+/// [`ChangeEvent::minimal`] or [`ChangeEvent::for_bridge`] (the
 /// production graph→eval bridge populates every field directly inside
 /// this workspace), so a future field add is not a major-version break.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,12 +162,7 @@ impl ChangeEvent {
     /// must populate every field directly so multi-label matching and
     /// attribution are not silently lost.
     #[must_use]
-    pub fn legacy_minimal(
-        anchor_cid: Cid,
-        kind: ChangeKind,
-        seq: u64,
-        payload_bytes: Vec<u8>,
-    ) -> Self {
+    pub fn minimal(anchor_cid: Cid, kind: ChangeKind, seq: u64, payload_bytes: Vec<u8>) -> Self {
         Self {
             anchor_cid,
             kind,

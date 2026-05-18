@@ -286,7 +286,7 @@ impl RedbBackend {
     /// # Errors
     /// Returns [`GraphError`] on encode / write failure.
     pub fn store_subgraph(&self, sg: &benten_core::Subgraph) -> Result<Cid, GraphError> {
-        let bytes = sg.to_dag_cbor().map_err(GraphError::from)?;
+        let bytes = sg.to_canonical_bytes().map_err(GraphError::from)?;
         let digest = blake3::hash(&bytes);
         let cid = Cid::from_blake3_digest(*digest.as_bytes());
         self.put(&subgraph_key(&cid), &bytes)?;

@@ -6,7 +6,7 @@
 //!
 //! - [`Value`] — the graph value type. Variants: `null`, `bool`, `int`,
 //!   `float`, `text`, `bytes`, `list`, and `map`. The `Float` variant rejects
-//!   `NaN` and `±Infinity` at `canonical_bytes` time and normalizes `-0.0` to
+//!   `NaN` and `±Infinity` at `to_canonical_bytes` time and normalizes `-0.0` to
 //!   `+0.0`; see the [`value`] module docs for the full contract.
 //! - [`Node`] — a content-addressed graph Node (label list + ordered property
 //!   map). Content-addressed via BLAKE3 over DAG-CBOR; see ENGINE-SPEC §7.
@@ -102,6 +102,7 @@ pub use value::{MAX_VALUE_DECODE_DEPTH, Value};
 /// payload (e.g. `redb_backend.rs::put_node_with_context`) rely on
 /// implicit copy semantics instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub enum WriteAuthority {
     /// Normal user path (default).
     User,
@@ -211,7 +212,7 @@ impl Node {
     /// Returns [`CoreError::Serialize`] if `serde_ipld_dagcbor` cannot encode
     /// the Node (e.g., non-UTF-8 in a text field, which the type system
     /// already prevents, or integer overflow in the CBOR encoder).
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
         // Canonicalize the property tree up-front: reject NaN / ±Inf so the
         // rejection surfaces as a real `CoreError` (with a stable
         // `E_VALUE_FLOAT_*` code) rather than a `Serialize` variant holding a
@@ -256,9 +257,9 @@ impl Node {
     ///
     /// # Errors
     ///
-    /// Propagates [`CoreError::Serialize`] from [`Node::canonical_bytes`].
+    /// Propagates [`CoreError::Serialize`] from [`Node::to_canonical_bytes`].
     pub fn cid(&self) -> Result<Cid, CoreError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
@@ -268,18 +269,18 @@ impl Node {
     ///
     /// Production WRITE hot paths (`redb_backend`, `browser_backend`) need
     /// both the CID (the storage key) and the canonical bytes (the stored
-    /// value). Calling `cid()` then `canonical_bytes()` runs the full
+    /// value). Calling `cid()` then `to_canonical_bytes()` runs the full
     /// DAG-CBOR encode (and the property-tree canonicalization walk) twice.
     /// This method encodes once and hashes those exact bytes — behavior is
-    /// identical (`cid == blake3(canonical_bytes)` in both shapes) with ~50%
+    /// identical (`cid == blake3(to_canonical_bytes)` in both shapes) with ~50%
     /// of the per-WRITE encode cost.
     ///
     /// # Errors
     ///
     /// Propagates [`CoreError::Serialize`] (and the typed float errors) from
-    /// [`Node::canonical_bytes`].
+    /// [`Node::to_canonical_bytes`].
     pub fn cid_and_canonical_bytes(&self) -> Result<(Cid, Vec<u8>), CoreError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
     }
@@ -355,6 +356,7 @@ struct NodeHashView<'a> {
 ///
 /// ```
 /// use benten_core::Cid;
+/// use core::str::FromStr;
 ///
 /// let cid = Cid::from_blake3_digest([7u8; 32]);
 /// // Round-trips through the canonical base32-multibase string form.
@@ -469,51 +471,6 @@ impl Cid {
         &self.0
     }
 
-    /// Parse a base32-multibase-prefixed CIDv1 string (e.g.
-    /// `"bafyr4i..."`). This is the inverse of [`Cid::to_base32`].
-    ///
-    /// Phase 1 accepts exactly the multibase form produced by `to_base32`:
-    /// the single-character `b` prefix followed by an RFC 4648 lowercase
-    /// base32 body with no padding. The decoded bytes are then handed to
-    /// [`Cid::from_bytes`], which enforces the Benten CIDv1 layout
-    /// (`[0x01, 0x71, 0x1e, 0x20, <32-byte BLAKE3 digest>]`).
-    ///
-    /// # Errors
-    ///
-    /// - [`CoreError::CidParse`] if the string is empty, lacks the `b`
-    ///   multibase prefix, or contains a character outside the base32
-    ///   lowercase alphabet `a-z2-7`.
-    /// - The three typed failure classes from [`Cid::from_bytes`]
-    ///   ([`CoreError::InvalidCid`], [`CoreError::CidUnsupportedCodec`],
-    ///   [`CoreError::CidUnsupportedHash`]) if the decoded bytes are the
-    ///   wrong length or carry unexpected multicodec / multihash codes.
-    pub fn from_str(s: &str) -> Result<Self, CoreError> {
-        // Multibase prefix: Phase 1 accepts only `b` (base32-lower-nopad).
-        // Any other leading char — including the common mistakes `B`
-        // (base32 upper), `z` (base58btc), `f` (base16), `m` (base64) —
-        // is rejected rather than silently accepted.
-        // Boundary hardening (Safe-2 / META #629 DoS-via-unbounded-decode):
-        // a well-formed Benten CIDv1 base32 body is exactly
-        // `CID_LEN * 8 / 5` (≈58) chars; the `b` prefix makes ~59. Reject
-        // any string longer than a generous fixed ceiling *before* decode
-        // so adversarial multi-hundred-MB input cannot drive an unbounded
-        // `Vec::with_capacity` allocation (or, on wasm32 where `usize` is
-        // 32-bit, a `len * 5` capacity overflow). The ceiling is well
-        // above any legitimate CID string and below DoS-relevant sizes.
-        const MAX_CID_STR_LEN: usize = 256;
-        if s.len() > MAX_CID_STR_LEN {
-            return Err(CoreError::CidParse(
-                "CID string exceeds the maximum length for a Benten CIDv1 \
-                 base32 encoding",
-            ));
-        }
-        let body = s.strip_prefix('b').ok_or(CoreError::CidParse(
-            "CID string must use multibase base32-lower-nopad ('b' prefix)",
-        ))?;
-        let decoded = base32_lower_nopad_decode(body)?;
-        Cid::from_bytes(&decoded)
-    }
-
     /// Phase-2b G6-A test helper: mint a fresh distinct CID for SUBSCRIBE
     /// red-phase fixtures. Always returns a distinct value within a process
     /// (uses a monotonic counter hashed into the digest); cross-process
@@ -561,14 +518,57 @@ impl Cid {
 // constructors are retained (deleting them would break cross-crate
 // production + test callers and CLAUDE.md #5 forbids deprecation shims);
 // these trait impls add the standard-library-conventional surface
-// (`str::parse`, `From`, `TryFrom`) so generic code can convert without
-// reaching for the inherent names. `FromStr` delegates to the inherent
-// `from_str` so there is exactly one parse implementation.
+// (`str::parse`, `From`, `TryFrom`). The canonical parse lives in this
+// `FromStr` impl — the prior shadowing inherent `Cid::from_str` was
+// DELETED (#840, RATIFIED #733-FromStr-cluster class; CLAUDE.md #5: no
+// alias/shim). Callers parse via `s.parse::<Cid>()` or
+// `<Cid as FromStr>::from_str(s)`.
 impl core::str::FromStr for Cid {
     type Err = CoreError;
 
+    /// Parse a base32-multibase-prefixed CIDv1 string (e.g.
+    /// `"bafyr4i..."`). The inverse of [`Cid::to_base32`].
+    ///
+    /// Phase 1 accepts exactly the multibase form produced by `to_base32`:
+    /// the single-character `b` prefix followed by an RFC 4648 lowercase
+    /// base32 body with no padding. The decoded bytes are then handed to
+    /// [`Cid::from_bytes`], which enforces the Benten CIDv1 layout
+    /// (`[0x01, 0x71, 0x1e, 0x20, <32-byte BLAKE3 digest>]`).
+    ///
+    /// # Errors
+    ///
+    /// - [`CoreError::CidParse`] if the string is empty, lacks the `b`
+    ///   multibase prefix, or contains a character outside the base32
+    ///   lowercase alphabet `a-z2-7`.
+    /// - The three typed failure classes from [`Cid::from_bytes`]
+    ///   ([`CoreError::InvalidCid`], [`CoreError::CidUnsupportedCodec`],
+    ///   [`CoreError::CidUnsupportedHash`]) if the decoded bytes are the
+    ///   wrong length or carry unexpected multicodec / multihash codes.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Cid::from_str(s)
+        // Multibase prefix: Phase 1 accepts only `b` (base32-lower-nopad).
+        // Any other leading char — including the common mistakes `B`
+        // (base32 upper), `z` (base58btc), `f` (base16), `m` (base64) —
+        // is rejected rather than silently accepted.
+        // Boundary hardening (Safe-2 / META #629 DoS-via-unbounded-decode):
+        // a well-formed Benten CIDv1 base32 body is exactly
+        // `CID_LEN * 8 / 5` (≈58) chars; the `b` prefix makes ~59. Reject
+        // any string longer than a generous fixed ceiling *before* decode
+        // so adversarial multi-hundred-MB input cannot drive an unbounded
+        // `Vec::with_capacity` allocation (or, on wasm32 where `usize` is
+        // 32-bit, a `len * 5` capacity overflow). The ceiling is well
+        // above any legitimate CID string and below DoS-relevant sizes.
+        const MAX_CID_STR_LEN: usize = 256;
+        if s.len() > MAX_CID_STR_LEN {
+            return Err(CoreError::CidParse(
+                "CID string exceeds the maximum length for a Benten CIDv1 \
+                 base32 encoding",
+            ));
+        }
+        let body = s.strip_prefix('b').ok_or(CoreError::CidParse(
+            "CID string must use multibase base32-lower-nopad ('b' prefix)",
+        ))?;
+        let decoded = base32_lower_nopad_decode(body)?;
+        Cid::from_bytes(&decoded)
     }
 }
 
@@ -814,8 +814,8 @@ pub const LABEL_NEXT_VERSION: &str = "NEXT_VERSION";
 
 /// Format any `Display`able error into an owned `String`.
 ///
-/// Centralized so call sites in the hash path (e.g. [`Node::canonical_bytes`]
-/// / [`Edge::canonical_bytes`]) don't each need to silence the
+/// Centralized so call sites in the hash path (e.g. [`Node::to_canonical_bytes`]
+/// / [`Edge::to_canonical_bytes`]) don't each need to silence the
 /// `expect`-on-`write!` idiom — writing into a freshly-allocated `String`
 /// cannot fail, but the workspace's `clippy::unwrap_used` +
 /// `clippy::expect_used` lints deny the ergonomic escapes. This helper
@@ -840,6 +840,7 @@ pub(crate) fn format_err<E: fmt::Display>(e: &E) -> String {
 )]
 mod tests {
     use super::*;
+    use core::str::FromStr;
     // Single source of truth for the canonical fixture — re-use the public
     // constructor from `testing` rather than defining a second private copy
     // that could drift.

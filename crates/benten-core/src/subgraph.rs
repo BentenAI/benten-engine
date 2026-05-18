@@ -192,6 +192,7 @@ impl PrimitiveKind {
 /// silent second encoding that does not round-trip through
 /// [`Subgraph::load_verified`].
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct OperationNode {
     /// Node id, unique within the enclosing subgraph.
     pub id: String,
@@ -282,20 +283,19 @@ pub struct NodeHandle(pub u32);
 ///
 /// # Canonical-bytes encoding
 ///
-/// `Subgraph::to_dagcbor` / [`canonical_subgraph_bytes`] use the
+/// `Subgraph::to_canonical_bytes` / [`canonical_subgraph_bytes`] use the
 /// `CanonView` schema (sorted nodes + sorted edges + handler_id +
 /// deterministic).
 ///
 /// **`Subgraph` is intentionally NOT `Serialize` / `Deserialize`**
 /// (cag-mr-g12c-cont-1, D5). The pre-fix-pass auto-derived impls were a
 /// SECONDARY (non-canonical) serialisation that did NOT match
-/// `canonical_bytes()` — calling `serde_ipld_dagcbor::to_vec(&sg)` produced
+/// `to_canonical_bytes()` — calling `serde_ipld_dagcbor::to_vec(&sg)` produced
 /// bytes whose BLAKE3 differed from `sg.cid()`, and round-tripping through a
 /// generic serde sink yielded a `Subgraph` that would not re-hash to the
 /// original CID. Removing the derives forces every encode path to go through
-/// [`Subgraph::canonical_bytes`] / [`Subgraph::to_dag_cbor`] /
-/// [`Subgraph::to_dagcbor`] and every decode path through
-/// [`Subgraph::load_verified`] / [`Subgraph::from_dagcbor`] /
+/// [`Subgraph::to_canonical_bytes`] and every decode path through
+/// [`Subgraph::load_verified`] / [`Subgraph::from_canonical_bytes`] /
 /// [`Subgraph::load_verified_with_cid`], so the `cid()` ↔ stored-bytes
 /// contract is single-sourced. A caller that previously relied on `serde`
 /// will see a typed compile error pointing at the canonical entry points.
@@ -474,7 +474,7 @@ impl Subgraph {
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on DAG-CBOR failure.
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
         canonical_subgraph_bytes(self)
     }
 
@@ -486,7 +486,7 @@ impl Subgraph {
     /// # Errors
     /// Returns [`CoreError::Serialize`] if DAG-CBOR encoding fails.
     pub fn cid(&self) -> Result<Cid, CoreError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
@@ -494,32 +494,14 @@ impl Subgraph {
     /// Fwd-1 #926: compute the CID **and** return the canonical bytes from a
     /// single encode + hash pass (see [`crate::Node::cid_and_canonical_bytes`]
     /// for the rationale). Avoids the duplicate node/edge sort + DAG-CBOR
-    /// encode that `cid()` then `canonical_bytes()` performs.
+    /// encode that `cid()` then `to_canonical_bytes()` performs.
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] if DAG-CBOR encoding fails.
     pub fn cid_and_canonical_bytes(&self) -> Result<(Cid, Vec<u8>), CoreError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
-    }
-
-    /// G12-C: DAG-CBOR encode (alias for [`Subgraph::canonical_bytes`]).
-    /// The shorter name (no underscore) matches the round-trip-test
-    /// convention `to_dagcbor` ↔ `from_dagcbor`.
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on encode failure.
-    pub fn to_dag_cbor(&self) -> Result<Vec<u8>, CoreError> {
-        self.canonical_bytes()
-    }
-
-    /// G12-C: alias for [`Subgraph::to_dag_cbor`].
-    ///
-    /// # Errors
-    /// Returns [`CoreError::Serialize`] on encode failure.
-    pub fn to_dagcbor(&self) -> Result<Vec<u8>, CoreError> {
-        self.canonical_bytes()
     }
 
     /// Maximum accepted DAG-CBOR payload size for a subgraph decode at an
@@ -560,11 +542,15 @@ impl Subgraph {
         Self::from_canonical_owned(owned)
     }
 
-    /// G12-C: alias for [`Subgraph::load_verified`].
+    /// Standardized canonical-bytes deserializer (mirror of
+    /// [`Subgraph::to_canonical_bytes`]). Fronts the bounded
+    /// [`Subgraph::load_verified`] decode path (enforces
+    /// [`Subgraph::MAX_DECODE_BYTES`] before decode).
     ///
     /// # Errors
-    /// Returns [`CoreError::Serialize`] on decode failure.
-    pub fn from_dagcbor(bytes: &[u8]) -> Result<Self, CoreError> {
+    /// Returns [`CoreError::Serialize`] on decode failure or boundary-cap
+    /// violation.
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, CoreError> {
         Self::load_verified(bytes)
     }
 

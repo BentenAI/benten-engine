@@ -42,5 +42,5 @@
 pub trait CanonicalBytes {
     /// Encode `self` to its canonical DAG-CBOR byte representation.
     #[must_use]
-    fn canonical_bytes(&self) -> Vec<u8>;
+    fn to_canonical_bytes(&self) -> Vec<u8>;
 }

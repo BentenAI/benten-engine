@@ -114,11 +114,11 @@ pub struct Ucan {
     /// Inner claims (issuer / audience / capability / nbf / exp /
     /// proof chain).
     pub claims: UcanClaims,
-    /// Ed25519 signature of `canonical_bytes(claims)`.
+    /// Ed25519 signature of `to_canonical_bytes(claims)`.
     pub signature: Vec<u8>,
 }
 
-/// UCAN claim payload. The `canonical_bytes` encoding is what the
+/// UCAN claim payload. The `to_canonical_bytes` encoding is what the
 /// signature signs (per `crypto-major-1` shape: signature field
 /// excluded from signed bytes).
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -157,9 +157,9 @@ impl Ucan {
         check_time_window(&self.claims, now)
     }
 
-    // Hyg-1 #311: the private `Ucan::canonical_bytes(&self)` method is
+    // Hyg-1 #311: the private `Ucan::to_canonical_bytes(&self)` method is
     // removed — a zero-caller no-op wrapper over the module free-fn
-    // `canonical_bytes(&UcanClaims)`. Call sites use the free-fn
+    // `to_canonical_bytes(&UcanClaims)`. Call sites use the free-fn
     // directly (CLAUDE.md #5 — no no-op wrappers).
 
     /// Decode a `Ucan` from untrusted canonical bytes with a hard
@@ -350,13 +350,13 @@ fn max_cbor_container_depth(bytes: &[u8], limit: usize) -> Result<usize, UcanErr
 }
 
 /// Qual-2 #759: byte-identical reproduction of the prior free-fn
-/// `canonical_bytes(&UcanClaims)` body, lifted onto the shared
+/// `to_canonical_bytes(&UcanClaims)` body, lifted onto the shared
 /// [`CanonicalBytes`] trait. Whole-struct
 /// DAG-CBOR encoding unchanged (v1-wire-adjacent — §3.5m P-III;
 /// covered by the byte-equality pin in
 /// `tests/canonical_bytes_trait.rs`).
 impl crate::CanonicalBytes for UcanClaims {
-    fn canonical_bytes(&self) -> Vec<u8> {
+    fn to_canonical_bytes(&self) -> Vec<u8> {
         serde_ipld_dagcbor::to_vec(self)
             .expect("DAG-CBOR encoding of UcanClaims fixed shape cannot fail")
     }
@@ -456,7 +456,7 @@ impl UcanBuilder {
             exp: self.exp,
             prf: self.prf,
         };
-        let bytes = claims.canonical_bytes();
+        let bytes = claims.to_canonical_bytes();
         let sig = keypair.sign(&bytes);
         Ucan {
             claims,
@@ -667,7 +667,7 @@ fn validate_chain_inner(
         let pk: PublicKey = iss_did
             .resolve()
             .map_err(|_| UcanError::BadSignature { link_index: idx })?;
-        let bytes = token.claims.canonical_bytes();
+        let bytes = token.claims.to_canonical_bytes();
         // ed25519-dalek's verify is itself constant-time on the
         // signature bytes (ed25519 verification has no early-exit on
         // signature mismatch); we still flow the result through a

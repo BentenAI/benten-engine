@@ -730,7 +730,7 @@ impl RedbBackend {
     /// runs the redb write and index maintenance under a single commit.
     fn put_node_unchecked(&self, node: &Node) -> Result<Cid, GraphError> {
         // Fwd-1 #926: single encode+hash pass instead of cid() then
-        // canonical_bytes() (which double-encodes the same Node).
+        // to_canonical_bytes() (which double-encodes the same Node).
         let (cid, bytes) = node.cid_and_canonical_bytes()?;
         let n_key = node_key(&cid);
 
@@ -1230,6 +1230,11 @@ impl RedbBackend {
             // configured mode so downstream inspection APIs see something
             // truthful during 2a's shape-only lifetime.
             WriteAuthority::SyncReplica { .. } => (Durability::None, self.configured_durability),
+            // `WriteAuthority` is `#[non_exhaustive]` (#837): an
+            // authority class this build does not recognize gets the
+            // configured (safe) durability — never weaker than the
+            // operator's chosen default.
+            _ => (self.durability, self.configured_durability),
         };
 
         // G11-A TOCTOU atomicity: the existence probe + the conditional
@@ -1283,11 +1288,15 @@ impl RedbBackend {
             // sequence — sec-r1-4 "pure-read dedup" contract.
             drop(write_txn);
             return match ctx.authority {
-                WriteAuthority::User => Err(GraphError::InvImmutability {
+                WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
+                // `User` and any future `#[non_exhaustive]` authority
+                // (#837) take the conservative immutability-enforcing
+                // path — only the two explicitly-privileged classes are
+                // exempt from the Inv-2 content-immutability rejection.
+                WriteAuthority::User | _ => Err(GraphError::InvImmutability {
                     cid,
                     attempted_authority: ctx.authority,
                 }),
-                WriteAuthority::EnginePrivileged | WriteAuthority::SyncReplica { .. } => Ok(cid),
             };
         }
 
@@ -1442,7 +1451,7 @@ impl RedbBackend {
         // Otherwise inject the node's canonical bytes under the caller's
         // chosen key. Index maintenance mirrors `put_node_with_context`
         // but keyed on `cid` rather than the node's true CID.
-        let bytes = node.canonical_bytes()?;
+        let bytes = node.to_canonical_bytes()?;
         let n_key = node_key(cid);
         let write_txn = self.begin_write_txn()?;
         {
@@ -1595,8 +1604,8 @@ impl RedbBackend {
 
         let cid = node.cid().expect("bench helper: cid compute");
         let bytes = node
-            .canonical_bytes()
-            .expect("bench helper: canonical_bytes");
+            .to_canonical_bytes()
+            .expect("bench helper: to_canonical_bytes");
         let n_key = node_key(&cid);
 
         let write_txn = self

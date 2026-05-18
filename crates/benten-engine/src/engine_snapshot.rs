@@ -100,7 +100,7 @@ impl Engine {
     pub fn export_snapshot_blob(&self) -> Result<Vec<u8>, EngineError> {
         let blob = self.collect_snapshot_blob()?;
         let bytes = blob
-            .to_dag_cbor()
+            .to_canonical_bytes()
             .map_err(|e: CoreError| EngineError::Core(e))?;
         Ok(bytes)
     }
@@ -202,7 +202,7 @@ impl Engine {
     ///   indicates tampering between the source-side canonical encode
     ///   and the destination-side decode.
     pub fn from_snapshot_blob(bytes: &[u8]) -> Result<Self, EngineError> {
-        let blob = SnapshotBlob::from_dag_cbor(bytes).map_err(EngineError::Core)?;
+        let blob = SnapshotBlob::from_canonical_bytes(bytes).map_err(EngineError::Core)?;
         if blob.schema_version
             != benten_graph::backends::snapshot_blob::SNAPSHOT_BLOB_SCHEMA_VERSION
         {
@@ -238,7 +238,7 @@ impl Engine {
 
         // Replay each Node body through `put_node`. Because the body
         // bytes are canonical DAG-CBOR (the source engine produced them
-        // via the same canonical_bytes path), `put_node`'s recomputed
+        // via the same to_canonical_bytes path), `put_node`'s recomputed
         // CID matches the snapshot-blob's key — Inv-13's
         // content-addressing invariant carries us through.
         for (cid, body) in &blob.nodes {
