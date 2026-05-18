@@ -1067,3 +1067,146 @@ fn project_view_read_to_outcome(
 // which do not auto-register a live subscriber on engine open. Full
 // removal of the whitelist waits on G8-A's Algorithm B port to expose
 // a definition-registry method on the subscriber.
+
+// =====================================================================
+// EngineViewsHandle — Wave-E HELD #1190 / #834 facet-handle split
+// part 1 (RATIFIED #4, Atrium-pattern; `docs/future/refinement-audit-
+// 2026-05.md §15.3` item #4).
+//
+// Sibling to the established `crate::engine_caps::EngineCapsHandle`
+// (the `engine.caps()` facet). #1190 part-1 introduces the `views()`
+// facet so the IVM-view read/registration surface has a structural
+// seam — addressing #834 (Surf-1: the flat 50-method namespace has no
+// API-level signal which methods compose against the view subsystem)
+// the same way `engine.caps()` did for the capability subsystem.
+//
+// **Additive, zero call-site cascade (RATIFIED P-II compliance).**
+// The handle methods delegate to the existing `impl Engine` view
+// methods, which STAY in place. The mechanical migration of every
+// `engine.read_view(..)` call site to `engine.views().read_view(..)`
+// + `#[deprecated]` shims on `Engine` is a cross-crate mechanical
+// cascade (every crate's tests reference these) — that is RATIFIED
+// P-II "ONE orchestrator-serialized workspace pass" + the explicitly-
+// RATIFIED Phase-4-Meta part-2/3 of the facet split (#1190 body: "the
+// remaining handles … part 2/3 defer to Phase-4-Meta per the
+// RATIFIED phased rollout"). Part-1 lands the PERMANENT handle shape
+// now (P-I: the elegant permanent API) without the churny cascade in
+// a security-serialized lane.
+// =====================================================================
+
+/// Wave-E HELD #1190 — IVM-view read/registration facet handle,
+/// returned by [`Engine::views`]. Sibling to
+/// [`crate::engine_caps::EngineCapsHandle`].
+///
+/// Wraps a borrow of the engine + exposes the view subsystem surface
+/// (`read_view*`, `view_strategy`, `materialize_view_with_gate`,
+/// `user_view_*`, `register_user_view`) under one cohesive namespace.
+/// The methods delegate to the engine's existing view entry points;
+/// the handle is the structural seam the #834 Surf-1 finding asks for
+/// (the JS-side mirror — `engine.views().<m>()` factory handle like
+/// `engine.atrium(..)` — is the RATIFIED Phase-4-Meta part-2).
+pub struct EngineViewsHandle<'eng> {
+    /// Engine borrow. Crate-private so external code MUST go through
+    /// the public methods.
+    pub(crate) engine: &'eng Engine,
+}
+
+impl<'eng> EngineViewsHandle<'eng> {
+    /// See [`Engine::read_view`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::read_view`].
+    pub fn read_view(&self, view_id: &str) -> Result<Outcome, EngineError> {
+        self.engine.read_view(view_id)
+    }
+
+    /// See [`Engine::read_view_with`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::read_view_with`].
+    pub fn read_view_with(
+        &self,
+        view_id: &str,
+        opts: ReadViewOptions,
+    ) -> Result<Outcome, EngineError> {
+        self.engine.read_view_with(view_id, opts)
+    }
+
+    /// See [`Engine::read_view_strict`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::read_view_strict`].
+    pub fn read_view_strict(&self, view_id: &str) -> Result<Outcome, EngineError> {
+        self.engine.read_view_strict(view_id)
+    }
+
+    /// See [`Engine::read_view_allow_stale`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::read_view_allow_stale`].
+    pub fn read_view_allow_stale(&self, view_id: &str) -> Result<Outcome, EngineError> {
+        self.engine.read_view_allow_stale(view_id)
+    }
+
+    /// See [`Engine::view_strategy`].
+    #[must_use]
+    pub fn view_strategy(&self, view_id: &str) -> Option<benten_ivm::Strategy> {
+        self.engine.view_strategy(view_id)
+    }
+
+    /// See [`Engine::materialize_view_with_gate`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::materialize_view_with_gate`].
+    pub fn materialize_view_with_gate(
+        &self,
+        view_id: &str,
+        gate: &crate::ivm_view_read_gate::IvmViewReadGate,
+    ) -> Result<Option<Vec<Cid>>, EngineError> {
+        self.engine.materialize_view_with_gate(view_id, gate)
+    }
+
+    /// See [`Engine::user_view_snapshot`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::user_view_snapshot`].
+    pub fn user_view_snapshot(&self, view_id: &str) -> Result<Option<Vec<Node>>, EngineError> {
+        self.engine.user_view_snapshot(view_id)
+    }
+
+    /// See [`Engine::user_view_on_update`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::user_view_on_update`].
+    pub fn user_view_on_update(&self, view_id: &str) -> Result<Option<ChangeProbe>, EngineError> {
+        self.engine.user_view_on_update(view_id)
+    }
+
+    /// See [`Engine::user_view_drain_updates_since`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from
+    /// [`Engine::user_view_drain_updates_since`].
+    pub fn user_view_drain_updates_since(
+        &self,
+        view_id: &str,
+        since_offset: u64,
+    ) -> Result<Option<Vec<benten_graph::ChangeEvent>>, EngineError> {
+        self.engine
+            .user_view_drain_updates_since(view_id, since_offset)
+    }
+
+    /// See [`Engine::user_view_change_offset`].
+    #[must_use]
+    pub fn user_view_change_offset(&self) -> u64 {
+        self.engine.user_view_change_offset()
+    }
+
+    /// See [`Engine::register_user_view`].
+    ///
+    /// # Errors
+    /// Forwards [`EngineError`] from [`Engine::register_user_view`].
+    pub fn register_user_view(&self, spec: UserViewSpec) -> Result<Cid, EngineError> {
+        self.engine.register_user_view(spec)
+    }
+}

@@ -1627,6 +1627,27 @@ impl Engine {
         crate::engine_caps::EngineCapsHandle { engine: self }
     }
 
+    /// **Wave-E HELD #1190 / #834** — IVM-view read/registration facet
+    /// handle (facet-handle split part 1, RATIFIED #4, Atrium-pattern).
+    ///
+    /// Sibling to [`Self::caps`]. Returns an
+    /// [`crate::engine_views::EngineViewsHandle`] exposing the view
+    /// subsystem (`read_view*`, `view_strategy`,
+    /// `materialize_view_with_gate`, `user_view_*`,
+    /// `register_user_view`) under one cohesive namespace — the
+    /// structural seam the #834 Surf-1 finding asks for.
+    ///
+    /// Part-1 is additive: the existing `impl Engine` view methods
+    /// stay (zero call-site cascade per RATIFIED P-II). The
+    /// `#[deprecated]` shims + the napi `engine.views().<m>()` JS-mirror
+    /// + the mechanical workspace call-site migration are the
+    /// explicitly-RATIFIED Phase-4-Meta part-2/3 (P-II
+    /// orchestrator-serialized workspace sweep).
+    #[must_use]
+    pub fn views(&self) -> crate::engine_views::EngineViewsHandle<'_> {
+        crate::engine_views::EngineViewsHandle { engine: self }
+    }
+
     /// Phase-3 G16-B-F — current-epoch snapshot of every revoked
     /// `(actor_cid, scope)` pair that the in-memory cap layer has
     /// observed on this engine.
