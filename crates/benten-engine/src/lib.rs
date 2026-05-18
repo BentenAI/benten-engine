@@ -182,6 +182,8 @@ pub use engine::{CHANGE_STREAM_MAX_BUFFERED, Engine, EngineGeneric};
 #[cfg(not(feature = "browser-backend"))]
 pub use engine_caps::{CapProof, EngineCapsHandle};
 #[cfg(not(feature = "browser-backend"))]
+pub use engine_views::EngineViewsHandle;
+#[cfg(not(feature = "browser-backend"))]
 pub use engine_transaction::EngineTransaction;
 pub use error::EngineError;
 pub use outcome::{
