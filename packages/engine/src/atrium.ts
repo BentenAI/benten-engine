@@ -294,15 +294,29 @@ export interface NativeAtrium {
    * doesn't expose it.
    */
   isActive?: boolean;
-  join?: () => void;
-  leave?: () => void;
+  // META #744 PR-A: the 9 AsyncTask-migrated mutators
+  // (`join` / `leave` / `rejoin` / `declareDeviceAttestation` +
+  // `setLocalDevice*` / `clearLocalDevice*`) now return
+  // `Promise<void>` from the native `JsAtrium` AsyncTask shape. The
+  // un-migrated sync surfaces (`trustPeer` / `revokePeer` /
+  // `listDeclaredDeviceAttestations` / `setAcceptor` / `listPeers`)
+  // are typed `Promise<…>` too for wrapper shape-consistency — the
+  // in-memory shim's sync returns are `await`-tolerant. `listPeers`
+  // stays sync (`string[]`): it is read on the synchronous
+  // `Atrium.listPeers()` getter, not awaited.
+  join?: () => Promise<void>;
+  leave?: () => Promise<void>;
   /** R6-FP Wave A Sub-A1 (`napi-r6-r1-1`) — see {@link Atrium.rejoin}. */
-  rejoin?: () => void;
+  rejoin?: () => Promise<void>;
   listPeers?: () => string[];
-  trustPeer?: (peerDid: string) => void;
-  revokePeer?: (peerDid: string) => void;
-  declareDeviceAttestation?: (attestation: NativeDeviceAttestation) => void;
-  listDeclaredDeviceAttestations?: () => NativeDeviceAttestation[];
+  trustPeer?: (peerDid: string) => void | Promise<void>;
+  revokePeer?: (peerDid: string) => void | Promise<void>;
+  declareDeviceAttestation?: (
+    attestation: NativeDeviceAttestation,
+  ) => Promise<void>;
+  listDeclaredDeviceAttestations?: () =>
+    | NativeDeviceAttestation[]
+    | Promise<NativeDeviceAttestation[]>;
   /**
    * R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — local device-attestation
    * setters bound through to the engine-side `AtriumHandle::*`
@@ -310,12 +324,12 @@ export interface NativeAtrium {
    * older napi cdylib builds — the TS wrapper surfaces a clear error
    * at call time rather than at construction.
    */
-  setLocalDeviceDid?: (deviceDid: string) => void;
-  setLocalDeviceKeypair?: (keypair: unknown) => void;
-  clearLocalDeviceKeypair?: () => void;
-  setLocalDeviceAttestation?: (attestation: unknown) => void;
-  clearLocalDeviceAttestation?: () => void;
-  setAcceptor?: (freshnessWindowSecs: number) => void;
+  setLocalDeviceDid?: (deviceDid: string) => Promise<void>;
+  setLocalDeviceKeypair?: (keypair: unknown) => Promise<void>;
+  clearLocalDeviceKeypair?: () => Promise<void>;
+  setLocalDeviceAttestation?: (attestation: unknown) => Promise<void>;
+  clearLocalDeviceAttestation?: () => Promise<void>;
+  setAcceptor?: (freshnessWindowSecs: number) => void | Promise<void>;
 }
 
 interface NativeDeviceAttestation {
@@ -397,14 +411,26 @@ class AtriumHandle implements Atrium {
     if (typeof this.native.join !== "function") {
       throw new Error("Atrium.join unavailable on this native binding");
     }
-    this.native.join();
+    // META #744 PR-A: the native `JsAtrium::join` is now a
+    // Promise-returning `AsyncTask` (runs the iroh `open_atrium`
+    // round-trip on a libuv worker, off the JS-arrival thread).
+    // Landing the Rust AsyncTask migration WITHOUT this `await` would
+    // be a silent correctness regression — the wrapper would resolve
+    // before the engine-side handle is bound. The in-memory shim's
+    // sync method is `await`-tolerant (`await <non-Promise>` resolves
+    // immediately).
+    await this.native.join();
   }
 
   async leave(): Promise<void> {
     if (typeof this.native.leave !== "function") {
       throw new Error("Atrium.leave unavailable on this native binding");
     }
-    this.native.leave();
+    // META #744 PR-A: `await` the now-Promise-returning native
+    // `leave()` AsyncTask. The local cleanup loop + registry resets
+    // below MUST stay AFTER the await so they run only once the
+    // engine-side `is_active` flip has completed (ordering preserved).
+    await this.native.leave();
     // G21-T2 fp-mini-review MAJOR-7 closure: drop the
     // peer-lifecycle + subscribe callback registries on `leave()`.
     // Pre-fp-mini-review a stale callback list survived leave/rejoin
@@ -425,7 +451,10 @@ class AtriumHandle implements Atrium {
     if (typeof this.native.rejoin !== "function") {
       throw new Error("Atrium.rejoin unavailable on this native binding");
     }
-    this.native.rejoin();
+    // META #744 PR-A: native `rejoin()` is now a Promise-returning
+    // AsyncTask — `await` it so the wrapper resolves only after the
+    // engine-side `is_active` flag is restored.
+    await this.native.rejoin();
   }
 
   listPeers(): string[] {
@@ -439,14 +468,26 @@ class AtriumHandle implements Atrium {
     if (typeof this.native.trustPeer !== "function") {
       throw new Error("Atrium.trustPeer unavailable on this native binding");
     }
-    this.native.trustPeer(peerDid);
+    // META #744 PR-A: `trust_peer` is NOT itself AsyncTask-migrated
+    // (the Rust side is a pure in-memory roster push, no `block_on`),
+    // but the `NativeAtrium.trustPeer` type is `Promise<void>` for
+    // shape-consistency with the migrated mutators; `await` is a
+    // no-op on the sync return and future-proofs against the
+    // engine-side trust-roster surface landing as async.
+    await this.native.trustPeer(peerDid);
   }
 
   async revokePeer(peerDid: string): Promise<void> {
     if (typeof this.native.revokePeer !== "function") {
       throw new Error("Atrium.revokePeer unavailable on this native binding");
     }
-    this.native.revokePeer(peerDid);
+    // META #744 PR-A: `await` the native revoke (sync today —
+    // `revoke_peer` is a pure roster push, no `block_on` — typed
+    // `Promise<void>` for shape-consistency). The peer-leave callback
+    // dispatch below MUST stay AFTER the await so listeners observe
+    // the revoke only once the native side has applied it (ordering
+    // preserved).
+    await this.native.revokePeer(peerDid);
     // Notify peer-leave subscribers locally on revoke.
     for (const cb of this.peerLeaveCallbacks) {
       try {
@@ -530,7 +571,12 @@ class AtriumHandle implements Atrium {
         "Atrium.declareDeviceAttestation unavailable on this native binding",
       );
     }
-    this.native.declareDeviceAttestation({
+    // META #744 PR-A: native `declareDeviceAttestation` is now a
+    // Promise-returning AsyncTask. It also throws synchronously
+    // (E_ATRIUM_NOT_JOINED, #688 fix-2) before the task is scheduled
+    // when called pre-join; `await` surfaces both the sync gate
+    // rejection and the async forward result to the caller.
+    await this.native.declareDeviceAttestation({
       deviceDid: envelope.deviceDid,
       capabilities: envelope.capabilities,
       freshnessWindow: envelope.freshnessWindow,
@@ -541,7 +587,12 @@ class AtriumHandle implements Atrium {
     if (typeof this.native.listDeclaredDeviceAttestations !== "function") {
       return [];
     }
-    const native = this.native.listDeclaredDeviceAttestations();
+    // META #744 PR-A: `list_declared_device_attestations` is NOT
+    // AsyncTask-migrated (sync Vec read on the Rust side, no
+    // `block_on`); the `await` is a no-op on the sync array return,
+    // kept for shape-consistency with the migrated mutators per the
+    // PR-A plan's site list.
+    const native = await this.native.listDeclaredDeviceAttestations();
     return native.map((a) => ({
       deviceDid: a.deviceDid,
       capabilities: a.capabilities,
@@ -563,7 +614,10 @@ class AtriumHandle implements Atrium {
     if (typeof deviceDid !== "string") {
       throw new Error("Atrium.setLocalDeviceDid requires a string deviceDid");
     }
-    this.native.setLocalDeviceDid(deviceDid);
+    // META #744 PR-A: native setter is now a Promise-returning
+    // AsyncTask (+ synchronous E_ATRIUM_NOT_JOINED gate pre-join);
+    // `await` surfaces both.
+    await this.native.setLocalDeviceDid(deviceDid);
   }
 
   async setLocalDeviceKeypair(keypair: KeypairHandle): Promise<void> {
@@ -583,7 +637,10 @@ class AtriumHandle implements Atrium {
     // `KeypairHandle` is the structural shape; production callers
     // pass the actual napi class instance returned by
     // `Keypair.generate()`.
-    this.native.setLocalDeviceKeypair(keypair);
+    // META #744 PR-A: native setter is a Promise-returning AsyncTask
+    // (the `Keypair` seed-envelope duplicate is produced
+    // synchronously inside the native method before scheduling).
+    await this.native.setLocalDeviceKeypair(keypair);
   }
 
   async clearLocalDeviceKeypair(): Promise<void> {
@@ -592,7 +649,8 @@ class AtriumHandle implements Atrium {
         "Atrium.clearLocalDeviceKeypair unavailable on this native binding",
       );
     }
-    this.native.clearLocalDeviceKeypair();
+    // META #744 PR-A: native clear is a Promise-returning AsyncTask.
+    await this.native.clearLocalDeviceKeypair();
   }
 
   async setLocalDeviceAttestation(
@@ -613,7 +671,10 @@ class AtriumHandle implements Atrium {
     // `bindings/napi/src/atrium.rs::set_local_device_attestation
     // (&JsDeviceAttestation)`). Production callers pass the actual
     // napi class instance returned by `DeviceAttestation.issue(...)`.
-    this.native.setLocalDeviceAttestation(attestation);
+    // META #744 PR-A: native setter is a Promise-returning AsyncTask
+    // (the attestation `inner_clone()` is produced synchronously
+    // inside the native method before scheduling).
+    await this.native.setLocalDeviceAttestation(attestation);
   }
 
   async clearLocalDeviceAttestation(): Promise<void> {
@@ -622,7 +683,8 @@ class AtriumHandle implements Atrium {
         "Atrium.clearLocalDeviceAttestation unavailable on this native binding",
       );
     }
-    this.native.clearLocalDeviceAttestation();
+    // META #744 PR-A: native clear is a Promise-returning AsyncTask.
+    await this.native.clearLocalDeviceAttestation();
   }
 
   async setAcceptor(freshnessWindowSecs: number): Promise<void> {
@@ -640,7 +702,12 @@ class AtriumHandle implements Atrium {
         "Atrium.setAcceptor requires a non-negative finite freshnessWindowSecs",
       );
     }
-    this.native.setAcceptor(freshnessWindowSecs);
+    // META #744 PR-A: `set_envelope_freshness_window` is NOT
+    // AsyncTask-migrated (bare atomic store on the Rust side, no
+    // `block_on`); the `await` is a no-op on the sync return, kept
+    // for shape-consistency with the migrated mutators per the PR-A
+    // plan's site list.
+    await this.native.setAcceptor(freshnessWindowSecs);
   }
 }
 
@@ -728,11 +795,19 @@ function makeInMemoryNativeAtrium(atriumId: string): NativeAtrium {
     get isActive() {
       return state.active;
     },
-    join: () => {
+    // META #744 PR-A: the 9 mutators that are AsyncTask-migrated on
+    // the native side are `async` here so the shim conforms to the
+    // `Promise<void>` `NativeAtrium` types. The shim itself does no
+    // real async work — the bodies are synchronous; `async` only
+    // shapes the return type. `await` against these is correct;
+    // pre-migration callers that did not await still work (the
+    // Promise resolves on the next microtask with the state already
+    // mutated synchronously inside the body).
+    join: async () => {
       state.joined = true;
       state.active = true;
     },
-    leave: () => {
+    leave: async () => {
       // Wave A semantic: leave flips active to false but preserves the
       // sticky `joined` flag (matching the engine-side
       // `AtriumHandle::leave` non-consuming surface). The pre-Wave-A
@@ -745,7 +820,7 @@ function makeInMemoryNativeAtrium(atriumId: string): NativeAtrium {
       state.joined = false;
       state.active = false;
     },
-    rejoin: () => {
+    rejoin: async () => {
       state.joined = true;
       state.active = true;
     },
@@ -758,25 +833,25 @@ function makeInMemoryNativeAtrium(atriumId: string): NativeAtrium {
     revokePeer: (peerDid) => {
       state.revoked.add(peerDid);
     },
-    declareDeviceAttestation: (a) => {
+    declareDeviceAttestation: async (a) => {
       state.declared.set(a.deviceDid, a);
     },
     listDeclaredDeviceAttestations: () => {
       return [...state.declared.values()];
     },
-    setLocalDeviceDid: (did) => {
+    setLocalDeviceDid: async (did) => {
       state.localDeviceDid = did === "" ? undefined : did;
     },
-    setLocalDeviceKeypair: (kp) => {
+    setLocalDeviceKeypair: async (kp) => {
       state.localDeviceKeypair = kp;
     },
-    clearLocalDeviceKeypair: () => {
+    clearLocalDeviceKeypair: async () => {
       state.localDeviceKeypair = undefined;
     },
-    setLocalDeviceAttestation: (att) => {
+    setLocalDeviceAttestation: async (att) => {
       state.localDeviceAttestation = att;
     },
-    clearLocalDeviceAttestation: () => {
+    clearLocalDeviceAttestation: async () => {
       state.localDeviceAttestation = undefined;
     },
     setAcceptor: (windowSecs) => {
