@@ -62,7 +62,7 @@ jobs:
       - name: Initialize CodeQL
         # github/codeql-action/init@v3 → resolved 2026-04-25
         # (v3 tag → commit ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a)
-        uses: github/codeql-action/init@7fd177fa680c9881b53cdab4d346d32574c9f7f4
+        uses: github/codeql-action/init@458d36d7d4f47d0dd16ca424c1d3cda0060f1360
         with:
           languages: ${{ matrix.language }}
           # Repo-wide CodeQL config. `paths-ignore` excludes test/bench/
@@ -83,6 +83,6 @@ jobs:
       - name: Perform CodeQL Analysis
         # github/codeql-action/analyze@v3 → resolved 2026-04-25
         # (v3 tag → commit ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a)
-        uses: github/codeql-action/analyze@7fd177fa680c9881b53cdab4d346d32574c9f7f4
+        uses: github/codeql-action/analyze@458d36d7d4f47d0dd16ca424c1d3cda0060f1360
         with:
           category: /language:${{ matrix.language }}

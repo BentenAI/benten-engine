@@ -71,7 +71,7 @@ jobs:
         # The 2 globals-touching tests (`sandbox_module_cache_avoids_recompilation_on_repeated_call`
         # + `wait_signal_shape_defaults_untyped_accepts_any_value`) flake
         # under cargo test's default in-binary parallelism.
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@b550161ef8a7bc4f2a671c0b03a18ac9ccedea1e # v2
         with:
           tool: cargo-nextest
 
