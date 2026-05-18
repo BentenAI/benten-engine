@@ -1000,6 +1000,18 @@ pub struct EngineGeneric<B: GraphBackend> {
     /// is named at `docs/future/phase-4-backlog.md §4.36` as a Phase-4-Meta carry.
     pub(crate) manifest_envelope_rechecker:
         Option<Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>>,
+    /// **Refinement-audit-2026-05 Wave-E HELD #1197/#1146** — Layer-3
+    /// plugin-manifest `shares`-envelope resolver consulted from inside
+    /// [`crate::engine_caps::EngineCapsHandle::delegate_capability`].
+    /// `None` collapses to
+    /// [`crate::shares_policy_resolver::NoopSharesPolicyResolver`]
+    /// behavior (pre-Wave-E `AllPermit` baseline; manifest-`shares`
+    /// gate does not constrain delegation). The platform layer / napi
+    /// binding installs a real adapter (wrapping the plugin library +
+    /// manifest store) via [`Self::set_shares_policy_resolver`] so the
+    /// CLAUDE.md #18 Layer-3 gate fires fail-CLOSED.
+    pub(crate) shares_policy_resolver:
+        Option<Arc<dyn crate::shares_policy_resolver::SharesPolicyResolver>>,
 }
 
 /// Default engine alias resolving to the redb-backed specialization on
@@ -1805,6 +1817,18 @@ impl<B: GraphBackend> EngineGeneric<B> {
             manifest_envelope_rechecker: Some(Arc::new(
                 crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker,
             )),
+            // Wave-E HELD #1197/#1146 — Layer-3 `shares`-envelope
+            // resolver. Default `Some(Noop)` for the same structural
+            // reason as the rechecker above: the recheck-path always
+            // runs; the production adapter is the only swap needed to
+            // engage real manifest-`shares` enforcement. Noop returns
+            // `NotPluginPrincipal` (observably identical to the
+            // pre-Wave-E `AllPermit` shim — zero v1 behavior delta),
+            // while a hosted plugin library installs the real adapter
+            // so the CLAUDE.md #18 Layer-3 gate fires fail-CLOSED.
+            shares_policy_resolver: Some(Arc::new(
+                crate::shares_policy_resolver::NoopSharesPolicyResolver,
+            )),
         }
     }
 
@@ -1839,6 +1863,32 @@ impl<B: GraphBackend> EngineGeneric<B> {
         rechecker: Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>,
     ) {
         self.manifest_envelope_rechecker = Some(rechecker);
+    }
+
+    /// **Refinement-audit-2026-05 Wave-E HELD #1197/#1146** — install
+    /// the Layer-3 plugin-manifest `shares`-envelope resolver.
+    ///
+    /// Consulted from
+    /// [`crate::engine_caps::EngineCapsHandle::delegate_capability`] to
+    /// enforce CLAUDE.md baked-in #18 Layer 3 (runtime delegation only
+    /// within the source plugin's signed, user-consented manifest
+    /// `shares` policy). Pre-this-wave the delegation path used a
+    /// hard-coded `AllPermit` shim; the manifest-`shares` gate was
+    /// paper-only (META #669 / Safe-3 #596).
+    ///
+    /// Engines built without this setter behave observably identically
+    /// to the pre-Wave-E `AllPermit` shim (the default
+    /// [`crate::shares_policy_resolver::NoopSharesPolicyResolver`]
+    /// classifies every principal as `NotPluginPrincipal`). The
+    /// production adapter wrapping the plugin library + manifest store
+    /// (typically in `benten-platform-foundation`) makes the gate fire
+    /// fail-CLOSED: a plugin-DID with no resolvable manifest, or whose
+    /// `shares` policy denies the step, is rejected.
+    pub fn set_shares_policy_resolver(
+        &mut self,
+        resolver: Arc<dyn crate::shares_policy_resolver::SharesPolicyResolver>,
+    ) {
+        self.shares_policy_resolver = Some(resolver);
     }
 
     /// Phase-2b G10-A-wasip1: returns `true` when this engine is a
