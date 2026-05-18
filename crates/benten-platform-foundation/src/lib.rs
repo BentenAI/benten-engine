@@ -68,11 +68,12 @@
 //! - `E_MATERIALIZER_SCHEMA_MISMATCH`
 //! - `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE`
 //!
-//! At R3 these ErrorCodes DO NOT EXIST in `benten-errors`. R3 test pins assert
-//! their post-R5 presence by attempting to parse the string forms via
-//! `ErrorCode::from_str` and matching against `ErrorCode::Unknown` for the
-//! current RED-PHASE state. Real variants land at G23-A / G23-B with the
-//! canary commit.
+//! (Historical: at R3 these ErrorCodes did not yet exist in `benten-errors`;
+//! R3 test pins asserted their post-R5 presence by parsing the string forms.)
+//! The real variants landed at G23-A / G23-B; parsing now goes through the
+//! fallible `<ErrorCode as core::str::FromStr>::from_str` (#733) — a
+//! recognized code returns `Ok(variant)`; an unrecognized code returns
+//! `Err(ParseErrorCodeError)` rather than the prior lossy `Unknown`.
 
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 

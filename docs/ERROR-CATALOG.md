@@ -439,7 +439,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "Unknown error code (forward-compat fallback)"
 - **Context:** `{ raw: string }`
-- **Fix:** The drift-detect / catalog contract reserves `ErrorCode::Unknown(s)` as a forward-compat escape valve so a newer server emitting an unrecognized code does not crash an older client. If this code reaches a caller, update the engine / bindings to the latest release — the payload carries the raw code string the server actually emitted. Never thrown by Phase-1 Rust code deliberately; exists only to make the enum round-trip through `from_str` infallible.
+- **Fix:** The drift-detect / catalog contract reserves `ErrorCode::Unknown(s)` as a forward-compat escape valve so a newer server emitting an unrecognized code does not crash an older client. If this code reaches a caller, update the engine / bindings to the latest release — the payload carries the raw code string the server actually emitted. Never thrown by Phase-1 Rust code deliberately; it is the forward-compat recovery target callers opt into via `ErrorCode::from_str(s).unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()))` (#733: the `core::str::FromStr` impl is fallible — unrecognized input is `Err(ParseErrorCodeError)`, not a silent `Unknown`).
 - **Thrown at:** Forward-compat deserialization
 - **Phase:** 1
 

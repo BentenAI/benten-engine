@@ -16,6 +16,7 @@
 //! land); pairs with the broader Phase-3 host-error catalog work.
 
 use benten_errors::ErrorCode;
+use core::str::FromStr;
 
 /// Host-boundary error: stable `code` discriminant + opaque `source` +
 /// optional human `context`. See module docs.
@@ -86,7 +87,13 @@ impl HostError {
         let code_bytes = parts.next().unwrap_or(&[]);
         let ctx_bytes = parts.next().unwrap_or(&[]);
         let code_str = core::str::from_utf8(code_bytes).unwrap_or("E_UNKNOWN");
-        let code = ErrorCode::from_str(code_str);
+        // Wire-decode is forward-compatible: a code emitted by a newer
+        // peer that this build does not recognize is preserved as
+        // `ErrorCode::Unknown` rather than failing the decode (#733
+        // fallible-FromStr migration retains the prior lossy-recover
+        // behavior explicitly at this boundary).
+        let code =
+            ErrorCode::from_str(code_str).unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()));
         let context = if ctx_bytes.is_empty() {
             None
         } else {

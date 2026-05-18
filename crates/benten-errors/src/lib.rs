@@ -21,13 +21,16 @@
 //!
 //! Adding a variant requires:
 //! 1. Append a `match` arm in [`ErrorCode::as_str`], [`ErrorCode::as_static_str`],
-//!    and [`ErrorCode::from_str`].
+//!    and the [`core::str::FromStr`] impl.
 //! 2. Reserve the code in the catalog doc.
 //! 3. Update any `.code()` mapper in the owning crate that may produce it.
 //!
-//! [`ErrorCode::from_str`] round-trips [`ErrorCode::as_str`] for every known
-//! variant and returns [`ErrorCode::Unknown`] for unrecognized codes so a
-//! future server emitting a newer code doesn't crash an older client.
+//! The [`core::str::FromStr`] impl round-trips [`ErrorCode::as_str`] for every
+//! known variant and returns `Err(`[`ParseErrorCodeError`]`)` for unrecognized
+//! codes (#733: fallible by design — parsing a closed catalog can fail).
+//! Forward-compatible boundaries that must not fail on a newer peer's code
+//! recover the prior behavior explicitly via
+//! `.unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()))`.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -562,7 +565,7 @@ pub enum ErrorCode {
     /// silently fail-OPEN against a chain with `nbf > 0` (treats
     /// `now=0 < nbf` as "not-yet-valid" but iteration continues); the
     /// inversion fail-CLOSES with this typed code so callers MUST
-    /// inject a real clock via `with_now_for_test` (or the
+    /// inject a real clock via `with_now_secs` (or the
     /// `WriteContext::now`-threading work named in phase-3-backlog
     /// §2.3 (i)). Maps to `E_UCAN_CLOCK_NOT_INJECTED`. Routes to
     /// `ON_DENIED` (cap-denial family — the chain cannot be validated
@@ -1769,17 +1772,62 @@ impl ErrorCode {
             ErrorCode::Unknown(_) => Some("ON_ERROR"),
         }
     }
+}
 
-    /// Parse a stable catalog code string into an [`ErrorCode`], falling back
-    /// to [`ErrorCode::Unknown`] with the raw string preserved so forward-
-    /// compatible deserialization never panics.
+/// Error returned by [`ErrorCode`]'s [`core::str::FromStr`] impl when the
+/// input string is not a recognized stable catalog code.
+///
+/// Carries the unrecognized raw string so forward-compatible callers
+/// (e.g. deserialization boundaries) can recover an
+/// [`ErrorCode::Unknown`] via
+/// `s.parse().unwrap_or_else(|e: ParseErrorCodeError| ErrorCode::Unknown(e.into_inner()))`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseErrorCodeError(String);
+
+impl ParseErrorCodeError {
+    /// The unrecognized catalog-code string that failed to parse.
     #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume self, yielding the unrecognized string (forward-compat
+    /// recovery into [`ErrorCode::Unknown`]).
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl core::fmt::Display for ParseErrorCodeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "unrecognized error-code catalog string: {:?}", self.0)
+    }
+}
+
+impl core::error::Error for ParseErrorCodeError {}
+
+impl core::str::FromStr for ErrorCode {
+    type Err = ParseErrorCodeError;
+
+    /// Parse a stable catalog code string into an [`ErrorCode`].
+    ///
+    /// Fallible by design (#733, RATIFIED P-I): parsing a *closed*
+    /// catalog from an arbitrary string can fail. Unrecognized input
+    /// yields [`Err(ParseErrorCodeError)`](ParseErrorCodeError) carrying
+    /// the raw string. Forward-compatible deserialization boundaries
+    /// recover the prior [`ErrorCode::Unknown`] behavior explicitly via
+    /// `.unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()))`.
+    ///
+    /// # Errors
+    /// Returns [`ParseErrorCodeError`] if `s` is not a recognized
+    /// stable catalog code.
     #[allow(
         clippy::too_many_lines,
         reason = "exhaustive catalog-string → ErrorCode match; one arm per variant by design (mirror of as_static_str's structure)"
     )]
-    pub fn from_str(s: &str) -> ErrorCode {
-        match s {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let code = match s {
             "E_INV_CYCLE" => ErrorCode::InvCycle,
             "E_INV_DEPTH_EXCEEDED" => ErrorCode::InvDepthExceeded,
             "E_INV_FANOUT_EXCEEDED" => ErrorCode::InvFanoutExceeded,
@@ -1997,8 +2045,9 @@ impl ErrorCode {
             "E_MATERIALIZER_CAP_DENIED" => ErrorCode::MaterializerCapDenied,
             "E_MATERIALIZER_SCHEMA_MISMATCH" => ErrorCode::MaterializerSchemaMismatch,
             "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE" => ErrorCode::MaterializerSubscribeSeamFailure,
-            other => ErrorCode::Unknown(other.to_string()),
-        }
+            other => return Err(ParseErrorCodeError(other.to_string())),
+        };
+        Ok(code)
     }
 }
 

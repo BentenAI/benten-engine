@@ -10,6 +10,7 @@
 //! [`ViewCreateOptions`] are small supporting types.
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use benten_core::{Cid, Node, Value};
 use benten_errors::ErrorCode;
@@ -277,7 +278,10 @@ impl Outcome {
                 .error_code
                 .clone()
                 .map_or(ErrorCode::Unknown(String::new()), |s| {
-                    ErrorCode::from_str(&s)
+                    // Forward-compat: an unrecognized code string is
+                    // preserved as `Unknown` rather than dropped (#733
+                    // fallible-FromStr migration; explicit lossy-recover).
+                    ErrorCode::from_str(&s).unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()))
                 }),
         })
     }
