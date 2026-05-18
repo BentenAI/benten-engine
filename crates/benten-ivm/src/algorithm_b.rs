@@ -1107,9 +1107,9 @@ impl AlgorithmBView {
     /// Mapping:
     ///
     /// - declared `None` ⇒ inner emits `ViewResult::Cids(cids)` →
-    ///   `KernelOutput::Rows(to_canonical_bytes)`.
+    ///   `KernelOutput::Rows(canonical_bytes)`.
     /// - declared `Some(Rules)` ⇒ inner emits `ViewResult::Rules(rules)`
-    ///   → `KernelOutput::Rules(to_canonical_bytes)`.
+    ///   → `KernelOutput::Rules(canonical_bytes)`.
     /// - declared `Some(Current)` ⇒ inner emits
     ///   `ViewResult::Current(opt_cid)` →
     ///   `KernelOutput::Current(opt_bytes)`.
