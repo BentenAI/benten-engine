@@ -41,7 +41,7 @@ fn dsl_compiler_widened_emission_canonical_bytes_stable_for_permuted_prop_keys()
     let a = compile_str(src_a).unwrap();
     let b = compile_str(src_b).unwrap();
     assert_eq!(
-        a.subgraph.canonical_bytes().unwrap(),
-        b.subgraph.canonical_bytes().unwrap()
+        a.subgraph.to_canonical_bytes().unwrap(),
+        b.subgraph.to_canonical_bytes().unwrap()
     );
 }

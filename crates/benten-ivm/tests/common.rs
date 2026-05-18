@@ -176,11 +176,11 @@ enum Inner {
 
 /// Wrapper around the inner view kernel that exposes the state-result
 /// observables `ivm-major-3` + `r4-r2-ivm-2` pin (`is_stale`, `read`,
-/// `read_with`, `canonical_bytes`, `refresh`, `materialised`).
+/// `read_with`, `to_canonical_bytes`, `refresh`, `materialised`).
 pub struct MaterializedView {
     inner: Inner,
     last_writes: Vec<Write>,
-    /// Pre-trip canonical_bytes — captured each time `read_allow_stale`
+    /// Pre-trip to_canonical_bytes — captured each time `read_allow_stale`
     /// could return a non-empty snapshot. Used by `read_with(allow_stale)`
     /// to surface the last-known-good shape after a stale trip (the
     /// inner kernel itself drops the snapshot post-trip; cache here).
@@ -335,7 +335,7 @@ impl MaterializedView {
 
     /// Canonical row-set bytes (sorted CIDs as bytes; deterministic across
     /// runs). Used by `structured_diff` to surface drift.
-    pub fn canonical_bytes(&self) -> Vec<u8> {
+    pub fn to_canonical_bytes(&self) -> Vec<u8> {
         let rows = self.materialised();
         let mut out = Vec::with_capacity(rows.len() * 36);
         for c in &rows {
@@ -366,9 +366,9 @@ impl MaterializedView {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DiffKind {
-    /// Equal canonical_bytes — no drift.
+    /// Equal to_canonical_bytes — no drift.
     Equal,
-    /// Different canonical_bytes — drift between incremental + from-scratch.
+    /// Different to_canonical_bytes — drift between incremental + from-scratch.
     Drift,
     /// One path errored (BudgetExceeded), other succeeded — asymmetric.
     AsymmetricBudget,
@@ -616,7 +616,7 @@ pub fn try_build_full_view(
 pub fn structured_diff(a: &MaterializedView, b: &MaterializedView) -> StructuredDiff {
     let incremental_rows = a.materialised();
     let from_scratch_rows = b.materialised();
-    let kind = if a.canonical_bytes() == b.canonical_bytes() {
+    let kind = if a.to_canonical_bytes() == b.to_canonical_bytes() {
         DiffKind::Equal
     } else {
         DiffKind::Drift

@@ -132,8 +132,8 @@ fn sandbox_named_manifest_canonical_bytes_dagcbor() {
     // bit-stable across re-encodes (BTreeMap key ordering).
     let reg = ManifestRegistry::new();
     let bundle = reg.lookup("compute-basic").unwrap();
-    let bytes_1 = bundle.canonical_bytes().unwrap();
-    let bytes_2 = bundle.canonical_bytes().unwrap();
+    let bytes_1 = bundle.to_canonical_bytes().unwrap();
+    let bytes_2 = bundle.to_canonical_bytes().unwrap();
     assert_eq!(bytes_1, bytes_2, "DAG-CBOR encoding must be stable");
     assert!(!bytes_1.is_empty(), "canonical bytes must be non-empty");
 }

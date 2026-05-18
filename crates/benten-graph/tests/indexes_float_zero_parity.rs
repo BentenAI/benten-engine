@@ -52,7 +52,7 @@ fn neg_zero_and_pos_zero_share_cid_and_share_index_bucket() {
     //    is correctly REFUSED by Inv-13 Row 1 — not silently REPLACE'd.
     // 2. `value_index_bytes` canonicalization fix (adjacent to #548): the
     //    property index now canonicalizes `-0.0 → +0.0` before encoding
-    //    the key (matching `Node::canonical_bytes`), so the `+0.0`-stored
+    //    the key (matching `Node::to_canonical_bytes`), so the `+0.0`-stored
     //    entry IS findable by a `-0.0` query — the load-bearing
     //    "same index bucket" contract this test pins. Previously this only
     //    passed because the test wrote BOTH signs, masking the asymmetry.

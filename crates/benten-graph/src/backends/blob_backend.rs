@@ -63,6 +63,7 @@ use crate::backends::blob_backend_trait::BlobBackend;
 use crate::redb_backend::RedbBackend;
 use crate::store::NodeStore;
 use crate::{GraphError, WriteContext};
+use core::str::FromStr;
 
 /// G14-C label used for the durable module-bytes side-table. The label
 /// MUST start with `system:` so the `guard_system_zone_node` helper at

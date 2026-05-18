@@ -94,7 +94,7 @@ fn mk_preview_event(label: &str, seq_payload: u64) -> ChangeEvent {
     let anchor_cid = Cid::from_blake3_digest(
         *blake3::hash(format!("anchor-{label}-{seq_payload}").as_bytes()).as_bytes(),
     );
-    let mut event = ChangeEvent::legacy_minimal(anchor_cid, ChangeKind::Created, seq, Vec::new());
+    let mut event = ChangeEvent::minimal(anchor_cid, ChangeKind::Created, seq, Vec::new());
     event.labels = vec![label.to_string()];
     event
 }

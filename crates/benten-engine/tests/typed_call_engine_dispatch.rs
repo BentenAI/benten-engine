@@ -28,6 +28,7 @@ use benten_core::{OperationNode, Value};
 use benten_engine::Engine;
 use benten_errors::ErrorCode;
 use benten_eval::{PrimitiveHost, PrimitiveKind, TypedCallOp, primitives::call};
+use std::str::FromStr;
 
 mod common;
 
@@ -558,7 +559,8 @@ fn typed_call_error_codes_round_trip_through_catalog() {
         );
         let parsed = ErrorCode::from_str(s);
         assert_eq!(
-            parsed, code,
+            parsed,
+            Ok(code.clone()),
             "from_str round-trip MUST recover the variant; {s} → {parsed:?} ≠ {code:?}"
         );
     }

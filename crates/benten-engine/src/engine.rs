@@ -60,6 +60,8 @@ use crate::primitive_host::{
     ActiveCall, PendingHostOp, cap_error_to_outcome, eval_error_to_engine_error,
     outcome_from_terminal_with_cid, system_zone_to_outcome, tx_aborted_outcome,
 };
+use core::str::FromStr;
+
 use crate::subgraph_spec::{
     GrantSubject, IntoCallInput, IntoSubgraphSpec, RevokeScope, RevokeSubject, SubgraphSpec,
     WriteSpec,

@@ -1,13 +1,13 @@
 //! Qual-2 #759 closure pin — `CanonicalBytes` trait contract.
 //!
-//! The trait extraction (6 duplicated `canonical_bytes` sites + 2
+//! The trait extraction (6 duplicated `to_canonical_bytes` sites + 2
 //! inline `SigInput<'a>` structs collapsed onto one trait) is a
 //! structural refactor that MUST preserve byte output exactly
 //! (v1-wire-adjacent — §3.5m P-III). These pins assert the
 //! load-bearing contract:
 //!
 //! 1. The trait is implemented for every domain type that previously
-//!    had a private `canonical_bytes` (`RotationAttestation`,
+//!    had a private `to_canonical_bytes` (`RotationAttestation`,
 //!    `UcanClaims`, `CredentialClaims`, `DeviceAttestation`).
 //! 2. The encoding is deterministic + non-empty.
 //! 3. **Signature-input hygiene** — for the two projection types
@@ -38,15 +38,15 @@ fn rotation_attestation_canonical_bytes_is_deterministic_and_excludes_signature(
     let did: Did = old_kp.public_key().to_did();
     let att: RotationAttestation = rotate_keypair(&did, &old_kp, &new_kp, 1_000).unwrap();
 
-    let a = att.canonical_bytes();
-    let b = att.canonical_bytes();
+    let a = att.to_canonical_bytes();
+    let b = att.to_canonical_bytes();
     assert_eq!(a, b, "trait encoding must be deterministic");
     assert!(!a.is_empty(), "encoding must be non-empty");
 
     // Signature-input hygiene: the trait encoding is computed over
     // (previous_did, next_did, superseded_at) ONLY — the `signature`
     // field is excluded. The verify path consumes
-    // `self.canonical_bytes()` (the trait); if `signature` were folded
+    // `self.to_canonical_bytes()` (the trait); if `signature` were folded
     // into the projection, signing would be circular and verify would
     // fail. A passing verify proves the projection excludes the
     // signature.
@@ -61,7 +61,7 @@ fn rotation_attestation_round_trip_through_trait_bytes() {
     let did: Did = old_kp.public_key().to_did();
     let att = rotate_keypair(&did, &old_kp, &new_kp, 42).unwrap();
 
-    // verify_signature_with internally uses `self.canonical_bytes()`
+    // verify_signature_with internally uses `self.to_canonical_bytes()`
     // (the trait). A drifted trait body would fail this.
     att.verify_signature_with(old_kp.public_key())
         .expect("sign/verify round-trips through the CanonicalBytes trait");
@@ -85,11 +85,11 @@ fn device_attestation_trait_is_sig_input_projection_distinct_from_round_trip() {
         DeviceAttestation::issue_with_nonce(&parent, device_did, envelope, 100, [7u8; 32]).unwrap();
 
     // The trait impl is the signature-input projection (excludes
-    // `signature`); the inherent `canonical_bytes` is the whole-struct
+    // `signature`); the inherent `to_canonical_bytes` is the whole-struct
     // round-trip (includes `signature`). They are DIFFERENT byte
     // outputs by design — assert they do not silently alias.
-    let sig_input = CanonicalBytes::canonical_bytes(&att);
-    let whole_struct = att.canonical_bytes(); // inherent wins in method position
+    let sig_input = CanonicalBytes::to_canonical_bytes(&att);
+    let whole_struct = att.to_canonical_bytes(); // inherent wins in method position
     assert_ne!(
         sig_input, whole_struct,
         "trait sig-input projection must differ from whole-struct round-trip encoding"

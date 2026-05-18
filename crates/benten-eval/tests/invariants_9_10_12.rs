@@ -64,7 +64,7 @@ fn rejects_content_hash_mismatch() {
         .read("r")
         .build_validated_for_corruption_test();
     let cid = sg.cid().unwrap();
-    let mut bytes = sg.canonical_bytes().unwrap();
+    let mut bytes = sg.to_canonical_bytes().unwrap();
     // Flip a single bit. Now the stored bytes no longer hash to `cid`.
     let last = bytes.last_mut().unwrap();
     *last ^= 0x01;
@@ -137,7 +137,7 @@ fn invariant_10_rejection_exposes_cid_expected_and_actual_accessors() {
         .read("r")
         .build_validated_for_corruption_test();
     let cid = sg.cid().unwrap();
-    let mut bytes = sg.canonical_bytes().unwrap();
+    let mut bytes = sg.to_canonical_bytes().unwrap();
     *bytes.last_mut().unwrap() ^= 0x01;
     let err =
         <benten_eval::Subgraph as benten_eval::SubgraphExt>::load_verified_with_cid(&cid, &bytes)

@@ -162,7 +162,7 @@ fn on_change_as_with_cursor_actor_aware_cursor_resume_composition_under_noauth()
 
     // Publish a real event matching the registered pattern.
     let seq = benten_eval::primitives::subscribe::next_engine_seq();
-    let mut event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+    let mut event = benten_eval::primitives::subscribe::ChangeEvent::minimal(
         benten_core::Cid::from_blake3_digest(*blake3::hash(b"post:created").as_bytes()),
         benten_eval::primitives::subscribe::ChangeKind::Created,
         seq,

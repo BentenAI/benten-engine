@@ -10,6 +10,7 @@
 
 use benten_errors::ErrorCode;
 use benten_platform_foundation::registry::timeout_error_code;
+use std::str::FromStr;
 
 #[test]
 fn registry_discover_surface_stub_exists_for_phase_4_meta_with_typed_error_code() {
@@ -37,7 +38,7 @@ fn registry_discover_surface_stub_exists_for_phase_4_meta_with_typed_error_code(
     );
     assert!(matches!(
         ErrorCode::from_str("E_REGISTRY_DISCOVERY_TIMEOUT"),
-        ErrorCode::RegistryDiscoveryTimeout
+        Ok(ErrorCode::RegistryDiscoveryTimeout)
     ));
 }
 

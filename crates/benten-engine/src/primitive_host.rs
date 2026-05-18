@@ -44,6 +44,7 @@ use crate::engine::{Engine, is_known_view_id};
 use crate::error::EngineError;
 use crate::outcome::Outcome;
 use crate::system_zones::SYSTEM_ZONE_PREFIXES;
+use core::str::FromStr;
 
 /// Phase 2a G9-A-cont: wall-clock refresh ceiling per §9.13 refresh
 /// point #3. An ITERATE / CALL loop that elapses this much monotonic

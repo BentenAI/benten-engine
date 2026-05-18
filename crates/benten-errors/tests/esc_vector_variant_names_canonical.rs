@@ -34,6 +34,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 #[test]
 fn esc_vector_and_escape_attempt_typed_error_catalog_canonical_per_d_e_and_r4_r1_wsa_5() {
@@ -62,11 +63,11 @@ fn esc_vector_and_escape_attempt_typed_error_catalog_canonical_per_d_e_and_r4_r1
     // round-trip discipline).
     assert!(matches!(
         ErrorCode::from_str("E_SANDBOX_ESCAPE_ATTEMPT"),
-        ErrorCode::SandboxEscapeAttempt
+        Ok(ErrorCode::SandboxEscapeAttempt)
     ));
     assert!(matches!(
         ErrorCode::from_str("E_SANDBOX_STACK_OVERFLOW"),
-        ErrorCode::SandboxStackOverflow
+        Ok(ErrorCode::SandboxStackOverflow)
     ));
 
     // Source 3: EscVector enum variants spell-canonical (source-cite

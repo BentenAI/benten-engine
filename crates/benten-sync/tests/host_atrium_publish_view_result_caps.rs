@@ -260,7 +260,7 @@ fn host_atrium_publish_view_result_cap_trust_no_one_via_no_delegation_recompute_
     //   // (deterministic recomputation under the same graph state):
     //   wait_for_atrium_convergence(&peers).await;
     //   let view_bytes: BTreeSet<_> = peers.iter()
-    //       .map(|p| p.materialize_user_view(&view_def.id()).unwrap().canonical_bytes())
+    //       .map(|p| p.materialize_user_view(&view_def.id()).unwrap().to_canonical_bytes())
     //       .collect();
     //   assert_eq!(view_bytes.len(), 1,
     //       "trust-no-one mode: each peer recomputes locally; deterministic recomputation produces identical canonical-bytes");

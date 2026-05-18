@@ -257,7 +257,7 @@ fn inspect_state_with_valid_envelope_bytes_exits_0() {
         frame_index: 0,
     };
     let envelope = ExecutionStateEnvelope::new(payload).expect("envelope construct");
-    let bytes = envelope.to_dagcbor().expect("envelope encode");
+    let bytes = envelope.to_canonical_bytes().expect("envelope encode");
     std::fs::write(&file_path, &bytes).expect("write envelope file");
 
     let output = benten_dev()

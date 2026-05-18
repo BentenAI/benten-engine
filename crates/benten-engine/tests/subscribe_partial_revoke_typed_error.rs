@@ -149,7 +149,7 @@ fn cap_recheck_failing_mid_stream_populates_subscription_termination_reason_with
     .unwrap();
 
     let mk_event = |seq: u64| {
-        ChangeEvent::legacy_minimal(
+        ChangeEvent::minimal(
             Cid::from_blake3_digest(*blake3::hash(format!("anchor-{seq}").as_bytes()).as_bytes()),
             ChangeKind::Created,
             seq,
@@ -258,7 +258,7 @@ fn freshly_registered_on_change_termination_reason_slot_is_none() {
     let pre_count = subscribe_revoked_mid_stream_count();
     benten_eval::primitives::subscribe::publish_change_event_with_labels(
         &["FreshProbe:hello".to_string()],
-        ChangeEvent::legacy_minimal(
+        ChangeEvent::minimal(
             Cid::from_blake3_digest(*blake3::hash(b"anchor-fresh").as_bytes()),
             ChangeKind::Created,
             500,

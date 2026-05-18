@@ -25,6 +25,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_core::testing::canonical_test_node;
+use core::str::FromStr;
 
 /// Phase-1 canonical fixture CID. Derived from the canonical
 /// `Post {title: "Hello, Benten", published: true, views: 42, tags:

@@ -34,6 +34,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 /// 15 G24-D ErrorCode string forms — mirror of
 /// `manifest_fixtures::G24_D_ERROR_CODES` at
@@ -77,13 +78,13 @@ fn every_expected_g24_d_plugin_code_resolves_to_named_variant() {
         // variants resolve to NAMED variants (un-ignored sentinel).
         let parsed = ErrorCode::from_str(code);
         assert!(
-            !matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_ok(),
             "G24-D subset-closure: ErrorCode {code} expected in enum \
              post-G24-D but from_str returned Unknown — enum + as_str \
              + from_str arms missing for this variant"
         );
         assert_eq!(
-            parsed.as_static_str(),
+            parsed.expect("recognized catalog code").as_static_str(),
             *code,
             "G24-D subset-closure: ErrorCode {code} must round-trip \
              through as_static_str → from_str without lossy conversion"
@@ -104,12 +105,12 @@ fn device_attestation_forged_code_keeps_plugin_family_prefix() {
     let code = "E_PLUGIN_DEVICE_ATTESTATION_FORGED";
     let parsed = ErrorCode::from_str(code);
     assert!(
-        !matches!(parsed, ErrorCode::Unknown(_)),
+        parsed.is_ok(),
         "Sentinel: {code} must be a NAMED variant post-G24-D \
          (Ben's R4-triage §7 ratification — E_PLUGIN_* family prefix)"
     );
     assert_eq!(
-        parsed.as_static_str(),
+        parsed.expect("recognized catalog code").as_static_str(),
         code,
         "Sentinel: {code} must round-trip exact string form — \
          catches accidental rename back to \
@@ -122,7 +123,7 @@ fn device_attestation_forged_code_keeps_plugin_family_prefix() {
     let old_name = "E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE";
     let parsed_old = ErrorCode::from_str(old_name);
     assert!(
-        matches!(parsed_old, ErrorCode::Unknown(_)),
+        parsed_old.is_err(),
         "Sentinel inverse: {old_name} (pre-rename) MUST NOT be a named \
          variant; R4-triage §7 ratification chose E_PLUGIN_DEVICE_ATTESTATION_FORGED"
     );

@@ -13,6 +13,8 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::str::FromStr;
+
 use benten_errors::{ErrorCode, FIRING_CODES_AT_PHASE_2A_SNAPSHOT};
 
 #[test]
@@ -28,7 +30,7 @@ fn phase_2a_error_codes_present() {
         );
         assert_eq!(
             ErrorCode::from_str(literal),
-            variant.clone(),
+            Ok(variant.clone()),
             "from_str must round-trip the literal {literal}"
         );
     }

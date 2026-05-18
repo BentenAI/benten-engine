@@ -43,6 +43,7 @@ use benten_sync::errors::AtriumTransportError;
 use benten_sync::handshake_wire::HandshakeFrame;
 use benten_sync::peer_id::PeerId;
 use benten_sync::transport::{Endpoint, TransportStatus};
+use std::str::FromStr;
 
 #[tokio::test]
 async fn atrium_relay_unreachable_fires_typed_error_no_panic() {
@@ -69,7 +70,7 @@ async fn atrium_relay_unreachable_fires_typed_error_no_panic() {
     // Round-trips through the parser:
     assert_eq!(
         ErrorCode::from_str("E_ATRIUM_RELAY_UNREACHABLE"),
-        ErrorCode::AtriumRelayUnreachable
+        Ok(ErrorCode::AtriumRelayUnreachable)
     );
 
     // Also test that a relay-side peer-connect failure maps to the

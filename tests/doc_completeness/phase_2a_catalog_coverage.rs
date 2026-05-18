@@ -27,6 +27,7 @@ use benten_errors::{
 };
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Repo-root path to the catalog.
 fn catalog_path() -> PathBuf {
@@ -96,10 +97,11 @@ fn error_catalog_has_every_phase_2a_reserved_code() {
 /// Bidirectional drift — direction (b): catalog → ErrorCode, restricted to
 /// the Phase-2a set. Every Phase-2a firing + reserved code, when found as
 /// a heading in the catalog, MUST round-trip through
-/// `ErrorCode::from_str(literal)` to the same variant (not `Unknown`). A
-/// heading that fails to round-trip signals a catalog entry whose code
-/// slot was never wired into the Rust enum — a "paper code" with no
-/// reachable fire site.
+/// `ErrorCode::from_str(literal)` to `Ok(<the same variant>)` (#733:
+/// fallible parse — a recognized code is `Ok`, an unrecognized one is a
+/// parse error). A heading that fails to round-trip signals a catalog
+/// entry whose code slot was never wired into the Rust enum — a "paper
+/// code" with no reachable fire site.
 ///
 /// The test deliberately scopes to the Phase-2a set: Phase-3 sync codes
 /// (E_SYNC_*) and Phase-2 SANDBOX codes are catalog-documented ahead of
@@ -125,9 +127,9 @@ fn phase_2a_codes_round_trip_through_from_str() {
             continue;
         }
         let parsed = ErrorCode::from_str(literal);
-        if parsed != *variant {
+        if parsed.as_ref() != Ok(variant) {
             failures.push(format!(
-                "catalog heading `### {literal}` round-trips to {parsed:?}, expected {variant:?}"
+                "catalog heading `### {literal}` round-trips to {parsed:?}, expected Ok({variant:?})"
             ));
         }
     }

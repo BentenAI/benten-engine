@@ -21,10 +21,10 @@ fn subgraph_dagcbor_roundtrip_preserves_deterministic_field() {
         "pre-encode: deterministic=true must be reflected in accessor"
     );
 
-    // DAG-CBOR round-trip. Requires Subgraph to expose to_dagcbor / from_dagcbor
-    // (or canonical_bytes + load_verified) that preserve the flag.
-    let bytes = sg.to_dagcbor().expect("encode");
-    let decoded: Subgraph = Subgraph::from_dagcbor(&bytes).expect("decode");
+    // DAG-CBOR round-trip. Requires Subgraph to expose to_canonical_bytes / from_canonical_bytes
+    // (or to_canonical_bytes + load_verified) that preserve the flag.
+    let bytes = sg.to_canonical_bytes().expect("encode");
+    let decoded: Subgraph = Subgraph::from_canonical_bytes(&bytes).expect("decode");
 
     assert!(
         decoded.is_declared_deterministic(),

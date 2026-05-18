@@ -11,6 +11,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 /// `e_wait_ttl_expired_present_in_catalog` — D12 + R2 row 525.
 #[test]
@@ -19,7 +20,7 @@ fn e_wait_ttl_expired_present_in_catalog() {
     assert_eq!(code.as_str(), "E_WAIT_TTL_EXPIRED");
     assert_eq!(
         ErrorCode::from_str("E_WAIT_TTL_EXPIRED"),
-        ErrorCode::WaitTtlExpired
+        Ok(ErrorCode::WaitTtlExpired)
     );
 }
 
@@ -30,7 +31,7 @@ fn e_wait_ttl_invalid_present_in_catalog() {
     assert_eq!(code.as_str(), "E_WAIT_TTL_INVALID");
     assert_eq!(
         ErrorCode::from_str("E_WAIT_TTL_INVALID"),
-        ErrorCode::WaitTtlInvalid
+        Ok(ErrorCode::WaitTtlInvalid)
     );
 }
 
@@ -44,7 +45,7 @@ fn e_wait_metadata_missing_present_in_catalog() {
     assert_eq!(code.as_str(), "E_WAIT_METADATA_MISSING");
     assert_eq!(
         ErrorCode::from_str("E_WAIT_METADATA_MISSING"),
-        ErrorCode::WaitMetadataMissing
+        Ok(ErrorCode::WaitMetadataMissing)
     );
 }
 
@@ -62,7 +63,7 @@ fn wait_ttl_no_deprecated_aliases() {
     ] {
         let parsed = ErrorCode::from_str(alias);
         assert!(
-            !matches!(parsed, ErrorCode::WaitTtlExpired),
+            !matches!(parsed, Ok(ErrorCode::WaitTtlExpired)),
             "{alias} MUST NOT alias E_WAIT_TTL_EXPIRED (no deprecated \
              aliases per CLAUDE.md rule #5)"
         );
@@ -71,12 +72,12 @@ fn wait_ttl_no_deprecated_aliases() {
     // ErrorCode::WaitTimeout (NOT to WaitTtlExpired).
     assert_eq!(
         ErrorCode::from_str("E_WAIT_TIMEOUT"),
-        ErrorCode::WaitTimeout
+        Ok(ErrorCode::WaitTimeout)
     );
     assert!(
         !matches!(
             ErrorCode::from_str("E_WAIT_TIMEOUT"),
-            ErrorCode::WaitTtlExpired
+            Ok(ErrorCode::WaitTtlExpired)
         ),
         "E_WAIT_TIMEOUT MUST NOT alias E_WAIT_TTL_EXPIRED — distinct semantics"
     );
@@ -88,7 +89,7 @@ fn wait_ttl_no_deprecated_aliases() {
     ] {
         let parsed = ErrorCode::from_str(alias);
         assert!(
-            !matches!(parsed, ErrorCode::WaitTtlInvalid),
+            !matches!(parsed, Ok(ErrorCode::WaitTtlInvalid)),
             "{alias} MUST NOT alias E_WAIT_TTL_INVALID"
         );
     }

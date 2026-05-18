@@ -80,7 +80,7 @@ fn load_verified_rejects_cid_mismatch_with_claimed_cid() {
     let real_bytes = {
         // Build a minimal-valid Subgraph, encode it.
         let sg = Subgraph::empty_for_test("verify_migration");
-        sg.to_dag_cbor().expect("encode must succeed")
+        sg.to_canonical_bytes().expect("encode must succeed")
     };
     // Claim a different CID than what the bytes hash to.
     let wrong_cid = Cid::from_blake3_digest([0u8; 32]);
@@ -103,7 +103,7 @@ fn load_verified_roundtrip_preserves_deterministic_field() {
     let mut sg = Subgraph::empty_for_test("deterministic_field_pin");
     sg.set_deterministic(true);
 
-    let bytes = sg.to_dag_cbor().expect("encode must succeed");
+    let bytes = sg.to_canonical_bytes().expect("encode must succeed");
     let loaded = Subgraph::load_verified(&bytes).expect("re-decode must succeed");
 
     assert!(
@@ -114,7 +114,7 @@ fn load_verified_roundtrip_preserves_deterministic_field() {
     // Negative pin: false also survives.
     let mut sg2 = Subgraph::empty_for_test("deterministic_field_pin_false");
     sg2.set_deterministic(false);
-    let bytes2 = sg2.to_dag_cbor().expect("encode must succeed");
+    let bytes2 = sg2.to_canonical_bytes().expect("encode must succeed");
     let loaded2 = Subgraph::load_verified(&bytes2).expect("re-decode must succeed");
     assert!(
         !loaded2.is_declared_deterministic(),

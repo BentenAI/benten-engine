@@ -20,8 +20,8 @@
 //!    runtime that none of the four relocated types impl
 //!    `serde::Serialize` or `serde::de::DeserializeOwned`.
 //! 2. **Canonical round-trip pin**: re-asserts that the canonical encode
-//!    (`canonical_bytes` / `to_dagcbor` / `to_dag_cbor`) and decode
-//!    (`load_verified` / `from_dagcbor` / `load_verified_with_cid`) entry
+//!    (`to_canonical_bytes`) and decode
+//!    (`load_verified` / `from_canonical_bytes` / `load_verified_with_cid`) entry
 //!    points produce byte-identical CIDs across single-node and
 //!    multi-node fixtures — the absence of generic-serde impls has not
 //!    regressed the canonical path.
@@ -59,11 +59,12 @@ fn canonical_round_trip_single_node_subgraph_byte_identical_cid() {
     let _ = b.read("entry");
     let sg = b.build_unvalidated_for_test();
 
-    let bytes_a = sg.canonical_bytes().expect("encode A");
-    let bytes_b = sg.to_dagcbor().expect("encode B (alias)");
-    let bytes_c = sg.to_dag_cbor().expect("encode C (alias)");
-    assert_eq!(bytes_a, bytes_b, "canonical_bytes must equal to_dagcbor");
-    assert_eq!(bytes_a, bytes_c, "canonical_bytes must equal to_dag_cbor");
+    let bytes_a = sg.to_canonical_bytes().expect("encode A");
+    let bytes_b = sg.to_canonical_bytes().expect("encode B");
+    assert_eq!(
+        bytes_a, bytes_b,
+        "two to_canonical_bytes calls must be byte-identical"
+    );
 
     let cid_a = sg.cid().expect("cid A");
     let decoded = Subgraph::load_verified(&bytes_a).expect("decode");
@@ -91,10 +92,10 @@ fn canonical_round_trip_multi_node_subgraph_byte_identical_cid() {
     let _resp = b.respond(t);
     let sg = b.build_unvalidated_for_test();
 
-    let bytes = sg.canonical_bytes().expect("encode");
+    let bytes = sg.to_canonical_bytes().expect("encode");
     let cid_before = sg.cid().expect("cid pre-decode");
     let decoded = Subgraph::load_verified(&bytes).expect("decode");
-    let bytes_again = decoded.canonical_bytes().expect("re-encode");
+    let bytes_again = decoded.to_canonical_bytes().expect("re-encode");
 
     assert_eq!(
         bytes, bytes_again,
@@ -221,8 +222,8 @@ fn subgraph_does_not_implement_serialize() {
         !(&&Probe::<Subgraph>::new()).impls_serialize(),
         "cag-mr-g12c-cont-1: Subgraph MUST NOT impl serde::Serialize. \
          A Serialize impl would re-introduce the silent non-canonical- \
-         encoding footgun. Encode via Subgraph::canonical_bytes / \
-         to_dag_cbor / to_dagcbor instead."
+         encoding footgun. Encode via Subgraph::to_canonical_bytes \
+         instead."
     );
 }
 
@@ -232,7 +233,7 @@ fn subgraph_does_not_implement_deserialize_owned() {
         !(&&Probe::<Subgraph>::new()).impls_deserialize(),
         "cag-mr-g12c-cont-1: Subgraph MUST NOT impl \
          serde::de::DeserializeOwned. Decode via Subgraph::load_verified / \
-         from_dagcbor / load_verified_with_cid instead."
+         from_canonical_bytes / load_verified_with_cid instead."
     );
 }
 

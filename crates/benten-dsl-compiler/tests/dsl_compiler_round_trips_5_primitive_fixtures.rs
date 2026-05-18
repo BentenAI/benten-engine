@@ -24,9 +24,9 @@ fn dsl_compiler_round_trips_read_respond_minimal_handler() {
     assert_eq!(c.primitives[1].kind, PrimitiveKind::Respond);
     // Round-trip via canonical bytes — re-decoding must produce a Subgraph
     // with the same CID.
-    let bytes = c.subgraph.canonical_bytes().unwrap();
+    let bytes = c.subgraph.to_canonical_bytes().unwrap();
     let cid_a = c.subgraph.cid().unwrap();
-    let sg2 = benten_core::Subgraph::from_dagcbor(&bytes).unwrap();
+    let sg2 = benten_core::Subgraph::from_canonical_bytes(&bytes).unwrap();
     assert_eq!(sg2.cid().unwrap(), cid_a);
 }
 
@@ -92,7 +92,7 @@ fn dsl_compiler_round_trip_preserves_subgraph_spec_cid_across_compile_serialize_
     let src = "handler 'cid-stable' { read('post') -> respond }";
     let c = compile_str(src).unwrap();
     let cid_a = c.subgraph.cid().unwrap();
-    let bytes = c.subgraph.canonical_bytes().unwrap();
-    let sg2 = benten_core::Subgraph::from_dagcbor(&bytes).unwrap();
+    let bytes = c.subgraph.to_canonical_bytes().unwrap();
+    let sg2 = benten_core::Subgraph::from_canonical_bytes(&bytes).unwrap();
     assert_eq!(sg2.cid().unwrap(), cid_a);
 }

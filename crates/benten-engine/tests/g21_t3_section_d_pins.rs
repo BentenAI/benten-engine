@@ -152,7 +152,7 @@ fn subscribe_partial_revoke_via_cap_recheck_closure_cancels_only_affected_path()
 
     // Helper: build a minimal ChangeEvent for a given label.
     let mk_event = |label: &str| {
-        ChangeEvent::legacy_minimal(
+        ChangeEvent::minimal(
             Cid::from_blake3_digest(*blake3::hash(label.as_bytes()).as_bytes()),
             ChangeKind::Created,
             next_engine_seq(),

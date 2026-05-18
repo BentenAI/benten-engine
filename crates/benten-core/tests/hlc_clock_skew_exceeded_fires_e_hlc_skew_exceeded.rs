@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use benten_core::CoreError;
 use benten_core::hlc::{BentenHlc, Hlc};
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 // Per-test mock clocks: each test owns its own `static AtomicU64` + `fn`
 // pointer, eliminating the cross-test race that the previous shared-
@@ -80,7 +81,7 @@ fn skew_error_maps_to_e_hlc_skew_exceeded_catalog_code() {
     // Round-trip via from_str so the parse-side mapping is also pinned.
     assert_eq!(
         ErrorCode::from_str("E_HLC_SKEW_EXCEEDED"),
-        ErrorCode::HlcSkewExceeded
+        Ok(ErrorCode::HlcSkewExceeded)
     );
 }
 

@@ -139,7 +139,7 @@ fn canonical_bytes_handler_version_chain_extensible_for_future_attribution_varia
     // bytes (or CID) of any chain Node that pre-dates the amendment.
     let cid = Cid::from_blake3_digest(*blake3::hash(b"some-version").as_bytes());
     let node = make_version_node("demo:create_post", &cid, None, 0);
-    let bytes = node.canonical_bytes().unwrap();
+    let bytes = node.to_canonical_bytes().unwrap();
 
     // (1) The first byte of a DAG-CBOR map is in the major-type-5
     // range (0xa0..=0xbf for definite-length maps). Per RFC-8949
@@ -163,7 +163,7 @@ fn canonical_bytes_handler_version_chain_extensible_for_future_attribution_varia
         Value::Text("future-G16-B-variant".into()),
     );
     let extended = Node::new(vec![HANDLER_VERSION_LABEL.to_string()], extended_props);
-    let extended_bytes = extended.canonical_bytes().unwrap();
+    let extended_bytes = extended.to_canonical_bytes().unwrap();
     assert_ne!(
         bytes, extended_bytes,
         "additive extension MUST produce different canonical bytes (the new property is encoded)"
@@ -172,7 +172,7 @@ fn canonical_bytes_handler_version_chain_extensible_for_future_attribution_varia
     // (3) The pre-extension bytes are byte-stable (DAG-CBOR
     // determinism).
     let node_again = make_version_node("demo:create_post", &cid, None, 0);
-    let bytes_again = node_again.canonical_bytes().unwrap();
+    let bytes_again = node_again.to_canonical_bytes().unwrap();
     assert_eq!(
         bytes, bytes_again,
         "DAG-CBOR canonical bytes MUST be byte-stable for identical content"

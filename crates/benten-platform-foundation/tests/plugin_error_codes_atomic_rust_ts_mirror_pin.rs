@@ -38,6 +38,7 @@ mod manifest_fixtures;
 use benten_errors::ErrorCode;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Locate the workspace root by walking up from CARGO_MANIFEST_DIR
 /// (crate-relative paths break when tests run from arbitrary cwd; the
@@ -67,13 +68,13 @@ fn plugin_manifest_error_codes_present_in_rust_enum() {
     for code in manifest_fixtures::G24_D_ERROR_CODES {
         let parsed = ErrorCode::from_str(code);
         assert!(
-            !matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_ok(),
             "ErrorCode {code} MUST be a named variant post-G24-D; \
              round-trip through from_str returned Unknown — §3.5g atomic \
              Rust mint missing"
         );
         assert_eq!(
-            parsed.as_static_str(),
+            parsed.expect("recognized catalog code").as_static_str(),
             *code,
             "ErrorCode {code} must round-trip as_static_str → from_str \
              (§3.5g rule-mirror)"

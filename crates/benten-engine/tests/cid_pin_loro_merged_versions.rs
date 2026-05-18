@@ -53,7 +53,7 @@ fn fixture_n(_n: usize) {
     //   let v1 = make_version(anchor_id, props_v1_for_seed(_n), peer_a_did);
     //   let v2 = make_version(anchor_id, props_v2_for_seed(_n), peer_b_did);
     //   let merged = merge_versions(&[v1, v2]);
-    //   merged.canonical_bytes()
+    //   merged.to_canonical_bytes()
     unimplemented!("G16-B wires canonical fixture builders for cid-pin sites 1..=10");
 }
 

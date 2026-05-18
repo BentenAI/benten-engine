@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 use benten_core::{Cid, Value};
 
 use crate::{EvalError, InvariantViolation, PrimitiveKind, Subgraph};
+use core::str::FromStr;
 
 /// Property key on a WRITE [`crate::OperationNode`] whose value, when set
 /// to a literal CID already in `registered_cids`, triggers the

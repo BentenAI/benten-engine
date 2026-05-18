@@ -153,7 +153,7 @@ fn node_load_verified_rejects_authentic_but_adversarial_deep_property() {
     );
     let node = Node::new(vec!["Adversarial".to_string()], props);
     let bytes = node
-        .canonical_bytes()
+        .to_canonical_bytes()
         .expect("encoding own (over-deep) data is the trusted direction and must succeed");
     let cid = node.cid().expect("cid of own data");
 

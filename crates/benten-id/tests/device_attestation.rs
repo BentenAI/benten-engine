@@ -54,7 +54,7 @@ fn device_attestation_round_trip() {
         DeviceAttestation::issue(&parent, device.public_key().to_did(), envelope.clone()).unwrap();
 
     // Canonical-bytes round-trip:
-    let bytes = attestation.canonical_bytes();
+    let bytes = attestation.to_canonical_bytes();
     let parsed = DeviceAttestation::from_canonical_bytes(&bytes).unwrap();
     assert_eq!(parsed.envelope(), &envelope);
     assert_eq!(

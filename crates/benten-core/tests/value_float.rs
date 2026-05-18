@@ -27,7 +27,7 @@ fn node_with_float(f: f64) -> Node {
 #[test]
 fn float_nan_rejected() {
     let n = node_with_float(f64::NAN);
-    let err = n.canonical_bytes().expect_err("NaN must be rejected");
+    let err = n.to_canonical_bytes().expect_err("NaN must be rejected");
     assert!(
         matches!(err, CoreError::FloatNan),
         "expected CoreError::FloatNan, got {err:?}"
@@ -39,7 +39,7 @@ fn float_nan_rejected() {
 #[test]
 fn float_infinity_rejected() {
     let n = node_with_float(f64::INFINITY);
-    let err = n.canonical_bytes().expect_err("+Inf must be rejected");
+    let err = n.to_canonical_bytes().expect_err("+Inf must be rejected");
     assert!(matches!(err, CoreError::FloatNonFinite));
     assert_eq!(err.code(), ErrorCode::ValueFloatNonFinite);
 }
@@ -47,7 +47,7 @@ fn float_infinity_rejected() {
 #[test]
 fn float_negative_infinity_rejected() {
     let n = node_with_float(f64::NEG_INFINITY);
-    let err = n.canonical_bytes().expect_err("-Inf must be rejected");
+    let err = n.to_canonical_bytes().expect_err("-Inf must be rejected");
     assert!(matches!(err, CoreError::FloatNonFinite));
 }
 
@@ -58,9 +58,9 @@ fn float_finite_one_encodes_shortest_form() {
     // re-encode — the shortest-form contract is that decoding `1.0` back and
     // re-encoding produces identical bytes.
     let n = node_with_float(1.0);
-    let bytes = n.canonical_bytes().unwrap();
+    let bytes = n.to_canonical_bytes().unwrap();
     let decoded: Node = serde_ipld_dagcbor::from_slice(&bytes).unwrap();
-    let rebytes = decoded.canonical_bytes().unwrap();
+    let rebytes = decoded.to_canonical_bytes().unwrap();
     assert_eq!(bytes, rebytes, "shortest-form encoding must be idempotent");
 }
 
@@ -83,7 +83,7 @@ fn float_nested_in_map_roundtrips() {
     let mut p = BTreeMap::new();
     p.insert("m".to_string(), Value::Map(inner.clone()));
     let n = Node::new(vec!["T".to_string()], p);
-    let decoded: Node = serde_ipld_dagcbor::from_slice(&n.canonical_bytes().unwrap()).unwrap();
+    let decoded: Node = serde_ipld_dagcbor::from_slice(&n.to_canonical_bytes().unwrap()).unwrap();
     assert_eq!(decoded.properties.get("m").unwrap(), &Value::Map(inner));
 }
 

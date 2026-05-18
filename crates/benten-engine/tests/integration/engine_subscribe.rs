@@ -123,7 +123,7 @@ fn yield_for_dispatch() {
 /// `publish_change_event_with_label`. Returns the seq published.
 fn publish_real_event(label: &str, payload: Vec<u8>) -> u64 {
     let seq = benten_eval::primitives::subscribe::next_engine_seq();
-    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+    let event = benten_eval::primitives::subscribe::ChangeEvent::minimal(
         benten_core::Cid::from_blake3_digest(*blake3::hash(label.as_bytes()).as_bytes()),
         benten_eval::primitives::subscribe::ChangeKind::Created,
         seq,

@@ -108,7 +108,7 @@ fn make_batch(n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     // payload so the serializer cost is amortized out of the measurement
     // (durability is what we're measuring, not canonical-CBOR encoding).
     let node = canonical_test_node();
-    let value = node.canonical_bytes().expect("canonical bytes");
+    let value = node.to_canonical_bytes().expect("canonical bytes");
     (0..n)
         .map(|i| {
             let mut key = Vec::with_capacity(12);
@@ -149,7 +149,7 @@ fn bench_single_write(c: &mut Criterion) {
             |b, &mode| {
                 let (backend, _dir) = fresh_backend(mode).expect("backend");
                 let value = canonical_test_node()
-                    .canonical_bytes()
+                    .to_canonical_bytes()
                     .expect("canonical bytes");
                 // Counter in a Cell would work; using an AtomicUsize
                 // avoids interior-mut dances and still monomorphizes to a
@@ -236,7 +236,7 @@ fn bench_sustained_throughput(c: &mut Criterion) {
             |b, &mode| {
                 let (backend, _dir) = fresh_backend(mode).expect("backend");
                 let value = canonical_test_node()
-                    .canonical_bytes()
+                    .to_canonical_bytes()
                     .expect("canonical bytes");
                 // Monotonic counter so every commit targets a fresh key.
                 // Using a plain `usize` in a Cell would require
@@ -307,7 +307,7 @@ fn bench_gate5_descope_proof(c: &mut Criterion) {
             |b, &mode| {
                 let (backend, _dir) = fresh_backend(mode).expect("backend");
                 let value = canonical_test_node()
-                    .canonical_bytes()
+                    .to_canonical_bytes()
                     .expect("canonical bytes");
                 let counter = std::sync::atomic::AtomicUsize::new(0);
 

@@ -8,6 +8,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 /// `E_STREAM_BACKPRESSURE_DROPPED` round-trips through `as_str` / `from_str`.
 #[test]
@@ -16,7 +17,7 @@ fn e_stream_backpressure_dropped_routed_through_typed_error_catalog() {
     assert_eq!(code.as_str(), "E_STREAM_BACKPRESSURE_DROPPED");
     assert_eq!(
         ErrorCode::from_str("E_STREAM_BACKPRESSURE_DROPPED"),
-        ErrorCode::StreamBackpressureDropped
+        Ok(ErrorCode::StreamBackpressureDropped)
     );
 }
 
@@ -27,7 +28,7 @@ fn e_stream_closed_by_peer_routed_through_typed_error_catalog() {
     assert_eq!(code.as_str(), "E_STREAM_CLOSED_BY_PEER");
     assert_eq!(
         ErrorCode::from_str("E_STREAM_CLOSED_BY_PEER"),
-        ErrorCode::StreamClosedByPeer
+        Ok(ErrorCode::StreamClosedByPeer)
     );
 }
 
@@ -39,6 +40,6 @@ fn e_stream_producer_wallclock_exceeded_routed_through_typed_error_catalog() {
     assert_eq!(code.as_str(), "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED");
     assert_eq!(
         ErrorCode::from_str("E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED"),
-        ErrorCode::StreamProducerWallclockExceeded
+        Ok(ErrorCode::StreamProducerWallclockExceeded)
     );
 }

@@ -33,6 +33,7 @@ use benten_core::{Cid, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 
 use crate::{BudgetTracker, View, ViewDefinition, ViewError, ViewQuery, ViewResult, ViewState};
+use core::str::FromStr;
 
 /// Stable view identifier used in error messages and `View::id`.
 const VIEW_ID: &str = "capability_grants";

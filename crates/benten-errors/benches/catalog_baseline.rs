@@ -29,6 +29,7 @@
 //! ```
 
 use std::hint::black_box;
+use std::str::FromStr;
 
 use benten_errors::ErrorCode;
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -72,7 +73,7 @@ fn bench_from_str_roundtrip(c: &mut Criterion) {
     c.bench_function("from_str_roundtrip", |b| {
         b.iter(|| {
             for s in &strings {
-                black_box(ErrorCode::from_str(black_box(s)));
+                let _ = black_box(ErrorCode::from_str(black_box(s)));
             }
         });
     });

@@ -47,13 +47,13 @@ fn yield_for_dispatch() {
 fn publish_real_event(label: &str, payload: Vec<u8>) -> u64 {
     let seq = benten_eval::primitives::subscribe::next_engine_seq();
     // Construct the event WITH `labels` populated explicitly — the
-    // legacy `legacy_minimal` constructor sets `labels = Vec::new()`,
+    // legacy `minimal` constructor sets `labels = Vec::new()`,
     // and the publish entrypoint uses its `labels: &[String]` arg
     // only for pattern routing (NOT to back-fill the event's own
     // `labels` field). Option-D's per-event `check_read` reads
     // `event.labels.first()` for the `ReadContext.label`, so we must
     // populate the field on the event itself.
-    let mut event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+    let mut event = benten_eval::primitives::subscribe::ChangeEvent::minimal(
         benten_core::Cid::from_blake3_digest(*blake3::hash(label.as_bytes()).as_bytes()),
         benten_eval::primitives::subscribe::ChangeKind::Created,
         seq,
