@@ -76,6 +76,7 @@ pub mod change;
 pub mod change_probe;
 pub mod handler_router;
 pub mod manifest_envelope_recheck;
+pub mod shares_policy_resolver;
 // Phase-3 G15-A wave-5a — materialization-time per-row READ gate for
 // IVM-materialized views. Closes Compromise #11 in coordination with
 // G14-D delivery-time gate per `ivm-major-2` + `ds-r4r2-7` shared-trait

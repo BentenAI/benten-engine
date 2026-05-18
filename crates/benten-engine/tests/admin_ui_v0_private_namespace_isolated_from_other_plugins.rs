@@ -213,8 +213,12 @@ fn admin_ui_v0_non_private_scope_delegation_does_not_trip_private_namespace_arm(
     // refusal MUST NOT over-fire on non-private scopes. A scope of
     // shape `store:notes:read` is NOT `private:*`; the
     // `is_private_namespace_cap` detector returns false; the
-    // delegation seam consults the SharesPolicyView (which defaults
-    // to `AllPermit` at G24-D's pre-manifest seam) and admits.
+    // delegation seam then consults the installed
+    // `SharesPolicyResolver` (Wave-E HELD #1197/#1146). The harness
+    // engine carries the default `NoopSharesPolicyResolver`, which
+    // classifies the principal `NotPluginPrincipal` ⇒ admits; a real
+    // adapter would consult the source plugin's manifest `shares`
+    // policy.
     //
     // This is the regression-guard half of the T7 pin: if the
     // private-namespace detector over-matched (e.g. recognising

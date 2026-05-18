@@ -1606,6 +1606,27 @@ through `verify_manifest_with_mode`. The canonical-bytes encoding
 preserves the reserved-field (D9-RESOLVED) discipline; the
 verification arm is additive — no wire-format break.
 
+**napi cdylib boundary (META #684 — refinement-audit-2026-05 Wave-E
+HELD).** META #684 flagged that the Compromise-#21 CLOSED claim was
+*engine-side only*: at HEAD the napi cdylib binding exposed ONLY the
+unsigned `installModule` (hard-coded
+`ManifestVerifyArgs::unsigned_development()`), so a module installed
+through the Node.js binding skipped signature verification — the
+signed-manifest enforcement did not survive crossing the cdylib
+construction site. **Resolved on main (PR #1282/#1290):** the
+`installModuleSigned` napi surface (`bindings/napi/src/lib.rs`)
+threads `ManifestVerifyArgs::registry(registry_pubkey,
+engine_audience_did, now)` into the same enforced
+`Engine::install_module` path (Ed25519 verify against the
+publisher-registry key + audience-binding; `installModule` is
+retained as the explicit unsigned-development opt-in, documented as
+such at the call site). Wave-E HELD added the would-FAIL-if-reverted
+cdylib closure-pin
+`bindings/napi/tests/install_module_signed_napi_cdylib_enforcement_1205_closure_pin.rs`
+(tampered registry signature rejected; valid registry-signed manifest
+admits — not degenerate deny-all). Compromise #21 stays **CLOSED**,
+now honestly inclusive of the napi cdylib boundary.
+
 **Renumbering note.** This was `Compromise #N+5` in `docs/MODULE-MANIFEST.md`'s local table prior to R6 phase-close; lifted to global #21 here.
 
 **Cross-refs.** `docs/MODULE-MANIFEST.md` §6 + §7; `docs/ERROR-CATALOG.md::E_MODULE_MANIFEST_CID_MISMATCH`.
