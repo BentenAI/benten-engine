@@ -1270,9 +1270,33 @@ impl AtriumHandle {
     /// the recording is observable via
     /// [`AtriumHandle::list_declared_device_attestations`] but does
     /// not yet ride the wire frame.
-    pub async fn register_device_attestation(&self, attestation: DeclaredDeviceAttestation) {
+    ///
+    /// # Errors
+    ///
+    /// #688 fix-3 (refinement-audit-2026-05): returns
+    /// [`AtriumError::InvalidState`] (mapped to `E_ATRIUM_INACTIVE`)
+    /// when the handle is in the post-`leave()` quiesced state. This
+    /// closes the mid-leave race the Safe-4 lens identified: a
+    /// concurrent `leave()` from another JS Worker can flip the
+    /// engine-side `is_active` flag between the napi layer's
+    /// `engine_atrium_or_err` snapshot and this call. Pre-#688 this
+    /// method consulted no `ensure_active` guard so it succeeded even
+    /// on an inactive handle — the symmetric fail-OPEN flaw to the
+    /// Phase-3 §13.11 class. The gate brings device-attestation
+    /// registration into shape-conformance with the other sync-
+    /// touching surfaces ([`AtriumHandle::leave`] rustdoc) that are
+    /// already `ensure_active`-gated.
+    pub async fn register_device_attestation(
+        &self,
+        attestation: DeclaredDeviceAttestation,
+    ) -> AtriumResult<()> {
+        // #688 fix-3: gate on the lifecycle flag BEFORE recording.
+        // Mirrors the `ensure_active` discipline on the other
+        // sync-touching surfaces.
+        self.ensure_active("register_device_attestation")?;
         let mut tbl = self.inner.declared_device_attestations.lock().await;
         tbl.insert(attestation.device_did.clone(), attestation);
+        Ok(())
     }
 
     /// List declared device-attestation envelopes recorded on this
@@ -2015,5 +2039,92 @@ mod tests {
         }
         assert!(!zone_is_system_zone("/zone/posts"));
         assert!(!zone_is_system_zone("/user/data"));
+    }
+
+    /// #688 fix-3 closure pin (refinement-audit-2026-05 / META #744
+    /// PR-A). Asserts the `ensure_active` gate added to
+    /// `register_device_attestation` FIRES when the handle is in the
+    /// post-`leave()` quiesced state — i.e. it reproduces the
+    /// mid-leave race the Safe-4 lens identified (a concurrent
+    /// `leave()` flips `is_active` to false between the napi layer's
+    /// `engine_atrium_or_err` snapshot and this engine-side call).
+    ///
+    /// Would-FAIL-if-no-op'd: pre-#688 `register_device_attestation`
+    /// returned `()` with NO `ensure_active` consultation, so a
+    /// post-leave call SUCCEEDED (recording into the table on an
+    /// inactive handle — the symmetric fail-OPEN flaw to Phase-3
+    /// §13.11). Reverting the gate makes this test's
+    /// `expect_err` + `AtriumInactive` assertion fail.
+    #[tokio::test]
+    async fn register_device_attestation_rejects_after_leave_mid_race_688_fix3() {
+        let atrium = AtriumHandle::open(AtriumConfig::for_test())
+            .await
+            .expect("open atrium");
+
+        let envelope = DeclaredDeviceAttestation {
+            device_did: "did:key:zMidLeaveRace".to_string(),
+            claims: vec![DeclaredCapabilityClaim {
+                path: "/zone/notifications/*".to_string(),
+                ability: "read".to_string(),
+            }],
+            freshness_window: 3600,
+        };
+
+        // Pre-leave (active): registration succeeds + round-trips.
+        atrium
+            .register_device_attestation(envelope.clone())
+            .await
+            .expect("active handle accepts registration");
+        assert_eq!(
+            atrium.list_declared_device_attestations().await.len(),
+            1,
+            "active-handle registration recorded"
+        );
+
+        // Simulate the mid-leave race: a concurrent `leave()` flips
+        // the engine-side `is_active` flag to false.
+        atrium.leave().await.expect("leave is infallible");
+
+        // Post-leave: the #688 fix-3 `ensure_active` gate MUST fire.
+        let err = atrium
+            .register_device_attestation(envelope.clone())
+            .await
+            .expect_err("inactive handle must reject registration (#688 fix-3)");
+        match &err {
+            AtriumError::InvalidState { reason } => {
+                assert!(
+                    reason.contains("register_device_attestation"),
+                    "reason names the gated op: {reason}"
+                );
+            }
+            other => panic!("expected AtriumError::InvalidState, got {other:?}"),
+        }
+        assert_eq!(
+            err.code(),
+            benten_errors::ErrorCode::AtriumInactive,
+            "InvalidState routes to E_ATRIUM_INACTIVE"
+        );
+
+        // The rejected registration did NOT mutate the table — the
+        // table still holds only the single pre-leave entry.
+        assert_eq!(
+            atrium.list_declared_device_attestations().await.len(),
+            1,
+            "post-leave rejection did not record a second entry"
+        );
+
+        // After `rejoin()` the gate re-opens — registration succeeds
+        // again (idempotent replace of the same device-DID keeps the
+        // table at one entry).
+        atrium.rejoin().await.expect("rejoin is infallible");
+        atrium
+            .register_device_attestation(envelope)
+            .await
+            .expect("re-activated handle accepts registration");
+        assert_eq!(
+            atrium.list_declared_device_attestations().await.len(),
+            1,
+            "rejoin re-opens the gate; idempotent replace keeps one entry"
+        );
     }
 }

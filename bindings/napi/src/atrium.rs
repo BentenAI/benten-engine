@@ -161,10 +161,62 @@ pub struct DeviceAttestationDeclaration {
 /// (stored under `inner` once `join` completes). Pre-G21-T2 the
 /// state was hollow in-memory only; the engine-side surfaces were
 /// unreachable from JS/TS.
+///
+/// ## Safe-4-async / META #744 PR-A — AsyncTask migration
+///
+/// The 9 `block_on`-driving mutators (`join` / `leave` / `rejoin` /
+/// `declare_device_attestation` / `set_local_device_did` /
+/// `set_local_device_keypair` / `clear_local_device_keypair` /
+/// `set_local_device_attestation` / `clear_local_device_attestation`)
+/// are Promise-returning `AsyncTask`s, NOT sync `#[napi]` methods.
+/// Pre-PR-A every one of these mapped to a sync Rust fn that called
+/// `js_atrium_runtime().block_on(async_op())` **on the libuv worker
+/// thread the JS call arrived on** — parking that thread for the full
+/// iroh round-trip. With the default `UV_THREADPOOL_SIZE=4`, four
+/// concurrent `await atrium.*()` calls saturated the pool and every
+/// unrelated fs / DNS / crypto op on the same Node process queued
+/// behind them (META #744 headline).
+///
+/// Each migrated method clones the owned/`Arc` data it needs into a
+/// `Send + 'static` `Task` struct and returns `AsyncTask<…>`. napi-rs
+/// schedules `Task::compute()` onto a libuv worker via
+/// `uv_queue_work`; the `block_on` still runs there (the iroh ops are
+/// genuinely blocking from this layer's view), but the JS event loop
+/// is freed and the Promise resolves on completion. The `block_on`
+/// **always runs on the persistent `js_atrium_runtime()` static** —
+/// never a per-task / napi-default runtime — so iroh `Endpoint`
+/// background tasks survive across calls (the original
+/// `js_atrium_runtime()` invariant; see its rustdoc).
+///
+/// `state` is `Arc<Mutex<…>>` (not a bare `Mutex`) so a `Task` can
+/// clone the `Arc` in and briefly lock it inside `compute()` to read
+/// the engine reference / write the resulting handle back — without
+/// holding the `&self` borrow or any guard across the async boundary
+/// (the #652 / #704 / #735 lock-across-await class). The std `Mutex`
+/// guard is acquired + released around (never across) the `block_on`.
+///
+/// **NOT migrated (no `block_on`):** the sync setters
+/// `set_envelope_freshness_window` (bare atomic store) +
+/// `is_active` / `is_joined` getters + the in-memory roster ops
+/// (`list_peers` / `trust_peer` / `revoke_peer` /
+/// `list_declared_device_attestations`). `StreamHandleJs::next` is
+/// **explicitly out of PR-A scope** (PR-B, #1203 — it is the only
+/// public-SemVer-breaking surface and is handled there via a
+/// lock-split, not by Promise-ifying the public sync getter).
+///
+/// **Cancellation contract:** an `AsyncTask` is NOT cancellable once
+/// `compute()` has started running on a libuv worker (napi-rs only
+/// supports cancelling tasks still queued, via `AbortSignal`, which
+/// this binding does not wire). A `join()` whose `compute()` is
+/// in-flight runs to completion even if the JS caller drops the
+/// Promise. This is acceptable for the atrium mutators (bounded iroh
+/// ops) and is load-bearing context for PR-B's `StreamHandleJs::next`
+/// (an unbounded `recv_blocking()` MUST stay cancellable — hence
+/// PR-B's lock-split rather than a naive AsyncTask conversion).
 #[napi]
 pub struct JsAtrium {
     config: AtriumConfig,
-    state: Mutex<AtriumHandleState>,
+    state: Arc<Mutex<AtriumHandleState>>,
 }
 
 /// Per-handle session state. Combines:
@@ -230,7 +282,7 @@ impl JsAtrium {
     pub fn create(config: AtriumConfig) -> Self {
         Self {
             config,
-            state: Mutex::new(AtriumHandleState::default()),
+            state: Arc::new(Mutex::new(AtriumHandleState::default())),
         }
     }
 
@@ -242,10 +294,10 @@ impl JsAtrium {
     pub(crate) fn from_engine(config: AtriumConfig, engine: Arc<InnerEngine>) -> Self {
         Self {
             config,
-            state: Mutex::new(AtriumHandleState {
+            state: Arc::new(Mutex::new(AtriumHandleState {
                 engine: Some(engine),
                 ..AtriumHandleState::default()
-            }),
+            })),
         }
     }
 
@@ -302,43 +354,11 @@ impl JsAtrium {
     /// no-op success (the engine-side handle stays `None`); the
     /// `is_joined` getter still flips true so the existing TS
     /// round-trip pins keep working.
-    #[napi]
-    pub fn join(&self) -> Result<()> {
-        let engine_opt = {
-            let state = self.state.lock().expect("atrium state mutex");
-            state.engine.clone()
-        };
-        if let Some(engine) = engine_opt {
-            // G21-T2 fp-mini-review MAJOR-5 closure: drive the
-            // engine-side open_atrium through the process-singleton
-            // shared runtime (`js_atrium_runtime()`). Pre-fp-mini-
-            // review a fresh `new_current_thread()` runtime was
-            // constructed per call; the runtime dropped at the end
-            // of `block_on` so iroh's `Endpoint` background tasks
-            // (driven by the runtime's reactor) terminated and
-            // subsequent operations on the stored `AtriumHandle`
-            // would deadlock once real engine-side delegation
-            // arrives.
-            let handle = js_atrium_runtime()
-                .block_on(engine.open_atrium(EngineAtriumConfig::production()))
-                .map_err(|e| {
-                    napi::Error::new(
-                        Status::GenericFailure,
-                        format!("E_ATRIUM_TRANSPORT_DEGRADED: open_atrium failed: {e:?}"),
-                    )
-                })?;
-            let mut state = self.state.lock().expect("atrium state mutex");
-            state.engine_atrium = Some(handle);
-        } else {
-            // Test-only `create()` path: no engine reference, so we
-            // can't drive a real iroh Endpoint bind. Flip the in-memory
-            // joined-state flag so the existing TS round-trip pins
-            // (`atrium.test.ts`) observe `isJoined === true` without
-            // requiring a built napi cdylib + Engine instance.
-            let mut state = self.state.lock().expect("atrium state mutex");
-            state.joined_no_engine = true;
-        }
-        Ok(())
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn join(&self) -> AsyncTask<JoinTask> {
+        AsyncTask::new(JoinTask {
+            state: Arc::clone(&self.state),
+        })
     }
 
     /// Leave the atrium — tear down per-session sync participation
@@ -373,28 +393,11 @@ impl JsAtrium {
     /// shared-runtime drive (no per-call runtime construction) for the
     /// same iroh-background-task lifetime reasons documented at
     /// `js_atrium_runtime()`.
-    #[napi]
-    pub fn leave(&self) -> Result<()> {
-        let handle_opt = {
-            let mut state = self.state.lock().expect("atrium state mutex");
-            state.joined_no_engine = false;
-            // Wave A: clone (NOT take) — the handle survives so
-            // `rejoin()` can resume on it.
-            state.engine_atrium.clone()
-        };
-        if let Some(handle) = handle_opt {
-            // Non-consuming engine-side `leave()` flips the
-            // `is_active` flag to false. Currently infallible per the
-            // engine-side rustdoc; the result-shape is preserved for
-            // future versions that may surface drain-failure reasons.
-            js_atrium_runtime().block_on(handle.leave()).map_err(|e| {
-                napi::Error::new(
-                    Status::GenericFailure,
-                    format!("E_ATRIUM_LEAVE_FAILED: leave failed: {e:?}"),
-                )
-            })?;
-        }
-        Ok(())
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn leave(&self) -> AsyncTask<LeaveTask> {
+        AsyncTask::new(LeaveTask {
+            state: Arc::clone(&self.state),
+        })
     }
 
     /// R6-FP Wave A Sub-A1 closure (`napi-r6-r1-1`) — non-consuming
@@ -422,38 +425,11 @@ impl JsAtrium {
     ///
     /// Idempotent: a `rejoin()` on an already-active handle is a no-op
     /// (the engine-side handle's `is_active` flag is already `true`).
-    #[napi]
-    pub fn rejoin(&self) -> Result<()> {
-        let engine_atrium = {
-            let mut state = self.state.lock().expect("atrium state mutex");
-            // Test-only `create()` path (no engine reference): flip the
-            // in-memory flag back to true so the existing TS round-trip
-            // pins observe `isActive === true` post-rejoin. Idempotent
-            // for already-joined-no-engine handles.
-            if state.engine.is_none() {
-                state.joined_no_engine = true;
-                return Ok(());
-            }
-            state.engine_atrium.clone()
-        };
-        if let Some(handle) = engine_atrium {
-            // Drive engine-side `rejoin()` through the shared runtime
-            // (see `js_atrium_runtime()` rationale at the top of this
-            // file). `AtriumHandle::rejoin` is idempotent + currently
-            // infallible; the result-shape is preserved for future
-            // versions that may surface re-bind failure.
-            js_atrium_runtime().block_on(handle.rejoin()).map_err(|e| {
-                napi::Error::new(
-                    Status::GenericFailure,
-                    format!("E_ATRIUM_REJOIN_FAILED: rejoin failed: {e:?}"),
-                )
-            })?;
-        }
-        // If the engine reference exists but `engine_atrium` is None
-        // (meaning the engine-bound JsAtrium was never joined to begin
-        // with), `rejoin()` is a no-op — callers must drive `join()`
-        // first to populate the handle.
-        Ok(())
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn rejoin(&self) -> AsyncTask<RejoinTask> {
+        AsyncTask::new(RejoinTask {
+            state: Arc::clone(&self.state),
+        })
     }
 
     /// R6-FP Wave A Sub-A1 closure (`napi-r6-r1-1`) — observable
@@ -568,52 +544,38 @@ impl JsAtrium {
     /// present (post-join), the declaration is also forwarded to
     /// the handshake machinery so peers observe it on the wire.
     /// Pre-join + test-only-create paths record locally only.
-    #[napi]
+    /// #688 fix-2 (refinement-audit-2026-05): the engine-bound
+    /// `AtriumHandle` is resolved through `engine_atrium_or_err`
+    /// BEFORE any local recording, surfacing `E_ATRIUM_NOT_JOINED`
+    /// when called pre-join. Pre-#688 this path did
+    /// `state.engine_atrium.clone()` + `if let Some(handle)` so a
+    /// pre-join caller silently recorded the attestation in the local
+    /// `declared_attestations` Vec ONLY — the engine-side forward was
+    /// skipped without error (the symmetric fail-OPEN flaw to
+    /// Phase-3 §13.11). It now matches the 6 sibling R6-FP Wave A
+    /// Sub-A2 setters which all gate through `engine_atrium_or_err`.
+    /// The local round-trip Vec push moves into the `AsyncTask`
+    /// `compute()` so the recorded-then-forwarded ordering is
+    /// preserved (#688 fix-1: the engine-side
+    /// `register_device_attestation` result is now `let _: () =`
+    /// bound + error-mapped — fix-3 upgraded it to
+    /// `AtriumResult<()>`).
+    #[napi(ts_return_type = "Promise<void>")]
     pub fn declare_device_attestation(
         &self,
         attestation: DeviceAttestationDeclaration,
-    ) -> Result<()> {
-        // First snapshot for the engine-side forward; release lock
-        // before driving async to avoid deadlock under heavy parallel
-        // declare flows.
-        let engine_atrium = {
-            let mut state = self.state.lock().expect("atrium state mutex");
-            // Replace any existing entry for the same device-DID
-            // (local round-trip surface per r1-napi-2 + pcds-r4-r1-2).
-            state
-                .declared_attestations
-                .retain(|a| a.device_did != attestation.device_did);
-            state.declared_attestations.push(attestation.clone());
-            state.engine_atrium.clone()
-        };
-        // G21-T2 §D audit-6-3 closure: forward the declaration to the
-        // engine-side `AtriumHandle::register_device_attestation` so
-        // the envelope rides the handshake-time presentation path.
-        // The engine-side recording is the load-bearing pin —
-        // `AtriumHandle::list_declared_device_attestations` round-trips
-        // the recorded envelopes; the on-the-wire frame-emission to
-        // peer handshakes wires through G16-D wave-6b's broader
-        // handshake protocol body work (BELONGS-NAMED-NOW per HARD
-        // RULE rule-12 to phase-3-backlog §3.1 Atrium peer-handshake).
-        if let Some(handle) = engine_atrium {
-            // G21-T2 fp-mini-review MAJOR-5 closure: shared runtime
-            // (see `js_atrium_runtime()` rationale at the top of
-            // this file).
-            let envelope = benten_engine::engine_sync::DeclaredDeviceAttestation {
-                device_did: attestation.device_did.clone(),
-                claims: attestation
-                    .capabilities
-                    .iter()
-                    .map(|c| benten_engine::engine_sync::DeclaredCapabilityClaim {
-                        path: c.path.clone(),
-                        ability: c.ability.clone(),
-                    })
-                    .collect(),
-                freshness_window: attestation.freshness_window,
-            };
-            js_atrium_runtime().block_on(handle.register_device_attestation(envelope));
-        }
-        Ok(())
+    ) -> Result<AsyncTask<DeclareDeviceAttestationTask>> {
+        // #688 fix-2: gate on the engine-bound handle BEFORE recording
+        // anything locally — surfaces `E_ATRIUM_NOT_JOINED` pre-join,
+        // matching the 6 sibling setters. The test-only `create()`
+        // path (no engine reference) likewise errors here, same as
+        // every other engine-bound setter.
+        let handle = self.engine_atrium_or_err("declare_device_attestation")?;
+        Ok(AsyncTask::new(DeclareDeviceAttestationTask {
+            state: Arc::clone(&self.state),
+            handle,
+            attestation,
+        }))
     }
 
     /// List declared device-attestations on this handle. Round-trip
@@ -661,16 +623,18 @@ impl JsAtrium {
     /// replay-resistance, and frame-pair payload-hash.
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
-    #[napi]
-    pub fn set_local_device_did(&self, device_did: String) -> Result<()> {
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn set_local_device_did(
+        &self,
+        device_did: String,
+    ) -> Result<AsyncTask<SetLocalDeviceDidTask>> {
         let handle = self.engine_atrium_or_err("set_local_device_did")?;
         let did_opt = if device_did.is_empty() {
             None
         } else {
             Some(device_did)
         };
-        js_atrium_runtime().block_on(handle.set_local_device_did(did_opt));
-        Ok(())
+        Ok(AsyncTask::new(SetLocalDeviceDidTask { handle, did_opt }))
     }
 
     /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — bind the local device's
@@ -694,12 +658,22 @@ impl JsAtrium {
     /// preserved so forgery-test fixtures can drive mismatched cases.
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
-    #[napi]
-    pub fn set_local_device_keypair(&self, keypair: &JsKeypair) -> Result<()> {
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn set_local_device_keypair(
+        &self,
+        keypair: &JsKeypair,
+    ) -> Result<AsyncTask<SetLocalDeviceKeypairTask>> {
         let handle = self.engine_atrium_or_err("set_local_device_keypair")?;
+        // `Keypair` duplication (audited DAG-CBOR seed-envelope
+        // round-trip) happens synchronously here, BEFORE the task is
+        // scheduled, because `&JsKeypair` is a borrow that cannot
+        // cross the `Send + 'static` task boundary. The owned
+        // duplicate moves into the task.
         let kp = keypair.duplicate_via_envelope()?;
-        js_atrium_runtime().block_on(handle.set_local_device_keypair(Some(kp)));
-        Ok(())
+        Ok(AsyncTask::new(SetLocalDeviceKeypairTask {
+            handle,
+            keypair: Some(kp),
+        }))
     }
 
     /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — clear the local device's
@@ -710,11 +684,13 @@ impl JsAtrium {
     /// [`JsAtrium::set_local_device_keypair`].
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
-    #[napi]
-    pub fn clear_local_device_keypair(&self) -> Result<()> {
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn clear_local_device_keypair(&self) -> Result<AsyncTask<SetLocalDeviceKeypairTask>> {
         let handle = self.engine_atrium_or_err("clear_local_device_keypair")?;
-        js_atrium_runtime().block_on(handle.set_local_device_keypair(None));
-        Ok(())
+        Ok(AsyncTask::new(SetLocalDeviceKeypairTask {
+            handle,
+            keypair: None,
+        }))
     }
 
     /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — bind the local device's
@@ -733,12 +709,20 @@ impl JsAtrium {
     /// that slot observe the same identity.
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
-    #[napi]
-    pub fn set_local_device_attestation(&self, attestation: &JsDeviceAttestation) -> Result<()> {
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn set_local_device_attestation(
+        &self,
+        attestation: &JsDeviceAttestation,
+    ) -> Result<AsyncTask<SetLocalDeviceAttestationTask>> {
         let handle = self.engine_atrium_or_err("set_local_device_attestation")?;
+        // `inner_clone()` runs synchronously here — `&JsDeviceAttestation`
+        // is a borrow that cannot cross the task boundary; the owned
+        // clone moves into the task.
         let att = attestation.inner_clone();
-        js_atrium_runtime().block_on(handle.set_local_device_attestation(Some(att)));
-        Ok(())
+        Ok(AsyncTask::new(SetLocalDeviceAttestationTask {
+            handle,
+            attestation: Some(att),
+        }))
     }
 
     /// R6-FP Wave A Sub-A2 (`napi-r6-r1-2`) — clear the local device's
@@ -749,11 +733,15 @@ impl JsAtrium {
     /// [`JsAtrium::set_local_device_attestation`].
     ///
     /// Errors with `E_ATRIUM_NOT_JOINED` if called before `join()`.
-    #[napi]
-    pub fn clear_local_device_attestation(&self) -> Result<()> {
+    #[napi(ts_return_type = "Promise<void>")]
+    pub fn clear_local_device_attestation(
+        &self,
+    ) -> Result<AsyncTask<SetLocalDeviceAttestationTask>> {
         let handle = self.engine_atrium_or_err("clear_local_device_attestation")?;
-        js_atrium_runtime().block_on(handle.set_local_device_attestation(None));
-        Ok(())
+        Ok(AsyncTask::new(SetLocalDeviceAttestationTask {
+            handle,
+            attestation: None,
+        }))
     }
 
     /// COLLAPSE (P3) — set the freshness window (seconds) applied to
@@ -803,5 +791,302 @@ impl JsAtrium {
                 ),
             )),
         }
+    }
+}
+
+// ============================================================================
+// Safe-4-async / META #744 PR-A — AsyncTask migration
+// ============================================================================
+//
+// Each `Task` below carries owned / `Arc` data only (`Send + 'static`);
+// no `&self` borrow or `MutexGuard` crosses into `compute()`. napi-rs
+// schedules `compute()` onto a libuv worker thread via `uv_queue_work`,
+// so the JS event loop is freed while the (genuinely blocking from this
+// layer's view) iroh round-trip runs. The `block_on` ALWAYS targets the
+// persistent process-singleton `js_atrium_runtime()` static — never a
+// per-task / napi-default runtime — so iroh `Endpoint` background tasks
+// survive across calls (see `js_atrium_runtime()` rustdoc + the
+// `JsAtrium` doc-comment cancellation/runtime contract).
+//
+// Error-mapping strings are byte-for-byte preserved from the pre-PR-A
+// sync bodies so downstream string-matching consumers + the ErrorCode
+// 4-surface mirror (§3.5g) stay stable.
+
+/// `AsyncTask` backing [`JsAtrium::join`]. Holds the shared
+/// `Arc<Mutex<AtriumHandleState>>`; reads the engine ref + writes the
+/// resulting `AtriumHandle` back under brief std-`Mutex` sections that
+/// never span the `block_on`.
+pub struct JoinTask {
+    state: Arc<Mutex<AtriumHandleState>>,
+}
+
+impl Task for JoinTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        // Brief lock to read the engine ref; released before block_on.
+        let engine_opt = {
+            let state = self.state.lock().expect("atrium state mutex");
+            state.engine.clone()
+        };
+        if let Some(engine) = engine_opt {
+            // Drive engine-side open_atrium on the PERSISTENT shared
+            // runtime (`js_atrium_runtime()`). A per-call / per-task
+            // runtime would drop iroh's `Endpoint` background tasks
+            // when it fell out of scope post-`block_on`.
+            let handle = js_atrium_runtime()
+                .block_on(engine.open_atrium(EngineAtriumConfig::production()))
+                .map_err(|e| {
+                    napi::Error::new(
+                        Status::GenericFailure,
+                        format!("E_ATRIUM_TRANSPORT_DEGRADED: open_atrium failed: {e:?}"),
+                    )
+                })?;
+            // Brief lock to write the handle back; no await held.
+            let mut state = self.state.lock().expect("atrium state mutex");
+            state.engine_atrium = Some(handle);
+        } else {
+            // Test-only `create()` path: no engine reference, so we
+            // can't drive a real iroh Endpoint bind. Flip the in-memory
+            // joined-state flag so the existing TS round-trip pins
+            // (`atrium.test.ts`) observe `isJoined === true` without
+            // requiring a built napi cdylib + Engine instance.
+            let mut state = self.state.lock().expect("atrium state mutex");
+            state.joined_no_engine = true;
+        }
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
+    }
+}
+
+/// `AsyncTask` backing [`JsAtrium::leave`].
+pub struct LeaveTask {
+    state: Arc<Mutex<AtriumHandleState>>,
+}
+
+impl Task for LeaveTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let handle_opt = {
+            let mut state = self.state.lock().expect("atrium state mutex");
+            state.joined_no_engine = false;
+            // Wave A: clone (NOT take) — the handle survives so
+            // `rejoin()` can resume on it.
+            state.engine_atrium.clone()
+        };
+        if let Some(handle) = handle_opt {
+            // Non-consuming engine-side `leave()` flips the
+            // `is_active` flag to false. Currently infallible per the
+            // engine-side rustdoc; the result-shape is preserved for
+            // future versions that may surface drain-failure reasons.
+            js_atrium_runtime().block_on(handle.leave()).map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("E_ATRIUM_LEAVE_FAILED: leave failed: {e:?}"),
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
+    }
+}
+
+/// `AsyncTask` backing [`JsAtrium::rejoin`].
+pub struct RejoinTask {
+    state: Arc<Mutex<AtriumHandleState>>,
+}
+
+impl Task for RejoinTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let engine_atrium = {
+            let mut state = self.state.lock().expect("atrium state mutex");
+            // Test-only `create()` path (no engine reference): flip the
+            // in-memory flag back to true so the existing TS round-trip
+            // pins observe `isActive === true` post-rejoin. Idempotent
+            // for already-joined-no-engine handles.
+            if state.engine.is_none() {
+                state.joined_no_engine = true;
+                return Ok(());
+            }
+            state.engine_atrium.clone()
+        };
+        if let Some(handle) = engine_atrium {
+            // Drive engine-side `rejoin()` through the shared runtime
+            // (see `js_atrium_runtime()` rationale at the top of this
+            // file). `AtriumHandle::rejoin` is idempotent + currently
+            // infallible; the result-shape is preserved for future
+            // versions that may surface re-bind failure.
+            js_atrium_runtime().block_on(handle.rejoin()).map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("E_ATRIUM_REJOIN_FAILED: rejoin failed: {e:?}"),
+                )
+            })?;
+        }
+        // If the engine reference exists but `engine_atrium` is None
+        // (meaning the engine-bound JsAtrium was never joined to begin
+        // with), `rejoin()` is a no-op — callers must drive `join()`
+        // first to populate the handle.
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
+    }
+}
+
+/// `AsyncTask` backing [`JsAtrium::declare_device_attestation`].
+///
+/// The engine-bound `AtriumHandle` is resolved + the
+/// `E_ATRIUM_NOT_JOINED` gate (#688 fix-2) is applied SYNCHRONOUSLY in
+/// the `#[napi]` method before this task is constructed (matching the
+/// 6 sibling setters). This task does the local round-trip Vec push
+/// (r1-napi-2 + pcds-r4-r1-2 surface) THEN forwards to the engine —
+/// preserving the recorded-then-forwarded ordering.
+pub struct DeclareDeviceAttestationTask {
+    state: Arc<Mutex<AtriumHandleState>>,
+    handle: AtriumHandle,
+    attestation: DeviceAttestationDeclaration,
+}
+
+impl Task for DeclareDeviceAttestationTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        // Local round-trip surface (r1-napi-2 + pcds-r4-r1-2): replace
+        // any existing entry for the same device-DID. Brief lock; no
+        // await held across it.
+        {
+            let mut state = self.state.lock().expect("atrium state mutex");
+            state
+                .declared_attestations
+                .retain(|a| a.device_did != self.attestation.device_did);
+            state.declared_attestations.push(self.attestation.clone());
+        }
+        // G21-T2 §D audit-6-3 closure: forward to the engine-side
+        // `AtriumHandle::register_device_attestation` so the envelope
+        // rides the handshake-time presentation path. The on-the-wire
+        // frame-emission wires through G16-D wave-6b's broader
+        // handshake protocol body work (BELONGS-NAMED-NOW per HARD
+        // RULE rule-12 to phase-3-backlog §3.1 Atrium peer-handshake).
+        let envelope = benten_engine::engine_sync::DeclaredDeviceAttestation {
+            device_did: self.attestation.device_did.clone(),
+            claims: self
+                .attestation
+                .capabilities
+                .iter()
+                .map(|c| benten_engine::engine_sync::DeclaredCapabilityClaim {
+                    path: c.path.clone(),
+                    ability: c.ability.clone(),
+                })
+                .collect(),
+            freshness_window: self.attestation.freshness_window,
+        };
+        // #688 fix-1 + fix-3: the result is BOUND (`let _: () =`) and
+        // error-mapped. fix-3 upgraded the engine-side
+        // `register_device_attestation` to `AtriumResult<()>` with an
+        // `ensure_active` gate that returns `E_ATRIUM_INACTIVE` on a
+        // mid-leave race; pre-#688 the return was silently discarded
+        // (`;`-terminated) which would have dropped that error once
+        // the engine-side return was upgraded.
+        let _: () = js_atrium_runtime()
+            .block_on(self.handle.register_device_attestation(envelope))
+            .map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("E_ATRIUM_INACTIVE: register_device_attestation failed: {e:?}"),
+                )
+            })?;
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
+    }
+}
+
+/// `AsyncTask` backing [`JsAtrium::set_local_device_did`]. The
+/// `E_ATRIUM_NOT_JOINED` gate is applied synchronously before this
+/// task is constructed.
+pub struct SetLocalDeviceDidTask {
+    handle: AtriumHandle,
+    did_opt: Option<String>,
+}
+
+impl Task for SetLocalDeviceDidTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        js_atrium_runtime().block_on(self.handle.set_local_device_did(self.did_opt.take()));
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
+    }
+}
+
+/// `AsyncTask` backing [`JsAtrium::set_local_device_keypair`] +
+/// [`JsAtrium::clear_local_device_keypair`] (the latter passes
+/// `keypair: None`). The owned `Keypair` duplicate / the
+/// `E_ATRIUM_NOT_JOINED` gate are produced synchronously before this
+/// task is constructed.
+pub struct SetLocalDeviceKeypairTask {
+    handle: AtriumHandle,
+    keypair: Option<benten_id::keypair::Keypair>,
+}
+
+impl Task for SetLocalDeviceKeypairTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        js_atrium_runtime().block_on(self.handle.set_local_device_keypair(self.keypair.take()));
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
+    }
+}
+
+/// `AsyncTask` backing [`JsAtrium::set_local_device_attestation`] +
+/// [`JsAtrium::clear_local_device_attestation`] (the latter passes
+/// `attestation: None`). The owned attestation clone / the
+/// `E_ATRIUM_NOT_JOINED` gate are produced synchronously before this
+/// task is constructed.
+pub struct SetLocalDeviceAttestationTask {
+    handle: AtriumHandle,
+    attestation: Option<benten_id::device_attestation::DeviceAttestation>,
+}
+
+impl Task for SetLocalDeviceAttestationTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        js_atrium_runtime().block_on(
+            self.handle
+                .set_local_device_attestation(self.attestation.take()),
+        );
+        Ok(())
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
+        Ok(())
     }
 }
