@@ -1162,11 +1162,11 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-1 #683, u
 
 ---
 
-## §4.86–§4.92 W20-P4 close-as-named — benten-platform-foundation + benten-eval Phase-4-Meta-deferred refinement-audit tail
+## §4.161–§4.167 W20-P4 close-as-named — benten-platform-foundation + benten-eval Phase-4-Meta-deferred refinement-audit tail
 
 The rows below are the W20 (close-as-named partition P4) HARD-RULE clause-(b) BELONGS-NAMED-NOW destinations for the `refinement-audit-2026-05` issues labelled `phase-4-meta-deferred` + `priority:p2` against `benten-platform-foundation` + `benten-eval` that are NOT already homed by an existing §-row. Already-homed-elsewhere members are NOT repeated here: benten-eval #1157/#1040/#1044/#1045/#1034/#1049 (§4.76), #1163 (§4.77), #1042 (§4.78), #1027 (§4.65). Each issue below is verified OPEN + `phase-4-meta-deferred` + `priority:p2` + `severity-minor|severity-obs` (zero p0/p1/severity-major; none are real-bugs requiring pull-forward — the campaign orchestrator's deferral triage labels stand). Issues stay OPEN as Phase-4-Meta tracking rows; the orchestrator bulk-closes via set-diff against `.addl/refinement-audit-2026-05/w20-close-p4.txt`.
 
-### §4.86 benten-platform-foundation hygiene/dead-code + stale-cite cleanup cluster (Phase-4-Meta — refinement-audit Hyg-1/Hyg-2/Hyg-3)
+### §4.161 benten-platform-foundation hygiene/dead-code + stale-cite cleanup cluster (Phase-4-Meta — refinement-audit Hyg-1/Hyg-2/Hyg-3)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Hyg-1 #315/#321/#326/#331/#339, Hyg-2 #390/#392, Hyg-3 #444/#445/#448/#451/#454/#463; `phase-4-meta-deferred`; META #476 stale-phase/cite-marker workspace sweep alignment). Mechanical hygiene with zero v1-behaviour cost; bundled into one Phase-4-Meta crate-hygiene pass.
 
@@ -1176,7 +1176,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Hyg-1 #315/#32
 
 **Acceptance criteria (Phase-4-Meta crate-hygiene pass).** Delete dead aliases/dupes; compose the reimplemented subgraph builder; collapse divergent banned-list constants per §4.55; wire-or-delete the two inert validators at the plugin-install-path wave; retense/repoint every stale rustdoc cite to the actual symbol/path (or delete if the cited surface is gone). ~no LOC now; ~150-250 LOC at Phase-4-Meta. No behaviour change.
 
-### §4.87 benten-platform-foundation Qual-1/Qual-2 simplicity + materializer indirection refactor cluster (Phase-4-Meta)
+### §4.162 benten-platform-foundation Qual-1/Qual-2 simplicity + materializer indirection refactor cluster (Phase-4-Meta)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-1 #727/#730/#732, Qual-2 #800; `phase-4-meta-deferred`; couples §4.84/§4.85 Phase-4-Meta perf/cleanup window + dead-code #312). Structural simplification, no v1-behaviour change; one Phase-4-Meta materializer/manifest simplicity pass.
 
@@ -1187,31 +1187,31 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-1 #727/#7
 
 **Acceptance criteria (Phase-4-Meta).** Extract one generic Value-tree visitor; collapse the 4-layer render indirection to 2; drop the redundant `MaterializerError` code-field (derive from variant identity); narrow the 3-port generic bundle to the single concrete shape. Couples §4.84/§4.85. ~200-350 LOC at Phase-4-Meta. No behaviour change.
 
-### §4.88 benten-platform-foundation safe-1/safe-2/safe-3/safe-4 boundary + invariant + observability tail (Phase-4-Meta; security-adjacent items flagged)
+### §4.163 benten-platform-foundation safe-1/safe-2/safe-3/safe-4 boundary + invariant + observability tail (Phase-4-Meta; security-adjacent items flagged)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-1 #521/#527, Safe-2 #585, Safe-3 #614/#619, Safe-4 #640/#646; `phase-4-meta-deferred`, all `severity-minor|obs`; #585 aligns META #629 DoS-via-unbounded-decode; #527 cap-scope-enforcement is the security-adjacent member). The campaign's BLOCKER cluster (META #629 flagship instances) already carries the v1-platform-shippable DoS arms; these are the Phase-4-Meta tail instances per the same orchestrator triage that labelled them `priority:p2`+`phase-4-meta-deferred`.
 
 - **Security-adjacent (flag to orchestrator at Phase-4-Meta open):** #527 `materialize_format` per-primitive `cap_recheck` fan-out discards the `bool` result → per-primitive cap-scope never enforced (correctness/authz tail; orchestrator decides at Phase-4-Meta whether this is pulled forward into the §629 / cap-enforcement v1 cluster or stays Phase-4-Meta — mirrors §4.76's #1045 disposition note). #585 `ManifestStore::load_verified` T5a verify-on-load is DoS-amplified by its own input (decode-before-size-check; META #629 alignment).
-- **Invariant/doc-drift (Safe-3):** #614 `build_composition_subgraph` rustdoc claims BFS but uses `Vec::pop()`=DFS (cycle detection still correct; doc invariant drift only); #619 4 `module_ecosystem` upgrade-flow helpers (`decide_upgrade_consent`/`verify_upgrade_author_continuity`/`check_author_trust`/`new_version_available_code`) unwired from `plugin_lifecycle::install_plugin` (couples §4.86 #390/#392 plugin-install-path wave + META #669 CLAUDE.md #18 Layers 2+3 T10-upgrade paper-only).
+- **Invariant/doc-drift (Safe-3):** #614 `build_composition_subgraph` rustdoc claims BFS but uses `Vec::pop()`=DFS (cycle detection still correct; doc invariant drift only); #619 4 `module_ecosystem` upgrade-flow helpers (`decide_upgrade_consent`/`verify_upgrade_author_continuity`/`check_author_trust`/`new_version_available_code`) unwired from `plugin_lifecycle::install_plugin` (couples §4.161 #390/#392 plugin-install-path wave + META #669 CLAUDE.md #18 Layers 2+3 T10-upgrade paper-only).
 - **Observability/error-loss (Safe-1):** #521 `PluginLibrary` timestamp `i64::try_from` silently saturates u64 overflow to `i64::MAX` with no observability.
 - **Forward-shape (Safe-4):** #640 "atomically persists" rustdoc claim at `module_ecosystem.rs:46/175/192` documents transactional semantics the sequential code does not provide (doc-retense or real-atomicity decision); #646 `Send+Sync` bounds on `Materializer`+`Renderer` + `MaterializerCapRecheck` `Arc` are option-value-only with zero v1 exercising code (forward-architectural-shape; sibling pattern to §4.65/benten-eval #1027 zero-v1-consumer carrying-cost).
 
 **Acceptance criteria (Phase-4-Meta).** #527 + #585 dispositioned at Phase-4-Meta open (pull-forward-to-§629-cluster vs stay) by the orchestrator; #619 upgrade-flow helpers wired at the plugin-install-path hardening wave (or documented as explicit Phase-5 blocker per HARD RULE clause-(b)); #614/#640 rustdoc retensed to match actual code semantics (or code made to match the doc where the invariant is load-bearing); #521 saturation gets an observability surface; #646 zero-consumer bounds ratified (keep-as-forward-shape vs narrow). ~150-300 LOC at Phase-4-Meta. The #527/#585 security-adjacent arms are surfaced to the orchestrator, NOT decided in this doc-only lane.
 
-### §4.89 benten-platform-foundation surf-1 feature-flag + fwd-1 performance/bench cluster (Phase-4-Meta perf/API-stabilization)
+### §4.164 benten-platform-foundation surf-1 feature-flag + fwd-1 performance/bench cluster (Phase-4-Meta perf/API-stabilization)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Surf-1 #863, Fwd-1 #961/#970/#974/#979/#982; `phase-4-meta-deferred`; couples §4.43 v1-API-stabilization + §4.76/§4.84 Phase-4-Meta perf-pass / META #1062 bench-harness baseline). benten-platform-foundation is a ~8k-LOC v1-platform-shippable crate with zero benches + zero feature flags despite structural pluggability.
 
 - #863 zero feature flags despite `Materializer`/`Renderer`/`ManifestStore`/admin-ui-v0 structural pluggability — incoherent with the `benten-graph`/`benten-engine` feature-gate workspace pattern (couples §4.43 v1-API-stabilization sweep — the feature-table shape is a v1-SemVer surface decision).
 - #961 zero benchmark coverage at the ~8k-LOC crate (no `benches/` dir, `bench=false`, no criterion dev-dep) → regression protection absent (couples §4.84/§4.76 / META #1062 one Phase-4-Meta bench-harness baseline pass).
 - #982 `ManifestStore::install_plugin` double-CBOR-encodes the `InstallRecord` + `load_verified` full-vec-clones stored bytes → pass-through-bytes + borrowed-decode closes both (allocation hot-path; META #1064 alignment).
-- #970 `materialize_format` iterates spec nodes 6-7× per walk (4 redundant passes + 2-3 in render path) → single-scan refactor collapses to 2 (couples §4.87 #800/#730 materializer simplicity).
+- #970 `materialize_format` iterates spec nodes 6-7× per walk (4 redundant passes + 2-3 in render path) → single-scan refactor collapses to 2 (couples §4.162 #800/#730 materializer simplicity).
 - #974 `PluginLibrary::versions_of`/`remove`/`try_append_anchor_chain` are O(N) over all entries — missing per-name secondary index — scales poorly past Phase-6/Phase-8 (couples §4.79 benten-core Anchor-shape unification — the per-name index shape rides the unified `VersionDag` migration).
 - #979 "in-flight reads cannot race" rustdoc narrative on a fully-synchronous `&mut`-gated crate — type system (not ordering) prevents the named race → retense the rustdoc (doc-only; sibling Safe-3 #614/#640 doc-drift).
 
 **Acceptance criteria (Phase-4-Meta).** Feature-table shape ratified at the §4.43 v1-API-stabilization sweep (#863); 3-4 informational Criterion benches added under `crates/benten-platform-foundation/benches/` folded into the META #1062 baseline pass (#961); allocation cleanups (#982 pass-through-bytes/borrowed-decode; #970 single-scan) landed with before/after benches; #974 per-name index rides the §4.79 `VersionDag` migration; #979 rustdoc retensed. ~250-400 LOC at Phase-4-Meta.
 
-### §4.90 benten-eval hyg-1 dead-code + hyg-4 ignore-audit cleanup cluster (Phase-4-Meta — refinement-audit Hyg-1/Hyg-4)
+### §4.165 benten-eval hyg-1 dead-code + hyg-4 ignore-audit cleanup cluster (Phase-4-Meta — refinement-audit Hyg-1/Hyg-4)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Hyg-1 #335/#341/#347, Hyg-4 #485/#487; `phase-4-meta-deferred`; sibling of §4.75 benten-eval in-source-marker cluster + META #476 stale-marker sweep). Mechanical hygiene, zero v1-behaviour cost; one Phase-4-Meta benten-eval hygiene pass.
 
@@ -1220,22 +1220,22 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Hyg-1 #335/#34
 
 **Acceptance criteria (Phase-4-Meta).** Delete the zero-caller pub fns (or `pub(crate)`-narrow + de-stale INTERNALS.md); retense the stale `#[ignore]` rationales (#485 phase-rename language → Phase-4-Meta per §4.65; #487 line-pin → exact line or symbol-relative reference). ~no LOC now; ~60-120 LOC at Phase-4-Meta. No behaviour change.
 
-### §4.91 benten-eval qual-1 simplicity + surf-1 visibility/cfg-shape cluster (Phase-4-Meta / §4.43 v1-API-stabilization)
+### §4.166 benten-eval qual-1 simplicity + surf-1 visibility/cfg-shape cluster (Phase-4-Meta / §4.43 v1-API-stabilization)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-1 #726/#729, Surf-1 #876/#877; `phase-4-meta-deferred`; couples §4.43 v1-API-stabilization sweep + §4.77 `PrimitiveHost` seam + sec-r6r2-02 cfg-discipline). Structural/visibility cleanup; visibility narrowing is a v1-SemVer surface so it rides §4.43.
 
 - #726 `register_on_change` 7-arg signature with `#[allow(too_many_arguments)]` bundles 3 delivery-shape closures + 2 shared atomic slots → collapse to a `DeliveryCallbacks` struct (couples §4.77 SUBSCRIBE seam — the param shape is part of the seam-shape decision).
-- #729 `MultiplicativeBudget` newtype wraps a single u64 with 2 trivial accessors; no callsite pattern-matches or distinguishes from u64 → unwrap-or-justify (sibling §4.87 #732 redundant-state pattern).
+- #729 `MultiplicativeBudget` newtype wraps a single u64 with 2 trivial accessors; no callsite pattern-matches or distinguishes from u64 → unwrap-or-justify (sibling §4.162 #732 redundant-state pattern).
 - #876 5 SANDBOX internal modules (`counted_sink`/`epoch_ticker`/`escape_defenses`/`fingerprint`/`resource_limiter`/`trap_to_typed`) ship `pub mod` with zero production cross-crate consumers → should be `pub(crate)` (curated `pub use` already exposes the intended surface) — v1-SemVer visibility narrowing, rides §4.43.
 - #877 feature-gate shape inconsistency — SANDBOX `testing_inject_attack` family uses TRIPLE-OR `cfg(any(test, feature="test-helpers", feature="testing"))` vs every other test-only surface's DOUBLE-OR `cfg(any(test, feature="testing"))` (test-author DX confusion + sec-r6r2-02 cfg-discipline drift) → normalize.
 
 **Acceptance criteria (Phase-4-Meta).** #726 `DeliveryCallbacks` struct collapse co-routes with the §4.77 SUBSCRIBE-seam ratification; #729 newtype unwrapped or justified; #876 visibility narrowed at the §4.43 sweep (cross-crate-zero-consumer verify first); #877 cfg-gate normalized to the DOUBLE-OR convention. ~120-220 LOC at Phase-4-Meta. #876 visibility change is v1-SemVer — surfaced for §4.43, not decided here.
 
-### §4.92 benten-eval safe-1/safe-2/safe-3/safe-4 + fwd-1/fwd-2 tail cluster (Phase-4-Meta; security-adjacent items flagged)
+### §4.167 benten-eval safe-1/safe-2/safe-3/safe-4 + fwd-1/fwd-2 tail cluster (Phase-4-Meta; security-adjacent items flagged)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-1 #523/#524/#528, Safe-2 #580/#584, Safe-3 #622, Safe-4 #656/#657, Fwd-1 #1046/#1047/#1048, Fwd-2 #1042-already-§4.78-EXCLUDED→ #1042 not repeated; `phase-4-meta-deferred`, all `severity-minor|obs`; #580/#584 align META #629 DoS-via-unbounded-decode). The campaign's META #629 BLOCKER cluster already carries the v1-platform-shippable flagship DoS instances; the items below are the Phase-4-Meta tail per the same orchestrator triage labelling them `priority:p2`+`phase-4-meta-deferred`.
 
-- **Security-adjacent (flag to orchestrator at Phase-4-Meta open):** #580 `typed_call::UcanValidateChain` accepts unbounded `tokens.len()` + unbounded per-token `Bytes` (META #629 alignment; this is the benten-eval typed-CALL analog of the §4.80 `from_canonical_bytes_bounded` cross-crate migration — couples §4.80 P-II sweep); #584 `sandbox::resource_limiter::table_growing` permissively returns `Ok(true)` → untrusted-module table-grow uncapped (SANDBOX resource-bound tail; orchestrator decides at Phase-4-Meta open whether #580/#584 pull forward into the §629 / SANDBOX-bound v1 cluster or stay — mirrors §4.76 #1045 + §4.88 #527 disposition notes).
+- **Security-adjacent (flag to orchestrator at Phase-4-Meta open):** #580 `typed_call::UcanValidateChain` accepts unbounded `tokens.len()` + unbounded per-token `Bytes` (META #629 alignment; this is the benten-eval typed-CALL analog of the §4.80 `from_canonical_bytes_bounded` cross-crate migration — couples §4.80 P-II sweep); #584 `sandbox::resource_limiter::table_growing` permissively returns `Ok(true)` → untrusted-module table-grow uncapped (SANDBOX resource-bound tail; orchestrator decides at Phase-4-Meta open whether #580/#584 pull forward into the §629 / SANDBOX-bound v1 cluster or stay — mirrors §4.76 #1045 + §4.163 #527 disposition notes).
 - **Observability/error-loss (Safe-1):** #523 `host_error.rs:88` `from_wire_bytes` silently falls back to `E_UNKNOWN` on invalid UTF-8; #524 `epoch_ticker.rs:86` `.expect('epoch ticker thread spawn failed')` panics the whole engine process on thread-spawn failure (fail-closed-vs-typed-error decision); #528 `subscribe.rs` publish fan-out drops inject errors + callback panics with no observability surface (couples §4.76 #1041 publish-walk + §4.77 SUBSCRIBE seam).
 - **Invariant-surface (Safe-3):** #622 Inv-4 runtime arm inline check at `sandbox.rs:539` bypasses the public `invariants::sandbox_depth::check_runtime_entry` helper — two divergent firing surfaces with different ErrorCode coverage (consolidate to the single helper).
 - **Concurrency-shape (Safe-4):** #656 `ActiveSubscription::next_blocking` uses 5ms polling sleep instead of `Condvar` (inconsistent with `chunk_sink.rs`; burns CPU + up-to-5ms tail latency); #657 `BoundedSink::capacity_remaining` acquires inner Mutex for one `VecDeque::len()` read (serialises against producer's blocking `send()` under back-pressure).
