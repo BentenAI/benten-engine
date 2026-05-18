@@ -42,7 +42,7 @@ jobs:
       - name: Install cargo-vet (prebuilt)
         # taiki-e/install-action installs prebuilt cargo-vet (~3s
         # vs ~60s for `cargo install --locked cargo-vet`).
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@b550161ef8a7bc4f2a671c0b03a18ac9ccedea1e # v2
         with:
           tool: cargo-vet
 
