@@ -1,0 +1,68 @@
+# W20 close-as-named partition P3 — benten-sync + benten-ivm + benten-caps
+# All verified: OPEN + phase-4-meta-deferred + priority:p2 + genuinely Phase-4-Meta + homed in phase-4-backlog.md §4.136-§4.146
+# Orchestrator bulk-closes via set-diff. SUSPECT items: NONE.
+# HEAD pin: 20fb5c78  branch: wave-e/w20-p3
+
+# --- benten-sync (30) ---
+378
+384
+457
+489
+520
+569
+574
+581
+644
+647
+651
+679
+689
+700
+715
+723
+762
+796
+890
+891
+1001
+1006
+1011
+1013
+1077
+1079
+1080
+1081
+1184
+1186
+
+# --- benten-ivm (10) ---
+919
+920
+953
+956
+958
+960
+963
+966
+967
+1221
+
+# --- benten-caps (18) ---
+300
+303
+358
+458
+480
+641
+661
+668
+674
+683
+793
+886
+946
+954
+993
+1005
+1017
+1233
