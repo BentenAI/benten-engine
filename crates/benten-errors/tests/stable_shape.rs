@@ -15,6 +15,8 @@
 //!    code rendered by an older client round-trips through the enum
 //!    without lossy conversion.
 
+use std::str::FromStr;
+
 use benten_errors::ErrorCode;
 
 /// Every catalog variant must round-trip through `as_str` / `from_str`
@@ -497,7 +499,8 @@ fn variant_count_is_pinned() {
         let s = code.as_str();
         let parsed = ErrorCode::from_str(s);
         assert_eq!(
-            &parsed, code,
+            parsed.as_ref(),
+            Ok(code),
             "catalog variant {code:?} failed as_str/from_str round-trip via string {s}",
         );
     }
@@ -1059,21 +1062,24 @@ fn as_str_stable_for_representative_code() {
 /// `from_str` round-trips `as_str` for a representative code.
 #[test]
 fn from_str_roundtrip_representative() {
-    let parsed = ErrorCode::from_str("E_CAP_DENIED");
+    let parsed = ErrorCode::from_str("E_CAP_DENIED").expect("recognized code");
     assert_eq!(parsed, ErrorCode::CapDenied);
     assert_eq!(parsed.as_str(), "E_CAP_DENIED");
 }
 
-/// Unknown codes fall back to `Unknown(String)` with the payload preserved.
+/// Unknown codes are a parse error (#733: fallible by design). The raw
+/// string is preserved on the error so forward-compat callers can recover
+/// `ErrorCode::Unknown` explicitly.
 #[test]
-fn from_str_unknown_preserves_raw_string() {
-    let code = ErrorCode::from_str("E_NOT_A_REAL_CODE");
-    match &code {
-        ErrorCode::Unknown(s) => assert_eq!(s, "E_NOT_A_REAL_CODE"),
-        other => panic!("expected Unknown, got {other:?}"),
-    }
-    // as_str returns the raw string verbatim so rendering stays lossless.
-    assert_eq!(code.as_str(), "E_NOT_A_REAL_CODE");
+fn from_str_unknown_is_err_and_preserves_raw_string() {
+    let err = ErrorCode::from_str("E_NOT_A_REAL_CODE")
+        .expect_err("unrecognized code must be a parse error");
+    assert_eq!(err.as_str(), "E_NOT_A_REAL_CODE");
+    // Forward-compat recovery preserves the raw string verbatim so
+    // rendering stays lossless.
+    let recovered = ErrorCode::from_str("E_NOT_A_REAL_CODE")
+        .unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()));
+    assert_eq!(recovered.as_str(), "E_NOT_A_REAL_CODE");
 }
 
 /// `as_static_str` returns the frozen 'static form for known variants and
@@ -1151,6 +1157,6 @@ fn phase_2a_snapshot_consts_use_frozen_names() {
         .iter()
         .chain(RESERVED_CODES_AT_PHASE_2A_SNAPSHOT)
     {
-        assert_eq!(ErrorCode::from_str(code.as_static_str()), *code);
+        assert_eq!(ErrorCode::from_str(code.as_static_str()), Ok(code.clone()));
     }
 }

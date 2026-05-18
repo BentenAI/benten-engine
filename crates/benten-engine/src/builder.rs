@@ -245,7 +245,7 @@ impl EngineBuilder {
     /// `UcanGroundedPolicy` wrap doesn't fire unless
     /// `use_ucan_grounded` is set).
     #[must_use]
-    pub fn ucan_grounded_now_for_test(mut self, now_secs: u64) -> Self {
+    pub fn ucan_grounded_now_secs(mut self, now_secs: u64) -> Self {
         self.ucan_grounded_now_secs = Some(now_secs);
         self
     }
@@ -466,13 +466,13 @@ impl EngineBuilder {
             // the eval-side delivery can carry the Node identity without
             // pulling a new serde dep into benten-engine. (The
             // ChangeBroadcast already operates inside benten-engine, so
-            // we have the Node's `cid()` accessor + canonical_bytes
+            // we have the Node's `cid()` accessor + to_canonical_bytes
             // available; we use the latter so the consumer-side code can
             // re-hash without ambiguity if it wishes.)
             let payload_bytes: Vec<u8> = event
                 .node
                 .as_ref()
-                .and_then(|n| n.canonical_bytes().ok())
+                .and_then(|n| n.to_canonical_bytes().ok())
                 .unwrap_or_default();
             // R6FP-Group-1 (Round-2 Instance 6 BLOCKER): forward ALL
             // 9 fields cleanly. Pre-fix this bridge dropped 6 of 9
@@ -493,7 +493,7 @@ impl EngineBuilder {
             // form is no longer legal here; the bridge uses the
             // full-fidelity `ChangeEvent::for_bridge` constructor, which
             // forwards every one of the 9 fields with their real values
-            // (NOT the lossy `legacy_minimal`). Argument order mirrors
+            // (NOT the lossy `minimal`). Argument order mirrors
             // the field order so the no-field-drop drift guard still
             // covers all forwarded fields.
             let translated = benten_eval::primitives::subscribe::ChangeEvent::for_bridge(
@@ -578,7 +578,7 @@ impl EngineBuilder {
                         // G16-B-B-rest sub-item D: tests inject a
                         // static clock so time-bounded UCAN proofs
                         // walk cleanly past the fail-closed branch.
-                        policy = policy.with_now_for_test(now_secs);
+                        policy = policy.with_now_secs(now_secs);
                     }
                     (Some(Arc::new(policy) as Arc<dyn CapabilityPolicy>), false)
                 } else {

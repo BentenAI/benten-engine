@@ -59,6 +59,7 @@ use benten_graph::MutexExt;
 
 use crate::engine::Engine;
 use crate::error::EngineError;
+use core::str::FromStr;
 
 /// G14-C label used for the durable handler-version-chain side-table.
 /// Privileged-write surface (`system:` prefix) — same shape as

@@ -111,6 +111,6 @@ proptest! {
 fn build_and_hash(ops: &[Op]) -> String {
     let node = build_node(ops);
     node.cid()
-        .expect("canonical_bytes must succeed for int-only properties")
+        .expect("to_canonical_bytes must succeed for int-only properties")
         .to_string()
 }

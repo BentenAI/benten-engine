@@ -46,6 +46,8 @@ fn write_authority_enum_discriminates_user_engine_sync() {
             WriteAuthority::User => "user",
             WriteAuthority::EnginePrivileged => "engine",
             WriteAuthority::SyncReplica { .. } => "sync",
+            // `WriteAuthority` is `#[non_exhaustive]` (#837).
+            _ => "unknown",
         }
     }
     assert_eq!(as_label(user), "user");

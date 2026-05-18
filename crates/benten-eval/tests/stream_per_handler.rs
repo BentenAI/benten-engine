@@ -300,11 +300,7 @@ fn stream_per_handler_config_consumed_by_build_stream_handle_not_dead_execute_ar
     use benten_eval::{EvalError, NullHost, StepResult};
 
     use benten_core::OperationNode;
-    let op = OperationNode {
-        id: "dead_arm_test".to_string(),
-        kind: PrimitiveKind::Stream,
-        properties: BTreeMap::new(),
-    };
+    let op = OperationNode::new("dead_arm_test", PrimitiveKind::Stream);
     let host = NullHost;
     let dead_arm: Result<StepResult, EvalError> =
         benten_eval::primitives::stream::execute(&op, &host);

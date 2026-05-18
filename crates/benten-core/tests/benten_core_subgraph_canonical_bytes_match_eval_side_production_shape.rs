@@ -161,8 +161,8 @@ fn migrated_subgraph_dagcbor_round_trip_preserves_full_shape() {
         .push_edge_raw("a", "b", "next");
     sg.set_deterministic(true);
 
-    let bytes = sg.to_dagcbor().expect("encode");
-    let decoded = Subgraph::from_dagcbor(&bytes).expect("decode");
+    let bytes = sg.to_canonical_bytes().expect("encode");
+    let decoded = Subgraph::from_canonical_bytes(&bytes).expect("decode");
 
     assert_eq!(decoded.handler_id(), sg.handler_id());
     assert_eq!(

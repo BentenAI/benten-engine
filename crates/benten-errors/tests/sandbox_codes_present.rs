@@ -17,6 +17,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 #[test]
 fn e_sandbox_codes_present_in_catalog() {
@@ -37,10 +38,13 @@ fn e_sandbox_codes_present_in_catalog() {
     for code_str in &codes {
         let parsed = ErrorCode::from_str(code_str);
         assert!(
-            !matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_ok(),
             "{code_str} not registered as a stable variant"
         );
-        assert_eq!(parsed.as_static_str(), *code_str);
+        assert_eq!(
+            parsed.expect("recognized catalog code").as_static_str(),
+            *code_str
+        );
     }
 
     // Anti-rename guard — `E_SANDBOX_REENTRANCY_DENIED` MUST round-trip
@@ -49,7 +53,7 @@ fn e_sandbox_codes_present_in_catalog() {
     // non-negotiable rule #5).
     let stale = ErrorCode::from_str("E_SANDBOX_REENTRANCY_DENIED");
     assert!(
-        matches!(stale, ErrorCode::Unknown(_)),
+        stale.is_err(),
         "E_SANDBOX_REENTRANCY_DENIED MUST be Unknown — D19 + wsa-7 \
          renamed it to E_SANDBOX_NESTED_DISPATCH_DENIED with no alias"
     );
@@ -64,7 +68,7 @@ fn e_sandbox_codes_present_in_catalog() {
     ] {
         let parsed = ErrorCode::from_str(stale_code);
         assert!(
-            matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_err(),
             "stale code {stale_code} MUST round-trip to Unknown (cleanup pre-PR drift)"
         );
     }

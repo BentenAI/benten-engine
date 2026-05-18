@@ -423,7 +423,7 @@ impl Engine {
                 cid.to_base32()
             ),
         })?;
-        envelope.to_dagcbor().map_err(EngineError::Core)
+        envelope.to_canonical_bytes().map_err(EngineError::Core)
     }
 
     /// Phase 2a G3-B: resume from DAG-CBOR bytes WITHOUT a principal check.
@@ -590,11 +590,12 @@ impl Engine {
         // or a valid-but-wrong-shape structure (Serialize). Integrity is
         // only distinguished AFTER decode, via `payload_cid` recompute —
         // that's the ExecStateTampered path in step 1.
-        let envelope =
-            ExecutionStateEnvelope::from_dagcbor(bytes).map_err(|e| EngineError::Other {
+        let envelope = ExecutionStateEnvelope::from_canonical_bytes(bytes).map_err(|e| {
+            EngineError::Other {
                 code: ErrorCode::Serialize,
                 message: format!("resume: envelope decode: {e}"),
-            })?;
+            }
+        })?;
 
         // Step 1: recompute payload_cid. Any drift = tamper.
         let recomputed = envelope
@@ -942,7 +943,7 @@ impl Engine {
             frame_index: 0,
         };
         let envelope = ExecutionStateEnvelope::new(payload).map_err(EngineError::Core)?;
-        envelope.to_dagcbor().map_err(EngineError::Core)
+        envelope.to_canonical_bytes().map_err(EngineError::Core)
     }
 
     /// Phase 2a test-only hook — fabricate an envelope whose attribution

@@ -17,7 +17,7 @@
 //! - `"sw:" ++ cid_bytes` — WAIT metadata side-table value
 //!   (DAG-CBOR-encoded `SerializableWaitMetadata` — module-private).
 //! - `"se:" ++ cid_bytes` — `ExecutionStateEnvelope` bytes
-//!   (canonical DAG-CBOR — same encoding `to_dagcbor` produces).
+//!   (canonical DAG-CBOR — same encoding `to_canonical_bytes` produces).
 //! - `"sc:" ++ subscriber_cid_bytes` — SUBSCRIBE persistent cursor
 //!   value (`u64` `max_delivered_seq` little-endian).
 //!
@@ -352,7 +352,7 @@ impl SuspensionStore for RedbSuspensionStore {
 
     fn put_envelope(&self, envelope: ExecutionStateEnvelope) -> Result<(), SuspensionStoreError> {
         let cid = envelope.payload_cid;
-        let bytes = envelope.to_dagcbor().map_err(backend_err)?;
+        let bytes = envelope.to_canonical_bytes().map_err(backend_err)?;
         self.backend
             .put(&envelope_key(&cid), &bytes)
             .map_err(backend_err)
@@ -365,7 +365,7 @@ impl SuspensionStore for RedbSuspensionStore {
         let Some(bytes) = self.backend.get(&envelope_key(cid)).map_err(backend_err)? else {
             return Ok(None);
         };
-        let envelope = ExecutionStateEnvelope::from_dagcbor(&bytes).map_err(backend_err)?;
+        let envelope = ExecutionStateEnvelope::from_canonical_bytes(&bytes).map_err(backend_err)?;
         Ok(Some(envelope))
     }
 

@@ -80,7 +80,7 @@ fn subgraph_ext_load_verified_with_cid_is_the_name_817() {
     let r = sb.read("r");
     sb.respond(r);
     let sg = sb.build_validated().expect("trivial subgraph builds");
-    let bytes = sg.canonical_bytes().expect("encode");
+    let bytes = sg.to_canonical_bytes().expect("encode");
     let cid = sg.cid().expect("cid");
     // Bind the function item by its current name; a rename back to
     // `load_verified_eval` would break this line at compile time.

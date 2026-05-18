@@ -25,6 +25,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 /// 9 G23-A ErrorCode string forms — mirror of
 /// `schema_fixtures::G23_A_ERROR_CODES` at
@@ -37,7 +38,7 @@ use benten_errors::ErrorCode;
 ///
 /// RED-PHASE: at HEAD these don't exist in the enum. Each
 /// `ErrorCode::from_str(code)` returns `ErrorCode::Unknown(code)`. The
-/// `!matches!(parsed, ErrorCode::Unknown(_))` assertion fails for all
+/// `parsed.is_ok()` assertion fails for all
 /// 9. Un-ignore at G23-A wave-4.
 const EXPECTED_G23_A_CODES: &[&str] = &[
     "E_SCHEMA_VALIDATION_FAILED",
@@ -70,13 +71,13 @@ fn every_expected_g23_a_schema_code_resolves_to_named_variant() {
         // closure target.
         let parsed = ErrorCode::from_str(code);
         assert!(
-            !matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_ok(),
             "G23-A subset-closure: ErrorCode {code} expected in enum \
              post-G23-A but from_str returned Unknown — enum + as_str \
              + from_str arms missing for this variant"
         );
         assert_eq!(
-            parsed.as_static_str(),
+            parsed.expect("recognized catalog code").as_static_str(),
             *code,
             "G23-A subset-closure: ErrorCode {code} must round-trip \
              through as_static_str → from_str without lossy conversion"

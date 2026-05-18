@@ -25,6 +25,7 @@
 use benten_core::{Cid, Value};
 
 use crate::{EvalError, OperationNode, PrimitiveHost, StepResult};
+use core::str::FromStr;
 
 /// Execute a READ primitive.
 ///

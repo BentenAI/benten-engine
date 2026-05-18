@@ -49,7 +49,7 @@ use std::collections::BTreeMap;
 /// **Intentionally NOT `Serialize` / `Deserialize`** (det-r4b-4 closure,
 /// wave-8e). Mirrors the cag-mr-g12c-cont-1 fix-pass applied to
 /// `Subgraph` / `NodeHandle`: the canonical encoding for a CapBundle
-/// flows through [`Self::canonical_bytes`] (a typed inner shape that
+/// flows through [`Self::to_canonical_bytes`] (a typed inner shape that
 /// honours the sorted-keys + skip-when-None discipline that defines
 /// CID-stability across the Phase-4-Meta signed-bundle lift). A
 /// `serde_json::to_string(&bundle)` callsite would silently produce a
@@ -57,7 +57,7 @@ use std::collections::BTreeMap;
 /// `None` discipline, no DAG-CBOR canonicalisation — and any
 /// downstream consumer treating that JSON as authoritative would be
 /// out-of-sync with the canonical-bytes-derived CID. Dropping the
-/// auto-derive forces every caller through `canonical_bytes()` and
+/// auto-derive forces every caller through `to_canonical_bytes()` and
 /// makes the secondary-serde footgun impossible to hit by accident.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapBundle {
@@ -70,7 +70,7 @@ pub struct CapBundle {
     /// **sec-g7a-mr-3 fix-pass: D9 signed-manifest reservation.** Phase 3
     /// will lift the deferral by populating this field with an Ed25519
     /// signature over the unsigned canonical bytes. In Phase 2b this is
-    /// ALWAYS `None`; the canonical-bytes encoder ([`Self::canonical_bytes`])
+    /// ALWAYS `None`; the canonical-bytes encoder ([`Self::to_canonical_bytes`])
     /// explicitly omits the field when `None` so the unsigned-bundle CID
     /// is structurally guaranteed to remain CID-stable across the
     /// Phase-3 lift (the field added to the encoded map only when
@@ -112,7 +112,7 @@ impl CapBundle {
     /// # Errors
     /// Returns `Err(ManifestError::Encode { .. })` on DAG-CBOR encode
     /// failure.
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, ManifestError> {
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, ManifestError> {
         // Use a typed wrapper so the encoder honours the same canonical
         // discipline (sorted keys + skip-when-None) as the rest of the
         // workspace's DAG-CBOR encoders. `BTreeMap<&str, ...>` here cannot
@@ -134,12 +134,12 @@ impl CapBundle {
         })
     }
 
-    /// Compute the CID of this bundle (BLAKE3 over [`Self::canonical_bytes`]).
+    /// Compute the CID of this bundle (BLAKE3 over [`Self::to_canonical_bytes`]).
     ///
     /// # Errors
     /// Returns `Err(ManifestError::Encode { .. })` on DAG-CBOR encode failure.
     pub fn cid(&self) -> Result<Cid, ManifestError> {
-        let bytes = self.canonical_bytes()?;
+        let bytes = self.to_canonical_bytes()?;
         let digest = blake3::hash(&bytes);
         Ok(Cid::from_blake3_digest(*digest.as_bytes()))
     }
@@ -221,7 +221,7 @@ const DEFAULT_MANIFEST_NAMES: &[&str] = &["compute-basic", "compute-with-kv"];
 /// re-parses the TOML at runtime and asserts byte-for-byte match against
 /// the bundle this function emits.
 ///
-/// Caps are sorted-canonical per D9 so [`CapBundle::canonical_bytes`] is
+/// Caps are sorted-canonical per D9 so [`CapBundle::to_canonical_bytes`] is
 /// bit-stable.
 #[must_use]
 pub fn default_manifests() -> BTreeMap<String, CapBundle> {
@@ -425,8 +425,8 @@ mod tests {
     fn canonical_bytes_round_trip_stable() {
         let reg = ManifestRegistry::new();
         let bundle = reg.lookup("compute-basic").unwrap();
-        let bytes_1 = bundle.canonical_bytes().unwrap();
-        let bytes_2 = bundle.canonical_bytes().unwrap();
+        let bytes_1 = bundle.to_canonical_bytes().unwrap();
+        let bytes_2 = bundle.to_canonical_bytes().unwrap();
         assert_eq!(bytes_1, bytes_2);
     }
 
@@ -453,7 +453,7 @@ mod tests {
     /// canonical bytes today equal its canonical bytes after Phase-3
     /// adds signed bundles. This test pins the property by hand-encoding
     /// the same shape WITHOUT the signature field and asserting the
-    /// bytes are identical to what `canonical_bytes()` produces for an
+    /// bytes are identical to what `to_canonical_bytes()` produces for an
     /// unsigned bundle. If a future refactor accidentally serialises
     /// `Some(empty)` or `null` for the unsigned case the test fires.
     #[test]
@@ -477,7 +477,7 @@ mod tests {
         let hand = Unsigned { caps: &bundle.caps };
         let hand_bytes = serde_ipld_dagcbor::to_vec(&hand).unwrap();
 
-        let real_bytes = bundle.canonical_bytes().unwrap();
+        let real_bytes = bundle.to_canonical_bytes().unwrap();
         assert_eq!(
             real_bytes, hand_bytes,
             "unsigned CapBundle canonical-bytes MUST omit the signature \
@@ -496,8 +496,8 @@ mod tests {
         signed.signature = Some(ManifestSignature {
             bytes: vec![0x42; 64],
         });
-        let unsigned_bytes = unsigned.canonical_bytes().unwrap();
-        let signed_bytes = signed.canonical_bytes().unwrap();
+        let unsigned_bytes = unsigned.to_canonical_bytes().unwrap();
+        let signed_bytes = signed.to_canonical_bytes().unwrap();
         assert_ne!(
             unsigned_bytes, signed_bytes,
             "signed CapBundle MUST produce distinct canonical bytes \

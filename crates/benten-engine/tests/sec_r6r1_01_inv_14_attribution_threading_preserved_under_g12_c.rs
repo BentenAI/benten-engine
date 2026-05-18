@@ -122,8 +122,8 @@ fn g12a_budget_exhausted_does_not_bypass_attribution_frame_post_g12_c() {
     b.respond(r);
     let sg = b.build_unvalidated_for_test();
 
-    let bytes = sg.to_dagcbor().expect("encode");
-    let decoded = Subgraph::from_dagcbor(&bytes).expect("decode");
+    let bytes = sg.to_canonical_bytes().expect("encode");
+    let decoded = Subgraph::from_canonical_bytes(&bytes).expect("decode");
 
     for n in decoded.nodes() {
         assert_eq!(

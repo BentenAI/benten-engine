@@ -28,6 +28,7 @@ use benten_core::{OperationNode, Subgraph};
 use benten_engine::{Engine, EngineError};
 use benten_errors::ErrorCode;
 use benten_eval::PrimitiveKind;
+use std::str::FromStr;
 
 fn fresh_engine() -> (tempfile::TempDir, Engine) {
     let dir = tempfile::tempdir().unwrap();
@@ -181,6 +182,6 @@ fn error_code_string_round_trip() {
     );
     assert_eq!(
         ErrorCode::from_str("E_RESERVED_HANDLER_NAMESPACE"),
-        ErrorCode::ReservedHandlerNamespace
+        Ok(ErrorCode::ReservedHandlerNamespace)
     );
 }

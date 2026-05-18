@@ -159,11 +159,11 @@ fn get_node_rejects_substituted_decodable_bytes_with_content_hash_error() {
         .properties
         .insert("w9_t6_marker".to_string(), Value::text("tampered"));
     let bytes_b = node_b
-        .canonical_bytes()
-        .expect("canonical_bytes(B) must succeed");
+        .to_canonical_bytes()
+        .expect("to_canonical_bytes(B) must succeed");
 
     // Sanity check: A and B encode to different bytes.
-    let bytes_a = node_a.canonical_bytes().expect("canonical_bytes(A)");
+    let bytes_a = node_a.to_canonical_bytes().expect("to_canonical_bytes(A)");
     assert_ne!(bytes_a, bytes_b, "test fixture: A and B must differ");
 
     // Overwrite A's slot at cid_a with B's bytes.

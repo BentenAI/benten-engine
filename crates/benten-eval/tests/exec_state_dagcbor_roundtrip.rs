@@ -40,8 +40,8 @@ fn sample_payload() -> ExecutionStatePayload {
 fn exec_state_dagcbor_roundtrip() {
     let envelope = ExecutionStateEnvelope::new(sample_payload()).expect("construct");
 
-    let bytes = envelope.to_dagcbor().expect("encode");
-    let decoded = ExecutionStateEnvelope::from_dagcbor(&bytes).expect("decode");
+    let bytes = envelope.to_canonical_bytes().expect("encode");
+    let decoded = ExecutionStateEnvelope::from_canonical_bytes(&bytes).expect("decode");
 
     // Round-trip structurally equal.
     assert_eq!(decoded.schema_version, envelope.schema_version);
@@ -63,8 +63,8 @@ fn exec_state_cid_deterministic() {
     let e1 = ExecutionStateEnvelope::new(sample_payload()).expect("e1");
     let e2 = ExecutionStateEnvelope::new(sample_payload()).expect("e2");
 
-    let b1 = e1.to_dagcbor().expect("b1");
-    let b2 = e2.to_dagcbor().expect("b2");
+    let b1 = e1.to_canonical_bytes().expect("b1");
+    let b2 = e2.to_canonical_bytes().expect("b2");
     assert_eq!(
         b1, b2,
         "byte-level determinism required for DAG-CBOR round-trip"
@@ -135,13 +135,13 @@ proptest! {
         };
         let envelope = ExecutionStateEnvelope::new(payload).expect("construct");
 
-        let bytes1 = envelope.to_dagcbor().expect("encode1");
-        let bytes2 = envelope.to_dagcbor().expect("encode2");
+        let bytes1 = envelope.to_canonical_bytes().expect("encode1");
+        let bytes2 = envelope.to_canonical_bytes().expect("encode2");
         prop_assert_eq!(&bytes1, &bytes2, "encode is deterministic");
 
         let decoded =
-            ExecutionStateEnvelope::from_dagcbor(&bytes1).expect("decode");
-        let re_encoded = decoded.to_dagcbor().expect("re-encode");
+            ExecutionStateEnvelope::from_canonical_bytes(&bytes1).expect("decode");
+        let re_encoded = decoded.to_canonical_bytes().expect("re-encode");
         prop_assert_eq!(bytes1, re_encoded, "re-encode must be bijective");
     }
 }

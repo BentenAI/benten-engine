@@ -12,6 +12,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 /// SHAPE-PIN: validates the struct shape for Phase-2b forward-compat.
 /// Does NOT validate firing semantics (those land in Phase 2b).
@@ -21,7 +22,7 @@ fn host_not_found_roundtrips() {
     assert_eq!(code.as_str(), "E_HOST_NOT_FOUND");
     assert_eq!(
         ErrorCode::from_str("E_HOST_NOT_FOUND"),
-        ErrorCode::HostNotFound
+        Ok(ErrorCode::HostNotFound)
     );
 }
 
@@ -33,7 +34,7 @@ fn host_write_conflict_roundtrips() {
     assert_eq!(code.as_str(), "E_HOST_WRITE_CONFLICT");
     assert_eq!(
         ErrorCode::from_str("E_HOST_WRITE_CONFLICT"),
-        ErrorCode::HostWriteConflict
+        Ok(ErrorCode::HostWriteConflict)
     );
 }
 
@@ -45,7 +46,7 @@ fn host_backend_unavailable_roundtrips() {
     assert_eq!(code.as_str(), "E_HOST_BACKEND_UNAVAILABLE");
     assert_eq!(
         ErrorCode::from_str("E_HOST_BACKEND_UNAVAILABLE"),
-        ErrorCode::HostBackendUnavailable
+        Ok(ErrorCode::HostBackendUnavailable)
     );
 }
 
@@ -57,7 +58,7 @@ fn host_capability_revoked_roundtrips() {
     assert_eq!(code.as_str(), "E_HOST_CAPABILITY_REVOKED");
     assert_eq!(
         ErrorCode::from_str("E_HOST_CAPABILITY_REVOKED"),
-        ErrorCode::HostCapabilityRevoked
+        Ok(ErrorCode::HostCapabilityRevoked)
     );
 }
 
@@ -69,6 +70,6 @@ fn host_capability_expired_roundtrips() {
     assert_eq!(code.as_str(), "E_HOST_CAPABILITY_EXPIRED");
     assert_eq!(
         ErrorCode::from_str("E_HOST_CAPABILITY_EXPIRED"),
-        ErrorCode::HostCapabilityExpired
+        Ok(ErrorCode::HostCapabilityExpired)
     );
 }

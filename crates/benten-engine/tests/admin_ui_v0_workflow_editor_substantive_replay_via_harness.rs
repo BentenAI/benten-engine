@@ -286,7 +286,7 @@ fn admin_ui_v0_workflow_editor_substantive_replay_via_real_engine_round_trip() {
         cid_replay, cid_save,
         "replay-time `Subgraph::cid()` MUST equal save-time CID — \
          catches drift between the `_content_hash` helper and the \
-         `Cid::from_blake3_digest(canonical_bytes)` engine path"
+         `Cid::from_blake3_digest(to_canonical_bytes)` engine path"
     );
 
     // ------------------------------------------------------------------

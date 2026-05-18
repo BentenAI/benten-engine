@@ -91,7 +91,7 @@ fn fresh_policy(
     now_secs: u64,
 ) -> UcanGroundedPolicy<RedbBackend> {
     let inner = GrantBackedPolicy::new(Arc::new(DenyAllGrantReader));
-    UcanGroundedPolicy::new(inner, ucan).with_now_for_test(now_secs)
+    UcanGroundedPolicy::new(inner, ucan).with_now_secs(now_secs)
 }
 
 /// Build a UCAN issued by `issuer_kp` for `audience_did` granting

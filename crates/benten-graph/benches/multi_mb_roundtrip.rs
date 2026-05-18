@@ -28,7 +28,7 @@
 //! ## Memory footprint
 //!
 //! redb is mmap-backed; the canonical-CBOR encoder allocates the full
-//! encoded buffer inside `canonical_bytes()`. For a 100MB payload that's
+//! encoded buffer inside `to_canonical_bytes()`. For a 100MB payload that's
 //! ~100MB of transient heap during the put, plus another ~100MB for the
 //! decoded Node on `get_node`. Systems with <2GB free RAM may see
 //! allocator pressure — reduce `size_mb` or skip the 100MB variant.

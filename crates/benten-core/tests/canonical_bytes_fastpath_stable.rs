@@ -2,7 +2,7 @@
 //!
 //! The TIER-1 perf pass introduced two behavior-preserving optimizations:
 //!
-//! 1. `Node`/`Edge::canonical_bytes` skip the `Value::to_canonical` deep-clone
+//! 1. `Node`/`Edge::to_canonical_bytes` skip the `Value::to_canonical` deep-clone
 //!    walk when every property is already canonical (#932).
 //! 2. `Node`/`Edge`/`Subgraph::cid_and_canonical_bytes` fuse the encode+hash
 //!    so production WRITE paths don't double-encode (#926).
@@ -24,13 +24,13 @@ const CANONICAL_CID: &str = "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57
 fn fixture_fused_matches_separate_and_pinned_cid() {
     let n = canonical_test_node();
     let cid_sep = n.cid().unwrap();
-    let bytes_sep = n.canonical_bytes().unwrap();
+    let bytes_sep = n.to_canonical_bytes().unwrap();
     let (cid_fused, bytes_fused) = n.cid_and_canonical_bytes().unwrap();
 
     assert_eq!(cid_sep, cid_fused, "fused CID must equal separate CID");
     assert_eq!(
         bytes_sep, bytes_fused,
-        "fused bytes must be byte-identical to canonical_bytes()"
+        "fused bytes must be byte-identical to to_canonical_bytes()"
     );
     assert_eq!(
         cid_fused.to_string(),
@@ -63,8 +63,8 @@ fn fast_path_and_slow_path_produce_identical_bytes() {
     let slow = Node::new(vec!["T".to_string()], neg_zero);
 
     assert_eq!(
-        fast.canonical_bytes().unwrap(),
-        slow.canonical_bytes().unwrap(),
+        fast.to_canonical_bytes().unwrap(),
+        slow.to_canonical_bytes().unwrap(),
         "fast-path (+0.0) and slow-path (-0.0 normalized) bytes must be identical"
     );
     assert_eq!(
@@ -82,14 +82,14 @@ fn non_finite_float_still_errors() {
     p.insert("bad".to_string(), Value::Float(f64::NAN));
     let n = Node::new(vec!["T".to_string()], p);
     assert!(
-        n.canonical_bytes().is_err(),
+        n.to_canonical_bytes().is_err(),
         "NaN must still take the slow path and error"
     );
 
     let mut p2 = BTreeMap::new();
     p2.insert("bad".to_string(), Value::Float(f64::INFINITY));
     let n2 = Node::new(vec!["T".to_string()], p2);
-    assert!(n2.canonical_bytes().is_err(), "Inf must still error");
+    assert!(n2.to_canonical_bytes().is_err(), "Inf must still error");
 }
 
 /// Edge: fused == separate, and the fast path is byte-stable.
@@ -106,7 +106,7 @@ fn edge_fused_matches_separate() {
     let e = Edge::new(src, tgt, "REL".to_string(), Some(props));
 
     let cid_sep = e.cid().unwrap();
-    let bytes_sep = e.canonical_bytes().unwrap();
+    let bytes_sep = e.to_canonical_bytes().unwrap();
     let (cid_fused, bytes_fused) = e.cid_and_canonical_bytes().unwrap();
     assert_eq!(cid_sep, cid_fused);
     assert_eq!(bytes_sep, bytes_fused);

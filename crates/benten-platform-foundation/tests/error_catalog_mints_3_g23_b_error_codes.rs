@@ -31,6 +31,7 @@ mod materializer_fixtures;
 use benten_errors::ErrorCode;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 fn workspace_root() -> PathBuf {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -47,13 +48,13 @@ fn error_catalog_mints_3_g23_b_error_codes() {
     for code in materializer_fixtures::G23_B_ERROR_CODES {
         let parsed = ErrorCode::from_str(code);
         assert!(
-            !matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_ok(),
             "ErrorCode {code} MUST be a named variant post-G23-B; \
              round-trip through from_str returned Unknown — §3.5g atomic mint missing"
         );
         // Round-trip: variant.as_static_str() == code.
         assert_eq!(
-            parsed.as_static_str(),
+            parsed.expect("recognized catalog code").as_static_str(),
             *code,
             "ErrorCode {code} must round-trip as_static_str → from_str"
         );

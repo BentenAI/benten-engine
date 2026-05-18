@@ -2,7 +2,7 @@
 //!
 //! The load-bearing property of [`Value`] is *hashability*: every variant must
 //! serialize deterministically through `serde_ipld_dagcbor`, because
-//! [`Node::canonical_bytes`](crate::Node::canonical_bytes) is the sole input to
+//! [`Node::to_canonical_bytes`](crate::Node::to_canonical_bytes) is the sole input to
 //! content addressing. The one non-obvious wrinkle is [`Value::Float`]:
 //!
 //! - **NaN is rejected.** IEEE-754 allows roughly 2^53 distinct NaN payloads.
@@ -362,7 +362,7 @@ impl Value {
     /// Produce a hashing-canonical clone of this value: validates that no
     /// non-finite floats are present, and normalizes `-0.0` to `+0.0` so the
     /// CID is stable across the sign of zero. Used by
-    /// [`Node::canonical_bytes`](crate::Node::canonical_bytes).
+    /// [`Node::to_canonical_bytes`](crate::Node::to_canonical_bytes).
     ///
     /// # Errors
     ///

@@ -43,6 +43,7 @@ use std::hint::black_box;
 
 use benten_core::Cid;
 use benten_core::testing::canonical_test_node;
+use core::str::FromStr;
 use criterion::{Criterion, criterion_group, criterion_main};
 
 fn bench_cid_parse(c: &mut Criterion) {

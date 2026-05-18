@@ -72,7 +72,7 @@ fn snapshot_blob_from_bytes_with_cap_enforces_caller_budget() {
     // refused under a 1-byte caller budget — proving the cap is the
     // gate, not the decode.
     let blob = one_node_blob();
-    let bytes = blob.to_dag_cbor().unwrap();
+    let bytes = blob.to_canonical_bytes().unwrap();
     assert!(SnapshotBlobBackend::from_bytes(&bytes).is_ok());
     let err = SnapshotBlobBackend::from_bytes_with_cap(&bytes, 1)
         .expect_err("1-byte cap must refuse a real blob before decode");

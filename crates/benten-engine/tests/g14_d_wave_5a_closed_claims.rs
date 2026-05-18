@@ -277,7 +277,7 @@ fn resume_with_meta_rejects_cap_snapshot_hash_mismatch() {
     // pre-populate the live chain to match suspend-time:
     e.testing_register_actor_proof_chain(actor, chain_at_suspend.clone());
     let bytes = e.fabricate_test_suspend_envelope(&actor).unwrap();
-    let envelope = benten_eval::ExecutionStateEnvelope::from_dagcbor(&bytes).unwrap();
+    let envelope = benten_eval::ExecutionStateEnvelope::from_canonical_bytes(&bytes).unwrap();
     let envelope_cid = envelope.envelope_cid();
     e.put_cap_snapshot_for_envelope(
         envelope_cid,

@@ -30,7 +30,7 @@ use benten_eval::ExecutionStateEnvelope;
 /// a valid envelope or the embedded payload CID does not match the
 /// recomputed CID (envelope-tampering signal).
 pub fn pretty_print_envelope_bytes(bytes: &[u8]) -> Result<String, ErrorCode> {
-    let env = ExecutionStateEnvelope::from_dagcbor(bytes)
+    let env = ExecutionStateEnvelope::from_canonical_bytes(bytes)
         .map_err(|e| ErrorCode::Unknown(format!("inspect_state_decode: {e}")))?;
 
     // refinement-audit #794 (ST-EVAL lane): `envelope_cid()` is now
@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn pretty_prints_round_tripped_envelope() {
         let env = synth_envelope();
-        let bytes = env.to_dagcbor().unwrap();
+        let bytes = env.to_canonical_bytes().unwrap();
         let rendered = pretty_print_envelope_bytes(&bytes).expect("pretty");
         assert!(rendered.contains("benten-dev inspect-state"));
         assert!(rendered.contains("schema_version"));

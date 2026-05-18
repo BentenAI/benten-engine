@@ -1567,7 +1567,7 @@ pub fn make_change_event(
     payload: serde_json::Value,
 ) -> ChangeEvent {
     let bytes = serde_json::to_vec(&payload).unwrap_or_default();
-    ChangeEvent::legacy_minimal(anchor_cid, kind, 0, bytes)
+    ChangeEvent::minimal(anchor_cid, kind, 0, bytes)
 }
 
 /// Inject a change event into a subscription. Returns the subscription's

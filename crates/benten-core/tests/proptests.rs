@@ -41,7 +41,7 @@ proptest! {
     #[test]
     fn prop_node_roundtrip_cid_stable(node in arb_node()) {
         let cid_before = node.cid().unwrap();
-        let bytes = node.canonical_bytes().unwrap();
+        let bytes = node.to_canonical_bytes().unwrap();
         let decoded: Node = serde_ipld_dagcbor::from_slice(&bytes).unwrap();
         let cid_after = decoded.cid().unwrap();
         prop_assert_eq!(cid_before, cid_after);
@@ -69,7 +69,7 @@ proptest! {
         p.insert("f".to_string(), Value::Float(f));
         let n = Node::new(vec!["T".to_string()], p);
         let cid_before = n.cid().unwrap();
-        let bytes = n.canonical_bytes().unwrap();
+        let bytes = n.to_canonical_bytes().unwrap();
         let decoded: Node = serde_ipld_dagcbor::from_slice(&bytes).unwrap();
         prop_assert_eq!(cid_before, decoded.cid().unwrap());
     }

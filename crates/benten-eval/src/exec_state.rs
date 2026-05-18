@@ -366,21 +366,21 @@ impl ExecutionStateEnvelope {
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on encode failure.
-    pub fn to_dagcbor(&self) -> Result<Vec<u8>, CoreError> {
+    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, CoreError> {
         serde_ipld_dagcbor::to_vec(self)
             .map_err(|e| CoreError::Serialize(format!("exec-state envelope encode: {e}")))
     }
 
     /// Decode an envelope from canonical DAG-CBOR.
     ///
-    /// This is the mirror of [`Self::to_dagcbor`]; `to_dagcbor` →
-    /// `from_dagcbor` is a bijection on well-formed bytes. The decoder does
+    /// This is the mirror of [`Self::to_canonical_bytes`]; `to_canonical_bytes` →
+    /// `from_canonical_bytes` is a bijection on well-formed bytes. The decoder does
     /// NOT re-verify `payload_cid` against the payload bytes — that is step 1
     /// of the resume protocol (see [`Self::recompute_payload_cid`]).
     ///
     /// # Errors
     /// Returns [`CoreError::Serialize`] on decode failure.
-    pub fn from_dagcbor(bytes: &[u8]) -> Result<Self, CoreError> {
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, CoreError> {
         serde_ipld_dagcbor::from_slice(bytes)
             .map_err(|e| CoreError::Serialize(format!("exec-state envelope decode: {e}")))
     }

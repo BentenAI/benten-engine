@@ -122,8 +122,8 @@ fn canonical_cid_is_wire_stable_and_pinned() {
     );
 
     // Round-trip through canonical bytes → identical CID.
-    let bytes = c1.subgraph.canonical_bytes().unwrap();
-    let sg2 = benten_core::Subgraph::from_dagcbor(&bytes).unwrap();
+    let bytes = c1.subgraph.to_canonical_bytes().unwrap();
+    let sg2 = benten_core::Subgraph::from_canonical_bytes(&bytes).unwrap();
     assert_eq!(
         sg2.cid().unwrap(),
         cid1,

@@ -126,7 +126,7 @@ fn resume_with_missing_attribution_triple_rejects() {
 
     // Decode once via the canonical envelope to harvest the head-of-chain
     // CIDs (so our tampered frame still names valid actors / handlers).
-    let canonical = ExecutionStateEnvelope::from_dagcbor(&bytes).expect("decode envelope");
+    let canonical = ExecutionStateEnvelope::from_canonical_bytes(&bytes).expect("decode envelope");
     let head = canonical
         .payload
         .attribution_chain

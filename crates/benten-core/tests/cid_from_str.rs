@@ -17,6 +17,7 @@ use std::path::PathBuf;
 
 use benten_core::testing::canonical_test_node;
 use benten_core::{Cid, CoreError};
+use core::str::FromStr;
 
 /// Round-trip: encode → decode must yield the same bytes.
 #[test]

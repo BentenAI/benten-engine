@@ -26,6 +26,7 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_errors::ErrorCode;
+use std::str::FromStr;
 
 /// 3 G23-B ErrorCode string forms — mirror of
 /// `materializer_fixtures::G23_B_ERROR_CODES` at
@@ -56,13 +57,13 @@ fn every_expected_g23_b_materializer_code_resolves_to_named_variant() {
         // Dynamic half: from_str round-trip.
         let parsed = ErrorCode::from_str(code);
         assert!(
-            !matches!(parsed, ErrorCode::Unknown(_)),
+            parsed.is_ok(),
             "G23-B subset-closure: ErrorCode {code} expected in enum \
              post-G23-B but from_str returned Unknown — enum + as_str \
              + from_str arms missing for this variant"
         );
         assert_eq!(
-            parsed.as_static_str(),
+            parsed.expect("recognized catalog code").as_static_str(),
             *code,
             "G23-B subset-closure: ErrorCode {code} must round-trip \
              through as_static_str → from_str without lossy conversion"

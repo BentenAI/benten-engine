@@ -22,6 +22,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 
 /// Parser for `cargo tree` output — asserts the `benten-eval` crate has
 /// no incoming edge from `benten-graph` in the workspace graph. Direct
@@ -120,7 +121,7 @@ fn host_error_code_variants_reserved_visible_from_engine_crate() {
     ];
     for (variant, literal) in expected {
         assert_eq!(variant.as_str(), *literal);
-        assert_eq!(ErrorCode::from_str(literal), variant.clone());
+        assert_eq!(ErrorCode::from_str(literal), Ok(variant.clone()));
     }
 }
 

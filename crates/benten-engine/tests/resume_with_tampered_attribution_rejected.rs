@@ -34,7 +34,7 @@
 //!
 //! Wave-3c R4b fix-pass: this test was previously `#[ignore]`d with a
 //! `panic!("red-phase: ...")` body. G3-A landed `ExecutionStateEnvelope`
-//! with `from_dagcbor` / `to_dagcbor` / `recompute_payload_cid`, and G3-B
+//! with `from_canonical_bytes` / `to_canonical_bytes` / `recompute_payload_cid`, and G3-B
 //! landed `suspend_to_bytes` / `resume_from_bytes_unauthenticated` — so
 //! the atk-1 attribution-tamper attack is now end-to-end pinned (not just
 //! the random byte-flip via `resume_decode_failure_not_panic.rs`).
@@ -80,7 +80,8 @@ fn resume_with_tampered_attribution_rejected() {
     // we do NOT touch `envelope.payload_cid` — the integrity check in
     // step 1 catches the payload mutation precisely BECAUSE the envelope
     // still claims the original CID.
-    let mut envelope = ExecutionStateEnvelope::from_dagcbor(&bytes).expect("decode envelope");
+    let mut envelope =
+        ExecutionStateEnvelope::from_canonical_bytes(&bytes).expect("decode envelope");
     let original_cid = envelope.payload_cid;
 
     // Substitute a different valid CID into attribution_chain[0].actor_cid.
@@ -104,7 +105,9 @@ fn resume_with_tampered_attribution_rejected() {
         );
     }
 
-    let tampered_bytes = envelope.to_dagcbor().expect("re-encode tampered envelope");
+    let tampered_bytes = envelope
+        .to_canonical_bytes()
+        .expect("re-encode tampered envelope");
     assert_ne!(
         tampered_bytes, bytes,
         "mutation must change the canonical bytes (otherwise step 1 cannot \

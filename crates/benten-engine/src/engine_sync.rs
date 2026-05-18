@@ -454,7 +454,7 @@ impl DeviceAttestationEnvelope {
     /// Canonical bytes covered by `envelope_signature` — `(version,
     /// attestation, payload_hash, session_nonce)` in DAG-CBOR. Excludes
     /// the signature itself (signature self-reference hygiene; mirrors
-    /// `benten_id::device_attestation::canonical_bytes` precedent).
+    /// `benten_id::device_attestation::to_canonical_bytes` precedent).
     fn signature_input_bytes(&self) -> AtriumResult<Vec<u8>> {
         #[derive(serde::Serialize)]
         struct SigInput<'a> {

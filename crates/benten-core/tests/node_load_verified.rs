@@ -21,7 +21,7 @@ fn sample_node() -> Node {
 fn node_load_verified_rehashes_on_read_passes() {
     let node = sample_node();
     let cid = node.cid().expect("cid");
-    let bytes = node.canonical_bytes().expect("canonical bytes");
+    let bytes = node.to_canonical_bytes().expect("canonical bytes");
 
     // Happy path — stored bytes match stored CID: returns Ok(Node).
     let loaded = Node::load_verified(&cid, &bytes).expect("load_verified");
@@ -32,7 +32,7 @@ fn node_load_verified_rehashes_on_read_passes() {
 fn node_load_verified_rehashes_on_read_fails() {
     let node = sample_node();
     let cid = node.cid().expect("cid");
-    let mut bytes = node.canonical_bytes().expect("canonical bytes");
+    let mut bytes = node.to_canonical_bytes().expect("canonical bytes");
 
     // Flip one byte in the middle to simulate storage corruption or tamper.
     let mid = bytes.len() / 2;

@@ -19,6 +19,7 @@
 use benten_core::{Node, Value};
 use benten_engine::Engine;
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 // Phase 1 compromise; remove when Phase 2 implements per-iteration capability re-check.
 //

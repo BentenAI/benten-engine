@@ -71,7 +71,7 @@ fn algorithm_b_incremental_state_converges_across_two_replicas_after_loro_merge(
     //   let view_b = engine_b.materialize_user_view(&view_def.id()).unwrap();
     //
     //   // ASSERTION 1: canonical-bytes-equal post-merge:
-    //   assert_eq!(view_a.canonical_bytes(), view_b.canonical_bytes(),
+    //   assert_eq!(view_a.to_canonical_bytes(), view_b.to_canonical_bytes(),
     //       "post-Loro-merge user-view materialization MUST produce \
     //        identical canonical-bytes across replicas");
     //
@@ -81,8 +81,8 @@ fn algorithm_b_incremental_state_converges_across_two_replicas_after_loro_merge(
     //   // post-merge graph state):
     //   let view_a_rebuild = engine_a.rebuild_user_view(&view_def.id()).unwrap();
     //   let view_b_rebuild = engine_b.rebuild_user_view(&view_def.id()).unwrap();
-    //   assert_eq!(view_a.canonical_bytes(), view_a_rebuild.canonical_bytes());
-    //   assert_eq!(view_b.canonical_bytes(), view_b_rebuild.canonical_bytes());
+    //   assert_eq!(view_a.to_canonical_bytes(), view_a_rebuild.to_canonical_bytes());
+    //   assert_eq!(view_b.to_canonical_bytes(), view_b_rebuild.to_canonical_bytes());
     //
     //   // ASSERTION 3: both views contain BOTH peer's contributing
     //   // writes (not just one side's local writes):

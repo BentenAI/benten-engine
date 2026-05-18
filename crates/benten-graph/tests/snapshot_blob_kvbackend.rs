@@ -88,7 +88,7 @@ fn snapshot_blob_kvbackend_rejects_writes() {
 #[test]
 fn snapshot_blob_round_trips_export_import() {
     let (_cid, blob) = one_node_blob();
-    let bytes_a = blob.to_dag_cbor().unwrap();
+    let bytes_a = blob.to_canonical_bytes().unwrap();
 
     let backend = SnapshotBlobBackend::from_bytes(&bytes_a).unwrap();
     let bytes_b = backend.export_blob().unwrap();
@@ -104,8 +104,8 @@ fn snapshot_blob_round_trips_export_import() {
 fn snapshot_blob_btreemap_canonical_bytes_stable() {
     let (_, blob1) = one_node_blob();
     let (_, blob2) = one_node_blob();
-    let bytes1 = blob1.to_dag_cbor().unwrap();
-    let bytes2 = blob2.to_dag_cbor().unwrap();
+    let bytes1 = blob1.to_canonical_bytes().unwrap();
+    let bytes2 = blob2.to_canonical_bytes().unwrap();
     assert_eq!(
         bytes1, bytes2,
         "two blobs built from identical state must encode to identical bytes \

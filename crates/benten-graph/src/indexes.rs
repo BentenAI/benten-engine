@@ -46,7 +46,7 @@ pub(crate) const PROP_INDEX_TABLE: redb::MultimapTableDefinition<&[u8], &[u8]> =
     redb::MultimapTableDefinition::new("benten_prop_index");
 
 /// Encode a `Value` to its canonical DAG-CBOR bytes for use as an index key
-/// component. Shares the *canonical* form used by `Node::canonical_bytes`
+/// component. Shares the *canonical* form used by `Node::to_canonical_bytes`
 /// (the CID input) so that equality in the index aligns with equality in
 /// canonical storage.
 ///
@@ -54,7 +54,7 @@ pub(crate) const PROP_INDEX_TABLE: redb::MultimapTableDefinition<&[u8], &[u8]> =
 /// body called `serde_ipld_dagcbor::to_vec(value)` on the RAW value
 /// without first normalizing via [`Value::to_canonical`]. That broke the
 /// docstring's own promised invariant for `Value::Float(-0.0)`:
-/// `Node::canonical_bytes` collapses `-0.0 → +0.0` (so two Nodes that
+/// `Node::to_canonical_bytes` collapses `-0.0 → +0.0` (so two Nodes that
 /// differ only by the sign of a zero share ONE CID), but the index key
 /// did NOT — a Node stored under a `+0.0` property was unfindable by a
 /// `-0.0` query (and vice-versa) even though they are the SAME content-
@@ -66,7 +66,7 @@ pub(crate) const PROP_INDEX_TABLE: redb::MultimapTableDefinition<&[u8], &[u8]> =
 ///
 /// # Errors
 /// - [`CoreError::FloatNan`] / [`CoreError::FloatNonFinite`] if the value
-///   contains a non-finite float (same rejection `Node::canonical_bytes`
+///   contains a non-finite float (same rejection `Node::to_canonical_bytes`
 ///   applies — an un-indexable value is not silently mis-indexed).
 /// - [`CoreError::Serialize`] if `serde_ipld_dagcbor::to_vec` fails —
 ///   in practice impossible for the canonicalized `Value` type but

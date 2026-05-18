@@ -47,7 +47,7 @@ fn fresh_engine_ucan_durable() -> (tempfile::TempDir, Engine) {
     let engine = Engine::builder()
         .path(dir.path().join("benten.redb"))
         .capability_policy_ucan_durable()
-        .ucan_grounded_now_for_test(1_000_000_000)
+        .ucan_grounded_now_secs(1_000_000_000)
         .build()
         .unwrap();
     (dir, engine)

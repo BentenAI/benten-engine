@@ -987,8 +987,8 @@ mod inline_tests {
         )
         .unwrap();
         assert_eq!(
-            a.subgraph.canonical_bytes().unwrap(),
-            b.subgraph.canonical_bytes().unwrap(),
+            a.subgraph.to_canonical_bytes().unwrap(),
+            b.subgraph.to_canonical_bytes().unwrap(),
             "BTreeMap ordering ensures permutation-stable canonical bytes"
         );
     }

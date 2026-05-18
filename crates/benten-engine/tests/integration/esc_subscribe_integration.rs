@@ -94,7 +94,7 @@ fn esc_7_revoke_cap_mid_stream_auto_cancels_subscription_on_next_event() {
     // engine's per-event cap-recheck closure consults
     // `inner.is_actor_active(&alice)`, sees the revoked marker, and
     // calls `unregister_on_change` + flips `entry.active` to false.
-    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+    let event = benten_eval::primitives::subscribe::ChangeEvent::minimal(
         actor("event-anchor-1"),
         benten_eval::primitives::subscribe::ChangeKind::Created,
         benten_eval::primitives::subscribe::next_engine_seq(),
@@ -234,7 +234,7 @@ fn helper_smoke_register_uncounted_host_fn_records_marker_in_sideband() {
     // subscription's cap-recheck closure consults the production
     // revoked-actors set (NOT the test_markers sideband), so the
     // delivery succeeds + the subscription stays active.
-    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+    let event = benten_eval::primitives::subscribe::ChangeEvent::minimal(
         actor("event-anchor-13"),
         benten_eval::primitives::subscribe::ChangeKind::Created,
         benten_eval::primitives::subscribe::next_engine_seq(),
@@ -374,7 +374,7 @@ fn esc_7_and_test_markers_are_disjoint() {
     // Publish a real event. Bob is not revoked, so delivery succeeds +
     // the subscription stays active.
     let _ = SubscribeCursor::Latest;
-    let event = benten_eval::primitives::subscribe::ChangeEvent::legacy_minimal(
+    let event = benten_eval::primitives::subscribe::ChangeEvent::minimal(
         actor("event-anchor-bob"),
         benten_eval::primitives::subscribe::ChangeKind::Created,
         benten_eval::primitives::subscribe::next_engine_seq(),

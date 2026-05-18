@@ -106,11 +106,8 @@ fn read_primitive_option_c_symmetric_by_cid_collapses_to_not_found() {
         "target_cid".to_string(),
         Value::Bytes(cid.as_bytes().to_vec()),
     );
-    let op = OperationNode {
-        id: "read_1".into(),
-        kind: PrimitiveKind::Read,
-        properties: props,
-    };
+    let mut op = OperationNode::new("read_1", PrimitiveKind::Read);
+    op.properties = props;
     let step = benten_eval::primitives::read::execute(&op, &host)
         .expect("READ primitive must route via typed edge under denial");
     assert_eq!(
@@ -127,11 +124,8 @@ fn read_primitive_option_c_symmetric_by_label_collapses_to_empty() {
     let mut props = BTreeMap::new();
     props.insert("query_kind".to_string(), Value::text("label"));
     props.insert("label".to_string(), Value::text("post"));
-    let op = OperationNode {
-        id: "read_by_label".into(),
-        kind: PrimitiveKind::Read,
-        properties: props,
-    };
+    let mut op = OperationNode::new("read_by_label", PrimitiveKind::Read);
+    op.properties = props;
     let step = benten_eval::primitives::read::execute(&op, &host)
         .expect("READ by-label must route via typed edge under denial");
     assert_eq!(

@@ -8,6 +8,8 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::str::FromStr;
+
 use benten_core::CoreError;
 use benten_errors::ErrorCode;
 
@@ -18,17 +20,21 @@ fn error_code_as_str_stable_for_inv_cycle() {
 
 #[test]
 fn error_code_from_str_roundtrips_for_known_code() {
-    let code = ErrorCode::from_str("E_INV_CYCLE");
+    let code = ErrorCode::from_str("E_INV_CYCLE").expect("recognized code");
     assert_eq!(code, ErrorCode::InvCycle);
 }
 
 #[test]
-fn error_code_from_str_unknown_falls_back_to_unknown_variant() {
-    let code = ErrorCode::from_str("E_NOT_A_REAL_CODE");
-    match code {
-        ErrorCode::Unknown(s) => assert_eq!(s, "E_NOT_A_REAL_CODE"),
-        other => panic!("expected Unknown, got {other:?}"),
-    }
+fn error_code_from_str_unknown_is_err_and_preserves_raw_string() {
+    // #733: fallible by design — an unrecognized code is a parse error,
+    // not a lossy `Unknown`. The raw string is preserved on the error so
+    // forward-compat callers can recover `Unknown` explicitly.
+    let err = ErrorCode::from_str("E_NOT_A_REAL_CODE")
+        .expect_err("unrecognized code must be a parse error");
+    assert_eq!(err.as_str(), "E_NOT_A_REAL_CODE");
+    let recovered = ErrorCode::from_str("E_NOT_A_REAL_CODE")
+        .unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()));
+    assert!(matches!(recovered, ErrorCode::Unknown(s) if s == "E_NOT_A_REAL_CODE"));
 }
 
 #[test]
@@ -68,20 +74,22 @@ fn core_error_cid_unsupported_hash_maps_to_cid_unsupported_hash_code() {
     );
 }
 
-/// R4 triage (m15) — R1 drift-detector finding: the catch-all
-/// `ErrorCode::Unknown(String)` variant must preserve the original string,
-/// not panic, not lossy-convert. Without this test a future refactor that
-/// drops the payload (e.g. unifying to a single `Unknown` unit variant) would
-/// silently lose the code identity.
+/// R4 triage (m15) — R1 drift-detector finding: an unrecognized code must
+/// preserve the original string, not panic, not lossy-convert. Post-#733
+/// the parse is fallible: the raw string is preserved on the parse error,
+/// and the forward-compat `Unknown` recovery still renders it verbatim.
 #[test]
 fn unknown_error_code_preserves_string_not_panic() {
     let arbitrary = "E_SOMETHING_WE_HAVE_NOT_SPECCED_YET";
-    let code = ErrorCode::from_str(arbitrary);
-    match &code {
-        ErrorCode::Unknown(s) => assert_eq!(s, arbitrary, "payload must be preserved verbatim"),
-        other => panic!("expected Unknown variant, got {other:?}"),
-    }
-    // And round-trip via as_str: an unknown code's `.as_str()` returns the
-    // stored string so downstream printers can render it.
+    let err = ErrorCode::from_str(arbitrary).expect_err("unrecognized code is a parse error");
+    assert_eq!(
+        err.as_str(),
+        arbitrary,
+        "payload must be preserved verbatim"
+    );
+    // And round-trip via the forward-compat `Unknown` recovery: `.as_str()`
+    // returns the stored string so downstream printers can render it.
+    let code =
+        ErrorCode::from_str(arbitrary).unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()));
     assert_eq!(code.as_str(), arbitrary);
 }

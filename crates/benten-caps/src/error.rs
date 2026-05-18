@@ -219,7 +219,7 @@ pub enum CapError {
     /// work that lights up the real-clock production path.
     #[error(
         "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a \
-         chain with time-bounded delegations; inject a real clock via with_now_for_test \
+         chain with time-bounded delegations; inject a real clock via with_now_secs \
          (or wait for CapWriteContext::now threading per phase-3-backlog §2.3 (i))"
     )]
     UcanClockNotInjected,

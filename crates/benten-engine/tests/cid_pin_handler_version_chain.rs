@@ -36,8 +36,8 @@ fn assert_canonical_cid_stable(
 ) {
     let node_a = make_version_node(label, version_cid, predecessor, seq);
     let node_b = make_version_node(label, version_cid, predecessor, seq);
-    let bytes_a = node_a.canonical_bytes().unwrap();
-    let bytes_b = node_b.canonical_bytes().unwrap();
+    let bytes_a = node_a.to_canonical_bytes().unwrap();
+    let bytes_b = node_b.to_canonical_bytes().unwrap();
     assert_eq!(
         bytes_a, bytes_b,
         "DAG-CBOR canonical bytes MUST be byte-stable for identical content (D-PHASE-3-19a)"

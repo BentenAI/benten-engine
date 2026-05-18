@@ -183,7 +183,7 @@ pub struct UcanGroundedPolicy<B: GraphBackend> {
     /// threading work named in phase-3-backlog §2.3 (i). This default
     /// is far in the future (year 9999) so present-day proofs with
     /// reasonable `exp` accept; tests inject custom values via the
-    /// `with_now_for_test` builder.
+    /// `with_now_secs` builder.
     now_secs: u64,
 }
 
@@ -202,7 +202,7 @@ impl<B: GraphBackend> std::fmt::Debug for UcanGroundedPolicy<B> {
 /// in [`UcanGroundedPolicy::typed_cap_permitted_by_proof`] can
 /// distinguish "caller injected `now=0`" from "caller did not inject
 /// at all" — by convention production callers MUST inject a positive
-/// epoch-seconds value via [`UcanGroundedPolicy::with_now_for_test`]
+/// epoch-seconds value via [`UcanGroundedPolicy::with_now_secs`]
 /// (or the eventual `CapWriteContext::now` threading per
 /// phase-3-backlog §2.3 (i)). A test that explicitly wants the
 /// sentinel-driven fail-closed path leaves the default; a test that
@@ -249,15 +249,19 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
         }
     }
 
-    /// Override the `now` value used by the chain-walker for
-    /// `nbf`/`exp` time-window validation. Tests pin specific clock
-    /// values to exercise expired / not-yet-valid token rejection.
-    ///
-    /// Production callers leave this at the default (year-9999
-    /// fixture) until `CapWriteContext::now` threading lands per
-    /// phase-3-backlog §2.3 (i).
+    /// Inject the `now` (epoch-seconds) value the chain-walker uses for
+    /// `nbf`/`exp` time-window validation. This is the **production**
+    /// clock-injection seam (renamed from the misleading
+    /// `with_now_for_test`, #733-sibling P-II naming sweep): until
+    /// `CapWriteContext::now` threading lands (phase-3-backlog §2.3 (i)),
+    /// every chain-walk path — production AND test — must inject a
+    /// positive value here, otherwise the sentinel `DEFAULT_NOW_SECS = 0`
+    /// drives the fail-closed `CapError::UcanClockNotInjected` branch for
+    /// any time-bounded UCAN chain. Tests pin specific clock values to
+    /// exercise expired / not-yet-valid rejection; a test that wants the
+    /// fail-closed path deliberately leaves the default.
     #[must_use]
-    pub fn with_now_for_test(mut self, now_secs: u64) -> Self {
+    pub fn with_now_secs(mut self, now_secs: u64) -> Self {
         self.now_secs = now_secs;
         self
     }
@@ -544,7 +548,7 @@ mod tests {
 
         // G16-B-B-rest sub-item D: inject a real wallclock so the
         // fail-closed branch does NOT fire (token has `exp > 0`).
-        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_secs(1_000_000_000);
         // G22-FP-2 cap-r1-1 BLOCKER closure: `actor_hint` carries the
         // active principal DID; the chain's audience MUST match this
         // DID for the gate to permit. Using the keypair's own DID
@@ -573,7 +577,7 @@ mod tests {
         // G16-B-B-rest sub-item D: inject a real wallclock so the
         // forged-cap-claim assertion exercises the typed-cap mapping
         // path rather than the upstream fail-closed path.
-        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_secs(1_000_000_000);
         // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
         // audience so the test exercises the typed-cap mapping path
         // (NOT the upstream audience-mismatch path).
@@ -598,7 +602,7 @@ mod tests {
         let token = build_ucan(&kp, "typed:crypto", "sign", 0, 100);
         backend.install_proof(&token).unwrap();
 
-        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(200);
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_secs(200);
         // G22-FP-2 cap-r1-1 BLOCKER closure: principal DID matches
         // audience so the test exercises the time-window path (NOT
         // the upstream audience-mismatch path). The audience-binding
@@ -769,7 +773,7 @@ mod tests {
         // that walk at all; it fails closed first.
         let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
         backend.install_proof(&token).unwrap();
-        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_secs(1_000_000_000);
 
         // actor_hint present but NOT did:key-shaped — caller signalled
         // principal-intent with a bad value.
@@ -818,7 +822,7 @@ mod tests {
         let kp = Keypair::generate();
         let token = build_ucan(&kp, "typed:crypto", "sign", 0, 253_402_300_798);
         backend.install_proof(&token).unwrap();
-        let policy = fresh_policy(Arc::clone(&backend)).with_now_for_test(1_000_000_000);
+        let policy = fresh_policy(Arc::clone(&backend)).with_now_secs(1_000_000_000);
 
         let ctx_no_actor = CapWriteContext {
             label: "cap:typed:crypto-sign".to_string(),
