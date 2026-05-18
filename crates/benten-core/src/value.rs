@@ -133,7 +133,7 @@ pub enum Value {
 /// benten-core; the wrapper does not defend against a future codec
 /// change"). A payload exceeding this surfaces as a `serde` custom error,
 /// wrapped by the calling decoder into
-/// [`CoreError::Serialize`](crate::CoreError::Serialize) — the same typed
+/// [`CoreError::Serialize`] — the same typed
 /// surface the byte ceiling uses. No new `ErrorCode` and no canonical-bytes
 /// change (decode-side rejection only; P-III wire/CID format untouched).
 pub const MAX_VALUE_DECODE_DEPTH: usize = 64;

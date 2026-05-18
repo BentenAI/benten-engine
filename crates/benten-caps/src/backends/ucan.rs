@@ -190,6 +190,9 @@ fn cap_err_from_ucan(err: UcanError) -> CapError {
         UcanError::DecodeFailed => CapError::BackendStorage {
             reason: "UCAN decode failure".to_string(),
         },
+        UcanError::ProofChainTooDeep { depth, max } => CapError::BackendStorage {
+            reason: format!("UCAN proof chain too deep: depth={depth} exceeds max={max}"),
+        },
         UcanError::CapabilityNotGranted {
             required,
             leaf_caps,

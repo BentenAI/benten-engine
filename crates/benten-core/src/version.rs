@@ -6,12 +6,13 @@
 //! typed-error condition ([`VersionError::Branched`]) rather than silent
 //! divergence.
 //!
-//! A thinner `u64`-id-based surface co-exists at the crate root
-//! ([`crate::Anchor`] / [`crate::append_version`] etc.) for the Phase 1
-//! "simple" use-case where the caller does not need to detect concurrent
-//! appends. R5 keeps both surfaces; R5 G7 picks a canonical shape once the
-//! evaluator is in place (`TODO(phase-3 — version surface
-//! consolidation)`; carried from Phase-2 generic marker).
+//! The legacy thinner `u64`-id-based crate-root surface was removed for
+//! refinement-audit #1003 (zero non-test callers; CLAUDE.md rule #5) —
+//! this Cid-head-threaded surface and the DAG-shape
+//! [`crate::version_chain::DagVersionChain`] are the two remaining
+//! version surfaces. Their unification into one `VersionDag` with an
+//! opt-in strict/linear mode is the Phase-4-Meta D3 work named in
+//! `docs/future/phase-4-backlog.md` §4.79.
 //!
 //! ## State storage
 //!
