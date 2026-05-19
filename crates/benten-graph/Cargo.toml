@@ -61,18 +61,6 @@ test-fixtures = []
 # pull redb into the wasm32 link. See `crates/benten-graph/src/
 # browser_backend.rs` module docs for the full thin-client commitment.
 browser-backend = []
-# ADDL Phase-4-Meta-Core TF-1 RED-PHASE staging (pim-12 / §3.6e). Gates the
-# `tests/tf1_989_cross_did_partition_isolation.rs` cross-DID non-leak
-# canary suite, which references the #989 production surface
-# (`WriteContext::namespace_did` + `RedbBackend::scoped(..)` per-DID view)
-# that does NOT exist until G-CORE-1 lands. NOT default-enabled so the
-# workspace keeps compiling pre-implementation. The G-CORE-1 implementer
-# REMOVES this feature + the file's `#![cfg(..)]` gate + lifts the
-# `#[ignore]`s in the SAME wave (the un-ignore action the closing-wave
-# sweep + mini-reviewer verify per §3.6e — landing-status, not just
-# spec-pin presence). Untouched: the compromise-#7-pinned `default = [
-# "test-fixtures"]` / `test-fixtures = []` literals above.
-tf1_989_red_phase = []
 # `testing` gates the test-only instrumentation that would otherwise grow
 # unboundedly at runtime: the `test_event_log`, the `warmed` HashSet inside
 # `CidExistenceCache`, and the `last_durability_by_label` map. Matches the
