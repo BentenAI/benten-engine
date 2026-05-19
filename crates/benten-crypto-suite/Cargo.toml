@@ -1,0 +1,25 @@
+[package]
+name = "benten-crypto-suite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The ONE thin Benten-owned signature/hash/cipher-suite-agility integration crate — a codepoint-dispatched seam wrapping vetted upstream RustCrypto primitives. v1-beta signature default = hybrid Ed25519⊕ML-DSA-65 (NF-4 concatenated/committing/strip-resistant; both must verify); classical-only Ed25519 = non-default downgrade; typed unsupported-algorithm arm (never silent fallback); no hardcoded sizes (a v1-PRODUCTION-correctness property). The ONLY crypto-primitive call site per crypto-agility-contract:6. RED-PHASE STUB at R3-A — G-CORE-2 (#1300) fills the real impl."
+
+[lints]
+workspace = true
+
+# RED-PHASE STUB (pim-12 §3.6e). Intentionally NO dependencies and NO public
+# API surface at R3-A landing. The TF-2 test pins under `tests/` reference the
+# INTENDED G-CORE-2 (#1300) public surface (`benten_crypto_suite::sig::*`,
+# `benten_crypto_suite::codepoint::*`, etc.). Those `use` lines are the
+# canonical RED-phase failure point: they compile-but-fail until G-CORE-2
+# lands the real integration crate. The crate, its deps (RustCrypto
+# `ed25519-dalek` / `ml-dsa` / `slh-dsa` / `ml-kem` / `x25519-dalek` /
+# `chacha20poly1305` / `hkdf` / `sha2` / `sha3` / `blake3`), and the typed
+# codepoint-dispatch API are G-CORE-2's deliverable — NOT this R3's job.
+[dependencies]
+
+[dev-dependencies]
