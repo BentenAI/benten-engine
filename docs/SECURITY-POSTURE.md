@@ -5,8 +5,10 @@ This document records the security claims Benten makes through Phase
 document is the written, referenceable form. The Phase-3-close table
 below is preserved verbatim (Phase 3 surfaces remain LOAD-BEARING under
 the post-Phase-4-Foundation engineering); Compromise #26 (Phase-4-Foundation
-manifest-envelope recheck at the sync merge boundary) is appended at
-the end of the table narrative.
+manifest-envelope recheck at the sync merge boundary) and Compromise #30
+(Phase-4-Meta-Core unaudited PQ primitives in the v1-beta hybrid default,
+per the 2026-05-19 PQ-default reframe) are appended at the end of the
+table narrative.
 
 ## Phase 4-Foundation close — compromise table
 
@@ -41,8 +43,11 @@ the end of the table narrative.
 | 27 | (RESERVED for META #669 closure — Plugin trust model Layers 2+3 + T10-upgrade paper-only at HEAD) | 4-Foundation | **OPEN; tracking via [META #669](https://github.com/BentenAI/benten-engine/issues/669) + [#1118](https://github.com/BentenAI/benten-engine/issues/1118) Compromise #27 mint task.** Reserved row; row body lands when META #669 closure or honest-disclosure mint lands. |
 | 28 | (RESERVED for META #629 closure — DoS-via-unbounded-decode workspace pattern; 26 instances / 9 crates) | 4-Foundation | **OPEN; tracking via [META #629](https://github.com/BentenAI/benten-engine/issues/629) + [#1126](https://github.com/BentenAI/benten-engine/issues/1126) Compromise #28 mint task.** Reserved row; row body lands when META #629 closure or honest-disclosure mint lands. |
 | 29 | Engine-level extensions — compile-time trust posture (CLAUDE.md baked-in #19) | 4-Foundation | **OPEN ARCHITECTURAL COMMITMENT; registry-tracked for cross-reference completeness.** Engine extensions are Rust crates compile-time linked into the engine binary; trust is `cargo` + code review, not the type system. Future post-Ed25519 / post-iroh / post-redb / post-wasmtime engine-extension migrations land under this Compromise's namespace per Phase-9+ scope. The trust model is comprehensively narrated below at §"Engine-level extensions — compile-time trust"; this row makes the claim registry-discoverable for the §3.12 R7-equivalent audit walk. Tracking via [#1131](https://github.com/BentenAI/benten-engine/issues/1131). |
+| 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` / `ml-kem` have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 concatenated/committing; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD) and the concatenated combiner is **committing / strip-resistant** (both halves must verify; the typed-unsupported-arm-never-silent-fallback contract enforces fail-closed) — so **unaudited PQC is never the SOLE trust path**. **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem` audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. See `docs/future/refinement-audit-2026-05.md §15` for the v1-platform-shippable BLOCKER cluster framing.
+
+**PQ-default-reframe-2026-05-19 delta:** Compromise #30 (unaudited PQ primitives in the v1-beta hybrid default) is the sole net-new addition from the 2026-05-19 PQ-default reframe — it names the pre-audit window as a tracked, registry-discoverable compromise that is MITIGATED by the classical-floor hybrid construction and CLOSES at the v1-GM independent audit (NF-2 / C-GM-AUDIT). The hash posture (Compromise #6) is **UNAFFECTED** by the reframe (the reframe is signature + encryption only). See `.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`.
 
 **Phase-4-Foundation delta:** Compromise #26 is the sole Phase-4-Foundation-era net-new addition. The remaining surfaces (#1-25) inherit Phase-3 posture unchanged. Phase-4-Foundation engineering shipped without introducing a sixth-class principal type at the evaluator boundary — the plugin-DID principal extension routes through the existing `CapabilityPolicy` + manifest-envelope-chain-validation seams.
 
@@ -2067,3 +2072,76 @@ plugin-DID principal extension (`docs/INVARIANT-COVERAGE.md`);
 trait + `NoopManifestEnvelopeRechecker` default impl;
 `crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope`
 (the function the Phase-4-Meta production adapter will call into).
+
+### Compromise #30 — Unaudited PQ primitives in the v1-beta hybrid default — OPEN; MITIGATED by hybrid construction; CLOSES at v1-GM
+
+**Status.** **OPEN; MITIGATED.** Per the 2026-05-19 PQ-default reframe
+(`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md
+baked-in #5 / #15), `v1-beta` ships PQ-hybrid by default for both
+signature (hybrid Ed25519⊕ML-DSA-65, concatenated/committing/
+strip-resistant, both-must-verify) and encryption (hybrid X25519⊕ML-KEM-768
+KEM-wrap at codepoint `0x647a` + ChaCha20-Poly1305 bulk). The PQ
+primitive crates (`ml-dsa` / `ml-kem`, RustCrypto-class) **have no
+independent third-party security audit yet** — this is the sole unmet
+security bar in the PQ stack (the classical AEAD bulk layer IS
+NCC-audited). The compromise is the pre-audit window between `v1-beta`
+and `v1-GM`.
+
+**Class.** Dependency-on-unaudited-cryptographic-primitive, scoped to a
+defined release window. Distinct from Compromise #6 (BLAKE3 collision
+bound — a hash *architectural* bound; the 2026-05-19 reframe is signature
++ encryption only, so Compromise #6 / the hash posture is UNAFFECTED).
+
+**Mitigation (why this is shippable at `v1-beta`).** The hybrid
+construction means **unaudited PQC is never the SOLE trust path**:
+
+1. **Classical floor.** The classical half of each hybrid (Ed25519 for
+   signature, X25519 for the KEM, plus the NCC-audited ChaCha20-Poly1305
+   AEAD) is fully present and is the audited security floor. A total
+   break of the unaudited ML-DSA / ML-KEM primitive does not, by itself,
+   drop security below the classical baseline the platform would have had
+   shipping classical-only.
+2. **Committing / strip-resistant combiner.** The signature hybrid is
+   concatenated and committing (NF-4): both signatures must verify; neither
+   half can be stripped or substituted without the verify failing closed.
+   The encryption hybrid uses the vendored ~30-LOC X-Wing-style combiner
+   over `ml-kem` + `x25519-dalek` + `sha3`. The
+   typed-unsupported-algorithm-arm-never-silent-fallback contract clause
+   (CLAUDE.md #5) is what enforces fail-closed — there is no silent
+   downgrade path to the classical half.
+3. **No content migration on close.** Because the codepoint seam is
+   self-describing and old codepoints are supported forever, closing this
+   compromise (or any later algorithm change) never strands or migrates
+   already-written content.
+
+**Closure condition.** **CLOSES at `v1-GM`** when the independent
+third-party security audit of the pinned `ml-dsa` + `ml-kem` versions
+lands during the `v1-beta` window — NF-2 / **C-GM-AUDIT** written exit
+criterion: audit delivered; findings triaged per HARD-RULE-12; no
+unresolved high/critical finding affects the hybrid trust path (any
+high/critical remediated *and* re-verified); pinned versions ==
+audited versions (no post-audit trust-path version drift without
+re-audit); Ben sign-off on the actual findings. The audit is a
+**committed `v1-beta` deliverable that gates the `v1-GM` tag** (not a
+discretionary post-spike decision-point).
+
+**Rejected alternative (named, per the reframe).** "PQ-TLS as a
+quantum-resistant transport envelope buys time" (Matrix's public
+position) does NOT transfer to Benten: Benten's vision (baked-in #18 —
+peers-hold-ciphertext / untrusted-host / at-rest replicated objects)
+defeats the transport-envelope argument because Benten ciphertext rests
+*at rest on peer disks*, not just in transit; Benten's actual transport
+(iroh, baked-in #17) is itself classical-only with no PQ roadmap. This
+is why PQ-hybrid is the default at the object layer rather than relying
+on transport — and why this compromise exists rather than being
+side-stepped by a transport-envelope claim.
+
+**Cross-refs.** `.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`
+(authoritative reframe record + NF-1..NF-5);
+`.addl/pq-research/RATIFIED-crypto-agility-2026-05-18.md` (the
+build-now stack + framing, superseded-in-part); CLAUDE.md baked-in #5 /
+#15; the v1-beta PQ-audit issue #1302 + issues #1300 / #1301; the four
+`.addl/pq-research/landscape-*-2026-05-19.md` corroboration passes;
+`.addl/pq-research/landscape-pq-algorithm-diversity-2026-05-19.md` (the
+NF-1 PQ⊕PQ post-classical-death documented end-state + FIPS-207
+build-trigger).

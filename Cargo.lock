@@ -346,6 +346,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-crypto-suite"
+version = "0.1.0"
+
+[[package]]
 name = "benten-dev"
 version = "0.1.0"
 dependencies = [
