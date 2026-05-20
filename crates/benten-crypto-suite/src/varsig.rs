@@ -174,11 +174,25 @@ pub enum VarsigError {
     Truncated,
     /// Bad magic byte (not `0xb5`).
     #[error("varsig bad magic byte: 0x{got:02x}")]
-    BadMagic { got: u8 },
+    BadMagic {
+        /// The actual byte observed at the magic-byte position.
+        got: u8,
+    },
     /// Unsupported Varsig version (G-CORE-2 ships v1 only).
     #[error("varsig unsupported version: {got}")]
-    UnsupportedVersion { got: u8 },
+    UnsupportedVersion {
+        /// The version byte observed; G-CORE-2 ships v1 only — any other
+        /// value fails closed via this variant.
+        got: u8,
+    },
     /// Unknown / reserved codepoint — fail-closed.
     #[error("varsig unsupported codepoint 0x{codepoint:04x}: {reason}")]
-    UnsupportedCodepoint { codepoint: u16, reason: String },
+    UnsupportedCodepoint {
+        /// The codepoint observed in the wire header (unknown / reserved /
+        /// non-implemented at this build's codepoint dispatch table).
+        codepoint: u16,
+        /// Human-readable reason describing why the codepoint is rejected
+        /// (e.g. "reserved for NF-1 PQ⊕PQ end-state", "unknown to v1 suite").
+        reason: String,
+    },
 }
