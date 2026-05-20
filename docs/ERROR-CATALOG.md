@@ -2,23 +2,24 @@
 
 **Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
 
-**Catalog count narrative (post Phase-4-Foundation R6-FP-3 close, 2026-05-13):** four distinct counts coexist by design — each measures a different surface:
+**Catalog count narrative (post Phase-4-Meta-Core G-CORE-1 fix-pass, 2026-05-19):** four distinct counts coexist by design — each measures a different surface:
 
-| Count | Source | Value (at HEAD post R6-FP-A batch-merge) | Meaning |
+| Count | Source | Value (at HEAD post G-CORE-1 fix-pass) | Meaning |
 |---|---|---|---|
-| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **169** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **169** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
-| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **171** | = 169 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 171 \| rust codes: 170 \| ts codes: 171" line reflects this intentional retention. |
-| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **170** | = 169 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **170** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **170** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **172** | = 170 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 172 \| rust codes: 171 \| ts codes: 172" line reflects this intentional retention. |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **171** | = 170 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
-**Why four counts (169 / 169 / 170 / 171):** the Rust enum is the source of throwable variants (169); plus a forward-compat `Unknown(String)` fallback (= 170 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 171 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (169). Single canonical headline number: **169 production-throwable codes** at the refinement-audit-2026-05 wire-format cluster close (+1 `E_GRAPH_SCHEMA_VERSION_MISMATCH` over the Phase-4-Foundation R6-FP-3 baseline of 168).
+**Why four counts (170 / 170 / 171 / 172):** the Rust enum is the source of throwable variants (170); plus a forward-compat `Unknown(String)` fallback (= 171 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 172 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (170). Single canonical headline number: **170 production-throwable codes** at the Phase-4-Meta-Core G-CORE-1 fix-pass close (+1 `E_NAMESPACED_WRITE_UNSUPPORTED` over the refinement-audit-2026-05 baseline of 169).
 
 **Cohort math (Phase-4-Foundation):**
 - **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.
 - **Phase-4-Foundation R5 canary mints:** 31 new codes across 4 cohorts (G24-F thin-client +4, G23-A schema +9, G24-D plugin +15, G23-B materializer +3). 132 + 31 = 163 (the post-R5-canary intermediate count).
 - **R6-FP-A closure cohort:** R6-FP-A added 4 plugin install-record / DID-handle codes (3 substitution-discriminating + 1 caller-mint-first pre-insert enforcement). 163 + 4 = **167 throwable post R6-FP-A batch-merge**.
 - **R6-FP-3 closure cohort (cap-r6-r3-1 defensive-return hardening):** R6-FP-3 added 1 plugin-DID handle duplicate-rejection code at `PluginDidStore::insert`. 167 + 1 = **168 throwable at Phase-4-Foundation R6-FP-3 close**. The 7 cohorts:
-- **refinement-audit-2026-05 wire-format cluster (#992):** +1 `E_GRAPH_SCHEMA_VERSION_MISMATCH` (redb on-disk schema-version envelope; refuse a version this build doesn't understand rather than silently mis-route reads). 168 + 1 = **169 throwable at HEAD**.
+- **refinement-audit-2026-05 wire-format cluster (#992):** +1 `E_GRAPH_SCHEMA_VERSION_MISMATCH` (redb on-disk schema-version envelope; refuse a version this build doesn't understand rather than silently mis-route reads). 168 + 1 = **169 throwable at refinement-audit-2026-05 close**.
+- **Phase-4-Meta-Core G-CORE-1 fix-pass (#989 storage-partition seam):** +1 `E_NAMESPACED_WRITE_UNSUPPORTED` (`BrowserBackend::put_node_with_context` fails CLOSED when `ctx.namespace_did = Some(_)` rather than silently dropping the scope — preserves the C1 cross-DID non-leak invariant uniformly across every `GraphBackend` impl, not just `RedbBackend`). 169 + 1 = **170 throwable at HEAD**.
 
 Authoritative count assertion lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length AND the exhaustive-match `catalog_variant_count_matches_enum` cross-check so adding a variant without updating this doc fails CI.
 
@@ -1564,6 +1565,14 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** The materializer's reactive update path routes ONLY through `Engine::on_change_as_with_cursor` (the cap-rechecking SUBSCRIBE entry point per sec-3.5-r1-9). Attachment failed — pattern is empty or invalid, the cursor type is unsupported, or the engine's policy denied subscription registration. Fix the pattern shape (non-empty event-name glob) or supply a valid SubscribeCursor; consult `Engine::on_change_as_with_cursor` docs.
 - **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::subscribe_with_gate` (G23-B canary).
 - **Phase:** 4-Foundation G23-B
+
+### E_NAMESPACED_WRITE_UNSUPPORTED
+
+- **Message:** "namespaced write unsupported on this backend: {backend} cannot route writes to namespace_did partitions; only RedbBackend implements the per-DID partition surface today"
+- **Context:** `{ backend: &'static str }` (e.g. `"BrowserBackend"`)
+- **Fix:** The `WriteContext::namespace_did` field is the §1.A.FROZEN canary surface from G-CORE-1 (#989 cross-DID storage-partition seam). At HEAD only `RedbBackend` enforces the C1 cross-DID non-leak invariant via the per-DID partition keyspace + `ScopedView`. The `BrowserBackend` (CLAUDE.md baked-in #17 shape-b/c thin-client cache) and any other non-partitioned `GraphBackend` impl fail CLOSED on `Some(namespace_did)` with this typed code rather than silently dropping the scope and landing the write in the un-namespaced legacy keyspace — which would break the C1 invariant invisibly (a subsequent `ScopedView::get_node` would return `None` for the just-written CID). The fail-closed contract preserves the §1.A.FROZEN canary shape's safety promise across every `GraphBackend` impl, not just `RedbBackend`. Fix at the call site: either route the write through `RedbBackend` (the partitioned full-peer storage backend), or call with `WriteContext::namespace_did = None` (the legacy un-namespaced path). A future wave that implements the in-RAM partition for `BrowserBackend` replaces this typed-reject with the partitioned write path; the typed-reject is the defense in the interim per HARD RULE 12 clause-(b). Structural-shape rejection at the storage boundary — no primitive-edge routing (None).
+- **Thrown at:** `crates/benten-graph/src/browser_backend.rs::BrowserBackend::put_node_with_context` (G-CORE-1 fix-pass, Phase 4-Meta-Core).
+- **Phase:** 4-Meta-Core G-CORE-1 (fix-pass closure of `g-core-1-mr-1` MAJOR)
 
 ## Extending the catalog
 

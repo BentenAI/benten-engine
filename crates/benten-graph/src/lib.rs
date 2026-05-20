@@ -606,6 +606,41 @@ pub enum GraphError {
         /// Schema version observed on the redb file.
         actual: u32,
     },
+
+    /// G-CORE-1 fix-pass (Phase 4-Meta-Core, #989 storage-partition seam):
+    /// a `GraphBackend::put_node_with_context` call carried a
+    /// `WriteContext::namespace_did = Some(_)` against a backend that
+    /// does NOT implement per-DID partition isolation. At HEAD only
+    /// [`crate::redb_backend::RedbBackend`] enforces the C1 cross-DID
+    /// non-leak invariant via the per-DID partition keyspace +
+    /// `ScopedView`; [`crate::browser_backend::BrowserBackend`]
+    /// (CLAUDE.md baked-in #17 shape-b/c thin-client cache) and any
+    /// other non-partitioned backend fail CLOSED on `Some(namespace_did)`
+    /// with this variant rather than silently dropping the scope and
+    /// landing the write in the un-namespaced legacy keyspace — which
+    /// would break the C1 invariant invisibly.
+    ///
+    /// The defense is the BrowserBackend deferred-named-now stance per
+    /// HARD RULE 12 clause-(b) until the in-RAM partition impl lands
+    /// (named for the wave that builds out the thin-client surfaces;
+    /// per §1.A.FROZEN this is the deferred companion to RedbBackend's
+    /// `scoped` impl). The fail-closed contract preserves the
+    /// §1.A.FROZEN canary shape's safety promise across ALL
+    /// `GraphBackend` impls, not just `RedbBackend`. Mirrors the
+    /// [`crate::backends::snapshot_blob::SnapshotBlobError::ReadOnly`]
+    /// posture for a different unsupported-write surface.
+    ///
+    /// Maps to `E_NAMESPACED_WRITE_UNSUPPORTED`.
+    #[error(
+        "namespaced write unsupported on this backend: {backend} cannot route writes to namespace_did partitions; only RedbBackend implements the per-DID partition surface today"
+    )]
+    #[non_exhaustive]
+    NamespacedWriteUnsupported {
+        /// Static name of the backend that refused the namespaced write
+        /// (e.g. `"BrowserBackend"`). The static-str shape keeps the
+        /// variant cheap to construct + non-allocating on the hot path.
+        backend: &'static str,
+    },
 }
 
 impl GraphError {
@@ -673,6 +708,7 @@ impl GraphError {
             GraphError::DecodeTooLarge { .. } => ErrorCode::Serialize,
             GraphError::TxAborted { .. } => ErrorCode::TxAborted,
             GraphError::SchemaVersionMismatch { .. } => ErrorCode::GraphSchemaVersionMismatch,
+            GraphError::NamespacedWriteUnsupported { .. } => ErrorCode::NamespacedWriteUnsupported,
         }
     }
 }

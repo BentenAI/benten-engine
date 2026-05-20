@@ -1406,9 +1406,18 @@ impl RedbBackend {
                 // partition prefix structurally confines the scan. Empty-
                 // value entries (we just need the key set; the CID is the
                 // key suffix). Property index for namespaced writes is
-                // deferred to a later wave (`ScopedView::get_by_property`
+                // NAMED for a later wave (`ScopedView::get_by_property`
                 // is not in the G-CORE-1 surface; the TF-1 family pins
-                // only label + point + iterate + edge).
+                // only label + point + iterate + edge). Named-destination:
+                // `docs/future/phase-4-backlog.md §3.8` + GH #1306 (HARD
+                // RULE 12 clause-(b) BELONGS-NAMED-NOW; G-CORE-1
+                // fix-pass closure of `g-core-1-mr-4` MINOR). NOT a
+                // fail-OPEN: the `PROP_INDEX_TABLE` multimap is
+                // structurally skipped for namespaced writes, so a
+                // cross-partition property-index leak is structurally
+                // impossible — only naming hygiene is fix-now; the
+                // implementation lands when a downstream wave needs
+                // `ScopedView::get_by_property`.
                 let mut nodes = write_txn.open_table(NODES_TABLE)?;
                 for label in &node.labels {
                     let key = namespaced_label_index_key(did, label, &cid);
@@ -1872,8 +1881,16 @@ impl RedbBackend {
                     // `namespace_did`); deliver only to un-namespaced
                     // subscribers so the C1 cross-DID non-leak invariant
                     // holds end-to-end at the change-subscriber boundary.
-                    // A future per-DID `transaction` path will set a
-                    // per-call namespace_did + filter the same way.
+                    // Named for the wave that adds a per-DID `transaction`
+                    // surface — see `docs/future/phase-4-backlog.md §3.7`
+                    // + GH #1305 (HARD RULE 12 clause-(b) BELONGS-NAMED-
+                    // NOW destination; G-CORE-1 fix-pass closure of
+                    // `g-core-1-mr-2` MAJOR). A future per-DID
+                    // `transaction` path will set a per-call
+                    // namespace_did + filter the same way (route (a)) or
+                    // explicitly disposition transactional namespaced
+                    // writes as out of scope (route (b)) — decision
+                    // belongs to that wave.
                     let subs = self.snapshot_subscribers_for(None);
                     if !subs.is_empty() {
                         // #645 (Safe-4, META #707 slice): release the
