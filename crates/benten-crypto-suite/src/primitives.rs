@@ -19,12 +19,10 @@
 /// v1-beta classical-signature primitive — Ed25519 via `ed25519-dalek`.
 pub use ed25519_dalek;
 
-// v1-beta PQ-signature primitive — ML-DSA-65 via `ml-dsa` — DEFERRED
-// (see the Cargo.toml DISAGREE-WITH-EVIDENCE record): the 2026-05-19
-// `pkcs8 0.11.0` + `ed25519 3.0.0` stable releases broke
-// the iroh-base 0.98.0 `=ed25519-dalek 3.0.0-pre.6` chain. The
-// hybrid arm typed-rejects in this wave; the coordinated workspace
-// dep-bump wave (alongside G-CORE-3 #1301) enables it.
+/// v1-beta PQ-signature primitive — ML-DSA-65 via `ml-dsa`. LIVE
+/// end-to-end as of G-CORE-2-FP-1 (2026-05-19) after the iroh 1.0.0-rc.0
+/// bump closed the upstream ecosystem fork.
+pub use ml_dsa;
 
 // NF-1 PQ⊕PQ end-state signature primitive — SLH-DSA via `slh-dsa` —
 // dep reserved for G-CORE-3c (workspace `sha2 0.10` vs slh-dsa's

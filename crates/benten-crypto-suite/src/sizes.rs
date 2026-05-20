@@ -13,16 +13,42 @@
 //! drive ML-DSA-65 dimensions without instantiating a full hybrid keypair
 //! (the dimensions are what we're testing, not the live-sign throughput).
 
+use ml_dsa::{EncodedSignature, KeySizeUser, MlDsa65, VerifyingKey as MlDsaVerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::codepoint::SigCodepoint;
 use crate::sig::HybridSignature;
 
-// Per FIPS 204 ML-DSA-65 (Category-3): public-key 1952 B; signature 3309 B.
-// Sourced from upstream `ml-dsa` crate constants (NOT a Benten redefinition);
-// kept as `pub(crate)` constants to feed [`SyntheticVector`] generation.
-pub(crate) const ML_DSA_65_PUBKEY_LEN: usize = 1952;
-pub(crate) const ML_DSA_65_SIG_LEN: usize = 3309;
+// ML-DSA-65 (FIPS-204 Category-3) public-key + signature byte lengths.
+//
+// Sourced from the upstream `ml-dsa 0.1` crate's type-level constants —
+// the public-key length flows through `KeySizeUser::key_size()` on
+// `VerifyingKey<MlDsa65>` (impl in `ml_dsa::verifying`), and the
+// signature length flows through `EncodedSignature::<MlDsa65>::default()`
+// (a `hybrid_array::Array<u8, SignatureSize<MlDsa65>>` whose `len()` is
+// the type-level USIZE). **NOT a Benten redefinition** (CLAUDE.md
+// baked-in #5 "never hardcode key/sig/ciphertext sizes"). The FIPS-204
+// reference dimensions are 1952 B-key / 3309 B-sig; the
+// `debug_assert_eq!` arms below validate this at test time.
+//
+// These are exposed via the public no-arg `ml_dsa_65_pubkey_len()` /
+// `ml_dsa_65_sig_len()` `pub fn`s (NOT `pub const` — the upstream sizes
+// are type-level so this is a runtime witness, satisfying
+// `SignatureSuite::exposes_static_size_constant() -> false`).
+
+/// Returns the ML-DSA-65 verifying-key byte length, sourced from
+/// upstream `ml_dsa` type-level constants.
+#[must_use]
+pub fn ml_dsa_65_pubkey_len() -> usize {
+    <MlDsaVerifyingKey<MlDsa65>>::key_size()
+}
+
+/// Returns the ML-DSA-65 signature byte length, sourced from upstream
+/// `ml_dsa` type-level constants.
+#[must_use]
+pub fn ml_dsa_65_sig_len() -> usize {
+    EncodedSignature::<MlDsa65>::default().as_slice().len()
+}
 
 /// A concrete ML-DSA-65-dimensioned synthetic vector used by TF-2 to drive
 /// the size-touching surfaces.
@@ -33,14 +59,16 @@ pub struct SyntheticVector {
 
 impl SyntheticVector {
     /// Build a synthetic vector at the canonical ML-DSA-65 dimensions
-    /// (~1952 B key / ~3309 B sig). Bytes are deterministic-pattern (so
-    /// TF-2 assertions are stable).
+    /// (1952 B key / 3309 B sig per FIPS-204, sourced from upstream
+    /// `ml-dsa` type-level constants — NOT a hardcoded Benten
+    /// redefinition). Bytes are deterministic-pattern (so TF-2
+    /// assertions are stable).
     #[must_use]
     pub fn ml_dsa65_for_test() -> Self {
-        let pq_pubkey: Vec<u8> = (0..ML_DSA_65_PUBKEY_LEN as u32)
-            .map(|i| (i & 0xff) as u8)
-            .collect();
-        let pq_sig: Vec<u8> = (0..ML_DSA_65_SIG_LEN as u32)
+        let pubkey_len = ml_dsa_65_pubkey_len();
+        let sig_len = ml_dsa_65_sig_len();
+        let pq_pubkey: Vec<u8> = (0..pubkey_len as u32).map(|i| (i & 0xff) as u8).collect();
+        let pq_sig: Vec<u8> = (0..sig_len as u32)
             .map(|i| ((i ^ 0xa5) & 0xff) as u8)
             .collect();
         Self { pq_pubkey, pq_sig }

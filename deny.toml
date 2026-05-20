@@ -44,20 +44,11 @@ ignore = [
     # Example format:
     # { id = "RUSTSEC-XXXX-YYYY", reason = "only reachable via `foo` crate's test-only path; upstream fix tracked at <URL>; remove by 2026-06-01" }
 
-    # RUSTSEC-2026-0119: hickory-dns CPU exhaustion via O(n^2) name compression.
-    # Reachable only via iroh's DNS resolver (Phase-3 P2P sync transport).
-    # Transitive root: iroh 0.98.2 -> hickory-resolver 0.26.0-beta.4 -> hickory-proto.
-    # Closure plan: Phase-3 R5 close iroh-version-bump cycle (Dependabot
-    # fast-track per `scope-real-10`); Phase-7 Garden-relay work may
-    # alternatively replace hickory-dns with a minimal in-process resolver.
-    # Track at `docs/future/phase-3-backlog.md` §9 (security-advisory carries).
-    # Remove when iroh upstream picks up a hickory-dns fix or when we drop
-    # the dep edge.
-    { id = "RUSTSEC-2026-0119", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §9 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
-
-    # RUSTSEC-2026-0120: hickory-dns NSEC3 unbounded loop on cross-zone responses.
-    # Same transitive root + same closure path as RUSTSEC-2026-0119.
-    { id = "RUSTSEC-2026-0120", reason = "transitive via iroh -> hickory-resolver; closure tracked at docs/future/phase-3-backlog.md §9 (Phase-3 R5 close iroh-version-bump cycle / Phase-7 Garden-relay alt)" },
+    # RUSTSEC-2026-0119 + RUSTSEC-2026-0120 (hickory-dns CPU-exhaustion + NSEC3
+    # unbounded-loop) CLOSED 2026-05-19 at G-CORE-2-FP-1 via iroh 0.98 →
+    # 1.0.0-rc.0 bump; transitive hickory-resolver 0.26.0-beta.4 → 0.26.1
+    # picks up the upstream fix. Ignore entries removed (cargo-deny warns on
+    # advisory-not-detected for stale ignores).
 
     # RUSTSEC-2024-0436: paste unmaintained advisory (informational; no exploit).
     # Transitive via netlink-packet-core -> netdev -> netwatch -> iroh.

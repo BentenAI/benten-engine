@@ -26,51 +26,34 @@ workspace = true
 # `ed25519-dalek` live HERE; consumers import through us).
 ed25519-dalek = { workspace = true }
 
-# DISAGREE-WITH-EVIDENCE (clause-(c)) record — surface to Ben per
-# `feedback_surface_arch_decisions_under_auth.md`:
+# v1-beta DEFAULT PQ half of the hybrid signature (NF-4): ML-DSA-65
+# (FIPS-204 Category-3) via vetted upstream RustCrypto `ml-dsa`. Direct
+# dep lives HERE (the ONLY crypto-primitive call site per
+# `crypto-agility-contract:6`). Pinned `^0.1` per
+# `.addl/pq-research/landscape-crate-reverify-2026-05-19.md`.
 #
-# The brief specifies "G-CORE-2 ships *both* primitives + the hybrid
-# combiner as the default arm" — adding `ml-dsa = "0.1"` would
-# implement that. **BUT** the 2026-05-19 stable releases of `pkcs8
-# 0.11.0` + `ed25519 3.0.0` (both published TODAY) created an
-# ecosystem fork: `ml-dsa 0.1.0` requires `pkcs8 ^0.11` which now
-# resolves to 0.11.0 stable; iroh-base 0.98.0 hard-`=`-pins
-# `ed25519-dalek 3.0.0-pre.6` which requires `ed25519 3.0.0-rc.4`
-# which requires `pkcs8 = "0.11.0-rc.10"` exactly. The two
-# constraints are unsatisfiable. ed25519-dalek 3.0.0-pre.7 (which
-# uses ed25519 ^3 + pkcs8 ^0.11 stable) is the fix, BUT iroh-base
-# `=`-pins pre.6 so cargo cannot select pre.7 without a `[patch]`,
-# and the only available pre.7 source is git (CLAUDE.md baked-in #5
-# forbids untrusted-source crypto primitives).
-#
-# **Decision (taken AS BEN per the night-shift stance):** ship the
-# canary with the FULL structural surface — codepoint dispatch +
-# hybrid-construction wire-format + commitment-binding spec +
-# typed-unsupported arm + classical-only live downgrade + every TF-2
-# size / codepoint / typed-unsupported / classical-arm pin GREEN —
-# but typed-reject the hybrid arm with the same
-# `UnsupportedAlgorithm::Signature` envelope the unknown-codepoint
-# arm uses, naming the iroh-base upstream constraint as the
-# unblock dependency. The 6 TF-2 hybrid-only pins are
-# `#[ignore = "..."]`-staged with the clear unblock destination
-# named in the ignore reason (a `#1304`-shaped tracking item that
-# the orchestrator opens at PR review). G-CORE-3 #1301 + the
-# coordinated workspace bump (iroh-base → stable-pkcs8 ed25519-dalek)
-# light the live ml-dsa together.
-#
-# The safety invariant is preserved by construction: the hybrid arm
-# returns `UnsupportedAlgorithm::Signature { codepoint: 0x0001 }` —
-# there is NO silent fallback path; callers attempting hybrid
-# verification get a typed-rejected error, not a silent classical
-# accept. Until the iroh upstream lands, peers must explicitly
-# select the classical-only codepoint to interoperate.
-#
-# This DOES widen the C2 exit criterion's actual deliverable
-# (C2 says "signature hybrid co-verify exists") — surfaced to Ben
-# as the FORK to ratify at PR review (continue as-is + open the
-# coordinated-bump tracker, or block-the-PR + first land an
-# iroh-upstream-driven fix). Per the night-shift bias-to-continue,
-# the PR opens with the surface ratification surfaced explicitly.
+# CLOSED-WITH-EVIDENCE (was DISAGREE-WITH-EVIDENCE at G-CORE-2 canary):
+# the G-CORE-2 ecosystem fork (iroh-base 0.98.0's `=`-pin on
+# `ed25519-dalek 3.0.0-pre.6` blocking `ml-dsa 0.1.0`'s `pkcs8 ^0.11`
+# stable requirement) was resolved 2026-05-19 by the Ben-ratified
+# (option (c-ii)) iroh 0.98 → 1.0.0-rc.0 bump (G-CORE-2-FP-1). The
+# 1.0.0-rc.0 line picks up `ed25519-dalek 3.0.0-pre.7` (uses
+# `ed25519 3.0.0` + `pkcs8 0.11.0` stable) — directly compatible
+# with `ml-dsa 0.1`. The deferred-live hybrid arm in `sig.rs` is now
+# wired through the real `ml_dsa::SigningKey::<MlDsa65>` /
+# `VerifyingKey::<MlDsa65>` paths; the previous synthesizer is
+# removed. See `.addl/phase-4-meta/iroh-pin-investigation-2026-05-19.md`
+# for the 2-LOC migration confirmation. Features: `alloc` (Vec /
+# Box / String — needed for the size-touching surfaces) + `rand_core`
+# (key generation via `Generate::generate_from_rng` /
+# `try_generate_from_rng`) + `getrandom` (lets us call
+# `SigningKey::<MlDsa65>::generate()` which routes through `SysRng`
+# without needing the workspace's rand_core 0.6 OsRng — ml-dsa
+# expects rand_core 0.10's `CryptoRng`, so going via `getrandom`
+# sidesteps the version-skew). `pkcs8` feature NOT enabled — the
+# Benten wire format uses raw `Encoded` bytes (`encode()` /
+# `decode()`) NOT PKCS#8 envelopes.
+ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom"] }
 
 # NF-1 PQ⊕PQ end-state non-default arm (ML-DSA-65 ⊕ SLH-DSA): the
 # codepoint is reserved-but-unimplemented in this wave (the dispatch
@@ -96,11 +79,8 @@ sha3 = { version = "0.10", default-features = false }
 # `ml-kem` + `chacha20poly1305` + `hkdf` as direct deps of THIS crate
 # when it lights up the live cipher-suite impl (still the ONLY call site
 # per crypto-agility-contract:6 — the deps move to here at G-CORE-3
-# alongside the live combiner). Pulling them into this wave triggered a
-# `pkcs8 0.11.0-rc.10 → 0.11.0` lockfile re-resolution that broke
-# iroh's `ed25519 3.0.0-rc.4` (which is pinned by iroh-base
-# `=ed25519-dalek 3.0.0-pre.6`) — DEFER to G-CORE-3 which can do the
-# coordinated workspace dep bump.
+# alongside the live combiner). The G-CORE-2 ecosystem fork that
+# previously blocked these deps is closed by the iroh 1.0.0-rc.0 bump.
 
 # Standard supporting deps.
 serde = { workspace = true, features = ["derive", "alloc"] }
@@ -111,16 +91,12 @@ zeroize = { workspace = true }
 subtle = { workspace = true }
 rand_core = { workspace = true }
 
-# G-CORE-2 (#1300) version-pin: hold `ed25519` at the last RC (rc.4)
-# that the `iroh-base 0.98.0` → `=ed25519-dalek 3.0.0-pre.6` chain was
-# written against. The 2026-05-19 `ed25519 3.0.0` stable release
-# changed the `pkcs8.rs` API surface (`Error::KeyMalformed` enum
-# variant removed in pkcs8 0.11.0 stable) which breaks ed25519-dalek
-# pre.6's `pkcs8::DecodePrivateKey` impl. Pin removes when iroh-base
-# ships a stable-pkcs8/ed25519-3.0.0-compatible ed25519-dalek (the
-# follow-on workspace bump tracking item: this pin is the closure
-# marker — remove when CI passes without it).
-ed25519 = { version = "=3.0.0-rc.4", default-features = false }
+# G-CORE-2-FP-1 (2026-05-19) — the provisional `ed25519 = "=3.0.0-rc.4"`
+# pin (G-CORE-2 closure-marker for the iroh-base 0.98.0 fork) is
+# REMOVED. The iroh 0.98 → 1.0.0-rc.0 bump in `benten-engine` +
+# `benten-sync` lets cargo select `ed25519-dalek 3.0.0-pre.7` →
+# `ed25519 3.0.0` stable → `pkcs8 0.11.0` stable. No further pin
+# needed; transitive resolution unifies on the stable chain.
 
 # `tempfile` + `redb` are used by the `sizes` module's
 # `RedbSigHandle` for the TF-2 surface-3 size-touching pin. NOT
@@ -129,3 +105,13 @@ ed25519 = { version = "=3.0.0-rc.4", default-features = false }
 # crate used across the workspace.
 tempfile = { workspace = true }
 redb = { workspace = true }
+
+[dev-dependencies]
+# benten-id pulled as a dev-dep so the `discharge::Issue835Discharge`
+# `compile_fail` doctest in lib can name `benten_id::did::Did` at
+# doctest-compile time — the test verifies that
+# `Did::from_string_unchecked` is genuinely unreachable from outside
+# `benten-id` (pim-18 SHAPE-not-SUBSTANCE substitution for the
+# previous hardcoded-sentinel discharge marker). Compile-time
+# witness, NOT a runtime sentinel.
+benten-id = { path = "../benten-id" }

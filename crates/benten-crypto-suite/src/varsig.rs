@@ -18,15 +18,15 @@ use thiserror::Error;
 
 use crate::codepoint::SigCodepoint;
 use crate::sig::HybridSignature;
+use crate::sizes::ml_dsa_65_sig_len;
 
 const VARSIG_MAGIC: u8 = 0xb5;
 const VARSIG_V1: u8 = 0x01;
 
 // Codepoint-dispatched dimensions sourced from the upstream crates' constants
-// (NOT a Benten redefinition).
+// (NOT a Benten redefinition). ML-DSA-65 sourced from upstream `ml-dsa`
+// type-level constants via [`crate::sizes::ml_dsa_65_sig_len`].
 const ED25519_SIG_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
-// ML-DSA-65 FIPS 204 Category-3 fixed signature size.
-const ML_DSA_65_SIG_LEN: usize = 3309;
 // SHA3-256 commitment fixed output.
 const COMMITMENT_LEN: usize = 32;
 
@@ -114,13 +114,14 @@ impl UcanVarsigV1Header {
 fn decode_payload(codepoint: SigCodepoint, payload: &[u8]) -> Result<HybridSignature, VarsigError> {
     match codepoint.raw() {
         0x0001 => {
-            let expected = ED25519_SIG_LEN + ML_DSA_65_SIG_LEN + COMMITMENT_LEN;
+            let ml_dsa_sig_len = ml_dsa_65_sig_len();
+            let expected = ED25519_SIG_LEN + ml_dsa_sig_len + COMMITMENT_LEN;
             if payload.len() != expected {
                 return Err(VarsigError::Truncated);
             }
             let classical = payload[..ED25519_SIG_LEN].to_vec();
-            let pq = payload[ED25519_SIG_LEN..ED25519_SIG_LEN + ML_DSA_65_SIG_LEN].to_vec();
-            let commitment = payload[ED25519_SIG_LEN + ML_DSA_65_SIG_LEN..].to_vec();
+            let pq = payload[ED25519_SIG_LEN..ED25519_SIG_LEN + ml_dsa_sig_len].to_vec();
+            let commitment = payload[ED25519_SIG_LEN + ml_dsa_sig_len..].to_vec();
             Ok(HybridSignature::from_parts_internal(
                 codepoint, classical, pq, commitment,
             ))

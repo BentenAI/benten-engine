@@ -113,6 +113,16 @@ All are **informational-only unmaintained advisories** (no exploit class). The c
 - Handler-call-graph cycle detection at handler-registration time (`phase-3-backlog §15.2`)
 - **View 3 (content_listing) stale-with-last-known-good fallback generalization (mat-r1-14)** — the `ContentListingView` budget-exhaustion path returns the LAST KNOWN GOOD snapshot via `read_page_allow_stale` rather than empty. G23-0b preserves this non-trivial-named behavior at the canonical-view inner kernel + does NOT generalize the fallback into a uniform pathway on `Algorithm B`'s generic kernel. Phase 4-Meta lifts the stale-with-last-known-good shape into a general `View::read_allow_stale` semantics that user-defined views can opt into; until then the canonical View 3 path is the only fallback-aware view. Closure pin: `crates/benten-ivm/tests/view_3_stale_with_last_known_good_does_not_generalize_trivially_named_carry.rs`.
 
+### §3.7 Post-G-CORE-2 dep-bump tail — iroh 1.0.0-rc.0 → stable + RC→stable cleanup + #835 visibility-flip fixture migration (tracked at #1308)
+
+Companion tracker to G-CORE-2-FP-1 (which closed the G-CORE-2 ecosystem fork by bumping iroh 0.98 → 1.0.0-rc.0; ratified 2026-05-19 per `.addl/phase-4-meta/iroh-pin-investigation-2026-05-19.md`). The scope of the original "coordinated workspace dep-bump wave" carry from G-CORE-2 is now significantly reduced + folded into this smaller tail:
+
+- (a) **iroh 1.0.0-rc.0 → 1.0.0 stable** via Dependabot fast-track once upstream ships stable (single Cargo.toml edit at `crates/benten-engine/Cargo.toml:209` + `crates/benten-sync/Cargo.toml:90`).
+- (b) **RC→stable promotion stability** — G-CORE-2-FP-1 transitively picked up 5 RC→stable promotions (`sha2`, `ed25519`, `pkcs8`, `spki`, `noq`, `noq-proto`); verify lockfile stays at stable through Dependabot churn.
+- (c) **#835 `Did::from_string_unchecked` fixture-caller migration** — ~100 test-fixture call sites still use placeholder DID strings via the openly-named `Did::from_string_for_test_fixture` path. Two options: (c-i) keep that path + mechanical sweep, or (c-ii) regenerate fixtures with valid did:key strings + migrate to `Did::parse_validated` + DELETE `from_string_for_test_fixture`. Decide pre-Phase-4-Meta-Core v1-interface-freeze. The compile-time witness (a `compile_fail` doctest in `benten_crypto_suite::discharge::Issue835Discharge`) catches a silent revert of the visibility flip.
+
+Full enumeration + cross-references at GH issue #1308.
+
 ---
 
 ## §4. Phase 4-Foundation Track B (Class-of-bug audits + cleanups)

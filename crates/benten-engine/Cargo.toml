@@ -199,6 +199,20 @@ zeroize = { workspace = true }
 # target-table layer so the dep chain is not even resolvable on wasm32.
 # tokio + iroh ride alongside for the async Atrium API surface +
 # `EndpointAddr` re-export at `sync_subgraph` arguments.
+#
+# Phase-4-Meta-Core G-CORE-2-FP-1 (2026-05-19): iroh bumped 0.98 →
+# 1.0.0-rc.0 as the Ben-ratified closure of the G-CORE-2 ecosystem
+# fork (iroh-base 0.98.0 `=`-pinned `ed25519-dalek 3.0.0-pre.6` which
+# blocked `ml-dsa 0.1.0`'s `pkcs8 ^0.11` stable requirement). The
+# 1.0.0-rc.0 line picks up `ed25519-dalek 3.0.0-pre.7` (which uses
+# `ed25519 3.0.0` + `pkcs8 0.11.0` stable), enables LIVE ML-DSA-65
+# verify in `benten-crypto-suite`, and aligns the iroh version
+# timeline with the v1 public interface freeze at G-CORE-9.
+# Dependabot fast-track preserved at the minor-version granularity
+# per scope-real-10. Bonus: closes RUSTSEC-2026-0119/0120 via the
+# transitive `hickory-resolver 0.26.0-beta.4 → 0.26.1` promotion.
+# See `.addl/phase-4-meta/iroh-pin-investigation-2026-05-19.md` for
+# the 2-LOC migration confirmation + zero iroh-API breakage.
 benten-sync = { path = "../benten-sync" }
 tokio = { version = "1", default-features = false, features = [
     "rt",
@@ -206,7 +220,7 @@ tokio = { version = "1", default-features = false, features = [
     "macros",
     "sync",
 ] }
-iroh = { version = "0.98", default-features = false, features = ["tls-ring"] }
+iroh = { version = "1.0.0-rc.0", default-features = false, features = ["tls-ring"] }
 
 [dev-dependencies]
 criterion = { workspace = true }

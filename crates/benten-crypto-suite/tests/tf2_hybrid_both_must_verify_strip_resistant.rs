@@ -158,6 +158,43 @@ fn tf2_tampered_message_fails_closed() {
     );
 }
 
+/// MR-1 follow-up (G-CORE-2-FP-1): adversary substitutes the PQ half
+/// with a different keypair's PQ half over the same message. Both
+/// halves are individually well-formed (the substitute is a real
+/// ML-DSA-65 signature over `msg`), but the commitment binds the
+/// ORIGINAL keypair's PQ verifying-key, so the recomputation tripps
+/// the strip-resistance arm. Independent of the LIVE ML-DSA verify —
+/// the commitment + the dual cryptographic verify are TWO independent
+/// fail-closed surfaces. would-FAIL if a future agent regresses the
+/// commitment to bind only one pubkey (the MR-7 hazard).
+#[test]
+fn tf2_cross_keypair_pq_half_substitute_fails_closed_via_commitment() {
+    let suite = SignatureSuite::v1_default();
+    let kp_alice = suite.generate_keypair();
+    let kp_eve = suite.generate_keypair();
+    let msg = b"keypair pubkey is bound into the NF-4 commitment";
+
+    let sig_alice = suite.sign(&kp_alice, msg);
+    let sig_eve = suite.sign(&kp_eve, msg);
+
+    // Forge: Alice's classical half + Eve's PQ half (both halves valid
+    // signatures over `msg` individually, but they bind two different
+    // PQ pubkeys via the commitment).
+    let forged = HybridSignature::splice_for_test(
+        sig_alice.classical_half_for_test(),
+        sig_eve.pq_half_for_test(),
+    );
+    let outcome = suite.verify(kp_alice.public(), msg, &forged);
+    assert!(
+        outcome.is_err(),
+        "cross-keypair PQ-half substitute MUST fail closed via the \
+         commitment-binding arm (the commitment binds the ORIGINAL \
+         keypair's PQ pubkey); got {outcome:?}. A future agent who \
+         binds only one pubkey into the commitment would silently \
+         accept this forgery — pim-18 SHAPE-trap."
+    );
+}
+
 /// The hybrid signature MUST NOT be a degenerate alias of the classical
 /// signature: a config that *claims* hybrid but whose ML-DSA-65 half is
 /// empty/zero MUST be rejected at construction or verify (no Ed25519-only

@@ -339,18 +339,30 @@ toml = { version = "0.8", default-features = false, features = ["parse"] }
 # Phase 3 (sync) — Atrium P2P transport. iroh wires at G16-A wave-6
 # canary; Loro wires at G16-B wave-6b.
 #
-# iroh: pinned at 0.98 minor + Dependabot fast-track per scope-real-10
-# (relay infrastructure availability for holepunch/relay-fallback CI
-# cells stabilizes alongside iroh's ecosystem maintenance cadence).
-# Pulled by `crates/benten-sync` only, behind the
-# `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` cfg-gate
-# per CLAUDE.md baked-in #17 native-only commitment.
+# iroh: Phase-4-Meta-Core G-CORE-2-FP-1 (2026-05-19) bumped 0.98 →
+# 1.0.0-rc.0 as the Ben-ratified closure of the G-CORE-2 ecosystem
+# fork (the iroh-base 0.98.0 `=`-pin on `ed25519-dalek 3.0.0-pre.6`
+# blocked `ml-dsa 0.1.0`'s `pkcs8 ^0.11` stable requirement). The
+# 1.0.0-rc.0 line picks up `ed25519-dalek 3.0.0-pre.7` (uses `ed25519
+# 3.0.0` + `pkcs8 0.11.0` stable), enables LIVE ML-DSA-65 verify in
+# `benten-crypto-suite`, and aligns the iroh version timeline with
+# the v1 public interface freeze at G-CORE-9. Dependabot fast-track
+# per scope-real-10 preserved at the minor granularity (relay
+# infrastructure availability for holepunch/relay-fallback CI cells
+# stabilizes alongside iroh's ecosystem maintenance cadence). Bonus:
+# closes RUSTSEC-2026-0119 + RUSTSEC-2026-0120 via the transitive
+# `hickory-resolver 0.26.0-beta.4 → 0.26.1` promotion + 5 RC→stable
+# crate-graph promotions (`sha2`, `ed25519`, `pkcs8`, `noq`, `noq-proto`).
+# Pulled by `crates/benten-sync` + (test-only) `crates/benten-engine`,
+# behind the `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
+# cfg-gate per CLAUDE.md baked-in #17 native-only commitment.
 # G16-A wave-6 canary lands transport core; G16-B wave-6b adds Loro;
 # G16-C/D add MST + handshake protocol body. The version pin lives at
-# the consumer crate's manifest (`crates/benten-sync/Cargo.toml`)
-# rather than this workspace.dependencies table because benten-sync
-# is the only consumer; promoting to workspace.dependencies happens
-# if/when a sibling crate also needs the dep.
+# the consumer crate's manifest (`crates/benten-sync/Cargo.toml` +
+# `crates/benten-engine/Cargo.toml`) rather than this
+# workspace.dependencies table because there's only one substantive
+# consumer; promoting to workspace.dependencies happens if/when a
+# third sibling needs the dep.
 # loro = "1"  — reserved for G16-B wave-6b; not yet pulled.
 
 # Phase 3 G14-A1 (identity) — Ed25519 + did:key + UCAN. The G14-A1 canary

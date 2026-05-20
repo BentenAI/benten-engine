@@ -1,12 +1,11 @@
 //! Signature seam — v1-beta hybrid Ed25519⊕ML-DSA-65 default surface
-//! (structurally landed; live ML-DSA-65 deferred per the Cargo.toml
-//! DISAGREE-WITH-EVIDENCE record); classical Ed25519 non-default
-//! downgrade arm (LIVE); typed-unsupported arm on unknown / reserved /
-//! ml-dsa-deferred codepoints.
+//! (LIVE end-to-end as of G-CORE-2-FP-1 / 2026-05-19 — the iroh 0.98 →
+//! 1.0.0-rc.0 bump closes the upstream ecosystem fork that previously
+//! gated the live ML-DSA-65 arm; classical Ed25519 non-default
+//! downgrade arm (LIVE); typed-unsupported arm on unknown / reserved
+//! codepoints.
 //!
-//! # NF-4 construction (RATIFIED — structurally documented here; live
-//! call-site enabled at the iroh-upstream-driven workspace dep-bump
-//! wave alongside G-CORE-3 #1301)
+//! # NF-4 construction (RATIFIED — both halves LIVE)
 //!
 //! The hybrid is built **concatenated / committing / strip-resistant**
 //! per `RATIFIED-pq-default-reframe-2026-05-19` §2 NF-4
@@ -32,33 +31,41 @@
 //!
 //! The commitment binds (a) both public-keys, (b) both signature halves,
 //! and (c) the message — so neither half can be stripped, truncated, or
-//! cross-message-substituted without the verify failing closed. This is
-//! the load-bearing safety property of the whole PQ-default reframe.
+//! cross-message-substituted without the verify failing closed. The
+//! commitment + the dual cryptographic verifies are **independent
+//! fail-closed surfaces**; both fire on adversarial inputs. This is the
+//! load-bearing safety property of the whole PQ-default reframe.
 //!
-//! # G-CORE-2 wave reality — hybrid arm typed-rejects
+//! # Hybrid arm behavior — both must verify, never silent fallback
 //!
-//! In THIS wave the hybrid sign/verify call sites return
-//! [`VerifyError::Unsupported`] / a typed-unsupported sign-time error
-//! because `ml-dsa = "0.1"` cannot be added to the workspace without
-//! triggering a `pkcs8 0.11.0-rc.10 → 0.11.0` resolver cascade that
-//! breaks the iroh-base 0.98.0 chain (which `=`-pins `ed25519-dalek
-//! 3.0.0-pre.6`). The fail-closed safety property is preserved by
-//! construction — hybrid attempts get a TYPED error, NEVER a silent
-//! classical fallback. The coordinated workspace dep-bump wave
-//! (alongside G-CORE-3 #1301) lights the live hybrid path.
+//! Hybrid `verify` returns `Ok(())` ONLY when BOTH the classical
+//! Ed25519 cryptographic verify AND the ML-DSA-65 cryptographic verify
+//! succeed against the same message and the commitment binding all the
+//! inputs matches. Returns a typed [`VerifyError`] otherwise — NEVER a
+//! silent single-half accept; NEVER a silent classical-only fallback;
+//! NEVER `Ok(())` after only one half's cryptographic verify.
 //!
-//! # No-hardcoded-sizes property
+//! # No-hardcoded-sizes property (CLAUDE.md baked-in #5)
 //!
 //! Every public surface reports its sizes dynamically via the
-//! codepoint-dispatch. Ed25519-shaped (32 B-key / 64 B-sig) assumptions
-//! are excluded by construction.
+//! codepoint-dispatch. ML-DSA-65 dimensions flow from upstream
+//! `ml_dsa` type-level constants ([`crate::sizes::ml_dsa_65_pubkey_len`]
+//! / [`crate::sizes::ml_dsa_65_sig_len`]) — NOT redefined. Ed25519
+//! dimensions flow from `ed25519_dalek::SIGNATURE_LENGTH`. The
+//! commitment is fixed at SHA3-256 output (32 B).
 
 use ed25519_dalek::{Signer as _, Verifier as _};
+use ml_dsa::signature::{Keypair as _, Signer as _, Verifier as _};
+use ml_dsa::{
+    EncodedSignature, EncodedVerifyingKey, Generate as _, KeySizeUser, MlDsa65,
+    Signature as MlDsaSig, SigningKey as MlDsaSigningKey, VerifyingKey as MlDsaVerifyingKey,
+};
 use rand_core::OsRng;
 use sha3::Digest as _;
 
 use crate::codepoint::SigCodepoint;
 use crate::error::UnsupportedAlgorithm;
+use crate::sizes::ml_dsa_65_sig_len;
 
 // Re-export so test files that `use benten_crypto_suite::sig::VerifyError`
 // (per TF-2 spec) find it under sig where the verify happens.
@@ -70,23 +77,13 @@ pub use crate::error::VerifyError;
 const ED25519_PUBLIC_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 const ED25519_SIG_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
-// ML-DSA-65 dimensions are sourced from FIPS 204 Category-3 (fixed,
-// algorithm-spec-defined). The constants here are FIPS-spec-named (NOT
-// Benten-redefined sizes per CLAUDE.md baked-in #5); they exist to
-// preserve the codepoint-dispatched size-reporting surface while the
-// live primitive is deferred. The TF-2 size-touching pins exercise
-// these via the [`crate::sizes::SyntheticVector`] substrate.
-const ML_DSA_65_PUBLIC_LEN: usize = 1952;
-const ML_DSA_65_SIG_LEN: usize = 3309;
-
 const COMMITMENT_LEN: usize = 32; // SHA3-256 output.
 
-#[allow(dead_code)]
 const HYBRID_DOMAIN_SEP: &[u8] = b"benten-crypto-suite/hybrid-ed25519-mldsa65/v1\0";
 
 /// Public configuration of a [`SignatureSuite`] — selects between the
-/// v1-beta hybrid default (structurally landed; live arm deferred) and
-/// the classical-only downgrade arm (LIVE).
+/// v1-beta hybrid default (LIVE) and the classical-only downgrade arm
+/// (LIVE).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SuiteConfig {
     codepoint: SigCodepoint,
@@ -94,9 +91,8 @@ pub struct SuiteConfig {
 
 impl SuiteConfig {
     /// The v1-beta DEFAULT — hybrid Ed25519⊕ML-DSA-65 (NF-4
-    /// concatenated/committing/strip-resistant). At G-CORE-2 the live
-    /// sign/verify call sites return typed-unsupported; the coordinated
-    /// workspace dep-bump wave lights them.
+    /// concatenated/committing/strip-resistant); BOTH halves
+    /// cryptographically verified; LIVE end-to-end.
     #[must_use]
     pub const fn v1_default() -> Self {
         Self {
@@ -131,12 +127,11 @@ impl SuiteConfig {
     }
 }
 
-/// Hybrid keypair — carries the classical half (always) + a placeholder
-/// for the PQ half (the live PQ keypair lights at the coordinated
-/// dep-bump wave; until then the hybrid SIGN path typed-rejects).
+/// Hybrid keypair — carries the classical half (always) + the PQ half
+/// when the suite is hybrid (LIVE end-to-end).
 pub struct Keypair {
     classical: ed25519_dalek::SigningKey,
-    is_hybrid: bool,
+    pq: Option<MlDsaSigningKey<MlDsa65>>,
 }
 
 impl Keypair {
@@ -145,7 +140,7 @@ impl Keypair {
     pub fn public(&self) -> PublicKey {
         PublicKey {
             classical: self.classical.verifying_key(),
-            is_hybrid: self.is_hybrid,
+            pq: self.pq.as_ref().map(|sk| sk.verifying_key()),
         }
     }
 }
@@ -154,7 +149,16 @@ impl Keypair {
 /// the suite is hybrid.
 pub struct PublicKey {
     classical: ed25519_dalek::VerifyingKey,
-    is_hybrid: bool,
+    pq: Option<MlDsaVerifyingKey<MlDsa65>>,
+}
+
+impl PublicKey {
+    /// `true` iff this public-key handle carries the PQ verifying-key
+    /// (i.e. came from a hybrid keypair).
+    #[must_use]
+    pub fn is_hybrid(&self) -> bool {
+        self.pq.is_some()
+    }
 }
 
 /// Hybrid signature — concatenated/committing/strip-resistant.
@@ -275,7 +279,7 @@ impl SignatureSuite {
         Self { config }
     }
 
-    /// v1-beta DEFAULT — hybrid Ed25519⊕ML-DSA-65.
+    /// v1-beta DEFAULT — hybrid Ed25519⊕ML-DSA-65 (LIVE end-to-end).
     #[must_use]
     pub const fn v1_default() -> Self {
         Self::from_config(SuiteConfig::v1_default())
@@ -308,11 +312,11 @@ impl SignatureSuite {
     /// Per-codepoint signature byte length — sum of the cryptographic
     /// halves (NOT including the commitment substrate). NOT a hardcoded
     /// `pub const`. Sources its constants from the upstream crate
-    /// constants + the FIPS-204 ML-DSA-65 fixed sig size.
+    /// constants via [`crate::sizes`].
     #[must_use]
     pub fn signature_byte_len_for(&self, codepoint: SigCodepoint) -> usize {
         match codepoint.raw() {
-            0x0001 => ED25519_SIG_LEN + ML_DSA_65_SIG_LEN,
+            0x0001 => ED25519_SIG_LEN + ml_dsa_65_sig_len(),
             0x0002 => ED25519_SIG_LEN,
             _ => 0,
         }
@@ -329,25 +333,29 @@ impl SignatureSuite {
     #[must_use]
     pub fn generate_keypair(&self) -> Keypair {
         let classical = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        Keypair {
-            classical,
-            is_hybrid: self.is_hybrid(),
-        }
+        let pq = if self.is_hybrid() {
+            // ML-DSA-65 key-gen via the `Generate::generate()` path
+            // (enabled by the `getrandom` feature; uses `SysRng`
+            // internally — sidesteps the rand_core 0.6/0.10 version
+            // skew between ed25519-dalek 2.x and ml-dsa 0.1's
+            // crypto-common 0.2.x).
+            Some(MlDsaSigningKey::<MlDsa65>::generate())
+        } else {
+            None
+        };
+        Keypair { classical, pq }
     }
 
     /// Sign a message under the configured suite.
     ///
-    /// **Hybrid arm: synthesizes an ML-DSA-65-dimensioned PQ half from
-    /// the keypair's classical seed + a hardcoded domain-separation
-    /// label (deterministic-but-not-cryptographic) so the wire
-    /// dimensions + commitment construction stay exercised end-to-end.
-    /// The synthesized PQ half is NOT a real ML-DSA signature — the
-    /// hybrid VERIFY path consequently typed-rejects the resulting
-    /// signature with a fail-closed typed-unsupported envelope.**
-    /// The coordinated workspace dep-bump wave (alongside G-CORE-3
-    /// #1301) swaps the synthesizer for the real `ml-dsa::sign` call.
+    /// **Hybrid arm (LIVE):** produces a real ML-DSA-65 signature via
+    /// the deterministic signing path + a real Ed25519 signature + the
+    /// NF-4 commitment binding both pubkeys + both sigs + the message.
+    /// Both halves cryptographically verify on `verify`.
     ///
-    /// Classical-only arm: produces a REAL Ed25519 signature.
+    /// Classical-only arm: produces a REAL Ed25519 signature; PQ half
+    /// empty; commitment empty (the construction degenerates to a plain
+    /// Ed25519 signature on the wire).
     #[must_use]
     pub fn sign(&self, kp: &Keypair, msg: &[u8]) -> HybridSignature {
         let classical_sig = kp.classical.sign(msg);
@@ -362,15 +370,18 @@ impl SignatureSuite {
             };
         }
 
-        // Hybrid arm — synthesize PQ-dimensioned bytes from the keypair
-        // seed (so the SIZE-touching surfaces stay exercised end-to-end).
-        // The synthesized bytes are domain-separated from any real
-        // ML-DSA signature so they fail-closed on real-verify if/when
-        // the live arm lights up. Until then the hybrid VERIFY path
-        // typed-rejects.
-        let pq_bytes = synthesize_pq_bytes(&kp.classical, msg);
+        // Hybrid arm — real ML-DSA-65 sign + commitment binding.
+        let pq_sk = kp
+            .pq
+            .as_ref()
+            .expect("hybrid keypair must carry a PQ signing key (invariant of generate_keypair)");
+        let pq_vk = pq_sk.verifying_key();
+        let pq_sig: MlDsaSig<MlDsa65> = pq_sk.sign(msg);
+        let pq_bytes = pq_sig.encode().as_slice().to_vec();
+
         let commitment = compute_commitment(
             &kp.classical.verifying_key(),
+            &pq_vk,
             &classical_bytes,
             &pq_bytes,
             msg,
@@ -386,13 +397,19 @@ impl SignatureSuite {
 
     /// Verify a signature under the configured suite.
     ///
-    /// - Hybrid: **typed-rejects** in this wave (the live ML-DSA-65
-    ///   verify path is deferred to the iroh-upstream-driven workspace
-    ///   dep-bump wave). Strip / substitution / tamper attacks all
-    ///   surface typed errors — never `Ok(())`.
+    /// - **Hybrid (LIVE):** returns `Ok(())` ONLY when BOTH the
+    ///   classical Ed25519 cryptographic verify AND the ML-DSA-65
+    ///   cryptographic verify succeed against the same message AND the
+    ///   NF-4 commitment (over `domain_sep || pub_classical || pub_pq
+    ///   || classical_sig || pq_sig || msg`) recomputes equal to the
+    ///   commitment that travelled with the signature. Returns a typed
+    ///   [`VerifyError`] otherwise — strip / substitution / tamper /
+    ///   half-missing / commitment-mismatch attacks all surface typed
+    ///   errors. NEVER a silent single-half accept. NEVER `Ok(())`
+    ///   after only one cryptographic verify.
     /// - Classical-only suite handed a hybrid-codepoint sig: surfaces
     ///   [`VerifyError::CodepointMismatch`] (silent-downgrade defense).
-    /// - Classical-only: real Ed25519 verify.
+    /// - Classical-only suite + classical-only sig: real Ed25519 verify.
     pub fn verify(
         &self,
         pk: PublicKey,
@@ -426,11 +443,8 @@ impl SignatureSuite {
                 .map_err(|_| VerifyError::ClassicalVerifyFailed);
         }
 
-        // Hybrid verify — REQUIRES BOTH halves + a matching commitment.
-        // The structural checks (half-emptiness / commitment presence /
-        // commitment recomputation) still fire — so strip-resistance pins
-        // still hit fail-closed surfaces. Only the cryptographic verify
-        // of the PQ half is deferred.
+        // Hybrid verify — REQUIRES BOTH halves + a matching commitment
+        // + BOTH cryptographic verifies succeed.
         if sig.classical.is_empty() {
             return Err(VerifyError::HybridHalfMissing("classical half is empty"));
         }
@@ -442,23 +456,22 @@ impl SignatureSuite {
                 "commitment is missing (would silently allow cross-message splice)",
             ));
         }
-        if !pk.is_hybrid {
-            return Err(VerifyError::HybridHalfMissing(
-                "hybrid public key missing PQ half (caller used non-hybrid keypair)",
-            ));
-        }
+        let pq_vk = pk.pq.as_ref().ok_or(VerifyError::HybridHalfMissing(
+            "hybrid public key missing PQ half (caller used non-hybrid keypair)",
+        ))?;
 
-        // Recompute the commitment over the FULL inputs; mismatch =
-        // strip/substitute attack. This guards every cross-message
-        // splice / tamper attack pin in TF-2.
-        let commitment_expected = compute_commitment(&pk.classical, &sig.classical, &sig.pq, msg);
+        // Recompute the commitment over the FULL inputs (binds both
+        // pubkeys + both sigs + msg per NF-4); mismatch = strip /
+        // substitute / cross-message-splice attack.
+        let commitment_expected =
+            compute_commitment(&pk.classical, pq_vk, &sig.classical, &sig.pq, msg);
         if commitment_expected != sig.commitment {
             return Err(VerifyError::StripResistanceViolated(
-                "commitment mismatch — either half was substituted or the message differs",
+                "commitment mismatch — either half was substituted, a pubkey was substituted, or the message differs",
             ));
         }
 
-        // Verify the classical half.
+        // Cryptographically verify the classical Ed25519 half.
         if sig.classical.len() != ED25519_SIG_LEN {
             return Err(VerifyError::MalformedSignature("classical sig length"));
         }
@@ -472,58 +485,51 @@ impl SignatureSuite {
             .verify(msg, &classical_sig)
             .map_err(|_| VerifyError::ClassicalVerifyFailed)?;
 
-        // PQ verify — DEFERRED at G-CORE-2: the live ML-DSA-65 verify
-        // lights at the coordinated workspace dep-bump wave alongside
-        // G-CORE-3 #1301. Typed-rejects per the fail-closed contract;
-        // NEVER a silent classical-only accept.
+        // Cryptographically verify the PQ ML-DSA-65 half (LIVE — wired
+        // at G-CORE-2-FP-1 2026-05-19 after the iroh 1.0.0-rc.0 bump
+        // closed the upstream ecosystem fork). `Signature::decode` is
+        // size-checked at type-level (the encoded buffer must be exactly
+        // ML-DSA-65 signature size); a malformed/truncated PQ half
+        // surfaces `VerifyError::MalformedSignature` before ever
+        // reaching the cryptographic check.
+        if sig.pq.len() != ml_dsa_65_sig_len() {
+            return Err(VerifyError::MalformedSignature("pq sig length"));
+        }
+        let encoded_pq: EncodedSignature<MlDsa65> =
+            EncodedSignature::<MlDsa65>::try_from(sig.pq.as_slice())
+                .map_err(|_| VerifyError::MalformedSignature("pq sig encoding"))?;
+        let pq_sig = MlDsaSig::<MlDsa65>::decode(&encoded_pq).ok_or(
+            VerifyError::MalformedSignature("pq sig decode (algorithm-internal shape violation)"),
+        )?;
+        pq_vk
+            .verify(msg, &pq_sig)
+            .map_err(|_| VerifyError::PqVerifyFailed)?;
+
         Ok(())
     }
 }
 
-/// Synthesize PQ-dimensioned bytes from the classical seed + msg.
-/// **NOT a real ML-DSA-65 signature** — it preserves the wire
-/// dimensions + commitment input so the size-touching / strip-resistance
-/// pins stay exercised. The deferred-live wave swaps this for
-/// `ml_dsa::SigningKey::<MlDsa65>::sign(msg)`.
-fn synthesize_pq_bytes(sk: &ed25519_dalek::SigningKey, msg: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(ML_DSA_65_SIG_LEN);
-    let seed = sk.to_bytes();
-    // Domain-separated SHAKE-style stream — repeated SHA3-256 over
-    // (seed || msg || counter) until ML_DSA_65_SIG_LEN bytes filled.
-    let mut counter: u32 = 0;
-    while out.len() < ML_DSA_65_SIG_LEN {
-        let mut hasher = sha3::Sha3_256::new();
-        hasher.update(b"benten-crypto-suite/synthetic-mldsa65-deferred/v1\0");
-        hasher.update(&seed);
-        hasher.update(msg);
-        hasher.update(&counter.to_le_bytes());
-        out.extend_from_slice(&hasher.finalize());
-        counter += 1;
-    }
-    out.truncate(ML_DSA_65_SIG_LEN);
-    out
-}
-
 /// Compute the NF-4 commitment binding both pubkeys + both sigs + msg.
 ///
-/// Sources `pub_pq` from the classical seed (deferred-arm shape — the
-/// live arm sources it from the real ML-DSA-65 verifying key); the
-/// commitment shape is preserved so all strip-resistance pins still hit
-/// the fail-closed surface.
+/// Live arm — `pq_pk` is the real ML-DSA-65 verifying key. The
+/// commitment is structurally strip-resistant: any cross-message splice
+/// or pubkey substitution mutates a binding input and trips the
+/// recomputation-mismatch arm on `verify`.
 fn compute_commitment(
     classical_pk: &ed25519_dalek::VerifyingKey,
+    pq_pk: &MlDsaVerifyingKey<MlDsa65>,
     classical_sig: &[u8],
     pq_sig: &[u8],
     msg: &[u8],
 ) -> Vec<u8> {
+    let pq_pk_encoded: EncodedVerifyingKey<MlDsa65> = pq_pk.encode();
+    let pq_pk_bytes = pq_pk_encoded.as_slice();
+    debug_assert_eq!(pq_pk_bytes.len(), <MlDsaVerifyingKey<MlDsa65>>::key_size());
+
     let mut hasher = sha3::Sha3_256::new();
     hasher.update(HYBRID_DOMAIN_SEP);
     hasher.update(classical_pk.as_bytes());
-    // Live arm binds the PQ verifying key; deferred arm binds the
-    // classical pubkey as the placeholder (the PQ half's bytes are
-    // already in the input so any tamper is caught by the
-    // recomputation-mismatch arm).
-    hasher.update(classical_pk.as_bytes());
+    hasher.update(pq_pk_bytes);
     hasher.update(classical_sig);
     hasher.update(pq_sig);
     hasher.update(msg);
@@ -538,11 +544,4 @@ fn compute_commitment(
 #[doc(hidden)]
 pub const fn ed25519_public_len() -> usize {
     ED25519_PUBLIC_LEN
-}
-
-/// Re-export the ML-DSA-65 dimensions for downstream introspection. NOT
-/// public; the production surface reports sizes via the dispatch.
-#[doc(hidden)]
-pub const fn ml_dsa_65_sig_len() -> usize {
-    ML_DSA_65_SIG_LEN
 }

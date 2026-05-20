@@ -49,6 +49,32 @@ impl DischargeDisposition {
 }
 
 /// The `#835` discharge record.
+///
+/// # Compile-time witness (pim-18 SHAPE-not-SUBSTANCE substitution)
+///
+/// The doctest below is `compile_fail` — it attempts to call
+/// `benten_id::did::Did::from_string_unchecked` from outside the
+/// `benten-id` crate (this `benten-crypto-suite` crate is one such
+/// outside caller). Since the discharge made that function
+/// `pub(crate)`, the call MUST fail to compile. If a future
+/// maintainer reverts the visibility flip in `benten-id/src/did.rs`
+/// (changing `pub(crate)` back to `pub`), this doctest would START
+/// compiling — and `compile_fail` would then FAIL the test, flagging
+/// the regression at compile time, NOT at the level of a hardcoded
+/// sentinel constant.
+///
+/// (The classical hardcoded-sentinel approach — a `pub const fn
+/// executed_disposition() -> CratePrivate` — was the pim-18 SHAPE-trap
+/// the original R5 mini-review surfaced; this doctest is the
+/// substantive replacement that the test wrapper alone could not be.)
+///
+/// ```compile_fail
+/// // `from_string_unchecked` is `pub(crate)` in `benten-id` per the
+/// // #835 discharge — calling it from outside that crate MUST NOT
+/// // compile. If this stops failing to compile, the discharge has
+/// // been silently reverted.
+/// let _ = benten_id::did::Did::from_string_unchecked(String::from("did:key:placeholder"));
+/// ```
 pub struct Issue835Discharge;
 
 impl Issue835Discharge {
