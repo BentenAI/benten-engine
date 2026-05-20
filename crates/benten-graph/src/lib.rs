@@ -613,7 +613,12 @@ pub enum GraphError {
     /// does NOT implement per-DID partition isolation. At HEAD only
     /// [`crate::redb_backend::RedbBackend`] enforces the C1 cross-DID
     /// non-leak invariant via the per-DID partition keyspace +
-    /// `ScopedView`; [`crate::browser_backend::BrowserBackend`]
+    /// `ScopedView`; `BrowserBackend` (cite as plain-backtick not
+    /// path-style bracketed — `browser_backend` is feature-gated under
+    /// the `browser-backend` cargo feature so the path-style cite
+    /// `[\`crate::browser_backend::BrowserBackend\`]` fails
+    /// `rustdoc::broken-intra-doc-links` under default-features
+    /// compilation per memory `feedback_rustdoc_path_style_cite_brackets`)
     /// (CLAUDE.md baked-in #17 shape-b/c thin-client cache) and any
     /// other non-partitioned backend fail CLOSED on `Some(namespace_did)`
     /// with this variant rather than silently dropping the scope and
