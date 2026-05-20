@@ -1054,6 +1054,25 @@ pub enum ErrorCode {
     /// invalid, cursor-attach failed, or the underlying subscription
     /// was rejected. Maps to `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE`.
     MaterializerSubscribeSeamFailure,
+    // ----- Phase 4-Meta-Core G-CORE-1 — #989 storage-partition seam (1 code) -----
+    /// A `GraphBackend::put_node_with_context` call carried a
+    /// `WriteContext::namespace_did = Some(_)` against a backend that
+    /// does NOT implement per-DID partition isolation. Closes the
+    /// G-CORE-1 fix-pass `g-core-1-mr-1` MAJOR: the §1.A.FROZEN canary
+    /// shape (`WriteContext::namespace_did`) is uniform across every
+    /// `GraphBackend` impl, but at HEAD only `RedbBackend` enforces the
+    /// C1 cross-DID non-leak invariant via the per-DID partition
+    /// keyspace + `ScopedView`. The `BrowserBackend` (CLAUDE.md
+    /// baked-in #17 shape-b/c thin-client cache) and any other backend
+    /// that has not implemented the partition surface fail CLOSED on
+    /// `Some(namespace_did)` rather than silently dropping the
+    /// scope and landing the write in the un-namespaced legacy
+    /// keyspace — which would break the C1 invariant invisibly. A
+    /// future wave that implements the in-RAM partition for
+    /// `BrowserBackend` replaces this typed-reject with the partitioned
+    /// write path; the typed-reject is the defense in the interim. Maps
+    /// to `E_NAMESPACED_WRITE_UNSUPPORTED`.
+    NamespacedWriteUnsupported,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1351,6 +1370,7 @@ impl ErrorCode {
             ErrorCode::MaterializerCapDenied => "E_MATERIALIZER_CAP_DENIED",
             ErrorCode::MaterializerSchemaMismatch => "E_MATERIALIZER_SCHEMA_MISMATCH",
             ErrorCode::MaterializerSubscribeSeamFailure => "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
+            ErrorCode::NamespacedWriteUnsupported => "E_NAMESPACED_WRITE_UNSUPPORTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1766,6 +1786,16 @@ impl ErrorCode {
             ErrorCode::MaterializerSchemaMismatch
             | ErrorCode::MaterializerSubscribeSeamFailure => None,
 
+            // Phase 4-Meta-Core G-CORE-1 #989 storage-partition seam:
+            // a typed-reject for an unsupported namespaced-write surface
+            // is a structural shape rejection at the storage boundary
+            // (a "wrong backend for this write" condition, not a
+            // capability denial and not a primitive-edge routing
+            // disposition). Mirrors the routing posture of the
+            // materializer-schema-mismatch / subscribe-seam-failure
+            // pre-fanout structural rejections.
+            ErrorCode::NamespacedWriteUnsupported => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2045,6 +2075,7 @@ impl core::str::FromStr for ErrorCode {
             "E_MATERIALIZER_CAP_DENIED" => ErrorCode::MaterializerCapDenied,
             "E_MATERIALIZER_SCHEMA_MISMATCH" => ErrorCode::MaterializerSchemaMismatch,
             "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE" => ErrorCode::MaterializerSubscribeSeamFailure,
+            "E_NAMESPACED_WRITE_UNSUPPORTED" => ErrorCode::NamespacedWriteUnsupported,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

@@ -165,6 +165,10 @@ fn snapshot_blob_backend_write_path_returns_read_only_error() {
         label: String::new(),
         is_privileged: true,
         authority: WriteAuthority::EnginePrivileged,
+        // G-CORE-1 #989: snapshot-blob backend exercises the legacy
+        // un-namespaced path; the per-DID storage-partition seam is the
+        // redb path's concern.
+        namespace_did: None,
     };
     let priv_err = <SnapshotBlobBackend as GraphBackend>::put_node_with_context(
         &backend,
