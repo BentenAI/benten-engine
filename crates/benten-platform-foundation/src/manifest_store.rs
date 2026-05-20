@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn install_then_load_verified_round_trips() {
         let user = Keypair::generate();
-        let plugin_did = Did::from_string_unchecked("did:key:zPlugin".to_string());
+        let plugin_did = Did::from_string_for_test_fixture("did:key:zPlugin".to_string());
         let record = signed_record(
             &user,
             plugin_did.clone(),
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn load_verified_rejects_post_install_byte_mutation_with_drift_notification() {
         let user = Keypair::generate();
-        let plugin_did = Did::from_string_unchecked("did:key:zPlugin".to_string());
+        let plugin_did = Did::from_string_for_test_fixture("did:key:zPlugin".to_string());
         let original = signed_record(
             &user,
             plugin_did.clone(),

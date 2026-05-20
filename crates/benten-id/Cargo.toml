@@ -62,8 +62,11 @@ benten-core = { path = "../benten-core" }
 # arch-r1-10 forbidden set; pure-data crate at the bottom of the
 # workspace dep graph.
 benten-errors = { workspace = true }
-# Ed25519 signing + verifying (plan §3 G14-A1 row).
-ed25519-dalek = { workspace = true }
+# Ed25519 signing + verifying (plan §3 G14-A1 row). Routed through
+# `benten-crypto-suite::primitives::ed25519_dalek` per G-CORE-2 (#1300) —
+# the integration crate is the ONLY workspace direct-dep on ed25519-dalek
+# (crypto-agility-contract:6 — `crypto-agility-contract:6`).
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 # Secret-bytes hygiene (crypto-blocker-1 BLOCKER): `Zeroize` +
 # `ZeroizeOnDrop` derives on the `SecretKey` newtype + redacted Debug.
 # `secrecy` is intentionally NOT pulled in — the redacted Debug + no-Clone

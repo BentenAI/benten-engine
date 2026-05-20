@@ -189,7 +189,7 @@ fn did_key_rejects_wrong_multicodec_per_w3c_spec() {
     payload.extend_from_slice(&[0x00, 0x00]); // wrong multicodec
     payload.extend_from_slice(&[0xab; 32]); // arbitrary 32-byte body
     let bad_body = bs58::encode(&payload).into_string();
-    let bad_did = Did::from_string_unchecked(format!("did:key:z{bad_body}"));
+    let bad_did = Did::from_string_for_test_fixture(format!("did:key:z{bad_body}"));
 
     let err = bad_did
         .resolve()

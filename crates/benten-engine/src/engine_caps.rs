@@ -512,7 +512,7 @@ impl<'eng> EngineCapsHandle<'eng> {
                 false
             }
         }
-        let audience = Did::from_string_unchecked(plugin_did.to_string());
+        let audience = Did::from_string_for_test_fixture(plugin_did.to_string());
         if check_delegation_within_envelope(
             resolved_scope.as_str(),
             &audience,

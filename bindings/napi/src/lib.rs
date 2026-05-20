@@ -769,7 +769,7 @@ mod napi_surface {
             // (P-II) — NOT minted in this single-crate lane.
             {
                 use benten_id::did::Did;
-                let candidate = Did::from_string_unchecked(plugin_did.clone());
+                let candidate = Did::from_string_for_test_fixture(plugin_did.clone());
                 candidate.resolve().map_err(|e| {
                     napi::Error::new(
                         napi::Status::InvalidArg,
@@ -1707,7 +1707,7 @@ mod napi_surface {
                 )
             })?;
 
-            let audience = Did::from_string_unchecked(engine_audience_did.clone());
+            let audience = Did::from_string_for_test_fixture(engine_audience_did.clone());
             audience.resolve().map_err(|e| {
                 napi::Error::new(
                     Status::InvalidArg,

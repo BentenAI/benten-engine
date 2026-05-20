@@ -43,7 +43,7 @@
 //! `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME` per
 //! `crates/benten-id/tests/device_attestation.rs::browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time`.
 
-use ed25519_dalek::{Signature, Verifier};
+use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Verifier};
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
@@ -158,12 +158,12 @@ pub struct DeviceAttestation {
 impl DeviceAttestation {
     /// Borrow the device-DID.
     pub fn device_did(&self) -> Did {
-        Did::from_string_unchecked(self.device_did.clone())
+        Did::from_string_for_test_fixture(self.device_did.clone())
     }
 
     /// Borrow the parent-DID.
     pub fn parent_did(&self) -> Did {
-        Did::from_string_unchecked(self.parent_did.clone())
+        Did::from_string_for_test_fixture(self.parent_did.clone())
     }
 
     /// Borrow the envelope.

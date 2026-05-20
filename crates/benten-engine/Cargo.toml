@@ -162,7 +162,10 @@ benten-id = { path = "../benten-id" }
 # wave-6b-fp surface can be groutable. Native-only (with the rest of
 # this section) per the same `engine_sync.rs` cfg-gating that scopes
 # the Atrium surface to full peers.
-ed25519-dalek = { workspace = true }
+# Per G-CORE-2 (#1300): ed25519-dalek is routed through the integration
+# crate `benten-crypto-suite::primitives::ed25519_dalek` (the ONLY
+# workspace direct-dep on the primitive lives in benten-crypto-suite).
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 subtle = { workspace = true }
 getrandom = { workspace = true }
 # Phase-3 G21-T1 — `typed_call_dispatch::build_seed_envelope` constructs

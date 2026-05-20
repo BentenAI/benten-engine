@@ -467,7 +467,7 @@ fn r6fp_a_sec_r6r1_8_shares_target_plugin_author_variant_removed() {
     // Would-FAIL if: SharesTarget::PluginAuthor were re-added without
     // implementing the resolver-lookup wiring (per the doc-comment).
     let target_a = SharesTarget::Any;
-    let target_b = SharesTarget::PluginDid(Did::from_string_unchecked(
+    let target_b = SharesTarget::PluginDid(Did::from_string_for_test_fixture(
         "did:key:z6MkSharesTargetSet".to_string(),
     ));
 

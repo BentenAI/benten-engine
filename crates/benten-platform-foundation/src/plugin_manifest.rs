@@ -14,9 +14,9 @@
 //! See `docs/PLUGIN-MANIFEST.md` for the engineer-facing reference.
 
 use benten_core::{Cid, OperationNode, PrimitiveKind, Subgraph, Value};
+use benten_crypto_suite::primitives::ed25519_dalek::Verifier;
 use benten_errors::ErrorCode;
 use benten_id::did::Did;
-use ed25519_dalek::Verifier;
 use serde::{Deserialize, Serialize};
 
 // =====================================================================
@@ -174,7 +174,8 @@ impl PluginManifest {
             .as_slice()
             .try_into()
             .map_err(|_| ErrorCode::PluginContentPeerSignatureInvalid)?;
-        let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        let signature =
+            benten_crypto_suite::primitives::ed25519_dalek::Signature::from_bytes(&sig_bytes);
         let msg = self.signing_payload();
         pubkey
             .as_verifying_key()
@@ -601,7 +602,8 @@ impl InstallRecord {
             .as_slice()
             .try_into()
             .map_err(|_| ErrorCode::PluginInstallRecordUserSignatureInvalid)?;
-        let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        let signature =
+            benten_crypto_suite::primitives::ed25519_dalek::Signature::from_bytes(&sig_bytes);
         pubkey
             .as_verifying_key()
             .verify(&self.signing_payload(), &signature)

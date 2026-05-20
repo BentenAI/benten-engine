@@ -71,15 +71,15 @@ impl UserDidRegistry for UserRegistry {
 }
 
 fn stub_user_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkUser".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkUser".to_string())
 }
 
 fn stub_plugin_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPlugin".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPlugin".to_string())
 }
 
 fn stub_peer_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPeer".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPeer".to_string())
 }
 
 /// LOAD-BEARING per r4-triage §2 r4-tc-10. CLAUDE.md #18 clause-(a)
@@ -134,6 +134,7 @@ fn manifest_envelope_chain_validation_requires_user_root_anchor() {
 /// from the test crate. Confirms upstream dep graph intact.
 #[test]
 fn chain_validation_imports_resolve_compile_witness() {
-    let user_did = benten_id::did::Did::from_string_unchecked("did:key:z6MkUser".to_string());
+    let user_did =
+        benten_id::did::Did::from_string_for_test_fixture("did:key:z6MkUser".to_string());
     let _: &benten_id::did::Did = &user_did;
 }

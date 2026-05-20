@@ -37,7 +37,7 @@ fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
     PluginManifest {
         plugin_name: plugin_name.to_string(),
         content_cid: cid,
-        peer_did: Did::from_string_unchecked("did:key:zAuthor".to_string()),
+        peer_did: Did::from_string_for_test_fixture("did:key:zAuthor".to_string()),
         peer_signature: vec![0u8; 64],
         requires: vec![CapRequirement::new("store:notes:read")],
         shares: SharesPolicy {
@@ -104,7 +104,7 @@ fn uninstall_cascade_revokes_user_grants_with_audience_equals_plugin_did() {
 #[test]
 fn uninstall_cascade_revokes_plugin_did_downstream_ucan_delegations() {
     let plugin_a = stub_plugin_did();
-    let plugin_b = Did::from_string_unchecked("did:key:zPluginB".to_string());
+    let plugin_b = Did::from_string_for_test_fixture("did:key:zPluginB".to_string());
 
     let mut library = PluginLibrary::new();
     let cid = install_plugin_a(&mut library, plugin_a.clone());

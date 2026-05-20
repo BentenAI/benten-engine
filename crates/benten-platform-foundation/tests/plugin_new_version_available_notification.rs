@@ -32,7 +32,7 @@ fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
     PluginManifest {
         plugin_name: plugin_name.to_string(),
         content_cid: cid,
-        peer_did: Did::from_string_unchecked("did:key:zAuthor".to_string()),
+        peer_did: Did::from_string_for_test_fixture("did:key:zAuthor".to_string()),
         peer_signature: vec![0u8; 64],
         requires: vec![CapRequirement::new("store:notes:read")],
         shares: SharesPolicy {
@@ -79,7 +79,7 @@ fn discovering_newer_version_in_atrium_surfaces_new_version_available_event_end_
     library.insert(LibraryEntry {
         manifest_cid: v1,
         manifest: fake_manifest("my-plugin", v1),
-        plugin_did: Did::from_string_unchecked("did:key:zPluginV1".to_string()),
+        plugin_did: Did::from_string_for_test_fixture("did:key:zPluginV1".to_string()),
         installed_at_nanos: 1,
     });
 

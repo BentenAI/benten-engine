@@ -997,7 +997,7 @@ mod tests {
     use benten_id::did::Did;
 
     fn fake_did(suffix: &str) -> Did {
-        Did::from_string_unchecked(format!("did:key:z{suffix}"))
+        Did::from_string_for_test_fixture(format!("did:key:z{suffix}"))
     }
 
     fn fake_cid(b: u8) -> Cid {

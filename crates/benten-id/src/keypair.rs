@@ -30,9 +30,9 @@
 
 use core::fmt;
 
-pub use ed25519_dalek::Signature;
+pub use benten_crypto_suite::primitives::ed25519_dalek::Signature;
 
-use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+use benten_crypto_suite::primitives::ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -143,11 +143,15 @@ impl PublicKey {
     }
 
     /// Verify a signature against this public key.
-    pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), ed25519_dalek::SignatureError> {
+    pub fn verify(
+        &self,
+        msg: &[u8],
+        sig: &Signature,
+    ) -> Result<(), benten_crypto_suite::primitives::ed25519_dalek::SignatureError> {
         self.inner.verify(msg, sig)
     }
 
-    /// Borrow the underlying `ed25519_dalek::VerifyingKey` for
+    /// Borrow the underlying `benten_crypto_suite::primitives::ed25519_dalek::VerifyingKey` for
     /// downstream interop.
     pub fn as_verifying_key(&self) -> &VerifyingKey {
         &self.inner

@@ -348,6 +348,22 @@ dependencies = [
 [[package]]
 name = "benten-crypto-suite"
 version = "0.1.0"
+dependencies = [
+ "blake3",
+ "ed25519 3.0.0-rc.4",
+ "ed25519-dalek 2.2.0",
+ "rand_core 0.6.4",
+ "redb",
+ "serde",
+ "serde_bytes",
+ "serde_ipld_dagcbor",
+ "sha2 0.10.9",
+ "sha3",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.18",
+ "zeroize",
+]
 
 [[package]]
 name = "benten-dev"
@@ -377,6 +393,7 @@ version = "0.1.0"
 dependencies = [
  "benten-caps",
  "benten-core",
+ "benten-crypto-suite",
  "benten-errors",
  "benten-eval",
  "benten-graph",
@@ -388,7 +405,6 @@ dependencies = [
  "bs58",
  "criterion",
  "data-encoding",
- "ed25519-dalek 2.2.0",
  "getrandom 0.2.17",
  "iroh",
  "proptest",
@@ -458,9 +474,9 @@ name = "benten-id"
 version = "0.1.0"
 dependencies = [
  "benten-core",
+ "benten-crypto-suite",
  "benten-errors",
  "bs58",
- "ed25519-dalek 2.2.0",
  "getrandom 0.2.17",
  "hex",
  "proptest",
@@ -520,11 +536,11 @@ version = "0.1.0"
 dependencies = [
  "benten-caps",
  "benten-core",
+ "benten-crypto-suite",
  "benten-engine",
  "benten-errors",
  "benten-id",
  "blake3",
- "ed25519-dalek 2.2.0",
  "proptest",
  "serde",
  "serde_ipld_dagcbor",
@@ -3603,6 +3619,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "keccak"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
+dependencies = [
+ "cpufeatures 0.2.17",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6139,6 +6164,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
  "digest 0.11.3",
+]
+
+[[package]]
+name = "sha3"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77fd7028345d415a4034cf8777cd4f8ab1851274233b45f84e3d955502d93874"
+dependencies = [
+ "digest 0.10.7",
+ "keccak",
 ]
 
 [[package]]

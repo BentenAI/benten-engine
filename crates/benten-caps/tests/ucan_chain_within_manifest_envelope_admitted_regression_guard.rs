@@ -66,9 +66,9 @@ fn legitimate_chain_within_manifest_envelope_admitted_no_false_positive() {
     //
     // Would-FAIL-IF-OVER-REJECT: a regression that adds envelope check
     // but breaks valid chains.
-    let user = Did::from_string_unchecked("did:key:z6MkRegGuardUser".into());
-    let plugin_a = Did::from_string_unchecked("did:key:z6MkRegGuardA".into());
-    let plugin_b = Did::from_string_unchecked("did:key:z6MkRegGuardB".into());
+    let user = Did::from_string_for_test_fixture("did:key:z6MkRegGuardUser".into());
+    let plugin_a = Did::from_string_for_test_fixture("did:key:z6MkRegGuardA".into());
+    let plugin_b = Did::from_string_for_test_fixture("did:key:z6MkRegGuardB".into());
 
     let chain = vec![
         DelegationStep {

@@ -1,5 +1,5 @@
 //! R4-FP-3 RED-PHASE pin: `docs/ARCHITECTURE.md` crate-count drift
-//! detector post-Phase-4-Foundation (12 crates).
+//! detector post-Phase-4-Foundation (13 crates).
 //!
 //! ## Pin sources
 //!
@@ -14,7 +14,7 @@
 //!
 //! Per `r1-triage.md` ratification #1: Phase 4-Foundation adds two
 //! crates (`benten-platform-foundation` 11th + `benten-renderer-tauri`
-//! 12th). `docs/ARCHITECTURE.md` must reflect the 12-crate count in
+//! 12th). `docs/ARCHITECTURE.md` must reflect the 13-crate count in
 //! the section header AND list the new crates by name.
 //!
 //! State at HEAD: ARCHITECTURE.md already retensed to "Twelve crates
@@ -42,7 +42,7 @@ fn workspace_root() -> PathBuf {
 #[test]
 #[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-A wave-10 un-ignores. \
     Pin source: r2-test-landscape.md §2.12 row 1 + exit-criterion 10. ARCHITECTURE.md \
-    12-crate retense regression-guard. Companion to phase-3-era ten-crates pin per \
+    13-crate retense regression-guard. Companion to phase-3-era ten-crates pin per \
     `architecture_md_10_crate_count_post_phase_3_canaries.rs`."]
 fn architecture_md_lists_correct_crate_count_post_phase_4_foundation() {
     let root = workspace_root();
@@ -61,13 +61,13 @@ fn architecture_md_lists_correct_crate_count_post_phase_4_foundation() {
     // OR remain only in historical context. After G26-A retense the
     // canonical phrasing is "Twelve crates".
     let says_twelve = lower.contains("twelve crates")
-        || lower.contains("## 12 crates")
+        || lower.contains("## 13 crates")
         || lower.contains("# twelve");
     assert!(
         says_twelve,
-        "docs/ARCHITECTURE.md MUST state 'Twelve crates' / '## 12 crates' post-Phase-4-Foundation \
+        "docs/ARCHITECTURE.md MUST state 'Twelve crates' / '## 13 crates' post-Phase-4-Foundation \
          retense. After benten-platform-foundation + benten-renderer-tauri join the workspace, \
-         the section header MUST reflect the 12-crate shape (paired with cite-drift-detector \
+         the section header MUST reflect the 13-crate shape (paired with cite-drift-detector \
          source-of-truth)."
     );
 
@@ -100,12 +100,12 @@ fn architecture_md_lists_correct_crate_count_post_phase_4_foundation() {
     assert!(
         pf_dir.is_dir(),
         "crates/benten-platform-foundation/ MUST exist on disk — without it the \
-         12-crate phrasing in ARCHITECTURE.md is aspirational (the regression \
+         13-crate phrasing in ARCHITECTURE.md is aspirational (the regression \
          Phase-1 R7 audit caught repeatedly)."
     );
     assert!(
         rt_dir.is_dir(),
         "crates/benten-renderer-tauri/ MUST exist on disk — without it the \
-         12-crate phrasing is aspirational."
+         13-crate phrasing is aspirational."
     );
 }

@@ -41,7 +41,8 @@ fn private_namespace_cap_rejects_cross_plugin_delegation_even_with_shares_any() 
     // consultation. Would-FAIL if the rule check ordered policy
     // BEFORE the private-namespace short-circuit.
     let owner_did = stub_plugin_did();
-    let target = benten_id::did::Did::from_string_unchecked("did:key:z6MkOtherPlugin".to_string());
+    let target =
+        benten_id::did::Did::from_string_for_test_fixture("did:key:z6MkOtherPlugin".to_string());
 
     // Manifest declares shares: Any for a private:<owner_did>:* cap.
     let mut m = minimal_manifest();

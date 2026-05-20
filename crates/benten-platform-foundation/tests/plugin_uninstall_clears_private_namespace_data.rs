@@ -30,7 +30,7 @@ fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
     PluginManifest {
         plugin_name: plugin_name.to_string(),
         content_cid: cid,
-        peer_did: Did::from_string_unchecked("did:key:zAuthor".to_string()),
+        peer_did: Did::from_string_for_test_fixture("did:key:zAuthor".to_string()),
         peer_signature: vec![0u8; 64],
         requires: vec![CapRequirement::new("store:notes:read")],
         shares: SharesPolicy {
@@ -48,7 +48,7 @@ fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
 #[test]
 fn uninstall_deletes_private_namespace_rows_for_plugin_did() {
     let plugin_did = stub_plugin_did();
-    let other_plugin = Did::from_string_unchecked("did:key:zOtherPlugin".to_string());
+    let other_plugin = Did::from_string_for_test_fixture("did:key:zOtherPlugin".to_string());
 
     let cid = Cid::from_blake3_digest([4u8; 32]);
     let mut library = PluginLibrary::new();

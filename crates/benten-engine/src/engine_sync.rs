@@ -575,7 +575,8 @@ impl DeviceAttestationEnvelope {
             return Ok(None);
         };
         // (1) Envelope signature against device-DID's resolved pubkey.
-        let device_did = benten_id::did::Did::from_string_unchecked(attestation.device_did.clone());
+        let device_did =
+            benten_id::did::Did::from_string_for_test_fixture(attestation.device_did.clone());
         let device_pk = device_did
             .resolve()
             .map_err(|e| AtriumError::DeviceAttestationForged {
@@ -594,14 +595,17 @@ impl DeviceAttestationEnvelope {
                 ),
             }
         })?;
-        let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
-        ed25519_dalek::Verifier::verify(device_pk.as_verifying_key(), &sig_input, &sig).map_err(
-            |_| AtriumError::DeviceAttestationForged {
-                reason: "envelope signature does not verify against device DID's pubkey \
+        let sig = benten_crypto_suite::primitives::ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        benten_crypto_suite::primitives::ed25519_dalek::Verifier::verify(
+            device_pk.as_verifying_key(),
+            &sig_input,
+            &sig,
+        )
+        .map_err(|_| AtriumError::DeviceAttestationForged {
+            reason: "envelope signature does not verify against device DID's pubkey \
                          (DID forgery / wrong-key signing)"
-                    .into(),
-            },
-        )?;
+                .into(),
+        })?;
         // (2) Embedded-attestation → user-root signature verify.
         //     COLLAPSE: this is now "verify a delegation link" — the
         //     same op the unified chain-walk performs per link. The
@@ -611,7 +615,8 @@ impl DeviceAttestationEnvelope {
         //     production-wired) + revocation list (J3 — collapsed to
         //     user-root UCAN revocation at the durable seam) are
         //     intentionally NOT re-homed here.
-        let parent_did = benten_id::did::Did::from_string_unchecked(attestation.parent_did.clone());
+        let parent_did =
+            benten_id::did::Did::from_string_for_test_fixture(attestation.parent_did.clone());
         let parent_pk = parent_did
             .resolve()
             .map_err(|_| AtriumError::DeviceAttestationForged {

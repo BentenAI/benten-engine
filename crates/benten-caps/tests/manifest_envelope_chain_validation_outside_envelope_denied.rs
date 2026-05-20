@@ -58,9 +58,9 @@ impl UserDidRegistry for UserRegistry {
 
 #[test]
 fn ucan_chain_outside_manifest_envelope_denied_load_bearing() {
-    let user = Did::from_string_unchecked("did:key:z6MkUser".into());
-    let plugin_a = Did::from_string_unchecked("did:key:z6MkPluginA".into());
-    let plugin_b = Did::from_string_unchecked("did:key:z6MkPluginB".into());
+    let user = Did::from_string_for_test_fixture("did:key:z6MkUser".into());
+    let plugin_a = Did::from_string_for_test_fixture("did:key:z6MkPluginA".into());
+    let plugin_b = Did::from_string_for_test_fixture("did:key:z6MkPluginB".into());
 
     // Hostile chain: plugin-A's manifest installed but `shares=None`
     // for the requested cap. Plugin-A would-be-delegation to plugin-B

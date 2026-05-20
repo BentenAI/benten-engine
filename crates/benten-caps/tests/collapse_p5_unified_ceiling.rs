@@ -63,7 +63,7 @@ fn manifest_with_requires(requires: Vec<&str>) -> PluginManifest {
     PluginManifest {
         plugin_name: "p5-pin".to_string(),
         content_cid: benten_core::Cid::from_blake3_digest([7u8; 32]),
-        peer_did: Did::from_string_unchecked("did:key:z6MkP5Author".to_string()),
+        peer_did: Did::from_string_for_test_fixture("did:key:z6MkP5Author".to_string()),
         peer_signature: vec![0u8; 64],
         requires: requires
             .into_iter()

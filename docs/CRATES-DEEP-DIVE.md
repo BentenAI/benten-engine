@@ -43,7 +43,7 @@ Twelve crates. Roughly stacked from foundational types at the bottom to the orch
 ## § 2. The dependency graph
 
 ```
-   benten-renderer-tauri ──┐                                              (12 crates,
+   benten-renderer-tauri ──┐                                              (13 crates,
        (prod deps:         │                                               top of stack)
         engine + foundation)│
                             ↓
@@ -479,7 +479,7 @@ These are gaps that won't block dispatch but will become tangible inside Phase 4
 
 ## § 9. Open questions for Ben
 
-Flat list of the most-impactful unresolved decisions across all 12 crates. Roughly priority-ordered for the pre-Phase-4-Meta + v1-assessment-window contexts.
+Flat list of the most-impactful unresolved decisions across all 13 crates. Roughly priority-ordered for the pre-Phase-4-Meta + v1-assessment-window contexts.
 
 1. **D-4F-2 materializer location + composition shape (formerly D-3.5-2).** Sketch A (extend `benten-ivm`'s `Projection` enum + register materializer views as user views) vs Sketch B (sibling subscriber, new crate or new module) vs Sketch C (materializers are subgraphs the evaluator walks). The audit positions the current plan as "(b) engine-side sub-module" but the underlying composition-vs-sibling-vs-subgraph question hasn't been codified. This is the single biggest pre-Phase-4-Foundation decision.
 

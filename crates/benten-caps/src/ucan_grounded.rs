@@ -158,7 +158,7 @@ fn principal_did_from_context(ctx: &CapWriteContext) -> PrincipalResolution {
         // do NOT degrade to the audience-less walk.
         return PrincipalResolution::Malformed;
     }
-    let did = Did::from_string_unchecked(hint.to_string());
+    let did = Did::from_string_for_test_fixture(hint.to_string());
     // Round-trip check: the string MUST parse to a valid pubkey via
     // `Did::resolve` — otherwise it's a malformed `did:key:` string
     // masquerading as a principal.

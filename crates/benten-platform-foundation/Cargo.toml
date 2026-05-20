@@ -24,12 +24,15 @@ bench = false
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
 benten-id = { path = "../benten-id" }
+# Per G-CORE-2 (#1300): ed25519-dalek is routed through the integration
+# crate `benten-crypto-suite::primitives::ed25519_dalek` (the ONLY
+# workspace direct-dep on the primitive lives in benten-crypto-suite).
 # G24-D — canonical-bytes DAG-CBOR + BLAKE3 content hashing + Ed25519
 # verification for the FULL plugin manifest schema per CLAUDE.md #18.
 blake3 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_ipld_dagcbor = { workspace = true }
-ed25519-dalek = { workspace = true }
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 thiserror = { workspace = true }
 # G23-A schema_compiler: JSON-Schema ingest dialect parser. `serde_json` is
 # the workspace-canonical JSON parser; no other JSON deps allowed in the

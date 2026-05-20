@@ -27,7 +27,7 @@ fn install_record_with_zero_byte_signature_rejected_with_typed_consent_error() {
     // per arch-r1-3 ErrorCode split).
     let record = InstallRecord {
         manifest_cid: stub_cid_zero(),
-        plugin_did: benten_id::did::Did::from_string_unchecked(
+        plugin_did: benten_id::did::Did::from_string_for_test_fixture(
             "did:key:z6MkPluginConsentTest".to_string(),
         ),
         timestamp_stub_nanos: 1_700_000_000_000_000_000,
@@ -55,7 +55,7 @@ fn install_record_with_malformed_64_byte_signature_rejected_at_consent_gate() {
     // only checked length (not actual cryptographic verification).
     let record = InstallRecord {
         manifest_cid: stub_cid_zero(),
-        plugin_did: benten_id::did::Did::from_string_unchecked(
+        plugin_did: benten_id::did::Did::from_string_for_test_fixture(
             "did:key:z6MkPluginConsentTest".to_string(),
         ),
         timestamp_stub_nanos: 1_700_000_000_000_000_000,

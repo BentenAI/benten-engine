@@ -423,19 +423,19 @@ mod tests {
     }
 
     fn user_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkUser".to_string())
+        Did::from_string_for_test_fixture("did:key:z6MkUser".to_string())
     }
 
     fn plugin_a_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkPluginA".to_string())
+        Did::from_string_for_test_fixture("did:key:z6MkPluginA".to_string())
     }
 
     fn plugin_b_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkPluginB".to_string())
+        Did::from_string_for_test_fixture("did:key:z6MkPluginB".to_string())
     }
 
     fn peer_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkPeer".to_string())
+        Did::from_string_for_test_fixture("did:key:z6MkPeer".to_string())
     }
 
     fn user_registry_with(user: Did) -> TestUserRegistry {
@@ -603,7 +603,7 @@ mod tests {
         // user → plugin-A; plugin-X (NOT plugin-A) → plugin-B.
         // The next step's issuer doesn't match the previous step's
         // audience — chain integrity violation.
-        let plugin_x = Did::from_string_unchecked("did:key:z6MkPluginX".into());
+        let plugin_x = Did::from_string_for_test_fixture("did:key:z6MkPluginX".into());
         let chain = vec![
             DelegationStep {
                 issuer_did: user_did(),

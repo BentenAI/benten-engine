@@ -44,7 +44,7 @@ fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
     PluginManifest {
         plugin_name: plugin_name.to_string(),
         content_cid: cid,
-        peer_did: Did::from_string_unchecked("did:key:zAuthor".to_string()),
+        peer_did: Did::from_string_for_test_fixture("did:key:zAuthor".to_string()),
         peer_signature: vec![0u8; 64],
         requires: vec![CapRequirement::new("store:notes:read")],
         shares: SharesPolicy {
@@ -62,7 +62,7 @@ fn fake_manifest(plugin_name: &str, cid: Cid) -> PluginManifest {
 #[test]
 fn plugin_uninstall_cascade_revokes_caps_delegated_to_other_plugins() {
     let plugin_a = stub_plugin_did();
-    let plugin_b = Did::from_string_unchecked("did:key:zPluginB".to_string());
+    let plugin_b = Did::from_string_for_test_fixture("did:key:zPluginB".to_string());
     let user_did = stub_user_did();
 
     let cid_a = Cid::from_blake3_digest([1u8; 32]);

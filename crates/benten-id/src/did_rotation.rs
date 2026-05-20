@@ -36,7 +36,7 @@
 //! Durable rehydration of this in-memory walk is named for
 //! Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`.
 
-use ed25519_dalek::{Signature, Signer, Verifier};
+use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 
 use crate::CanonicalBytes;
@@ -102,16 +102,16 @@ impl RotationAttestation {
     /// redundant re-wraps to delete (CLAUDE.md #5): the typed-`Did`
     /// return is the safe handle callers should use rather than
     /// touching the raw `String`; deleting them would push every
-    /// consumer to re-implement `Did::from_string_unchecked` inline.
+    /// consumer to re-implement `Did::from_string_for_test_fixture` inline.
     pub fn previous_keypair_did(&self) -> Did {
-        Did::from_string_unchecked(self.previous_did.clone())
+        Did::from_string_for_test_fixture(self.previous_did.clone())
     }
 
     /// Borrow the next keypair's `did:key` as a typed [`Did`]. See
     /// [`RotationAttestation::previous_keypair_did`] for the Qual-1
     /// #711 disposition.
     pub fn next_keypair_did(&self) -> Did {
-        Did::from_string_unchecked(self.next_did.clone())
+        Did::from_string_for_test_fixture(self.next_did.clone())
     }
 
     /// Verify the attestation's signature against the supplied OLD
@@ -275,7 +275,7 @@ impl RotationLog {
         // did:key; resolve it to the OLD public key and verify the
         // 64-byte Ed25519 signature. Resolution failure OR signature
         // mismatch both map to BadSignature (matches Acceptor step-4).
-        let prev_did = Did::from_string_unchecked(attestation.previous_did.clone());
+        let prev_did = Did::from_string_for_test_fixture(attestation.previous_did.clone());
         let old_pk = prev_did
             .resolve()
             .map_err(|_| crate::errors::DidRotationError::BadSignature)?;

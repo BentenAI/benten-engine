@@ -33,23 +33,23 @@ pub fn stub_cid_two() -> Cid {
 
 /// Stub peer-DID for tests.
 pub fn stub_peer_did_alice() -> Did {
-    Did::from_string_unchecked("did:key:z6MkAlice".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkAlice".to_string())
 }
 
 /// Second peer-DID — used in T6b "substituted peer-DID" tests.
 pub fn stub_peer_did_attacker() -> Did {
-    Did::from_string_unchecked("did:key:z6MkAttacker".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkAttacker".to_string())
 }
 
 /// Stub user-DID — root of cap chain per CLAUDE.md #18 Layer 1.
 pub fn stub_user_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkUser".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkUser".to_string())
 }
 
 /// Stub plugin-DID — UCAN audience handle minted at install. NOT an
 /// attested sub-identity of user-DID per CLAUDE.md #18 retense.
 pub fn stub_plugin_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPlugin".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPlugin".to_string())
 }
 
 /// Minimal valid-shape manifest (no signing logic at R3).
@@ -318,7 +318,7 @@ pub fn signed_install_record(
 /// Mints a real `PluginDidHandle` via `benten_id::plugin_did::mint()`,
 /// inserts it into the supplied `PluginDidStore`, and returns the DID.
 /// Use this everywhere a test would otherwise build an `InstallRecord`
-/// with a `Did::from_string_unchecked` placeholder — the new
+/// with a `Did::from_string_for_test_fixture` placeholder — the new
 /// `install_plugin` Step 8 enforces that `install_record.plugin_did`
 /// is present in the store + matches `InstallParams::expected_plugin_did`,
 /// so placeholder DIDs no longer work.
