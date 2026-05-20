@@ -204,6 +204,7 @@ export const CATALOG_CODES = [
   "E_MATERIALIZER_CAP_DENIED",
   "E_MATERIALIZER_SCHEMA_MISMATCH",
   "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
+  "E_NAMESPACED_WRITE_UNSUPPORTED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2774,6 +2775,21 @@ export class EMaterializerSubscribeSeamFailure extends BentenError {
 }
 
 /**
+ * E_NAMESPACED_WRITE_UNSUPPORTED
+ *
+ * Thrown at: `crates/benten-graph/src/browser_backend.rs::BrowserBackend::put_node_with_context` (G-CORE-1 fix-pass, Phase 4-Meta-Core).
+ * Message template: "namespaced write unsupported on this backend: {backend} cannot route writes to namespace_did partitions; only RedbBackend implements the per-DID partition surface today"
+ */
+export class ENamespacedWriteUnsupported extends BentenError {
+  static readonly code = "E_NAMESPACED_WRITE_UNSUPPORTED";
+  static readonly fixHint = "The `WriteContext::namespace_did` field is the §1.A.FROZEN canary surface from G-CORE-1 (#989 cross-DID storage-partition seam). At HEAD only `RedbBackend` enforces the C1 cross-DID non-leak invariant via the per-DID partition keyspace + `ScopedView`. The `BrowserBackend` (CLAUDE.md baked-in #17 shape-b/c thin-client cache) and any other non-partitioned `GraphBackend` impl fail CLOSED on `Some(namespace_did)` with this typed code rather than silently dropping the scope and landing the write in the un-namespaced legacy keyspace — which would break the C1 invariant invisibly (a subsequent `ScopedView::get_node` would return `None` for the just-written CID). The fail-closed contract preserves the §1.A.FROZEN canary shape's safety promise across every `GraphBackend` impl, not just `RedbBackend`. Fix at the call site: either route the write through `RedbBackend` (the partitioned full-peer storage backend), or call with `WriteContext::namespace_did = None` (the legacy un-namespaced path). A future wave that implements the in-RAM partition for `BrowserBackend` replaces this typed-reject with the partitioned write path; the typed-reject is the defense in the interim per HARD RULE 12 clause-(b). Structural-shape rejection at the storage boundary — no primitive-edge routing (None).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_NAMESPACED_WRITE_UNSUPPORTED", "The `WriteContext::namespace_did` field is the §1.A.FROZEN canary surface from G-CORE-1 (#989 cross-DID storage-partition seam). At HEAD only `RedbBackend` enforces the C1 cross-DID non-leak invariant via the per-DID partition keyspace + `ScopedView`. The `BrowserBackend` (CLAUDE.md baked-in #17 shape-b/c thin-client cache) and any other non-partitioned `GraphBackend` impl fail CLOSED on `Some(namespace_did)` with this typed code rather than silently dropping the scope and landing the write in the un-namespaced legacy keyspace — which would break the C1 invariant invisibly (a subsequent `ScopedView::get_node` would return `None` for the just-written CID). The fail-closed contract preserves the §1.A.FROZEN canary shape's safety promise across every `GraphBackend` impl, not just `RedbBackend`. Fix at the call site: either route the write through `RedbBackend` (the partitioned full-peer storage backend), or call with `WriteContext::namespace_did = None` (the legacy un-namespaced path). A future wave that implements the in-RAM partition for `BrowserBackend` replaces this typed-reject with the partitioned write path; the typed-reject is the defense in the interim per HARD RULE 12 clause-(b). Structural-shape rejection at the storage boundary — no primitive-edge routing (None).", message, context);
+    this.name = "ENamespacedWriteUnsupported";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -2953,4 +2969,5 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_MATERIALIZER_CAP_DENIED": EMaterializerCapDenied,
   "E_MATERIALIZER_SCHEMA_MISMATCH": EMaterializerSchemaMismatch,
   "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE": EMaterializerSubscribeSeamFailure,
+  "E_NAMESPACED_WRITE_UNSUPPORTED": ENamespacedWriteUnsupported,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

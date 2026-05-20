@@ -1855,6 +1855,24 @@ Provides a sovereign space for plugin internals (AI agents' working memory,
 intermediate state, scratchpads) without breaking the cross-plugin sharing
 model — same UCAN machinery, different policy.
 
+**Storage-partition substrate (Phase-4-Meta-Core G-CORE-1 / #989).** The
+`WriteContext::namespace_did: Option<Cid>` field threads a per-DID partition
+selector through the storage layer. A `Some(did)` write lands in a per-DID
+keyspace partition keyed on `Cid::as_bytes()` of the DID; a `Backend::scoped(did)`
+view reads only that partition. The cross-DID non-leak invariant (plan §1.A
+C1) holds structurally for point read, label range scan, raw key iterate,
+edge keyspace, and post-commit change-subscriber fan-out — a write under
+`namespace_did = Some(X)` is invisible to a view scoped to
+`namespace_did = Some(Y)` for `X != Y`. The default `None` path is
+byte-identical to the pre-#989 keyspace, so the Inv-13 5-row dispatch
+matrix, durability tiers, SC1 system-zone ban, and the #843 canonical-bytes
+golden CID are all preserved for legacy callers. This seam closes the
+*authority* half of the multi-tenant isolation primitive; the
+*confidentiality* half — per-DID encryption of partition bytes so an
+untrusted-host or peer-holding-ciphertext peer cannot read across
+partitions even with raw redb access — is the Phase-4-Meta-Core #1301
+encryption-as-confidentiality substrate that this seam unblocks.
+
 **Threat model.**
 
 - **Scope creep at install** — defended by signed manifest. The user reviews

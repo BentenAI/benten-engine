@@ -476,6 +476,14 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SubscribeRevokedMidStream,
     ErrorCode::ThinClientAuthRejected,
     ErrorCode::ViewLabelMismatch,
+    // Phase 4-Meta-Core G-CORE-1 fix-pass — #989 storage-partition
+    // seam typed-reject for non-partitioned backends (BrowserBackend
+    // et al.). Closes g-core-1-mr-1 MAJOR (BrowserBackend silently
+    // dropping ctx.namespace_did at the §1.A.FROZEN canary surface).
+    // Construction site:
+    //   `benten-graph::browser_backend::BrowserBackend::put_node_with_context`
+    // (the typed-reject fail-closed defense before any write).
+    ErrorCode::NamespacedWriteUnsupported,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -774,8 +782,13 @@ fn variant_count_is_pinned() {
     // #992 (refinement-audit-2026-05 wire-format cluster): +1
     // `GraphSchemaVersionMismatch` (redb on-disk schema-version envelope).
     // 168 + 1 = 169.
+    // G-CORE-1 fix-pass (Phase 4-Meta-Core, #989 storage-partition
+    // seam): +1 `NamespacedWriteUnsupported` (BrowserBackend / non-
+    // partitioned-backend fail-closed typed-reject when ctx
+    // .namespace_did = Some at the §1.A.FROZEN canary surface).
+    // 169 + 1 = 170.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 169,
+        CATALOG_VARIANT_COUNT, 170,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -993,7 +1006,12 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::PluginInstallRecordConsentingUserMismatch
             | ErrorCode::PluginInstallRecordPluginDidMismatch
             | ErrorCode::PluginDidHandleNotPreInserted
-            | ErrorCode::PluginDidHandleDuplicate => true,
+            | ErrorCode::PluginDidHandleDuplicate
+            // G-CORE-1 fix-pass (Phase 4-Meta-Core, #989 storage-
+            // partition seam): typed-reject for non-partitioned
+            // GraphBackend impls when ctx.namespace_did = Some at the
+            // §1.A.FROZEN canary surface (BrowserBackend et al.).
+            | ErrorCode::NamespacedWriteUnsupported => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

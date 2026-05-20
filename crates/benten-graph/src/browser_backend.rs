@@ -549,6 +549,36 @@ impl GraphBackend for BrowserBackend {
         node: &Node,
         ctx: &WriteContext,
     ) -> Result<Cid, <Self as GraphBackend>::Error> {
+        // G-CORE-1 fix-pass closure of `g-core-1-mr-1` (Phase 4-Meta-
+        // Core, #989 storage-partition seam): the §1.A.FROZEN canary
+        // shape (`WriteContext::namespace_did`) is uniform across every
+        // `GraphBackend` impl, but at HEAD only `RedbBackend` enforces
+        // the C1 cross-DID non-leak invariant via the per-DID partition
+        // keyspace + `ScopedView`. The `BrowserBackend` (CLAUDE.md
+        // baked-in #17 shape-b/c thin-client cache) does NOT carry that
+        // partition surface yet; silently dropping `ctx.namespace_did`
+        // and landing the write in the un-namespaced legacy keyspace
+        // would break the C1 invariant invisibly (a subsequent
+        // `ScopedView::get_node` would return `None` for the
+        // just-written CID). Fail CLOSED with a typed reject — the
+        // fix-now defense per the mini-review's (a) recommendation
+        // (smallest LOC, fails the call site at compile-development
+        // time, names the gap typed). Mirrors
+        // `SnapshotBlobError::ReadOnly`'s posture for a different
+        // unsupported-write surface. A future wave that implements the
+        // in-RAM partition for `BrowserBackend` replaces this
+        // typed-reject with the partitioned write path; the
+        // typed-reject is the defense in the interim per HARD RULE 12
+        // clause-(b). Ordered BEFORE the system-zone gate so a caller
+        // that combines `Some(namespace_did)` with a `system:`-label
+        // attempt sees the partitioning-unsupported reject first
+        // (structural-shape-rejection precedes the authority gate).
+        if ctx.namespace_did.is_some() {
+            return Err(GraphError::NamespacedWriteUnsupported {
+                backend: "BrowserBackend",
+            });
+        }
+
         // System-zone gate (preserved per docstring).
         if !ctx.is_privileged {
             for label in &node.labels {
@@ -681,5 +711,49 @@ mod tests {
             .put_node_with_context(&sys_node, &ctx)
             .expect_err("non-privileged system-zone write rejected");
         assert!(matches!(err, GraphError::SystemZoneWrite { .. }));
+    }
+
+    /// G-CORE-1 fix-pass closure of `g-core-1-mr-1` MAJOR — negative
+    /// control to the TF-1 positive control on `RedbBackend` (Phase
+    /// 4-Meta-Core, #989 storage-partition seam). A namespaced
+    /// `WriteContext::namespace_did = Some(_)` against the
+    /// `BrowserBackend` (which does NOT implement per-DID partition
+    /// isolation) is structurally rejected with
+    /// `GraphError::NamespacedWriteUnsupported` BEFORE any write
+    /// reaches the in-RAM map, preserving the C1 cross-DID non-leak
+    /// invariant uniformly across every `GraphBackend` impl (rather
+    /// than allowing a silent drop into the un-namespaced legacy
+    /// keyspace).
+    #[test]
+    fn put_node_with_context_fail_closed_on_namespace_did_some() {
+        let backend = BrowserBackend::new();
+        let node = canonical_test_node();
+        // Use the canonical-test-node CID itself as the namespace DID
+        // (any well-formed `Cid` value exercises the `Some(_)` arm —
+        // the BrowserBackend rejects on the structural presence of the
+        // option, not on the partition contents).
+        let some_did = node.cid().expect("canonical test node CID");
+        let ctx = WriteContext::new("post").with_namespace_did(Some(some_did));
+        let err = backend
+            .put_node_with_context(&node, &ctx)
+            .expect_err("namespaced write against BrowserBackend must fail-closed");
+        assert!(
+            matches!(
+                err,
+                GraphError::NamespacedWriteUnsupported {
+                    backend: "BrowserBackend"
+                }
+            ),
+            "expected GraphError::NamespacedWriteUnsupported {{ backend: \"BrowserBackend\" }}, got {err:?}"
+        );
+
+        // The un-namespaced legacy path stays intact (regression
+        // guard — the fail-closed arm does not regress the
+        // `ctx.namespace_did = None` path).
+        let none_ctx = WriteContext::new("post");
+        let cid = backend
+            .put_node_with_context(&node, &none_ctx)
+            .expect("un-namespaced write succeeds");
+        assert_eq!(node.cid().unwrap(), cid);
     }
 }

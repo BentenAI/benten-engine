@@ -36,6 +36,8 @@ fn caches_stay_bounded_under_many_distinct_inserts() {
             label: format!("label-{i}"),
             is_privileged: false,
             authority: WriteAuthority::User,
+            // G-CORE-1 #989: legacy un-namespaced path.
+            namespace_did: None,
         };
         backend.put_node_with_context(&node, &ctx).unwrap();
     }
