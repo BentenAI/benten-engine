@@ -294,7 +294,7 @@ fn did_resolve(input: &Value) -> Result<Value, EvalError> {
     let map = expect_map(input)?;
     let did_str = expect_text(map, "did")?;
 
-    let did = benten_id::did::Did::from_string_unchecked(did_str.clone());
+    let did = benten_id::did::Did::from_string_for_test_fixture(did_str.clone());
     let pk = did
         .resolve()
         .map_err(|e| EvalError::TypedCallDispatchError {
@@ -403,7 +403,7 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
     // claim would still validate: true; sec-major-1 fix). A clean
     // negative is `valid: false` with the reason; only a structurally-
     // malformed input bubbles `TypedCallDispatchError`.
-    let audience_did = benten_id::did::Did::from_string_unchecked(audience_str.clone());
+    let audience_did = benten_id::did::Did::from_string_for_test_fixture(audience_str.clone());
 
     match benten_id::ucan::validate_chain_for_capability(&chain, &audience_did, &required_cap, now)
     {
@@ -457,7 +457,8 @@ fn vc_verify(input: &Value) -> Result<Value, EvalError> {
             reason: format!("credential DAG-CBOR decode: {e}"),
         })?;
 
-    let expected_issuer = benten_id::did::Did::from_string_unchecked(expected_issuer_str.clone());
+    let expected_issuer =
+        benten_id::did::Did::from_string_for_test_fixture(expected_issuer_str.clone());
 
     // `verify_at` enforces signature + issuer-binding + issuance/
     // expiration time-window. A semantic rejection (bad signature /

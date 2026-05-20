@@ -59,7 +59,9 @@ fn delegation_admitted_under_shares_any_default_for_non_private_cap() {
     let manifest_a = benten_platform_foundation::PluginManifest {
         plugin_name: "a".to_string(),
         content_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        peer_did: benten_id::did::Did::from_string_unchecked("did:key:z6MkAuthorAny".to_string()),
+        peer_did: benten_id::did::Did::from_string_for_test_fixture(
+            "did:key:z6MkAuthorAny".to_string(),
+        ),
         peer_signature: vec![0u8; 64],
         requires: vec![benten_platform_foundation::CapRequirement::new(
             "store:notes:read",
@@ -90,7 +92,9 @@ fn delegation_within_envelope_admits_only_the_specified_rule_not_others() {
     let manifest_a = benten_platform_foundation::PluginManifest {
         plugin_name: "a".to_string(),
         content_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        peer_did: benten_id::did::Did::from_string_unchecked("did:key:z6MkAuthorMatch".to_string()),
+        peer_did: benten_id::did::Did::from_string_for_test_fixture(
+            "did:key:z6MkAuthorMatch".to_string(),
+        ),
         peer_signature: vec![0u8; 64],
         requires: vec![benten_platform_foundation::CapRequirement::new(
             "store:notes:read",

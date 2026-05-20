@@ -74,7 +74,7 @@ fn device_attestation_trait_is_sig_input_projection_distinct_from_round_trip() {
     };
 
     let parent = Keypair::generate();
-    let device_did = Did::from_string_unchecked("did:key:zDevice".to_string());
+    let device_did = Did::from_string_for_test_fixture("did:key:zDevice".to_string());
     let envelope = CapabilityEnvelope {
         runs_sandbox: false,
         runs_atrium_peer: false,

@@ -34,7 +34,7 @@
 //! protocols are intentionally above the source-grep filter, which
 //! strips comment-only lines per `crypto-r4-r1-minor-2` hardening).
 
-use ed25519_dalek::{Signature, Signer, Verifier};
+use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 
 use crate::errors::MultiSigError;
 use crate::keypair::{Keypair, PublicKey};

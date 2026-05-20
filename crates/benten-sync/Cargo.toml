@@ -82,12 +82,17 @@ blake3 = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # iroh: P2P QUIC transport with holepunch + relay-default per
-# D-PHASE-3-3 RESOLVED-at-R1. Pinned to 0.98 (current latest stable as
-# of 2026-05-06) + Dependabot fast-track per scope-real-10. Per
-# scope-real-10, holepunch tests are CI-conditional (gated to specific
-# runner cells with relay infrastructure available); loopback +
-# relay-fallback are required-on-every-PR.
-iroh = { version = "0.98", default-features = false, features = ["tls-ring"] }
+# D-PHASE-3-3 RESOLVED-at-R1. Bumped 0.98 → 1.0.0-rc.0 at
+# Phase-4-Meta-Core G-CORE-2-FP-1 (Ben-ratified 2026-05-19) — the
+# upstream RC line that resolves the iroh-base/ed25519-dalek/pkcs8
+# stable chain and unblocks `ml-dsa 0.1` in `benten-crypto-suite`.
+# Dependabot fast-track preserved per scope-real-10 at the minor
+# granularity. Per scope-real-10, holepunch tests are CI-conditional
+# (gated to specific runner cells with relay infrastructure
+# available); loopback + relay-fallback are required-on-every-PR.
+# Zero iroh-API breakage across the 13 paths we consume — see
+# `.addl/phase-4-meta/iroh-pin-investigation-2026-05-19.md`.
+iroh = { version = "1.0.0-rc.0", default-features = false, features = ["tls-ring"] }
 # Loro: high-performance CRDT framework. Pinned at 1.12 minor (current
 # latest stable 2026-05-06) + Dependabot fast-track per scope-real-10.
 # Native-only (alongside iroh) — Loro stays in `benten-sync` which is

@@ -58,7 +58,7 @@ impl GrantReader for MockGrants {
 }
 
 fn plugin_did_alpha() -> Did {
-    Did::from_string_unchecked("did:key:z6MkAlpha".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkAlpha".to_string())
 }
 
 fn manifest_with_mixed_requires() -> PluginManifest {

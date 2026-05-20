@@ -80,7 +80,7 @@ pub const HARNESS_DEFAULT_ORIGIN: &str = "https://benten.localhost:8443";
 
 /// Plugin-DID string the harness uses for the admin-UI plugin.
 /// `did:key`-shaped (compatible with [`Engine::delegate_capability`]'s
-/// `Did::from_string_unchecked` path).
+/// `Did::from_string_for_test_fixture` path).
 pub const HARNESS_ADMIN_UI_PLUGIN_DID: &str = "did:key:z6MkAdminUiV0PluginHarnessFixture12345";
 
 /// Plugin-DID string the harness uses for the "hostile" / "other"

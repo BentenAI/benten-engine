@@ -42,11 +42,11 @@ use benten_caps::manifest_scope::private_namespace_scope_admits_actor;
 use benten_id::did::Did;
 
 fn plugin_a() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPluginAlpha".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPluginAlpha".to_string())
 }
 
 fn plugin_b() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPluginBeta".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPluginBeta".to_string())
 }
 
 /// G27-D: private-namespace scope admits ONLY its owning plugin-DID.
@@ -115,7 +115,7 @@ fn admits_actor_returns_false_for_non_private_scopes() {
 fn admits_actor_defends_did_prefix_collisions() {
     let scope = "private:did:key:z6MkPluginAlpha:resource";
     let prefix_collision_did =
-        Did::from_string_unchecked("did:key:z6MkPluginAlphaExtended".to_string());
+        Did::from_string_for_test_fixture("did:key:z6MkPluginAlphaExtended".to_string());
 
     assert!(
         !private_namespace_scope_admits_actor(scope, &prefix_collision_did),

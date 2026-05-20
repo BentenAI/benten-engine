@@ -107,7 +107,7 @@ impl JsKeypair {
 #[napi]
 pub fn verify_signature(issuer_did: String, message: Buffer, signature: Buffer) -> Result<bool> {
     use benten_id::did::Did;
-    let did = Did::from_string_unchecked(issuer_did);
+    let did = Did::from_string_for_test_fixture(issuer_did);
     let pk = match did.resolve() {
         Ok(pk) => pk,
         Err(e) => return Err(Error::from_reason(format!("invalid did:key: {e}"))),
@@ -188,7 +188,7 @@ impl JsVerifiableCredential {
         expiration_secs: Option<i64>,
     ) -> Result<Self> {
         let issuer_did = issuer.inner.public_key().to_did();
-        let subject = RustDid::from_string_unchecked(subject_did);
+        let subject = RustDid::from_string_for_test_fixture(subject_did);
         let mut builder = RustCredential::builder()
             .issuer(&issuer_did)
             .subject(&subject)
@@ -230,7 +230,7 @@ impl JsVerifiableCredential {
     /// Verify at a given epoch second (rejects expired credentials).
     #[napi]
     pub fn verify_at(&self, expected_issuer_did: String, now_secs: i64) -> Result<bool> {
-        let did = RustDid::from_string_unchecked(expected_issuer_did);
+        let did = RustDid::from_string_for_test_fixture(expected_issuer_did);
         match rust_vc_verify_at(&self.inner, &did, now_secs.max(0) as u64) {
             Ok(()) => Ok(true),
             Err(e) => Err(Error::from_reason(format!("vc verify_at failed: {e}"))),
@@ -242,7 +242,7 @@ impl JsVerifiableCredential {
     pub fn verify_in_trust_domain(&self, trusted_issuer_dids: Vec<String>) -> Result<bool> {
         let dids = trusted_issuer_dids
             .into_iter()
-            .map(RustDid::from_string_unchecked)
+            .map(RustDid::from_string_for_test_fixture)
             .collect::<Vec<_>>();
         let trust_domain = RustTrustDomain::new(dids);
         match rust_vc_verify_in_trust_domain(&self.inner, &trust_domain) {
@@ -330,7 +330,7 @@ impl JsDeviceAttestation {
     ) -> Result<Self> {
         let envelope =
             envelope_from_str(runs_sandbox, holds_zones, online_uptime, runs_atrium_peer)?;
-        let device = RustDid::from_string_unchecked(device_did);
+        let device = RustDid::from_string_for_test_fixture(device_did);
         let attestation = RustDeviceAttestation::issue(&parent.inner, device, envelope)
             .map_err(|e| Error::from_reason(format!("attestation issuance failed: {e}")))?;
         Ok(Self { inner: attestation })
@@ -351,7 +351,7 @@ impl JsDeviceAttestation {
     ) -> Result<Self> {
         let envelope =
             envelope_from_str(runs_sandbox, holds_zones, online_uptime, runs_atrium_peer)?;
-        let device = RustDid::from_string_unchecked(device_did);
+        let device = RustDid::from_string_for_test_fixture(device_did);
         let target = match runtime_target.as_str() {
             "browser" => RustRuntimeTarget::Browser,
             "native" => RustRuntimeTarget::Native,
@@ -409,7 +409,7 @@ impl JsDeviceAttestation {
             parent_online_uptime,
             parent_runs_atrium_peer,
         )?;
-        let device = RustDid::from_string_unchecked(device_did);
+        let device = RustDid::from_string_for_test_fixture(device_did);
         let attestation = RustDeviceAttestation::issue_with_authority(
             &parent.inner,
             device,
@@ -423,7 +423,7 @@ impl JsDeviceAttestation {
     /// Convenience: issue browser-target minimum-capability envelope.
     #[napi(factory)]
     pub fn issue_for_browser_target(parent: &JsKeypair, device_did: String) -> Result<Self> {
-        let device = RustDid::from_string_unchecked(device_did);
+        let device = RustDid::from_string_for_test_fixture(device_did);
         let attestation = RustDeviceAttestation::issue_for_browser_target(&parent.inner, device)
             .map_err(|e| Error::from_reason(format!("attestation issuance failed: {e}")))?;
         Ok(Self { inner: attestation })
@@ -456,7 +456,7 @@ impl JsDeviceAttestation {
     /// Verify the attestation against the parent's `did:key` string.
     #[napi]
     pub fn verify_signature(&self, parent_did: String) -> Result<bool> {
-        let did = RustDid::from_string_unchecked(parent_did);
+        let did = RustDid::from_string_for_test_fixture(parent_did);
         let pk = did
             .resolve()
             .map_err(|e| Error::from_reason(format!("invalid did:key: {e}")))?;

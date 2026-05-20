@@ -63,9 +63,9 @@ impl UserDidRegistry for UserRegistry {
 
 #[test]
 fn ucan_chain_within_manifest_envelope_admitted_at_chain_validator() {
-    let user = Did::from_string_unchecked("did:key:z6MkUser".into());
-    let plugin_a = Did::from_string_unchecked("did:key:z6MkPluginA".into());
-    let plugin_b = Did::from_string_unchecked("did:key:z6MkPluginB".into());
+    let user = Did::from_string_for_test_fixture("did:key:z6MkUser".into());
+    let plugin_a = Did::from_string_for_test_fixture("did:key:z6MkPluginA".into());
+    let plugin_b = Did::from_string_for_test_fixture("did:key:z6MkPluginB".into());
 
     let chain = vec![
         DelegationStep {

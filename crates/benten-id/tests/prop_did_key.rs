@@ -2,9 +2,9 @@
 
 #![allow(clippy::unwrap_used)]
 
+use benten_crypto_suite::primitives::ed25519_dalek::SigningKey;
 use benten_id::did::Did;
 use benten_id::keypair::PublicKey;
-use ed25519_dalek::SigningKey;
 use proptest::prelude::*;
 
 proptest! {

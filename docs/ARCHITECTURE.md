@@ -6,9 +6,9 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ---
 
-## Twelve crates (post-Phase-4-Foundation)
+## Thirteen crates (post-Phase-4-Meta-Core G-CORE-2)
 
-The Rust workspace ships twelve Rust crates plus the napi bindings + the
+The Rust workspace ships thirteen Rust crates plus the napi bindings + the
 TypeScript DSL wrapper. The 8 → 10 crate transition completed in
 Phase 3 — `benten-id` (9th, identity + claims) and `benten-sync`
 (10th, sync runtime — native-only) landed and were filled in across
@@ -26,7 +26,15 @@ workspace to twelve crates** per the post-R1-triage ratification
   compiled this in"; distinct from app-level plugins which are
   subgraphs).
 
-The narrative below is the Phase-4-Foundation-close shape.
+**Phase 4-Meta-Core G-CORE-2 (#1300) extends the workspace to thirteen
+crates** by adding `benten-crypto-suite` — the ONE thin Benten-owned
+signature / hash / cipher-suite agility integration crate (the ONLY
+crypto-primitive call site per `RATIFIED-crypto-agility-2026-05-18.md`
+line 6; v1-beta signature default = hybrid Ed25519⊕ML-DSA-65; concat /
+hash / codepoint / envelope glue over vetted upstream RustCrypto
+crates).
+
+The narrative below is the post-G-CORE-2 shape.
 
 ```
 crates/
@@ -114,6 +122,33 @@ crates/
                         # intentionally broader than other crates
                         # because every part of it composes into one
                         # platform-shippable boundary.
+  benten-crypto-suite/  # 13th crate (Phase 4-Meta-Core / G-CORE-2).
+                        # The ONE thin Benten-owned signature / hash /
+                        # cipher-suite agility integration crate. Per
+                        # `RATIFIED-crypto-agility-2026-05-18.md` line 6:
+                        # the ONLY crypto-primitive call site in the
+                        # workspace. Concat / hash / codepoint / envelope
+                        # GLUE only over vetted upstream RustCrypto
+                        # crates (`ed25519-dalek`, `blake3`, `sha2`,
+                        # `sha3`, `subtle`, `zeroize`); the integration
+                        # crate NEVER forks or reimplements primitives
+                        # (CLAUDE.md baked-in #5). v1-beta signature
+                        # default = hybrid Ed25519⊕ML-DSA-65
+                        # (concatenated/committing/strip-resistant per
+                        # NF-4); classical-only Ed25519 is the
+                        # non-default downgrade arm. Unknown / reserved
+                        # codepoints surface typed
+                        # `UnsupportedAlgorithm` — NEVER a silent
+                        # fallback (CLAUDE.md baked-in #5 +
+                        # `RATIFIED-pq-default-reframe-2026-05-19.md`
+                        # §4 P2P-interop invariant). The live ML-DSA-65
+                        # primitive instantiation is deferred to the
+                        # coordinated workspace dep-bump wave alongside
+                        # G-CORE-3 #1301 (see the Cargo.toml record);
+                        # the hybrid arm typed-rejects until then. The
+                        # safety invariant is preserved: unaudited PQC
+                        # is never the SOLE trust path; the classical
+                        # half is the audited security floor.
   benten-renderer-tauri/
                         # 12th crate (Phase 4-Foundation). Tauri 2.x
                         # renderer ENGINE EXTENSION per CLAUDE.md
@@ -146,7 +181,7 @@ packages/
                     # over the napi surface.
 ```
 
-A workspace test pin verifies all twelve crate names + the
+A workspace test pin verifies all thirteen crate names + the
 `native-only` annotation on `benten-sync` are present in this document
 (see `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs`),
 so the Phase-4-Foundation-close shape described above is the durable
@@ -171,7 +206,7 @@ Each crate has one responsibility. A reader can use `benten-engine` with `NoAuth
 
 ## Bindings and tooling
 
-Beyond the twelve Rust crates, the workspace ships two ancillary trees that exist
+Beyond the thirteen Rust crates, the workspace ships two ancillary trees that exist
 to make the engine reachable from JavaScript and to keep developer onboarding
 ten minutes from `npx` to a green test:
 

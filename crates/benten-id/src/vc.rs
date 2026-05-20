@@ -86,7 +86,7 @@
 //! `crates/benten-id/tests/graph_encoded.rs` (named destination per
 //! HARD RULE rule-12 disposition (b)).
 
-use ed25519_dalek::{Signature, Signer, Verifier};
+use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -495,7 +495,7 @@ pub fn verify_in_trust_domain(vc: &Credential, trust_domain: &TrustDomain) -> Re
             issuer: vc.claims.issuer.clone(),
         });
     }
-    let issuer = Did::from_string_unchecked(vc.claims.issuer.clone());
+    let issuer = Did::from_string_for_test_fixture(vc.claims.issuer.clone());
     verify(vc, &issuer)
 }
 

@@ -54,7 +54,7 @@
 //! `docs/future/phase-4-backlog.md §4.26`. See
 //! `crates/benten-id/tests/ucan.rs` for the full pin catalogue.
 
-use ed25519_dalek::{Signature, Signer, Verifier};
+use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 
@@ -663,7 +663,7 @@ fn validate_chain_inner(
         let sig = Signature::from_bytes(&sig_bytes);
 
         // Resolve issuer DID to its public key.
-        let iss_did = Did::from_string_unchecked(token.claims.iss.clone());
+        let iss_did = Did::from_string_for_test_fixture(token.claims.iss.clone());
         let pk: PublicKey = iss_did
             .resolve()
             .map_err(|_| UcanError::BadSignature { link_index: idx })?;

@@ -49,7 +49,7 @@
 //! Constant-time signature comparison flows through
 //! [`benten_id::ucan`]'s existing `subtle::ConstantTimeEq` discipline
 //! (mirror of the audience-binding gate). The Ed25519 verify itself
-//! uses `ed25519_dalek::Verifier::verify`, which is documented as
+//! uses `benten_crypto_suite::primitives::ed25519_dalek::Verifier::verify`, which is documented as
 //! constant-time over the signature bytes.
 
 use std::collections::BTreeMap;
@@ -448,7 +448,7 @@ fn verify_via_ucan_chain(
     let leaf = chain
         .first()
         .ok_or_else(|| ManifestVerifyError::UcanInvalid("empty chain".to_string()))?;
-    let issuer_did = Did::from_string_unchecked(leaf.claims.iss.clone());
+    let issuer_did = Did::from_string_for_test_fixture(leaf.claims.iss.clone());
     let issuer_pk = issuer_did
         .resolve()
         .map_err(|e| ManifestVerifyError::UcanInvalid(format!("issuer DID resolve: {e}")))?;

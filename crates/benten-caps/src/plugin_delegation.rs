@@ -162,7 +162,7 @@ mod tests {
     }
 
     fn target_did() -> Did {
-        Did::from_string_unchecked("did:key:z6MkTarget".to_string())
+        Did::from_string_for_test_fixture("did:key:z6MkTarget".to_string())
     }
 
     #[test]

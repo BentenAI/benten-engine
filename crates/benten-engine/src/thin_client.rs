@@ -556,20 +556,20 @@ fn production_signature_verifier(
     message: &[u8],
     signature: &[u8],
 ) -> Result<(), String> {
+    use benten_crypto_suite::primitives::ed25519_dalek::Verifier;
     use benten_id::did::Did;
-    use ed25519_dalek::Verifier;
     // Resolve the DID to a public key. The `did:key` resolver is the
     // closed Phase-3 G14-B baseline; non-did:key forms reject inside
     // `Did::resolve` as unsupported until a later phase widens the
     // resolver registry.
-    let did = Did::from_string_unchecked(principal_did.to_string());
+    let did = Did::from_string_for_test_fixture(principal_did.to_string());
     let public_key = did
         .resolve()
         .map_err(|e| format!("did key resolution failed: {e}"))?;
     let sig_bytes: [u8; 64] = signature
         .try_into()
         .map_err(|_| format!("signature length {} != 64", signature.len()))?;
-    let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+    let sig = benten_crypto_suite::primitives::ed25519_dalek::Signature::from_bytes(&sig_bytes);
     public_key
         .as_verifying_key()
         .verify(message, &sig)

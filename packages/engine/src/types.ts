@@ -639,16 +639,67 @@ export interface ViewDef {
 // ---------------------------------------------------------------------------
 
 /**
- * Reserved-for-Phase-3 manifest signature shape. Phase 2b leaves this
- * structurally typed but always-undefined — D9 requires the canonical
- * DAG-CBOR encoding to OMIT the `signature` key entirely when undefined,
- * not to emit `null`. The `?` here is the load-bearing parity check.
+ * Manifest signature shape — PQ-hybrid-capable per §1.A.FROZEN item 10
+ * (widened by G-CORE-2 #1300 per the 2026-05-19 PQ-default reframe).
+ *
+ * # Cross-language rule-mirror (§3.5g) with the Rust integration crate
+ *
+ * Mirrors `benten_crypto_suite::HybridSignature` + `SigCodepoint` from
+ * the integration crate (`crates/benten-crypto-suite`). NO hardcoded
+ * Ed25519-shaped (32 B-key / 64 B-sig) size assumption JS-side. The
+ * ML-DSA-65 dimensions (~1952 B key / ~3309 B sig) are carried via
+ * variable-length base64 strings — the JS surface does NOT pre-bound
+ * the sig length to 88 base64 chars (Ed25519-sig × 4/3 + padding) the
+ * way an Ed25519-only schema would.
+ *
+ * # Codepoint dispatch
+ *
+ * `codepoint` selects the dispatch arm:
+ * - `0x0001` (`HYBRID_ED25519_MLDSA65`, v1-beta DEFAULT) — `ed25519` +
+ *   `mlDsa65` + `commitment` MUST all be present (NF-4
+ *   concatenated/committing/strip-resistant; both halves required to
+ *   verify).
+ * - `0x0002` (`CLASSICAL_ED25519`, non-default downgrade) — `ed25519`
+ *   MUST be present; `mlDsa65` + `commitment` MUST be absent.
+ *
+ * **No silent fallback on unknown codepoints** — the napi/Rust dispatch
+ * surfaces typed `E_CRYPTO_UNSUPPORTED_ALGORITHM` per the CLAUDE.md #5
+ * typed-unsupported-arm clause.
  *
  * Pin source: `packages/engine/test/manifest_schema_parity.test.ts`.
  */
 export interface ManifestSignature {
-  /** Phase-3 Ed25519 signature bytes (base64). Reserved. */
+  /**
+   * Signature codepoint — selects the dispatch arm. Mirrors
+   * `benten_crypto_suite::SigCodepoint`:
+   * - `0x0001` = hybrid Ed25519⊕ML-DSA-65 (v1-beta DEFAULT).
+   * - `0x0002` = classical-only Ed25519 (non-default downgrade).
+   *
+   * Omitted in the legacy-shape signature (where only `ed25519` is
+   * present); the canonical PQ-hybrid-aware encoder always emits the
+   * codepoint.
+   */
+  codepoint?: number;
+  /**
+   * Ed25519 (classical) signature bytes — base64. **Variable-length
+   * base64; no JS-side 88-char hardcode.** Always present for both
+   * `codepoint=0x0001` and `codepoint=0x0002`.
+   */
   ed25519?: string;
+  /**
+   * ML-DSA-65 (PQ) signature bytes — base64. Present iff
+   * `codepoint=0x0001`. Variable-length (~3309 B raw → ~4412 base64
+   * chars); the JS surface does NOT bound this length.
+   */
+  mlDsa65?: string;
+  /**
+   * NF-4 commitment binding both halves + message — base64 (32 B raw
+   * = SHA3-256 output, ~44 base64 chars). Present iff `codepoint=0x0001`.
+   * The committing construction is what makes the hybrid
+   * strip-resistant: neither half can be stripped, truncated, or
+   * cross-message-substituted without the verify failing closed.
+   */
+  commitment?: string;
 }
 
 /**

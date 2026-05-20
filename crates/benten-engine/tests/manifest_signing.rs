@@ -160,7 +160,8 @@ fn publisher_registry_mutation_requires_ucan_delegation() {
     // g14-c-mr-2: pin the engine's audience DID at registry
     // construction time. Cross-atrium-replay defense binds the chain
     // leaf's audience to THIS pre-set value.
-    let engine_audience_did = Did::from_string_unchecked("did:key:atrium-test-self".to_string());
+    let engine_audience_did =
+        Did::from_string_for_test_fixture("did:key:atrium-test-self".to_string());
     let registry = PublisherRegistry::new(&engine, admin_did, engine_audience_did);
 
     // Adversarial path: explicit "no UCAN" entry rejects.
@@ -189,12 +190,12 @@ fn publisher_registry_rejects_cross_atrium_replay() {
     let admin_did = admin_kp.public_key().to_did();
 
     // Atrium-B registry — its audience is "atrium-B-self"
-    let atrium_b_audience = Did::from_string_unchecked("did:key:atrium-B-self".to_string());
+    let atrium_b_audience = Did::from_string_for_test_fixture("did:key:atrium-B-self".to_string());
     let registry_b = PublisherRegistry::new(&engine, admin_did.clone(), atrium_b_audience.clone());
 
     // Attacker holds a UCAN signed by admin but audience-bound to
     // Atrium-A. Replay against Atrium-B's registry.
-    let atrium_a_audience = Did::from_string_unchecked("did:key:atrium-A-self".to_string());
+    let atrium_a_audience = Did::from_string_for_test_fixture("did:key:atrium-A-self".to_string());
     let cross_atrium_chain = Ucan::builder()
         .issuer_did(&admin_did)
         .audience_did(&atrium_a_audience) // audience-bound to A, not B

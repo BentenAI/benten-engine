@@ -93,7 +93,7 @@ pub fn validate_chain_with_rotation_log(
     // consultation* is local policy.
     validate_chain_no_time_check(chain)?;
     for token in chain {
-        let did = Did::from_string_unchecked(token.claims.iss.clone());
+        let did = Did::from_string_for_test_fixture(token.claims.iss.clone());
         if log.is_superseded(&did) {
             return Err(UcanError::IssuerKeypairSuperseded {
                 issuer: token.claims.iss.clone(),

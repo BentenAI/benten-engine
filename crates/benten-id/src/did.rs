@@ -105,10 +105,64 @@ impl Did {
     }
 
     /// Construct from a pre-resolved string. Caller must have already
-    /// verified the string parses via [`Did::resolve`]. (Used at
-    /// deserialization boundaries; the round-trip pin still holds.)
-    pub fn from_string_unchecked(s: String) -> Self {
+    /// verified the string parses via [`Did::resolve`]. Used at
+    /// deserialization boundaries inside `benten-id` (the round-trip
+    /// pin in `prop_did_key` covers it).
+    ///
+    /// # #835 discharge — verify-and-execute (G-CORE-2 / 2026-05-19)
+    ///
+    /// Per `RATIFIED-crypto-agility-2026-05-18.md` §"Discharges": #835
+    /// → "collapse to ONE unvalidated boundary (Deserialize stays
+    /// structurally-trusting; the signature/codepoint gate at chain-walk
+    /// is the load-bearing assertion); `from_string_unchecked` → delete
+    /// or `pub(crate)`." This wave executes the `pub(crate)` half:
+    /// the function is no longer reachable from outside `benten-id`
+    /// (the Rust type system enforces this at compile time). External
+    /// callers route through [`Did::parse_validated`] (validates the
+    /// `did:key` round-trip on construction) or — for tests with
+    /// hardcoded placeholder DID strings that intentionally bypass
+    /// the W3C validator — [`Did::from_string_for_test_fixture`]
+    /// (the explicitly test-named openly-unsafe constructor, which the
+    /// `#835` audit treats as a distinct (named) surface and does NOT
+    /// flag).
+    pub(crate) fn from_string_unchecked(s: String) -> Self {
         Self(s)
+    }
+
+    /// Test-fixture constructor — open-unsafe, named to signal intent.
+    ///
+    /// Used by integration tests + Rust crate tests that need to
+    /// construct a `Did` from a hardcoded placeholder string (e.g.
+    /// `"did:key:z6MkAlice"`) that doesn't validate against the W3C
+    /// `did:key` spec. The function name is the load-bearing safety
+    /// signal — code-review for any production-path call here is
+    /// always a regression flag (a callsite with `for_test_fixture`
+    /// in production code reads as a self-evident smell, where the
+    /// previous `from_string_unchecked` blended into surrounding
+    /// production code).
+    ///
+    /// **NEVER call from production code.** Production callers MUST
+    /// use [`Did::parse_validated`].
+    #[must_use]
+    pub fn from_string_for_test_fixture(s: String) -> Self {
+        Self(s)
+    }
+
+    /// Validate-on-construct typed constructor — the **post-#835-discharge
+    /// safe-by-default** path for external callers (napi bindings,
+    /// fixtures, other crates).
+    ///
+    /// Validates the input string round-trips through [`Did::resolve`]
+    /// (`did:key:z` prefix + multibase-decodable + Ed25519-multicodec
+    /// prefix + 32-byte pubkey) before construction. Surfaces a typed
+    /// [`DidError`] on failure rather than swallowing the bad input.
+    pub fn parse_validated(s: impl Into<String>) -> Result<Self, DidError> {
+        let s = s.into();
+        let candidate = Self(s);
+        // Round-trip-validate: if `resolve()` succeeds the string is
+        // well-formed; we return the same candidate.
+        candidate.resolve()?;
+        Ok(candidate)
     }
 }
 

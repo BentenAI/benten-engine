@@ -55,11 +55,11 @@ use benten_platform_foundation::{
 };
 
 fn plugin_a_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPluginA".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPluginA".to_string())
 }
 
 fn plugin_b_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkPluginB".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkPluginB".to_string())
 }
 
 fn source_manifest_with_no_shares() -> PluginManifest {

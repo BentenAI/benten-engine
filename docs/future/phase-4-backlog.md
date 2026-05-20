@@ -121,6 +121,16 @@ All are **informational-only unmaintained advisories** (no exploit class). The c
 
 **Tracked: [#1306](https://github.com/BentenAI/benten-engine/issues/1306).** Closes `g-core-1-mr-4` MINOR (HARD RULE 12 clause-(b) destination for the inline-only-named limitation at `crates/benten-graph/src/redb_backend.rs:1404-1417` — the `Some(did)` arm of label-index maintenance deliberately skips `PROP_INDEX_TABLE` writes for namespaced writes). Internally consistent: the missing impl matches the missing public surface (`ScopedView::get_by_property` does not exist), so the absent index can never be queried in a way that would silently return empty results. NOT a fail-OPEN — the multimap is structurally skipped, not partially partitioned. The named-destination naming is fix-now per HARD RULE 12 clause-(b). The actual impl can land in a downstream wave (likely the encryption-substrate #1301 or a materializer-pipeline wave that exercises per-DID schema queries). Source-comment at `redb_backend.rs:1408-1411` cites this row + the issue.
 
+### §3.9 Post-G-CORE-2 dep-bump tail — iroh 1.0.0-rc.0 → stable + RC→stable cleanup + #835 visibility-flip fixture migration (tracked at #1308)
+
+Companion tracker to G-CORE-2-FP-1 (which closed the G-CORE-2 ecosystem fork by bumping iroh 0.98 → 1.0.0-rc.0; ratified 2026-05-19 per `.addl/phase-4-meta/iroh-pin-investigation-2026-05-19.md`). The scope of the original "coordinated workspace dep-bump wave" carry from G-CORE-2 is now significantly reduced + folded into this smaller tail:
+
+- (a) **iroh 1.0.0-rc.0 → 1.0.0 stable** via Dependabot fast-track once upstream ships stable (single Cargo.toml edit at `crates/benten-engine/Cargo.toml:209` + `crates/benten-sync/Cargo.toml:90`).
+- (b) **RC→stable promotion stability** — G-CORE-2-FP-1 transitively picked up 5 RC→stable promotions (`sha2`, `ed25519`, `pkcs8`, `spki`, `noq`, `noq-proto`); verify lockfile stays at stable through Dependabot churn.
+- (c) **#835 `Did::from_string_unchecked` fixture-caller migration** — ~100 test-fixture call sites still use placeholder DID strings via the openly-named `Did::from_string_for_test_fixture` path. Two options: (c-i) keep that path + mechanical sweep, or (c-ii) regenerate fixtures with valid did:key strings + migrate to `Did::parse_validated` + DELETE `from_string_for_test_fixture`. Decide pre-Phase-4-Meta-Core v1-interface-freeze. The compile-time witness (a `compile_fail` doctest in `benten_crypto_suite::discharge::Issue835Discharge`) catches a silent revert of the visibility flip.
+
+Full enumeration + cross-references at GH issue #1308. (Section numbered §3.9 post-merge resolution: PR #1304's G-CORE-1 fix-pass landed §3.7 + §3.8 first; G-CORE-2's tail re-numbered from its original §3.7 → §3.9 to avoid section-number collision.)
+
 ---
 
 ## §4. Phase 4-Foundation Track B (Class-of-bug audits + cleanups)

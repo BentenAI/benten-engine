@@ -48,7 +48,7 @@ use benten_platform_foundation::{
 };
 
 fn plugin_did() -> Did {
-    Did::from_string_unchecked("did:key:z6MkConsistency".to_string())
+    Did::from_string_for_test_fixture("did:key:z6MkConsistency".to_string())
 }
 
 fn manifest_with_full_envelope() -> PluginManifest {
@@ -125,7 +125,7 @@ fn manifest_aware_scope_install_time_vs_check_time_consistency() {
     // Defense-in-depth: deriving via a different `plugin_did` produces
     // DIFFERENT output (the plugin-DID is in the canonical scope-
     // string, so a different DID input yields different output).
-    let different_did = Did::from_string_unchecked("did:key:z6MkDifferent".to_string());
+    let different_did = Did::from_string_for_test_fixture("did:key:z6MkDifferent".to_string());
     let different_requires = manifest_requires_to_scope(&manifest, &different_did);
     assert_ne!(
         install_time_requires, different_requires,

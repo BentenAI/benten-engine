@@ -120,7 +120,7 @@ fn device_did_revocation_napi_routes_through_rotation_log_not_cap_revoke_seam() 
     // Substrate-boundary arm #1: a `RotationLog` with NO entries treats
     // an arbitrary DID as un-superseded. This is the baseline state
     // against which a cap-revoke cycle must leave RotationLog alone.
-    let device_did = Did::from_string_unchecked(
+    let device_did = Did::from_string_for_test_fixture(
         "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH".to_string(),
     );
     let mut log = RotationLog::new();
@@ -162,7 +162,7 @@ fn device_did_revocation_napi_routes_through_rotation_log_not_cap_revoke_seam() 
     // is a sentinel — `is_superseded` consults `previous_did` via
     // `ct_signature_eq` on the bytes, not via signature verification
     // (that happens at the chain-walker layer separately).
-    let other_did = Did::from_string_unchecked(
+    let other_did = Did::from_string_for_test_fixture(
         "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktX".to_string(),
     );
     let attestation = RotationAttestation {
