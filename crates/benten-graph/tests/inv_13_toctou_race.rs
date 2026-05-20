@@ -45,6 +45,9 @@ fn inv_13_concurrent_user_writes_race_still_rejects() {
         label: "race-target".to_string(),
         is_privileged: false,
         authority: WriteAuthority::User,
+        // G-CORE-1 #989: legacy un-namespaced path — Inv-13 5-row matrix
+        // semantics are unchanged for `namespace_did = None`.
+        namespace_did: None,
     };
 
     const N: usize = 8;
@@ -106,6 +109,9 @@ fn inv_13_concurrent_privileged_dedup_no_audit_advance() {
         label: "race-target".to_string(),
         is_privileged: true,
         authority: WriteAuthority::EnginePrivileged,
+        // G-CORE-1 #989: legacy un-namespaced path — Inv-13 5-row matrix
+        // semantics are unchanged for `namespace_did = None`.
+        namespace_did: None,
     };
 
     const N: usize = 8;

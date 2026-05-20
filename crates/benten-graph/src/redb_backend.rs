@@ -36,9 +36,12 @@ use crate::indexes::{
     value_index_bytes,
 };
 use crate::store::{
-    ChangeEvent, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore,
+    ChangeEvent, ChangeKind, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore,
     GRAPH_SCHEMA_VERSION, NodeStore, SCHEMA_VERSION_KEY, decode_err, edge_key, edge_src_index_key,
-    edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, node_key,
+    edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, namespaced_edge_key,
+    namespaced_edge_src_index_key, namespaced_edge_src_index_prefix, namespaced_edge_tgt_index_key,
+    namespaced_label_index_key, namespaced_label_index_prefix, namespaced_node_key,
+    namespaced_node_prefix, node_key,
 };
 use crate::transaction::{TxGuard, fan_out};
 use crate::{GraphError, Transaction, WriteAuthority, WriteContext};
@@ -170,6 +173,12 @@ fn warn_if_group_durability_collapsed(mode: DurabilityMode) {
     }
 }
 
+/// One registered change-event subscriber, paired with its optional per-DID
+/// partition filter. Phase-4-Meta-Core G-CORE-1 (#989): see the
+/// [`RedbBackend::subscribers`](struct.RedbBackend.html) field doc + the
+/// `transaction` / `put_node_with_context` fan-out paths.
+pub(crate) type SubscriberSlot = (Option<Cid>, Arc<dyn ChangeSubscriber>);
+
 /// A [`KVBackend`] implementation backed by a local redb v4 database file.
 ///
 /// redb provides serializable isolation (single writer, multiple readers)
@@ -254,7 +263,20 @@ pub struct RedbBackend {
     /// Registered change-event subscribers. Behind a `Mutex<Vec<...>>` so
     /// `register_subscriber` and the post-commit fan-out can share one
     /// list without forcing callers to hold an `Arc<RedbBackend>`.
-    subscribers: Arc<Mutex<Vec<Arc<dyn ChangeSubscriber>>>>,
+    ///
+    /// Phase-4-Meta-Core G-CORE-1 (#989): each entry carries an
+    /// `Option<Cid>` subscriber-side namespace filter (see [`SubscriberSlot`]):
+    /// `None` is an un-namespaced subscriber receiving events from
+    /// un-namespaced writes only (registered via
+    /// [`Self::register_subscriber`]); `Some(did)` is a namespaced
+    /// subscriber receiving events from writes whose
+    /// `WriteContext::namespace_did == Some(did)` (registered via
+    /// [`ScopedView::register_subscriber`]). Fan-out (in
+    /// `put_node_with_context` / `put_edge_with_context` / `transaction`)
+    /// filters by exact match on this field so the C1 cross-DID non-leak
+    /// invariant holds at the change-subscriber boundary (TF-1 PIN 4
+    /// asserts this end-to-end).
+    subscribers: Arc<Mutex<Vec<SubscriberSlot>>>,
     /// In-transaction flag. Set via [`TxGuard`] at the start of a
     /// closure-based transaction, cleared on drop. Prevents nested
     /// `backend.transaction(|_| backend.transaction(...))` calls from
@@ -995,7 +1017,22 @@ impl RedbBackend {
         ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
         guard_system_zone_edge(edge, ctx.is_privileged)?;
-        self.put_edge_unchecked(edge)
+        match ctx.namespace_did.as_ref() {
+            // G-CORE-1 #989: un-namespaced edges go to the legacy
+            // `e:`/`es:`/`et:` keyspace (byte-identical to pre-#989).
+            None => self.put_edge_unchecked(edge),
+            // Namespaced edges go to the `d:<did>:e:`/`es:`/`et:` family.
+            // Body first, then indexes — same idempotent shape as the
+            // un-namespaced path so a retry under the same partition
+            // re-writes identical bytes to identical keys.
+            Some(did) => {
+                let (cid, bytes) = edge.cid_and_canonical_bytes()?;
+                self.put(&namespaced_edge_key(did, &cid), &bytes)?;
+                self.put(&namespaced_edge_src_index_key(did, &edge.source, &cid), &[])?;
+                self.put(&namespaced_edge_tgt_index_key(did, &edge.target, &cid), &[])?;
+                Ok(cid)
+            }
+        }
     }
 
     /// Internal helper — the edge write and index maintenance without the
@@ -1200,6 +1237,11 @@ impl RedbBackend {
         node: &Node,
         ctx: &WriteContext,
     ) -> Result<Cid, GraphError> {
+        // G-CORE-1 #989: SC1 system-zone ban runs FIRST and is unaffected
+        // by `namespace_did`. A namespaced unprivileged write of a
+        // `system:`-labelled node is rejected the same way an
+        // un-namespaced one is (TF-1 PIN 6 asserts this: the DID prefix
+        // MUST NOT become a privilege side-channel).
         guard_system_zone_node(node, ctx.is_privileged)?;
 
         // Compute the CID + canonical bytes in ONE encode pass (#926):
@@ -1210,6 +1252,14 @@ impl RedbBackend {
         // does not pessimize the dedup path: `bytes` was already computed
         // unconditionally before the in-txn probe, so a dedup hit paid
         // the encode cost regardless; this just makes it one pass not two.
+        //
+        // P-III SAFETY: `cid_and_canonical_bytes()` is INDEPENDENT of
+        // `ctx.namespace_did` — `namespace_did` affects only the STORAGE
+        // KEY shape, never the node's canonical bytes / CID. The #843
+        // golden CID `bafyr4icl4umfqvsu7awtnvg2iwt3bxebuywb5tp7wkejvufgp2xstgao5m`
+        // therefore stays unchanged for every shape under both the
+        // namespaced + un-namespaced paths (TF-1 PIN 2 asserts this end-
+        // to-end via the byte-equiv regression-guard).
         let (cid, bytes) = node.cid_and_canonical_bytes()?;
 
         // Phase 2a G2-A: WriteAuthority-driven per-call durability tier.
@@ -1262,7 +1312,22 @@ impl RedbBackend {
         // inside the write txn; the bloom remains a hint for the non-
         // transactional `probe_cid_exists` path only.
 
-        let n_key = node_key(&cid);
+        // G-CORE-1 #989: choose the storage-key family by `namespace_did`.
+        //   - `None`        → legacy `n:<cid>` (un-namespaced; byte-identical
+        //                     to the pre-#989 path; full label + property
+        //                     index maintenance in `LABEL_INDEX_TABLE` +
+        //                     `PROP_INDEX_TABLE`).
+        //   - `Some(did)`   → namespaced `d:<did>:n:<cid>` + a partition-
+        //                     local label index living inside `NODES_TABLE`
+        //                     under `d:<did>:l:<label>:<cid>`. The
+        //                     un-namespaced multimap indexes
+        //                     (`LABEL_INDEX_TABLE` / `PROP_INDEX_TABLE`)
+        //                     are NOT touched by namespaced writes so a
+        //                     cross-DID multimap scan cannot leak.
+        let n_key = match ctx.namespace_did.as_ref() {
+            None => node_key(&cid),
+            Some(did) => namespaced_node_key(did, &cid),
+        };
 
         let write_txn = self.begin_write_txn_with(effective_redb)?;
 
@@ -1272,6 +1337,14 @@ impl RedbBackend {
         // snapshot that includes every prior committed put. The bloom
         // fast-path is bypassed here precisely because its "definitely
         // absent" answer races with uncommitted concurrent writers.
+        //
+        // G-CORE-1 #989: the probe is keyed on `n_key` (un-namespaced or
+        // partitioned per `ctx.namespace_did`), so Inv-13 immutability
+        // fires PER-PARTITION — the same CID may legitimately appear in
+        // two distinct namespace partitions without colliding (Inv-2 is
+        // a content-immutability property of "this partition"). For the
+        // un-namespaced path the key is identical to pre-#989, so the
+        // TF-1 PIN 7 "Inv-13 5-row matrix unaffected" assertion holds.
         let already_present = {
             let table = write_txn.open_table(NODES_TABLE)?;
             table.get(n_key.as_slice())?.is_some()
@@ -1309,19 +1382,37 @@ impl RedbBackend {
             let mut nodes = write_txn.open_table(NODES_TABLE)?;
             nodes.insert(n_key.as_slice(), bytes.as_slice())?;
         }
-        {
-            let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
-            for label in &node.labels {
-                label_idx.insert(label.as_bytes(), cid.as_bytes().as_slice())?;
+        // G-CORE-1 #989: label + property index maintenance split by
+        // partition. Namespaced writes write a partition-local label
+        // index inside `NODES_TABLE`; un-namespaced writes use the
+        // pre-#989 multimap tables so legacy semantics are preserved.
+        match ctx.namespace_did.as_ref() {
+            None => {
+                let mut label_idx = write_txn.open_multimap_table(LABEL_INDEX_TABLE)?;
+                for label in &node.labels {
+                    label_idx.insert(label.as_bytes(), cid.as_bytes().as_slice())?;
+                }
+                let mut prop_idx = write_txn.open_multimap_table(PROP_INDEX_TABLE)?;
+                for label in &node.labels {
+                    for (prop_name, value) in &node.properties {
+                        let vbytes = value_index_bytes(value)?;
+                        let key = property_index_key(label, prop_name, &vbytes);
+                        prop_idx.insert(key.as_slice(), cid.as_bytes().as_slice())?;
+                    }
+                }
             }
-        }
-        {
-            let mut prop_idx = write_txn.open_multimap_table(PROP_INDEX_TABLE)?;
-            for label in &node.labels {
-                for (prop_name, value) in &node.properties {
-                    let vbytes = value_index_bytes(value)?;
-                    let key = property_index_key(label, prop_name, &vbytes);
-                    prop_idx.insert(key.as_slice(), cid.as_bytes().as_slice())?;
+            Some(did) => {
+                // Per-DID label index lives in NODES_TABLE so the
+                // partition prefix structurally confines the scan. Empty-
+                // value entries (we just need the key set; the CID is the
+                // key suffix). Property index for namespaced writes is
+                // deferred to a later wave (`ScopedView::get_by_property`
+                // is not in the G-CORE-1 surface; the TF-1 family pins
+                // only label + point + iterate + edge).
+                let mut nodes = write_txn.open_table(NODES_TABLE)?;
+                for label in &node.labels {
+                    let key = namespaced_label_index_key(did, label, &cid);
+                    nodes.insert(key.as_slice(), b"".as_slice())?;
                 }
             }
         }
@@ -1417,7 +1508,52 @@ impl RedbBackend {
             log.push(event);
         }
 
+        // G-CORE-1 #989: post-commit subscriber fan-out, partition-filtered.
+        // See `dispatch_node_change_event` for the matching + invocation
+        // contract (extracted helper to keep `put_node_with_context`
+        // under clippy's `too_many_lines` cap).
+        self.dispatch_node_change_event(node, &cid, tx_id, ctx.namespace_did.as_ref());
+
         Ok(cid)
+    }
+
+    /// G-CORE-1 #989 — post-commit `ChangeEvent::Created` fan-out for
+    /// `put_node_with_context`. Snapshots subscribers whose registration
+    /// `namespace_did` matches the write's exactly (`target_ns`), then
+    /// invokes each subscriber's `on_change` synchronously. Subscriber
+    /// panics are caught and discarded (parity with the `fan_out` helper
+    /// the `transaction()` path uses).
+    fn dispatch_node_change_event(
+        &self,
+        node: &Node,
+        cid: &Cid,
+        tx_id: u64,
+        target_ns: Option<&Cid>,
+    ) {
+        let matched_subs = self.snapshot_subscribers_for(target_ns);
+        if matched_subs.is_empty() {
+            return;
+        }
+        let event = ChangeEvent {
+            cid: *cid,
+            labels: node.labels.clone(),
+            kind: ChangeKind::Created,
+            tx_id,
+            actor_cid: None,
+            handler_cid: None,
+            capability_grant_cid: None,
+            node: Some(node.clone()),
+            edge_endpoints: None,
+        };
+        for sub in &matched_subs {
+            // Per the existing `transaction()` / `fan_out()` contract,
+            // subscriber panics MUST NOT take down the commit thread.
+            // Discard the payload; a Phase-3 dead-letter counter will
+            // replace the silent swallow across both fan-out paths.
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                sub.on_change(&event);
+            }));
+        }
     }
 
     /// Backing for [`Self::put_node_at_cid_for_test`]. See the public
@@ -1731,14 +1867,14 @@ impl RedbBackend {
                     // g3-ce-10 reservation: a subscriber registered between
                     // the commit and the snapshot below observes the just-
                     // committed event; one registered afterwards does not.
-                    let subs = {
-                        let guard = self.subscribers.lock_recover();
-                        if guard.is_empty() {
-                            Vec::new()
-                        } else {
-                            guard.clone()
-                        }
-                    };
+                    // G-CORE-1 #989: the `transaction` path is
+                    // un-namespaced today (`Transaction` does not carry a
+                    // `namespace_did`); deliver only to un-namespaced
+                    // subscribers so the C1 cross-DID non-leak invariant
+                    // holds end-to-end at the change-subscriber boundary.
+                    // A future per-DID `transaction` path will set a
+                    // per-call namespace_did + filter the same way.
+                    let subs = self.snapshot_subscribers_for(None);
                     if !subs.is_empty() {
                         // #645 (Safe-4, META #707 slice): release the
                         // in-transaction `TxGuard` BEFORE fanning out to
@@ -1869,9 +2005,63 @@ impl RedbBackend {
         &self,
         subscriber: Arc<dyn ChangeSubscriber>,
     ) -> Result<(), GraphError> {
+        // G-CORE-1 #989: subscribers registered through the un-scoped
+        // entry point receive events from un-namespaced writes only
+        // (the `Some(did)` namespaced-writes fan-out path filters them
+        // OUT). To subscribe to a per-DID partition, call
+        // [`ScopedView::register_subscriber`] on a [`Self::scoped`] view.
+        self.register_subscriber_slot(None, subscriber)
+    }
+
+    /// Phase-4-Meta-Core G-CORE-1 (#989): unified registration entry point.
+    /// `target_ns = None` is the un-namespaced subscriber; `Some(did)` is
+    /// the per-DID-partition subscriber. Shared backing for both
+    /// `register_subscriber` and `register_namespaced_subscriber`.
+    fn register_subscriber_slot(
+        &self,
+        target_ns: Option<Cid>,
+        subscriber: Arc<dyn ChangeSubscriber>,
+    ) -> Result<(), GraphError> {
         let mut guard = self.subscribers.lock_recover();
-        guard.push(subscriber);
+        guard.push((target_ns, subscriber));
         Ok(())
+    }
+
+    /// Phase-4-Meta-Core G-CORE-1 (#989): subscriber-internal entry point
+    /// used by [`ScopedView::register_subscriber`] to register a subscriber
+    /// confined to a single DID partition. The fan-out path in
+    /// `put_node_with_context` / `put_edge_with_context` / `transaction`
+    /// only invokes this subscriber on events whose write carried
+    /// `WriteContext::namespace_did == Some(namespace_did)`.
+    fn register_namespaced_subscriber(
+        &self,
+        namespace_did: Cid,
+        subscriber: Arc<dyn ChangeSubscriber>,
+    ) -> Result<(), GraphError> {
+        self.register_subscriber_slot(Some(namespace_did), subscriber)
+    }
+
+    /// Phase-4-Meta-Core G-CORE-1 (#989) — fan-out helper. Snapshot
+    /// subscribers whose registration namespace matches `target_ns`
+    /// exactly (`None` = un-namespaced subscribers; `Some(did)` = the
+    /// matching per-DID subscribers). Clones the inner `Arc`s so the
+    /// subscribers mutex is released before any callback fires (parity
+    /// with the existing `transaction()` fan-out drop-guard pattern).
+    fn snapshot_subscribers_for(&self, target_ns: Option<&Cid>) -> Vec<Arc<dyn ChangeSubscriber>> {
+        let guard = self.subscribers.lock_recover();
+        if guard.is_empty() {
+            return Vec::new();
+        }
+        guard
+            .iter()
+            .filter_map(|(sub_ns, sub)| {
+                if sub_ns.as_ref() == target_ns {
+                    Some(Arc::clone(sub))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Count of currently-registered change subscribers. Used by thinness
@@ -1889,6 +2079,28 @@ impl RedbBackend {
         self.subscribers.lock_recover().len()
     }
 
+    /// Phase-4-Meta-Core G-CORE-1 (#989): open a per-DID storage-partition
+    /// view scoped to `namespace_did`. Every read (`get_node`, `get_edge`,
+    /// `get_by_label`, `iter_node_cids`, `edges_from`) issued through the
+    /// returned [`ScopedView`] is confined to that DID's partition; every
+    /// subscriber registered through [`ScopedView::register_subscriber`]
+    /// is fanned-out events from writes confined to that DID's partition.
+    ///
+    /// **Cross-DID non-leak invariant (C1 — plan §1.A; TF-1 exit
+    /// obligation):** for any DID-X ≠ DID-Y, a `Backend::scoped(Y)` view
+    /// returns `None` / `Vec::new()` for every key/CID written under
+    /// `namespace_did = Some(X)`. The partition is enforced structurally
+    /// at the key-prefix layer (see `store::partition_prefix`), so the
+    /// boundary cannot be bypassed by a generic-trait dispatch or a
+    /// privileged-API path.
+    #[must_use]
+    pub fn scoped(&self, namespace_did: Cid) -> ScopedView<'_> {
+        ScopedView {
+            backend: self,
+            namespace_did,
+        }
+    }
+
     /// Open a MVCC snapshot handle. The handle captures redb's read-txn at
     /// the call instant; subsequent writes to the backend are invisible to
     /// the snapshot until it is dropped and a fresh one is opened.
@@ -1901,6 +2113,188 @@ impl RedbBackend {
         Ok(crate::SnapshotHandle {
             read_txn: Some(read_txn),
         })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// G-CORE-1 #989 — per-DID storage-partition view
+// ---------------------------------------------------------------------------
+
+/// Per-DID storage-partition view of a [`RedbBackend`]. Returned by
+/// [`RedbBackend::scoped`]; every read + subscriber registration issued
+/// through this handle is confined to the partition keyed by
+/// `namespace_did` — the C1 cross-DID non-leak invariant (plan §1.A;
+/// TF-1 exit obligation).
+///
+/// The view borrows the backend (`'a` lifetime) so it costs nothing to
+/// construct; the partition prefix is the `d:<cid_bytes>:` envelope
+/// derived once at construction-time per `store::partition_prefix`.
+///
+/// The view is **read-only** — namespaced writes go through
+/// `RedbBackend::put_node_with_context` / `put_edge_with_context` with
+/// a `WriteContext::with_namespace_did(Some(did))`; the view does NOT
+/// duplicate the write surface so the SC1 system-zone guard, Inv-13
+/// 5-row dispatch matrix, and durability tiers stay in one place.
+pub struct ScopedView<'a> {
+    backend: &'a RedbBackend,
+    namespace_did: Cid,
+}
+
+impl<'a> ScopedView<'a> {
+    /// The DID this view is scoped to. Stable for the view's lifetime.
+    #[must_use]
+    pub fn namespace_did(&self) -> &Cid {
+        &self.namespace_did
+    }
+
+    /// Per-DID point read. Returns `Ok(None)` if `cid` is not present in
+    /// THIS partition, even if the same `cid` is present in a different
+    /// partition — the C1 confidentiality-by-isolation arm at the point-
+    /// read surface (TF-1 PIN 1).
+    ///
+    /// **Verify-on-read** (W9-T6 parity with `RedbBackend::get_node`):
+    /// the stored bytes are BLAKE3-hashed BEFORE decode; a mismatch
+    /// surfaces as `E_INV_CONTENT_HASH`.
+    ///
+    /// # Errors
+    /// - `Ok(None)` on a clean miss within this partition.
+    /// - [`GraphError::Core`] carrying `CoreError::ContentHashMismatch`
+    ///   on stored-bytes vs. CID drift.
+    /// - [`GraphError::Core`] carrying `CoreError::Serialize` on decode
+    ///   failure of hash-matching bytes.
+    /// - [`GraphError::RedbSource`] on redb I/O failure.
+    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, GraphError> {
+        let key = namespaced_node_key(&self.namespace_did, cid);
+        let Some(bytes) = self.backend.get(&key)? else {
+            return Ok(None);
+        };
+        // Verify-on-read symmetric with `RedbBackend::get_node`.
+        use benten_core::CoreError;
+        let computed_cid = Cid::from_blake3_digest(*blake3::hash(&bytes).as_bytes());
+        if computed_cid != *cid {
+            return Err(GraphError::from(CoreError::ContentHashMismatch {
+                path: "node",
+                expected: *cid,
+                actual: computed_cid,
+            }));
+        }
+        let node: Node = serde_ipld_dagcbor::from_slice(&bytes)
+            .map_err(decode_err)
+            .map_err(GraphError::from)?;
+        Ok(Some(node))
+    }
+
+    /// Per-DID label range scan. Returns every Node CID stored under
+    /// `label` IN THIS PARTITION; cross-partition writes are invisible
+    /// (TF-1 PIN 2). Empty input returns an empty result (parity with
+    /// `RedbBackend::get_by_label`).
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] on redb I/O failure.
+    /// - [`GraphError::Core`] if an index entry's bytes don't round-trip
+    ///   through [`Cid::from_bytes`].
+    pub fn get_by_label(&self, label: &str) -> Result<Vec<Cid>, GraphError> {
+        if label.is_empty() {
+            return Ok(Vec::new());
+        }
+        let prefix = namespaced_label_index_prefix(&self.namespace_did, label);
+        let hits = self.backend.scan(&prefix)?;
+        let mut out = Vec::with_capacity(hits.len());
+        for (k, _v) in hits.iter() {
+            // Key shape: `d:<did>:l:<label>:<cid>` — the trailing 36
+            // bytes are the node CID per `Cid::CID_LEN` (`namespaced_label_index_key`).
+            let Some(cid_bytes) = k.get(prefix.len()..) else {
+                continue;
+            };
+            let cid = Cid::from_bytes(cid_bytes).map_err(GraphError::from)?;
+            out.push(cid);
+        }
+        Ok(out)
+    }
+
+    /// Per-DID raw node-keyspace iterate. Yields every node CID stored in
+    /// THIS partition; cross-partition writes are invisible (TF-1 PIN 3).
+    /// Iterate is the path index-scoping alone cannot mask, so this is
+    /// the lowest-level partition-confinement assertion.
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] on redb I/O failure.
+    /// - [`GraphError::Core`] if a key's CID-suffix bytes don't round-
+    ///   trip through [`Cid::from_bytes`].
+    pub fn iter_node_cids(&self) -> Result<Vec<Cid>, GraphError> {
+        let prefix = namespaced_node_prefix(&self.namespace_did);
+        let hits = self.backend.scan(&prefix)?;
+        let mut out = Vec::with_capacity(hits.len());
+        for (k, _v) in hits.iter() {
+            let Some(cid_bytes) = k.get(prefix.len()..) else {
+                continue;
+            };
+            let cid = Cid::from_bytes(cid_bytes).map_err(GraphError::from)?;
+            out.push(cid);
+        }
+        Ok(out)
+    }
+
+    /// Per-DID edge point read. Returns `Ok(None)` if `cid` is not
+    /// present in THIS partition (TF-1 PIN 5).
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] on redb I/O failure.
+    /// - [`GraphError::Core`] on decode failure.
+    pub fn get_edge(&self, cid: &Cid) -> Result<Option<Edge>, GraphError> {
+        let key = namespaced_edge_key(&self.namespace_did, cid);
+        let Some(bytes) = self.backend.get(&key)? else {
+            return Ok(None);
+        };
+        let edge: Edge = serde_ipld_dagcbor::from_slice(&bytes)
+            .map_err(decode_err)
+            .map_err(GraphError::from)?;
+        Ok(Some(edge))
+    }
+
+    /// Per-DID `edges_from`. Returns every edge whose `source == cid`
+    /// IN THIS PARTITION; cross-partition writes are invisible (TF-1
+    /// PIN 5 — the `es:` index keyspace must be DID-partitioned, not
+    /// just `n:`).
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] on redb I/O failure.
+    /// - [`GraphError::Core`] on decode failure.
+    pub fn edges_from(&self, source: &Cid) -> Result<Vec<Edge>, GraphError> {
+        let prefix = namespaced_edge_src_index_prefix(&self.namespace_did, source);
+        let hits = self.backend.scan(&prefix)?;
+        let mut out = Vec::with_capacity(hits.len());
+        for (k, _v) in hits.iter() {
+            // Trailing `Cid::CID_LEN` bytes are the edge CID.
+            let Some(edge_cid_bytes) = k.get(prefix.len()..) else {
+                continue;
+            };
+            let edge_cid = Cid::from_bytes(edge_cid_bytes).map_err(GraphError::from)?;
+            if let Some(edge) = self.get_edge(&edge_cid)? {
+                out.push(edge);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Register a change subscriber confined to this DID partition.
+    /// The post-commit fan-out delivers events ONLY for writes whose
+    /// `WriteContext::namespace_did == Some(self.namespace_did)`.
+    /// Cross-partition writes + un-namespaced writes do NOT reach this
+    /// subscriber (TF-1 PIN 4: a Y-scoped subscriber observes its own
+    /// Y write but NOT an X write through the real post-commit fan-out).
+    ///
+    /// # Errors
+    /// Returns `Ok(())` unconditionally today; the fallible signature
+    /// mirrors [`RedbBackend::register_subscriber`] for forward-compat
+    /// parity (Phase-3 WASM backends may reject incompatible
+    /// subscribers).
+    pub fn register_subscriber(
+        &self,
+        subscriber: Arc<dyn ChangeSubscriber>,
+    ) -> Result<(), GraphError> {
+        self.backend
+            .register_namespaced_subscriber(self.namespace_did, subscriber)
     }
 }
 

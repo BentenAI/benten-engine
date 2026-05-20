@@ -17,9 +17,25 @@
 //!   implements `NodeStore` / `EdgeStore` directly (no blanket impl — the
 //!   index-maintenance contract is per-backend).
 //! - [`redb_backend`] — the concrete [`RedbBackend`], its `KVBackend` /
-//!   `NodeStore` / `EdgeStore` impls, and the index maintenance.
+//!   `NodeStore` / `EdgeStore` impls, the index maintenance, and the
+//!   per-DID partition view [`redb_backend::ScopedView`] (G-CORE-1 #989).
 //! - this module — [`GraphError`] and the Phase-1 stubs (`Transaction`,
 //!   `WriteContext`, `SnapshotHandle`) owned by G3 / G6.
+//!
+//! ## Phase-4-Meta-Core G-CORE-1 (#989) — per-DID storage partition seam
+//!
+//! `WriteContext::namespace_did: Option<Cid>` carries a per-DID storage
+//! partition selector through the write path. `None` (the default) routes
+//! to the legacy un-namespaced keyspace (byte-identical to the pre-#989
+//! path; the #843 golden CID is preserved). `Some(did)` confines the write
+//! to a per-DID partition under the `d:<did_bytes>:` key envelope, plus a
+//! partition-local label index, edge keyspace, and post-commit change-
+//! subscriber registration. [`redb_backend::ScopedView`] (returned by
+//! [`RedbBackend::scoped`]) is the read-side view; cross-DID reads are
+//! invariant-blocked at the key-prefix layer (plan §1.A C1 — cross-DID
+//! non-leak). The `WriteContext` shape including `namespace_did` is the
+//! §1.A.FROZEN item-5 locked canary surface; later waves consume it but
+//! do not reshape it.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -68,7 +84,7 @@ pub use graph_backend::RedbTransactionRunner;
 pub use in_memory_backend::InMemoryBackend;
 pub use mutex_ext::{MutexExt, RwLockExt};
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
-pub use redb_backend::RedbBackend;
+pub use redb_backend::{RedbBackend, ScopedView};
 pub use store::{ChangeEvent, ChangeKind, ChangeSubscriber, EdgeStore, NodeStore};
 #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
 pub use transaction::{PendingOp, Transaction};
@@ -833,6 +849,38 @@ impl SnapshotHandle {
 /// create_view, revoke_capability), bypassing the system-zone label ban.
 ///
 /// **Phase 1 G3-A / SC1 stub.**
+///
+/// ## Phase-4-Meta-Core G-CORE-1 (#989) — `namespace_did` partition seam
+///
+/// `namespace_did: Option<Cid>` is the storage-partition seam: when
+/// `Some(did)`, the write lands in the per-DID partition for `did`; when
+/// `None`, the write lands in the legacy (un-namespaced) keyspace — the
+/// pre-#989 behaviour, byte-identical to the path that existed at
+/// origin/main `ed03729a`. The field is additive — a `Default::default()`
+/// `WriteContext` carries `namespace_did = None` so existing call sites
+/// see no behavioural change (Inv-13 5-row dispatch matrix, durability
+/// tiers, SC1 system-zone ban: all unchanged for the un-namespaced path).
+///
+/// **Type: `Option<Cid>`** (per multitenant-r1-1 + plan §3 G-CORE-1 + #989
+/// body authority). The DID identifier surfaces as a Cid-encoded value at
+/// the `WriteContext` boundary so `benten-graph` does NOT take an edge on
+/// `benten-id` (the arch-r1-10 layering invariant; verified by the absence
+/// of `benten-id` from `crates/benten-graph/Cargo.toml`). The `Cid` type
+/// already lives in `benten-core` and is the natural fit.
+///
+/// **§1.A.FROZEN item 5 (locked canary shape):** this `WriteContext` shape
+/// — the three pre-#989 fields PLUS `namespace_did` — is the shape
+/// G-CORE-9 freezes for v1; later waves consume it but do not reshape it.
+///
+/// **C1 cross-DID non-leak invariant (plan §1.A C1; G-CORE-1 exit
+/// obligation):** any write that carries `namespace_did = Some(X)` is
+/// confined to the X partition end-to-end — point read, label range scan,
+/// raw key iterate, and change-subscriber fan-out all respect the
+/// boundary. A view scoped to `Some(Y)` for `Y != X` sees NONE of the X
+/// writes. The runtime check is structural: keys land under a per-DID
+/// prefix derived from `Cid::as_bytes()`, so an unscoped path cannot
+/// observe a scoped key by accident (the legacy `n:`/`e:`/`es:`/`et:`
+/// prefixes never collide with the per-DID prefix family).
 #[derive(Debug, Clone)]
 pub struct WriteContext {
     /// The Node's primary label — used for the system-zone prefix check.
@@ -844,6 +892,15 @@ pub struct WriteContext {
     /// runs. Defaults to [`WriteAuthority::User`]. `EnginePrivileged` aligns
     /// with `is_privileged = true`; `SyncReplica` is Phase-3 reserved.
     pub authority: WriteAuthority,
+    /// Phase-4-Meta-Core G-CORE-1 (#989): per-DID storage-partition seam.
+    /// `None` = the legacy (un-namespaced) keyspace (byte-identical to the
+    /// pre-#989 path). `Some(did)` = the write is confined to the per-DID
+    /// partition for `did`. See the struct-level docs for the cross-DID
+    /// non-leak invariant + the canonical-bytes-independence guarantee.
+    ///
+    /// Use the builder [`WriteContext::with_namespace_did`] to set, and
+    /// the accessor [`WriteContext::namespace_did`] to read.
+    pub namespace_did: Option<Cid>,
 }
 
 impl Default for WriteContext {
@@ -852,6 +909,12 @@ impl Default for WriteContext {
             label: String::new(),
             is_privileged: false,
             authority: WriteAuthority::User,
+            // G-CORE-1 #989: default = legacy (un-namespaced) keyspace.
+            // A `Default::default()` `WriteContext` MUST carry
+            // `namespace_did = None` so every pre-#989 call site sees
+            // byte-identical behaviour (TF-1 PIN 7 asserts this; the
+            // #843 golden CID under the un-namespaced path stays UNCHANGED).
+            namespace_did: None,
         }
     }
 }
@@ -865,6 +928,7 @@ impl WriteContext {
             label: label.into(),
             is_privileged: false,
             authority: WriteAuthority::User,
+            namespace_did: None,
         }
     }
 
@@ -879,6 +943,7 @@ impl WriteContext {
             label: String::new(),
             is_privileged: true,
             authority: WriteAuthority::EnginePrivileged,
+            namespace_did: None,
         }
     }
 
@@ -896,6 +961,26 @@ impl WriteContext {
         }
         self.authority = authority;
         self
+    }
+
+    /// Phase-4-Meta-Core G-CORE-1 (#989): set the per-DID storage-partition
+    /// `namespace_did`. `Some(did)` confines the write to the per-DID
+    /// partition; `None` (the default) routes to the legacy un-namespaced
+    /// keyspace.
+    ///
+    /// Builder-style — chains with [`Self::new`] and [`Self::with_authority`].
+    #[must_use]
+    pub fn with_namespace_did(mut self, namespace_did: Option<Cid>) -> Self {
+        self.namespace_did = namespace_did;
+        self
+    }
+
+    /// Phase-4-Meta-Core G-CORE-1 (#989): read the per-DID storage-partition
+    /// `namespace_did`. Returns `Some(&Cid)` for a namespaced context, `None`
+    /// for the legacy un-namespaced path.
+    #[must_use]
+    pub fn namespace_did(&self) -> Option<&Cid> {
+        self.namespace_did.as_ref()
     }
 
     /// Called by the transaction primitive to enforce the SC1 stopgap.
