@@ -880,6 +880,96 @@ pub fn validate_schema_author_within_manifest_envelope(
 }
 
 // =====================================================================
+// G-CORE-7 §4.19(b) + §4.32 — schema-author trust-list prompt path
+// =====================================================================
+
+/// Outcome of a schema-provenance verification against a manifest's
+/// `requires_schema_authors` trust-list per Ben Q3 ratification.
+///
+/// **G-CORE-7 §4.19(b)**: introduces the long-named
+/// `UserPromptRequired` surface — the third outcome between
+/// auto-accept (`Trusted`) and hard-reject. Per Ben Q3 the v1 admin UI
+/// ships with default-empty trust-list, so a schema from an unknown
+/// peer-DID surfaces this outcome rather than auto-rejecting; the
+/// admin UI's user-prompt UX consumes it and writes the user's choice
+/// back into the manifest envelope's trust-list (§4.32 wiring).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProvenanceOutcome {
+    /// The schema's `peer_did` is in the manifest's
+    /// `requires_schema_authors` trust-list (or the trust-list is
+    /// `None`/empty in a context where the caller pre-accepted that
+    /// shape) — materialize silently.
+    Trusted,
+    /// The trust-list is non-empty BUT does NOT contain the schema's
+    /// peer-DID, AND the caller has NOT pre-accepted the
+    /// default-empty bypass — admin UI prompts the user; the user's
+    /// choice updates the manifest's trust-list (§4.32) so subsequent
+    /// schemas from the same peer-DID return `Trusted`.
+    UserPromptRequired {
+        /// The schema's peer-DID — the admin UI shows this to the
+        /// user so they can decide whether to trust this author.
+        peer_did: Did,
+    },
+}
+
+/// **G-CORE-7 §4.19(b) + §4.32** — verify a schema's peer-DID against a
+/// manifest's `requires_schema_authors` trust-list, surfacing the
+/// `ProvenanceOutcome::UserPromptRequired` variant for the
+/// post-Ben-Q3 default-empty admin-UI shape.
+///
+/// Semantics (per Ben Q3 ratification — r4-triage §7):
+///
+/// - `None` trust-list (Q3 default; admin UI v0 ships this) AND a
+///   schema from an unknown peer-DID → `UserPromptRequired { peer_did }`.
+///   This is the load-bearing distinction from
+///   [`validate_schema_author_within_manifest_envelope`] which returns
+///   `Ok(())` on `None` (auto-accept; the legacy structural shape).
+///   The prompt path EXTENDS the structural shape with the user-choice
+///   surface (admin UI consumes the prompt).
+///
+/// - `Some(list)` non-empty AND `schema_peer_did ∈ list` → `Trusted`.
+///
+/// - `Some(list)` non-empty AND `schema_peer_did ∉ list` →
+///   `UserPromptRequired { peer_did }`.
+///
+/// - `Some(list)` empty Vec — treated as `None` (the Q3 default-empty
+///   marker may be encoded either way; both surface
+///   `UserPromptRequired` for unknown peer-DIDs).
+///
+/// **§4.32 within-envelope binding:** the trust-list is read from the
+/// supplied `manifest` reference — callers MUST hand in the manifest
+/// they verified via `validate_with_clock` / `validate_with_rotation_log`
+/// (i.e. the post-signature-verified envelope), NOT a post-install-
+/// mutated copy. The function does NOT re-verify the manifest envelope
+/// — that's the caller's contract; this function is the trust-list
+/// arm only.
+#[must_use]
+pub fn verify_schema_provenance_with_trust_list(
+    schema_peer_did: &Did,
+    manifest: &PluginManifest,
+) -> ProvenanceOutcome {
+    match &manifest.requires_schema_authors {
+        // Q3 default-empty (None or empty Vec) — surface the prompt so
+        // the user explicitly chooses on first encounter.
+        None => ProvenanceOutcome::UserPromptRequired {
+            peer_did: schema_peer_did.clone(),
+        },
+        Some(list) if list.is_empty() => ProvenanceOutcome::UserPromptRequired {
+            peer_did: schema_peer_did.clone(),
+        },
+        Some(list) => {
+            if list.contains(schema_peer_did) {
+                ProvenanceOutcome::Trusted
+            } else {
+                ProvenanceOutcome::UserPromptRequired {
+                    peer_did: schema_peer_did.clone(),
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
 // Signing helper
 // =====================================================================
 

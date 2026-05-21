@@ -42,8 +42,22 @@ thiserror = { workspace = true }
 # satisfies both G23-A's needs and G24-D's needs — batch-2 conflict resolution.)
 serde_json = { workspace = true }
 
+# G-CORE-7 §6.4 — `RedbManifestStore` durable backend (redb-backed
+# install-record persistence; survives process restart). Native-only
+# (gated `#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]`
+# in `manifest_store::redb_store`); browser-wasm32 builds use the
+# in-RAM `ManifestStore` HashMap only. redb is the workspace's canonical
+# KV store (benten-graph already depends on redb v4 per workspace
+# Cargo.toml).
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))'.dependencies]
+redb = "4"
+
 [dev-dependencies]
 benten-engine = { path = "../benten-engine" }
+# G-CORE-7 §6.4 — tempfile for the durable-round-trip test that
+# opens a `RedbManifestStore` at a tempdir path, drops, reopens, and
+# asserts the install record survives.
+tempfile = "3"
 # G23-A cap-policy end-to-end pin (RecordingCapPolicy) implements
 # `benten_caps::CapabilityPolicy` to count cap-checks at the engine
 # boundary during a schema-emitted Subgraph walk per §3.6b pim-2.

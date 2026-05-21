@@ -1,5 +1,29 @@
-//! Phase-4-Foundation G24-D-FP-1 — `ManifestStore` durable surface with
-//! verify-on-every-load defense.
+//! Phase-4-Foundation G24-D-FP-1 + **G-CORE-7 §6.4** — `ManifestStore`
+//! durable surface with verify-on-every-load defense, AND a durable
+//! `RedbManifestStore` backend whose persisted install records survive
+//! a process / handle restart.
+//!
+//! ## G-CORE-7 §6.4 — `RedbManifestStore`
+//!
+//! At HEAD pre-G-CORE-7 the `ManifestStore` is an in-RAM `HashMap` only
+//! (its own original doc: "the redb backing is a follow-on"). G-CORE-7
+//! lands the follow-on: [`RedbManifestStore`] is a thin durable wrapper
+//! that persists the same canonical-bytes DAG-CBOR `InstallRecord`
+//! encoding `ManifestStore` already stores (verify-on-load byte
+//! equality preserved), so the verify-on-every-load defense extends
+//! across process restarts.
+//!
+//! Native-only (gated `#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]`);
+//! browser-wasm32 builds continue using the in-RAM `ManifestStore`.
+//!
+//! **P-III note (§3.5m):** `RedbManifestStore` is a NEW durable
+//! backend — it does NOT mutate any canonical-bytes / on-disk wire
+//! format that is content-addressed or P-III-frozen. The persisted-
+//! record bytes ARE the existing DAG-CBOR `InstallRecord` encoding;
+//! redb keys on the plugin-DID string form, both stable inputs. No
+//! P-III decision-point sits on §6.4.
+//!
+//! ## G24-D-FP-1 — in-RAM `ManifestStore` (preserved)
 //!
 //! Per threat-model §T5a + defense step 1 ("Install record verified on
 //! EVERY load, not just at install — (i) at engine boot, (ii) at
@@ -163,6 +187,195 @@ impl ManifestStore {
     #[must_use]
     pub fn contains(&self, plugin_did: &Did) -> bool {
         self.records.contains_key(plugin_did)
+    }
+}
+
+// =====================================================================
+// G-CORE-7 §6.4 — RedbManifestStore (durable)
+// =====================================================================
+
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+pub use redb_store::RedbManifestStore;
+
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+mod redb_store {
+    //! Durable redb-backed manifest store. Persists the SAME canonical-
+    //! bytes DAG-CBOR `InstallRecord` encoding the in-RAM
+    //! [`super::ManifestStore`] stores; reopening a store at the same
+    //! path returns the previously-persisted records.
+
+    use super::DriftNotification;
+    use crate::plugin_manifest::InstallRecord;
+    use benten_errors::ErrorCode;
+    use benten_id::did::Did;
+    use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
+    use std::path::Path;
+
+    /// Single redb table mapping `plugin_did.as_str()` (UTF-8 bytes) →
+    /// canonical-bytes DAG-CBOR `InstallRecord`. Naming kept in the
+    /// `benten_*` namespace to mirror benten-graph's `benten_nodes`
+    /// table convention.
+    const INSTALL_RECORDS_TABLE: TableDefinition<&str, &[u8]> =
+        TableDefinition::new("benten_plugin_manifest_install_records");
+
+    /// **G-CORE-7 §6.4** — durable redb-backed manifest store.
+    ///
+    /// Survives process restart: opening a `RedbManifestStore` at the
+    /// SAME path returns the previously-persisted records. The
+    /// verify-on-every-load defense from [`super::ManifestStore`]
+    /// extends across the restart boundary — the loaded bytes are
+    /// re-verified via [`InstallRecord::verify_user_signature`] before
+    /// being returned to the caller.
+    pub struct RedbManifestStore {
+        db: Database,
+        notifications: std::sync::Mutex<Vec<DriftNotification>>,
+    }
+
+    impl std::fmt::Debug for RedbManifestStore {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("RedbManifestStore")
+                .field("notifications", &self.notifications)
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl RedbManifestStore {
+        /// Open-or-create a durable manifest store at `path`.
+        ///
+        /// Idempotent on an existing file. Per the redb workspace
+        /// pattern (mirrors `RedbBackend::open_or_create`) creating
+        /// the table is part of construction so callers can rely on
+        /// the schema being present immediately.
+        ///
+        /// # Errors
+        ///
+        /// `E_INTERNAL` on any redb open / table-create failure.
+        pub fn open_or_create(path: impl AsRef<Path>) -> Result<Self, ErrorCode> {
+            let db = Database::create(path.as_ref()).map_err(|_| ErrorCode::GraphInternal)?;
+            // Ensure the table exists with a no-op write.
+            {
+                let write_txn = db.begin_write().map_err(|_| ErrorCode::GraphInternal)?;
+                let _ = write_txn
+                    .open_table(INSTALL_RECORDS_TABLE)
+                    .map_err(|_| ErrorCode::GraphInternal)?;
+                write_txn.commit().map_err(|_| ErrorCode::GraphInternal)?;
+            }
+            Ok(Self {
+                db,
+                notifications: std::sync::Mutex::new(Vec::new()),
+            })
+        }
+
+        /// Persist a verified install record under `plugin_did`. The
+        /// caller MUST have verified the user-DID signature before
+        /// calling — defense-in-depth, this method re-verifies as the
+        /// first-of-three verify points (install / load / merge),
+        /// mirroring the in-RAM [`super::ManifestStore::install_plugin`]
+        /// discipline.
+        ///
+        /// # Errors
+        ///
+        /// - `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` if the
+        ///   record's user-DID signature fails to verify (defense in
+        ///   depth).
+        /// - `E_PLUGIN_MANIFEST_INVALID` on canonical-bytes encode
+        ///   failure.
+        /// - `E_INTERNAL` on redb transaction failure.
+        pub fn install_plugin(
+            &mut self,
+            plugin_did: Did,
+            record: InstallRecord,
+        ) -> Result<(), ErrorCode> {
+            record.verify_user_signature()?;
+            let bytes = serde_ipld_dagcbor::to_vec(&record)
+                .map_err(|_| ErrorCode::PluginManifestInvalid)?;
+            let write_txn = self
+                .db
+                .begin_write()
+                .map_err(|_| ErrorCode::GraphInternal)?;
+            {
+                let mut table = write_txn
+                    .open_table(INSTALL_RECORDS_TABLE)
+                    .map_err(|_| ErrorCode::GraphInternal)?;
+                table
+                    .insert(plugin_did.as_str(), bytes.as_slice())
+                    .map_err(|_| ErrorCode::GraphInternal)?;
+            }
+            write_txn.commit().map_err(|_| ErrorCode::GraphInternal)?;
+            Ok(())
+        }
+
+        /// Re-verify and load the install record for `plugin_did`.
+        /// Second-of-three verify points; surfaces drift notifications
+        /// to the caller via [`Self::captured_user_notifications`].
+        ///
+        /// # Errors
+        ///
+        /// Same as [`super::ManifestStore::load_verified`] PLUS
+        /// `E_INTERNAL` on redb read failure.
+        pub fn load_verified(&mut self, plugin_did: &Did) -> Result<InstallRecord, ErrorCode> {
+            let bytes = {
+                let read_txn = self.db.begin_read().map_err(|_| ErrorCode::GraphInternal)?;
+                let table = read_txn
+                    .open_table(INSTALL_RECORDS_TABLE)
+                    .map_err(|_| ErrorCode::GraphInternal)?;
+                let Some(guard) = table
+                    .get(plugin_did.as_str())
+                    .map_err(|_| ErrorCode::GraphInternal)?
+                else {
+                    return Err(ErrorCode::PluginManifestInvalid);
+                };
+                guard.value().to_vec()
+            };
+            let record: InstallRecord = match serde_ipld_dagcbor::from_slice(&bytes) {
+                Ok(r) => r,
+                Err(_) => {
+                    if let Ok(mut notes) = self.notifications.lock() {
+                        notes.push(DriftNotification {
+                            plugin_did: plugin_did.clone(),
+                            reason: "E_PLUGIN_MANIFEST_INVALID".to_string(),
+                        });
+                    }
+                    return Err(ErrorCode::PluginManifestInvalid);
+                }
+            };
+            if let Err(e) = record.verify_user_signature() {
+                if let Ok(mut notes) = self.notifications.lock() {
+                    notes.push(DriftNotification {
+                        plugin_did: plugin_did.clone(),
+                        reason: "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID".to_string(),
+                    });
+                }
+                return Err(e);
+            }
+            Ok(record)
+        }
+
+        /// Snapshot of captured drift notifications (test observable).
+        #[must_use]
+        pub fn captured_user_notifications(&self) -> Vec<DriftNotification> {
+            self.notifications
+                .lock()
+                .map(|n| n.clone())
+                .unwrap_or_default()
+        }
+
+        /// Whether a record exists for `plugin_did` (test observable).
+        ///
+        /// # Errors
+        ///
+        /// `E_INTERNAL` on redb read failure.
+        pub fn contains(&self, plugin_did: &Did) -> Result<bool, ErrorCode> {
+            let read_txn = self.db.begin_read().map_err(|_| ErrorCode::GraphInternal)?;
+            let table = read_txn
+                .open_table(INSTALL_RECORDS_TABLE)
+                .map_err(|_| ErrorCode::GraphInternal)?;
+            let present = table
+                .get(plugin_did.as_str())
+                .map_err(|_| ErrorCode::GraphInternal)?
+                .is_some();
+            Ok(present)
+        }
     }
 }
 

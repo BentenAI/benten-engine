@@ -313,6 +313,18 @@ pub fn signed_install_record(
     record
 }
 
+/// G-CORE-7 §4.19(b) helper — admin UI v0 manifest with an explicit
+/// non-empty `requires_schema_authors` trust-list. Used by the
+/// `schema_author_not_in_admin_ui_trust_list_prompts_user.rs` GREEN
+/// arm (a second schema from a now-trusted peer surfaces `Trusted`).
+#[allow(dead_code)]
+pub fn admin_ui_v0_manifest_with_trust_list(authors: Vec<Did>) -> PluginManifest {
+    PluginManifest {
+        requires_schema_authors: Some(authors),
+        ..admin_ui_v0_manifest()
+    }
+}
+
 /// R6-FP-A-fp caller-mint-first helper.
 ///
 /// Mints a real `PluginDidHandle` via `benten_id::plugin_did::mint()`,
