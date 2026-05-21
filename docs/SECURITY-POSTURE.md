@@ -1033,8 +1033,11 @@ system-zone reservation is intact (users cannot WRITE `system:` Nodes)
 — this finding was purely about the read path's check-firing
 asymmetry. **Phase-3 G20-A3 wave-8a closure:** `read_view_with` now
 extracts the `label_hint` via a registry helper
-(`Engine::resolve_read_view_label_hint`) that consults
-`benten_ivm::hardcoded_label_for_id` for canonical ids first, then
+(`Engine::resolve_read_view_label_hint`) that consults the
+`benten_ivm::CanonicalViews` registry-query type
+(`CanonicalViews::registry().lookup(id).and_then(|e| e.hardcoded_label())`,
+post-G-CORE-4 D1 A2 collapse — the 4 pre-collapse leaked helpers are
+now `pub(crate)`) for canonical ids first, then
 the engine's `user_view_input_labels` map (populated at
 `register_user_view` time) for user-defined views, falling back to
 the `content_listing_` prefix-strip only as a final resort for

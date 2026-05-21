@@ -21,7 +21,7 @@
 //! internally) but re-categorises them at the kernel-dispatch level: they
 //! are the **canonical fast-path inner kernels** [`crate::AlgorithmBView`]
 //! invokes when the dispatch router classifies a view-id as canonical via
-//! [`crate::dispatch_for`] (which returns `Strategy::A` as the canonical
+//! [`crate::CanonicalViews::dispatch`] (which returns `Strategy::A` as the canonical
 //! fast-path *classification*, not the engine-boundary strategy of the
 //! resulting view).
 //!

@@ -49,7 +49,7 @@
 //! generalized Algorithm B. G23-0a does NOT mint a `Strategy::Generalized`
 //! or `Strategy::Subgraph` variant — the SubgraphSpec input shape lives
 //! *under* the existing `Strategy::B` classification. The internal
-//! [`crate::algorithm_b::dispatch_for`] router still classifies canonical
+//! [`crate::CanonicalViews::dispatch`] router still classifies canonical
 //! ids as `Strategy::A` (the canonical fast-path marker) and user-defined
 //! ids as `Strategy::B`, but the engine-boundary [`crate::View::strategy`]
 //! for either lane returns `Strategy::B` (the wrapper IS Strategy::B).
@@ -106,7 +106,7 @@ pub enum TypedOutputProjection {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubgraphSpec {
     /// Stable view id. Canonical view ids route to fast-path classification
-    /// (`Strategy::A` per [`crate::algorithm_b::dispatch_for`] — INTERNAL);
+    /// (`Strategy::A` per [`crate::CanonicalViews::dispatch`] — INTERNAL);
     /// user-defined ids route to the generic-kernel path
     /// (`Strategy::B` per the same router). The engine-boundary strategy
     /// for either lane is `Strategy::B`.

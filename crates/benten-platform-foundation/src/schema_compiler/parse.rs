@@ -368,13 +368,31 @@ fn parse_field(raw: &serde_json::Value, location: &str) -> Result<ParsedField, S
     };
 
     // FieldEnum / FieldUnion variants — VARIANT edge targets.
+    //
+    // G-CORE-4 §4.6 strict 4-of-4 input-dialect validation widens the
+    // accepted variant shape: each variant may be either
+    //   - a JSON object `{ "name": "...", "scalar": "..." }`, or
+    //   - a JSON string `"name"` (implicit `scalar == "text"`).
+    //
+    // The string form is the dialect FieldEnum authors typically write
+    // (the enum's discriminator is the variant name; the scalar is
+    // implicit `text`). The object form remains supported for FieldUnion
+    // variants that carry typed payloads.
     let variants = if matches!(label, VocabLabel::FieldEnum | VocabLabel::FieldUnion) {
         if let Some(arr) = obj.get("variants").and_then(|v| v.as_array()) {
             let mut parsed_variants = Vec::with_capacity(arr.len());
             for raw_variant in arr {
+                if let Some(variant_name) = raw_variant.as_str() {
+                    // String shorthand — implicit `text` scalar.
+                    parsed_variants.push(ParsedVariant {
+                        name: variant_name.to_string(),
+                        scalar: Scalar::Text,
+                    });
+                    continue;
+                }
                 let variant_obj = raw_variant.as_object().ok_or_else(|| {
                     SchemaCompileError::ValidationFailed {
-                        reason: "variant must be a JSON object".to_string(),
+                        reason: "variant must be a JSON string (shorthand) or object".to_string(),
                         location: Some(format!("{location}.variants[]")),
                     }
                 })?;

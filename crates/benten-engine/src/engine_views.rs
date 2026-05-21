@@ -24,9 +24,11 @@
 //!   registration sites);
 //! - [`Self::register_user_view`] + [`benten_ivm::Algorithm::register`],
 //!   which dispatches canonical view ids through the same hand-written
-//!   inner kernel via [`benten_ivm::dispatch_for`]. Post-G15-A this is the
-//!   preferred path because it gives canonical + user-defined views a
-//!   single registration surface (g15a-mr-minor-1 disambiguation).
+//!   inner kernel via [`benten_ivm::CanonicalViews::dispatch`]
+//!   (post-G-CORE-4 D1 A2 — the pre-collapse `dispatch_for` helper
+//!   is `pub(crate)`). Post-G15-A this is the preferred path because
+//!   it gives canonical + user-defined views a single registration
+//!   surface (g15a-mr-minor-1 disambiguation).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -219,7 +221,9 @@ impl Engine {
 
     /// Phase-3 G20-A3 (carry-ivm-r6-3 closure): resolve the read-gate
     /// label hint for `view_id`. Canonical hand-written ids resolve
-    /// via [`benten_ivm::hardcoded_label_for_id`]; user-defined views
+    /// via [`benten_ivm::CanonicalViews::lookup`] (post-G-CORE-4 D1 A2
+    /// — the 4 pre-collapse leaked helpers are `pub(crate)`);
+    /// user-defined views
     /// consult the in-memory `user_view_input_labels` map populated at
     /// [`Self::register_user_view`] time; the legacy `content_listing_`
     /// string-prefix is preserved as a final fallback for pre-canonical-
@@ -234,7 +238,10 @@ impl Engine {
     /// read_view_with view-id-prefix heuristic".
     fn resolve_read_view_label_hint(&self, view_id: &str) -> String {
         let normalized = view_id.strip_prefix("system:ivm:").unwrap_or(view_id);
-        if let Some(hc) = benten_ivm::hardcoded_label_for_id(normalized) {
+        if let Some(hc) = benten_ivm::CanonicalViews::registry()
+            .lookup(normalized)
+            .and_then(|e| e.hardcoded_label())
+        {
             return hc.to_string();
         }
         let registry_label = {
@@ -517,7 +524,9 @@ impl Engine {
     ///
     /// The label filter is derived from the view's registration
     /// metadata: canonical hand-written view ids map through
-    /// [`benten_ivm::hardcoded_label_for_id`]; user-defined views are
+    /// [`benten_ivm::CanonicalViews::lookup`] (post-G-CORE-4 D1 A2
+    /// — the 4 pre-collapse leaked helpers are `pub(crate)`);
+    /// user-defined views are
     /// served from the in-memory `user_view_input_labels` map populated
     /// at [`Self::register_user_view`] time.
     ///
@@ -547,7 +556,10 @@ impl Engine {
         // Derive the input label. Canonical ids resolve via
         // `hardcoded_label_for_id`; user-defined ids consult the
         // in-memory cache populated at registration time.
-        let label = if let Some(hardcoded) = benten_ivm::hardcoded_label_for_id(normalized) {
+        let label = if let Some(hardcoded) = benten_ivm::CanonicalViews::registry()
+            .lookup(normalized)
+            .and_then(|e| e.hardcoded_label())
+        {
             Some(hardcoded.to_string())
         } else {
             let guard = self
@@ -597,7 +609,10 @@ impl Engine {
         if ivm.view_is_stale(normalized).is_none() {
             return Ok(None);
         }
-        let label = if let Some(hardcoded) = benten_ivm::hardcoded_label_for_id(normalized) {
+        let label = if let Some(hardcoded) = benten_ivm::CanonicalViews::registry()
+            .lookup(normalized)
+            .and_then(|e| e.hardcoded_label())
+        {
             Some(hardcoded.to_string())
         } else {
             let guard = self
@@ -699,7 +714,9 @@ impl Engine {
         // napi consumers that bypass the TS validator. Surfaced as
         // `E_VIEW_LABEL_MISMATCH` (catalog).
         if let UserViewInputPattern::Label(supplied_label) = spec.input_pattern()
-            && let Some(hardcoded) = benten_ivm::algorithm_b::hardcoded_label_for_id(spec.id())
+            && let Some(hardcoded) = benten_ivm::CanonicalViews::registry()
+                .lookup(spec.id())
+                .and_then(|e| e.hardcoded_label())
             && hardcoded != supplied_label.as_str()
         {
             return Err(EngineError::ViewLabelMismatch {
@@ -723,9 +740,11 @@ impl Engine {
         // string `AnchorPrefix(<prefix>)` so the operator sees both the
         // shape + the supplied prefix value).
         if let UserViewInputPattern::AnchorPrefix(prefix) = spec.input_pattern()
-            && benten_ivm::algorithm_b::is_canonical_view_id(spec.id())
+            && benten_ivm::CanonicalViews::registry().is_canonical(spec.id())
         {
-            let expected_label = benten_ivm::algorithm_b::hardcoded_label_for_id(spec.id())
+            let expected_label = benten_ivm::CanonicalViews::registry()
+                .lookup(spec.id())
+                .and_then(|e| e.hardcoded_label())
                 .map_or_else(
                     || "<exact label>".to_string(),
                     std::string::ToString::to_string,
@@ -874,8 +893,10 @@ impl Engine {
                         // through `E_VIEW_LABEL_MISMATCH` (the catalog
                         // semantic for "registration label disagrees
                         // with canonical kernel's hardcoded shape").
-                        let expected_label =
-                            benten_ivm::algorithm_b::hardcoded_label_for_id(&view_id).map_or_else(
+                        let expected_label = benten_ivm::CanonicalViews::registry()
+                            .lookup(&view_id)
+                            .and_then(|e| e.hardcoded_label())
+                            .map_or_else(
                                 || "<exact label>".to_string(),
                                 std::string::ToString::to_string,
                             );
