@@ -572,11 +572,25 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-FP-BF mini-review r6fp-bf-mr-1). R6-
 
 Estimated scope: ~50-100 LOC + 2 integration test pins.
 
-### §4.33 `module_ecosystem::install_plugin*` legacy-path deletion + test migration (Phase-4-Meta)
+### §4.33 `module_ecosystem::install_plugin*` legacy-path deletion + test migration (CLOSED at Phase-4-Meta-Core G-CORE-0)
 
 R6-FP-A (PR `r6/fp-1-plugin-trust` commit `2be7841`) marked the legacy `benten_platform_foundation::module_ecosystem::install_plugin` and `install_plugin_persisting_did` as `#[deprecated]` per HARD RULE 12 clause-(a) (BLOCKER-DEPRECATE rather than BLOCKER-DELETE) to avoid migrating 4 test files in the same wave. The deprecation-without-deletion has a NAMED destination — THIS ENTRY — per mini-review finding `r6fp-a-mr-6` + HARD RULE 12 clause-(b). (Originally proposed as `§4.22`; renumbered to `§4.33` at strategy-C batch reconciliation to avoid collision with the §4.22-§4.32 sequence added by Wave-BF + its mr-fix.)
 
-**Deletion deadline:** Phase-4-Meta opening wave (pre-v1-assessment-window per CLAUDE.md #15 — the v1 platform-shippable assessment cannot tolerate two install paths with different security envelopes coexisting in the public surface).
+**CLOSED at Phase-4-Meta-Core G-CORE-0** (plan §1.A.FROZEN item 7 — the v1 platform-shippable assessment cannot tolerate two install paths with different security envelopes coexisting in the public surface; HARD-RULE-12 clause-(a) deletion).
+
+**What shipped:**
+- Deleted `benten_platform_foundation::module_ecosystem::install_plugin` + `install_plugin_persisting_did` + their `InstallResult` / `InstallerShape` supports (`crates/benten-platform-foundation/src/module_ecosystem.rs`).
+- Migrated all 4 legacy test files to the canonical `plugin_lifecycle::install_plugin`:
+  - `tests/plugin_content_cid_mismatch_rejected_on_receive.rs` (2 arms)
+  - `tests/plugin_heterogeneity_incompatible.rs` (2 arms; manifest signing tightened so Step 5 heterogeneity gate is the load-bearing rejection, not the prior earlier-stage stub-signature reject)
+  - `tests/plugin_manifest_substitution_at_install_rejected.rs` (2 legacy arms migrated; the 3rd arm was already on `plugin_lifecycle`)
+  - `tests/g24d_substantive_pipeline.rs` (5 legacy arms migrated via a `drive_install` helper that mirrors the caller-mint-first contract)
+- Un-ignored 3 RED-phase arms in `tests/tf_g_core_0_legacy_install_path_deletion_4_33.rs` (G-CORE-0 verify-pass factual state check); the verify-pass arm 3 was sharpened to scan only non-doc-comment `use` lines + call-sites (legitimate retrospective references in docstrings are intentionally permitted).
+- Updated `crates/benten-platform-foundation/INTERNALS.md` §4f + §"Open questions" + `crates/benten-errors/tests/stable_shape.rs:380` narrative cite.
+
+No further obligation.
+
+**Historical: deletion deadline:** Phase-4-Meta opening wave (pre-v1-assessment-window per CLAUDE.md #15 — the v1 platform-shippable assessment cannot tolerate two install paths with different security envelopes coexisting in the public surface).
 
 **Migration scope (4 test files use `#![allow(deprecated)]`):**
 
@@ -647,6 +661,8 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 sec-r6r3-1 + sec-r6r3-2 MINOR, de
 
 **Sibling wasm32 sweep (benten-graph `backends/blob_backend.rs`, added 2026-05-15 per umbrella #1207 / mini-review-1237 MINOR):** the pre-existing wasm32 break has 3 sites at `crates/benten-graph/src/backends/blob_backend.rs:63/135/164`; umbrella #1207 added a 4th identical-pattern site at `crates/benten-graph/src/backends/blob_backend.rs:248` (disclosed, in an already-wasm32-broken non-wasm32 module — not a meaningful regression; note: #1207 also relocated this file from `crates/benten-graph/src/blob_backend.rs` to `crates/benten-graph/src/backends/blob_backend.rs`, so all cites use the new path). The eventual wasm32-gating fix MUST sweep all 4 sites together (not 3) — bundle with this §4.42 wave.
 
+**G-CORE-0 verify-pass note (added 2026-05-21):** At HEAD `ae69c339` the wasm32 cfg-gating in `benten-graph` is consolidated at `crates/benten-graph/src/backends/mod.rs:41,47` (two file-import-scope `#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]` gates excluding the whole `blob_backend` + `snapshot_blob` modules on `wasm32-unknown-unknown`); the per-function 4-site claim above is STALE (the legacy per-site cfg-blocks were superseded). The G-CORE-4 wasm32 sweep wave should re-survey site-count against the consolidated mod-level shape before triaging; the substantive obligation (decide stub-vs-compile_error for `manifest_envelope_chain_validation`) is unchanged. NOT a Phase-4-Meta-Core G-CORE-0 scope expansion — disposition belongs to G-CORE-4 per the existing carry destination.
+
 ### §4.45 `PluginDidStore::insert` duplicate-DID defensive return — CLOSED at R6-FP-3 (2026-05-13)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 carry).
@@ -656,7 +672,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R3 cap-r6-r3-1 MINOR; R6-R2 r2-cp-3 
 **What shipped:**
 - `crates/benten-id/src/plugin_did.rs::PluginDidStore::insert` signature: `pub fn insert(&mut self, handle: PluginDidHandle) -> Result<(), ErrorCode>` returning `Err(ErrorCode::PluginDidHandleDuplicate)` when the same DID is already present.
 - New ErrorCode `E_PLUGIN_DID_HANDLE_DUPLICATE` minted with full 4-surface mirror: Rust enum + as_str + matches_static + ALL_CATALOG_VARIANTS + from_str + TS catalog + ERROR-CATALOG.md heading + preamble narrative reconciliation 167→168 (and 169→170 for catalog/TS retaining E_INV_ITERATE_NEST_DEPTH).
-- Caller-mint-first contract production arm at `crates/benten-platform-foundation/src/module_ecosystem.rs:211` now propagates the Result via `?`.
+- Caller-mint-first contract production arm at the canonical install entry-point in `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` now propagates the Result via `?` (originally landed at `module_ecosystem::install_plugin_persisting_did:211`; that legacy precursor was DELETED at Phase-4-Meta-Core G-CORE-0 per §4.33 — the duplicate-rejection guarantee carries forward unchanged on the canonical path).
 - Test fixture at `crates/benten-platform-foundation/tests/common/manifest_fixtures.rs::mint_and_insert_plugin_did` adjusted for the new Result signature.
 - Test-only `plugin_did::handle_with_did_for_test(did)` constructor (gated behind `cfg(any(test, feature = "testing"))`) lets the duplicate-rejection path be exercised directly.
 - Substantive test pin at `crates/benten-id/tests/plugin_did_store_insert_duplicate_rejected.rs` (3 tests; required-features=["testing"]; pim-2 §3.6b PRODUCTION-ARM + OBSERVABLE-CONSEQUENCE + WOULD-FAIL-IF-NO-OP'd).

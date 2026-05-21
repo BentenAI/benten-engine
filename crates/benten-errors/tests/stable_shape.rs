@@ -377,7 +377,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-platform-foundation::plugin_manifest::validate`,
     //   `::verify_user_signature`, `::verify_peer_signature`, etc.;
     //   `benten-caps::plugin_delegation::check_delegation_within_envelope`;
-    //   `benten-platform-foundation::module_ecosystem::install_plugin`.
+    //   `benten-platform-foundation::plugin_lifecycle::install_plugin`.
     //   `RegistryDiscoveryTimeout` reserved at Phase 4-Foundation; fires
     //   first at Phase 4-Meta.
     ErrorCode::PluginManifestInvalid,
