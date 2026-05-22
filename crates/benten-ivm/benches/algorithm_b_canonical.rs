@@ -10,8 +10,10 @@
 //!   constructor that wraps the hand-written inner kernel directly).
 //! - `post_g15a` — the post-G15-A generalized register path: construct
 //!   via [`benten_ivm::Algorithm::register`] which routes through
-//!   [`benten_ivm::dispatch_for`] (canonical id → canonical fast-path
-//!   classification → same hand-written inner kernel).
+//!   [`benten_ivm::CanonicalViews::dispatch`] (canonical id → canonical
+//!   fast-path classification → same hand-written inner kernel —
+//!   post-G-CORE-4 D1 A2; the pre-collapse `dispatch_for` helper is
+//!   `pub(crate)`).
 //!
 //! The companion test
 //! `crates/benten-ivm/tests/algorithm_b_general.rs::algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_baseline`
