@@ -58,6 +58,65 @@
 //! compile + (future) inverse. WOULD-FAIL if the bound / upper-limit /
 //! inverse is a no-op.
 //! ============================================================================
+//!
+//! ============================================================================
+//! HARD-RULE-12 clause-(b) BELONGS-NAMED-NOW dispositions — 13 OTHER DSL
+//! cluster issues (R4.1 L1 M-1 closure / orchestrator triage 2026-05-22).
+//! ============================================================================
+//!
+//! R2 §2 G-CORE-DSL row names 16 DSL cluster issues; the 3 closure pins
+//! above cover #496 / #551 / #1020. The remaining 13 issues each receive
+//! a HARD-RULE-12 clause-(b) BELONGS-NAMED-NOW disposition NOW, naming a
+//! specific destination per HARD RULE 12 (no phantom "carry to brief").
+//!
+//! **Named destination for all 13**: the R5 **G-CORE-DSL implementer
+//! brief**'s "in-scope" enumeration. The orchestrator authors the
+//! G-CORE-DSL implementer brief at G-CORE-DSL wave-dispatch time and
+//! MUST include this disposition row as an input-constraint. The
+//! corresponding closure pins (one per issue) land at G-CORE-DSL
+//! wave-implementation-time (per pim-12 / §3.6e: RED-PHASE staged-pin
+//! → un-ignore at the wave that closes it). Captured in R4.1 triage at
+//! `.addl/phase-4-meta/R4.1-TRIAGE.md` §"R5 brief-author-time named
+//! destinations" → "For R5 G-CORE-DSL brief".
+//!
+//!   - #1000 (fwd-2) Diagnostic span is point not range — Phase-6 AI
+//!     repair-prompt UX needs start_offset+end_offset → BELONGS-NAMED-NOW
+//!   - #934  (fwd-1) parse_value numeric literals allocate String
+//!     instead of slicing &src → BELONGS-NAMED-NOW
+//!   - #931  (fwd-1) peek_at(n) uses chars().nth(n) — O(n) UTF-8 walk;
+//!     2nd byte ASCII lookahead → BELONGS-NAMED-NOW
+//!   - #929  (fwd-1) no benches exist; `[lib] bench = false`; parse/
+//!     emit/round-trip perf unmeasured → BELONGS-NAMED-NOW
+//!   - #848  (surf-1) id_for fallback `_ => 'op'` silent on new
+//!     #[non_exhaustive] PrimitiveKind variants — defense-in-depth gap
+//!     → BELONGS-NAMED-NOW
+//!   - #841  (surf-1) Diagnostic.error_code is &'static str but 4 valid
+//!     values are pub(crate) consts — consumers hardcode strings →
+//!     BELONGS-NAMED-NOW
+//!   - #839  (surf-1) CompileError::Io abused at devserver consumer to
+//!     wrap non-IO engine-registration errors → BELONGS-NAMED-NOW
+//!   - #790  (qual-2) 'Emit' name triple-overloaded across
+//!     CompileError::Emit + fn emit + PrimitiveKind::Emit →
+//!     BELONGS-NAMED-NOW
+//!   - #760  (qual-2) 10 parse_err callsites use post-token cursor;
+//!     only 2 capture start position — diagnostic line/column points at
+//!     wrong span → BELONGS-NAMED-NOW
+//!   - #671  (qual-1) validate_shapes two error arms duplicate ~22 LOC
+//!     of Diagnostic construction; collapsible to single helper →
+//!     BELONGS-NAMED-NOW
+//!   - #663  (qual-1) parse_primitive 154-LOC 12-arm dispatch has
+//!     structural duplication reducible via parse-helpers (~50-70 LOC
+//!     achievable) → BELONGS-NAMED-NOW
+//!   - #608  (safe-3) Rust DSL accepts empty/whitespace handler_id;
+//!     TS DSL rejects with EDslInvalidShape — cross-language rule-mirror
+//!     gap (§3.5g) → BELONGS-NAMED-NOW
+//!   - #545  (safe-2) compile_str + compile_file have no source-length
+//!     / file-size cap — sibling DoS to #496 recursion depth →
+//!     BELONGS-NAMED-NOW
+//!
+//! Each destination row above is realified by the G-CORE-DSL implementer
+//! brief at wave-dispatch time (orchestrator-authored from R4.1 triage
+//! input). No phantom "TODO" carry. ============================================
 
 #![allow(clippy::unwrap_used)]
 

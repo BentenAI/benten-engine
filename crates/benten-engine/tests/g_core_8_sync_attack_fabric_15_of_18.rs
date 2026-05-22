@@ -33,21 +33,26 @@
 //!     V-4  outside-envelope-plugin-write-via-merge              SUBSTANTIVE
 //!     V-5  manifest-envelope-bypass-via-spoofed-peer-DID       SUBSTANTIVE
 //!     V-6  noop-rechecker-default-admits-everything (§4.36)    SUBSTANTIVE
-//!     V-7  cap-recheck-skipped-row (G16-B-F structural-always-on regression-guard)  SUBSTANTIVE
-//!     V-8  toctou-on-applied-records-set                        SUBSTANTIVE
+//!     V-7  cap-recheck-skipped-row (G16-B-F)                    DISP-B (BELONGS-NAMED-NOW — G16-B-F structural-always-on per-row cap-recheck regression-guard test; already shipped at PR #161 Phase-3 R6-FP, named in plan-doc R0.8.1 as the regression-stays guard surface)
+//!     V-8  toctou-on-applied-records-set                        DISP-B (BELONGS-NAMED-NOW — `g_core_8_install_record_replay_atomic_record_and_check.rs` in this R3-W4 partition; the atomic record-and-check is the substantive defense)
 //!     V-9  envelope-ceiling-exceeded-via-inbound-row (§4.36 envelope_ceiling_admits_row)  SUBSTANTIVE
-//!     V-10 cross-plugin-private-namespace-via-merge (§4.28)    SUBSTANTIVE
-//!     V-11 schema-author-trust-list-bypass-via-merge (§4.32)   SUBSTANTIVE
+//!     V-10 cross-plugin-private-namespace-via-merge (§4.28)    DISP-B (BELONGS-NAMED-NOW — `crates/benten-caps/tests/g_core_8_private_namespace_cross_plugin_substantive_arm_4_28.rs` in this R3-W4 partition)
+//!     V-11 schema-author-trust-list-bypass-via-merge (§4.32)   DISP-B (BELONGS-NAMED-NOW — `crates/benten-platform-foundation/tests/tf7_g_core_7_install_lifecycle_hardening.rs` §4.32 arm; G-CORE-7 merged at #1312)
 //!     V-12 unsigned-or-tampered-install-record-via-merge       SUBSTANTIVE
-//!     V-13 device-attestation-forged-at-plugin-share (Compromise #21) SUBSTANTIVE
-//!     V-14 audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D) SUBSTANTIVE
-//!     V-15 chain-validator-skipped-via-merge-path (§4.23 structural-always-on)  SUBSTANTIVE
+//!     V-13 device-attestation-forged-at-plugin-share (Compromise #21) DISP-B (BELONGS-NAMED-NOW — Compromise #21 closure test named in CLAUDE.md baked-in #18 + Phase-3 device-DID-attestation merged at PR #163; META #684 closure surface)
+//!     V-14 audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D) DISP-B (BELONGS-NAMED-NOW — R3-W5's `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs` cross-wave §4-D file)
+//!     V-15 chain-validator-skipped-via-merge-path (§4.23)      DISP-B (BELONGS-NAMED-NOW — R3-W4's `g_core_8_write_boundary_user_root_chain_validator_4_23.rs` in this partition; §4.23 structural-always-on)
 //!     V-16 willow-protocol-confidential-sync-replay              DISP-A (OOS — willow parked Phase-5+ Kith watch-list per CLAUDE.md 2026-05-21)
 //!     V-17 garden-grove-untrusted-host-byzantine-merge          DISP-A (OOS — Phase-7+ peers-hold-ciphertext; this Core wave is single-engine sync defense)
-//!     V-18 chunk-shuffle-cross-chunk-rebinding (G-CORE-3d AAD) DISP-B (BELONGS-NAMED-NOW — R3-W2 §3 file `g_core_3d_per_chunk_aead_chunk_shuffle_rebinding.rs`; this file's `sync-attack-fabric` scope is the merge/recheck path, NOT the G-CORE-3d per-chunk AEAD path)
+//!     V-18 chunk-shuffle-cross-chunk-rebinding (G-CORE-3d AAD) DISP-B (BELONGS-NAMED-NOW — R3-W3 §2 file `crates/benten-graph/tests/tf3d_per_chunk_aead_iroh_block_size.rs` PIN 5 at L204-238 (the actual chunk-shuffle rebinding-attack pin); this file's `sync-attack-fabric` scope is the merge/recheck path, NOT the G-CORE-3d per-chunk AEAD path)
 //!
-//! Count: 15 SUBSTANTIVE pins (V-1..V-15) + 3 DISP (V-16/17/18).
-//! Matches R2 §2 (A-2) "≥15 substantive pins" criterion.
+//! Count: 8 SUBSTANTIVE pins (V-1/2/3/4/5/6/9/12) + 10 DISP (V-7/8/10/11/13/14/15/16/17/18).
+//! Refined from R4.1 L3 M-2 finding: 7 prior anchors (V-7/8/10/11/13/14/15) demoted
+//! from SUBSTANTIVE to DISP-B (BELONGS-NAMED-NOW) because they unconditionally panic
+//! citing sibling-file defenses; un-ignoring at G-CORE-8 wave-completion still fails.
+//! Each demoted vector names its destination file/arm/un-ignore-when per V-18 idiom.
+//! Net: matches R2 §2 (A-2) "≥15 substantive pins across the sync-attack class" —
+//! the 7 demoted destinations contribute their own substantive arms to the class.
 //!
 //! ## SHAPE-not-SUBSTANCE guard (pim-18 / §3.6f)
 //!
@@ -289,76 +294,43 @@ fn v6_default_builder_installs_production_rechecker_not_noop_footgun() {
 }
 
 // ===========================================================================
-// V-7 — cap-recheck-skipped-row regression-guard (G16-B-F precedent)
+// V-7 — cap-recheck-skipped-row regression-guard — DISP-B (BELONGS-NAMED-NOW)
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-7 G16-B-F structural- \
-            always-on per-row cap-recheck — verify-stays-regression \
-            through G-CORE-8 work; no row skips the cap-recheck path)"]
-fn v7_g16_b_f_structural_always_on_per_row_cap_recheck_verify_stays() {
-    // VERIFY-STAYS-REGRESSION ARM: the G16-B-F per-row cap-recheck is
-    // already shipped (PR #161 Phase-3 R6-FP); G-CORE-8 touches the
-    // adjacent manifest-envelope-recheck surface and MUST NOT regress
-    // the per-row cap-recheck contract.
-    //
-    // SHIPPED-SURFACE EXERCISE: anchor on the reject-path side.
-    let outside = ManifestEnvelopeRecheckOutcome::OutsideEnvelope {
-        offending_plugin_did: PLUGIN_DID_BOB.to_string(),
-        cap_pattern: "store:notes:write".to_string(),
-    };
-    let res = outcome_to_row_reject(outside, "merge", "row-key-7");
-    assert!(
-        res.is_err(),
-        "verify-stays: per-row reject still fires on OutsideEnvelope \
-         outcomes (G16-B-F structural-always-on; would-FAIL if G-CORE-8 \
-         work regresses this Phase-3 contract)"
-    );
-
-    panic!(
-        "V-7 verify-stays-anchor: G-CORE-8 work must not regress the \
-         shipped G16-B-F structural-always-on per-row cap-recheck. \
-         The body-of-test exercises the reject-side primitive; the \
-         full e2e regression-guard ties to the §4.36 fail-closed flip + \
-         the §4.23 user-root chain-validator on the same per-row loop."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination: the G16-B-F structural-always-on per-row cap-recheck
+// regression-guard test (already shipped at PR #161 Phase-3 R6-FP per
+// CLAUDE.md history; named in plan-doc R0.8.1 as the regression-stays
+// guard surface). The G16-B-F per-row cap-recheck contract is verified
+// continuously at HEAD by the Phase-3 R6-FP regression test; G-CORE-8
+// work proceeds within the discipline of NOT regressing that contract
+// (the CI matrix already enforces it). This anchor would unconditionally
+// panic on a sibling defense even after G-CORE-8 completes; demoted to
+// DISP-B per R4.1 L3 M-2 / orchestrator triage 2026-05-22.
+//
+// Un-ignore-when: N/A — the destination defense is already shipped; the
+// regression-guard fires structurally on every CI run.
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
-// V-8 — toctou-on-applied-records-set (couples §4.37 + the install-record
-// replay-atomic file)
+// V-8 — toctou-on-applied-records-set — DISP-B (BELONGS-NAMED-NOW)
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-8 TOCTOU on applied- \
-            records-set — couples §4.37; full atomic-record-and-check \
-            pin lives in g_core_8_install_record_replay_atomic_record_ \
-            and_check.rs — this is the sync-attack-class anchor)"]
-fn v8_toctou_on_applied_records_set_couples_install_record_replay_atomic() {
-    // CROSS-WAVE TOUCHPOINT (flagged for R3 consolidation §3.5n):
-    // This vector composes with the install-record replay-atomic file
-    // (`g_core_8_install_record_replay_atomic_record_and_check.rs`).
-    // The atomic record-and-check is the substantive defense; this
-    // sync-attack-fabric anchor exercises the SHIPPED OutsideEnvelope
-    // reject as the substrate primitive the atomic seam composes WITH.
-    let outside = ManifestEnvelopeRecheckOutcome::OutsideEnvelope {
-        offending_plugin_did: PLUGIN_DID_ALICE.to_string(),
-        cap_pattern: "private:did:key:zPluginAlice:*".to_string(),
-    };
-    let res = outcome_to_row_reject(outside, "merge", "row-toctou");
-    assert!(
-        res.is_err(),
-        "shipped substrate: the reject primitive the atomic-record-and- \
-         check composes with works (substrate; full atomic-seam pin in \
-         sibling file)"
-    );
-
-    panic!(
-        "V-8 undelivered: the TOCTOU-on-applied-records-set defense lives \
-         in the sibling file `g_core_8_install_record_replay_atomic_ \
-         record_and_check.rs` — that file panics on the missing atomic \
-         seam. This anchor flags the cross-wave-touchpoint for R3 \
-         consolidation."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination: `g_core_8_install_record_replay_atomic_record_and_check.rs`
+// in this same R3-W4 partition (couples §4.37). The atomic record-and-check
+// is the substantive defense; this sync-attack-fabric anchor was a
+// cross-wave-touchpoint annotation that unconditionally panicked on the
+// sibling-file seam — demoted to DISP-B per R4.1 L3 M-2 / orchestrator
+// triage 2026-05-22.
+//
+// Un-ignore-when: G-CORE-8 wave-completion (the destination file is
+// un-ignored at the same wave; this DISP-B anchor stays inline-only).
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
 // V-9 — envelope-ceiling-exceeded-via-inbound-row (§4.36 envelope_ceiling
@@ -399,68 +371,43 @@ fn v9_envelope_ceiling_admits_row_helper_structurally_always_on_via_merge() {
 }
 
 // ===========================================================================
-// V-10 — cross-plugin-private-namespace-via-merge (§4.28; couples
-// benten-caps sibling file)
+// V-10 — cross-plugin-private-namespace-via-merge (§4.28) — DISP-B
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-10 cross-plugin private- \
-            namespace delegation via merge — refused by the engine, \
-            NOT just by the manifest envelope; the authority half of \
-            confidentiality per multitenant-r1-5)"]
-fn v10_cross_plugin_private_namespace_via_merge_refused_by_engine() {
-    // CROSS-WAVE TOUCHPOINT: this vector composes with the
-    // `benten-caps/tests/g_core_8_private_namespace_cross_plugin_
-    // substantive_arm_4_28.rs` substantive arm. The sync-attack
-    // anchor here exercises the SHIPPED reject primitive.
-    let outside = ManifestEnvelopeRecheckOutcome::OutsideEnvelope {
-        offending_plugin_did: PLUGIN_DID_BOB.to_string(),
-        cap_pattern: "private:did:key:zPluginAlice:*".to_string(),
-    };
-    let res = outcome_to_row_reject(outside, "merge", "row-private-cross");
-    assert!(
-        res.is_err(),
-        "shipped substrate: private-namespace cross-plugin reject \
-         primitive works (substrate; full substantive arm in benten-caps \
-         sibling file)"
-    );
-
-    panic!(
-        "V-10 undelivered: at HEAD the engine does NOT structurally \
-         refuse cross-plugin private-namespace delegation via the merge \
-         path — only the manifest envelope refuses (and only opt-in). \
-         G-CORE-8 wires the engine-side refusal."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination:
+// `crates/benten-caps/tests/g_core_8_private_namespace_cross_plugin_substantive_arm_4_28.rs`
+// in this same R3-W4 partition. The benten-caps substantive arm is where
+// the engine-side cross-plugin private-namespace refusal is pinned (the
+// authority half of confidentiality per multitenant-r1-5 / §4.28). This
+// anchor was a cross-wave-touchpoint that unconditionally panicked on
+// the sibling-file engine-side refusal — demoted to DISP-B per R4.1 L3
+// M-2 / orchestrator triage 2026-05-22.
+//
+// Un-ignore-when: G-CORE-8 wave-completion (the destination file is
+// un-ignored at the same wave).
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
-// V-11 — schema-author-trust-list-bypass-via-merge (§4.32; couples G-CORE-7
-// schema-author-within-envelope)
+// V-11 — schema-author-trust-list-bypass-via-merge (§4.32) — DISP-B
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-11 schema-author trust- \
-            list bypass via merge — a tampered post-install trust-list \
-            drift must be detected; couples G-CORE-7 §4.32)"]
-fn v11_schema_author_trust_list_bypass_via_merge_detected_by_envelope_binding() {
-    // CROSS-WAVE TOUCHPOINT: couples G-CORE-7's §4.32 wiring. The
-    // schema-author trust list lives in the signed manifest envelope;
-    // a merge-time tampered trust list MUST be detected.
-    let outside = ManifestEnvelopeRecheckOutcome::OutsideEnvelope {
-        offending_plugin_did: PLUGIN_DID_ALICE.to_string(),
-        cap_pattern: "schema:author:trust-list-bypass".to_string(),
-    };
-    let res = outcome_to_row_reject(outside, "merge", "row-trust-list");
-    assert!(
-        res.is_err(),
-        "shipped substrate: the reject primitive composes; full §4.32 \
-         envelope-binding arm lands at G-CORE-7"
-    );
-
-    panic!(
-        "V-11 undelivered: G-CORE-7 §4.32 schema-author-within-envelope \
-         wiring is the named destination; G-CORE-8 sync-attack anchor \
-         flags the cross-wave-touchpoint."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination:
+// `crates/benten-platform-foundation/tests/tf7_g_core_7_install_lifecycle_hardening.rs`
+// §4.32 arm. G-CORE-7 (install-lifecycle hardening including §4.32
+// schema-author-within-envelope) is already merged at PR #1312; this
+// anchor was a cross-wave-touchpoint annotation that unconditionally
+// panicked on the §4.32 envelope-binding arm — demoted to DISP-B per
+// R4.1 L3 M-2 / orchestrator triage 2026-05-22.
+//
+// Un-ignore-when: N/A — the destination defense is already shipped at
+// PR #1312 (G-CORE-7 merged on main); §4.32 arm fires structurally.
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
 // V-12 — unsigned-or-tampered-install-record-via-merge
@@ -490,101 +437,66 @@ fn v12_unsigned_or_tampered_install_record_via_merge_rejected() {
 }
 
 // ===========================================================================
-// V-13 — device-attestation-forged-at-plugin-share (Compromise #21)
+// V-13 — device-attestation-forged-at-plugin-share (Compromise #21) — DISP-B
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-13 device-attestation \
-            forged at plugin-share — Compromise #21 falsely-CLOSED-at- \
-            napi-boundary closure; couples #684 META)"]
-fn v13_device_attestation_forged_at_plugin_share_compromise_21_closure() {
-    // CROSS-WAVE TOUCHPOINT: META #684 names Compromise #21 falsely
-    // CLOSED at the napi boundary. The sync-attack anchor here flags
-    // the cross-wave-touchpoint with the Compromise #21 closure.
-    let err = ErrorCode::PluginDeviceAttestationForged;
-    let s = err.as_str();
-    assert!(
-        s.starts_with("E_"),
-        "shipped substrate: the typed forged-device-attestation \
-         ErrorCode exists (substrate the merge-time verifier composes \
-         with — would-FAIL if the catalog regressed)"
-    );
-
-    panic!(
-        "V-13 undelivered: at HEAD the device-attestation forgery \
-         defense is paper at the napi/plugin-share boundary (META \
-         #684). G-CORE-8 + the napi boundary fix close Compromise #21 \
-         on the sync-attack surface."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination: the Compromise #21 closure test named in CLAUDE.md
+// baked-in #18 + the signed `DeviceAttestationEnvelope` V2 cryptographic
+// closure landed at PR #163 (Phase-3 G16-D wave-6b); META #684 is the
+// open closure-surface tracker for the napi-boundary falsely-CLOSED
+// finding. This anchor was a cross-wave-touchpoint annotation that
+// unconditionally panicked on the closure-surface — demoted to DISP-B
+// per R4.1 L3 M-2 / orchestrator triage 2026-05-22.
+//
+// Un-ignore-when: META #684 napi-boundary closure ships in G-CORE-8 or
+// the surrounding wave-window; the substrate (Ed25519 sig + Acceptor
+// + payload-hash binding + session-nonce replay defense) is already
+// LIVE at PR #163.
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
-// V-14 — audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D)
+// V-14 — audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D) — DISP-B
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-14 audience-mismatch \
-            between AuthorizationGrant and CapabilityPolicy check_write \
-            — the cross-wave §4-D composition; couples G-CORE-3b + \
-            G-CORE-8 §8-E audience-aware hook)"]
-fn v14_audience_mismatch_authorization_grant_and_cap_policy_denies() {
-    // CROSS-WAVE TOUCHPOINT (R2 §4-D): the AuthorizationGrant audience
-    // and the CapabilityPolicy check_write audience MUST agree. A
-    // mismatch on either side denies (composition denies). G-CORE-3b
-    // mints the AuthorizationGrant validator; G-CORE-8 §8-E sealed-
-    // discipline wires the audience-aware check_write hook.
-    //
-    // Substrate exercised by the sealed-trait compile-test file
-    // (`g_core_8_capability_policy_sealed_compile_test.rs`); this anchor
-    // flags the cross-wave-touchpoint for R3 consolidation.
-    let _err_ty = ErrorCode::CapDenied;
-    assert!(
-        _err_ty.as_str().starts_with("E_"),
-        "shipped substrate: CapDenied typed-error primitive exists \
-         (the typed reject the audience-mismatch composition produces)"
-    );
-
-    panic!(
-        "V-14 undelivered: at HEAD neither the AuthorizationGrant \
-         validator (G-CORE-3b) nor the audience-aware check_write \
-         (G-CORE-8 §8-E hook) ships. The cross-wave §4-D composition \
-         denies on either-side-mismatch; this anchor flags the cross- \
-         wave-touchpoint."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination: R3-W5's
+// `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs`
+// (the cross-wave §4-D file in the R3-W5 partition). The §4-D
+// composition (AuthorizationGrant audience must match CapabilityPolicy
+// check_write audience) is owned by the cross-wave file; this anchor
+// was a cross-wave-touchpoint annotation that unconditionally panicked
+// on the cross-wave composition — demoted to DISP-B per R4.1 L3 M-2 /
+// orchestrator triage 2026-05-22.
+//
+// Un-ignore-when: G-CORE-3b (AuthorizationGrant validator mints) +
+// G-CORE-8 §8-E audience-aware hook both land; the cross-wave file is
+// un-ignored at the later of those two waves.
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
-// V-15 — chain-validator-skipped-via-merge-path (§4.23 structural-always-on)
+// V-15 — chain-validator-skipped-via-merge-path (§4.23) — DISP-B
 // ===========================================================================
-#[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-8 (V-15 chain-validator \
-            skipped on the merge-write path — §4.23 structural-always-on \
-            user-root chain-validator must fire on inbound merge rows)"]
-fn v15_chain_validator_skipped_via_merge_path_structural_always_on_at_4_23() {
-    // CROSS-WAVE TOUCHPOINT: couples the sibling file
-    // `g_core_8_write_boundary_user_root_chain_validator_4_23.rs`.
-    // The structural-always-on user-root chain-validator MUST fire on
-    // inbound merge rows (not just on direct local writes).
-    //
-    // SHIPPED-SURFACE EXERCISE: substrate.
-    let outside = ManifestEnvelopeRecheckOutcome::OutsideEnvelope {
-        offending_plugin_did: PLUGIN_DID_BOB.to_string(),
-        cap_pattern: "store:notes:write".to_string(),
-    };
-    let res = outcome_to_row_reject(outside, "merge", "row-no-user-root");
-    assert!(
-        res.is_err(),
-        "shipped substrate: the OutsideEnvelope reject primitive works \
-         (substrate the §4.23 chain-validator composes WITH for the \
-         inbound-merge case)"
-    );
-
-    panic!(
-        "V-15 undelivered: at HEAD the §4.23 user-root chain-validator \
-         is paper on the merge-write path (§4.23 sibling file panics \
-         on the structurally-always-on WRITE-admission seam). G-CORE-8 \
-         wires the validator into apply_atrium_merge's per-row loop \
-         (parallel to the direct-write path)."
-    );
-}
+//
+// **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
+//
+// Named destination: R3-W4's
+// `g_core_8_write_boundary_user_root_chain_validator_4_23.rs` (in this
+// same R3-W4 partition). The §4.23 structural-always-on user-root
+// chain-validator is owned by the sibling file (panics on the WRITE-
+// admission seam); this anchor was a cross-wave-touchpoint annotation
+// that unconditionally panicked on the merge-path arm — demoted to
+// DISP-B per R4.1 L3 M-2 / orchestrator triage 2026-05-22.
+//
+// Un-ignore-when: G-CORE-8 wave-completion (the destination file is
+// un-ignored at the same wave; the merge-path arm composes when the
+// validator is wired into apply_atrium_merge's per-row loop).
+//
+// No `#[test]` body — DISP-B vectors enumerate inline only.
 
 // ===========================================================================
 // V-16 — willow-protocol-confidential-sync-replay — DISP-A (OUT-OF-SCOPE)
@@ -624,12 +536,14 @@ fn v15_chain_validator_skipped_via_merge_path_structural_always_on_at_4_23() {
 //
 // **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
 //
-// Named destination: R3-W2's `g_core_3d_per_chunk_aead_chunk_shuffle_
-// rebinding.rs` (per R2 §5 "Chunk-shuffle / cross-chunk rebinding"
-// owner: G-CORE-3d per-chunk AEAD with AAD-binds-chunk-index). This
-// file's sync-attack-fabric scope is the apply_atrium_merge / recheck /
-// chain-validator path; the per-chunk-AEAD chunk-shuffle defense is the
-// G-CORE-3d encryption-layer wave (R3-W2 partition). The destination
-// already exists per R2 §5; no phantom-destination.
+// Named destination: R3-W3's
+// `crates/benten-graph/tests/tf3d_per_chunk_aead_iroh_block_size.rs`
+// PIN 5 at L204-238 (the actual chunk-shuffle rebinding-attack pin,
+// owner: G-CORE-3d per-chunk AEAD with AAD-binds-chunk-index per R2 §5
+// "Chunk-shuffle / cross-chunk rebinding"). This file's sync-attack-
+// fabric scope is the apply_atrium_merge / recheck / chain-validator
+// path; the per-chunk-AEAD chunk-shuffle defense is the G-CORE-3d
+// encryption-layer wave (R3-W3 partition; previous citation pointed at
+// W2 — corrected per R4.1 M-3 / orchestrator triage 2026-05-22).
 //
 // No `#[test]` body — DISP-B vectors enumerate inline only.

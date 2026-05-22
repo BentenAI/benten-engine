@@ -71,8 +71,10 @@
 //!     `crates/benten-caps/src/policy.rs:261` (the trait def at HEAD has
 //!     NO sealed supertrait — RED contract is concrete).
 //!
-//! Pins: G-CORE-8 · §8-E · §1.A.FROZEN item 11 (CapabilityPolicy sealed
-//! for v1; PUBLIC surface lock). R2 map: TF-8 F-4 sealed-discipline.
+//! Pins: G-CORE-8 · §8-E · §1.A.FROZEN item 8 (benten-caps v1-API forks
+//! — CapabilityPolicy sealed-discipline; PUBLIC surface lock; previous
+//! citation at item 11 corrected per R4.1 L6 m-10 / orchestrator triage
+//! 2026-05-22). R2 map: TF-8 F-4 sealed-discipline.
 
 #![allow(unused_imports, dead_code, clippy::unwrap_used)]
 
