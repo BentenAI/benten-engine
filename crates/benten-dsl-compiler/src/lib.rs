@@ -180,14 +180,40 @@ pub struct CompiledPrimitive {
     pub properties: std::collections::BTreeMap<String, Value>,
 }
 
+/// Maximum DSL source length accepted by [`compile_str`] and [`compile_file`]
+/// (defense-in-depth — see #545; sibling to the bounded-recursion guard at
+/// `parse_object`/`parse_value` for #496). 1 MiB is ~500× the largest in-tree
+/// DSL fixture (~2 KiB); the devserver/REPL authoring surface is the only
+/// in-tree caller, so this is a guard against accidentally piping a
+/// large/binary file into `compile_file`, not an adversarial-network
+/// threat. Rejects with [`CompileError::Parse`] carrying
+/// [`E_DSL_PARSE_ERROR`] (reuses existing code — no new cross-language-
+/// mirrored ErrorCode per §3.5g).
+pub const MAX_SOURCE_LEN: usize = 1_048_576;
+
 /// Compile a DSL source string into a [`CompiledSubgraph`].
 ///
 /// # Errors
 ///
 /// Returns [`CompileError`] for any parse, semantic, or emission failure.
 /// Each error carries a [`Diagnostic`] with line/column + human-readable
-/// message + typed `error_code` for devserver rendering.
+/// message + typed `error_code` for devserver rendering. Sources larger
+/// than [`MAX_SOURCE_LEN`] are rejected at entry with
+/// [`CompileError::Parse`] (#545 defense-in-depth cap).
 pub fn compile_str(source: &str) -> Result<CompiledSubgraph, CompileError> {
+    if source.len() > MAX_SOURCE_LEN {
+        return Err(CompileError::Parse(Diagnostic {
+            error_code: E_DSL_PARSE_ERROR,
+            message: format!(
+                "DSL source length {} bytes exceeds MAX_SOURCE_LEN ({} bytes); \
+                 see #545 — splitting/trimming the source is the intended fix",
+                source.len(),
+                MAX_SOURCE_LEN
+            ),
+            line: None,
+            column: None,
+        }));
+    }
     if source.trim().is_empty() {
         return Err(CompileError::Parse(Diagnostic {
             error_code: E_DSL_PARSE_ERROR,
@@ -205,9 +231,26 @@ pub fn compile_str(source: &str) -> Result<CompiledSubgraph, CompileError> {
 ///
 /// # Errors
 ///
-/// Returns [`CompileError::Io`] for IO failures or any failure modes of
+/// Returns [`CompileError::Io`] for IO failures, including a typed
+/// rejection when the on-disk file size exceeds [`MAX_SOURCE_LEN`] (#545
+/// defense-in-depth — short-circuits BEFORE [`std::fs::read_to_string`]
+/// allocates the buffer). Also propagates any failure modes of
 /// [`compile_str`].
 pub fn compile_file(path: &Path) -> Result<CompiledSubgraph, CompileError> {
+    // #545 short-circuit: check on-disk size BEFORE read_to_string slurps the
+    // file into memory; protects against accidentally pointing the devserver
+    // at a multi-GB / symlinked binary file.
+    let metadata = std::fs::metadata(path)
+        .map_err(|e| CompileError::Io(format!("{}: {}", path.display(), e)))?;
+    if metadata.len() > MAX_SOURCE_LEN as u64 {
+        return Err(CompileError::Io(format!(
+            "{}: file size {} bytes exceeds MAX_SOURCE_LEN ({} bytes); \
+             see #545 — splitting the source or pointing at a smaller file is the intended fix",
+            path.display(),
+            metadata.len(),
+            MAX_SOURCE_LEN
+        )));
+    }
     let src = std::fs::read_to_string(path)
         .map_err(|e| CompileError::Io(format!("{}: {}", path.display(), e)))?;
     compile_str(&src)
@@ -276,9 +319,22 @@ impl std::fmt::Display for Diagnostic {
 // Stable error codes
 // ---------------------------------------------------------------------------
 
-pub(crate) const E_DSL_PARSE_ERROR: &str = "E_DSL_PARSE_ERROR";
-pub(crate) const E_DSL_UNKNOWN_PRIMITIVE: &str = "E_DSL_UNKNOWN_PRIMITIVE";
-pub(crate) const E_DSL_MISSING_RESPOND: &str = "E_DSL_MISSING_RESPOND";
+/// Typed error-code constants surfaced via [`Diagnostic::error_code`].
+/// Promoted from `pub(crate)` → `pub` per #841 so downstream consumers
+/// (devserver / `bindings/napi/src/devserver.rs` / TS mirror) can match
+/// against the typed constants instead of duplicated string literals.
+/// `&'static str` is preserved because [`Diagnostic::error_code`] is
+/// declared `&'static str` (a wire-stability constraint from the
+/// pre-v1-API-stabilization window; an enum-typed code is a parallel
+/// possible refactor recorded at #841 but kept out of scope here to
+/// keep the v1-API surface narrow). Cross-language mirror per §3.5g:
+/// the TS side reads these as the typed `EDsl*` BentenError subclasses
+/// at `packages/engine/src/dsl.ts`.
+pub const E_DSL_PARSE_ERROR: &str = "E_DSL_PARSE_ERROR";
+/// See [`E_DSL_PARSE_ERROR`] for the typed-constant promotion rationale.
+pub const E_DSL_UNKNOWN_PRIMITIVE: &str = "E_DSL_UNKNOWN_PRIMITIVE";
+/// See [`E_DSL_PARSE_ERROR`] for the typed-constant promotion rationale.
+pub const E_DSL_MISSING_RESPOND: &str = "E_DSL_MISSING_RESPOND";
 /// Phase-3 R6 fp Wave C2 (closes dx-r6-r1-1 MAJOR — DSL orphan code half):
 /// shape validation rejected a primitive's typed property (e.g. SANDBOX
 /// `fuel` declared as a string instead of an integer). Mirrors the
@@ -288,7 +344,7 @@ pub(crate) const E_DSL_MISSING_RESPOND: &str = "E_DSL_MISSING_RESPOND";
 /// path: `crates/benten-dsl-compiler/src/lib.rs::validate_shapes` (a
 /// crate-private free function, NOT a member of an `emit` module —
 /// `emit` and `validate_shapes` are sibling free functions).
-pub(crate) const E_DSL_INVALID_SHAPE: &str = "E_DSL_INVALID_SHAPE";
+pub const E_DSL_INVALID_SHAPE: &str = "E_DSL_INVALID_SHAPE";
 
 // ---------------------------------------------------------------------------
 // AST
@@ -823,34 +879,48 @@ fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
     /// `crates/benten-engine/src/primitive_host.rs::execute_sandbox`.
     const SANDBOX_INT_PROPS: &[&str] = &["fuel", "wallclock_ms", "output_limit"];
 
+    // #608 (safe-3) — handler_id MUST be a non-empty, non-whitespace-only
+    // identifier. Cross-language rule-mirror (§3.5g): the TS-side DSL
+    // builder (`packages/engine/src/dsl.ts:800`) rejects empty handlerIds
+    // with `EDslInvalidShape("handlerId must be a non-empty string")`;
+    // surface the same typed code on the Rust side so a handler authored
+    // via either surface fails identically at compile-time rather than
+    // propagating ambiguously to `Engine::register_subgraph`.
+    if handler.handler_id.trim().is_empty() {
+        return Err(CompileError::Emit(Diagnostic {
+            error_code: E_DSL_INVALID_SHAPE,
+            message: "handler id must be a non-empty, non-whitespace string \
+                      (#608 — cross-language mirror with TS-side \
+                      EDslInvalidShape)"
+                .to_string(),
+            line: None,
+            column: None,
+        }));
+    }
+
+    // #671 (qual-1): collapse the two near-identical error-construction arms
+    // into a single helper closure capturing the SANDBOX-int-prop typed-error
+    // skeleton. Single source of truth for the message body + the typed
+    // `E_DSL_INVALID_SHAPE` code; future amendments to the SANDBOX-budget
+    // error message touch one site, not two.
+    let sandbox_int_err = |key: &str, got: &dyn std::fmt::Display| {
+        CompileError::Emit(Diagnostic {
+            error_code: E_DSL_INVALID_SHAPE,
+            message: format!(
+                "sandbox primitive `{key}` property must be a non-negative integer (got {got}); see docs/SANDBOX-LIMITS.md §2"
+            ),
+            line: None,
+            column: None,
+        })
+    };
     for p in &handler.primitives {
         if matches!(p.kind, PrimitiveKind::Sandbox) {
             for &key in SANDBOX_INT_PROPS {
                 if let Some(v) = p.properties.get(key) {
                     match v {
                         Value::Int(n) if *n >= 0 => {}
-                        Value::Int(n) => {
-                            return Err(CompileError::Emit(Diagnostic {
-                                error_code: E_DSL_INVALID_SHAPE,
-                                message: format!(
-                                    "sandbox primitive `{}` property must be a non-negative integer (got {n}); see docs/SANDBOX-LIMITS.md §2",
-                                    key
-                                ),
-                                line: None,
-                                column: None,
-                            }));
-                        }
-                        other => {
-                            return Err(CompileError::Emit(Diagnostic {
-                                error_code: E_DSL_INVALID_SHAPE,
-                                message: format!(
-                                    "sandbox primitive `{}` property must be a non-negative integer (got {:?}); see docs/SANDBOX-LIMITS.md §2",
-                                    key, other
-                                ),
-                                line: None,
-                                column: None,
-                            }));
-                        }
+                        Value::Int(n) => return Err(sandbox_int_err(key, n)),
+                        other => return Err(sandbox_int_err(key, &format!("{other:?}"))),
                     }
                 }
             }
@@ -880,11 +950,28 @@ fn id_for(kind: PrimitiveKind, idx: usize) -> String {
         PrimitiveKind::Sandbox => "sb",
         PrimitiveKind::Subscribe => "su",
         PrimitiveKind::Stream => "sm",
-        // PrimitiveKind is `#[non_exhaustive]`. New variants added in later
-        // phases fall back to a generic `op` prefix; the DSL grammar does
-        // not yet have keywords for them, so this branch is unreachable
-        // from the parser today but keeps the compile honest.
-        _ => "op",
+        // #848 (surf-1) — `PrimitiveKind` is `#[non_exhaustive]` upstream
+        // for forward-compatibility, but **CLAUDE.md #1 commits the 12
+        // operation primitives as irreducible**. A 13th variant landing
+        // upstream without re-opening commitment #1 (and without adding a
+        // matching DSL keyword + per-variant `id_for` prefix here) would
+        // silently collide all unknown variants under the same `op` prefix
+        // → CID-instability across new-variant additions (the load-bearing
+        // hazard pre-named at `INTERNALS.md` §9 item 5). Make the silent
+        // fallback LOUD: panic with a typed reason so the next maintainer
+        // sees the structural break at the first call, not as a CID-drift
+        // bug-report from production. The DSL parser cannot construct a
+        // non-12-variant `PrimitiveKind` at HEAD (the parser dispatch
+        // covers exactly the 12 keywords + falls through to
+        // `E_DSL_UNKNOWN_PRIMITIVE`), so this branch is unreachable from
+        // the public surface today.
+        kind => unreachable!(
+            "#848: PrimitiveKind variant {kind:?} has no DSL id-prefix mapping. \
+             A new variant landed in benten-core without a matching arm here \
+             — re-opening CLAUDE.md #1 (12 primitives irreducible) is required \
+             before adding the 13th; once the commitment is updated, add a new \
+             2-char prefix arm above (mirroring the existing 12 entries).",
+        ),
     };
     format!("{prefix}{idx}")
 }
