@@ -143,6 +143,72 @@ RED at HEAD because next() is still SYNC \`Buffer | null\` per bindings/napi/src
             ).toBe(true);
         });
 
+        // ====================================================================
+        // R4-FP-1 extension (m-6 closure): Gates 24+25 forward-looking pins
+        // ====================================================================
+        // Per R4.1 triage m-6 (L4 wire-format-conformance, FIX-NOW): R2 §6
+        // gates 24+25 (TS size-touching surface + ErrorCode 4-surface atomic
+        // mirror) docstring-flagged in W1 pins but no test pin. This section
+        // closes the gap with forward-looking pins that fire at R5 G-CORE-3a
+        // wave-completion (when the encryption/sig type TS surface lands).
+        //
+        //   - Gate 24 (size-touching surface): the TS surface MUST NOT
+        //     hardcode Ed25519-classical 32/64-byte sizes; PQ-hybrid v1-beta
+        //     default carries larger sizes per CLAUDE.md baked-in #5. The
+        //     types.ts (or generated equivalent) MUST expose
+        //     size-of-key / size-of-sig as runtime queries or accept
+        //     variable-length opaque Bytes (NOT typed-byte-array-of-fixed-32).
+        //   - Gate 25 (ErrorCode 4-surface mirror): every new
+        //     encryption/sig ErrorCode minted Rust-side mirrors atomically
+        //     in errors.generated.ts (§3.5g rule-mirror; standard pattern).
+
+        it("Gate 24 (R4.1 m-6): TS surface does NOT hardcode classical 32/64-byte signature sizes (PQ-hybrid is the v1-beta default per baked-in #5)", () => {
+            // Un-skip at G-CORE-3a (the wave that mints KeyMaterial +
+            // AeadEnvelope + the typed sig surface). The body at un-skip:
+            // grep types.ts + index.d.ts for any hardcoded literal `32`
+            // or `64` adjacent to a `signature` / `key` / `Bytes` type;
+            // assert ZERO hits OR all such hits are gated behind explicit
+            // `ed25519_classical` downgrade-arm types (NOT the default).
+            //
+            // The PQ-hybrid v1-beta defaults are codepoint `0x647a` for
+            // X-Wing-hybrid encryption + concatenated Ed25519⊕ML-DSA-65 for
+            // signatures; the bytelengths are NOT 32/64 (ML-DSA-65 sig is
+            // ~3309 bytes; concatenated hybrid is ~3373 bytes). Hardcoding
+            // 32/64 forecloses the v1-beta default.
+            throw new Error(
+                "RED-PHASE: un-skip at G-CORE-3a. Body: grep types.ts + \
+index.d.ts for `: 32` / `:64` / `Buffer\\(32\\)` / `Uint8Array\\(64\\)` \
+adjacent to signature/key types; assert all hits are gated to explicit \
+classical-downgrade arms, NOT the default. The default surface MUST be \
+variable-length Bytes. § R4.1 L4 m-6 + R2 §6 Gate 24 + CLAUDE.md baked- \
+in #5 PQ-hybrid v1-beta default.",
+            );
+        });
+
+        it("Gate 25 (R4.1 m-6): every encryption/sig ErrorCode minted at G-CORE-3a mirrors atomically in errors.generated.ts (§3.5g 4-surface)", () => {
+            // Un-skip at G-CORE-3a. The body at un-skip: extract the set
+            // of E_CRYPTO_* / E_KEM_* / E_SIG_* variants from
+            // `crates/benten-errors/src/error_code.rs` (post-G-CORE-3a);
+            // extract the corresponding TS-side union members from
+            // `packages/engine/src/errors.generated.ts`; assert set-equal
+            // post-rename normalization (snake↔kebab as the §3.5g rule-
+            // mirror defines). The §3.5g cross-tool config mirror discipline
+            // (§3.5g item #4) also applies if any deny.toml / CI lint
+            // entry references these codes.
+            //
+            // At R4-FP-1 author-time, the encryption ErrorCode prefixes do
+            // not yet exist Rust-side; this pin is the forward-looking
+            // §3.5g atomic-mirror contract.
+            throw new Error(
+                "RED-PHASE: un-skip at G-CORE-3a. Body: enumerate \
+crypto-side ErrorCode variants from benten-errors (post-G-CORE-3a mint); \
+enumerate TS union members from errors.generated.ts; assert byte-equal \
+sets. The WOULD-FAIL arm: implementer mints E_CRYPTO_INVALID_AEAD_NONCE \
+Rust-side but forgets the errors.generated.ts regen — atomic-mirror \
+violation. § R4.1 L4 m-6 + R2 §6 Gate 25 + §3.5g 4-surface mirror.",
+            );
+        });
+
         it("errors.generated.ts ErrorCode set mirrors any new G-CORE-10 ErrorCode mints atomically (§3.5g 4-surface mirror)", () => {
             const errsGen = readWorkspaceFile(
                 "packages/engine/src/errors.generated.ts",
