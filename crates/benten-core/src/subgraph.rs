@@ -778,6 +778,20 @@ pub struct SubgraphBuilder {
     pub extra_edges: usize,
     /// Invariant-9 declared determinism flag.
     pub deterministic: bool,
+    /// G-CORE-6a / #506: deferred builder errors. The chainable setters
+    /// (`iterate` / `iterate_parallel` / `push`) record over-range numeric
+    /// arguments here instead of returning `Result`; the single-fallible-
+    /// point `.build()` call surfaces the first one as
+    /// `CoreError::ValueOutOfRange`.
+    ///
+    /// Why deferred: the `.build()`-as-single-fallible-point shape (#506
+    /// closure / G-CORE-6 verify-pass) keeps intermediate setters
+    /// chainable + infallible (`-> NodeHandle` / `-> &mut Self`), so
+    /// callsite ergonomics stay the same as the existing
+    /// `build_unvalidated_for_test` path while the over-range case
+    /// becomes a typed error at build-time. Unsaturated callers (the
+    /// overwhelmingly common case) pay zero cost.
+    pub build_errors: Vec<CoreError>,
 }
 
 impl SubgraphBuilder {
@@ -792,6 +806,7 @@ impl SubgraphBuilder {
             edges: Vec::new(),
             extra_edges: 0,
             deterministic: false,
+            build_errors: Vec::new(),
         }
     }
 
@@ -810,7 +825,30 @@ impl SubgraphBuilder {
         op.properties
             .entry(ATTRIBUTION_PROPERTY_KEY.to_string())
             .or_insert(Value::Bool(true));
-        let h = NodeHandle(u32::try_from(self.nodes.len()).unwrap_or(u32::MAX));
+        // G-CORE-6a / #506: `NodeHandle(u32)` slot exhaustion is
+        // practically unreachable (requires ~4.29B nodes in one
+        // builder, on a `no_std` heap), but the silent-saturation
+        // shape is the Safe-1 / #506 concern (Safe-1 lens: "silent
+        // failure modes"). `debug_assert!` loud-fails in debug
+        // builds where the silent failure is the bug; release builds
+        // keep the no_std-compatible saturating fallback for safety
+        // AND record a deferred `CoreError::ValueOutOfRange` so
+        // `.build()` surfaces the over-range case as a typed error.
+        let len = self.nodes.len();
+        debug_assert!(
+            len < u32::MAX as usize,
+            "SubgraphBuilder::push: NodeHandle u32 slot budget exhausted (~4.29B nodes; impossible-in-practice but the silent-saturation arm is bugged)"
+        );
+        if len >= u32::MAX as usize {
+            let mut buf = String::new();
+            let _ = core::fmt::write(&mut buf, format_args!("{len}"));
+            self.build_errors.push(CoreError::ValueOutOfRange {
+                field: "push.handle_slot",
+                value: buf,
+                bound: "u32::MAX",
+            });
+        }
+        let h = NodeHandle(u32::try_from(len).unwrap_or(u32::MAX));
         self.nodes.push(op);
         self.parallel_fanout.push(1);
         self.iterate_depth.push(0);
@@ -876,10 +914,30 @@ impl SubgraphBuilder {
     /// the previously-identical `max` parameter name.
     pub fn iterate(&mut self, prev: NodeHandle, _body: &str, max_iterations: u64) -> NodeHandle {
         let id = format!("iterate_{}", self.nodes.len());
-        let op = OperationNode::new(id, PrimitiveKind::Iterate).with_property(
-            "max",
-            Value::Int(i64::try_from(max_iterations).unwrap_or(i64::MAX)),
-        );
+        // G-CORE-6a / #506: `max_iterations: u64` storage type is
+        // `Value::Int` (`i64`); record an over-range argument as a
+        // deferred error so `.build()` surfaces it. Issue #506's
+        // semantic concern: the *declared* Inv-3 bound (~9.2e18 at
+        // i64::MAX) would diverge from the *recorded* bound + the
+        // Subgraph CID would also be affected, both silently. The
+        // chainable surface stays infallible (`-> NodeHandle`) per
+        // the #506-closure shape; the typed error only surfaces at
+        // the single-fallible-point `.build()` call.
+        let max_i64 = match i64::try_from(max_iterations) {
+            Ok(v) => v,
+            Err(_) => {
+                let mut buf = String::new();
+                let _ = core::fmt::write(&mut buf, format_args!("{max_iterations}"));
+                self.build_errors.push(CoreError::ValueOutOfRange {
+                    field: "iterate.max_iterations",
+                    value: buf,
+                    bound: "i64::MAX",
+                });
+                i64::MAX
+            }
+        };
+        let op = OperationNode::new(id, PrimitiveKind::Iterate)
+            .with_property("max", Value::Int(max_i64));
         let nest = self.iterate_depth_of(prev) + 1;
         self.push_chained(op, prev, nest)
     }
@@ -918,6 +976,16 @@ impl SubgraphBuilder {
     }
 
     /// Phase 2a G3-B: WAIT signal variant with explicit timeout.
+    ///
+    /// # Saturation
+    ///
+    /// `Duration::as_millis()` returns `u128`; the on-graph
+    /// `Value::Int` storage type is `i64`. Per #506's disposition for
+    /// this site, a `Duration` exceeding `i64::MAX` milliseconds
+    /// (~292M years) is treated as benign and saturates to `i64::MAX`
+    /// without recording a deferred error — any caller passing a
+    /// duration that large is doing something else wrong and the
+    /// resulting bound is still effectively-infinite.
     pub fn wait_signal_with_timeout(
         &mut self,
         prev: NodeHandle,
@@ -926,6 +994,8 @@ impl SubgraphBuilder {
     ) -> NodeHandle {
         let h = self.wait_signal(prev, signal_name);
         let idx = h.0 as usize;
+        // safety: Duration > 292M years is meaningless; #506 explicitly
+        // categorises this site as benign-leave-as-is.
         let ms = i64::try_from(timeout.as_millis()).unwrap_or(i64::MAX);
         if let Some(n) = self.nodes.get_mut(idx) {
             n.properties.insert("timeout_ms".into(), Value::Int(ms));
@@ -934,12 +1004,22 @@ impl SubgraphBuilder {
     }
 
     /// Phase 2a G3-B: WAIT duration variant.
+    ///
+    /// # Saturation
+    ///
+    /// `Duration::as_millis()` returns `u128`; the on-graph
+    /// `Value::Int` storage type is `i64`. Per #506's disposition for
+    /// this site, a `Duration` exceeding `i64::MAX` milliseconds
+    /// (~292M years) is treated as benign and saturates to `i64::MAX`
+    /// without recording a deferred error.
     pub fn wait_duration(
         &mut self,
         prev: NodeHandle,
         duration: core::time::Duration,
     ) -> NodeHandle {
         let id = format!("wait_{}", self.nodes.len());
+        // safety: Duration > 292M years is meaningless; #506 explicitly
+        // categorises this site as benign-leave-as-is.
         let ms = i64::try_from(duration.as_millis()).unwrap_or(i64::MAX);
         let op = OperationNode::new(id, PrimitiveKind::Wait)
             .with_property("duration_ms", Value::Int(ms));
@@ -996,10 +1076,28 @@ impl SubgraphBuilder {
         parallel_fanout: usize,
     ) -> NodeHandle {
         let id = format!("iterate_par_{}", self.nodes.len());
-        let op = OperationNode::new(id, PrimitiveKind::Iterate).with_property(
-            "parallel",
-            Value::Int(i64::try_from(parallel_fanout).unwrap_or(i64::MAX)),
-        );
+        // G-CORE-6a / #506: `parallel_fanout: usize` storage type is
+        // `Value::Int` (`i64`); record an over-range argument as a
+        // deferred error so `.build()` surfaces it. The semantic
+        // concern: silent saturation of the Inv-3 fan-out width
+        // declaration would diverge from the recorded value and
+        // affect the Subgraph CID, both silently. Chainable surface
+        // stays infallible per the #506-closure shape.
+        let parallel_i64 = match i64::try_from(parallel_fanout) {
+            Ok(v) => v,
+            Err(_) => {
+                let mut buf = String::new();
+                let _ = core::fmt::write(&mut buf, format_args!("{parallel_fanout}"));
+                self.build_errors.push(CoreError::ValueOutOfRange {
+                    field: "iterate_parallel.parallel_fanout",
+                    value: buf,
+                    bound: "i64::MAX",
+                });
+                i64::MAX
+            }
+        };
+        let op = OperationNode::new(id, PrimitiveKind::Iterate)
+            .with_property("parallel", Value::Int(parallel_i64));
         let nest = self.iterate_depth_of(prev) + 1;
         let h = self.push_chained(op, prev, nest);
         self.parallel_fanout[h.0 as usize] = parallel_fanout;
@@ -1052,6 +1150,16 @@ impl SubgraphBuilder {
     /// `benten_eval::SubgraphBuilderExt::build_validated` (a trait method)
     /// which adds the invariants pass and returns a `RegistrationError`-typed
     /// result.
+    ///
+    /// # Saturating numeric behaviour
+    ///
+    /// This entry point does NOT surface deferred `CoreError::ValueOutOfRange`
+    /// errors recorded by `iterate` / `iterate_parallel` / `push`; if any
+    /// caller passes an over-range numeric argument the resulting `Subgraph`
+    /// will carry the saturated value (the legacy semantics callers of this
+    /// `_for_test` entry point depend on for the negative-path tests). Use
+    /// [`SubgraphBuilder::build`] (the #506 single-fallible-point) when
+    /// over-range arguments must surface as typed errors.
     pub fn build_unvalidated_for_test(self) -> Subgraph {
         let edges = self.materialize_edges();
         Subgraph {
@@ -1060,6 +1168,60 @@ impl SubgraphBuilder {
             handler_id: self.handler_id,
             deterministic: self.deterministic,
         }
+    }
+
+    /// G-CORE-6a / #506 — the single-fallible-point builder finalizer.
+    ///
+    /// Consumes the builder and produces a `Subgraph`, surfacing the
+    /// **first** deferred `CoreError::ValueOutOfRange` recorded by any
+    /// chainable setter (`iterate` over-range `max_iterations`,
+    /// `iterate_parallel` over-range `parallel_fanout`, or the
+    /// practically-unreachable `push` `NodeHandle(u32)` slot
+    /// exhaustion) as a typed error.
+    ///
+    /// This is the SOLE `pub fn` on `SubgraphBuilder` returning
+    /// `Result` (the #506-closure shape: intermediate setters remain
+    /// chainable + infallible — `-> NodeHandle` / `-> &mut Self`;
+    /// fallibility is collapsed to this ONE call). The companion
+    /// [`SubgraphBuilder::build_unvalidated_for_test`] entry point
+    /// stays infallible for the legacy negative-test surface that
+    /// depends on the saturating semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(CoreError::ValueOutOfRange)` if any chainable
+    /// setter previously received a numeric argument exceeding its
+    /// storage type's bound. Only the first deferred error is
+    /// returned; the rest (if any) remain on `self.build_errors`'s
+    /// drop path.
+    ///
+    /// # Validation
+    ///
+    /// This method does NOT run structural validation (the arch-1
+    /// `benten-eval`-only invariants pass). For validation use the
+    /// eval-side extension trait
+    /// `benten_eval::SubgraphBuilderExt::build_validated` — which is
+    /// the `_validated` companion in a separate crate and therefore
+    /// does NOT count against the #506 "no other `pub fn` returning
+    /// `Result` on the builder" property (it lives on a foreign
+    /// extension trait in `benten-eval`, not as an inherent `pub fn`
+    /// here).
+    pub fn build(mut self) -> Result<Subgraph, CoreError> {
+        if !self.build_errors.is_empty() {
+            // Take the first deferred error; remaining ones drop with
+            // the builder. The first-error surface is enough — fix
+            // that one and re-run; the deferred-error vec exists to
+            // record all of them for diagnostics, not to flood
+            // callers with N parallel errors.
+            return Err(self.build_errors.remove(0));
+        }
+        let edges = self.materialize_edges();
+        Ok(Subgraph {
+            nodes: self.nodes,
+            edges,
+            handler_id: self.handler_id,
+            deterministic: self.deterministic,
+        })
     }
 
     fn materialize_edges(&self) -> Vec<(String, String, String)> {

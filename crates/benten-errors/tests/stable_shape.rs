@@ -59,6 +59,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SystemZoneWrite,
     ErrorCode::ValueFloatNan,
     ErrorCode::ValueFloatNonFinite,
+    ErrorCode::ValueOutOfRange,
     ErrorCode::CidParse,
     ErrorCode::CidUnsupportedCodec,
     ErrorCode::CidUnsupportedHash,
@@ -835,14 +836,20 @@ fn variant_count_is_pinned() {
     // `TwoCidMappingIntegrityMismatch`). 171 + 3 = 174.
     //
     // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R1 + §R3)
-    // rebased onto post-#1323 main: +2 — `AuthorizationGrantBindingSigInvalid`
+    // MERGED at e89a1919: +2 — `AuthorizationGrantBindingSigInvalid`
     // (the ONE-signed-artifact binding-sig tamper-detection typed-reject
     // for the A-1 stolen-UCAN + A-2 stolen-keys + A-3 wrong-audience
     // attacks) + `ChainNarrowingViolation` (structured-`Scope` chain-
     // validator widening typed-reject across `Hashes` subset-violations
     // + `RestrictedSelector` 6-dim widenings). 174 + 2 = 176.
+    //
+    // G-CORE-6a (Phase 4-Meta-Core, #506 builder closure) batch-rebased
+    // past 176: +1 `ValueOutOfRange` (SubgraphBuilder records over-range
+    // numeric arguments as deferred errors and surfaces them at the
+    // single-fallible-point `.build()` call per #506 / G-CORE-6 verify-
+    // pass). 176 + 1 = 177.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 176,
+        CATALOG_VARIANT_COUNT, 177,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -936,6 +943,7 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::SystemZoneWrite
             | ErrorCode::ValueFloatNan
             | ErrorCode::ValueFloatNonFinite
+            | ErrorCode::ValueOutOfRange
             | ErrorCode::CidParse
             | ErrorCode::CidUnsupportedCodec
             | ErrorCode::CidUnsupportedHash
