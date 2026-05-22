@@ -759,6 +759,17 @@ struct CanonViewOwned {
 /// the builder + validator). Existing test callsites import the builder
 /// from `benten_eval::` (which re-exports), so the trait method shadows
 /// the inherent unvalidated body and gets validation semantics for free.
+///
+/// **G-CORE-6a / #506 closure: `.build()` is the canonical single-
+/// fallible-point.** The chainable setters (`iterate` / `iterate_parallel`
+/// / `push`) are infallible (`-> NodeHandle` / `-> &mut Self`); they
+/// defer any over-range numeric argument into the `build_errors` field as
+/// a `CoreError::ValueOutOfRange`. `.build()` collects those deferred
+/// errors and returns `Err(CoreError::ValueOutOfRange { .. })` if any
+/// were recorded, else returns the well-formed `Subgraph`. Prefer
+/// `.build()` over `build_unvalidated_for_test` for new callsites that
+/// want the typed-error surface; `build_unvalidated_for_test` stays for
+/// the invariant edge-case tests that intentionally bypass it.
 pub struct SubgraphBuilder {
     /// Handler id for this subgraph (stamped onto the produced [`Subgraph`]).
     pub handler_id: String,
