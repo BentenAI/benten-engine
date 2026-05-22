@@ -93,10 +93,7 @@ pub fn walk(spec: &Spec) -> Result<WalkResult, SubgraphSpecError> {
         .flat_map(|m| m.values().copied())
         .collect();
     for root in spec.roots() {
-        let has_out_edges = spec
-            .edges()
-            .get(root)
-            .is_some_and(|m| !m.is_empty());
+        let has_out_edges = spec.edges().get(root).is_some_and(|m| !m.is_empty());
         let is_target = edge_targets.contains(root);
         if !has_out_edges && !is_target {
             return Err(SubgraphSpecError::CidMissing(*root));
