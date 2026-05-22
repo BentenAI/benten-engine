@@ -48,6 +48,33 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Disk-pressure mitigation for ubuntu-24.04 GH-hosted x86_64 runners
+  # (infra-disk-pressure-fix-2026-05-22). Three required-checks failed
+  # 2× consecutively on PR #1312 with `couldn't create a temp dir: No
+  # space left on device (os error 28)` during cargo build of
+  # `benten-engine` test binaries — debug-symbol size + incremental
+  # compilation artifacts overflowed runner disk even with the
+  # `Free disk space (Linux runners only)` composite step running.
+  #
+  # `CARGO_INCREMENTAL=0` disables incremental compilation files —
+  # incremental is cache-eviction-bound on CI runners (each run gets a
+  # fresh image; the incremental cache is never reused) so the only
+  # effect on CI is writing 3-5 GB of `target/*/incremental/**` that
+  # the next compile unit can't see anyway. Saves disk without
+  # affecting build correctness.
+  #
+  # `CARGO_PROFILE_DEV_DEBUG=line-tables-only` reduces debug-symbol
+  # size by ~80% (debug symbols dominate dev/test target sizes for
+  # a workspace this large). `line-tables-only` keeps the file:line
+  # information needed for backtraces + panic messages; drops the
+  # type-debug-info bulk that test runtime never reads.
+  #
+  # The macOS legs in this matrix don't hit the disk-OOM (their
+  # runners have ~40 GB free vs Linux ~14 GB after image bloat), so
+  # these env vars are a no-op there. Setting at workflow-env scope
+  # means every job leg inherits — including the matrix Linux legs.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   # --------------------------------------------------------------------------
