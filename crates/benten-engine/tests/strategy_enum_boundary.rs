@@ -16,8 +16,9 @@
 //!
 //! The Strategy enum surface at the engine boundary stays shape-stable
 //! across G15-A's kernel generalization. G15-A added INTERNAL routing
-//! ([`benten_ivm::dispatch_for`] returning `Strategy::A` for canonical
-//! ids and `Strategy::B` for user-defined ids) but the engine-facing
+//! ([`benten_ivm::CanonicalViews::dispatch`] returning `Strategy::A` for
+//! canonical ids and `Strategy::B` for user-defined ids — post-G-CORE-4
+//! D1 A2 the pre-collapse `dispatch_for` helper is `pub(crate)`) but the engine-facing
 //! Strategy enum keeps the same closed `{ A, B, C }` variant set —
 //! adding a new variant without an explicit RFC would be a breaking
 //! change that an exhaustive match catches at compile time.
@@ -42,13 +43,19 @@ fn strategy_enum_at_engine_boundary_does_not_leak_algorithm_b_internals_per_clau
     assert_eq!(classify(Strategy::B), "B");
     assert_eq!(classify(Strategy::Reserved), "Reserved");
 
-    // The G15-A internal dispatch router lives behind a `pub fn
-    // dispatch_for(view_id: &str) -> Strategy` — it RETURNS a Strategy
-    // (no algorithm-internal type leakage) and TAKES a `&str`
-    // (no `View` trait object). The engine consumes only the Strategy
-    // return value.
-    let _: Strategy = benten_ivm::dispatch_for("capability_grants");
-    let _: Strategy = benten_ivm::dispatch_for("custom:foo");
+    // Post-G-CORE-4 D1 A2: the G15-A internal dispatch router lives
+    // behind the [`CanonicalViews::dispatch`] method of the unified
+    // registry-query type — it RETURNS a Strategy (no algorithm-internal
+    // type leakage) and TAKES a `&str` (no `View` trait object). The
+    // engine consumes only the Strategy return value. The 4 pre-collapse
+    // standalone `pub` helpers (`dispatch_for`, `hardcoded_label_for_id`,
+    // `is_canonical_view_id`, `canonical_typed_output_projection_for`)
+    // are narrowed to `pub(crate)` post-G-CORE-4 (the unified
+    // registry-query type is the published surface; ivm-r1-2
+    // DISAGREE-record + #758 rename + #914 narrowing ride).
+    let registry = benten_ivm::CanonicalViews::registry();
+    let _: Strategy = registry.dispatch("capability_grants");
+    let _: Strategy = registry.dispatch("custom:foo");
 
     // The Algorithm B kernel surface (`AlgorithmBView`, `Algorithm`,
     // `LabelPattern`, `Projection`) is named at `benten_ivm::*` but

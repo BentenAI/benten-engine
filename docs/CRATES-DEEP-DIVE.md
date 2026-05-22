@@ -110,7 +110,7 @@ The same pattern shows up in **CRUD handlers**: `crud('post')` lowers to a `READ
 
 **arch-1 dep-break** (`benten-eval` ↛ `benten-graph`) is defended in depth: `Cargo.toml` carries no entry; the CI workflow + four dedicated arch tests assert the absence; `HostError` is the opaque envelope so no graph type appears on the public surface.
 
-**IVM thinness** (CLAUDE.md #2) is defended by the engine boundary naming exactly one type (`Strategy`) from `benten-ivm` and the eval boundary defining `ViewQuery` LOCALLY in `host.rs` so the evaluator does not import `benten_ivm::ViewQuery`. The `dispatch_for` router is `pub` but documented INTERNAL; the engine's `register_user_view` is the only call site that consumes it.
+**IVM thinness** (CLAUDE.md #2) is defended by the engine boundary naming exactly one type (`Strategy`) from `benten-ivm` and the eval boundary defining `ViewQuery` LOCALLY in `host.rs` so the evaluator does not import `benten_ivm::ViewQuery`. Post-G-CORE-4 (D1 A2 + ivm-r1-2 DISAGREE-record) the 4 pre-collapse leaked helpers (`hardcoded_label_for_id` / `canonical_typed_output_projection_for` / `is_canonical_view_id` / `dispatch_for`) are narrowed to `pub(crate)` and collapsed into ONE published seam — the [`CanonicalViews`] registry-query type, documented alongside `Strategy` as the deliberate engine-facing IVM boundary. The engine's `register_user_view` + read-view label-hint resolution paths are the only external call sites and they query through `CanonicalViews::registry()`.
 
 **SANDBOX host-fn surface** (CLAUDE.md #16) is closed at four (time + log + kv:read + random). The `HOST_FN_NAMES` constant is a `const &[&str; 4]` so adding a new name fails compilation in any code that depends on the length. There is no `kv:write`, no `kv:delete`, no edge-mutating host-fn, and a regression test (`tests/host_fn_no_storage_mutating_per_baked_in_16.rs`) defends against future drift.
 
@@ -212,7 +212,7 @@ Each per-crate audit surfaces a small handful of stale comments or unresolved TO
 
 - `benten-errors::parse_cap_string` doc-comment still says "Phase 2a stub" + "Real parser lands in G4-A" despite G4-A having closed.
 - `benten-core`'s legacy crate-root `u64`-id `Anchor` surface (and its `U64_CHAINS` table) was removed for refinement-audit #1003 (zero non-test callers; CLAUDE.md rule #5), retiring the prior `TODO(phase-3 — anchorstore + GC)` growth concern.
-- `benten-core` now has two `Anchor` shapes (`version::Anchor` Cid-head-threaded and `version_chain::DagVersionChain` DAG-shape); their unification into one `VersionDag` with an opt-in strict/linear mode is the ratified Phase-4-Meta D3 work named in `docs/future/phase-4-backlog.md` §4.79.
+- `benten-core` exposes the unified `version_dag::VersionDag` composability surface (Phase-4-Meta-Core G-CORE-5 D3 unification, RATIFIED 2026-05-17, closes #849): one nominal type with an opt-in `Mode::{Strict, Dag}` selector + one shared `VersionChain` trait + one CURRENT semantic across modes. The two underlying per-pattern implementations (`version::Anchor` Cid-head-threaded linear; `version_chain::DagVersionChain` explicit DAG) remain alongside for existing engine + platform-foundation callers; migrating those callsites onto the unified surface is downstream-wave work.
 - `crates/benten-graph/src/lib.rs` carries `TODO(phase-3 — write-authority/is_privileged coherence)` (storage-layer two-axes drift risk; tracked in §13.x of phase-3-backlog).
 - `benten-graph`'s in-transaction flag is per-`Arc<RedbBackend>` (mini-review g3-ce-7 proposed keying on canonical DB path; carried).
 - `benten-graph::next_tx_id` is process-lifetime-only (mini-review g3-ce-8 proposed persisting; carried).
@@ -307,7 +307,7 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-graph` | `Transaction::transaction` always rejects nested | low | Savepoints / partial rollback design — Phase 4-Meta or later |
 | `benten-ivm` | `Projection` has one variant (`AllProps`) — placeholder for materializer | high | Lift enum: `PropSubset`, `Computed`, `Reshape` |
 | `benten-ivm` | `ViewQuery` is one un-typed record over-broad | medium | Typed-per-view variant per docstring |
-| `benten-ivm` | `dispatch_for` + `is_canonical_view_id` are `pub` but documented INTERNAL | low | Narrow to `pub(crate)` after re-export sweep |
+| `benten-ivm` | `dispatch_for` + `is_canonical_view_id` were `pub` but documented INTERNAL | CLOSED at G-CORE-4 | Narrowed to `pub(crate)`; collapsed into the new `CanonicalViews` registry-query type (D1 A2 + ivm-r1-2 DISAGREE-record) |
 | `benten-ivm` | Phase-1 `rebuild()` doesn't replay events | medium | Phase-3+ event-replay infrastructure |
 | `benten-ivm` | `Strategy::Reserved` is the named-future-family placeholder (renamed from `Strategy::C` at G23-0a) | low | CLOSED at G23-0a; future algorithmic families replace the variant |
 | `benten-ivm` | Subscriber pattern-based pre-filtering Phase-3 TODO unmoved | low (medium at Phase 4-Foundation scale) | Becomes load-bearing when N user views >> 5 |

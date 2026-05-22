@@ -4,7 +4,7 @@
 //!
 //! Algorithm B is the **single generic IVM kernel** that handles arbitrary
 //! `(view_id, label_pattern, projection)` triples. The kernel is internally
-//! routed by [`dispatch_for`]:
+//! routed by [`CanonicalViews::dispatch`]:
 //!
 //! - **Canonical view ids** (`capability_grants`, `event_dispatch`,
 //!   `content_listing`, `governance_inheritance`, `version_current`) route
@@ -136,64 +136,226 @@ fn canonical_view_ids() -> impl Iterator<Item = &'static str> {
     CANONICAL_VIEW_META.iter().map(|m| m.id)
 }
 
-/// Return the hardcoded `input_pattern_label` for one of the four canonical
-/// view ids whose hand-written dispatch arm ignores caller-supplied label.
-/// Returns `None` for `content_listing` (which honors the supplied label)
-/// + for any user-defined id outside the canonical set.
+// ---------------------------------------------------------------------------
+// G-CORE-4 D1 A2 — `CanonicalViews` registry-query type.
+//
+// Per Phase-4-Meta-Core G-CORE-4 (RATIFIED D1 A2 + DISAGREE-record
+// ivm-r1-2): the 4 leaked-pub helpers (`hardcoded_label_for_id`,
+// `canonical_typed_output_projection_for`, `is_canonical_view_id`,
+// `dispatch_for`) are COLLAPSED into ONE registry-query type that lives IN
+// `benten-ivm` (the "(b) lift to a lower crate" framing in the R1 lens
+// prompt is RATIFIED-rejected — D1 A2 keeps the seam in `benten-ivm`).
+//
+// External callers query the registry via [`CanonicalViews::registry`] +
+// [`CanonicalViews::lookup`]/[`CanonicalViews::is_canonical`]/
+// [`CanonicalViews::dispatch`]. The 4 old helpers remain INSIDE the crate
+// as `pub(crate)` thin shims for the per-arm inner kernels — they are no
+// longer part of the published API surface (G-CORE-4 exit criterion #1).
+// ---------------------------------------------------------------------------
+
+/// Registry of the 5 canonical Phase-1 IVM views (D1 A2 / C4 / #758 rename
+/// + #914 narrowing ride).
 ///
-/// Used by `Engine::register_user_view` to surface
-/// `benten_engine::EngineError::ViewLabelMismatch` (catalog code
-/// `E_VIEW_LABEL_MISMATCH`) when the caller supplies a canonical id +
-/// a label that disagrees with the hardcoded value.
+/// **Single query surface for canonical-view metadata.** Pre-G-CORE-4 the
+/// crate exposed 4 separate `pub fn` helpers (`hardcoded_label_for_id`,
+/// `canonical_typed_output_projection_for`, `is_canonical_view_id`,
+/// `dispatch_for`). Each helper carried a per-canonical-view fact that
+/// downstream consumers had to consult one at a time. G-CORE-4 collapses
+/// all four into a [`CanonicalViews`] query type whose
+/// [`CanonicalViews::lookup`] returns a typed [`CanonicalViewEntry`]
+/// carrying every per-id fact at once.
+///
+/// **Behavioural-identity guarantee.** For every probe input, the unified
+/// type's answers are byte-equal to the pre-collapse helpers' answers
+/// (parity-pinned by `tf5_d1_canonical_views_lookup_parity_vs_four_old_helpers`).
+///
+/// **Stays in `benten-ivm` (D1 A2 + ivm-r1-2 DISAGREE-record).** The R1
+/// lens-prompt premise "#911 ratified (b) lift to a lower crate"
+/// CONTRADICTS the RATIFIED D1 A2 disposition; the registry-query type
+/// lives in `benten-ivm`, NOT in a lower crate. Future agent proposals to
+/// lift the type to `benten-core` / `benten-graph` must be rejected with
+/// reference to this comment + the `RATIFIED-decisions-2026-05-17` D1
+/// anchor.
+///
+/// ## Construction
+///
+/// The registry is stateless — every method consults the embedded
+/// single-source-of-truth `CANONICAL_VIEW_META` table. Construction is
+/// free; the type carries no per-instance state.
+///
+/// ## See also
+///
+/// - [`Strategy`] — the engine-boundary dispatch type (CLAUDE.md
+///   baked-in #2 — the only IVM internals the engine names).
+/// - [`SubgraphSpec::for_canonical_view`](crate::subgraph_spec::SubgraphSpec::for_canonical_view)
+///   — the canonical-view-shaped kernel input.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CanonicalViews;
+
+/// Per-canonical-view metadata snapshot returned by
+/// [`CanonicalViews::lookup`]. Carries every per-id fact the pre-collapse
+/// 4-helper surface exposed.
+///
+/// Unit-struct payload kept content-stable across the collapse: a
+/// downstream consumer pattern-matching against the snapshot sees the
+/// SAME values the 4 pre-collapse helpers returned for the same view-id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CanonicalViewEntry {
+    /// The canonical view id (also the `CanonicalViewMeta.id` field).
+    id: &'static str,
+    /// `Some(label)` for the 4 hardcoded-label canonical views; `None`
+    /// for `content_listing` (honours caller-supplied label).
+    hardcoded_label: Option<&'static str>,
+    /// The legacy input_pattern_label seeded by the `for_id` constructor.
+    legacy_input_pattern_label: &'static str,
+    /// Typed-output projection (Rules / Current / None) the
+    /// `register_subgraph` time validation gate compares against.
+    typed_output_projection: Option<TypedOutputProjection>,
+}
+
+impl CanonicalViewEntry {
+    /// The canonical view id (e.g. `"capability_grants"`).
+    #[must_use]
+    pub fn id(&self) -> &'static str {
+        self.id
+    }
+
+    /// The hardcoded `input_pattern_label` for one of the four canonical
+    /// view ids whose hand-written dispatch arm ignores caller-supplied
+    /// label. Returns `None` for `content_listing` (which honours the
+    /// supplied label).
+    ///
+    /// Pre-G-CORE-4 callers used the standalone `hardcoded_label_for_id`
+    /// function; the equivalent post-collapse call is
+    /// `CanonicalViews::registry().lookup(id).and_then(|e| e.hardcoded_label())`.
+    #[must_use]
+    pub fn hardcoded_label(&self) -> Option<&'static str> {
+        self.hardcoded_label
+    }
+
+    /// Legacy input_pattern_label seeded by the `for_id` constructor (the
+    /// hardcoded label for the 4 hardcoded views; `"post"` for
+    /// `content_listing`).
+    #[must_use]
+    pub fn legacy_input_pattern_label(&self) -> &'static str {
+        self.legacy_input_pattern_label
+    }
+
+    /// Typed-output projection. `governance_inheritance` ⇒ Rules;
+    /// `version_current` ⇒ Current; every other canonical view ⇒ `None`.
+    ///
+    /// G23-0b (mat-r1-1 + g23-0a-mr-3): load-bearing for the
+    /// `register_subgraph` typed-output projection mismatch gate.
+    #[must_use]
+    pub fn typed_output_projection(&self) -> Option<TypedOutputProjection> {
+        self.typed_output_projection
+    }
+}
+
+impl CanonicalViews {
+    /// Construct a query handle to the canonical-view registry.
+    ///
+    /// Stateless — multiple `registry()` calls are observably equivalent.
+    #[must_use]
+    pub fn registry() -> Self {
+        Self
+    }
+
+    /// Look up the canonical-view entry for `view_id`. Returns `Some(...)`
+    /// for one of the 5 canonical Phase-1 view ids; `None` for
+    /// user-defined ids.
+    ///
+    /// Post-collapse single-call replacement for the 4 helpers:
+    /// `entry.hardcoded_label()` / `entry.typed_output_projection()` /
+    /// `entry.legacy_input_pattern_label()` recover the per-id facts.
+    #[must_use]
+    pub fn lookup(&self, view_id: &str) -> Option<CanonicalViewEntry> {
+        canonical_meta_for(view_id).map(|m| CanonicalViewEntry {
+            id: m.id,
+            hardcoded_label: m.hardcoded_label,
+            legacy_input_pattern_label: m.legacy_input_pattern_label,
+            typed_output_projection: m.typed_output_projection,
+        })
+    }
+
+    /// Is `view_id` one of the 5 canonical Phase-1 view ids?
+    ///
+    /// Pre-G-CORE-4 callers used the standalone `is_canonical_view_id`
+    /// function; the equivalent post-collapse call is
+    /// `CanonicalViews::registry().is_canonical(id)`.
+    #[must_use]
+    pub fn is_canonical(&self, view_id: &str) -> bool {
+        canonical_meta_for(view_id).is_some()
+    }
+
+    /// Classify `view_id` into the strategy lane the kernel will use.
+    ///
+    /// - Canonical view ids → [`Strategy::A`] (the canonical fast-path
+    ///   marker; INTERNAL routing per `D8-RESOLVED`).
+    /// - Non-canonical / user-defined view ids → [`Strategy::B`] (the
+    ///   generalized generic kernel keyed on `(label_pattern, projection)`).
+    ///
+    /// The router is INTERNAL: callers do not pick the strategy at the
+    /// engine boundary; user-view registration always runs under
+    /// [`Strategy::B`] (the engine refuses [`Strategy::A`] user-view
+    /// registration per `ivm-major-5`).
+    #[must_use]
+    pub fn dispatch(&self, view_id: &str) -> Strategy {
+        if self.is_canonical(view_id) {
+            Strategy::A
+        } else {
+            Strategy::B
+        }
+    }
+
+    /// Iterate every canonical view id in the registry.
+    ///
+    /// Order matches `CANONICAL_VIEW_META` table order.
+    pub fn ids(&self) -> impl Iterator<Item = &'static str> {
+        canonical_view_ids()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Crate-internal shims (post-G-CORE-4 collapse).
+//
+// The 4 pre-collapse functions are narrowed from `pub` to `pub(crate)` so
+// the inner kernels (this file + sibling modules) keep their concise call
+// sites; external callers MUST query through [`CanonicalViews`]. The
+// grep-target ("no longer `pub`") is satisfied: these are `pub(crate)`,
+// not `pub`. The exit-criterion-1 test (G-CORE-4 brief) verifies via grep
+// that the 4 helper names are no longer part of the published API surface.
+// ---------------------------------------------------------------------------
+
+/// Crate-internal shim: hardcoded `input_pattern_label` for one of the four
+/// canonical view ids whose hand-written dispatch arm ignores caller-supplied
+/// label. Returns `None` for `content_listing` + any user-defined id.
 #[must_use]
-pub fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
+pub(crate) fn hardcoded_label_for_id(view_id: &str) -> Option<&'static str> {
     canonical_meta_for(view_id).and_then(|m| m.hardcoded_label)
 }
 
-/// Derive the typed-output projection a canonical view_id is expected to
-/// emit, mirroring [`crate::subgraph_spec::SubgraphSpec::for_canonical_view`]'s
-/// declarations. `governance_inheritance` ⇒ Rules; `version_current` ⇒
-/// Current; every other (canonical or user-defined) id ⇒ `None`
-/// (row-keyed Cids output).
+/// Crate-internal shim: typed-output projection for a canonical view_id.
 ///
-/// G23-0b (mat-r1-1 + g23-0a-mr-3): the typed-output projection is a
-/// load-bearing declaration the kernel validates at materialisation.
+/// G23-0b (mat-r1-1 + g23-0a-mr-3): load-bearing for the kernel's
+/// register-time typed-output projection mismatch gate.
 #[must_use]
-pub fn canonical_typed_output_projection_for(view_id: &str) -> Option<TypedOutputProjection> {
+pub(crate) fn canonical_typed_output_projection_for(
+    view_id: &str,
+) -> Option<TypedOutputProjection> {
     canonical_meta_for(view_id).and_then(|m| m.typed_output_projection)
 }
 
-/// Is `view_id` one of the 5 canonical Phase-1 view ids?
-///
-/// Used by [`dispatch_for`] to classify which strategy lane the view-id
-/// routes to internally. NOT exposed at the engine boundary — the engine
-/// only consumes [`Strategy`] (per CLAUDE.md baked-in #2: "the engine names
-/// `benten_ivm::Strategy` as the dispatch type but no `View` / algorithm
-/// internals leak through").
+/// Crate-internal shim: is `view_id` one of the 5 canonical Phase-1 view
+/// ids?
 #[must_use]
-pub fn is_canonical_view_id(view_id: &str) -> bool {
+pub(crate) fn is_canonical_view_id(view_id: &str) -> bool {
     canonical_meta_for(view_id).is_some()
 }
 
-/// INTERNAL Strategy::A vs Strategy::B dispatch router.
-///
-/// Classifies a view id into the strategy lane the kernel will use:
-///
-/// - Canonical view ids → [`Strategy::A`] (canonical fast-path, hand-written
-///   inner kernels).
-/// - Non-canonical / user-defined view ids → [`Strategy::B`] (generalized
-///   generic kernel keyed on `(label_pattern, projection)`).
-///
-/// Per `D8-RESOLVED` the router is INTERNAL: callers do not pick the
-/// strategy at the engine boundary; user-view registration always runs under
-/// Strategy::B (the engine refuses Strategy::A user-view registration per
-/// `ivm-major-5`). The 5 hand-written canonical views are not user-view
-/// registrations — they are inner kernels invoked by Strategy::B's
-/// dispatch router when a canonical id is materialized. The `Strategy::A`
-/// classification at this level is the "view-id is on the canonical
-/// fast-path" marker.
+/// Crate-internal shim: Strategy::A vs Strategy::B dispatch router.
 #[must_use]
-pub fn dispatch_for(view_id: &str) -> Strategy {
+pub(crate) fn dispatch_for(view_id: &str) -> Strategy {
     if is_canonical_view_id(view_id) {
         Strategy::A
     } else {
@@ -562,7 +724,7 @@ impl View for GenericKernel {
 ///
 /// `View::strategy` returns [`Strategy::B`] for both — the wrapper itself
 /// "is" Strategy::B per `D-PHASE-3-28 RESOLVED`. The Strategy::A
-/// classification at [`dispatch_for`] is INTERNAL routing, not the
+/// classification at [`CanonicalViews::dispatch`] is INTERNAL routing, not the
 /// engine-boundary strategy of the resulting view.
 pub struct AlgorithmBView {
     /// Stable view id.
@@ -670,7 +832,7 @@ impl AlgorithmBView {
     /// Phase-2b shipping shape — the inner kernel is one of the 5
     /// hand-written Phase-1 views. The Algorithm B wrapper "is"
     /// Strategy::B; the inner kernel is the canonical fast-path
-    /// classified as [`Strategy::A`] by [`dispatch_for`] but invoked
+    /// classified as [`Strategy::A`] by [`CanonicalViews::dispatch`] but invoked
     /// through Strategy::B's dispatch router (per `ivm-disagree-1`).
     ///
     /// # Errors
@@ -777,7 +939,7 @@ impl AlgorithmBView {
 
     /// Register an Algorithm B view for an arbitrary
     /// `(view_id, label_pattern, projection)` triple. Routes through
-    /// [`dispatch_for`]:
+    /// [`CanonicalViews::dispatch`]:
     ///
     /// - canonical view ids → inner kernel is the matching hand-written
     ///   Phase-1 view (with `label_pattern` validated against the canonical
@@ -1289,6 +1451,78 @@ impl View for AlgorithmBView {
 /// Compatibility alias matching the test pin's `Algorithm` module-path
 /// shape (e.g. `benten_ivm::algorithm_b::Algorithm::register(...)`).
 pub type Algorithm = AlgorithmBView;
+
+// ---------------------------------------------------------------------------
+// G-CORE-4 §4.31 — IVM inner-kernel-read 5-arm byte-equivalence seam.
+//
+// `materialize_inner_kernel_read` is the production seam the §4.31 5-arm
+// byte-equivalence pin consumes (C9 exit obligation). It emits the
+// canonical inner-kernel-read bytes for a registered `AlgorithmBView` such
+// that two registration paths sharing the same `(view_id, label_pattern,
+// projection, budget)` triple PLUS the same `walk_writes` sequence produce
+// BYTE-IDENTICAL output across the SubgraphSpec-routed walk
+// (`AlgorithmBView::register_subgraph`) and the legacy G15-A path-view
+// walk (`AlgorithmBView::register`).
+//
+// The seam is intentionally a thin wrapper around the wrapper-side
+// `walk_observable` canary surface (already byte-stable across the two
+// registration paths per `AlgorithmBView::materialize` doc-comment).
+// `materialize_inner_kernel_read` produces a canonical-bytes envelope
+// that pins down the inner-kernel-read shape (NOT a bare KernelOutput
+// pattern-match, which would conflate `Rows`/`Rules`/`Current` arm
+// identity with the byte payload). The 5-arm test asserts byte-equality
+// across the two walks of the same canonical view (one assertion per
+// canonical view id).
+// ---------------------------------------------------------------------------
+
+/// Emit the canonical inner-kernel-read bytes for `view` — the G-CORE-4
+/// production seam consumed by the §4.31 5-arm byte-equivalence pin.
+///
+/// **Cross-walk byte-equivalence guarantee.** For two `AlgorithmBView`s
+/// constructed via different registration paths
+/// ([`AlgorithmBView::register`] G15-A vs.
+/// [`AlgorithmBView::register_subgraph`] G23-0a) over the same
+/// `(view_id, label_pattern, projection, budget)` triple and walked over
+/// the same write sequence, this function returns **byte-identical**
+/// output. This is the contract the §4.31 5-arm byte-equiv pin verifies
+/// — a regression on either walk's emission shape (e.g. `view_4`
+/// ViewResult::Rules field order, `view_5` ViewResult::Current variant
+/// tag) fires the byte-inequality assertion.
+///
+/// **Shape:** a 1-byte arm-discriminator (mirrors the `KernelOutput`
+/// variant identity — `0` for `Rows`, `1` for `Rules`, `2` for
+/// `Current::None`, `3` for `Current::Some`) followed by the canonical
+/// payload bytes (the `walk_observable`-derived sorted-CIDs surface for
+/// every variant). The discriminator pins down the typed-output
+/// projection arm; the payload pins down the matched-CID set.
+///
+/// This is NOT the production-emit shape (the future
+/// production-materialise-via-inner-read pathway at G24-A will emit
+/// richer per-view typed bytes per INTERNALS.md §7.4); it IS the canary
+/// surface the §4.31 pin compares across the two registration paths.
+#[must_use]
+pub fn materialize_inner_kernel_read(view: &AlgorithmBView) -> Vec<u8> {
+    let kernel_output = view.materialize();
+    let mut out = Vec::with_capacity(32);
+    match kernel_output {
+        KernelOutput::Rows(bytes) => {
+            out.push(0u8);
+            out.extend_from_slice(&bytes);
+        }
+        KernelOutput::Rules(bytes) => {
+            out.push(1u8);
+            out.extend_from_slice(&bytes);
+        }
+        KernelOutput::Current(None) => {
+            out.push(2u8);
+        }
+        KernelOutput::Current(Some(bytes)) => {
+            out.push(3u8);
+            out.extend_from_slice(&bytes);
+        }
+    }
+    out
+}
 
 #[cfg(test)]
 #[allow(

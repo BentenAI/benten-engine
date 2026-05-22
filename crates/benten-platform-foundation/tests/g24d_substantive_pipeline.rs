@@ -1,9 +1,16 @@
 //! G24-D substantive pipeline end-to-end test.
 //!
-//! R6-FP-A: imports legacy `module_ecosystem::install_plugin*` for
-//! several arms (deprecated). Migration scheduled for pre-tag sweep.
-#![allow(deprecated)]
-
+//! Phase-4-Meta-Core G-CORE-0 migration (plan §1.A.FROZEN item 7,
+//! `docs/future/phase-4-backlog.md §4.33`, HARD-RULE-12 clause-(a)):
+//! all arms previously importing the deleted
+//! `module_ecosystem::{install_plugin, install_plugin_persisting_did}`
+//! precursors are migrated to the canonical
+//! `plugin_lifecycle::install_plugin` (the 11-step pipeline with full
+//! Layer-1 cap cascade + Layer-2 consent + Layer-3 envelope per
+//! CLAUDE.md #18). The non-install helpers — `decide_upgrade_consent`,
+//! `verify_install_record`, `verify_upgrade_author_continuity` — stay
+//! on `module_ecosystem` (their non-install surfaces were preserved
+//! at G-CORE-0).
 //!
 //! Exercises the FULL plugin manifest lifecycle through real
 //! signing / verification / install / library / DAG version chain
@@ -25,12 +32,13 @@ use benten_errors::ErrorCode;
 use benten_id::keypair::Keypair;
 use benten_id::plugin_did::{PluginDidStore, mint as mint_plugin_did};
 use benten_platform_foundation::module_ecosystem::{
-    InstallerShape, UpgradeConsentDecision, decide_upgrade_consent, install_plugin,
-    install_plugin_persisting_did, verify_install_record, verify_upgrade_author_continuity,
+    UpgradeConsentDecision, decide_upgrade_consent, verify_install_record,
+    verify_upgrade_author_continuity,
 };
 use benten_platform_foundation::plugin_library::PluginLibrary;
 use benten_platform_foundation::plugin_lifecycle::{
-    InMemoryUninstallCascade, UninstallPorts, uninstall_plugin,
+    InMemoryInstallCascade, InMemoryUninstallCascade, InstallParams, InstallPorts, InstallerShape,
+    UninstallPorts, install_plugin, uninstall_plugin,
 };
 use benten_platform_foundation::plugin_manifest::{
     CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
@@ -80,9 +88,76 @@ fn build_manifest(
     manifest
 }
 
+/// G-CORE-0 helper: drive a single install through the canonical
+/// `plugin_lifecycle::install_plugin` pipeline with caller-mint-first
+/// plugin-DID + signed InstallRecord. Returns the freshly-minted
+/// plugin-DID so callers can assert against it (parity with the
+/// pre-deletion `install_plugin_persisting_did` return shape).
+#[allow(clippy::too_many_arguments)]
+fn drive_install(
+    library: &mut PluginLibrary,
+    store: &mut PluginDidStore,
+    cascade: &mut InMemoryInstallCascade,
+    private_ns: &mut InMemoryInstallCascade,
+    user_kp: &Keypair,
+    manifest_bytes: &[u8],
+    cid: &Cid,
+    installer_shape: InstallerShape,
+    installed_at_nanos: u64,
+    nonce_byte: u8,
+) -> Result<benten_id::did::Did, ErrorCode> {
+    let plugin_did = {
+        let handle = mint_plugin_did();
+        let did = handle.did().clone();
+        store
+            .insert(handle)
+            .expect("test fixture inserts unique plugin-DID");
+        did
+    };
+    let mut record = InstallRecord {
+        manifest_cid: *cid,
+        plugin_did: plugin_did.clone(),
+        consenting_user_did: user_kp.public_key().to_did(),
+        user_signature: vec![0u8; 64],
+        timestamp_stub_nanos: 1_700_000_000_000_000_000,
+        nonce: vec![nonce_byte; 16],
+        granted_caps_bytes: vec![],
+    };
+    let payload = record.signing_payload();
+    record.user_signature = user_kp.sign(&payload).to_bytes().to_vec();
+
+    let user_did = user_kp.public_key().to_did();
+    let mut ports = InstallPorts {
+        cap_minter: cascade,
+        private_ns,
+    };
+    let params = InstallParams {
+        now_secs: 1_700_000_000,
+        installer_shape,
+        user_trust_list: &[],
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+        expected_plugin_did: &plugin_did,
+    };
+    install_plugin(
+        library,
+        store,
+        &mut ports,
+        &params,
+        manifest_bytes,
+        cid,
+        &record,
+        installed_at_nanos,
+        &|_| None,
+    )?;
+    Ok(plugin_did)
+}
+
 #[test]
 fn full_install_pipeline_real_signatures_succeeds() {
     let author = Keypair::generate();
+    let user_kp = Keypair::generate();
     let manifest = build_manifest(
         "test-app",
         &author,
@@ -100,18 +175,25 @@ fn full_install_pipeline_real_signatures_succeeds() {
 
     let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
     let mut library = PluginLibrary::new();
+    let mut store = PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
     let cid = manifest.content_cid;
-    let result = install_plugin(
+
+    drive_install(
         &mut library,
+        &mut store,
+        &mut cascade,
+        &mut private_ns,
+        &user_kp,
         &bytes,
         &cid,
         InstallerShape::FullPeer,
-        1_700_000_000_000_000_000,
-        &|_| None,
+        1,
+        1,
     )
     .expect("install succeeds");
 
-    assert_eq!(result.entry.manifest_cid, cid);
     assert!(library.get(&cid).is_some());
     assert_eq!(library.active("test-app"), Some(&cid));
 }
@@ -120,6 +202,7 @@ fn full_install_pipeline_real_signatures_succeeds() {
 fn install_pipeline_rejects_substituted_content() {
     let author = Keypair::generate();
     let attacker = Keypair::generate();
+    let user_kp = Keypair::generate();
     let real = build_manifest(
         "victim",
         &author,
@@ -137,17 +220,24 @@ fn install_pipeline_rejects_substituted_content() {
 
     let bytes = serde_ipld_dagcbor::to_vec(&substituted).expect("encode");
     let mut library = PluginLibrary::new();
-    let result = install_plugin(
+    let mut store = PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let result = drive_install(
         &mut library,
+        &mut store,
+        &mut cascade,
+        &mut private_ns,
+        &user_kp,
         &bytes,
         &substituted.content_cid,
         InstallerShape::FullPeer,
-        1_700_000_000_000_000_000,
-        &|_| None,
+        1,
+        2,
     );
     // Substitution caught: peer signature was over the ORIGINAL author's
     // peer_did, so swapping fails verify_peer_signature.
-    let err = result.err().expect("substitution rejected");
+    let err = result.expect_err("substitution rejected");
     assert!(
         matches!(err, ErrorCode::PluginContentPeerSignatureInvalid),
         "got {err:?}"
@@ -158,6 +248,7 @@ fn install_pipeline_rejects_substituted_content() {
 #[test]
 fn install_pipeline_rejects_thin_client_with_sandbox_exec() {
     let author = Keypair::generate();
+    let user_kp = Keypair::generate();
     let manifest = build_manifest(
         "sandbox-app",
         &author,
@@ -167,15 +258,22 @@ fn install_pipeline_rejects_thin_client_with_sandbox_exec() {
 
     let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
     let mut library = PluginLibrary::new();
-    let result = install_plugin(
+    let mut store = PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let result = drive_install(
         &mut library,
+        &mut store,
+        &mut cascade,
+        &mut private_ns,
+        &user_kp,
         &bytes,
         &manifest.content_cid,
         InstallerShape::ThinClient,
-        1_700_000_000_000_000_000,
-        &|_| None,
+        1,
+        3,
     );
-    let err = result.err().expect("thin-client + sandbox rejected");
+    let err = result.expect_err("thin-client + sandbox rejected");
     assert!(
         matches!(err, ErrorCode::PluginHeterogeneityIncompatible),
         "got {err:?}"
@@ -389,6 +487,7 @@ fn upgrade_with_different_peer_did_rejected_as_reinstall() {
 #[test]
 fn plugin_library_holds_all_versions_active_ref_per_name() {
     let author = Keypair::generate();
+    let user_kp = Keypair::generate();
     let v1 = build_manifest(
         "app",
         &author,
@@ -406,27 +505,38 @@ fn plugin_library_holds_all_versions_active_ref_per_name() {
     );
 
     let mut library = PluginLibrary::new();
+    let mut store = PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
     let v1_cid = v1.content_cid;
     let v2_cid = v2.content_cid;
     let bytes_v1 = serde_ipld_dagcbor::to_vec(&v1).expect("encode");
     let bytes_v2 = serde_ipld_dagcbor::to_vec(&v2).expect("encode");
 
-    install_plugin(
+    drive_install(
         &mut library,
+        &mut store,
+        &mut cascade,
+        &mut private_ns,
+        &user_kp,
         &bytes_v1,
         &v1_cid,
         InstallerShape::FullPeer,
         1,
-        &|_| None,
+        4,
     )
     .expect("v1 ok");
-    install_plugin(
+    drive_install(
         &mut library,
+        &mut store,
+        &mut cascade,
+        &mut private_ns,
+        &user_kp,
         &bytes_v2,
         &v2_cid,
         InstallerShape::FullPeer,
         2,
-        &|_| None,
+        5,
     )
     .expect("v2 ok");
 
@@ -493,6 +603,7 @@ fn workflow_promoted_to_plugin_via_manifest_addition() {
 #[test]
 fn uninstall_removes_library_entry_and_revokes_plugin_did() {
     let author = Keypair::generate();
+    let user_kp = Keypair::generate();
     let manifest = build_manifest(
         "doomed",
         &author,
@@ -503,42 +614,49 @@ fn uninstall_removes_library_entry_and_revokes_plugin_did() {
     let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode");
     let mut library = PluginLibrary::new();
     let mut store = PluginDidStore::new();
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
 
-    // G24-D-FP-1: install_plugin_persisting_did persists the minted
-    // plugin-DID handle into the store atomically — so the uninstall
-    // path's PluginDidStore::revoke call substantively succeeds
-    // (closes the pim-18 simulation-limitation from G24-D primary).
-    let entry = install_plugin_persisting_did(
+    // G-CORE-0: the canonical `plugin_lifecycle::install_plugin`
+    // already persists the minted plugin-DID handle into the store
+    // atomically (Step 8 caller-mint-first contract) — so the
+    // subsequent uninstall path's PluginDidStore::revoke call
+    // substantively succeeds. This supersedes the deleted
+    // `install_plugin_persisting_did` precursor (G24-D-FP-1 ergonomic
+    // seam that the canonical pipeline now subsumes).
+    let plugin_did = drive_install(
         &mut library,
         &mut store,
+        &mut cascade,
+        &mut private_ns,
+        &user_kp,
         &bytes,
         &cid,
         InstallerShape::FullPeer,
         1,
-        &|_| None,
+        6,
     )
     .expect("install ok");
-    let plugin_did = entry.plugin_did.clone();
     // Baseline: store carries the plugin-DID.
     assert!(
         store.get(&plugin_did).is_some(),
-        "Baseline: install_plugin_persisting_did persists the handle"
+        "Baseline: install_plugin persists the handle (Step 8 caller-mint-first)"
     );
 
-    let mut cascade = InMemoryUninstallCascade::new();
-    let mut private = InMemoryUninstallCascade::new();
-    let mut subs = InMemoryUninstallCascade::new();
+    let mut uninstall_cascade = InMemoryUninstallCascade::new();
+    let mut uninstall_private = InMemoryUninstallCascade::new();
+    let mut uninstall_subs = InMemoryUninstallCascade::new();
     let mut ctx = UninstallPorts {
-        cap_revoker: &mut cascade,
-        private_ns: &mut private,
-        subscriptions: &mut subs,
+        cap_revoker: &mut uninstall_cascade,
+        private_ns: &mut uninstall_private,
+        subscriptions: &mut uninstall_subs,
     };
     let outcome = uninstall_plugin(&mut library, &mut store, &mut ctx, &cid).expect("uninstall ok");
     assert!(outcome.library_entry_removed);
     assert!(
         outcome.plugin_did_revoked,
-        "G24-D-FP-1 substantive: plugin_did_revoked MUST be true now \
-         that install_plugin_persisting_did persists the handle"
+        "G24-D-FP-1 substantive: plugin_did_revoked MUST be true since \
+         the canonical install pipeline persists the handle"
     );
     assert!(library.get(&cid).is_none());
     assert_eq!(library.active("doomed"), None);

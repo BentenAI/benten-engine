@@ -20,9 +20,17 @@
 use benten_core::{Node, Value};
 use benten_graph::{ChangeEvent, ChangeKind};
 use benten_ivm::{
-    Algorithm, AlgorithmBView, AlgorithmError, LabelPattern, Projection, Strategy, View,
-    ViewDefinition, ViewQuery, ViewResult, dispatch_for,
+    Algorithm, AlgorithmBView, AlgorithmError, CanonicalViews, LabelPattern, Projection, Strategy,
+    View, ViewDefinition, ViewQuery, ViewResult,
 };
+
+/// Post-G-CORE-4 collapse: the standalone `dispatch_for` helper is
+/// `pub(crate)` (D1 A2 `CanonicalViews` registry-query type is the public
+/// surface); this test-side adapter preserves call-site brevity for the
+/// existing test bodies.
+fn dispatch_for(view_id: &str) -> Strategy {
+    CanonicalViews::registry().dispatch(view_id)
+}
 
 fn make_event(kind: ChangeKind, label: &str, idx: u64) -> ChangeEvent {
     let mut props = std::collections::BTreeMap::new();

@@ -1503,7 +1503,7 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 - **Message:** "plugin requires `host:sandbox:exec` but installing peer is a thin-compute-surface"
 - **Fix:** Per CLAUDE.md #17 heterogeneity contract: SANDBOX is full-peer-only. Install on a full-peer device (laptop / phone OS app / desktop); thin-clients (browser / edge / Tauri webview) cannot host SANDBOX-using plugins.
-- **Thrown at:** `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin` heterogeneity check.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` heterogeneity check (Step 5; the legacy `module_ecosystem::install_plugin` precursor was DELETED at Phase-4-Meta-Core G-CORE-0 — heterogeneity rejection carries forward unchanged).
 - **Phase:** 4-Foundation G24-D
 
 ### E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED

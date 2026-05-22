@@ -93,7 +93,8 @@ pub mod workflow_to_plugin;
 pub use materializer::{
     BrowserRender, HtmlJsonMaterializer, InMemoryMaterializerEngine, Materializer,
     MaterializerCapRecheck, MaterializerDenialFrame, MaterializerEngine, MaterializerError,
-    MaterializerOutput, MaterializerWalkInputs, PlaintextMaterializer, RenderError, Renderer,
+    MaterializerOutput, MaterializerWalkInputs, PlaintextMaterializer, RESOLVED_LIST_MARKER,
+    RESOLVED_MAP_MARKER, RESOLVED_REF_BODY_MARKER, RESOLVED_VARIANT_MARKER, RenderError, Renderer,
     SubscribeAttachToken, allow_all_cap_recheck, deny_all_cap_recheck, materialize_html_json,
     materialize_plaintext,
 };

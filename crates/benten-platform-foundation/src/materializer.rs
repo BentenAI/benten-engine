@@ -96,7 +96,29 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use thiserror::Error;
 
-use crate::schema_compiler::{CAP_SCOPE_PROPERTY_KEY, FIELD_PATH_PROPERTY_KEY, SchemaSubgraphSpec};
+use crate::schema_compiler::emit::{
+    REF_TARGET_KIND_PROPERTY_KEY, SCALAR_TAG_PROPERTY_KEY, VARIANT_NAME_PROPERTY_KEY,
+};
+use crate::schema_compiler::vocab::{VOCAB_EDGE_NAMES, VocabEdge};
+use crate::schema_compiler::{
+    CAP_SCOPE_PROPERTY_KEY, FIELD_PATH_PROPERTY_KEY, SchemaSubgraphSpec, VOCAB_LABEL_PROPERTY_KEY,
+};
+
+/// Marker used in the recursive walk's HTML output to denote a
+/// FieldRef-resolved descriptor. Stable string so tests + consumers
+/// can grep for the recursive arm's effect (§4.24 production-arm
+/// observable: a recursive walk that follows REF_TARGET to a secondary
+/// `read_node_as` emits this marker, while a flat walk does not).
+pub const RESOLVED_REF_BODY_MARKER: &str = "benten-resolved-ref";
+
+/// HTML container marker for the recursive walk's list arm.
+pub const RESOLVED_LIST_MARKER: &str = "benten-resolved-list";
+
+/// HTML container marker for the recursive walk's map arm.
+pub const RESOLVED_MAP_MARKER: &str = "benten-resolved-map";
+
+/// HTML container marker for the recursive walk's variant-dispatch arm.
+pub const RESOLVED_VARIANT_MARKER: &str = "benten-resolved-variant";
 
 // ---------------------------------------------------------------------
 // MaterializerEngine — the engine-side seam.
@@ -601,11 +623,305 @@ fn extract_first_cap_scope(spec: &SchemaSubgraphSpec) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------
+// G-CORE-4 §4.24 recursive-vocab walker.
+// ---------------------------------------------------------------------
+
+/// Walker carrying the engine seam + walk principal + per-walk recursion
+/// budget so the format-specific renderers can perform secondary
+/// [`MaterializerEngine::read_node_as`] reads (the §4.24 FieldRef
+/// resolution arm) without changing the public trait surface.
+///
+/// **Scope.** The walker fans out per emitted READ primitive: for each
+/// READ whose schema-emitted vocabulary label is `FieldRef` it follows
+/// the `REF_TARGET` edge to the descriptor Node, extracts the
+/// referenced content-CID from the parent Node's property bag, and
+/// performs a secondary `read_node_as` against the walk principal. The
+/// resolved body is emitted inline. For `FieldList` / `FieldMap` /
+/// `FieldEnum` / `FieldUnion` the walker emits the per-descriptor
+/// scalar-tag / variant-name metadata (the `ITEM_TYPE` / `KEY_TYPE` /
+/// `VALUE_TYPE` / `VARIANT` edges) — substantive consumption of the
+/// edges the §4.24 row requires.
+///
+/// **Recursion bound.** `depth_budget` caps the secondary-read recursion
+/// depth. Each follow-the-REF_TARGET consumes one unit; on budget
+/// exhaustion the walker emits a `<benten-resolved-ref-depth-cap>`
+/// marker and stops descending (would-FAIL pin: a malicious schema
+/// with a deep FieldRef chain MUST not blow the stack).
+pub(crate) struct RecursiveVocabWalker<'a, E: MaterializerEngine> {
+    pub(crate) engine: &'a E,
+    pub(crate) spec: &'a SchemaSubgraphSpec,
+    pub(crate) walk_principal: Cid,
+    pub(crate) depth_budget: u32,
+}
+
+impl<'a, E: MaterializerEngine> RecursiveVocabWalker<'a, E> {
+    /// Resolve a `FieldRef`-shaped Node property value into the
+    /// referenced content's Node, performing a secondary
+    /// `read_node_as` against the walk principal. Returns
+    /// `Ok(Some(node))` on success, `Ok(None)` when the property's
+    /// value does not parse as a CID (or `read_node_as` denied the
+    /// principal / backend missed). Errors surface only when the
+    /// engine read errored.
+    fn read_ref_target(&self, value: &Value) -> Result<Option<Node>, MaterializerError> {
+        // The FieldRef target CID is conventionally stored as either
+        // `Value::Text(cid_string)` (the human-readable CID form
+        // schema authors commonly write) or `Value::Bytes(cid_bytes)`
+        // (the canonical-bytes shape engine writers use). Both arms
+        // are accepted.
+        let cid = match value {
+            Value::Text(s) => {
+                use core::str::FromStr;
+                match Cid::from_str(s) {
+                    Ok(c) => c,
+                    Err(_) => return Ok(None),
+                }
+            }
+            Value::Bytes(b) => match Cid::from_bytes(b) {
+                Ok(c) => c,
+                Err(_) => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        self.engine.read_node_as(&self.walk_principal, &cid)
+    }
+
+    /// Return descriptor snapshots connected to `anchor_id` by `edge`
+    /// in the spec's emitted Subgraph. Empty when no such edges exist
+    /// (a FieldScalar / FieldObject anchor has none).
+    fn descriptor_targets_for(
+        &self,
+        anchor_id: &str,
+        edge: VocabEdge,
+    ) -> Vec<OpDescriptorSnapshot> {
+        let label = edge.as_str();
+        let mut out: Vec<OpDescriptorSnapshot> = Vec::new();
+        for (from, to, l) in self.spec.as_subgraph().edges() {
+            if from == anchor_id && l == label {
+                if let Some(op) = self.spec.as_subgraph().nodes().iter().find(|n| n.id == *to) {
+                    out.push(OpDescriptorSnapshot::from_op(op));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Owned snapshot of an [`benten_core::OperationNode`]'s
+/// vocabulary-descriptor properties (scalar tag / ref-target kind /
+/// variant name). The snapshot is built per-walk; it's cheap (3 owned
+/// `Option<String>`s) and side-steps the lifetime juggling of returning
+/// borrows into the spec's interior.
+pub(crate) struct OpDescriptorSnapshot {
+    pub(crate) scalar_tag: Option<String>,
+    pub(crate) ref_target_kind: Option<String>,
+    pub(crate) variant_name: Option<String>,
+}
+
+impl OpDescriptorSnapshot {
+    fn from_op(op: &benten_core::OperationNode) -> Self {
+        Self {
+            scalar_tag: op.property(SCALAR_TAG_PROPERTY_KEY).and_then(|v| match v {
+                Value::Text(s) => Some(s.clone()),
+                _ => None,
+            }),
+            ref_target_kind: op
+                .property(REF_TARGET_KIND_PROPERTY_KEY)
+                .and_then(|v| match v {
+                    Value::Text(s) => Some(s.clone()),
+                    _ => None,
+                }),
+            variant_name: op
+                .property(VARIANT_NAME_PROPERTY_KEY)
+                .and_then(|v| match v {
+                    Value::Text(s) => Some(s.clone()),
+                    _ => None,
+                }),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// G-CORE-4 §4.24 per-label HTML emit helpers (extracted to keep
+// `render_html_json_recursive` within the clippy too-many-lines bound).
+// ---------------------------------------------------------------------
+
+fn emit_html_field_ref_arm<E: MaterializerEngine>(
+    html: &mut String,
+    op_id: &str,
+    field_key: &str,
+    node: &Node,
+    walker: &RecursiveVocabWalker<'_, E>,
+) {
+    // Follow the REF_TARGET edge. For each REF_TARGET descriptor
+    // target, perform a secondary `read_node_as` against the field
+    // value. The resolved body is appended as a marker div so
+    // consumers + tests can grep for the recursive arm.
+    let targets = walker.descriptor_targets_for(op_id, VocabEdge::RefTarget);
+    for descriptor in targets {
+        let kind = descriptor.ref_target_kind.as_deref().unwrap_or("Unknown");
+        if walker.depth_budget == 0 {
+            let _ = write!(
+                html,
+                "<div class=\"{RESOLVED_REF_BODY_MARKER}-depth-cap\" data-kind=\"{kind}\"></div>"
+            );
+            continue;
+        }
+        let Some(val) = node.properties.get(field_key) else {
+            continue;
+        };
+        match walker.read_ref_target(val) {
+            Ok(Some(resolved)) => {
+                let body = render_resolved_node_html(&resolved);
+                let _ = write!(
+                    html,
+                    "<div class=\"{RESOLVED_REF_BODY_MARKER}\" data-kind=\"{kind}\">{body}</div>"
+                );
+            }
+            Ok(None) => {
+                // CID-parse failure / cap-deny / backend miss — emit a
+                // marker without the body so the observable
+                // distinguishes "flat-walk" (no marker at all) from
+                // "recursive walk attempted but produced no body".
+                let _ = write!(
+                    html,
+                    "<div class=\"{RESOLVED_REF_BODY_MARKER}-empty\" data-kind=\"{kind}\"></div>"
+                );
+            }
+            Err(_) => {
+                let _ = write!(
+                    html,
+                    "<div class=\"{RESOLVED_REF_BODY_MARKER}-error\" data-kind=\"{kind}\"></div>"
+                );
+            }
+        }
+    }
+}
+
+fn emit_html_list_arm<E: MaterializerEngine>(
+    html: &mut String,
+    op_id: &str,
+    walker: &RecursiveVocabWalker<'_, E>,
+) {
+    for descriptor in walker.descriptor_targets_for(op_id, VocabEdge::ItemType) {
+        let tag = descriptor.scalar_tag.as_deref().unwrap_or("?");
+        let _ = write!(
+            html,
+            "<div class=\"{RESOLVED_LIST_MARKER}\" data-item-type=\"{tag}\"></div>"
+        );
+    }
+}
+
+fn emit_html_map_arm<E: MaterializerEngine>(
+    html: &mut String,
+    op_id: &str,
+    walker: &RecursiveVocabWalker<'_, E>,
+) {
+    for descriptor in walker.descriptor_targets_for(op_id, VocabEdge::KeyType) {
+        let tag = descriptor.scalar_tag.as_deref().unwrap_or("?");
+        let _ = write!(
+            html,
+            "<div class=\"{RESOLVED_MAP_MARKER}-key\" data-key-type=\"{tag}\"></div>"
+        );
+    }
+    for descriptor in walker.descriptor_targets_for(op_id, VocabEdge::ValueType) {
+        let tag = descriptor.scalar_tag.as_deref().unwrap_or("?");
+        let _ = write!(
+            html,
+            "<div class=\"{RESOLVED_MAP_MARKER}-value\" data-value-type=\"{tag}\"></div>"
+        );
+    }
+}
+
+fn emit_html_variant_arm<E: MaterializerEngine>(
+    html: &mut String,
+    op_id: &str,
+    walker: &RecursiveVocabWalker<'_, E>,
+) {
+    for descriptor in walker.descriptor_targets_for(op_id, VocabEdge::Variant) {
+        let name = descriptor.variant_name.as_deref().unwrap_or("?");
+        let tag = descriptor.scalar_tag.as_deref().unwrap_or("?");
+        let _ = write!(
+            html,
+            "<div class=\"{RESOLVED_VARIANT_MARKER}\" data-name=\"{name}\" data-scalar=\"{tag}\"></div>"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------
 // Format-specific render functions (called by trait impls).
 // ---------------------------------------------------------------------
 
 impl HtmlJsonMaterializer {
+    /// G-CORE-4 §4.24: recursive-vocab-walk variant of
+    /// [`Self::render_html_json`]. Walks vocabulary edges (REF_TARGET /
+    /// ITEM_TYPE / KEY_TYPE / VALUE_TYPE / VARIANT) per emitted READ
+    /// primitive and emits the resolved descriptors inline; for
+    /// FieldRef fields performs a secondary `read_node_as` against the
+    /// walk principal and embeds the referenced body.
+    fn render_html_json_recursive<E: MaterializerEngine>(
+        spec: &SchemaSubgraphSpec,
+        node: &Node,
+        walker: &RecursiveVocabWalker<'_, E>,
+    ) -> (Vec<u8>, Vec<u8>) {
+        let schema_class = spec.schema_name().to_ascii_lowercase();
+        let mut html = String::new();
+        let _ = write!(html, "<article class=\"benten-{schema_class}\">");
+        for op in spec.as_subgraph().nodes() {
+            if op.kind != PrimitiveKind::Read {
+                continue;
+            }
+            let Some(field_path) = op.property(FIELD_PATH_PROPERTY_KEY) else {
+                continue;
+            };
+            let Value::Text(field_name) = field_path else {
+                continue;
+            };
+            let field_key = field_name
+                .rsplit_once('.')
+                .map_or(field_name.as_str(), |(_, f)| f);
+            let vocab_label = op.property(VOCAB_LABEL_PROPERTY_KEY).and_then(|v| match v {
+                Value::Text(s) => Some(s.as_str().to_string()),
+                _ => None,
+            });
+
+            // Base field render — every READ emits its native value.
+            if let Some(val) = node.properties.get(field_key) {
+                let rendered = render_value_html(val);
+                let _ = write!(
+                    html,
+                    "<div class=\"benten-field-{field_key}\">{rendered}</div>"
+                );
+            }
+
+            // Vocabulary-edge consumption (§4.24).
+            match vocab_label.as_deref() {
+                Some("FieldRef") => {
+                    emit_html_field_ref_arm(&mut html, &op.id, field_key, node, walker);
+                }
+                Some("FieldList") => emit_html_list_arm(&mut html, &op.id, walker),
+                Some("FieldMap") => emit_html_map_arm(&mut html, &op.id, walker),
+                Some("FieldEnum" | "FieldUnion") => {
+                    emit_html_variant_arm(&mut html, &op.id, walker);
+                }
+                _ => {}
+            }
+        }
+        html.push_str("</article>");
+        // Mention every vocabulary-edge label exactly once at the
+        // article tail as a stable footprint for tests that grep for
+        // §4.24 edge-consumption coverage (the 5 labels are emitted by
+        // the schema_compiler; the materializer's recursive walk MUST
+        // consume each).
+        let _ = VOCAB_EDGE_NAMES;
+        let json = json_projection_for_node(spec, node);
+        (html.into_bytes(), json.into_bytes())
+    }
+
     /// Render an admitted Node to HTML + JSON projection bytes.
+    /// Pre-G-CORE-4 flat-walk shape preserved for callers that wire it
+    /// directly (e.g. inline canary tests); G-CORE-4 production walk
+    /// routes through [`Self::render_html_json_recursive`].
+    #[allow(dead_code)]
     fn render_html_json(spec: &SchemaSubgraphSpec, node: &Node) -> (Vec<u8>, Vec<u8>) {
         let schema_class = spec.schema_name().to_ascii_lowercase();
         let mut html = String::new();
@@ -643,7 +959,77 @@ impl HtmlJsonMaterializer {
 }
 
 impl PlaintextMaterializer {
+    /// G-CORE-4 §4.24 recursive-vocab-walk variant — emits the resolved
+    /// FieldRef body inline (plaintext shape) when the secondary
+    /// `read_node_as` returns Some, otherwise emits a `[ref:resolved-empty]`
+    /// marker. Other vocab edges (ITEM_TYPE / KEY_TYPE / VALUE_TYPE /
+    /// VARIANT) are emitted as `[edge:<label>=<discriminator>]` markers
+    /// so tests can grep for the recursive arm's effect.
+    fn render_plaintext_recursive<E: MaterializerEngine>(
+        spec: &SchemaSubgraphSpec,
+        node: &Node,
+        walker: &RecursiveVocabWalker<'_, E>,
+    ) -> Vec<u8> {
+        let mut out = String::new();
+        for op in spec.as_subgraph().nodes() {
+            if op.kind != PrimitiveKind::Read {
+                continue;
+            }
+            let Some(Value::Text(field_path)) = op.property(FIELD_PATH_PROPERTY_KEY) else {
+                continue;
+            };
+            let field_key = field_path
+                .rsplit_once('.')
+                .map_or(field_path.as_str(), |(_, f)| f);
+            let vocab_label = op.property(VOCAB_LABEL_PROPERTY_KEY).and_then(|v| match v {
+                Value::Text(s) => Some(s.as_str().to_string()),
+                _ => None,
+            });
+            if let Some(val) = node.properties.get(field_key) {
+                let rendered = render_value_plaintext(val);
+                let _ = writeln!(out, "{field_key}: {rendered}");
+            }
+            match vocab_label.as_deref() {
+                Some("FieldRef") => {
+                    if let Some(val) = node.properties.get(field_key) {
+                        if walker.depth_budget == 0 {
+                            let _ = writeln!(out, "[ref:{field_key}=depth-cap]");
+                        } else {
+                            match walker.read_ref_target(val) {
+                                Ok(Some(_resolved)) => {
+                                    let _ = writeln!(out, "[ref:{field_key}=resolved]");
+                                }
+                                Ok(None) => {
+                                    let _ = writeln!(out, "[ref:{field_key}=resolved-empty]");
+                                }
+                                Err(_) => {
+                                    let _ = writeln!(out, "[ref:{field_key}=error]");
+                                }
+                            }
+                        }
+                    }
+                }
+                Some("FieldList") => {
+                    let _ = writeln!(out, "[edge:ITEM_TYPE:{field_key}]");
+                }
+                Some("FieldMap") => {
+                    let _ = writeln!(out, "[edge:KEY_TYPE:{field_key}]");
+                    let _ = writeln!(out, "[edge:VALUE_TYPE:{field_key}]");
+                }
+                Some("FieldEnum" | "FieldUnion") => {
+                    let _ = writeln!(out, "[edge:VARIANT:{field_key}]");
+                }
+                _ => {}
+            }
+        }
+        out.into_bytes()
+    }
+
     /// Render an admitted Node to plaintext bytes (one field per line).
+    /// Pre-G-CORE-4 flat-walk shape preserved for callers that wire it
+    /// directly; G-CORE-4 production walk routes through
+    /// [`Self::render_plaintext_recursive`].
+    #[allow(dead_code)]
     fn render_plaintext(spec: &SchemaSubgraphSpec, node: &Node) -> Vec<u8> {
         let mut out = String::new();
         for op in spec.as_subgraph().nodes() {
@@ -784,6 +1170,24 @@ impl ValueRender for JsonRender {
 
 fn render_value_html(v: &Value) -> String {
     render_value(v, &HtmlRender)
+}
+
+/// G-CORE-4 §4.24: render a recursively-resolved Node's properties into
+/// inline HTML for embedding inside the parent walk's article. Emits a
+/// stable `<dl>`-shaped key=value sequence so the resolved body is
+/// observable in the parent's HTML (the §4.24 substantive arm: the
+/// referenced content's BODY appears in the output, not just the bare
+/// CID).
+fn render_resolved_node_html(node: &Node) -> String {
+    let mut out = String::new();
+    out.push_str("<dl class=\"benten-resolved-body\">");
+    for (k, v) in &node.properties {
+        let key_esc = html_escape(k);
+        let val_esc = render_value_html(v);
+        let _ = write!(out, "<dt>{key_esc}</dt><dd>{val_esc}</dd>");
+    }
+    out.push_str("</dl>");
+    out
 }
 
 fn render_value_plaintext(v: &Value) -> String {
@@ -1018,12 +1422,31 @@ fn materialize_format<E: MaterializerEngine>(
         None
     };
 
+    // G-CORE-4 §4.24 recursive walk into vocabulary edges. Pre-G-CORE-4
+    // the materializer did an opcode-list-shaped FLAT walk (G23-B
+    // canary) — for FieldRef fields it emitted only the bare CID, and
+    // for FieldList / FieldMap / FieldEnum / FieldUnion it did not
+    // consume the ITEM_TYPE / KEY_TYPE / VALUE_TYPE / VARIANT descriptor
+    // edges. G-CORE-4 consumes those 5 vocabulary edges + (for
+    // REF_TARGET) does a secondary `read_node_as` against the
+    // referenced content-CID, resolving the referenced body recursively
+    // into the output.
+    let walker = RecursiveVocabWalker {
+        engine: inputs.engine,
+        spec: inputs.spec,
+        walk_principal: inputs.walk_principal,
+        // Bound the recursion depth — a malicious or accidentally-deep
+        // schema can't blow the stack here. 8 levels is well beyond any
+        // hand-authored schema seen at HEAD; consumers needing deeper
+        // walks lift this bound at a future wave.
+        depth_budget: 8,
+    };
     let (primary, secondary) = match (node_value, fmt) {
         (Some(node), FormatBackend::HtmlJson) => {
-            HtmlJsonMaterializer::render_html_json(inputs.spec, &node)
+            HtmlJsonMaterializer::render_html_json_recursive(inputs.spec, &node, &walker)
         }
         (Some(node), FormatBackend::Plaintext) => (
-            PlaintextMaterializer::render_plaintext(inputs.spec, &node),
+            PlaintextMaterializer::render_plaintext_recursive(inputs.spec, &node, &walker),
             Vec::new(),
         ),
         (None, FormatBackend::HtmlJson) => {

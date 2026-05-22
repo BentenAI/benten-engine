@@ -42,10 +42,15 @@
 )]
 
 use benten_ivm::algorithm_b::AlgorithmError;
-use benten_ivm::{
-    Algorithm, LabelPattern, Projection, SubgraphSpec, ViewError,
-    is_canonical_view_id as production_is_canonical_view_id,
-};
+use benten_ivm::{Algorithm, CanonicalViews, LabelPattern, Projection, SubgraphSpec, ViewError};
+
+/// Post-G-CORE-4 collapse: the standalone `is_canonical_view_id` helper
+/// is `pub(crate)`; this test-side adapter preserves call-site brevity
+/// by routing through the new [`CanonicalViews`] registry-query type
+/// (D1 A2; see G-CORE-4 brief + ivm-r1-2 DISAGREE-record).
+fn production_is_canonical_view_id(view_id: &str) -> bool {
+    CanonicalViews::registry().is_canonical(view_id)
+}
 
 // =============================================================================
 // Re-exports of production types — Family C consumes these
@@ -324,7 +329,12 @@ pub fn algorithm_register_baseline_via_g15a_path(
     } else {
         // The 4 hardcoded-label canonical views: surface the canonical
         // label so `Algorithm::register` accepts it.
-        let hardcoded = benten_ivm::algorithm_b::hardcoded_label_for_id(&canary.view_id)
+        // Post-G-CORE-4: route the hardcoded-label lookup through the
+        // `CanonicalViews` registry-query type (D1 A2; the 4 leaked
+        // helpers are `pub(crate)` post-collapse).
+        let hardcoded = CanonicalViews::registry()
+            .lookup(&canary.view_id)
+            .and_then(|e| e.hardcoded_label())
             .ok_or_else(|| format!("no hardcoded label for `{}`", canary.view_id))?;
         LabelPattern::exact(hardcoded)
     };

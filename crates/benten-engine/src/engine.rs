@@ -271,7 +271,9 @@ pub(crate) struct EngineInner {
     /// the returned [`ChangeProbe`] without round-tripping through the
     /// persisted `system:IVMView` Node. Canonical hand-written views
     /// have their input label resolved via
-    /// [`benten_ivm::hardcoded_label_for_id`]; this map covers the
+    /// [`benten_ivm::CanonicalViews::lookup`] (post-G-CORE-4 D1 A2
+    /// — the 4 pre-collapse leaked helpers are `pub(crate)`);
+    /// this map covers the
     /// generic user-defined fallback path. Maps `view_id` → input
     /// label string (the same value persisted as
     /// `input_pattern_label` on the `system:IVMView` Node).

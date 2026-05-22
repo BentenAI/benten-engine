@@ -46,8 +46,8 @@ pub mod testing;
 pub mod view;
 
 pub use algorithm_b::{
-    Algorithm, AlgorithmBView, AlgorithmError, LabelPattern, Projection, dispatch_for,
-    hardcoded_label_for_id, is_canonical_view_id,
+    Algorithm, AlgorithmBView, AlgorithmError, CanonicalViewEntry, CanonicalViews, LabelPattern,
+    Projection, materialize_inner_kernel_read,
 };
 // refinement-audit #346: `BudgetTracker` has zero external callers — it is
 // an internal per-view helper. The crate-root re-export is narrowed to

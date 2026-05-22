@@ -160,6 +160,79 @@ pub fn hostile_schema_with_cycle_bytes() -> &'static [u8] {
 }"#
 }
 
+// =============================================================================
+// G-CORE-4 §4.6 — the 4 missing per-label fixtures
+//
+// Phase-4-Foundation R3 left the §4.6 vocab-fixture pin exercising only 4
+// of the 8 declared `VocabLabel` variants (SchemaRoot / FieldScalar /
+// FieldList / FieldRef). G-CORE-4 adds the 4 missing FieldObject /
+// FieldMap / FieldEnum / FieldUnion fixtures plus per-label emit-side
+// edge assertions in `tf5_46_schema_compiler_8_labeltype_vocab_fixture.rs`.
+// =============================================================================
+
+/// FieldObject fixture — root has one nested object field (`profile`)
+/// that itself carries a FieldScalar child. Compiles via the
+/// implicit-via-recursion parent→child edge shape (no FIELD label per
+/// `vocab.rs` doc).
+pub fn field_object_fixture_bytes() -> &'static [u8] {
+    br#"{
+  "label": "SchemaRoot",
+  "name": "WithObject",
+  "fields": [
+    { "label": "FieldObject", "name": "profile",
+      "fields": [
+        { "label": "FieldScalar", "name": "nickname", "scalar": "text", "required": true, "scope": ["read:profile"] }
+      ],
+      "required": false, "scope": ["read:withobject"] }
+  ]
+}"#
+}
+
+/// FieldMap fixture — root carries a text→text map. Emits KEY_TYPE +
+/// VALUE_TYPE descriptor edges.
+pub fn field_map_fixture_bytes() -> &'static [u8] {
+    br#"{
+  "label": "SchemaRoot",
+  "name": "WithMap",
+  "fields": [
+    { "label": "FieldMap", "name": "labels", "key_scalar": "text", "value_scalar": "text",
+      "required": false, "scope": ["read:withmap"] }
+  ]
+}"#
+}
+
+/// FieldEnum fixture — root carries an enum with two named variants.
+/// Emits VARIANT descriptor edges. Uses the string-shorthand variant
+/// form (G-CORE-4 dialect widening: `["draft", "published"]`).
+pub fn field_enum_fixture_bytes() -> &'static [u8] {
+    br#"{
+  "label": "SchemaRoot",
+  "name": "WithEnum",
+  "fields": [
+    { "label": "FieldEnum", "name": "status",
+      "variants": ["draft", "published"],
+      "required": false, "scope": ["read:withenum"] }
+  ]
+}"#
+}
+
+/// FieldUnion fixture — root carries a tagged union with typed variants
+/// (object form: each variant carries a scalar tag).
+pub fn field_union_fixture_bytes() -> &'static [u8] {
+    br#"{
+  "label": "SchemaRoot",
+  "name": "WithUnion",
+  "fields": [
+    { "label": "FieldUnion", "name": "value",
+      "variants": [
+        { "name": "as_text", "scalar": "text" },
+        { "name": "as_int",  "scalar": "int" }
+      ],
+      "required": false, "scope": ["read:withunion"] }
+  ]
+}"#
+}
+
 /// T1 regression-guard fixture — structurally valid schema that must continue
 /// to round-trip after hostile schemas land in the rejection set.
 pub fn benign_schema_round_trip_bytes() -> &'static [u8] {
