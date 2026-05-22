@@ -90,6 +90,7 @@ pub mod change_stream;
 pub mod edge;
 pub mod hlc;
 pub mod subgraph;
+pub mod subgraph_spec;
 pub mod value;
 pub mod version;
 pub mod version_chain;
