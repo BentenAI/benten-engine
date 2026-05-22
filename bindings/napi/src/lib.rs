@@ -228,6 +228,8 @@ pub use policy::PolicyKind;
 mod napi_surface {
     use std::collections::BTreeMap;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+    use std::time::Duration;
 
     use benten_core::{Node as CoreNode, Value};
     use benten_engine::{Engine as InnerEngine, EngineBuilder, ViewCreateOptions};
@@ -242,8 +244,8 @@ mod napi_surface {
     };
     use crate::policy::{PolicyKind, parse_grant_json};
     use crate::stream::{
-        call_stream_adapter, call_stream_as_adapter, close_handle_adapter, next_chunk_adapter,
-        open_stream_adapter,
+        NextChunkPollNapi, call_stream_adapter, call_stream_as_adapter, close_handle_adapter,
+        next_chunk_poll_adapter, open_stream_adapter,
     };
     use crate::subgraph::{
         json_to_subgraph_spec, outcome_to_json, register_replace_outcome_to_json,
@@ -1998,18 +2000,90 @@ mod napi_surface {
     /// cfg-gated `testingOpenStreamForTest` factory continues to
     /// drain pre-populated chunk vectors for unit tests that don't
     /// need a live producer.
+    ///
+    /// # G-CORE-10 Option-C cancellation-stopgap (2026-05-22; #652;
+    /// pre-v1 hardening per CLAUDE.md baked-in #15)
+    ///
+    /// The state shape is **split** so `close()` from JS does not have
+    /// to wait on the same lock `next()` holds across an in-flight
+    /// engine-side `recv_blocking` call. Four sibling pieces:
+    ///
+    /// - `handle: std::sync::Mutex<Option<StreamHandle>>` — the engine
+    ///   handle; held by `next()` for one poll-iteration. Inside
+    ///   `next()` we use a bounded
+    ///   [`benten_engine::StreamHandle::next_chunk_with_timeout`] poll
+    ///   (50 ms) and check the close-signal between polls.
+    /// - `close_requested: AtomicBool` — set synchronously by `close()`
+    ///   without acquiring the handle lock. `next()` checks it on each
+    ///   poll iteration and bails out cleanly when set.
+    /// - `seq_so_far_cached: AtomicI64` / `is_drained_cached: AtomicBool`
+    ///   / `requires_explicit_close_cached: bool` — fast-path read
+    ///   accessors (no handle lock; no contention with an in-flight
+    ///   `next()`).
+    ///
+    /// This closes the #652 cancellation hazard where the bare
+    /// `Mutex<Option<StreamHandle>>` held across `recv_blocking()`
+    /// meant a JS-side `close()` had to park indefinitely waiting on
+    /// the in-flight `next()`'s lock. The full Option-A fix (PR-B
+    /// #1203: convert `next()` to napi-rs `AsyncTask`) is the
+    /// post-stopgap target; Option-C is the cheap correctness-first
+    /// stopgap that closes the cancellation race without changing the
+    /// sync `#[napi]` shape.
     #[napi]
     pub struct StreamHandleJs {
-        inner: std::sync::Mutex<Option<benten_engine::StreamHandle>>,
+        /// Engine handle. Held by `next()` for the duration of one
+        /// poll-loop iteration (≤ poll-interval; default 50ms via
+        /// [`STREAM_NEXT_POLL_INTERVAL`]). `close()` acquires this
+        /// lock via `try_lock` only, so `close()` never blocks. When
+        /// `try_lock` fails (an in-flight `next()` holds the lock),
+        /// the close-signal alone is sufficient: the next poll
+        /// iteration of `next()` observes `close_requested` and
+        /// calls `close_handle_adapter` itself before returning.
+        handle: std::sync::Mutex<Option<benten_engine::StreamHandle>>,
+        /// G-CORE-10 Option-C close-signal. Set synchronously by JS
+        /// `close()` without waiting on the handle lock. Checked by
+        /// every poll iteration of `next()`; when set, `next()`
+        /// observes it on the next 50ms boundary and returns `null`.
+        close_requested: AtomicBool,
+        /// Fast-path cached `is_drained` flag. Updated by `next()`
+        /// when EOS is observed + by `close()` (sync, lock-free).
+        is_drained_cached: AtomicBool,
+        /// Fast-path cached `seq_so_far` counter. Bumped by `next()`
+        /// after each successful chunk delivery.
+        seq_so_far_cached: AtomicI64,
+        /// Cached `requires_explicit_close` flag — immutable for the
+        /// handle's lifetime (set once at engine-side construction).
+        requires_explicit_close_cached: bool,
     }
 
     impl StreamHandleJs {
         pub(crate) fn from_inner(handle: benten_engine::StreamHandle) -> Self {
+            let requires_explicit_close = handle.requires_explicit_close();
+            let initial_drained = handle.is_drained();
+            let initial_seq = i64::try_from(handle.seq_so_far()).unwrap_or(i64::MAX);
             Self {
-                inner: std::sync::Mutex::new(Some(handle)),
+                handle: std::sync::Mutex::new(Some(handle)),
+                close_requested: AtomicBool::new(false),
+                is_drained_cached: AtomicBool::new(initial_drained),
+                seq_so_far_cached: AtomicI64::new(initial_seq),
+                requires_explicit_close_cached: requires_explicit_close,
             }
         }
     }
+
+    /// G-CORE-10 Option-C: poll interval for the bounded
+    /// `next_chunk_with_timeout` loop inside `StreamHandleJs::next`.
+    /// Short enough that a JS `close()` is observed within ~one
+    /// interval of being set; long enough that we don't churn the
+    /// producer-bridge mutex / SharedChannel condvar excessively.
+    ///
+    /// 50ms is the same order-of-magnitude as napi-rs's libuv worker
+    /// scheduling latency; lowering it past ~10ms would not perceptibly
+    /// improve cancellation responsiveness but would increase wakeup
+    /// overhead under steady-state streaming. Set high enough that
+    /// vitest tests with a 2-second bounded-timeout assertion observe
+    /// cancellation within ~50ms of `close()` setting the signal.
+    const STREAM_NEXT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
     #[napi]
     impl StreamHandleJs {
@@ -2017,34 +2091,98 @@ mod napi_surface {
         ///
         /// Throws if the stream has been closed and drained, or if the
         /// underlying executor surfaces a typed error.
+        ///
+        /// # G-CORE-10 Option-C cancellation-stopgap
+        ///
+        /// Internally uses a bounded poll-loop
+        /// ([`benten_engine::StreamHandle::next_chunk_with_timeout`]
+        /// with [`STREAM_NEXT_POLL_INTERVAL`] = 50ms) so a concurrent
+        /// JS `close()` is observed within ~one poll interval. Before
+        /// each poll iteration we check `close_requested`; if set we
+        /// close the handle inline and return `null` cleanly.
         #[napi]
         pub fn next(&self) -> napi::Result<Option<Buffer>> {
-            let mut g = self.inner.lock().map_err(|_| {
+            // Fast-path: close already requested before we acquire the
+            // lock. Return null without disturbing the handle.
+            if self.close_requested.load(Ordering::SeqCst) {
+                if let Ok(mut g) = self.handle.try_lock()
+                    && let Some(h) = g.as_mut()
+                {
+                    close_handle_adapter(h);
+                    self.is_drained_cached.store(true, Ordering::SeqCst);
+                }
+                return Ok(None);
+            }
+            let mut g = self.handle.lock().map_err(|_| {
                 napi::Error::new(
                     Status::GenericFailure,
                     "StreamHandle: internal lock poisoned",
                 )
             })?;
             let Some(handle) = g.as_mut() else {
+                self.is_drained_cached.store(true, Ordering::SeqCst);
                 return Ok(None);
             };
-            match next_chunk_adapter(handle)? {
-                Some(bytes) => Ok(Some(Buffer::from(bytes))),
-                None => Ok(None),
+            // Poll-loop with bounded waits, interleaved with
+            // close_requested checks.
+            loop {
+                if self.close_requested.load(Ordering::SeqCst) {
+                    close_handle_adapter(handle);
+                    self.is_drained_cached.store(true, Ordering::SeqCst);
+                    return Ok(None);
+                }
+                match next_chunk_poll_adapter(handle, STREAM_NEXT_POLL_INTERVAL)? {
+                    NextChunkPollNapi::Chunk(bytes) => {
+                        let new_seq = i64::try_from(handle.seq_so_far()).unwrap_or(i64::MAX);
+                        self.seq_so_far_cached.store(new_seq, Ordering::SeqCst);
+                        return Ok(Some(Buffer::from(bytes)));
+                    }
+                    NextChunkPollNapi::EndOfStream => {
+                        self.is_drained_cached.store(true, Ordering::SeqCst);
+                        return Ok(None);
+                    }
+                    NextChunkPollNapi::Timeout => {
+                        // Loop back to top: re-check close_requested,
+                        // then re-poll. (Bare loop body — `continue`
+                        // is implied by the empty arm.)
+                    }
+                }
             }
         }
 
         /// Explicitly close the handle. Idempotent. Once closed, all
         /// subsequent `next()` calls return `null`.
+        ///
+        /// # G-CORE-10 Option-C cancellation-stopgap (#652)
+        ///
+        /// **Non-blocking**: synchronously sets `close_requested` +
+        /// `is_drained_cached` without waiting on the handle lock.
+        /// Then **opportunistically** tries `try_lock` on the engine
+        /// handle to drop the producer-bridge source immediately; if
+        /// `try_lock` fails (an in-flight `next()` holds the lock),
+        /// the in-flight `next()` itself will observe `close_requested`
+        /// on its next 50ms poll boundary and close the handle inline.
+        ///
+        /// Either way `close()` returns within a bounded constant
+        /// time, closing the #652 race where the pre-stopgap shape
+        /// (single outer Mutex held across `recv_blocking()`) made
+        /// `close()` park indefinitely behind a stuck `next()`.
         #[napi]
         pub fn close(&self) -> napi::Result<()> {
-            let mut g = self.inner.lock().map_err(|_| {
-                napi::Error::new(
-                    Status::GenericFailure,
-                    "StreamHandle: internal lock poisoned",
-                )
-            })?;
-            if let Some(handle) = g.as_mut() {
+            // Step 1: set the close-signal + drained-cache
+            // synchronously. This is the load-bearing #652 closure —
+            // a concurrent next() polling at the 50ms boundary will
+            // observe close_requested and bail out.
+            self.close_requested.store(true, Ordering::SeqCst);
+            self.is_drained_cached.store(true, Ordering::SeqCst);
+            // Step 2: try-lock the engine handle. If we get it, close
+            // the engine handle directly so the producer thread
+            // observes consumer-disconnect ASAP. If we don't get it,
+            // the in-flight next() will close on its next poll
+            // iteration.
+            if let Ok(mut g) = self.handle.try_lock()
+                && let Some(handle) = g.as_mut()
+            {
                 close_handle_adapter(handle);
             }
             Ok(())
@@ -2052,18 +2190,13 @@ mod napi_surface {
 
         /// `true` once the handle is drained (closed AND no buffered
         /// chunks remain).
+        ///
+        /// G-CORE-10 Option-C: reads the cached atomic flag — no
+        /// handle lock acquired, so this never contends with an
+        /// in-flight `next()`.
         #[napi(js_name = "isDrained")]
         pub fn is_drained(&self) -> napi::Result<bool> {
-            let g = self.inner.lock().map_err(|_| {
-                napi::Error::new(
-                    Status::GenericFailure,
-                    "StreamHandle: internal lock poisoned",
-                )
-            })?;
-            Ok(match g.as_ref() {
-                Some(h) => h.is_drained(),
-                None => true,
-            })
+            Ok(self.is_drained_cached.load(Ordering::SeqCst))
         }
 
         /// Engine-assigned sequence count of chunks delivered so far.
@@ -2075,18 +2208,13 @@ mod napi_surface {
         /// return type `u32` saturated at 2^32 via `u32::try_from`,
         /// silently truncating past 4B chunks. Widened to `i64` so
         /// long-lived streams report the real count.
+        ///
+        /// G-CORE-10 Option-C: reads the cached atomic counter — no
+        /// handle lock acquired, so this never contends with an
+        /// in-flight `next()`.
         #[napi(js_name = "seqSoFar")]
         pub fn seq_so_far(&self) -> napi::Result<i64> {
-            let g = self.inner.lock().map_err(|_| {
-                napi::Error::new(
-                    Status::GenericFailure,
-                    "StreamHandle: internal lock poisoned",
-                )
-            })?;
-            Ok(match g.as_ref() {
-                Some(h) => i64::try_from(h.seq_so_far()).unwrap_or(i64::MAX),
-                None => 0,
-            })
+            Ok(self.seq_so_far_cached.load(Ordering::SeqCst))
         }
 
         /// Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): exposes the
@@ -2101,18 +2229,14 @@ mod napi_surface {
         /// auto-close on `for-await` scope-exit). Pre-G19-C2 the flag
         /// existed engine-side but did not cross to JS — the TS
         /// surfaces were functionally indistinguishable.
+        ///
+        /// G-CORE-10 Option-C: this flag is immutable for the
+        /// handle's lifetime (set once at engine-side construction);
+        /// cached in the napi wrapper at `from_inner` so reads here
+        /// don't take the handle lock.
         #[napi(js_name = "requiresExplicitClose")]
         pub fn requires_explicit_close(&self) -> napi::Result<bool> {
-            let g = self.inner.lock().map_err(|_| {
-                napi::Error::new(
-                    Status::GenericFailure,
-                    "StreamHandle: internal lock poisoned",
-                )
-            })?;
-            Ok(match g.as_ref() {
-                Some(h) => h.requires_explicit_close(),
-                None => false,
-            })
+            Ok(self.requires_explicit_close_cached)
         }
     }
 }
