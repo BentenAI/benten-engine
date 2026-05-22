@@ -11,9 +11,10 @@
 //!     "Mode 3 inline-tiny ABSENT: assert no `InlineContent` arm in
 //!     DropBundle (defer-to-post-v1 contract). If present, reject
 //!     construction."
-//!   - `00-implementation-plan.md` §1.A.FROZEN item 15(h): "3 sendme
-//!     deployment modes (online-pull / offline-Drop / inline-tiny —
-//!     ship Mode 2 in G-CORE-3f, defer Mode 3 to post-v1)."
+//!   - `00-implementation-plan.md` §3 G-CORE-3 def input-constraints
+//!     refinement #6 L341: "3 sendme deployment modes (online-pull /
+//!     offline-Drop / inline-tiny — ship Mode 2 in G-CORE-3f, defer
+//!     Mode 3 to post-v1)."
 //!   - `00-implementation-plan.md` §3 G-CORE-3f wave def: "mode 2
 //!     sendme→Drop ships; mode 3 inline-tiny defers to post-v1".
 //!
@@ -43,7 +44,7 @@ use benten_drop::{DropBundle, DropContentMode};
 #[test]
 #[ignore = "RED-PHASE: un-ignore at G-CORE-3f"]
 fn tf3f_drop_content_mode_no_inline_tiny_arm() {
-    // The allowed modes per §1.A.FROZEN item 15(h):
+    // The allowed modes per §3 G-CORE-3 def input-constraints refinement #6 L341:
     let mode_online_pull = DropContentMode::OnlinePull;
     let mode_offline_drop = DropContentMode::OfflineDrop;
 

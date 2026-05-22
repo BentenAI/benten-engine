@@ -29,9 +29,10 @@
 //!     offline scenario."
 //!   - §2 G-CORE-3f (F-3): "DropBundle version mismatch (future version)
 //!     → typed `UnsupportedDropVersion`; never silent skip."
-//!   - `00-implementation-plan.md` §1.A.FROZEN item 15(h): Three sendme
-//!     deployment modes (online-pull / offline-Drop / inline-tiny — ship
-//!     Mode 2 in G-CORE-3f, defer Mode 3 to post-v1).
+//!   - `00-implementation-plan.md` §3 G-CORE-3 def input-constraints
+//!     refinement #6 L341: Three sendme deployment modes (online-pull /
+//!     offline-Drop / inline-tiny — ship Mode 2 in G-CORE-3f, defer Mode 3
+//!     to post-v1).
 //!
 //! ============================================================================
 //! RED-PHASE — un-ignore at G-CORE-3f (pim-12 / §3.6e).
