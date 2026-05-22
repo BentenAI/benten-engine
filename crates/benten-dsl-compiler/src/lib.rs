@@ -881,7 +881,7 @@ fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
 
     // #608 (safe-3) — handler_id MUST be a non-empty, non-whitespace-only
     // identifier. Cross-language rule-mirror (§3.5g): the TS-side DSL
-    // builder (`packages/engine/src/dsl.ts:800`) rejects empty handlerIds
+    // builder (`packages/engine/src/dsl.ts::SubgraphBuilder`) rejects empty handlerIds
     // with `EDslInvalidShape("handlerId must be a non-empty string")`;
     // surface the same typed code on the Rust side so a handler authored
     // via either surface fails identically at compile-time rather than
