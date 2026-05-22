@@ -280,3 +280,111 @@ fn tf2_f4_unknown_codepoint_at_decrypt_typed_unsupported_never_silent_fallback()
          strand legitimate peers under reserved codepoints)"
     );
 }
+
+// =====================================================================
+// R4-FP-1 extension (m-7 closure): Gate 6 PQ-hybrid envelope format-
+// version discriminator.
+// =====================================================================
+//
+// Per R4.1 triage m-7 (L4 wire-format-conformance, FIX-NOW): R2 §6
+// Gate 6 (format-version discriminator in serialized envelope) is
+// covered for DropBundle (W3) + SnapshotBlob (W5) but NOT for the
+// PQ-hybrid envelope itself. This pin closes the gap.
+//
+// The Gate 6 contract: every serialized envelope MUST carry an
+// explicit format-version byte (or codepoint) discriminator that
+// future versions can dispatch on. Without it, a v2 envelope would
+// be indistinguishable from a v1 envelope and a peer could silently
+// misparse — the exact wire-break-via-version-drift failure class
+// CLAUDE.md baked-in #5 (multiformats permanent commitment) defends
+// against.
+//
+// The SHIPPED Varsig v1 header surface (`UcanVarsigV1Header` at
+// `crates/benten-crypto-suite/src/varsig.rs`) is the load-bearing
+// example: bytes [magic 0xb5 | version 0x01 | codepoint LE16 | ...].
+// The G-CORE-3a `AeadEnvelope` (the PQ-hybrid envelope itself) must
+// follow the SAME framing discipline — a magic byte, an explicit
+// version byte, and a codepoint dispatch — so a future version-2
+// envelope is distinguishable from a version-1 envelope without
+// pre-coordination.
+
+/// Gate 6 (R4-FP-1 m-7 closure) — the G-CORE-3a `AeadEnvelope`
+/// serialization carries an explicit format-version discriminator
+/// byte that a future-version-aware peer can dispatch on (NOT a
+/// raw-concatenated payload that would be ambiguous against v2+).
+#[test]
+#[ignore = "RED-PHASE: un-ignore at G-CORE-3a (Gate 6 format-version discriminator pin for the PQ-hybrid envelope; delete stub + insert real wire-format check)"]
+fn tf2_gate6_pq_hybrid_envelope_carries_explicit_format_version_discriminator() {
+    // At G-CORE-3a un-ignore: the body wires against the real
+    // `AeadEnvelope::to_wire_bytes()` (or equivalent serialization
+    // surface name; final decision = G-CORE-3a implementer) and
+    // asserts:
+    //   (1) byte 0 is a stable magic byte (or a multiformats prefix
+    //       byte equivalent to Varsig's 0xb5);
+    //   (2) byte 1 (or byte 0 for a multicodec-style varint) is a
+    //       FORMAT-VERSION DISCRIMINATOR that equals the v1-beta
+    //       default version byte;
+    //   (3) the wire MUST encode the cipher-suite codepoint AFTER the
+    //       version byte — so a future v2 envelope (e.g. one carrying
+    //       a sealed-AEAD-with-nonce-prefix-shape change) is
+    //       distinguishable from v1 by examining byte 1 alone.
+    //
+    // The WOULD-FAIL arm: if the implementer ships `AeadEnvelope` as a
+    // raw-concatenated `[wrapped_key | nonce | ciphertext]` (skipping
+    // the version byte), a future v2 (e.g. one with an extra header
+    // field or different nonce-derivation) is INDISTINGUISHABLE on the
+    // wire from v1 — the exact silent-misparse-via-drift class Gate 6
+    // defends against. The pin enforces a 1-byte version discriminator
+    // up front.
+    //
+    // At R4-FP-1 author-time the AeadEnvelope serialization surface
+    // does not yet exist; this pin stays RED until G-CORE-3a flips
+    // 0x647a to live AND ships AeadEnvelope::to_wire_bytes with a
+    // format-version byte.
+    //
+    // Body sketch (un-ignore wires against the live surface):
+    //
+    //     let suite = CipherSuite::at_codepoint_for_test(
+    //         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768);
+    //     let (recipient_pub, _) = generate_recipient_keypair_for_test();
+    //     let k = b"32-bytes-of-uniformly-random-key";
+    //     let wrapped = suite.wrap_key_material(&recipient_pub, k).unwrap();
+    //     let env = suite.seal_aead(&wrapped, b"aad", b"plaintext").unwrap();
+    //     let bytes = env.to_wire_bytes();
+    //     // Assert byte 1 carries the format-version discriminator
+    //     // for the v1-beta default (the exact byte value is a
+    //     // G-CORE-3a design decision; the existence of the
+    //     // discriminator at a stable position is the load-bearing
+    //     // contract).
+    //     assert!(bytes.len() >= 4,
+    //         "AeadEnvelope wire-format MUST begin with magic + version + codepoint prefix");
+    //     // Concretely (mirroring Varsig v1 shape):
+    //     //   bytes[0] = 0xae (envelope magic) — sample; final = G-CORE-3a
+    //     //   bytes[1] = 0x01 (v1-beta default format version)
+    //     //   bytes[2..4] = codepoint LE16
+    //     assert_eq!(bytes[1], 0x01,
+    //         "Gate 6: AeadEnvelope MUST carry an explicit format-version \
+    //          byte at byte-1 so a future v2 is distinguishable from v1 \
+    //          without pre-coordination (multiformats-permanent-commitment \
+    //          property per CLAUDE.md baked-in #5)");
+    //
+    // The stub body just `unimplemented!()` so an accidentally-un-ignored
+    // test loud-fails (NOT silent-green) until the implementer wires it.
+    let _hybrid = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("G-CORE-3a MUST flip 0x647a to live");
+    // The actual wire-format assertion is the un-ignore body sketched
+    // above; until G-CORE-3a ships `AeadEnvelope::to_wire_bytes` the
+    // stub's `unimplemented!()` is the load-bearing RED signal.
+    unimplemented!(
+        "G-CORE-3a Gate 6 (R4-FP-1 m-7) — AeadEnvelope::to_wire_bytes \
+         format-version discriminator pin; un-ignore wires against the \
+         live serialization surface per the body-sketch above. The \
+         contract: byte-1 (or codepoint-equivalent position) MUST \
+         carry an explicit v1-beta format-version discriminator so a \
+         future v2 envelope is distinguishable on the wire without \
+         pre-coordination (multiformats-permanent-commitment property \
+         per CLAUDE.md baked-in #5). The DropBundle (W3) + SnapshotBlob \
+         (W5) parallel pins are the named-companions; this closes the \
+         PQ-hybrid-envelope itself case."
+    );
+}
