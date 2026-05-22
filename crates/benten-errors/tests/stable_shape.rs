@@ -59,6 +59,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::SystemZoneWrite,
     ErrorCode::ValueFloatNan,
     ErrorCode::ValueFloatNonFinite,
+    ErrorCode::ValueOutOfRange,
     ErrorCode::CidParse,
     ErrorCode::CidUnsupportedCodec,
     ErrorCode::CidUnsupportedHash,
@@ -787,8 +788,13 @@ fn variant_count_is_pinned() {
     // partitioned-backend fail-closed typed-reject when ctx
     // .namespace_did = Some at the §1.A.FROZEN canary surface).
     // 169 + 1 = 170.
+    // G-CORE-6a (Phase 4-Meta-Core, #506 builder closure): +1
+    // `ValueOutOfRange` (SubgraphBuilder records over-range numeric
+    // arguments as deferred errors and surfaces them at the single-
+    // fallible-point `.build()` call per #506 / G-CORE-6 verify-pass).
+    // 170 + 1 = 171.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 170,
+        CATALOG_VARIANT_COUNT, 171,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -882,6 +888,7 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::SystemZoneWrite
             | ErrorCode::ValueFloatNan
             | ErrorCode::ValueFloatNonFinite
+            | ErrorCode::ValueOutOfRange
             | ErrorCode::CidParse
             | ErrorCode::CidUnsupportedCodec
             | ErrorCode::CidUnsupportedHash

@@ -68,6 +68,7 @@ export const CATALOG_CODES = [
   "E_SYNC_CAP_UNVERIFIED",
   "E_VALUE_FLOAT_NAN",
   "E_VALUE_FLOAT_NONFINITE",
+  "E_VALUE_OUT_OF_RANGE",
   "E_CID_PARSE",
   "E_CID_UNSUPPORTED_CODEC",
   "E_CID_UNSUPPORTED_HASH",
@@ -731,6 +732,21 @@ export class EValueFloatNonFinite extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_VALUE_FLOAT_NONFINITE", "DAG-CBOR's canonical form rejects ±Infinity. Clamp to a finite bound or use `Value::Null`.", message, context);
     this.name = "EValueFloatNonFinite";
+  }
+}
+
+/**
+ * E_VALUE_OUT_OF_RANGE
+ *
+ * Thrown at: `SubgraphBuilder::build` (the single-fallible-point per #506 / G-CORE-6)
+ * Message template: "Builder-time numeric value out of range for its storage type ({field}: {value} exceeds {bound})"
+ */
+export class EValueOutOfRange extends BentenError {
+  static readonly code = "E_VALUE_OUT_OF_RANGE";
+  static readonly fixHint = "`SubgraphBuilder` records each over-range numeric argument as a deferred error and surfaces them at the single-fallible-point `.build()` call (#506 / G-CORE-6 verify-pass). Most common: `iterate(max_iterations)` receives a `u64` exceeding `i64::MAX` (the on-graph `Value::Int` storage type), or `iterate_parallel(parallel_fanout)` receives a `usize` exceeding `i64::MAX`. Either cap the argument inside the caller before invoking the builder, or split the work across multiple iterate nodes. The `push()`-time `NodeHandle(u32::MAX)` exhaustion case (~4.29B nodes per builder) is practically unreachable but yields the same code if hit.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_VALUE_OUT_OF_RANGE", "`SubgraphBuilder` records each over-range numeric argument as a deferred error and surfaces them at the single-fallible-point `.build()` call (#506 / G-CORE-6 verify-pass). Most common: `iterate(max_iterations)` receives a `u64` exceeding `i64::MAX` (the on-graph `Value::Int` storage type), or `iterate_parallel(parallel_fanout)` receives a `usize` exceeding `i64::MAX`. Either cap the argument inside the caller before invoking the builder, or split the work across multiple iterate nodes. The `push()`-time `NodeHandle(u32::MAX)` exhaustion case (~4.29B nodes per builder) is practically unreachable but yields the same code if hit.", message, context);
+    this.name = "EValueOutOfRange";
   }
 }
 
@@ -2833,6 +2849,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_SYNC_CAP_UNVERIFIED": ESyncCapUnverified,
   "E_VALUE_FLOAT_NAN": EValueFloatNan,
   "E_VALUE_FLOAT_NONFINITE": EValueFloatNonFinite,
+  "E_VALUE_OUT_OF_RANGE": EValueOutOfRange,
   "E_CID_PARSE": ECidParse,
   "E_CID_UNSUPPORTED_CODEC": ECidUnsupportedCodec,
   "E_CID_UNSUPPORTED_HASH": ECidUnsupportedHash,

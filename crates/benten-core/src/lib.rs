@@ -781,6 +781,34 @@ pub enum CoreError {
         /// Skew tolerance the local HLC was configured with.
         tolerance_ms: u64,
     },
+
+    /// G-CORE-6a / #506: a builder-time numeric argument exceeded the
+    /// type bound it would be stored under. `SubgraphBuilder` records
+    /// each over-range argument as a deferred error and surfaces the
+    /// **first** one at the single-fallible-point `.build()` call (the
+    /// #506 closure shape — intermediate setters remain
+    /// chainable/infallible; only `.build()` returns `Result`). Maps
+    /// to [`ErrorCode::ValueOutOfRange`] (`E_VALUE_OUT_OF_RANGE`).
+    ///
+    /// Common origin sites in `SubgraphBuilder`:
+    /// - `iterate(max_iterations: u64)` — argument > `i64::MAX` (the
+    ///   `Value::Int` storage type's bound)
+    /// - `iterate_parallel(parallel_fanout: usize)` — argument > `i64::MAX`
+    /// - `push` — `NodeHandle(u32)` slot exhausted (practically
+    ///   unreachable: requires ~4.29B nodes per builder)
+    #[error(
+        "value out of range for {field}: {value} exceeds {bound} (builder deferred error surfaced at .build())"
+    )]
+    ValueOutOfRange {
+        /// The builder argument name that overflowed (`"iterate.max_iterations"` /
+        /// `"iterate_parallel.parallel_fanout"` / `"push.handle_slot"`).
+        field: &'static str,
+        /// The submitted value, rendered as a string (avoids a generic
+        /// parameter on the error enum; covers `u64` / `u128` / `usize`).
+        value: String,
+        /// The type bound (e.g. `"i64::MAX"`, `"u32::MAX"`).
+        bound: &'static str,
+    },
 }
 
 impl CoreError {
@@ -798,6 +826,7 @@ impl CoreError {
             CoreError::NotFound => ErrorCode::NotFound,
             CoreError::ContentHashMismatch { .. } => ErrorCode::InvContentHash,
             CoreError::HlcSkewExceeded { .. } => ErrorCode::HlcSkewExceeded,
+            CoreError::ValueOutOfRange { .. } => ErrorCode::ValueOutOfRange,
         }
     }
 }

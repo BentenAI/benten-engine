@@ -120,6 +120,13 @@ pub enum ErrorCode {
     ValueFloatNan,
     /// `Value::Float` rejected a `±Infinity` payload at canonical-bytes time.
     ValueFloatNonFinite,
+    /// A builder-time numeric argument exceeded the type bound it would be
+    /// stored under (e.g. `SubgraphBuilder::iterate(max_iterations)` u64 arg
+    /// exceeding `i64::MAX`, or the `NodeHandle(u32)` slot exhausted). The
+    /// builder records the over-range as a deferred error and surfaces it
+    /// at the single-fallible-point `.build()` call (#506 closure;
+    /// G-CORE-6 verify-pass).
+    ValueOutOfRange,
     /// Failed to parse a CID string (multicodec / multihash / base32).
     CidParse,
     /// CID uses a multicodec Benten does not support (non-`dag-cbor`).
@@ -1183,6 +1190,7 @@ impl ErrorCode {
             ErrorCode::SystemZoneWrite => "E_SYSTEM_ZONE_WRITE",
             ErrorCode::ValueFloatNan => "E_VALUE_FLOAT_NAN",
             ErrorCode::ValueFloatNonFinite => "E_VALUE_FLOAT_NONFINITE",
+            ErrorCode::ValueOutOfRange => "E_VALUE_OUT_OF_RANGE",
             ErrorCode::CidParse => "E_CID_PARSE",
             ErrorCode::CidUnsupportedCodec => "E_CID_UNSUPPORTED_CODEC",
             ErrorCode::CidUnsupportedHash => "E_CID_UNSUPPORTED_HASH",
@@ -1531,6 +1539,7 @@ impl ErrorCode {
             | ErrorCode::SystemZoneWrite
             | ErrorCode::ValueFloatNan
             | ErrorCode::ValueFloatNonFinite
+            | ErrorCode::ValueOutOfRange
             | ErrorCode::CidParse
             | ErrorCode::CidUnsupportedCodec
             | ErrorCode::CidUnsupportedHash
@@ -1882,6 +1891,7 @@ impl core::str::FromStr for ErrorCode {
             "E_SYSTEM_ZONE_WRITE" => ErrorCode::SystemZoneWrite,
             "E_VALUE_FLOAT_NAN" => ErrorCode::ValueFloatNan,
             "E_VALUE_FLOAT_NONFINITE" => ErrorCode::ValueFloatNonFinite,
+            "E_VALUE_OUT_OF_RANGE" => ErrorCode::ValueOutOfRange,
             "E_CID_PARSE" => ErrorCode::CidParse,
             "E_CID_UNSUPPORTED_CODEC" => ErrorCode::CidUnsupportedCodec,
             "E_CID_UNSUPPORTED_HASH" => ErrorCode::CidUnsupportedHash,
