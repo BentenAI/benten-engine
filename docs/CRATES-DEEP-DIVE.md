@@ -212,7 +212,7 @@ Each per-crate audit surfaces a small handful of stale comments or unresolved TO
 
 - `benten-errors::parse_cap_string` doc-comment still says "Phase 2a stub" + "Real parser lands in G4-A" despite G4-A having closed.
 - `benten-core`'s legacy crate-root `u64`-id `Anchor` surface (and its `U64_CHAINS` table) was removed for refinement-audit #1003 (zero non-test callers; CLAUDE.md rule #5), retiring the prior `TODO(phase-3 — anchorstore + GC)` growth concern.
-- `benten-core` now has two `Anchor` shapes (`version::Anchor` Cid-head-threaded and `version_chain::DagVersionChain` DAG-shape); their unification into one `VersionDag` with an opt-in strict/linear mode is the ratified Phase-4-Meta D3 work named in `docs/future/phase-4-backlog.md` §4.79.
+- `benten-core` exposes the unified `version_dag::VersionDag` composability surface (Phase-4-Meta-Core G-CORE-5 D3 unification, RATIFIED 2026-05-17, closes #849): one nominal type with an opt-in `Mode::{Strict, Dag}` selector + one shared `VersionChain` trait + one CURRENT semantic across modes. The two underlying per-pattern implementations (`version::Anchor` Cid-head-threaded linear; `version_chain::DagVersionChain` explicit DAG) remain alongside for existing engine + platform-foundation callers; migrating those callsites onto the unified surface is downstream-wave work.
 - `crates/benten-graph/src/lib.rs` carries `TODO(phase-3 — write-authority/is_privileged coherence)` (storage-layer two-axes drift risk; tracked in §13.x of phase-3-backlog).
 - `benten-graph`'s in-transaction flag is per-`Arc<RedbBackend>` (mini-review g3-ce-7 proposed keying on canonical DB path; carried).
 - `benten-graph::next_tx_id` is process-lifetime-only (mini-review g3-ce-8 proposed persisting; carried).
