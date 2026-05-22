@@ -12,6 +12,13 @@
 //! `Anchor + append_version + walk_versions`) to DAG-shape. The
 //! linear surface remains for callers that don't need branches.
 //!
+//! The Phase-4-Meta-Core G-CORE-5 D3 unification (RATIFIED 2026-05-17;
+//! closes #849) added [`crate::version_dag::VersionDag`] as the
+//! post-unification canonical composability surface with one opt-in
+//! [`crate::version_dag::Mode`] selector across both shapes; this
+//! explicit-DAG module remains as the per-pattern implementation for
+//! pre-unification consumers.
+//!
 //! ## Shape
 //!
 //! A `DagVersionChain` is a forest of (parent, child) edges keyed by

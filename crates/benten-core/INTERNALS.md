@@ -8,7 +8,7 @@ Current as of HEAD `8141b94` (post `phase-4-foundation-close` tag).
 
 ## 1. What this crate does (in two paragraphs)
 
-`benten-core` is the foundation of the Benten type system. It defines the four shapes everything else in the workspace agrees on — `Value` (the DAG-CBOR-compatible value type), `Node` (a labelled, propertied content-addressed graph node), `Edge` (a content-addressed directed edge between two Node CIDs), and `Cid` (a thin CIDv1 newtype). On top of those, it provides content-addressed hashing (BLAKE3 over DAG-CBOR with canonical key sort), three coexisting version-chain shapes (a thin `u64`-id anchor for the simple case, a Cid-head-threaded linear anchor that detects concurrent forks, and a DAG-shaped chain added in Phase-4-Foundation G24-D to support branches + merges per the plugin-library subgraph design), a Hybrid Logical Clock (HLC) for Phase-3 sync, a `Subgraph` + `SubgraphBuilder` pair that represents a handler-as-graph and produces a deterministic CID for it, and the `ChangeStream` port that `benten-eval`'s SUBSCRIBE primitive consumes.
+`benten-core` is the foundation of the Benten type system. It defines the four shapes everything else in the workspace agrees on — `Value` (the DAG-CBOR-compatible value type), `Node` (a labelled, propertied content-addressed graph node), `Edge` (a content-addressed directed edge between two Node CIDs), and `Cid` (a thin CIDv1 newtype). On top of those, it provides content-addressed hashing (BLAKE3 over DAG-CBOR with canonical key sort), the unified `VersionDag` version-chain composability surface (Phase-4-Meta-Core G-CORE-5 D3 unification — one nominal type with an opt-in strict/dag `Mode`, one shared `VersionChain` trait, one CURRENT semantic) plus the two underlying per-pattern implementations it composes over (Cid-head-threaded linear `version::Anchor` and DAG-shaped `version_chain::DagVersionChain` added in Phase-4-Foundation G24-D for branches + merges per the plugin-library subgraph design), a Hybrid Logical Clock (HLC) for Phase-3 sync, a `Subgraph` + `SubgraphBuilder` pair that represents a handler-as-graph and produces a deterministic CID for it, and the `ChangeStream` port that `benten-eval`'s SUBSCRIBE primitive consumes.
 
 The crate is intentionally `#![no_std]` (with `extern crate alloc`). It forbids `unsafe_code`, warns on `missing_docs`, and depends on no other Benten crate except `benten-errors` (the workspace error-catalog). It pulls in nothing storage-shaped, nothing evaluator-shaped, nothing capability-shaped, and nothing networking-shaped. Every other Benten crate either depends on `benten-core` or depends on a crate that does — making `benten-core` the bottom of the workspace dependency graph and the place where the hash contract lives single-sourced. This is Compromise #3 (zero-Benten-deps root of dep graph) operationalised.
 
@@ -17,14 +17,14 @@ The crate is intentionally `#![no_std]` (with `extern crate alloc`). It forbids 
 ## 2. Where it sits in the dependency chain
 
 ### Inputs (workspace)
-- `benten-errors` — the only Benten crate `benten-core` depends on. Provides the stable `ErrorCode` enum that `CoreError::code()`, `VersionError::code()`, and `VersionDagError::code()` map into.
+- `benten-errors` — the only Benten crate `benten-core` depends on. Provides the stable `ErrorCode` enum that `CoreError::code()`, `VersionError::code()`, `version_chain::VersionDagError::code()`, and `version_dag::VersionDagError::code()` map into.
 
 ### Inputs (external)
 - `blake3` (pure feature) — content hashing.
 - `serde_ipld_dagcbor` — canonical DAG-CBOR encode/decode with length-first key sort.
 - `serde` + `serde_bytes` — the data-model glue.
-- `spin` — `no_std`-compatible `Mutex` + `Lazy`. Used by the `u64`-id anchor table, the Cid-head anchor's per-anchor chain, and the HLC's `last_emitted` cell.
-- `thiserror` — ergonomic `Display`/`Error` derives for `CoreError`, `VersionError`, and `VersionDagError`.
+- `spin` — `no_std`-compatible `Mutex` + `Lazy`. Used by the Cid-head anchor's per-anchor chain and the HLC's `last_emitted` cell.
+- `thiserror` — ergonomic `Display`/`Error` derives for `CoreError`, `VersionError`, `version_chain::VersionDagError`, and `version_dag::VersionDagError`.
 
 Dev-deps (`proptest`, `criterion`, `serde_json`) are target-gated off `wasm32-*` so the wasm32-wasip1 example build doesn't drag in `wait-timeout` (which lacks a wasi backend).
 
@@ -47,10 +47,10 @@ This is not soft style — it is the invariant that lets the crate stay foundati
 
 ## 3. Files inventory in `src/`
 
-There are eight `.rs` files. Total source size is roughly ~3,750 lines.
+There are nine `.rs` files. Total source size is roughly ~4,150 lines.
 
-### `lib.rs` (~948 LOC)
-Crate root. Carries the module-level docs, the `WriteAuthority` enum (lifted into core during Phase-2a ucca-9 / arch-r1-2 so `benten-graph` and `benten-caps` can re-export the same type — `Copy` per R6 R2 C2-R2-6), the four multicodec/multihash constants (`CID_V1=0x01`, `MULTICODEC_DAG_CBOR=0x71`, `MULTIHASH_BLAKE3=0x1e`, `BLAKE3_DIGEST_LEN=32`, plus `CID_LEN=36`), the `Node` struct + its hash path (`to_canonical_bytes` / `cid` / `load_verified`), the `Cid` newtype + its parse paths (`from_bytes`, `<Cid as core::str::FromStr>::from_str`, `to_base32`), the rolled-by-hand base32-lower-nopad codec, the `CoreError` enum + its `code()` mapping, the `u64`-id `Anchor` surface (with its process-global `U64_CHAINS` table), the `LABEL_CURRENT` / `LABEL_NEXT_VERSION` constants, the `format_err` helper used to bridge `Display`-only errors into owned `String`s without triggering the workspace's `unwrap_used` / `expect_used` lints, and the `pub mod testing` module exposing `canonical_test_node` for cross-process determinism fixtures.
+### `lib.rs` (~975 LOC)
+Crate root. Carries the module-level docs, the `WriteAuthority` enum (lifted into core during Phase-2a ucca-9 / arch-r1-2 so `benten-graph` and `benten-caps` can re-export the same type — `Copy` per R6 R2 C2-R2-6), the four multicodec/multihash constants (`CID_V1=0x01`, `MULTICODEC_DAG_CBOR=0x71`, `MULTIHASH_BLAKE3=0x1e`, `BLAKE3_DIGEST_LEN=32`, plus `CID_LEN=36`), the `Node` struct + its hash path (`to_canonical_bytes` / `cid` / `load_verified`), the `Cid` newtype + its parse paths (`from_bytes`, `<Cid as core::str::FromStr>::from_str`, `to_base32`), the rolled-by-hand base32-lower-nopad codec, the `CoreError` enum + its `code()` mapping, the `LABEL_CURRENT` / `LABEL_NEXT_VERSION` edge-label constants for the version-chain pattern, the `format_err` helper used to bridge `Display`-only errors into owned `String`s without triggering the workspace's `unwrap_used` / `expect_used` lints, and the `pub mod testing` module exposing `canonical_test_node` for cross-process determinism fixtures. (The legacy `u64`-id `Anchor` + `U64_CHAINS` process-global table block was deleted for #1003 — zero non-test callers; RATIFIED 2026-05-17.)
 
 **Key invariants:** Node CID is a pure function of `(labels, properties)`; `anchor_id` is `#[serde(skip)]` and excluded by both the skip attribute and a dedicated `NodeHashView` projection (belt-and-suspenders). NaN/±Inf rejection is performed up-front by `Value::to_canonical` so failures surface as typed `CoreError::FloatNan` / `FloatNonFinite` rather than wrapped serde errors. `-0.0` is normalised to `+0.0` so the CID is stable across the sign of zero.
 
@@ -149,10 +149,12 @@ If you're a user of `benten-core`, you mostly touch these:
 
 **Constructing a CID.** Three doors. `Cid::from_blake3_digest([u8; 32])` for internal mint. `Cid::from_bytes(&[u8])` for napi-boundary 36-byte buffers; distinguishes structural failures (`InvalidCid`) from protocol-mismatch (`CidUnsupportedCodec`, `CidUnsupportedHash`). `<Cid as core::str::FromStr>::from_str(&str)` / `"bafyr4i...".parse::<Cid>()` for the multibase form; only accepts the `b` prefix (base32-lower-nopad). The prior shadowing inherent `Cid::from_str` was deleted (#840/P-II; the trait impl is the single parse). Render via `to_base32()` or `Display`.
 
-**Version chains, three shapes.**
-- **Thin `u64`-id (root crate).** `Anchor::new()` allocates a fresh monotonic id. `append_version(&anchor, &node)` returns the appended CID; `current_version(&anchor)` returns the latest; `walk_versions(&anchor)` returns the oldest-first `Vec<Cid>`. No fork detection. Backed by a process-global `U64_CHAINS` `BTreeMap`.
-- **Cid-head-threaded linear (`version::*`).** `version::Anchor::new(root_cid)`. Each `append_version(&anchor, &prior_head, &new_head)` declares the prior head the caller observed; concurrent appends against the same prior fork into a typed `VersionError::Branched`. Per-anchor state, no global table.
-- **DAG-shaped (`version_chain::*`).** `DagVersionChain::new(root_cid)`. Each `add_version(parent, child)` builds the parent/children edge map; multiple children per parent = branches; multiple parents per child = merge. `tips()` returns leaf CIDs; `current()` / `set_current(cid)` track the per-device-local active reference. Cycle detection runs on every `add_version`. This is the surface the Phase-4-Foundation plugin-library subgraph stores against.
+**Version chains — the unified `VersionDag` composability surface (G-CORE-5).**
+- **Unified `version_dag::VersionDag`** — `VersionDag::new(root_cid, Mode::Strict | Mode::Dag)`. One nominal type, one opt-in `Mode` selector, one shared `VersionChain` trait, one CURRENT semantic. `Mode::Strict` is the linear / fork-rejecting contract (≡ old `version::Anchor` shape); `Mode::Dag` is the branch / merge / cycle-rejecting contract (≡ old `version_chain::DagVersionChain` shape). Errors land in the unified `version_dag::VersionDagError` (`Branched` / `UnknownPrior` / `Cycle` / `UnknownCurrent`). The trait is object-safe — `&dyn VersionChain` reads `current()` / `walk()` uniformly across modes. This is the post-Phase-4-Meta-Core canonical surface; #849 closure.
+- **Cid-head-threaded linear (`version::*`).** `version::Anchor::new(root_cid)`. Each `append_version(&anchor, &prior_head, &new_head)` declares the prior head the caller observed; concurrent appends against the same prior fork into a typed `VersionError::Branched`. Per-anchor state. The per-pattern implementation pre-existing G-CORE-5; existing engine / platform-foundation consumers keep using it directly.
+- **DAG-shaped (`version_chain::*`).** `DagVersionChain::new(root_cid)`. Each `add_version(parent, child)` builds the parent/children edge map; multiple children per parent = branches; multiple parents per child = merge. `tips()` returns leaf CIDs; `current()` / `set_current(cid)` track the per-device-local active reference. Cycle detection runs on every `add_version`. The per-pattern implementation Phase-4-Foundation G24-D shipped; existing plugin-library consumers keep using it directly.
+
+(The legacy `u64`-id crate-root `Anchor` + process-global `U64_CHAINS` table — the third shape that pre-dated this unification — was deleted for #1003 (zero non-test callers; RATIFIED 2026-05-17).)
 
 **HLC.** `Hlc::new(node_id, fn() -> u64)` constructs a clock. `hlc.now()` returns a strictly-greater stamp each call. `hlc.update(&remote)` advances local and returns the post-update local stamp, or errors with `HlcSkewExceeded` if the remote is too far in the future.
 
@@ -160,7 +162,7 @@ If you're a user of `benten-core`, you mostly touch these:
 
 **Subscribe surface.** `SubscriberId::from_cid(cid)`, `ChangeEvent { anchor_cid, kind, seq, payload_bytes, labels, tx_id, actor_cid, handler_cid, capability_grant_cid }`. Implement `ChangeStream` to provide events to SUBSCRIBE.
 
-**Errors.** `CoreError` is `#[non_exhaustive]` and ten-variant. Every variant has a stable catalog code via `CoreError::code() -> ErrorCode`. Sibling `VersionError` + `VersionDagError` expose `.code()` symmetrically.
+**Errors.** `CoreError` is `#[non_exhaustive]` and ten-variant. Every variant has a stable catalog code via `CoreError::code() -> ErrorCode`. Sibling `version::VersionError`, `version_chain::VersionDagError`, and `version_dag::VersionDagError` expose `.code()` symmetrically — all map into the shared `E_VERSION_*` family.
 
 ---
 
@@ -186,12 +188,14 @@ If you're a user of `benten-core`, you mostly touch these:
 - `proptests_edge_roundtrip.rs` — `(source, target, label)` determines the Edge CID, proptest-shaped.
 
 ### Version chain
-- `anchor_version.rs` — `u64`-id-Anchor happy path.
+- `u64_anchor_surface_deleted_1003.rs` — #1003 closure-pin: positively asserts the deleted `u64`-id Anchor surface is gone and the canonical replacement linear surface is intact + prior-head-threaded + fork-rejecting.
 - `version_branched.rs` — Cid-head linear `VersionError::Branched` / `UnknownPrior` shapes.
 - `version_error_codes.rs` — `.code()` mapping for both `VersionError` variants.
 - `version_chain_label_constants.rs` — pins `LABEL_CURRENT == "CURRENT"` and `LABEL_NEXT_VERSION == "NEXT_VERSION"`.
+- `tf6_d3_version_dag_unification_red.rs` — TF-6 RED-PHASE pins, un-ignored at G-CORE-5: the unified `version_dag::VersionDag` exists in either `Mode`, strict-mode fork-rejection ≡ old `VersionError::Branched`, DAG-mode branch / merge round-trips, ONE shared trait + ONE CURRENT, P-III canonical-bytes preservation.
+- `tf6_d3_dead_anchor_1003_and_995_verify_stays_regression.rs` — TF-6 GREEN regression guards through the unification: the deleted u64 Anchor stays deleted, the two underlying per-pattern implementations stay correct pre-unification, the #995-corrected `Cid` docstring facts (`Copy` + fixed-len + byte-lexicographic `Ord`) hold.
 
-(The DAG-shape surface `version_chain::DagVersionChain` is covered by inline `#[cfg(test)] mod tests` in `src/version_chain.rs` rather than a separate integration test — linear/branch/merge/cycle/unknown-parent/set-current-unknown coverage all there.)
+(The DAG-shape surface `version_chain::DagVersionChain` is covered by inline `#[cfg(test)] mod tests` in `src/version_chain.rs` rather than a separate integration test — linear/branch/merge/cycle/unknown-parent/set-current-unknown coverage all there. Inline `#[cfg(test)] mod tests` in `src/version_dag.rs` covers the unified surface's strict/dag mode arms, the `VersionChain` trait dispatch, and the unified-error code mapping.)
 
 ### Subgraph
 - `subgraph_deterministic_dagcbor.rs` — round-trip preserves the `deterministic` flag.
@@ -245,12 +249,12 @@ There's one example: `examples/print_canonical_cid.rs` (~18 LOC) — prints the 
 - **`benten-core` MUST NOT depend on `benten-eval`** is enforced both by a unit test (`benten_core_no_eval_dep.rs`) AND a workflow (`arch-1-dep-break.yml`). Belt-and-suspenders, deliberately.
 - **`#[no_std]` + `forbid(unsafe_code)` + `warn(missing_docs)`** at the crate root. The crate is portable to `wasm32-unknown-unknown` (Class B thin-compute surface per CLAUDE.md #17) and the missing_docs lint is on so every public surface has docstring coverage.
 - **HLC stays out of `uhlc`'s `async-std` mire.** The decision to roll HLC directly rather than take `uhlc 0.2.1` is documented in `hlc.rs` and explicitly cites the `no_std` + sync-surface motivation. The state machine is ~150 LOC, no external deps.
-- **DAG-shaped version chain composes with the linear one.** `version_chain::DagVersionChain` doesn't replace `version::Anchor`; it sits alongside, sharing the `Cid` keying + the same catalog-code mapping. Phase-4-Foundation extended the version-chain surface without breaking the linear callers.
+- **One unified version-chain composability surface.** `version_dag::VersionDag` is the post-G-CORE-5 canonical surface — ONE nominal type with an opt-in `Mode::{Strict, Dag}`, one shared `VersionChain` trait (object-safe), one CURRENT semantic, one unified error enum (`VersionDagError::{Branched, UnknownPrior, Cycle, UnknownCurrent}`). The two underlying per-pattern implementations (`version::Anchor` Cid-head-threaded linear; `version_chain::DagVersionChain` explicit DAG) remain alongside as pre-unification implementations existing consumers (engine, plugin-library) keep using directly. New code threads through the unified `VersionDag` surface.
 
 ### Observations (not findings — context for future contributors)
 
-- **Three coexisting Anchor shapes.** `u64`-id at `lib.rs`, Cid-head linear at `version.rs`, DAG-shaped at `version_chain.rs`. The plain-English contract is: `u64`-id for cheap simple cases (no fork detection), linear-Cid-head for the rejecting-fork case, DAG for the branches-allowed case. The R5-G7 "pick a canonical shape" carry has now been overtaken by events: Phase-4-Foundation needed the DAG shape, so consolidation can't mean "delete two." A future consolidation could collapse to "DAG only with an `is_linear()` convenience" but no concrete pressure to do that yet. Carried as a v1-gate / Phase 4-Meta assessment candidate — the residual `TODO(phase-3 — version surface consolidation)` markers in `lib.rs:666` and `version.rs:13` are still present at HEAD.
-- **Process-global `U64_CHAINS` table for the `u64`-id `Anchor`.** This `static spin::Lazy<spin::Mutex<BTreeMap<u64, Vec<Cid>>>>` in `lib.rs:718` is acknowledged inline as a Phase-3-deferral: it grows unbounded for the life of the process and has no `drop_anchor` / GC. Fine for Phase 1 test runs; a long-running process would want a caller-owned `AnchorStore`. The Cid-head-threaded sibling in `version.rs` already moved to per-anchor `Arc<Mutex<...>>`, and `version_chain::DagVersionChain` is value-typed (no global table). The `TODO(phase-3 — anchorstore + GC)` marker in `lib.rs:712` and the `TODO(phase-3 — anchorstore + CRDT merge)` in `version.rs:26` are both still present.
+- **Two underlying per-pattern implementations behind the unified surface.** `version::Anchor` (Cid-head-threaded linear, fork-rejecting) and `version_chain::DagVersionChain` (branch/merge/cycle-rejecting DAG) remain as the per-pattern implementations. They are not shims — both ship real, tested logic that pre-dates G-CORE-5 and that existing callers depend on directly. The post-G-CORE-5 contract is that *new* composability code threads through `version_dag::VersionDag`. Migrating the existing callsites (engine `AnchorStore` / `handler_versions`, platform-foundation `plugin_library`) to the unified surface is a downstream wave's work, not G-CORE-5 scope.
+- **`Arc<Mutex<...>>` chain state in `version::Anchor`.** The per-anchor `Arc<spin::Mutex<Vec<(Cid, Cid)>>>` carries the appended-chain history; cloning shares state, calling `Anchor::new` twice with the same head produces independent chains. This was the fix for a prior process-global-map design that leaked state between unrelated anchors. The `version_chain::DagVersionChain` sibling is value-typed (no shared mutability — clone gives an independent DAG); the unified `version_dag::VersionDag` follows the same value-typed shape.
 - **`Subgraph` field-pub-ness vs accessor discipline.** `Subgraph::nodes`, `edges`, `handler_id`, `deterministic` are `pub`. The G12-C-cont docstring acknowledges this is a deliberate choice — `benten-eval`'s invariants module was reaching into the previous `pub(crate)` siblings and converting to accessors-everywhere would have cascaded across ~2,000 LOC. There ARE read-only accessor methods alongside (`nodes()` / `edges()` / `handler_id()` / `is_deterministic()`), so consumers have the option. Mutation discipline is enforced at registration time by Inv-13 (`benten-graph::immutability`), not by the type system. This is a legitimate trade-off; documenting that it's a trade-off is appropriate.
 - **`SubgraphBuilder` knows about Inv-14.** `push()` stamps `attribution: true` on every emitted `OperationNode` by default. The constant `ATTRIBUTION_PROPERTY_KEY` is core-side because the eval-side builder previously needed the string. This is a soft boundary leak — Inv-14 is an evaluator concern that benten-core's builder defaults a property for. The inline justification (D12.7 Decision 1) is fair: the builder is the canonical attribution-stamp surface and tests bypass the builder when probing the reject path. Worth noting as a "core knows about one invariant by name, but only as a property key string."
 
@@ -258,16 +262,16 @@ These are observations, not violations. The crate is in a healthy posture for a 
 
 ---
 
-## 8. Phase-4-Foundation impact + Phase 4-Meta expectations
+## 8. Phase-4-Foundation impact + Phase 4-Meta posture
 
 Phase-4-Foundation shipped at tag `phase-4-foundation-close` and added one new module (`version_chain.rs`) per CLAUDE.md baked-in #18 implementation refinement D-4F-14. The rest of the Foundation work landed downstream — plugin manifest types live in `benten-platform-foundation`, schema-driven rendering surfaces live in the new admin-shell + render-backend crates, and the Class B β `Engine::read_node_as` shipped at PR #184 entirely engine-side. The crate's role as the bottom of the workspace stayed intact across the phase.
 
-Phase 4-Meta is the next architectural wave that may touch this crate:
+Phase-4-Meta-Core G-CORE-5 (D3 unification, RATIFIED 2026-05-17) shipped the unified `version_dag::VersionDag` composability surface (one nominal type, one shared `VersionChain` trait, one CURRENT semantic, opt-in `Mode::{Strict, Dag}`) and closed #849 + the Anchor/u64-delete half of #1142. The two underlying per-pattern implementations (`version::Anchor`, `version_chain::DagVersionChain`) remain in place; migrating existing engine + platform-foundation consumers to the unified surface is downstream-wave work.
+
+Other Phase 4-Meta surfaces that may touch this crate:
 
 - **Plugin manifest types — where they live.** Per CLAUDE.md #18 implementation refinements, every plugin ships a signed manifest with `requires` + `shares` halves. Foundation chose to keep these in `benten-platform-foundation` (closer to where install-time validation runs) rather than lifting to `benten-core`. If Phase 4-Meta needs the manifest types referenced from `benten-caps` for the capability-policy backend AND from `benten-platform-foundation` for install, the consolidation candidate is moving the value-shaped half (the immutable serialised manifest) into `benten-core` while keeping install-time validation in `benten-platform-foundation`. Open call; no concrete pressure yet.
 - **`Engine::get_node` visibility tightening.** CLAUDE.md #18 names a v1-assessment-window question: `Engine::get_node` is currently `pub` (originally intended `pub(crate)` per the initial bake-in framing). This is an engine-side decision (not core-side), but it interacts with how plugins consume Node CIDs through the public API — the `Cid` type that flows through `read_node_as(principal, cid)` is owned by `benten-core`, so any visibility change ripples through the type surface here.
-- **Phase-3 version-surface consolidation TODO.** Still carried; see §7 above. With three shapes coexisting, the "pick a canonical one" framing is obsolete; a more useful framing for Phase 4-Meta might be "do we need an `AnchorStore` trait that all three shapes implement, so callers can swap underlying state strategy without retyping?"
-- **`AnchorStore` / anchor GC.** The `TODO(phase-3 — anchorstore + CRDT merge)` in `version.rs` and `TODO(phase-3 — anchorstore + GC)` in `lib.rs` both anticipate a caller-owned `AnchorStore` handle. Phase-3 `benten-sync` is now CRDT-merge-shaped (Loro integration shipped); the `AnchorStore` half of the comment still needs landing. v1-gate-window candidate per CLAUDE.md #15.
 
 None of the above involves opening up a 13th primitive or relaxing the arch-1 dep direction. The crate's role as the bottom of the workspace stays intact.
 
@@ -275,12 +279,11 @@ None of the above involves opening up a 13th primitive or relaxing the arch-1 de
 
 ## 9. Open questions / unresolved internals
 
-Four explicit `TODO`-tagged carries in source — all still present at `phase-4-foundation-close`:
+One explicit `TODO`-tagged carry in source post-G-CORE-5:
 
-- `lib.rs:666` — `TODO(phase-3 — version surface consolidation)` on the `u64`-id Anchor block. Now reframed in scope by Phase-4-Foundation's addition of `version_chain.rs` (three shapes, not two).
-- `lib.rs:712` — `TODO(phase-3 — anchorstore + GC)` on `U64_CHAINS` unbounded growth.
-- `version.rs:13` — second instance of the version-surface-consolidation marker.
-- `version.rs:26` — `TODO(phase-3 — anchorstore + CRDT merge)` on the per-anchor `Arc<Mutex<...>>` pattern.
+- `version.rs:27` — `TODO(phase-3 — anchorstore + CRDT merge)` on the per-anchor `Arc<Mutex<...>>` pattern, anticipating CRDT-merge under the sync protocol + possibly an explicit `AnchorStore` handle for bulk operations. Phase-3 `benten-sync` is now CRDT-merge-shaped (Loro integration shipped); the explicit-`AnchorStore` half of the carry remains a downstream-wave consideration.
+
+The earlier `lib.rs:666` / `lib.rs:712` / `version.rs:13` TODO carries (version-surface consolidation; `U64_CHAINS` + `AnchorStore` + GC) are CLOSED: the `u64`-id surface was deleted for #1003 (PR #1290) and the version-surface consolidation shipped as the unified `version_dag::VersionDag` at G-CORE-5 (PR landing this brief).
 
 No `FIXME` markers in source.
 
