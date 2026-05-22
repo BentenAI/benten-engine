@@ -205,6 +205,7 @@ export const CATALOG_CODES = [
   "E_MATERIALIZER_SCHEMA_MISMATCH",
   "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
   "E_NAMESPACED_WRITE_UNSUPPORTED",
+  "E_RECIPIENT_LACKS_KEYS_FOR_SUITE",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2790,6 +2791,21 @@ export class ENamespacedWriteUnsupported extends BentenError {
 }
 
 /**
+ * E_RECIPIENT_LACKS_KEYS_FOR_SUITE
+ *
+ * Thrown at: `crates/benten-crypto-suite/src/cipher_suite.rs::CipherSuite::wrap_key_material` + `::unwrap_key_material` (G-CORE-3a CANARY, Phase 4-Meta-Core).
+ * Message template: "recipient lacks one of the required key halves for the dispatched cipher-suite"
+ */
+export class ERecipientLacksKeysForSuite extends BentenError {
+  static readonly code = "E_RECIPIENT_LACKS_KEYS_FOR_SUITE";
+  static readonly fixHint = "Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_RECIPIENT_LACKS_KEYS_FOR_SUITE", "Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.", message, context);
+    this.name = "ERecipientLacksKeysForSuite";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -2970,4 +2986,5 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_MATERIALIZER_SCHEMA_MISMATCH": EMaterializerSchemaMismatch,
   "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE": EMaterializerSubscribeSeamFailure,
   "E_NAMESPACED_WRITE_UNSUPPORTED": ENamespacedWriteUnsupported,
+  "E_RECIPIENT_LACKS_KEYS_FOR_SUITE": ERecipientLacksKeysForSuite,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

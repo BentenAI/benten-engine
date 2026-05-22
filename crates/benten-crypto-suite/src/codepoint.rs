@@ -204,14 +204,18 @@ impl CipherSuiteCodepoint {
 
     /// Resolve cipher-suite codepoint into a typed dispatch outcome.
     ///
-    /// **In this wave (G-CORE-2) every cipher-suite codepoint is
-    /// reserved-but-unimplemented and surfaces typed-unsupported.**
-    /// G-CORE-3 will flip 0x647a from typed-unsupported to live.
+    /// **G-CORE-3a flips `0x647a` (X25519⊕ML-KEM-768 hybrid) + `0x6400`
+    /// (classical-only X25519 downgrade) to LIVE.** The full swap matrix
+    /// (incl. `0x0000` no-encryption + `0x647b` NF-1 PQ⊕PQ end-state) is
+    /// G-CORE-3c's deliverable; here `0x0000` + `0x647b` remain
+    /// typed-rejected per the additive-codepoint discipline.
     pub fn resolve(self) -> Result<(), UnsupportedAlgorithm> {
         match self.0 {
-            0x647a => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
+            // G-CORE-3a LIVE arms.
+            0x647a | 0x6400 => Ok(()),
+            // Reserved-but-unimplemented at this wave (G-CORE-3c lights).
             0x647b => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
-            0x6400 | 0x0000 => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
+            0x0000 => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
             other => Err(UnsupportedAlgorithm::CipherSuite { codepoint: other }),
         }
     }

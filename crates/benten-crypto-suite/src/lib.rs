@@ -108,6 +108,7 @@
 
 #![doc(html_root_url = "https://docs.rs/benten-crypto-suite/0.0.0/")]
 
+pub mod aead;
 pub mod boundary;
 pub mod cipher_suite;
 pub mod codepoint;
@@ -117,11 +118,14 @@ pub mod hash;
 pub mod primitives;
 pub mod sig;
 pub mod sizes;
+pub mod structural_kdf;
 pub mod varsig;
 
 // Convenience re-exports of the most-used typed surface.
-pub use crate::codepoint::{HashCodepoint, SigCodepoint};
+pub use crate::aead::{AeadEnvelope, AeadError, KeyMaterial};
+pub use crate::codepoint::{CipherSuiteCodepoint, HashCodepoint, SigCodepoint};
 pub use crate::error::{CryptoError, UnsupportedAlgorithm, VerifyError};
 pub use crate::hash::HashSeam;
 pub use crate::sig::{HybridSignature, SignatureSuite, SuiteConfig};
+pub use crate::structural_kdf::{StructuralKdfKey, derive_root, derive_step};
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};

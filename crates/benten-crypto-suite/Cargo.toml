@@ -73,14 +73,19 @@ blake3 = { workspace = true }
 sha2 = { version = "0.10", default-features = false }
 sha3 = { version = "0.10", default-features = false }
 
-# Encryption-side primitives (G-CORE-3 #1301) are reserved-but-NOT-
-# instantiated at this wave — the codepoint dispatch typed-rejects them
-# (additive-codepoint discipline). G-CORE-3 adds `x25519-dalek` +
-# `ml-kem` + `chacha20poly1305` + `hkdf` as direct deps of THIS crate
-# when it lights up the live cipher-suite impl (still the ONLY call site
-# per crypto-agility-contract:6 — the deps move to here at G-CORE-3
-# alongside the live combiner). The G-CORE-2 ecosystem fork that
-# previously blocked these deps is closed by the iroh 1.0.0-rc.0 bump.
+# Encryption-side primitives (G-CORE-3 #1301) — G-CORE-3a CANARY adds
+# `x25519-dalek` + `ml-kem` + `chacha20poly1305` + `hkdf` as direct
+# deps of THIS crate (the ONLY crypto-primitive call site per
+# crypto-agility-contract:6). The vendored ~30-LOC X-Wing-style
+# combiner over `ml-kem` + `x25519-dalek` + `sha3` lights up codepoint
+# `0x647a` per Spike I + CLAUDE.md baked-in #5. ChaCha20-Poly1305 is
+# the bulk AEAD; HKDF-SHA256 is the structural-KDF substrate per
+# Spike E Interpretation-B (`derive_step`/`derive_root` with
+# `"step"`/`"root"` info-tags for cross-role domain separation).
+x25519-dalek = { version = "2", default-features = false, features = ["alloc", "static_secrets", "zeroize"] }
+ml-kem = { version = "0.2", default-features = false }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
+hkdf = { version = "0.12", default-features = false }
 
 # Standard supporting deps.
 serde = { workspace = true, features = ["derive", "alloc"] }

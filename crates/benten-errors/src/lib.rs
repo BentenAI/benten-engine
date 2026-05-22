@@ -1073,6 +1073,19 @@ pub enum ErrorCode {
     /// write path; the typed-reject is the defense in the interim. Maps
     /// to `E_NAMESPACED_WRITE_UNSUPPORTED`.
     NamespacedWriteUnsupported,
+    /// G-CORE-3a CANARY (#1300/#1301 substrate, Phase 4-Meta-Core; F-3 W1
+    /// spec-gap closure): the recipient lacks one of the required key
+    /// halves for the dispatched cipher-suite. Per CLAUDE.md baked-in #5
+    /// codepoint-dispatch + RATIFIED-S&C 2026-05-21: the hybrid X-Wing
+    /// suite at `0x647a` (X25519⊕ML-KEM-768) requires BOTH key halves on
+    /// the recipient side; a degenerate recipient holding only the
+    /// classical X25519 half fails closed with this typed code rather
+    /// than silently falling back to a classical-only unwrap (the
+    /// silent-downgrade vector this typed arm exists to prevent). The
+    /// `cipher_suite::AeadError::RecipientLacksKeysForSuite` variant +
+    /// the structural-shape rejection at the cipher-suite boundary
+    /// surface here as `E_RECIPIENT_LACKS_KEYS_FOR_SUITE`.
+    RecipientLacksKeysForSuite,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1371,6 +1384,7 @@ impl ErrorCode {
             ErrorCode::MaterializerSchemaMismatch => "E_MATERIALIZER_SCHEMA_MISMATCH",
             ErrorCode::MaterializerSubscribeSeamFailure => "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
             ErrorCode::NamespacedWriteUnsupported => "E_NAMESPACED_WRITE_UNSUPPORTED",
+            ErrorCode::RecipientLacksKeysForSuite => "E_RECIPIENT_LACKS_KEYS_FOR_SUITE",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1796,6 +1810,16 @@ impl ErrorCode {
             // pre-fanout structural rejections.
             ErrorCode::NamespacedWriteUnsupported => None,
 
+            // Phase 4-Meta-Core G-CORE-3a CANARY (#1300/#1301): the
+            // recipient-lacks-keys-for-suite typed arm is a structural
+            // shape rejection at the cipher-suite boundary (a "this
+            // recipient does not match this codepoint's required key
+            // halves" condition, not a primitive-edge routing
+            // disposition). The fail-closed defense against the
+            // silent-downgrade vector means no primitive-edge fallback
+            // is appropriate here.
+            ErrorCode::RecipientLacksKeysForSuite => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2076,6 +2100,7 @@ impl core::str::FromStr for ErrorCode {
             "E_MATERIALIZER_SCHEMA_MISMATCH" => ErrorCode::MaterializerSchemaMismatch,
             "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE" => ErrorCode::MaterializerSubscribeSeamFailure,
             "E_NAMESPACED_WRITE_UNSUPPORTED" => ErrorCode::NamespacedWriteUnsupported,
+            "E_RECIPIENT_LACKS_KEYS_FOR_SUITE" => ErrorCode::RecipientLacksKeysForSuite,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

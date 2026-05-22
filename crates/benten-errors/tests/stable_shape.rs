@@ -484,6 +484,15 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-graph::browser_backend::BrowserBackend::put_node_with_context`
     // (the typed-reject fail-closed defense before any write).
     ErrorCode::NamespacedWriteUnsupported,
+    // G-CORE-3a CANARY (Phase 4-Meta-Core; F-3 W1 spec-gap closure):
+    // recipient-lacks-keys-for-suite typed arm at the X-Wing-hybrid
+    // cipher-suite boundary. Fail-closed defense against the
+    // silent-downgrade vector when a degenerate recipient (missing one
+    // of the hybrid-required key halves) is handed a hybrid-codepoint
+    // WrappedKey. Construction sites:
+    //   `benten-crypto-suite::cipher_suite::CipherSuite::wrap_key_material`
+    //   `benten-crypto-suite::cipher_suite::CipherSuite::unwrap_key_material`
+    ErrorCode::RecipientLacksKeysForSuite,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -787,8 +796,14 @@ fn variant_count_is_pinned() {
     // partitioned-backend fail-closed typed-reject when ctx
     // .namespace_did = Some at the §1.A.FROZEN canary surface).
     // 169 + 1 = 170.
+    // G-CORE-3a CANARY (Phase 4-Meta-Core, #1300/#1301 substrate;
+    // F-3 W1 spec-gap closure): +1 `RecipientLacksKeysForSuite`
+    // (X-Wing-hybrid cipher-suite fail-closed typed-reject when the
+    // recipient lacks one of the hybrid-required key halves; the
+    // silent-downgrade defense per CLAUDE.md baked-in #5).
+    // 170 + 1 = 171.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 170,
+        CATALOG_VARIANT_COUNT, 171,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1011,7 +1026,13 @@ fn catalog_variant_count_matches_enum() {
             // partition seam): typed-reject for non-partitioned
             // GraphBackend impls when ctx.namespace_did = Some at the
             // §1.A.FROZEN canary surface (BrowserBackend et al.).
-            | ErrorCode::NamespacedWriteUnsupported => true,
+            | ErrorCode::NamespacedWriteUnsupported
+            // G-CORE-3a CANARY (Phase 4-Meta-Core, #1300/#1301 substrate;
+            // F-3 W1 spec-gap closure): typed-reject for the
+            // X-Wing-hybrid cipher-suite when the recipient lacks one of
+            // the hybrid-required key halves (the silent-downgrade defense
+            // per CLAUDE.md baked-in #5).
+            | ErrorCode::RecipientLacksKeysForSuite => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't
