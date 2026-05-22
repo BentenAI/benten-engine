@@ -77,6 +77,13 @@ fn c6_pii_verify_legacy_minimal_is_empty_tracked() {
     // (which legitimately *mentions* the historical name). The
     // factual post-state PR #1295 produced: zero `legacy_minimal`
     // identifier occurrences in tracked SOURCE.
+    //
+    // Self-reference exclusion: this test file itself contains the
+    // literal string `legacy_minimal` in its narrative comments AND
+    // in this assertion's diagnostic body. The pathspec excludes
+    // this file via `:!` magic pathspec so the verify-pass premise
+    // (`legacy_minimal` absent from real source) doesn't get
+    // self-shadowed by the verify-pass test's own diagnostic prose.
     let out = Command::new("git")
         .arg("grep")
         .arg("-l")
@@ -85,6 +92,7 @@ fn c6_pii_verify_legacy_minimal_is_empty_tracked() {
         .arg("crates/")
         .arg("bindings/")
         .arg("packages/")
+        .arg(":!crates/benten-core/tests/tf10_c6_pii_verify_pass_factual_state_check.rs")
         .current_dir(&root)
         .output()
         .expect("run git grep");
