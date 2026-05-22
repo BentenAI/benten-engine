@@ -131,6 +131,86 @@ Companion tracker to G-CORE-2-FP-1 (which closed the G-CORE-2 ecosystem fork by 
 
 Full enumeration + cross-references at GH issue #1308. (Section numbered §3.9 post-merge resolution: PR #1304's G-CORE-1 fix-pass landed §3.7 + §3.8 first; G-CORE-2's tail re-numbered from its original §3.7 → §3.9 to avoid section-number collision.)
 
+### §3.10 Sharing & Confidentiality (S&C) — RATIFIED post-spike-sequence; G-CORE-3 design contract
+
+**Status: RATIFIED 2026-05-21 night** (Ben: "those 4 proposed resolutions sound fine!" — combined with the 2 already-resolved-on-evidence by Spike H+1.1 / H+1.2 + the 1 confirmed-on-evidence by Spike I = all 6 G-CORE-3 pre-implementation ratifications LOCKED + the bonus CLAUDE.md baked-in #5 crypto-agility validation CONFIRMED). Promoted from TENTATIVE per the post-spike-sequence ratification state. The authoritative ratification record is [`/.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`](../../.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md) (load-bearing; supersedes the prior DESIGN-doc's "tentative" framing for the 7 commitments + the 6 open questions). The plan-doc body edits encoding the ratification + 8 spike-derived refinements landed at R0.7 + R0.8 + R0.8.1 (`.addl/phase-4-meta/00-implementation-plan.md` revision-history; R1 CONVERGED at R1.6). This row remains as the named-backlog-destination for the G-CORE-3 design contract per HARD RULE 12 clause-(b) (the destination receives the work, NOT a phantom carry-forward).
+
+**Ratified scope (replaces the prior "tentative scope" framing)**: G-CORE-3 reframes from "§8-CC envelope only" to "full S&C stack" — combined LOC estimate ~4000-5000 across `benten-core` + `benten-caps` + `benten-crypto-suite` + engine-evaluator hookup + `benten-sync` (revised up from the original ~2500-4000 given the composition overhead Spike H surfaced; the wave decomposes into 6 sub-waves a-b-w-d-e-f per the plan-doc §3 G-CORE-3 reframe). The 6 ratifications:
+
+- **R1 — Subgraph-selector chain non-widening = Path (a) restricted-spec language only.** Path (b) refinement-witness validator structurally unsound per Spike H+1.1 (NP-hard satisfiability over arbitrary `SubgraphSpec`s; non-portable across `SubgraphSpec` evolution; no constructive witness). Restricted spec-language carrier slot reserved in `SubgraphSpec` extension-slots; freeze-time extension is additive.
+- **R2 — iroh-blobs integration = option (B) two-CID mapping + per-chunk-AEAD ≥64 KiB, chunk size = `IROH_BLOCK_SIZE` (16 KiB).** Per Spike H+1.2. The unencrypted-CID gets exposed only to UCAN-validated peers; encrypted-CID is what serves on the wire. Per-chunk-AEAD with `IROH_BLOCK_SIZE` alignment preserves iroh-blobs' chunk-streaming property; AAD binds chunk index for replay-defense. ≥64 KiB threshold is empirically derived (sub-threshold = inline-bytes mode per Drop Format).
+- **R3 — `AuthorizationGrant` = ONE signed artifact `{ucan, key_material, binding_sig}`.** Single-artifact wire-format replacing the originally-considered two-step UCAN-then-key-material flow; eliminates the partial-disclosure failure mode. The `binding_sig` covers the UCAN + the wrapped key material together so neither can be substituted without invalidating the binding.
+- **R4 — Path canonicalization = BFS-order; carry canonical path in grant.** Resolves the non-DAG / multi-path-to-same-Node case: the canonical owner-path is computed via BFS from `K_principal` and carried in the grant so recipients derive the same key value regardless of which edge they walked. Generalizes Willow's prefix-preserving path-encryption from hierarchical paths to arbitrary graph structures.
+- **R5 — Resolver evaluation = live-per-request** (sub-graph SHAPES, not frozen snapshots) with IVM-cache-invalidation seam reusing G-CORE-4's `CanonicalViews::ChangeSubscriber` subscription. Sharing a `SubgraphSpec` shares the SHAPE; recipients re-evaluate at access-time against the current graph state. Cache invalidation rides the G-CORE-4 IVM subscription seam — no new propagation mechanism.
+- **R6 — Revocation reach documented at `docs/SECURITY-POSTURE.md` (Compromise #N TBD).** Revocation cuts FUTURE serves; already-derived keys remain decryptable (the inherent limit of any key-disclosure-based scheme). Drop bundles are forever-valid once distributed (offline-transferable content). The narrative section documents the threat model + acceptable failure modes explicitly so consumers can reason about residual exposure.
+
+**★ Bonus: CLAUDE.md baked-in #5 crypto-agility CONFIRMED exactly as written** (Spike I). X-Wing combiner body = 24 LOC; codepoint-dispatch + typed-reject pattern works end-to-end; X25519⊕ML-KEM-768 hybrid wrap ~1.7× slower than classical = non-issue; Spike H `KeyMaterial` integration is one-field-type-swap. No revision to the crypto-agility contract.
+
+**8 spike-derived design refinements** (all folded into the ratified architecture; see plan-doc §3 G-CORE-3 input-constraints paragraph + R0.7 revision-history for the full enumeration):
+
+1. Per-chunk-AEAD chunk-size = `IROH_BLOCK_SIZE` (16 KiB), not free parameter
+2. Path-tagged keys with ONE canonical-owner-path (BFS-order), NOT structure-independent per-CID derivation alone
+3. Walker-as-Subgraph-shipped-once-in-`benten-core` (not per-spec reimplementation; one walker traverses any `SubgraphSpec`)
+4. Opaque-specs MUST materialize before sharing (sharing requires the recipient to re-evaluate; opaque blocks that)
+5. Restricted-spec extension slots are NAMED, not opaque (carrier slot in `SubgraphSpec` is `RestrictedSpec(version, ...)` not raw bytes)
+6. 3 sendme deployment modes: ticket → Drop, ticket → live publisher, sub-KiB inline-bytes (Drop format covers all three)
+7. iroh `EndpointId` IS `ed25519_dalek::VerifyingKey` (no new identity type at the iroh boundary)
+8. Drop bundle = full S&C composition serialized as CBOR-on-disk (offline-transferable single-file artifact)
+
+**Sub-wave decomposition (per plan-doc §3 G-CORE-3 reframe at R0.7 / R0.8.1):**
+
+- **G-CORE-3a — crypto-suite CANARY** (must land first; mints the `KeyMaterial` + `AeadEnvelope` types; ~500-700 LOC in `benten-crypto-suite`)
+- **G-CORE-3b — `SubgraphSpec` + walker** (depends on 3a; ~800-1000 LOC across `benten-core` + `benten-caps`)
+- **G-CORE-3w — subgraph_spec walker as Subgraph** (R0.8 rename from "3c" to "3w" to avoid label collision with pre-existing G-CORE-3c swap-matrix wave; ~300-400 LOC in `benten-core`)
+- **G-CORE-3d — graph-AEAD layer** (depends on 3a + 3b; ~800-1000 LOC; wraps per-Node read/write with `K(N)`)
+- **G-CORE-3e — sync + iroh-blobs UCAN-gating** (depends on 3a + 3b + 3w + 3d; ~1000-1200 LOC across `benten-sync` + `benten-caps`)
+- **G-CORE-3f — Drop Format** (parallel with 3e; depends on 3a + 3b; ~500-600 LOC across `benten-core` + `benten-sync`)
+- **G-CORE-3c (PRE-EXISTING SEPARATE WAVE) — full swap matrix conformance** (NOT renamed; this is the pre-spike crypto-agility swap-matrix carrier; ~200-300 LOC in `benten-crypto-suite` + workspace conformance tests; lands separately from the 3a-f S&C cluster)
+
+**Tentative scope (would reframe G-CORE-3 from "§8-CC envelope only" to "full S&C stack"; estimate ~2500-4000 LOC across `benten-core` + `benten-caps` + `benten-crypto-suite` + engine-evaluator hookup) — historical for context, superseded by ratified scope above**:
+
+- **`SubgraphSpec` primitive — 4-thing thin core:** Roots + Expansion + Inclusion + Termination. All ~30+ dimensions of sub-graph sharing semantics (structural / filtering / temporal / authority / confidentiality / dynamic / quotas) collapse into one of these four. The primitive is itself a Subgraph composed of the existing 12 operation primitives (fractal property; CLAUDE.md baked-in #1 12-primitive-irreducibility preserved; no new `PrimitiveKind` variant minted).
+- **Encryption-by-default with two-path key derivation:** every Node has a key derived from structure. Per-Node canonical `K(N) = KDF(K_principal, N.cid)` (owner-derivable; CID-stable; structure-independent; handles non-DAG graphs via canonical path). Per-structural-path `K(N) = KDF(K(predecessor), edge_label)` (recipients derive deeper keys by walking known edge-paths; generalizes Willow's prefix-preserving path-encryption from hierarchical paths to arbitrary graph structures). Both paths converge on the same key value for any given Node. Multi-tenancy demands encryption-as-default; sharing is the additive operation.
+- **Structured UCAN scope** replacing free-form URI strings: `{selector: SubgraphSpec.cid, action, key_material, validity, delegation}`. Composable (intersection = engine operation on the SubgraphSpecs); auditable (selector is a content-addressed Subgraph; pull + inspect); encryption-aware (sharing a scope intrinsically shares the structural-path key material); time-bounded + delegation-aware first-class. The capability *graph* (who-granted-what-to-whom) lives natively in the data model — UCANs are Nodes; "Alice granted Bob X" is an edge.
+- **UCAN-gated iroh-blobs:** wrap iroh-blobs serving with UCAN cap-check (a `UcanGatedBlobStore` over the underlying iroh-blobs store + intercept fetches + validate cap chain + serve-or-reject). Sendme tickets become *necessary-but-not-sufficient* — authorization layered on top of capability-by-possession.
+- **Drop Format as content-bundle representation** composing with sendme tickets: a Drop is self-contained (content + auth + entries + keys); a sendme ticket can point AT a Drop OR at a live publisher OR (for sub-kilobyte content) inline the bytes directly. Three modes from one primitive: online-pull + offline-transfer + tiny-inline-payload.
+- **Deferred:** PIO (Private Interest Overlap Detection — encryption-by-default closes most of the same threats; watch-list) / full Willow adoption (iroh-willow effectively parked + version-incompatible + spec mid-redesign per `.addl/pq-research/RESEARCH-iroh-willow-assessment-2026-05-20.md`) / blinded sigs / ring sigs / threshold sigs (all → Phase-5+ Kith).
+
+**6 originally-open questions — ALL CLOSED post-spike-sequence** (per `.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`):
+1. **Default expansion strategy** → RESOLVED: restricted-spec language with named extension-slots (Path a only; Path b structurally unsound per Spike H+1.1).
+2. **Encryption class enum shape** → RESOLVED: 2-class `EncryptionClass::{Public, Confidential}` baseline; finer reserved variants land via the named extension-slots when needed.
+3. **KDF hash choice** → RESOLVED: HKDF-SHA256 for domain separation (Spike E recommended exact API + `derive_step` shape; `info = "step" || edge_label || N.cid` for cross-role domain separation).
+4. **SubgraphSpec evaluator placement** → RESOLVED: walker is a Subgraph shipped once in `benten-core` (Spike F); engine evaluator universal, not dedicated subsystem.
+5. **Revocation interaction** → RESOLVED: live-per-request re-check with G-CORE-4 IVM-cache-invalidation seam (Spike H end-to-end; cache invalidation rides existing `CanonicalViews::ChangeSubscriber` — no new mechanism).
+6. **Dynamic vs static membership** → RESOLVED: live-subscription is the default (R5 live-per-request resolver); frozen-snapshot mode is the explicit opt-in via `SubgraphSpec` flag, not the reverse.
+
+**Spike sequence — ALL 11 SPIKES COMPLETE** (per `.addl/spikes/README.md`):
+- Spike A (sendme + iroh-blobs hands-on) ✅ COMPLETE — informed UCAN-gated iroh-blobs feasibility
+- Spike A2 (custom-ALPN UCAN-on-wire) ✅ COMPLETE — Shape 2 Flavor B + Shape 3 typed-from-day-one
+- Spike B (willow_rs `willow_data_model` + `meadowcap` minimal example, Codeberg fork) ✅ COMPLETE — take-inspiration-not-deps
+- Spike C (iroh-gossip 3-peer broadcast) ✅ COMPLETE — HOLD as primary; GO as latency overlay
+- Spike D (callme / iroh-live real-time media) DEFERRED to Phase-5+ (per RATIFIED record)
+- Spike E (two-path key derivation) ✅ COMPLETE — design bug surfaced + corrected to Interpretation B; HKDF-SHA256 v1-beta default
+- Spike F (SubgraphSpec evaluator) ✅ COMPLETE — fractal property holds; walker is a Subgraph shipped once
+- Spike G (Drop Format) ✅ COMPLETE — 2688-byte bundle; offline-consume verified
+- Spike H (end-to-end capstone) ✅ COMPLETE — 4/5 scenarios pass; 1 surfaced gap closed at R1 ratification
+- Spike H+1.1 (refinement-witness validator) ✅ COMPLETE — Path b structurally unsound; R1 RESOLVED Path a only
+- Spike H+1.2 (two-CID iroh-blobs) ✅ COMPLETE — R2 RESOLVED option B + per-chunk-AEAD ≥64 KiB
+- Spike I (X25519⊕ML-KEM-768 hybrid) ✅ COMPLETE — CLAUDE.md baked-in #5 CONFIRMED exactly as written
+
+**Cross-references:**
+- **RATIFIED record (authoritative)**: [`/.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`](../../.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md)
+- Design synthesis (pre-ratification): `.addl/phase-4-meta/DESIGN-sharing-and-confidentiality-2026-05-21.md` (TENTATIVE framing; superseded by RATIFIED record for the 7 commitments + 6 open questions)
+- Spike methodology + status: `.addl/spikes/README.md`
+- Session narrative: `.addl/phase-4-meta/SESSION-2026-05-20-to-2026-05-21-substrate-wave-and-willow-pivot.md`
+- §8-CC research (pre-S&C-promotion shape): `.addl/pq-research/RESEARCH-confidential-content-design-2026-05-20.md`
+- iroh-family + Willow landscape: `.addl/pq-research/RESEARCH-atrium-transport-model-2026-05-20.md`
+- iroh-willow code-level audit + defer-to-Phase-5+ recommendation: `.addl/pq-research/RESEARCH-iroh-willow-assessment-2026-05-20.md`
+- Plan-doc R0.7 / R0.8 / R0.8.1 revision-history (encoding the ratification + 8 refinements + the G-CORE-3 a-b-w-d-e-f wave decomposition + §1.A.FROZEN item 15 + §5 D-list rows D-4M-R1..R6 + D-4M-R-CRYPTO): `.addl/phase-4-meta/00-implementation-plan.md`
+- R2 test-landscape synthesis covering the full Phase-4-Meta-Core scope (forward + retrospective on merged substrate + cross-wave interactions + adversarial patterns + wire-format conformance): `.addl/phase-4-meta/R2-test-landscape.md`
+
+**Next:** R3 dispatch (5-parallel test-writer agents per the R2 W1-W5 partition; ~118 pins total) → R3 consolidation → R4 → R5 G-CORE-3 a-b-w-d-e-f wave dispatch per the ratified decomposition → cascade-as-they-merge with mini-reviews → eventual phase-4-meta-core-close R6 council → G-CORE-9 freeze → tag `phase-4-meta-core-close`.
+
 ---
 
 ## §4. Phase 4-Foundation Track B (Class-of-bug audits + cleanups)
