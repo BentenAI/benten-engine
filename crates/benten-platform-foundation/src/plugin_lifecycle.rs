@@ -563,9 +563,9 @@ impl SubscriptionRegistry for InMemoryUninstallCascade {
 //   cascade + library entry + plugin-DID minted-and-persisted)
 // - Seam 2: engine-injected clock at install boundary
 //   (`PluginManifest::validate_with_clock`)
-// - Seam 4: cycle detection wired at the install entry-point (already
-//   present at `module_ecosystem::install_plugin`; the lifecycle seam
-//   layers consent + clock-injection + trust-list on top)
+// - Seam 4: cycle detection wired at the install entry-point (the
+//   lifecycle seam layers consent + clock-injection + trust-list on
+//   top of the structural cycle detection over `composes_plugins`)
 //
 // Per CLAUDE.md baked-in #18 four-identity-concepts model: this is
 // where the InstallRecord's user-DID signature is verified, the
@@ -575,11 +575,18 @@ impl SubscriptionRegistry for InMemoryUninstallCascade {
 // crate doesn't depend on `benten-caps` for production paths, so the
 // engine adapter wires the real grant store; the [`InMemoryInstallCascade`]
 // substantive default powers test pins.
+//
+// Phase-4-Meta-Core G-CORE-0 (plan §1.A.FROZEN item 7) deleted the
+// legacy `module_ecosystem::install_plugin` precursor + its sibling
+// `install_plugin_persisting_did`; this is now the canonical
+// (only-public) install path per CLAUDE.md #18.
 
-/// Shape of the installing peer (mirrors
-/// [`crate::module_ecosystem::InstallerShape`] — re-declared here to
-/// keep the lifecycle seam dep-direction clean against
-/// `module_ecosystem`).
+/// Shape of the installing peer.
+///
+/// At Phase-4-Meta-Core G-CORE-0 (plan §1.A.FROZEN item 7) this is the
+/// canonical `InstallerShape`; the duplicate `module_ecosystem::
+/// InstallerShape` that sat alongside the deleted legacy install path
+/// was removed in the same wave (HARD-RULE-12 clause-(a)).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallerShape {
     /// Full peer (native Rust; runs_sandbox=true; shape (a)).
