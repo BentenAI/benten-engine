@@ -2592,7 +2592,7 @@ Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window open
 
 **Acceptance criteria when this lands:**
 - New seam: `crates/benten-engine/src/handler_cycle_detector.rs` — pure-function topological-walk over the handler-registration graph at install/registration time; emits typed `E_HANDLER_CYCLE_DETECTED` if a cycle is found.
-- Hook into `Engine::register_subgraph` + the plugin install path (G24-D `module_ecosystem::install`) to run the detector BEFORE persisting the registration. Reject install + surface the cycle to the user with the offending handler-call-edges enumerated.
+- Hook into `Engine::register_subgraph` + the plugin install path (`plugin_lifecycle::install_plugin` — the canonical entry-point; superseded the G24-D `module_ecosystem::install_plugin` precursor that was DELETED at Phase-4-Meta-Core G-CORE-0) to run the detector BEFORE persisting the registration. Reject install + surface the cycle to the user with the offending handler-call-edges enumerated.
 - Test pin: a 2-handler cycle (A → B → A) fails install with `E_HANDLER_CYCLE_DETECTED`; a 3-handler cycle (A → B → C → A) same; a deep handler-call DAG without cycle passes install.
 - Regression-guard: confirm `E_ITER_BUDGET_EXHAUSTED` still fires for the (now-narrower) class of runtime dynamic-cycle creation — e.g., a handler that conditionally dispatches based on input-data — which static detection cannot reach.
 - LOC estimate: ~50-100 LOC production (topological walk + install-path hook) + ~80-150 LOC test.
@@ -2601,7 +2601,7 @@ Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window open
 
 **Couples to:**
 - `crates/benten-engine` `call_handler` primitive + iteration-budget enforcement (the current fail-late defense).
-- Phase 4-Foundation G24-D `module_ecosystem::install` path (the install-time hook surface).
+- Phase 4-Foundation G24-D `plugin_lifecycle::install_plugin` path (the install-time hook surface; superseded the deleted-at-G-CORE-0 `module_ecosystem::install_plugin` precursor).
 - CLAUDE.md baked-in #4 ("not Turing complete: DAGs only. Bounded iteration.") — static cycle detection at install time is the natural enforcement of the DAG-only commitment at the cross-handler boundary.
 
 ---

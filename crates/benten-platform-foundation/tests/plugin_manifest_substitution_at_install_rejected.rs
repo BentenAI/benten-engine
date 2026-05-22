@@ -1,13 +1,13 @@
 //! Phase-4-Foundation R4-FP-1 — T5b LOAD-BEARING pin: plugin content
 //! substitution at install rejected (peer-DID signature check).
 //!
-//! R6-FP-A: this test exercises BOTH the legacy
-//! `module_ecosystem::install_plugin` (deprecated; first arm at line
-//! ~93) AND the canonical `plugin_lifecycle::install_plugin` (second
-//! arm at line ~165). Migration of the legacy arm is scheduled for
-//! pre-tag sweep.
-#![allow(deprecated)]
-
+//! Phase-4-Meta-Core G-CORE-0 migration (plan §1.A.FROZEN item 7,
+//! `docs/future/phase-4-backlog.md §4.33`, HARD-RULE-12 clause-(a)):
+//! the first two arms previously imported the deleted
+//! `module_ecosystem::install_plugin` precursor; all three arms now
+//! route through the canonical `plugin_lifecycle::install_plugin`
+//! (Step 4 `validate_with_clock → verify_peer_signature` is the
+//! load-bearing peer-signature defense).
 //!
 //! Pin source: `.addl/phase-4-foundation/r4-triage.md` §2 MAJOR row
 //! r4-tc-4 + `.addl/phase-4-foundation/admin-ui-v0-threat-model.md` §T5
@@ -22,7 +22,8 @@
 //! known-trusted-author list, user installs hostile content under the
 //! same human-readable name."
 //!
-//! Defense: install_plugin's `verify_peer_signature` step verifies the
+//! Defense: the canonical install pipeline Step 4 (validate_with_clock,
+//! which delegates to verify_peer_signature internally) verifies the
 //! signature was produced by the claimed peer-DID's secret key. A
 //! forged-claim signature (where bytes were signed by a different key
 //! than the claimed `peer_did`) FAILS verification and surfaces typed
@@ -47,8 +48,10 @@ mod common;
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_id::keypair::Keypair;
-use benten_platform_foundation::module_ecosystem::{InstallerShape, install_plugin};
 use benten_platform_foundation::plugin_library::PluginLibrary;
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
+};
 use benten_platform_foundation::plugin_manifest::{
     CapRequirement, PluginManifest, RendererBackend, RendererConfig, SharesPolicy, sign_manifest,
 };
@@ -56,13 +59,15 @@ use benten_platform_foundation::plugin_manifest::{
 #[test]
 fn plugin_install_with_content_substituted_by_attacker_peer_did_rejected() {
     // SUBSTANTIVE per pim-2 §3.6b: build a manifest CLAIMING alice's
-    // peer_did but sign with attacker's keypair. install_plugin's
-    // verify_peer_signature step MUST reject with typed
-    // PluginContentPeerSignatureInvalid. Would-FAIL if install path
-    // skipped peer-DID signature verification (T5b substitution
-    // attack succeeds silently).
+    // peer_did but sign with attacker's keypair. The canonical install
+    // pipeline's Step 4 verify_peer_signature MUST reject with typed
+    // PluginContentPeerSignatureInvalid. Would-FAIL if Step 4 skipped
+    // peer-DID signature verification (T5b substitution attack
+    // succeeds silently).
     let alice = Keypair::generate();
     let attacker = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
     assert_ne!(
         alice.public_key().to_did(),
         attacker.public_key().to_did(),
@@ -98,11 +103,34 @@ fn plugin_install_with_content_substituted_by_attacker_peer_did_rejected() {
     let cid = manifest.content_cid;
 
     let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
+    let install_record =
+        common::manifest_fixtures::signed_install_record(&user_kp, cid, plugin_did.clone(), 1);
+
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let mut ports = InstallPorts {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+    };
+    let params = InstallParams {
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &[],
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+        expected_plugin_did: &plugin_did,
+    };
     let result = install_plugin(
         &mut library,
+        &mut store,
+        &mut ports,
+        &params,
         &bytes,
         &cid,
-        InstallerShape::FullPeer,
+        &install_record,
         1,
         &|_| None,
     );
@@ -130,9 +158,12 @@ fn plugin_install_with_content_substituted_by_attacker_peer_did_rejected() {
 #[test]
 fn plugin_install_admits_bytes_when_peer_did_matches_signing_key() {
     // SUBSTANTIVE boundary per pim-2 §3.6b: complementary positive arm
-    // - if claimed peer_did matches the actual signing key, install
-    // admits. Would-FAIL if verify_peer_signature was over-strict.
+    // - if claimed peer_did matches the actual signing key, the
+    // canonical install pipeline admits. Would-FAIL if Step 4
+    // verify_peer_signature was over-strict.
     let alice = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
     let mut manifest = PluginManifest {
         plugin_name: "honest-plugin".to_string(),
         content_cid: Cid::from_blake3_digest([0u8; 32]),
@@ -158,17 +189,40 @@ fn plugin_install_admits_bytes_when_peer_did_matches_signing_key() {
     let cid = manifest.content_cid;
 
     let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
+    let install_record =
+        common::manifest_fixtures::signed_install_record(&user_kp, cid, plugin_did.clone(), 2);
+
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let mut ports = InstallPorts {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+    };
+    let params = InstallParams {
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &[],
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+        expected_plugin_did: &plugin_did,
+    };
     let outcome = install_plugin(
         &mut library,
+        &mut store,
+        &mut ports,
+        &params,
         &bytes,
         &cid,
-        InstallerShape::FullPeer,
+        &install_record,
         1,
         &|_| None,
     );
     assert!(
         outcome.is_ok(),
-        "claimed-peer-DID-matches-signature MUST admit"
+        "claimed-peer-DID-matches-signature MUST admit: {outcome:?}"
     );
     assert_eq!(library.len(), 1);
 }
@@ -181,10 +235,6 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     //  (a) NEGATIVE — alice authors; trust-list does NOT contain alice
     //      → typed PluginAuthorNotTrusted.
     //  (b) POSITIVE — same manifest, trust-list contains alice → admits.
-    use benten_platform_foundation::plugin_lifecycle::{
-        InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
-    };
-
     let alice = Keypair::generate();
     let trusted_author = Keypair::generate();
     let user_kp = Keypair::generate();

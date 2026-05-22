@@ -2657,7 +2657,7 @@ export class EPluginNewVersionAvailable extends BentenError {
 /**
  * E_PLUGIN_HETEROGENEITY_INCOMPATIBLE
  *
- * Thrown at: `crates/benten-platform-foundation/src/module_ecosystem.rs::install_plugin` heterogeneity check.
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` heterogeneity check (Step 5; the legacy `module_ecosystem::install_plugin` precursor was DELETED at Phase-4-Meta-Core G-CORE-0 — heterogeneity rejection carries forward unchanged).
  * Message template: "plugin requires `host:sandbox:exec` but installing peer is a thin-compute-surface"
  */
 export class EPluginHeterogeneityIncompatible extends BentenError {

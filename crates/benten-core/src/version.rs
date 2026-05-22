@@ -7,12 +7,13 @@
 //! divergence.
 //!
 //! The legacy thinner `u64`-id-based crate-root surface was removed for
-//! refinement-audit #1003 (zero non-test callers; CLAUDE.md rule #5) —
-//! this Cid-head-threaded surface and the DAG-shape
-//! [`crate::version_chain::DagVersionChain`] are the two remaining
-//! version surfaces. Their unification into one `VersionDag` with an
-//! opt-in strict/linear mode is the Phase-4-Meta D3 work named in
-//! `docs/future/phase-4-backlog.md` §4.79.
+//! refinement-audit #1003 (zero non-test callers; CLAUDE.md rule #5).
+//! The post-G-CORE-5 canonical composability surface is
+//! [`crate::version_dag::VersionDag`] (Phase-4-Meta-Core D3
+//! unification, RATIFIED 2026-05-17, closing #849); this Cid-head-
+//! threaded surface and the DAG-shape
+//! [`crate::version_chain::DagVersionChain`] remain as per-pattern
+//! implementations for pre-unification consumers.
 //!
 //! ## State storage
 //!

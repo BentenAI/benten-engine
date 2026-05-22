@@ -15,19 +15,32 @@
 //! - [`Cid`] — a thin CIDv1 newtype (multicodec `0x71` dag-cbor, multihash
 //!   `0x1e` blake3) produced by [`Node::cid`] / [`Edge::cid`].
 //!
-//! Version chains ship in **two shapes** (the legacy crate-root `u64`-id
-//! `Anchor` compatibility surface was deleted for #1003 — zero non-test
-//! callers; RATIFIED 2026-05-17):
+//! Version chains expose **one canonical composability surface** —
+//! [`version_dag::VersionDag`] (Phase-4-Meta-Core G-CORE-5, the D3
+//! unification ratified 2026-05-17 closing #849). [`VersionDag`] carries
+//! an opt-in [`version_dag::Mode`] selector: `Strict` (linear,
+//! fork-rejecting — the prior-head-threaded contract) and `Dag` (branch /
+//! merge — CLAUDE.md baked-in #18 plugin-library shape). One shared
+//! [`version_dag::VersionChain`] trait + one CURRENT semantic across
+//! both modes.
+//!
+//! The two underlying per-pattern implementations remain in place for
+//! callers that pre-date the unification:
 //!
 //! - [`version::Anchor`] + [`version::append_version`] /
-//!   [`version::walk_versions`] — prior-head-threaded linear surface. Each
-//!   append names the head the caller observed, so concurrent writers
-//!   forking the chain surface as [`version::VersionError::Branched`] /
-//!   [`version::VersionError::UnknownPrior`].
-//! - [`version_chain::DagVersionChain`] — DAG-shape version chain
-//!   supporting branches/merges natively. The Phase-4-Meta D3 unification
-//!   of these two surfaces into one `VersionDag` with a strict/linear mode
-//!   is named in `docs/future/phase-4-backlog.md` (#849).
+//!   [`version::walk_versions`] — the prior-head-threaded linear surface
+//!   (existing engine / platform-foundation consumers).
+//! - [`version_chain::DagVersionChain`] — the explicit DAG-shape surface
+//!   (existing plugin-library consumers; Phase-4-Foundation G24-D).
+//!
+//! Both surfaces are real, non-shim implementations; the post-G-CORE-5
+//! contract is that [`version_dag::VersionDag`] is the canonical
+//! composability surface new code threads through. The legacy `u64`-id
+//! crate-root `Anchor` (no fork detection, process-global
+//! `U64_CHAINS`) was deleted for #1003 (zero non-test callers; RATIFIED
+//! 2026-05-17; CLAUDE.md rule #5 — delete, don't comment).
+//!
+//! [`VersionDag`]: version_dag::VersionDag
 //!
 //! The [`Node::anchor_id`] field is version-chain identity; it is **excluded
 //! from the content hash** so the same content under a different anchor
@@ -80,6 +93,7 @@ pub mod subgraph;
 pub mod value;
 pub mod version;
 pub mod version_chain;
+pub mod version_dag;
 
 pub use change_stream::{ChangeEvent, ChangeKind, ChangeStream, SubscriberId};
 pub use edge::Edge;
@@ -789,21 +803,23 @@ impl CoreError {
 }
 
 // ---------------------------------------------------------------------------
-// Anchor + version-chain helpers (C6)
-//
-// ---------------------------------------------------------------------------
 // Version-chain edge-label contract.
 //
-// `benten_core::version::*` (Cid-head linear, see `src/version.rs`) and
-// `benten_core::version_chain::DagVersionChain` (DAG-shape) are the canonical
-// version-chain surfaces. The earlier crate-root `u64`-id `Anchor` +
-// `append_version` / `current_version` / `walk_versions` compatibility
-// surface (Phase-1 "simple" case) was DELETED for #1003 (refinement-audit
-// 2026-05; RATIFIED 2026-05-17 — zero non-test callers; superseded by the
-// Cid-head + DAG surfaces; CLAUDE.md rule #5 = delete dead surface, don't
-// freeze-and-shim). The DAG-shape unification of the two remaining Anchor
-// surfaces (#849) is a Phase-4-Meta D3 design item — see
-// `docs/future/phase-4-backlog.md`.
+// The post-G-CORE-5 canonical composability surface is
+// `benten_core::version_dag::VersionDag` (Phase-4-Meta-Core D3
+// unification; RATIFIED 2026-05-17; closes #849 + #1142 Anchor/u64-delete
+// half). One nominal type with an opt-in `Mode::{Strict, Dag}`; one
+// shared `VersionChain` trait; one CURRENT semantic. The two underlying
+// per-pattern implementations (`benten_core::version::Anchor` — Cid-head
+// prior-threaded linear; `benten_core::version_chain::DagVersionChain` —
+// explicit branch/merge) remain for pre-unification consumers.
+//
+// The earlier crate-root `u64`-id `Anchor` + `append_version` /
+// `current_version` / `walk_versions` compatibility surface (Phase-1
+// "simple" case) was DELETED for #1003 (refinement-audit 2026-05;
+// RATIFIED 2026-05-17 — zero non-test callers; superseded by the
+// Cid-head + DAG + unified surfaces; CLAUDE.md rule #5 = delete dead
+// surface, don't freeze-and-shim).
 // ---------------------------------------------------------------------------
 
 /// The `CURRENT` edge label — anchor → current-version Node pointer.
