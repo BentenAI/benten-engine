@@ -141,6 +141,45 @@ pub(crate) fn close_handle_adapter(handle: &mut StreamHandle) {
     handle.close();
 }
 
+/// G-CORE-10 Option-C cancellation-stopgap (#652; pre-v1 hardening
+/// per CLAUDE.md baked-in #15): poll-with-timeout variant of
+/// [`next_chunk_adapter`].
+///
+/// Returns a tri-state outcome (chunk / EOS / timeout) rather than the
+/// `Option<Buffer>` shape, so the napi `StreamHandleJs::next` body can
+/// interleave a check on `close_requested` between bounded polls —
+/// closing the race where a `close()` from JS cannot cancel a `next()`
+/// parked indefinitely inside `recv_blocking()` on the producer-bridge
+/// channel.
+///
+/// The full Option-A fix (PR-B #1203: convert `next()` to a napi-rs
+/// `AsyncTask`) is the post-Option-C target. Option-C is the
+/// cheap-and-correct stopgap that closes the cancellation hazard while
+/// keeping the sync `#[napi]` shape.
+pub(crate) enum NextChunkPollNapi {
+    /// Chunk delivered within the poll-interval; bytes carried in the
+    /// variant payload.
+    Chunk(Vec<u8>),
+    /// Producer closed the channel cleanly.
+    EndOfStream,
+    /// Neither chunk nor EOS within the poll-interval; caller should
+    /// re-poll (typically after checking a cancellation signal).
+    Timeout,
+}
+
+pub(crate) fn next_chunk_poll_adapter(
+    handle: &mut StreamHandle,
+    timeout: std::time::Duration,
+) -> napi::Result<NextChunkPollNapi> {
+    use benten_engine::NextChunkPoll;
+    match handle.next_chunk_with_timeout(timeout) {
+        Ok(NextChunkPoll::Chunk(c)) => Ok(NextChunkPollNapi::Chunk(c.bytes)),
+        Ok(NextChunkPoll::EndOfStream) => Ok(NextChunkPollNapi::EndOfStream),
+        Ok(NextChunkPoll::Timeout) => Ok(NextChunkPollNapi::Timeout),
+        Err(e) => Err(engine_err(e)),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers — JSON → Node
 // ---------------------------------------------------------------------------
