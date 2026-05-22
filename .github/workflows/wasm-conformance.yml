@@ -48,6 +48,13 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   WASMTIME_VERSION: "v26.0.1"
+  # Disk-pressure mitigation; see ci.yml env block for rationale.
+  # SANDBOX-adversarial fixture job hit `ld signal 7 (SIGBUS)` 2×
+  # consecutively on PR #1312 — same x86_64-Linux-disk-OOM root cause
+  # class as the cargo-llvm-cov + linux-x86_64 stable failures (ld
+  # mmap-truncation when intermediate temp dir runs out of disk).
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   sandbox-wasm-conformance:
@@ -56,6 +63,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Free disk space (Linux runners only)
+        # infra-disk-pressure-fix-2026-05-22: SANDBOX adversarial native-run
+        # step compiles the full benten-eval test surface; without freeing
+        # ~25-30 GB of unused tooling first, the ld step hits SIGBUS
+        # (mmap-truncation when intermediate temp dir runs out of disk).
+        # Composite action mirrors ci.yml + coverage.yml usage.
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/free-disk-space
 
       - name: Install Rust toolchain (stable + wasm32-wasip1)
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
