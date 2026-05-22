@@ -49,6 +49,7 @@
 //! - PR #199 `Engine::revoke_capability_by_grant_cid` — engine-side
 //!   adapter routes through that typed surface.
 
+use crate::module_ecosystem::{UpgradeConsentDecision, decide_upgrade_consent};
 use crate::plugin_library::{LibraryEntry, PluginLibrary};
 use crate::plugin_manifest::{
     InstallRecord, MANIFEST_CLOCK_NOT_INJECTED_SENTINEL, PluginManifest, ValidationOutcome,
@@ -616,6 +617,31 @@ pub trait CapMinter {
         plugin_did: &Did,
         scope: &str,
     ) -> Result<Cid, ErrorCode>;
+
+    /// **G-CORE-7 §4.21 + §4.35 rollback hook.**
+    ///
+    /// Revoke a previously-minted root grant by its `grant_cid`. The
+    /// install lifecycle calls this for every grant minted in Step 9
+    /// when ANY subsequent step (or a mid-Step-9 cascade entry) fails,
+    /// to leave **zero residual minted grants**.
+    ///
+    /// Production engine adapters route this to the cap-store's
+    /// per-grant-CID revocation surface (couples to Phase-3 PR #199
+    /// `Engine::revoke_capability_by_grant_cid`). The default impl is a
+    /// no-op so existing adapters compile against an additive
+    /// signature — the install lifecycle's rollback discipline is the
+    /// load-bearing surface, NOT every `CapMinter` impl.
+    ///
+    /// # Errors
+    ///
+    /// `E_INTERNAL` propagated from the adapter. The install
+    /// lifecycle's rollback loop logs but does NOT propagate errors
+    /// from individual revocations — partial-rollback is observably
+    /// captured in the cap-store's revocation log; the install itself
+    /// has already failed and surfaces its primary error.
+    fn revoke_root_grant(&mut self, _grant_cid: &Cid) -> Result<(), ErrorCode> {
+        Ok(())
+    }
 }
 
 /// Port the storage-backend adapter implements to provision the
@@ -628,6 +654,26 @@ pub trait PrivateNamespaceProvisioner {
     ///
     /// `E_INTERNAL` propagated from the adapter.
     fn provision_private_namespace(&mut self, plugin_did: &Did) -> Result<(), ErrorCode>;
+
+    /// **G-CORE-7 §4.21 rollback hook.**
+    ///
+    /// Tear down the `private:<plugin_did>:*` namespace previously
+    /// provisioned for this plugin. The install lifecycle calls this
+    /// when Step 11 (library insert) fails AFTER Step 10 (namespace
+    /// provision) succeeded — leaving the partially-provisioned
+    /// namespace in place would be observable residue.
+    ///
+    /// Default impl is a no-op so existing adapters compile against an
+    /// additive signature.
+    ///
+    /// # Errors
+    ///
+    /// `E_INTERNAL` propagated from the adapter. The install
+    /// lifecycle's rollback loop does NOT propagate errors from this
+    /// hook (same discipline as `CapMinter::revoke_root_grant`).
+    fn deprovision_private_namespace(&mut self, _plugin_did: &Did) -> Result<(), ErrorCode> {
+        Ok(())
+    }
 }
 
 /// Bundle of the engine-side ports — passed to [`install_plugin`].
@@ -849,6 +895,39 @@ where
         }
     }
 
+    // 7b. **G-CORE-7 §4.41 — caps-grew fresh-consent (e2e wiring).**
+    //
+    //    When the install is a within-lineage upgrade (`prior_installed_cid`
+    //    Some) AND the resolver returns the prior manifest, consult the
+    //    LANDED-GREEN pure decision fn `decide_upgrade_consent`:
+    //    if `ConsentRequired` (caps grew) the install record MUST carry an
+    //    explicit fresh-consent token covering the widened cap envelope.
+    //
+    //    The fresh-consent token shape: every entry in `install_record.
+    //    granted_caps_bytes` is the DAG-CBOR encoding of one
+    //    `CapRequirement`; the union of those scopes MUST be a superset
+    //    of the new manifest's `requires`. An empty `granted_caps_bytes`
+    //    (the v0 install path produces this for INITIAL installs where
+    //    the manifest_cid binding suffices) is treated as "no explicit
+    //    upgrade consent" and rejects the caps-grew upgrade with the
+    //    typed `E_PLUGIN_INSTALL_CONSENT_REQUIRED` code.
+    //
+    //    Initial installs (`prior_installed_cid = None`) skip this check
+    //    entirely — the manifest_cid binding in the user-signed
+    //    InstallRecord is itself the consent for the initial cap set.
+    //
+    //    Couples LANDED `module_ecosystem::decide_upgrade_consent` (pure
+    //    fn); the gap closed here is the production-path e2e wiring.
+    if let Some(prior_cid) = params.prior_installed_cid
+        && prior_cid != *expected_cid
+        && let Some(prior_manifest) = resolver(&prior_cid)
+        && decide_upgrade_consent(&prior_manifest, &manifest)
+            == UpgradeConsentDecision::ConsentRequired
+        && !install_record_covers_required_caps(install_record, &manifest)
+    {
+        return Err(ErrorCode::PluginInstallConsentRequired);
+    }
+
     // 8. Plugin-DID adoption (caller-mint-first contract per R6-FP-A
     //    + R6-FP-A-fp mr-1 + mr-2 BLOCKER closures).
     //
@@ -893,27 +972,58 @@ where
     }
     let plugin_did = install_record.plugin_did.clone();
 
-    // 9. Cap cascade — mint root grants from user_did → plugin_did.
-    let mut grants_minted = 0usize;
+    // 9. **G-CORE-7 §4.35 — Step-9 cap-cascade atomicity** (all-or-
+    //    nothing mint loop): track every minted grant CID; on any
+    //    mid-loop mint failure, unwind already-minted grants before
+    //    propagating the error so the cascade is observably atomic
+    //    (zero partial-grant residue).
+    let mut minted_grant_cids: Vec<Cid> = Vec::with_capacity(manifest.requires.len());
     for req in &manifest.requires {
-        ports
+        match ports
             .cap_minter
-            .mint_root_grant(params.user_did, &plugin_did, &req.scope)?;
-        grants_minted += 1;
+            .mint_root_grant(params.user_did, &plugin_did, &req.scope)
+        {
+            Ok(cid) => minted_grant_cids.push(cid),
+            Err(e) => {
+                // §4.35 unwind: revoke every grant minted earlier in
+                // this same mint-loop. Revocation errors are observed
+                // in the cap-store's revocation log; the primary
+                // failure is the mint error which we propagate.
+                rollback_step9(ports.cap_minter, &minted_grant_cids);
+                return Err(e);
+            }
+        }
+    }
+    let grants_minted = minted_grant_cids.len();
+
+    // 10. Provision private namespace. **G-CORE-7 §4.21** — if this
+    //     fails, the Step-9 grants are stranded under the current HEAD
+    //     impl; the fix is to unwind them before propagating the error.
+    if let Err(e) = ports.private_ns.provision_private_namespace(&plugin_did) {
+        rollback_step9(ports.cap_minter, &minted_grant_cids);
+        return Err(e);
     }
 
-    // 10. Provision private namespace.
-    ports.private_ns.provision_private_namespace(&plugin_did)?;
-
-    // 11. Insert into library + set active reference.
+    // 11. Insert into library + set active reference. **G-CORE-7 §4.21**
+    //     — `set_active` can fail (e.g. unknown-plugin-name race); on
+    //     failure unwind BOTH Step-9 grants AND Step-10 namespace
+    //     provision, AND remove the just-inserted library entry, so the
+    //     install_plugin call leaves no observable residue.
     let entry = LibraryEntry {
         manifest_cid: *expected_cid,
         manifest: manifest.clone(),
-        plugin_did,
+        plugin_did: plugin_did.clone(),
         installed_at_nanos,
     };
     library.insert(entry.clone());
-    library.set_active(&manifest.plugin_name, *expected_cid)?;
+    if let Err(e) = library.set_active(&manifest.plugin_name, *expected_cid) {
+        // Step-11b rollback: remove the just-inserted entry, deprovision
+        // the namespace, unwind the Step-9 grant cascade.
+        library.remove(expected_cid);
+        let _ = ports.private_ns.deprovision_private_namespace(&plugin_did);
+        rollback_step9(ports.cap_minter, &minted_grant_cids);
+        return Err(e);
+    }
 
     Ok(InstallOutcome {
         entry,
@@ -921,6 +1031,43 @@ where
         grants_minted,
         private_namespace_provisioned: true,
     })
+}
+
+/// **G-CORE-7 §4.21 + §4.35 helper** — unwind every Step-9 minted
+/// grant. Revocation errors are deliberately swallowed (the install
+/// has already failed; the cap-store's own revocation log captures any
+/// partial-rollback failures); see the `revoke_root_grant` doc comment
+/// for the discipline narrative.
+fn rollback_step9<M: CapMinter + ?Sized>(minter: &mut M, minted: &[Cid]) {
+    for cid in minted {
+        let _ = minter.revoke_root_grant(cid);
+    }
+}
+
+/// **G-CORE-7 §4.41 helper** — whether the install record's
+/// `granted_caps_bytes` set covers every scope in the new manifest's
+/// `requires`. Each entry of `granted_caps_bytes` is the DAG-CBOR
+/// encoding of one [`crate::plugin_manifest::CapRequirement`]; an entry
+/// that fails to decode is treated as un-coverage (fail-closed —
+/// malformed consent tokens MUST NOT smuggle un-consented caps).
+fn install_record_covers_required_caps(record: &InstallRecord, manifest: &PluginManifest) -> bool {
+    use crate::plugin_manifest::CapRequirement;
+    let mut consented: HashSet<String> = HashSet::with_capacity(record.granted_caps_bytes.len());
+    for bytes in &record.granted_caps_bytes {
+        match serde_ipld_dagcbor::from_slice::<CapRequirement>(bytes) {
+            Ok(req) => {
+                consented.insert(req.scope);
+            }
+            Err(_) => {
+                // Malformed consent token → un-coverage. Fail closed.
+                return false;
+            }
+        }
+    }
+    manifest
+        .requires
+        .iter()
+        .all(|req| consented.contains(&req.scope))
 }
 
 /// Substantive in-memory default for the install-side cascade ports.
@@ -981,11 +1128,25 @@ impl CapMinter for InMemoryInstallCascade {
             .push((user_did.clone(), plugin_did.clone(), scope.to_string(), cid));
         Ok(cid)
     }
+
+    /// G-CORE-7 §4.21 + §4.35 rollback observable: drop the entry for
+    /// `grant_cid` from `minted_grants` so `minted_grants().len()` is
+    /// the correct post-rollback observable.
+    fn revoke_root_grant(&mut self, grant_cid: &Cid) -> Result<(), ErrorCode> {
+        self.minted_grants.retain(|(_, _, _, cid)| cid != grant_cid);
+        Ok(())
+    }
 }
 
 impl PrivateNamespaceProvisioner for InMemoryInstallCascade {
     fn provision_private_namespace(&mut self, plugin_did: &Did) -> Result<(), ErrorCode> {
         self.provisioned_namespaces.insert(plugin_did.clone());
+        Ok(())
+    }
+
+    /// G-CORE-7 §4.21 rollback observable for the Step-11 fail-path.
+    fn deprovision_private_namespace(&mut self, plugin_did: &Did) -> Result<(), ErrorCode> {
+        self.provisioned_namespaces.remove(plugin_did);
         Ok(())
     }
 }

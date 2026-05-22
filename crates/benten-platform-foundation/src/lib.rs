@@ -100,9 +100,10 @@ pub use materializer::{
 };
 
 pub use plugin_manifest::{
-    CapRequirement, ContentAddressed, InstallRecord, PluginManifest, RendererBackend,
-    RendererConfig, RotatedKeyWarning, SharesPolicy, SharesPolicyDefault, SharesRule, SharesTarget,
-    ValidationOutcome, sign_manifest,
+    CapRequirement, ContentAddressed, InstallRecord, PluginManifest, ProvenanceOutcome,
+    RendererBackend, RendererConfig, RotatedKeyWarning, SharesPolicy, SharesPolicyDefault,
+    SharesRule, SharesTarget, ValidationOutcome, sign_manifest,
+    verify_schema_provenance_with_trust_list,
 };
 
 // G23-A schema_compiler canary public surface — the entry-point
