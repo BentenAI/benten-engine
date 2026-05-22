@@ -1,7 +1,7 @@
 //! Phase-4-Meta-Core — ADDL R3 (TDD red-phase) — R3-W4 / G-CORE-8 / §8-E —
 //! `CapabilityPolicy` SEALED-DISCIPLINE compile-test pin (§1.A.FROZEN
-//! item 11 — CapabilityPolicy sealed for v1; on-surface per CLAUDE.md
-//! baked-in #7 sealed-discipline refinement).
+//! item 8 — benten-caps v1-API forks; sealed-discipline carrier per
+//! CLAUDE.md baked-in #7 sealed-discipline refinement).
 //!
 //! ## RED-PHASE — un-ignore at G-CORE-8
 //!
