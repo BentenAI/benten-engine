@@ -43,6 +43,13 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Disk-pressure mitigation; see ci.yml env block for rationale.
+  # `cargo-llvm-cov` is the highest-risk job for x86_64 disk-OOM because
+  # the instrumented build doubles target/ size (LLVM coverage profiling
+  # writes parallel .profraw + instrumented binaries). PR #1312 hit
+  # `No space left on device` 2× consecutively here.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   coverage:
