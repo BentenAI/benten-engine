@@ -596,9 +596,9 @@ impl<'a> Parser<'a> {
                 // pushing char-by-char. `i64::from_str` and `f64::from_str`
                 // both accept `&str`. Removes 1 `String` allocation + N
                 // realloc-grow steps per numeric literal. Same pattern as
-                // `parse_identifier` (line 638) + `read_until_balanced`
-                // (line 682). `parse_string` is intentionally NOT migrated
-                // because it would have to handle quote-escapes.
+                // `Parser::parse_identifier` + `Parser::read_until_balanced`.
+                // `parse_string` is intentionally NOT migrated because it
+                // would have to handle quote-escapes.
                 let start = self.pos;
                 if c == '-' {
                     self.advance();
@@ -773,26 +773,14 @@ impl<'a> Parser<'a> {
         Ok(self.src[start..self.pos].to_string())
     }
 
-    fn parse_err(&self, message: String) -> CompileError {
-        CompileError::Parse(Diagnostic {
-            error_code: E_DSL_PARSE_ERROR,
-            message,
-            line: Some(self.line),
-            column: Some(self.column),
-        })
-    }
-
-    /// #760 closure: span-anchored variant of [`Self::parse_err`]. Use this
-    /// when the offending source span starts BEFORE the current cursor
-    /// position (i.e. the parser already consumed the token whose start the
-    /// diagnostic should point at). Callers capture `(self.line, self.column)`
-    /// BEFORE the consume-step and pass the captured pair here so the
-    /// diagnostic's `line` / `column` mark the offending span's *start*
-    /// rather than the post-token cursor. `parse_identifier` (line 638-656)
-    /// and `parse_primitive` (line 367-368) already used the same pattern
-    /// via per-site `Diagnostic { line: Some(start_line), column: Some(start_col), ... }`
-    /// constructs; this helper centralises it for the other 10 callsites
-    /// that were emitting post-token cursor positions.
+    /// #760 closure: span-anchored parse-error constructor. All parse-error
+    /// callsites use this — callers capture `(self.line, self.column)` BEFORE
+    /// the consume-step and pass the captured pair here so the diagnostic's
+    /// `line` / `column` mark the offending span's *start* rather than the
+    /// post-token cursor. `Parser::parse_identifier` and `Parser::parse_primitive`
+    /// already used the same pattern via per-site `Diagnostic { line: Some(start_line), column: Some(start_col), ... }`
+    /// constructs; this helper centralises it for the other 10 callsites that
+    /// were emitting post-token cursor positions.
     fn parse_err_at(&self, line: u32, column: u32, message: String) -> CompileError {
         CompileError::Parse(Diagnostic {
             error_code: E_DSL_PARSE_ERROR,

@@ -45,7 +45,7 @@ Net shape: the compiler is a leaf consumer of `benten-core` and a sibling-not-pa
 
 There is one file.
 
-**`src/lib.rs` (894 lines)** — the entire crate. Logical sections, in order of appearance:
+**`src/lib.rs` (1344 lines, post-G-CORE-DSL chunk-2)** — the entire crate. Logical sections, in order of appearance:
 
 - **Crate-level docs (lines 1-83):** scope note, dep-direction reminder, the EBNF-shaped grammar block, and the deliberate-non-extensibility note. The grammar block is the canonical reference for what tokens the parser accepts; everything below this comment should be implementing that grammar and nothing more.
 - **Public surface (lines 98-218):** `CompiledSubgraph`, `CompiledPrimitive`, `compile_str`, `compile_file`, `CompileError`, `Diagnostic`. The two functions are thin: trim-check, hand off to `Parser`, hand off to `emit`. All the complexity lives in `Parser` and `emit`.
