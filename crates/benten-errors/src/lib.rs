@@ -152,6 +152,16 @@ pub enum ErrorCode {
     /// the snapshot-blob `SchemaVersion` posture. Absence of the envelope
     /// is NOT this code — a pre-envelope file is implied-v1.
     GraphSchemaVersionMismatch,
+    /// G-CORE-6b (Phase 4-Meta-Core, 2026-05-23): a decoded
+    /// `benten_graph::backends::snapshot_blob::SnapshotBlob` declared a
+    /// `schema_version` this build does not understand (the v1→v2 P-III
+    /// bump is the inaugural mismatch). Lifted from
+    /// `SnapshotBlobError::SchemaVersion` so callers can match the
+    /// specific cross-version mismatch class without conflating it with
+    /// the generic `Serialize` decode-failure family (the prior mapping
+    /// hid the distinction). Mirrors `GraphSchemaVersionMismatch` for
+    /// the snapshot-blob surface.
+    SnapshotBlobSchemaVersionMismatch,
     /// DAG-CBOR serialization failure at the hash path (e.g. encoder
     /// integer-overflow). Distinct from the catalog's registration-time
     /// invariants; the payload is a human-readable message held on the
@@ -1263,6 +1273,9 @@ impl ErrorCode {
             ErrorCode::Serialize => "E_SERIALIZE",
             ErrorCode::GraphInternal => "E_GRAPH_INTERNAL",
             ErrorCode::GraphSchemaVersionMismatch => "E_GRAPH_SCHEMA_VERSION_MISMATCH",
+            ErrorCode::SnapshotBlobSchemaVersionMismatch => {
+                "E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH"
+            }
             ErrorCode::DuplicateHandler => "E_DUPLICATE_HANDLER",
             ErrorCode::NoCapabilityPolicyConfigured => "E_NO_CAPABILITY_POLICY_CONFIGURED",
             ErrorCode::ProductionRequiresCaps => "E_PRODUCTION_REQUIRES_CAPS",
@@ -1574,6 +1587,7 @@ impl ErrorCode {
             ErrorCode::NotFound
             | ErrorCode::BackendNotFound
             | ErrorCode::GraphSchemaVersionMismatch
+            | ErrorCode::SnapshotBlobSchemaVersionMismatch
             | ErrorCode::HostNotFound
             | ErrorCode::VersionUnknownPrior
             | ErrorCode::UnknownView
@@ -2005,6 +2019,9 @@ impl core::str::FromStr for ErrorCode {
             "E_SERIALIZE" => ErrorCode::Serialize,
             "E_GRAPH_INTERNAL" => ErrorCode::GraphInternal,
             "E_GRAPH_SCHEMA_VERSION_MISMATCH" => ErrorCode::GraphSchemaVersionMismatch,
+            "E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH" => {
+                ErrorCode::SnapshotBlobSchemaVersionMismatch
+            }
             "E_DUPLICATE_HANDLER" => ErrorCode::DuplicateHandler,
             "E_NO_CAPABILITY_POLICY_CONFIGURED" => ErrorCode::NoCapabilityPolicyConfigured,
             "E_PRODUCTION_REQUIRES_CAPS" => ErrorCode::ProductionRequiresCaps,

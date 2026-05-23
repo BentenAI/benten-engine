@@ -41,6 +41,9 @@ fn one_node_blob() -> SnapshotBlob {
         anchor_cid: None,
         nodes,
         system_zone_index: BTreeMap::new(),
+        // v2 (G-CORE-6b): §8-B MerkleRangeProof root hook; None for
+        // pre-§8-B-materializer fixtures.
+        merkle_root: None,
     }
 }
 

@@ -76,6 +76,7 @@ export const CATALOG_CODES = [
   "E_NOT_FOUND",
   "E_GRAPH_INTERNAL",
   "E_GRAPH_SCHEMA_VERSION_MISMATCH",
+  "E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH",
   "E_UNKNOWN",
   "E_DUPLICATE_HANDLER",
   "E_NO_CAPABILITY_POLICY_CONFIGURED",
@@ -857,6 +858,21 @@ export class EGraphSchemaVersionMismatch extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_GRAPH_SCHEMA_VERSION_MISMATCH", "Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1 (the 5-prefix layout that predates the envelope). Fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration. #992 (refinement-audit-2026-05 wire-format cluster).", message, context);
     this.name = "EGraphSchemaVersionMismatch";
+  }
+}
+
+/**
+ * E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH
+ *
+ * Thrown at: `SnapshotBlobBackend::from_bytes` / `from_bytes_with_cap` (`crates/benten-graph/src/backends/snapshot_blob.rs`) + lifted through `Engine::from_snapshot_blob` (`crates/benten-engine/src/engine_snapshot.rs`).
+ * Message template: "snapshot-blob schema mismatch: this build expects version {expected}, blob declared version {actual}"
+ */
+export class ESnapshotBlobSchemaVersionMismatch extends BentenError {
+  static readonly code = "E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH";
+  static readonly fixHint = "Stable code for `SnapshotBlobError::SchemaVersion` — a decoded `benten_graph::backends::snapshot_blob::SnapshotBlob` declared a `schema_version` this build does not understand. Lifted from the prior catch-all `E_SERIALIZE` mapping at G-CORE-6b (Phase 4-Meta-Core, 2026-05-23) so callers can match the cross-version mismatch class specifically without conflating it with the generic decode-failure family. Mirrors `E_GRAPH_SCHEMA_VERSION_MISMATCH` for the snapshot-blob surface. The G-CORE-6b R5 wave (Ben-authorized autonomously per no-users-yet) landed the inaugural `1→2` bump — v2 added `merkle_root: Option<Cid>` as the §8-B mode-(b) MerkleRangeProof hook. Fires when a v1 reader sees a v2 blob (or v2 reader sees a v1 blob) — both directions strict-reject rather than silently mis-decoding. Use a build whose `SNAPSHOT_BLOB_SCHEMA_VERSION` matches the blob.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH", "Stable code for `SnapshotBlobError::SchemaVersion` — a decoded `benten_graph::backends::snapshot_blob::SnapshotBlob` declared a `schema_version` this build does not understand. Lifted from the prior catch-all `E_SERIALIZE` mapping at G-CORE-6b (Phase 4-Meta-Core, 2026-05-23) so callers can match the cross-version mismatch class specifically without conflating it with the generic decode-failure family. Mirrors `E_GRAPH_SCHEMA_VERSION_MISMATCH` for the snapshot-blob surface. The G-CORE-6b R5 wave (Ben-authorized autonomously per no-users-yet) landed the inaugural `1→2` bump — v2 added `merkle_root: Option<Cid>` as the §8-B mode-(b) MerkleRangeProof hook. Fires when a v1 reader sees a v2 blob (or v2 reader sees a v1 blob) — both directions strict-reject rather than silently mis-decoding. Use a build whose `SNAPSHOT_BLOB_SCHEMA_VERSION` matches the blob.", message, context);
+    this.name = "ESnapshotBlobSchemaVersionMismatch";
   }
 }
 
@@ -2937,6 +2953,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_NOT_FOUND": ENotFound,
   "E_GRAPH_INTERNAL": EGraphInternal,
   "E_GRAPH_SCHEMA_VERSION_MISMATCH": EGraphSchemaVersionMismatch,
+  "E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH": ESnapshotBlobSchemaVersionMismatch,
   "E_UNKNOWN": EUnknown,
   "E_DUPLICATE_HANDLER": EDuplicateHandler,
   "E_NO_CAPABILITY_POLICY_CONFIGURED": ENoCapabilityPolicyConfigured,

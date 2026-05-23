@@ -436,6 +436,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** redb backend open (`RedbBackend::open_existing` / `open_or_create`)
 - **Phase:** 4-Meta (pre-v1 wire-format freeze)
 
+### E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH
+
+- **Message:** "snapshot-blob schema mismatch: this build expects version {expected}, blob declared version {actual}"
+- **Context:** `{ expected: number, actual: number }`
+- **Fix:** Stable code for `SnapshotBlobError::SchemaVersion` — a decoded `benten_graph::backends::snapshot_blob::SnapshotBlob` declared a `schema_version` this build does not understand. Lifted from the prior catch-all `E_SERIALIZE` mapping at G-CORE-6b (Phase 4-Meta-Core, 2026-05-23) so callers can match the cross-version mismatch class specifically without conflating it with the generic decode-failure family. Mirrors `E_GRAPH_SCHEMA_VERSION_MISMATCH` for the snapshot-blob surface. The G-CORE-6b R5 wave (Ben-authorized autonomously per no-users-yet) landed the inaugural `1→2` bump — v2 added `merkle_root: Option<Cid>` as the §8-B mode-(b) MerkleRangeProof hook. Fires when a v1 reader sees a v2 blob (or v2 reader sees a v1 blob) — both directions strict-reject rather than silently mis-decoding. Use a build whose `SNAPSHOT_BLOB_SCHEMA_VERSION` matches the blob.
+- **Thrown at:** `SnapshotBlobBackend::from_bytes` / `from_bytes_with_cap` (`crates/benten-graph/src/backends/snapshot_blob.rs`) + lifted through `Engine::from_snapshot_blob` (`crates/benten-engine/src/engine_snapshot.rs`).
+- **Phase:** 4-Meta-Core G-CORE-6b (v1→v2 SnapshotBlob schema bump; P-III Ben-authorized autonomously per no-users-yet)
+
 ### E_UNKNOWN
 
 - **Message:** "Unknown error code (forward-compat fallback)"
