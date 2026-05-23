@@ -1,7 +1,7 @@
 //! `benten-dsl-compiler` — Phase-2b DSL-text → `Subgraph` compiler.
 //!
 //! **MINIMAL-FOR-DEVSERVER scope** per `r1-architect-reviewer.json` (G12-B-scope):
-//! ~900 LOC, 7 public items intended for `tools/benten-dev` (the literal LOC
+//! ~900 LOC, 9 public items intended for `tools/benten-dev` (the literal LOC
 //! ceiling drifted from the original ~200-400 framing as the parser + the
 //! Phase-3 R6 `validate_shapes` pass + the 12-primitive dispatch landed; the
 //! spirit-of-the-rule — one source file, narrow surface, no engine/eval/graph
@@ -14,6 +14,18 @@
 //! 5. [`CompiledSubgraph`] — canonical [`Subgraph`] + per-primitive list.
 //! 6. [`CompiledPrimitive`] — one primitive declaration for introspection.
 //! 7. [`PrimitiveKind`] — re-export so consumers need no transitive `benten-core` dep.
+//! 8. [`Span`] — half-open `[start_offset, end_offset)` byte-span carrying
+//!    `(start_line, start_column, end_line, end_column)` for [`Diagnostic`]
+//!    (G-CORE-DSL chunk-3, #1000 closure).
+//! 9. [`CompileError::error_code`] — boundary helper resolving each variant to
+//!    its stable `E_DSL_*` code string (G-CORE-DSL chunk-3, #839 closure).
+//!
+//! In addition, the narrow surface includes a small set of stable `E_DSL_*`
+//! code-string `pub const`s — [`MAX_SOURCE_LEN`], [`E_DSL_PARSE_ERROR`],
+//! [`E_DSL_UNKNOWN_PRIMITIVE`], [`E_DSL_MISSING_RESPOND`],
+//! [`E_DSL_INVALID_SHAPE`], [`E_DSL_IO_ERROR`], [`E_DSL_BACKEND_REJECTED`] —
+//! that mirror the [`benten_errors::ErrorCode`] catalog at this crate's
+//! boundary (the §3.5g cross-language atomic-mirror seam).
 //!
 //! Everything else is `pub(crate)`. Surface stability is intentionally narrow
 //! so `cargo-public-api` baseline locked at G6 first push does not freeze
