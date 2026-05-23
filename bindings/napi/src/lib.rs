@@ -1987,9 +1987,9 @@ mod napi_surface {
     /// across the napi boundary. The TS wrapper renders this class as
     /// `AsyncIterable<Buffer>` with an explicit `close()` method.
     ///
-    /// Each `next()` call drains one chunk, returning either
-    /// `Buffer | null` (`null` ⇒ end-of-stream). Errors surface as
-    /// thrown napi errors.
+    /// Each `next()` call drains one chunk, returning a
+    /// `Promise<Buffer | null>` (`null` ⇒ end-of-stream). Errors surface
+    /// as Promise rejections carrying typed napi errors.
     ///
     /// Production runtime (post wave-8c-stream-infra): `next()` from
     /// a handle constructed via `engine.callStream` / `engine.openStream`
@@ -2001,55 +2001,70 @@ mod napi_surface {
     /// drain pre-populated chunk vectors for unit tests that don't
     /// need a live producer.
     ///
-    /// # G-CORE-10 Option-C cancellation-stopgap (2026-05-22; #652;
-    /// pre-v1 hardening per CLAUDE.md baked-in #15)
+    /// # G-CORE-10 PR-B AsyncTask migration (#1203; #652)
     ///
-    /// The state shape is **split** so `close()` from JS does not have
-    /// to wait on the same lock `next()` holds across an in-flight
-    /// engine-side `recv_blocking` call. Four sibling pieces:
+    /// `next()` is a napi-rs v3 `AsyncTask`: the body runs on the libuv
+    /// worker thread pool (NOT the JS main thread), freeing the event
+    /// loop to dispatch unrelated timers / I/O / setImmediate callbacks
+    /// while the producer-bridge recv is parked. This closes the libuv-
+    /// non-starvation hazard that the prior sync `#[napi]` shape carried
+    /// (every blocking `recv_blocking()` froze the JS thread).
+    ///
+    /// State shape (Arc-shared between the napi class + every in-flight
+    /// `NextChunkTask`):
     ///
     /// - `handle: std::sync::Mutex<Option<StreamHandle>>` — the engine
-    ///   handle; held by `next()` for one poll-iteration. Inside
-    ///   `next()` we use a bounded
-    ///   [`benten_engine::StreamHandle::next_chunk_with_timeout`] poll
-    ///   (50 ms) and check the close-signal between polls.
-    /// - `close_requested: AtomicBool` — set synchronously by `close()`
-    ///   without acquiring the handle lock. `next()` checks it on each
-    ///   poll iteration and bails out cleanly when set.
-    /// - `seq_so_far_cached: AtomicI64` / `is_drained_cached: AtomicBool`
+    ///   handle; held by the AsyncTask `compute()` body for one poll-
+    ///   iteration at a time. `close()` acquires it via `try_lock` so
+    ///   `close()` never blocks behind an in-flight `next()`.
+    /// - `close_requested: AtomicBool` — cancellation signal. Set
+    ///   synchronously by `close()` without acquiring the handle lock;
+    ///   the AsyncTask `compute()` body observes it between polls.
+    ///   napi-rs's built-in `AbortSignal` only aborts STILL-QUEUED
+    ///   tasks; an in-flight `compute()` cannot be force-cancelled by
+    ///   the runtime, so the body must voluntarily poll for
+    ///   cancellation. `close_requested` is that voluntary signal.
+    /// - `is_drained_cached: AtomicBool` / `seq_so_far_cached: AtomicI64`
     ///   / `requires_explicit_close_cached: bool` — fast-path read
     ///   accessors (no handle lock; no contention with an in-flight
-    ///   `next()`).
+    ///   `next()` AsyncTask).
     ///
-    /// This closes the #652 cancellation hazard where the bare
-    /// `Mutex<Option<StreamHandle>>` held across `recv_blocking()`
-    /// meant a JS-side `close()` had to park indefinitely waiting on
-    /// the in-flight `next()`'s lock. The full Option-A fix (PR-B
-    /// #1203: convert `next()` to napi-rs `AsyncTask`) is the
-    /// post-stopgap target; Option-C is the cheap correctness-first
-    /// stopgap that closes the cancellation race without changing the
-    /// sync `#[napi]` shape.
+    /// # Cancellation contract (PR-B vs Option-C)
+    ///
+    /// PR-B inherits Option-C's cancellation contract (`close()` sets
+    /// `close_requested`; the in-flight body observes it within ~one
+    /// poll-interval and returns `null` cleanly) AND adds the libuv-
+    /// non-starvation property. The Mutex + AtomicBool stay because
+    /// napi-rs AsyncTask cannot force-cancel an in-flight `compute()`;
+    /// the voluntary-poll signal remains the load-bearing #652 closure
+    /// and is the equivalent of the AsyncTask "abort handle".
     #[napi]
     pub struct StreamHandleJs {
-        /// Engine handle. Held by `next()` for the duration of one
-        /// poll-loop iteration (≤ poll-interval; default 50ms via
-        /// [`STREAM_NEXT_POLL_INTERVAL`]). `close()` acquires this
-        /// lock via `try_lock` only, so `close()` never blocks. When
-        /// `try_lock` fails (an in-flight `next()` holds the lock),
-        /// the close-signal alone is sufficient: the next poll
-        /// iteration of `next()` observes `close_requested` and
-        /// calls `close_handle_adapter` itself before returning.
+        /// Shared state — held by both the JS class + every in-flight
+        /// `NextChunkTask` (AsyncTask).
+        state: Arc<StreamHandleSharedState>,
+    }
+
+    /// Shared state of a [`StreamHandleJs`] — referenced by the napi
+    /// class AND by every in-flight `NextChunkTask` AsyncTask. The Arc
+    /// ensures the engine handle outlives both the JS class drop AND
+    /// any pending AsyncTask still running on the libuv thread pool.
+    pub(crate) struct StreamHandleSharedState {
+        /// Engine handle. Held by the AsyncTask `compute()` body for
+        /// one poll-iteration at a time (≤ poll-interval; default 50ms
+        /// via [`STREAM_NEXT_POLL_INTERVAL`]). `close()` acquires this
+        /// lock via `try_lock` only, so `close()` never blocks.
         handle: std::sync::Mutex<Option<benten_engine::StreamHandle>>,
-        /// G-CORE-10 Option-C close-signal. Set synchronously by JS
-        /// `close()` without waiting on the handle lock. Checked by
-        /// every poll iteration of `next()`; when set, `next()`
-        /// observes it on the next 50ms boundary and returns `null`.
+        /// Cancellation signal. Set synchronously by JS `close()`
+        /// without waiting on the handle lock. Polled by the in-flight
+        /// AsyncTask `compute()` body; when observed, the body closes
+        /// the engine handle inline and returns `null`.
         close_requested: AtomicBool,
-        /// Fast-path cached `is_drained` flag. Updated by `next()`
-        /// when EOS is observed + by `close()` (sync, lock-free).
+        /// Fast-path cached `is_drained` flag. Updated by the AsyncTask
+        /// `compute()` body on EOS + by `close()` (sync, lock-free).
         is_drained_cached: AtomicBool,
-        /// Fast-path cached `seq_so_far` counter. Bumped by `next()`
-        /// after each successful chunk delivery.
+        /// Fast-path cached `seq_so_far` counter. Bumped by the
+        /// AsyncTask body after each successful chunk delivery.
         seq_so_far_cached: AtomicI64,
         /// Cached `requires_explicit_close` flag — immutable for the
         /// handle's lifetime (set once at engine-side construction).
@@ -2062,20 +2077,23 @@ mod napi_surface {
             let initial_drained = handle.is_drained();
             let initial_seq = i64::try_from(handle.seq_so_far()).unwrap_or(i64::MAX);
             Self {
-                handle: std::sync::Mutex::new(Some(handle)),
-                close_requested: AtomicBool::new(false),
-                is_drained_cached: AtomicBool::new(initial_drained),
-                seq_so_far_cached: AtomicI64::new(initial_seq),
-                requires_explicit_close_cached: requires_explicit_close,
+                state: Arc::new(StreamHandleSharedState {
+                    handle: std::sync::Mutex::new(Some(handle)),
+                    close_requested: AtomicBool::new(false),
+                    is_drained_cached: AtomicBool::new(initial_drained),
+                    seq_so_far_cached: AtomicI64::new(initial_seq),
+                    requires_explicit_close_cached: requires_explicit_close,
+                }),
             }
         }
     }
 
-    /// G-CORE-10 Option-C: poll interval for the bounded
-    /// `next_chunk_with_timeout` loop inside `StreamHandleJs::next`.
-    /// Short enough that a JS `close()` is observed within ~one
-    /// interval of being set; long enough that we don't churn the
-    /// producer-bridge mutex / SharedChannel condvar excessively.
+    /// G-CORE-10 PR-B: poll interval for the bounded
+    /// `next_chunk_with_timeout` loop inside the [`NextChunkTask`]
+    /// AsyncTask `compute()` body. Short enough that a JS `close()`
+    /// is observed within ~one interval of being set; long enough
+    /// that we don't churn the producer-bridge mutex / SharedChannel
+    /// condvar excessively.
     ///
     /// 50ms is the same order-of-magnitude as napi-rs's libuv worker
     /// scheduling latency; lowering it past ~10ms would not perceptibly
@@ -2085,60 +2103,69 @@ mod napi_surface {
     /// cancellation within ~50ms of `close()` setting the signal.
     const STREAM_NEXT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-    #[napi]
-    impl StreamHandleJs {
-        /// Pull the next chunk. Returns `null` at end-of-stream.
-        ///
-        /// Throws if the stream has been closed and drained, or if the
-        /// underlying executor surfaces a typed error.
-        ///
-        /// # G-CORE-10 Option-C cancellation-stopgap
-        ///
-        /// Internally uses a bounded poll-loop
-        /// ([`benten_engine::StreamHandle::next_chunk_with_timeout`]
-        /// with [`STREAM_NEXT_POLL_INTERVAL`] = 50ms) so a concurrent
-        /// JS `close()` is observed within ~one poll interval. Before
-        /// each poll iteration we check `close_requested`; if set we
-        /// close the handle inline and return `null` cleanly.
-        #[napi]
-        pub fn next(&self) -> napi::Result<Option<Buffer>> {
+    /// G-CORE-10 PR-B (#1203): AsyncTask backing
+    /// [`StreamHandleJs::next`]. The `compute()` body runs on the
+    /// libuv worker thread pool (NOT the JS main thread), so the JS
+    /// event loop stays free to dispatch unrelated timers / I/O /
+    /// setImmediate callbacks while the producer-bridge recv is
+    /// parked. This is the libuv-non-starvation property PR-B delivers
+    /// over the pre-PR-B sync `#[napi]` shape.
+    ///
+    /// Cancellation: `compute()` polls
+    /// `state.close_requested` between bounded
+    /// `next_chunk_with_timeout` waits and bails out cleanly when
+    /// observed. napi-rs's built-in `AbortSignal` only aborts STILL-
+    /// QUEUED tasks (not an in-flight `compute()`), so the voluntary
+    /// poll signal is the load-bearing in-flight cancellation path.
+    pub struct NextChunkTask {
+        state: Arc<StreamHandleSharedState>,
+    }
+
+    impl Task for NextChunkTask {
+        type Output = Option<Vec<u8>>;
+        type JsValue = Option<Buffer>;
+
+        fn compute(&mut self) -> napi::Result<Self::Output> {
+            let state = &*self.state;
             // Fast-path: close already requested before we acquire the
-            // lock. Return null without disturbing the handle.
-            if self.close_requested.load(Ordering::SeqCst) {
-                if let Ok(mut g) = self.handle.try_lock()
+            // handle lock. Return null without disturbing the handle.
+            if state.close_requested.load(Ordering::SeqCst) {
+                if let Ok(mut g) = state.handle.try_lock()
                     && let Some(h) = g.as_mut()
                 {
                     close_handle_adapter(h);
-                    self.is_drained_cached.store(true, Ordering::SeqCst);
+                    state.is_drained_cached.store(true, Ordering::SeqCst);
                 }
                 return Ok(None);
             }
-            let mut g = self.handle.lock().map_err(|_| {
+            let mut g = state.handle.lock().map_err(|_| {
                 napi::Error::new(
                     Status::GenericFailure,
                     "StreamHandle: internal lock poisoned",
                 )
             })?;
             let Some(handle) = g.as_mut() else {
-                self.is_drained_cached.store(true, Ordering::SeqCst);
+                state.is_drained_cached.store(true, Ordering::SeqCst);
                 return Ok(None);
             };
             // Poll-loop with bounded waits, interleaved with
-            // close_requested checks.
+            // close_requested checks. Runs on libuv worker pool — the
+            // JS event loop is NOT blocked while this body sits in a
+            // recv_blocking() inside next_chunk_with_timeout.
             loop {
-                if self.close_requested.load(Ordering::SeqCst) {
+                if state.close_requested.load(Ordering::SeqCst) {
                     close_handle_adapter(handle);
-                    self.is_drained_cached.store(true, Ordering::SeqCst);
+                    state.is_drained_cached.store(true, Ordering::SeqCst);
                     return Ok(None);
                 }
                 match next_chunk_poll_adapter(handle, STREAM_NEXT_POLL_INTERVAL)? {
                     NextChunkPollNapi::Chunk(bytes) => {
                         let new_seq = i64::try_from(handle.seq_so_far()).unwrap_or(i64::MAX);
-                        self.seq_so_far_cached.store(new_seq, Ordering::SeqCst);
-                        return Ok(Some(Buffer::from(bytes)));
+                        state.seq_so_far_cached.store(new_seq, Ordering::SeqCst);
+                        return Ok(Some(bytes));
                     }
                     NextChunkPollNapi::EndOfStream => {
-                        self.is_drained_cached.store(true, Ordering::SeqCst);
+                        state.is_drained_cached.store(true, Ordering::SeqCst);
                         return Ok(None);
                     }
                     NextChunkPollNapi::Timeout => {
@@ -2150,37 +2177,75 @@ mod napi_surface {
             }
         }
 
+        fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
+            Ok(output.map(Buffer::from))
+        }
+    }
+
+    #[napi]
+    impl StreamHandleJs {
+        /// Pull the next chunk. Resolves to `null` at end-of-stream.
+        ///
+        /// The returned `Promise` rejects with a typed napi error if
+        /// the underlying executor surfaces a typed error.
+        ///
+        /// # G-CORE-10 PR-B AsyncTask migration (#1203; #652)
+        ///
+        /// Returns an `AsyncTask<NextChunkTask>` — the producer-bridge
+        /// poll-loop runs on the libuv worker thread pool (NOT the JS
+        /// main thread), so the JS event loop stays free to dispatch
+        /// unrelated timers / I/O / setImmediate callbacks while this
+        /// `next()` is parked in `recv_blocking()`.
+        ///
+        /// Cancellation: a concurrent JS `close()` is observed within
+        /// ~one poll-interval (default 50ms via
+        /// [`STREAM_NEXT_POLL_INTERVAL`]) and the Promise resolves
+        /// with `null` cleanly. napi-rs's built-in `AbortSignal` only
+        /// aborts STILL-QUEUED tasks (an in-flight `compute()` cannot
+        /// be force-cancelled by the runtime), so the
+        /// `close_requested` poll is the load-bearing in-flight
+        /// cancellation signal.
+        #[napi(ts_return_type = "Promise<Buffer | null>")]
+        pub fn next(&self) -> AsyncTask<NextChunkTask> {
+            AsyncTask::new(NextChunkTask {
+                state: Arc::clone(&self.state),
+            })
+        }
+
         /// Explicitly close the handle. Idempotent. Once closed, all
-        /// subsequent `next()` calls return `null`.
+        /// subsequent `next()` Promises resolve with `null`.
         ///
-        /// # G-CORE-10 Option-C cancellation-stopgap (#652)
+        /// # G-CORE-10 PR-B (#652)
         ///
-        /// **Non-blocking**: synchronously sets `close_requested` +
-        /// `is_drained_cached` without waiting on the handle lock.
+        /// **Non-blocking + sync**: synchronously sets `close_requested`
+        /// + `is_drained_cached` without waiting on the handle lock.
         /// Then **opportunistically** tries `try_lock` on the engine
         /// handle to drop the producer-bridge source immediately; if
-        /// `try_lock` fails (an in-flight `next()` holds the lock),
-        /// the in-flight `next()` itself will observe `close_requested`
-        /// on its next 50ms poll boundary and close the handle inline.
+        /// `try_lock` fails (an in-flight `next()` AsyncTask holds the
+        /// lock from its libuv worker), the in-flight `compute()` will
+        /// observe `close_requested` on its next 50ms poll boundary
+        /// and close the handle inline before resolving with `null`.
         ///
         /// Either way `close()` returns within a bounded constant
-        /// time, closing the #652 race where the pre-stopgap shape
-        /// (single outer Mutex held across `recv_blocking()`) made
-        /// `close()` park indefinitely behind a stuck `next()`.
+        /// time, closing the #652 race the original pre-Option-C shape
+        /// carried (a single outer Mutex held across `recv_blocking()`
+        /// would have made `close()` park indefinitely behind a stuck
+        /// `next()`).
         #[napi]
         pub fn close(&self) -> napi::Result<()> {
+            let state = &*self.state;
             // Step 1: set the close-signal + drained-cache
             // synchronously. This is the load-bearing #652 closure —
-            // a concurrent next() polling at the 50ms boundary will
-            // observe close_requested and bail out.
-            self.close_requested.store(true, Ordering::SeqCst);
-            self.is_drained_cached.store(true, Ordering::SeqCst);
+            // a concurrent next() AsyncTask polling at the 50ms
+            // boundary will observe close_requested and bail out.
+            state.close_requested.store(true, Ordering::SeqCst);
+            state.is_drained_cached.store(true, Ordering::SeqCst);
             // Step 2: try-lock the engine handle. If we get it, close
             // the engine handle directly so the producer thread
             // observes consumer-disconnect ASAP. If we don't get it,
-            // the in-flight next() will close on its next poll
-            // iteration.
-            if let Ok(mut g) = self.handle.try_lock()
+            // the in-flight next() AsyncTask will close on its next
+            // poll iteration.
+            if let Ok(mut g) = state.handle.try_lock()
                 && let Some(handle) = g.as_mut()
             {
                 close_handle_adapter(handle);
@@ -2191,12 +2256,11 @@ mod napi_surface {
         /// `true` once the handle is drained (closed AND no buffered
         /// chunks remain).
         ///
-        /// G-CORE-10 Option-C: reads the cached atomic flag — no
-        /// handle lock acquired, so this never contends with an
-        /// in-flight `next()`.
+        /// Reads the cached atomic flag — no handle lock acquired, so
+        /// this never contends with an in-flight `next()` AsyncTask.
         #[napi(js_name = "isDrained")]
         pub fn is_drained(&self) -> napi::Result<bool> {
-            Ok(self.is_drained_cached.load(Ordering::SeqCst))
+            Ok(self.state.is_drained_cached.load(Ordering::SeqCst))
         }
 
         /// Engine-assigned sequence count of chunks delivered so far.
@@ -2209,12 +2273,11 @@ mod napi_surface {
         /// silently truncating past 4B chunks. Widened to `i64` so
         /// long-lived streams report the real count.
         ///
-        /// G-CORE-10 Option-C: reads the cached atomic counter — no
-        /// handle lock acquired, so this never contends with an
-        /// in-flight `next()`.
+        /// Reads the cached atomic counter — no handle lock acquired,
+        /// so this never contends with an in-flight `next()` AsyncTask.
         #[napi(js_name = "seqSoFar")]
         pub fn seq_so_far(&self) -> napi::Result<i64> {
-            Ok(self.seq_so_far_cached.load(Ordering::SeqCst))
+            Ok(self.state.seq_so_far_cached.load(Ordering::SeqCst))
         }
 
         /// Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): exposes the
@@ -2230,13 +2293,12 @@ mod napi_surface {
         /// existed engine-side but did not cross to JS — the TS
         /// surfaces were functionally indistinguishable.
         ///
-        /// G-CORE-10 Option-C: this flag is immutable for the
-        /// handle's lifetime (set once at engine-side construction);
-        /// cached in the napi wrapper at `from_inner` so reads here
-        /// don't take the handle lock.
+        /// This flag is immutable for the handle's lifetime (set once
+        /// at engine-side construction); cached in the napi wrapper
+        /// at `from_inner` so reads here don't take the handle lock.
         #[napi(js_name = "requiresExplicitClose")]
         pub fn requires_explicit_close(&self) -> napi::Result<bool> {
-            Ok(self.requires_explicit_close_cached)
+            Ok(self.state.requires_explicit_close_cached)
         }
     }
 }

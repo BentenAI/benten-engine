@@ -49,9 +49,14 @@ import type { Chunk, JsonValue, StreamHandle } from "./types.js";
  * `bindings/napi/src/lib.rs`. We type-erase to an interface here so the
  * wrapper compiles even when the native binding hasn't been rebuilt yet
  * (the wrapper falls back to a clean `E_DSL_INVALID_SHAPE` at call time).
+ *
+ * G-CORE-10 PR-B (#1203): `next()` is now a Promise-returning napi-rs
+ * `AsyncTask` (the body runs on the libuv worker pool, freeing the JS
+ * event loop). The TS wrapper `await`s the Promise inside the
+ * `Symbol.asyncIterator` and the public `StreamHandle.next()`.
  */
 export interface NativeStreamHandle {
-  next(): Buffer | null;
+  next(): Promise<Buffer | null>;
   close(): void;
   isDrained(): boolean;
   /**
@@ -217,7 +222,12 @@ export function wrapStreamHandle(native: NativeStreamHandle): StreamHandle {
       return {
         next: async (): Promise<IteratorResult<Chunk>> => {
           try {
-            const chunk = native.next();
+            // G-CORE-10 PR-B (#1203): native.next() is now Promise-
+            // returning (napi-rs AsyncTask); await before checking the
+            // EOS-null sentinel. The producer-bridge poll-loop runs on
+            // the libuv worker pool, so the JS event loop is free
+            // while we await this Promise.
+            const chunk = await native.next();
             if (chunk === null) {
               // Natural completion — disarm so the negative pin
               // (scenario c) does NOT fire E_STREAM_HANDLE_LEAKED.

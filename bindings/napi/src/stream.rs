@@ -152,10 +152,13 @@ pub(crate) fn close_handle_adapter(handle: &mut StreamHandle) {
 /// parked indefinitely inside `recv_blocking()` on the producer-bridge
 /// channel.
 ///
-/// The full Option-A fix (PR-B #1203: convert `next()` to a napi-rs
-/// `AsyncTask`) is the post-Option-C target. Option-C is the
-/// cheap-and-correct stopgap that closes the cancellation hazard while
-/// keeping the sync `#[napi]` shape.
+/// G-CORE-10 PR-B (#1203) consumes the same adapter: PR-B moved the
+/// poll-loop body from a sync `#[napi]` method into a napi-rs
+/// `AsyncTask::compute()` body that runs on the libuv worker thread
+/// pool (freeing the JS event loop), while keeping the bounded-poll +
+/// `close_requested`-check cancellation contract. napi-rs's built-in
+/// `AbortSignal` only aborts STILL-QUEUED tasks (not in-flight
+/// `compute()`), so the voluntary-poll signal stays load-bearing.
 pub(crate) enum NextChunkPollNapi {
     /// Chunk delivered within the poll-interval; bytes carried in the
     /// variant payload.

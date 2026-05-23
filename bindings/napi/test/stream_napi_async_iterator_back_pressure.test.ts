@@ -137,30 +137,30 @@ describe("napi STREAM bridge — async-iterator back-pressure (wave-8c-stream-in
     }
   }
 
-  it("for-await consumer drives chunk-by-chunk delivery", () => {
+  it("for-await consumer drives chunk-by-chunk delivery", async () => {
     // Pin: producer emits N chunks, consumer drives each via
     // next(). All are delivered in order. The native cdylib's
-    // StreamHandleJs exposes `next()` (sync) returning Buffer | null;
-    // EOS is null.
+    // StreamHandleJs exposes `next()` (G-CORE-10 PR-B AsyncTask;
+    // returns `Promise<Buffer | null>`); EOS resolves to null.
     registerCounter(engine, "counter_iter");
     const handle = engine.callStream("counter_iter", "go", { upTo: 5 });
     const seen: number[] = [];
     let chunk;
-    while ((chunk = handle.next()) !== null) {
+    while ((chunk = await handle.next()) !== null) {
       seen.push(seen.length);
     }
     expect(seen).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("explicit handle.close() is idempotent + drains pending chunks", () => {
+  it("explicit handle.close() is idempotent + drains pending chunks", async () => {
     // The producer-bridge handle's close() decrements the active-
-    // stream counter and is idempotent. Subsequent next() returns
-    // null (end-of-stream) without throwing.
+    // stream counter and is idempotent. Subsequent next() resolves
+    // to null (end-of-stream) without throwing.
     registerCounter(engine, "counter_close");
     const handle = engine.openStream("counter_close", "go", { upTo: 100 });
     handle.close();
     handle.close(); // idempotent
-    expect(handle.next()).toBeNull();
+    expect(await handle.next()).toBeNull();
   });
 
   it("active stream count surface present + decrements on close", () => {

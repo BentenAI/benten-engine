@@ -1179,18 +1179,25 @@ export type StreamCursor =
  */
 export interface StreamHandle extends AsyncIterable<Chunk> {
   /**
-   * Pull the next chunk synchronously. Returns `null` at end-of-stream.
-   * Throws if the underlying executor surfaces a typed error
-   * (back-pressure drop, peer close, capability denial mid-stream).
+   * Pull the next chunk. Resolves to `null` at end-of-stream.
+   * The Promise rejects if the underlying executor surfaces a typed
+   * error (back-pressure drop, peer close, capability denial mid-stream).
+   *
+   * G-CORE-10 PR-B (#1203): the underlying napi `StreamHandleJs::next`
+   * is a `AsyncTask` whose body runs on the libuv worker pool; the JS
+   * event loop stays free to dispatch unrelated timers / I/O while
+   * this Promise is pending. A concurrent `close()` is observed within
+   * ~one poll-interval (default 50ms) and the Promise resolves to
+   * `null` cleanly.
    *
    * Most consumers should prefer the `for await ... of` form which
    * routes through `[Symbol.asyncIterator]()`.
    */
-  next(): Chunk | null;
+  next(): Promise<Chunk | null>;
 
   /**
    * Explicitly close the handle. Idempotent. Once closed, all
-   * subsequent `next()` calls return `null`.
+   * subsequent `next()` Promises resolve with `null`.
    */
   close(): void;
 
