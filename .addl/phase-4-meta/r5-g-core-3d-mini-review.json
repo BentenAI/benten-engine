@@ -1,0 +1,114 @@
+{
+  "wave": "G-CORE-3d",
+  "pr": 1323,
+  "head": "17a394e3",
+  "base": "340391ab",
+  "disposition": "APPROVE-WITH-FIXES",
+  "reviewer": "rust-mini-reviewer (general-purpose agent)",
+  "review_completed_at": "2026-05-22T21:10:00-07:00",
+  "diff_stat_observed": "19 files changed, 2663 insertions, 23 deletions (brief stated ~931/~38 — actual scope larger; substantive work is correctly scoped to the G-CORE-3d wave-def)",
+  "tests_locally_verified": {
+    "tf3d_two_cid_mapping_roundtrip": "4/4 PASS",
+    "tf3d_aad_binds_plaintext_cid_rebinding_attack": "3/3 PASS",
+    "tf3d_partition_before_crypto": "3/3 PASS",
+    "tf3d_per_chunk_aead_iroh_block_size": "5/5 PASS",
+    "tf1_989_cross_did_partition_isolation": "8/8 PASS",
+    "stable_clippy_benten_graph_all_features_all_targets": "CLEAN (0 warnings)",
+    "msrv_1_95_clippy_benten_graph_all_features_all_targets": "CLEAN (0 warnings)",
+    "workspace_check_all_features": "13 pre-existing errors on main (engine_wait + BrowserBackend; NOT regressions caused by this PR — reproduced on 340391ab base)"
+  },
+  "findings": [
+    {
+      "id": "g-core-3d-mr-1",
+      "severity": "BLOCKER",
+      "dim": "ci_regression / cross-language atomic mirror / §3.5n ground-truth-verify",
+      "title": "wasm32-unknown-unknown build regression — getrandom requires \"js\" feature; 4 CI checks newly FAILING vs base 340391ab",
+      "location": "crates/benten-graph/Cargo.toml dependency chain (new benten-crypto-suite dep → ml-dsa + chacha20poly1305 + ed25519-dalek + x25519-dalek → getrandom 0.2.17 without js feature gate)",
+      "evidence": [
+        "PR #1323 4 wasm32 failures: (a) `T8 benten-napi wasm32-unknown-unknown` (WASM Checks) — FAILURE; (b) `bundle + size cap + headless smoke` (WASM Browser) — FAILURE; (c) `build wasm32-unknown-unknown bundle` (Cross-Browser Determinism) — FAILURE; (d) `wasm32 (wasip1 runtime + unknown-unknown compile)` (CI) — FAILURE.",
+        "Base SHA 340391ab on main: ALL FOUR workflows GREEN (verified via `gh run list --workflow=... --branch main`); `WASM Checks` SUCCESS at 340391ab, 8883f789, 8fec3cbc, 1d087433, c9c11c56.",
+        "Reproduced LOCALLY: `cargo check -p benten-napi --target wasm32-unknown-unknown --features benten-engine/browser-backend --no-default-features` → identical `error: the wasm*-unknown-unknown targets are not supported by default, you may need to enable the \"js\" feature` from getrandom v0.2.17.",
+        "Root cause: PR #1323 adds `benten-crypto-suite = { path = ... }` as an UN-CONDITIONAL dependency of `benten-graph` (line 102 of crates/benten-graph/Cargo.toml). benten-graph is on the benten-napi → benten-engine → benten-graph wasm32-unknown-unknown build chain (per CLAUDE.md baked-in #17 thin-client commitment). benten-crypto-suite hard-depends on ml-dsa/chacha20poly1305/ed25519-dalek/x25519-dalek, which transitively pull `getrandom` without the `js` feature.",
+        "G-CORE-3a CANARY (PR #1319) introduced `benten-crypto-suite` itself but the wasm CI stayed green because no wasm-target-reachable crate depended on it; this PR is the first wasm-reachable consumer."
+      ],
+      "production_impact": "Browser-target builds (CLAUDE.md baked-in #17 shape b — thin compute surface) DO NOT COMPILE post-merge. This is a direct violation of the thin-client commitment + breaks the embedded-webview / browser-tab deployment shapes.",
+      "disposition": "FIX-NOW per HARD RULE 12. Two valid resolutions: (a) make the `benten-crypto-suite` dep target-conditional on `benten-graph` — `[target.'cfg(not(all(target_arch = \"wasm32\", target_os = \"unknown\")))'.dependencies] benten-crypto-suite = { path = ... }` — and `#[cfg_attr(target_arch=\"wasm32\"+target_os=\"unknown\", allow(...))]`-gate the `aead_wrap` + AEAD-wrap branch of `put_node_with_context`; OR (b) propagate `getrandom = { version = \"0.2\", features = [\"js\"] }` (and 0.3 equivalent) as an explicit dep in `benten-crypto-suite` under `cfg(all(target_arch=\"wasm32\", target_os=\"unknown\"))`. (a) is the lower-risk path — wasm32-unknown-unknown is the thin-client target that fundamentally has no per-DID-AEAD wrap path (BrowserBackend rejects namespaced writes at GraphError::NamespacedWriteUnsupported anyway); (b) is the broader fix that lets the integration crate compile on browser. Recommend (a) as a quick-fix, with (b) named-now into `docs/future/phase-4-backlog.md §3.10 G-CORE-3e` (where the K_principal-per-DID seam will need browser consideration anyway).",
+      "named_destination_if_b_chosen": "docs/future/phase-4-backlog.md §3.10 (G-CORE-3e entry already exists; add a sub-bullet 'browser-target getrandom feature gating')."
+    },
+    {
+      "id": "g-core-3d-mr-2",
+      "severity": "MINOR",
+      "dim": "wave-completion checklist (pim-12)",
+      "title": "stale `RED-PHASE — un-ignore at G-CORE-3d` doc-comment markers in tf3d_* test file headers post-un-ignoring",
+      "location": "crates/benten-graph/tests/tf3d_*.rs (4 files, 1-4 hits per file in `//!` doc comments)",
+      "evidence": [
+        "All `#[ignore]` attribute markers correctly removed (15/15 tests run + PASS).",
+        "But the file-header `//! RED-PHASE — un-ignore at G-CORE-3d (pim-12 / §3.6e).` comment + tf3d_two_cid_mapping_roundtrip.rs paragraph 'Each `#[test]` is `#[ignore]`-staged with the literal marker `RED-PHASE: un-ignore at G-CORE-3d`' both linger as out-of-date narrative."
+      ],
+      "disposition": "FIX-NOW inline via a 1-line follow-up edit (replace 'RED-PHASE — un-ignore at G-CORE-3d' with 'UN-IGNORED at G-CORE-3d' or similar past-tense marker; remove the 'staged with the literal marker' paragraph in tf3d_two_cid_mapping_roundtrip.rs). Not a blocker — does not affect runtime behavior; matters for future-archaeology clarity (an agent grepping for RED-PHASE markers would falsely conclude the wave is still pending)."
+    },
+    {
+      "id": "g-core-3d-mr-3",
+      "severity": "OBSERVATION",
+      "dim": "wave-completion checklist / clarity",
+      "title": "PR description mismatch: LOC count (~931 / ~38 claimed vs 2663 / 23 actual)",
+      "location": "PR #1323 brief vs commit `17a394e3`",
+      "evidence": [
+        "Brief stated `~931 insertions / ~38 deletions across 19 files`; actual diff = `19 files changed, 2663 insertions, 23 deletions`. File count matches (19); insertions ~3x higher.",
+        "Brief assertions about 15 un-ignored tf3d_* test pins / 227+28+754 PASS counts all hold (locally verified the substantive ones)."
+      ],
+      "disposition": "OBSERVATION — author likely undercounted by excluding extensive code-comments, tests (which are now ~900 LOC of pin bodies), and the SECURITY-POSTURE.md retense section. Substantive scope is sound + matches the G-CORE-3d wave-def; the inflation is mostly thorough doc-coupling + per-arm tests, both load-bearing. NOT a finding — flagging for accuracy."
+    }
+  ],
+  "positive_observations": [
+    "Coverage (dim 1) — Every tf3d_* pin enumerates a SUBSTANTIVE production arm per pim-18: tf3d_two_cid_mapping_roundtrip PIN 1 exercises the real `put_node_with_context` → `two_cid_lookup` → `get_encrypted_node` → `decrypt` chain (would-FAIL on a stub that stored plaintext at the plaintext_cid); tf3d_aad_binds_plaintext_cid PIN 1 exercises the real AEAD with the rebinding mutation (would-FAIL if AAD omits plaintext_cid); tf3d_partition_before_crypto PIN 1 asserts the EXACT error variant `NotFound` is surfaced (NOT `AeadAuthenticationFailed`) — load-bearing distinction since `AeadAuthenticationFailed` would prove cross-DID ciphertext leak per multitenant-r1-5.",
+    "Per-finding closure pins (dim 2 / pim-2 §3.6b sub-rule 4): pins are surgical — separate pin for AAD-binds-plaintext-CID (tf3d_aad_binds_plaintext_cid_rebinding_attack_defeated), separate pin for chunk-index AAD (tf3d_cross_chunk_rebinding_fails_aad_binds_chunk_index), separate pin for chunk-size = IROH_BLOCK_SIZE constant (tf3d_iroh_block_size_is_16_kib_exactly), separate pin for the two-CID-mapping durability across redb-reopen (tf3d_two_cid_mapping_durable_across_reopen). Not an umbrella 'two-CID works' assertion.",
+    "Cross-language atomic mirror (dim 3 / §3.5g): 3 new ErrorCodes atomically added to Rust enum + `as_static_str` + `from_str` + ON_DENIED routing + stable_shape `ALL_CATALOG_VARIANTS` + exhaustive match arm + CATALOG_VARIANT_COUNT bump (171→174) + ERROR-CATALOG.md entries (3 new sections with full Fix/Thrown-at/Phase narrative) + TS `errors.generated.ts` regenerated (verified 3 codes present at lines 209-211 + 3 new BentenError subclasses at lines 2817-2851 + 3 entries in code-class map at lines 3038-3039+). All four cross-language surfaces atomic in one commit.",
+    "Doc-coupling sweep (dim 4 / §3.5b): SECURITY-POSTURE.md gained a substantive 'Per-Node AEAD wrap layer — rebinding-attack-prevention' section at line 2170 (~125 lines) covering AAD-binds-plaintext-CID (whole arm) + AAD-binds-(plaintext-CID, chunk-index) (per-chunk arm) + two-CID mapping integrity defense-in-depth + Inv-11 strengthening via C1+C2 composition + key-derivation wave-scope + chunk-size = IROH_BLOCK_SIZE constraint + ChaCha20-Poly1305 mechanism + cross-refs. Includes the load-bearing 'C1 fires BEFORE C2; NotFound vs AeadAuthenticationFailed distinction = confidentiality boundary' framing. Closes the tf3d_security_posture_md_documents_rebinding_attack_prevention doc-coupling pin. The R0.8 R1.4-multitenant-r1.4-2 corrective is satisfied.",
+    "Ground-truth verify (dim 5 / §3.5n) — K(N) test seam (`Node::derive_key_for_test` + `derive_test_seam_key_from_cid` byte-for-byte equivalent: both = `blake3(b\"benten-test-key:\" || cid_bytes)`). The G-CORE-3e named destination at docs/future/phase-4-backlog.md §3.10 (line 166) is well-formed: 'Includes the K(N) production-source swap-in (per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW)' with explicit identification of the 1-call-site replacement at the put-path + the read-path read_decrypt_inner; both already point at the same `derive_test_seam_key_from_cid` helper so the swap-in IS a clean 1-line change. The G-CORE-3f deferral for import_encrypted_node_into_scope is also well-formed — the seam fails-closed with a typed `GraphError::Redb` error explaining 'the import path that validates the foreign K_principal + re-keys to the local K_principal lives at G-CORE-3f'; the tf3d_dropbundle_of_y_installed_under_x_namespace_rejected pin asserts only that result.is_err(), which leaves clean refinement surface at 3f for the exact arm + error variant choice.",
+    "Stable + MSRV clippy (dim 6 / §3.5j): both `cargo +stable clippy -p benten-graph --all-features --all-targets -- -D warnings` AND `cargo +1.95.0 clippy -p benten-graph --all-features --all-targets -- -D warnings` pass CLEAN (verified locally).",
+    "Isolation contract (dim 7): commits authored cleanly inside the worktree's branch with `Benten-Ben <ben@benten.ai>` author identity (verified `git log -1 --format='%an %ae'`); single commit on the PR branch; no force-push (verified via `git log pr-1323 --oneline -10`).",
+    "NO admin-bypass, NO force-push (dim 8): single commit `17a394e3` cleanly on top of base `340391ab`; PR mergeStateStatus = BLOCKED (the natural CI-gated state), NOT admin-bypassed.",
+    "CLAUDE.md baked-in #5 crypto-agility preserved (dim 9): aead_wrap.rs module head doc comment explicitly states 'Every AEAD operation routes through `benten_crypto_suite::aead::wrap` / `::unwrap` / `::aad_whole_content` / `::aad_per_chunk`. This module is glue: threshold dispatch + chunk slicing + envelope packaging.' Verified: no direct `use chacha20poly1305::*` / `use blake3` / etc. in aead_wrap.rs body; the only crypto-primitive routing is via `suite_wrap` / `suite_unwrap` / `suite_aad_whole_content` / `suite_aad_per_chunk` aliases. Codepoint dispatch via `KeyMaterial::from_bytes_for_test(envelope.cipher_codepoint, key)` in `make_key_material_matching` preserves the codepoint-dispatch arm (codepoint mismatch surfaces typed `AeadError::Unsupported`, never silent fallback).",
+    "Inv-11 strengthening structural (dim 10): partition-before-crypto order is STRUCTURAL — the namespaced AEAD-wrap path in `put_node_with_context` happens INSIDE the `if let Some(did) = ctx.namespace_did.as_ref()` arm (the partition decision is made first via the WriteContext shape, then the AEAD-wrap fires within that arm); the read path `read_via_two_cid_scoped` consults `two_cid_lookup_scoped` whose key is `d:<did>:m:<plaintext_cid>` — a cross-DID caller misses at the partition-prefix layer with `Ok(None)` BEFORE any AEAD work. Verified by the tf3d_cross_did_returns_notfound_not_aead_error pin which explicitly asserts the error variant is `NotFound` and EXPLICITLY rejects `AeadAuthenticationFailed`. No encryption-before-partition inversion observed.",
+    "8-site TF-1 test updates (dim 11): preserves G-CORE-1's contracts. The change is `let cid = backend.put_node_with_context(&node, &ctx).expect(...)` → `backend.put_node_with_context(&node, &ctx).expect(...); let cid = node.cid().unwrap()`. G-CORE-1's contracts (label_index keyed on plaintext_cid, ChangeEvent.cid = plaintext_cid, scoped().get_node(plaintext) returns Node) ALL key on plaintext_cid which IS what `node.cid()` returns. Verified: the put-return value-change from plaintext_cid → ciphertext_cid for namespaced writes does NOT propagate to any non-test production caller. The only PRODUCTION namespaced `with_namespace_did(Some(...))` call site in workspace is `crates/benten-graph/src/browser_backend.rs:736` which is itself inside `#[cfg(test)]` — i.e. NO production caller currently exercises the namespaced-write return value, so the surface-change has zero production blast radius. All 9 production engine callers of `put_node_with_context` use `WriteContext::privileged_for_engine_api()` (verified) which has `namespace_did: None`, hitting the legacy un-namespaced path (return = plaintext_cid unchanged). The TF-1 updates are minimal + correct."
+  ],
+  "ground_truth_verify": {
+    "production_kn_seam": "agreed — `Node::derive_key_for_test` and `derive_test_seam_key_from_cid` produce byte-identical output (both = `blake3(b\"benten-test-key:\" || cid.as_bytes())`); the production K(N) swap is a clean 1-line replacement at exactly two call sites (the `aead_key = derive_test_seam_key_from_cid(&cid)` in `put_node_with_context` + the `aead_key = derive_test_seam_key_from_cid(plaintext_cid)` in `read_decrypt_inner`). The G-CORE-3e named destination at docs/future/phase-4-backlog.md §3.10 line 166 is well-formed and explicit. Test seam — NOT a hard structural commitment.",
+    "g_core_3f_install_path_deferral": "agreed — the `import_encrypted_node_into_scope` test seam fails-closed cleanly with `GraphError::Redb(...)` whose body explicitly names G-CORE-3f as the destination for the production refinement; the tf3d_dropbundle_of_y_installed_under_x_namespace_rejected pin asserts only result.is_err(), leaving the choice of which arm refuses (partition routing vs AEAD authentication vs UCAN check) open for G-CORE-3f to refine. Clean refinement surface preserved.",
+    "tf1_8_site_update": "preserves-contracts — verified above; no production downstream caller exercises the namespaced put-return value (only browser_backend.rs:736 is a test-only call site), and all 9 production callers in benten-engine/src use `WriteContext::privileged_for_engine_api()` which has `namespace_did: None` → hits the legacy un-namespaced path that returns plaintext_cid unchanged. The G-CORE-1 contracts (label_index / ChangeEvent / iter_node_cids / scoped().get_node all keyed on plaintext_cid) are STRUCTURALLY UNCHANGED — only the namespaced put-return value-surface flips from plaintext_cid → ciphertext_cid, and TF-1 tests correctly migrate to obtaining the plaintext-CID handle from `node.cid()`."
+  },
+  "ci_status_at_review_time": {
+    "merge_state_status": "BLOCKED",
+    "failures": [
+      {
+        "name": "T8 benten-napi wasm32-unknown-unknown",
+        "workflow": "WASM Checks",
+        "regression_from_base_340391ab": true,
+        "root_cause": "g-core-3d-mr-1 (getrandom js feature missing in benten-crypto-suite transitive deps on wasm32-unknown-unknown)"
+      },
+      {
+        "name": "bundle + size cap + headless smoke",
+        "workflow": "WASM Browser (wasm32-unknown-unknown)",
+        "regression_from_base_340391ab": true,
+        "root_cause": "same as above"
+      },
+      {
+        "name": "build wasm32-unknown-unknown bundle",
+        "workflow": "Cross-Browser Determinism (Chromium / Gecko / WebKit)",
+        "regression_from_base_340391ab": true,
+        "root_cause": "same as above"
+      },
+      {
+        "name": "wasm32 (wasip1 runtime + unknown-unknown compile)",
+        "workflow": "CI",
+        "regression_from_base_340391ab": true,
+        "root_cause": "same as above"
+      }
+    ],
+    "pre_existing_main_failures_NOT_pr_regressions": [
+      "(none observed for required CI lanes; 13 workspace-check errors involving engine_wait + BrowserBackend reproduce on base 340391ab)"
+    ]
+  },
+  "recommendation": "BLOCK MERGE pending g-core-3d-mr-1 closure (wasm32-unknown-unknown getrandom feature gate). g-core-3d-mr-2 (stale RED-PHASE comment) can ride along in the same fix-pass or as orchestrator-direct one-line edit. After mr-1 fix lands + the 4 wasm checks return GREEN, this PR is APPROVED for merge — substantive review (dims 1-11) is all CLEAN and the work is high-quality. The wasm32 regression is the only blocker; everything else is positive observation or single MINOR doc-comment cleanup."
+}
