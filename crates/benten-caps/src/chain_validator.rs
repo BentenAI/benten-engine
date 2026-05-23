@@ -22,7 +22,6 @@
 //!   Spike H+1.1 deferred to future ratification). Treated as
 //!   `ChainNotNarrowing` for now — explicit + symmetric typed-reject.
 
-use crate::restricted_spec::RestrictedSpec;
 use crate::scope::Scope;
 
 /// Successful validator outcome.
@@ -105,7 +104,3 @@ fn scope_contains(parent: &Scope, child: &Scope) -> bool {
         | (Scope::RestrictedSelector(_), Scope::Hashes(_)) => false,
     }
 }
-
-/// Suppress unused-import warning when this module compiles standalone.
-#[allow(dead_code)]
-fn _restricted_spec_anchor(_: &RestrictedSpec) {}

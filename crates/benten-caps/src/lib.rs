@@ -89,9 +89,13 @@ pub mod restricted_spec;
 // G-CORE-3b — structured cap-grant `Scope` enum with EXACTLY two arms
 // (`Hashes` + `RestrictedSelector`). NO `OpaqueSelector` arm by the
 // `no-opaque-arm` decision (RATIFIED §R1 + Spike H+1.1 §b.SEC #4).
-// `#[non_exhaustive]` so future named arms are a minor-version bump;
-// any proposal to re-introduce opaque-refinement-witness semantics
-// must be rejected per HARD RULE 12.
+// **NOT `#[non_exhaustive]`** — the §1.A.FROZEN item 15(c) "no-opaque-arm"
+// freeze is structurally stronger than the META #907 default: making the
+// enum non-exhaustive would force external-crate tests to wildcard-match
+// (silently accepting a future `OpaqueSelector` — the exact failure mode
+// the `tf3b_no_opaque_selector_arm_structural` test defends against).
+// Any proposal to re-introduce opaque-refinement-witness semantics must
+// be rejected per HARD RULE 12.
 pub mod scope;
 
 // G-CORE-3b — `AuthorizationGrant{ucan, key_material, binding_sig}`
