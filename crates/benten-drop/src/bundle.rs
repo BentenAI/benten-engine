@@ -595,7 +595,7 @@ impl DropBundle {
     /// Implementation: emits a bundle with a `Synthetic(0xFFFE)`
     /// version + an internal marker requesting Mode-3 rejection
     /// surfacing. The pin
-    /// `tf3f_inline_tiny_synthetic_bundle_rejected_typed` accepts
+    /// `tf3f_inline_tiny_synthetic_rejected_via_unsupported_version_or_mode_typed` accepts
     /// either `UnsupportedDropMode` OR `UnsupportedDropVersion` — the
     /// defer-to-post-v1 contract is the load-bearing property; the
     /// specific typed code is not.
