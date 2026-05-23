@@ -95,10 +95,23 @@ pub struct UcanEnvelope {
     /// `false` is the production default; the wave-3e
     /// `tf3e_unresolvable_peer_did_yields_typed_unresolved_deny` pin
     /// sets this to `true` to trigger the typed `UnresolvedDeny` arm
-    /// at handler time. This field is NOT covered by `binding_sig`
-    /// verification (it's a handler-time policy flag rather than a
-    /// cryptographic binding); the production wire-up at G-CORE-3e
-    /// replaces it with a real peer-resolution call against the
+    /// at handler time.
+    ///
+    /// This field **IS** covered by `binding_sig` verification (it's
+    /// part of the [`UcanEnvelope`] serde shape, so `binding_message`
+    /// CBOR-encodes it via serde-derive auto-inclusion; there is no
+    /// `#[serde(skip)]` attribute — `#[serde(default)]` only controls
+    /// deserialize-default behavior, not serialize-omission). However,
+    /// the handler ARM 1 unresolved-peer short-circuit fires **BEFORE**
+    /// ARM 5 binding-sig verification, so a grant with this flag set
+    /// never reaches the binding-sig check — the runtime semantic is
+    /// "unresolved-peer-deny short-circuits ALL other validation
+    /// including binding-sig". Production grants with this flag set
+    /// would still verify their binding-sig under the ARM-1-bypassed
+    /// code path.
+    ///
+    /// The production wire-up at G-CORE-3e replaces this in-grant
+    /// sentinel with a real peer-resolution call against the
     /// RotationLog. NEVER promote this to a production grant fixture —
     /// it is the sentinel pattern, NOT a real grant arm.
     #[serde(default)]
@@ -459,14 +472,20 @@ impl AuthorizationGrant {
     ) -> Self {
         let mut grant = Self::issue_for_test(issuer_kp, audience_pubkey, scope, exp_secs);
         grant.ucan.unresolved_peer = true;
-        // The unresolved_peer flag is NOT in `binding_message` (it's a
-        // handler-time policy flag, not a cryptographic binding) but
-        // it IS in the UcanEnvelope serde shape so a fresh re-sign
-        // would propagate it; we don't re-sign here because the test
-        // assertion fires at the handler boundary BEFORE binding-sig
-        // verification — the typed UnresolvedDeny arm short-circuits
-        // by design (an unresolvable peer means we can't even know
-        // who's asking, so binding-sig verification is moot).
+        // The unresolved_peer flag IS part of `binding_message` (it
+        // serializes through serde-derive auto-inclusion on the
+        // UcanEnvelope CBOR shape — see the field doc-comment for the
+        // serde-derived inclusion analysis). Mutating it post-sign
+        // therefore DOES invalidate `binding_sig`. We don't re-sign
+        // here because the handler ARM 1 unresolved-peer short-circuit
+        // fires BEFORE ARM 5 binding-sig verification — the runtime
+        // semantic is `unresolved-peer-deny short-circuits ALL other
+        // validation including binding-sig`. The fixture is therefore
+        // brittle to a future ARM-reorder; see the
+        // `g-core-3e-mr7-test-fixture-re-sign-discipline` carry in
+        // `docs/future/phase-4-backlog.md` for the proper re-sign
+        // hardening + the discriminator-asserting safety net the
+        // tf3e corpus already carries.
         grant
     }
 

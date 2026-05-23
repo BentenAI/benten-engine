@@ -145,6 +145,18 @@ pub(crate) const TWO_CID_MAP_TABLE: TableDefinition<&[u8], &[u8]> =
 /// K_principal storage seam landing first. The seam is named at
 /// `docs/future/phase-4-backlog.md` §3.10 G-CORE-3e (K_principal
 /// per-DID secret store) for the production replacement.
+///
+/// **⚠️ Confidentiality limit at this wave (K_principal-seam stand-in).**
+/// The `K_PRINCIPAL_DOMAIN_KEY` constant + the publicly-known
+/// `namespace_did` `Cid` bytes are the ONLY inputs to the K_principal
+/// synthesis at this wave — so **any party holding
+/// `(namespace_did, ciphertext_blob)` can derive `K(N)` and decrypt**.
+/// The `_test_seam_` hint in the function name is load-bearing on every
+/// caller until the K_principal-store backend lands; do NOT rely on the
+/// wave-3e confidentiality envelope for any data not also protected by
+/// namespace-isolation at the storage backend. See
+/// `docs/SECURITY-POSTURE.md` ("Confidentiality limit at this wave"
+/// callout under the G-CORE-3e key-derivation section).
 pub fn derive_test_seam_key_from_cid_with_namespace(did: Option<&Cid>, cid: &Cid) -> Vec<u8> {
     // Step 1 — synthesize K_principal from a domain tag + namespace
     // DID. The domain tag separates the K_principal-synthesis role

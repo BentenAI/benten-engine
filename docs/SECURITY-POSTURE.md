@@ -2276,6 +2276,25 @@ at the same boundary; the helper signature
 `docs/future/phase-4-backlog.md §3.10` for the per-DID secret-store
 upgrade.
 
+**⚠️ Confidentiality limit at this wave.** The deterministic
+`K_principal` synthesis at this wave —
+`blake3::keyed_hash(&K_PRINCIPAL_DOMAIN_KEY, did_bytes)` over a
+publicly-known 32-byte domain-tag constant + the publicly-known
+`namespace_did` `Cid` bytes — means **any party holding
+`(namespace_did, ciphertext_blob)` can derive `K(N)` and decrypt**.
+This is acceptable ONLY because the wave-3e use-case is keeping
+the substrate-shape stable for the production `K_principal`-store
+swap-in at the next wave; do **NOT** rely on the wave-3e
+confidentiality envelope for any data not also protected by
+namespace-isolation at the storage backend. The function name
+retains the `derive_test_seam_key_from_cid_with_namespace` "test
+seam" hint precisely to mark this wave-state on every caller. Named
+carry destination: `docs/future/phase-4-backlog.md §3.10`
+(K_principal-per-DID secret-material backend) — the swap-in
+replaces only the `K_principal` synthesis step; the function
+signature + the AEAD-wrap layer + the per-chunk size are all
+stable.
+
 ### Per-chunk-AEAD chunk size = `IROH_BLOCK_SIZE` (16 KiB)
 
 Per `§1.A.FROZEN item 15(g)` the per-chunk AEAD chunk size MUST equal
