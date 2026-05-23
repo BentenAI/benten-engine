@@ -1086,6 +1086,29 @@ pub enum ErrorCode {
     /// the structural-shape rejection at the cipher-suite boundary
     /// surface here as `E_RECIPIENT_LACKS_KEYS_FOR_SUITE`.
     RecipientLacksKeysForSuite,
+    /// G-CORE-3b (Phase 4-Meta-Core, #1300/#1301 substrate; RATIFIED-S&C
+    /// 2026-05-21 §R3 ONE-signed-artifact contract): the
+    /// `AuthorizationGrant`'s `binding_sig` failed verification — the
+    /// signed binding over `(ucan, key_material, audience)` canonical
+    /// bytes does not match the issuer's signature. Surfaces the
+    /// stolen-UCAN-without-keys (A-1), stolen-keys-without-UCAN (A-2),
+    /// and wrong-audience-swap (A-3) tamper-detection arms uniformly —
+    /// any of the three load-bearing legs being swapped post-issue
+    /// produces this typed code. NEVER catch + retry with a different
+    /// audience or substitute half — the binding is the foundation
+    /// (the load-bearing property §R3 exists to defend).
+    AuthorizationGrantBindingSigInvalid,
+    /// G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R1
+    /// chain-narrowing contract): a structured-`Scope` delegation
+    /// chain widens its predecessor at some step — the chain validator
+    /// surfaces this typed code with the offending `step_index`.
+    /// Covers Path (a) `RestrictedSpec`-language widening + `Scope::
+    /// Hashes` subset-violation widening + cross-arm transitions.
+    /// Path (b) refinement-witness over opaque specs is structurally
+    /// unsound (Spike H+1.1) so no opaque-arm closure path exists; the
+    /// only legitimate `Scope` arms at v1-beta are `Hashes` +
+    /// `RestrictedSelector`.
+    ChainNarrowingViolation,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1385,6 +1408,14 @@ impl ErrorCode {
             ErrorCode::MaterializerSubscribeSeamFailure => "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
             ErrorCode::NamespacedWriteUnsupported => "E_NAMESPACED_WRITE_UNSUPPORTED",
             ErrorCode::RecipientLacksKeysForSuite => "E_RECIPIENT_LACKS_KEYS_FOR_SUITE",
+            // Single-line form is REQUIRED so the drift-detect parser's
+            // single-line regex (`scripts/drift-detect.ts::buildVariantCodeMap`)
+            // can map the enum-arm name to the catalog code. fmt may
+            // want to wrap because of the long line — keep with an
+            // inline `#[rustfmt::skip]` so the regex stays satisfied.
+            #[rustfmt::skip]
+            ErrorCode::AuthorizationGrantBindingSigInvalid => "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
+            ErrorCode::ChainNarrowingViolation => "E_CHAIN_NARROWING_VIOLATION",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1820,6 +1851,19 @@ impl ErrorCode {
             // is appropriate here.
             ErrorCode::RecipientLacksKeysForSuite => None,
 
+            // G-CORE-3b: structural-shape rejections at the
+            // cap-policy/grant-validation boundary — fail-closed
+            // defenses against the binding-sig tamper (A-1/A-2/A-3)
+            // and chain-widening attack vectors RATIFIED §R3 + §R1
+            // exist to prevent. No primitive-edge routing — the
+            // caller MUST handle the typed reject explicitly rather
+            // than silently re-routing through an `ON_ERROR` edge,
+            // since "swallow and continue" is the exact failure mode
+            // the binding-sig + chain-narrowing contracts defend
+            // against.
+            ErrorCode::AuthorizationGrantBindingSigInvalid => None,
+            ErrorCode::ChainNarrowingViolation => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2101,6 +2145,10 @@ impl core::str::FromStr for ErrorCode {
             "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE" => ErrorCode::MaterializerSubscribeSeamFailure,
             "E_NAMESPACED_WRITE_UNSUPPORTED" => ErrorCode::NamespacedWriteUnsupported,
             "E_RECIPIENT_LACKS_KEYS_FOR_SUITE" => ErrorCode::RecipientLacksKeysForSuite,
+            "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID" => {
+                ErrorCode::AuthorizationGrantBindingSigInvalid
+            }
+            "E_CHAIN_NARROWING_VIOLATION" => ErrorCode::ChainNarrowingViolation,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

@@ -1584,6 +1584,26 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 <!-- reachability: ignore -->
 
+### E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID
+
+- **Message:** "binding signature mismatch: ucan or key_material does not match the issuer's signed binding"
+- **Context:** `{ detail: String }` (which half mismatched + the verify-failure shape) OR `{ bound_audience: Cid, presented_audience: Cid }` for the wrong-audience-swap arm
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R3 (ONE-signed-artifact contract): the `AuthorizationGrant`'s `binding_sig` covers `(canonical_bytes(ucan) || canonical_bytes(key_material) || audience_bytes)` — it MUST verify before the validator consults either the UCAN scope or the key material (the binding is the foundation). This typed code fires for three distinct attack surfaces uniformly: (A-1) stolen-UCAN-without-keys — attacker lifts the UCAN half but presents a different `key_material`; the binding-sig over the new `(ucan, key_material)` tuple no longer matches the issuer's signed binding. (A-2) stolen-keys-without-UCAN — symmetric mirror of A-1 on the other half. (A-3) wrong-audience-swap — grant bound to audience X is presented for verification under audience Y; the audience binding is the load-bearing third leg per §R3 so a swap fails closed with `AudienceMismatch`. NEVER catch this error and retry with a substitute half / different audience — the typed reject IS the defense the §R3 contract exists to provide. Structural-shape rejection at the grant-validation boundary — no primitive-edge routing (None).
+- **Thrown at:** `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant::verify_binding` (G-CORE-3b, Phase 4-Meta-Core) — surfaces as `AuthorizationGrantError::BindingMismatch` / `AuthorizationGrantError::AudienceMismatch` at the cap-layer boundary; the boundary-lift into `benten-errors::ErrorCode::AuthorizationGrantBindingSigInvalid` for the engine-wide catalog surface lands at G-CORE-3e (sync/ALPN wire-up) + G-CORE-3f (Drop bundle) when grants flow through `CapabilityPolicy::check_*`. At G-CORE-3b the ErrorCode variant is reserved + the `AuthorizationGrantError` variants are the live production typed arms; the drift-detector's `reachability: ignore` annotation below names this reservation.
+- **Phase:** 4-Meta-Core G-CORE-3b (RATIFIED-S&C 2026-05-21 §R3 ONE-signed-artifact contract)
+
+<!-- reachability: ignore -->
+
+### E_CHAIN_NARROWING_VIOLATION
+
+- **Message:** "chain step {step_index} widens predecessor scope"
+- **Context:** `{ step_index: usize }` (1-based index of the offending edge — the transition from `chain[step_index-1]` to `chain[step_index]`)
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R1 (chain non-widening contract; Path (a) restricted-spec language only): a structured-`Scope` delegation chain MUST be monotonically narrowing — every step's `Scope` must be CONTAINED by its predecessor's. The chain validator surfaces this typed code at the first widening edge. Three widening arms fire it uniformly: (a) `Scope::Hashes(parent) → Scope::Hashes(child)` where `child` is NOT a subset of `parent` (adding hashes widens). (b) `Scope::RestrictedSelector(parent) → Scope::RestrictedSelector(child)` where `parent.contains(&child)` returns false (any of the 6 dimensions widens: roots / edge-allowlist / max_depth / label-allowlist / label-denylist [INVERSE] / property-equalities). (c) Cross-arm transitions (`Hashes` ↔ `RestrictedSelector`) — structurally non-comparable at v1-beta. Fix at the call site: re-issue the delegation with a properly narrowed scope. NEVER add a third `Scope` arm (e.g. `OpaqueSelector`) to work around this — Path (b) refinement-witness over opaque specs is structurally unsound per Spike H+1.1 §b.SEC #4 and the §1.A.FROZEN item 15(c) `no-opaque-arm` freeze prohibits the workaround; adding such an arm is a HALT-AND-SURFACE-TO-BEN escalation per HARD RULE 12.
+- **Thrown at:** `crates/benten-caps/src/chain_validator.rs::validate_chain_narrowing` (G-CORE-3b, Phase 4-Meta-Core) — surfaces as `ChainValidationError::ChainNotNarrowing` at the cap-layer boundary; the boundary-lift into `benten-errors::ErrorCode::ChainNarrowingViolation` for the engine-wide catalog surface lands at G-CORE-3e (sync/ALPN wire-up) when the chain validator runs at delegation-acceptance time. At G-CORE-3b the ErrorCode variant is reserved + the `ChainValidationError` variant is the live production typed arm; the drift-detector's `reachability: ignore` annotation below names this reservation.
+- **Phase:** 4-Meta-Core G-CORE-3b (RATIFIED-S&C 2026-05-21 §R1 chain-narrowing contract)
+
+<!-- reachability: ignore -->
+
 ## Extending the catalog
 
 When adding a new error:

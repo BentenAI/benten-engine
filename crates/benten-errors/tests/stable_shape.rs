@@ -493,6 +493,18 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-crypto-suite::cipher_suite::CipherSuite::wrap_key_material`
     //   `benten-crypto-suite::cipher_suite::CipherSuite::unwrap_key_material`
     ErrorCode::RecipientLacksKeysForSuite,
+    // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R3
+    // ONE-signed-artifact contract): binding-sig tamper-detection arm.
+    // Construction sites:
+    //   `benten-caps::authorization_grant::AuthorizationGrant::verify_binding`
+    //   (the A-1/A-2/A-3 binding-mismatch + audience-mismatch defenses).
+    ErrorCode::AuthorizationGrantBindingSigInvalid,
+    // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R1
+    // chain-narrowing contract): structured-`Scope` chain widening
+    // typed-reject. Construction sites:
+    //   `benten-caps::chain_validator::validate_chain_narrowing`
+    //   (the `ChainNotNarrowing { step_index }` typed-reject path).
+    ErrorCode::ChainNarrowingViolation,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -802,8 +814,15 @@ fn variant_count_is_pinned() {
     // recipient lacks one of the hybrid-required key halves; the
     // silent-downgrade defense per CLAUDE.md baked-in #5).
     // 170 + 1 = 171.
+    // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R1 + §R3):
+    // +2 — `AuthorizationGrantBindingSigInvalid` (the ONE-signed-
+    // artifact binding-sig tamper-detection typed-reject for the
+    // A-1 stolen-UCAN + A-2 stolen-keys + A-3 wrong-audience attacks)
+    // + `ChainNarrowingViolation` (structured-`Scope` chain-validator
+    // widening typed-reject across `Hashes` subset-violations +
+    // `RestrictedSelector` 6-dim widenings). 171 + 2 = 173.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 171,
+        CATALOG_VARIANT_COUNT, 173,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1032,7 +1051,15 @@ fn catalog_variant_count_matches_enum() {
             // X-Wing-hybrid cipher-suite when the recipient lacks one of
             // the hybrid-required key halves (the silent-downgrade defense
             // per CLAUDE.md baked-in #5).
-            | ErrorCode::RecipientLacksKeysForSuite => true,
+            | ErrorCode::RecipientLacksKeysForSuite
+            // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21
+            // §R3 ONE-signed-artifact + §R1 chain-narrowing): fail-
+            // closed typed-rejects at the cap-policy/grant-validation
+            // boundary — neither admits primitive-edge fallback per
+            // CLAUDE.md baked-in #18 trust-model + HARD RULE 12 (the
+            // typed reject IS the defense).
+            | ErrorCode::AuthorizationGrantBindingSigInvalid
+            | ErrorCode::ChainNarrowingViolation => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

@@ -34,6 +34,13 @@ blake3 = { workspace = true }
 # DeviceRevocation entries (matches the workspace canonical-bytes
 # discipline).
 serde_ipld_dagcbor = { workspace = true }
+# G-CORE-3b — `RestrictedSpec` + `Scope` + `AuthorizationGrant` carry
+# `derive(Serialize, Deserialize)` for canonical-bytes encode/decode
+# parity across online (G-CORE-3e ALPN) + offline (G-CORE-3f Drop
+# bundle) surfaces. `serde_bytes` for the `#[serde(with = "serde_bytes")]`
+# attribute on the issuer verifying-key blob in `AuthorizationGrant`.
+serde = { workspace = true }
+serde_bytes = { workspace = true }
 # G14-B: constant-time byte comparison surface per crypto-major-4.
 # Already used transitively via benten-id; the explicit dep here
 # pins the same minor version at this layer for any future cap-side
@@ -60,6 +67,22 @@ tracing = { workspace = true }
 # `cfg(not(target_arch = "wasm32"))`-gated in `src/backends/mod.rs`.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 benten-id = { path = "../benten-id" }
+# G-CORE-3b — OsRng for the `AuthorizationGrant::issue_for_test`
+# signing-keypair generation path (Ed25519). Workspace-pinned at the
+# rand_core 0.6 version ed25519-dalek 2.x consumes. Native-only because
+# `getrandom` on wasm32-unknown-unknown requires the `js` feature which
+# we don't enable (CLAUDE.md baked-in #17 — identity/cap work is full-
+# peer only).
+rand_core = { workspace = true }
+# G-CORE-3b — `AuthorizationGrant{ucan, key_material, binding_sig}` ONE
+# signed artifact per RATIFIED-S&C 2026-05-21 §R3 routes the binding-sig
+# through the workspace-canonical ed25519 surface re-exported by the
+# integration crate (per crypto-agility-contract:6: benten-caps is NOT
+# permitted a direct dep on `ed25519-dalek`; it goes through
+# `benten_crypto_suite::primitives::ed25519_dalek`). Native-only because
+# the `AuthorizationGrant` surface is full-peer (the wasm32 thin client
+# does NOT issue or verify grants per CLAUDE.md baked-in #17).
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 # G27-D (Phase 4-Foundation): `benten-platform-foundation` consumed
 # for `PluginManifest`, `CapRequirement`, `SharesPolicy` in the
 # manifest-aware scope-derivation module. Native-only — wasm32 thin-
