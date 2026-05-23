@@ -163,6 +163,13 @@ impl Engine {
             anchor_cid: None,
             nodes,
             system_zone_index,
+            // v2 (G-CORE-6b): MST root hook for §8-B mode-(b)
+            // range-proof verification. At HEAD the engine does not
+            // construct an MST during snapshot export; populated when
+            // the §8-B `MerkleRangeProofBackend` consumer wave lands
+            // (`docs/future/phase-4-backlog.md
+            // §8-B-merkle-range-proof-consumer-wire-up`).
+            merkle_root: None,
         })
     }
 
@@ -193,7 +200,11 @@ impl Engine {
     ///
     /// # Errors
     /// - [`EngineError::Other`] (`E_SERIALIZE`) on snapshot-blob decode
-    ///   failure or schema-version mismatch.
+    ///   failure.
+    /// - [`EngineError::Other`] (`E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH`)
+    ///   on a cross-version mismatch (G-CORE-6b v1→v2 bump lifted the
+    ///   mismatch class out of the generic `Serialize` family so
+    ///   callers can match it specifically).
     /// - [`EngineError::Graph`] on in-memory redb construction failure
     ///   (extremely unlikely — only happens on allocator failure
     ///   inside the redb cache).
@@ -207,7 +218,13 @@ impl Engine {
             != benten_graph::backends::snapshot_blob::SNAPSHOT_BLOB_SCHEMA_VERSION
         {
             return Err(EngineError::Other {
-                code: ErrorCode::Serialize,
+                // G-CORE-6b: lift to the typed
+                // `SnapshotBlobSchemaVersionMismatch` (was `Serialize`
+                // pre-bump) so callers can match the cross-version
+                // class specifically. Mirrors the underlying
+                // `SnapshotBlobError::SchemaVersion.code()` mapping
+                // so the two paths agree on the surface code.
+                code: ErrorCode::SnapshotBlobSchemaVersionMismatch,
                 message: format!(
                     "snapshot-blob schema mismatch: expected {expected}, got {actual}",
                     expected = benten_graph::backends::snapshot_blob::SNAPSHOT_BLOB_SCHEMA_VERSION,
