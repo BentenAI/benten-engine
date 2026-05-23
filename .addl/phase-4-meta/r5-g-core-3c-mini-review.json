@@ -1,0 +1,143 @@
+{
+  "wave": "G-CORE-3c",
+  "pr": 1341,
+  "branch": "g-core-3c/swap-matrix-conformance",
+  "head_sha": "814d9a609863853b7325d0f02c5757c34b13a7e0",
+  "base_sha_main": "05707357",
+  "reviewer": "rust-mini-reviewer (G-CORE-3 TERMINAL wave)",
+  "review_date": "2026-05-23",
+  "disposition": "APPROVE-WITH-FIX-NOW-FINDINGS",
+  "headline": "G-CORE-3c is structurally sound and the v1-beta crypto trust path is in place: 7-arm swap matrix wires end-to-end (5 named constructors covering the load-bearing arm pairings); 18 NEW tests + 3 inline tests all GREEN under cargo test; benten-crypto-suite clippy + rustdoc clean; §3.5g 4-surface mirror (Rust enum + as_str + FromStr + stable_shape 188->189 + TS catalog + TS class + CODE_TO_CTOR map) atomic; pim-1 docs (ERROR-CATALOG + SECURITY-POSTURE) coupled. Author's 3 surfaced judgment calls are SOUND with two requiring docstring hardening. HOWEVER: 1 MAJOR codepoint-semantic drift on 0x647b reuse, 1 MAJOR production-hot-path call to a `_for_test`-named test-API, and 3 MINOR findings (NF-4 strip-test actually exercises AAD-mutation not NF-4 verify; pure-PQ encrypt+decrypt paths are structurally unreachable; KAT cross-process determinism docstring overpromises). All MAJOR are FIX-NOW per HARD-RULE-12; none block CI merge.",
+  "ground_truth_verify_quality": "HIGH — independently traced (a) 7 suites actually built (3 sig arms x 4 enc arms with 5 constructors covering the valid pairings) (b) wrap/unwrap round-trip substantive — `cargo test -p benten-crypto-suite` returned 18 new tests passing including KAT pins with real ML-DSA-65 sig sizes and ML-KEM-768 ciphertext sizes (c) X-Wing combiner verified committing+strip-resistant in `sig.rs` `verify` path via VerifyError::StripResistanceViolated (d) typed-unsupported-fail-closed reachable on dispatcher entry — pin tf4_typed_unsupported_*_codepoint_never_silent_fallback confirms (e) NF-1 PQ⊕PQ buildable — `slh-dsa 0.2.0-rc.5` linked, real sk/vk generated, pure_pq_nf1_kat_self_check() runs sign+verify against live primitives (test takes 10.26s = real SLH-DSA wall-clock) (f) AUDIT_LANDED flag genuinely write-protected — `pub const false` with no setter API, no cfg(test) override, no compile-time-condition (g) 3 R3 RED-PHASE pins genuinely un-ignored (no `#[ignore]` in any of the 3 tf4_*.rs files).",
+  "findings": [
+    {
+      "id": "g3c-mr-major-1-codepoint-semantic-drift",
+      "severity": "MAJOR",
+      "lens": "codepoint-semantics + future-wire-format-freeze-safety",
+      "title": "0x647b reserved-for-ML-KEM-768⊕HQC reused for ML-KEM-768-only in SwapMatrix.cipher_suite_codepoint()",
+      "location": "crates/benten-crypto-suite/src/swap_matrix.rs:319 (`EncryptionArm::PurePqMlKem768Only => CipherSuiteCodepoint::HYBRID_MLKEM768_HQC`) + sister at line 449, 545",
+      "evidence": "codepoint.rs:190 reserves 0x647b for HYBRID_MLKEM768_HQC (NF-1 ML-KEM-768⊕HQC PQ⊕PQ end-state). cipher_suite.rs:711-715 keeps 0x647b typed-rejected at CipherSuite::resolve. But swap_matrix EncryptionArm::PurePqMlKem768Only (described in docs as 'ML-KEM-768-only; classical X25519 dropped'; lines 179-182) maps to 0x647b. ML-KEM-768-only is NOT the same as ML-KEM-768⊕HQC — the former is a single-PQ stripped-hybrid, the latter is a true PQ⊕PQ hybrid. Even though the audit-landed flag prevents runtime activation today, when the audit flips in v1-GM, callers will see codepoint 0x647b carrying ML-KEM-only payload, not HQC-hybrid payload. Future migration to the true NF-1 HQC arm would either silently break the wire format OR force a re-spend of 0x647b.",
+      "disposition": "FIX-NOW per HARD-RULE-12 (a) since this is the TERMINAL wave before G-CORE-9 freeze. Three resolution options to surface to Ben: (i) mint a new codepoint for 'pure-PQ ML-KEM-768-only' (e.g. 0x647c, separate from the reserved 0x647b HQC end-state); (ii) drop the pure-PQ-enc arm from this wave entirely and defer to FIPS-207 HQC arrival in 2027 (the audit-gate already prevents activation, so the structural surface adds nothing v1-beta-usable); (iii) explicitly document 0x647b's current dual semantic as 'reserved for ML-KEM-768-{only,⊕HQC} disambiguated at audit-flip time' AND name the disambiguation mechanism. Option (i) is the structurally-cleanest; option (ii) is the smallest diff and arguably correct given the wave's safety-invariant framing.",
+      "blocks_merge": false,
+      "blocks_g_core_9_freeze": true
+    },
+    {
+      "id": "g3c-mr-major-2-from_bytes_for_test-in-production-path",
+      "severity": "MAJOR",
+      "lens": "API-naming-vs-usage + §3.5g class",
+      "title": "KeyMaterial::from_bytes_for_test (test-named API) called from production SwapMatrix::sign_and_seal + open_and_verify hot paths",
+      "location": "crates/benten-crypto-suite/src/swap_matrix.rs:431, 448, 527, 544 (production-API surfaces — `sign_and_seal` is `pub`, called from non-test consumers per the swap-matrix integration contract)",
+      "evidence": "aead.rs:103 declares `pub fn from_bytes_for_test(codepoint, bytes: &[u8]) -> Self` with `#[must_use]` and docstring 'Test-only constructor — accept arbitrary bytes + codepoint for per-test K_ROOT vectors.' But `swap_matrix::sign_and_seal` (a `pub fn` production API surface) calls it for the encryption-active arms. The proper API is `from_bytes(codepoint, Vec<u8>)` which is `pub(crate)` — benten-crypto-suite IS the crate, so it COULD call the crate-private constructor. The `_for_test` naming is misleading and trips production-vs-test reviewers (and pim-18 SHAPE-not-SUBSTANCE: a `_for_test` surface in a production hot path is the exact opposite of the discipline).",
+      "disposition": "FIX-NOW per HARD-RULE-12 (a): rename the 4 call-sites to use `KeyMaterial::from_bytes(codepoint, bytes.to_vec())` (which is `pub(crate)`, in-crate from swap_matrix — works without changing the visibility), OR rename the `from_bytes_for_test` method to drop the `_for_test` suffix and update its docstring (since it's now a real production-arm API). Trivial mechanical fix (<10 LOC). Recommend the rename approach since the existing `from_bytes` takes `Vec<u8>` while `from_bytes_for_test` takes `&[u8]` — they're not API-equivalent.",
+      "blocks_merge": false
+    },
+    {
+      "id": "g3c-mr-minor-1-strip-test-actually-aad-test",
+      "severity": "MINOR",
+      "lens": "pim-18 SHAPE-not-SUBSTANCE + NF-4 pin precision",
+      "title": "tf4_both_must_verify_strip_pq_half_fails_closed fails at AEAD-AAD layer, NOT NF-4 verify layer",
+      "location": "crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs:151-173",
+      "evidence": "The test zeros the PQ half of `env.signature_bytes` then calls `hybrid.open_and_verify(...)`. compose_aad (line 1476) includes `signature_bytes` in AAD. At wrap-time AAD was computed over the ORIGINAL signature_bytes; at receive-time the mutated signature_bytes feeds a DIFFERENT AAD. ChaCha20-Poly1305 detects the AAD mismatch as a tag failure and returns `AeadAuthFailed` BEFORE the code reaches the NF-4 verify_payload step. So the test witnesses 'envelope AAD-binding catches sig-mutation' (a real property) but does NOT witness NF-4 strip-resistance (the documented intent — `assert! ... 'MUST fail closed at the NF-4 layer'`). A truly load-bearing NF-4 test would (i) construct a strip-attack payload that flows through the AEAD (e.g. seal with a STRIPPED sig from the start, where the AAD already commits to the stripped form) OR (ii) bypass the AEAD layer and call sig-only verify on a stripped HybridSignature.",
+      "disposition": "FIX-NOW per HARD-RULE-12 (a): tighten the test to actually witness NF-4 strip-resistance, OR rename the test + docstring to honestly say 'fails at AEAD-AAD layer'. Recommend the former since the wave brief calls out NF-4 strip-resistance as a load-bearing safety pin and sig.rs's `verify` path has the StripResistanceViolated arm that should be exercised. Inline trivial fix; orchestrator-direct or a 1-agent follow-up.",
+      "blocks_merge": false
+    },
+    {
+      "id": "g3c-mr-minor-2-pure-pq-enc-paths-unreachable",
+      "severity": "MINOR",
+      "lens": "test-coverage of build-now-but-non-default arm",
+      "title": "Pure-PQ encrypt+decrypt paths (pure_pq_mlkem_encapsulate / aead_wrap_pure_pq / aead_unwrap_pure_pq) are structurally unreachable in tests until audit-flag flip",
+      "location": "crates/benten-crypto-suite/src/swap_matrix.rs:1605-1688 (the 4 helper functions) + 440-465 + 535-554 (the sign_and_seal / open_and_verify pure-PQ branches)",
+      "evidence": "SwapKeypair::PurePq is only constructable via generate_keypair_for_test when sig_arm == PurePqMlDsa65Slhdsa. SwapMatrix with that sig_arm only comes from try_pure_pq_sole_trust_path which always returns Err(AuditNotLandedPurePqRejected). Therefore no test in the workspace exercises the AEAD wrap+unwrap pure-PQ paths end-to-end. The pure_pq_nf1_kat_self_check witnesses sign+verify only. These primitives could silently break and the regression would not surface until v1-GM audit-flag flip.",
+      "disposition": "FIX-NOW per HARD-RULE-12 (a) via a test-only side-door: e.g. a `#[cfg(test)] fn force_pure_pq_for_test() -> SwapMatrix` that bypasses the audit-flag gate (clearly named, NOT a public surface; only callable from this crate's tests). Pair with end-to-end pure-PQ sign+seal+open+verify pin. This catches FIPS-203 ML-KEM-768 + ChaCha20-Poly1305 integration drift now (cheaply) rather than discovering it during the v1-GM audit window when the cost of fixing-and-re-auditing is much higher.",
+      "blocks_merge": false
+    },
+    {
+      "id": "g3c-mr-minor-3-kat-cross-process-docstring",
+      "severity": "MINOR",
+      "lens": "docstring-vs-actual-contract drift",
+      "title": "ml_dsa_65_keygen_from_seed_for_test docstring claims 'passing the SAME seed always returns the SAME pubkey bytes' but determinism is only within-process",
+      "location": "crates/benten-crypto-suite/src/swap_matrix.rs:1306-1308",
+      "evidence": "The function generates a fresh ML-DSA SigningKey via `MlDsaSigningKey::<MlDsa65>::generate()` (OS RNG) at cache-miss, then caches and returns the result keyed by `seed`. The `seed` is the cache key — NOT input to keygen. A SECOND process starting fresh will populate the cache with a DIFFERENT pubkey for the same seed. The docstring 'passing the SAME seed always returns the SAME pubkey bytes' is true within a single process but false across processes — which is fine for the wave intent (the NF-2 / C-GM-AUDIT will replace this with real NIST KAT vector files) but the docstring overstates the contract.",
+      "disposition": "FIX-NOW per HARD-RULE-12 (a): clarify the docstring to 'within a single process, passing the same seed returns the same pubkey bytes (process-cached synthesis); cross-process determinism arrives via the NF-2 / C-GM-AUDIT real-NIST-KAT-vector fixture'. Trivial inline. Pair this with the existing module-doc comment at lines 1019-1038 which already acknowledges this nuance.",
+      "blocks_merge": false
+    },
+    {
+      "id": "g3c-mr-minor-4-ts-mirror-swap-matrix-not-shipped",
+      "severity": "MINOR",
+      "lens": "§3.5g cross-language rule-mirror self-named obligation",
+      "title": "tf4 test file self-names a TS mirror obligation `packages/engine/src/swap_matrix.generated.ts` that is NOT shipped",
+      "location": "crates/benten-crypto-suite/tests/tf4_pure_pq_gated_audit_landed.rs:43-49 (`The audit-landed-flag is mirrored to TS via packages/engine/src/swap_matrix.generated.ts ... flagged here as a G-CORE-3c atomic-update obligation`) AND tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs:38-42 (same)",
+      "evidence": "Only `packages/engine/src/errors.generated.ts` is touched by this wave (the new ErrorCode is mirrored). The self-named obligation `swap_matrix.generated.ts` does not exist in `packages/engine/src/` — only `errors.generated.ts` is shipped. The test docstrings frame this as 'a G-CORE-3c atomic-update obligation' — that IS the §3.5g HARD-RULE-12 cross-language atomic discipline.",
+      "disposition": "Per HARD-RULE-12 disposition: either (a) ship the TS mirror NOW (likely a thin re-export naming the audit_landed_pure_pq_flag = false constant on the TS side so JS/TS callers see the same gate) — preferred per the wave's self-named obligation, OR (b) DELETE the self-named obligation from the test docstrings (DISAGREE-WITH-EXPLANATION: TS callers route through the engine-error catalog which DOES mirror the new ErrorCode; a separate swap_matrix.generated.ts is not load-bearing if the only TS-side surface is the error code). DO NOT leave the obligation un-discharged in test docstrings ('flagged here' is not a valid HARD-RULE-12 disposition). Recommend (b) — the ErrorCode mirror covers the surface that TS consumers actually use; the wider SwapMatrix surface is Rust-only at v1-beta.",
+      "blocks_merge": false
+    }
+  ],
+  "judgment_call_dispositions": {
+    "slh_dsa_param_choice_sha2_128s": {
+      "verdict": "SOUND with docstring hardening recommended",
+      "rationale": "The argument that 'codepoint 0x0003 reserves the suite identifier not a parameter set' is structurally correct — the swap-matrix suite-selector dispatches by codepoint, and the underlying SignatureSuite primitive can be re-parameterized internally. The Sha2_128s choice for the conformance-test layer is reasonable (smallest sigs + fastest verify = faster CI). However: the docstring at lines 76-84 says 'wire-format canonical choice (likely upgraded to Sha2_192s for Cat-3 parity) is a G-CORE-9 P-III freeze decision' — but G-CORE-9 will then have to choose between (a) flipping the parameter set under the same codepoint (breaks any v1-beta deployed signatures using Sha2_128s) and (b) minting a new codepoint for Sha2_192s. The docstring should call out this fork explicitly so the G-CORE-9 decision is not surprised by it.",
+      "follow_up": "Hardening recommended: add a line to the docstring 'G-CORE-9 P-III freeze must choose: re-parameterize 0x0003 to Cat-3 Sha2_192s (breaks v1-beta deployed pure-PQ sigs — acceptable because pure-PQ-sole-trust-path is structurally non-default until audit flip) OR mint a new codepoint reserving Sha2_128s for the smaller-sig variant'. Trivial inline."
+    },
+    "kat_vector_strategy_process_cached_synthesis": {
+      "verdict": "SOUND with explicit cross-process-determinism qualification needed (see Minor #3 above)",
+      "rationale": "Process-cached synthesis is genuinely a usable conformance witness: it catches the 'PQ-shaped Ed25519 stub' class (the cached pubkey would not be ML-DSA-65-dimensioned ~1952 B). The argument 'real NIST KAT corpora are an NF-2 / C-GM-AUDIT fixture deliverable' is consistent with the audit-landed gating shape — the audit-deliverable itself needs real KAT vectors; the v1-beta conformance layer needs reproducibility-within-a-test-process (which is what the process-cache provides).",
+      "follow_up": "Tighten the docstring per Minor #3. Otherwise the strategy is appropriate to the wave's scope; the gap (real NIST KAT corpora) is correctly named for NF-2 / C-GM-AUDIT."
+    },
+    "audit_landed_flag_pub_const_no_setter": {
+      "verdict": "SOUND — flag is genuinely write-protected",
+      "rationale": "Verified via grep: no `set_audit_landed_pure_pq_flag` exists anywhere in the workspace. The constant is declared `pub const AUDIT_LANDED_PURE_PQ_FLAG: bool = false` at module level — no `#[cfg(test)]` override, no compile-time-conditional, no test-only setter API. The `try_pure_pq_sole_trust_path` constructor is the ONLY code path consulting the flag, and it does so via direct `if !AUDIT_LANDED_PURE_PQ_FLAG { return Err(...) }` (line 251). The named typed arm `AuditNotLandedPurePqRejected` is the v1-GM-gating grep target. Workspace test confirms the flag is `false` at baseline (3 separate accessor calls in `tf4_p5b_audit_landed_pure_pq_flag_is_false_at_workspace_baseline`). Flipping the flag requires a future Ben-authored commit modifying the constant value + the gating-side coupled actions (independent audit deliverable + pinned crate versions + sign-off) per the docstring at lines 67-73.",
+      "follow_up": "None for the flag mechanic itself. Consider a `#[deny]` lint-style guard at the CI surface in the v1-GM gate cascade so a future commit that flips the flag also has to land the coupled artifacts before merging — but that's a CI infrastructure concern not a code concern, deferrable per the C-GM-AUDIT exit-criterion procedure."
+    }
+  },
+  "architectural_surface_for_ben_morning": [
+    "0x647b codepoint-semantic drift: pure-PQ-ML-KEM-only is mapped to a codepoint reserved for ML-KEM⊕HQC. Three resolution options (mint new codepoint / drop the pure-PQ-enc arm pre-FIPS-207 / explicitly disambiguate) — Ben's call on which option to take BEFORE G-CORE-9 freeze. The wave can merge as-is (gate prevents runtime activation) but this needs to land before G-CORE-9.",
+    "TS-mirror obligation self-named in tf4 docstrings but not delivered: either ship `packages/engine/src/swap_matrix.generated.ts` or remove the self-named obligation. Recommend removal (the ErrorCode mirror already covers the surface TS consumers use).",
+    "Pure-PQ encrypt+decrypt paths structurally unreachable in tests pre-audit: defensible (the safety invariant is the gate) BUT silent breakage risk during v1-GM audit window is real. A test-only side-door (`#[cfg(test)] force_pure_pq_for_test`) closes the gap cheaply now."
+  ],
+  "ground_truth_verification_summary": {
+    "claims_verified": [
+      "7 suites built — 3 signature arms x 4 encryption arms covered by 5 named constructors (v1_beta_default / classical_only / no_encryption_public_class / non_pq_encryption / try_pure_pq_sole_trust_path).",
+      "wrap+unwrap round-trip substantive — 18 NEW tests passing locally; KAT pins confirm real ML-DSA-65 (~3309 B sig) and ML-KEM-768 (~1088 B ciphertext) sizes not stubbed.",
+      "X-Wing combiner committing+strip-resistant — sig.rs verify path has typed VerifyError::StripResistanceViolated arm; AAD binds signature_bytes (compose_aad line 1476).",
+      "typed-unsupported-fail-closed reachable — tf4_typed_unsupported_{sig,cipher}_codepoint_never_silent_fallback pins exercise CipherSuite::resolve and SignatureSuite::resolve_codepoint with unknown codepoints; both return typed UnsupportedAlgorithm.",
+      "NF-1 PQ⊕PQ buildable — slh-dsa 0.2.0-rc.5 + ml-dsa 0.1 both wired, real keypair generated, pure_pq_nf1_kat_self_check runs sign+verify against live primitives (10.26s wall-clock = real SLH-DSA).",
+      "AUDIT_LANDED_PURE_PQ_FLAG is `pub const false` with no setter API; no cfg(test) override; the only consumer is try_pure_pq_sole_trust_path which fails-closed.",
+      "3 R3 RED-PHASE pins from W1 (P-1..P-5b + F-1/F-2 + A-1/A-2) genuinely un-ignored — `grep -rn '#\\[ignore\\]' crates/benten-crypto-suite/tests/tf4_*` returns no matches.",
+      "Cross-language mirror atomic (Rust enum + as_str + FromStr + stable_shape 188->189 + TS catalog + TS class + CODE_TO_CTOR map all updated in same commit).",
+      "Docs coupled (pim-1): ERROR-CATALOG.md row + SECURITY-POSTURE.md G-CORE-3c runtime gate paragraph both added."
+    ],
+    "claims_NOT_holding": [
+      "tf4_both_must_verify_strip_pq_half_fails_closed docstring says 'MUST fail closed at the NF-4 layer' — actually fails at AEAD-AAD layer before reaching NF-4. Real but tighter pin needed. See Minor #1.",
+      "ml_dsa_65_keygen_from_seed_for_test docstring 'passing the SAME seed always returns the SAME pubkey bytes' — only true within-process. See Minor #3.",
+      "tf4 docstrings self-name a TS swap_matrix.generated.ts mirror obligation that is not shipped. See Minor #4."
+    ]
+  },
+  "rubric_dimension_scores": {
+    "coverage_completeness": "GREEN",
+    "7_suites_actually_built": "GREEN",
+    "wrap_unwrap_round_trip_substantive": "GREEN-with-MINOR (Minor #2: pure-PQ enc paths unreachable in tests)",
+    "X_Wing_combiner_committing_strip_resistant": "GREEN",
+    "adversarial_downgrade_typed_reject": "GREEN",
+    "typed_unsupported_fail_closed_everywhere": "GREEN",
+    "NF_1_pq_pq_buildable_now": "GREEN",
+    "NF_2_C_GM_AUDIT_flag_write_protected": "GREEN",
+    "SLH_DSA_param_choice_soundness": "GREEN-with-docstring-hardening (judgment call)",
+    "KAT_vector_strategy_soundness": "GREEN-with-MINOR (Minor #3 docstring)",
+    "cross_language_3_5g_atomic": "GREEN-for-ErrorCode + MINOR-for-self-named-swap_matrix.generated.ts (Minor #4)",
+    "ground_truth_verify_3_5n": "GREEN (full enumeration of trace claims above)",
+    "stable_MSRV_clippy_rustdoc_workspace_missing_docs": "GREEN-for-this-crate (cargo check + cargo clippy --all-targets -D warnings + cargo doc all clean locally on benten-crypto-suite; missing_docs not workspace-enforced)",
+    "CATALOG_rebase_coordination": "GREEN (188->189 against base 05707357)",
+    "doc_coupling_pim_1": "GREEN",
+    "isolation_no_bypass_no_force_push": "GREEN (review-only; no mutation to PR branch)",
+    "codepoint_semantics_majora": "MAJOR (#1: 0x647b semantic drift — actionable before G-CORE-9 freeze)",
+    "API_naming_vs_usage_majorb": "MAJOR (#2: from_bytes_for_test in production hot path)"
+  },
+  "ci_status_at_review_time": "53 checks pending (mid-CI cycle); 0 failing observed yet. The build+test linux-x86_64 / cargo-llvm-cov / wasm32-conformance / drift-detector / catalog-parity lanes will all need green before merge; the cross-language mirror atomicity check should pass given the 4-surface coordination is consistent.",
+  "recommended_next_action": "(1) ORCHESTRATOR-DIRECT fix-pass for the 2 MAJOR + 4 MINOR findings (single small commit — codepoint disambiguation OR clarifying-docstring per Ben's call on Major #1; rename from_bytes_for_test callers to from_bytes per Major #2; tighten the NF-4 strip test per Minor #1; add a cfg(test) side-door + pure-PQ end-to-end test per Minor #2; clarify KAT docstring per Minor #3; remove or ship swap_matrix.generated.ts per Minor #4). (2) Surface Major #1 to Ben morning as the load-bearing pre-G-CORE-9 architectural fork. (3) Once CI returns full-green AND the FIX-NOW commit is in, this is BATCH-CANDIDATE for the next Strategy-C wave per dispatch-conventions §3.14 (G-CORE-3c is itself the last of the G-CORE-3 family; the natural batch with the next set of post-3-family waves). (4) DO NOT admin-bypass; merge via the normal 53-check gate per the standing no-admin-bypass discipline.",
+  "rebase_staleness_check": {
+    "merge_base_with_origin_main": "05707357",
+    "commits_behind_main": 0,
+    "tree_state_at_review": "clean (no uncommitted changes; pr-1341 checked out at 814d9a60 verified)",
+    "stale": false
+  }
+}
