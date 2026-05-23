@@ -135,6 +135,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -203,6 +204,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut ctx2 = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
+        install_record_replay_check: None,
     };
     let ctx2_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -259,6 +261,7 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut ctx3 = InstallPorts {
         cap_minter: &mut cascade3,
         private_ns: &mut private_ns3,
+        install_record_replay_check: None,
     };
     let ctx3_params = InstallParams {
         now_secs: 1_700_000_000,

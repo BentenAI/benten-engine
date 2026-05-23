@@ -77,6 +77,24 @@ pub mod change_probe;
 pub mod handler_router;
 pub mod manifest_envelope_recheck;
 pub mod shares_policy_resolver;
+// Phase-4-Meta-Core G-CORE-8 §4.23 — structural-always-on user-DID
+// root write-boundary chain validator. Port + Noop default + typed
+// reject mapping; production validator + WRITE-admission wire-up
+// follow per the module's G-CORE-8.2 BELONGS-NAMED-NOW disposition.
+pub mod write_boundary_chain_validator;
+// Phase-4-Meta-Core G-CORE-8 §4.22 — thin-client bridge that
+// resolves the acting principal from the authenticated DID-keyed
+// session (NEVER from client input). Composes the G24-F SHIPPED
+// DidKeyedSession surface; native-only per CLAUDE.md baked-in #17
+// (full peers run the bridge; thin compute surfaces ARE the bridge's
+// consumers via HTTP/IPC).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod thin_client_bridge;
+// Phase-4-Meta-Core G-CORE-8 §4.37 — InstallRecord replay-defense +
+// atomic record-and-check around admission. Couples the F3 durable
+// replay-marker pattern that benten-caps `FrameReplayMarker` uses for
+// sync-frame replay defense.
+pub mod install_record_replay;
 // Phase-3 G15-A wave-5a — materialization-time per-row READ gate for
 // IVM-materialized views. Closes Compromise #11 in coordination with
 // G14-D delivery-time gate per `ivm-major-2` + `ds-r4r2-7` shared-trait

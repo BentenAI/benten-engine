@@ -35,15 +35,90 @@ use crate::EngineError;
 use benten_errors::ErrorCode;
 
 /// Outcome of a manifest-envelope recheck call.
+///
+/// # G-CORE-8 §4.36 fail-CLOSED flip + (a-sub) typed-arm split
+///
+/// Phase-4-Meta-Core G-CORE-8 closes the **security-r1-1 + security-r1-2
+/// BLOCKERs** by ADDING a typed [`Self::UnresolvedDeny`] arm
+/// (distinct from the legitimate [`Self::NotApplicable`] arm) and
+/// flipping the [`outcome_to_row_reject`] mapping so the new arm
+/// row-rejects with typed
+/// [`ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny`].
+///
+/// **The pre-G-CORE-8 BLOCKER:** the rechecker had no `UnresolvedDeny`
+/// typed-arm — a substantive rechecker that detected an unresolvable
+/// peer-DID or a sentinel `<unresolved-peer>` had no way to express
+/// "I tried but couldn't positively place this row" except by
+/// admitting (`NotApplicable`) or fabricating an `OutsideEnvelope`
+/// error with synthesized fields. The result: an attacker who induced
+/// peer-DID resolution failure could route an inbound row through the
+/// admit path. G-CORE-8 fixes this by minting `UnresolvedDeny` + the
+/// typed reject so substantive rechecker implementations can
+/// fail-CLOSED honestly on unresolvable cases.
+///
+/// **The post-flip enum invariant (security-r1-2):** `Admitted` and
+/// `NotApplicable` are the proceed paths; `UnresolvedDeny` and
+/// `OutsideEnvelope` are the reject paths. The semantic split:
+///
+/// - `NotApplicable` = "no plugin chain present in this row — Layer-3
+///   envelope semantics don't apply here; the Layer-1 user-root +
+///   per-row cap-recheck checks (enforced elsewhere) are the relevant
+///   defenses." This is the legitimate "user wrote it directly" case
+///   AND the legitimate "no rechecker installed → nothing to check"
+///   case (the Noop returns this).
+/// - `UnresolvedDeny` = "I expected to verify a plugin chain BUT
+///   couldn't (peer-DID unresolvable, sentinel `<unresolved-peer>`,
+///   no installed manifest, ambiguous resolution)." Substantive
+///   `ProductionManifestEnvelopeRechecker` impls return this on the
+///   failure paths; row-rejects fail-CLOSED.
+/// - `Admitted` = "plugin chain positively verified against the
+///   manifest envelope" — proceed.
+/// - `OutsideEnvelope` = "plugin chain present BUT a step is outside
+///   the source plugin's `shares` policy" — row-rejects with the
+///   pre-existing typed code.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestEnvelopeRecheckOutcome {
-    /// No manifest-envelope chain found for this row (e.g. user-issued
-    /// write not delegated through any plugin) — recheck passes
-    /// trivially. The Layer 1 user-root-anchor check in
-    /// `CapabilityPolicy::check_write` still applies.
+    /// No manifest-envelope chain is in scope for this row (e.g.
+    /// user-issued write not delegated through any plugin; or the
+    /// installed rechecker has no PluginLibrary state to consult, the
+    /// Noop case). Layer-3 envelope semantics do not apply. Layer-1
+    /// user-root + per-row cap-recheck checks (enforced elsewhere)
+    /// remain the relevant defenses.
+    ///
+    /// **Note** — this is distinct from [`Self::UnresolvedDeny`]: the
+    /// former says "no chain here, nothing to check at this layer";
+    /// the latter says "chain expected, but the rechecker could not
+    /// positively place it." Substantive `Production*Rechecker` impls
+    /// MUST return `UnresolvedDeny` on the failure path (NEVER
+    /// `NotApplicable`), so peer-DID resolution failure cannot route
+    /// through the admit path.
     NotApplicable,
+    /// **G-CORE-8 §4.36 fail-CLOSED arm (security-r1-1 + security-r1-2
+    /// BLOCKER closures; new variant).**
+    ///
+    /// The rechecker EXPECTED to verify a plugin chain for this row
+    /// but could NOT positively place it against the local manifest
+    /// store + UserDidRegistry. Causes: unresolvable peer-DID
+    /// (sentinel `<unresolved-peer>`); no installed manifest for the
+    /// inbound row's source plugin-DID; ambiguous-resolution outcome
+    /// where the rechecker cannot produce a positive `Admitted`
+    /// verdict.
+    ///
+    /// **Invariant (security-r1-2):** this outcome MUST row-reject via
+    /// [`outcome_to_row_reject`] (typed
+    /// [`ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny`]). NEVER
+    /// admit on this arm. The pre-G-CORE-8 BLOCKER was the *absence*
+    /// of this typed arm — substantive rechecker impls had to either
+    /// admit-on-unresolved or fabricate fields. Production impls now
+    /// return this arm honestly + fail-CLOSED at the merge boundary.
+    UnresolvedDeny,
     /// A manifest-envelope chain was found AND every step fits the
     /// source plugin's `shares` policy. Admit the row.
+    ///
+    /// **Invariant (security-r1-2):** this is the **positive proceed
+    /// path**; returned ONLY on a positively-verified envelope/chain
+    /// match (a substantive impl that returns `Admitted` is asserting
+    /// it walked the chain + every step satisfied the `shares` policy).
     Admitted,
     /// A manifest-envelope chain was found BUT a step is outside the
     /// envelope (Layer 2 ↔ Layer 3 mismatch). Reject the row with the
@@ -90,14 +165,33 @@ pub trait ManifestEnvelopeRechecker: Send + Sync {
     ) -> ManifestEnvelopeRecheckOutcome;
 }
 
-/// Default rechecker — returns `NotApplicable` for every call.
-/// Behavior is observably identical to Phase-3 (no envelope recheck).
-/// Engines built at the default (post-R6-FP-A: `Engine::default` installs
-/// `Some(Arc::new(Noop))`) get this seam structurally wired so the
-/// recheck-path always fires; operators swap in a real adapter via
-/// `Engine::set_manifest_envelope_rechecker(Arc::new(<real>))`. A fluent
-/// `EngineBuilder::with_manifest_envelope_rechecker` setter is named
-/// at `docs/future/phase-4-backlog.md §4.36` as a Phase-4-Meta carry.
+/// Default rechecker — returns
+/// [`ManifestEnvelopeRecheckOutcome::NotApplicable`] for every call.
+///
+/// **Semantics:** "no PluginLibrary state to consult → no chain in
+/// scope at this layer." Equivalent to the Phase-3 baseline: Layer-3
+/// envelope semantics don't apply, Layer-1 user-root + per-row
+/// cap-recheck (enforced elsewhere) remain in force.
+///
+/// **G-CORE-8 §4.36 note:** the §4.36 fail-CLOSED flip is the addition
+/// of the typed [`ManifestEnvelopeRecheckOutcome::UnresolvedDeny`]
+/// arm (NOT a change to this Noop's outcome). Substantive
+/// `Production*Rechecker` impls — which actually have PluginLibrary
+/// state — return `UnresolvedDeny` on the unresolvable-peer / missing-
+/// manifest paths AND row-reject via [`outcome_to_row_reject`] with
+/// typed [`ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny`]. The
+/// Noop continues to return `NotApplicable` because it has no
+/// PluginLibrary state by definition — it is the "no Layer-3 enforcement
+/// installed" default and the typed reject would over-fire on every
+/// inbound row (breaking every existing sync test that doesn't wire a
+/// real PluginLibrary).
+///
+/// **Production-wiring contract:** deployments that install a real
+/// PluginLibrary swap in a `ProductionManifestEnvelopeRechecker`
+/// (typically the platform-foundation glue type that wraps
+/// `PluginLibrary` + `validate_chain_with_manifest_envelope`) via
+/// [`crate::Engine::set_manifest_envelope_rechecker`]. The Noop is the
+/// default for deployments that have no Layer-3 trust model installed.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoopManifestEnvelopeRechecker;
 
@@ -108,6 +202,17 @@ impl ManifestEnvelopeRechecker for NoopManifestEnvelopeRechecker {
         _zone: &str,
         _key: &str,
     ) -> ManifestEnvelopeRecheckOutcome {
+        // The Noop has no PluginLibrary state to consult; by
+        // construction it cannot answer "is this chain inside the
+        // source plugin's manifest envelope?" — there's no manifest
+        // store to look in. The right answer at this layer is
+        // NotApplicable ("no Layer-3 enforcement installed; defer to
+        // Layer-1 user-root + per-row cap-recheck enforced elsewhere").
+        //
+        // Production deployments with a PluginLibrary install a real
+        // ProductionManifestEnvelopeRechecker that returns
+        // UnresolvedDeny on the unresolvable-peer path → row-rejects
+        // (G-CORE-8 §4.36 fail-CLOSED via the new typed arm).
         ManifestEnvelopeRecheckOutcome::NotApplicable
     }
 }
@@ -127,8 +232,30 @@ pub fn outcome_to_row_reject(
     key: &str,
 ) -> Result<(), EngineError> {
     match outcome {
-        ManifestEnvelopeRecheckOutcome::NotApplicable
-        | ManifestEnvelopeRecheckOutcome::Admitted => Ok(()),
+        // Proceed paths: `Admitted` (positive verification) +
+        // `NotApplicable` (no chain in scope at this layer — Layer-1
+        // user-root + per-row cap-recheck enforced elsewhere are the
+        // relevant defenses).
+        ManifestEnvelopeRecheckOutcome::Admitted
+        | ManifestEnvelopeRecheckOutcome::NotApplicable => Ok(()),
+        // **G-CORE-8 §4.36 fail-CLOSED flip (security-r1-1 + security-r1-2
+        // BLOCKER closures):** the new `UnresolvedDeny` typed arm
+        // row-rejects with the typed ErrorCode. Substantive
+        // `Production*Rechecker` impls return this on the unresolvable-
+        // peer / missing-manifest / ambiguous-resolution paths so
+        // peer-DID resolution failure CANNOT route through the admit
+        // path. The pre-G-CORE-8 BLOCKER was the absence of this typed
+        // arm — substantive impls had to admit-on-unresolved or fabricate
+        // OutsideEnvelope fields.
+        ManifestEnvelopeRecheckOutcome::UnresolvedDeny => Err(EngineError::Other {
+            code: ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+            message: format!(
+                "apply_atrium_merge: manifest-envelope recheck cannot positively place row \
+                 (zone='{zone}' key='{key}'): unresolvable peer-DID, sentinel \
+                 '<unresolved-peer>', missing installed manifest, or ambiguous resolution \
+                 — fail-CLOSED per G-CORE-8 §4.36 (security-r1-1 + security-r1-2)"
+            ),
+        }),
         ManifestEnvelopeRecheckOutcome::OutsideEnvelope {
             offending_plugin_did,
             cap_pattern,

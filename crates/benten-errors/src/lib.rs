@@ -1142,6 +1142,63 @@ pub enum ErrorCode {
     /// only legitimate `Scope` arms at v1-beta are `Hashes` +
     /// `RestrictedSelector`.
     ChainNarrowingViolation,
+
+    // ----- Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes) -----
+    //
+    // G-CORE-8 §4.36 fail-CLOSED flip + §4.37 InstallRecord replay defense +
+    // §4.23 user-DID root write-boundary chain validator + §4.22 thin-client
+    // bridge principal-resolution. All four codes ride the existing typed-
+    // reject discipline (typed-rejection-on-the-defense-arm; never silent
+    // fail-open). Each code's construction site is named in `tests/
+    // stable_shape.rs` ALL_CATALOG_VARIANTS entries below.
+    /// G-CORE-8 §4.36 fail-CLOSED flip (security-r1-1 + security-r1-2
+    /// BLOCKER closure). The manifest-envelope rechecker observed an
+    /// outcome it could NOT positively place — unresolvable peer-DID
+    /// (sentinel `<unresolved-peer>`), no manifest available for the
+    /// inbound row, or any non-positive recheck outcome. Per the
+    /// post-rename enum invariant in
+    /// `benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome`
+    /// (formerly `NotApplicable` → now `UnresolvedDeny`): `Admitted` is
+    /// the ONLY proceed path; every non-positive outcome row-rejects
+    /// with this typed code. Construction site:
+    /// `benten-engine::manifest_envelope_recheck::outcome_to_row_reject`
+    /// on the `UnresolvedDeny` arm. Maps to
+    /// `E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY`.
+    ManifestEnvelopeRecheckUnresolvedDeny,
+    /// G-CORE-8 §4.37 InstallRecord replay defense + TOCTOU atomic
+    /// record-and-check. A second presentation of the same install-
+    /// record CID (matched by `signing_payload` hash, the canonical
+    /// content identity) is rejected at admission BEFORE the cap-cascade
+    /// runs (zero duplicate-mint window). The check-and-record is
+    /// atomic — `record_and_check_install_record` is a single
+    /// critical section (compare-and-swap shape; no verify-then-record
+    /// gap). Construction site:
+    /// `benten-engine::install_record_replay::InstallRecordReplayStore`.
+    /// Maps to `E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED`.
+    PluginInstallRecordAlreadyApplied,
+    /// G-CORE-8 §4.23 structural-always-on user-DID root write-boundary
+    /// chain validator. A WRITE whose UCAN delegation chain does NOT
+    /// terminate at a registered user-DID root is rejected at the WRITE
+    /// admission seam (mirrors Phase-3 G16-B-F structural-always-on
+    /// per-row cap-recheck — fail-CLOSED, NOT an opt-in). Defends the
+    /// CLAUDE.md #18 Layer-1 user-as-root invariant against plugin-DID
+    /// elevation attempts (a plugin-rooted "chain" cannot satisfy the
+    /// user-root-terminus check). Construction site: the engine
+    /// transaction-commit admission path consulting the configured
+    /// `WriteBoundaryChainValidator`. Maps to
+    /// `E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED`.
+    WriteBoundaryChainNotUserRooted,
+    /// G-CORE-8 §4.22 thin-client bridge principal resolution failure.
+    /// The bridge could not resolve the acting principal from the
+    /// authenticated DID-keyed session (token expired, session not
+    /// established, origin mismatch, or any other reason the session
+    /// surface returns a typed `ThinClientSessionError`). The bridge
+    /// NEVER trusts a client-supplied principal — a client that asserts
+    /// "I am principal X" without a session bound to X is rejected with
+    /// this typed code. Construction site:
+    /// `benten-engine::thin_client_bridge::ThinClientBridge::resolve_principal_for_request`.
+    /// Maps to `E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED`.
+    ThinClientBridgePrincipalUnresolved,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1452,6 +1509,15 @@ impl ErrorCode {
             #[rustfmt::skip]
             ErrorCode::AuthorizationGrantBindingSigInvalid => "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
             ErrorCode::ChainNarrowingViolation => "E_CHAIN_NARROWING_VIOLATION",
+            // G-CORE-8 §4.36/§4.37/§4.23/§4.22 — single-line per drift-detect regex.
+            #[rustfmt::skip]
+            ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
+            #[rustfmt::skip]
+            ErrorCode::PluginInstallRecordAlreadyApplied => "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED",
+            #[rustfmt::skip]
+            ErrorCode::WriteBoundaryChainNotUserRooted => "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
+            #[rustfmt::skip]
+            ErrorCode::ThinClientBridgePrincipalUnresolved => "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1908,6 +1974,21 @@ impl ErrorCode {
             ErrorCode::AuthorizationGrantBindingSigInvalid => None,
             ErrorCode::ChainNarrowingViolation => None,
 
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock:
+            // - ManifestEnvelopeRecheckUnresolvedDeny + WriteBoundary
+            //   ChainNotUserRooted are cap-bearing denials at the merge /
+            //   write-admission boundary → ON_DENIED.
+            // - PluginInstallRecordAlreadyApplied fires at install
+            //   admission (pre-cap-cascade) — install path is not a
+            //   primitive-edge dispatch surface; the typed code is the
+            //   only routing.
+            // - ThinClientBridgePrincipalUnresolved fires at the bridge
+            //   entry — not a primitive-edge dispatch surface.
+            ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => Some("ON_DENIED"),
+            ErrorCode::WriteBoundaryChainNotUserRooted => Some("ON_DENIED"),
+            ErrorCode::PluginInstallRecordAlreadyApplied => None,
+            ErrorCode::ThinClientBridgePrincipalUnresolved => None,
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2196,6 +2277,17 @@ impl core::str::FromStr for ErrorCode {
                 ErrorCode::AuthorizationGrantBindingSigInvalid
             }
             "E_CHAIN_NARROWING_VIOLATION" => ErrorCode::ChainNarrowingViolation,
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock.
+            "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY" => {
+                ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+            }
+            "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED" => {
+                ErrorCode::PluginInstallRecordAlreadyApplied
+            }
+            "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED" => ErrorCode::WriteBoundaryChainNotUserRooted,
+            "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED" => {
+                ErrorCode::ThinClientBridgePrincipalUnresolved
+            }
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)
