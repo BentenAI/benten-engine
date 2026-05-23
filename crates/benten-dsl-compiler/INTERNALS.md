@@ -2,7 +2,7 @@
 
 Plain-English deep-dive into the `benten-dsl-compiler` crate. Audience: a developer or AI agent who needs to understand what this crate is, why it exists, and what to expect when extending it. Read-only audit; no claims about Phase-4 plans beyond what is already pinned in the code or accompanying retrospective docs.
 
-**Last refreshed against `8141b94` (Phase-4-Foundation tag-eve, 2026-05-14).** The crate is substantively unchanged since the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep); the only intervening edit was the Phase-3.5 → Phase-4-Foundation rename at `00f2784` (2026-05-11). Phase-4-Foundation R5+R6 work touched zero source files in this crate — the typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
+**Last refreshed against `f2c744f0` (post-G-CORE-DSL chunk-2 fix-up + main merge, 2026-05-23).** The crate had been substantively unchanged from the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep) through `8141b94` (Phase-4-Foundation tag-eve, 2026-05-14); G-CORE-DSL chunk-2 (#663 #760 #929 #931 #934) is the first substantive edit since, growing `src/lib.rs` past the prior 894-LOC baseline. The typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
 
 ---
 
@@ -45,7 +45,7 @@ Net shape: the compiler is a leaf consumer of `benten-core` and a sibling-not-pa
 
 There is one file.
 
-**`src/lib.rs` (1344 lines, post-G-CORE-DSL chunk-2)** — the entire crate. Logical sections, in order of appearance:
+**`src/lib.rs` (1431 lines, post-G-CORE-DSL chunk-2 + main merge)** — the entire crate. Logical sections, in order of appearance:
 
 - **Crate-level docs (lines 1-83):** scope note, dep-direction reminder, the EBNF-shaped grammar block, and the deliberate-non-extensibility note. The grammar block is the canonical reference for what tokens the parser accepts; everything below this comment should be implementing that grammar and nothing more.
 - **Public surface (lines 98-218):** `CompiledSubgraph`, `CompiledPrimitive`, `compile_str`, `compile_file`, `CompileError`, `Diagnostic`. The two functions are thin: trim-check, hand off to `Parser`, hand off to `emit`. All the complexity lives in `Parser` and `emit`.
