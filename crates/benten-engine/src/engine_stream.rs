@@ -1376,7 +1376,7 @@ mod tests {
                     saw_eos = true;
                     break;
                 }
-                NextChunkPoll::Timeout => continue,
+                NextChunkPoll::Timeout => {}
                 NextChunkPoll::Chunk(c) => panic!("unexpected chunk: {c:?}"),
             }
         }
