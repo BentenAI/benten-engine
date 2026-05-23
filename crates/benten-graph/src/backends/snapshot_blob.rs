@@ -10,12 +10,44 @@
 //!
 //! ```text
 //! SnapshotBlob {
-//!     schema_version: u32,                              // currently 1
+//!     schema_version: u32,                              // currently 2 (G-CORE-6b)
 //!     anchor_cid: Option<Cid>,                          // version-anchor head if present
 //!     nodes: BTreeMap<Cid, Vec<u8>>,                    // n:CID body bytes
 //!     system_zone_index: BTreeMap<String, Vec<Cid>>,    // label -> CIDs
+//!     merkle_root: Option<Cid>,                         // v2: §8-B mode-(b) MerkleRangeProof root (None until §8-B materializer wave wires it)
 //! }
 //! ```
+//!
+//! ## v1 → v2 schema bump (G-CORE-6b, Phase-4-Meta-Core)
+//!
+//! v2 adds **`merkle_root: Option<Cid>`** as the §8-B mode-(b) light-client
+//! `MerkleRangeProofBackend` hook (per `.addl/phase-4-meta/00-implementation-plan.md`
+//! R0.4 edit-10 + §1.A.FROZEN item 4 + §8-B-(i)). The field is
+//! `Option<Cid>` so existing nodes-only snapshots (produced by
+//! `Engine::export_snapshot_blob`) remain encodable as v2 without
+//! requiring an MST root: `None` is the pre-§8-B-materializer sentinel.
+//! When the §8-B `MerkleRangeProofBackend` trait + materializer wave lands,
+//! the engine's `export_snapshot_blob` path will populate this field from
+//! the source-side MST root, and light-client mode-(b) range-proof
+//! verification consumes it. Consumer-trait wire-up is named to follow at
+//! a §8-B benten-sync wave (`docs/future/phase-4-backlog.md
+//! §8-B-merkle-range-proof-consumer-wire-up`) — out-of-scope for G-CORE-6b
+//! which is the schema-bump-only sub-lane per the plan.
+//!
+//! ## P-III autonomous landing rationale (Ben-authorized 2026-05-22 night)
+//!
+//! The original §8-B-(i) framing scheduled this bump at the G-CORE-9
+//! D2-freeze gate precisely because P-III (wire/CID/on-disk format
+//! change) is normally orchestrator-forbidden. The standing P-III
+//! caution is "existing-data migration" — there are NO v1 snapshot
+//! blobs in the wild (no users yet), so that concern does not apply.
+//! **No backwards-compat code** (no `SnapshotBlobV1` shadow struct, no
+//! `from_v1` migrator, no schema-version branching in the decoder) is
+//! needed: a v1 blob reaching a v2 reader strict-rejects via the existing
+//! [`SnapshotBlobError::SchemaVersion`] path (identical mechanism applies
+//! in the reverse direction post-bump). The CID of the encoded snapshot
+//! blob necessarily changes (one more struct field shifts the canonical
+//! bytes); that cascade is acceptable per the same no-users-yet rationale.
 //!
 //! Both the outer struct and the two `BTreeMap`s sort by key, so two
 //! engines built from identical state produce byte-identical blobs (D10 +
@@ -85,14 +117,27 @@ use crate::store::{ChangeSubscriber, EdgeStore, NodeStore, node_key};
 /// Current snapshot-blob schema version. Bumped if the on-disk shape
 /// changes; readers reject blobs whose `schema_version` they don't
 /// understand rather than silently mis-decoding.
-pub const SNAPSHOT_BLOB_SCHEMA_VERSION: u32 = 1;
+///
+/// **v1 → v2 bump (G-CORE-6b, Phase-4-Meta-Core, 2026-05-23, P-III
+/// Ben-authorized autonomously per no-users-yet):** v2 adds
+/// [`SnapshotBlob::merkle_root`] as the §8-B mode-(b) `MerkleRangeProof`
+/// hook. See module-level doc for the full rationale.
+pub const SNAPSHOT_BLOB_SCHEMA_VERSION: u32 = 2;
 
 /// Canonical D10 snapshot-blob payload. Encoded as DAG-CBOR; field order
 /// matters for byte-stability — `serde_ipld_dagcbor` writes struct fields
 /// in declaration order and sorts `BTreeMap` keys.
+///
+/// **v2 (G-CORE-6b)** appended [`Self::merkle_root`] at the end of the
+/// field list so the v1 → v2 canonical-bytes shift is a tail-append (the
+/// `schema_version: 1` vs `2` discriminator and the new field are the
+/// only bytes that differ for a structurally-identical source state).
+/// New fields added in future bumps MUST also be appended (declaration
+/// order = serialization order under `serde_ipld_dagcbor`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapshotBlob {
-    /// Schema version. Currently always [`SNAPSHOT_BLOB_SCHEMA_VERSION`].
+    /// Schema version. Currently always [`SNAPSHOT_BLOB_SCHEMA_VERSION`]
+    /// (= 2 as of G-CORE-6b; was 1 in Phase-2b D10 + Phase-3 + Phase-4-Foundation).
     pub schema_version: u32,
     /// Version-anchor head CID, if the source engine had one. `None` for
     /// engines that don't use the version-chain pattern.
@@ -105,6 +150,19 @@ pub struct SnapshotBlob {
     /// source engine's index walk (ordered by CID at construction time so
     /// the encoding is stable).
     pub system_zone_index: BTreeMap<String, Vec<Cid>>,
+    /// **v2 (G-CORE-6b):** §8-B mode-(b) Merkle range-proof root CID,
+    /// when the source side has one. The §8-B `MerkleRangeProofBackend`
+    /// trait (not yet shipped — landed at a follow-up §8-B benten-sync
+    /// wave per `docs/future/phase-4-backlog.md
+    /// §8-B-merkle-range-proof-consumer-wire-up`) consumes this to
+    /// verify per-key inclusion proofs without holding the full
+    /// snapshot. `None` is the pre-§8-B-materializer sentinel:
+    /// `Engine::export_snapshot_blob` writes `None` at HEAD; a future
+    /// engine path populates it from the source MST root. Light-client
+    /// consumers that need range-proof verification check for `Some`
+    /// and refuse otherwise (the refusal surface is the §8-B trait's
+    /// concern, not this struct's).
+    pub merkle_root: Option<Cid>,
 }
 
 impl SnapshotBlob {
@@ -195,13 +253,22 @@ pub enum SnapshotBlobError {
 
 impl SnapshotBlobError {
     /// Stable [`ErrorCode`] for the variant.
+    ///
+    /// **G-CORE-6b (v1→v2 bump):** `SchemaVersion` now lifts to the
+    /// typed [`ErrorCode::SnapshotBlobSchemaVersionMismatch`] instead
+    /// of the generic [`ErrorCode::Serialize`] catch-all (which
+    /// conflated decode-failure with cross-version mismatch). Mirrors
+    /// the `GraphSchemaVersionMismatch` posture for the snapshot-blob
+    /// surface. The TS-side handler patterns track this via the
+    /// `errors.generated.ts` mirror; `E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH`
+    /// is the cross-language drift-detector surface.
     #[must_use]
     pub fn code(&self) -> ErrorCode {
         match self {
             SnapshotBlobError::ReadOnly { .. } => ErrorCode::BackendReadOnly,
             SnapshotBlobError::Decode(e) => e.code(),
             SnapshotBlobError::TooLarge { .. } => ErrorCode::Serialize,
-            SnapshotBlobError::SchemaVersion { .. } => ErrorCode::Serialize,
+            SnapshotBlobError::SchemaVersion { .. } => ErrorCode::SnapshotBlobSchemaVersionMismatch,
         }
     }
 }
@@ -538,6 +605,9 @@ mod tests {
             anchor_cid: None,
             nodes,
             system_zone_index: BTreeMap::new(),
+            // v2 (G-CORE-6b): no MST root in the smoke fixture — the
+            // §8-B materializer wave populates this when it lands.
+            merkle_root: None,
         }
     }
 

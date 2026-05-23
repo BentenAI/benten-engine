@@ -71,6 +71,7 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::Serialize,
     ErrorCode::GraphInternal,
     ErrorCode::GraphSchemaVersionMismatch,
+    ErrorCode::SnapshotBlobSchemaVersionMismatch,
     ErrorCode::DuplicateHandler,
     ErrorCode::NoCapabilityPolicyConfigured,
     ErrorCode::ProductionRequiresCaps,
@@ -848,8 +849,17 @@ fn variant_count_is_pinned() {
     // numeric arguments as deferred errors and surfaces them at the
     // single-fallible-point `.build()` call per #506 / G-CORE-6 verify-
     // pass). 176 + 1 = 177.
+    //
+    // G-CORE-6b (Phase 4-Meta-Core, 2026-05-23, P-III Ben-authorized
+    // autonomously per no-users-yet) rebased onto post-#1325 main:
+    // +1 `SnapshotBlobSchemaVersionMismatch` — the v1→v2
+    // `SnapshotBlob.schema_version` P-III bump lifts the typed
+    // `SnapshotBlobError::SchemaVersion` mismatch out of the generic
+    // `Serialize` family so callers can match the cross-version case
+    // specifically (mirrors `GraphSchemaVersionMismatch` for the
+    // snapshot-blob surface). 177 + 1 = 178.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 177,
+        CATALOG_VARIANT_COUNT, 178,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -957,6 +967,7 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::Serialize
             | ErrorCode::GraphInternal
             | ErrorCode::GraphSchemaVersionMismatch
+            | ErrorCode::SnapshotBlobSchemaVersionMismatch
             | ErrorCode::DuplicateHandler
             | ErrorCode::NoCapabilityPolicyConfigured
             | ErrorCode::ProductionRequiresCaps
