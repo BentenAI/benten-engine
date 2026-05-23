@@ -519,6 +519,17 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-caps::chain_validator::validate_chain_narrowing`
     //   (the `ChainNotNarrowing { step_index }` typed-reject path).
     ErrorCode::ChainNarrowingViolation,
+    // G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    // online-share contract; Flavor B per-request UCAN check): the
+    // UCAN-gated iroh-blobs ALPN handler's per-request typed-reject
+    // arms — umbrella `UcanBlobsRequestRejected` + scope-specific
+    // `UcanBlobsRequestNotInScope` + unresolvable-peer sentinel
+    // `UnresolvedPeerDeny`. Construction sites:
+    //   `benten-sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request`
+    //   (the per-request validation + scope-check + unresolved-peer arms).
+    ErrorCode::UcanBlobsRequestRejected,
+    ErrorCode::UcanBlobsRequestNotInScope,
+    ErrorCode::UnresolvedPeerDeny,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -849,7 +860,7 @@ fn variant_count_is_pinned() {
     // single-fallible-point `.build()` call per #506 / G-CORE-6 verify-
     // pass). 176 + 1 = 177.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 177,
+        CATALOG_VARIANT_COUNT, 180,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1092,7 +1103,15 @@ fn catalog_variant_count_matches_enum() {
             // CLAUDE.md baked-in #18 trust-model + HARD RULE 12 (the
             // typed reject IS the defense).
             | ErrorCode::AuthorizationGrantBindingSigInvalid
-            | ErrorCode::ChainNarrowingViolation => true,
+            | ErrorCode::ChainNarrowingViolation
+            // G-CORE-3e (Phase 4-Meta-Core) — UCAN-gated iroh-blobs
+            // ALPN handler per-request typed rejects (Flavor B). The
+            // typed reject IS the defense per the §R2 online-share
+            // contract + audience-binding (§R3) — see CLAUDE.md baked-in
+            // #18 trust model + HARD RULE 12.
+            | ErrorCode::UcanBlobsRequestRejected
+            | ErrorCode::UcanBlobsRequestNotInScope
+            | ErrorCode::UnresolvedPeerDeny => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

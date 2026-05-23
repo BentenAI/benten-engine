@@ -1149,6 +1149,57 @@ pub enum ErrorCode {
     /// only legitimate `Scope` arms at v1-beta are `Hashes` +
     /// `RestrictedSelector`.
     ChainNarrowingViolation,
+    /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    /// online-share contract; Flavor B per-request UCAN check): the
+    /// wave-3e UCAN-gated iroh-blobs ALPN handler rejected a request
+    /// at the per-request validation step BEFORE any bytes flowed.
+    /// Umbrella code for the "request denied at the handler boundary"
+    /// class of failures (malformed grant, binding-sig invalid not
+    /// covered by the more-specific
+    /// `AuthorizationGrantBindingSigInvalid` code, handler-policy
+    /// rejection). Distinct from
+    /// [`Self::UcanBlobsRequestNotInScope`] (scope-specific reject
+    /// when the requested ciphertext_hash is NOT in the granted
+    /// `RestrictedSpec` roots allowlist) and from
+    /// [`Self::UnresolvedPeerDeny`] (sentinel arm for the unresolvable
+    /// peer-DID adversarial pattern). Per the "binding is the
+    /// foundation" §R3 contract, the handler validates the request's
+    /// UCAN per-request BEFORE dispatching to iroh-blobs's
+    /// `provider::handle_connection`; this typed code fires when
+    /// validation rejects. NEVER catch + retry — the typed reject IS
+    /// the defense.
+    UcanBlobsRequestRejected,
+    /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    /// online-share contract; F-2 scope-check arm): the requested
+    /// ciphertext_hash is NOT in the granted `RestrictedSpec`'s
+    /// `roots` allowlist. The handler returns this typed code +
+    /// serves zero bytes. Distinct from
+    /// [`Self::UcanBlobsRequestRejected`] (umbrella per-request
+    /// rejection — malformed grant, binding-sig, etc.); this code is
+    /// specifically the "the grant is otherwise valid but does NOT
+    /// authorise this particular hash" arm. Covers the wave-3e
+    /// adversarial pattern where Bob holds a valid grant for
+    /// `{hash_a, hash_b}` and requests `hash_c` — the handler MUST
+    /// NOT serve `hash_c` even though Bob's grant is otherwise valid.
+    /// Routes to `ON_DENIED` (cap-denial family). Construction site:
+    /// `crates/benten-sync/src/ucan_blobs_protocol.rs`.
+    UcanBlobsRequestNotInScope,
+    /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    /// + security-r1-2 adversarial pattern): the requester's grant
+    /// references an unresolvable peer-DID (the sentinel
+    /// `<unresolved-peer>` pattern). The wave-3e handler MUST NEVER
+    /// proceed with an unresolvable peer; it returns this typed code
+    /// (`UnresolvedDeny`-shaped) BEFORE any binding-sig verification
+    /// or iroh-blobs dispatch. Couples §4.36 recheck + §4.25
+    /// sync-hydrate denial: both surfaces fire this same code on the
+    /// unresolvable arm so audit pipelines route uniformly. Routes to
+    /// `ON_DENIED`. Construction site:
+    /// `crates/benten-sync/src/ucan_blobs_protocol.rs`. NEVER admit
+    /// an unresolved peer — if we can't resolve who's asking, we
+    /// can't even know whether the binding-sig matches their identity;
+    /// silent admission would defeat the entire audience-binding
+    /// property of `AuthorizationGrant`.
+    UnresolvedPeerDeny,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1460,6 +1511,9 @@ impl ErrorCode {
             #[rustfmt::skip]
             ErrorCode::AuthorizationGrantBindingSigInvalid => "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
             ErrorCode::ChainNarrowingViolation => "E_CHAIN_NARROWING_VIOLATION",
+            ErrorCode::UcanBlobsRequestRejected => "E_UCAN_BLOBS_REQUEST_REJECTED",
+            ErrorCode::UcanBlobsRequestNotInScope => "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE",
+            ErrorCode::UnresolvedPeerDeny => "E_UNRESOLVED_PEER_DENY",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1917,6 +1971,17 @@ impl ErrorCode {
             ErrorCode::AuthorizationGrantBindingSigInvalid => None,
             ErrorCode::ChainNarrowingViolation => None,
 
+            // G-CORE-3e (Phase 4-Meta-Core) — per-request UCAN-blobs
+            // protocol typed rejects. All three route to `ON_DENIED`
+            // (cap-denial family — the wave-3e handler IS a per-request
+            // capability check). The typed reject IS the defense per the
+            // §R2 online-share contract + the audience-binding property
+            // of `AuthorizationGrant` (§R3); silent re-routing would
+            // defeat that. NEVER catch + retry.
+            ErrorCode::UcanBlobsRequestRejected => Some("ON_DENIED"),
+            ErrorCode::UcanBlobsRequestNotInScope => Some("ON_DENIED"),
+            ErrorCode::UnresolvedPeerDeny => Some("ON_DENIED"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2206,6 +2271,9 @@ impl core::str::FromStr for ErrorCode {
                 ErrorCode::AuthorizationGrantBindingSigInvalid
             }
             "E_CHAIN_NARROWING_VIOLATION" => ErrorCode::ChainNarrowingViolation,
+            "E_UCAN_BLOBS_REQUEST_REJECTED" => ErrorCode::UcanBlobsRequestRejected,
+            "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE" => ErrorCode::UcanBlobsRequestNotInScope,
+            "E_UNRESOLVED_PEER_DENY" => ErrorCode::UnresolvedPeerDeny,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

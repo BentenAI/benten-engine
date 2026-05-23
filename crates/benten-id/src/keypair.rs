@@ -161,6 +161,18 @@ impl PublicKey {
     pub fn to_did(&self) -> crate::did::Did {
         crate::did::Did::from_public_key(self)
     }
+
+    /// G-CORE-3e test helper — alias for [`Self::to_bytes`] used by the
+    /// wave-3e zero-conversion plumbing pins. The "for_test" suffix
+    /// follows the workspace `*_for_test` convention so production
+    /// callers reach for [`Self::to_bytes`] / [`Self::as_verifying_key`]
+    /// directly. Same 32 bytes — both surfaces are the canonical
+    /// Ed25519 public-key encoding.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn to_bytes_for_test(&self) -> [u8; 32] {
+        self.inner.to_bytes()
+    }
 }
 
 /// Ed25519 keypair = secret + cached verifying key.
@@ -215,6 +227,20 @@ impl Keypair {
     /// Borrow this keypair's public key.
     pub fn public_key(&self) -> &PublicKey {
         &self.verifying
+    }
+
+    /// G-CORE-3e test helper — returns the cached
+    /// `ed25519_dalek::VerifyingKey` by value. Used by the wave-3e
+    /// `tf3e_endpoint_id_round_trips_through_verifying_key_byte_identical`
+    /// pin to assert iroh `EndpointId` ↔ `VerifyingKey` is a
+    /// byte-identical identity-cast (Spike A2 zero-conversion contract).
+    /// Production callers reach for [`PublicKey::as_verifying_key`]
+    /// (borrow form). The "for_test" suffix follows the workspace
+    /// `*_for_test` convention.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn public_key_verifying_key_for_test(&self) -> VerifyingKey {
+        *self.verifying.as_verifying_key()
     }
 
     // Hyg-1 #306: `Keypair::secret()` (pub(crate)) removed — zero

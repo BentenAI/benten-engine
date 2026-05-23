@@ -2235,23 +2235,46 @@ with `K_principal`-rooted key derivation is the second. The §4-A
 cross-wave test set (R3-W3 partition-before-crypto pin family) pins
 both layers + their composition order.
 
-### Key-derivation source — G-CORE-3d wave-scope
+### Key-derivation source — G-CORE-3e production HKDF-SHA256 swap-in
 
-The G-CORE-3d wave uses `Node::derive_key_for_test` (a stable
-BLAKE3-of-plaintext-CID derivation) as the K(N) source for the
-namespaced-write AEAD-wrap path. The production K(N) path via
-`benten_crypto_suite::structural_kdf::derive_step` rooted at
-`K_principal` per Spike-E Interpretation-B path-tagged derivation
-requires the `K_principal`-per-DID seam which lands at G-CORE-3e (the
-sync + UCAN-gating wave). The AAD-binds-plaintext-CID
-rebinding-attack defenses described above are IN PLACE at G-CORE-3d;
-only the K(N) source upgrade is wave-deferred. NOT a fail-OPEN —
-namespaced writes ARE AEAD-wrapped at this wave; the production
-K-source upgrade is a swap-in at the same boundary (the
-`derive_test_seam_key_from_cid` helper in `crates/benten-graph/src/
-redb_backend.rs` + the parallel call site in `Node::derive_key_for_test`
-both replace with the structural-KDF call at G-CORE-3e). Named
-destination: `docs/future/phase-4-backlog.md §3.10`.
+The G-CORE-3e wave swaps the BLAKE3-of-plaintext-CID test-seam K(N)
+derivation for the production HKDF-SHA256 structural-KDF substrate
+from `benten_crypto_suite::structural_kdf` (Spike-E Interpretation-B
+path-tagged derivation per the RATIFIED-S&C §R-key-derivation
+contract). The new derivation chain in
+`crates/benten-graph/src/redb_backend.rs::derive_test_seam_key_from_cid_with_namespace`:
+
+```text
+K_principal = BLAKE3-keyed-hash(domain_tag, info = namespace_did.as_bytes())
+K(root)     = derive_root(K_principal, root_cid = plaintext_cid.as_bytes())
+            = HKDF-SHA256(K_principal, info = "root" || plaintext_cid)
+K(N)        = K(root)   // single-Node walk at this seam; the
+                        // multi-edge derive_step chain through a
+                        // SubgraphSpec walk lands at the future
+                        // subgraph-walk wire-up
+```
+
+The seal-side `put_node_with_context` AEAD-wrap call + the unseal-
+side `read_decrypt_inner` AEAD-unwrap call BOTH route through the
+same `derive_test_seam_key_from_cid_with_namespace(namespace_did,
+plaintext_cid)` helper — byte-for-byte agreement is load-bearing
+(AEAD authenticate-on-decrypt fails closed if the keys diverge).
+The unseal side recovers the namespace_did from the
+TWO_CID_MAP_TABLE row's key prefix via the new
+`two_cid_lookup_with_namespace` lookup (`d:<did>:m:<plaintext_cid>`
+shape).
+
+**K_principal seam.** The wave-3e per-deployment `K_principal`
+material is deterministically derived from the namespace_did via
+BLAKE3 keyed-hash over a stable domain tag — this lets the wave-3e
+per-recipient seal/unseal path produce stable keys without the
+K_principal storage seam landing first (the K_principal-per-DID
+secret-material backend is the #989 / #1301 substrate). The
+production wire-up reads K_principal from the per-DID secret store
+at the same boundary; the helper signature
+`(namespace_did, plaintext_cid)` is the stable seam. Named at
+`docs/future/phase-4-backlog.md §3.10` for the per-DID secret-store
+upgrade.
 
 ### Per-chunk-AEAD chunk size = `IROH_BLOCK_SIZE` (16 KiB)
 
@@ -2291,3 +2314,114 @@ ChaCha20-Poly1305, not a CLAUDE.md #5 "no-hardcoded-sizes" violation).
   error envelope).
 - `crates/benten-graph/tests/tf3d_*.rs` (the 15 R3 RED-PHASE pins
   un-ignored at G-CORE-3d landing).
+
+## UCAN-gated iroh-blobs custom-ALPN handler — per-request validation (G-CORE-3e / #1301)
+
+**Section landed at Phase-4-Meta-Core G-CORE-3e wave (per
+`RATIFIED-sharing-and-confidentiality-2026-05-21.md` R2 online-share
+contract + Flavor B per-request UCAN check finding).** Terminal wave
+for the G-CORE-3 online path.
+
+### What it defends
+
+The wave-3e UCAN-gated iroh-blobs custom-ALPN handler
+(`crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler`)
+validates the requester's `AuthorizationGrant` on EVERY incoming
+request BEFORE dispatching to upstream
+`iroh_blobs::provider::handle_connection`. This is the Flavor B
+contract per Spike A2: a previously-validated grant is NEVER trusted
+across requests; every request re-runs the full validation pipeline.
+
+### Six-arm validation pipeline (fail-closed at first reject)
+
+The handler runs validation arms IN ORDER, fail-closed at the first
+rejection. The typed reject IS the defense per §R2 + §R3 +
+audience-binding:
+
+1. **Unresolvable peer-DID short-circuit** (security-r1-2 sentinel).
+   If the grant's UCAN references an unresolvable peer-DID, return
+   typed `UnresolvedDeny` BEFORE any cryptographic work. We can't
+   validate the binding-sig if we can't even know who's asking.
+2. **Audience binding** (Spike A2 zero-conversion identity-cast).
+   The connection's verified `EndpointId` (iroh `EndpointId` IS
+   `ed25519_dalek::VerifyingKey` per Spike A2 — no parse, no
+   conversion) MUST equal the grant's `audience_pubkey` bytes
+   exactly. Mismatch → typed `UcanAudienceMismatch`. This is the
+   F-1 unauthorised-requester + A-2 audience-substitution defense.
+3. **UCAN time-bounded validity** (replay-attack defense). `nbf <=
+   now < exp` per injected clock. Past-`exp` → `UcanExpired`;
+   future-`nbf` → `UcanNotYetValid`.
+4. **Revocation observance** (§R6 reach). If the grant CID is in
+   the handler's revocation store → typed `GrantRevoked`. Already-
+   decrypted plaintext at the recipient side is NOT revoked — that's
+   the documented cryptographic limit at §R6.
+5. **Binding-sig verification** (delegates to wave-3b
+   `AuthorizationGrant::verify_binding` — covers A-1 stolen-UCAN-
+   without-keys, A-2 stolen-keys-without-UCAN, A-3 wrong-audience-
+   swap uniformly).
+6. **Scope check** (F-2 arm). The requested `ciphertext_hash` MUST
+   be in the granted `RestrictedSpec`'s `roots` allowlist (per
+   `with_hashes` constructor). Out-of-scope → typed `NotInScope`.
+
+ONLY after all six arms pass does the handler dispatch to
+`iroh_blobs::provider::handle_connection` (the production wire-up
+arm; the wave-3e test seam increments
+`UcanBlobsHandler::dispatch_count_for_test`).
+
+### Zero-conversion plumbing — iroh `EndpointId` IS `VerifyingKey`
+
+Per Spike A2: iroh's `EndpointId` (= `iroh_base::PublicKey`) is a
+byte-identical wrapper around `CompressedEdwardsY` — the same
+32-byte Ed25519 public-key encoding as `ed25519_dalek::VerifyingKey`.
+The wave-3e handler exploits this identity at the audience-binding
+arm: the connection's verified `EndpointId` bytes ARE the requester's
+UCAN audience pubkey bytes; no parsing, no `VerifyingKey::from_bytes`
+round-trip in the hot path. The identity-cast helpers
+`verifying_key_to_endpoint_id` + `endpoint_id_to_verifying_key`
+codify the contract; the wave-3e pin
+`tf3e_endpoint_id_round_trips_through_verifying_key_byte_identical`
+enforces it.
+
+### Revocation reach (§R6)
+
+UCAN revocation cuts FUTURE serves only — already-decrypted
+plaintext at the recipient side remains decryptable (cryptographic
+limit). Mitigation: tight `nbf`/`exp` windows + key rotation per
+the §R6 contract. The wave-3e
+`tf3e_revoked_grant_yields_typed_revoked` pin asserts the future-
+serve cut; the documented limit on already-derived plaintext is
+recorded here.
+
+### What is NOT in this wave
+
+- **The actual `iroh_blobs::provider::handle_connection` call.** The
+  brief explicitly says "reuses" the upstream call; landing
+  iroh-blobs as a workspace dependency is OUT-OF-SCOPE for G-CORE-3e.
+  The wave proves the per-request UCAN validation + scope check +
+  identity-cast plumbing all work end-to-end against the test seam;
+  the production wire-up at a future iroh-blobs-integration wave
+  swaps the test-instrumented dispatch counter for the real
+  upstream call at the named `serve_request_for_test` boundary in
+  `ucan_blobs_protocol.rs`.
+- **Real RotationLog peer-resolution.** The wave-3e `unresolved_peer`
+  flag is a sentinel; the production wire-up swaps it for a real
+  `benten-id::RotationLog::resolve` call at the validation pipeline's
+  Arm 1.
+
+### Cross-refs
+
+- `crates/benten-sync/src/ucan_blobs_protocol.rs` (the per-request
+  handler) + `crates/benten-sync/src/two_cid_store.rs` (the
+  ciphertext-bytes store wrapping the two-CID mapping, with the
+  named iroh-blobs `FsStore` swap-point at `ciphertext_bytes`).
+- `crates/benten-sync/tests/tf3e_*.rs` (the 4 R3 wave-3e RED-PHASE
+  pin files, 11 pins total un-ignored at G-CORE-3e landing).
+- `crates/benten-caps/src/authorization_grant.rs` (wave-3b
+  `verify_binding` substrate, extended with wave-3e `audience_pubkey`
+  + `scope` fields + `issue_for_test` / `issue_with_nbf_for_test` /
+  `issue_with_unresolved_peer_for_test` / `malformed_for_test`
+  helpers).
+- `00-implementation-plan.md` §3 G-CORE-3e wave definition.
+- `RATIFIED-sharing-and-confidentiality-2026-05-21.md` §R2 (online
+  share + Flavor B per-request UCAN check) + §R3 (audience-binding
+  property) + §R6 (revocation reach).
