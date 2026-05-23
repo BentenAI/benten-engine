@@ -144,11 +144,28 @@ fn tf4_size_overhead_hybrid_larger_than_classical() {
     );
 }
 
-/// Both-must-verify (NF-4) at the swap-matrix surface — verify a
-/// hybrid envelope where the PQ half has been zeroed (strip attack):
-/// MUST fail closed.
+/// Defense-in-depth at the swap-matrix surface: mutating the
+/// `signature_bytes` of a sealed envelope MUST fail closed BEFORE
+/// reaching the sig-level verify. compose_aad binds signature_bytes
+/// into the AEAD AAD; at wrap-time AAD was computed over the original
+/// bytes, at receive-time the mutated bytes feed a different AAD, so
+/// ChaCha20-Poly1305 detects the AAD mismatch as a tag failure and
+/// returns `AeadAuthFailed` BEFORE the code reaches the NF-4 verify
+/// step.
+///
+/// This is the FIRST line of defense against a sig-byte tamper at the
+/// envelope surface (an attacker who can mutate signature_bytes in
+/// transit). For the NF-4-layer strip-resistance (which guards
+/// against an attacker who can construct a stripped-half signature
+/// from the start), see [`tf4_nf4_strip_resistance_at_sig_layer_fails_closed`]
+/// below.
+///
+/// Renamed at G-CORE-3c fix-pass (mr-minor-1) — earlier docstring
+/// claimed "fails at NF-4 layer" but the test actually witnesses the
+/// AEAD-AAD-binding layer, not the sig-layer verify. The two layers
+/// are complementary; both are pinned now.
 #[test]
-fn tf4_both_must_verify_strip_pq_half_fails_closed() {
+fn tf4_aead_aad_binds_signature_bytes_so_sig_tamper_fails_closed() {
     let hybrid = SwapMatrix::v1_beta_default();
     let kp = hybrid.generate_keypair_for_test();
     let rkp = hybrid.generate_recipient_keypair_for_test();
@@ -168,7 +185,65 @@ fn tf4_both_must_verify_strip_pq_half_fails_closed() {
     let outcome = hybrid.open_and_verify(&rkp.secret(), &kp.public(), &env);
     assert!(
         outcome.is_err(),
-        "stripped PQ half MUST fail closed at the NF-4 layer; got {outcome:?}"
+        "AEAD-AAD-binding MUST fail closed when signature_bytes are mutated \
+         post-seal (AAD mismatch surfaces AeadAuthFailed BEFORE NF-4 verify); \
+         got {outcome:?}"
+    );
+}
+
+/// NF-4 strip-resistance at the sig layer (defense-in-depth complement
+/// to the AEAD-AAD pin above). Constructs a `HybridSignature` with the
+/// PQ half stripped from the START (so AAD-binding cannot detect the
+/// tamper — the receiver's AAD-recompute matches the wire bytes), and
+/// confirms that the sig-layer `verify` surfaces a typed
+/// `VerifyError::StripResistanceViolated` (commitment-recompute over
+/// the FULL inputs mismatches the wire commitment because one half is
+/// missing).
+///
+/// This is the load-bearing NF-4 pin the wave brief calls out: a
+/// hybrid suite NEVER accepts a single-half signature, even when no
+/// other layer detects the strip. The test bypasses the AEAD layer and
+/// drives `SignatureSuite::verify` directly with a synthesized
+/// stripped signature, exercising the `VerifyError::StripResistanceViolated`
+/// arm in `sig.rs::verify` (the commitment-recompute path).
+///
+/// Added at G-CORE-3c fix-pass (mr-minor-1) — paired with the renamed
+/// AEAD-AAD pin above for proper defense-in-depth coverage. The two
+/// pins together witness the FULL strip-resistance contract: AAD-
+/// binding catches sig-byte tamper in transit; commitment-recompute
+/// catches stripped-from-the-start half-missing constructions.
+#[test]
+fn tf4_nf4_strip_resistance_at_sig_layer_fails_closed() {
+    use benten_crypto_suite::sig::SignatureSuite;
+
+    let suite = SignatureSuite::v1_default();
+    let kp = suite.generate_keypair();
+    let msg = b"strip-resistance NF-4 target";
+
+    // Sign normally — produces a hybrid sig (classical || pq || commitment).
+    let sig = suite.sign(&kp, msg);
+    // Sanity: full hybrid sig should verify cleanly.
+    suite
+        .verify(kp.public(), msg, &sig)
+        .expect("full hybrid sig MUST verify");
+
+    // Construct a strip-attack input directly: drop the PQ half. The
+    // commitment stays as-was (the wire bytes that travelled with the
+    // strip-attack input); the missing-half arm + the commitment-
+    // mismatch arm in sig.rs::verify are what fail closed.
+    let stripped = sig.without_pq_half_for_test();
+    let outcome = suite.verify(kp.public(), msg, &stripped);
+
+    assert!(
+        matches!(
+            outcome,
+            Err(
+                benten_crypto_suite::error::VerifyError::HybridHalfMissing(_)
+                    | benten_crypto_suite::error::VerifyError::StripResistanceViolated(_)
+            )
+        ),
+        "NF-4 strip-resistance MUST fail closed at the sig-layer verify \
+         with HybridHalfMissing or StripResistanceViolated; got {outcome:?}"
     );
 }
 

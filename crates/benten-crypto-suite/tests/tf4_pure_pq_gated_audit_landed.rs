@@ -40,13 +40,26 @@
 //! it. NO `set_audit_landed_flag` in the test surface; flipping the
 //! flag is a v1-GM coupled action.
 //!
-//! # §3.5g cross-language rule-mirror
+//! # §3.5g cross-language rule-mirror — DISCHARGED via ErrorCode mirror
 //!
-//! The audit-landed-flag is mirrored to TS via
-//! `packages/engine/src/swap_matrix.generated.ts` (per §6 lane 25 TS
-//! analog). The TS-side MUST also see `audit_landed_pure_pq = false` at
-//! workspace baseline; flagged here as a G-CORE-3c atomic-update
-//! obligation.
+//! The TS-side surface of the audit-gate is the new ErrorCode
+//! [`E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED`] (mirrored in
+//! `packages/engine/src/errors.generated.ts` per the §3.5g 4-surface
+//! discipline). TS callers route through the engine-error catalog
+//! which surfaces this typed arm when a pure-PQ-sole-trust-path
+//! construction is rejected pre-audit. The wider `SwapMatrix` surface
+//! is Rust-only at v1-beta — TS consumers MUST NOT instantiate
+//! SwapMatrix arms directly; they consume sealed envelopes through
+//! the engine's typed boundary which already surfaces the audit-gate
+//! rejection via the ErrorCode mirror.
+//!
+//! G-CORE-3c fix-pass (mr-minor-4): the earlier self-named obligation
+//! `packages/engine/src/swap_matrix.generated.ts` was retracted — it
+//! is not load-bearing because the ErrorCode mirror covers the only
+//! TS-observable surface at v1-beta. A future TS-side SwapMatrix
+//! mirror (if cross-language SwapMatrix instantiation surfaces) would
+//! land as its own brief under the §3.5g discipline; until then, the
+//! ErrorCode mirror DISCHARGES the cross-language obligation.
 
 #![allow(clippy::unwrap_used)]
 

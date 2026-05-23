@@ -33,13 +33,26 @@
 //! sibling cache entries; same-name calls within a single test return
 //! the byte-identical vector witnessing reproducibility).
 //!
-//! # §3.5g cross-language rule-mirror note
+//! # §3.5g cross-language rule-mirror — DISCHARGED via ErrorCode mirror
 //!
-//! The swap-matrix conformance status is mirrored to TS via
-//! `packages/engine/src/swap_matrix.generated.ts` (per R2 §6 lane 11/24
-//! TS analog). The TS-side gate is a G-CORE-3c atomic-update obligation
-//! (the new `E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED` ErrorCode is
-//! generated into the TS catalog per the §3.5g pre-flight).
+//! The TS-side surface of the swap-matrix audit-gate is the new
+//! ErrorCode `E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED` (mirrored in
+//! `packages/engine/src/errors.generated.ts` per the §3.5g 4-surface
+//! discipline). TS callers route through the engine-error catalog
+//! which surfaces this typed arm when a pure-PQ-sole-trust-path
+//! construction is rejected pre-audit. The wider `SwapMatrix` surface
+//! is Rust-only at v1-beta — TS consumers MUST NOT instantiate
+//! SwapMatrix arms directly; they consume sealed envelopes through
+//! the engine's typed boundary which already surfaces the audit-gate
+//! rejection via the ErrorCode mirror.
+//!
+//! G-CORE-3c fix-pass (mr-minor-4): the earlier self-named obligation
+//! `packages/engine/src/swap_matrix.generated.ts` was retracted — it
+//! is not load-bearing because the ErrorCode mirror covers the only
+//! TS-observable surface at v1-beta. A future TS-side SwapMatrix
+//! mirror (if cross-language SwapMatrix instantiation surfaces) would
+//! land as its own brief under the §3.5g discipline; until then, the
+//! ErrorCode mirror DISCHARGES the cross-language obligation.
 
 #![allow(clippy::unwrap_used)]
 

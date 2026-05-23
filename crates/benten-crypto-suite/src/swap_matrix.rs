@@ -261,6 +261,31 @@ impl SwapMatrix {
         })
     }
 
+    /// **Test-only side-door** — construct the pure-PQ-sole-trust-path
+    /// swap-matrix arm WITHOUT consulting [`AUDIT_LANDED_PURE_PQ_FLAG`].
+    ///
+    /// This bypasses the v1-beta C11b safety invariant deliberately so
+    /// that the workspace test corpus can exercise the pure-PQ
+    /// encrypt+decrypt code paths (`pure_pq_mlkem_encapsulate` /
+    /// `aead_wrap_pure_pq` / `aead_unwrap_pure_pq` / `pure_pq_mlkem_decapsulate`)
+    /// + the sign/verify SLH-DSA arm end-to-end BEFORE the v1-GM audit
+    /// flips the flag. Without this side-door those paths are
+    /// structurally unreachable at test-time and a FIPS-203 ML-KEM-768 +
+    /// ChaCha20-Poly1305 integration drift would not surface until the
+    /// v1-GM audit window (when remediation cost is much higher).
+    ///
+    /// **NEVER call from production paths.** Compile-time gated to
+    /// `#[cfg(test)]` so production builds cannot link this constructor.
+    /// Added at G-CORE-3c fix-pass (mr-minor-2).
+    #[cfg(test)]
+    #[must_use]
+    pub fn force_pure_pq_for_test_bypassing_audit_gate() -> Self {
+        Self {
+            sig_arm: SignatureArm::PurePqMlDsa65Slhdsa,
+            enc_arm: EncryptionArm::PurePqMlKem768Only,
+        }
+    }
+
     /// True iff the signature half is hybrid (Ed25519⊕ML-DSA-65 NF-4).
     #[must_use]
     pub const fn signature_is_hybrid(&self) -> bool {
@@ -428,7 +453,7 @@ impl SwapMatrix {
                     &signature_bytes,
                 );
                 let plaintext_with_sig = compose_plaintext_with_sig(&signature_bytes, payload);
-                let key = KeyMaterial::from_bytes_for_test(cipher_codepoint, &k_root);
+                let key = KeyMaterial::from_raw_bytes(cipher_codepoint, &k_root);
                 let aead_env = crate::aead::wrap(&plaintext_with_sig, &key, &aad)
                     .map_err(SwapMatrixError::from_aead)?;
                 Some(SealedEnvelope {
@@ -445,10 +470,8 @@ impl SwapMatrix {
                             detail: "pure-PQ encryption requires a pure-PQ ML-KEM recipient",
                         })?;
                 let (ct, ss) = pure_pq_mlkem_encapsulate(&recip_kem.public_bytes)?;
-                let key = KeyMaterial::from_bytes_for_test(
-                    CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
-                    &ss,
-                );
+                let key =
+                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_MLKEM768_HQC, &ss);
                 let aad = compose_aad(
                     self.signature_codepoint(),
                     self.cipher_suite_codepoint(),
@@ -524,7 +547,7 @@ impl SwapMatrix {
                     .unwrap_key_material(recip_secret, &sealed.wrapped)
                     .map_err(SwapMatrixError::from_aead)?;
                 let k_root = unwrapped.as_bytes().to_vec();
-                let key = KeyMaterial::from_bytes_for_test(cipher_codepoint, &k_root);
+                let key = KeyMaterial::from_raw_bytes(cipher_codepoint, &k_root);
                 let aad = compose_aad(
                     envelope.sig_codepoint,
                     envelope.cipher_codepoint,
@@ -541,10 +564,8 @@ impl SwapMatrix {
                         })?;
                 let ct_bytes = sealed.wrapped.ek_mlkem.clone();
                 let ss = pure_pq_mlkem_decapsulate(&recip_kem.secret_bytes, &ct_bytes)?;
-                let key = KeyMaterial::from_bytes_for_test(
-                    CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
-                    &ss,
-                );
+                let key =
+                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_MLKEM768_HQC, &ss);
                 let aad = compose_aad(
                     envelope.sig_codepoint,
                     envelope.cipher_codepoint,
@@ -1303,9 +1324,25 @@ impl SwapMatrix {
     /// KAT-load-time for the corresponding seed; returns the encoded
     /// verifying-key bytes.
     ///
-    /// Reproducibility witness: passing the SAME seed always returns
-    /// the SAME pubkey bytes. The pin
-    /// [`SwapMatrix::load_fips_204_kat_vector_for_test`] populated this cache.
+    /// **Within a single process**, passing the same seed returns the
+    /// same pubkey bytes (process-cached synthesis: the underlying
+    /// SigningKey is generated once via OS RNG at first call for a
+    /// given seed and cached keyed by that seed; subsequent calls
+    /// return the cached vk).
+    ///
+    /// **Cross-process determinism is NOT provided by this function.**
+    /// A second process starting fresh will populate the cache with a
+    /// DIFFERENT pubkey for the same seed because the seed is used as
+    /// the cache key, NOT as input to the cryptographic keygen.
+    /// Cross-process / cross-build determinism arrives via the NF-2 /
+    /// C-GM-AUDIT real-NIST-KAT-vector fixture path (named carry to
+    /// the v1-GM audit deliverable; see `.addl/pq-research/`).
+    /// The pin [`SwapMatrix::load_fips_204_kat_vector_for_test`]
+    /// populated this cache and shares the same within-process-only
+    /// determinism contract.
+    ///
+    /// Docstring sharpened at G-CORE-3c fix-pass (mr-minor-3) — earlier
+    /// docstring overpromised cross-process determinism.
     #[must_use]
     pub fn ml_dsa_65_keygen_from_seed_for_test(seed: &[u8]) -> PureSigPubkey {
         // Lookup the cached entry by seed. If the cache hasn't seen
@@ -1883,5 +1920,65 @@ mod tests {
         assert_eq!(kat1.expected_pubkey, kat2.expected_pubkey);
         assert_eq!(kat1.expected_ciphertext, kat2.expected_ciphertext);
         assert_eq!(kat1.expected_shared_secret, kat2.expected_shared_secret);
+    }
+
+    /// G-CORE-3c fix-pass mr-minor-2: exercise the pure-PQ
+    /// encrypt+decrypt code paths end-to-end via the
+    /// `#[cfg(test)]`-gated audit-gate side-door.
+    ///
+    /// Without this pin the pure-PQ paths (`pure_pq_mlkem_encapsulate`
+    /// / `aead_wrap_pure_pq` / `aead_unwrap_pure_pq` /
+    /// `pure_pq_mlkem_decapsulate`) are structurally unreachable from
+    /// tests until the v1-GM audit-landed flag flips (per the C11b
+    /// safety invariant) — a FIPS-203 ML-KEM-768 + ChaCha20-Poly1305
+    /// integration drift would not surface until the v1-GM audit
+    /// window. This pin closes that gap cheaply now.
+    ///
+    /// NOT a substitute for the v1-GM audit; the audit-gate remains
+    /// the production guard. This test exercises the cryptographic
+    /// dispatch only.
+    #[test]
+    fn pure_pq_end_to_end_round_trip_via_test_only_side_door() {
+        let m = SwapMatrix::force_pure_pq_for_test_bypassing_audit_gate();
+        assert!(m.is_pure_pq_sole_trust_path());
+        assert!(m.encryption_active());
+
+        let kp = m.generate_keypair_for_test();
+        let rkp = m.generate_recipient_keypair_for_test();
+        let payload = b"pure-PQ sole-trust-path end-to-end round-trip target";
+
+        let env = m.sign_and_seal(&kp, &rkp.public(), payload).expect(
+            "pure-PQ sign_and_seal MUST succeed via side-door (exercises \
+                     pure_pq_mlkem_encapsulate + aead_wrap_pure_pq)",
+        );
+        let recovered = m.open_and_verify(&rkp.secret(), &kp.public(), &env).expect(
+            "pure-PQ open_and_verify MUST succeed (exercises \
+                     pure_pq_mlkem_decapsulate + aead_unwrap_pure_pq)",
+        );
+        assert_eq!(
+            recovered.as_slice(),
+            payload,
+            "pure-PQ round-trip MUST preserve payload bytes"
+        );
+    }
+
+    /// Cross-recipient compat (binding) pin for the pure-PQ arm:
+    /// sealed under recipient A → opened by recipient B MUST fail
+    /// closed. Complement to the equivalent hybrid-arm pin.
+    #[test]
+    fn pure_pq_cross_recipient_open_fails_closed_via_test_only_side_door() {
+        let m = SwapMatrix::force_pure_pq_for_test_bypassing_audit_gate();
+        let kp = m.generate_keypair_for_test();
+        let rkp_a = m.generate_recipient_keypair_for_test();
+        let rkp_b = m.generate_recipient_keypair_for_test();
+        let payload = b"sealed under recipient A";
+        let env = m
+            .sign_and_seal(&kp, &rkp_a.public(), payload)
+            .expect("seal must succeed");
+        let outcome = m.open_and_verify(&rkp_b.secret(), &kp.public(), &env);
+        assert!(
+            outcome.is_err(),
+            "pure-PQ open under wrong recipient MUST fail closed; got {outcome:?}"
+        );
     }
 }
