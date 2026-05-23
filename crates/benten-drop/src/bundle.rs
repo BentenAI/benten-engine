@@ -194,6 +194,16 @@ impl From<EnvelopeSigError> for DropBundleError {
 /// `EncryptedNode` itself is not (storage-layer envelope shape lives
 /// behind the `to_wire_bytes` / `from_wire_bytes` private CBOR
 /// representation per G-CORE-3d).
+///
+/// **⚠️ Wire-format coupling — frozen atomically at G-CORE-9.** The
+/// Drop bundle's on-disk layout is content-addressed via the inner
+/// `encode_encrypted_node` CBOR format, which the storage-layer
+/// (`benten_graph::aead_wrap`) explicitly marks NOT-frozen pre-v1.
+/// Both layers are atomically frozen at the G-CORE-9 v1-interface
+/// freeze wave; before that, the Drop wire-format is provisional. The
+/// `DropVersion` discriminator + the typed `UnsupportedDropVersion`
+/// reject path ensure forward-incompat blobs surface a typed error
+/// (no silent-mis-decode) until the freeze locks the layout.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedContent {
     /// Storage-encoded `EncryptedNode` bytes (via
@@ -252,8 +262,16 @@ impl EncryptedContent {
 ///   spec this bundle is for; the body is carried for offline
 ///   consume so the recipient does not need a network lookup).
 /// - `per_node_attestation`: optional opaque bytes blob carried
-///   when per-Node attestation is included (the defense-in-depth
-///   marker — measured by the overhead pin).
+///   as a SIZE-RESERVED placeholder at G-CORE-3f (130-byte sized
+///   marker; the real per-Node-signature construction is reserved
+///   for G-CORE-9 when the freeze fixes its typed shape). Defense-
+///   in-depth at G-CORE-3f is genuinely 2 layers (envelope-sig +
+///   per-Node-AEAD-tag); the third layer (per-Node-sig validation)
+///   lands at G-CORE-9 against a real `Vec<Signature>` shape — the
+///   `DropBundleError::PerNodeSignatureInvalid` typed-reject defined
+///   here is reserved-but-unconstructed until that surface lands.
+///   The size-reservation pin keeps the ~12% Spike G ceiling visible
+///   so the future field doesn't surface as a wire-format surprise.
 /// - `envelope_sig`: `Vec<u8>` — Ed25519 signature over the bundle
 ///   header (everything else above). Verified BEFORE any per-Node
 ///   decrypt is attempted.
