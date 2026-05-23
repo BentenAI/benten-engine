@@ -1,12 +1,17 @@
-//! `docs/ARCHITECTURE.md` 13-crate count drift detector.
+//! `docs/ARCHITECTURE.md` 14-crate count drift detector.
 //!
-//! The workspace landed at 13 crates after `benten-platform-foundation`
+//! The workspace landed at 14 crates after `benten-platform-foundation`
 //! (11th, Phase 4-Foundation — schema-rendering + materializer + plugin
-//! manifest + admin UI v0 + `Renderer` trait abstraction) and
+//! manifest + admin UI v0 + `Renderer` trait abstraction),
 //! `benten-renderer-tauri` (12th, Phase 4-Foundation — Tauri 2.x
-//! renderer engine extension per CLAUDE.md baked-in #19).
+//! renderer engine extension per CLAUDE.md baked-in #19),
+//! `benten-crypto-suite` (13th, Phase 4-Meta-Core G-CORE-2 — the ONE
+//! thin Benten-owned signature / hash / cipher-suite agility integration
+//! crate), and `benten-drop` (14th, Phase 4-Meta-Core G-CORE-3f — the
+//! Drop bundle format crate; offline-share format shipped over the
+//! iroh-blobs two-CID seam).
 //!
-//! ARCHITECTURE.md enumerates all 13 crates by name with `benten-sync`
+//! ARCHITECTURE.md enumerates all 14 crates by name with `benten-sync`
 //! flagged native-only per CLAUDE.md baked-in #17. The cite-drift
 //! detector source-of-truth derives the count dynamically from
 //! `Cargo.toml` per `tools/cite-drift-detector/src/lib.rs::derive_crate_count_from_workspace`,
@@ -19,8 +24,9 @@
 //! manifest the way Phase-1 R7 audits caught aspirational-prose-but-
 //! dead-code regressions repeatedly (CLAUDE.md: "Verify, don't trust
 //! docs"). G26-A pre-tag retense (Phase 4-Foundation R6-FP-G) renamed
-//! this file from `architecture_md_10_crate_count_post_phase_3_canaries.rs`
-//! and retensed every assertion to the 13-crate shape.
+//! this file from `architecture_md_10_crate_count_post_phase_3_canaries.rs`;
+//! G-CORE-2 retensed every assertion to the 13-crate shape; G-CORE-3f
+//! retensed every assertion to the 14-crate shape.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -66,34 +72,37 @@ fn architecture_md_says_twelve_crates_after_phase_4_foundation_canaries() {
             && !lower.contains("# ten crates")
             && !lower.contains("# eight crates")
             && !lower.contains("## twelve crates")
-            && !lower.contains("# twelve crates"),
-        "docs/ARCHITECTURE.md still carries a pre-G-CORE-2 \
-         heading 'Twelve crates' / 'Ten crates' / 'Eight crates'. \
-         After benten-crypto-suite joins the workspace as the 13th \
-         crate (G-CORE-2 #1300), the canonical heading MUST say \
-         'Thirteen crates' (paired with the cite-drift detector \
+            && !lower.contains("# twelve crates")
+            && !lower.contains("## thirteen crates")
+            && !lower.contains("# thirteen crates"),
+        "docs/ARCHITECTURE.md still carries a pre-G-CORE-3f \
+         heading 'Thirteen crates' / 'Twelve crates' / 'Ten crates' \
+         / 'Eight crates'. After benten-drop joins the workspace as \
+         the 14th crate (G-CORE-3f), the canonical heading MUST say \
+         'Fourteen crates' (paired with the cite-drift detector \
          source-of-truth)."
     );
 
     // Should explicitly assert the new count.
-    let says_thirteen = lower.contains("thirteen crates")
-        || lower.contains("## 13 crates")
-        || lower.contains("# thirteen")
-        || lower.contains("thirteen rust crates");
+    let says_fourteen = lower.contains("fourteen crates")
+        || lower.contains("## 14 crates")
+        || lower.contains("# fourteen")
+        || lower.contains("fourteen rust crates");
     assert!(
-        says_thirteen,
-        "docs/ARCHITECTURE.md MUST explicitly state 'Thirteen crates' / \
-         '## 13 crates' / similar with benten-crypto-suite as the 13th \
+        says_fourteen,
+        "docs/ARCHITECTURE.md MUST explicitly state 'Fourteen crates' / \
+         '## 14 crates' / similar with benten-drop as the 14th \
          workspace member."
     );
 
-    // The five post-Phase-1 crates must all be listed by name.
+    // The six post-Phase-1 crates must all be listed by name.
     for name in [
         "benten-id",
         "benten-sync",
         "benten-platform-foundation",
         "benten-renderer-tauri",
         "benten-crypto-suite",
+        "benten-drop",
     ] {
         assert!(
             lower.contains(name),
@@ -116,10 +125,10 @@ fn architecture_md_says_twelve_crates_after_phase_4_foundation_canaries() {
 }
 
 /// Workspace-shape sanity check — verifies the actual `crates/` layout
-/// matches the doc. Asserts the four post-Phase-1 crate directories
-/// are present so the 13-crate doc claim is not aspirational. Also
-/// guards against silent removal of a Phase-3 / Phase-4-Foundation
-/// crate.
+/// matches the doc. Asserts the six post-Phase-1 crate directories
+/// are present so the 14-crate doc claim is not aspirational. Also
+/// guards against silent removal of a Phase-3 / Phase-4-Foundation /
+/// Phase-4-Meta-Core crate.
 #[test]
 fn workspace_has_phase_4_foundation_canary_crate_dirs() {
     let root = workspace_root();
@@ -130,12 +139,13 @@ fn workspace_has_phase_4_foundation_canary_crate_dirs() {
         "benten-platform-foundation",
         "benten-renderer-tauri",
         "benten-crypto-suite",
+        "benten-drop",
     ] {
         let dir = root.join("crates").join(name);
         assert!(
             dir.is_dir(),
             "crates/{name}/ MUST exist. Without the directory, the \
-             13-crates phrasing in ARCHITECTURE.md would be aspirational \
+             14-crates phrasing in ARCHITECTURE.md would be aspirational \
              (the regression Phase-1 R7 audit caught repeatedly)."
         );
     }

@@ -2291,3 +2291,83 @@ ChaCha20-Poly1305, not a CLAUDE.md #5 "no-hardcoded-sizes" violation).
   error envelope).
 - `crates/benten-graph/tests/tf3d_*.rs` (the 15 R3 RED-PHASE pins
   un-ignored at G-CORE-3d landing).
+
+## Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)
+
+Per `.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`
+§R6, the revocation surface for the Sharing & Confidentiality stack has
+an inherent **asymmetry** between the two delivery modes:
+
+### Online-pull (Mode 1, G-CORE-3e ALPN custom-handler)
+
+When a recipient pulls live from a publisher over the iroh ALPN custom
+handler, the publisher's cap-policy validates the carried UCAN at every
+request. Revocation **cuts future serves**: a previously-issued UCAN
+that the issuer has revoked is refused on the next inbound request, and
+all subsequent requests for that grant fail typed. The
+`benten-id::RotationLog`-backed UCAN revocation surface (shipped in
+Phase 3) gives publishers a write-once durable record consulted at the
+ALPN boundary.
+
+### Offline-Drop (Mode 2, `benten-drop::DropBundle`, G-CORE-3f)
+
+When the recipient consumes a Drop bundle from the filesystem (no
+network; no live publisher; sealed CBOR-on-disk artifact), there is no
+opportunity for the issuer to refuse the request — **already-derived
+keys remain decryptable**. The key material is already in the
+recipient's hands (carried inside the bundle's
+`AuthorizationGrant.key_material`); revocation cannot retroactively
+take it back. The cryptographic property:
+
+> **Drop bundles are forever-valid once distributed.** A Drop bundle
+> whose embedded UCAN is revoked AFTER distribution still decrypts at
+> the recipient's end. This is not a defect; it is the cryptographic
+> reality of any sealed offline artifact.
+
+**Mitigations (operator discipline):**
+
+- **Tight `nbf`/`exp` on issued UCANs.** A short-lived UCAN naturally
+  bounds the forever-valid window: a Drop bundle whose UCAN has
+  `exp = issue_time + 24h` is decryptable indefinitely BUT readers can
+  observe the `exp` as a freshness hint when re-using the carried
+  material (the engine surfaces the `exp` at consume time).
+- **Periodic key rotation.** Rotating the per-DID wrapped-key seed at
+  a regular cadence means each Drop bundle's `key_material` covers
+  only a bounded slice of the principal's content history. A
+  compromised Drop bundle exposes only the content sealed under the
+  rotation epoch's keys; future content under rotated keys remains
+  confidential.
+- **Don't distribute Drop bundles you'd want to revoke later.** The
+  online-pull (Mode 1) path is the right shape when revocation
+  semantics are load-bearing; the Drop format is for share-and-forget
+  artifacts (recipe collections, time-frozen reports, archival
+  snapshots) where revocation is not the trust foundation.
+
+### Construction sites
+
+- `crates/benten-drop/src/bundle.rs` —
+  `DropBundle::consume_offline` is the load-bearing surface; the
+  function returns recovered plaintext IFF the envelope-sig + grant
+  binding-sig + per-Node AEAD tags all verify. There is NO
+  revocation-store consultation step (this is the §R6 reality made
+  observable in code).
+- `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`
+  pins the property end-to-end:
+  - `tf3f_drop_bundle_decrypts_after_ucan_revocation_forever_valid` —
+    publishes + revokes + asserts the Drop still decrypts.
+  - `tf3f_security_posture_md_documents_revocation_reach_section` —
+    asserts this section is present + names the load-bearing claims.
+  - `tf3f_security_posture_md_names_online_vs_offline_revocation_asymmetry`
+    — asserts BOTH halves of the asymmetry are named.
+
+### Cross-refs
+
+- `.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`
+  §R6 "Revocation reach" (the ratification record).
+- `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def
+  input-constraints refinement #6 L341 (the three sendme deployment
+  modes; this asymmetry follows from mode 2 being offline-by-construction).
+- Online-pull revocation surface lives in
+  `crates/benten-id/src/did_rotation.rs` (`RotationLog`) +
+  `crates/benten-caps/src/grant_backed.rs` (the UCAN-gated cap policy
+  consulted at the ALPN boundary).
