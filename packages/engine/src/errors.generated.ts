@@ -1046,7 +1046,7 @@ export class EVersionUnknownPrior extends BentenError {
 /**
  * E_DSL_INVALID_SHAPE
  *
- * Thrown at: TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+ * Thrown at: TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser + `validate_shapes` build-phase pass; the variant carrying the diagnostic is `CompileError::Build(_)` post-G-CORE-DSL chunk-3 #790 rename from `CompileError::Emit`) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
  * Message template: "DSL value does not match expected shape: {reason}"
  */
 export class EDslInvalidShape extends BentenError {
@@ -2921,14 +2921,14 @@ export class EChainNarrowingViolation extends BentenError {
 /**
  * E_DSL_BACKEND_REJECTED
  *
- * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (G-CORE-DSL chunk-3, Phase 4-Meta-Core) — the typed home for downstream-consumer-injected post-compile rejections. Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome` (pre-#839 abused `CompileError::Io` to carry engine-registration failures; post-#839 routes through this typed variant + code).
+ * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (the public variant; downstream consumers wrap their typed rejections here). Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`. The DSL compiler itself never emits this variant — the compile pipeline emits `Parse` / `Semantic` / `Build` / `Io` only.
  * Message template: "DSL backend rejection: {downstream_error}"
  */
 export class EDslBackendRejected extends BentenError {
   static readonly code = "E_DSL_BACKEND_REJECTED";
-  static readonly fixHint = "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful compile). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. The wrapped message body carries the downstream error's `Debug` representation prefixed by a consumer-site tag (canonical example: `devserver_engine_register: <error>`).";
+  static readonly fixHint = "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful DSL compile in the devserver flow). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. Pre-#839 the devserver abused `CompileError::Io` to wrap engine-registration failures (widening the documented `Io` semantic to \"everything else\"); post-#839 the new `CompileError::Backend(_)` variant + this typed code are the routing-correct home.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_DSL_BACKEND_REJECTED", "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful compile). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. The wrapped message body carries the downstream error's `Debug` representation prefixed by a consumer-site tag (canonical example: `devserver_engine_register: <error>`).", message, context);
+    super("E_DSL_BACKEND_REJECTED", "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful DSL compile in the devserver flow). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. Pre-#839 the devserver abused `CompileError::Io` to wrap engine-registration failures (widening the documented `Io` semantic to \"everything else\"); post-#839 the new `CompileError::Backend(_)` variant + this typed code are the routing-correct home.", message, context);
     this.name = "EDslBackendRejected";
   }
 }
