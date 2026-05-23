@@ -105,18 +105,26 @@ fn recheck_outcome_enum_carries_unresolved_deny_not_not_applicable() {
     );
 }
 
+// MR-2 follow-up: this test is renamed from
+// `default_builder_installs_substantive_production_rechecker_not_noop`
+// (which asserted the OPPOSITE of its name) to honestly describe what
+// it actually exercises — the SHIPPED Noop's admit-everything baseline
+// as the security-r1-1 would-FAIL signal. The substantive
+// default-builder-installs-Production-rechecker arm is the
+// G-CORE-8.2-deferred wire-up (see `INTERNALS.md` §9 item 11 — the
+// `Engine::default()` Production-rechecker glue path BELONGS-NAMED-NOW
+// destination); when that ships, a new test `default_builder_installs_substantive_production_rechecker_at_G_CORE_8_2`
+// asserts the post-wire-up shape directly.
 #[test]
-fn default_builder_installs_substantive_production_rechecker_not_noop() {
-    // SHAPE-trap guard (R2 §4-A): this MUST assert the DEFAULT engine
-    // builder installs a SUBSTANTIVE `ProductionManifestEnvelopeRechecker`
-    // — NOT that "a rechecker type exists" and NOT the Noop footgun.
-    //
-    // Post-G-CORE-8 the assertion is: build an `Engine` via the default
-    // builder; drive `apply_atrium_merge` with a row whose peer-DID is
-    // a plugin-principal whose manifest `shares` policy DENIES the cap;
-    // assert the row is REJECTED with
-    // `ErrorCode::PluginDelegationOutsideManifestEnvelope` WITHOUT the
-    // test ever calling `Engine::set_manifest_envelope_rechecker`.
+fn noop_rechecker_admit_everything_is_security_r1_1_would_fail_baseline() {
+    // SHAPE-trap guard (R2 §4-A; renamed at MR-2 follow-up): the
+    // SHIPPED `NoopManifestEnvelopeRechecker` admits-everything by
+    // returning `NotApplicable` (which `outcome_to_row_reject` maps to
+    // `Ok(())` → admit). That admit-everything default IS the
+    // security-r1-1 BLOCKER's load-bearing would-FAIL — every hostile
+    // row would-be-admitted under the default-wired Noop unless the
+    // engine builder gets re-wired to install the substantive
+    // Production rechecker at G-CORE-8.2.
     //
     // -----------------------------------------------------------------
     // SHIPPED-SURFACE EXERCISE (R4.1 fix-pass per pim-18 §3.6f — L3
