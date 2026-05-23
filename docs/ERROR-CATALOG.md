@@ -372,6 +372,14 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** Value construction / deserialization
 - **Phase:** 1
 
+### E_VALUE_OUT_OF_RANGE
+
+- **Message:** "Builder-time numeric value out of range for its storage type ({field}: {value} exceeds {bound})"
+- **Context:** `{ field: string, value: number, bound: number }`
+- **Fix:** `SubgraphBuilder` records each over-range numeric argument as a deferred error and surfaces them at the single-fallible-point `.build()` call (#506 / G-CORE-6 verify-pass). Most common: `iterate(max_iterations)` receives a `u64` exceeding `i64::MAX` (the on-graph `Value::Int` storage type), or `iterate_parallel(parallel_fanout)` receives a `usize` exceeding `i64::MAX`. Either cap the argument inside the caller before invoking the builder, or split the work across multiple iterate nodes. The `push()`-time `NodeHandle(u32::MAX)` exhaustion case (~4.29B nodes per builder) is practically unreachable but yields the same code if hit.
+- **Thrown at:** `SubgraphBuilder::build` (the single-fallible-point per #506 / G-CORE-6)
+- **Phase:** 4 (Phase-4-Meta-Core)
+
 ### E_CID_PARSE
 
 - **Message:** "CID bytes could not be parsed into a CIDv1: {detail}"
