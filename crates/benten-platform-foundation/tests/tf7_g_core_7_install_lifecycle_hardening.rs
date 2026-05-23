@@ -248,6 +248,7 @@ fn install_step10_provision_failure_rolls_back_step9_minted_grants_zero_residual
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut bad_ns,
+        install_record_replay_check: None,
     };
     let params = install_params(&trust_list, &user_did, &plugin_did);
 
@@ -326,6 +327,7 @@ fn install_step9_cap_cascade_is_atomic_midloop_failure_unwinds_prior_grants() {
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut ns,
+        install_record_replay_check: None,
     };
     let params = install_params(&trust_list, &user_did, &plugin_did);
 
@@ -435,6 +437,7 @@ fn upgrade_with_grown_requires_must_block_install_until_fresh_consent_e2e() {
         let mut ctx = InstallPorts {
             cap_minter: &mut minter,
             private_ns: &mut ns,
+            install_record_replay_check: None,
         };
         let params = install_params(&trust_list, &user_did, &plugin_did);
         install_plugin(
@@ -468,6 +471,7 @@ fn upgrade_with_grown_requires_must_block_install_until_fresh_consent_e2e() {
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut ns,
+        install_record_replay_check: None,
     };
     let mut params = install_params(&trust_list, &user_did, &plugin_did);
     params.prior_installed_cid = Some(v1_cid);
@@ -554,6 +558,7 @@ fn install_with_time_bounded_manifest_under_clock_sentinel_rejected_e2e() {
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut ns,
+        install_record_replay_check: None,
     };
     // CLOCK-NOT-INJECTED sentinel: now_secs == 0.
     let params = InstallParams {

@@ -2087,12 +2087,86 @@ row means **the substantive defense at the merge boundary is NOT live
 in shipped binaries** — only the per-row `CapabilityPolicy::pre_write`
 check from Compromise #2 sync-replica sub-narrative is.
 
-**Cross-refs.** R4b-FP-1 implementer brief (`r4b/fp-1` branch); Inv-14
-plugin-DID principal extension (`docs/INVARIANT-COVERAGE.md`);
-`crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`
-trait + `NoopManifestEnvelopeRechecker` default impl;
+**G-CORE-8 R5 delta (Phase-4-Meta-Core).** Three structural hardening
+shipped on top of the R4b-FP-1 seam without yet wiring the substantive
+production adapter (which still lands in G-CORE-8.2; see backlog
+§4.36):
+
+1. **Typed-arm split at the `Outcome` enum
+   (`ManifestEnvelopeRecheckOutcome::UnresolvedDeny`).** Pre-R5 the
+   enum had only `{ OutsideEnvelope, NotApplicable }`. The
+   `NotApplicable` arm admit-everythings (mapped to `Ok(())` by
+   `outcome_to_row_reject`) — correct for the "rechecker has no
+   context" case, but a footgun if a substantive rechecker fails to
+   resolve a peer. The new typed `UnresolvedDeny` arm fails CLOSED
+   with the matching new ErrorCode
+   `ManifestEnvelopeRecheckUnresolvedDeny` so the security-r1-2
+   distinction "I cannot decide" vs "I admit" is preserved at the
+   wire-typed layer. Substantive rechecker impls landing at G-CORE-8.2
+   are required to emit `UnresolvedDeny` rather than `NotApplicable`
+   when their own internal resolution fails (e.g. missing-manifest /
+   chain-root-not-loaded).
+2. **Structural empty-peer-DID fail-CLOSED at
+   `crates/benten-engine/src/engine.rs::apply_atrium_merge:1448-1484`
+   — the two-layer defense the mini-reviewer ground-truth-verified.**
+   Layer-A: BEFORE delegating to the installed rechecker, the merge
+   loop calls `atrium.resolve_peer_dids(&seed.peer_node_ids).await`
+   and short-circuits with
+   `ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny` when the
+   resolved set is empty — closes the case where a Noop-defaulted
+   engine would otherwise admit any merge whose peer-DID is
+   unresolvable. Layer-B: the substantive rechecker impl emits
+   `UnresolvedDeny` from its own internal resolution failure. Both
+   layers route to the same typed code → the operator-log signal is
+   indistinguishable from either layer's perspective ("the merge
+   refused because the engine could not identify the writer"). The
+   Noop default still returns `NotApplicable` when a peer-DID IS
+   resolvable — that is the deliberate "rechecker has no context"
+   shape preserved from R4b-FP-1; only the unresolvable-peer arm is
+   structurally upgraded to fail-CLOSED.
+3. **Three additional typed ErrorCodes minted at G-CORE-8** in the
+   adjacent surfaces, each closing a previously-untyped admit/silent
+   path:
+   - `PluginInstallRecordAlreadyApplied` — idempotency at the install
+     replay surface (`benten-engine/src/install_record_replay.rs`);
+     prevents double-application of an already-installed plugin
+     manifest at replay time.
+   - `WriteBoundaryChainNotUserRooted` — the user-as-root invariant
+     (CLAUDE.md #18 layer (a)) typed at the write boundary; the
+     `WriteContext::chain` MUST trace to a user-DID root or the write
+     rejects with this code rather than silently passing the
+     CapabilityPolicy gate on an attenuation-only chain.
+   - `ThinClientBridgePrincipalUnresolved` — the thin-client (shape
+     (b) per CLAUDE.md #17) bridge surface
+     (`benten-engine/src/thin_client_bridge.rs`) fail-CLOSED when the
+     bridged principal cannot be resolved against the local engine's
+     `UserDidRegistry`; mirrors the same I-cannot-decide-so-I-refuse
+     posture as `ManifestEnvelopeRecheckUnresolvedDeny` but at the
+     thin-client / IPC boundary.
+
+The G-CORE-8 delta is `CapabilityPolicy`-trait soft-seal +
+manifest-envelope-recheck typed-arm-split + the three adjacent typed
+fail-CLOSED ErrorCodes. The substantive `ProductionManifestEnvelopeRechecker`
+adapter remains DEFERRED to G-CORE-8.2 per backlog §4.36; the seam +
+typed-arm + structural-empty-peer-DID fail-CLOSED layer landing at
+G-CORE-8 is what makes a substantive adapter drop-in-safe rather than
+a wire-shape change.
+
+**Cross-refs.** R4b-FP-1 implementer brief (`r4b/fp-1` branch); G-CORE-8
+implementer brief (`g-core-8/security-surface-sealed-rebased` branch +
+its mini-rev MAJ+MIN fix-pass); Inv-14 plugin-DID principal extension
+(`docs/INVARIANT-COVERAGE.md`);
+`crates/benten-engine/src/manifest_envelope_recheck.rs::{ManifestEnvelopeRechecker,
+ManifestEnvelopeRecheckOutcome, NoopManifestEnvelopeRechecker,
+outcome_to_row_reject}`;
+`crates/benten-engine/src/engine.rs::apply_atrium_merge` (the
+structural empty-peer-DID fail-CLOSED arm at
+[`engine.rs:1448-1484`](../crates/benten-engine/src/engine.rs#L1448-L1484));
 `crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope`
-(the function the Phase-4-Meta production adapter will call into).
+(the function the G-CORE-8.2 production adapter will call into);
+`benten-errors::ErrorCode::{ManifestEnvelopeRecheckUnresolvedDeny,
+PluginInstallRecordAlreadyApplied, WriteBoundaryChainNotUserRooted,
+ThinClientBridgePrincipalUnresolved}`.
 
 ### Compromise #30 — Unaudited PQ primitives in the v1-beta hybrid default — OPEN; MITIGATED by hybrid construction; CLOSES at v1-GM
 

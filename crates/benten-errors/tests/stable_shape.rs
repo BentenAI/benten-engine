@@ -556,6 +556,27 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   reject of Mode-3 discriminator) + the
     //   `synthesize_inline_tiny_cbor_for_test` fixture.
     ErrorCode::DropBundleMode3InlineRejected,
+    // Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes;
+    // §4.36 fail-CLOSED flip + §4.37 InstallRecord replay + §4.23
+    // user-DID root write-boundary chain validator + §4.22 thin-
+    // client bridge principal resolution). Construction sites:
+    //   `benten-engine::manifest_envelope_recheck::outcome_to_row_reject`
+    //     (the UnresolvedDeny arm — replaces the prior NotApplicable→
+    //     Ok(()) silent-admit path).
+    //   `benten-engine::install_record_replay::InstallRecordReplayStore::
+    //     record_and_check`  (the atomic check-and-record on second
+    //     presentation of the same install-record CID).
+    //   `benten-engine::write_boundary_chain_validator::
+    //     WriteBoundaryChainValidator::validate`  (the structural
+    //     always-on chain validator at the WRITE admission seam).
+    //   `benten-engine::thin_client_bridge::ThinClientBridge::
+    //     resolve_principal_for_request`  (the bridge that resolves
+    //     the acting principal from the authenticated session — no
+    //     client-supplied principal override).
+    ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+    ErrorCode::PluginInstallRecordAlreadyApplied,
+    ErrorCode::WriteBoundaryChainNotUserRooted,
+    ErrorCode::ThinClientBridgePrincipalUnresolved,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -906,8 +927,26 @@ fn variant_count_is_pinned() {
     // `DropBundleEnvelopeSigInvalid` + `DropBundleVersionUnsupported` +
     // `DropBundleMode3InlineRejected` for the offline Drop bundle
     // defense-in-depth contract (Spike G+H). 181 + 3 = 184.
+    //
+    // G-CORE-8 (Phase 4-Meta-Core, security-surface lock) consolidated
+    // alongside G-CORE-3e + G-CORE-3f in Strategy-C wave-2 batch:
+    // +4 codes — `ManifestEnvelopeRecheckUnresolvedDeny` (§4.36 fail-
+    // CLOSED flip — typed-reject for any non-positive recheck outcome at
+    // the apply_atrium_merge per-row recheck boundary; closes
+    // security-r1-1 + security-r1-2 BLOCKERs) +
+    // `PluginInstallRecordAlreadyApplied` (§4.37 atomic record-and-check
+    // around install admission — second presentation of the same
+    // install-record CID rejects before the cap-cascade runs; closes the
+    // TOCTOU window on the applied-records set) +
+    // `WriteBoundaryChainNotUserRooted` (§4.23 structural-always-on
+    // user-DID root chain validator at the WRITE admission seam — mirrors
+    // Phase-3 G16-B-F structural-always-on per-row cap-recheck) +
+    // `ThinClientBridgePrincipalUnresolved` (§4.22 thin-client bridge
+    // principal resolution failure — the bridge never trusts client-
+    // supplied principals; resolves from the authenticated session).
+    // 184 + 4 = 188.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 184,
+        CATALOG_VARIANT_COUNT, 188,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1169,7 +1208,14 @@ fn catalog_variant_count_matches_enum() {
             // provide).
             | ErrorCode::DropBundleEnvelopeSigInvalid
             | ErrorCode::DropBundleVersionUnsupported
-            | ErrorCode::DropBundleMode3InlineRejected => true,
+            | ErrorCode::DropBundleMode3InlineRejected
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock:
+            // fail-closed typed-rejects at the recheck / install /
+            // write-boundary / thin-client-bridge boundaries.
+            | ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+            | ErrorCode::PluginInstallRecordAlreadyApplied
+            | ErrorCode::WriteBoundaryChainNotUserRooted
+            | ErrorCode::ThinClientBridgePrincipalUnresolved => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

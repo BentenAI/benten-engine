@@ -113,6 +113,7 @@ fn plugin_install_with_content_substituted_by_attacker_peer_did_rejected() {
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -199,6 +200,7 @@ fn plugin_install_admits_bytes_when_peer_did_matches_signing_key() {
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -279,6 +281,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -328,6 +331,7 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let mut ctx2 = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
+        install_record_replay_check: None,
     };
     let ctx2_params = InstallParams {
         now_secs: 1_700_000_000,
