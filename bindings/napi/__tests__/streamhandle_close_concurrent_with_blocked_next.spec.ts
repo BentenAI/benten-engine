@@ -97,6 +97,7 @@ describe(
   () => {
     it(
       "close() returns synchronously without blocking on in-flight next()",
+      { timeout: 4000 },
       async () => {
         // Construct a handle via `testingOpenStreamForTest` with zero
         // chunks. Then drive a single `next()` (returns null immediately
@@ -119,11 +120,11 @@ describe(
         handle.close();
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
 
     it(
       "next() observes close_requested set during in-flight poll loop and returns null within bounded time",
+      { timeout: 4000 },
       async () => {
         // The Option-C arm's load-bearing assertion: a `next()` call
         // that has entered the poll-loop observes a concurrent
@@ -170,11 +171,11 @@ describe(
         expect(elapsed).toBeLessThan(2000);
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
 
     it(
       "isDrained() + seqSoFar() + requiresExplicitClose() are lock-free and don't contend with in-flight next()",
+      { timeout: 4000 },
       async () => {
         // The Option-C state-split moved these accessors off the
         // outer Mutex onto atomic caches + an immutable field.
@@ -198,7 +199,6 @@ describe(
         handle.close();
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
   },
 );
@@ -211,6 +211,7 @@ describe(
   () => {
     it(
       "close() idempotent across concurrent blocked next()s; all Promises settle cleanly with no orphan",
+      { timeout: 5000 },
       async () => {
         // PR-B AsyncTask shape: next() returns Promise<Buffer | null>.
         // Fire K concurrent next() AsyncTasks on a handle backed by
@@ -246,7 +247,6 @@ describe(
         }
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 5000 },
     );
   },
 );
