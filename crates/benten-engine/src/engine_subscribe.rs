@@ -361,6 +361,7 @@ impl Engine {
                         target_cid: Some(event.anchor_cid),
                         device_cid: None,
                         actor_hint: None,
+                        audience_did: None,
                     };
                     match policy.check_read(&ctx) {
                         Ok(()) => CapRecheckOutcome::Keep,

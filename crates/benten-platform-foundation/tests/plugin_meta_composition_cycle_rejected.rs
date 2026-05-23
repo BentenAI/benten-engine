@@ -210,6 +210,7 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade_minter,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,

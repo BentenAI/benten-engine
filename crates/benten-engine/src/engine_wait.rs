@@ -888,6 +888,7 @@ impl Engine {
                 pending_ops: Vec::new(),
                 authority: benten_caps::WriteAuthority::User,
                 device_cid,
+                audience_did: None,
             };
             policy.check_write(&ctx).map_err(|e| EngineError::Other {
                 code: ErrorCode::CapRevokedMidEval,

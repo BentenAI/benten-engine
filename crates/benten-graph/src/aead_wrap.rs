@@ -376,6 +376,13 @@ pub fn encrypt_chunk(
 /// frozen public surface (the v1 wire-freeze happens at G-CORE-9).
 /// Any drift here is caught by the round-trip pins +
 /// `tf3d_two_cid_mapping_durable_across_reopen`.
+//
+// See also crates/benten-drop/src/bundle.rs DropBundle docstring for the
+// parallel wire-format coupling callout — the Drop bundle's
+// `EncryptedContent.bytes` wraps this storage encoding, so both layers
+// are atomically frozen at G-CORE-9. Any pre-freeze mutation here MUST
+// also retense benten-drop's DropBundle wire shape + the tf3f
+// offline-consume pins.
 pub fn encode_encrypted_node(encrypted: &EncryptedNode) -> Result<Vec<u8>, AeadError> {
     const STORAGE_MAGIC: u8 = 0x3d;
     let mut out = Vec::new();

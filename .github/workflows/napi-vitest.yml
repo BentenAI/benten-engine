@@ -84,7 +84,15 @@ jobs:
         run: |
           cd bindings/napi
           npm install --no-audit --no-fund
-          npm run build
+          # G-CORE-10 PR-B: append --features test-helpers so the cdylib
+          # compiles in `Engine::testingOpenStreamForTest` (and other
+          # cfg-gated test surfaces). Without it the PR-B test bodies
+          # (libuv-non-starvation + asynctask-roundtrip + close-concurrent)
+          # all runtime-fail with E_PRIMITIVE_NOT_IMPLEMENTED. The
+          # production cdylib still ships WITHOUT this feature — only the
+          # CI vitest build pulls it in. Mirrors the established pattern
+          # documented at `bindings/napi/Cargo.toml::[features]::test-helpers`.
+          npm run build -- --features test-helpers
           # @napi-rs/cli v3 emits the binary with the full Rust target triple's
           # ABI suffix on Linux (`benten-napi.linux-x64-gnu.node`), but the
           # test files' `loadNative()` helper computes

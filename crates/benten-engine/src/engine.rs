@@ -994,16 +994,46 @@ pub struct EngineGeneric<B: GraphBackend> {
         std::sync::Mutex<std::collections::HashSet<benten_core::Cid>>,
     /// **Phase-4-Foundation R4b-FP-1 Seam 3** — manifest-envelope
     /// recheck port consulted from inside [`Self::apply_atrium_merge`]'s
-    /// per-row recheck loop. `None` collapses to
-    /// [`crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker`]
-    /// behavior (Phase-3 baseline; no envelope recheck). Default-built
-    /// engines (post-R6-FP-A) install `Some(Arc::new(Noop))` so the
-    /// recheck-path always fires; an operator swaps in a real
-    /// adapter post-build via [`Self::set_manifest_envelope_rechecker`].
-    /// A fluent `EngineBuilder::with_manifest_envelope_rechecker` setter
-    /// is named at `docs/future/phase-4-backlog.md §4.36` as a Phase-4-Meta carry.
+    /// per-row recheck loop.
+    ///
+    /// **G-CORE-8 §4.36 fail-CLOSED flip** (security-r1-1 + security-r1-2
+    /// BLOCKER closures): the flip is the addition of a new typed
+    /// [`crate::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome::UnresolvedDeny`]
+    /// arm (distinct from the legitimate `NotApplicable` "no chain in
+    /// scope" arm). Substantive `Production*Rechecker` impls return
+    /// `UnresolvedDeny` on unresolvable-peer / missing-manifest paths;
+    /// the per-row `outcome_to_row_reject` mapping
+    /// row-rejects with typed
+    /// [`benten_errors::ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny`].
+    /// Engine::default continues to install `Some(Arc::new(Noop))` (the
+    /// Noop returns `NotApplicable` because it has no PluginLibrary
+    /// state to consult); platform-foundation glue swaps in a real
+    /// `ProductionManifestEnvelopeRechecker` via
+    /// [`Self::set_manifest_envelope_rechecker`] when a PluginLibrary
+    /// is installed alongside the engine.
     pub(crate) manifest_envelope_rechecker:
         Option<Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>>,
+    /// **Phase-4-Meta-Core G-CORE-8 §4.23** — write-boundary chain
+    /// validator port. Default is the
+    /// [`crate::write_boundary_chain_validator::NoopWriteBoundaryChainValidator`]
+    /// (returns `NotApplicable` → admit; "no validator installed").
+    /// Production deployments with a PluginLibrary install a
+    /// substantive `ProductionWriteBoundaryChainValidator` via
+    /// [`Self::set_write_boundary_chain_validator`]. The actual
+    /// structural-always-on consultation inside the WRITE admission
+    /// path is the G-CORE-8.2 follow-up wave (the typed seam + Noop
+    /// default + setter ARE the G-CORE-8 deliverable so the wire-up
+    /// is a one-line consume; G-CORE-8.2 lands the consume).
+    pub(crate) write_boundary_chain_validator:
+        Option<Arc<dyn crate::write_boundary_chain_validator::WriteBoundaryChainValidator>>,
+    /// **Phase-4-Meta-Core G-CORE-8 §4.37** — install-record replay
+    /// store. The atomic record-and-check store the install pipeline
+    /// consults pre-cap-cascade. Per-engine instance (per-process
+    /// lifetime at v1; durable F3-pattern wire-up is Phase-4-Meta-
+    /// Composing). The store is always-present (no Option) because
+    /// the v1 in-memory `HashSet` shape has zero overhead when unused.
+    pub(crate) install_record_replay_store:
+        Arc<crate::install_record_replay::InstallRecordReplayStore>,
     /// **Refinement-audit-2026-05 Wave-E HELD #1197/#1146** — Layer-3
     /// plugin-manifest `shares`-envelope resolver consulted from inside
     /// [`crate::engine_caps::EngineCapsHandle::delegate_capability`].
@@ -1378,6 +1408,7 @@ impl Engine {
                     pending_ops: Vec::new(),
                     authority: benten_caps::WriteAuthority::User,
                     device_cid: None,
+                    audience_did: None,
                 };
                 if let Err(cap_err) = policy.check_write(&ctx) {
                     use benten_caps::CapError;
@@ -1415,14 +1446,41 @@ impl Engine {
             // are a Layer-3 refinement (CLAUDE.md #18) on top of the
             // Layer-1 revocation defense.
             if let Some(rechecker) = self.manifest_envelope_rechecker.as_ref() {
-                let peer_did_str = atrium
-                    .resolve_peer_dids(&seed.peer_node_ids)
-                    .await
-                    .into_iter()
-                    .next()
-                    .unwrap_or_else(|| "<unresolved-peer>".to_string());
-                let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
-                crate::manifest_envelope_recheck::outcome_to_row_reject(outcome, zone, key)?;
+                // G-CORE-8 §4.36 + (b): an unresolvable peer-DID at the
+                // sync-merge boundary MUST fail-closed structurally —
+                // even if the installed rechecker is the Noop (which
+                // would return NotApplicable→admit). We short-circuit
+                // here BEFORE calling the rechecker: if `resolve_peer_dids`
+                // returns no resolved DID (empty iterator), this is the
+                // sentinel "unresolvable-peer" case from (b); fail
+                // CLOSED with the typed UnresolvedDeny code rather than
+                // routing through a rechecker that has no context.
+                // Substantive rechecker impls still get called when
+                // there IS a resolved DID, and they emit
+                // UnresolvedDeny when their own resolution fails (e.g.
+                // missing-manifest case).
+                let resolved_dids = atrium.resolve_peer_dids(&seed.peer_node_ids).await;
+                match resolved_dids.into_iter().next() {
+                    None => {
+                        // (b) unresolvable-peer-DID at the merge-recheck
+                        // boundary → fail CLOSED with the typed code.
+                        return Err(EngineError::Other {
+                            code: ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+                            message: format!(
+                                "apply_atrium_merge: peer-DID resolution failed at \
+                                 merge-recheck boundary (zone='{zone}' key='{key}'): \
+                                 no resolvable DID for peer_node_ids — fail-CLOSED \
+                                 per G-CORE-8 §4.36 + (b)"
+                            ),
+                        });
+                    }
+                    Some(peer_did_str) => {
+                        let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
+                        crate::manifest_envelope_recheck::outcome_to_row_reject(
+                            outcome, zone, key,
+                        )?;
+                    }
+                }
             }
 
             // **COLLAPSE (P3) — J8 envelope-ceiling AND.** The single
@@ -1827,21 +1885,53 @@ impl<B: GraphBackend> EngineGeneric<B> {
             wait_ttl_gc_event_driven_disabled: std::sync::atomic::AtomicBool::new(false),
             wait_ttl_tracked_envelopes: std::sync::Mutex::new(std::collections::HashSet::new()),
             // p4f-r6-pa-cp-2 BLOCKER + tmr-r6-r1-1 closure (R6-FP-A):
-            // default to the explicit-Noop rather than `None`, so the
-            // recheck-path ALWAYS fires + the gate is structurally
-            // active (even if the Noop impl returns NotApplicable for
-            // every call today, the production adapter is the only
-            // swap needed to engage real envelope enforcement).
-            // Eliminates the silent-skip fail-open default. Engines
-            // that want the explicit no-op semantics can keep this
-            // value; engines that want real envelope enforcement call
-            // `set_manifest_envelope_rechecker(Arc::new(<real>))`. The
-            // observable difference at v1 is zero (Noop returns
-            // NotApplicable → Admitted); the structural posture is
-            // fail-closed by default for future adapter swap.
+            // **G-CORE-8 §4.36 fail-CLOSED flip** (security-r1-1 +
+            // security-r1-2 BLOCKER closures): Engine::default
+            // continues to install `Some(Arc::new(Noop))` for the
+            // structural-recheck-path-always-fires guarantee, but the
+            // G-CORE-8 §4.36 flip is the addition of a NEW typed
+            // `ManifestEnvelopeRecheckOutcome::UnresolvedDeny` arm
+            // (distinct from `NotApplicable`) so a substantive
+            // `Production*Rechecker` can return UnresolvedDeny on the
+            // unresolvable-peer / missing-manifest paths and have
+            // `outcome_to_row_reject` row-reject with typed
+            // ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny. The
+            // Noop continues to return NotApplicable (it has no
+            // PluginLibrary state by construction) — production
+            // deployments with a PluginLibrary swap in a real adapter
+            // via `set_manifest_envelope_rechecker(Arc::new(<real>))`.
+            // The pre-G-CORE-8 BLOCKER was that NO substantive
+            // rechecker had a typed-arm to express "unresolvable" —
+            // forced to admit-on-unresolved; G-CORE-8 mints the arm +
+            // wires the typed reject so substantive impls can
+            // fail-CLOSED honestly.
             manifest_envelope_rechecker: Some(Arc::new(
                 crate::manifest_envelope_recheck::NoopManifestEnvelopeRechecker,
             )),
+            // **G-CORE-8 §4.23 seam:** default is the Noop
+            // (NotApplicable → admit; "no validator installed").
+            // Production deployments with a PluginLibrary swap in a
+            // substantive ProductionWriteBoundaryChainValidator via
+            // `set_write_boundary_chain_validator`. The structural-
+            // always-on WRITE-admission consultation is the G-CORE-8.2
+            // follow-up wave (HARD-RULE-12 named-now destination
+            // documented in write_boundary_chain_validator.rs module
+            // header).
+            write_boundary_chain_validator: Some(Arc::new(
+                crate::write_boundary_chain_validator::NoopWriteBoundaryChainValidator,
+            )),
+            // **G-CORE-8 §4.37 seam:** the install-record replay
+            // store is always-present (zero-overhead when unused).
+            // The install pipeline consults it pre-cap-cascade
+            // (atomic record-and-check; TOCTOU defense). Wire-up
+            // into Engine::install_plugin lives at the install
+            // pipeline boundary — currently the foundation crate's
+            // `plugin_lifecycle::install_plugin` is the install entry
+            // point; the engine-level consume is the G-CORE-8.2
+            // follow-up.
+            install_record_replay_store: Arc::new(
+                crate::install_record_replay::InstallRecordReplayStore::new(),
+            ),
             // Wave-E HELD #1197/#1146 — Layer-3 `shares`-envelope
             // resolver. Default `Some(Noop)` for the same structural
             // reason as the rechecker above: the recheck-path always
@@ -1888,6 +1978,41 @@ impl<B: GraphBackend> EngineGeneric<B> {
         rechecker: Arc<dyn crate::manifest_envelope_recheck::ManifestEnvelopeRechecker>,
     ) {
         self.manifest_envelope_rechecker = Some(rechecker);
+    }
+
+    /// **Phase-4-Meta-Core G-CORE-8 §4.23** — install the
+    /// write-boundary chain validator port.
+    ///
+    /// Production deployments with a PluginLibrary swap in a
+    /// substantive `ProductionWriteBoundaryChainValidator` (typically
+    /// the platform-foundation glue type that consults the engine's
+    /// install-record-backed `UserDidRegistry` + composes
+    /// `benten_caps::validate_chain_with_manifest_envelope`).
+    /// Engines built without this setter behave observably as "no
+    /// Layer-1 chain-validator at the WRITE-boundary" — Layer-1
+    /// enforcement at `CapabilityPolicy::check_write` remains in
+    /// force.
+    pub fn set_write_boundary_chain_validator(
+        &mut self,
+        validator: Arc<dyn crate::write_boundary_chain_validator::WriteBoundaryChainValidator>,
+    ) {
+        self.write_boundary_chain_validator = Some(validator);
+    }
+
+    /// **Phase-4-Meta-Core G-CORE-8 §4.37** — read-only access to the
+    /// install-record replay store (test observable + install-pipeline
+    /// consume).
+    ///
+    /// The install pipeline calls `record_and_check` BEFORE the cap-
+    /// cascade runs to catch replayed install records (second
+    /// presentation of the same canonical signing-payload bytes
+    /// rejects with typed
+    /// `ErrorCode::PluginInstallRecordAlreadyApplied`).
+    #[must_use]
+    pub fn install_record_replay_store(
+        &self,
+    ) -> &Arc<crate::install_record_replay::InstallRecordReplayStore> {
+        &self.install_record_replay_store
     }
 
     /// **Refinement-audit-2026-05 Wave-E HELD #1197/#1146** — install

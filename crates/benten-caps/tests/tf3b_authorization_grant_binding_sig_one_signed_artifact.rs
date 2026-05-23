@@ -90,7 +90,7 @@ fn one_signed_artifact_round_trips_encode_decode_verify() {
     let audience = audience_alice();
     let ucan = synthetic_ucan_for(audience);
     let km = synthetic_key_material();
-    let grant = AuthorizationGrant::issue_for_test(ucan, km, audience).unwrap();
+    let grant = AuthorizationGrant::issue_envelopes_for_test(ucan, km, audience).unwrap();
 
     // Encode → CBOR bytes (canonical / deterministic).
     let bytes = grant.to_canonical_bytes().unwrap();
@@ -121,7 +121,7 @@ fn stolen_ucan_without_keys_binding_sig_rejects() {
     let audience = audience_alice();
     let ucan = synthetic_ucan_for(audience);
     let km_issued = synthetic_key_material();
-    let grant = AuthorizationGrant::issue_for_test(ucan, km_issued, audience).unwrap();
+    let grant = AuthorizationGrant::issue_envelopes_for_test(ucan, km_issued, audience).unwrap();
 
     // Attacker swaps the KeyMaterial half AFTER the issuer signed.
     let km_attacker_fresh = KeyMaterial::synthetic_for_test_distinct(1);
@@ -150,7 +150,7 @@ fn stolen_keys_without_ucan_binding_sig_rejects() {
     let audience = audience_alice();
     let ucan_issued = synthetic_ucan_for(audience);
     let km = synthetic_key_material();
-    let grant = AuthorizationGrant::issue_for_test(ucan_issued, km, audience).unwrap();
+    let grant = AuthorizationGrant::issue_envelopes_for_test(ucan_issued, km, audience).unwrap();
 
     // Attacker swaps the UCAN half AFTER the issuer signed.
     let ucan_attacker = UcanEnvelope::synthetic_for_test_distinct(audience, 7);
@@ -182,7 +182,7 @@ fn wrong_audience_swap_binding_sig_rejects() {
     let bob = audience_bob();
     let ucan = synthetic_ucan_for(alice);
     let km = synthetic_key_material();
-    let grant = AuthorizationGrant::issue_for_test(ucan, km, alice).unwrap();
+    let grant = AuthorizationGrant::issue_envelopes_for_test(ucan, km, alice).unwrap();
 
     // Present the same grant for verification under Bob — must fail.
     let err = grant
@@ -211,7 +211,7 @@ fn online_and_offline_envelope_shapes_byte_equal() {
     let audience = audience_alice();
     let ucan = synthetic_ucan_for(audience);
     let km = synthetic_key_material();
-    let grant = AuthorizationGrant::issue_for_test(ucan, km, audience).unwrap();
+    let grant = AuthorizationGrant::issue_envelopes_for_test(ucan, km, audience).unwrap();
 
     let online_bytes = grant.to_canonical_bytes().unwrap();
     let offline_bytes = grant.to_canonical_bytes().unwrap();

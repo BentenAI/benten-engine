@@ -154,7 +154,17 @@ fn tf3d_two_cid_mapping_round_trip_lookup_and_decrypt() {
     let encrypted: EncryptedNode = backend
         .get_encrypted_node(&ciphertext_cid)
         .expect("get_encrypted_node must succeed");
-    let decrypted = decrypt(&encrypted, &node.derive_key_for_test()).expect("AEAD decrypt OK");
+    // G-CORE-3e: K(N) sourced from the production HKDF-SHA256 path
+    // (Spike-E Interpretation-B). The seal-side in
+    // `put_node_with_context` and the unseal-side here BOTH route
+    // through `derive_test_seam_key_from_cid_with_namespace` keyed on
+    // the SAME namespace_did (`did_x` above); byte-for-byte agreement
+    // is load-bearing for AEAD-authenticate-on-decrypt.
+    let aead_key = benten_graph::redb_backend::derive_test_seam_key_from_cid_with_namespace(
+        Some(&did_x),
+        &plaintext_cid,
+    );
+    let decrypted = decrypt(&encrypted, &aead_key).expect("AEAD decrypt OK");
     let round_trip_node: Node = serde_ipld_dagcbor::from_slice(&decrypted).expect("dagcbor OK");
     assert_eq!(
         round_trip_node.cid().unwrap(),

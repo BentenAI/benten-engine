@@ -520,6 +520,63 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-caps::chain_validator::validate_chain_narrowing`
     //   (the `ChainNotNarrowing { step_index }` typed-reject path).
     ErrorCode::ChainNarrowingViolation,
+    // G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    // online-share contract; Flavor B per-request UCAN check): the
+    // UCAN-gated iroh-blobs ALPN handler's per-request typed-reject
+    // arms — umbrella `UcanBlobsRequestRejected` + scope-specific
+    // `UcanBlobsRequestNotInScope` + unresolvable-peer sentinel
+    // `UnresolvedPeerDeny`. Construction sites:
+    //   `benten-sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request`
+    //   (the per-request validation + scope-check + unresolved-peer arms).
+    ErrorCode::UcanBlobsRequestRejected,
+    ErrorCode::UcanBlobsRequestNotInScope,
+    ErrorCode::UnresolvedPeerDeny,
+    // G-CORE-3f (Phase 4-Meta-Core, Drop bundle envelope-sig
+    // defense-in-depth per Spike G): the outer integrity layer's
+    // typed-reject when the Ed25519 envelope-sig does not verify
+    // against the carried verifying key. Construction sites:
+    //   `benten_drop::bundle::DropBundle::verify_envelope_signature`
+    //   (the outer integrity layer; AEAD tags are the inner layer
+    //   and DO NOT route through this code — content-only tampers
+    //   surface as `PerNodeAeadAuthenticationFailed` per the
+    //   defense-in-depth pin).
+    ErrorCode::DropBundleEnvelopeSigInvalid,
+    // G-CORE-3f (Phase 4-Meta-Core, Drop bundle forward-compat per
+    // `00-implementation-plan.md` §3 G-CORE-3 def input-constraints
+    // F-3): unknown `DropBundleVersion` discriminator typed-reject.
+    // Construction sites:
+    //   `benten_drop::bundle::DropBundle::parse_cbor_bytes`
+    //   (the typed-version-check arm in the reader pipeline).
+    ErrorCode::DropBundleVersionUnsupported,
+    // G-CORE-3f (Phase 4-Meta-Core, Drop bundle Mode-3 defer-to-
+    // post-v1 per `00-implementation-plan.md` §3 G-CORE-3 def
+    // input-constraints refinement #6 L341): Mode-3 inline-tiny
+    // bundle typed-reject. Construction sites:
+    //   `benten_drop::bundle::DropBundle::parse_cbor_bytes` (typed-
+    //   reject of Mode-3 discriminator) + the
+    //   `synthesize_inline_tiny_cbor_for_test` fixture.
+    ErrorCode::DropBundleMode3InlineRejected,
+    // Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes;
+    // §4.36 fail-CLOSED flip + §4.37 InstallRecord replay + §4.23
+    // user-DID root write-boundary chain validator + §4.22 thin-
+    // client bridge principal resolution). Construction sites:
+    //   `benten-engine::manifest_envelope_recheck::outcome_to_row_reject`
+    //     (the UnresolvedDeny arm — replaces the prior NotApplicable→
+    //     Ok(()) silent-admit path).
+    //   `benten-engine::install_record_replay::InstallRecordReplayStore::
+    //     record_and_check`  (the atomic check-and-record on second
+    //     presentation of the same install-record CID).
+    //   `benten-engine::write_boundary_chain_validator::
+    //     WriteBoundaryChainValidator::validate`  (the structural
+    //     always-on chain validator at the WRITE admission seam).
+    //   `benten-engine::thin_client_bridge::ThinClientBridge::
+    //     resolve_principal_for_request`  (the bridge that resolves
+    //     the acting principal from the authenticated session — no
+    //     client-supplied principal override).
+    ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+    ErrorCode::PluginInstallRecordAlreadyApplied,
+    ErrorCode::WriteBoundaryChainNotUserRooted,
+    ErrorCode::ThinClientBridgePrincipalUnresolved,
     // Phase 4-Meta-Core G-CORE-DSL chunk-3 (#839): downstream-consumer
     // rejection at the DSL-compile boundary. Closes the
     // `CompileError::Io`-variant-abuse at
@@ -867,8 +924,45 @@ fn variant_count_is_pinned() {
     // `Serialize` family so callers can match the cross-version case
     // specifically (mirrors `GraphSchemaVersionMismatch` for the
     // snapshot-blob surface). 177 + 1 = 178.
+    //
+    // G-CORE-3e (Phase 4-Meta-Core, sync + iroh-blobs UCAN-gating)
+    // rebased onto post-#1331 main: +3 codes —
+    // `UcanBlobsRequestRejected` + `UcanBlobsRequestNotInScope` +
+    // `UnresolvedPeerDeny` for the custom-ALPN per-request UCAN check
+    // path. 178 + 3 = 181.
+    //
+    // G-CORE-3f (Phase 4-Meta-Core, NEW benten-drop crate) consolidated
+    // alongside G-CORE-3e in Strategy-C wave-2 batch: +3 codes —
+    // `DropBundleEnvelopeSigInvalid` + `DropBundleVersionUnsupported` +
+    // `DropBundleMode3InlineRejected` for the offline Drop bundle
+    // defense-in-depth contract (Spike G+H). 181 + 3 = 184.
+    //
+    // G-CORE-8 (Phase 4-Meta-Core, security-surface lock) consolidated
+    // alongside G-CORE-3e + G-CORE-3f in Strategy-C wave-2 batch:
+    // +4 codes — `ManifestEnvelopeRecheckUnresolvedDeny` (§4.36 fail-
+    // CLOSED flip — typed-reject for any non-positive recheck outcome at
+    // the apply_atrium_merge per-row recheck boundary; closes
+    // security-r1-1 + security-r1-2 BLOCKERs) +
+    // `PluginInstallRecordAlreadyApplied` (§4.37 atomic record-and-check
+    // around install admission — second presentation of the same
+    // install-record CID rejects before the cap-cascade runs; closes the
+    // TOCTOU window on the applied-records set) +
+    // `WriteBoundaryChainNotUserRooted` (§4.23 structural-always-on
+    // user-DID root chain validator at the WRITE admission seam — mirrors
+    // Phase-3 G16-B-F structural-always-on per-row cap-recheck) +
+    // `ThinClientBridgePrincipalUnresolved` (§4.22 thin-client bridge
+    // principal resolution failure — the bridge never trusts client-
+    // supplied principals; resolves from the authenticated session).
+    // 184 + 4 = 188.
+    //
+    // G-CORE-DSL chunk-3 (#839) rebased onto post-#1340 main (Strategy-C
+    // wave-2 batch): +1 `DslBackendRejected` — downstream-consumer
+    // rejection at the DSL-compile boundary; closes the
+    // `CompileError::Io`-variant abuse at the devserver site by giving
+    // downstream consumers a typed home distinct from real file-IO
+    // failures. 188 + 1 = 189.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 179,
+        CATALOG_VARIANT_COUNT, 189,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1113,6 +1207,31 @@ fn catalog_variant_count_matches_enum() {
             // typed reject IS the defense).
             | ErrorCode::AuthorizationGrantBindingSigInvalid
             | ErrorCode::ChainNarrowingViolation
+            // G-CORE-3e (Phase 4-Meta-Core) — UCAN-gated iroh-blobs
+            // ALPN handler per-request typed rejects (Flavor B). The
+            // typed reject IS the defense per the §R2 online-share
+            // contract + audience-binding (§R3) — see CLAUDE.md baked-in
+            // #18 trust model + HARD RULE 12.
+            | ErrorCode::UcanBlobsRequestRejected
+            | ErrorCode::UcanBlobsRequestNotInScope
+            | ErrorCode::UnresolvedPeerDeny
+            // G-CORE-3f (Phase 4-Meta-Core, Drop bundle defense-in-
+            // depth per Spike G + the F-3 typed-reject + the Mode-3
+            // defer-to-post-v1 contracts): fail-closed typed-rejects
+            // at the Drop-consumer boundary — neither admits
+            // primitive-edge fallback per HARD RULE 12 (the typed
+            // reject IS the defense the Drop format exists to
+            // provide).
+            | ErrorCode::DropBundleEnvelopeSigInvalid
+            | ErrorCode::DropBundleVersionUnsupported
+            | ErrorCode::DropBundleMode3InlineRejected
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock:
+            // fail-closed typed-rejects at the recheck / install /
+            // write-boundary / thin-client-bridge boundaries.
+            | ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+            | ErrorCode::PluginInstallRecordAlreadyApplied
+            | ErrorCode::WriteBoundaryChainNotUserRooted
+            | ErrorCode::ThinClientBridgePrincipalUnresolved
             // G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection
             // at the DSL-compile boundary; closes the
             // `CompileError::Io`-variant abuse at the devserver site.

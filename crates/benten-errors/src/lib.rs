@@ -1159,6 +1159,147 @@ pub enum ErrorCode {
     /// only legitimate `Scope` arms at v1-beta are `Hashes` +
     /// `RestrictedSelector`.
     ChainNarrowingViolation,
+    /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    /// online-share contract; Flavor B per-request UCAN check): the
+    /// wave-3e UCAN-gated iroh-blobs ALPN handler rejected a request
+    /// at the per-request validation step BEFORE any bytes flowed.
+    /// Umbrella code for the "request denied at the handler boundary"
+    /// class of failures (malformed grant, binding-sig invalid not
+    /// covered by the more-specific
+    /// `AuthorizationGrantBindingSigInvalid` code, handler-policy
+    /// rejection). Distinct from
+    /// [`Self::UcanBlobsRequestNotInScope`] (scope-specific reject
+    /// when the requested ciphertext_hash is NOT in the granted
+    /// `RestrictedSpec` roots allowlist) and from
+    /// [`Self::UnresolvedPeerDeny`] (sentinel arm for the unresolvable
+    /// peer-DID adversarial pattern). Per the "binding is the
+    /// foundation" §R3 contract, the handler validates the request's
+    /// UCAN per-request BEFORE dispatching to iroh-blobs's
+    /// `provider::handle_connection`; this typed code fires when
+    /// validation rejects. NEVER catch + retry — the typed reject IS
+    /// the defense.
+    UcanBlobsRequestRejected,
+    /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    /// online-share contract; F-2 scope-check arm): the requested
+    /// ciphertext_hash is NOT in the granted `RestrictedSpec`'s
+    /// `roots` allowlist. The handler returns this typed code +
+    /// serves zero bytes. Distinct from
+    /// [`Self::UcanBlobsRequestRejected`] (umbrella per-request
+    /// rejection — malformed grant, binding-sig, etc.); this code is
+    /// specifically the "the grant is otherwise valid but does NOT
+    /// authorise this particular hash" arm. Covers the wave-3e
+    /// adversarial pattern where Bob holds a valid grant for
+    /// `{hash_a, hash_b}` and requests `hash_c` — the handler MUST
+    /// NOT serve `hash_c` even though Bob's grant is otherwise valid.
+    /// Routes to `ON_DENIED` (cap-denial family). Construction site:
+    /// `crates/benten-sync/src/ucan_blobs_protocol.rs`.
+    UcanBlobsRequestNotInScope,
+    /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
+    /// + security-r1-2 adversarial pattern): the requester's grant
+    /// references an unresolvable peer-DID (the sentinel
+    /// `<unresolved-peer>` pattern). The wave-3e handler MUST NEVER
+    /// proceed with an unresolvable peer; it returns this typed code
+    /// (`UnresolvedDeny`-shaped) BEFORE any binding-sig verification
+    /// or iroh-blobs dispatch. Couples §4.36 recheck + §4.25
+    /// sync-hydrate denial: both surfaces fire this same code on the
+    /// unresolvable arm so audit pipelines route uniformly. Routes to
+    /// `ON_DENIED`. Construction site:
+    /// `crates/benten-sync/src/ucan_blobs_protocol.rs`. NEVER admit
+    /// an unresolved peer — if we can't resolve who's asking, we
+    /// can't even know whether the binding-sig matches their identity;
+    /// silent admission would defeat the entire audience-binding
+    /// property of `AuthorizationGrant`.
+    UnresolvedPeerDeny,
+    /// G-CORE-3f (Phase 4-Meta-Core, Drop bundle envelope-sig defense-
+    /// in-depth per Spike G): the envelope-level Ed25519 signature
+    /// over a `benten_drop::DropBundle` header did not verify against
+    /// the carried verifying key. Surfaces at
+    /// `benten_drop::bundle::DropBundle::verify_envelope_signature`
+    /// (the outer integrity layer; per-Node AEAD tags are the inner
+    /// layer). The envelope-sig intentionally binds the bundle
+    /// HEADER only — per the per-Node-ciphertext-tamper-detected pin,
+    /// content-only tampers do NOT trip this code; they trip the
+    /// inner AEAD-tag layer instead.
+    DropBundleEnvelopeSigInvalid,
+    /// G-CORE-3f (Phase 4-Meta-Core, Drop bundle forward-compat per
+    /// `00-implementation-plan.md` §3 G-CORE-3 def input-constraints
+    /// F-3): a `benten_drop::DropBundle` carrying a `DropBundleVersion`
+    /// discriminator the reader does not recognize was rejected
+    /// typed (never silent skip). The current production-known
+    /// version is `1`; the test-only `Synthetic(u16)` arm exists
+    /// solely to drive the reject pin. Construction site:
+    /// `benten_drop::bundle::DropBundle::parse_cbor_bytes`.
+    DropBundleVersionUnsupported,
+    /// G-CORE-3f (Phase 4-Meta-Core, Drop bundle Mode-3 defer-to-
+    /// post-v1 contract per `00-implementation-plan.md` §3 G-CORE-3
+    /// def input-constraints refinement #6 L341): a parsed
+    /// `benten_drop::DropBundle` payload either carried an
+    /// `InlineTiny` mode discriminator OR an out-of-band sentinel
+    /// the parser uses to surface the Mode-3-rejected typed path.
+    /// Mode 3 (bundle ≤16KiB inlined into the share URL) is
+    /// deferred to post-v1; this is the typed-reject surface.
+    /// Construction site:
+    /// `benten_drop::bundle::DropBundle::parse_cbor_bytes` (typed-
+    /// reject path) + the `synthesize_inline_tiny_cbor_for_test`
+    /// fixture exercising it.
+    DropBundleMode3InlineRejected,
+
+    // ----- Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes) -----
+    //
+    // G-CORE-8 §4.36 fail-CLOSED flip + §4.37 InstallRecord replay defense +
+    // §4.23 user-DID root write-boundary chain validator + §4.22 thin-client
+    // bridge principal-resolution. All four codes ride the existing typed-
+    // reject discipline (typed-rejection-on-the-defense-arm; never silent
+    // fail-open). Each code's construction site is named in `tests/
+    // stable_shape.rs` ALL_CATALOG_VARIANTS entries below.
+    /// G-CORE-8 §4.36 fail-CLOSED flip (security-r1-1 + security-r1-2
+    /// BLOCKER closure). The manifest-envelope rechecker observed an
+    /// outcome it could NOT positively place — unresolvable peer-DID
+    /// (sentinel `<unresolved-peer>`), no manifest available for the
+    /// inbound row, or any non-positive recheck outcome. Per the
+    /// post-rename enum invariant in
+    /// `benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome`
+    /// (formerly `NotApplicable` → now `UnresolvedDeny`): `Admitted` is
+    /// the ONLY proceed path; every non-positive outcome row-rejects
+    /// with this typed code. Construction site:
+    /// `benten-engine::manifest_envelope_recheck::outcome_to_row_reject`
+    /// on the `UnresolvedDeny` arm. Maps to
+    /// `E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY`.
+    ManifestEnvelopeRecheckUnresolvedDeny,
+    /// G-CORE-8 §4.37 InstallRecord replay defense + TOCTOU atomic
+    /// record-and-check. A second presentation of the same install-
+    /// record CID (matched by `signing_payload` hash, the canonical
+    /// content identity) is rejected at admission BEFORE the cap-cascade
+    /// runs (zero duplicate-mint window). The check-and-record is
+    /// atomic — `record_and_check_install_record` is a single
+    /// critical section (compare-and-swap shape; no verify-then-record
+    /// gap). Construction site:
+    /// `benten-engine::install_record_replay::InstallRecordReplayStore`.
+    /// Maps to `E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED`.
+    PluginInstallRecordAlreadyApplied,
+    /// G-CORE-8 §4.23 structural-always-on user-DID root write-boundary
+    /// chain validator. A WRITE whose UCAN delegation chain does NOT
+    /// terminate at a registered user-DID root is rejected at the WRITE
+    /// admission seam (mirrors Phase-3 G16-B-F structural-always-on
+    /// per-row cap-recheck — fail-CLOSED, NOT an opt-in). Defends the
+    /// CLAUDE.md #18 Layer-1 user-as-root invariant against plugin-DID
+    /// elevation attempts (a plugin-rooted "chain" cannot satisfy the
+    /// user-root-terminus check). Construction site: the engine
+    /// transaction-commit admission path consulting the configured
+    /// `WriteBoundaryChainValidator`. Maps to
+    /// `E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED`.
+    WriteBoundaryChainNotUserRooted,
+    /// G-CORE-8 §4.22 thin-client bridge principal resolution failure.
+    /// The bridge could not resolve the acting principal from the
+    /// authenticated DID-keyed session (token expired, session not
+    /// established, origin mismatch, or any other reason the session
+    /// surface returns a typed `ThinClientSessionError`). The bridge
+    /// NEVER trusts a client-supplied principal — a client that asserts
+    /// "I am principal X" without a session bound to X is rejected with
+    /// this typed code. Construction site:
+    /// `benten-engine::thin_client_bridge::ThinClientBridge::resolve_principal_for_request`.
+    /// Maps to `E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED`.
+    ThinClientBridgePrincipalUnresolved,
     /// Phase 4-Meta-Core G-CORE-DSL chunk-3 (closes #839): a downstream
     /// consumer of the `benten-dsl-compiler` crate rejected a
     /// post-compile registration / wiring step (canonical example:
@@ -1493,6 +1634,21 @@ impl ErrorCode {
             #[rustfmt::skip]
             ErrorCode::AuthorizationGrantBindingSigInvalid => "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
             ErrorCode::ChainNarrowingViolation => "E_CHAIN_NARROWING_VIOLATION",
+            ErrorCode::UcanBlobsRequestRejected => "E_UCAN_BLOBS_REQUEST_REJECTED",
+            ErrorCode::UcanBlobsRequestNotInScope => "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE",
+            ErrorCode::UnresolvedPeerDeny => "E_UNRESOLVED_PEER_DENY",
+            ErrorCode::DropBundleEnvelopeSigInvalid => "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID",
+            ErrorCode::DropBundleVersionUnsupported => "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
+            ErrorCode::DropBundleMode3InlineRejected => "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
+            // G-CORE-8 §4.36/§4.37/§4.23/§4.22 — single-line per drift-detect regex.
+            #[rustfmt::skip]
+            ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
+            #[rustfmt::skip]
+            ErrorCode::PluginInstallRecordAlreadyApplied => "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED",
+            #[rustfmt::skip]
+            ErrorCode::WriteBoundaryChainNotUserRooted => "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
+            #[rustfmt::skip]
+            ErrorCode::ThinClientBridgePrincipalUnresolved => "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
             // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer rejection
             // at the DSL-compile boundary; closes the Io-variant abuse.
             ErrorCode::DslBackendRejected => "E_DSL_BACKEND_REJECTED",
@@ -1953,6 +2109,44 @@ impl ErrorCode {
             // against.
             ErrorCode::AuthorizationGrantBindingSigInvalid => None,
             ErrorCode::ChainNarrowingViolation => None,
+            // G-CORE-3f Drop bundle reject codes. No primitive-edge
+            // routing — these are typed-rejects at the Drop-consumer
+            // surface that the consumer MUST handle explicitly
+            // (per the §"defer-to-post-v1 contract" + the
+            // defense-in-depth pin's fail-fast property — silent
+            // re-routing through `ON_ERROR` would defeat the
+            // typed-reject contract that the version + mode + sig
+            // verify steps exist to defend).
+            ErrorCode::DropBundleEnvelopeSigInvalid => None,
+            ErrorCode::DropBundleVersionUnsupported => None,
+            ErrorCode::DropBundleMode3InlineRejected => None,
+
+            // G-CORE-3e (Phase 4-Meta-Core) — per-request UCAN-blobs
+            // protocol typed rejects. All three route to `ON_DENIED`
+            // (cap-denial family — the wave-3e handler IS a per-request
+            // capability check). The typed reject IS the defense per the
+            // §R2 online-share contract + the audience-binding property
+            // of `AuthorizationGrant` (§R3); silent re-routing would
+            // defeat that. NEVER catch + retry.
+            ErrorCode::UcanBlobsRequestRejected => Some("ON_DENIED"),
+            ErrorCode::UcanBlobsRequestNotInScope => Some("ON_DENIED"),
+            ErrorCode::UnresolvedPeerDeny => Some("ON_DENIED"),
+
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock:
+            // - ManifestEnvelopeRecheckUnresolvedDeny + WriteBoundary
+            //   ChainNotUserRooted are cap-bearing denials at the merge /
+            //   write-admission boundary → ON_DENIED.
+            // - PluginInstallRecordAlreadyApplied fires at install
+            //   admission (pre-cap-cascade) — install path is not a
+            //   primitive-edge dispatch surface; the typed code is the
+            //   only routing.
+            // - ThinClientBridgePrincipalUnresolved fires at the bridge
+            //   entry — not a primitive-edge dispatch surface.
+            ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => Some("ON_DENIED"),
+            ErrorCode::WriteBoundaryChainNotUserRooted => Some("ON_DENIED"),
+            ErrorCode::PluginInstallRecordAlreadyApplied => None,
+            ErrorCode::ThinClientBridgePrincipalUnresolved => None,
+
             // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer
             // rejection at the DSL-compile boundary is a downstream
             // concern; ON_ERROR is the canonical disposition (no
@@ -2252,6 +2446,23 @@ impl core::str::FromStr for ErrorCode {
                 ErrorCode::AuthorizationGrantBindingSigInvalid
             }
             "E_CHAIN_NARROWING_VIOLATION" => ErrorCode::ChainNarrowingViolation,
+            "E_UCAN_BLOBS_REQUEST_REJECTED" => ErrorCode::UcanBlobsRequestRejected,
+            "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE" => ErrorCode::UcanBlobsRequestNotInScope,
+            "E_UNRESOLVED_PEER_DENY" => ErrorCode::UnresolvedPeerDeny,
+            "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID" => ErrorCode::DropBundleEnvelopeSigInvalid,
+            "E_DROP_BUNDLE_VERSION_UNSUPPORTED" => ErrorCode::DropBundleVersionUnsupported,
+            "E_DROP_BUNDLE_MODE3_INLINE_REJECTED" => ErrorCode::DropBundleMode3InlineRejected,
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock.
+            "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY" => {
+                ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+            }
+            "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED" => {
+                ErrorCode::PluginInstallRecordAlreadyApplied
+            }
+            "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED" => ErrorCode::WriteBoundaryChainNotUserRooted,
+            "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED" => {
+                ErrorCode::ThinClientBridgePrincipalUnresolved
+            }
             "E_DSL_BACKEND_REJECTED" => ErrorCode::DslBackendRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };

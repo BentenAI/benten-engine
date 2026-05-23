@@ -97,6 +97,7 @@ describe(
   () => {
     it(
       "close() returns synchronously without blocking on in-flight next()",
+      { timeout: 4000 },
       async () => {
         // Construct a handle via `testingOpenStreamForTest` with zero
         // chunks. Then drive a single `next()` (returns null immediately
@@ -119,11 +120,11 @@ describe(
         handle.close();
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
 
     it(
       "next() observes close_requested set during in-flight poll loop and returns null within bounded time",
+      { timeout: 4000 },
       async () => {
         // The Option-C arm's load-bearing assertion: a `next()` call
         // that has entered the poll-loop observes a concurrent
@@ -160,22 +161,27 @@ describe(
         ]);
         handle.close();
         const start = Date.now();
-        const result = handle.next();
+        // G-CORE-10 PR-B (#1203): next() is now AsyncTask-backed;
+        // returns Promise<Buffer | null>. The cancellation contract
+        // (close_requested observed → resolve with null within ~one
+        // poll-interval) is preserved.
+        const result = await handle.next();
         const elapsed = Date.now() - start;
         expect(result).toBeNull();
         expect(elapsed).toBeLessThan(2000);
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
 
     it(
       "isDrained() + seqSoFar() + requiresExplicitClose() are lock-free and don't contend with in-flight next()",
+      { timeout: 4000 },
       async () => {
         // The Option-C state-split moved these accessors off the
         // outer Mutex onto atomic caches + an immutable field.
-        // Verify they don't throw + return sensible values both
-        // before + after close().
+        // PR-B inherits the lock-free accessor shape via the
+        // Arc<StreamHandleSharedState> wrapping. Verify they don't
+        // throw + return sensible values both before + after close().
         const handle = engine.testingOpenStreamForTest([
           Buffer.from([1, 2]),
         ]);
@@ -185,34 +191,62 @@ describe(
         expect(typeof handle.isDrained()).toBe("boolean");
         expect(typeof handle.seqSoFar()).toBe("number");
         expect(handle.requiresExplicitClose()).toBe(false);
-        // Drain the chunk.
-        const c = handle.next();
+        // Drain the chunk (PR-B: next() returns Promise<Buffer | null>).
+        const c = await handle.next();
         expect(c).not.toBeNull();
         expect(handle.seqSoFar()).toBeGreaterThanOrEqual(1);
         // Close + verify cached flags update.
         handle.close();
         expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
   },
 );
 
-// Idempotence-under-PR-B-pressure arm — stays skipped pending #1203.
-describe.skip(
-  "G-CORE-10 PR-B arm: idempotence under concurrent next() pressure (PENDING #1203)",
+// G-CORE-10 PR-B (#1203) idempotence-under-pressure arm — LANDED.
+// Un-skipped at PR-B; the AsyncTask migration makes the
+// idempotence-under-concurrent-Promise-pressure predicate expressible.
+describe(
+  "G-CORE-10 PR-B arm: idempotence under concurrent next() pressure (#1203 LANDED)",
   () => {
     it(
-      "close() idempotent across concurrent blocked next()s with no zombie tokio task",
+      "close() idempotent across concurrent blocked next()s; all Promises settle cleanly with no orphan",
+      { timeout: 5000 },
       async () => {
-        throw new Error(
-          "RED-PHASE: un-skip at G-CORE-10 (PR-B #1203). The Option-C \
-stopgap does not introduce tokio tasks at the napi layer (next() stays \
-sync #[napi] with a poll-loop), so the zombie-tokio-task predicate \
-only becomes expressible after the PR-B AsyncTask migration.",
-        );
+        // PR-B AsyncTask shape: next() returns Promise<Buffer | null>.
+        // Fire K concurrent next() AsyncTasks on a handle backed by
+        // the test-factory (pre-populated chunk vector); close()
+        // mid-flight; assert ALL K Promises settle (resolve or reject)
+        // within the bounded timeout — no orphan AsyncTask hanging on
+        // the libuv worker pool. The earlier-on-libuv tasks may
+        // resolve with chunks; the later ones (after close_requested
+        // is set) resolve with null per the cancellation contract.
+        const handle = engine.testingOpenStreamForTest([
+          Buffer.from([1]),
+          Buffer.from([2]),
+          Buffer.from([3]),
+        ]);
+        const K = 8; // > UV_THREADPOOL_SIZE default 4 — exercises pool saturation.
+        const promises: Promise<Buffer | null>[] = [];
+        for (let i = 0; i < K; i++) {
+          promises.push(handle.next());
+        }
+        // Close mid-flight — opportunistic try_lock may race with an
+        // in-flight compute(); either way all Promises must settle.
+        handle.close();
+        handle.close(); // idempotent — must not throw
+        // All K Promises settle (allSettled used so a reject doesn't
+        // mask the orphan-task predicate; the assertion is about
+        // settlement, not success).
+        const settled = await Promise.allSettled(promises);
+        expect(settled.length).toBe(K);
+        for (const r of settled) {
+          // Each Promise either fulfilled (Buffer | null) or
+          // rejected — both are "settled" not "orphaned".
+          expect(r.status === "fulfilled" || r.status === "rejected").toBe(true);
+        }
+        expect(handle.isDrained()).toBe(true);
       },
-      { timeout: 4000 },
     );
   },
 );

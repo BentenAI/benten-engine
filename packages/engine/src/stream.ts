@@ -49,9 +49,14 @@ import type { Chunk, JsonValue, StreamHandle } from "./types.js";
  * `bindings/napi/src/lib.rs`. We type-erase to an interface here so the
  * wrapper compiles even when the native binding hasn't been rebuilt yet
  * (the wrapper falls back to a clean `E_DSL_INVALID_SHAPE` at call time).
+ *
+ * G-CORE-10 PR-B (#1203): `next()` is now a Promise-returning napi-rs
+ * `AsyncTask` (the body runs on the libuv worker pool, freeing the JS
+ * event loop). The TS wrapper `await`s the Promise inside the
+ * `Symbol.asyncIterator` and the public `StreamHandle.next()`.
  */
 export interface NativeStreamHandle {
-  next(): Buffer | null;
+  next(): Promise<Buffer | null>;
   close(): void;
   isDrained(): boolean;
   /**
@@ -177,9 +182,10 @@ function ensureLeakRegistry(): FinalizationRegistry<LeakBookkeeping> | null {
  * `[Symbol.asyncIterator]()` glue so consumers can `for await` it,
  * forwards `next` / `close` / `isDrained` / `seqSoFar` straight through.
  *
- * The async-iterator's `next()` calls the native sync `next()` and
- * resolves the result. Real back-pressure handling is Rust-side; the
- * JS-side iterator is a thin shell.
+ * The async-iterator's `next()` awaits the native Promise-returning
+ * `next()` (G-CORE-10 PR-B AsyncTask) and resolves the result. Real
+ * back-pressure handling is Rust-side; the JS-side iterator is a thin
+ * shell.
  *
  * Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): when the underlying
  * `NativeStreamHandle.requiresExplicitClose()` returns `true`, arms a
@@ -217,7 +223,12 @@ export function wrapStreamHandle(native: NativeStreamHandle): StreamHandle {
       return {
         next: async (): Promise<IteratorResult<Chunk>> => {
           try {
-            const chunk = native.next();
+            // G-CORE-10 PR-B (#1203): native.next() is now Promise-
+            // returning (napi-rs AsyncTask); await before checking the
+            // EOS-null sentinel. The producer-bridge poll-loop runs on
+            // the libuv worker pool, so the JS event loop is free
+            // while we await this Promise.
+            const chunk = await native.next();
             if (chunk === null) {
               // Natural completion — disarm so the negative pin
               // (scenario c) does NOT fire E_STREAM_HANDLE_LEAKED.
