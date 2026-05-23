@@ -182,9 +182,10 @@ function ensureLeakRegistry(): FinalizationRegistry<LeakBookkeeping> | null {
  * `[Symbol.asyncIterator]()` glue so consumers can `for await` it,
  * forwards `next` / `close` / `isDrained` / `seqSoFar` straight through.
  *
- * The async-iterator's `next()` calls the native sync `next()` and
- * resolves the result. Real back-pressure handling is Rust-side; the
- * JS-side iterator is a thin shell.
+ * The async-iterator's `next()` awaits the native Promise-returning
+ * `next()` (G-CORE-10 PR-B AsyncTask) and resolves the result. Real
+ * back-pressure handling is Rust-side; the JS-side iterator is a thin
+ * shell.
  *
  * Phase-3 G19-C2 wave-7 (§7.1.2 + stream-r1-4): when the underlying
  * `NativeStreamHandle.requiresExplicitClose()` returns `true`, arms a
