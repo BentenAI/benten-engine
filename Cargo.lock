@@ -477,6 +477,7 @@ version = "0.1.0"
 dependencies = [
  "benten-caps",
  "benten-core",
+ "benten-crypto-suite",
  "benten-engine",
  "benten-errors",
  "blake3",

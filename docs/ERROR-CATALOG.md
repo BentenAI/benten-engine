@@ -1584,6 +1584,36 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 <!-- reachability: ignore -->
 
+### E_AEAD_REBINDING_ATTACK_DETECTED
+
+- **Message:** "AEAD authentication failed: AAD-binds-plaintext-CID rebinding attack (or AAD-binds-chunk-index cross-chunk-rebinding attack) detected at decrypt time"
+- **Context:** `{ envelope_plaintext_cid: Cid, recipient_aad_cid: Cid, variant: "whole" | "chunk", chunk_index: Option<u64> }`
+- **Fix:** Per §1.A.FROZEN item 15(g) + SECURITY-POSTURE.md "rebinding-attack-prevention" section + RATIFIED-S&C 2026-05-21 R2 (per-Spike-G/H/R3 ratification): the per-Node AEAD wrap binds `plaintext_cid` (whole-content arm) or `(plaintext_cid, chunk_index)` (per-chunk arm) into the ChaCha20-Poly1305 AAD at seal time. The decrypt-time AAD reconstruction MUST match byte-for-byte; failure means an attacker is mounting a valid ciphertext under the WRONG plaintext-CID (rebinding) or the WRONG chunk-index (cross-chunk-rebinding). Resolution: the caller's storage / mapping table has been tampered + the AEAD layer is correctly catching it; verify the two-CID mapping is consistent with the envelope's stored plaintext_cid + verify no off-tree process is mutating the encrypted-nodes table. NEVER catch + retry — the silent-acceptance of mismatch is the attack vector this code prevents.
+- **Thrown at:** `crates/benten-graph/src/aead_wrap.rs::decrypt` + `::decrypt_chunk` (lifted from `benten_crypto_suite::aead::unwrap` returning `AeadError::AeadAuthFailed` when the AAD-rebinding shape is matched); surfaces through `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::AeadAuthenticationFailed` → engine-error lift at G-CORE-3e.
+- **Phase:** 4-Meta-Core G-CORE-3d (Spike G/H + R3 ratification of `RATIFIED-sharing-and-confidentiality-2026-05-21.md` R2 two-CID + per-Node AEAD contract)
+
+<!-- reachability: ignore -->
+
+### E_TWO_CID_MAPPING_NOT_FOUND
+
+- **Message:** "two-CID mapping has no entry for plaintext CID {plaintext_cid} under the active scope"
+- **Context:** `{ plaintext_cid: Cid, scope: "unscoped" | "partition(<did>)" }`
+- **Fix:** Per RATIFIED-S&C 2026-05-21 R2 two-CID contract + multitenant-r1-5 partition-isolation property: this code is the load-bearing confidentiality arm at the head of `RedbBackend::read_via_two_cid_scoped`. A cross-DID caller (a `WriteContext::namespace_did = Some(did_y)` view trying to read content written under `did_x`) gets this code at the mapping-lookup step BEFORE any AEAD work — the partition isolation fires structurally at the key-prefix layer. NOT a tamper signal + NOT a degraded-cryptographic-state signal; semantically "this plaintext CID was never written here / under this scope." Resolution at the read site: check whether the read is intentional (re-issue under the correct namespace_did) or whether the plaintext CID was supplied by an untrusted source. NEVER promote this to an AEAD-authentication error — the distinction is the confidentiality boundary between "you saw the bytes and couldn't decrypt them" (leak) and "you didn't even see this mapping exists" (correct isolation).
+- **Thrown at:** `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::NotFound` via `crates/benten-graph/src/redb_backend.rs::RedbBackend::read_via_two_cid` + `::read_via_two_cid_scoped`. Engine-error lift at G-CORE-3e.
+- **Phase:** 4-Meta-Core G-CORE-3d
+
+<!-- reachability: ignore -->
+
+### E_TWO_CID_MAPPING_INTEGRITY_MISMATCH
+
+- **Message:** "two-CID mapping integrity mismatch: envelope's plaintext_cid field doesn't match the mapping-claimed plaintext_cid (or stored ciphertext bytes don't hash to the claimed ciphertext_cid)"
+- **Context:** `{ expected_plaintext_cid: Cid, actual_plaintext_cid: Cid, ciphertext_cid: Cid }`
+- **Fix:** Per the defense-in-depth contract documented in SECURITY-POSTURE.md "rebinding-attack-prevention" section: the two-CID mapping row `d:<did>:m:<plaintext_a> → ciphertext_cid` is structurally validated against the envelope at decrypt time. If the envelope's `plaintext_cid` field doesn't match the mapping-claimed `plaintext_a` (i.e. the mapping was tampered to redirect `plaintext_a → ciphertext_b` where *B*'s envelope carries `plaintext_cid = B ≠ A`), this typed integrity error fires. This complements the AEAD layer's AAD-binds-plaintext-CID defense — the AEAD layer would also catch the foreign envelope's AAD mismatch, but this structural check surfaces the tamper class distinctly so audit logs can distinguish "storage tamper" from "cryptographic tamper" cleanly. Resolution: investigate the storage layer for off-tree mutation of the `TWO_CID_MAP_TABLE` or `ENCRYPTED_NODES_TABLE`; the legitimate sealed write path produces consistent envelope ↔ mapping bindings. NEVER catch + retry.
+- **Thrown at:** `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::IntegrityMismatch` via `crates/benten-graph/src/redb_backend.rs::RedbBackend::read_decrypt_inner`. Engine-error lift at G-CORE-3e.
+- **Phase:** 4-Meta-Core G-CORE-3d
+
+<!-- reachability: ignore -->
+
 ## Extending the catalog
 
 When adding a new error:

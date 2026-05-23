@@ -493,6 +493,19 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-crypto-suite::cipher_suite::CipherSuite::wrap_key_material`
     //   `benten-crypto-suite::cipher_suite::CipherSuite::unwrap_key_material`
     ErrorCode::RecipientLacksKeysForSuite,
+    // Phase 4-Meta-Core G-CORE-3d (#1301) — per-Node AEAD wrap layer +
+    // two-CID mapping table. 3 typed arms cover the AAD-rebinding-
+    // attack-detected case (cryptographic tamper), the mapping-not-
+    // found case (the load-bearing confidentiality arm — surfacing
+    // NotFound BEFORE any AEAD attempt is the multitenant-r1-5
+    // structural property), and the mapping-integrity-mismatch case
+    // (storage-side tamper). Construction sites: the storage-layer
+    // `benten_graph::two_cid_map::TwoCidMapError` → `ErrorCode`
+    // conversion in benten-graph + the engine-error fan-out at
+    // `benten_engine`'s storage-read seam (lands at G-CORE-3e).
+    ErrorCode::AeadRebindingAttackDetected,
+    ErrorCode::TwoCidMappingNotFound,
+    ErrorCode::TwoCidMappingIntegrityMismatch,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -802,8 +815,24 @@ fn variant_count_is_pinned() {
     // recipient lacks one of the hybrid-required key halves; the
     // silent-downgrade defense per CLAUDE.md baked-in #5).
     // 170 + 1 = 171.
+    //
+    // G-CORE-3d (Phase 4-Meta-Core, #1301; per-Node AEAD wrap layer +
+    // two-CID mapping table): +3 codes covering the three structural
+    // failure classes of the storage-layer AEAD path:
+    //   * `AeadRebindingAttackDetected` — AAD-binds-plaintext-CID +
+    //     AAD-binds-chunk-index defense per §1.A.FROZEN item 15(g) +
+    //     SECURITY-POSTURE.md "rebinding-attack-prevention" section
+    //     (Spike G/H + R3 ratification);
+    //   * `TwoCidMappingNotFound` — partition-isolation arm at the
+    //     head of `RedbBackend::read_via_two_cid_scoped` (cross-DID
+    //     callers surface NotFound BEFORE any AEAD attempt per
+    //     multitenant-r1-5 confidentiality property);
+    //   * `TwoCidMappingIntegrityMismatch` — storage-side tamper +
+    //     structural envelope-vs-mapping CID-binding check.
+    // 171 + 3 = 174. **Coordinate with #1318 (G-CORE-6a +1 to 172) +
+    // sibling G-CORE-3b/3w; sequential-merge resolution may renumber.**
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 171,
+        CATALOG_VARIANT_COUNT, 174,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1032,7 +1061,12 @@ fn catalog_variant_count_matches_enum() {
             // X-Wing-hybrid cipher-suite when the recipient lacks one of
             // the hybrid-required key halves (the silent-downgrade defense
             // per CLAUDE.md baked-in #5).
-            | ErrorCode::RecipientLacksKeysForSuite => true,
+            | ErrorCode::RecipientLacksKeysForSuite
+            // Phase 4-Meta-Core G-CORE-3d (#1301) — per-Node AEAD wrap
+            // layer + two-CID mapping table typed errors.
+            | ErrorCode::AeadRebindingAttackDetected
+            | ErrorCode::TwoCidMappingNotFound
+            | ErrorCode::TwoCidMappingIntegrityMismatch => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

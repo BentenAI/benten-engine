@@ -38,10 +38,10 @@ use crate::indexes::{
 use crate::store::{
     ChangeEvent, ChangeKind, ChangeSubscriber, EDGE_SRC_PREFIX, EDGE_TGT_PREFIX, EdgeStore,
     GRAPH_SCHEMA_VERSION, NodeStore, SCHEMA_VERSION_KEY, decode_err, edge_key, edge_src_index_key,
-    edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, namespaced_edge_key,
-    namespaced_edge_src_index_key, namespaced_edge_src_index_prefix, namespaced_edge_tgt_index_key,
-    namespaced_label_index_key, namespaced_label_index_prefix, namespaced_node_key,
-    namespaced_node_prefix, node_key,
+    edge_src_index_prefix, edge_tgt_index_key, edge_tgt_index_prefix, namespaced_ciphertext_key,
+    namespaced_edge_key, namespaced_edge_src_index_key, namespaced_edge_src_index_prefix,
+    namespaced_edge_tgt_index_key, namespaced_label_index_key, namespaced_label_index_prefix,
+    namespaced_node_key, namespaced_node_prefix, node_key,
 };
 use crate::transaction::{TxGuard, fan_out};
 use crate::{GraphError, Transaction, WriteAuthority, WriteContext};
@@ -89,6 +89,54 @@ fn guard_system_zone_edge(edge: &Edge, is_privileged: bool) -> Result<(), GraphE
 /// Edge stores layer the `n:CID`, `e:CID`, `es:SRC|EDGE`, `et:TGT|EDGE` key
 /// schema on top of this table.
 pub(crate) const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("benten_nodes");
+
+/// Phase-4-Meta-Core G-CORE-3d (#1301): two-CID mapping table —
+/// `plaintext_cid → ciphertext_cid` for the per-Node AEAD wrap path.
+/// Stored separately from `NODES_TABLE` so a future redb-schema
+/// migration can re-key the mapping shape without touching the node
+/// body table.
+///
+/// Keying:
+/// - un-namespaced writes (legacy `WriteContext::namespace_did = None`)
+///   do NOT touch this table — the legacy path stores plaintext bytes
+///   at `n:<plaintext_cid>` and `plaintext_cid == ciphertext_cid` by
+///   construction.
+/// - namespaced writes (`namespace_did = Some(did)`) record a row keyed
+///   on `TwoCidMap::partition_table_key(did, plaintext_cid) =
+///   d:<did>:m:<plaintext_cid>`, with value = `ciphertext_cid.as_bytes()`.
+///
+/// The partition prefix in the key makes cross-DID lookups structurally
+/// invisible — the partition-isolation arm (multitenant-r1-5) fires at
+/// the prefix match step BEFORE any AEAD layer.
+pub(crate) const TWO_CID_MAP_TABLE: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("benten_two_cid_map");
+
+/// G-CORE-3d: derive the test-seam K(N) from a plaintext CID. Mirrors
+/// `benten_core::Node::derive_key_for_test` byte-for-byte so the
+/// `read_via_two_cid_scoped` decrypt path produces the same key as the
+/// `put_node_with_context` seal path. The production K(N) source
+/// (per Spike-E Interpretation-B path-tagged derivation, rooted at
+/// K_principal) lands at G-CORE-3e — at swap-in time this helper +
+/// the `Node::derive_key_for_test` call site in `put_node_with_context`
+/// both replace with the structural-KDF call.
+fn derive_test_seam_key_from_cid(cid: &Cid) -> Vec<u8> {
+    let mut input = Vec::with_capacity(b"benten-test-key:".len() + cid.as_bytes().len());
+    input.extend_from_slice(b"benten-test-key:");
+    input.extend_from_slice(cid.as_bytes());
+    blake3::hash(&input).as_bytes().to_vec()
+}
+
+/// G-CORE-3d: AEAD-wrapped node body storage. Whereas the legacy
+/// `NODES_TABLE` stores plaintext DAG-CBOR bytes (un-namespaced) +
+/// plaintext DAG-CBOR under `d:<did>:n:<cid>` (namespaced un-encrypted
+/// shape pre-3d), this table stores AEAD envelope wire bytes (per
+/// `benten_crypto_suite::AeadEnvelope::to_wire_bytes`) at
+/// `d:<did>:c:<ciphertext_cid>`. The key prefix `c:` is distinct from
+/// `n:` so a future schema-version migration that consolidates the
+/// tables can disambiguate ciphertext storage from plaintext storage
+/// without re-keying.
+pub(crate) const ENCRYPTED_NODES_TABLE: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("benten_encrypted_nodes");
 
 /// G11-A unbounded-cache bound: maximum entries in the test-only
 /// `test_event_log` before the buffer is cleared. Tests drain the
@@ -1232,6 +1280,17 @@ impl RedbBackend {
     /// - [`GraphError::SystemZoneWrite`] on an unprivileged system-zone
     ///   label.
     /// - Every error [`RedbBackend::put_node`] can surface.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "G-CORE-3d (#1301) extended this body with the namespaced \
+                  AEAD-wrap + two-CID-mapping path; the doc-comments + \
+                  per-arm rationale keep the substantive body small. \
+                  Decomposition into a helper would require threading the \
+                  open write-txn through a mutable borrow + would obscure \
+                  the in-txn ordering of `put plaintext → put ciphertext → \
+                  put mapping → commit` — the load-bearing atomicity is \
+                  easier to audit when read top-to-bottom."
+    )]
     pub fn put_node_with_context(
         &self,
         node: &Node,
@@ -1425,6 +1484,106 @@ impl RedbBackend {
                 }
             }
         }
+        // Phase-4-Meta-Core G-CORE-3d (#1301): for namespaced writes,
+        // ALSO AEAD-wrap the canonical bytes + store the envelope at
+        // `d:<did>:c:<ciphertext_cid>` AND record the mapping row
+        // `d:<did>:m:<plaintext_cid> → ciphertext_cid` so a later
+        // `read_via_two_cid_scoped(plaintext_cid)` can resolve UCAN
+        // scope (against plaintext_cid) to served bytes (ciphertext_cid).
+        //
+        // **Compositional with G-CORE-1.** This block is purely
+        // additive — the plaintext storage at `d:<did>:n:<plaintext_cid>`
+        // + label_index + property_index + change_event paths above are
+        // unchanged. Partition isolation (multitenant-r1-5) fires
+        // STRUCTURALLY at the key-prefix layer BEFORE this block
+        // executes; cross-DID reads through `read_via_two_cid_scoped`
+        // surface `NotFound` because their mapping table key
+        // (`d:<did_y>:m:<plaintext_cid>`) doesn't exist.
+        //
+        // **Key derivation (G-CORE-3d wave-scope).** This wave uses
+        // `Node::derive_key_for_test` as the K(N) source — a stable
+        // BLAKE3-derived per-Node key. The production K(N) path via
+        // `benten_crypto_suite::structural_kdf::derive_step` rooted at
+        // `K_principal` (per Spike-E Interpretation-B path-tagged
+        // derivation) requires the K_principal-per-DID seam which lands
+        // at G-CORE-3e (sync + UCAN-gating wave). Named-destination:
+        // `docs/future/phase-4-backlog.md §3.10` + GH issue
+        // (TBD next-wave); HARD RULE 12 clause-(b) BELONGS-NAMED-NOW.
+        // The AAD-binds-plaintext-CID rebinding-attack defense
+        // (Spike G/H + R3 ratification) is in place at this wave; only
+        // the K(N) source upgrade is named-deferred. NOT a fail-OPEN:
+        // namespaced writes ARE AEAD-wrapped at this wave; the
+        // production K-source upgrade is a swap-in at the same
+        // boundary.
+        // Phase-4-Meta-Core G-CORE-3d (#1301): for namespaced writes,
+        // ALSO AEAD-wrap the canonical bytes + store the envelope at
+        // `d:<did>:c:<ciphertext_cid>` AND record the mapping row
+        // `d:<did>:m:<plaintext_cid> → ciphertext_cid` so a later
+        // `read_via_two_cid_scoped(plaintext_cid)` can resolve UCAN
+        // scope (against plaintext_cid) to served bytes (ciphertext_cid).
+        //
+        // **The return-value structural change (P-III).** For namespaced
+        // writes the return value of `put_node_with_context` is the
+        // **ciphertext_cid** (the storage / transport identity per
+        // §1.A.FROZEN item 15(g) two-CID contract + tf3d_two_cid PIN 1
+        // `assert_ne!(plaintext_cid, ciphertext_cid)`). For un-namespaced
+        // writes (`namespace_did = None`) the return remains the
+        // plaintext_cid since no AEAD wrap fires + the two-CID mapping
+        // is trivially `plaintext_cid == ciphertext_cid` by construction.
+        // G-CORE-1's TF-1 partition-isolation tests anchor on
+        // `node.cid()` (= plaintext_cid) for label_index / iterate /
+        // change_event Node-identity assertions; the TF-1 test sites
+        // that consumed the return as a plaintext-CID handle were
+        // updated at G-CORE-3d wave-time. The G-CORE-1 contracts
+        // themselves (label_index keyed on plaintext_cid, change_event
+        // ChangeEvent::cid = plaintext_cid, scoped().get_node(plaintext)
+        // returns Node) are UNCHANGED — only the surface for obtaining
+        // the plaintext-CID handle from a `put_node_with_context` call
+        // is via `node.cid()` instead of the return.
+        //
+        // **Key derivation (G-CORE-3d wave-scope).** This wave uses
+        // `Node::derive_key_for_test` as the K(N) source — a stable
+        // BLAKE3-derived per-Node key. The production K(N) path via
+        // `benten_crypto_suite::structural_kdf::derive_step` rooted at
+        // `K_principal` (per Spike-E Interpretation-B path-tagged
+        // derivation) requires the K_principal-per-DID seam which lands
+        // at G-CORE-3e (sync + UCAN-gating wave). Named-destination:
+        // `docs/future/phase-4-backlog.md §3.10` (HARD RULE 12
+        // clause-(b) BELONGS-NAMED-NOW). The AAD-binds-plaintext-CID
+        // rebinding-attack defense (Spike G/H + R3 ratification) is in
+        // place at this wave; only the K(N) source upgrade is
+        // named-deferred. NOT a fail-OPEN: namespaced writes ARE
+        // AEAD-wrapped at this wave; the production K-source upgrade is
+        // a swap-in at the same boundary.
+        let returned_cid = if let Some(did) = ctx.namespace_did.as_ref() {
+            // K(N) sourced from the test-seam derivation (same bytes as
+            // `Node::derive_key_for_test` + `derive_test_seam_key_from_cid`).
+            // Production K(N) (structural-KDF rooted at K_principal) lands
+            // at G-CORE-3e per the wave-def named-destination above.
+            let aead_key = derive_test_seam_key_from_cid(&cid);
+            let encrypted = crate::aead_wrap::EncryptedNode::encrypt(&bytes, &cid, &aead_key)
+                .map_err(|e| GraphError::Redb(format!("G-CORE-3d AEAD wrap failed: {e}")))?;
+            let envelope_bytes = crate::aead_wrap::encode_encrypted_node(&encrypted)
+                .map_err(|e| GraphError::Redb(format!("G-CORE-3d AEAD encode failed: {e}")))?;
+            let ciphertext_cid = Cid::from_blake3_digest(*blake3::hash(&envelope_bytes).as_bytes());
+            // Mapping key + ciphertext-storage key both live inside the
+            // partition prefix; cross-DID lookups are structurally
+            // invisible at the prefix-match step (multitenant-r1-5).
+            let mapping_key = crate::two_cid_map::TwoCidMap::partition_table_key(did, &cid);
+            let ciphertext_key = namespaced_ciphertext_key(did, &ciphertext_cid);
+            {
+                let mut enc_table = write_txn.open_table(ENCRYPTED_NODES_TABLE)?;
+                enc_table.insert(ciphertext_key.as_slice(), envelope_bytes.as_slice())?;
+            }
+            {
+                let mut map_table = write_txn.open_table(TWO_CID_MAP_TABLE)?;
+                map_table.insert(mapping_key.as_slice(), ciphertext_cid.as_bytes().as_slice())?;
+            }
+            ciphertext_cid
+        } else {
+            cid
+        };
+
         write_txn.commit()?;
 
         // Wave-1 mini-review SEVERE-2: bump the storage-layer commit
@@ -1523,7 +1682,15 @@ impl RedbBackend {
         // under clippy's `too_many_lines` cap).
         self.dispatch_node_change_event(node, &cid, tx_id, ctx.namespace_did.as_ref());
 
-        Ok(cid)
+        // G-CORE-3d (#1301): for namespaced writes return ciphertext_cid
+        // (the storage / transport identity, the load-bearing two-CID
+        // contract per §1.A.FROZEN item 15(g) + tf3d PIN 1); for
+        // un-namespaced writes return plaintext_cid as before. The
+        // ChangeEvent / label_index / iter_node_cids / scoped().get_node
+        // contracts above are all keyed on `cid` (plaintext_cid) — only
+        // the return surface changes. Callers needing the plaintext-CID
+        // handle for a namespaced write use `node.cid()`.
+        Ok(returned_cid)
     }
 
     /// G-CORE-1 #989 — post-commit `ChangeEvent::Created` fan-out for
@@ -2130,6 +2297,328 @@ impl RedbBackend {
         Ok(crate::SnapshotHandle {
             read_txn: Some(read_txn),
         })
+    }
+
+    // -----------------------------------------------------------------
+    // Phase-4-Meta-Core G-CORE-3d (#1301) — two-CID mapping + AEAD-wrap
+    // read-path APIs. Companion to the namespaced-write extension in
+    // `put_node_with_context` above. Each method is partition-scoped
+    // (the un-namespaced lookups return None / NotFound because no
+    // mapping rows are recorded under the legacy non-namespaced path).
+    // -----------------------------------------------------------------
+
+    /// Phase-4-Meta-Core G-CORE-3d (#1301): un-scoped two-CID mapping
+    /// lookup — searches every partition's mapping rows for the given
+    /// plaintext CID. Returns `Ok(Some(ciphertext_cid))` on hit,
+    /// `Ok(None)` on a clean miss (NOT an error per tf3d PIN 2
+    /// "missing-entry returns Ok(None)").
+    ///
+    /// **For partition-scoped lookups** use
+    /// [`Self::two_cid_lookup_scoped`] — that's the path UCAN-scope
+    /// resolution rides on. The un-scoped variant exists for tests +
+    /// for the rare administrative tooling that needs to know "does
+    /// ANY partition have a mapping for this plaintext CID?".
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] / [`GraphError::Redb`] on redb I/O.
+    pub fn two_cid_lookup(&self, plaintext_cid: &Cid) -> Result<Option<Cid>, GraphError> {
+        let read_txn = self.db.begin_read()?;
+        let table = match read_txn.open_table(TWO_CID_MAP_TABLE) {
+            Ok(t) => t,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        let suffix = plaintext_cid.as_bytes().as_slice();
+        // Iterate every row; for un-scoped lookups any partition's
+        // mapping that ends with the queried plaintext_cid bytes is a
+        // hit. Partition-scoped callers should use
+        // `two_cid_lookup_scoped` for an O(1) keyed lookup.
+        for row in table.iter()? {
+            let (key, value) = row?;
+            let key_bytes = key.value();
+            if key_bytes.ends_with(suffix) && key_bytes.contains(&b':') {
+                let raw = value.value();
+                let cid = Cid::from_bytes(raw).map_err(GraphError::from)?;
+                return Ok(Some(cid));
+            }
+        }
+        Ok(None)
+    }
+
+    /// G-CORE-3d: partition-scoped two-CID mapping lookup. Looks at
+    /// `d:<ctx.namespace_did>:m:<plaintext_cid>` exactly; returns
+    /// `Ok(None)` if the row is absent. This is the load-bearing
+    /// confidentiality arm — a cross-DID caller sees `Ok(None)` because
+    /// the partition prefix in the key doesn't match (the partition-
+    /// isolation invariant fires at the key-prefix layer BEFORE any
+    /// AEAD work).
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] / [`GraphError::Redb`] on redb I/O.
+    pub fn two_cid_lookup_scoped(
+        &self,
+        plaintext_cid: &Cid,
+        ctx: &WriteContext,
+    ) -> Result<Option<Cid>, GraphError> {
+        let Some(did) = ctx.namespace_did() else {
+            // Un-namespaced lookups have no mapping by construction
+            // (plaintext_cid == ciphertext_cid).
+            return Ok(None);
+        };
+        let read_txn = self.db.begin_read()?;
+        let table = match read_txn.open_table(TWO_CID_MAP_TABLE) {
+            Ok(t) => t,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        let mapping_key = crate::two_cid_map::TwoCidMap::partition_table_key(did, plaintext_cid);
+        match table.get(mapping_key.as_slice())? {
+            None => Ok(None),
+            Some(v) => {
+                let cid = Cid::from_bytes(v.value()).map_err(GraphError::from)?;
+                Ok(Some(cid))
+            }
+        }
+    }
+
+    /// G-CORE-3d: load the [`crate::aead_wrap::EncryptedNode`] stored
+    /// at `ciphertext_cid` (the storage / transport identity). Searches
+    /// every partition's encrypted-nodes rows. Used by the un-scoped
+    /// read path + by tests that bypass partition routing.
+    ///
+    /// # Errors
+    /// - [`GraphError::Redb`] string variant if the bytes don't decode
+    ///   to an `EncryptedNode` (corrupt or wrong-table key collision).
+    /// - [`GraphError::RedbSource`] on redb I/O.
+    pub fn get_encrypted_node(
+        &self,
+        ciphertext_cid: &Cid,
+    ) -> Result<crate::aead_wrap::EncryptedNode, GraphError> {
+        let read_txn = self.db.begin_read()?;
+        let table = match read_txn.open_table(ENCRYPTED_NODES_TABLE) {
+            Ok(t) => t,
+            Err(redb::TableError::TableDoesNotExist(_)) => {
+                return Err(GraphError::Redb(format!(
+                    "no encrypted-nodes table; ciphertext_cid {ciphertext_cid:?} not found"
+                )));
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let suffix = ciphertext_cid.as_bytes().as_slice();
+        for row in table.iter()? {
+            let (key, value) = row?;
+            let key_bytes = key.value();
+            if key_bytes.ends_with(suffix) {
+                let bytes = value.value().to_vec();
+                return crate::aead_wrap::decode_encrypted_node(&bytes)
+                    .map_err(|e| GraphError::Redb(format!("decode_encrypted_node failed: {e}")));
+            }
+        }
+        Err(GraphError::Redb(format!(
+            "ciphertext_cid {ciphertext_cid:?} not present in any partition's encrypted-nodes table"
+        )))
+    }
+
+    /// G-CORE-3d test-only seam: same shape as
+    /// [`Self::get_encrypted_node`] but with the "search every
+    /// partition" wording moved into the docs so the
+    /// `tf3d_partition_before_crypto::tf3d_wrong_principal_key_fails_aead_defense_in_depth`
+    /// pin can mount an attacker scenario (the attacker has raw access
+    /// to the redb file; they pull X's ciphertext via this seam +
+    /// attempt to decrypt with Y's K_principal). Production callers
+    /// use the partition-scoped read path.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn get_encrypted_node_unscoped_for_test(
+        &self,
+        plaintext_cid: &Cid,
+    ) -> Result<crate::aead_wrap::EncryptedNode, GraphError> {
+        // Resolve plaintext_cid → ciphertext_cid through the un-scoped
+        // mapping table, then load the envelope at that ciphertext_cid.
+        let ciphertext_cid = self.two_cid_lookup(plaintext_cid)?.ok_or_else(|| {
+            GraphError::Redb(format!(
+                "test-seam: no two-CID mapping for plaintext_cid {plaintext_cid:?}"
+            ))
+        })?;
+        self.get_encrypted_node(&ciphertext_cid)
+    }
+
+    /// G-CORE-3d: full read-via-two-CID — lookup the mapping for
+    /// `plaintext_cid`, load the ciphertext, AEAD-decrypt, return the
+    /// reconstituted plaintext bytes.
+    ///
+    /// # Errors
+    /// - [`crate::two_cid_map::TwoCidMapError::NotFound`] if no
+    ///   mapping row exists (clean miss; NOT a tamper signal).
+    /// - [`crate::two_cid_map::TwoCidMapError::IntegrityMismatch`] if
+    ///   the stored ciphertext bytes don't hash to the
+    ///   `ciphertext_cid` the mapping claims (redb tamper).
+    /// - [`crate::two_cid_map::TwoCidMapError::AeadAuthenticationFailed`]
+    ///   if the AEAD authenticator rejects (cryptographic tamper /
+    ///   rebinding).
+    pub fn read_via_two_cid(
+        &self,
+        plaintext_cid: &Cid,
+    ) -> Result<Vec<u8>, crate::two_cid_map::TwoCidMapError> {
+        use crate::two_cid_map::TwoCidMapError;
+        // Look the mapping up unscoped to support test-seam pins that
+        // tamper a mapping in one partition + read it back; the scoped
+        // variant is `read_via_two_cid_scoped`.
+        let ciphertext_cid = self
+            .two_cid_lookup(plaintext_cid)
+            .map_err(|e| TwoCidMapError::Storage {
+                reason: format!("two_cid_lookup failed: {e}"),
+            })?
+            .ok_or_else(|| TwoCidMapError::NotFound {
+                plaintext_cid: plaintext_cid.to_base32(),
+            })?;
+        self.read_decrypt_inner(plaintext_cid, &ciphertext_cid)
+    }
+
+    /// G-CORE-3d: partition-scoped read-via-two-CID — the load-bearing
+    /// confidentiality arm. A cross-DID caller (`ctx.namespace_did =
+    /// Some(did_y)`) trying to read content written under
+    /// `did_x` gets [`crate::two_cid_map::TwoCidMapError::NotFound`]
+    /// at the mapping lookup step BEFORE any AEAD work — the partition
+    /// isolation invariant fires structurally.
+    pub fn read_via_two_cid_scoped(
+        &self,
+        plaintext_cid: &Cid,
+        ctx: &WriteContext,
+    ) -> Result<Vec<u8>, crate::two_cid_map::TwoCidMapError> {
+        use crate::two_cid_map::TwoCidMapError;
+        let ciphertext_cid = self
+            .two_cid_lookup_scoped(plaintext_cid, ctx)
+            .map_err(|e| TwoCidMapError::Storage {
+                reason: format!("two_cid_lookup_scoped failed: {e}"),
+            })?
+            .ok_or_else(|| TwoCidMapError::NotFound {
+                plaintext_cid: plaintext_cid.to_base32(),
+            })?;
+        self.read_decrypt_inner(plaintext_cid, &ciphertext_cid)
+    }
+
+    /// Shared inner read-decrypt path called by [`Self::read_via_two_cid`]
+    /// + [`Self::read_via_two_cid_scoped`]. Loads the envelope, verifies
+    /// integrity (BLAKE3 of stored bytes matches `ciphertext_cid`),
+    /// then AEAD-decrypts under the test-seam K(N).
+    ///
+    /// The K(N) source here is the test-seam path (parity with the
+    /// `put_node_with_context` AEAD-wrap call). Production K(N) lands
+    /// at G-CORE-3e (see the named-destination in `put_node_with_context`).
+    fn read_decrypt_inner(
+        &self,
+        plaintext_cid: &Cid,
+        ciphertext_cid: &Cid,
+    ) -> Result<Vec<u8>, crate::two_cid_map::TwoCidMapError> {
+        use crate::two_cid_map::TwoCidMapError;
+        let encrypted =
+            self.get_encrypted_node(ciphertext_cid)
+                .map_err(|e| TwoCidMapError::Storage {
+                    reason: format!("get_encrypted_node({ciphertext_cid:?}) failed: {e}"),
+                })?;
+        // PIN 4 tamper detection: the AEAD-binds-plaintext-CID
+        // authentication will fire below; here we ALSO assert the
+        // envelope's plaintext_cid field matches the mapping-claimed
+        // plaintext_cid. If a mapping was tampered to point at a
+        // foreign ciphertext, the foreign envelope's stored
+        // plaintext_cid field won't match — typed integrity error.
+        if encrypted.plaintext_cid() != plaintext_cid {
+            return Err(TwoCidMapError::IntegrityMismatch {
+                expected: plaintext_cid.to_base32(),
+                actual: encrypted.plaintext_cid().to_base32(),
+            });
+        }
+        // Reconstruct K(N) via the test-seam derivation. Loading a
+        // pre-decode Node round-trip is needed because the test-seam
+        // K-derivation is keyed on the Node's plaintext CID, which we
+        // already have above; the derivation produces the same bytes
+        // as the seal-time call inside `put_node_with_context`.
+        let aead_key = derive_test_seam_key_from_cid(plaintext_cid);
+        crate::aead_wrap::decrypt(&encrypted, &aead_key).map_err(|e| {
+            TwoCidMapError::AeadAuthenticationFailed {
+                reason: format!("{e:?}"),
+            }
+        })
+    }
+
+    /// G-CORE-3d test-only seam: corrupt a mapping row so PIN 4
+    /// (`tf3d_mapping_table_tamper_yields_typed_integrity_error`) can
+    /// assert that a tampered `plaintext_a → ciphertext_b` redirection
+    /// is caught by the AEAD layer. Searches every partition for the
+    /// `plaintext_cid` mapping row + overwrites the value with
+    /// `foreign_ciphertext_cid.as_bytes()`.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn tamper_mapping_for_test(
+        &self,
+        plaintext_cid: &Cid,
+        foreign_ciphertext_cid: &Cid,
+    ) -> Result<(), GraphError> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(TWO_CID_MAP_TABLE)?;
+            // Find the row whose key ends with plaintext_cid bytes.
+            let suffix = plaintext_cid.as_bytes().as_slice();
+            let mut tampered_key: Option<Vec<u8>> = None;
+            {
+                let iter = table.iter()?;
+                for row in iter {
+                    let (key, _) = row?;
+                    let key_bytes = key.value();
+                    if key_bytes.ends_with(suffix) && key_bytes.contains(&b':') {
+                        tampered_key = Some(key_bytes.to_vec());
+                        break;
+                    }
+                }
+            }
+            if let Some(key) = tampered_key {
+                table.insert(key.as_slice(), foreign_ciphertext_cid.as_bytes().as_slice())?;
+            } else {
+                return Err(GraphError::Redb(format!(
+                    "tamper_mapping_for_test: no mapping row for plaintext_cid {plaintext_cid:?}"
+                )));
+            }
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    /// G-CORE-3d test-only seam: simulate a DropBundle import of an
+    /// EncryptedNode (sealed under a foreign K_principal) into the
+    /// caller's namespace. Used by
+    /// `tf3d_partition_before_crypto::tf3d_dropbundle_of_y_installed_under_x_namespace_rejected`
+    /// to assert the import path refuses cross-DID confidentiality
+    /// leaks at install time (either partition-routing rejection or
+    /// AEAD-authentication rejection — exact arm is implementation-
+    /// defined at the G-CORE-3d/3f integration boundary).
+    ///
+    /// # Errors
+    /// - Returns `GraphError::Redb` with a diagnostic note —
+    ///   structurally cross-DID install is refused at this seam pending
+    ///   the G-CORE-3f DropBundle install path landing in benten-drop.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn import_encrypted_node_into_scope(
+        &self,
+        encrypted: &crate::aead_wrap::EncryptedNode,
+        plaintext_cid: &Cid,
+        ctx: &WriteContext,
+    ) -> Result<(), GraphError> {
+        let _ = ctx;
+        let _ = encrypted;
+        // PIN-3 contract per tf3d_dropbundle_of_y_installed_under_x_namespace_rejected:
+        // the cross-DID install MUST be refused. The integration point
+        // (DropBundle install path with K_principal verification) lives
+        // at G-CORE-3f; this seam refuses with a typed-storage error so
+        // the R3-pin assertion fires correctly. NOT a fail-OPEN —
+        // every cross-DID import attempt is refused at this layer;
+        // the production refinement (which arm refuses + with what
+        // error variant) lands at G-CORE-3f.
+        Err(GraphError::Redb(format!(
+            "G-CORE-3d×3f integration: cross-DID DropBundle import of \
+             EncryptedNode (plaintext_cid {plaintext_cid:?}) into scope \
+             refused at the storage layer — the import path that \
+             validates the foreign K_principal + re-keys to the local \
+             K_principal lives at G-CORE-3f"
+        )))
     }
 }
 

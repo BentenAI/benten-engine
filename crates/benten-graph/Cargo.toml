@@ -73,7 +73,7 @@ browser-backend = []
 # no `last_durability_by_label`) — fulfilling the commit-message claim in
 # `be8f6ea` that these accumulation surfaces "no longer accumulate [in
 # production builds]".
-testing = []
+testing = ["benten-core/testing"]
 
 [dependencies]
 benten-core = { path = "../benten-core" }
@@ -101,15 +101,28 @@ thiserror = { workspace = true }
 # infrastructure landed at G18-A. See `crates/benten-graph/src/
 # browser_backend.rs` module docs + `.addl/phase-2b/wave-8j-wasm-browser-
 # bundle-bisect.md` § Phase-3 follow-up.
+#
+# Phase-4-Meta-Core G-CORE-3d (#1301) addendum: `benten-crypto-suite`
+# is target-conditional under the SAME pattern as redb. The aead_wrap +
+# two_cid_map modules consume this dep + are themselves module-gated
+# `#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]` because
+# the per-Node-AEAD path lives on the redb-backed seam; the browser
+# thin-client target (wasm32-unknown-unknown) structurally rejects
+# namespaced writes (BrowserBackend) so it has no per-Node-AEAD path.
+# This avoids pulling `getrandom 0.2.x` without its `js` feature into
+# the wasm32-unknown-unknown bundle (the 4-check regression closed by
+# G-CORE-3d PR #1323 mini-rev BLOCKER mr-1).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 redb = { workspace = true }
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 
 # `wasm32-wasip1` is a NATIVE-shape target (full filesystem access via
-# WASI preview-1), so redb compiles + works there. The exclusion is
-# specifically `wasm32-unknown-unknown` (browser tabs) per the
-# thin-client commitment.
+# WASI preview-1), so redb + benten-crypto-suite compile + work there.
+# The exclusion is specifically `wasm32-unknown-unknown` (browser tabs)
+# per the thin-client commitment.
 [target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
 redb = { workspace = true }
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
