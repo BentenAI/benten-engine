@@ -577,6 +577,19 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginInstallRecordAlreadyApplied,
     ErrorCode::WriteBoundaryChainNotUserRooted,
     ErrorCode::ThinClientBridgePrincipalUnresolved,
+    // Phase 4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
+    // C11b safety invariant per the PQ-default reframe): +1
+    // `AuditNotLandedPurePqRejected`. The
+    // `SwapMatrix::try_pure_pq_sole_trust_path` constructor gate fires
+    // this code when the workspace-baseline
+    // `AUDIT_LANDED_PURE_PQ_FLAG` is `false` — the load-bearing
+    // safety invariant that prevents an implementer from shipping a
+    // pre-audit pure-PQ-sole-trust-path SwapMatrix (which would
+    // silently regress the v1-GM-gating C-GM-AUDIT exit criterion per
+    // CLAUDE.md baked-in #15). The named arm is what the v1-GM-gating
+    // CI lane greps for; collapsed to a generic Err would silently
+    // regress the gate. CATALOG_VARIANT_COUNT 188 → 189.
+    ErrorCode::AuditNotLandedPurePqRejected,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -945,8 +958,16 @@ fn variant_count_is_pinned() {
     // principal resolution failure — the bridge never trusts client-
     // supplied principals; resolves from the authenticated session).
     // 184 + 4 = 188.
+    //
+    // **Phase-4-Meta-Core G-CORE-3c terminal swap-matrix wave**: +1
+    // `AuditNotLandedPurePqRejected` (the C11b safety invariant per the
+    // PQ-default reframe; `SwapMatrix::try_pure_pq_sole_trust_path`
+    // constructor gate fires this code when the workspace-baseline
+    // `AUDIT_LANDED_PURE_PQ_FLAG` is `false` — load-bearing v1-GM-gating
+    // safety invariant; named arm is what the C-GM-AUDIT CI lane greps
+    // for). 188 + 1 = 189.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 188,
+        CATALOG_VARIANT_COUNT, 189,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1215,7 +1236,9 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
             | ErrorCode::PluginInstallRecordAlreadyApplied
             | ErrorCode::WriteBoundaryChainNotUserRooted
-            | ErrorCode::ThinClientBridgePrincipalUnresolved => true,
+            | ErrorCode::ThinClientBridgePrincipalUnresolved
+            // Phase 4-Meta-Core G-CORE-3c terminal swap-matrix wave.
+            | ErrorCode::AuditNotLandedPurePqRejected => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

@@ -1300,6 +1300,22 @@ pub enum ErrorCode {
     /// `benten-engine::thin_client_bridge::ThinClientBridge::resolve_principal_for_request`.
     /// Maps to `E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED`.
     ThinClientBridgePrincipalUnresolved,
+    /// Phase-4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
+    /// C11b safety invariant per the PQ-default reframe): a caller
+    /// attempted to construct a pure-PQ-sole-trust-path crypto
+    /// configuration (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc)
+    /// while the workspace-baseline `AUDIT_LANDED_PURE_PQ_FLAG` is
+    /// `false` — the independent `ml-dsa`/`ml-kem`/`slh-dsa` third-party
+    /// audit (NF-2 / C-GM-AUDIT) has not landed yet, so the hybrid
+    /// construction must remain the SOLE trust path until the audit
+    /// witnesses correctness. The
+    /// `benten_crypto_suite::swap_matrix::SwapMatrixError::AuditNotLandedPurePqRejected`
+    /// variant + the runtime gate in
+    /// `SwapMatrix::try_pure_pq_sole_trust_path` surface here as
+    /// `E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED`. The named arm is what
+    /// the v1-GM-gating CI lane greps for — a generic `Err` would
+    /// silently regress the C-GM-AUDIT exit criterion.
+    AuditNotLandedPurePqRejected,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1629,6 +1645,7 @@ impl ErrorCode {
             ErrorCode::WriteBoundaryChainNotUserRooted => "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
             #[rustfmt::skip]
             ErrorCode::ThinClientBridgePrincipalUnresolved => "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
+            ErrorCode::AuditNotLandedPurePqRejected => "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2119,10 +2136,14 @@ impl ErrorCode {
             //   only routing.
             // - ThinClientBridgePrincipalUnresolved fires at the bridge
             //   entry — not a primitive-edge dispatch surface.
+            // - AuditNotLandedPurePqRejected fires at the
+            //   `SwapMatrix::try_pure_pq_sole_trust_path` constructor
+            //   gate (configuration-time, not primitive-edge dispatch).
             ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => Some("ON_DENIED"),
             ErrorCode::WriteBoundaryChainNotUserRooted => Some("ON_DENIED"),
             ErrorCode::PluginInstallRecordAlreadyApplied => None,
             ErrorCode::ThinClientBridgePrincipalUnresolved => None,
+            ErrorCode::AuditNotLandedPurePqRejected => None,
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -2433,6 +2454,8 @@ impl core::str::FromStr for ErrorCode {
             "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED" => {
                 ErrorCode::ThinClientBridgePrincipalUnresolved
             }
+            // Phase 4-Meta-Core G-CORE-3c full swap-matrix conformance.
+            "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED" => ErrorCode::AuditNotLandedPurePqRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

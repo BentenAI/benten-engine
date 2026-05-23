@@ -147,6 +147,7 @@ impl Keypair {
 
 /// Public-key handle — carries the verifying-key for both halves where
 /// the suite is hybrid.
+#[derive(Clone)]
 pub struct PublicKey {
     classical: ed25519_dalek::VerifyingKey,
     pq: Option<MlDsaVerifyingKey<MlDsa65>>,

@@ -223,6 +223,7 @@ export const CATALOG_CODES = [
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED",
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
+  "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -3078,6 +3079,21 @@ export class EThinClientBridgePrincipalUnresolved extends BentenError {
 }
 
 /**
+ * E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
+ *
+ * Thrown at: `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
+ * Message template: "pure-PQ-sole-trust-path rejected (audit not landed): hybrid construction is the audited path until the independent ml-dsa/ml-kem/slh-dsa audit (NF-2 / C-GM-AUDIT) lands"
+ */
+export class EAuditNotLandedPurePqRejected extends BentenError {
+  static readonly code = "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED";
+  static readonly fixHint = "Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED", "Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.", message, context);
+    this.name = "EAuditNotLandedPurePqRejected";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3276,4 +3292,5 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED": EPluginInstallRecordAlreadyApplied,
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED": EWriteBoundaryChainNotUserRooted,
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED": EThinClientBridgePrincipalUnresolved,
+  "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED": EAuditNotLandedPurePqRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;
