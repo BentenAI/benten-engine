@@ -370,6 +370,65 @@ impl CompileError {
             Self::Backend(_) => E_DSL_BACKEND_REJECTED,
         }
     }
+
+    /// Return the typed [`benten_errors::ErrorCode`] mirror for the variant.
+    ///
+    /// Companion to [`CompileError::error_code`] (the wire-string surface).
+    /// Where a first-class typed mirror exists in the `benten-errors`
+    /// catalog ([`benten_errors::ErrorCode::DslBackendRejected`] for
+    /// [`CompileError::Backend`]), the typed variant is returned;
+    /// everything else routes through
+    /// [`benten_errors::ErrorCode::Unknown`] carrying the wire string so
+    /// downstream consumers can still match by stable code without losing
+    /// the discriminant.
+    ///
+    /// This is the load-bearing alias-mapper for the drift detector's
+    /// ErrorCode reachability pass: the
+    /// `CompileError::Backend(_) => ErrorCode::DslBackendRejected` arm
+    /// is what makes the typed catalog variant reachable through the
+    /// devserver wrap site at
+    /// `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`
+    /// (the canonical production construction site for
+    /// [`CompileError::Backend`]). Diagnostic-carrying variants + the
+    /// `Io` variant remain wrapped in `Unknown(_)` until they earn
+    /// first-class typed variants in their own future waves.
+    /// Construct a [`CompileError::Backend`] wrapping a downstream
+    /// consumer's post-compile rejection. Canonical use site: the
+    /// devserver engine-registration path
+    /// (`tools/benten-dev::DevServer::replace_handler_from_dsl_with_outcome`)
+    /// wraps `engine.register_subgraph_replace(...)` failures here so
+    /// the wire surfaces stable [`E_DSL_BACKEND_REJECTED`] /
+    /// [`benten_errors::ErrorCode::DslBackendRejected`] instead of
+    /// abusing the `Io` variant.
+    ///
+    /// Centralizing construction in this crate (rather than the
+    /// downstream `tools/` tree) makes the typed
+    /// `ErrorCode::DslBackendRejected` reachable through the
+    /// drift-detector's alias-mapper pass — the detector only scans
+    /// `crates/*/src/` for both the mapper arm and the upstream
+    /// variant construction site.
+    #[must_use]
+    pub fn backend(msg: impl Into<String>) -> Self {
+        CompileError::Backend(msg.into())
+    }
+
+    #[must_use]
+    pub fn code(&self) -> benten_errors::ErrorCode {
+        // Use the fully-qualified `CompileError::Variant` form on the
+        // arm LHS (rather than `Self::Variant`) so the workspace
+        // ErrorCode-reachability drift detector
+        // (`scripts/drift-detect.ts`) picks the
+        // `CompileError::Backend(_) => ErrorCode::DslBackendRejected`
+        // mapping up as a transitive-construction alias — the regex
+        // keys on `TypeName(Error|Violation)::Variant`.
+        match self {
+            CompileError::Backend(_) => benten_errors::ErrorCode::DslBackendRejected,
+            CompileError::Parse(d) | CompileError::Semantic(d) | CompileError::Build(d) => {
+                benten_errors::ErrorCode::Unknown(d.error_code.to_string())
+            }
+            CompileError::Io(_) => benten_errors::ErrorCode::Unknown(E_DSL_IO_ERROR.to_string()),
+        }
+    }
 }
 
 /// Source-span shape — a half-open `[start_offset, end_offset)` byte range

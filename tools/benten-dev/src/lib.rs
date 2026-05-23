@@ -444,7 +444,7 @@ impl DevServer {
                 // matches the analog path in
                 // `register_handler_from_str` which wraps as
                 // `ErrorCode::Unknown(format!("devserver_engine_register: {e:?}"))`.
-                Err(e) => Err(CompileError::Backend(format!(
+                Err(e) => Err(CompileError::backend(format!(
                     "devserver_engine_register: {e:?}"
                 ))),
             }
