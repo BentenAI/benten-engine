@@ -20,7 +20,7 @@
 //!     mapping ratified by R2 + Spike H+1.2).
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-3d (pim-12 / §3.6e).
+//! LANDED at G-CORE-3d (pim-12 / §3.6e closure).
 //! ============================================================================
 //! `benten_graph::{aead_wrap, two_cid_map}` modules + the
 //! `RedbBackend::two_cid_lookup` extension do NOT exist at origin/main
@@ -74,7 +74,7 @@ use alloc::collections::BTreeMap;
 
 use benten_core::{Cid, Node, Value};
 use benten_graph::{RedbBackend, WriteContext};
-// RED-PHASE failure point: intended G-CORE-3d two-CID + AEAD wrap surface.
+// Production failure point: G-CORE-3d two-CID + AEAD wrap surface (LANDED).
 // Does NOT exist at c9c11c56 → compile-but-fail here.
 use benten_graph::aead_wrap::{AeadError, EncryptedNode, decrypt, encrypt};
 use benten_graph::two_cid_map::{TwoCidMap, TwoCidMapError};
@@ -121,7 +121,7 @@ fn tf3d_two_cid_mapping_round_trip_lookup_and_decrypt() {
     let node = node_titled("Recipe: tomato soup");
     let plaintext_cid = node.cid().unwrap();
 
-    // RED-PHASE production surface: `put_node_with_context` wraps the
+    // Production surface (LANDED at G-CORE-3d): `put_node_with_context` wraps the
     // node in AEAD, computes the ciphertext_cid, stores AT the
     // ciphertext_cid, and records the mapping plaintext_cid → ciphertext_cid.
     let ciphertext_cid = backend

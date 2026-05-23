@@ -92,16 +92,6 @@ serde = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 
-# Phase-4-Meta-Core G-CORE-3d (#1301): per-Node AEAD wrap layer +
-# two-CID mapping table ride on the codepoint-dispatched cipher-suite
-# substrate (`KeyMaterial` / `AeadEnvelope` / `wrap` / `unwrap` /
-# `aad_whole_content` / `aad_per_chunk` / `IROH_BLOCK_SIZE` /
-# `WHOLE_CONTENT_AEAD_THRESHOLD`) minted at G-CORE-3a CANARY. Per
-# CLAUDE.md baked-in #5 the integration crate is the ONLY crypto-
-# primitive call site; benten-graph's AEAD wrap module is glue over
-# that surface, never against ChaCha20-Poly1305 / HKDF / etc. directly.
-benten-crypto-suite = { path = "../benten-crypto-suite" }
-
 # G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17 + br-r1-1 BLOCKER): the
 # `redb` dependency is target-conditional. Native targets (x86_64-* /
 # aarch64-* / wasm32-wasip1) compile redb + the `RedbBackend` impl. The
@@ -111,15 +101,28 @@ benten-crypto-suite = { path = "../benten-crypto-suite" }
 # infrastructure landed at G18-A. See `crates/benten-graph/src/
 # browser_backend.rs` module docs + `.addl/phase-2b/wave-8j-wasm-browser-
 # bundle-bisect.md` § Phase-3 follow-up.
+#
+# Phase-4-Meta-Core G-CORE-3d (#1301) addendum: `benten-crypto-suite`
+# is target-conditional under the SAME pattern as redb. The aead_wrap +
+# two_cid_map modules consume this dep + are themselves module-gated
+# `#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]` because
+# the per-Node-AEAD path lives on the redb-backed seam; the browser
+# thin-client target (wasm32-unknown-unknown) structurally rejects
+# namespaced writes (BrowserBackend) so it has no per-Node-AEAD path.
+# This avoids pulling `getrandom 0.2.x` without its `js` feature into
+# the wasm32-unknown-unknown bundle (the 4-check regression closed by
+# G-CORE-3d PR #1323 mini-rev BLOCKER mr-1).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 redb = { workspace = true }
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 
 # `wasm32-wasip1` is a NATIVE-shape target (full filesystem access via
-# WASI preview-1), so redb compiles + works there. The exclusion is
-# specifically `wasm32-unknown-unknown` (browser tabs) per the
-# thin-client commitment.
+# WASI preview-1), so redb + benten-crypto-suite compile + work there.
+# The exclusion is specifically `wasm32-unknown-unknown` (browser tabs)
+# per the thin-client commitment.
 [target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
 redb = { workspace = true }
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

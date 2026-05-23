@@ -26,7 +26,7 @@
 //!     AEAD with key-derivation rooted at `K_principal`)."
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-3d (pim-12 / §3.6e).
+//! LANDED at G-CORE-3d (pim-12 / §3.6e closure).
 //! ============================================================================
 //! This file is on-surface for the §3.13 per-test-static decomposition
 //! cap (R2 §7 W3 + the partition-isolation surface list); zero shared
@@ -46,7 +46,7 @@ use alloc::collections::BTreeMap;
 
 use benten_core::{Cid, Node, Value};
 use benten_graph::{RedbBackend, WriteContext};
-// RED-PHASE failure point.
+// Production failure point (LANDED at G-CORE-3d).
 use benten_graph::aead_wrap::{AeadError, decrypt};
 use tempfile::tempdir;
 

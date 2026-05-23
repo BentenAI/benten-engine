@@ -27,7 +27,7 @@
 //!     prevention."
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-3d (pim-12 / §3.6e).
+//! LANDED at G-CORE-3d (pim-12 / §3.6e closure).
 //! ============================================================================
 //! The `aead_wrap::{IROH_BLOCK_SIZE, WHOLE_AEAD_THRESHOLD, EncryptedNode,
 //! ChunkedCiphertext}` surfaces do not exist at origin/main `c9c11c56` →
@@ -47,7 +47,7 @@ use alloc::collections::BTreeMap;
 
 use benten_core::{Cid, Node, Value};
 use benten_graph::{RedbBackend, WriteContext};
-// RED-PHASE failure point — G-CORE-3d surface.
+// Production failure point (LANDED at G-CORE-3d).
 use benten_graph::aead_wrap::{
     AeadError, ChunkedCiphertext, EncryptedNode, IROH_BLOCK_SIZE, WHOLE_AEAD_THRESHOLD,
     decrypt_chunk, encrypt_chunk,

@@ -20,7 +20,7 @@
 //!   - `RATIFIED-sharing-and-confidentiality-2026-05-21.md` §R2 + Spike G/H.
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-3d (pim-12 / §3.6e).
+//! LANDED at G-CORE-3d (pim-12 / §3.6e closure).
 //! ============================================================================
 
 #![allow(clippy::unwrap_used)]
@@ -36,7 +36,7 @@ extern crate alloc;
 use alloc::collections::BTreeMap;
 
 use benten_core::{Cid, Node, Value};
-// RED-PHASE failure point.
+// Production failure point (LANDED at G-CORE-3d).
 use benten_graph::aead_wrap::{AeadError, EncryptedNode, decrypt, encrypt};
 
 fn node_titled(title: &str) -> Node {
