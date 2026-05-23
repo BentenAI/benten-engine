@@ -150,7 +150,7 @@ Each phase layers on the previous without requiring changes below. The engine's 
 ## Where to go from here
 
 - **Try it.** See [`QUICKSTART.md`](QUICKSTART.md) for the 10-minute path. `npx create-benten-app my-app` gives you a scaffolded project with a `crud('post')` handler.
-- **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the thirteen crates (eight foundational + `benten-id` + `benten-sync` + `benten-platform-foundation` + `benten-renderer-tauri` + `benten-crypto-suite`), the invariant set, the storage layer, and the evaluator's request flow.
+- **Understand the architecture.** [`ARCHITECTURE.md`](ARCHITECTURE.md) walks the fourteen crates (eight foundational + `benten-id` + `benten-sync` + `benten-platform-foundation` + `benten-renderer-tauri` + `benten-crypto-suite` + `benten-drop`), the invariant set, the storage layer, and the evaluator's request flow.
 - **Read the error catalog.** [`ERROR-CATALOG.md`](ERROR-CATALOG.md) is the stable contract: every error the engine surfaces, by discriminant, with context.
 - **Read the typed-CALL reference.** [`TYPED-CALL.md`](TYPED-CALL.md) covers the Phase-3 typed-CALL dispatch surface — the 10 engine-known ops + their cap requirements + the SANDBOX-vs-typed-CALL decision tree.
 - **Look at the glossary.** [`GLOSSARY.md`](GLOSSARY.md) names the concepts above and a few more.
