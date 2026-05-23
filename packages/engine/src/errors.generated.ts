@@ -2793,7 +2793,7 @@ export class ENamespacedWriteUnsupported extends BentenError {
 /**
  * E_RECIPIENT_LACKS_KEYS_FOR_SUITE
  *
- * Thrown at: `crates/benten-crypto-suite/src/cipher_suite.rs::CipherSuite::wrap_key_material` + `::unwrap_key_material` (G-CORE-3a CANARY, Phase 4-Meta-Core).
+ * Thrown at: `crates/benten-crypto-suite/src/cipher_suite.rs::CipherSuite::wrap_key_material` + `::unwrap_key_material` (G-CORE-3a CANARY, Phase 4-Meta-Core) — surfaces as `AeadError::RecipientLacksKeysForSuite` at the cipher-suite boundary; the boundary-lift into `benten-errors::ErrorCode::RecipientLacksKeysForSuite` for the engine-wide catalog surface lands at G-CORE-3b (caps + UCAN-bound recipient resolution where the typed-arm threads through the cap-policy path) — at G-CORE-3a the ErrorCode variant is reserved + the AeadError variant is the live production typed-arm. The drift-detector's `reachability: ignore` annotation below names this reservation; G-CORE-3b removes it when the wire-up lands.
  * Message template: "recipient lacks one of the required key halves for the dispatched cipher-suite"
  */
 export class ERecipientLacksKeysForSuite extends BentenError {
