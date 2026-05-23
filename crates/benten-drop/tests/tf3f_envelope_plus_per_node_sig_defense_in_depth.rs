@@ -122,15 +122,20 @@ fn tf3f_tampered_envelope_sig_fails_before_per_node_decrypt() {
 }
 
 // ---------------------------------------------------------------------------
-// PIN 3 — P-3: defense-in-depth overhead <12% (Spike G finding).
+// PIN 3 — P-3: per-Node attestation size-reservation overhead <12% (Spike G finding).
 // ---------------------------------------------------------------------------
-// The per-Node-sig adds <12% overhead vs envelope-sig-only. A stub
-// that omits per-Node-sigs would pass the consume test (envelope-sig
-// alone is sufficient for happy-path) but breaks defense-in-depth.
-// This pin asserts the per-Node-sig surface is present + sized.
+// Honesty: this measures the SIZED PLACEHOLDER's overhead as the
+// surface reservation for the typed `Vec<Signature>` upgrade at the
+// G-CORE-9 v1-interface freeze. The placeholder bytes are NOT real
+// per-Node Ed25519 signatures at G-CORE-3f — they are a size budget
+// pin (~130 bytes; ~10% of base bundle; well under the 12% ceiling)
+// to keep the future field from surfacing as a wire-format surprise.
+// A stub that omits the attestation blob would shrink the bundle and
+// fail this pin; a stub that included real per-Node sigs would still
+// satisfy this size-overhead bound (the upgrade is shape-compatible).
 #[test]
 
-fn tf3f_defense_in_depth_overhead_under_12_percent() {
+fn tf3f_per_node_attestation_size_overhead_under_12_percent() {
     let kp_alice = Keypair::generate();
     let kp_bob = Keypair::generate();
 

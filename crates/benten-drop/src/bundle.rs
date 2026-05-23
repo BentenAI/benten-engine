@@ -508,10 +508,10 @@ impl DropBundle {
     }
 
     /// Build a 5-Recipe DropBundle WITHOUT the per-Node attestation
-    /// blob (used to measure the defense-in-depth overhead in
-    /// `tf3f_defense_in_depth_overhead_under_12_percent`). The
-    /// envelope-sig is still emitted; per-Node integrity reduces to
-    /// the AEAD tag layer only.
+    /// blob (used to measure the placeholder size-reservation overhead
+    /// in `tf3f_per_node_attestation_size_overhead_under_12_percent`).
+    /// The envelope-sig is still emitted; per-Node integrity reduces
+    /// to the AEAD tag layer only.
     #[must_use]
     pub fn build_5_recipe_bundle_for_recipient_envelope_only_for_test(
         issuer_kp: &Keypair,
@@ -720,13 +720,16 @@ fn build_5_recipe_bundle_impl(
     let auth_grant = AuthorizationGrant::issue_for_test(ucan, key_material, audience)
         .expect("synthetic grant issues for test");
 
-    // Per-Node attestation surface — the production wire-up at
-    // G-CORE-9 freeze upgrades this to a typed `Vec<Signature>`
-    // parallel to `content`. For Spike G's overhead measurement the
-    // load-bearing property is the size differential between
-    // with-attestation and envelope-only variants. Sized to stay
-    // <12% of base bundle size per the Spike G measurement
-    // (`tf3f_defense_in_depth_overhead_under_12_percent`).
+    // G-CORE-3f: this is a SIZED PLACEHOLDER, not real per-Node
+    // Ed25519 signatures. The placeholder reserves the wire-shape
+    // budget; G-CORE-9 v1-interface freeze upgrades it to typed
+    // `Vec<Signature>` parallel to `content`. See `per_node_attestation`
+    // field docstring + the
+    // `tf3f_per_node_attestation_size_overhead_under_12_percent` pin.
+    // For Spike G's overhead measurement the load-bearing property is
+    // the size differential between with-attestation and envelope-only
+    // variants. Sized to stay <12% of base bundle size per the Spike G
+    // measurement.
     //
     // Sizing math: the envelope-only bundle measures ~1327 bytes
     // (5 small Recipe cells + grant + header + envelope-sig);
