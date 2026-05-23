@@ -408,6 +408,7 @@ version = "0.1.0"
 dependencies = [
  "benten-core",
  "benten-errors",
+ "criterion",
  "thiserror 2.0.18",
 ]
 
