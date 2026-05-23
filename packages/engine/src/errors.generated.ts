@@ -223,6 +223,7 @@ export const CATALOG_CODES = [
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED",
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
+  "E_DSL_BACKEND_REJECTED",
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
 ] as const;
 
@@ -1056,7 +1057,7 @@ export class EVersionUnknownPrior extends BentenError {
 /**
  * E_DSL_INVALID_SHAPE
  *
- * Thrown at: TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+ * Thrown at: TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser + `validate_shapes` build-phase pass; the variant carrying the diagnostic is `CompileError::Build(_)` post-G-CORE-DSL chunk-3 #790 rename from `CompileError::Emit`) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
  * Message template: "DSL value does not match expected shape: {reason}"
  */
 export class EDslInvalidShape extends BentenError {
@@ -3079,6 +3080,21 @@ export class EThinClientBridgePrincipalUnresolved extends BentenError {
 }
 
 /**
+ * E_DSL_BACKEND_REJECTED
+ *
+ * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (the public variant; downstream consumers wrap their typed rejections here). Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`. The DSL compiler itself never emits this variant — the compile pipeline emits `Parse` / `Semantic` / `Build` / `Io` only.
+ * Message template: "DSL backend rejection: {downstream_error}"
+ */
+export class EDslBackendRejected extends BentenError {
+  static readonly code = "E_DSL_BACKEND_REJECTED";
+  static readonly fixHint = "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful DSL compile in the devserver flow). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. Pre-#839 the devserver abused `CompileError::Io` to wrap engine-registration failures (widening the documented `Io` semantic to \"everything else\"); post-#839 the new `CompileError::Backend(_)` variant + this typed code are the routing-correct home.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DSL_BACKEND_REJECTED", "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful DSL compile in the devserver flow). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. Pre-#839 the devserver abused `CompileError::Io` to wrap engine-registration failures (widening the documented `Io` semantic to \"everything else\"); post-#839 the new `CompileError::Backend(_)` variant + this typed code are the routing-correct home.", message, context);
+    this.name = "EDslBackendRejected";
+  }
+}
+
+/**
  * E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
  *
  * Thrown at: `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
@@ -3292,5 +3308,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED": EPluginInstallRecordAlreadyApplied,
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED": EWriteBoundaryChainNotUserRooted,
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED": EThinClientBridgePrincipalUnresolved,
+  "E_DSL_BACKEND_REJECTED": EDslBackendRejected,
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED": EAuditNotLandedPurePqRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

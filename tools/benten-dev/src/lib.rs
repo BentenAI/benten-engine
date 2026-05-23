@@ -428,15 +428,23 @@ impl DevServer {
         if let Some(engine) = &self.engine {
             match engine.register_subgraph_replace(compiled.subgraph) {
                 Ok(outcome) => Ok(Some(outcome)),
-                // Engine registration failed post-compile — surface
-                // through the existing Io variant since CompileError's
-                // current variant set covers DSL-grammar-vs-typecheck
-                // failure modes; engine-side rejection is a downstream
-                // bucket that fits Io's "everything else" semantic.
-                // R6FP-tail (Round-2 Instance 10) matches the analog
-                // path in `register_handler_from_str` which wraps as
+                // G-CORE-DSL chunk-3 #839 closure: route engine-
+                // registration failures through the NEW typed
+                // `CompileError::Backend(_)` variant (maps to
+                // `E_DSL_BACKEND_REJECTED` on the wire) instead of
+                // abusing `CompileError::Io`. Pre-#839 this wrapped as
+                // `CompileError::Io` because the variant set covered
+                // only DSL-grammar-vs-typecheck failure modes; the new
+                // `Backend` variant is the typed home for
+                // downstream-consumer post-compile rejections, distinct
+                // from real `std::io::Error` IO failures. The same
+                // diagnostic shape (`devserver_engine_register: ...`)
+                // is preserved at the message body so existing log
+                // greppers stay green. R6FP-tail (Round-2 Instance 10)
+                // matches the analog path in
+                // `register_handler_from_str` which wraps as
                 // `ErrorCode::Unknown(format!("devserver_engine_register: {e:?}"))`.
-                Err(e) => Err(CompileError::Io(format!(
+                Err(e) => Err(CompileError::backend(format!(
                     "devserver_engine_register: {e:?}"
                 ))),
             }

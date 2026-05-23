@@ -577,6 +577,16 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginInstallRecordAlreadyApplied,
     ErrorCode::WriteBoundaryChainNotUserRooted,
     ErrorCode::ThinClientBridgePrincipalUnresolved,
+    // Phase 4-Meta-Core G-CORE-DSL chunk-3 (#839): downstream-consumer
+    // rejection at the DSL-compile boundary. Closes the
+    // `CompileError::Io`-variant-abuse at
+    // `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`
+    // by giving downstream consumers a typed home distinct from real
+    // file-IO failures. The new `CompileError::Backend` variant in
+    // `crates/benten-dsl-compiler/src/lib.rs` maps here via its
+    // `error_code` → `E_DSL_BACKEND_REJECTED`. CATALOG_VARIANT_COUNT
+    // 188 → 189.
+    ErrorCode::DslBackendRejected,
     // Phase 4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
     // C11b safety invariant per the PQ-default reframe): +1
     // `AuditNotLandedPurePqRejected`. The
@@ -588,7 +598,9 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // silently regress the v1-GM-gating C-GM-AUDIT exit criterion per
     // CLAUDE.md baked-in #15). The named arm is what the v1-GM-gating
     // CI lane greps for; collapsed to a generic Err would silently
-    // regress the gate. CATALOG_VARIANT_COUNT 188 → 189.
+    // regress the gate. CATALOG_VARIANT_COUNT 189 → 190 (stacked on
+    // top of chunk-3's DslBackendRejected which landed first via
+    // #1339).
     ErrorCode::AuditNotLandedPurePqRejected,
 ];
 
@@ -959,15 +971,21 @@ fn variant_count_is_pinned() {
     // supplied principals; resolves from the authenticated session).
     // 184 + 4 = 188.
     //
+    // G-CORE-DSL chunk-3 (#839) merged via #1339: +1 `DslBackendRejected`
+    // — downstream-consumer rejection at the DSL-compile boundary; closes
+    // the `CompileError::Io`-variant abuse at the devserver site by giving
+    // downstream consumers a typed home distinct from real file-IO
+    // failures. 188 + 1 = 189.
+    //
     // **Phase-4-Meta-Core G-CORE-3c terminal swap-matrix wave**: +1
     // `AuditNotLandedPurePqRejected` (the C11b safety invariant per the
     // PQ-default reframe; `SwapMatrix::try_pure_pq_sole_trust_path`
     // constructor gate fires this code when the workspace-baseline
     // `AUDIT_LANDED_PURE_PQ_FLAG` is `false` — load-bearing v1-GM-gating
     // safety invariant; named arm is what the C-GM-AUDIT CI lane greps
-    // for). 188 + 1 = 189.
+    // for). 189 + 1 = 190.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 189,
+        CATALOG_VARIANT_COUNT, 190,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1237,6 +1255,10 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::PluginInstallRecordAlreadyApplied
             | ErrorCode::WriteBoundaryChainNotUserRooted
             | ErrorCode::ThinClientBridgePrincipalUnresolved
+            // G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection
+            // at the DSL-compile boundary; closes the
+            // `CompileError::Io`-variant abuse at the devserver site.
+            | ErrorCode::DslBackendRejected
             // Phase 4-Meta-Core G-CORE-3c terminal swap-matrix wave.
             | ErrorCode::AuditNotLandedPurePqRejected => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
