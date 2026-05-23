@@ -1,0 +1,60 @@
+[package]
+name = "benten-drop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Drop bundle format (G-CORE-3f) — self-contained CBOR-on-disk envelope `DropBundle{version, spec_cid, auth_grant, content: Vec<EncryptedNode>, key_material, manifest}` shipped over the iroh-blobs two-CID seam (mode 2 sendme→Drop). Carries Spike G's envelope-sig + per-Node-sig defense-in-depth (<12% overhead); mode 3 inline-tiny deferred to post-v1. Consumer reads filesystem-only (no network, no live publisher)."
+
+[lints]
+workspace = true
+
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through. See benten-core/Cargo.toml for the
+# longer rationale.
+bench = false
+
+# G-CORE-3f Drop-bundle deps — leans on the substrate cascade:
+#   - benten-crypto-suite (3a CANARY) — KeyMaterial + AeadEnvelope + cipher dispatch
+#   - benten-graph (3d) — EncryptedNode + per-Node AEAD wrap (the storage-layer
+#     content cells the Drop bundle ships as `Vec<EncryptedNode>`)
+#   - benten-caps (3b) — RestrictedSpec (the SubgraphSpec selector) + AuthorizationGrant
+#     (the ONE signed artifact `{ucan, key_material, binding_sig}` carried in the bundle)
+#   - benten-core — Cid + canonical-bytes seam (spec_cid + per-Node plaintext_cids)
+#   - benten-id — Keypair (test fixtures + Ed25519 envelope signing)
+#   - benten-errors — ErrorCode discriminants for the wave's typed mints
+[dependencies]
+benten-core = { path = "../benten-core" }
+benten-errors = { workspace = true }
+benten-caps = { path = "../benten-caps" }
+benten-graph = { path = "../benten-graph" }
+benten-crypto-suite = { path = "../benten-crypto-suite" }
+benten-id = { path = "../benten-id" }
+
+# Canonical bytes substrate. DAG-CBOR (the workspace canonical-bytes
+# encoding per Phase-1 Cid contract) is the bundle's on-disk format.
+# `serde` derives the encode/decode for `DropBundle` + its components;
+# `serde_ipld_dagcbor` encodes to canonical DAG-CBOR; `serde_bytes`
+# narrows `Vec<u8>` → CBOR byte-string (the standard envelope shape
+# used for nonces / ciphertexts / signature bytes across the workspace).
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+thiserror = { workspace = true }
+
+# Cryptographic surface for the envelope-level signature (the defense-
+# in-depth outer layer per Spike G). Goes through `benten-id` for the
+# `Keypair`/`PublicKey` API (which itself routes to ed25519-dalek via
+# benten-crypto-suite per the ONLY-call-site rule). The bundle envelope
+# is signed with the issuer's Ed25519 keypair; per-Node integrity is
+# the secondary layer via the AEAD authentication tags already carried
+# in each `EncryptedNode`.
+
+[dev-dependencies]
+# `benten-id::keypair::Keypair` is used by the TF-3f pin fixtures
+# (`build_5_recipe_bundle_for_*`, `flip_byte_in_content_for_test`,
+# `tamper_envelope_signature_for_test`, etc.). Already a regular dep
+# above; listed here for clarity that the dev-time pins exercise it.

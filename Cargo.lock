@@ -403,6 +403,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-drop"
+version = "0.1.0"
+dependencies = [
+ "benten-caps",
+ "benten-core",
+ "benten-crypto-suite",
+ "benten-errors",
+ "benten-graph",
+ "benten-id",
+ "serde",
+ "serde_bytes",
+ "serde_ipld_dagcbor",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "benten-dsl-compiler"
 version = "0.1.0"
 dependencies = [

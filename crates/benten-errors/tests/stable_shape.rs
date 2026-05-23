@@ -531,6 +531,31 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::UcanBlobsRequestRejected,
     ErrorCode::UcanBlobsRequestNotInScope,
     ErrorCode::UnresolvedPeerDeny,
+    // G-CORE-3f (Phase 4-Meta-Core, Drop bundle envelope-sig
+    // defense-in-depth per Spike G): the outer integrity layer's
+    // typed-reject when the Ed25519 envelope-sig does not verify
+    // against the carried verifying key. Construction sites:
+    //   `benten_drop::bundle::DropBundle::verify_envelope_signature`
+    //   (the outer integrity layer; AEAD tags are the inner layer
+    //   and DO NOT route through this code — content-only tampers
+    //   surface as `PerNodeAeadAuthenticationFailed` per the
+    //   defense-in-depth pin).
+    ErrorCode::DropBundleEnvelopeSigInvalid,
+    // G-CORE-3f (Phase 4-Meta-Core, Drop bundle forward-compat per
+    // `00-implementation-plan.md` §3 G-CORE-3 def input-constraints
+    // F-3): unknown `DropBundleVersion` discriminator typed-reject.
+    // Construction sites:
+    //   `benten_drop::bundle::DropBundle::parse_cbor_bytes`
+    //   (the typed-version-check arm in the reader pipeline).
+    ErrorCode::DropBundleVersionUnsupported,
+    // G-CORE-3f (Phase 4-Meta-Core, Drop bundle Mode-3 defer-to-
+    // post-v1 per `00-implementation-plan.md` §3 G-CORE-3 def
+    // input-constraints refinement #6 L341): Mode-3 inline-tiny
+    // bundle typed-reject. Construction sites:
+    //   `benten_drop::bundle::DropBundle::parse_cbor_bytes` (typed-
+    //   reject of Mode-3 discriminator) + the
+    //   `synthesize_inline_tiny_cbor_for_test` fixture.
+    ErrorCode::DropBundleMode3InlineRejected,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -875,8 +900,14 @@ fn variant_count_is_pinned() {
     // `UcanBlobsRequestRejected` + `UcanBlobsRequestNotInScope` +
     // `UnresolvedPeerDeny` for the custom-ALPN per-request UCAN check
     // path. 178 + 3 = 181.
+    //
+    // G-CORE-3f (Phase 4-Meta-Core, NEW benten-drop crate) consolidated
+    // alongside G-CORE-3e in Strategy-C wave-2 batch: +3 codes —
+    // `DropBundleEnvelopeSigInvalid` + `DropBundleVersionUnsupported` +
+    // `DropBundleMode3InlineRejected` for the offline Drop bundle
+    // defense-in-depth contract (Spike G+H). 181 + 3 = 184.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 181,
+        CATALOG_VARIANT_COUNT, 184,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1128,7 +1159,17 @@ fn catalog_variant_count_matches_enum() {
             // #18 trust model + HARD RULE 12.
             | ErrorCode::UcanBlobsRequestRejected
             | ErrorCode::UcanBlobsRequestNotInScope
-            | ErrorCode::UnresolvedPeerDeny => true,
+            | ErrorCode::UnresolvedPeerDeny
+            // G-CORE-3f (Phase 4-Meta-Core, Drop bundle defense-in-
+            // depth per Spike G + the F-3 typed-reject + the Mode-3
+            // defer-to-post-v1 contracts): fail-closed typed-rejects
+            // at the Drop-consumer boundary — neither admits
+            // primitive-edge fallback per HARD RULE 12 (the typed
+            // reject IS the defense the Drop format exists to
+            // provide).
+            | ErrorCode::DropBundleEnvelopeSigInvalid
+            | ErrorCode::DropBundleVersionUnsupported
+            | ErrorCode::DropBundleMode3InlineRejected => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

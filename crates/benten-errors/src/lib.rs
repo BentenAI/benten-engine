@@ -1210,6 +1210,39 @@ pub enum ErrorCode {
     /// silent admission would defeat the entire audience-binding
     /// property of `AuthorizationGrant`.
     UnresolvedPeerDeny,
+    /// G-CORE-3f (Phase 4-Meta-Core, Drop bundle envelope-sig defense-
+    /// in-depth per Spike G): the envelope-level Ed25519 signature
+    /// over a `benten_drop::DropBundle` header did not verify against
+    /// the carried verifying key. Surfaces at
+    /// `benten_drop::bundle::DropBundle::verify_envelope_signature`
+    /// (the outer integrity layer; per-Node AEAD tags are the inner
+    /// layer). The envelope-sig intentionally binds the bundle
+    /// HEADER only — per the per-Node-ciphertext-tamper-detected pin,
+    /// content-only tampers do NOT trip this code; they trip the
+    /// inner AEAD-tag layer instead.
+    DropBundleEnvelopeSigInvalid,
+    /// G-CORE-3f (Phase 4-Meta-Core, Drop bundle forward-compat per
+    /// `00-implementation-plan.md` §3 G-CORE-3 def input-constraints
+    /// F-3): a `benten_drop::DropBundle` carrying a `DropBundleVersion`
+    /// discriminator the reader does not recognize was rejected
+    /// typed (never silent skip). The current production-known
+    /// version is `1`; the test-only `Synthetic(u16)` arm exists
+    /// solely to drive the reject pin. Construction site:
+    /// `benten_drop::bundle::DropBundle::parse_cbor_bytes`.
+    DropBundleVersionUnsupported,
+    /// G-CORE-3f (Phase 4-Meta-Core, Drop bundle Mode-3 defer-to-
+    /// post-v1 contract per `00-implementation-plan.md` §3 G-CORE-3
+    /// def input-constraints refinement #6 L341): a parsed
+    /// `benten_drop::DropBundle` payload either carried an
+    /// `InlineTiny` mode discriminator OR an out-of-band sentinel
+    /// the parser uses to surface the Mode-3-rejected typed path.
+    /// Mode 3 (bundle ≤16KiB inlined into the share URL) is
+    /// deferred to post-v1; this is the typed-reject surface.
+    /// Construction site:
+    /// `benten_drop::bundle::DropBundle::parse_cbor_bytes` (typed-
+    /// reject path) + the `synthesize_inline_tiny_cbor_for_test`
+    /// fixture exercising it.
+    DropBundleMode3InlineRejected,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1527,6 +1560,9 @@ impl ErrorCode {
             ErrorCode::UcanBlobsRequestRejected => "E_UCAN_BLOBS_REQUEST_REJECTED",
             ErrorCode::UcanBlobsRequestNotInScope => "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE",
             ErrorCode::UnresolvedPeerDeny => "E_UNRESOLVED_PEER_DENY",
+            ErrorCode::DropBundleEnvelopeSigInvalid => "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID",
+            ErrorCode::DropBundleVersionUnsupported => "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
+            ErrorCode::DropBundleMode3InlineRejected => "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1984,6 +2020,17 @@ impl ErrorCode {
             // against.
             ErrorCode::AuthorizationGrantBindingSigInvalid => None,
             ErrorCode::ChainNarrowingViolation => None,
+            // G-CORE-3f Drop bundle reject codes. No primitive-edge
+            // routing — these are typed-rejects at the Drop-consumer
+            // surface that the consumer MUST handle explicitly
+            // (per the §"defer-to-post-v1 contract" + the
+            // defense-in-depth pin's fail-fast property — silent
+            // re-routing through `ON_ERROR` would defeat the
+            // typed-reject contract that the version + mode + sig
+            // verify steps exist to defend).
+            ErrorCode::DropBundleEnvelopeSigInvalid => None,
+            ErrorCode::DropBundleVersionUnsupported => None,
+            ErrorCode::DropBundleMode3InlineRejected => None,
 
             // G-CORE-3e (Phase 4-Meta-Core) — per-request UCAN-blobs
             // protocol typed rejects. All three route to `ON_DENIED`
@@ -2291,6 +2338,9 @@ impl core::str::FromStr for ErrorCode {
             "E_UCAN_BLOBS_REQUEST_REJECTED" => ErrorCode::UcanBlobsRequestRejected,
             "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE" => ErrorCode::UcanBlobsRequestNotInScope,
             "E_UNRESOLVED_PEER_DENY" => ErrorCode::UnresolvedPeerDeny,
+            "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID" => ErrorCode::DropBundleEnvelopeSigInvalid,
+            "E_DROP_BUNDLE_VERSION_UNSUPPORTED" => ErrorCode::DropBundleVersionUnsupported,
+            "E_DROP_BUNDLE_MODE3_INLINE_REJECTED" => ErrorCode::DropBundleMode3InlineRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

@@ -216,6 +216,9 @@ export const CATALOG_CODES = [
   "E_UCAN_BLOBS_REQUEST_REJECTED",
   "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE",
   "E_UNRESOLVED_PEER_DENY",
+  "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID",
+  "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
+  "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2966,6 +2969,51 @@ export class EUnresolvedPeerDeny extends BentenError {
 }
 
 /**
+ * E_DROP_BUNDLE_ENVELOPE_SIG_INVALID
+ *
+ * Thrown at: `crates/benten-drop/src/bundle.rs::DropBundle::verify_envelope_signature` + `::consume_offline` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::EnvelopeSignatureInvalid` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleEnvelopeSigInvalid` for the engine-wide catalog surface lands at the G-CORE-9 v1-interface freeze when the engine's outbound-Drop API surface stabilizes. At G-CORE-3f the ErrorCode variant is reserved + the `DropBundleError` variant is the live production typed arm; the drift-detector's `reachability: ignore` annotation below names this reservation.
+ * Message template: "envelope signature mismatch: Drop bundle envelope-sig does not verify against the carried verifying key"
+ */
+export class EDropBundleEnvelopeSigInvalid extends BentenError {
+  static readonly code = "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID";
+  static readonly fixHint = "Per Spike G's defense-in-depth contract the Drop bundle has TWO independent integrity layers: (i) an Ed25519 envelope-sig over the bundle HEADER (`version + mode + spec_cid + audience + auth_grant + restricted_spec + per_node_attestation` — explicitly NOT the raw content bytes) and (ii) per-Node AEAD authentication tags inside each `EncryptedContent`. This code fires when the OUTER layer fails — the header was tampered post-issue OR the wrong verifying key is paired with the signature. Per the `tf3f_per_node_ciphertext_tamper_detected_envelope_sig_still_valid` pin, content-only tampers do NOT trip this code (they trip the inner AEAD layer as `PerNodeAeadAuthenticationFailed` instead — that asymmetry IS the defense-in-depth property). Fix at the producer side: re-build the bundle with the correct issuer keypair; never patch a header field after `to_cbor_bytes()`. No primitive-edge routing (None) — the typed-reject IS the defense.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DROP_BUNDLE_ENVELOPE_SIG_INVALID", "Per Spike G's defense-in-depth contract the Drop bundle has TWO independent integrity layers: (i) an Ed25519 envelope-sig over the bundle HEADER (`version + mode + spec_cid + audience + auth_grant + restricted_spec + per_node_attestation` — explicitly NOT the raw content bytes) and (ii) per-Node AEAD authentication tags inside each `EncryptedContent`. This code fires when the OUTER layer fails — the header was tampered post-issue OR the wrong verifying key is paired with the signature. Per the `tf3f_per_node_ciphertext_tamper_detected_envelope_sig_still_valid` pin, content-only tampers do NOT trip this code (they trip the inner AEAD layer as `PerNodeAeadAuthenticationFailed` instead — that asymmetry IS the defense-in-depth property). Fix at the producer side: re-build the bundle with the correct issuer keypair; never patch a header field after `to_cbor_bytes()`. No primitive-edge routing (None) — the typed-reject IS the defense.", message, context);
+    this.name = "EDropBundleEnvelopeSigInvalid";
+  }
+}
+
+/**
+ * E_DROP_BUNDLE_VERSION_UNSUPPORTED
+ *
+ * Thrown at: `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::UnsupportedDropVersion` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleVersionUnsupported` lands at G-CORE-9 v1-interface freeze. At G-CORE-3f the ErrorCode variant is reserved + the `DropBundleError` variant is the live production typed arm.
+ * Message template: "unsupported Drop bundle version: reader does not recognize the on-wire version discriminator"
+ */
+export class EDropBundleVersionUnsupported extends BentenError {
+  static readonly code = "E_DROP_BUNDLE_VERSION_UNSUPPORTED";
+  static readonly fixHint = "Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints (F-3 typed-reject rule): a future Drop bundle version this reader does not know about MUST yield typed `UnsupportedDropVersion` — NEVER silent skip. Silent skip would let a malicious \"future-version\" bundle be ignored without warning + invite header-confusion attacks. Fix at the consumer side: upgrade `benten-drop` to a version that knows the on-wire discriminator. The test-only `DropBundleVersion::Synthetic(u16)` arm exists solely to drive this typed-reject pin. No primitive-edge routing (None).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DROP_BUNDLE_VERSION_UNSUPPORTED", "Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints (F-3 typed-reject rule): a future Drop bundle version this reader does not know about MUST yield typed `UnsupportedDropVersion` — NEVER silent skip. Silent skip would let a malicious \"future-version\" bundle be ignored without warning + invite header-confusion attacks. Fix at the consumer side: upgrade `benten-drop` to a version that knows the on-wire discriminator. The test-only `DropBundleVersion::Synthetic(u16)` arm exists solely to drive this typed-reject pin. No primitive-edge routing (None).", message, context);
+    this.name = "EDropBundleVersionUnsupported";
+  }
+}
+
+/**
+ * E_DROP_BUNDLE_MODE3_INLINE_REJECTED
+ *
+ * Thrown at: `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::UnsupportedDropMode` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleMode3InlineRejected` lands at G-CORE-9 v1-interface freeze. At G-CORE-3f the ErrorCode variant is reserved.
+ * Message template: "Mode-3 (InlineTiny) Drop bundle rejected: deferred to post-v1"
+ */
+export class EDropBundleMode3InlineRejected extends BentenError {
+  static readonly code = "E_DROP_BUNDLE_MODE3_INLINE_REJECTED";
+  static readonly fixHint = "Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints refinement #6 L341, three sendme deployment modes exist: Mode 1 (online-pull, G-CORE-3e ALPN), Mode 2 (offline-Drop, G-CORE-3f sealed bundle), and Mode 3 (inline-tiny — bundle ≤16KiB inlined into the share URL). **Mode 3 is deferred to post-v1.** The `DropContentMode` enum has no `InlineTiny` arm — a synthetic CBOR payload requesting Mode 3 is typed-rejected at parse time. Per the `tf3f_drop_content_mode_no_inline_tiny_arm` structural pin, adding an `InlineTiny` variant in a future commit breaks the exhaustive match in that test (no `_` wildcard). Fix at the producer side: use Mode 2 (offline-Drop) for share-and-forget bundles, or Mode 1 (online-pull) when revocation semantics are load-bearing. No primitive-edge routing (None).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DROP_BUNDLE_MODE3_INLINE_REJECTED", "Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints refinement #6 L341, three sendme deployment modes exist: Mode 1 (online-pull, G-CORE-3e ALPN), Mode 2 (offline-Drop, G-CORE-3f sealed bundle), and Mode 3 (inline-tiny — bundle ≤16KiB inlined into the share URL). **Mode 3 is deferred to post-v1.** The `DropContentMode` enum has no `InlineTiny` arm — a synthetic CBOR payload requesting Mode 3 is typed-rejected at parse time. Per the `tf3f_drop_content_mode_no_inline_tiny_arm` structural pin, adding an `InlineTiny` variant in a future commit breaks the exhaustive match in that test (no `_` wildcard). Fix at the producer side: use Mode 2 (offline-Drop) for share-and-forget bundles, or Mode 1 (online-pull) when revocation semantics are load-bearing. No primitive-edge routing (None).", message, context);
+    this.name = "EDropBundleMode3InlineRejected";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3157,4 +3205,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_UCAN_BLOBS_REQUEST_REJECTED": EUcanBlobsRequestRejected,
   "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE": EUcanBlobsRequestNotInScope,
   "E_UNRESOLVED_PEER_DENY": EUnresolvedPeerDeny,
+  "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID": EDropBundleEnvelopeSigInvalid,
+  "E_DROP_BUNDLE_VERSION_UNSUPPORTED": EDropBundleVersionUnsupported,
+  "E_DROP_BUNDLE_MODE3_INLINE_REJECTED": EDropBundleMode3InlineRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;
