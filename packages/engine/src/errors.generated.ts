@@ -213,6 +213,9 @@ export const CATALOG_CODES = [
   "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH",
   "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
   "E_CHAIN_NARROWING_VIOLATION",
+  "E_UCAN_BLOBS_REQUEST_REJECTED",
+  "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE",
+  "E_UNRESOLVED_PEER_DENY",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2918,6 +2921,51 @@ export class EChainNarrowingViolation extends BentenError {
 }
 
 /**
+ * E_UCAN_BLOBS_REQUEST_REJECTED
+ *
+ * Thrown at: `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` + `::validate_request_for_connection` (G-CORE-3e, Phase 4-Meta-Core).
+ * Message template: "UCAN-gated iroh-blobs ALPN handler rejected request at per-request validation"
+ */
+export class EUcanBlobsRequestRejected extends BentenError {
+  static readonly code = "E_UCAN_BLOBS_REQUEST_REJECTED";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the \"request denied at the handler boundary BEFORE any bytes flow\" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedSpec`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_UCAN_BLOBS_REQUEST_REJECTED", "Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the \"request denied at the handler boundary BEFORE any bytes flow\" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedSpec`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.", message, context);
+    this.name = "EUcanBlobsRequestRejected";
+  }
+}
+
+/**
+ * E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE
+ *
+ * Thrown at: `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` (the scope-allowlist check after binding-sig + audience verification).
+ * Message template: "requested ciphertext_hash {hash} NOT in granted RestrictedSpec scope"
+ */
+export class EUcanBlobsRequestNotInScope extends BentenError {
+  static readonly code = "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedSpec` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE", "Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedSpec` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.", message, context);
+    this.name = "EUcanBlobsRequestNotInScope";
+  }
+}
+
+/**
+ * E_UNRESOLVED_PEER_DENY
+ *
+ * Thrown at: `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request_for_connection` (the unresolvable-peer short-circuit arm at the top of the validation cascade).
+ * Message template: "grant references unresolvable peer-DID; refusing admission"
+ */
+export class EUnresolvedPeerDeny extends BentenError {
+  static readonly code = "E_UNRESOLVED_PEER_DENY";
+  static readonly fixHint = "Per the security-r1-2 adversarial pattern (§5 \"unresolvable peer-DID at recheck\"): a grant whose UCAN issuer/audience cannot be resolved through the RotationLog MUST never be admitted. The handler returns this typed code BEFORE binding-sig verification — if we can't even know who's asking, we can't know whether their key matches the binding-sig, and silent admission would defeat the entire audience-binding (§R3) defense. Couples §4.36 recheck + §4.25 sync-hydrate denial: both surfaces fire this same code on the unresolvable arm so audit pipelines route uniformly. The wave-3e production wire-up replaces the in-grant sentinel with a real RotationLog lookup.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_UNRESOLVED_PEER_DENY", "Per the security-r1-2 adversarial pattern (§5 \"unresolvable peer-DID at recheck\"): a grant whose UCAN issuer/audience cannot be resolved through the RotationLog MUST never be admitted. The handler returns this typed code BEFORE binding-sig verification — if we can't even know who's asking, we can't know whether their key matches the binding-sig, and silent admission would defeat the entire audience-binding (§R3) defense. Couples §4.36 recheck + §4.25 sync-hydrate denial: both surfaces fire this same code on the unresolvable arm so audit pipelines route uniformly. The wave-3e production wire-up replaces the in-grant sentinel with a real RotationLog lookup.", message, context);
+    this.name = "EUnresolvedPeerDeny";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3106,4 +3154,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH": ETwoCidMappingIntegrityMismatch,
   "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID": EAuthorizationGrantBindingSigInvalid,
   "E_CHAIN_NARROWING_VIOLATION": EChainNarrowingViolation,
+  "E_UCAN_BLOBS_REQUEST_REJECTED": EUcanBlobsRequestRejected,
+  "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE": EUcanBlobsRequestNotInScope,
+  "E_UNRESOLVED_PEER_DENY": EUnresolvedPeerDeny,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

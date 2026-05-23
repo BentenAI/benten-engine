@@ -112,8 +112,26 @@ tokio = { version = "1", default-features = false, features = [
     "time",
     "net",
 ] }
+# G-CORE-3e wave (Phase-4-Meta-Core): the UCAN-gated iroh-blobs custom-
+# ALPN handler validates [`benten_caps::authorization_grant::AuthorizationGrant`]
+# per request before dispatching to `iroh_blobs::provider::handle_connection`.
+# benten-caps is native-only (matches benten-sync's native-only posture per
+# CLAUDE.md baked-in #17 — the `AuthorizationGrant` module itself carries
+# `#![cfg(not(target_arch = "wasm32"))]`). arch-r1-11 + D-PHASE-3-14 forbid
+# benten-engine + benten-eval as deps; benten-caps is on the allowed side
+# of the layered architecture (caps + sync are both in the engine's
+# underlying substrate; the engine consumes both at the policy-hook +
+# sync-runtime boundaries).
+benten-caps = { path = "../benten-caps" }
 # Bytes-handling utility used by iroh's Connection API.
 bytes = { version = "1", default-features = false }
+# G-CORE-3e wave (Phase-4-Meta-Core): the HKDF-SHA256 structural-KDF
+# substrate used by the production K(N) derivation in the per-recipient
+# key-derivation arm (Spike-E Interpretation-B path-tagged derivation per
+# `.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`
+# §R-key-derivation). benten-crypto-suite is workspace-wide (no native
+# gating); listing in the top-level table is fine.
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 
 [dev-dependencies]
 # Proptest carries the 10 000-case property suites that G16-B wave-6b
