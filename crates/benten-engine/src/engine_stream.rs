@@ -111,6 +111,31 @@ use crate::error::EngineError;
 /// (constructed via [`StreamHandle::from_producer_bridge`]) participate.
 static ACTIVE_STREAMS: AtomicUsize = AtomicUsize::new(0);
 
+/// G-CORE-10 Option-C cancellation-stopgap outcome variant for
+/// [`StreamHandle::next_chunk_with_timeout`].
+///
+/// Tri-state outcome that lets callers interleave external cancel-
+/// signal checks between bounded receive waits, closing the #652 race
+/// where the napi `StreamHandleJs::close()` cannot cancel a `next()`
+/// parked indefinitely inside `recv_blocking()`. The classic
+/// [`StreamHandle::next_chunk`] returns `Result<Option<Chunk>,
+/// EngineError>` which collapses "got a chunk", "clean EOS", and
+/// "still waiting" into the same `Ok(None)`-or-block surface; this
+/// variant separates `Timeout` from `EndOfStream` so the napi layer
+/// can detect a cancel request between polls.
+#[derive(Debug)]
+pub enum NextChunkPoll {
+    /// A chunk arrived within the timeout window.
+    Chunk(Chunk),
+    /// The producer closed the channel cleanly (clean EOS — caller
+    /// should stop polling).
+    EndOfStream,
+    /// Neither a chunk nor an EOS arrived within the timeout; caller
+    /// may re-poll (typically after checking an external cancel
+    /// signal).
+    Timeout,
+}
+
 /// Cursor mode for STREAM consumers.
 ///
 /// Locked-shape per plan §3 G6-B / G6-A D5 cursor surface symmetry.
@@ -417,6 +442,94 @@ impl StreamHandle {
             }
         }
         Ok(None)
+    }
+
+    /// G-CORE-10 Option-C cancellation-stopgap (pre-v1 hardening per
+    /// CLAUDE.md baked-in #15): poll-with-timeout variant of
+    /// [`Self::next_chunk`]. Returns:
+    ///
+    /// - `Ok(NextChunkPoll::Chunk(c))` — a chunk was delivered before
+    ///   the timeout expired (semantically equivalent to
+    ///   `next_chunk()` returning `Ok(Some(c))`).
+    /// - `Ok(NextChunkPoll::EndOfStream)` — the producer closed the
+    ///   channel cleanly (equivalent to `next_chunk()` returning
+    ///   `Ok(None)`).
+    /// - `Ok(NextChunkPoll::Timeout)` — neither a chunk nor a clean
+    ///   EOS arrived within `timeout`; the caller may re-poll. THIS IS
+    ///   THE LOAD-BEARING DIFFERENCE: it lets a caller interleave
+    ///   close-signal checks between bounded waits, closing the
+    ///   #652 race where `close()` from JS cannot cancel a `next()`
+    ///   parked indefinitely inside `recv_blocking()`.
+    /// - `Err(EngineError)` — typed channel error (back-pressure drop,
+    ///   peer close, producer panic).
+    ///
+    /// Pre-buffered chunks (the test-factory path) + the
+    /// `pending_error` path are returned immediately without consulting
+    /// the timeout — only the producer-bridge `recv` is bounded.
+    ///
+    /// # Errors
+    /// Same surface as [`Self::next_chunk`]: typed channel errors flow
+    /// through; mutex-poisoning of the bridge source surfaces as
+    /// `EngineError::Other { code: GraphInternal, .. }` per the same
+    /// poison discipline.
+    pub fn next_chunk_with_timeout(
+        &mut self,
+        timeout: Duration,
+    ) -> Result<NextChunkPoll, EngineError> {
+        if let Some(err) = self.pending_error.take() {
+            return Err(err);
+        }
+        if let Some(chunk) = self.chunks.pop_front() {
+            self.next_seq = self.next_seq.saturating_add(1);
+            return Ok(NextChunkPoll::Chunk(chunk));
+        }
+        if self.closed {
+            return Ok(NextChunkPoll::EndOfStream);
+        }
+        if let Some(source_mtx) = self.bridge_source.as_ref() {
+            // Same intentional bare-`.lock()` discipline as
+            // `next_chunk` — poisoning is a load-bearing signal that
+            // the producer is unrecoverable (see the rationale comment
+            // on `next_chunk`).
+            let mut guard = source_mtx.lock().map_err(|e| EngineError::Other {
+                code: ErrorCode::GraphInternal,
+                message: format!("StreamHandle source mutex poisoned: {e}"),
+            })?;
+            match guard.recv_blocking_timeout(timeout) {
+                Ok(Some(chunk)) => {
+                    if chunk.final_chunk {
+                        self.closed = true;
+                        return Ok(NextChunkPoll::EndOfStream);
+                    }
+                    self.next_seq = self.next_seq.saturating_add(1);
+                    Ok(NextChunkPoll::Chunk(chunk))
+                }
+                Ok(None) => {
+                    // `recv_blocking_timeout` returns `Ok(None)` for
+                    // BOTH "timed out without a chunk" AND "producer
+                    // closed cleanly". Disambiguate via the
+                    // `ChunkSource::is_closed` accessor added for this
+                    // stopgap: a closed channel with no chunks is
+                    // EOS; an open channel with no chunks (yet) is a
+                    // Timeout the caller can re-poll.
+                    if guard.is_closed() {
+                        self.closed = true;
+                        Ok(NextChunkPoll::EndOfStream)
+                    } else {
+                        Ok(NextChunkPoll::Timeout)
+                    }
+                }
+                Err(err) => {
+                    self.closed = true;
+                    Err(EngineError::Other {
+                        code: err.code(),
+                        message: err.to_string(),
+                    })
+                }
+            }
+        } else {
+            Ok(NextChunkPoll::EndOfStream)
+        }
     }
 
     /// Explicit close — release the handle's resources without driving
@@ -1159,5 +1272,114 @@ mod tests {
         h.close();
         assert!(h.next_chunk().unwrap().is_none());
         assert!(h.is_drained());
+    }
+
+    // -----------------------------------------------------------------
+    // G-CORE-10 Option-C cancellation-stopgap (#652; CLAUDE.md #15)
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn next_chunk_with_timeout_drains_buffered_chunks() {
+        let mut h = StreamHandle::from_test_chunks(vec![
+            Chunk {
+                seq: 0,
+                final_chunk: false,
+                bytes: vec![10, 20],
+            },
+            Chunk {
+                seq: 1,
+                final_chunk: true,
+                bytes: vec![30],
+            },
+        ]);
+        match h
+            .next_chunk_with_timeout(Duration::from_millis(10))
+            .unwrap()
+        {
+            NextChunkPoll::Chunk(c) => assert_eq!(c.bytes, vec![10, 20]),
+            other => panic!("expected Chunk, got {other:?}"),
+        }
+        assert_eq!(h.seq_so_far(), 1);
+        match h
+            .next_chunk_with_timeout(Duration::from_millis(10))
+            .unwrap()
+        {
+            NextChunkPoll::Chunk(c) => assert_eq!(c.bytes, vec![30]),
+            other => panic!("expected Chunk, got {other:?}"),
+        }
+        match h
+            .next_chunk_with_timeout(Duration::from_millis(10))
+            .unwrap()
+        {
+            NextChunkPoll::EndOfStream => {}
+            other => panic!("expected EndOfStream, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn next_chunk_with_timeout_empty_closed_returns_eos() {
+        let mut h = StreamHandle::empty_closed();
+        match h
+            .next_chunk_with_timeout(Duration::from_millis(10))
+            .unwrap()
+        {
+            NextChunkPoll::EndOfStream => {}
+            other => panic!("expected EndOfStream, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn next_chunk_with_timeout_returns_timeout_on_slow_producer() {
+        use benten_eval::chunk_sink::make_chunk_sink;
+        use std::num::NonZeroUsize;
+        use std::sync::mpsc;
+        let (sink, source) = make_chunk_sink(NonZeroUsize::new(4).unwrap());
+        let (tx, rx) = mpsc::channel::<()>();
+        let producer = std::thread::spawn(move || {
+            let _sink = sink;
+            let _ = rx.recv();
+        });
+        let mut h = StreamHandle::from_producer_bridge(source, producer, false);
+        let start = std::time::Instant::now();
+        let outcome = h
+            .next_chunk_with_timeout(Duration::from_millis(50))
+            .unwrap();
+        let elapsed = start.elapsed();
+        match outcome {
+            NextChunkPoll::Timeout => {}
+            other => panic!("expected Timeout, got {other:?}"),
+        }
+        assert!(
+            elapsed < Duration::from_millis(250),
+            "next_chunk_with_timeout exceeded budget: {elapsed:?}"
+        );
+        drop(tx);
+        drop(h);
+    }
+
+    #[test]
+    fn next_chunk_with_timeout_observes_eos_after_producer_close() {
+        use benten_eval::chunk_sink::make_chunk_sink;
+        use std::num::NonZeroUsize;
+        let (sink, source) = make_chunk_sink(NonZeroUsize::new(4).unwrap());
+        let producer = std::thread::spawn(move || {
+            drop(sink);
+        });
+        let mut h = StreamHandle::from_producer_bridge(source, producer, false);
+        let mut saw_eos = false;
+        for _ in 0..10 {
+            match h
+                .next_chunk_with_timeout(Duration::from_millis(50))
+                .unwrap()
+            {
+                NextChunkPoll::EndOfStream => {
+                    saw_eos = true;
+                    break;
+                }
+                NextChunkPoll::Timeout => {}
+                NextChunkPoll::Chunk(c) => panic!("unexpected chunk: {c:?}"),
+            }
+        }
+        assert!(saw_eos, "never observed EndOfStream within 10 poll iters");
     }
 }

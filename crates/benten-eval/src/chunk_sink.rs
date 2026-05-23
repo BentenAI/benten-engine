@@ -343,6 +343,21 @@ impl ChunkSource {
         }
     }
 
+    /// G-CORE-10 Option-C cancellation-stopgap helper: report whether
+    /// the producer side has closed the channel. Distinguishes the
+    /// "timed out without progress" vs "producer cleanly closed"
+    /// outcomes of [`Self::recv_blocking_timeout`] (which collapses
+    /// both into `Ok(None)`).
+    ///
+    /// Cheap: takes the shared mutex briefly to read the `closed`
+    /// flag. Returns `true` iff the producer side has signalled
+    /// close (either via explicit `BoundedSink::close()` or via
+    /// `BoundedSink::drop`).
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.shared.inner.lock().is_ok_and(|g| g.closed)
+    }
+
     /// Blocking receive with a timeout.
     ///
     /// # Errors
