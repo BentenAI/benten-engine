@@ -348,27 +348,54 @@ fn reload_subscriber_unsubscribed(operation: &str) -> napi::Error {
 /// carrier; post-G19-B every napi-emitted error uses the uniform
 /// JSON shape, so `mapNativeError` doesn't need branch-by-shape logic.
 fn compile_err_to_napi(err: CompileError) -> napi::Error {
+    // G-CORE-DSL chunk-3 #1000 closure: Diagnostic now carries a `Span`
+    // with full half-open byte range + endpoint (line, column) coords
+    // instead of a single 1-indexed (line, column) point. Surface ALL
+    // span coordinates so AI-loop / LSP-style consumers (Phase 6+) can
+    // slice the offending byte range, not just place a cursor. The
+    // existing `line` / `column` field-shape is preserved for
+    // backward-readable consumption (TS-side `mapNativeError` keys off
+    // both); the new `startOffset` / `endOffset` / `endLine` /
+    // `endColumn` are additive.
+    // G-CORE-DSL chunk-3 #839 closure: `Io` and `Backend` variants
+    // surface their stable error_code via `CompileError::error_code()`
+    // (the new boundary helper) so the JS consumer routes
+    // `E_DSL_BACKEND_REJECTED` distinct from `E_DSL_IO_ERROR` instead
+    // of collapsing both into the generic `E_DSL_COMPILE_ERROR`
+    // placeholder.
     match err.diagnostic() {
         Some(d) => {
+            let fields = if let Some(s) = d.span {
+                serde_json::json!({
+                    "line": s.start_line,
+                    "column": s.start_column,
+                    "endLine": s.end_line,
+                    "endColumn": s.end_column,
+                    "startOffset": s.start_offset,
+                    "endOffset": s.end_offset,
+                })
+            } else {
+                serde_json::json!({
+                    "line": null,
+                    "column": null,
+                })
+            };
             let body = serde_json::json!({
                 "code": d.error_code,
                 "message": d.message,
-                "fields": {
-                    "line": d.line,
-                    "column": d.column,
-                },
+                "fields": fields,
             });
             let message = serde_json::to_string(&body)
                 .unwrap_or_else(|_| format!("{}: {}", d.error_code, d.message));
             napi::Error::new(Status::GenericFailure, message)
         }
         None => {
+            let code = err.error_code();
             let body = serde_json::json!({
-                "code": "E_DSL_COMPILE_ERROR",
+                "code": code,
                 "message": format!("{err}"),
             });
-            let message = serde_json::to_string(&body)
-                .unwrap_or_else(|_| format!("E_DSL_COMPILE_ERROR: {err}"));
+            let message = serde_json::to_string(&body).unwrap_or_else(|_| format!("{code}: {err}"));
             napi::Error::new(Status::GenericFailure, message)
         }
     }

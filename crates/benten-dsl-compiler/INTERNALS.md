@@ -2,7 +2,7 @@
 
 Plain-English deep-dive into the `benten-dsl-compiler` crate. Audience: a developer or AI agent who needs to understand what this crate is, why it exists, and what to expect when extending it. Read-only audit; no claims about Phase-4 plans beyond what is already pinned in the code or accompanying retrospective docs.
 
-**Last refreshed against `f2c744f0` (post-G-CORE-DSL chunk-2 fix-up + main merge, 2026-05-23).** The crate had been substantively unchanged from the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep) through `8141b94` (Phase-4-Foundation tag-eve, 2026-05-14); G-CORE-DSL chunk-2 (#663 #760 #929 #931 #934) is the first substantive edit since, growing `src/lib.rs` past the prior 894-LOC baseline. The typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
+**Last refreshed against `g-core-dsl/chunk-3` branch post-G-CORE-DSL chunk-3 (#1000 + #839 + #790, 2026-05-23).** The crate had been substantively unchanged from the initial deep-dive at `a9da0be` (2026-05-08 G20-B docs sweep) through `8141b94` (Phase-4-Foundation tag-eve, 2026-05-14); G-CORE-DSL chunk-2 (#663 #760 #929 #931 #934, merged at `86b82de2`) was the first substantive edit since, growing `src/lib.rs` past the prior 894-LOC baseline. G-CORE-DSL chunk-3 (#1000 Diagnostic Span shape + #839 `CompileError::Backend` 5th variant + #790 `CompileError::Emit` → `Build` rename) is the FIRST pre-v1-API-freeze-sensitive public-API-shape change — see §4 for the new public surface + the §3.5g cross-language ErrorCode mint (`E_DSL_BACKEND_REJECTED`). The typed-CALL DSL surface added at Phase-3 G21-T2 (PR #148, `7a6c36a`) landed in the TS DSL + napi binding only, not in the Rust dsl-compiler grammar. See §8 for the deliberate placement rationale.
 
 ---
 
@@ -45,7 +45,7 @@ Net shape: the compiler is a leaf consumer of `benten-core` and a sibling-not-pa
 
 There is one file.
 
-**`src/lib.rs` (1431 lines, post-G-CORE-DSL chunk-2 + main merge)** — the entire crate. Logical sections, in order of appearance:
+**`src/lib.rs` (~1722 lines post-G-CORE-DSL chunk-3; ~291 LOC of growth = Diagnostic Span + Span struct + 5th `CompileError::Backend` variant + `CompileError::error_code()` boundary + 6 new `validate_shapes`-shape rules' inline span-tracking)** — the entire crate. Logical sections, in order of appearance:
 
 - **Crate-level docs (lines 1-83):** scope note, dep-direction reminder, the EBNF-shaped grammar block, and the deliberate-non-extensibility note. The grammar block is the canonical reference for what tokens the parser accepts; everything below this comment should be implementing that grammar and nothing more.
 - **Public surface (lines 98-218):** `CompiledSubgraph`, `CompiledPrimitive`, `compile_str`, `compile_file`, `CompileError`, `Diagnostic`. The two functions are thin: trim-check, hand off to `Parser`, hand off to `emit`. All the complexity lives in `Parser` and `emit`.
@@ -75,11 +75,15 @@ Compile a file. Plain English: same as `compile_str` but reads the bytes off dis
 
 **3. `CompileError`**
 
-A typed error enum with four variants — `Parse`, `Semantic`, `Emit`, `Io`. Each non-Io variant carries a `Diagnostic`. The discriminant is stable; devserver and downstream tooling switch on it without parsing prose. The `diagnostic()` helper unwraps the inner `Diagnostic` when present.
+A typed error enum with five variants — `Parse`, `Semantic`, `Build`, `Io`, `Backend`. The `Parse` / `Semantic` / `Build` variants carry a `Diagnostic`; `Io` and `Backend` carry free-form `String`s. The discriminant is stable; devserver and downstream tooling switch on it without parsing prose. The `diagnostic()` helper unwraps the inner `Diagnostic` when present; `error_code()` returns the stable wire code for ALL variants (the diagnostic's code for the diagnostic-carrying variants; `E_DSL_IO_ERROR` for `Io`; `E_DSL_BACKEND_REJECTED` for `Backend`). **G-CORE-DSL chunk-3 changes (#790 + #839):** the prior `Emit` variant was renamed to `Build` (disambiguates from `PrimitiveKind::Emit` the runtime operation primitive — the variant now describes the compilation-build phase, which IS what it does); the new `Backend(String)` 5th variant is the typed home for downstream-consumer-injected post-compile rejections (canonical example: engine-registration failure in the devserver `replace_handler_from_dsl_with_outcome` path) — pre-#839 downstream consumers abused `CompileError::Io` to wrap these, widening Io's documented semantic.
 
 **4. `Diagnostic`**
 
-The shape devserver renders. Five fields: a stable `error_code` string (one of four `E_DSL_*` constants), a human-readable `message`, and optional 1-indexed `line` + `column`. Implements `Display` for log output. The error_code is the load-bearing field; everything else is for humans.
+The shape devserver renders. Three fields: a stable `error_code` string (one of the `E_DSL_*` constants), a human-readable `message`, and an `Option<Span>`. Two convenience accessor methods — `line()` + `column()` — unwrap the Span's start coordinates for backward-readable consumers. Implements `Display` for log output (single-line for point-spans, `start-end` range for multi-line spans). The error_code is the load-bearing field; everything else is for humans (or AI loops). **G-CORE-DSL chunk-3 change (#1000):** the prior 1-indexed `(Option<u32>, Option<u32>)` point-span is replaced by a full `Option<Span>` carrying `(start_line, start_column, end_line, end_column, start_offset, end_offset)`. The widening unlocks two consumer surfaces: (a) LSP-style editor squiggle highlighting (the renderer can mark the offending range, not just place a cursor); (b) AI-loop repair-prompt feedback (the loop can slice `source[start_offset..end_offset]` to feed the offender directly back to the model without re-walking the parser). See `Span` for the half-open byte-range contract.
+
+**5. `Span`** (new at G-CORE-DSL chunk-3 #1000)
+
+The source-position shape carried by `Diagnostic.span`. Six fields — `start_line` / `start_column` / `end_line` / `end_column` / `start_offset` / `end_offset` — describe the same offending range across three axes (1-indexed line + 1-indexed column + byte offset into the source). Half-open: `source[start_offset..end_offset]` is the offending slice (NOT inclusive of `end_offset`). `Span::point(line, col, off)` constructs the degenerate-equal point-span (start == end on all axes) used at "expected X at cursor" diagnostic sites.
 
 **Supporting publics (also part of the surface but not in the "4 public items" count):**
 
@@ -114,7 +118,9 @@ These are the load-bearing arch-1 pins. The scan parses only `[dependencies]`, `
 
 - Unbalanced brace → `CompileError::Parse` with code `E_DSL_PARSE_ERROR`.
 - Unknown primitive → `CompileError::Semantic` with code `E_DSL_UNKNOWN_PRIMITIVE`.
-- Missing respond → `CompileError::Emit` with code `E_DSL_MISSING_RESPOND`.
+- Missing respond → `CompileError::Build` with code `E_DSL_MISSING_RESPOND` (post-#790 rename from `Emit`).
+- SANDBOX shape violation → `CompileError::Build` with code `E_DSL_INVALID_SHAPE`.
+- Downstream-consumer post-compile rejection → `CompileError::Backend(_)` with code `E_DSL_BACKEND_REJECTED` (post-#839; NOT emitted by the compiler itself, wrapped by consumers).
 - Empty source → `Parse` with no line/column.
 - Syntax error on a specific line → diagnostic carries the correct 1-indexed line + column.
 

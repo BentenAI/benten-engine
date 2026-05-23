@@ -547,7 +547,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Message:** "DSL value does not match expected shape: {reason}"
 - **Context:** `{ reason: string, received: unknown }`
 - **Fix:** Check the DSL API documentation for the expected shape.
-- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser/emit pass) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser + `validate_shapes` build-phase pass; the variant carrying the diagnostic is `CompileError::Build(_)` post-G-CORE-DSL chunk-3 #790 rename from `CompileError::Emit`) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
 - **Phase:** 1 (TS DSL builder methods) / 3 (Rust dsl-compiler + engine register-time validation; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_ERROR`.
 
 ### E_DSL_UNREGISTERED_HANDLER
@@ -1737,6 +1737,14 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** Per G-CORE-8 §4.22 + CLAUDE.md baked-in #17/#18: the thin-client bridge resolves the acting principal from the authenticated DID-keyed session token (NOT from anything the client supplies). A client cannot self-elevate by asserting `principal = X` in-band — the API has no client-principal parameter. Fix at the caller: re-establish a session via the DID-keyed handshake protocol (challenge → sign → establish_session); the resulting SessionToken is bound to the session's server-side principal-DID. If the handshake fails verify the did:key resolution, signature validity, and origin pinning per `crates/benten-engine/src/thin_client.rs` `DidKeyedSession::establish_session` contract.
 - **Thrown at:** `crates/benten-engine/src/thin_client_bridge.rs::ThinClientBridge::resolve_principal_for_request` (G-CORE-8, Phase 4-Meta-Core; §4.22 thin-client bridge principal-resolution-from-session-not-client). The bridge takes (session_token, presented_origin) and returns either the bound principal-DID or this typed code — no client-supplied principal field exists on the API surface (structural defense; would-FAIL to compile if a regression added one).
 - **Phase:** 4-Meta-Core G-CORE-8 (§4.22 thin-client bridge principal-resolution-from-session-not-client)
+
+### E_DSL_BACKEND_REJECTED
+
+- **Message:** "DSL backend rejection: {downstream_error}"
+- **Context:** Free-form string carrying the downstream consumer's error representation; the canonical wrap site (`tools/benten-dev::DevServer::replace_handler_from_dsl_with_outcome`) prefixes the body with a consumer-site tag (`devserver_engine_register: <error>`) so log greppers can route by source.
+- **Fix:** G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful DSL compile in the devserver flow). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. Pre-#839 the devserver abused `CompileError::Io` to wrap engine-registration failures (widening the documented `Io` semantic to "everything else"); post-#839 the new `CompileError::Backend(_)` variant + this typed code are the routing-correct home.
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (the public variant; downstream consumers wrap their typed rejections here). Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`. The DSL compiler itself never emits this variant — the compile pipeline emits `Parse` / `Semantic` / `Build` / `Io` only.
+- **Phase:** 4-Meta-Core G-CORE-DSL chunk-3 (#839 closure — CompileError::Io variant-abuse fix)
 
 ## Extending the catalog
 

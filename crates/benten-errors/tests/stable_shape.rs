@@ -577,6 +577,15 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::PluginInstallRecordAlreadyApplied,
     ErrorCode::WriteBoundaryChainNotUserRooted,
     ErrorCode::ThinClientBridgePrincipalUnresolved,
+    // Phase 4-Meta-Core G-CORE-DSL chunk-3 (#839): downstream-consumer
+    // rejection at the DSL-compile boundary. Closes the
+    // `CompileError::Io`-variant-abuse at
+    // `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`
+    // by giving downstream consumers a typed home distinct from real
+    // file-IO failures. The new `CompileError::Backend` variant in
+    // `crates/benten-dsl-compiler/src/lib.rs` maps here via its
+    // `error_code` → `E_DSL_BACKEND_REJECTED`.
+    ErrorCode::DslBackendRejected,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -945,8 +954,15 @@ fn variant_count_is_pinned() {
     // principal resolution failure — the bridge never trusts client-
     // supplied principals; resolves from the authenticated session).
     // 184 + 4 = 188.
+    //
+    // G-CORE-DSL chunk-3 (#839) rebased onto post-#1340 main (Strategy-C
+    // wave-2 batch): +1 `DslBackendRejected` — downstream-consumer
+    // rejection at the DSL-compile boundary; closes the
+    // `CompileError::Io`-variant abuse at the devserver site by giving
+    // downstream consumers a typed home distinct from real file-IO
+    // failures. 188 + 1 = 189.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 188,
+        CATALOG_VARIANT_COUNT, 189,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1215,7 +1231,11 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
             | ErrorCode::PluginInstallRecordAlreadyApplied
             | ErrorCode::WriteBoundaryChainNotUserRooted
-            | ErrorCode::ThinClientBridgePrincipalUnresolved => true,
+            | ErrorCode::ThinClientBridgePrincipalUnresolved
+            // G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection
+            // at the DSL-compile boundary; closes the
+            // `CompileError::Io`-variant abuse at the devserver site.
+            | ErrorCode::DslBackendRejected => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't
