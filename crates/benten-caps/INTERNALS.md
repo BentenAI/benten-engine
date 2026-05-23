@@ -191,6 +191,19 @@ The crate's load-bearing posture is: **capability is policy, the trait is the co
 
 R5 + R6-FP shipped the full plugin-trust composition: G24-D single-step delegation gate, G24-D-FP-2 chain validator, G27-B `GrantBackedPolicy::ctx.scope` override, G27-C `benten-id::grant_reader` CID-keyed companion, G27-D manifest-aware scope derivation, R1 cap-r1-2 + cap-r1-10 principal-aware read-side check (`has_unrevoked_grant_for_scope_and_actor`), R1-FP G22-FP-2 audience binding via `principal_did_from_context`, R6-FP-A `PluginInstallRecordPluginDidMismatch` typed forensic-discrimination ErrorCode, R6-FP-3 `E_PLUGIN_DID_HANDLE_DUPLICATE` for `PluginDidStore::insert` defensive return. CATALOG_VARIANT_COUNT moved 118→132+ across the R5 / R6-FP cluster (see ERROR-CATALOG.md for the canonical count at HEAD).
 
+### Phase 4-Meta-Core G-CORE-3b (LANDED)
+
+G-CORE-3b mints the structured sharing-and-confidentiality public surface on the cap side per RATIFIED-S&C 2026-05-21:
+
+- **`restricted_spec.rs`** — `RestrictedSpec` 6-dimensional sub-graph restriction language (Path (a) of §R1): roots + edge-allowlist + max_depth + label-allowlist + label-denylist (INVERSE direction) + property-equalities. Decidable structural `contains()` AND-composed across all 6 dims; reflexive + transitive. `#[non_exhaustive]` for future NAMED dimensions (extension slots are NAMED not opaque per Spike H+1.1).
+- **`scope.rs`** — `Scope` enum with EXACTLY TWO arms: `Hashes(Vec<Cid>)` + `RestrictedSelector(RestrictedSpec)`. **NO `OpaqueSelector` arm** — Path (b) refinement-witness over opaque specs structurally unsound per Spike H+1.1 §b.SEC #4. NOT `#[non_exhaustive]` (the §1.A.FROZEN item 15(c) "no-opaque-arm" freeze is structurally stronger than the META #907 default; downstream exhaustive matches are the compile-time pin against silent third-arm addition).
+- **`authorization_grant.rs`** (native-only) — `AuthorizationGrant{ucan, key_material, binding_sig, audience_binding, issuer_verifying_key}` ONE signed artifact per §R3. Binding-sig covers `(canonical_bytes(ucan) || canonical_bytes(key_material) || audience_bytes)`; `verify_binding()` checks audience FIRST then signature, fail-closed defenses for A-1 (stolen-UCAN) + A-2 (stolen-keys) + A-3 (wrong-audience-swap). Signing path routes through `benten_crypto_suite::primitives::ed25519_dalek` per crypto-agility-contract:6 (no direct ed25519-dalek dep — required by the workspace's ONLY-call-site rule).
+- **`chain_validator.rs`** — `validate_chain_narrowing(&[Scope])` enforces monotonic-narrowing per §R1. Returns typed `ChainNotNarrowing { step_index }` for the first widening edge. DISTINCT from the existing `chain_authority` envelope-ceiling seam (that one rides UCAN cap-string attenuation + the device/manifest envelope ceiling; this one rides the structured-`Scope` 6-dim language).
+
+Two new ErrorCodes minted: `E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID` + `E_CHAIN_NARROWING_VIOLATION`. CATALOG_VARIANT_COUNT 171 → 173 (atomic Rust + TS + ERROR-CATALOG.md per §3.5g cross-language rule-mirror).
+
+G-CORE-3b GATES G-CORE-3e (sync + iroh-blobs wires the grant over ALPN), G-CORE-3f (Drop bundle composes the grant + sendme ticket for offline), G-CORE-8 (security-surface lock + sealed-`CapabilityPolicy` trait per CLAUDE.md baked-in #7 refinement).
+
 ### Phase 4-Meta carries
 
 - **`ManifestEnvelopeRechecker` production adapter (Compromise #26 full close).** Phase-4-Meta §4.36 — closes the `apply_atrium_merge` envelope-recheck adapter end-to-end (Seam 3 already wired; adapter implementation is the remaining axis).

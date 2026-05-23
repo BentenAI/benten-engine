@@ -329,6 +329,7 @@ name = "benten-caps"
 version = "0.1.0"
 dependencies = [
  "benten-core",
+ "benten-crypto-suite",
  "benten-engine",
  "benten-errors",
  "benten-graph",
@@ -337,6 +338,9 @@ dependencies = [
  "blake3",
  "criterion",
  "proptest",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_bytes",
  "serde_ipld_dagcbor",
  "subtle",
  "tempfile",

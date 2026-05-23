@@ -506,6 +506,18 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::AeadRebindingAttackDetected,
     ErrorCode::TwoCidMappingNotFound,
     ErrorCode::TwoCidMappingIntegrityMismatch,
+    // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R3
+    // ONE-signed-artifact contract): binding-sig tamper-detection arm.
+    // Construction sites:
+    //   `benten-caps::authorization_grant::AuthorizationGrant::verify_binding`
+    //   (the A-1/A-2/A-3 binding-mismatch + audience-mismatch defenses).
+    ErrorCode::AuthorizationGrantBindingSigInvalid,
+    // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R1
+    // chain-narrowing contract): structured-`Scope` chain widening
+    // typed-reject. Construction sites:
+    //   `benten-caps::chain_validator::validate_chain_narrowing`
+    //   (the `ChainNotNarrowing { step_index }` typed-reject path).
+    ErrorCode::ChainNarrowingViolation,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -817,22 +829,20 @@ fn variant_count_is_pinned() {
     // 170 + 1 = 171.
     //
     // G-CORE-3d (Phase 4-Meta-Core, #1301; per-Node AEAD wrap layer +
-    // two-CID mapping table): +3 codes covering the three structural
-    // failure classes of the storage-layer AEAD path:
-    //   * `AeadRebindingAttackDetected` — AAD-binds-plaintext-CID +
-    //     AAD-binds-chunk-index defense per §1.A.FROZEN item 15(g) +
-    //     SECURITY-POSTURE.md "rebinding-attack-prevention" section
-    //     (Spike G/H + R3 ratification);
-    //   * `TwoCidMappingNotFound` — partition-isolation arm at the
-    //     head of `RedbBackend::read_via_two_cid_scoped` (cross-DID
-    //     callers surface NotFound BEFORE any AEAD attempt per
-    //     multitenant-r1-5 confidentiality property);
-    //   * `TwoCidMappingIntegrityMismatch` — storage-side tamper +
-    //     structural envelope-vs-mapping CID-binding check.
-    // 171 + 3 = 174. **Coordinate with #1318 (G-CORE-6a +1 to 172) +
-    // sibling G-CORE-3b/3w; sequential-merge resolution may renumber.**
+    // two-CID mapping table) MERGED at 5ccdd0da: +3 codes covering the
+    // three structural failure classes of the storage-layer AEAD path
+    // (`AeadRebindingAttackDetected` + `TwoCidMappingNotFound` +
+    // `TwoCidMappingIntegrityMismatch`). 171 + 3 = 174.
+    //
+    // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R1 + §R3)
+    // rebased onto post-#1323 main: +2 — `AuthorizationGrantBindingSigInvalid`
+    // (the ONE-signed-artifact binding-sig tamper-detection typed-reject
+    // for the A-1 stolen-UCAN + A-2 stolen-keys + A-3 wrong-audience
+    // attacks) + `ChainNarrowingViolation` (structured-`Scope` chain-
+    // validator widening typed-reject across `Hashes` subset-violations
+    // + `RestrictedSelector` 6-dim widenings). 174 + 2 = 176.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 174,
+        CATALOG_VARIANT_COUNT, 176,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1066,7 +1076,15 @@ fn catalog_variant_count_matches_enum() {
             // layer + two-CID mapping table typed errors.
             | ErrorCode::AeadRebindingAttackDetected
             | ErrorCode::TwoCidMappingNotFound
-            | ErrorCode::TwoCidMappingIntegrityMismatch => true,
+            | ErrorCode::TwoCidMappingIntegrityMismatch
+            // G-CORE-3b (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21
+            // §R3 ONE-signed-artifact + §R1 chain-narrowing): fail-
+            // closed typed-rejects at the cap-policy/grant-validation
+            // boundary — neither admits primitive-edge fallback per
+            // CLAUDE.md baked-in #18 trust-model + HARD RULE 12 (the
+            // typed reject IS the defense).
+            | ErrorCode::AuthorizationGrantBindingSigInvalid
+            | ErrorCode::ChainNarrowingViolation => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

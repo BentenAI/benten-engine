@@ -77,6 +77,42 @@ pub mod manifest_scope;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod manifest_envelope_chain_validation;
 
+// G-CORE-3b — structured `RestrictedSpec` sub-graph restriction
+// language (Path (a) of RATIFIED-S&C 2026-05-21 §R1; Path (b)
+// refinement-witness over opaque specs structurally unsound per Spike
+// H+1.1). Six dimensions: roots + edge-allowlist + max_depth +
+// label-allowlist + label-denylist + property-equalities; decidable
+// `contains()` AND-composed across all six. v1-frozen public surface
+// per §1.A.FROZEN item 15(b).
+pub mod restricted_spec;
+
+// G-CORE-3b — structured cap-grant `Scope` enum with EXACTLY two arms
+// (`Hashes` + `RestrictedSelector`). NO `OpaqueSelector` arm by the
+// `no-opaque-arm` decision (RATIFIED §R1 + Spike H+1.1 §b.SEC #4).
+// `#[non_exhaustive]` so future named arms are a minor-version bump;
+// any proposal to re-introduce opaque-refinement-witness semantics
+// must be rejected per HARD RULE 12.
+pub mod scope;
+
+// G-CORE-3b — `AuthorizationGrant{ucan, key_material, binding_sig}`
+// ONE signed artifact per RATIFIED §R3. The binding-sig covers
+// `(ucan, key_material, audience)` canonical bytes; validators check
+// binding BEFORE consulting the UCAN scope or key material. Native-
+// only because the production signing path routes through
+// `benten_crypto_suite::primitives::ed25519_dalek` (the workspace's
+// ONE crypto-primitive call site lives in benten-crypto-suite per
+// crypto-agility-contract:6) and CLAUDE.md baked-in #17 keeps
+// identity / cap issuing on the full-peer side.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod authorization_grant;
+
+// G-CORE-3b — structured `Scope` chain validator with monotonic-
+// narrowing semantics. Distinct from the existing `chain_authority`
+// envelope-ceiling seam: this validator enforces non-widening over
+// the structured `RestrictedSpec` 6-dim language. Returns typed
+// `ChainNotNarrowing { step_index }` for the first widening edge.
+pub mod chain_validator;
+
 // COLLAPSE P2 CONSOLIDATE — policy-bearing UCAN chain-authority
 // consultation (rotation-log-as-authority + the single generalized
 // envelope-ceiling seam). Moved from `benten_id::ucan` per
@@ -115,6 +151,20 @@ pub use typed_cap_mapping::{TypedCapGroup, typed_cap_for_ucan_claim};
 #[cfg(not(target_arch = "wasm32"))]
 pub use ucan_grounded::UcanGroundedPolicy;
 pub use ucan_stub::LegacyUcanStubBackend;
+
+// G-CORE-3b — structured sharing-and-confidentiality public surface
+// (the v1-frozen `RestrictedSpec` + `Scope` + chain validator types;
+// `AuthorizationGrant` is native-only and re-exports below).
+pub use chain_validator::{ChainValidationError, ChainValidatorOutcome, validate_chain_narrowing};
+pub use restricted_spec::{PropertyValue, RestrictedSpec};
+pub use scope::Scope;
+
+// G-CORE-3b — `AuthorizationGrant` re-export native-only (matches the
+// existing `UCANBackend` re-export discipline above).
+#[cfg(not(target_arch = "wasm32"))]
+pub use authorization_grant::{
+    AuthorizationGrant, AuthorizationGrantError, KeyMaterial, UcanEnvelope,
+};
 
 // Surf-1 #884 (v1-API-stabilization): the three plugin-trust modules
 // (Layer 2 + Layer 3 of CLAUDE.md #18) now follow the same crate-root
