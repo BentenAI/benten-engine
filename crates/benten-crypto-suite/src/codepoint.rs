@@ -156,23 +156,28 @@ impl HashCodepoint {
 ///
 /// `HYBRID_X25519_MLKEM768` at `0x647a` is the IETF HPKE-PQ WG-stream
 /// `MLKEM768-X25519` hybrid-KEM codepoint (IANA-requested; X-Wing-style
-/// vendored combiner over `ml-kem` + `x25519-dalek` + `sha3`). The live
-/// impl lands at G-CORE-3 #1301; at this wave the codepoint dispatch
-/// typed-rejects with the same [`UnsupportedAlgorithm`] envelope so the
-/// codepoint reservation is structurally honored (additive-codepoint
-/// discipline; old-codepoints-supported-forever invariant).
+/// vendored combiner over `ml-kem` + `x25519-dalek` + `sha3`).
+/// **G-CORE-3a CANARY flips `0x647a` + `0x6400` (classical-X25519
+/// downgrade arm) to LIVE.** `0x647b` (NF-1 ML-KEM-768⊕HQC end-state)
+/// + `0x0000` (no-encryption) remain reserved-typed-reject via
+/// [`UnsupportedAlgorithm`] until G-CORE-3c's full swap-matrix wave —
+/// the additive-codepoint discipline + old-codepoints-supported-forever
+/// invariant hold across the partial-light step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CipherSuiteCodepoint(pub(crate) u16);
 
 impl CipherSuiteCodepoint {
     /// v1-beta DEFAULT for #1301: X25519⊕ML-KEM-768 hybrid KEM at
-    /// codepoint `0x647a` + ChaCha20-Poly1305 bulk. **Reserved-but-
-    /// unimplemented at G-CORE-2** (live impl + conformance test at
-    /// G-CORE-3 #1301 — see plan §3 G-CORE-3 + RATIFIED §1 + §6).
+    /// codepoint `0x647a` + ChaCha20-Poly1305 bulk. **LIVE at G-CORE-3a
+    /// CANARY** (X-Wing-style combiner over `ml-kem` + `x25519-dalek`
+    /// + `sha3`; conformance test at G-CORE-3 #1301 — see plan §3
+    /// G-CORE-3 + RATIFIED §1 + §6).
     pub const HYBRID_X25519_MLKEM768: Self = Self(0x647a);
 
     /// Non-PQ downgrade: X25519-only KEM + ChaCha20-Poly1305 bulk.
-    /// Reserved at G-CORE-2 / live at G-CORE-3c (full swap matrix).
+    /// **LIVE at G-CORE-3a CANARY** — classical-only X25519 downgrade
+    /// arm of the hybrid swap matrix; full swap-matrix conformance
+    /// (incl. `0x647b` + `0x0000`) lands at G-CORE-3c.
     pub const CLASSICAL_X25519: Self = Self(0x6400);
 
     /// No-encryption (plaintext partition) downgrade. Reserved at
@@ -204,14 +209,18 @@ impl CipherSuiteCodepoint {
 
     /// Resolve cipher-suite codepoint into a typed dispatch outcome.
     ///
-    /// **In this wave (G-CORE-2) every cipher-suite codepoint is
-    /// reserved-but-unimplemented and surfaces typed-unsupported.**
-    /// G-CORE-3 will flip 0x647a from typed-unsupported to live.
+    /// **G-CORE-3a flips `0x647a` (X25519⊕ML-KEM-768 hybrid) + `0x6400`
+    /// (classical-only X25519 downgrade) to LIVE.** The full swap matrix
+    /// (incl. `0x0000` no-encryption + `0x647b` NF-1 PQ⊕PQ end-state) is
+    /// G-CORE-3c's deliverable; here `0x0000` + `0x647b` remain
+    /// typed-rejected per the additive-codepoint discipline.
     pub fn resolve(self) -> Result<(), UnsupportedAlgorithm> {
         match self.0 {
-            0x647a => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
+            // G-CORE-3a LIVE arms.
+            0x647a | 0x6400 => Ok(()),
+            // Reserved-but-unimplemented at this wave (G-CORE-3c lights).
             0x647b => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
-            0x6400 | 0x0000 => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
+            0x0000 => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
             other => Err(UnsupportedAlgorithm::CipherSuite { codepoint: other }),
         }
     }

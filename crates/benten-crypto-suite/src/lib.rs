@@ -69,12 +69,14 @@
 //! The KEM/AEAD primitive deps (`x25519-dalek`, `ml-kem`,
 //! `chacha20poly1305`, `hkdf`) are declared HERE so G-CORE-3 plugs into
 //! a real typed surface ([`cipher_suite::CipherSuiteCodepoint`]) without
-//! adding a new workspace dep. G-CORE-3 lights up the
-//! `0x647a` X25519⊕ML-KEM-768 hybrid KEM (the vendored ~30-LOC X-Wing-style
+//! adding a new workspace dep. **G-CORE-3a (CANARY) flips `0x647a`
+//! X25519⊕ML-KEM-768 hybrid KEM (the vendored ~30-LOC X-Wing-style
 //! combiner over `ml-kem` + `x25519-dalek` + `sha3` — stable-but-non-WG
-//! IETF Independent Submission draft, Benten-owned). In this wave the
-//! cipher-suite codepoints typed-reject via the same
-//! [`UnsupportedAlgorithm`] arm.
+//! IETF Independent Submission draft, Benten-owned) + `0x6400`
+//! classical-only X25519 downgrade arm to LIVE.** The remaining
+//! cipher-suite codepoints (`0x647b` NF-1 ML-KEM-768⊕HQC end-state +
+//! `0x0000` no-encryption) stay reserved-typed-reject via
+//! [`UnsupportedAlgorithm`] until G-CORE-3c's full swap-matrix wave.
 //!
 //! # Module map
 //!
@@ -91,8 +93,9 @@
 //!   no-hardcoded-sizes substrate the cross-surface ML-DSA-65 vector
 //!   round-trips through.
 //! - [`cipher_suite`] — typed surface for G-CORE-3 #1301
-//!   (reserved-but-unimplemented at this wave; live impls land in
-//!   G-CORE-3).
+//!   (G-CORE-3a CANARY: `0x647a` hybrid + `0x6400` classical-X25519
+//!   downgrade LIVE; `0x647b` NF-1 PQ⊕PQ + `0x0000` no-encryption
+//!   remain reserved-typed-reject until G-CORE-3c swap-matrix wave).
 //! - [`error`] — typed errors including [`error::UnsupportedAlgorithm`].
 //! - [`boundary`] — the call-site-audit surface (TF-2 grep-pin
 //!   substrate; asserts this crate is the only one that direct-deps the
@@ -108,6 +111,7 @@
 
 #![doc(html_root_url = "https://docs.rs/benten-crypto-suite/0.0.0/")]
 
+pub mod aead;
 pub mod boundary;
 pub mod cipher_suite;
 pub mod codepoint;
@@ -117,11 +121,14 @@ pub mod hash;
 pub mod primitives;
 pub mod sig;
 pub mod sizes;
+pub mod structural_kdf;
 pub mod varsig;
 
 // Convenience re-exports of the most-used typed surface.
-pub use crate::codepoint::{HashCodepoint, SigCodepoint};
+pub use crate::aead::{AeadEnvelope, AeadError, KeyMaterial};
+pub use crate::codepoint::{CipherSuiteCodepoint, HashCodepoint, SigCodepoint};
 pub use crate::error::{CryptoError, UnsupportedAlgorithm, VerifyError};
 pub use crate::hash::HashSeam;
 pub use crate::sig::{HybridSignature, SignatureSuite, SuiteConfig};
+pub use crate::structural_kdf::{StructuralKdfKey, derive_root, derive_step};
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};

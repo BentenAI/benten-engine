@@ -1574,6 +1574,16 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Thrown at:** `crates/benten-graph/src/browser_backend.rs::BrowserBackend::put_node_with_context` (G-CORE-1 fix-pass, Phase 4-Meta-Core).
 - **Phase:** 4-Meta-Core G-CORE-1 (fix-pass closure of `g-core-1-mr-1` MAJOR)
 
+### E_RECIPIENT_LACKS_KEYS_FOR_SUITE
+
+- **Message:** "recipient lacks one of the required key halves for the dispatched cipher-suite"
+- **Context:** `{ cipher_codepoint: u16, missing_half: &'static str }` (e.g. `cipher_codepoint: 0x647a` + `missing_half: "ml-kem-768"`)
+- **Fix:** Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.
+- **Thrown at:** `crates/benten-crypto-suite/src/cipher_suite.rs::CipherSuite::wrap_key_material` + `::unwrap_key_material` (G-CORE-3a CANARY, Phase 4-Meta-Core) — surfaces as `AeadError::RecipientLacksKeysForSuite` at the cipher-suite boundary; the boundary-lift into `benten-errors::ErrorCode::RecipientLacksKeysForSuite` for the engine-wide catalog surface lands at G-CORE-3b (caps + UCAN-bound recipient resolution where the typed-arm threads through the cap-policy path) — at G-CORE-3a the ErrorCode variant is reserved + the AeadError variant is the live production typed-arm. The drift-detector's `reachability: ignore` annotation below names this reservation; G-CORE-3b removes it when the wire-up lands.
+- **Phase:** 4-Meta-Core G-CORE-3a (F-3 W1 spec-gap closure)
+
+<!-- reachability: ignore -->
+
 ## Extending the catalog
 
 When adding a new error:
