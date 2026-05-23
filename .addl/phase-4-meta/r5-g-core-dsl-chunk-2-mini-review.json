@@ -1,0 +1,85 @@
+{
+  "wave": "G-CORE-DSL chunk-2",
+  "pr": 1326,
+  "head": "85c07b7c929f7c0b3c913b70457fe08bf52ace8b",
+  "base": "e89a1919",
+  "disposition": "APPROVE-WITH-FIXES",
+  "summary": "Substantively clean implementation. All 5 issue closures landed; refactor preserves canonical bytes + public surface; tests pass (43/43); clippy/fmt/doc all green. Two MINOR findings: dead-code residue of the now-unused parse_err helper, and stale line-number citations in the parse_err_at + #934 doc-comments. Both safe to land; both should be fixed inline before/at merge per HARD RULE 12 'inline trivial fixes' clause + CLAUDE.md rule 5 'no deprecated aliases — delete, don't comment'. No BLOCKER, no MAJOR.",
+  "findings": [
+    {
+      "id": "dsl-c2-r5-mr-1",
+      "severity": "MINOR",
+      "title": "Dead-code residue: `Parser::parse_err` helper is unused after the #760 migration",
+      "category": "code-hygiene",
+      "evidence": "All 10 bare `self.parse_err(...)` callsites on base (e89a1919, 10 callsites verified) were migrated to `parse_err_at(start_line, start_col, ...)`. Post-migration: 0 `self.parse_err(` callsites + the helper definition at src/lib.rs:776-783 remains. `RUSTFLAGS='-W dead_code' cargo build -p benten-dsl-compiler` emits `warning: method 'parse_err' is never used --> crates/benten-dsl-compiler/src/lib.rs:776:8`. Workspace `[lints]` does not escalate dead_code to deny, which is why CI clippy didn't catch it. The doccomment on `parse_err_at` line 785 still references `[\\`Self::parse_err\\`]` so deleting `parse_err` requires updating that reference (sharpen to 'span-anchored helper for emitting CompileError::Parse with a captured span').",
+      "disposition": "FIX-NOW",
+      "disposition_rationale": "HARD RULE 12 + CLAUDE.md rule 5 'No deprecated aliases or backward-compat shims. Fresh project. Delete, don't comment.' Trivial inline fix; orchestrator can apply directly (5-line delete + 2-line doc tweak). Not a BLOCKER because the dead helper doesn't break runtime correctness, and `dead_code` is workspace-warning not deny.",
+      "suggested_fix": "Delete lines 776-783 (the `parse_err` method body); update `parse_err_at` doccomment line 785 from '[\\`Self::parse_err\\`]' to 'companion to per-site Diagnostic construction'."
+    },
+    {
+      "id": "dsl-c2-r5-mr-2",
+      "severity": "MINOR",
+      "title": "Stale line-number citations in two doc-comments (parse_err_at + #934 numeric comment)",
+      "category": "doc-coupling / cite-drift",
+      "evidence": "Two doccomment blocks reference line numbers that don't match the post-PR source. (1) Line 599 comment cites '`parse_identifier` (line 638)' and 'read_until_balanced (line 682)' — actual locations are 678 and 740. (2) Line 791-792 doccomment cites 'parse_identifier (line 638-656)' and 'parse_primitive (line 367-368)' — actual locations are 678 and 417. The cite-drift CI detector (scripts/drift-detect.ts) does not match `line NNN` plain-prose patterns so this would not have been auto-caught, but it falls squarely in the §3.5g cross-doc-cite-drift class (pim-N origin pattern). A future reader following any of these cites will land in unrelated code 40-260 lines away.",
+      "disposition": "FIX-NOW",
+      "disposition_rationale": "HARD RULE 12 + pim-1 §3.5b post-fix doc-coupling pre-flight. Inline orchestrator fix; sharpen each citation to either correct lines or symbol-only (`parse_identifier` / `read_until_balanced` / `parse_primitive` without line numbers, since the symbol-only form is drift-free by construction).",
+      "suggested_fix": "Replace `(line 638)` / `(line 682)` / `(line 367-368)` / `(line 638-656)` with bare symbol names (`parse_identifier` / `read_until_balanced` / `parse_primitive`). The symbol references are drift-free; the line numbers add no information given the symbol is named."
+    },
+    {
+      "id": "dsl-c2-r5-mr-3",
+      "severity": "OBSERVATION",
+      "title": "INTERNALS.md §3 line-count for src/lib.rs is now stale",
+      "category": "doc-coupling",
+      "evidence": "INTERNALS.md line 48 says 'src/lib.rs (894 lines)'; post-PR the file is 1356 lines (parse_helper-extraction + 13 closure-pin tests). INTERNALS.md line 5 last-refresh annotation is still '@ 8141b94 (Phase-4-Foundation tag-eve, 2026-05-14)' — chunk-2's edits + the prior chunk-1 edits are not reflected. Implementer touched only the §6 Benches inventory subsection; §3 file inventory + §1 'whole crate is 894 LOC' + §4 'public-item count' framing should also retense.",
+      "disposition": "DEFER-BELONGS-NAMED-NOW",
+      "destination": "Carry as part of the next G-CORE-DSL chunk merge OR a post-batch INTERNALS.md retense pass; not BLOCKER because the document is internal-audit-only and explicit-line-count drift is a known recurring doc-coupling pattern in this crate (the same Cargo.toml '~200-300 LOC, 4 public items' framing in INTERNALS.md §4 is called out as an Open Question item 1 already). Orchestrator-direct option: pre-merge bump the §3 line count + §5 last-refresh SHA inline.",
+      "disposition_rationale": "OBSERVATION rather than MINOR-FIX-NOW because this drift class is already named in the document itself (§9 Open Questions item 1) + falls into the routine 'retense INTERNALS.md every wave that touches the crate' rhythm. Inline orchestrator bump preferred if cheap; otherwise carry to the next chunk's retense."
+    }
+  ],
+  "rubric_dispositions": {
+    "1_coverage_completeness": "APPROVE — 13 closure-pin tests exercise the SUBSTANTIVE production arms per pim-18 §3.6f. Each pin has would-FAIL evidence in its doccomment (regression of slice start = wrong value / regression of byte arithmetic = chain split / etc). No aspirational-prose gaps detected.",
+    "2_wave_completion_checklist": "APPROVE — each closure pin targets the SPECIFIC fix per pim-2 §3.6b sub-rule 4 (e.g. issue_934_variable_reference_slice_path_preserves_dollar_prefix exercises the $-prefix slicing arm specifically, not an umbrella 'variable reference works' check).",
+    "3_934_numeric_slicing": "APPROVE — Int/Float/negative/`$`-prefix preservation all verified by closure pins. parse_string correctly excluded (the inline #934 comment names the escape-decoding hard-stop). Negative-int test confirms `start` captured BEFORE the `if c == '-'` advance, preserving the leading sign in the slice window.",
+    "4_931_peek_at_deletion": "APPROVE — base verification: baseline grep `peek_at` returned exactly 2 hits (1 callsite + 1 definition). Post-PR: 0 callsites + 0 definition (only 3 documentation references remain, all in comments referring to the prior code). Byte-comparison correctness: both `-` (0x2D) and `>` (0x3E) are ASCII so `bytes.get(self.pos) == Some(&b'-')` is equivalent to the prior char-comparison.",
+    "5_760_parse_err_at_helper": "APPROVE — all 10 bare `parse_err` callsites migrated to `parse_err_at` (counted: lines 556, 620, 625, 635, 642, 668, 708, 730, 732, 765). Each callsite captures `(start_line, start_col)` BEFORE the fallible consume so the diagnostic anchors at the offending span start. Closure pins verify unterminated-string anchors at opening-quote line (not at end-of-input cursor) — the most behavior-substantive of the migrations. See finding dsl-c2-r5-mr-1: the now-unused `parse_err` helper should be deleted, not retained.",
+    "6_663_parse_primitive_refactor": "APPROVE — 3 shared helpers (parse_paren_string for 4 single-string primitives + parse_paren_string_optional_object for 3 string+optional-object primitives + parse_paren_object for 2 single-object primitives) + 3 outliers (branch + iterate use read_until_balanced; respond is single-token) cover all 12 primitives. `#[allow(clippy::too_many_lines)]` correctly removed. Behavior preservation verified by issue_663_all_12_primitive_kinds_dispatch_via_helpers + the existing permuted_keys_yield_identical_canonical_bytes + canonical_bytes_v1_scheme_pin tests (3/3 pass). Note: `parse_paren_string_optional_object` skips ws only inside the `Some` branch before expect_char(')'); the `None` branch falls through with cursor already at the post-string skip_ws position — correct.",
+    "7_929_round_trip_bench": "APPROVE — `[[bench]]` entry minted with `harness = false` (criterion convention). Library `bench = false` preserved with sharpened comment explaining the per-library-vs-per-bench distinction. Bench harness compiles cleanly (`cargo bench --no-run` succeeds). Per-fixture functions structured as one-bench-per-MINIMAL-FOR-DEVSERVER fixture (5 fixtures matching tests/dsl_compiler_round_trips_5_primitive_fixtures.rs naming). Baselines ~800ns-1.6µs are not asserted in CI (regression-tripwire scope per the issue's disposition); reasonable for one-shot DSL compile of ~40-100 byte sources.",
+    "8_public_surface_impact": "APPROVE — `git diff base..head | grep '^[+-]pub'` returns 0 hits. permuted_keys_yield_identical_canonical_bytes + canonical_bytes_v1_scheme_pin (3 tests) all pass. Zero new pub items confirmed.",
+    "9_doc_coupling_sweep": "APPROVE-WITH-FIXES — INTERNALS.md §6 correctly updated for the new bench harness (+15 lines, accurate). Other adjacent docs (DSL.md / GLOSSARY.md) do not exist for this crate; the §3.5b sweep surface is INTERNALS.md only. See findings dsl-c2-r5-mr-2 (stale line cites in src/lib.rs doccomments) + dsl-c2-r5-mr-3 (INTERNALS.md §3 line-count + last-refresh-SHA drift).",
+    "10_n_ground_truth_verify": "APPROVE — implementer's claims independently verified against base SHA e89a1919: (a) 10 `self.parse_err(` callsites on base → 10 migrations, none missed; (b) `peek_at(1)` callsite count = 1 on base → 0 post-PR, definition deleted; (c) `parse_primitive` body sized as claimed pre-refactor (154 LOC inline dispatch with #[allow(too_many_lines)]); (d) chunk-3 deferred areas (`fn emit`, `CompileError::Io`, `Diagnostic` shape) confirmed untouched in the diff.",
+    "11_stable_msrv_clippy": "APPROVE — local `cargo clippy -p benten-dsl-compiler --all-targets -- -D warnings` clean; pre-flight in implementer's PR description states both MSRV 1.95 + stable were run. CI required clippy gates are still QUEUED at review time; the local verification matches.",
+    "12_isolation_no_admin_no_force_push": "APPROVE — commit author = `Benten-Ben <ben@benten.ai>` (no AI attribution); single commit (no force-push); PR open NORMAL with `mergeStateStatus: BLOCKED` (waiting on required checks, which is the correct gate per HARD RULE 12 + dispatch-conventions). No admin-bypass observed.",
+    "13_chunk_3_deferral_correctness": "APPROVE — implementer correctly did NOT touch the chunk-3 issues: #1000 (Diagnostic span point-vs-range; touches the Diagnostic shape) + #839 (CompileError::Io variant misuse at devserver; cross-crate scope) + #790 (3-way 'Emit' name overload; rename touching public surface). All 3 remain OPEN. Deferral matches HANDOFF chunk decomposition (chunk-2 = safer-scope local refactors; chunk-3 = public-surface / cross-crate / wider-scope)."
+  },
+  "ground_truth_verify": {
+    "all_5_issue_specs_match_source": "agreed",
+    "peek_at_single_callsite": "verified",
+    "parse_err_callsite_count_10": "verified (10/10 migrated; helper itself now dead — see finding mr-1)",
+    "chunk_3_deferred_issues_untouched": "verified (#1000 + #839 + #790 still OPEN; diff shows no edits to fn emit / CompileError::Io / Diagnostic shape / Emit name)",
+    "tests_pass_43_of_43": "verified (22 inline + 4 arch + 3 widened-spec + 3 canonical-bytes-v1 + 5 rejects-invalid + 6 round-trips = 43)",
+    "zero_new_pub_items": "verified (git diff base..head | grep ^[+-]pub returns 0 hits)",
+    "zero_new_error_codes": "verified (no E_DSL_* additions; CATALOG_VARIANT_COUNT unchanged)",
+    "canonical_bytes_unchanged": "verified (permuted_keys_yield_identical_canonical_bytes + canonical_cid_is_wire_stable_and_pinned + dsl_emits_canonical_subgraphbuilder_key_namespace_no_underscore + dsl_emits_uniform_two_char_node_id_prefixes all PASS)"
+  },
+  "positive_observations": [
+    "Strong adherence to pim-2 §3.6b sub-rule 4: every closure-pin test exercises the SPECIFIC fixed arm (e.g. issue_934_negative_integer_literal_round_trips specifically exercises `start` captured BEFORE the leading-`-` advance, not just 'negative int round-trips').",
+    "pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight: every closure-pin doccomment names the would-FAIL regression mode (off-by-one slice start / dropped `.` byte / wrong offset arithmetic / etc). This is the discipline the pim was codified for.",
+    "Public-surface impact = 0 (verified by diff): all 4 new helpers are private `Parser` methods. Preserves the 'four public items in spirit' INTERNALS.md framing.",
+    "ErrorCode catalog impact = 0 — no spurious mints; refactor remained scoped per the wave brief.",
+    "Canonical bytes wire-stability preserved: 3 dedicated v1-scheme pins (`dsl_emits_uniform_two_char_node_id_prefixes` + `dsl_emits_canonical_subgraphbuilder_key_namespace_no_underscore` + `canonical_cid_is_wire_stable_and_pinned`) all PASS. The #663 helper extraction is therefore confirmed byte-identical to the prior dispatch — exactly the property the pre-v1 wire-format-freeze discipline requires.",
+    "Bench harness scope discipline: implementer explicitly framed it as a regression tripwire (catching ~10x slowdowns from quadratic dispatch / unbounded backtracking) rather than a perf-optimization target, matching the issue's disposition framing + the MINIMAL-FOR-DEVSERVER bounded-one-shot scope.",
+    "Chunk-2/chunk-3 split was respected: the riskier-scope issues (#1000 Diagnostic range / #839 CompileError::Io misuse / #790 Emit name overload) were left untouched, exactly per the brief's safer-scope-now / wider-scope-later decomposition."
+  ],
+  "ci_state_at_review": {
+    "head_sha": "85c07b7c929f7c0b3c913b70457fe08bf52ace8b",
+    "mergeable": "MERGEABLE",
+    "merge_state": "BLOCKED (waiting on required checks)",
+    "checks_completed_at_review": 4,
+    "checks_queued_or_in_progress_at_review": "~40+",
+    "any_red_failures_at_review": "none observed in completed set (Branch Protection Spec Check + Cross-Process Graph CID + WASM Checks T8 + workspace benches SKIPPED — all SUCCESS or SKIPPED)",
+    "note": "CI not yet conclusive; mini-review based on local verification + diff analysis + ground-truth re-grep against base SHA. Recommend re-checking CI rollup pre-merge per §3.5h GREEN-CI-CONFIRMATION."
+  },
+  "merge_recommendation": "APPROVE-WITH-FIXES — orchestrator-direct apply findings mr-1 (delete dead parse_err helper + sharpen parse_err_at doccomment) + mr-2 (replace line-number cites with symbol-only cites) as a small fix-up commit BEFORE merge. Findings mr-3 (INTERNALS.md §3 line-count + §5 last-refresh-SHA bump) can either ride the same fix-up commit (preferred per pim-1 §3.5b) or carry to the next G-CORE-DSL chunk merge. NO BLOCKER / NO MAJOR; safe to land once CI greens + the 2 MINOR fixups apply.",
+  "schema_version": "§3.6i v1 (disposition top-level; findings[] with per-finding disposition matching HARD RULE 12)"
+}
