@@ -519,6 +519,27 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-caps::chain_validator::validate_chain_narrowing`
     //   (the `ChainNotNarrowing { step_index }` typed-reject path).
     ErrorCode::ChainNarrowingViolation,
+    // Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes;
+    // §4.36 fail-CLOSED flip + §4.37 InstallRecord replay + §4.23
+    // user-DID root write-boundary chain validator + §4.22 thin-
+    // client bridge principal resolution). Construction sites:
+    //   `benten-engine::manifest_envelope_recheck::outcome_to_row_reject`
+    //     (the UnresolvedDeny arm — replaces the prior NotApplicable→
+    //     Ok(()) silent-admit path).
+    //   `benten-engine::install_record_replay::InstallRecordReplayStore::
+    //     record_and_check`  (the atomic check-and-record on second
+    //     presentation of the same install-record CID).
+    //   `benten-engine::write_boundary_chain_validator::
+    //     WriteBoundaryChainValidator::validate`  (the structural
+    //     always-on chain validator at the WRITE admission seam).
+    //   `benten-engine::thin_client_bridge::ThinClientBridge::
+    //     resolve_principal_for_request`  (the bridge that resolves
+    //     the acting principal from the authenticated session — no
+    //     client-supplied principal override).
+    ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+    ErrorCode::PluginInstallRecordAlreadyApplied,
+    ErrorCode::WriteBoundaryChainNotUserRooted,
+    ErrorCode::ThinClientBridgePrincipalUnresolved,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -848,8 +869,26 @@ fn variant_count_is_pinned() {
     // numeric arguments as deferred errors and surfaces them at the
     // single-fallible-point `.build()` call per #506 / G-CORE-6 verify-
     // pass). 176 + 1 = 177.
+    //
+    // G-CORE-8 (Phase 4-Meta-Core, security-surface lock) rebased onto
+    // post-#1325 main lands +4 codes:
+    // `ManifestEnvelopeRecheckUnresolvedDeny` (§4.36 fail-CLOSED flip —
+    // the post-rename enum invariant typed-reject for any non-positive
+    // recheck outcome at the apply_atrium_merge per-row recheck boundary;
+    // closes security-r1-1 + security-r1-2 BLOCKERs) +
+    // `PluginInstallRecordAlreadyApplied` (§4.37 atomic-record-and-check
+    // around install admission — second presentation of the same
+    // install-record CID rejects before the cap-cascade runs; closes the
+    // TOCTOU window on the applied-records set) +
+    // `WriteBoundaryChainNotUserRooted` (§4.23 structural-always-on
+    // user-DID root chain validator at the WRITE admission seam — mirrors
+    // Phase-3 G16-B-F structural-always-on per-row cap-recheck) +
+    // `ThinClientBridgePrincipalUnresolved` (§4.22 thin-client bridge
+    // principal resolution failure — the bridge never trusts client-
+    // supplied principals; resolves from the authenticated session).
+    // 177 + 4 = 181.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 177,
+        CATALOG_VARIANT_COUNT, 181,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1092,7 +1131,14 @@ fn catalog_variant_count_matches_enum() {
             // CLAUDE.md baked-in #18 trust-model + HARD RULE 12 (the
             // typed reject IS the defense).
             | ErrorCode::AuthorizationGrantBindingSigInvalid
-            | ErrorCode::ChainNarrowingViolation => true,
+            | ErrorCode::ChainNarrowingViolation
+            // Phase 4-Meta-Core G-CORE-8 security-surface lock:
+            // fail-closed typed-rejects at the recheck / install /
+            // write-boundary / thin-client-bridge boundaries.
+            | ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+            | ErrorCode::PluginInstallRecordAlreadyApplied
+            | ErrorCode::WriteBoundaryChainNotUserRooted
+            | ErrorCode::ThinClientBridgePrincipalUnresolved => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

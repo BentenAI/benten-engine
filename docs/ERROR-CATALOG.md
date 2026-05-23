@@ -1642,6 +1642,38 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 <!-- reachability: ignore -->
 
+### E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY
+
+- **Message:** "manifest-envelope recheck rejected row: unresolvable peer-DID or no positive verification"
+- **Context:** `{ zone: String, key: String }` (the merge zone + row key for forensic correlation)
+- **Fix:** Per G-CORE-8 §4.36 fail-CLOSED flip: the manifest-envelope rechecker MUST row-reject on every non-positively-verified outcome (unresolvable peer-DID, sentinel `<unresolved-peer>`, no installed manifest for the inbound row, etc.). `Admitted` is the ONLY proceed path — every other outcome is `UnresolvedDeny` post-rename and routes through `outcome_to_row_reject` to a typed reject with `ON_DENIED` primitive-edge routing. NEVER add an admit-on-ambiguity path; the security-r1-2 invariant explicitly prohibits silent fail-OPEN on ambiguous-resolution arms.
+- **Thrown at:** `crates/benten-engine/src/manifest_envelope_recheck.rs::outcome_to_row_reject` (G-CORE-8, Phase 4-Meta-Core; security-r1-1 + security-r1-2 BLOCKER closure). Replaces the prior `NotApplicable → Ok(())` silent-admit path inside `apply_atrium_merge`'s per-row recheck loop. The default-builder also flips to install the `ProductionManifestEnvelopeRechecker` glue so Engine::default deployments inherit Layer-3 enforcement without an explicit `set_manifest_envelope_rechecker` call.
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.36 fail-CLOSED flip + production-rechecker default-builder wire-up)
+
+### E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED
+
+- **Message:** "install record already applied: second presentation rejected"
+- **Context:** `{ record_identity: String }` (the canonical `signing_payload` hash that names the consumed record)
+- **Fix:** Per G-CORE-8 §4.37 + R2 §5 replay-attack class: an InstallRecord is consumed exactly once. Presenting the same canonical record bytes twice (matched by `signing_payload` hash) is the replay-attack signal — the second admission rejects with this typed code BEFORE any cap is minted (zero duplicate-mint window). Fix at the caller: if a legitimate re-install is intended, mint a fresh InstallRecord with a new nonce + fresh user-DID signature; the engine treats a fresh nonce as a distinct admission.
+- **Thrown at:** `crates/benten-engine/src/install_record_replay.rs::InstallRecordReplayStore::record_and_check` (G-CORE-8, Phase 4-Meta-Core; §4.37 replay defense). The check-and-record is atomic — single critical section, no verify-then-record gap (TOCTOU defense; couples to the F3 durable-replay-marker pattern that benten-caps `FrameReplayMarker` already uses for sync-frame replay defense).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.37 InstallRecord replay-defense + atomic record-and-check)
+
+### E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED
+
+- **Message:** "write-boundary chain validator: chain does not terminate at a registered user-DID root"
+- **Context:** `{ chain_root_did: String }` (the offending non-user-DID root the chain anchored at)
+- **Fix:** Per G-CORE-8 §4.23 + CLAUDE.md baked-in #18 Layer-1 user-as-root invariant: EVERY WRITE's capability chain must trace back to a registered user-DID root grant. A plugin-DID-minted root chain is structurally rejected (a plugin cannot mint its own root authority). Fix at the call site: re-issue the delegation chain from a user-DID root; if the write is plugin-initiated, ensure the chain carries the user's signed root delegation as `chain[0]` per the manifest_envelope_chain_validation contract.
+- **Thrown at:** `crates/benten-engine/src/write_boundary_chain_validator.rs::WriteBoundaryChainValidator::validate` (G-CORE-8, Phase 4-Meta-Core; §4.23 structural-always-on user-DID root chain validator at the WRITE admission seam). Composes `benten_caps::validate_chain_with_manifest_envelope` against the engine's install-record-backed `UserDidRegistry`. Mirrors Phase-3 G16-B-F structural-always-on per-row cap-recheck — fail-CLOSED, NOT an opt-in. At G-CORE-8 the validator is a seam wired structurally-always-on inside the engine WRITE-admission path; production callers that have NOT installed a user-registry get fail-CLOSED on every chain-carrying write (the seam is honest about its mode of operation rather than silently fail-OPEN).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.23 structurally-always-on user-DID root write-boundary chain validator)
+
+### E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED
+
+- **Message:** "thin-client bridge: cannot resolve acting principal from authenticated session"
+- **Context:** `{ token_id: String, presented_origin: String, reason: String }` (the bridge entry-point parameters + the typed session-error reason if a session lookup was attempted)
+- **Fix:** Per G-CORE-8 §4.22 + CLAUDE.md baked-in #17/#18: the thin-client bridge resolves the acting principal from the authenticated DID-keyed session token (NOT from anything the client supplies). A client cannot self-elevate by asserting `principal = X` in-band — the API has no client-principal parameter. Fix at the caller: re-establish a session via the DID-keyed handshake protocol (challenge → sign → establish_session); the resulting SessionToken is bound to the session's server-side principal-DID. If the handshake fails verify the did:key resolution, signature validity, and origin pinning per `crates/benten-engine/src/thin_client.rs` `DidKeyedSession::establish_session` contract.
+- **Thrown at:** `crates/benten-engine/src/thin_client_bridge.rs::ThinClientBridge::resolve_principal_for_request` (G-CORE-8, Phase 4-Meta-Core; §4.22 thin-client bridge principal-resolution-from-session-not-client). The bridge takes (session_token, presented_origin) and returns either the bound principal-DID or this typed code — no client-supplied principal field exists on the API surface (structural defense; would-FAIL to compile if a regression added one).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.22 thin-client bridge principal-resolution-from-session-not-client)
+
 ## Extending the catalog
 
 When adding a new error:
