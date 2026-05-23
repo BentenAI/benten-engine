@@ -68,6 +68,7 @@ describe(
   () => {
     it(
       "a pending next() does NOT block libuv setImmediate / fs.readFile dispatch",
+      { timeout: 5000 },
       async () => {
         // Construct a handle with no pre-populated chunks; the
         // testingOpenStreamForTest factory hands back an immediately-
@@ -106,11 +107,11 @@ describe(
         // contention with the in-flight next() compute().
         expect(fsLatencyMs).toBeLessThan(2000);
       },
-      { timeout: 5000 },
     );
 
     it(
       "concurrent next() pressure (N parallel streams) keeps libuv responsive for unrelated I/O",
+      { timeout: 6000 },
       async () => {
         // Fire N concurrent next() AsyncTasks across N independent
         // handles (each pre-drained); assert an unrelated fs.readFile
@@ -144,7 +145,6 @@ describe(
 
         expect(fsLatencyMs).toBeLessThan(2500);
       },
-      { timeout: 6000 },
     );
   },
 );
