@@ -717,7 +717,13 @@ fn build_5_recipe_bundle_impl(
     let key_material = benten_caps::authorization_grant::KeyMaterial {
         bytes: key_bytes.clone(),
     };
-    let auth_grant = AuthorizationGrant::issue_for_test(ucan, key_material, audience)
+    // Note: PR #1336 (G-CORE-3e wave) reshaped `AuthorizationGrant::
+    // issue_for_test` to a 4-arg keypair+audience-pubkey+scope+expiry
+    // signature; the wave-3b 3-arg helper is now `issue_envelopes_for_test`.
+    // benten-drop fixture needs the wave-3b shape because it must control
+    // `key_material.bytes` (matching the AEAD key_bytes above for
+    // consume_offline decryption) — Strategy-C wave-2 batch consolidation.
+    let auth_grant = AuthorizationGrant::issue_envelopes_for_test(ucan, key_material, audience)
         .expect("synthetic grant issues for test");
 
     // G-CORE-3f: this is a SIZED PLACEHOLDER, not real per-Node
