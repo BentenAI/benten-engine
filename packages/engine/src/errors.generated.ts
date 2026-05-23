@@ -209,6 +209,8 @@ export const CATALOG_CODES = [
   "E_AEAD_REBINDING_ATTACK_DETECTED",
   "E_TWO_CID_MAPPING_NOT_FOUND",
   "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH",
+  "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
+  "E_CHAIN_NARROWING_VIOLATION",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2854,6 +2856,36 @@ export class ETwoCidMappingIntegrityMismatch extends BentenError {
 }
 
 /**
+ * E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID
+ *
+ * Thrown at: `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant::verify_binding` (G-CORE-3b, Phase 4-Meta-Core) — surfaces as `AuthorizationGrantError::BindingMismatch` / `AuthorizationGrantError::AudienceMismatch` at the cap-layer boundary; the boundary-lift into `benten-errors::ErrorCode::AuthorizationGrantBindingSigInvalid` for the engine-wide catalog surface lands at G-CORE-3e (sync/ALPN wire-up) + G-CORE-3f (Drop bundle) when grants flow through `CapabilityPolicy::check_*`. At G-CORE-3b the ErrorCode variant is reserved + the `AuthorizationGrantError` variants are the live production typed arms; the drift-detector's `reachability: ignore` annotation below names this reservation.
+ * Message template: "binding signature mismatch: ucan or key_material does not match the issuer's signed binding"
+ */
+export class EAuthorizationGrantBindingSigInvalid extends BentenError {
+  static readonly code = "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R3 (ONE-signed-artifact contract): the `AuthorizationGrant`'s `binding_sig` covers `(canonical_bytes(ucan) || canonical_bytes(key_material) || audience_bytes)` — it MUST verify before the validator consults either the UCAN scope or the key material (the binding is the foundation). This typed code fires for three distinct attack surfaces uniformly: (A-1) stolen-UCAN-without-keys — attacker lifts the UCAN half but presents a different `key_material`; the binding-sig over the new `(ucan, key_material)` tuple no longer matches the issuer's signed binding. (A-2) stolen-keys-without-UCAN — symmetric mirror of A-1 on the other half. (A-3) wrong-audience-swap — grant bound to audience X is presented for verification under audience Y; the audience binding is the load-bearing third leg per §R3 so a swap fails closed with `AudienceMismatch`. NEVER catch this error and retry with a substitute half / different audience — the typed reject IS the defense the §R3 contract exists to provide. Structural-shape rejection at the grant-validation boundary — no primitive-edge routing (None).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID", "Per RATIFIED-S&C 2026-05-21 §R3 (ONE-signed-artifact contract): the `AuthorizationGrant`'s `binding_sig` covers `(canonical_bytes(ucan) || canonical_bytes(key_material) || audience_bytes)` — it MUST verify before the validator consults either the UCAN scope or the key material (the binding is the foundation). This typed code fires for three distinct attack surfaces uniformly: (A-1) stolen-UCAN-without-keys — attacker lifts the UCAN half but presents a different `key_material`; the binding-sig over the new `(ucan, key_material)` tuple no longer matches the issuer's signed binding. (A-2) stolen-keys-without-UCAN — symmetric mirror of A-1 on the other half. (A-3) wrong-audience-swap — grant bound to audience X is presented for verification under audience Y; the audience binding is the load-bearing third leg per §R3 so a swap fails closed with `AudienceMismatch`. NEVER catch this error and retry with a substitute half / different audience — the typed reject IS the defense the §R3 contract exists to provide. Structural-shape rejection at the grant-validation boundary — no primitive-edge routing (None).", message, context);
+    this.name = "EAuthorizationGrantBindingSigInvalid";
+  }
+}
+
+/**
+ * E_CHAIN_NARROWING_VIOLATION
+ *
+ * Thrown at: `crates/benten-caps/src/chain_validator.rs::validate_chain_narrowing` (G-CORE-3b, Phase 4-Meta-Core) — surfaces as `ChainValidationError::ChainNotNarrowing` at the cap-layer boundary; the boundary-lift into `benten-errors::ErrorCode::ChainNarrowingViolation` for the engine-wide catalog surface lands at G-CORE-3e (sync/ALPN wire-up) when the chain validator runs at delegation-acceptance time. At G-CORE-3b the ErrorCode variant is reserved + the `ChainValidationError` variant is the live production typed arm; the drift-detector's `reachability: ignore` annotation below names this reservation.
+ * Message template: "chain step {step_index} widens predecessor scope"
+ */
+export class EChainNarrowingViolation extends BentenError {
+  static readonly code = "E_CHAIN_NARROWING_VIOLATION";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R1 (chain non-widening contract; Path (a) restricted-spec language only): a structured-`Scope` delegation chain MUST be monotonically narrowing — every step's `Scope` must be CONTAINED by its predecessor's. The chain validator surfaces this typed code at the first widening edge. Three widening arms fire it uniformly: (a) `Scope::Hashes(parent) → Scope::Hashes(child)` where `child` is NOT a subset of `parent` (adding hashes widens). (b) `Scope::RestrictedSelector(parent) → Scope::RestrictedSelector(child)` where `parent.contains(&child)` returns false (any of the 6 dimensions widens: roots / edge-allowlist / max_depth / label-allowlist / label-denylist [INVERSE] / property-equalities). (c) Cross-arm transitions (`Hashes` ↔ `RestrictedSelector`) — structurally non-comparable at v1-beta. Fix at the call site: re-issue the delegation with a properly narrowed scope. NEVER add a third `Scope` arm (e.g. `OpaqueSelector`) to work around this — Path (b) refinement-witness over opaque specs is structurally unsound per Spike H+1.1 §b.SEC #4 and the §1.A.FROZEN item 15(c) `no-opaque-arm` freeze prohibits the workaround; adding such an arm is a HALT-AND-SURFACE-TO-BEN escalation per HARD RULE 12.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_CHAIN_NARROWING_VIOLATION", "Per RATIFIED-S&C 2026-05-21 §R1 (chain non-widening contract; Path (a) restricted-spec language only): a structured-`Scope` delegation chain MUST be monotonically narrowing — every step's `Scope` must be CONTAINED by its predecessor's. The chain validator surfaces this typed code at the first widening edge. Three widening arms fire it uniformly: (a) `Scope::Hashes(parent) → Scope::Hashes(child)` where `child` is NOT a subset of `parent` (adding hashes widens). (b) `Scope::RestrictedSelector(parent) → Scope::RestrictedSelector(child)` where `parent.contains(&child)` returns false (any of the 6 dimensions widens: roots / edge-allowlist / max_depth / label-allowlist / label-denylist [INVERSE] / property-equalities). (c) Cross-arm transitions (`Hashes` ↔ `RestrictedSelector`) — structurally non-comparable at v1-beta. Fix at the call site: re-issue the delegation with a properly narrowed scope. NEVER add a third `Scope` arm (e.g. `OpaqueSelector`) to work around this — Path (b) refinement-witness over opaque specs is structurally unsound per Spike H+1.1 §b.SEC #4 and the §1.A.FROZEN item 15(c) `no-opaque-arm` freeze prohibits the workaround; adding such an arm is a HALT-AND-SURFACE-TO-BEN escalation per HARD RULE 12.", message, context);
+    this.name = "EChainNarrowingViolation";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3038,4 +3070,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_AEAD_REBINDING_ATTACK_DETECTED": EAeadRebindingAttackDetected,
   "E_TWO_CID_MAPPING_NOT_FOUND": ETwoCidMappingNotFound,
   "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH": ETwoCidMappingIntegrityMismatch,
+  "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID": EAuthorizationGrantBindingSigInvalid,
+  "E_CHAIN_NARROWING_VIOLATION": EChainNarrowingViolation,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;
