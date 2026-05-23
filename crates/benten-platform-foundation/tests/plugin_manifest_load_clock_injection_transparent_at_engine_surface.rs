@@ -118,6 +118,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
     let mut ctx_no_clock = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_no_clock_params = InstallParams {
         now_secs: MANIFEST_CLOCK_NOT_INJECTED_SENTINEL,
@@ -189,6 +190,7 @@ fn admin_ui_v0_install_without_clock_injection_surfaces_e_ucan_clock_not_injecte
     let mut ctx_with_clock = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
+        install_record_replay_check: None,
     };
     let ctx_with_clock_params = InstallParams {
         now_secs: 1_700_000_000,

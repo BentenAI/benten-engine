@@ -130,6 +130,7 @@ fn drive_install(
     let mut ports = InstallPorts {
         cap_minter: cascade,
         private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
