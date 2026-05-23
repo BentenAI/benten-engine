@@ -195,9 +195,10 @@ pub const MAX_SOURCE_LEN: usize = 1_048_576;
 ///
 /// # Errors
 ///
-/// Returns [`CompileError`] for any parse, semantic, or emission failure.
-/// Each error carries a [`Diagnostic`] with line/column + human-readable
-/// message + typed `error_code` for devserver rendering. Sources larger
+/// Returns [`CompileError`] for any parse, semantic, or build-phase failure.
+/// Each diagnostic-carrying error carries a [`Diagnostic`] with [`Span`] +
+/// human-readable message + typed `error_code` for devserver rendering.
+/// Sources larger
 /// than [`MAX_SOURCE_LEN`] are rejected at entry with
 /// [`CompileError::Parse`] (#545 defense-in-depth cap).
 pub fn compile_str(source: &str) -> Result<CompiledSubgraph, CompileError> {
@@ -210,21 +211,19 @@ pub fn compile_str(source: &str) -> Result<CompiledSubgraph, CompileError> {
                 source.len(),
                 MAX_SOURCE_LEN
             ),
-            line: None,
-            column: None,
+            span: None,
         }));
     }
     if source.trim().is_empty() {
         return Err(CompileError::Parse(Diagnostic {
             error_code: E_DSL_PARSE_ERROR,
             message: "empty DSL source".to_string(),
-            line: None,
-            column: None,
+            span: None,
         }));
     }
     let mut parser = Parser::new(source);
     let handler = parser.parse_handler()?;
-    emit(handler)
+    build(handler)
 }
 
 /// Compile a DSL source file into a [`CompiledSubgraph`].
@@ -261,6 +260,26 @@ pub fn compile_file(path: &Path) -> Result<CompiledSubgraph, CompileError> {
 /// Wire-stable variant set: each variant maps to a stable `error_code`
 /// string (see [`Diagnostic::error_code`]) so devserver / TS-side renderers
 /// can switch on the discriminant without prose-string parsing.
+///
+/// **G-CORE-DSL chunk-3 (closes #790 + #839):** the prior 4-variant set
+/// (`Parse` / `Semantic` / `Emit` / `Io`) was renamed + extended:
+/// - `Emit` → `Build` — the prior name overloaded the `PrimitiveKind::Emit`
+///   operation primitive (CLAUDE.md #1's 12-primitive name; not renameable)
+///   AND the `fn emit` internal-emission function (also renamed to `build`).
+///   The discriminant now names the COMPILATION PHASE (AST→Subgraph
+///   construction), removing the overload with the runtime `Emit`
+///   primitive whose ErrorCode is wholly orthogonal.
+/// - `Backend(String)` — NEW 5th variant — the typed home for
+///   downstream-consumer-injected post-compile rejections (canonical
+///   example: `Engine::register_subgraph` returned an error after a
+///   successful compile in the devserver flow). Pre-#839 this path
+///   abused `CompileError::Io` to wrap engine-registration errors,
+///   widening `Io`'s documented semantic ("IO failure reading a source
+///   file") to "everything else." The new variant gives downstream
+///   consumers a typed bucket distinct from real `std::io::Error`
+///   failures and surfaces `E_DSL_BACKEND_REJECTED` on the wire so
+///   discriminant-switching consumers route engine-registration
+///   failures correctly (not into IO-handling code paths).
 #[derive(Debug, Clone, Error)]
 pub enum CompileError {
     /// Lexer / parser failure — DSL did not match the grammar.
@@ -270,27 +289,151 @@ pub enum CompileError {
     /// primitives / props / handler ids.
     #[error("DSL semantic error: {0}")]
     Semantic(Diagnostic),
-    /// Emission failure — well-typed AST but `Subgraph` construction
-    /// rejected (e.g. missing RESPOND, malformed structural shape).
-    #[error("DSL emit error: {0}")]
-    Emit(Diagnostic),
+    /// **Compilation-build phase failure** — well-typed AST but
+    /// `Subgraph` construction rejected (e.g. missing RESPOND, malformed
+    /// structural shape from `validate_shapes`). #790 closure: renamed
+    /// from the prior `Emit` variant to disambiguate from
+    /// `PrimitiveKind::Emit` (the runtime operation primitive that
+    /// publishes events to the engine event bus — a wholly distinct
+    /// concept). The error_code strings (`E_DSL_MISSING_RESPOND` /
+    /// `E_DSL_INVALID_SHAPE`) are unchanged; the wire-stable load-bearing
+    /// stability axis is the error_code, not the variant name.
+    #[error("DSL build error: {0}")]
+    Build(Diagnostic),
     /// IO failure reading a source file (only from [`compile_file`]).
+    /// Pre-#839 this variant was abused by downstream consumers (notably
+    /// the devserver) to wrap non-IO engine-registration failures. After
+    /// #839 the variant's documented semantic is preserved: this is
+    /// reserved for real `std::io::Error` failures from
+    /// [`compile_file`]. Downstream consumers wrapping post-compile
+    /// rejections should use [`CompileError::Backend`] instead.
     #[error("DSL io error: {0}")]
     Io(String),
+    /// **Downstream-consumer-injected post-compile rejection** (#839
+    /// closure). The DSL compiler itself never emits this variant —
+    /// the compile pipeline emits `Parse` / `Semantic` / `Build` / `Io`
+    /// only. Downstream consumers (canonical example: the devserver
+    /// engine-registration step at
+    /// `tools/benten-dev::DevServer::replace_handler_from_dsl_with_outcome`)
+    /// wrap their typed rejections here so discriminant-switching
+    /// consumers can route them distinct from IO failures. Maps to
+    /// [`E_DSL_BACKEND_REJECTED`] on the wire (typed mirror at
+    /// `benten_errors::ErrorCode::DslBackendRejected`).
+    #[error("DSL backend rejection: {0}")]
+    Backend(String),
 }
 
 impl CompileError {
     /// Borrow the inner [`Diagnostic`] when present.
+    ///
+    /// `Io` and `Backend` variants carry free-form strings (not
+    /// [`Diagnostic`]s) because they are downstream-environment failures
+    /// rather than source-position-anchored DSL diagnostics; they return
+    /// `None` here. Discriminant-switching consumers needing typed wire
+    /// codes for those variants should match on the variant directly +
+    /// surface the stable codes ([`E_DSL_IO_ERROR`] /
+    /// [`E_DSL_BACKEND_REJECTED`]).
     #[must_use]
     pub fn diagnostic(&self) -> Option<&Diagnostic> {
         match self {
-            Self::Parse(d) | Self::Semantic(d) | Self::Emit(d) => Some(d),
-            Self::Io(_) => None,
+            Self::Parse(d) | Self::Semantic(d) | Self::Build(d) => Some(d),
+            Self::Io(_) | Self::Backend(_) => None,
+        }
+    }
+
+    /// Return the stable error-code string for the variant.
+    ///
+    /// For variants carrying a [`Diagnostic`], returns the inner
+    /// [`Diagnostic::error_code`]. For [`CompileError::Io`] returns
+    /// [`E_DSL_IO_ERROR`]; for [`CompileError::Backend`] returns
+    /// [`E_DSL_BACKEND_REJECTED`]. This is the surface
+    /// discriminant-switching consumers (devserver / napi binding / TS
+    /// mirror) read to dispatch typed handling without prose-string
+    /// parsing.
+    #[must_use]
+    pub fn error_code(&self) -> &'static str {
+        match self {
+            Self::Parse(d) | Self::Semantic(d) | Self::Build(d) => d.error_code,
+            Self::Io(_) => E_DSL_IO_ERROR,
+            Self::Backend(_) => E_DSL_BACKEND_REJECTED,
+        }
+    }
+}
+
+/// Source-span shape — a half-open `[start_offset, end_offset)` byte range
+/// into the DSL source, paired with 1-indexed `(line, column)` coordinates
+/// at both endpoints for human-readable rendering.
+///
+/// **G-CORE-DSL chunk-3 (closes #1000):** the prior [`Diagnostic`]
+/// carried only a single 1-indexed `(line, column)` cursor point — a
+/// point-span, adequate for human-typing-rate devserver rendering but
+/// impoverished for AI-loop-feedback (Phase 6 AI-agent ecosystem — the
+/// repair-prompt loop slices offending bytes via `start_offset` /
+/// `end_offset`, multi-line span rendering needs `(end_line,
+/// end_column)`). The new `Span` carries all four coordinates so:
+///
+/// - editor surfaces (LSP-shaped consumers, devserver squiggle UI) can
+///   highlight the offending range, not just place a cursor;
+/// - AI repair-prompt loops (per CLAUDE.md baked-in #18 plugins-as-
+///   subgraphs + Phase 6 AI-agent trajectory) can slice
+///   `source[start_offset..end_offset]` to feed the offender directly
+///   back to the model without re-walking the parser;
+/// - multi-line constructs (unbalanced parens, long branch bodies)
+///   render correctly across the full span instead of pointing only at
+///   the open OR close.
+///
+/// All four coordinates describe the SAME range. `start_offset` /
+/// `end_offset` are byte offsets into the source (NOT char offsets;
+/// the parser tracks bytes per UTF-8 advance). Half-open: `end_offset`
+/// is exclusive, so `source[start_offset..end_offset]` is the offending
+/// slice. For point-spans (the "expected X here" cursor case),
+/// `start_offset == end_offset` AND `(start_line, start_column) ==
+/// (end_line, end_column)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Span {
+    /// 1-indexed line of the span's start.
+    pub start_line: u32,
+    /// 1-indexed column of the span's start.
+    pub start_column: u32,
+    /// 1-indexed line of the span's end (inclusive line; the cursor
+    /// SITS on this line at `end_column`).
+    pub end_line: u32,
+    /// 1-indexed column of the span's end (the post-token cursor
+    /// column, half-open: NOT a character position the offending range
+    /// includes).
+    pub end_column: u32,
+    /// Byte offset into the source where the span starts (inclusive).
+    pub start_offset: u32,
+    /// Byte offset into the source where the span ends (exclusive,
+    /// half-open). `source[start_offset..end_offset]` is the offending
+    /// slice.
+    pub end_offset: u32,
+}
+
+impl Span {
+    /// Construct a point-span at a single 1-indexed `(line, column)` +
+    /// byte offset (`start == end`).
+    #[must_use]
+    pub fn point(line: u32, column: u32, offset: u32) -> Self {
+        Self {
+            start_line: line,
+            start_column: column,
+            end_line: line,
+            end_column: column,
+            start_offset: offset,
+            end_offset: offset,
         }
     }
 }
 
 /// Diagnostic shape devserver renders: span + message + typed error code.
+///
+/// **G-CORE-DSL chunk-3 (closes #1000):** the prior `(Option<u32>,
+/// Option<u32>)` point-span is replaced by an `Option<Span>` carrying
+/// the full half-open byte range + endpoint `(line, column)` coordinates.
+/// Some diagnostics have no source-position anchor (empty source,
+/// MAX_SOURCE_LEN overrun, missing-respond) and continue to carry
+/// `span: None`.
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     /// Stable error-code string (e.g. `"E_DSL_PARSE_ERROR"`); switch-keyed
@@ -298,19 +441,55 @@ pub struct Diagnostic {
     pub error_code: &'static str,
     /// Human-readable message for tooltip + log surface.
     pub message: String,
-    /// 1-indexed line of the offending source span (None if span unknown).
-    pub line: Option<u32>,
-    /// 1-indexed column of the offending source span (None if span unknown).
-    pub column: Option<u32>,
+    /// The source-span the diagnostic anchors at (None if the
+    /// diagnostic has no source-position anchor, e.g. empty source).
+    pub span: Option<Span>,
+}
+
+impl Diagnostic {
+    /// Backward-readable accessor: the 1-indexed start-line of the
+    /// diagnostic's span, if any. Convenience for callers (devserver
+    /// renderer / napi binding) that only need the start coordinate.
+    #[must_use]
+    pub fn line(&self) -> Option<u32> {
+        self.span.map(|s| s.start_line)
+    }
+
+    /// Backward-readable accessor: the 1-indexed start-column of the
+    /// diagnostic's span, if any.
+    #[must_use]
+    pub fn column(&self) -> Option<u32> {
+        self.span.map(|s| s.start_column)
+    }
 }
 
 impl std::fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (self.line, self.column) {
-            (Some(l), Some(c)) => {
-                write!(f, "[{}] {}:{} {}", self.error_code, l, c, self.message)
+        match self.span {
+            Some(s) if s.start_line == s.end_line && s.start_column == s.end_column => {
+                // Point-span: render `line:col` for compactness.
+                write!(
+                    f,
+                    "[{}] {}:{} {}",
+                    self.error_code, s.start_line, s.start_column, self.message
+                )
             }
-            _ => write!(f, "[{}] {}", self.error_code, self.message),
+            Some(s) => {
+                // Range-span: render `startLine:startCol-endLine:endCol`
+                // so multi-line spans (unbalanced parens, long bodies)
+                // are visible at a glance.
+                write!(
+                    f,
+                    "[{}] {}:{}-{}:{} {}",
+                    self.error_code,
+                    s.start_line,
+                    s.start_column,
+                    s.end_line,
+                    s.end_column,
+                    self.message
+                )
+            }
+            None => write!(f, "[{}] {}", self.error_code, self.message),
         }
     }
 }
@@ -342,9 +521,27 @@ pub const E_DSL_MISSING_RESPOND: &str = "E_DSL_MISSING_RESPOND";
 /// builder methods so a Rust callsite emitting this surfaces the same
 /// typed `BentenError` subclass on the wire. Drift-detect reachability
 /// path: `crates/benten-dsl-compiler/src/lib.rs::validate_shapes` (a
-/// crate-private free function, NOT a member of an `emit` module —
-/// `emit` and `validate_shapes` are sibling free functions).
+/// crate-private free function, NOT a member of a `build` module —
+/// `build` and `validate_shapes` are sibling free functions; the prior
+/// `emit` framing was renamed at G-CORE-DSL chunk-3 #790).
 pub const E_DSL_INVALID_SHAPE: &str = "E_DSL_INVALID_SHAPE";
+/// G-CORE-DSL chunk-3 (closes #839 abuse): stable error-code string
+/// reported by [`CompileError::error_code`] for the `Io` variant.
+/// Distinct from [`E_DSL_BACKEND_REJECTED`] (which is the
+/// downstream-consumer post-compile rejection bucket). The `Io` variant
+/// itself carries a free-form `String` (the original
+/// `std::io::Error::to_string()`), not a [`Diagnostic`], so this code
+/// is surfaced via `CompileError::error_code` rather than via a
+/// `Diagnostic::error_code` field.
+pub const E_DSL_IO_ERROR: &str = "E_DSL_IO_ERROR";
+/// G-CORE-DSL chunk-3 (closes #839): stable error-code string for the
+/// new [`CompileError::Backend`] variant. Downstream consumers wrap
+/// their typed post-compile rejections (canonical example:
+/// `Engine::register_subgraph` failure in the devserver flow) with
+/// this code so discriminant-switching consumers route them distinct
+/// from real `Io` failures. Cross-language mirror (§3.5g) lives at
+/// `benten_errors::ErrorCode::DslBackendRejected`.
+pub const E_DSL_BACKEND_REJECTED: &str = "E_DSL_BACKEND_REJECTED";
 
 // ---------------------------------------------------------------------------
 // AST
@@ -470,8 +667,12 @@ impl<'a> Parser<'a> {
         Ok(o)
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "12-primitive keyword-dispatch match must stay as a single table for readability; splitting per-arm scatters the call shape without making the table easier to read (rationale carried forward from the prior `parse_primitive` allow at chunk-2)"
+    )]
     fn parse_primitive(&mut self) -> Result<PrimitiveAst, CompileError> {
-        let (start_line, start_col) = (self.line, self.column);
+        let (start_line, start_col, start_off) = (self.line, self.column, self.pos);
         let ident = self.parse_identifier()?;
         let mut props = std::collections::BTreeMap::<String, Value>::new();
         // #663 closure: the prior 154-LOC inline dispatch table is collapsed
@@ -567,11 +768,20 @@ impl<'a> Parser<'a> {
                 PrimitiveKind::Iterate
             }
             other => {
+                // #1000 closure: span covers the offending keyword
+                // from start (captured pre-parse_identifier) to current
+                // cursor (post-parse_identifier consumed the ident).
                 return Err(CompileError::Semantic(Diagnostic {
                     error_code: E_DSL_UNKNOWN_PRIMITIVE,
                     message: format!("unknown primitive `{other}`"),
-                    line: Some(start_line),
-                    column: Some(start_col),
+                    span: Some(Span {
+                        start_line,
+                        start_column: start_col,
+                        end_line: self.line,
+                        end_column: self.column,
+                        start_offset: start_off as u32,
+                        end_offset: self.pos as u32,
+                    }),
                 }));
             }
         };
@@ -600,7 +810,10 @@ impl<'a> Parser<'a> {
             // #760 closure: capture span-start BEFORE peek so the
             // "expected ',' or '}'" diagnostic points at the offending
             // unexpected character rather than at the post-skip_ws cursor.
-            let (sl, sc) = (self.line, self.column);
+            // #1000 closure: also capture byte offset for the new Span
+            // shape; end_offset is the post-peek cursor (= start_off for
+            // point-spans when no token is consumed past start).
+            let (sl, sc, so) = (self.line, self.column, self.pos);
             match self.peek() {
                 Some(',') => {
                     self.advance();
@@ -609,7 +822,7 @@ impl<'a> Parser<'a> {
                     self.advance();
                     break;
                 }
-                _ => return Err(self.parse_err_at(sl, sc, "expected ',' or '}'".to_string())),
+                _ => return Err(self.parse_err_at(sl, sc, so, "expected ',' or '}'".to_string())),
             }
         }
         Ok(map)
@@ -622,7 +835,8 @@ impl<'a> Parser<'a> {
         // start of the offending value rather than at the post-token cursor
         // (which for numeric / identifier / "expected value" cases was
         // misleading by the value's full byte-width).
-        let (start_line, start_col) = (self.line, self.column);
+        // #1000 closure: also capture byte offset for the new Span shape.
+        let (start_line, start_col, start_off) = (self.line, self.column, self.pos);
         match self.peek() {
             Some('\'') => Ok(Value::Text(self.parse_string()?)),
             Some('{') => Ok(Value::Map(self.parse_object()?)),
@@ -673,12 +887,22 @@ impl<'a> Parser<'a> {
                 let slice = &self.src[start..self.pos];
                 if saw_dot {
                     let v: f64 = slice.parse().map_err(|_| {
-                        self.parse_err_at(start_line, start_col, format!("invalid float `{slice}`"))
+                        self.parse_err_at(
+                            start_line,
+                            start_col,
+                            start_off,
+                            format!("invalid float `{slice}`"),
+                        )
                     })?;
                     Ok(Value::Float(v))
                 } else {
                     let v: i64 = slice.parse().map_err(|_| {
-                        self.parse_err_at(start_line, start_col, format!("invalid int `{slice}`"))
+                        self.parse_err_at(
+                            start_line,
+                            start_col,
+                            start_off,
+                            format!("invalid int `{slice}`"),
+                        )
                     })?;
                     Ok(Value::Int(v))
                 }
@@ -691,11 +915,17 @@ impl<'a> Parser<'a> {
                     other => Err(self.parse_err_at(
                         start_line,
                         start_col,
+                        start_off,
                         format!("unexpected identifier `{other}`"),
                     )),
                 }
             }
-            _ => Err(self.parse_err_at(start_line, start_col, "expected value".to_string())),
+            _ => Err(self.parse_err_at(
+                start_line,
+                start_col,
+                start_off,
+                "expected value".to_string(),
+            )),
         }
     }
 
@@ -707,7 +937,8 @@ impl<'a> Parser<'a> {
         // (where the user opened the quote) rather than at the end-of-input
         // cursor. This is the most-useful target for the only diagnostic
         // this function can emit.
-        let (start_line, start_col) = (self.line, self.column);
+        // #1000 closure: also capture byte offset for the Span shape.
+        let (start_line, start_col, start_off) = (self.line, self.column, self.pos);
         self.expect_char('\'')?;
         let mut s = String::new();
         loop {
@@ -724,6 +955,7 @@ impl<'a> Parser<'a> {
                     return Err(self.parse_err_at(
                         start_line,
                         start_col,
+                        start_off,
                         "unterminated string".to_string(),
                     ));
                 }
@@ -742,11 +974,12 @@ impl<'a> Parser<'a> {
             }
         }
         if self.pos == start {
+            // #1000 closure: point-span at the cursor (no token
+            // consumed). end == start.
             return Err(CompileError::Parse(Diagnostic {
                 error_code: E_DSL_PARSE_ERROR,
                 message: "expected identifier".to_string(),
-                line: Some(start_line),
-                column: Some(start_col),
+                span: Some(Span::point(start_line, start_col, start as u32)),
             }));
         }
         Ok(self.src[start..self.pos].to_string())
@@ -756,16 +989,26 @@ impl<'a> Parser<'a> {
         // #760 closure: capture span-start at the keyword's first character
         // so the "expected keyword X, got Y" diagnostic points at the
         // offending token's start, not at the post-identifier cursor.
-        let (start_line, start_col) = (self.line, self.column);
+        // #1000 closure: also capture byte offset; end-of-span is the
+        // post-parse_identifier cursor (covers the offending ident).
+        let (start_line, start_col, start_off) = (self.line, self.column, self.pos);
         let id = self.parse_identifier()?;
         if id == kw {
             Ok(())
         } else {
-            Err(self.parse_err_at(
-                start_line,
-                start_col,
-                format!("expected keyword `{kw}`, got `{id}`"),
-            ))
+            // #1000: end-of-span is the current cursor (post-ident).
+            Err(CompileError::Parse(Diagnostic {
+                error_code: E_DSL_PARSE_ERROR,
+                message: format!("expected keyword `{kw}`, got `{id}`"),
+                span: Some(Span {
+                    start_line,
+                    start_column: start_col,
+                    end_line: self.line,
+                    end_column: self.column,
+                    start_offset: start_off as u32,
+                    end_offset: self.pos as u32,
+                }),
+            }))
         }
     }
 
@@ -776,18 +1019,23 @@ impl<'a> Parser<'a> {
         // (which IS self.line/self.column at fn-entry — but capturing
         // explicitly makes the intent reader-obvious + matches the rest of
         // the #760-touched call sites).
-        let (start_line, start_col) = (self.line, self.column);
+        // #1000 closure: also capture byte offset.
+        let (start_line, start_col, start_off) = (self.line, self.column, self.pos);
         match self.peek() {
             Some(p) if p == c => {
                 self.advance();
                 Ok(())
             }
-            Some(p) => {
-                Err(self.parse_err_at(start_line, start_col, format!("expected `{c}`, got `{p}`")))
-            }
+            Some(p) => Err(self.parse_err_at(
+                start_line,
+                start_col,
+                start_off,
+                format!("expected `{c}`, got `{p}`"),
+            )),
             None => Err(self.parse_err_at(
                 start_line,
                 start_col,
+                start_off,
                 format!("expected `{c}`, got end-of-input"),
             )),
         }
@@ -818,11 +1066,24 @@ impl<'a> Parser<'a> {
                 }
                 Some(_) => self.advance(),
                 None => {
-                    return Err(self.parse_err_at(
-                        start_line,
-                        start_col,
-                        format!("expected `{close}`, hit end-of-input"),
-                    ));
+                    // #1000: end-of-span covers the WHOLE walked body
+                    // (start..self.pos) so the AI repair-prompt loop can
+                    // slice the offending expression directly. This is
+                    // load-bearing for the unbalanced-paren case: the
+                    // span covers everything from the open paren to the
+                    // EOF where the close paren never arrived.
+                    return Err(CompileError::Parse(Diagnostic {
+                        error_code: E_DSL_PARSE_ERROR,
+                        message: format!("expected `{close}`, hit end-of-input"),
+                        span: Some(Span {
+                            start_line,
+                            start_column: start_col,
+                            end_line: self.line,
+                            end_column: self.column,
+                            start_offset: start as u32,
+                            end_offset: self.pos as u32,
+                        }),
+                    }));
                 }
             }
         }
@@ -830,19 +1091,37 @@ impl<'a> Parser<'a> {
     }
 
     /// #760 closure: span-anchored parse-error constructor. All parse-error
-    /// callsites use this — callers capture `(self.line, self.column)` BEFORE
-    /// the consume-step and pass the captured pair here so the diagnostic's
-    /// `line` / `column` mark the offending span's *start* rather than the
-    /// post-token cursor. `Parser::parse_identifier` and `Parser::parse_primitive`
-    /// already used the same pattern via per-site `Diagnostic { line: Some(start_line), column: Some(start_col), ... }`
-    /// constructs; this helper centralises it for the other 10 callsites that
-    /// were emitting post-token cursor positions.
-    fn parse_err_at(&self, line: u32, column: u32, message: String) -> CompileError {
+    /// callsites use this — callers capture `(self.line, self.column,
+    /// self.pos)` BEFORE the consume-step and pass the captured triple
+    /// here so the diagnostic's [`Span`] marks the offending span's
+    /// *start* rather than the post-token cursor. Most callsites pass
+    /// the cursor's current `(line, column, pos)` as start (a point-span
+    /// when no token has been consumed past start); `Parser::parse_value`
+    /// + `parse_string` + `read_until_balanced` are the wider-span
+    /// callers using a captured start from earlier in the parse.
+    /// #1000 closure: signature widened to carry `start_offset`; end of
+    /// the span is the current cursor at error-construction time so the
+    /// span covers any tokens consumed between start-capture and
+    /// error-emit (e.g. an invalid numeric literal that walked the full
+    /// digit sequence before `i64::from_str` failed).
+    fn parse_err_at(
+        &self,
+        line: u32,
+        column: u32,
+        start_offset: usize,
+        message: String,
+    ) -> CompileError {
         CompileError::Parse(Diagnostic {
             error_code: E_DSL_PARSE_ERROR,
             message,
-            line: Some(line),
-            column: Some(column),
+            span: Some(Span {
+                start_line: line,
+                start_column: column,
+                end_line: self.line,
+                end_column: self.column,
+                start_offset: start_offset as u32,
+                end_offset: self.pos as u32,
+            }),
         })
     }
 
@@ -875,10 +1154,19 @@ impl<'a> Parser<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Emit — AST → benten_core::Subgraph + CompiledPrimitive list.
+// Build — AST → benten_core::Subgraph + CompiledPrimitive list.
 // ---------------------------------------------------------------------------
+//
+// #790 closure (G-CORE-DSL chunk-3): renamed from `emit` to `build` to
+// disambiguate from `PrimitiveKind::Emit` (the runtime operation
+// primitive that publishes events to the engine event bus — CLAUDE.md
+// #1 12-primitive-irreducibility commits the name to the runtime
+// primitive). The compilation-build phase NOW reads "build the Subgraph
+// from the AST" which is the actual operation. Sibling
+// `validate_shapes` is unchanged; both remain crate-private free
+// functions.
 
-fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
+fn build(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
     use benten_core::OperationNode;
 
     // Shape-validation pass — fires `E_DSL_INVALID_SHAPE` for typed-property
@@ -893,14 +1181,13 @@ fn emit(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
         .iter()
         .any(|p| matches!(p.kind, PrimitiveKind::Respond))
     {
-        return Err(CompileError::Emit(Diagnostic {
+        return Err(CompileError::Build(Diagnostic {
             error_code: E_DSL_MISSING_RESPOND,
             message: format!(
                 "handler `{}` does not contain a `respond` primitive",
                 handler.handler_id
             ),
-            line: None,
-            column: None,
+            span: None,
         }));
     }
 
@@ -965,14 +1252,13 @@ fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
     // via either surface fails identically at compile-time rather than
     // propagating ambiguously to `Engine::register_subgraph`.
     if handler.handler_id.trim().is_empty() {
-        return Err(CompileError::Emit(Diagnostic {
+        return Err(CompileError::Build(Diagnostic {
             error_code: E_DSL_INVALID_SHAPE,
             message: "handler id must be a non-empty, non-whitespace string \
                       (#608 — cross-language mirror with TS-side \
                       EDslInvalidShape)"
                 .to_string(),
-            line: None,
-            column: None,
+            span: None,
         }));
     }
 
@@ -982,13 +1268,12 @@ fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
     // `E_DSL_INVALID_SHAPE` code; future amendments to the SANDBOX-budget
     // error message touch one site, not two.
     let sandbox_int_err = |key: &str, got: &dyn std::fmt::Display| {
-        CompileError::Emit(Diagnostic {
+        CompileError::Build(Diagnostic {
             error_code: E_DSL_INVALID_SHAPE,
             message: format!(
                 "sandbox primitive `{key}` property must be a non-negative integer (got {got}); see docs/SANDBOX-LIMITS.md §2"
             ),
-            line: None,
-            column: None,
+            span: None,
         })
     };
     for p in &handler.primitives {
@@ -1077,9 +1362,10 @@ mod inline_tests {
     }
 
     #[test]
-    fn missing_respond_is_typed_emit_error() {
+    fn missing_respond_is_typed_build_error() {
+        // G-CORE-DSL chunk-3 #790 closure: variant renamed `Emit` → `Build`.
         let err = compile_str("handler 'h' { read('post') }").unwrap_err();
-        assert!(matches!(err, CompileError::Emit(_)));
+        assert!(matches!(err, CompileError::Build(_)));
         assert_eq!(err.diagnostic().unwrap().error_code, E_DSL_MISSING_RESPOND);
     }
 
@@ -1108,11 +1394,12 @@ mod inline_tests {
     /// regardless of which DSL surface authored the handler.
     #[test]
     fn sandbox_fuel_declared_as_string_is_typed_invalid_shape() {
+        // G-CORE-DSL chunk-3 #790 closure: variant renamed `Emit` → `Build`.
         let src = "handler 'h' { sandbox('mod', { fuel: 'high' }) -> respond }";
         let err = compile_str(src).unwrap_err();
         assert!(
-            matches!(err, CompileError::Emit(_)),
-            "fuel-as-string trips Emit-shape error, got {err:?}"
+            matches!(err, CompileError::Build(_)),
+            "fuel-as-string trips Build-shape error, got {err:?}"
         );
         assert_eq!(
             err.diagnostic().unwrap().error_code,
@@ -1123,11 +1410,12 @@ mod inline_tests {
 
     #[test]
     fn sandbox_negative_fuel_is_typed_invalid_shape() {
+        // G-CORE-DSL chunk-3 #790 closure: variant renamed `Emit` → `Build`.
         let src = "handler 'h' { sandbox('mod', { fuel: -1 }) -> respond }";
         let err = compile_str(src).unwrap_err();
         assert!(
-            matches!(err, CompileError::Emit(_)),
-            "negative fuel trips Emit-shape error, got {err:?}"
+            matches!(err, CompileError::Build(_)),
+            "negative fuel trips Build-shape error, got {err:?}"
         );
         assert_eq!(err.diagnostic().unwrap().error_code, E_DSL_INVALID_SHAPE,);
     }
@@ -1271,11 +1559,14 @@ mod inline_tests {
     /// confirms the centralized helper still emits a non-empty span.
     #[test]
     fn issue_760_expect_char_missing_brace_carries_line_column() {
+        // G-CORE-DSL chunk-3 #1000 closure: line/column now accessed via
+        // the [`Diagnostic::line`] / `column` convenience accessors that
+        // unwrap the underlying [`Span`].
         let src = "handler 'h'";
         let err = compile_str(src).expect_err("missing `{` must parse-error");
         let d = err.diagnostic().expect("diagnostic present");
-        assert!(d.line.is_some(), "line span present");
-        assert!(d.column.is_some(), "column span present");
+        assert!(d.line().is_some(), "line span present");
+        assert!(d.column().is_some(), "column span present");
         assert_eq!(d.error_code, E_DSL_PARSE_ERROR);
     }
 
@@ -1292,7 +1583,7 @@ mod inline_tests {
         let src = "handler 'unterminated\nstill running";
         let err = compile_str(src).expect_err("unterminated string must parse-error");
         let d = err.diagnostic().expect("diagnostic present");
-        let line = d.line.expect("line present");
+        let line = d.line().expect("line present");
         // The opening `'` of the unterminated string is on line 1 (the only
         // `'` in the source before EOF); span anchors there, not at the
         // post-walk line 2.
@@ -1315,7 +1606,7 @@ mod inline_tests {
         let err = compile_str(src).expect_err("invalid value must parse-error");
         let d = err.diagnostic().expect("diagnostic present");
         assert!(
-            d.line.is_some() && d.column.is_some(),
+            d.line().is_some() && d.column().is_some(),
             "span present: {d:?}"
         );
         assert_eq!(d.error_code, E_DSL_PARSE_ERROR);

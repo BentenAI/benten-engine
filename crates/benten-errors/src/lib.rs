@@ -1159,6 +1159,26 @@ pub enum ErrorCode {
     /// only legitimate `Scope` arms at v1-beta are `Hashes` +
     /// `RestrictedSelector`.
     ChainNarrowingViolation,
+    /// Phase 4-Meta-Core G-CORE-DSL chunk-3 (closes #839): a downstream
+    /// consumer of the `benten-dsl-compiler` crate rejected a
+    /// post-compile registration / wiring step (canonical example:
+    /// `Engine::register_subgraph` returned an error after a successful
+    /// DSL compile in `tools/benten-dev::DevServer::replace_handler_from_dsl_with_outcome`).
+    /// Distinct from `CompileError::Io` (which is reserved for real
+    /// `std::io::Error` failures from `compile_file`) and from
+    /// `CompileError::Build` (which is the AST-→-Subgraph emission
+    /// rejection); `Backend` is the "downstream-consumer-injected
+    /// rejection" carrier that closes the #839 Io-variant abuse at the
+    /// devserver boundary. Construction sites:
+    ///   `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend`
+    ///   (the public variant; downstream consumers wrap their typed
+    ///   rejections here)
+    ///   `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`
+    ///   (the canonical wrap site; pre-#839 abused `CompileError::Io`).
+    /// Routes to `ON_ERROR` — a downstream-consumer rejection is a
+    /// downstream concern; no primitive-edge routing nuance applies at
+    /// the DSL-compile boundary. Maps to `E_DSL_BACKEND_REJECTED`.
+    DslBackendRejected,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1473,6 +1493,9 @@ impl ErrorCode {
             #[rustfmt::skip]
             ErrorCode::AuthorizationGrantBindingSigInvalid => "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
             ErrorCode::ChainNarrowingViolation => "E_CHAIN_NARROWING_VIOLATION",
+            // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer rejection
+            // at the DSL-compile boundary; closes the Io-variant abuse.
+            ErrorCode::DslBackendRejected => "E_DSL_BACKEND_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1930,6 +1953,12 @@ impl ErrorCode {
             // against.
             ErrorCode::AuthorizationGrantBindingSigInvalid => None,
             ErrorCode::ChainNarrowingViolation => None,
+            // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer
+            // rejection at the DSL-compile boundary is a downstream
+            // concern; ON_ERROR is the canonical disposition (no
+            // primitive-edge routing nuance applies to a compile-time
+            // post-emit registration failure).
+            ErrorCode::DslBackendRejected => Some("ON_ERROR"),
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -2223,6 +2252,7 @@ impl core::str::FromStr for ErrorCode {
                 ErrorCode::AuthorizationGrantBindingSigInvalid
             }
             "E_CHAIN_NARROWING_VIOLATION" => ErrorCode::ChainNarrowingViolation,
+            "E_DSL_BACKEND_REJECTED" => ErrorCode::DslBackendRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

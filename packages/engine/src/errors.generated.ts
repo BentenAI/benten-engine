@@ -213,6 +213,7 @@ export const CATALOG_CODES = [
   "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH",
   "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID",
   "E_CHAIN_NARROWING_VIOLATION",
+  "E_DSL_BACKEND_REJECTED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2918,6 +2919,21 @@ export class EChainNarrowingViolation extends BentenError {
 }
 
 /**
+ * E_DSL_BACKEND_REJECTED
+ *
+ * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (G-CORE-DSL chunk-3, Phase 4-Meta-Core) — the typed home for downstream-consumer-injected post-compile rejections. Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome` (pre-#839 abused `CompileError::Io` to carry engine-registration failures; post-#839 routes through this typed variant + code).
+ * Message template: "DSL backend rejection: {downstream_error}"
+ */
+export class EDslBackendRejected extends BentenError {
+  static readonly code = "E_DSL_BACKEND_REJECTED";
+  static readonly fixHint = "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful compile). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. The wrapped message body carries the downstream error's `Debug` representation prefixed by a consumer-site tag (canonical example: `devserver_engine_register: <error>`).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DSL_BACKEND_REJECTED", "G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful compile). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. The wrapped message body carries the downstream error's `Debug` representation prefixed by a consumer-site tag (canonical example: `devserver_engine_register: <error>`).", message, context);
+    this.name = "EDslBackendRejected";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3106,4 +3122,5 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH": ETwoCidMappingIntegrityMismatch,
   "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID": EAuthorizationGrantBindingSigInvalid,
   "E_CHAIN_NARROWING_VIOLATION": EChainNarrowingViolation,
+  "E_DSL_BACKEND_REJECTED": EDslBackendRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

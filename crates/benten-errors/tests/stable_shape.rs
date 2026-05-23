@@ -520,6 +520,15 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   `benten-caps::chain_validator::validate_chain_narrowing`
     //   (the `ChainNotNarrowing { step_index }` typed-reject path).
     ErrorCode::ChainNarrowingViolation,
+    // Phase 4-Meta-Core G-CORE-DSL chunk-3 (#839): downstream-consumer
+    // rejection at the DSL-compile boundary. Closes the
+    // `CompileError::Io`-variant-abuse at
+    // `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`
+    // by giving downstream consumers a typed home distinct from real
+    // file-IO failures. The new `CompileError::Backend` variant in
+    // `crates/benten-dsl-compiler/src/lib.rs` maps here via its
+    // `error_code` → `E_DSL_BACKEND_REJECTED`.
+    ErrorCode::DslBackendRejected,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -859,7 +868,7 @@ fn variant_count_is_pinned() {
     // specifically (mirrors `GraphSchemaVersionMismatch` for the
     // snapshot-blob surface). 177 + 1 = 178.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 178,
+        CATALOG_VARIANT_COUNT, 179,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1103,7 +1112,11 @@ fn catalog_variant_count_matches_enum() {
             // CLAUDE.md baked-in #18 trust-model + HARD RULE 12 (the
             // typed reject IS the defense).
             | ErrorCode::AuthorizationGrantBindingSigInvalid
-            | ErrorCode::ChainNarrowingViolation => true,
+            | ErrorCode::ChainNarrowingViolation
+            // G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection
+            // at the DSL-compile boundary; closes the
+            // `CompileError::Io`-variant abuse at the devserver site.
+            | ErrorCode::DslBackendRejected => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't
