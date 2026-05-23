@@ -299,6 +299,28 @@ impl Node {
         Ok((Cid::from_blake3_digest(*digest.as_bytes()), bytes))
     }
 
+    /// G-CORE-3d test helper: derive a deterministic 32-B per-Node key
+    /// from the Node's CID + a fixed test prefix, suitable for feeding
+    /// into AEAD wrap/unwrap surfaces in RED-PHASE pins. NOT the
+    /// production K(N) path (which lives in the structural-KDF
+    /// substrate per Spike-E Interpretation-B path-tagged derivation);
+    /// this is a test seam that produces stable bytes for round-trip /
+    /// rebinding-attack / chunk-shuffling pins.
+    ///
+    /// Gated on `cfg(any(test, feature = "testing"))` so production
+    /// builds cannot accidentally use the test-derivation path.
+    #[cfg(any(test, feature = "testing"))]
+    #[must_use]
+    pub fn derive_key_for_test(&self) -> Vec<u8> {
+        let cid = self
+            .cid()
+            .expect("Node::derive_key_for_test: Node must canonicalize");
+        let mut input = Vec::with_capacity(b"benten-test-key:".len() + cid.as_bytes().len());
+        input.extend_from_slice(b"benten-test-key:");
+        input.extend_from_slice(cid.as_bytes());
+        blake3::hash(&input).as_bytes().to_vec()
+    }
+
     /// Phase 2a C4 / G2-A: load a Node from DAG-CBOR bytes, verifying that
     /// the recomputed CID matches the supplied `cid`.
     ///
@@ -512,6 +534,28 @@ impl Cid {
     pub fn sample_for_label(label: &str) -> Self {
         let digest = blake3::hash(label.as_bytes());
         Self::from_blake3_digest(*digest.as_bytes())
+    }
+
+    /// G-CORE-3d test helper: return the 32-B BLAKE3 digest portion of the
+    /// CID as a freshly-allocated `Vec<u8>` suitable for feeding into AEAD
+    /// AAD-builder helpers + per-test K_principal byte vectors. The full
+    /// CID layout includes 4 header bytes (version + codec + hash-code +
+    /// hash-length) followed by the 32-B digest; this helper returns the
+    /// digest tail only.
+    ///
+    /// **Test-only.** Production AAD builders consume the full CID byte
+    /// slice (via [`Cid::as_bytes`]); this helper exists so RED-PHASE
+    /// pins can write `cid.as_bytes_for_test()` symmetrically with the
+    /// production-side `cid.as_bytes()` slice consumption (and so K_principal
+    /// byte vectors used in `decrypt(...)`-shape pins are derivable
+    /// deterministically from a CID without leaking the production
+    /// derivation path). Gated on test/feature like
+    /// [`Cid::sample_for_test`].
+    #[cfg(any(test, feature = "testing"))]
+    #[must_use]
+    pub fn as_bytes_for_test(&self) -> Vec<u8> {
+        // The digest portion of the CID — bytes 4..36 (32-B BLAKE3 output).
+        self.0[4..].to_vec()
     }
 
     /// Base32 (RFC 4648, lowercase, no padding) string accessor, prefixed with

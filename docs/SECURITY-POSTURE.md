@@ -2166,3 +2166,128 @@ build-now stack + framing, superseded-in-part); CLAUDE.md baked-in #5 /
 `.addl/pq-research/landscape-pq-algorithm-diversity-2026-05-19.md` (the
 NF-1 PQ⊕PQ post-classical-death documented end-state + FIPS-207
 build-trigger).
+
+## Per-Node AEAD wrap layer — rebinding-attack-prevention (G-CORE-3d / #1301)
+
+**Section landed at Phase-4-Meta-Core G-CORE-3d wave (per R0.8
+multitenant-r1.4-2 corrective + Spike G/H + R3 ratification of the
+SubgraphSpec / `RATIFIED-sharing-and-confidentiality-2026-05-21.md` R2
+two-CID + per-Node AEAD contract).** Companion to baked-in #5
+(crypto-agility / PQ-default reframe), baked-in #15 (v1-gate
+encryption-as-confidentiality), and baked-in #18 (per-Node AEAD as the
+confidentiality half of the Principal primitive — the structural arm
+that capability-gating cannot provide on an untrusted host).
+
+### What rebinding-attack-prevention is
+
+Three load-bearing AEAD-layer defenses ride on the per-Node AEAD wrap
++ two-CID mapping that G-CORE-3d ships:
+
+1. **AAD-binds-plaintext-CID (whole-content arm).** The AAD passed to
+   ChaCha20-Poly1305 at seal time is
+   `aad_whole_content(plaintext_cid) = b"benten-aead:whole:" || plaintext_cid_bytes`.
+   At decrypt time the recipient reconstructs the AAD from the
+   envelope's `plaintext_cid` field. If an attacker takes a valid
+   ciphertext for plaintext-CID *P* and mounts it under plaintext-CID
+   *Q* (the **rebinding attack** — relocating a ciphertext under a
+   different plaintext identity), the AEAD authenticator fails because
+   the reconstructed AAD (binding *Q*) does not match the AAD bound at
+   seal time (binding *P*).
+2. **AAD-binds-(plaintext-CID, chunk-index) (per-chunk arm for Nodes ≥
+   64 KiB).** Per `§1.A.FROZEN item 15(g)` the per-chunk AEAD uses
+   `aad_per_chunk(plaintext_cid, chunk_index) =
+   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le`.
+   Shuffling chunk-N's ciphertext to index-M (the **cross-chunk
+   rebinding attack** — silently reordering content within a Node)
+   fails because the reconstructed AAD (binding `chunk_index=M`)
+   doesn't match the seal-time AAD (binding `chunk_index=N`).
+3. **Two-CID mapping integrity (defense-in-depth at the storage layer).**
+   The mapping table row `d:<did>:m:<plaintext_cid> → ciphertext_cid`
+   is validated structurally: the envelope's `plaintext_cid` field
+   MUST match the mapping-claimed plaintext_cid; mismatch surfaces as
+   `TwoCidMapError::IntegrityMismatch`. A tampered mapping that
+   redirects `plaintext_a → ciphertext_b` is caught because *B*'s
+   envelope carries `plaintext_cid = B`, not `A`.
+
+### Inv-11 strengthening (cross-DID leak invariant)
+
+Inv-11 (the cross-DID-no-leak invariant from G-CORE-1 #989) is
+STRENGTHENED by the per-Node AEAD layer per the C1+C2 composition
+(multitenant-r1-5):
+
+- **C1 (authority isolation, G-CORE-1):** `WriteContext::namespace_did`
+  partitions storage keys (`d:<did>:n:<cid>` + label_index +
+  property_index + change_event fan-out + iter_node_cids). Cross-DID
+  reads structurally miss at the key-prefix layer; the partition
+  isolation fires BEFORE any AEAD work, surfacing `NotFound` rather
+  than `AeadAuthenticationFailed` (which would imply the cross-DID
+  caller saw the ciphertext bytes — a confidentiality leak).
+- **C2 (confidentiality isolation, G-CORE-3d):** per-Node AEAD with
+  K(N) derived from `K_principal` (Spike-E Interpretation-B
+  path-tagged derivation) means even an attacker who bypasses the
+  partition layer (e.g. via raw redb file read) cannot decrypt without
+  the foreign DID's `K_principal`. The classical-half hybrid floor
+  (X25519 + ChaCha20-Poly1305 / NCC-audited) holds even when the PQC
+  half is unaudited (see Compromise 30).
+
+The composition: partition isolation is the first line; per-Node AEAD
+with `K_principal`-rooted key derivation is the second. The §4-A
+cross-wave test set (R3-W3 partition-before-crypto pin family) pins
+both layers + their composition order.
+
+### Key-derivation source — G-CORE-3d wave-scope
+
+The G-CORE-3d wave uses `Node::derive_key_for_test` (a stable
+BLAKE3-of-plaintext-CID derivation) as the K(N) source for the
+namespaced-write AEAD-wrap path. The production K(N) path via
+`benten_crypto_suite::structural_kdf::derive_step` rooted at
+`K_principal` per Spike-E Interpretation-B path-tagged derivation
+requires the `K_principal`-per-DID seam which lands at G-CORE-3e (the
+sync + UCAN-gating wave). The AAD-binds-plaintext-CID
+rebinding-attack defenses described above are IN PLACE at G-CORE-3d;
+only the K(N) source upgrade is wave-deferred. NOT a fail-OPEN —
+namespaced writes ARE AEAD-wrapped at this wave; the production
+K-source upgrade is a swap-in at the same boundary (the
+`derive_test_seam_key_from_cid` helper in `crates/benten-graph/src/
+redb_backend.rs` + the parallel call site in `Node::derive_key_for_test`
+both replace with the structural-KDF call at G-CORE-3e). Named
+destination: `docs/future/phase-4-backlog.md §3.10`.
+
+### Per-chunk-AEAD chunk size = `IROH_BLOCK_SIZE` (16 KiB)
+
+Per `§1.A.FROZEN item 15(g)` the per-chunk AEAD chunk size MUST equal
+`iroh-blobs::IROH_BLOCK_SIZE` (16 KiB). Spike H+1.2 validated this:
+divergent chunk size = double-chunking overhead at iroh's wire
+transport (iroh would re-chunk Benten's AEAD chunks to its own block
+size, doubling the per-chunk overhead). The constant lives at
+`benten_crypto_suite::aead::IROH_BLOCK_SIZE` (re-exported at
+`benten_graph::aead_wrap::IROH_BLOCK_SIZE` for the storage layer pin).
+A drift here is caught by the
+`tf3d_per_chunk_aead_iroh_block_size::tf3d_iroh_block_size_is_16_kib_exactly`
+regression pin.
+
+### Mechanism: ChaCha20-Poly1305
+
+The AEAD primitive is **ChaCha20-Poly1305** (RFC 8439) per CLAUDE.md
+baked-in #5 crypto-agility refinement. Dispatched via
+`benten_crypto_suite::aead::wrap` / `::unwrap` over the
+codepoint-tagged `KeyMaterial` (X-Wing-hybrid `0x647a` v1-beta default;
+classical-only X25519 `0x6400` downgrade arm; both feed the same
+ChaCha20-Poly1305 bulk layer). The integration crate is the ONLY
+crypto-primitive call site (crypto-agility-contract:6). Never
+hardcoded key/nonce/tag sizes outside the cipher-suite dispatch arm
+(the nonce length of 12 B is algorithm-parameter-fixed for
+ChaCha20-Poly1305, not a CLAUDE.md #5 "no-hardcoded-sizes" violation).
+
+### Cross-refs
+
+- `00-implementation-plan.md` §1.A.FROZEN item 15 + item 15(g) (the
+  two-CID + per-chunk-AEAD frozen contract).
+- `.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`
+  R2 (per-chunk-AEAD chunk-size = `IROH_BLOCK_SIZE` ratification).
+- Spike G + Spike H + Spike H+1.2 sandbox findings.
+- `crates/benten-graph/src/aead_wrap.rs` (the storage-layer AEAD-wrap
+  glue) + `crates/benten-graph/src/two_cid_map.rs` (the typed mapping
+  error envelope).
+- `crates/benten-graph/tests/tf3d_*.rs` (the 15 R3 RED-PHASE pins
+  un-ignored at G-CORE-3d landing).

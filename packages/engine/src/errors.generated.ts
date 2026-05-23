@@ -206,6 +206,9 @@ export const CATALOG_CODES = [
   "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
   "E_NAMESPACED_WRITE_UNSUPPORTED",
   "E_RECIPIENT_LACKS_KEYS_FOR_SUITE",
+  "E_AEAD_REBINDING_ATTACK_DETECTED",
+  "E_TWO_CID_MAPPING_NOT_FOUND",
+  "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2806,6 +2809,51 @@ export class ERecipientLacksKeysForSuite extends BentenError {
 }
 
 /**
+ * E_AEAD_REBINDING_ATTACK_DETECTED
+ *
+ * Thrown at: `crates/benten-graph/src/aead_wrap.rs::decrypt` + `::decrypt_chunk` (lifted from `benten_crypto_suite::aead::unwrap` returning `AeadError::AeadAuthFailed` when the AAD-rebinding shape is matched); surfaces through `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::AeadAuthenticationFailed` → engine-error lift at G-CORE-3e.
+ * Message template: "AEAD authentication failed: AAD-binds-plaintext-CID rebinding attack (or AAD-binds-chunk-index cross-chunk-rebinding attack) detected at decrypt time"
+ */
+export class EAeadRebindingAttackDetected extends BentenError {
+  static readonly code = "E_AEAD_REBINDING_ATTACK_DETECTED";
+  static readonly fixHint = "Per §1.A.FROZEN item 15(g) + SECURITY-POSTURE.md \"rebinding-attack-prevention\" section + RATIFIED-S&C 2026-05-21 R2 (per-Spike-G/H/R3 ratification): the per-Node AEAD wrap binds `plaintext_cid` (whole-content arm) or `(plaintext_cid, chunk_index)` (per-chunk arm) into the ChaCha20-Poly1305 AAD at seal time. The decrypt-time AAD reconstruction MUST match byte-for-byte; failure means an attacker is mounting a valid ciphertext under the WRONG plaintext-CID (rebinding) or the WRONG chunk-index (cross-chunk-rebinding). Resolution: the caller's storage / mapping table has been tampered + the AEAD layer is correctly catching it; verify the two-CID mapping is consistent with the envelope's stored plaintext_cid + verify no off-tree process is mutating the encrypted-nodes table. NEVER catch + retry — the silent-acceptance of mismatch is the attack vector this code prevents.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_AEAD_REBINDING_ATTACK_DETECTED", "Per §1.A.FROZEN item 15(g) + SECURITY-POSTURE.md \"rebinding-attack-prevention\" section + RATIFIED-S&C 2026-05-21 R2 (per-Spike-G/H/R3 ratification): the per-Node AEAD wrap binds `plaintext_cid` (whole-content arm) or `(plaintext_cid, chunk_index)` (per-chunk arm) into the ChaCha20-Poly1305 AAD at seal time. The decrypt-time AAD reconstruction MUST match byte-for-byte; failure means an attacker is mounting a valid ciphertext under the WRONG plaintext-CID (rebinding) or the WRONG chunk-index (cross-chunk-rebinding). Resolution: the caller's storage / mapping table has been tampered + the AEAD layer is correctly catching it; verify the two-CID mapping is consistent with the envelope's stored plaintext_cid + verify no off-tree process is mutating the encrypted-nodes table. NEVER catch + retry — the silent-acceptance of mismatch is the attack vector this code prevents.", message, context);
+    this.name = "EAeadRebindingAttackDetected";
+  }
+}
+
+/**
+ * E_TWO_CID_MAPPING_NOT_FOUND
+ *
+ * Thrown at: `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::NotFound` via `crates/benten-graph/src/redb_backend.rs::RedbBackend::read_via_two_cid` + `::read_via_two_cid_scoped`. Engine-error lift at G-CORE-3e.
+ * Message template: "two-CID mapping has no entry for plaintext CID {plaintext_cid} under the active scope"
+ */
+export class ETwoCidMappingNotFound extends BentenError {
+  static readonly code = "E_TWO_CID_MAPPING_NOT_FOUND";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 R2 two-CID contract + multitenant-r1-5 partition-isolation property: this code is the load-bearing confidentiality arm at the head of `RedbBackend::read_via_two_cid_scoped`. A cross-DID caller (a `WriteContext::namespace_did = Some(did_y)` view trying to read content written under `did_x`) gets this code at the mapping-lookup step BEFORE any AEAD work — the partition isolation fires structurally at the key-prefix layer. NOT a tamper signal + NOT a degraded-cryptographic-state signal; semantically \"this plaintext CID was never written here / under this scope.\" Resolution at the read site: check whether the read is intentional (re-issue under the correct namespace_did) or whether the plaintext CID was supplied by an untrusted source. NEVER promote this to an AEAD-authentication error — the distinction is the confidentiality boundary between \"you saw the bytes and couldn't decrypt them\" (leak) and \"you didn't even see this mapping exists\" (correct isolation).";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_TWO_CID_MAPPING_NOT_FOUND", "Per RATIFIED-S&C 2026-05-21 R2 two-CID contract + multitenant-r1-5 partition-isolation property: this code is the load-bearing confidentiality arm at the head of `RedbBackend::read_via_two_cid_scoped`. A cross-DID caller (a `WriteContext::namespace_did = Some(did_y)` view trying to read content written under `did_x`) gets this code at the mapping-lookup step BEFORE any AEAD work — the partition isolation fires structurally at the key-prefix layer. NOT a tamper signal + NOT a degraded-cryptographic-state signal; semantically \"this plaintext CID was never written here / under this scope.\" Resolution at the read site: check whether the read is intentional (re-issue under the correct namespace_did) or whether the plaintext CID was supplied by an untrusted source. NEVER promote this to an AEAD-authentication error — the distinction is the confidentiality boundary between \"you saw the bytes and couldn't decrypt them\" (leak) and \"you didn't even see this mapping exists\" (correct isolation).", message, context);
+    this.name = "ETwoCidMappingNotFound";
+  }
+}
+
+/**
+ * E_TWO_CID_MAPPING_INTEGRITY_MISMATCH
+ *
+ * Thrown at: `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::IntegrityMismatch` via `crates/benten-graph/src/redb_backend.rs::RedbBackend::read_decrypt_inner`. Engine-error lift at G-CORE-3e.
+ * Message template: "two-CID mapping integrity mismatch: envelope's plaintext_cid field doesn't match the mapping-claimed plaintext_cid (or stored ciphertext bytes don't hash to the claimed ciphertext_cid)"
+ */
+export class ETwoCidMappingIntegrityMismatch extends BentenError {
+  static readonly code = "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH";
+  static readonly fixHint = "Per the defense-in-depth contract documented in SECURITY-POSTURE.md \"rebinding-attack-prevention\" section: the two-CID mapping row `d:<did>:m:<plaintext_a> → ciphertext_cid` is structurally validated against the envelope at decrypt time. If the envelope's `plaintext_cid` field doesn't match the mapping-claimed `plaintext_a` (i.e. the mapping was tampered to redirect `plaintext_a → ciphertext_b` where *B*'s envelope carries `plaintext_cid = B ≠ A`), this typed integrity error fires. This complements the AEAD layer's AAD-binds-plaintext-CID defense — the AEAD layer would also catch the foreign envelope's AAD mismatch, but this structural check surfaces the tamper class distinctly so audit logs can distinguish \"storage tamper\" from \"cryptographic tamper\" cleanly. Resolution: investigate the storage layer for off-tree mutation of the `TWO_CID_MAP_TABLE` or `ENCRYPTED_NODES_TABLE`; the legitimate sealed write path produces consistent envelope ↔ mapping bindings. NEVER catch + retry.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_TWO_CID_MAPPING_INTEGRITY_MISMATCH", "Per the defense-in-depth contract documented in SECURITY-POSTURE.md \"rebinding-attack-prevention\" section: the two-CID mapping row `d:<did>:m:<plaintext_a> → ciphertext_cid` is structurally validated against the envelope at decrypt time. If the envelope's `plaintext_cid` field doesn't match the mapping-claimed `plaintext_a` (i.e. the mapping was tampered to redirect `plaintext_a → ciphertext_b` where *B*'s envelope carries `plaintext_cid = B ≠ A`), this typed integrity error fires. This complements the AEAD layer's AAD-binds-plaintext-CID defense — the AEAD layer would also catch the foreign envelope's AAD mismatch, but this structural check surfaces the tamper class distinctly so audit logs can distinguish \"storage tamper\" from \"cryptographic tamper\" cleanly. Resolution: investigate the storage layer for off-tree mutation of the `TWO_CID_MAP_TABLE` or `ENCRYPTED_NODES_TABLE`; the legitimate sealed write path produces consistent envelope ↔ mapping bindings. NEVER catch + retry.", message, context);
+    this.name = "ETwoCidMappingIntegrityMismatch";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -2987,4 +3035,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE": EMaterializerSubscribeSeamFailure,
   "E_NAMESPACED_WRITE_UNSUPPORTED": ENamespacedWriteUnsupported,
   "E_RECIPIENT_LACKS_KEYS_FOR_SUITE": ERecipientLacksKeysForSuite,
+  "E_AEAD_REBINDING_ATTACK_DETECTED": EAeadRebindingAttackDetected,
+  "E_TWO_CID_MAPPING_NOT_FOUND": ETwoCidMappingNotFound,
+  "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH": ETwoCidMappingIntegrityMismatch,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

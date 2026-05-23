@@ -46,8 +46,17 @@ pub use benten_errors::ErrorCode;
 
 use crate::store::subgraph_key;
 
+// Phase-4-Meta-Core G-CORE-3d (#1301): per-Node AEAD wrap layer +
+// two-CID mapping. Lives gated under non-`wasm32-unknown-unknown`
+// because the redb-backed storage seam (`RedbBackend` extensions)
+// these modules participate in is itself redb-gated; the browser
+// thin-client target does NOT carry this layer.
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+pub mod aead_wrap;
 pub mod backend;
 pub mod backends;
+#[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
+pub mod two_cid_map;
 // G13-C wave-3 (Phase-3 R5): `BrowserBackend` thin-client cache for the
 // `wasm32-unknown-unknown` browser bundle per CLAUDE.md baked-in #17.
 // Feature-gated so the native default-features build does not compile
@@ -1133,10 +1142,12 @@ mod tests {
         sorted.sort();
         assert_eq!(keys, sorted);
         keys.sort();
-        assert_eq!(
-            keys,
-            [b"alpha".as_ref(), b"beta".as_ref(), b"gamma".as_ref()]
-        );
+        // G-CORE-3d note: explicit `<[u8] as AsRef<[u8]>>::as_ref` ascription
+        // disambiguates between the `core::AsRef` impl + the
+        // `hybrid_array::Array<[u8]>` impl that landed in benten-graph's dep
+        // graph via `benten-crypto-suite` → `ml-kem` → `hybrid_array`.
+        let expected: [&[u8]; 3] = [b"alpha", b"beta", b"gamma"];
+        assert_eq!(keys, expected);
     }
 
     #[test]

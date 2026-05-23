@@ -1086,6 +1086,39 @@ pub enum ErrorCode {
     /// the structural-shape rejection at the cipher-suite boundary
     /// surface here as `E_RECIPIENT_LACKS_KEYS_FOR_SUITE`.
     RecipientLacksKeysForSuite,
+
+    /// Phase-4-Meta-Core G-CORE-3d (#1301) — per-Node AEAD wrap layer
+    /// AAD-binds-plaintext-CID rebinding-attack detected at decrypt
+    /// time. The cipher-suite layer's AEAD authenticator fails
+    /// (`benten_crypto_suite::AeadError::AeadAuthFailed`) when the
+    /// decrypt-time AAD doesn't match the seal-time AAD; this code is
+    /// the storage-layer rendering of that failure when the failure
+    /// mode is specifically the AAD-rebinding attack (a ciphertext for
+    /// plaintext-CID *P* mounted at plaintext-CID *Q*; or a chunk-N
+    /// ciphertext mounted at chunk-index *M ≠ N*). The load-bearing
+    /// rebinding-attack defense per §1.A.FROZEN item 15(g) +
+    /// SECURITY-POSTURE.md "rebinding-attack-prevention" section.
+    AeadRebindingAttackDetected,
+
+    /// G-CORE-3d (#1301) — two-CID mapping table has no entry for the
+    /// queried plaintext CID under the active scope (un-namespaced or
+    /// per-DID partition). Semantically "not in mapping," NOT "mapping
+    /// subsystem broken." The partition-isolation arm at the head of
+    /// `RedbBackend::read_via_two_cid_scoped` surfaces this when a
+    /// cross-DID caller reads, NEVER an AEAD-authentication failure
+    /// (which would imply the caller saw the ciphertext bytes — a
+    /// confidentiality leak per multitenant-r1-5).
+    TwoCidMappingNotFound,
+
+    /// G-CORE-3d (#1301) — two-CID mapping row was tampered. The
+    /// mapping claims `plaintext_cid → ciphertext_cid` but either the
+    /// stored ciphertext bytes don't BLAKE3 to `ciphertext_cid`
+    /// (storage-side tamper) or the envelope's `plaintext_cid` field
+    /// doesn't match the mapping-claimed plaintext_cid (structural
+    /// integrity check that complements the AEAD layer). Fires from
+    /// `benten_graph::two_cid_map::TwoCidMapError::IntegrityMismatch`.
+    TwoCidMappingIntegrityMismatch,
+
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1385,6 +1418,9 @@ impl ErrorCode {
             ErrorCode::MaterializerSubscribeSeamFailure => "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE",
             ErrorCode::NamespacedWriteUnsupported => "E_NAMESPACED_WRITE_UNSUPPORTED",
             ErrorCode::RecipientLacksKeysForSuite => "E_RECIPIENT_LACKS_KEYS_FOR_SUITE",
+            ErrorCode::AeadRebindingAttackDetected => "E_AEAD_REBINDING_ATTACK_DETECTED",
+            ErrorCode::TwoCidMappingNotFound => "E_TWO_CID_MAPPING_NOT_FOUND",
+            ErrorCode::TwoCidMappingIntegrityMismatch => "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -1820,6 +1856,15 @@ impl ErrorCode {
             // is appropriate here.
             ErrorCode::RecipientLacksKeysForSuite => None,
 
+            // G-CORE-3d (#1301): per-Node AEAD wrap + two-CID mapping
+            // typed errors. All three are structural integrity /
+            // tamper / authentication failures at the storage layer;
+            // routing them through ON_DENIED is the canonical
+            // confidentiality-failure disposition.
+            ErrorCode::AeadRebindingAttackDetected => Some("ON_DENIED"),
+            ErrorCode::TwoCidMappingNotFound => None,
+            ErrorCode::TwoCidMappingIntegrityMismatch => Some("ON_DENIED"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2101,6 +2146,9 @@ impl core::str::FromStr for ErrorCode {
             "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE" => ErrorCode::MaterializerSubscribeSeamFailure,
             "E_NAMESPACED_WRITE_UNSUPPORTED" => ErrorCode::NamespacedWriteUnsupported,
             "E_RECIPIENT_LACKS_KEYS_FOR_SUITE" => ErrorCode::RecipientLacksKeysForSuite,
+            "E_AEAD_REBINDING_ATTACK_DETECTED" => ErrorCode::AeadRebindingAttackDetected,
+            "E_TWO_CID_MAPPING_NOT_FOUND" => ErrorCode::TwoCidMappingNotFound,
+            "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH" => ErrorCode::TwoCidMappingIntegrityMismatch,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

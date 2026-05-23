@@ -122,6 +122,17 @@ pub(crate) fn namespaced_node_key(namespace_did: &Cid, cid: &Cid) -> Vec<u8> {
     k
 }
 
+/// G-CORE-3d: `d:<did>:c:<ciphertext_cid>` — namespaced AEAD-envelope
+/// storage key. The `c:` subprefix distinguishes ciphertext storage
+/// from plaintext (`n:`) storage so a future schema migration that
+/// consolidates the tables can disambiguate the two.
+pub(crate) fn namespaced_ciphertext_key(namespace_did: &Cid, ciphertext_cid: &Cid) -> Vec<u8> {
+    let mut k = partition_prefix(namespace_did);
+    k.extend_from_slice(b"c:");
+    k.extend_from_slice(ciphertext_cid.as_bytes());
+    k
+}
+
 /// `d:<did>:e:<cid>` — namespaced edge key.
 pub(crate) fn namespaced_edge_key(namespace_did: &Cid, cid: &Cid) -> Vec<u8> {
     let mut k = partition_prefix(namespace_did);

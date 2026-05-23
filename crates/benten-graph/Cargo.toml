@@ -73,7 +73,7 @@ browser-backend = []
 # no `last_durability_by_label`) — fulfilling the commit-message claim in
 # `be8f6ea` that these accumulation surfaces "no longer accumulate [in
 # production builds]".
-testing = []
+testing = ["benten-core/testing"]
 
 [dependencies]
 benten-core = { path = "../benten-core" }
@@ -91,6 +91,16 @@ blake3 = { workspace = true }
 serde = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
+
+# Phase-4-Meta-Core G-CORE-3d (#1301): per-Node AEAD wrap layer +
+# two-CID mapping table ride on the codepoint-dispatched cipher-suite
+# substrate (`KeyMaterial` / `AeadEnvelope` / `wrap` / `unwrap` /
+# `aad_whole_content` / `aad_per_chunk` / `IROH_BLOCK_SIZE` /
+# `WHOLE_CONTENT_AEAD_THRESHOLD`) minted at G-CORE-3a CANARY. Per
+# CLAUDE.md baked-in #5 the integration crate is the ONLY crypto-
+# primitive call site; benten-graph's AEAD wrap module is glue over
+# that surface, never against ChaCha20-Poly1305 / HKDF / etc. directly.
+benten-crypto-suite = { path = "../benten-crypto-suite" }
 
 # G13-C wave-3 (Phase-3 R5; CLAUDE.md baked-in #17 + br-r1-1 BLOCKER): the
 # `redb` dependency is target-conditional. Native targets (x86_64-* /

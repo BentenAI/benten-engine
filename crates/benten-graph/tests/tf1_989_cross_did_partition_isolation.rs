@@ -135,9 +135,13 @@ fn point_read_does_not_leak_across_did_partitions() {
     assert_ne!(did_x, did_y, "test setup: the two namespaces must differ");
 
     let secret = node_titled("X-private-secret");
-    let cid = backend
+    backend
         .put_node_with_context(&secret, &ctx_for(&did_x))
         .expect("write under namespace_did=X must succeed");
+    // G-CORE-3d (#1301): obtain the plaintext-CID handle from the Node
+    // directly (the put-return is now the ciphertext_cid for namespaced
+    // writes per the two-CID storage contract).
+    let cid = secret.cid().unwrap();
 
     // The OWNING partition can read it (no false-positive isolation).
     let from_x = backend.scoped(did_x.clone()).get_node(&cid).unwrap();
@@ -172,12 +176,20 @@ fn label_range_scan_does_not_leak_across_did_partitions() {
 
     let x_node = node_titled("X-doc");
     let y_node = node_titled("Y-doc");
-    let x_cid = backend
+    backend
         .put_node_with_context(&x_node, &ctx_for(&did_x))
         .unwrap();
-    let y_cid = backend
+    backend
         .put_node_with_context(&y_node, &ctx_for(&did_y))
         .unwrap();
+    // G-CORE-3d (#1301): namespaced `put_node_with_context` now returns
+    // the ciphertext_cid (the storage / transport identity). The
+    // label_index / iter_node_cids / change_event paths the assertions
+    // below test continue to key on the PLAINTEXT CID (`node.cid()`)
+    // per G-CORE-1's contract; obtain the plaintext-CID handle from the
+    // Node directly rather than the put return value.
+    let x_cid = x_node.cid().unwrap();
+    let y_cid = y_node.cid().unwrap();
 
     let y_hits = backend.scoped(did_y.clone()).get_by_label("Doc").unwrap();
     assert!(
@@ -215,9 +227,11 @@ fn raw_keyspace_iterate_does_not_leak_across_did_partitions() {
     let did_y = namespace_cid("did:key:zY");
 
     let secret = node_titled("X-iterate-secret");
-    let x_cid = backend
+    backend
         .put_node_with_context(&secret, &ctx_for(&did_x))
         .unwrap();
+    // G-CORE-3d (#1301): plaintext-CID handle from the Node directly.
+    let x_cid = secret.cid().unwrap();
 
     // Adversary iterates its OWN partition exhaustively and tries to
     // reach the X node by CID through the iterate-yielded key set.
@@ -277,9 +291,14 @@ fn change_subscriber_fan_out_does_not_leak_across_did_partitions() {
 
     // A write under namespace_did=X goes through the real post-commit
     // fan-out path (`put_node_with_context`).
-    let x_cid = backend
-        .put_node_with_context(&node_titled("X-fanout-secret"), &ctx_for(&did_x))
+    let x_node_local = node_titled("X-fanout-secret");
+    backend
+        .put_node_with_context(&x_node_local, &ctx_for(&did_x))
         .unwrap();
+    // G-CORE-3d (#1301): ChangeEvent.cid is keyed on plaintext_cid (the
+    // G-CORE-1 contract); the put return is the ciphertext_cid for
+    // namespaced writes. Obtain the plaintext-CID handle from the Node.
+    let x_cid = x_node_local.cid().unwrap();
 
     let observed = y_events.lock().unwrap();
     assert!(
@@ -296,9 +315,11 @@ fn change_subscriber_fan_out_does_not_leak_across_did_partitions() {
     // (proves the subscriber is wired, so the negative above is real
     // isolation, not a dead subscriber).
     drop(observed);
-    let y_cid = backend
-        .put_node_with_context(&node_titled("Y-fanout-own"), &ctx_for(&did_y))
+    let y_node_local = node_titled("Y-fanout-own");
+    backend
+        .put_node_with_context(&y_node_local, &ctx_for(&did_y))
         .unwrap();
+    let y_cid = y_node_local.cid().unwrap();
     assert!(
         y_events.lock().unwrap().iter().any(|e| e.cid == y_cid),
         "the Y-scoped subscriber MUST receive its own partition's write \
@@ -321,12 +342,18 @@ fn edge_keyspace_does_not_leak_across_did_partitions() {
 
     let src = node_titled("edge-src");
     let tgt = node_titled("edge-tgt");
-    let src_cid = backend
+    backend
         .put_node_with_context(&src, &ctx_for(&did_x))
         .unwrap();
-    let tgt_cid = backend
+    backend
         .put_node_with_context(&tgt, &ctx_for(&did_x))
         .unwrap();
+    // G-CORE-3d (#1301): edges are constructed against the PLAINTEXT
+    // node CIDs (the logical graph identity); the put return is the
+    // ciphertext_cid for namespaced writes, NOT the value the Edge
+    // points at.
+    let src_cid = src.cid().unwrap();
+    let tgt_cid = tgt.cid().unwrap();
     let edge = Edge::new(src_cid.clone(), tgt_cid.clone(), "LINKS", None);
     let edge_cid = backend
         .put_edge_with_context(&edge, &ctx_for(&did_x))
