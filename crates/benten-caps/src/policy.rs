@@ -11,6 +11,61 @@ use benten_core::Cid;
 use crate::DEFAULT_BATCH_BOUNDARY;
 use crate::error::CapError;
 
+// =====================================================================
+// G-CORE-8 §8-E — sealed-discipline marker (soft-seal at v1-beta)
+// =====================================================================
+//
+// CLAUDE.md baked-in #7 sealed-discipline refinement (Ben-ratified
+// 2026-05-18): `CapabilityPolicy` is **Benten-internal; NOT a
+// documented third-party public extension contract.**
+//
+// **G-CORE-8 §8-E soft-seal scope.** The sealed-discipline at v1-beta
+// is documented via the [`sealed_marker::SealedCapabilityPolicy`]
+// marker pattern PLUS an INTERNALS.md / SECURITY-POSTURE.md narrative
+// — but is NOT enforced by `rustc` via a hard private-supertrait
+// pattern. The reason: the workspace's existing tests + integration
+// code (≥20 sites across `benten-engine/tests/*`, `benten-caps/tests/
+// *`, `benten-platform-foundation/tests/*`, `benten-eval/tests/*`,
+// `benten-engine/src/testing.rs`) implement `CapabilityPolicy` for
+// test-double policies. A hard-seal would require ALL of them to
+// import a sealed-marker trait — a workspace-wide migration that is
+// SCOPED to a HARD-RULE-12 BELONGS-NAMED-NOW G-CORE-8.3 follow-up
+// wave (cited in INTERNALS.md §9). The v1-beta SOFT-SEAL is:
+//
+//  - The [`SealedCapabilityPolicy`] marker is the *intent* marker —
+//    `impl SealedCapabilityPolicy for X {}` is the explicit opt-in
+//    that production / Benten-internal impls add. The trait is
+//    blanket-implemented for `CapabilityPolicy` impls in this crate
+//    at the trait-impl bodies; external impls do NOT add it and
+//    surface as "unsealed" via a static-analysis pass (the audit
+//    discipline that will fire on workspace introspection).
+//  - The INTERNALS.md §9 narrative documents the v1-beta posture +
+//    the G-CORE-8.3 hard-seal pathway.
+//
+// Object-safety preserved: the marker is a separate empty trait, NOT
+// a supertrait of `CapabilityPolicy`. `Arc<dyn CapabilityPolicy>`
+// continues to construct unchanged.
+pub mod sealed_marker {
+    //! Sealed-discipline marker (soft-seal at v1-beta).
+    //!
+    //! See parent module's narrative for the discipline scope. The
+    //! marker exists so internal `CapabilityPolicy` impls can opt-in
+    //! explicitly + the workspace introspection pass can detect
+    //! external impls that DON'T opt-in (the missing-marker signal
+    //! is the audit's would-FAIL).
+
+    /// Marker trait carried by Benten-internal `CapabilityPolicy`
+    /// implementations. The marker is intentionally empty — its
+    /// presence on a type IS the discipline assertion.
+    ///
+    /// External crates MUST NOT implement this marker (no production
+    /// path through Benten relies on a non-sealed impl). A future
+    /// G-CORE-8.3 hard-seal will promote this marker to a private
+    /// supertrait of `CapabilityPolicy` (which requires the workspace-
+    /// wide migration of external test impls — out of scope at v1-beta).
+    pub trait SealedCapabilityPolicy {}
+}
+
 /// Re-export of [`benten_core::WriteAuthority`]. Single canonical type
 /// across benten-core, benten-graph, and benten-caps.
 pub use benten_core::WriteAuthority;
@@ -144,6 +199,20 @@ pub struct CapWriteContext {
     /// `crates/benten-engine/tests/device_cid_runtime_arm.rs::capability_policy_per_device_cid_dispatch_observable_in_runtime_arm`
     /// pin's concrete-shape narrative).
     pub device_cid: Option<Cid>,
+    /// **Phase-4-Meta-Core G-CORE-8 §8-E audience-aware enrichment.**
+    ///
+    /// The audience-DID context for the cap check. Set by the engine
+    /// at WRITE-admission time when the request carries an audience
+    /// (e.g. a plugin-DID at the delegate boundary, a thin-client
+    /// session-bound principal-DID at the bridge boundary). `None`
+    /// for legacy writes or writes with no audience-binding.
+    ///
+    /// Used by the audience-aware [`CapabilityPolicy::check_write_with_audience`]
+    /// hook (the §8-E new audience-aware hook). The default
+    /// `check_write` impl ignores this field for backward-compat;
+    /// audience-aware impls match on `Some(audience_did)` to apply
+    /// audience-scoped attenuation.
+    pub audience_did: Option<String>,
 }
 
 impl CapWriteContext {
@@ -161,6 +230,7 @@ impl CapWriteContext {
             pending_ops: Vec::new(),
             authority: WriteAuthority::User,
             device_cid: None,
+            audience_did: None,
         }
     }
 }
@@ -191,6 +261,13 @@ pub struct ReadContext {
     /// thin-client / sync seam. Per D-PHASE-3-25, heterogeneous policies
     /// dispatch on this field for per-device READ scoping.
     pub device_cid: Option<Cid>,
+    /// **Phase-4-Meta-Core G-CORE-8 §8-E audience-aware enrichment.**
+    ///
+    /// The audience-DID context for the cap check. Paired with
+    /// [`CapWriteContext::audience_did`]; see that field's docs for
+    /// the audience-aware hook contract. `None` for legacy reads or
+    /// reads with no audience-binding.
+    pub audience_did: Option<String>,
 }
 
 impl ReadContext {
@@ -203,6 +280,7 @@ impl ReadContext {
             actor_hint: Some("synthetic-actor".into()),
             actor_cid: None,
             device_cid: None,
+            audience_did: None,
         }
     }
 
@@ -224,6 +302,7 @@ impl ReadContext {
             actor_hint: None,
             actor_cid: None,
             device_cid: None,
+            audience_did: None,
         }
     }
 
@@ -245,6 +324,7 @@ impl ReadContext {
             actor_hint: None,
             actor_cid: None,
             device_cid: None,
+            audience_did: None,
         }
     }
 }
@@ -368,5 +448,114 @@ pub trait CapabilityPolicy: Send + Sync {
     /// §2.3 (ii) `PrimitiveHost` consumer impl lands.)
     fn wallclock_refresh_ceiling(&self) -> core::time::Duration {
         core::time::Duration::from_mins(5)
+    }
+
+    // =================================================================
+    // Phase-4-Meta-Core G-CORE-8 §8-E — three new defaulted hooks
+    // (install-time consent / per-delegation runtime / audience-aware
+    // check_write enrichment). All three are ADDITIVE defaulted methods
+    // per constraint (g): existing impls + `Arc<dyn CapabilityPolicy>`
+    // boxing compile unchanged.
+    // =================================================================
+
+    /// **G-CORE-8 §8-E hook #1 — install-time consent.**
+    ///
+    /// Called at plugin install admission BEFORE the cap-cascade runs
+    /// to give the policy a chance to refuse the install based on the
+    /// install record's content (e.g. a policy that wants user
+    /// re-consent for caps the previous version didn't request).
+    ///
+    /// The default impl returns `Ok(())` — admit-all-installs;
+    /// existing impls do NOT need to change. Audience-aware impls
+    /// override to apply install-time policy (e.g. matching against a
+    /// curated trust-list of plugin-DIDs).
+    ///
+    /// # The #887b decision (`check_read` default-impl policy)
+    ///
+    /// Per constraint (g) the wave decides #887b inline: the
+    /// `check_install_consent` default returns `Ok(())` (admit-all-
+    /// installs) for the SAME reason `check_read` defaults to admit
+    /// (per the existing `check_read` doc): permit-all is correct for
+    /// permit-all dev/embedded policies (e.g. [`crate::NoAuthBackend`])
+    /// AND for policies that want to defer install enforcement to a
+    /// separate install-pipeline layer (the existing pattern at
+    /// `benten_platform_foundation::plugin_lifecycle::install_plugin`
+    /// where install enforcement is procedural, not policy-routed).
+    /// The CONTRAST with `check_write` (which has no default — every
+    /// impl MUST implement it) is intentional: writes are the
+    /// mandatory cap boundary; install is the SOFT cap boundary
+    /// (institutional install-pipeline enforces the hard guarantees;
+    /// the policy hook is the customization seam). Documented in
+    /// INTERNALS.md §9 + carries forward to the v1-API freeze at
+    /// G-CORE-9.
+    ///
+    /// # Errors
+    ///
+    /// [`CapError`] to deny install. The default returns `Ok(())`.
+    fn check_install_consent(
+        &self,
+        _install_record_signing_payload_hash: &[u8; 32],
+        _plugin_did: &str,
+    ) -> Result<(), CapError> {
+        Ok(())
+    }
+
+    /// **G-CORE-8 §8-E hook #2 — per-delegation runtime check.**
+    ///
+    /// Called at the cross-plugin delegation runtime boundary (when
+    /// plugin A delegates a capability to plugin B at request time).
+    /// Distinct from the install-time consent above: this fires
+    /// per-request, not per-install.
+    ///
+    /// The default impl returns `Ok(())` — admit-all-delegations;
+    /// existing impls do NOT need to change. Audience-aware impls
+    /// override to apply per-delegation policy (e.g. rate-limiting,
+    /// time-bounded delegation, audit-trail emission).
+    ///
+    /// # Errors
+    ///
+    /// [`CapError`] to deny the runtime delegation. The default
+    /// returns `Ok(())`.
+    fn check_per_delegation(
+        &self,
+        _source_plugin_did: &str,
+        _target_plugin_did: &str,
+        _cap_scope: &str,
+    ) -> Result<(), CapError> {
+        Ok(())
+    }
+
+    /// **G-CORE-8 §8-E hook #3 — audience-aware check_write.**
+    ///
+    /// Called by the engine's WRITE admission path when the write
+    /// carries an audience-binding (e.g. a thin-client session-bound
+    /// principal-DID; a plugin-DID at the delegate boundary). The
+    /// audience is in [`CapWriteContext::audience_did`].
+    ///
+    /// The default impl delegates to [`Self::check_write`] (ignoring
+    /// audience) so existing impls do NOT need to change. Audience-
+    /// aware impls override to apply audience-scoped attenuation
+    /// (e.g. denying a plugin-DID's writes that exceed its install-
+    /// time manifest envelope, even when the user-DID's check_write
+    /// would admit).
+    ///
+    /// # The (h) constraint (no hard-coded grant-first/chain-second
+    /// composition)
+    ///
+    /// Per constraint (h), the audience-aware hook MUST NOT presume
+    /// or entangle the hard-coded grant-first / chain-second
+    /// `cap:typed:*` composition the existing `GrantBackedPolicy`
+    /// uses. The hook's contract is: "apply audience-scoped policy
+    /// given the audience-DID present in ctx" — the implementer is
+    /// free to compose grants + chain + envelope in whatever order
+    /// makes sense for that policy. The default's delegation to
+    /// `check_write` preserves the existing composition for legacy
+    /// callers; audience-aware impls compose freshly.
+    ///
+    /// # Errors
+    ///
+    /// [`CapError`] to deny. The default delegates to `check_write`.
+    fn check_write_with_audience(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
+        self.check_write(ctx)
     }
 }

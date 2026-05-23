@@ -79,6 +79,7 @@ fn install_on_thin_compute_surface_with_sandbox_exec_require_fails_with_heteroge
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -140,6 +141,7 @@ fn full_peer_does_not_trigger_heterogeneity_gate() {
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,

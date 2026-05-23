@@ -6,9 +6,9 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ---
 
-## Thirteen crates (post-Phase-4-Meta-Core G-CORE-2)
+## Fourteen crates (post-Phase-4-Meta-Core G-CORE-3f)
 
-The Rust workspace ships thirteen Rust crates plus the napi bindings + the
+The Rust workspace ships fourteen Rust crates plus the napi bindings + the
 TypeScript DSL wrapper. The 8 → 10 crate transition completed in
 Phase 3 — `benten-id` (9th, identity + claims) and `benten-sync`
 (10th, sync runtime — native-only) landed and were filled in across
@@ -34,7 +34,19 @@ line 6; v1-beta signature default = hybrid Ed25519⊕ML-DSA-65; concat /
 hash / codepoint / envelope glue over vetted upstream RustCrypto
 crates).
 
-The narrative below is the post-G-CORE-2 shape.
+**Phase 4-Meta-Core G-CORE-3f extends the workspace to fourteen
+crates** by adding `benten-drop` — the Drop bundle format crate
+(self-contained CBOR-on-disk envelope shipped over the iroh-blobs
+two-CID seam; Mode 2 sendme→Drop ships at G-CORE-3f; Mode 3
+inline-tiny deferred to post-v1 per `.addl/phase-4-meta/00-implementation-plan.md`
+§3 G-CORE-3 def input-constraints refinement #6 L341). Carries
+Spike G's envelope-sig + per-Node-sig defense-in-depth (<12%
+overhead). Per `RATIFIED-sharing-and-confidentiality-2026-05-21.md`
+§R6: Drop bundles are forever-valid once distributed (the
+revocation-reach asymmetry between online-pull and offline-Drop is
+documented at `docs/SECURITY-POSTURE.md` § "Revocation reach").
+
+The narrative below is the post-G-CORE-3f shape.
 
 ```
 crates/
@@ -149,6 +161,35 @@ crates/
                         # safety invariant is preserved: unaudited PQC
                         # is never the SOLE trust path; the classical
                         # half is the audited security floor.
+  benten-drop/          # 14th crate (Phase 4-Meta-Core / G-CORE-3f).
+                        # Drop bundle format — self-contained CBOR-on-
+                        # disk envelope `DropBundle{version, spec_cid,
+                        # auth_grant, content: Vec<EncryptedContent>,
+                        # restricted_spec, per_node_attestation,
+                        # envelope_sig, issuer_verifying_key}` shipped
+                        # over the iroh-blobs two-CID seam. Mode 2
+                        # (sendme→Drop) ships at G-CORE-3f; Mode 3
+                        # (inline-tiny) deferred to post-v1 per
+                        # `.addl/phase-4-meta/00-implementation-plan.md`
+                        # §3 G-CORE-3 def input-constraints refinement
+                        # #6 L341. Carries Spike G's envelope-sig +
+                        # per-Node-sig defense-in-depth (<12% overhead;
+                        # envelope-sig binds header only, AEAD tags
+                        # bind content — two independent integrity
+                        # layers). Consumer reads filesystem-only (no
+                        # network; no live publisher). Per RATIFIED-S&C
+                        # §R6 revocation-reach reality: Drop bundles
+                        # forever-valid once distributed (mitigations:
+                        # tight nbf/exp + periodic key rotation;
+                        # documented at SECURITY-POSTURE.md
+                        # "Revocation reach"). Dependency edges:
+                        # benten-core (Cid), benten-caps
+                        # (AuthorizationGrant + RestrictedSpec +
+                        # UcanEnvelope), benten-graph
+                        # (EncryptedNode + encode/decode), benten-id
+                        # (Keypair for envelope-sig), benten-crypto-suite
+                        # (BLAKE3 + Ed25519 via the only-call-site
+                        # primitive re-exports per CLAUDE.md #5).
   benten-renderer-tauri/
                         # 12th crate (Phase 4-Foundation). Tauri 2.x
                         # renderer ENGINE EXTENSION per CLAUDE.md
@@ -181,10 +222,10 @@ packages/
                     # over the napi surface.
 ```
 
-A workspace test pin verifies all thirteen crate names + the
+A workspace test pin verifies all fourteen crate names + the
 `native-only` annotation on `benten-sync` are present in this document
 (see `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs`),
-so the Phase-4-Foundation-close shape described above is the durable
+so the Phase-4-Meta-Core-G-CORE-3f shape described above is the durable
 narrative.
 
 The crate graph is DAG-shaped:

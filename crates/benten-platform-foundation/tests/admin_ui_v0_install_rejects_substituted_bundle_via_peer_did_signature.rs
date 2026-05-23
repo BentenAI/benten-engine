@@ -66,6 +66,7 @@ fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,

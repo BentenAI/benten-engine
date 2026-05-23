@@ -702,7 +702,24 @@ where
     pub cap_minter: &'a mut M,
     /// Private-namespace provisioner port.
     pub private_ns: &'a mut P,
+    /// **Phase-4-Meta-Core G-CORE-8 §4.37** — install-record replay
+    /// check port. Defaults to `None` (no replay check; backward-
+    /// compat). When `Some(F)`, called BEFORE the cap-cascade with
+    /// the canonical signing-payload hash of the install record. If
+    /// `F` returns `Err(_)`, install rejects pre-mint (zero
+    /// duplicate-mint window per §4.37 TOCTOU contract). Production
+    /// engines wire this to a closure over the engine's
+    /// `Engine::install_record_replay_store().record_and_check`.
+    pub install_record_replay_check: Option<&'a mut InstallRecordReplayCheckFn>,
 }
+
+/// Closure type for the [`InstallPorts::install_record_replay_check`]
+/// port. Takes the canonical 32-byte BLAKE3 hash of the install
+/// record's `signing_payload`; returns `Ok(())` to admit OR
+/// `Err(ErrorCode::PluginInstallRecordAlreadyApplied)` on replay.
+/// The 32-byte hash shape matches
+/// `benten_engine::install_record_replay::signing_payload_hash`.
+pub type InstallRecordReplayCheckFn = dyn FnMut(&[u8; 32]) -> Result<(), ErrorCode>;
 
 /// Non-port install parameters — the scalar / borrowed inputs the
 /// install cascade consumes (symmetric counterpart kept distinct from
@@ -863,6 +880,28 @@ where
     }
     if install_record.consenting_user_did != *params.user_did {
         return Err(ErrorCode::PluginInstallRecordConsentingUserMismatch);
+    }
+
+    // **3b. G-CORE-8 §4.37 InstallRecord replay-defense + atomic
+    //      record-and-check.** Fires BEFORE Step 4 (clock validation)
+    //      AND BEFORE Step 9 (cap-cascade). A second presentation of
+    //      the same install-record canonical bytes is rejected with
+    //      typed `PluginInstallRecordAlreadyApplied` here — zero
+    //      duplicate-mint window per the §4.37 TOCTOU contract.
+    //      Backward-compat: when the caller did NOT wire the port
+    //      (the `None` arm), this step no-ops (Phase-3-baseline
+    //      behavior preserved).
+    //
+    //      The canonical identity is the BLAKE3 hash of the
+    //      `signing_payload()` bytes (matches the canonical
+    //      content identity per the manifest_envelope_recheck.rs
+    //      `signing_payload_hash` helper in benten-engine; the
+    //      two-step composition stays free of platform-foundation
+    //      deps on benten-engine — the caller computes the hash).
+    if let Some(replay_check) = ports.install_record_replay_check.as_mut() {
+        let payload = install_record.signing_payload();
+        let payload_hash: [u8; 32] = *blake3::hash(&payload).as_bytes();
+        replay_check(&payload_hash)?;
     }
 
     // 4. Seam 2 — clock-injected validation (delegates to validate +

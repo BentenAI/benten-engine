@@ -84,6 +84,7 @@ fn install_path_rejects_bytes_with_announced_cid_mismatch_with_typed_error() {
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -145,6 +146,7 @@ fn install_path_admits_bytes_when_announced_cid_matches_signed_manifest() {
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,

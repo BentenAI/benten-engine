@@ -231,3 +231,18 @@ pub use transport_trait::TransportAddr;
 // D-PHASE-3-4 RESOLVED-at-R1. Native-only alongside iroh + Loro deps.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod crdt;
+
+// G-CORE-3e (Phase-4-Meta-Core) — UCAN-gated iroh-blobs custom-ALPN
+// handler (Flavor B per-request UCAN check). Validates each request's
+// AuthorizationGrant before dispatching to upstream
+// `iroh_blobs::provider::handle_connection`. Zero-conversion plumbing:
+// iroh EndpointId IS ed25519_dalek::VerifyingKey (Spike A2 finding).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ucan_blobs_protocol;
+
+// G-CORE-3e (Phase-4-Meta-Core) — TwoCidStore wave-3e adapter wrapping
+// a ciphertext-bytes backing store + the two-CID mapping (plaintext_cid
+// → ciphertext_cid → bytes). Production wire-up swaps the in-memory
+// store for `iroh_blobs::FsStore` at the named ciphertext_bytes seam.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod two_cid_store;

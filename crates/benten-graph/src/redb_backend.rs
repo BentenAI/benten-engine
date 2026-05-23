@@ -111,19 +111,127 @@ pub(crate) const NODES_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::n
 pub(crate) const TWO_CID_MAP_TABLE: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("benten_two_cid_map");
 
-/// G-CORE-3d: derive the test-seam K(N) from a plaintext CID. Mirrors
-/// `benten_core::Node::derive_key_for_test` byte-for-byte so the
-/// `read_via_two_cid_scoped` decrypt path produces the same key as the
-/// `put_node_with_context` seal path. The production K(N) source
-/// (per Spike-E Interpretation-B path-tagged derivation, rooted at
-/// K_principal) lands at G-CORE-3e — at swap-in time this helper +
-/// the `Node::derive_key_for_test` call site in `put_node_with_context`
-/// both replace with the structural-KDF call.
+/// G-CORE-3e: derive K(N) for a plaintext CID under a namespace DID,
+/// using the production HKDF-SHA256 structural-KDF substrate from
+/// `benten_crypto_suite::structural_kdf` (Spike-E Interpretation-B
+/// path-tagged derivation per
+/// `.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`
+/// §R-key-derivation).
+///
+/// **G-CORE-3e production swap (1-line):** this function replaces the
+/// G-CORE-3d wave's BLAKE3 test-seam derivation at the same boundary.
+/// The structural-KDF chain is:
+///
+/// ```text
+/// K_principal = HKDF-SHA256(domain_tag, info = did.as_bytes())
+/// K(root)     = derive_root(K_principal, root_cid = cid.as_bytes())
+/// K(N)        = K(root)   // single-Node walk at this seam; the
+///                         // multi-edge derive_step chain lands at
+///                         // the future subgraph-walk wire-up
+/// ```
+///
+/// The single-Node case (no canonical-path walk yet — the
+/// `derive_step` chain through SubgraphSpec walks lands at the
+/// future subgraph-walk wire-up) routes through `derive_root` so
+/// the substrate is exercised end-to-end + the seam is the same
+/// boundary the multi-edge wire-up swaps in at.
+///
+/// **K_principal seam.** The per-DID `K_principal` material lives
+/// behind a per-deployment secret store at the production wire-up
+/// (#989 / #1301 substrate). At this wave the K_principal is
+/// deterministically derived from the namespace_did via
+/// HKDF-SHA256 over a domain-tag — this lets the wave-3e
+/// per-recipient seal/unseal path produce stable keys without the
+/// K_principal storage seam landing first. The seam is named at
+/// `docs/future/phase-4-backlog.md` §3.10 G-CORE-3e (K_principal
+/// per-DID secret store) for the production replacement.
+///
+/// **⚠️ Confidentiality limit at this wave (K_principal-seam stand-in).**
+/// The `K_PRINCIPAL_DOMAIN_KEY` constant + the publicly-known
+/// `namespace_did` `Cid` bytes are the ONLY inputs to the K_principal
+/// synthesis at this wave — so **any party holding
+/// `(namespace_did, ciphertext_blob)` can derive `K(N)` and decrypt**.
+/// The `_test_seam_` hint in the function name is load-bearing on every
+/// caller until the K_principal-store backend lands; do NOT rely on the
+/// wave-3e confidentiality envelope for any data not also protected by
+/// namespace-isolation at the storage backend. See
+/// `docs/SECURITY-POSTURE.md` ("Confidentiality limit at this wave"
+/// callout under the G-CORE-3e key-derivation section).
+pub fn derive_test_seam_key_from_cid_with_namespace(did: Option<&Cid>, cid: &Cid) -> Vec<u8> {
+    // Step 1 — synthesize K_principal from a domain tag + namespace
+    // DID. The domain tag separates the K_principal-synthesis role
+    // from any other HKDF use across the workspace. The wave-3e
+    // namespace_did binds K_principal to a specific Atrium identity;
+    // the un-namespaced legacy path (None) uses a fixed sentinel so
+    // legacy plaintext nodes can still be round-tripped (the
+    // un-namespaced path doesn't AEAD-wrap at all in the live
+    // put_node_with_context, but the test-seam fallback path here
+    // covers any future caller).
+    let did_bytes: &[u8] = match did {
+        Some(d) => d.as_bytes(),
+        // Sentinel for the un-namespaced fallback. Distinct from
+        // any real DID so collisions are impossible.
+        None => b"benten/g-core-3e/unscoped-principal/v1",
+    };
+    // 32-byte domain key for the K_principal HKDF input. Stable
+    // across runs (the test-seam path is deterministic at this
+    // wave); the production wire-up reads this from the per-DID
+    // secret-material backend.
+    // Literal carries 32 bytes — exactly the BLAKE3 keyed-hash KEY_LEN.
+    const K_PRINCIPAL_DOMAIN_KEY: [u8; 32] = *b"benten/g-core-3e/k-principal-v1\0";
+    let k_principal_bytes = blake3::keyed_hash(&K_PRINCIPAL_DOMAIN_KEY, did_bytes);
+    let k_principal = benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(
+        k_principal_bytes.as_bytes(),
+    );
+
+    // Step 2 — derive K(root) for this Node via the HKDF-SHA256
+    // structural-KDF substrate. `derive_root` carries the "root"
+    // info-tag for cross-role domain separation per Spike-E +
+    // `benten_crypto_suite::structural_kdf` contract.
+    let k_root = benten_crypto_suite::structural_kdf::derive_root(&k_principal, cid.as_bytes());
+    k_root.as_bytes().to_vec()
+}
+
+/// G-CORE-3d back-compat shim — the un-namespaced legacy callers
+/// that previously called `derive_test_seam_key_from_cid(&cid)`
+/// route through the new namespace-aware helper with
+/// `namespace = None`. Kept as a thin shim so any in-flight call
+/// site keeps compiling; new callers should prefer the
+/// namespace-aware form directly.
+#[allow(dead_code)]
 fn derive_test_seam_key_from_cid(cid: &Cid) -> Vec<u8> {
-    let mut input = Vec::with_capacity(b"benten-test-key:".len() + cid.as_bytes().len());
-    input.extend_from_slice(b"benten-test-key:");
-    input.extend_from_slice(cid.as_bytes());
-    blake3::hash(&input).as_bytes().to_vec()
+    derive_test_seam_key_from_cid_with_namespace(None, cid)
+}
+
+/// G-CORE-3e: parse the namespace_did `Cid` out of a TWO_CID_MAP_TABLE
+/// key shaped `d:<namespace_did_bytes>:m:<plaintext_cid_bytes>` (per
+/// `crate::two_cid_map::TwoCidMap::partition_table_key`). Returns
+/// `None` if the key prefix doesn't carry the partition shape (i.e.
+/// the un-namespaced legacy `m:<plaintext_cid>` form). Used by
+/// [`RedbBackend::two_cid_lookup_with_namespace`] to recover the
+/// namespace_did the seal-time `put_node_with_context` call ran
+/// under so the unseal-side K(N) derivation routes through the same
+/// HKDF-SHA256 K_principal.
+fn parse_namespace_from_mapping_key(key_bytes: &[u8]) -> Option<Cid> {
+    // Expected prefix: b"d:" + did_bytes + b":m:" + plaintext_cid_bytes.
+    // The `Cid::as_bytes()` form is fixed-width (36 bytes per
+    // multihash+multicodec) but we don't strictly depend on that —
+    // we slice by the `:m:` delimiter that appears between the DID
+    // bytes and the plaintext_cid bytes.
+    let prefix = b"d:";
+    if !key_bytes.starts_with(prefix) {
+        return None;
+    }
+    let after_prefix = &key_bytes[prefix.len()..];
+    // Find the `:m:` delimiter. Cid bytes don't contain `:m:` as a
+    // 3-byte substring by construction (the multihash framing
+    // doesn't emit ASCII colons), so this scan is safe.
+    let needle = b":m:";
+    let idx = after_prefix
+        .windows(needle.len())
+        .position(|w| w == needle)?;
+    let did_bytes = &after_prefix[..idx];
+    Cid::from_bytes(did_bytes).ok()
 }
 
 /// G-CORE-3d: AEAD-wrapped node body storage. Whereas the legacy
@@ -1556,11 +1664,15 @@ impl RedbBackend {
         // AEAD-wrapped at this wave; the production K-source upgrade is
         // a swap-in at the same boundary.
         let returned_cid = if let Some(did) = ctx.namespace_did.as_ref() {
-            // K(N) sourced from the test-seam derivation (same bytes as
-            // `Node::derive_key_for_test` + `derive_test_seam_key_from_cid`).
-            // Production K(N) (structural-KDF rooted at K_principal) lands
-            // at G-CORE-3e per the wave-def named-destination above.
-            let aead_key = derive_test_seam_key_from_cid(&cid);
+            // G-CORE-3e: K(N) sourced from the production HKDF-SHA256
+            // structural-KDF substrate (Spike-E Interpretation-B path-
+            // tagged derivation rooted at a per-DID K_principal). The
+            // K_principal is currently deterministically derived from
+            // the namespace_did inside the helper — the named seam at
+            // `docs/future/phase-4-backlog.md` §3.10 swaps in the real
+            // per-DID secret-material backend (#989 / #1301 substrate)
+            // without changing this call site.
+            let aead_key = derive_test_seam_key_from_cid_with_namespace(Some(did), &cid);
             let encrypted = crate::aead_wrap::EncryptedNode::encrypt(&bytes, &cid, &aead_key)
                 .map_err(|e| GraphError::Redb(format!("G-CORE-3d AEAD wrap failed: {e}")))?;
             let envelope_bytes = crate::aead_wrap::encode_encrypted_node(&encrypted)
@@ -2322,6 +2434,31 @@ impl RedbBackend {
     /// # Errors
     /// - [`GraphError::RedbSource`] / [`GraphError::Redb`] on redb I/O.
     pub fn two_cid_lookup(&self, plaintext_cid: &Cid) -> Result<Option<Cid>, GraphError> {
+        Ok(self
+            .two_cid_lookup_with_namespace(plaintext_cid)?
+            .map(|(cid, _)| cid))
+    }
+
+    /// G-CORE-3e: un-scoped two-CID lookup that ALSO returns the
+    /// namespace_did the mapping row was sealed under, parsed from
+    /// the key prefix `d:<namespace_did>:m:<plaintext_cid>`. The
+    /// namespace is load-bearing for `Self::read_decrypt_inner` —
+    /// the production HKDF-SHA256 K(N) derivation per Spike-E is
+    /// keyed on the per-DID K_principal, so the unseal path MUST
+    /// recover the same namespace the seal path used.
+    ///
+    /// Returns `Ok(None)` if no row's key suffix matches the
+    /// plaintext_cid bytes. Returns the first match across
+    /// partitions (callers that need partition-scoped semantics use
+    /// [`Self::two_cid_lookup_scoped`]).
+    ///
+    /// # Errors
+    /// - [`GraphError::RedbSource`] / [`GraphError::Redb`] on redb I/O
+    ///   or malformed key bytes.
+    pub fn two_cid_lookup_with_namespace(
+        &self,
+        plaintext_cid: &Cid,
+    ) -> Result<Option<(Cid, Option<Cid>)>, GraphError> {
         let read_txn = self.db.begin_read()?;
         let table = match read_txn.open_table(TWO_CID_MAP_TABLE) {
             Ok(t) => t,
@@ -2339,7 +2476,8 @@ impl RedbBackend {
             if key_bytes.ends_with(suffix) && key_bytes.contains(&b':') {
                 let raw = value.value();
                 let cid = Cid::from_bytes(raw).map_err(GraphError::from)?;
-                return Ok(Some(cid));
+                let namespace = parse_namespace_from_mapping_key(key_bytes);
+                return Ok(Some((cid, namespace)));
             }
         }
         Ok(None)
@@ -2463,15 +2601,18 @@ impl RedbBackend {
         // Look the mapping up unscoped to support test-seam pins that
         // tamper a mapping in one partition + read it back; the scoped
         // variant is `read_via_two_cid_scoped`.
-        let ciphertext_cid = self
-            .two_cid_lookup(plaintext_cid)
+        // The unscoped lookup also returns the namespace_did the
+        // ciphertext was sealed under so the K(N) derivation can
+        // route through the correct K_principal per Spike-E.
+        let (ciphertext_cid, namespace_did) = self
+            .two_cid_lookup_with_namespace(plaintext_cid)
             .map_err(|e| TwoCidMapError::Storage {
-                reason: format!("two_cid_lookup failed: {e}"),
+                reason: format!("two_cid_lookup_with_namespace failed: {e}"),
             })?
             .ok_or_else(|| TwoCidMapError::NotFound {
                 plaintext_cid: plaintext_cid.to_base32(),
             })?;
-        self.read_decrypt_inner(plaintext_cid, &ciphertext_cid)
+        self.read_decrypt_inner(plaintext_cid, &ciphertext_cid, namespace_did.as_ref())
     }
 
     /// G-CORE-3d: partition-scoped read-via-two-CID — the load-bearing
@@ -2494,7 +2635,7 @@ impl RedbBackend {
             .ok_or_else(|| TwoCidMapError::NotFound {
                 plaintext_cid: plaintext_cid.to_base32(),
             })?;
-        self.read_decrypt_inner(plaintext_cid, &ciphertext_cid)
+        self.read_decrypt_inner(plaintext_cid, &ciphertext_cid, ctx.namespace_did.as_ref())
     }
 
     /// Shared inner read-decrypt path called by [`Self::read_via_two_cid`]
@@ -2509,6 +2650,7 @@ impl RedbBackend {
         &self,
         plaintext_cid: &Cid,
         ciphertext_cid: &Cid,
+        namespace_did: Option<&Cid>,
     ) -> Result<Vec<u8>, crate::two_cid_map::TwoCidMapError> {
         use crate::two_cid_map::TwoCidMapError;
         let encrypted =
@@ -2528,12 +2670,12 @@ impl RedbBackend {
                 actual: encrypted.plaintext_cid().to_base32(),
             });
         }
-        // Reconstruct K(N) via the test-seam derivation. Loading a
-        // pre-decode Node round-trip is needed because the test-seam
-        // K-derivation is keyed on the Node's plaintext CID, which we
-        // already have above; the derivation produces the same bytes
-        // as the seal-time call inside `put_node_with_context`.
-        let aead_key = derive_test_seam_key_from_cid(plaintext_cid);
+        // G-CORE-3e: reconstruct K(N) via the production HKDF-SHA256
+        // structural-KDF substrate, keyed on the same namespace_did
+        // the seal-time `put_node_with_context` call used. The seal
+        // + unseal sides MUST agree byte-for-byte on the K_principal
+        // synthesis input or AEAD authentication fails closed.
+        let aead_key = derive_test_seam_key_from_cid_with_namespace(namespace_did, plaintext_cid);
         crate::aead_wrap::decrypt(&encrypted, &aead_key).map_err(|e| {
             TwoCidMapError::AeadAuthenticationFailed {
                 reason: format!("{e:?}"),

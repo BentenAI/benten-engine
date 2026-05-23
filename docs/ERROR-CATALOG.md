@@ -1650,6 +1650,94 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 <!-- reachability: ignore -->
 
+### E_UCAN_BLOBS_REQUEST_REJECTED
+
+- **Message:** "UCAN-gated iroh-blobs ALPN handler rejected request at per-request validation"
+- **Context:** `{ reason: String }` (binding-sig invalid / expired / nbf-in-future / revoked / audience mismatch / malformed grant)
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the "request denied at the handler boundary BEFORE any bytes flow" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedSpec`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.
+- **Thrown at:** `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` + `::validate_request_for_connection` (G-CORE-3e, Phase 4-Meta-Core).
+- **Phase:** 4-Meta-Core G-CORE-3e (RATIFIED-S&C 2026-05-21 §R2 online-share contract)
+
+### E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE
+
+- **Message:** "requested ciphertext_hash {hash} NOT in granted RestrictedSpec scope"
+- **Context:** `{ ciphertext_hash: Cid, granted_roots: Vec<Cid> }`
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedSpec` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.
+- **Thrown at:** `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` (the scope-allowlist check after binding-sig + audience verification).
+- **Phase:** 4-Meta-Core G-CORE-3e (RATIFIED-S&C 2026-05-21 §R2 F-2 scope-check arm)
+
+### E_UNRESOLVED_PEER_DENY
+
+- **Message:** "grant references unresolvable peer-DID; refusing admission"
+- **Context:** `{ sentinel: "<unresolved-peer>" }`
+- **Fix:** Per the security-r1-2 adversarial pattern (§5 "unresolvable peer-DID at recheck"): a grant whose UCAN issuer/audience cannot be resolved through the RotationLog MUST never be admitted. The handler returns this typed code BEFORE binding-sig verification — if we can't even know who's asking, we can't know whether their key matches the binding-sig, and silent admission would defeat the entire audience-binding (§R3) defense. Couples §4.36 recheck + §4.25 sync-hydrate denial: both surfaces fire this same code on the unresolvable arm so audit pipelines route uniformly. The wave-3e production wire-up replaces the in-grant sentinel with a real RotationLog lookup.
+- **Thrown at:** `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request_for_connection` (the unresolvable-peer short-circuit arm at the top of the validation cascade).
+- **Phase:** 4-Meta-Core G-CORE-3e (RATIFIED-S&C 2026-05-21 §R2 + security-r1-2 unresolvable-peer adversarial pattern)
+
+<!-- reachability: ignore -->
+
+### E_DROP_BUNDLE_ENVELOPE_SIG_INVALID
+
+- **Message:** "envelope signature mismatch: Drop bundle envelope-sig does not verify against the carried verifying key"
+- **Context:** `{ detail: String }` (which surface of the header the verify-failure points at — verifying-key-malformed / signature-malformed / Ed25519-verify-failed)
+- **Fix:** Per Spike G's defense-in-depth contract the Drop bundle has TWO independent integrity layers: (i) an Ed25519 envelope-sig over the bundle HEADER (`version + mode + spec_cid + audience + auth_grant + restricted_spec + per_node_attestation` — explicitly NOT the raw content bytes) and (ii) per-Node AEAD authentication tags inside each `EncryptedContent`. This code fires when the OUTER layer fails — the header was tampered post-issue OR the wrong verifying key is paired with the signature. Per the `tf3f_per_node_ciphertext_tamper_detected_envelope_sig_still_valid` pin, content-only tampers do NOT trip this code (they trip the inner AEAD layer as `PerNodeAeadAuthenticationFailed` instead — that asymmetry IS the defense-in-depth property). Fix at the producer side: re-build the bundle with the correct issuer keypair; never patch a header field after `to_cbor_bytes()`. No primitive-edge routing (None) — the typed-reject IS the defense.
+- **Thrown at:** `crates/benten-drop/src/bundle.rs::DropBundle::verify_envelope_signature` + `::consume_offline` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::EnvelopeSignatureInvalid` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleEnvelopeSigInvalid` for the engine-wide catalog surface lands at the G-CORE-9 v1-interface freeze when the engine's outbound-Drop API surface stabilizes. At G-CORE-3f the ErrorCode variant is reserved + the `DropBundleError` variant is the live production typed arm; the drift-detector's `reachability: ignore` annotation below names this reservation.
+- **Phase:** 4-Meta-Core G-CORE-3f (Spike G defense-in-depth)
+
+<!-- reachability: ignore -->
+
+### E_DROP_BUNDLE_VERSION_UNSUPPORTED
+
+- **Message:** "unsupported Drop bundle version: reader does not recognize the on-wire version discriminator"
+- **Context:** `{ seen: u16 }` (the unknown version discriminator read off the wire; known production version = 1)
+- **Fix:** Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints (F-3 typed-reject rule): a future Drop bundle version this reader does not know about MUST yield typed `UnsupportedDropVersion` — NEVER silent skip. Silent skip would let a malicious "future-version" bundle be ignored without warning + invite header-confusion attacks. Fix at the consumer side: upgrade `benten-drop` to a version that knows the on-wire discriminator. The test-only `DropBundleVersion::Synthetic(u16)` arm exists solely to drive this typed-reject pin. No primitive-edge routing (None).
+- **Thrown at:** `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::UnsupportedDropVersion` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleVersionUnsupported` lands at G-CORE-9 v1-interface freeze. At G-CORE-3f the ErrorCode variant is reserved + the `DropBundleError` variant is the live production typed arm.
+- **Phase:** 4-Meta-Core G-CORE-3f (F-3 typed-reject rule)
+
+<!-- reachability: ignore -->
+
+### E_DROP_BUNDLE_MODE3_INLINE_REJECTED
+
+- **Message:** "Mode-3 (InlineTiny) Drop bundle rejected: deferred to post-v1"
+- **Context:** `{ detail: String }` (which arm tripped + the deferral citation)
+- **Fix:** Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints refinement #6 L341, three sendme deployment modes exist: Mode 1 (online-pull, G-CORE-3e ALPN), Mode 2 (offline-Drop, G-CORE-3f sealed bundle), and Mode 3 (inline-tiny — bundle ≤16KiB inlined into the share URL). **Mode 3 is deferred to post-v1.** The `DropContentMode` enum has no `InlineTiny` arm — a synthetic CBOR payload requesting Mode 3 is typed-rejected at parse time. Per the `tf3f_drop_content_mode_no_inline_tiny_arm` structural pin, adding an `InlineTiny` variant in a future commit breaks the exhaustive match in that test (no `_` wildcard). Fix at the producer side: use Mode 2 (offline-Drop) for share-and-forget bundles, or Mode 1 (online-pull) when revocation semantics are load-bearing. No primitive-edge routing (None).
+- **Thrown at:** `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::UnsupportedDropMode` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleMode3InlineRejected` lands at G-CORE-9 v1-interface freeze. At G-CORE-3f the ErrorCode variant is reserved.
+- **Phase:** 4-Meta-Core G-CORE-3f (refinement #6 defer-to-post-v1 contract)
+
+<!-- reachability: ignore -->
+
+### E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY
+
+- **Message:** "manifest-envelope recheck rejected row: unresolvable peer-DID or no positive verification"
+- **Context:** `{ zone: String, key: String }` (the merge zone + row key for forensic correlation)
+- **Fix:** Per G-CORE-8 §4.36 fail-CLOSED flip: the manifest-envelope rechecker MUST row-reject on every non-positively-verified outcome (unresolvable peer-DID, sentinel `<unresolved-peer>`, no installed manifest for the inbound row, etc.). `Admitted` is the ONLY proceed path — every other outcome is `UnresolvedDeny` post-rename and routes through `outcome_to_row_reject` to a typed reject with `ON_DENIED` primitive-edge routing. NEVER add an admit-on-ambiguity path; the security-r1-2 invariant explicitly prohibits silent fail-OPEN on ambiguous-resolution arms.
+- **Thrown at:** `crates/benten-engine/src/manifest_envelope_recheck.rs::outcome_to_row_reject` (G-CORE-8, Phase 4-Meta-Core; security-r1-1 + security-r1-2 BLOCKER closure). Replaces the prior `NotApplicable → Ok(())` silent-admit path inside `apply_atrium_merge`'s per-row recheck loop. The default-builder also flips to install the `ProductionManifestEnvelopeRechecker` glue so Engine::default deployments inherit Layer-3 enforcement without an explicit `set_manifest_envelope_rechecker` call.
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.36 fail-CLOSED flip + production-rechecker default-builder wire-up)
+
+### E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED
+
+- **Message:** "install record already applied: second presentation rejected"
+- **Context:** `{ record_identity: String }` (the canonical `signing_payload` hash that names the consumed record)
+- **Fix:** Per G-CORE-8 §4.37 + R2 §5 replay-attack class: an InstallRecord is consumed exactly once. Presenting the same canonical record bytes twice (matched by `signing_payload` hash) is the replay-attack signal — the second admission rejects with this typed code BEFORE any cap is minted (zero duplicate-mint window). Fix at the caller: if a legitimate re-install is intended, mint a fresh InstallRecord with a new nonce + fresh user-DID signature; the engine treats a fresh nonce as a distinct admission.
+- **Thrown at:** `crates/benten-engine/src/install_record_replay.rs::InstallRecordReplayStore::record_and_check` (G-CORE-8, Phase 4-Meta-Core; §4.37 replay defense). The check-and-record is atomic — single critical section, no verify-then-record gap (TOCTOU defense; couples to the F3 durable-replay-marker pattern that benten-caps `FrameReplayMarker` already uses for sync-frame replay defense).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.37 InstallRecord replay-defense + atomic record-and-check)
+
+### E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED
+
+- **Message:** "write-boundary chain validator: chain does not terminate at a registered user-DID root"
+- **Context:** `{ chain_root_did: String }` (the offending non-user-DID root the chain anchored at)
+- **Fix:** Per G-CORE-8 §4.23 + CLAUDE.md baked-in #18 Layer-1 user-as-root invariant: EVERY WRITE's capability chain must trace back to a registered user-DID root grant. A plugin-DID-minted root chain is structurally rejected (a plugin cannot mint its own root authority). Fix at the call site: re-issue the delegation chain from a user-DID root; if the write is plugin-initiated, ensure the chain carries the user's signed root delegation as `chain[0]` per the manifest_envelope_chain_validation contract.
+- **Thrown at:** `crates/benten-engine/src/write_boundary_chain_validator.rs::WriteBoundaryChainValidator::validate` (G-CORE-8, Phase 4-Meta-Core; §4.23 structural-always-on user-DID root chain validator at the WRITE admission seam). Composes `benten_caps::validate_chain_with_manifest_envelope` against the engine's install-record-backed `UserDidRegistry`. Mirrors Phase-3 G16-B-F structural-always-on per-row cap-recheck — fail-CLOSED, NOT an opt-in. At G-CORE-8 the validator is a seam wired structurally-always-on inside the engine WRITE-admission path; production callers that have NOT installed a user-registry get fail-CLOSED on every chain-carrying write (the seam is honest about its mode of operation rather than silently fail-OPEN).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.23 structurally-always-on user-DID root write-boundary chain validator)
+
+### E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED
+
+- **Message:** "thin-client bridge: cannot resolve acting principal from authenticated session"
+- **Context:** `{ token_id: String, presented_origin: String, reason: String }` (the bridge entry-point parameters + the typed session-error reason if a session lookup was attempted)
+- **Fix:** Per G-CORE-8 §4.22 + CLAUDE.md baked-in #17/#18: the thin-client bridge resolves the acting principal from the authenticated DID-keyed session token (NOT from anything the client supplies). A client cannot self-elevate by asserting `principal = X` in-band — the API has no client-principal parameter. Fix at the caller: re-establish a session via the DID-keyed handshake protocol (challenge → sign → establish_session); the resulting SessionToken is bound to the session's server-side principal-DID. If the handshake fails verify the did:key resolution, signature validity, and origin pinning per `crates/benten-engine/src/thin_client.rs` `DidKeyedSession::establish_session` contract.
+- **Thrown at:** `crates/benten-engine/src/thin_client_bridge.rs::ThinClientBridge::resolve_principal_for_request` (G-CORE-8, Phase 4-Meta-Core; §4.22 thin-client bridge principal-resolution-from-session-not-client). The bridge takes (session_token, presented_origin) and returns either the bound principal-DID or this typed code — no client-supplied principal field exists on the API surface (structural defense; would-FAIL to compile if a regression added one).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.22 thin-client bridge principal-resolution-from-session-not-client)
+
 ## Extending the catalog
 
 When adding a new error:

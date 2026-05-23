@@ -65,6 +65,7 @@ fn r6fp_a_arch_r6_r1_5_consenting_user_mismatch_surfaces_typed_consenting_user_c
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -146,6 +147,7 @@ fn r6fp_a_sec_r6r1_1_blocker_plugin_did_binding_load_bearing() {
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
+        install_record_replay_check: None,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -256,6 +258,7 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     let mut ctx_a = InstallPorts {
         cap_minter: &mut cascade_a,
         private_ns: &mut private_ns_a,
+        install_record_replay_check: None,
     };
     let ctx_a_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -307,6 +310,7 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     let mut ctx_b = InstallPorts {
         cap_minter: &mut cascade_b,
         private_ns: &mut private_ns_b,
+        install_record_replay_check: None,
     };
     let ctx_b_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -362,6 +366,7 @@ fn r6fp_a_mr_5_adversarial_plugin_did_substitution_rejected() {
     let mut ctx_c = InstallPorts {
         cap_minter: &mut cascade_c,
         private_ns: &mut private_ns_c,
+        install_record_replay_check: None,
     };
     let ctx_c_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -485,26 +490,25 @@ fn r6fp_a_sec_r6r1_8_shares_target_plugin_author_variant_removed() {
 
 #[test]
 fn r6fp_a_mr_7_manifest_envelope_recheck_outcome_drives_row_reject() {
-    // mr-7 (R6-FP-A-fp) end-to-end pin for plugin-arch BLOCKER #2:
-    // the rechecker port is now structurally wired (default flipped
-    // from None → Some(Noop) in engine.rs). This pin asserts that:
+    // mr-7 (R6-FP-A-fp) end-to-end pin for plugin-arch BLOCKER #2,
+    // **extended at G-CORE-8 §4.36** (security-r1-1 + security-r1-2
+    // BLOCKER closures via typed-arm split — see
+    // `manifest_envelope_recheck.rs` enum docs).
     //
-    //  - swapping in a rechecker that returns `OutsideEnvelope` → row
-    //    is rejected with typed
-    //    `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`.
-    //  - swapping back to the default `NoopManifestEnvelopeRechecker`
-    //    (returns `NotApplicable`) → row admits.
-    //  - the third outcome `Admitted` → row admits.
-    //
-    // Exercises the same `outcome_to_row_reject` function the
-    // production `apply_atrium_merge` per-row loop calls (engine.rs:1406).
-    // Avoids spinning a full Engine + iroh harness — the trait outcome
-    // → ErrorCode mapping IS the surface tested by mr-7.
-    //
-    // Would-FAIL if: the `NotApplicable` arm got rerouted to Reject
-    // (mr-6 hypothetical from plugin-arch-cap-policy lens), or the
-    // `OutsideEnvelope` arm regressed to silently admit (the pre-R6-FP
-    // default-None silent-skip).
+    //  - ARM (a): `OutsideEnvelope` → typed
+    //    `PluginDelegationOutsideManifestEnvelope` reject (unchanged).
+    //  - ARM (b): Noop's `NotApplicable` outcome → admit (unchanged;
+    //    Noop has no PluginLibrary state, so Layer-3 doesn't apply →
+    //    Layer-1 user-root + per-row cap-recheck elsewhere remain).
+    //  - ARM (c): `Admitted` outcome → admit (the positive Layer-3
+    //    verification path; unchanged).
+    //  - ARM (d) **NEW at G-CORE-8**: the new `UnresolvedDeny` typed
+    //    arm → typed `ManifestEnvelopeRecheckUnresolvedDeny` reject.
+    //    Substantive `Production*Rechecker` impls return this on the
+    //    unresolvable-peer / missing-manifest / ambiguous-resolution
+    //    paths so peer-DID resolution failure CANNOT route through the
+    //    admit path (the pre-G-CORE-8 BLOCKER was the absence of this
+    //    typed arm).
     use benten_engine::manifest_envelope_recheck::{
         ManifestEnvelopeRecheckOutcome, NoopManifestEnvelopeRechecker, outcome_to_row_reject,
     };
@@ -543,10 +547,24 @@ fn r6fp_a_mr_7_manifest_envelope_recheck_outcome_drives_row_reject() {
         "ARM (c): Admitted outcome MUST admit (the real-rechecker happy path)."
     );
 
+    // ARM (d) — **G-CORE-8 §4.36 fail-CLOSED arm (security-r1-1 +
+    // security-r1-2 BLOCKER closures):** the new `UnresolvedDeny` arm
+    // row-rejects with typed `ManifestEnvelopeRecheckUnresolvedDeny`.
+    // Would-FAIL if a regression removed the typed-arm split or routed
+    // `UnresolvedDeny` back to Ok(()).
+    let unresolved = ManifestEnvelopeRecheckOutcome::UnresolvedDeny;
+    let res_d = outcome_to_row_reject(unresolved, "zone-4", "key-4");
+    let err_d = res_d.expect_err("ARM (d) G-CORE-8: UnresolvedDeny MUST reject");
+    assert_eq!(
+        err_d.code(),
+        ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+        "ARM (d) G-CORE-8 §4.36 fail-CLOSED flip: UnresolvedDeny outcome \
+         MUST surface the typed ManifestEnvelopeRecheckUnresolvedDeny \
+         code. Would-FAIL if the typed-arm split regressed."
+    );
+
     // STRUCTURAL: instantiating a NoopManifestEnvelopeRechecker via
     // its public surface confirms the type is constructable + matches
     // the engine builder default. Closes plugin-arch BLOCKER #2.
-    // (Type is Copy + zero-sized; this is purely a name/visibility
-    // check that surfaces at compile time.)
     let _: NoopManifestEnvelopeRechecker = NoopManifestEnvelopeRechecker;
 }
