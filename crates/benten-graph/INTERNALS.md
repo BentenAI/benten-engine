@@ -231,12 +231,18 @@ buggy subscription.
   `put_node_with_context(privileged_for_engine_api())`. Defense-in-depth
   recomputes `BLAKE3(bytes)` and rejects `CidMismatch` at the put boundary.
   Closes Compromise #17 (in-memory module-bytes registry).
-- `backends/snapshot_blob.rs` (564 LOC) — `SnapshotBlobBackend`, a read-only
+- `backends/snapshot_blob.rs` (~615 LOC post-G-CORE-6b) — `SnapshotBlobBackend`, a read-only
   `KVBackend` over a canonical DAG-CBOR `SnapshotBlob` payload
-  (schema_version=1, anchor_cid, nodes:BTreeMap<Cid,Vec<u8>>, system_zone_index).
+  (schema_version=**2** post-G-CORE-6b, anchor_cid, nodes:BTreeMap<Cid,Vec<u8>>,
+  system_zone_index, **merkle_root: Option<Cid>** [v2: §8-B mode-(b)
+  MerkleRangeProof hook; `None` until §8-B consumer wave wires it per
+  `docs/future/phase-4-backlog.md §8-B-merkle-range-proof-consumer-wire-up`]).
   Writes surface `BackendReadOnly`. Used for Phase-3 sync handoff
   (peer A exports, peer B imports). Implements `GraphBackend` too with
   `SnapshotBlobSnapshotHandle` + `SnapshotBlobTransactionRunner` unit markers.
+  `SnapshotBlobError::SchemaVersion` lifts to typed
+  `ErrorCode::SnapshotBlobSchemaVersionMismatch` post-G-CORE-6b
+  (was generic `Serialize` pre-bump).
 - `backends/network_fetch_stub.rs` (228 LOC) — `NetworkFetchStubBackend`, a
   typed-error-only stub reserving the trait shape for the Phase-3
   iroh-fetch impl. Every operation returns a typed error
