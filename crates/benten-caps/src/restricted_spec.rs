@@ -151,6 +151,22 @@ impl RestrictedSpec {
         self
     }
 
+    /// G-CORE-3e convenience constructor — build a [`RestrictedSpec`]
+    /// whose `roots` set is the supplied list of CIDs (the ciphertext-
+    /// hashes the recipient is allowed to request). Equivalent to
+    /// `Self::new().with_roots(hashes)` but the `with_hashes` name
+    /// reads more naturally at the wave-3e ALPN-handler call site
+    /// where the CIDs are "ciphertext hashes the recipient may serve"
+    /// rather than "graph entry-point roots."
+    ///
+    /// This is the simplest constructor for the wave-3e per-request
+    /// scope-check arm; the full 6-dimensional restriction language is
+    /// available via the `.with_*` builders.
+    #[must_use]
+    pub fn with_hashes(hashes: Vec<Cid>) -> Self {
+        Self::new().with_roots(hashes)
+    }
+
     /// Restrict the walker to traversing only the given edge labels.
     #[must_use]
     pub fn with_edge_allowlist(mut self, labels: Vec<String>) -> Self {
