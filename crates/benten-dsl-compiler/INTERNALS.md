@@ -126,7 +126,20 @@ There are no proptest suites or fuzz harnesses in this crate. Everything is exam
 
 ## 6. Benches inventory
 
-None. `Cargo.toml` carries `[lib] bench = false`. No `benches/` directory.
+**`benches/round_trip.rs`** (G-CORE-DSL chunk-2, #929 closure) — single criterion
+bench group `dsl_round_trip` with one bench per MINIMAL-FOR-DEVSERVER fixture
+(`read_respond` / `write_respond` / `transform_respond` / `branch_respond` /
+`call_respond`). Baseline at landing time: ~800 ns – ~1.6 µs per fixture on
+the dev machine; one-shot DSL compile sits firmly below devserver-authoring-rate
+latency budget. This is a **regression tripwire, not a perf-optimization
+target** — the value is catching a 10× slowdown if parser dispatch grows
+quadratic / a future grammar shape rule introduces unbounded backtracking,
+not shaving microseconds off the happy path.
+
+The library `[lib]` target itself still carries `bench = false` (the
+inline-tests module is the library test carrier; the bench harness has its
+own `[[bench]]` entry in `Cargo.toml`). Run via
+`cargo bench -p benten-dsl-compiler`.
 
 ---
 

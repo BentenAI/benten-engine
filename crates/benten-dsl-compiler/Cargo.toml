@@ -14,6 +14,11 @@ workspace = true
 
 [lib]
 path = "src/lib.rs"
+# `bench = false` was set when this crate had zero benchmark coverage
+# (#929 finding). Keeping it `false` for the LIBRARY target itself: the
+# library's `#[test]` module is the inline-tests carrier, not a bench
+# carrier. Dedicated bench harnesses live under `benches/` and are
+# wired below via `[[bench]]`.
 bench = false
 
 [dependencies]
@@ -25,3 +30,13 @@ benten-errors = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# #929 closure: regression-detection harness for parse/emit round-trip
+# over the 5 MINIMAL-FOR-DEVSERVER fixtures. Catches ~10x slowdown if a
+# future grammar extension introduces accidental quadratic complexity.
+criterion = { workspace = true }
+
+# #929 closure: single round-trip bench harness. `harness = false` so
+# criterion's own runner takes over (criterion convention).
+[[bench]]
+name = "round_trip"
+harness = false
