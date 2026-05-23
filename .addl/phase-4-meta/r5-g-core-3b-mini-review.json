@@ -1,0 +1,85 @@
+{
+  "wave": "G-CORE-3b",
+  "pr": 1322,
+  "head": "804346cf",
+  "base": "340391ab",
+  "reviewer": "rust-mini-reviewer (Claude Opus 4.7 1M)",
+  "review_date": "2026-05-22",
+  "disposition": "APPROVE-WITH-FIXES",
+  "summary": "Substantive surface lands cleanly. All 4 ratified input constraints (R1 no-opaque-arm, R3 ONE-signed-artifact, H+1.1 monotonic-narrowing, H+1.1 decidable contains, NAMED-not-opaque extension slots) are preserved + structurally pinned by the tf3b_* test corpus. Cross-language atomic mirror (Rust+TS+ERROR-CATALOG.md+CATALOG_VARIANT_COUNT 171→173) is correct. Crypto-agility-contract:6 ed25519 routing through benten_crypto_suite::primitives is preserved (no direct ed25519-dalek dep added). CapabilityPolicy sealed-trait discipline (CLAUDE.md baked-in #7) untouched. Both §3.5n ground-truth-verify findings agreed. Two MINOR fixes required: (a) lib.rs:91-94 + 169 doc-drift falsely claiming Scope is #[non_exhaustive] (contradicts scope.rs:33-44 source-of-truth + the no-opaque-arm rationale); (b) chain_validator.rs:25 + 109-111 dead-code _restricted_spec_anchor wrapper. One OBS for the drift-detect workaround follow-up (BELONGS-NAMED-NOW to a new issue).",
+  "findings": [
+    {
+      "id": "g-core-3b-r5mr-1",
+      "severity": "MINOR",
+      "rubric_dim": "4",
+      "title": "Doc-drift in lib.rs falsely claims Scope is #[non_exhaustive]",
+      "evidence": "crates/benten-caps/src/lib.rs:89-94 module-doc says \"`#[non_exhaustive]` so future named arms are a minor-version bump; any proposal to re-introduce opaque-refinement-witness semantics must be rejected per HARD RULE 12.\" — but the actual scope.rs:33-44 source-of-truth attribute block + agent's §3.5n finding-1 explicitly DOES NOT apply `#[non_exhaustive]` to Scope (the §1.A.FROZEN item 15(c) freeze is structurally stronger). lib.rs line 156 module-prelude comment is consistent (\"v1-frozen `RestrictedSpec` + `Scope`\"), but the lines 89-94 block contradicts the actual structural pin. §3.5b pim-1 adjacent-doc-coupling sweep missed this drift.",
+      "disposition": "FIX-NOW (follow-up commit on same PR; orchestrator-inline if reviewer-cycle is closed: rewrite lib.rs:89-94 to say `\"// NOT `#[non_exhaustive]` per the §1.A.FROZEN item 15(c) \\\"no-opaque-arm\\\" freeze; future agents proposing a third arm trip compile-error at downstream exhaustive matches rather than wildcard-permitted silent addition. Adding any third arm is a HALT-AND-SURFACE-TO-BEN escalation per HARD RULE 12.\"`)"
+    },
+    {
+      "id": "g-core-3b-r5mr-2",
+      "severity": "MINOR",
+      "rubric_dim": "1",
+      "title": "Dead-code _restricted_spec_anchor in chain_validator.rs",
+      "evidence": "crates/benten-caps/src/chain_validator.rs:109-111 carries `#[allow(dead_code)] fn _restricted_spec_anchor(_: &RestrictedSpec) {}` with comment \"Suppress unused-import warning when this module compiles standalone.\" — but the `use crate::restricted_spec::RestrictedSpec;` at line 25 IS actually unused at the type level (method dispatch via `parent_spec.contains(child_spec)` does not require the type import; Scope::RestrictedSelector's payload is the type-establishing site). Cleaner fix: delete BOTH the import (line 25) AND the anchor fn (lines 109-111). Net 3 LOC removal; no behaviour change; closes the dead-code surface that violates §3.5b pim-1 adjacent-doc-coupling discipline (the anchor fn's purpose-comment is wrong since stable-clippy passed without it — no unused-import warning would fire).",
+      "disposition": "FIX-NOW (follow-up commit on same PR; orchestrator-inline trivial: rm import + rm fn body)"
+    },
+    {
+      "id": "g-core-3b-r5mr-3",
+      "severity": "OBS",
+      "rubric_dim": "5",
+      "title": "drift-detect single-line regex workaround — file BELONGS-NAMED-NOW follow-up issue",
+      "evidence": "crates/benten-errors/src/lib.rs:1409-1417 carries `#[rustfmt::skip]` + comment explaining the drift-detect `buildVariantCodeMap` single-line-regex limitation that wraps long ErrorCode names + bypasses the mapper. Agent's resolution is correct for the wave-scope (G-CORE-3b cannot fix the drift-detect tool — out of scope), but the workaround is per-future-long-ErrorCode-arm-recurrent + the rule is fragile (a fresh agent unaware of the constraint hits the same trap). Per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW: file a follow-up issue NOW naming the drift-detect tool fix as the proper resolution; pim-N candidate per agent's PR-body inline suggestion (\"ErrorCode arm names must fit single-line OR carry `#[rustfmt::skip]`\" for §3.5g).",
+      "disposition": "BELONGS-NAMED-NOW (orchestrator to file a new issue: `scripts/drift-detect.ts::buildVariantCodeMap` regex fragility — handle multi-line `ErrorCode::Variant => \"E_*\"` arms or codify the `#[rustfmt::skip]` per-long-arm convention in §3.5g. Reference back to this finding + the agent's PR body suggestion.)"
+    },
+    {
+      "id": "g-core-3b-r5mr-4",
+      "severity": "OBS",
+      "rubric_dim": "1",
+      "title": "ChainValidatorOutcome enum has a single Admitted arm — Result<(), ChainValidationError> is the more idiomatic shape",
+      "evidence": "crates/benten-caps/src/chain_validator.rs:28-34 + 70 returns `Result<ChainValidatorOutcome, ChainValidationError>` where `ChainValidatorOutcome` has exactly one arm `Admitted`. The single-arm enum carries no information beyond `Ok(())`. Future #[non_exhaustive] extension is plausible (e.g. `AdmittedWithCaveats`) but the v1-frozen surface should commit to the shape. Suggestion: either (a) reduce return to `Result<(), ChainValidationError>` for terse callsite-ergonomics, OR (b) document the Outcome enum's forward-compat intent explicitly in its doc-comment. Not blocking — pure ergonomic OBS for v1-API-freeze (G-CORE-9) consideration.",
+      "disposition": "OUT-OF-SCOPE (G-CORE-3b ratifies the public surface as the v1-frozen shape per §1.A.FROZEN item 15(b); the shape is named in the test corpus + can be revisited at G-CORE-9 freeze if the single-arm pattern is judged unnecessary; not a wave-blocker)"
+    },
+    {
+      "id": "g-core-3b-r5mr-5",
+      "severity": "OBS",
+      "rubric_dim": "1",
+      "title": "RestrictedSpec::contains 6-dim composition is O(N*M) per allowlist dimension",
+      "evidence": "crates/benten-caps/src/restricted_spec.rs:285-294 `allowlist_subset_check` + line 259 label_denylist check use nested `iter().all(|c| iter().any(|p| p == c))` — O(N*M) per dim. For typical Phase-4 plugin manifests where N/M ≤ 8 this is unmeasurable; for adversarial inputs (a chain validator called with attacker-crafted 10K-element allowlists) the chain validator becomes a DoS vector. Mitigation: BTreeSet/HashSet subset check is O((N+M) log N); the public API stays Vec<T>-shaped. v1-assessment-window OBS — name in phase-4-backlog.md if not already.",
+      "disposition": "BELONGS-NAMED-NOW (orchestrator: add a row to `docs/future/phase-4-backlog.md §3.10 S&C` or successor (v1-assessment-window) naming: `RestrictedSpec::contains O(N*M) allowlist subset → O((N+M)log N) BTreeSet swap; bound max RestrictedSpec dimension size at validator-entry as DoS defense.`)"
+    }
+  ],
+  "ground_truth_verify": {
+    "non_exhaustive_call": "agreed — applying `#[non_exhaustive]` to `Scope` would force external-crate matches (which `tests/tf3b_no_opaque_selector_arm_structural.rs` IS, since `tests/` files are external crates not the owning crate) to either use a wildcard arm (silently accepting future `OpaqueSelector` — the EXACT failure mode the test exists to prevent) OR rely on the `non_exhaustive_omitted_patterns` lint which doesn't fire from external crates. NOT applying `#[non_exhaustive]` is the structurally correct choice — the §1.A.FROZEN item 15(c) `no-opaque-arm` freeze IS load-bearing-stronger than the META #907 general default. Agent's resolution is right. (DOC-DRIFT in lib.rs:89-94 is a separate finding r5mr-1.)",
+    "drift_detect_workaround": "agreed — `#[rustfmt::skip]` + inline-comment is the right wave-scope answer (drift-detect tool fix is genuinely out-of-scope for G-CORE-3b's mint-the-surface mandate). Per HARD RULE 12 clause-(b), file the proper-fix as a BELONGS-NAMED-NOW follow-up issue (captured at finding r5mr-3). The pim-N candidate agent surfaced (`#[rustfmt::skip]` discipline for §3.5g cross-language rule-mirror long-arms) is also reasonable — orchestrator can promote to dispatch-conventions if 3+-instance recurrence."
+  },
+  "rubric_checklist": {
+    "1_coverage_completeness": "PASS — all 24 tf3b_* tests exercise SUBSTANTIVE production arms per pim-18 §3.6f SHAPE-not-SUBSTANCE: P-1.1..P-1.10 each hit a specific 6-dim narrowing arm + reflexivity + transitivity + composition; P-2.1..P-2.5 each hit a specific chain-narrowing arm; A-1/A-2/A-3/P-3.1/P-3.2 each hit a specific binding-sig defense + round-trip; A-4.1/A-4.2 are the load-bearing structural pin against silent third-arm addition. No aspirational-prose-only arms. Body of every test has WOULD-FAIL-if-no-op'd shape.",
+    "2_wave_completion_checklist": "PASS — all 24 tf3b_* RED-PHASE pins citing G-CORE-3b un-ignored per pim-12 §3.6e (verified: zero `#[ignore]` markers in tf3b_* test bodies; all 24 tests RUN per nextest `266 tests run: 266 passed, 6 skipped`). Closure pins exercise SPECIFIC arms per pim-2 §3.6b sub-rule 4 (e.g. monotonic-narrowing pinned at chain_validator P-2.1..P-2.5, decidable-contains at P-1.1..P-1.10 per-dimension, no-opaque-arm at A-4.1/A-4.2 structural exhaustive-match, binding-sig at A-1/A-2/A-3 per-attack-vector). No umbrella sentinels.",
+    "3_cross_language_atomic_mirror": "PASS — §3.5g 4-surface synchronized: (a) Rust enum at benten-errors/src/lib.rs:1086-1111 + match arms at 1417-1418 + None-routing at 1864-1865 + FromStr at 2149-2151; (b) TS class at packages/engine/src/errors.generated.ts:209-210 + class def at 2810-2840 + CODE_TO_CTOR_GENERATED at 3021-3022; (c) docs/ERROR-CATALOG.md +20 LOC with `<!-- reachability: ignore -->` annotation matching G-CORE-3a CANARY pattern; (d) CATALOG_VARIANT_COUNT bumped 171→173 at stable_shape.rs:817. drift-detect green (152 reachable, 0 unreachable).",
+    "4_doc_coupling_sweep": "PARTIAL FAIL — INTERNALS.md §8 carries the new \"Phase 4-Meta-Core G-CORE-3b (LANDED)\" subsection correctly (lines 194-205); BUT lib.rs:89-94 module-doc carries WRONG #[non_exhaustive] claim about Scope, contradicting scope.rs source-of-truth + the agent's own §3.5n finding-1 rationale. This is the §3.5b pim-1 adjacent-doc-sweep miss documented at finding r5mr-1. ARCHITECTURE.md + GLOSSARY.md + SECURITY-POSTURE.md sweeps NOT performed — but per PR description these are intentionally deferred to G-CORE-3e/3f when the surface flows through wire protocols (acceptable per PR scope-boundary).",
+    "5_ground_truth_verify": "AGREED on both §3.5n findings (see ground_truth_verify block above). Agent applied HARD RULE 12 clause-(b) discipline cleanly: NOT-applying `#[non_exhaustive]` is structurally justified + documented at the scope.rs declaration site, and the drift-detect workaround is wave-scope-appropriate with a follow-up issue surfaced (orchestrator to file per r5mr-3).",
+    "6_stable_and_msrv_clippy": "PASS — local re-verification: `cargo +stable clippy -p benten-caps -p benten-errors --all-targets -- -D warnings` clean (1m 30s, zero warnings, zero errors). PR commit body claims MSRV 1.95 clippy also clean. Per §3.5j double-gate discipline satisfied. (Note: PR CI rollup at write-time shows multiple checks IN_PROGRESS/QUEUED; orchestrator MUST verify GREEN-CI-CONFIRMATION per §3.5h amendment before merge.)",
+    "7_isolation_contract_compliance": "PASS — commit 804346cf authored cleanly by `Benten-Ben <ben@benten.ai>` (no AI attribution per CLAUDE.md commit conventions); single commit on the PR branch; no cross-agent collision evidence on the main repo; the worktree this reviewer runs in shows main-repo HEAD at 340391ab matching the PR base. No `feedback_agent_isolation_escape_absolute_paths` violations detected.",
+    "8_no_admin_bypass_no_force_push": "PASS — `gh pr view 1322 --json mergeStateStatus` shows `BLOCKED` (awaiting required CI to complete; correct posture — CI must go green before NORMAL `--squash` merge); no `--admin` flag use; single commit (no force-push history). PR posture matches CLAUDE.md non-negotiable: NO admin-bypass, NORMAL gate only.",
+    "9_crypto_agility_baked_in_5": "PASS — binding-sig uses Ed25519 (classical baseline) routed through `benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey}` at authorization_grant.rs:54-56 — the ONE crypto-primitive call site discipline per crypto-agility-contract:6. KeyMaterial type at the cap-layer is a synthetic envelope (authorization_grant.rs:107-134) distinct from the codepoint-dispatched `benten_crypto_suite::aead::KeyMaterial` G-CORE-3a CANARY mint; the production bridge lands at G-CORE-3e/3f per the doc-comment (line 100-106). No hardcoded sizes for sig/key beyond the Ed25519-specific 32-byte VerifyingKey + 64-byte Signature parse — these are CORRECT to hardcode at this surface (Ed25519-specific; not codepoint-dispatch territory). No silent fallback on parse-failure; typed `VerifyingKeyMalformed` + `BindingMismatch` rejects (authorization_grant.rs:296-320) — typed-unsupported-arm discipline preserved.",
+    "10_sealed_trait_baked_in_7": "PASS — `CapabilityPolicy` at policy.rs:261 stays `pub trait CapabilityPolicy: Send + Sync` with no sealed-marker change in this wave; that work belongs to G-CORE-8 per the PR body downstream-gate naming. G-CORE-3b adds NO new public traits to the cap-policy seal surface — the new types are concrete structs/enums (`RestrictedSpec`, `Scope`, `AuthorizationGrant`) + a free function (`validate_chain_narrowing`). The sealed-discipline contract is intact."
+  },
+  "positive_observations": [
+    "Domain-separation tag `BINDING_SIG_DOMAIN = b\"benten/g-core-3b/authorization-grant/v1\"` (authorization_grant.rs:208) is the right shape — surface-specific, version-suffixed, prevents cross-surface signature re-interpretation. Mirrors the established workspace discipline.",
+    "verify_binding order-of-operations (audience FIRST, then verifying-key parse, then signature verify) matches §R3 RATIFIED text exactly + correctly fails the A-3 attack at the cheapest check before the expensive crypto verify.",
+    "label_denylist INVERSE-direction semantics correctly implemented + explicitly tested at P-1.5 with a comment block naming the inverse semantic — this is the bug class most likely to be misimplemented under time pressure, well-defended.",
+    "ChainValidationError::EmptyChain typed-distinct from ChainNotNarrowing — caller can route empty-input differently from widening-violation without string-matching.",
+    "INTERNALS.md §8 \"Phase 4-Meta-Core G-CORE-3b (LANDED)\" subsection is comprehensive + correctly names downstream gates (G-CORE-3e sync, G-CORE-3f Drop, G-CORE-8 security-surface-lock) — future fresh agents picking up G-CORE-3e have the surface-shape map in the load-bearing place.",
+    "Test fixture helpers (synthetic_for_test, synthetic_for_test_distinct, with_swapped_*_for_test) follow the established workspace `_for_test` convention + are scoped behind cfg-guarded shapes only where appropriate; no production-code-leak of test-only constructors.",
+    "rand_core dep added correctly to target.cfg(not(target_arch = \"wasm32\")).dependencies — preserves wasm32 thin-client per CLAUDE.md baked-in #17.",
+    "Stable-clippy locally re-verified clean (266 tests pass, 0 warnings, 0 errors at 1m 30s wall-clock) — agent's pre-flight discipline holds.",
+    "ChainValidationOutcome::Admitted is the right typed-outcome shape — caller can match exhaustively without string-comparing strings or unwrapping a unit Result."
+  ],
+  "ci_state_at_review": {
+    "merge_state": "BLOCKED (awaiting required CI completion; correct posture)",
+    "mergeable": "MERGEABLE",
+    "queued_or_in_progress_checks": "~25 still QUEUED/IN_PROGRESS at write-time (CI: build+test matrices, msrv, WASM Browser, cargo-llvm-cov, cargo-deny, cite-drift, etc); first SUCCESS results landed cleanly (T4 + T5 + T6 + CodeQL + WASM Checks + WASM Runtime + Inv-11 + HostError + cargo-vet + Branch Protection Spec + Bundle Size + Cross-Browser Determinism build + Cargo.lock integrity + wasm32-wasip1 smoke).",
+    "orchestrator_action": "Per §3.5h GREEN-CI-CONFIRMATION discipline: wait for all required checks to land SUCCESS before NORMAL --squash merge. Per `feedback_arm_schedulewakeup_on_ci_wait`: if no in-flight agent is wired to wake on CI completion, arm ScheduleWakeup ≥1800s."
+  }
+}
