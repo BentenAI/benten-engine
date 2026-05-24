@@ -353,11 +353,16 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   - `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
     OR `AuthorizationGrant::issue_production` mandatory-bytes
     constructor (L6-r1-9)
-  - SHA2_512_256 (multihash `0x1015`) + SHA3_256 (multihash `0x16`)
-    pre-blessed agile-hash-fallback codepoint mint per CLAUDE.md baked-in
-    #5 (L11-R2-MINOR-4). At codepoint-mint-time MUST add to
-    `codepoint_table_integer_values_pinned` with hex-pin per the
-    discipline established at G-CORE-9 R1 fix-pass Bundle 5.
+  - ~~SHA2_512_256 (multihash `0x1015`) + SHA3_256 (multihash `0x16`)
+    pre-blessed agile-hash-fallback codepoint mint~~ — **RETRACTED at
+    G-CORE-9 R3 fix-pass (L11-R3-MAJOR-2 closure)**: both `HashCodepoint`
+    variants ALREADY EXIST at HEAD (minted at commit `ae69c339` G-CORE-2,
+    well before this FREEZE wave) AND are declared PERMANENT at
+    V1-FROZEN-INTERFACE.md item 6.2 codepoint table. The hex-pin landed
+    at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
+    at G-CORE-9 R3 fix-pass (per HARD RULE 12 — pin must land NOW, not
+    predicated on a future codepoint-mint that already happened). The
+    original L11-R2-MINOR-4 closure-evidence was mis-stated.
 - **v1-beta posture:** all of the above are nice-to-have; each has
   no immediate exploit at v1-beta (the audience CID IS bound via
   binding_sig; ed25519_dalek is the only signature primitive used

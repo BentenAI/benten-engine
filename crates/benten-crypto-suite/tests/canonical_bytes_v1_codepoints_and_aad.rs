@@ -51,6 +51,16 @@ fn codepoint_table_integer_values_pinned() {
         0x1e,
         "BLAKE3 wire-locked at 0x1e (v1-beta DEFAULT)"
     );
+    assert_eq!(
+        HashCodepoint::SHA2_512_256.raw(),
+        0x1015,
+        "SHA2_512_256 wire-locked at 0x1015 (pre-blessed agile fallback per V1-FROZEN row 6)"
+    );
+    assert_eq!(
+        HashCodepoint::SHA3_256.raw(),
+        0x16,
+        "SHA3_256 wire-locked at 0x16 (pre-blessed agile fallback per V1-FROZEN row 6)"
+    );
 
     // Cipher-suite codepoints (V1-FROZEN row 6).
     assert_eq!(

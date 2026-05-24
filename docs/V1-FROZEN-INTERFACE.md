@@ -135,25 +135,26 @@ with consumers that don't yet have the principal context.
 **Frozen surfaces (post-tighten target, per RATIFIED-prework-forks-2026-05-18.md
 §8-A option (a); applies at G-COMP-1 closure of Row D-7):**
 
-- `crates/benten-engine/src/engine_crud.rs:139` — `Engine::get_node` →
+- `crates/benten-engine/src/engine_crud.rs::Engine::get_node` →
   `pub(crate) fn read_node(&self, cid: &Cid) -> Result<Option<Node>,
   EngineError>` **renamed to `read_node` to remove the un-attributed
   semantic from the name surface**. The public `Engine::read_node_as`
-  (line `engine_wait.rs:1115`) carries the principal-bearing semantic.
-- `crates/benten-engine/src/engine_wait.rs:1056` — `Engine::put_node` →
+  (at `crates/benten-engine/src/engine_wait.rs::Engine::read_node_as`)
+  carries the principal-bearing semantic.
+- `crates/benten-engine/src/engine_wait.rs::Engine::put_node` →
   `pub(crate) fn put_node`.
-- `crates/benten-engine/src/engine_wait.rs:1027` —
-  `Engine::get_node_label_only` → `pub(crate) fn read_node_label_only`
+- `crates/benten-engine/src/engine_wait.rs::Engine::get_node_label_only`
+  → `pub(crate) fn read_node_label_only`
   (renamed; un-attributed label-only read; engine-internal only).
-- `crates/benten-engine/src/engine_wait.rs:1137` —
-  `Engine::resolve_subgraph_cid_for_test` → **DELETED from the public
+- `crates/benten-engine/src/engine_wait.rs::Engine::resolve_subgraph_cid_for_test`
+  → **DELETED from the public
   surface entirely**. Test-only use sites move into `pub(crate)` helpers
   inside `crates/benten-engine/src/testing.rs` (Test-API module already
   exists; that's the canonical location for test-only surfaces). Public
   surface MUST NOT carry `_for_test` suffixes (a `_for_test` `pub fn` is
   a red-flag — either real public API or belongs in `testing` module).
-- `crates/benten-engine/src/engine.rs:1628` — `Engine::caps() ->
-  &EngineCapsHandle` stays `pub`; this is the canonical cap-mutation
+- `crates/benten-engine/src/engine.rs::Engine::caps` (`fn caps(&self) ->
+  &EngineCapsHandle`) stays `pub`; this is the canonical cap-mutation
   surface per the §4.69-ALREADY-SHIPPED ground-truth. No `Engine`-direct
   cap-mutation method may regress (freeze invariant; orchestrator-
   mechanical no-regression test pin per build-backlog).
@@ -218,8 +219,8 @@ pattern covers it without re-opening the freeze.
 ## 2. Class-B-β visibility — `read_node_as` is the canonical principal-bearing read
 
 **Frozen surfaces:**
-- `crates/benten-engine/src/engine_wait.rs:1115` — `Engine::read_node_as(
-  &self, principal: &Cid, cid: &Cid) -> Result<Option<Node>, EngineError>` —
+- `crates/benten-engine/src/engine_wait.rs::Engine::read_node_as`
+  — `pub fn read_node_as(&self, principal: &Cid, cid: &Cid) -> Result<Option<Node>, EngineError>` —
   the public principal-bearing read API per CLAUDE.md baked-in #18. **The
   ONLY public read pathway for non-trusted principals.**
 - `crates/benten-engine/src/engine.rs::Engine::call_as` — the existing
@@ -241,7 +242,7 @@ pattern covers it without re-opening the freeze.
   plugin authors author graph nodes; the evaluator is the only caller of
   `_as`. Re-naming, signature changes, or making napi expose `_as`
   directly would break #18.
-- The TODO at `engine_wait.rs:1115` referencing Class-B-β alpha-shaped
+- The TODO at `crates/benten-engine/src/engine_wait.rs::Engine::read_node_as` referencing Class-B-β alpha-shaped
   stubs is closed (shipped at PR #184).
 
 **What's NOT frozen:**
@@ -693,16 +694,17 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 | #886 `[features]` | DECIDED (already shipped) | Pin `Cargo.toml` `[features]` block exactly as-is; comment-cite. |
 | #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit `5ce8bab6`).** `crates/benten-caps/src/policy.rs` `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old `sealed_marker::SealedCapabilityPolicy` soft-seal DELETED (no shim per HARD RULE 12 + CLAUDE.md #5). Workspace-wide migration applied: 4 internal impls (NoAuthBackend, GrantBackedPolicy, LegacyUcanStubBackend, UcanGroundedPolicy<B>) + ~17 workspace test-double impls received sibling `impl Sealed` blocks via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests` re-export. Feature pass-through: benten-engine `test-helpers` + benten-eval `testing` features enable `benten-caps/testing`. Object-safety preserved (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` exercises `Arc<dyn CapabilityPolicy>`). |
 | 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. **Consumption-deferred to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3** — zero production call sites at v1-beta; the signatures are locked so adding consumers later is non-breaking, but external policy authors overriding any of the three hooks have NO runtime effect at v1-beta until Row D-3 closes. |
-| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:179`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
+| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs::CapWriteContext::actor_hint`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
 | #883b prod-dep-edge | DECIDED | Lock as-shipped. |
-| #887b `check_read` default-impl | DECIDED (defaulted; pulled WITH/BEFORE G-CORE-8) | Lock at `crates/benten-caps/src/policy.rs:388` (`fn check_read(...) -> Result<(), CapError> { ... }` default body; admit-all baseline per Phase-1). |
+| #887b `check_read` default-impl | DECIDED (defaulted; pulled WITH/BEFORE G-CORE-8) | Lock at `crates/benten-caps/src/policy.rs::CapabilityPolicy::check_read` (defaulted `fn check_read(...) -> Result<(), CapError>` body; admit-all baseline per Phase-1). |
 | §4.69 organizing principle | RESOLVED (a) `EngineCapsHandle`-canonical — see item 1 | Already frozen at item 1; no-regression invariant pin. |
 
 **Additional surface freezes:**
-- `crates/benten-caps/src/policy.rs:341` `pub trait CapabilityPolicy:
-  Sealed + Send + Sync` (post-hard-seal).
-- `CapWriteContext` + `ReadContext` + `PendingOp` (`crates/benten-caps/src/
-  policy.rs:163, 260, 100`) — the cap-policy context types.
+- `crates/benten-caps/src/policy.rs::CapabilityPolicy` `pub trait CapabilityPolicy:
+  sealed::Sealed + Send + Sync` (post-hard-seal).
+- `CapWriteContext` + `ReadContext` + `PendingOp` (`crates/benten-caps/src/policy.rs::CapWriteContext`,
+  `crates/benten-caps/src/policy.rs::ReadContext`,
+  `crates/benten-caps/src/policy.rs::PendingOp`) — the cap-policy context types.
 - **Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext`** —
   **DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17**
   (~80+ workspace test-site cascade; the production-side migration to
@@ -733,7 +735,7 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
   `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs`.
 - **Hard-seal mechanism is structurally enforced by rustc on every workspace
   build** (`pub(crate) mod sealed { pub trait Sealed {} }` private supertrait
-  at `crates/benten-caps/src/policy.rs:50-64`; external `impl CapabilityPolicy`
+  in the `sealed` module at `crates/benten-caps/src/policy.rs::sealed` (a `pub(crate) mod sealed { pub trait Sealed {} }` private supertrait); external `impl CapabilityPolicy`
   cannot reach the private `Sealed` trait and fails to compile). Workspace-test
   opt-in is via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod
   __sealed_for_workspace_tests` re-export. **Explicit negative-arm trybuild
@@ -1012,27 +1014,27 @@ verification at HEAD):
 **Frozen surfaces (per §1.A.FROZEN item 12 + security-r1-2; all DECIDED +
 SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
 
-- `crates/benten-engine/src/manifest_envelope_recheck.rs:80` `pub enum
+- `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRecheckOutcome` `pub enum
   ManifestEnvelopeRecheckOutcome { NotApplicable, UnresolvedDeny, Admitted,
   OutsideEnvelope { offending_plugin_did, cap_pattern } }` — **all four
   variants frozen** including the post-rename `UnresolvedDeny` semantic.
   **`#[non_exhaustive]` LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 8b
-  (commit `75a1d33a`)** at `crates/benten-engine/src/manifest_envelope_recheck.rs:79`.
+  (commit `75a1d33a`)** at `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRecheckOutcome` (attribute applied directly above the enum definition).
   Adding a fifth variant post-v1 is breaking; the attribute makes the
   variant-set additively extensible.
 - The `Admitted` arm's structural invariant (security-r1-2 frozen):
   returned ONLY on a positively-verified envelope/chain match.
-  **`outcome_to_row_reject` at `manifest_envelope_recheck.rs:124-144`
+  **`outcome_to_row_reject` at `crates/benten-engine/src/manifest_envelope_recheck.rs::outcome_to_row_reject`
   MUST NOT collapse a non-positive outcome to `Ok(())`** — the
   structural property is part of the freeze.
-- `pub trait ManifestEnvelopeRechecker` (`crates/benten-engine/src/
-  manifest_envelope_recheck.rs:144`-ish) — the port interface; method
+- `pub trait ManifestEnvelopeRechecker` (`crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`) — the port interface; method
   signatures frozen.
 - `NoopManifestEnvelopeRechecker` is the v1-beta **shipped default**
-  (`crates/benten-engine/src/engine.rs:1908-1910` always installs
-  `Some(Arc::new(NoopManifestEnvelopeRechecker))`). At HEAD its
-  `recheck_row` returns `NotApplicable` for every input
-  (`manifest_envelope_recheck.rs:203-222`); the substantive Layer-3
+  (`crates/benten-engine/src/engine.rs::Engine::new_with_engine_caps_handle` always installs
+  `Some(Arc::new(NoopManifestEnvelopeRechecker))` per the
+  `manifest_envelope_rechecker: Some(Arc::new(...NoopManifestEnvelopeRechecker))` initializer). At HEAD its
+  `recheck_row` impl returns `NotApplicable` for every input
+  (`crates/benten-engine/src/manifest_envelope_recheck.rs::NoopManifestEnvelopeRechecker::recheck_row`); the substantive Layer-3
   defense (per-DID `PluginLibrary` + `UserDidRegistry` consult) is
   **consumption-deferred** — destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
   G-COMP-1 row "ProductionManifestEnvelopeRechecker production impl
@@ -1042,14 +1044,14 @@ SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
   Compromise #26 in SECURITY-POSTURE.md documents this v1-beta posture
   end-to-end.
 - Empty/sentinel `<unresolved-peer>` peer-DID MUST deny (never admit) at
-  recheck — **structurally enforced at v1-beta** at
-  `crates/benten-engine/src/engine.rs:1462-1476` (the `resolve_peer_dids`
-  empty-arm short-circuit returns typed
+  recheck — **structurally enforced at v1-beta** in the
+  `apply_atrium_merge` body at `crates/benten-engine/src/engine.rs`
+  (the `resolve_peer_dids` empty-arm short-circuit returns typed
   `ManifestEnvelopeRecheckUnresolvedDeny` BEFORE rechecker dispatch). The
   §4.25 sync-hydrate path shares the SAME primitive (`UnresolvedDeny` +
   `outcome_to_row_reject`); the handshake.rs wire-up is named to
   G-COMP-1 per
-  `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`.
+  `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs`.
 - `accept_atrium_share` — **deferred to G-COMP-1 (G24-D-FP-1 follow-up
   wave)**; destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` row
   "accept_atrium_share cross-peer install seam". At v1-beta the
