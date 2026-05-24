@@ -1,0 +1,202 @@
+{
+  "lens": "L2-crypto-adversarial-and-threat-model",
+  "round": "R4",
+  "wave": "G-CORE-9-FREEZE",
+  "branch": "g-core-9/r4-l2-adversarial-threat-model",
+  "base_commit": "25576cb1",
+  "r3_findings_summary": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "obs": 1
+  },
+  "r3_convergence_disposition": "CONVERGED-PER-Q5",
+  "r4_focus": "Per R4 brief — R3 CONVERGED-FOR-TAG (0/0/0/1 OBS at 7ef88757); R4 confirms convergence holds post R3-FP merged at 25576cb1. Per CLAUDE.md rule 9 Q5 + iterate-to-convergence generalization (feedback_iterate_critical_reviews_to_convergence): substantive = BLOCKER/MAJOR; converged means 0 substantive in a full council round. R4 = re-audit at the post-R3-FP HEAD to verify (a) the carry-forward L2-R3-OBS-1 has not regressed or escalated, (b) the broader R3-FP (12 closures across 7 files) introduced no new L2 BLOCKER/MAJOR, and (c) all R1+R2+R3 dispositions still hold at HEAD.",
+  "r3_fp_changeset_audit": {
+    "commit": "25576cb1",
+    "files_touched": 7,
+    "loc_delta": "+118 / -69",
+    "l2_critical_code_files_diff": {
+      "scope": "git diff 6c21e4f5..25576cb1 -- crates/benten-engine/src/engine.rs crates/benten-engine/src/manifest_envelope_recheck.rs crates/benten-caps/src/chain_authority.rs crates/benten-caps/src/manifest_envelope_chain_validation.rs",
+      "result": "ZERO lines changed across all 4 L2-critical code files",
+      "r4_disposition": "POSITIVE CONTROL — code-side L2 attack-surface invariants STRUCTURALLY UNCHANGED across R3-FP. The predicted 'doc-coupling-only' shape held exactly (matches R3's R2-FP audit shape). All L2 BLOCKER and MAJOR dispositions from R1+R2 that hinged on these files (L2-BLK-1/2/3, L2-MAJ-1/2/3/4) remain structurally valid at HEAD."
+    },
+    "crypto_suite_codepoint_change": {
+      "scope": "crates/benten-crypto-suite/src/codepoint.rs +4/-2",
+      "change": "SigCodepoint::raw() doc-string strengthened from 'P-III deferred; G-CORE-9 freezes the canonical wire form' to 'FROZEN at G-CORE-9 V1-FROZEN-INTERFACE row 6 (integer values PERMANENT per item 6.2 codepoint table; never reuse a value for a different algorithm)'",
+      "l2_relevance": "POSITIVE CONTROL — strengthens the crypto-agility-as-load-bearing-defense framing per CLAUDE.md baked-in #5. The codepoint value space is the structural seam that makes 'typed-reject on unknown crypto / never silent fallback' work; doc-honesty that the value is PERMANENT prevents future hostile contributor or honest mistake from reusing a value for a different algorithm (which would silently break all existing wire bytes for that codepoint). No attack-surface weakening; defense strengthening.",
+      "r4_disposition": "POSITIVE CONTROL — wire-format freeze doc-honesty hardened."
+    },
+    "sha_hashcodepoint_hex_pin_landing": {
+      "scope": "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs +10/-0",
+      "change": "Added 2 hex-pin assertions: HashCodepoint::SHA2_512_256.raw() == 0x1015 (pre-blessed agile fallback) + HashCodepoint::SHA3_256.raw() == 0x16 (pre-blessed agile fallback)",
+      "l2_relevance": "POSITIVE CONTROL — hash agile-fallback codepoints structurally pinned at v1-beta. Closes L11-R3-MAJOR-2 (per the R3-FP commit message) WITHOUT needing to mint new codepoints (they already existed at HEAD since ae69c339 G-CORE-2). The DEFERRED.md retraction at Row D-15 (L11-R3-MAJOR-2 closure) correctly retracts the prior 'mint at codepoint-time' framing as evidence-mis-stated. L2 lens reads this as: hash crypto-agility seam is now BOTH minted AND structurally pinned, defense-in-depth complete for the hash side.",
+      "r4_disposition": "POSITIVE CONTROL — hash crypto-agility defense structurally complete."
+    },
+    "v1_frozen_md_doc_honesty_retenses": {
+      "scope": "docs/V1-FROZEN-INTERFACE.md +59/-46 (net +13)",
+      "change_classification": "Pure cite-style hardening per §3.5b HARDENED point 3 (path:LINE-NUMBER → path::Symbol). 17 individual cite-conversions across §1 (4 pub(crate)-tighten targets) + §2 (read_node_as) + §8 (CapabilityPolicy + sealed module + actor_hint + CapWriteContext + ReadContext + PendingOp) + §12 (ManifestEnvelopeRecheckOutcome + outcome_to_row_reject + ManifestEnvelopeRechecker + NoopManifestEnvelopeRechecker install + Engine::new_with_engine_caps_handle + resolve_peer_dids + test fixture). Plus L12-R3-MIN-1 closure: §9 'FREEZE-WAVE FIX-NOW CRITICAL GAP' stale narrative stripped + replaced with 'CLOSED post G-CORE-9 build-out (commit 8cc4eddd)' note + all 14 baseline 'doesn't exist at HEAD' parentheticals removed.",
+      "l2_relevance": "NO L2 ATTACK-SURFACE CHANGE — pure doc-honesty improvements. The cite-style conversion preserves all referenced semantics; the path::Symbol cites become rebase-resilient (don't drift on line-shift) per pim-12/§3.5b HARDENED. The L12-R3-MIN-1 narrative retense is honest disclosure that the baselines were regenerated at 8cc4eddd; this STRENGTHENS the cargo-public-api drift-gate threat-model claim by no longer self-contradicting item 1's 'drift gate is now REAL, not a placebo'. No CapabilityPolicy / SubgraphSpec / swap-matrix / Compromise-row semantic changes.",
+      "r4_disposition": "NO NEW FINDINGS — doc-honesty net-positive; threat-model surfaces unchanged."
+    },
+    "v1_frozen_deferred_md_changes": {
+      "scope": "docs/V1-FROZEN-INTERFACE-DEFERRED.md +24/-10",
+      "change_classification": "(a) Row D-15 SHA codepoint mint claim RETRACTED (L11-R3-MAJOR-2 closure; codepoints already minted ae69c339 + hex-pin now landed at this R3-FP per HARD RULE 12); (b) Row D-17 extended to enumerate MaterializerError + VersionError + VersionDagError + LabelPattern (L8-r3-MIN-1/2/3 closures, all closure-path-(a) deferral-narrative extensions); (c) Row D-19 narrative updated to reflect L9-r3-MIN-1 closure (E_DSL_PARSE_FAILED → E_DSL_PARSE_ERROR reusing existing pub const at crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR).",
+      "l2_relevance": "NO L2 ATTACK-SURFACE CHANGE — all are HARD-RULE-12 clause-(b) compliant deferral-narrative strengthenings with named G-COMP-1 destinations. The SHA codepoint retraction is evidence-correction, not a posture change (the codepoints existed; the prior text mis-stated that they needed to be minted). The Row D-17 extensions add to an existing deferred set, preserving the established 'defer #[non_exhaustive] additive cascade to G-COMP-1' pattern; from L2 lens these wire-format-bearing types continue to receive Wire-bytes-load-bearing CLOSED-AT-G-CORE-9 treatment for the TRUE wire-format-bearing types (TypedOutputProjection + KernelOutput) while non-wire-format-bearing types (errors, mode enums, pattern selectors) ride the additive-cascade deferral. The error-type deferrals (MaterializerError / VersionError / VersionDagError / LabelPattern) do NOT cross any L2-relevant threat-model surface — they're internal error-class enums consumed within-crate-or-by-tests; out-of-crate consumers add wildcard arms when #[non_exhaustive] lands at G-COMP-1.",
+      "r4_disposition": "NO NEW FINDINGS — deferral narrative strengthened with explicit closure-path-(a) extensions; no threat-model surfaces touched."
+    },
+    "v1_beta_breaking_changes_md_changes": {
+      "scope": "docs/V1-BETA-BREAKING-CHANGES.md +16/-2",
+      "change_classification": "(a) L18-r3-1 closure: added 'G-CORE-9 R2 fix-pass additions' sub-heading to Cohort 3 with 2 dedicated rows enumerating the R2-FP break-OK changes that weren't enumerated as dedicated ledger rows (Bundle R2.8 TypedOutputProjection + KernelOutput #[non_exhaustive] AND Bundle R2.5 SwapMatrixError::CipherSuite → SwapMatrixError::Unsupported routing change). (b) Row D-19 narrative updated to reflect L9-r3-MIN-1 closure (E_DSL_PARSE_ERROR pub const reuse).",
+      "l2_relevance": "POSITIVE CONTROL — ledger-completeness audit (L18-r3-1) closed BY-EXPOSING-NOT-HIDING; the 2 R2-FP break-OK changes are now first-class ledger rows with full 'what changed / why break-OK / migration path' narrative. From L2 lens this is operator-visible threat-model disclosure honesty — downstream implementers can now see the SwapMatrixError variant change AND the IVM wire-format type #[non_exhaustive] landing as documented v1-beta breakage rather than hidden drift. The SwapMatrixError routing change (CipherSuite → Unsupported(UnsupportedAlgorithm::Cipher)) preserves the typed-reject discipline (no silent fallback; downstream just has to update the pattern-match arm). This is a step-strengthening of the 'typed-reject on unknown crypto / never silent fallback' L2 invariant.",
+      "r4_disposition": "POSITIVE CONTROL — operator-visible disclosure surface strengthened; typed-reject discipline preserved."
+    },
+    "v1_wire_format_inventory_md_changes": {
+      "scope": "docs/V1-WIRE-FORMAT-INVENTORY.md +2/-2",
+      "change_classification": "L11-R3-MAJOR-1 closure: Summary table rows 1 + 5 cite-corrections (row 1: canonical_test_node_sentinel_cid.rs phantom → canonical_bytes_fastpath_stable.rs + node_cid.rs real cites; row 5: ucan_envelope_*.rs phantom → tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs real cites).",
+      "l2_relevance": "POSITIVE CONTROL — wire-format-inventory test-coverage claims now cite REAL test files. From L2 lens this closes a doc-vs-code drift on the wire-format byte-pin coverage matrix, strengthening the credibility of the v1-beta wire-format-coverage claim. The UCAN-Varsig v1 header (Sig codepoint) byte-pin coverage IS structurally exercised by the cited tf3a + tf4 tests (they pin the hybrid sig codepoint integer + AAD construction).",
+      "r4_disposition": "POSITIVE CONTROL — wire-format coverage claim doc-honesty hardened."
+    },
+    "v1_frozen_build_backlog_md_changes": {
+      "scope": "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md +8/-2",
+      "change_classification": "Added 'DEFERRED to G-COMP-1 per Row D-20 (added at G-CORE-9 R2 fix-pass); the hard-seal MECHANISM ships + is structurally enforced by rustc on every workspace build, but the explicit compile-fail trybuild test fixture is the regression-defense backstop named-deferred' narrative around the compile-fail trybuild test.",
+      "l2_relevance": "POSITIVE CONTROL — narrative-honesty around the CapabilityPolicy hard-seal trybuild deferral. From L2 lens the seal MECHANISM (sealed::Sealed private supertrait) IS structurally rustc-enforced at v1-beta; only the explicit negative-arm trybuild test fixture is the deferred regression-defense. The disposition is HARD-RULE-12 clause-(b) compliant per Row D-20.",
+      "r4_disposition": "POSITIVE CONTROL — sealed-trait deferral narrative aligned."
+    }
+  },
+  "r1_r2_r3_disposition_rewalk_audit": {
+    "audit_methodology": "For each prior-round finding, verify the disposition still holds at HEAD post R3-FP merged. Carry forward + restate dispositions; flag any regression.",
+    "L2-BLK-1": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED — §8-A pub→pub(crate) DEFER to Row D-7",
+      "r4_verify": "PASS-STRENGTHENED — Row D-7 at DEFERRED.md still present + named (line 241 area). The R3-FP path::Symbol cite-style hardening at V1-FROZEN §1 (4 pub(crate)-tighten targets) makes the deferral target cites rebase-resilient. cargo-public-api baselines at docs/public-api/ still lock the un-tightened surface (the L12-R3-MIN-1 closure confirms the baselines ARE the real cargo-public-api output, not placeholder stubs)."
+    },
+    "L2-BLK-2": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED — ProductionManifestEnvelopeRechecker phantom; defer to Row D-4 + Compromise #26 retense",
+      "r4_verify": "PASS-UNCHANGED — Row D-4 still present. manifest_envelope_recheck.rs unchanged in R3-FP. SECURITY-POSTURE.md Compromise #26 retense at lines 2043-2060 (from R2-FP) untouched. Verified `pub struct ProductionManifestEnvelopeRechecker` / `impl ProductionManifestEnvelopeRechecker` STILL has zero matches across crates/."
+    },
+    "L2-BLK-3": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED — accept_atrium_share phantom; defer to Row D-5 + Compromise #26 retense",
+      "r4_verify": "PASS-UNCHANGED — Row D-5 still present. No tree changes affect the deferral. Verified `pub fn accept_atrium_share` STILL has zero matches in crates/. Test bodies still in deferred state with function referenced only in commented-out test bodies + narrative."
+    },
+    "L2-MAJ-1": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED — defer to Row D-18 with Row-D-4-coupled gap-close argument",
+      "r4_verify": "PASS-UNCHANGED — Row D-18 still present at DEFERRED.md. engine.rs UNCHANGED in R3-FP (verified zero lines diff). Inline comment at engine.rs:1463-1477 still names the deferral rationale verbatim. R2-FP's BREAKING-CHANGES.md Bundle 11 doc-honesty closure (verified at R3) holds at HEAD."
+    },
+    "L2-MAJ-2": {
+      "prior_disposition": "CLOSED at R3 via L2-R2-BLK-2 (Compromise #23 F3 TOCTOU retense at SECURITY-POSTURE.md:1691-1699)",
+      "r4_verify": "PASS-UNCHANGED — SECURITY-POSTURE.md untouched in R3-FP (verified zero lines diff). Compromise #23 F3 racy disclosure block at lines 1691-1699 still live + still matches DEFERRED.md Row D-8 promise + still matches Compromise #26 gold-standard shape. chain_authority.rs:404-421 still has the non-atomic get-then-put pair as accurately disclosed."
+    },
+    "L2-MAJ-3": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED-WITH-OBSERVATION — 0x6400 silent acceptance defer to Row D-15 + Cohort 4; operator-visible SECURITY-POSTURE.md disclosure missing (R2-OBS-1 → R3-OBS-1 carry-forward unchanged)",
+      "r4_verify": "OBS-PERSISTS — same shape as R3. SECURITY-POSTURE.md still has no Compromise-row disclosure of the 0x6400 silent-acceptance consumer-side gap (verified via grep: only 1 match at line 2444 in the descriptive cipher-suite paragraph, NOT a Compromise-row disclosure). Row D-15 (DEFERRED.md:351-352) STILL names CryptoPolicy::require_hybrid_pq destination (verified by grep). V1-BETA-BREAKING-CHANGES.md Cohort 4 Row D-15b STILL surfaces it (verified at line 228). This is the EXACT R3-R2 carry-forward shape. R3 disposition explicitly: 'orchestrator R3 triage final-call: either (a) accept the residual OBS as final v1-beta posture given Row D-15 + Cohort 4 coverage, OR (b) inline a ~5-line Compromise-row addition to close the operator-visible disclosure gap (~15 min orchestrator-direct work). Not BLOCKER-class. Not MAJOR-class.' Orchestrator did not select option (b) at R3 triage; the residual rides into R4 as the SOLE carry-forward OBS. Per CLAUDE.md rule 9 Q5 + iterate-to-convergence: substantive = BLOCKER/MAJOR; converged means 0 substantive. The OBS does NOT block convergence. Recorded again at L2-R4-OBS-1 (= L2-R3-OBS-1 = L2-R2-OBS-1 unchanged) per disclosure-honesty discipline."
+    },
+    "L2-MAJ-4": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED — graph-AEAD codepoint-binding via structural_kdf info-tag defer to Row D-13",
+      "r4_verify": "PASS-UNCHANGED — Row D-13 still present at DEFERRED.md. aead_wrap.rs unchanged in R3-FP (verified by file-list inspection). The K_root divergence natural defense argument intact at v1-beta."
+    },
+    "L2-MIN-1": {
+      "prior_disposition": "CONVERGED-AS-DEFERRED — §15.j live-per-request resolver-evaluation test pin defer to Row D-10",
+      "r4_verify": "PASS-UNCHANGED — Row D-10 still present at DEFERRED.md. Verification-mechanism test pin still absent at HEAD."
+    },
+    "L2-MIN-2": {
+      "prior_disposition": "CONVERGED-CLOSED — empty-DID-string structural reject + test pin landed",
+      "r4_verify": "PASS-UNCHANGED — chain_authority.rs unchanged in R3-FP. Production code at manifest_envelope_chain_validation.rs:289-300 + test pin at line 468 `empty_string_did_at_root_rejected_independent_of_registry` both still present."
+    },
+    "L2-OBS-1": {
+      "prior_disposition": "CONVERGED-CLEAN — C11b safety gate cfg(test) gated",
+      "r4_verify": "PASS-STRENGTHENED — swap_matrix.rs unchanged in R3-FP. V1-FROZEN.md item 6 (codepoint table) doc-string strengthening at codepoint.rs (SigCodepoint::raw doc-string FROZEN narrative) reinforces the codepoint-PERMANENT discipline that backstops C11b gating. The audit-gated `SwapMatrix::try_pure_pq_sole_trust_path` returning `AuditNotLandedPurePqRejected` at v1-beta is unchanged."
+    },
+    "L2-OBS-2": {
+      "prior_disposition": "CONVERGED-CLEAN — hybrid sig strip-resistance F-1 defenses structurally complete",
+      "r4_verify": "PASS-UNCHANGED — sig.rs unchanged in R3-FP (not in file-list)."
+    },
+    "L2-OBS-3": {
+      "prior_disposition": "CONVERGED-CLEAN — AAD-rebinding + AEAD codepoint-mismatch typed-reject at cipher-suite layer",
+      "r4_verify": "PASS-STRENGTHENED — aead.rs cipher_codepoint mismatch reject unchanged. V1-FROZEN.md item 15 (serde-tag vs codepoint-dispatch clarification) untouched in R3-FP per the file-list. SHA codepoint hex-pin landing extends the codepoint-table structural-pin discipline that backstops AAD-rebinding's codepoint-as-first-class-component."
+    },
+    "L2-R2-BLK-1": {
+      "prior_disposition": "CONVERGED-CLOSED — BREAKING-CHANGES.md Bundle 11 retense honest about deferral",
+      "r4_verify": "PASS-UNCHANGED — BREAKING-CHANGES.md changes in R3-FP are additive only (Cohort 3 G-CORE-9 R2 fix-pass additions sub-heading + Row D-19 narrative update). The Bundle 11 retense (lines 178-182) and its agreement with engine.rs:1463-1477 + DEFERRED.md Row D-18 is preserved (verified the cited line range was not in the R3-FP diff scope)."
+    },
+    "L2-R2-BLK-2": {
+      "prior_disposition": "CONVERGED-CLOSED — Compromise #23 F3 TOCTOU retense at SECURITY-POSTURE.md:1691-1699 matches DEFERRED.md Row D-8 + Compromise #26 gold standard",
+      "r4_verify": "PASS-UNCHANGED — SECURITY-POSTURE.md untouched in R3-FP. Compromise #23 F3 racy disclosure block live + intact."
+    },
+    "L2-R2-OBS-1 = L2-R3-OBS-1": {
+      "prior_disposition": "OBS — carry-forward; 0x6400 silent-acceptance operator-visible SECURITY-POSTURE.md disclosure missing; HARD-RULE-12 clause-(b) compliant via Row D-15 + Cohort 4",
+      "r4_verify": "OBS-PERSISTS — see L2-MAJ-3 above (same finding). Recorded again at L2-R4-OBS-1 per disclosure-honesty discipline; does NOT block convergence per Q5 (substantive = BLOCKER/MAJOR)."
+    },
+    "L2-R2-OBS-2": {
+      "prior_disposition": "CONVERGED-CLEAN-REFERENCED-AS-GOLD-STANDARD — Compromise #26 gold-standard shape applied at L2-R2-BLK-2 closure",
+      "r4_verify": "PASS-UNCHANGED — applied and preserved."
+    },
+    "L2-R2-OBS-3": {
+      "prior_disposition": "CONVERGED-CLEAN-REFERENCED-AS-GOLD-STANDARD — Compromise #26 shape was the L2-R2-BLK-2 closure pattern",
+      "r4_verify": "PASS-UNCHANGED — applied and preserved."
+    },
+    "L2-R3-OBS-1": {
+      "prior_disposition": "OBS-CARRIED-FORWARD-FROM-R2-OBS-1 unchanged",
+      "r4_verify": "OBS-PERSISTS-UNCHANGED — see L2-MAJ-3 and L2-R2-OBS-1 above."
+    }
+  },
+  "new_drift_audit_from_r3_fp": {
+    "scope": "R3-FP (commit 25576cb1) touched 7 files closing 12 findings (3 MAJORs + 9 MINORs). R4 audit checks for L2-scope (adversarial / threat-model) drift introduced by R3-FP.",
+    "summary": "ZERO new BLOCKER + ZERO new MAJOR + ZERO new MINOR L2 findings. R3-FP introduced multiple POSITIVE CONTROLS for the L2 threat-model surface: (1) codepoint-PERMANENT doc-honesty strengthening at SigCodepoint::raw; (2) SHA agile-hash hex-pin landing structurally completing the hash crypto-agility defense; (3) wire-format-inventory test-coverage cite-honesty (rows 1 + 5 now cite real tests); (4) BREAKING-CHANGES.md ledger-completeness (R2-FP break-OK changes now enumerated as first-class rows); (5) V1-FROZEN.md L12-R3-MIN-1 narrative-honesty (cargo-public-api drift gate no longer self-contradicts item 1's 'REAL not placebo' claim); (6) V1-FROZEN.md path::Symbol cite-style hardening (rebase-resilient cites per pim-12/§3.5b HARDENED). All R3-FP changes are doc-honesty / ledger-completeness / test-pin landings; ZERO L2-critical code-file edits (verified by 0-line diff across engine.rs / manifest_envelope_recheck.rs / chain_authority.rs / manifest_envelope_chain_validation.rs)."
+  },
+  "findings_summary_r4": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "obs": 1,
+    "obs_detail": [
+      {
+        "id": "L2-R4-OBS-1",
+        "severity": "OBSERVATION",
+        "title": "L2-MAJ-3 0x6400 silent-acceptance: SECURITY-POSTURE.md still has no Compromise-row disclosure (carry-forward unchanged from L2-R3-OBS-1 = L2-R2-OBS-1)",
+        "evidence": {
+          "row_d_15_intact": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:351-352 still names `CryptoPolicy::require_hybrid_pq` consumer-side policy flag for rejecting 0x6400 classical-only envelopes (L2-MAJ-3) — destination intact at G-COMP-1.",
+          "breaking_changes_disclosure_intact": "docs/V1-BETA-BREAKING-CHANGES.md:228 still surfaces Row D-15b — CryptoPolicy::require_hybrid_pq consumer-side flag — for downstream-implementer visibility.",
+          "security_posture_disclosure_missing": "docs/SECURITY-POSTURE.md still has no Compromise-row disclosure of the 0x6400 silent-acceptance consumer-side gap (verified via grep; sole match at line 2444 is the descriptive cipher-suite paragraph, NOT an operator-visible Compromise row).",
+          "carry_forward_chain": "L2-R2-OBS-1 (R2 surfaced) → L2-R3-OBS-1 (R3 carried-forward unchanged) → L2-R4-OBS-1 (R4 carried-forward unchanged). 3-round persistence."
+        },
+        "attack_surface": "Same as L2-R3-OBS-1: an operator deploying v1-beta cannot tell from SECURITY-POSTURE.md alone that the platform's PQ-hybrid-by-default marketing-position is producer-side-only (the 0x6400 X25519-classical-only downgrade arm is silently accepted on the consumer side at v1-beta; CryptoPolicy::require_hybrid_pq is the Composing-time consumer-side rejection flag that closes this gap). The honest disclosure surfaces in DEFERRED.md (G-COMP-1 implementer-facing) + BREAKING-CHANGES.md (Cohort 4 downstream-implementer surface) but not in SECURITY-POSTURE.md (operator-facing threat-model).",
+        "disposition": "OBSERVATION — recurring at R4 (carried over from R3 + R2 unchanged). The deferral itself is HARD-RULE-12 clause-(b) compliant via Row D-15 + Cohort 4 visibility. Per Q5 (substantive = BLOCKER/MAJOR), this OBS does NOT block convergence. Orchestrator R4 triage final-call: either (a) accept the residual OBS as final v1-beta posture (3-round-persistent disclosure is HARD-RULE-12 compliant via two named destinations), OR (b) inline a ~5-line Compromise-row addition to close the operator-visible disclosure gap (~15 min orchestrator-direct work; would also close this 3-round persistence). Not BLOCKER-class. Not MAJOR-class. Same recommendation as R3."
+      }
+    ],
+    "r1_findings_disposition_carried_forward": {
+      "converged_closed": ["L2-BLK-1", "L2-BLK-2", "L2-BLK-3", "L2-MIN-2"],
+      "converged_as_deferred": ["L2-MAJ-1", "L2-MAJ-3", "L2-MAJ-4", "L2-MIN-1"],
+      "converged_clean": ["L2-OBS-1", "L2-OBS-2", "L2-OBS-3"]
+    },
+    "r2_findings_disposition_carried_forward": {
+      "converged_closed_by_r2_fix_pass": ["L2-R2-BLK-1", "L2-R2-BLK-2"],
+      "obs_carried_forward_unchanged": ["L2-R2-OBS-1 → L2-R3-OBS-1 → L2-R4-OBS-1"],
+      "obs_referenced_as_gold_standard_applied_by_fix_pass": ["L2-R2-OBS-2", "L2-R2-OBS-3"]
+    },
+    "r3_findings_disposition_carried_forward": {
+      "obs_carried_forward_unchanged": ["L2-R3-OBS-1 → L2-R4-OBS-1"]
+    }
+  },
+  "monotonic_convergence_trajectory": {
+    "r1": "3 BLOCKER + 4 MAJOR + 2 MINOR + 3 OBS = 12 findings",
+    "r2": "2 BLOCKER + 0 MAJOR + 0 MINOR + 3 OBS = 5 findings",
+    "r3": "0 BLOCKER + 0 MAJOR + 0 MINOR + 1 OBS = 1 finding",
+    "r4": "0 BLOCKER + 0 MAJOR + 0 MINOR + 1 OBS = 1 finding",
+    "shape": "Monotonic non-increase: 12 → 5 → 1 → 1. R3→R4 is a fixpoint (R3-FP closed 3 MAJOR + 9 MINOR from OTHER lenses without disturbing the L2 lens's converged state). Consistent with Phase-2b R1=64 → R6=0 precedent + Phase-3 R1 = 3BLK+18MAJ → R-final = 0 substantive precedent."
+  },
+  "disposition": "APPROVE-FOR-TAG — v1-beta. R4 confirms R3's CONVERGED-PER-Q5 disposition holds at post-R3-FP HEAD (25576cb1). The R3-FP changeset (+118/-69 across 7 files closing 12 OTHER-lens findings) introduced ZERO new L2 BLOCKER/MAJOR/MINOR findings and multiple POSITIVE CONTROLS (codepoint-PERMANENT doc-honesty strengthening + SHA agile-hash hex-pin landing + wire-format-inventory cite-honesty + BREAKING-CHANGES.md ledger-completeness + cargo-public-api drift-gate narrative-honesty + path::Symbol rebase-resilient cite-style hardening). ZERO code-side L2-critical file edits (engine.rs / manifest_envelope_recheck.rs / chain_authority.rs / manifest_envelope_chain_validation.rs all 0-line diff in R3-FP). All R1+R2+R3 dispositions (12+5+1 cumulative findings) verified PASS-UNCHANGED or PASS-STRENGTHENED at HEAD. The sole carry-forward OBS (L2-R4-OBS-1 = L2-R3-OBS-1 = L2-R2-OBS-1 = L2-MAJ-3 0x6400 silent-acceptance operator-visible SECURITY-POSTURE.md disclosure gap) is HARD-RULE-12 clause-(b) compliant via Row D-15 + V1-BETA-BREAKING-CHANGES.md Cohort 4 Row D-15b dual-destination visibility; per Q5 (substantive = BLOCKER/MAJOR) it does NOT block convergence.",
+  "r4_convergence_disposition": "CONVERGED-PER-Q5 — 0 BLOCKER + 0 MAJOR + 0 MINOR + 1 OBS at R4 (fixpoint with R3). Per CLAUDE.md rule 9 Q5 ('Convergence loop terminates only when full council returns 0 substantive findings') + iterate-to-convergence generalization (feedback_iterate_critical_reviews_to_convergence: substantive = BLOCKER/MAJOR), this lens has CONVERGED at R3 AND HOLDS-CONVERGED at R4. The R3→R4 fixpoint demonstrates that R3-FP's broader 12-finding closure didn't disturb the L2 converged state — exactly the shape Q5 demands for advancing past the convergence loop. L2 lens APPROVES FOR TAG v1-beta.",
+  "positive_controls_passed_r4": [
+    "ZERO code-side L2-critical file edits in R3-FP (engine.rs / manifest_envelope_recheck.rs / chain_authority.rs / manifest_envelope_chain_validation.rs all 0-line diff)",
+    "SigCodepoint::raw() doc-string strengthened to FROZEN-PERMANENT narrative (positive control for codepoint-as-load-bearing-defense framing per CLAUDE.md baked-in #5)",
+    "HashCodepoint::SHA2_512_256 (0x1015) + HashCodepoint::SHA3_256 (0x16) hex-pins landed at canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned (positive control for hash crypto-agility structural defense completeness)",
+    "V1-WIRE-FORMAT-INVENTORY.md Summary rows 1 + 5 now cite real test files (no more phantom citations; wire-format coverage claim credibility hardened)",
+    "V1-BETA-BREAKING-CHANGES.md Cohort 3 'G-CORE-9 R2 fix-pass additions' sub-heading enumerates 2 R2-FP break-OK changes as first-class ledger rows (operator-visible disclosure surface strengthened)",
+    "V1-FROZEN-INTERFACE.md L12-R3-MIN-1 closure: 'FREEZE-WAVE FIX-NOW CRITICAL GAP' stale narrative stripped + replaced with 'CLOSED post G-CORE-9 build-out (commit 8cc4eddd)' (cargo-public-api drift-gate self-contradiction closed; gate-is-real claim now coherent across the doc)",
+    "V1-FROZEN-INTERFACE.md 17 path:LINE-NUMBER → path::Symbol cite conversions across §1 + §2 + §8 + §12 (rebase-resilient cites per pim-12/§3.5b HARDENED; positive control for cite-drift defense)",
+    "All R1+R2+R3 L2 dispositions verified PASS-UNCHANGED or PASS-STRENGTHENED at HEAD (12+5+1 cumulative finding-state preserved)",
+    "Monotonic-convergence fixpoint achieved: R3 = 1 OBS = R4 = 1 OBS (R3-FP's broader 12-finding closure didn't disturb L2 converged state)"
+  ],
+  "cross_ref_l1_l17": "L1 positive-control lens (R4) should confirm ZERO code-side L2-critical file edits in R3-FP (matches my code-diff audit). L17 doc-coupling lens (R4) should confirm V1-FROZEN.md path::Symbol cite-style hardening + cargo-public-api drift-gate narrative-honesty + V1-BETA-BREAKING-CHANGES.md ledger-completeness + V1-WIRE-FORMAT-INVENTORY.md cite-honesty mutual consistency. If both L1 + L17 R4 independently confirm CONVERGED/APPROVE-FOR-TAG, the orthogonal-lens cross-confirmation has held across all 4 rounds (R1+R2+R3+R4) and tag-readiness is established for the L2-scoped surface.",
+  "termination_criterion_per_q5": "TERMINATED for this lens — R3 CONVERGED-PER-Q5 (0 BLOCKER + 0 MAJOR + 0 MINOR + 1 OBS); R4 HOLDS-CONVERGED-PER-Q5 (0 BLOCKER + 0 MAJOR + 0 MINOR + 1 OBS, fixpoint with R3). Per CLAUDE.md rule 9 Q5 + iterate-to-convergence generalization, L2 lens has converged twice in succession (R3 + R4). The R3-FP did not disturb the converged state for this lens. Orchestrator R4 triage can either accept L2-R4-OBS-1 as final v1-beta posture (3-round-persistent disclosure with two HARD-RULE-12-clause-(b)-compliant named destinations) OR inline-close it as ~15-min orchestrator-direct work; either disposition advances to tag-readiness for this lens."
+}
