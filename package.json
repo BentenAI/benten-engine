@@ -14,7 +14,8 @@
     "test": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "codegen:errors": "node --import tsx scripts/codegen-errors.ts",
-    "drift:errors": "node --import tsx scripts/drift-detect.ts"
+    "drift:errors": "node --import tsx scripts/drift-detect.ts",
+    "drift:error-variant-mirror": "node --import tsx scripts/drift-detect-error-variant-mirror.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

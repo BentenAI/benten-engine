@@ -1320,6 +1320,28 @@ pub enum ErrorCode {
     /// downstream concern; no primitive-edge routing nuance applies at
     /// the DSL-compile boundary. Maps to `E_DSL_BACKEND_REJECTED`.
     DslBackendRejected,
+    /// Pre-G-CORE-9-FREEZE 2026-05-24 ratification (closes the
+    /// `CompileError::Io`-variant first-class-mirror gap surfaced by
+    /// PR #1339 chunk-3 + §3.5g item 6 amendment): a real file-IO
+    /// failure surfaces from the DSL compiler (file-not-found / read-
+    /// failure / stdin-read-failure during compilation). Distinct from
+    /// `DslBackendRejected` (`E_DSL_BACKEND_REJECTED` — downstream-
+    /// consumer rejection at the post-compile registration step) and
+    /// from the diagnostic-carrying compile variants (`Parse` / `Semantic`
+    /// / `Build` — which surface as `E_DSL_*` source-position diagnostics
+    /// not catalog-routed). Construction sites:
+    ///   `crates/benten-dsl-compiler/src/lib.rs::CompileError::Io`
+    ///   (the public variant; `compile_file` wraps `std::fs::read` IO
+    ///   failures + non-utf8 + missing-file conditions here)
+    /// Routes to `ON_ERROR` — IO failure at a compile boundary is a
+    /// downstream-uncomposable error (no graceful primitive-edge route).
+    /// Maps to `E_DSL_IO_ERROR`. Pre-#1339 the DSL compiler returned the
+    /// raw `E_DSL_IO_ERROR` string for `CompileError::Io` but no
+    /// matching catalog entry existed, so the napi `mapNativeError`
+    /// boundary collapsed to `E_UNKNOWN`; this first-class mirror closes
+    /// that gap + makes the §3.5g pub-error-variant-first-class-mirror
+    /// rule enforceable by the drift-detect scanner.
+    DslIoError,
     /// Phase-4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
     /// C11b safety invariant per the PQ-default reframe): a caller
     /// attempted to construct a pure-PQ-sole-trust-path crypto
@@ -1668,6 +1690,10 @@ impl ErrorCode {
             // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer rejection
             // at the DSL-compile boundary; closes the Io-variant abuse.
             ErrorCode::DslBackendRejected => "E_DSL_BACKEND_REJECTED",
+            // Pre-G-CORE-9-FREEZE 2026-05-24 — first-class mirror of the
+            // pre-existing `CompileError::Io` variant (§3.5g item 6
+            // amendment closure).
+            ErrorCode::DslIoError => "E_DSL_IO_ERROR",
             ErrorCode::AuditNotLandedPurePqRejected => "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
@@ -2174,6 +2200,12 @@ impl ErrorCode {
             // primitive-edge routing nuance applies to a compile-time
             // post-emit registration failure).
             ErrorCode::DslBackendRejected => Some("ON_ERROR"),
+            // Pre-G-CORE-9-FREEZE 2026-05-24 first-class mirror of
+            // `CompileError::Io`. Routes to ON_ERROR — a real file-IO
+            // failure at the compile boundary is a downstream-uncomposable
+            // error (no graceful primitive-edge route); mirrors the
+            // `DslBackendRejected` disposition for the same reason.
+            ErrorCode::DslIoError => Some("ON_ERROR"),
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -2485,6 +2517,9 @@ impl core::str::FromStr for ErrorCode {
                 ErrorCode::ThinClientBridgePrincipalUnresolved
             }
             "E_DSL_BACKEND_REJECTED" => ErrorCode::DslBackendRejected,
+            // Pre-G-CORE-9-FREEZE 2026-05-24 — first-class mirror of
+            // `CompileError::Io` (§3.5g item 6 amendment closure).
+            "E_DSL_IO_ERROR" => ErrorCode::DslIoError,
             // Phase 4-Meta-Core G-CORE-3c full swap-matrix conformance.
             "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED" => ErrorCode::AuditNotLandedPurePqRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),

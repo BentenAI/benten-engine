@@ -159,6 +159,11 @@ impl HashCodepoint {
 /// vendored combiner over `ml-kem` + `x25519-dalek` + `sha3`).
 /// **G-CORE-3a CANARY flips `0x647a` + `0x6400` (classical-X25519
 /// downgrade arm) to LIVE.** `0x647b` (NF-1 ML-KEM-768⊕HQC end-state)
+/// + `0x647c` (pure-PQ ML-KEM-768-only swap-matrix arm; reserved-named
+/// at G-CORE-3c but typed-reject at the v1-beta default `CipherSuite`
+/// dispatcher level — the pure-PQ arm is only constructible via
+/// [`crate::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
+/// which gates on `AUDIT_LANDED_PURE_PQ_FLAG`)
 /// + `0x0000` (no-encryption) remain reserved-typed-reject via
 /// [`UnsupportedAlgorithm`] until G-CORE-3c's full swap-matrix wave —
 /// the additive-codepoint discipline + old-codepoints-supported-forever
@@ -189,6 +194,20 @@ impl CipherSuiteCodepoint {
     /// (NIST-projected 2027); draft (~early-2026) is the early-warning.
     pub const HYBRID_MLKEM768_HQC: Self = Self(0x647b);
 
+    /// Pure-PQ ML-KEM-768-only swap-matrix arm (the
+    /// `EncryptionArm::PurePqMlKem768Only` destination — module-private
+    /// internal variant; not an intra-doc link —
+    /// classical X25519 dropped). **Reserved-named** at the cipher-suite
+    /// dispatcher level — the v1-beta default [`crate::cipher_suite::CipherSuite::resolve`]
+    /// arm typed-rejects `0x647c` per the C11b safety gate (pure-PQ is
+    /// only constructible via [`crate::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
+    /// which gates on `AUDIT_LANDED_PURE_PQ_FLAG`). Distinct from
+    /// [`Self::HYBRID_MLKEM768_HQC`] (`0x647b`) which is strictly reserved
+    /// for the future ML-KEM⊕HQC PQ⊕PQ end-state arm. **Pre-G-CORE-9-FREEZE
+    /// 2026-05-24 ratification** — minted as a NEW codepoint to prevent
+    /// wire-format collision when the AUDIT_LANDED flag flips at v1-GM.
+    pub const PURE_PQ_MLKEM768_ONLY: Self = Self(0x647c);
+
     /// Raw 16-bit codepoint.
     #[must_use]
     pub const fn raw(self) -> u16 {
@@ -211,15 +230,23 @@ impl CipherSuiteCodepoint {
     ///
     /// **G-CORE-3a flips `0x647a` (X25519⊕ML-KEM-768 hybrid) + `0x6400`
     /// (classical-only X25519 downgrade) to LIVE.** The full swap matrix
-    /// (incl. `0x0000` no-encryption + `0x647b` NF-1 PQ⊕PQ end-state) is
-    /// G-CORE-3c's deliverable; here `0x0000` + `0x647b` remain
-    /// typed-rejected per the additive-codepoint discipline.
+    /// (incl. `0x0000` no-encryption + `0x647b` NF-1 PQ⊕PQ end-state + the
+    /// pure-PQ-ML-KEM-only arm at `0x647c`) is G-CORE-3c's deliverable;
+    /// here `0x0000` + `0x647b` + `0x647c` remain typed-rejected at the
+    /// [`crate::cipher_suite::CipherSuite`] dispatcher level per the
+    /// additive-codepoint discipline + C11b safety gate (pure-PQ is only
+    /// reachable via the named `SwapMatrix::try_pure_pq_sole_trust_path`
+    /// constructor which gates on `AUDIT_LANDED_PURE_PQ_FLAG`).
     pub fn resolve(self) -> Result<(), UnsupportedAlgorithm> {
         match self.0 {
             // G-CORE-3a LIVE arms.
             0x647a | 0x6400 => Ok(()),
-            // Reserved-but-unimplemented at this wave (G-CORE-3c lights).
+            // Reserved-but-unimplemented at the cipher-suite dispatcher
+            // level (G-CORE-3c lights the full swap matrix). `0x647c`
+            // pure-PQ is reachable ONLY via SwapMatrix; `0x647b` is the
+            // future ML-KEM⊕HQC end-state.
             0x647b => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
+            0x647c => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
             0x0000 => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 }),
             other => Err(UnsupportedAlgorithm::CipherSuite { codepoint: other }),
         }

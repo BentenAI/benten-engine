@@ -224,6 +224,7 @@ export const CATALOG_CODES = [
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
   "E_DSL_BACKEND_REJECTED",
+  "E_DSL_IO_ERROR",
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
 ] as const;
 
@@ -3095,6 +3096,21 @@ export class EDslBackendRejected extends BentenError {
 }
 
 /**
+ * E_DSL_IO_ERROR
+ *
+ * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::CompileError::Io(_)` (the public variant; `compile_file` constructs it directly from `std::io::Error` failures). The `CompileError::code()` method routes the variant through `benten_errors::ErrorCode::DslIoError` so the napi `mapNativeError` boundary surfaces the typed catalog code instead of collapsing to `E_UNKNOWN`.
+ * Message template: "DSL IO error: {path_or_stream}: {os_error}"
+ */
+export class EDslIoError extends BentenError {
+  static readonly code = "E_DSL_IO_ERROR";
+  static readonly fixHint = "Pre-G-CORE-9-FREEZE 2026-05-24 — first-class catalog mirror of the pre-existing `CompileError::Io` variant (the §3.5g item 6 amendment closure that closes the first-class-mirror gap surfaced by PR #1339 chunk-3 where `Backend` was added as first-class but `Io` was left mapping to `E_UNKNOWN` at the napi boundary). Distinct from `E_DSL_BACKEND_REJECTED` (downstream-consumer rejection at the post-compile registration step, the chunk-3 home for what used to abuse `Io`). Fix at the call site: ensure the source file exists + is readable + is valid UTF-8; for stdin compilation, ensure the stream is non-empty and produces valid UTF-8.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DSL_IO_ERROR", "Pre-G-CORE-9-FREEZE 2026-05-24 — first-class catalog mirror of the pre-existing `CompileError::Io` variant (the §3.5g item 6 amendment closure that closes the first-class-mirror gap surfaced by PR #1339 chunk-3 where `Backend` was added as first-class but `Io` was left mapping to `E_UNKNOWN` at the napi boundary). Distinct from `E_DSL_BACKEND_REJECTED` (downstream-consumer rejection at the post-compile registration step, the chunk-3 home for what used to abuse `Io`). Fix at the call site: ensure the source file exists + is readable + is valid UTF-8; for stdin compilation, ensure the stream is non-empty and produces valid UTF-8.", message, context);
+    this.name = "EDslIoError";
+  }
+}
+
+/**
  * E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
  *
  * Thrown at: `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
@@ -3309,5 +3325,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED": EWriteBoundaryChainNotUserRooted,
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED": EThinClientBridgePrincipalUnresolved,
   "E_DSL_BACKEND_REJECTED": EDslBackendRejected,
+  "E_DSL_IO_ERROR": EDslIoError,
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED": EAuditNotLandedPurePqRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

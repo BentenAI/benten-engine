@@ -86,6 +86,19 @@ jobs:
         # The error message names the specific missing variant for lightning-
         # fast triage. This is load-bearing for R1 security finding #11.
 
+      - name: Run the pub-error-variant first-class-mirror scanner (§3.5g item 6)
+        run: node --import tsx scripts/drift-detect-error-variant-mirror.ts
+        # Pre-G-CORE-9-FREEZE 2026-05-24 §3.5g item 6 enforcer. Fails if any
+        # `pub enum *Error` variant is constructed in a `pub fn` outside
+        # `#[cfg(test)]` without a first-class `benten_errors::ErrorCode`
+        # catalog mirror (and without an opt-out annotation OR baseline
+        # grandfathering). Origin: PR #1339 chunk-3 surfaced the
+        # `CompileError::Io` mirror gap; the pre-G-CORE-9-FREEZE bundle
+        # closed that instance + ships this scanner so future asymmetries
+        # surface automatically. Pre-existing baseline (159 variants) is
+        # NAMED-DEFERRED to a post-G-CORE-9-FREEZE drain wave per
+        # scripts/drift-detect-error-variant-mirror-baseline.txt.
+
   test-drift-detector-fails:
     name: self-test (meta-assertion that the detector actually detects)
     runs-on: ubuntu-24.04

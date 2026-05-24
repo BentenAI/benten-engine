@@ -75,8 +75,12 @@
 //! IETF Independent Submission draft, Benten-owned) + `0x6400`
 //! classical-only X25519 downgrade arm to LIVE.** The remaining
 //! cipher-suite codepoints (`0x647b` NF-1 ML-KEM-768⊕HQC end-state +
+//! `0x647c` pure-PQ ML-KEM-768-only swap-matrix arm +
 //! `0x0000` no-encryption) stay reserved-typed-reject via
-//! [`UnsupportedAlgorithm`] until G-CORE-3c's full swap-matrix wave.
+//! [`UnsupportedAlgorithm`] at the cipher-suite dispatcher level until
+//! G-CORE-3c's full swap-matrix wave (`0x647c` is reachable ONLY via
+//! the named [`swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
+//! constructor which gates on `AUDIT_LANDED_PURE_PQ_FLAG`).
 //!
 //! # Module map
 //!
@@ -94,8 +98,10 @@
 //!   round-trips through.
 //! - [`cipher_suite`] — typed surface for G-CORE-3 #1301
 //!   (G-CORE-3a CANARY: `0x647a` hybrid + `0x6400` classical-X25519
-//!   downgrade LIVE; `0x647b` NF-1 PQ⊕PQ + `0x0000` no-encryption
-//!   remain reserved-typed-reject until G-CORE-3c swap-matrix wave).
+//!   downgrade LIVE; `0x647b` NF-1 ML-KEM⊕HQC + `0x647c` pure-PQ
+//!   ML-KEM-only + `0x0000` no-encryption remain reserved-typed-reject
+//!   at the cipher-suite dispatcher; the pure-PQ arm is reachable only
+//!   via the named `SwapMatrix::try_pure_pq_sole_trust_path` constructor).
 //! - [`error`] — typed errors including [`error::UnsupportedAlgorithm`].
 //! - [`boundary`] — the call-site-audit surface (TF-2 grep-pin
 //!   substrate; asserts this crate is the only one that direct-deps the

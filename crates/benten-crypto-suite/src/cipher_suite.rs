@@ -10,8 +10,12 @@
 //! - LIVE codepoint `0x6400` = classical-only X25519 KEM (non-default
 //!   downgrade arm of the swap matrix).
 //! - Typed-reject (NEVER silent-fallback) on every other codepoint —
-//!   `0x647b` (NF-1 PQ⊕PQ end-state) + `0x0000` (no-encryption) + any
-//!   unknown — surfaces `UnsupportedAlgorithm::CipherSuite`.
+//!   `0x647b` (NF-1 ML-KEM⊕HQC PQ⊕PQ end-state) + `0x647c` (pure-PQ
+//!   ML-KEM-768-only swap-matrix arm; reachable ONLY via the named
+//!   [`crate::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
+//!   constructor which gates on `AUDIT_LANDED_PURE_PQ_FLAG`)
+//!   + `0x0000` (no-encryption) + any unknown —
+//!   surfaces `UnsupportedAlgorithm::CipherSuite`.
 //! - [`CipherSuite::wrap_key_material`] / [`CipherSuite::unwrap_key_material`] —
 //!   the X-Wing-hybrid wrap/unwrap production API.
 //! - [`CipherSuite::seal_aead`] / [`CipherSuite::open_aead`] — the
@@ -713,6 +717,23 @@ mod tests {
         assert!(matches!(
             outcome,
             Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647b })
+        ));
+    }
+
+    #[test]
+    fn reserved_codepoint_0x647c_typed_rejects() {
+        // Pre-G-CORE-9-FREEZE 2026-05-24: `0x647c` is the named pure-PQ
+        // ML-KEM-768-only swap-matrix arm codepoint. At the cipher-suite
+        // dispatcher level it MUST typed-reject — the pure-PQ arm is
+        // ONLY reachable via the named
+        // `SwapMatrix::try_pure_pq_sole_trust_path` constructor (which
+        // gates on `AUDIT_LANDED_PURE_PQ_FLAG`). Sibling of the `0x647b`
+        // test above; distinct codepoint identity prevents wire-format
+        // collision when the AUDIT_LANDED flag flips at v1-GM.
+        let outcome = CipherSuite::resolve(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY);
+        assert!(matches!(
+            outcome,
+            Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647c })
         ));
     }
 }
