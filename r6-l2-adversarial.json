@@ -1,0 +1,217 @@
+{
+  "lens": "L2-crypto-adversarial-and-threat-model",
+  "round": "R6-R1",
+  "scope": "PHASE-WIDE (Phase-4-Meta-Core)",
+  "wave": "phase-4-meta-core-close",
+  "branch": "phase-4-meta-core/r6-r1-l2-adversarial-phase-wide",
+  "base_commit": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "g_core_9_r4_convergence_baseline": {
+    "r4_disposition": "CONVERGED-PER-Q5 (0 BLK / 0 MAJ / 0 MIN / 1 OBS)",
+    "r4_obs_carry": "L2-R4-OBS-1 = L2-R3-OBS-1 = L2-R2-OBS-1: 0x6400 silent-acceptance operator-visible SECURITY-POSTURE.md Compromise-row disclosure missing",
+    "phase_wide_check": "G-CORE-9 R4 was FREEZE-narrower (V1-FROZEN-INTERFACE.md + crypto-suite swap-matrix + cap-policy/manifest-envelope-recheck + breaking-changes-ledger). R6 re-runs L2 lens broader: sync attacks (handshake / apply_atrium_merge / Compromise #25 family) + plugin install/upgrade attacks (install_plugin pipeline / T10-upgrade defenses) + cross-crate attack surfaces (app-layer signature wiring vs crypto-suite hybrid suite)."
+  },
+  "audit_methodology": {
+    "step_1_baseline_verify": "Verify G-CORE-9 R4 CONVERGED-PER-Q5 state holds at the R4b-FP HEAD (4bbc4cac). The G-CORE-9 R4-FP merged 6 MINORs at a0b75637 (#1349); R4b-FP added 3 R4b commits (753d9840 + 8240a56c + 4bbc4cac) closing R4b L6 MAJOR pivot + L1 3 MAJORs cross-wave + 10 R4b MINORs. None touched L2-critical code files (engine.rs / manifest_envelope_recheck.rs / chain_authority.rs / manifest_envelope_chain_validation.rs / aead.rs / sig.rs / ucan_blobs_protocol.rs / plugin_lifecycle.rs / envelope_sig.rs).",
+    "step_2_phase_wide_attack_walk": "Walked the broader L2 surface that G-CORE-9-FREEZE narrower-scoped intentionally skipped: (a) sync-merge surface (apply_atrium_merge ingress + Compromise #25 HLC/nonce/envelope defenses); (b) plugin install pipeline (install_plugin's 11-step + InstallPorts replay-check); (c) plugin upgrade pipeline (T10-upgrade (a) same-author + (b) reject-downgrade); (d) cross-crate signature-wiring vs Compromise #30's PQ-hybrid-by-default claim (DropBundle envelope-sig + PluginManifest peer_signature + InstallRecord user_signature vs benten-crypto-suite::sig::SignatureSuite); (e) revocation reach asymmetry (online-pull vs offline-Drop, §R6 disclosure honesty); (f) AEAD rebinding attack family (G-CORE-3d's AAD-binds-CID defense at aead_wrap.rs + crypto-suite aead.rs)."
+  },
+  "g_core_9_r4_state_verify_at_head": {
+    "scope": "Re-verify each G-CORE-9 R4 disposition at HEAD (4bbc4cac) post the R4-FP + 3 R4b-FP commits.",
+    "L2-BLK-1_pub_to_pub_crate": "PASS-UNCHANGED — Row D-7 still present. cargo-public-api baselines at docs/public-api/ still lock un-tightened surface. R4-FP/R4b-FP added zero code-side L2 changes.",
+    "L2-BLK-2_production_rechecker_phantom": "PASS-UNCHANGED — Row D-4 still present. ProductionManifestEnvelopeRechecker absent at HEAD (verified: zero matches in crates/). Compromise #26 retense intact at SECURITY-POSTURE.md.",
+    "L2-BLK-3_accept_atrium_share_phantom": "PASS-UNCHANGED — Row D-5 still present. accept_atrium_share absent at HEAD (verified: zero matches in crates/).",
+    "L2-MAJ-1_synthesized_fallback_admits": "PASS-UNCHANGED — Row D-18 still present. engine.rs:1463-1477 narrative intact at HEAD. Default-Noop rechecker fixtures still rely on synthesized-fallback admit; hardening properly named-deferred to G-COMP-1.",
+    "L2-MAJ-2_compromise_23_F3_TOCTOU": "PASS-UNCHANGED — chain_authority.rs:404-421 still has the non-atomic get-then-put pair. SECURITY-POSTURE.md:1691-1699 disclosure block live. Row D-8 destination intact.",
+    "L2-MAJ-3_0x6400_silent_acceptance": "OBS-PERSISTS (= L2-R4-OBS-1 = L2-R3-OBS-1 = L2-R2-OBS-1, now 4-round persistent through R6-R1) — SECURITY-POSTURE.md still has no Compromise-row disclosure of the 0x6400 silent-acceptance consumer-side gap. Verified by grep: sole 0x6400 match at line 2444 is descriptive cipher-suite paragraph, NOT a Compromise-row. Row D-15 still names CryptoPolicy::require_hybrid_pq destination. V1-BETA-BREAKING-CHANGES.md Cohort 4 Row D-15b still surfaces it. This is the carry-forward OBS that R4 explicitly declined to inline-close.",
+    "L2-MAJ-4_graph_aead_codepoint_binding": "PASS-UNCHANGED — Row D-13 still present. aead_wrap.rs unchanged in R4-FP/R4b-FP. K_root divergence natural defense argument intact.",
+    "L2-MIN-1_live_per_request_resolver_test_pin": "PASS-UNCHANGED — Row D-10 still present. Verification-mechanism test pin still absent at HEAD.",
+    "L2-MIN-2_empty_did_string_structural_reject": "PASS-UNCHANGED — chain_authority.rs / manifest_envelope_chain_validation.rs:289-301 + test pin still live (verified by grep at line 295-301: 'L2-MIN-2 structural empty-DID-string defense'). Defense-in-depth check (per-step audience DID empty-string check) is described as 'applied at every audience step (within the per-step loop below) for defense-in-depth' BUT, on close audit, ONLY the root_issuer empty-check at lines 295-298 is structurally enforced; the per-step audience-DID empty-check IS NOT in the loop body (lines 306-354). The comment is aspirational. NOTED-AS-MINOR below.",
+    "L2-OBS-1_C11b_audit_gate": "PASS-UNCHANGED — swap_matrix.rs::try_pure_pq_sole_trust_path returning AuditNotLandedPurePqRejected at v1-beta unchanged. V1-FROZEN.md item 6 (codepoint table) FROZEN-PERMANENT narrative intact.",
+    "L2-OBS-2_hybrid_sig_strip_resistance": "PASS-UNCHANGED — sig.rs commitment + both-must-verify defenses intact. Codepoint-mismatch guard at sig.rs:424-426 enforces 'classical-only suite MUST NOT silently accept a hybrid-coded signature' — verified at HEAD.",
+    "L2-OBS-3_aad_rebinding_aead_codepoint_typed_reject": "PASS-UNCHANGED — aead.rs:288-294 codepoint-mismatch typed-reject intact (envelope.cipher_codepoint != key.codepoint short-circuits with Unsupported)."
+  },
+  "phase_wide_attack_audit": {
+    "sync_merge_surface_compromise_25": {
+      "scope": "Compromise #25 HLC-monotonic + nonce-cache + envelope-bound-HLC + per-row cap-recheck composite defense; engine.rs::apply_atrium_merge ingress.",
+      "verification": "All four composing primitives verified at HEAD: (1) HLC skew classifier at benten_core::hlc::Hlc::update with attack pin at crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs (the hlc_skew_exceeded_in_inbound_sync_frame_rejected_with_e_hlc_skew_exceeded test exercises adversarial future-HLC stamp); (2) nonce-cache for replay defense (per Compromise #23 Acceptor::accept_at nonce-store — COLLAPSE preserved as provenance-label per DECISION-RECORD §4); (3) envelope signature covers HLC fields (signed DeviceAttestationEnvelope V2 unchanged); (4) per-row cap-recheck at apply_atrium_merge with G16-B-F structural-always-on (PR #161) intact.",
+      "disposition": "CLEAN — Compromise #25 composite defense holds at HEAD across the full phase-wide sync-merge surface. Defense-in-depth per-row cap-recheck + manifest-envelope-recheck-seam (Compromise #26 seam half live; substantive-adapter Row D-4 deferred) layered correctly per CLAUDE.md #18 Layer-3-on-Layer-1."
+    },
+    "plugin_install_pipeline_compromise_26_install_record_replay": {
+      "scope": "install_plugin 11-step pipeline at crates/benten-platform-foundation/src/plugin_lifecycle.rs:830 + InstallPorts::install_record_replay_check + engine-side InstallRecordReplayStore at crates/benten-engine/src/install_record_replay.rs.",
+      "verification": "install_plugin step 3b at lines 901-905 calls replay_check IFF install_record_replay_check is Some(_). The port is Option<&mut InstallRecordReplayCheckFn> at line 713; defaults to None per the doc-comment 'no replay check; backward-compat'. The InstallRecordReplayStore IS engine-shipped (engine.rs:1035 + engine.rs:1947 default-construction) but there is NO engine-side install_plugin caller in crates/benten-engine/ — verified by grep for 'InstallPorts {' / 'install_record_replay_check' in benten-engine/src + bindings/ + packages/: zero matches outside the foundation crate's own tests. Every existing test caller passes 'install_record_replay_check: None'.",
+      "disposition_per_g_core_9_r4_baseline": "L2-MAJ-1-class deferred-substantive-adapter shape — symmetric to Compromise #26's NoopManifestEnvelopeRechecker default + ProductionManifestEnvelopeRechecker deferral. The replay-store IS shipped but no caller wires it at v1-beta. This is DISCLOSED at V1-FROZEN-INTERFACE-DEFERRED.md Row D-2 'InstallRecordReplayStore lifecycle-required wiring' (verified by grep). HARD RULE 12 clause-(b) compliant; properly named-deferred. No new finding — same shape as the Noop-default class for the manifest-envelope-recheck seam.",
+      "disposition": "CLEAN at lens-scope — disclosed at Row D-2; not silent."
+    },
+    "plugin_upgrade_t10_a_author_continuity_not_wired": {
+      "scope": "T10-upgrade defense step (a) 'same-author DID continuity' per admin-ui-v0-threat-model.md §T10 + r4-tc-3 BLOCKER row. The standalone helper verify_upgrade_author_continuity lives at crates/benten-platform-foundation/src/module_ecosystem.rs:99 with test coverage at plugin_upgrade_requires_same_author_did.rs.",
+      "evidence": [
+        "grep verify_upgrade_author_continuity crates/benten-platform-foundation/src/plugin_lifecycle.rs = ZERO matches",
+        "grep verify_upgrade_author_continuity crates/benten-engine/src/ bindings/ packages/ = ZERO matches (only tests + INTERNALS.md narrative)",
+        "install_plugin step 7 at plugin_lifecycle.rs:929-935 enforces ONLY T10-upgrade (b) DAG-descendant check; (a) same-author is NOT in the 11-step pipeline",
+        "Step 2 user_trust_list check at line 857 enforces 'manifest's peer_did is in user_trust_list IF list non-empty' — does NOT enforce continuity against prior_manifest.peer_did even when prior_installed_cid is Some + the resolver returns the prior manifest"
+      ],
+      "attack_vector": "Per threat-model §T10-upgrade (a): 'Upgrade from peer-DID alice to peer-DID attacker (transitive substitution) MUST be REJECTED — the silent-upgrade path requires same author DID + accepting a different peer-DID is a re-install requiring new consent.' At v1-beta, an attacker controlling a CID that is a DAG-descendant of the installed CID can ship a manifest with attacker's peer_did + valid peer_signature; install_plugin step 7 admits the upgrade because the DAG-descendant check passes; step 7b's caps-grew check is structurally independent (only re-consent on cap widening); the prior peer_did is never compared against the new peer_did. Net: silent-upgrade to attacker's peer_did succeeds if user_trust_list is empty (the v1 default per D-4F-3) OR if attacker is in the trust-list under a different name binding.",
+      "asymmetry_with_t10_b": "T10-upgrade (b) IS wired (step 7); T10-upgrade (a) is NOT. The two are co-defensive per the threat-model and per pim-2-amendment §3.6b sub-rule 4 ('T10-upgrade has multiple sub-arms (a) same-author, (b) reject-downgrade. This pin is the (a) arm only').",
+      "disclosure_check": "grep verify_upgrade_author_continuity docs/V1-FROZEN-INTERFACE-DEFERRED.md docs/V1-FROZEN-INTERFACE.md docs/SECURITY-POSTURE.md docs/V1-BETA-BREAKING-CHANGES.md = ZERO matches. The deferral is NOT disclosed.",
+      "disposition": "MAJOR — phase-wide gap; not disclosed. Per HARD RULE 12: not OUT-OF-SCOPE (within Phase-4-Meta-Core scope; install_plugin is a phase-shipped surface); not BELONGS-ELSEWHERE (already in benten-platform-foundation); not DISAGREE (the test pin literally exercises the standalone helper, not the wired-in install enforcement). FIX-NOW or DEFER-NAMED-NOW to a specific Row in V1-FROZEN-INTERFACE-DEFERRED.md is required."
+    },
+    "phase_wide_signature_wiring_vs_compromise_30_claim": {
+      "scope": "Compromise #30 claims 'v1-beta ships PQ-hybrid by default for both signature (hybrid Ed25519⊕ML-DSA-65, concatenated/committing/strip-resistant, both-must-verify)'. Verify the claim against the actual application-layer signature wiring across the phase.",
+      "evidence": [
+        "grep SignatureSuite / HybridSignature in crates/benten-id/src/ crates/benten-caps/src/ crates/benten-drop/src/ crates/benten-platform-foundation/src/ crates/benten-sync/src/ crates/benten-engine/src/ = ZERO matches across all six dependent crates",
+        "DropBundle envelope-sig at crates/benten-drop/src/envelope_sig.rs::sign_envelope (line 107-110) → Keypair::sign → classical-only Ed25519",
+        "PluginManifest peer_signature verify at crates/benten-platform-foundation/src/plugin_manifest.rs::verify_peer_signature (line 163-184) → ed25519_dalek::Signature::from_bytes → classical-only Ed25519",
+        "InstallRecord user_signature verify at crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature (line 592-611) → ed25519_dalek::Signature::from_bytes → classical-only Ed25519",
+        "AuthorizationGrant.binding_sig — DISCLOSED honestly at V1-FROZEN-INTERFACE-DEFERRED.md Row D-15e ('ed25519_dalek is the only signature primitive used for binding_sig at v1-beta')"
+      ],
+      "claim_actuality_gap": "Only binding_sig is honestly disclosed as classical-only at v1-beta. The other three app-layer sig surfaces (DropBundle envelope-sig + PluginManifest peer_signature + InstallRecord user_signature) are ALSO classical-only-Ed25519 at v1-beta, but Compromise #30 lines 2215-2218 frame 'v1-beta ships PQ-hybrid by default for both signature' WITHOUT the asterisk that the hybrid SUITE exists in benten-crypto-suite but is NOT wired at any application-layer signing site. The hybrid sig contract lives in benten-crypto-suite::sig::SignatureSuite + ::HybridSignature; the wire-format pins at tf3a + tf4 test hybrid sig is structurally LIVE in benten-crypto-suite; but every actual production signing call across the dependent crates uses Keypair::sign → classical Ed25519. This is operator-MISLEADING — an operator reading Compromise #30 + the v1-beta hybrid-default marketing would reasonably conclude that the platform signs application-layer artifacts with hybrid sigs at v1-beta, which is FALSE.",
+      "disclosure_check": "Compromise #30 itself at SECURITY-POSTURE.md:2211 does not name the application-layer-wiring gap. Row D-15e at V1-FROZEN-INTERFACE-DEFERRED.md:442 names ONLY binding_sig. The other three app-layer surfaces are not disclosed.",
+      "disposition": "MAJOR — operator-misleading disclosure at v1-beta. The hybrid sig CONTRACT shipping in benten-crypto-suite is structurally complete but is NOT wired at any application-layer signing site. Per HARD RULE 12: (a) clause-(b) DEFER-NAMED-NOW is the available path — adding 3 sister-rows to Row D-15e enumerating DropBundle envelope-sig + PluginManifest peer_signature + InstallRecord user_signature as 'classical-only-Ed25519 at v1-beta; hybrid promotion deferred to G-COMP-1' AND adding a sentence to Compromise #30 narrative clarifying 'shipped at v1-beta in benten-crypto-suite as the primitive layer; application-layer sig sites (drop envelope, plugin manifest peer-sig, install-record user-sig, AuthorizationGrant.binding_sig) ride classical-only Ed25519 via Keypair::sign at v1-beta; hybrid-wire promotion at app-layer = G-COMP-1 destination per V1-FROZEN-INTERFACE-DEFERRED.md Rows D-15e + companions'."
+    },
+    "compromise_25_hlc_replay_attack_class": {
+      "scope": "Compromise #25 sync-attack family — HLC-skew rejection + replay attack + per-row cap-recheck.",
+      "verification": "Three attack test pins live at HEAD: attack_hlc_skew_revocation_ordering.rs (HLC skew + revocation ordering), attack_loro_op_log_inv_13.rs (Loro op-log integrity), attack_mst_diff_cid_mismatch.rs (MST CID-mismatch). All un-ignored per pim-12. The substantive HLC classifier at benten_core::hlc::Hlc::update is the production receive path. The G-CORE-3e per-request UCAN validation pipeline at ucan_blobs_protocol.rs::validate_request_for_connection has 6 ordered fail-closed arms (unresolvable-peer + audience-mismatch + expiry + nbf + revocation + binding-sig + scope-check) with attack test pins at tf3e_replay_attack_ucan_expired.rs (A-1 expired UCAN) + tf3e_unauthorized_requester_audience_mismatch.rs (A-2 audience-substitution) + tf3e_ucan_blobs_protocol_per_request_validation.rs.",
+      "disposition": "CLEAN — Compromise #25 composite defense holds at HEAD; G-CORE-3e per-request validation pipeline composes correctly with Compromise #25's sync-layer primitives; no new BLOCKER/MAJOR phase-wide."
+    },
+    "drop_bundle_offline_revocation_reach_compromise_3f": {
+      "scope": "Compromise §R6 revocation-reach asymmetry between online-pull (Mode 1 G-CORE-3e ALPN handler) and offline-Drop (Mode 2 benten-drop::DropBundle::consume_offline).",
+      "verification": "SECURITY-POSTURE.md:2575-2649 fully discloses the asymmetry — 'Drop bundles are forever-valid once distributed' is named explicitly. Three test pins at tf3f_revocation_reach_forever_valid_documented.rs assert (a) Drop decrypts after UCAN revocation, (b) SECURITY-POSTURE.md documents the revocation-reach section, (c) BOTH halves of the asymmetry are named. Mitigations enumerated: tight nbf/exp + periodic key rotation + 'don't distribute Drop bundles you'd want to revoke later'.",
+      "disposition": "CLEAN — HARD RULE 12 clause-(b) compliant honest disclosure; the asymmetry is cryptographically structural (Mode 2 has no live network); the disclosure surface is operator-visible at SECURITY-POSTURE.md."
+    },
+    "aead_rebinding_attack_family_g_core_3d": {
+      "scope": "Per-Node AEAD rebinding-attack defenses at crates/benten-graph/src/aead_wrap.rs + crates/benten-crypto-suite/src/aead.rs.",
+      "verification": "Three defenses verified: (1) AAD-binds-plaintext-CID (whole-content) at aead.rs:210-215 + (2) AAD-binds-(plaintext-CID, chunk-index) per-chunk at aead.rs:221-227; (3) codepoint-mismatch typed-reject at aead.rs:288-294. Test pins at tf3d_aad_binds_plaintext_cid_rebinding_attack.rs + tf3d_per_chunk_aead_iroh_block_size.rs + tf3d_partition_before_crypto.rs + tf3d_two_cid_mapping_roundtrip.rs cover all three defenses. The graph-AEAD codepoint-binding via structural_kdf info-tag (L2-MAJ-4) is properly deferred to Row D-13 with K_root divergence natural defense at v1-beta.",
+      "disposition": "CLEAN — G-CORE-3d AEAD defenses structurally complete at v1-beta; L2-MAJ-4 deferred per HARD RULE 12 clause-(b)."
+    },
+    "manifest_envelope_chain_validation_did_check_per_step": {
+      "scope": "Defense-in-depth empty-DID-string check at every audience step claimed at manifest_envelope_chain_validation.rs:289-300 ('also applied at every audience step (within the per-step loop below) for defense-in-depth').",
+      "verification": "Read source at lines 295-298: only the root_issuer empty-check at lines 296-298 is structurally enforced. The per-step loop at lines 306-354 walks chain[i].issuer_did / chain[i].audience_did but does NOT include an .is_empty() check on audience_did before the manifest-lookup or the chain-integrity comparison. The doc comment at line 293-294 says 'The check is also applied at every audience step (within the per-step loop below) for defense-in-depth' — this is ASPIRATIONAL, not structural. An attacker chain whose intermediate step has audience_did = empty-string could mismatch at the next step's issuer_did != empty-string check, but the chain[i].audience_did = empty-string + chain[i+1].issuer_did = empty-string case would silently admit (empty string == empty string).",
+      "attack_vector": "An attacker chain where (chain[0].issuer_did = real_user_did, chain[0].audience_did = empty-string, chain[1].issuer_did = empty-string, chain[1].audience_did = attacker_did, chain[1].cap_pattern = 'arbitrary:cap'). Step 0 root_issuer check passes (real_user_did is non-empty + registered). Step 0 per-step audience = empty-string (no check). Step 1 chain-integrity check: chain[0].audience_did (empty-string) == chain[1].issuer_did (empty-string) — PASSES. Step 1 manifest-lookup for issuer_did=empty-string: depends on ManifestEnvelopeLookup impl; in-memory HashMap-based lookups (the test fixtures) might return None (NoManifestForIssuer rejects); but a registry that stored an empty-string key by config-mistake would return a SharesPolicy and admit. The risk is small (registry-config-mistake-dependent) but the aspirational doc-comment overstates the defense.",
+      "disposition": "MINOR — doc-narrative discloses 'defense-in-depth at every audience step' but code only enforces at root_issuer. Either (a) IMPLEMENT — add `if step.audience_did.as_str().is_empty()` reject at top of per-step loop (~3 LOC); OR (b) DEFER-NAMED-NOW to V1-FROZEN-INTERFACE-DEFERRED.md row with the narrative-vs-code gap explicit + close the aspirational doc-comment at lines 293-294 to match HEAD reality. Per HARD RULE 12, NOT a third option."
+    },
+    "cross_crate_attack_surface_inventory": {
+      "scope": "Phase-wide inventory of L2-relevant attack tests across all crates (not just FREEZE-narrower).",
+      "tally": {
+        "benten-sync/tests/attack_*.rs": 3,
+        "benten-sync/tests/tf3e_*.rs": 4,
+        "benten-graph/tests/tf3d_*.rs": 4,
+        "benten-drop/tests/tf3f_*.rs": 4,
+        "benten-crypto-suite/tests/tf2/tf4/*.rs": 2,
+        "benten-platform-foundation/tests/plugin_*.rs (attack-classed)": 15,
+        "benten-platform-foundation/tests/schema_*.rs (attack-classed)": 3,
+        "benten-eval/tests/sandbox_*.rs + cap_refresh_toctou.rs": 6
+      },
+      "summary": "~41 phase-wide L2-relevant attack-test files at HEAD (substantively-bodied; not RED-PHASE stubs). Cross-crate coverage spans sync attacks (handshake/HLC/MST/Loro) + UCAN replay/audience-mismatch + AEAD rebinding (whole + chunked) + Drop bundle envelope-tamper + plugin install substitution + author-rotation race + composition cycle + schema author trust + sandbox escape + cap-refresh TOCTOU. The breadth is healthy for v1-beta.",
+      "disposition": "CLEAN — phase-wide attack-test coverage shape is consistent with the v1-beta posture."
+    }
+  },
+  "findings_summary_r6_r1": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 1,
+    "obs": 1,
+    "findings": [
+      {
+        "id": "L2-R6-MAJOR-1",
+        "severity": "MAJOR",
+        "title": "T10-upgrade (a) same-author DID continuity check NOT wired in install_plugin pipeline (phase-wide gap; not disclosed)",
+        "evidence": {
+          "standalone_helper_exists": "crates/benten-platform-foundation/src/module_ecosystem.rs::verify_upgrade_author_continuity (line 99) — function shipped + tested at plugin_upgrade_requires_same_author_did.rs",
+          "zero_engine_callers": "grep verify_upgrade_author_continuity crates/benten-engine/src/ bindings/ packages/ = ZERO matches",
+          "install_plugin_omits": "crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin (line 830-1073) walks 11 steps; step 7 (line 929-935) enforces only T10-upgrade (b) DAG-descendant check; the prior_manifest.peer_did is NEVER compared against manifest.peer_did even when params.prior_installed_cid is Some AND the resolver returns the prior manifest at step 7b (line 962)",
+          "disclosure_gap": "grep verify_upgrade_author_continuity docs/V1-FROZEN-INTERFACE-DEFERRED.md docs/V1-FROZEN-INTERFACE.md docs/SECURITY-POSTURE.md docs/V1-BETA-BREAKING-CHANGES.md = ZERO matches"
+        },
+        "attack_vector": "T10-upgrade (a) per admin-ui-v0-threat-model.md §T10: 'Upgrade from peer-DID alice to peer-DID attacker (transitive substitution) MUST be REJECTED.' At v1-beta, when params.user_trust_list is empty (the D-4F-3 default), an attacker controlling a CID that is a DAG-descendant of the installed CID can ship a manifest signed by attacker's peer_did + a valid peer_signature; install_plugin step 7 admits the upgrade (DAG-descendant check passes); step 7b's caps-grew check only re-consents on widening; the prior peer_did is never compared. Net: silent-upgrade to attacker's peer_did. The standalone helper exists to perform this check; it just isn't called from the production install pipeline.",
+        "asymmetry_pattern": "META #707 asymmetric-at-parallel-entry-points pattern — T10-upgrade (a) and (b) are co-defensive per the threat model; (b) is wired, (a) is not.",
+        "disposition_options": "(a) FIX-NOW — add ~10 LOC to install_plugin step 7 conditional: if let Some(prior_cid) = params.prior_installed_cid + let Some(prior_manifest) = resolver(&prior_cid) + verify_upgrade_author_continuity(&prior_manifest, &manifest)?; — same pattern as step 7b; OR (b) DEFER-NAMED-NOW to a NEW V1-FROZEN-INTERFACE-DEFERRED.md row with v1-beta posture narrative (e.g. 'caller MUST invoke verify_upgrade_author_continuity before invoking install_plugin; no engine-side enforcement at v1-beta; the trust-list default-empty per D-4F-3 means an unsuspecting operator gets ZERO author-continuity defense; G-COMP-1 closure: wire the helper into step 7 of install_plugin per pim-2-amendment §3.6b sub-rule 4'). NOT a third option per HARD RULE 12.",
+        "disposition": "FIX-NOW or DEFER-NAMED-NOW — orchestrator triage call. Both options close the disclosure gap; (a) closes the structural gap too."
+      },
+      {
+        "id": "L2-R6-MAJOR-2",
+        "severity": "MAJOR",
+        "title": "Compromise #30 claims 'v1-beta ships PQ-hybrid by default for signature' but ZERO application-layer signing sites use the hybrid SignatureSuite (operator-misleading disclosure)",
+        "evidence": {
+          "compromise_30_claim": "docs/SECURITY-POSTURE.md:2215-2218: 'v1-beta ships PQ-hybrid by default for both signature (hybrid Ed25519⊕ML-DSA-65, concatenated/committing/strip-resistant, both-must-verify) and encryption ...'",
+          "hybrid_suite_exists_in_crypto_suite": "crates/benten-crypto-suite/src/sig.rs::SignatureSuite + ::HybridSignature shipped at G-CORE-2 (commit ae69c339); conformance-tested at tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs",
+          "zero_app_layer_callers": "grep -rln SignatureSuite / HybridSignature crates/benten-id crates/benten-caps crates/benten-drop crates/benten-platform-foundation crates/benten-sync crates/benten-engine = ZERO file matches across six dependent crates",
+          "three_undisclosed_classical_only_sites": [
+            "crates/benten-drop/src/envelope_sig.rs::sign_envelope (line 107) — Keypair::sign → classical Ed25519",
+            "crates/benten-platform-foundation/src/plugin_manifest.rs::verify_peer_signature (line 163-184) — ed25519_dalek::Signature::from_bytes → classical Ed25519",
+            "crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature (line 592-611) — ed25519_dalek::Signature::from_bytes → classical Ed25519"
+          ],
+          "single_disclosed_classical_only_site": "AuthorizationGrant.binding_sig — DISCLOSED at V1-FROZEN-INTERFACE-DEFERRED.md Row D-15e ('ed25519_dalek is the only signature primitive used for binding_sig at v1-beta; classical-only construction IS ...')"
+        },
+        "attack_vector": "Two parts: (1) Operator-misleading: an operator reading Compromise #30 + v1-beta marketing would reasonably conclude PQ-hybrid sigs are the v1-beta default for app-layer artifacts (drop bundles, plugin manifests, install consent). False — every app-layer sig at v1-beta is single classical Ed25519. The hybrid contract lives only in benten-crypto-suite and is never invoked by the dependent crates. (2) Substantive: a 'harvest now, decrypt later' adversary recording bytes at v1-beta cannot retroactively forge classical-only Ed25519 sigs (Ed25519 forgery requires breaking the discrete log over the Edwards curve, NOT a PQ-vulnerable problem) — so this is primarily a disclosure honesty + Compromise #30 claim-coverage issue, NOT an immediate cryptographic vulnerability. But the v1-GM C-GM-AUDIT exit criterion only audits ml-dsa + ml-kem; it does NOT certify that any app-layer artifact has post-quantum sig protection. Per the harvest-now-decrypt-later threat-model framing baked-in #5, when a quantum attacker arrives, recorded classical Ed25519 sigs on long-lived drop bundles + install records + plugin manifests can be re-signed at-will under forged identities (no defense at the sig layer for any of these app-layer artifacts at v1-beta).",
+        "disposition_options": "(a) DEFER-NAMED-NOW (recommended; HARD RULE 12 clause-(b)) — add THREE sister-rows to V1-FROZEN-INTERFACE-DEFERRED.md Row D-15e (D-15e-1 DropBundle.envelope_sig + D-15e-2 PluginManifest.peer_signature + D-15e-3 InstallRecord.user_signature) AND retense Compromise #30's lines 2215-2218 to clarify 'v1-beta ships PQ-hybrid sig SUITE in benten-crypto-suite as the primitive layer; application-layer signing sites (drop envelope-sig, plugin manifest peer-sig, install-record user-sig, AuthorizationGrant.binding_sig) currently ride classical-only Ed25519 via Keypair::sign at v1-beta; hybrid-wire promotion at app-layer = G-COMP-1 destination per Rows D-15e + D-15e-1/2/3'; (b) FIX-NOW — wire SignatureSuite + HybridSignature at the three app-layer sites (significantly larger change; v1-beta-API-breaking; the hybrid sig is ~3357 bytes vs 64-byte Ed25519 — changes wire-format of DropBundle.envelope_sig, PluginManifest.peer_signature, InstallRecord.user_signature fields — likely OUT-OF-SCOPE for R6 fix-pass at v1-beta).",
+        "disposition": "DEFER-NAMED-NOW STRONGLY RECOMMENDED — option (a) is the smallest doc-honesty closure (~30-40 LOC of disclosure); option (b) is wire-format-breaking + OUT-OF-SCOPE for R6 phase-close fix-pass."
+      },
+      {
+        "id": "L2-R6-MINOR-1",
+        "severity": "MINOR",
+        "title": "manifest_envelope_chain_validation.rs doc-comment claims 'empty-DID check applied at every audience step' but code only enforces at root_issuer (aspirational-not-structural)",
+        "evidence": {
+          "doc_claim": "crates/benten-caps/src/manifest_envelope_chain_validation.rs:293-294 — 'The check is also applied at every audience step (within the per-step loop below) for defense-in-depth.'",
+          "code_reality": "Only the root_issuer empty-check at lines 295-298 is structurally enforced. The per-step loop at lines 306-354 does NOT have an .is_empty() check on chain[i].audience_did or chain[i].issuer_did at loop top; the chain-integrity check at lines 308-313 compares step.audience_did == next.issuer_did but admits empty-string == empty-string. The manifest-lookup at lines 330-337 will (for in-memory test fixtures) return None for empty-string keys → NoManifestForIssuer; but a registry storing an empty-string key by config-mistake would return a SharesPolicy and admit.",
+          "attack_vector_bound": "Registry-config-mistake-dependent; small attack surface; primarily a doc-vs-code drift finding."
+        },
+        "disposition_options": "(a) IMPLEMENT (~3 LOC) — add `if step.audience_did.as_str().is_empty() || step.issuer_did.as_str().is_empty() { return ChainValidationOutcome::RootNotUserDid }` (or a new arm) at top of per-step loop; OR (b) RETENSE doc-comment to match HEAD reality + name the per-step hardening as a Row in V1-FROZEN-INTERFACE-DEFERRED.md.",
+        "disposition": "IMPLEMENT (option a) — orchestrator-direct ~3 LOC change is well under the §3.5n inline-fix threshold; closing the aspirational-vs-structural gap atomically is cheaper than the doc-retense + named-deferral cycle."
+      },
+      {
+        "id": "L2-R6-OBS-1",
+        "severity": "OBSERVATION",
+        "title": "L2-R6-OBS-1 = L2-R4-OBS-1 = L2-R3-OBS-1 = L2-R2-OBS-1: 0x6400 classical-only-X25519 silent-acceptance still has no SECURITY-POSTURE.md Compromise-row disclosure (now 4-round persistent through R6-R1)",
+        "evidence": {
+          "g_core_9_r4_baseline_unchanged": "G-CORE-9 R4 disposition explicitly: 'orchestrator R3 triage final-call: either (a) accept the residual OBS as final v1-beta posture given Row D-15 + Cohort 4 coverage, OR (b) inline a ~5-line Compromise-row addition to close the operator-visible disclosure gap. Not BLOCKER-class. Not MAJOR-class.' Orchestrator did NOT select option (b) at R3 / R4 triage; the residual rides into R6.",
+          "row_d_15_intact": "docs/V1-FROZEN-INTERFACE-DEFERRED.md still names CryptoPolicy::require_hybrid_pq consumer-side policy flag for rejecting 0x6400 classical-only envelopes (L2-MAJ-3) — destination intact at G-COMP-1",
+          "breaking_changes_disclosure_intact": "docs/V1-BETA-BREAKING-CHANGES.md still surfaces Row D-15b — CryptoPolicy::require_hybrid_pq consumer-side flag — for downstream-implementer visibility",
+          "security_posture_disclosure_missing": "docs/SECURITY-POSTURE.md still has no Compromise-row disclosure of the 0x6400 silent-acceptance consumer-side gap; sole match at line 2444 is the descriptive cipher-suite paragraph, NOT an operator-visible Compromise row",
+          "carry_forward_chain": "L2-R2-OBS-1 (G-CORE-9 R2) → L2-R3-OBS-1 (G-CORE-9 R3) → L2-R4-OBS-1 (G-CORE-9 R4) → L2-R6-OBS-1 (Phase-4-Meta-Core R6 phase-wide). 4-round persistence."
+      },
+        "attack_surface": "An operator deploying v1-beta cannot tell from SECURITY-POSTURE.md alone that the platform's PQ-hybrid-by-default marketing-position is producer-side-only (the 0x6400 X25519-classical-only downgrade arm is silently accepted on the consumer side at v1-beta; CryptoPolicy::require_hybrid_pq is the Composing-time consumer-side rejection flag that closes this gap). The honest disclosure surfaces in DEFERRED.md (G-COMP-1 implementer-facing) + BREAKING-CHANGES.md (Cohort 4 downstream-implementer surface) but not in SECURITY-POSTURE.md (operator-facing threat-model).",
+        "disposition": "OBSERVATION — recurring at R6-R1 (carried-forward from R4 unchanged). The deferral itself is HARD-RULE-12 clause-(b) compliant via Row D-15 + Cohort 4 visibility. Per Q5 (substantive = BLOCKER/MAJOR), this OBS does NOT block convergence. Note that L2-R6-MAJOR-2 above is structurally adjacent and would benefit from being closed together — if the orchestrator inlines the Compromise #30 narrative retense for L2-R6-MAJOR-2, adding a ~5-line Compromise-row for the 0x6400 disclosure becomes a coupled, ~15-min orchestrator-direct closure for the whole disclosure cluster."
+      }
+    ]
+  },
+  "r4_convergence_holds_at_head_verify": {
+    "scope": "Per the brief: 'Verify G-CORE-9 R4 convergence STILL HOLDS at HEAD.'",
+    "g_core_9_r4_baseline_dispositions": {
+      "L2-BLK-1": "HOLDS at 4bbc4cac — PASS-UNCHANGED (Row D-7 + cargo-public-api baselines)",
+      "L2-BLK-2": "HOLDS at 4bbc4cac — PASS-UNCHANGED (Row D-4 + ProductionManifestEnvelopeRechecker absent)",
+      "L2-BLK-3": "HOLDS at 4bbc4cac — PASS-UNCHANGED (Row D-5 + accept_atrium_share absent)",
+      "L2-MAJ-1": "HOLDS at 4bbc4cac — PASS-UNCHANGED (Row D-18 + engine.rs:1463-1477 narrative intact)",
+      "L2-MAJ-2": "HOLDS at 4bbc4cac — PASS-UNCHANGED (chain_authority.rs:404-421 + Compromise #23 F3 disclosure at SECURITY-POSTURE.md:1691-1699 + Row D-8)",
+      "L2-MAJ-3": "HOLDS as OBS — PASS-UNCHANGED (same shape as L2-R6-OBS-1 above; 4-round persistent)",
+      "L2-MAJ-4": "HOLDS at 4bbc4cac — PASS-UNCHANGED (Row D-13 + aead_wrap.rs unchanged)",
+      "L2-MIN-1": "HOLDS at 4bbc4cac — PASS-UNCHANGED (Row D-10 + test pin absent)",
+      "L2-MIN-2": "HOLDS at 4bbc4cac with NEW MINOR observation — the structural root-empty-check is enforced; the per-step audience-empty defense-in-depth doc-claim is aspirational (see L2-R6-MINOR-1 above; this is NEW phase-wide-audit MINOR not a regression of L2-MIN-2)",
+      "L2-OBS-1": "HOLDS at 4bbc4cac — PASS-UNCHANGED (swap_matrix.rs::try_pure_pq_sole_trust_path C11b gate intact)",
+      "L2-OBS-2": "HOLDS at 4bbc4cac — PASS-UNCHANGED (sig.rs commitment + both-must-verify + codepoint-mismatch guard intact)",
+      "L2-OBS-3": "HOLDS at 4bbc4cac — PASS-UNCHANGED (aead.rs:288-294 codepoint-mismatch typed-reject intact)"
+    },
+    "verdict": "G-CORE-9 R4 convergence HOLDS at HEAD for the FREEZE-narrower scope. The R6 phase-wide audit surfaced 2 NEW MAJORs + 1 NEW MINOR that G-CORE-9 R4's narrower scope did not cover; these are NEW broader-surface findings, not regressions of the G-CORE-9-FREEZE state."
+  },
+  "phase_level_attack_patterns_freeze_narrower_missed": {
+    "summary": "G-CORE-9-FREEZE narrower scope intentionally covered crypto-suite swap-matrix + V1-FROZEN-INTERFACE + cap-policy/manifest-envelope-recheck + breaking-changes-ledger. The R6 phase-wide audit extends to plugin install/upgrade pipeline + app-layer signature wiring vs primitive-layer hybrid SUITE + per-step DID-empty defense-in-depth — surfaces where G-CORE-9 R4 had no lens-coverage by design.",
+    "patterns_surfaced": [
+      "META #707 asymmetric-at-parallel-entry-points reappears at T10-upgrade (a) vs (b) — (b) is wired in install_plugin; (a) is not (L2-R6-MAJOR-1)",
+      "Disclosure-completeness asymmetry: Compromise #30's marketing-honest 'v1-beta ships PQ-hybrid sig by default' over-states the application-layer wiring; only binding_sig has a sister-row in DEFERRED.md; three other app-layer surfaces are silently classical-only (L2-R6-MAJOR-2)",
+      "Aspirational-narrative-vs-structural-enforcement gap at manifest_envelope_chain_validation.rs:293-294 (L2-R6-MINOR-1) — the per-step DID-empty defense-in-depth is doc-only"
+    ]
+  },
+  "disposition": "APPROVE-FOR-CONVERGENCE-WITH-2-MAJOR-FINDINGS — R6-R1 returns 0 BLOCKER / 2 MAJOR / 1 MINOR / 1 OBS phase-wide. Per CLAUDE.md rule 9 Q5 + iterate-to-convergence (feedback_iterate_critical_reviews_to_convergence): 2 MAJORs are substantive findings that block convergence at R6-R1; R6 R2 must re-audit the EDITED-by-triage artifact (either FIX-NOW for (1) and (3) + DEFER-NAMED-NOW for (2), OR DEFER-NAMED-NOW for all three with explicit V1-FROZEN-INTERFACE-DEFERRED.md row additions). The 1 OBS is unchanged 4-round carry; per Q5 OBSs do not block convergence.",
+  "r6_r1_convergence_disposition": "DOES-NOT-CONVERGE-AT-R6-R1 — 2 substantive findings (BLOCKER + MAJOR class) per Q5 termination criterion. R6 R2 required after orchestrator triage applies the FIX-NOW / DEFER-NAMED-NOW dispositions. Expected R6 R2 shape: if orchestrator inlines L2-R6-MAJOR-1 fix (~10 LOC) + L2-R6-MINOR-1 fix (~3 LOC) + L2-R6-MAJOR-2 deferral-narrative-add (~30-40 LOC), the L2-R6-OBS-1 carry-forward becomes natural to close in the same orchestrator-direct work (~5 LOC Compromise-row addition closes 4-round persistent disclosure); R6 R2 then returns 0 BLOCKER / 0 MAJOR / 0 MINOR / 0 OBS (full convergence).",
+  "positive_controls_verified_at_phase_wide_scope": [
+    "Compromise #25 sync-attack composite defense (HLC + nonce + envelope-sig-binds-HLC + per-row cap-recheck) holds at HEAD across phase-wide sync surface",
+    "G-CORE-3d AEAD rebinding-attack defenses (AAD-binds-CID whole + AAD-binds-(CID, chunk-index) per-chunk + codepoint-mismatch typed-reject) all structurally complete at HEAD",
+    "G-CORE-3e UCAN-gated iroh-blobs handler (6-arm validation pipeline) composes correctly with Compromise #25 sync-layer primitives",
+    "Compromise §R6 revocation-reach asymmetry (online-pull vs offline-Drop) is HARD-RULE-12 clause-(b) compliant honest disclosure",
+    "Compromise #23 F3 TOCTOU defense properly named-deferred to Row D-8 with operator-visible attack-class narrative at SECURITY-POSTURE.md:1691-1699",
+    "Compromise #26 manifest-envelope-recheck SEAM half live; substantive-adapter properly named-deferred to Row D-4",
+    "L2-MIN-2 root-issuer empty-DID structural reject at chain validation IS enforced; the per-step audience-DID gap is doc-only not structural",
+    "All G-CORE-9 R4 dispositions (12 cumulative findings) verified PASS-UNCHANGED or PASS-STRENGTHENED at HEAD (4bbc4cac); G-CORE-9 R4 CONVERGED-PER-Q5 HOLDS at R6 entry",
+    "Phase-wide attack-test corpus shape (~41 substantive L2-relevant test files) is healthy for v1-beta",
+    "AuthorizationGrant.binding_sig classical-only-at-v1-beta IS honestly disclosed at Row D-15e (the gold-standard disclosure shape the L2-R6-MAJOR-2 sister-rows would mirror)"
+  ],
+  "cross_ref_other_r6_lenses": "L1 (crypto-correctness phase-wide) should confirm zero L2-critical code-file changes from R4-FP/R4b-FP at HEAD (matches my walk: aead.rs / sig.rs / aead_wrap.rs / ucan_blobs_protocol.rs / envelope_sig.rs / plugin_lifecycle.rs / engine.rs all unchanged). L6 (cap-plugin-trust phase-wide) should independently surface L2-R6-MAJOR-1 (T10-upgrade (a) not wired) — orthogonal-lens cross-confirmation; if L6 surfaces the same finding the convergence-disposition is reinforced. L17 (frozen-item-15 phase-wide) should confirm Compromise #30 + Row D-15e wire-format-freeze claims remain honest after L2-R6-MAJOR-2 disclosure widening; the wire-format-freeze does NOT change at v1-beta (the app-layer sig sites stay classical-only Ed25519 per the disclosure addition; only the disclosure narrative changes).",
+  "termination_criterion_per_q5": "NOT-TERMINATED for this lens at R6-R1 — 2 MAJOR findings + 1 carry-forward OBS. Iterate-to-convergence (feedback_iterate_critical_reviews_to_convergence) requires R6 R2 re-audit after triage; the expected closure shape is orchestrator-direct (~45-58 LOC across one fix-pass touching plugin_lifecycle.rs + manifest_envelope_chain_validation.rs + V1-FROZEN-INTERFACE-DEFERRED.md + SECURITY-POSTURE.md). Per CLAUDE.md rule 9 Q5 + iterate-to-convergence generalization (substantive = BLOCKER/MAJOR), R6 R2 must return 0 substantive findings for full L2-phase-wide convergence."
+}
