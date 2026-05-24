@@ -1,0 +1,131 @@
+{
+  "lens": "L4. sync + iroh-blobs + Drop bundle",
+  "disposition": "APPROVE-WITH-1-MINOR-AND-1-OBS",
+  "phase": "Phase-4-Meta-Core R6 R1",
+  "branch": "phase-4-meta-core/r6-r1-l4-sync-iroh-drop",
+  "base_sha": "4bbc4cac",
+  "head_sha": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+  "surfaces_reviewed": [
+    "crates/benten-sync/src/ucan_blobs_protocol.rs (647 LOC)",
+    "crates/benten-sync/src/two_cid_store.rs (173 LOC)",
+    "crates/benten-drop/src/bundle.rs (793 LOC)",
+    "crates/benten-drop/src/envelope_sig.rs (149 LOC)",
+    "crates/benten-graph/src/aead_wrap.rs (694 LOC)",
+    "crates/benten-graph/src/redb_backend.rs (TWO_CID_MAP_TABLE seam)",
+    "crates/benten-caps/src/authorization_grant.rs (verify_binding seam)",
+    "crates/benten-engine/src/engine_share_scope.rs (live-per-request consumer surface)",
+    "docs/V1-FROZEN-INTERFACE.md items 11 + 14 + 15(g/h/j)",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md row D-10",
+    "docs/SECURITY-POSTURE.md Compromise #31 + §'Revocation reach' sections",
+    "tests: tf3d_aad_binds_plaintext_cid_rebinding_attack / tf3d_per_chunk_aead_iroh_block_size / tf3d_two_cid_mapping_roundtrip / tf3e_* (4 files) / tf3f_* (4 files)"
+  ],
+  "questions": [
+    {
+      "id": "L4-Q1",
+      "question": "Custom-ALPN UCAN check fires BEFORE iroh-blobs handoff (matches Spike A2 + Spike H+1.2 Experiment 2)?",
+      "answer": "YES. The handler's 6-arm pipeline at ucan_blobs_protocol.rs:418-533 runs (1) unresolved-peer short-circuit → (2) audience-binding == EndpointId → (3) UCAN nbf <= now < exp → (4) revocation check → (5) AuthorizationGrant::verify_binding (covers A-1/A-2/A-3) → (6) RestrictedScope.roots allowlist; ONLY on all-pass returns Ok(()) and only then does the caller hand the iroh Connection to iroh_blobs::provider::handle_connection. Test seam serve_request_for_test increments the dispatch counter ONLY after positive validation; pin tf3e_dispatch_to_iroh_blobs_only_after_positive_validation verifies counter unchanged on reject + +1 on accept. The actual iroh_blobs::provider::handle_connection call is honestly NAMED-as-out-of-scope at the swap-point (production wire-up at G-CORE-3-real-iroh-blobs integration wave); the validation-arm proof is end-to-end against the test seam, which is the correct wave-3e scope.",
+      "disposition": "PASS"
+    },
+    {
+      "id": "L4-Q2",
+      "question": "Two-CID mapping (plaintext_cid → ciphertext_cid) persists to redb in production; the spike's in-memory version isn't shipping?",
+      "answer": "YES (structurally correct, with honest scope-marker). The persistent plaintext_cid → ciphertext_cid mapping lives in benten-graph's redb backend at TWO_CID_MAP_TABLE (redb_backend.rs:111-112) keyed via TwoCidMap::partition_table_key(did, plaintext_cid) — durability pin tf3d_two_cid_mapping_durable_across_reopen at tf3d_two_cid_mapping_roundtrip.rs:208 asserts cross-reopen recovery + tf3d_mapping_table_tamper_yields_typed_integrity_error covers tamper. The benten-sync TwoCidStore (two_cid_store.rs) is the wave-3e adapter that holds (i) a local mapping cache + (ii) the ciphertext-bytes store; its module docstring (lines 28-42) honestly names the production swap-points: the mapping moves to the redb backend, and the ciphertext_bytes Mutex<BTreeMap<...>> swaps for iroh_blobs::FsStore. This is the correct decomposition (durable substrate already lives in benten-graph; the wave-3e adapter exists ONLY so the ALPN handler can land its per-request UCAN + scope arms without dragging iroh-blobs as a workspace dep mid-wave). The spike-only in-memory store IS NOT what production reads — production reads the redb TwoCidMap directly through benten-graph::RedbBackend.",
+      "disposition": "PASS"
+    },
+    {
+      "id": "L4-Q3",
+      "question": "Per-chunk-AEAD: chunk_size = IROH_BLOCK_SIZE (16 KiB); threshold ≥64 KiB; range-fetch slice is independently decryptable?",
+      "answer": "YES. The IROH_BLOCK_SIZE constant is re-exported from benten_crypto_suite::aead::IROH_BLOCK_SIZE = 16 * 1024 (aead.rs:52) into benten-graph as aead_wrap::IROH_BLOCK_SIZE (aead_wrap.rs:56). WHOLE_AEAD_THRESHOLD = 64 KiB re-exported (aead_wrap.rs:63 / aead.rs:56). EncryptedNode::encrypt dispatches on plaintext.len() < WHOLE_AEAD_THRESHOLD (aead_wrap.rs:118-131). ChunkedCiphertext::encrypt slices plaintext.chunks(IROH_BLOCK_SIZE) sealing each independently under aad_per_chunk(plaintext_cid, chunk_index) (aead_wrap.rs:229-235). Independent decryptability proven by free-function decrypt_chunk (aead_wrap.rs:327-338) which takes a single chunk + index + plaintext_cid + key. Pinned: tf3d_iroh_block_size_is_16_kib_exactly + tf3d_whole_aead_threshold_is_64_kib + tf3d_large_node_chunked_to_16_kib_each_independent_decrypt + the in-module unit test iroh_block_size_constant_is_16_kib at aead_wrap.rs:663. V1-FROZEN-INTERFACE.md §15.g aligns. The 16-KiB constant is wire-format-load-bearing + bytewise-pinned per item 4.",
+      "disposition": "PASS"
+    },
+    {
+      "id": "L4-Q4",
+      "question": "AAD-binds-plaintext-CID rebinding-attack defense actually fires (cross-check w/ L2 adversarial)?",
+      "answer": "YES — comprehensively. (a) Whole-arm: aad_whole_content(plaintext_cid) at aead.rs:210-215 prepends 'benten-aead:whole:' || plaintext_cid; pinned by tf3d_aad_binds_plaintext_cid_rebinding_attack_defeated which mounts a valid ciphertext under a different plaintext-CID via with_aad_plaintext_cid_for_test seam at aead_wrap.rs:155-166 and asserts AeadError::Authentication. (b) Chunked-arm: aad_per_chunk(plaintext_cid, chunk_index) at aead.rs:221-227 also binds the chunk_index as a u64-LE; pinned by tf3d_cross_chunk_rebinding_fails_aad_binds_chunk_index (presents chunk-N's bytes at index-M and asserts auth-fail). (c) Stable in-module tests rebinding_attack_fails + cross_chunk_rebinding_fails at aead_wrap.rs:617 + 642 cover the same surface as smoke. The defense is structural: the suite_unwrap call at aead_wrap.rs:277 + 293 reconstructs AAD from the envelope's plaintext_cid field — any post-seal AAD-mutation breaks Poly1305 verification at the cipher-suite layer. No silent-fallback path identified.",
+      "disposition": "PASS"
+    },
+    {
+      "id": "L4-Q5",
+      "question": "Drop bundle envelope-sig validation; per-Node AEAD authentication; defense-in-depth pin honest (pim-18; sig-layer NF-4 strip-resistance separately exercised post-fix-up)?",
+      "answer": "YES — with one OBS noted under findings. Layer-1 envelope-sig binds the bundle header MINUS content (envelope_sig.rs:80-102: build_envelope_message clones bundle, zeroes envelope_sig + issuer_verifying_key + content, encodes header, prepends domain-tag 'benten/g-core-3f/drop-bundle-envelope/v1'); this is the documented defense-in-depth design — a content-byte tamper does NOT break envelope-sig (caught at Layer-3 AEAD-tag). Layer-2 grant binding-sig (verify_binding at authorization_grant.rs:591) covers A-1/A-2/A-3 uniformly per RATIFIED-S&C §R3. Layer-3 per-Node AEAD: each EncryptedContent decodes via decode_encrypted_node + decrypts via benten_graph::aead_wrap::decrypt; AEAD-tag failure surfaces typed PerNodeAeadAuthenticationFailed (bundle.rs:147-153 + bundle.rs:417-422). consume_offline runs the three layers in order with fail-fast at envelope-sig BEFORE any decrypt attempt (proven by consume_offline_with_dec_counter_for_test + tf3f_tampered_envelope_sig_fails_before_per_node_decrypt). The per-Node-attestation field is HONESTLY disclosed as a SIZED PLACEHOLDER (bundle.rs:265-274 + 728-749 + the test pin tf3f_per_node_attestation_size_overhead_under_12_percent at lines 125-167 explicitly states this); PerNodeSignatureInvalid variant is documented as 'reserved-but-unconstructed until G-CORE-9 v1-interface freeze upgrades per_node_attestation to typed Vec<Signature>'. This matches pim-18 SHAPE-not-SUBSTANCE discipline: the substance (real per-Node Ed25519 sigs) is correctly named-as-future + the size-reservation pin keeps the future field honest. The defense-in-depth at G-CORE-3f is genuinely 2 cryptographic layers (envelope-sig + per-Node-AEAD-tag); the docstring states this explicitly. NF-4 strip-resistance (committing-combiner) is the crypto-suite layer's concern not the Drop bundle's; not in this lens's scope.",
+      "disposition": "PASS"
+    },
+    {
+      "id": "L4-Q6",
+      "question": "Live-per-request resolver (R5 ratification) wired; IVM-cache-invalidation seam named to G-CORE-4 CanonicalViews subscription as carry?",
+      "answer": "YES — structurally in place; formal test pin is named-deferral. (a) Engine::walk_share_scope (engine_share_scope.rs:59-62) calls walker::walk(spec) on EVERY invocation; there is no caching layer at this method (the engine handle is held as a `let _ = self` reserved-for-Composing-enrichment slot). Since each request walks fresh, the live-per-request property holds structurally — no cache to invalidate. (b) The IVM-cache-invalidation seam reuses G-CORE-4's CanonicalViews subscription per RATIFIED-S&C §R5 + V1-FROZEN-INTERFACE §15.j; CanonicalViews surface is verified live in engine_views.rs (10 call sites including registry::lookup + dispatch + is_canonical). (c) The formal verification test pin (write new in-scope content after UCAN issued → recipient sees on next walk_share_scope) is NAMED-DEFERRAL at V1-FROZEN-INTERFACE-DEFERRED.md row D-10 destination `crates/benten-engine/tests/g_core_9_share_scope_live_per_request.rs` (~50 LOC, G-COMP-1 ship). This is a valid HARD RULE 12 clause (b) defer with a specific destination row; v1-beta posture is 'live-per-request is structurally in place'. (d) `walk_share_scope_as` principal-bearing additive overload also named-deferral at D-11. (e) The §15.j contract is documented + frozen at V1-FROZEN-INTERFACE.md:1712-1740; the doc-coupling pin is the verification mechanism cited.",
+      "disposition": "PASS"
+    },
+    {
+      "id": "L4-Q7",
+      "question": "Revocation-reach asymmetry doc + Compromise (R6 ratification)?",
+      "answer": "YES — both halves present + named in two cross-referenced doc surfaces. (a) Compromise #31 minted at SECURITY-POSTURE.md:47 (active row): names the inherent property (UCAN revocation cuts future serves; already-derived keys remain decryptable forever; Drop bundles forever-valid once distributed); names the mitigation (tight UCAN nbf/exp + key rotation + E_UCAN_BLOBS_REQUEST_REJECTED server-side gate); names the v1-beta + v1-GM open posture; cites RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i). (b) Dedicated narrative section 'Revocation reach (§R6)' at SECURITY-POSTURE.md:2531 and 'Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)' at SECURITY-POSTURE.md:2575. (c) tf3f_revocation_reach_forever_valid_documented carries 3 pins: drop_bundle_decrypts_after_ucan_revocation_forever_valid + security_posture_md_documents_revocation_reach_section + security_posture_md_names_online_vs_offline_revocation_asymmetry — all live + green. (d) Handler-side: UcanBlobsHandler.record_revocation_for_test + the ARM-4 revocation observance check (ucan_blobs_protocol.rs:474-485) wire the future-serve cut; per-Node-key derivation is decoupled from the handler so already-derived plaintext stays decryptable by structural design. The asymmetry is honestly disclosed at every required surface.",
+      "disposition": "PASS"
+    }
+  ],
+  "findings": [
+    {
+      "id": "L4-MINOR-1",
+      "severity": "MINOR",
+      "site": "crates/benten-sync/src/ucan_blobs_protocol.rs:384 (validate_request), :349 (record_revocation_for_test), :547 (serve_request_for_test), :573 (endpoint_id_from_public_key_no_parsing)",
+      "title": "Public `_for_test` helpers + connection-less validate_request lack #[doc(hidden)] discipline; production misuse risk for validate_request (silently bypasses Arm-2 audience binding).",
+      "evidence": "Four functions are `pub` but are intended for test seams or non-production callers: (a) `validate_request` (no-conn-context arm) substitutes the grant's OWN audience_pubkey as the connection EndpointId at line 393-405 — this STRUCTURALLY bypasses Arm 2 (audience-binding check) for any production caller that mistakenly uses it instead of `validate_request_for_connection`. The docstring at 366-378 warns 'Production callers should use validate_request_for_connection (audience-binding is the §R3 contract; skipping it is a confidentiality hazard)' but the function remains pub + lacks #[doc(hidden)]. The sealed-discipline (CLAUDE.md #19 / sealed CapabilityPolicy precedent in §3-meta) would prefer pub(crate) or #[doc(hidden)]. (b) record_revocation_for_test (named _for_test) is pub without #[doc(hidden)] — drift-detect scanner sees it as a public production surface. (c) serve_request_for_test similar. (d) endpoint_id_from_public_key_no_parsing is pub without #[doc(hidden)] AND without _for_test suffix — it IS a production helper but doc-block at 567-575 says 'Production wire-up reaches the iroh API directly through verifying_key_to_endpoint_id / endpoint_id_to_verifying_key' which suggests it's the test-time convenience. Cross-reference: dispatch_count_for_test (line 357) and EndpointIdBytes::to_bytes_for_test (line 594) ARE correctly marked #[doc(hidden)]; the discipline is recognized but applied inconsistently.",
+      "impact": "validate_request silently bypassing audience-binding is the load-bearing concern: a production caller (e.g. a future engine-side wire-up author) that grabs the simpler-looking 'validate this request' API skips the A-2 audience-substitution defense entirely. The docstring warning is necessary but insufficient — type-system / visibility enforcement is the standard discipline (sealed-trait precedent; pub vs pub(crate)).",
+      "disposition": "FIX-NOW (clause-a inline orchestrator-direct in the R6-R1-FP wave): add `#[doc(hidden)]` to the 4 functions named above + consider tightening `validate_request` visibility to `pub(crate)` (or renaming to `validate_request_unbound_for_test` with #[doc(hidden)]) so production callers cannot accidentally skip Arm 2. The fix is ~10 LOC + carries no behaviour change for the wave-3e test surface.",
+      "named_destination": "R6-R1-FP wave or wave-3e follow-up commit on `phase-4-meta-core/r6-r1-l4-sync-iroh-drop`",
+      "rule_cite": "Standing sealed-discipline (CLAUDE.md #19); §3.5 agent-local-preflight; §3.6f SHAPE-not-SUBSTANCE pre-flight (production-call-site enumeration arm)"
+    },
+    {
+      "id": "L4-OBS-1",
+      "severity": "OBS",
+      "site": "crates/benten-sync/src/ucan_blobs_protocol.rs:301 (revocations: Mutex<BTreeSet<Cid>>), :306 (dispatch_count: Mutex<usize>); crates/benten-sync/src/two_cid_store.rs:66-70 (mapping + ciphertext_bytes Mutexes)",
+      "title": "std::sync::Mutex contention point on revocation lookups + bytes-fetch under concurrent inbound ALPN connections; production-scale concern named but not yet measured.",
+      "evidence": "The wave-3e handler structure assumes concurrent inbound iroh connections share a single UcanBlobsHandler (revocation Mutex locked on every per-request validation at line 477-485) + a single TwoCidStore (mapping Mutex locked on every plaintext→ciphertext resolve at line 102-108; bytes Mutex locked on every ciphertext_bytes fetch at line 116-122). Under wave-3e in-memory + ~zero-concurrency tests this is fine. At production scale with real iroh-blobs + concurrent peers + a real revocation backend, every request serializes through these mutexes. The TwoCidStore docstring (line 60-62) explicitly mentions 'Thread-safe (interior Mutex) so the wave-3e ALPN handler can be shared across concurrent inbound connections without an outer Arc<RwLock<_>> ceremony' — acknowledging the structure but not the contention asymptote.",
+      "impact": "Wave-3e correctness: PASS. Production-scale throughput is a known carry that will surface when iroh-blobs lands at integration wave + a concurrency benchmark is wired. Not a freeze-blocker (the swap-point IS the named-destination); naming it now so it doesn't surface as a surprise at G-CORE-9 close.",
+      "disposition": "OBS / BELONGS-NAMED-NOW into docs/future/phase-4-backlog.md or the G-CORE-3-real-iroh-blobs integration wave's pre-work brief; HARD RULE 12 clause-b destination required. Recommend orchestrator add a one-line carry row at the integration wave's brief: 'measure revocation-Mutex + TwoCidStore-Mutex contention under N concurrent connections; consider RwLock if read-heavy / sharded-by-DID if write-contention surfaces; the named swap from in-memory to backend is the natural window.'",
+      "named_destination": "G-CORE-3-real-iroh-blobs integration wave pre-work OR docs/future/phase-4-backlog.md (a new named row to satisfy HARD RULE 12 clause (b))",
+      "rule_cite": "HARD RULE 12 clause-(b); §3.6f SHAPE-not-SUBSTANCE pre-flight (production-call-site enumeration considering concurrency); RATIFIED-S&C §R2 Spike A2 production-handoff framing"
+    }
+  ],
+  "cross_check_with_other_lenses": [
+    {
+      "lens": "L2 (adversarial / threat-model)",
+      "intersection": "AAD-binds-plaintext-CID rebinding-attack defense (Q4 above) — both whole-arm + chunked-arm pinned + cited in L4; cross-check L2 (if it independently verifies the adversarial arms) for full coverage."
+    },
+    {
+      "lens": "L3 (AuthorizationGrant + walker)",
+      "intersection": "BFS-order walker (engine_share_scope::walk_share_scope) consumed by L4's live-per-request resolver Q6; walker_as_subgraph fractal CLAUDE.md #1 preservation cross-checks at L3."
+    },
+    {
+      "lens": "L5 (multi-tenant confidentiality substrate)",
+      "intersection": "Encryption-as-confidentiality envelope (EncryptedNode + AeadEnvelope) sits ON the WriteContext::namespace_did seam from L5; cross-check the partition-before-crypto invariant at tf3d_partition_before_crypto."
+    },
+    {
+      "lens": "L8 / wave-3b mini-rev",
+      "intersection": "verify_binding contract (audience_binding == audience + Ed25519 sig over (ucan, key_material, audience)); used at handler-side ARM 5 + Drop-side Layer 2; cross-check L8 for the grant-side coverage."
+    },
+    {
+      "lens": "L11 (wire-format / canonical bytes)",
+      "intersection": "DropBundle CBOR-on-disk encoding + EncryptedNode storage envelope (storage-magic 0x3d) are flagged as 'NOT a frozen public surface (the v1 wire-freeze happens at G-CORE-9)' in aead_wrap.rs:376-378 + cross-referenced from bundle.rs:200-206. L11 owns the freeze-time byte-pin discipline; L4 confirms the round-trip pins exist (tf3d_two_cid_mapping_roundtrip + tf3f_dropbundle_offline_consume) but defers byte-pin verification to L11."
+    }
+  ],
+  "pim_n_observations": [],
+  "freeze_readiness_for_l4_surfaces": {
+    "ALPN_handler_pipeline_shape": "freeze-ready (6 arms; typed-reject; test seam dispatch counter)",
+    "two_cid_mapping_contract_15g": "freeze-ready (redb TwoCidMap durable; in-mem TwoCidStore swap-point named)",
+    "per_chunk_AEAD_chunk_size_15g": "FROZEN (IROH_BLOCK_SIZE = 16 KiB golden constant; pinned)",
+    "AAD_binds_plaintext_CID_15g": "freeze-ready (whole + chunked arms pinned; rebinding-attack defeated)",
+    "drop_bundle_v1_envelope": "freeze-ready (DropBundleVersion::V1 + DropContentMode {OnlinePull, OfflineDrop}; no InlineTiny arm; per_node_attestation honest size-placeholder)",
+    "envelope_sig_domain_separation": "freeze-ready (per-surface domain tag 'benten/g-core-3f/drop-bundle-envelope/v1')",
+    "live_per_request_resolver_15j": "freeze-ready (structurally in place; formal test pin named-deferral D-10)",
+    "revocation_reach_compromise_31": "freeze-ready (Compromise #31 minted + narrative sections + 3 doc-coupling pins)"
+  },
+  "convergence_disposition": {
+    "round": "R6 R1",
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 1,
+    "obs_count": 1,
+    "recommended_next": "Q5-cadence: L4 surfaces are R6-R1-APPROVE-WITH-1-MINOR-AND-1-OBS. The 1 MINOR is a ~10-LOC inline orchestrator-direct fix (add #[doc(hidden)] + consider pub(crate) for validate_request); the 1 OBS is a HARD-RULE-12 clause-(b) name-it-now carry. R6 R2 full council per Q5 amendment can proceed once the MINOR is closed + the OBS destination is set; L4 does NOT independently block convergence (no BLOCKER, no MAJOR)."
+  }
+}
