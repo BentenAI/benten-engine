@@ -1,0 +1,110 @@
+{
+  "lens": "L7",
+  "lens_title": "install-lifecycle hardening + legacy-path deletion",
+  "round": "R6 R1",
+  "phase": "phase-4-meta-core",
+  "council": "phase-close-convergence",
+  "branch": "phase-4-meta-core/r6-r1-l7-install-lifecycle",
+  "base_branch": "origin/phase-4-meta-core/r4b-r1-fix-pass",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "surfaces_audited": [
+    "crates/benten-platform-foundation/src/plugin_lifecycle.rs",
+    "crates/benten-platform-foundation/src/module_ecosystem.rs",
+    "crates/benten-platform-foundation/src/plugin_manifest.rs",
+    "crates/benten-platform-foundation/src/manifest_store.rs",
+    "crates/benten-platform-foundation/tests/tf_g_core_0_legacy_install_path_deletion_4_33.rs",
+    "crates/benten-engine/src/install_record_replay.rs",
+    "crates/benten-engine/src/engine.rs (Engine::install_record_replay_store + apply_atrium_merge fail-CLOSED + setter wiring)",
+    "crates/benten-engine/tests/g_core_8_install_record_replay_atomic_record_and_check.rs",
+    "crates/benten-caps/src/manifest_envelope_chain_validation.rs (consumed-via port; lens-adjacent)",
+    "docs/V1-FROZEN-INTERFACE.md items 7 + 12",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md rows D-2/D-3/D-4/D-5/D-6/D-18",
+    "docs/SECURITY-POSTURE.md Compromise #26"
+  ],
+  "questions": [
+    {
+      "q": "§4.21 install-time consent gate actually checks every plugin manifest?",
+      "verdict": "YES",
+      "evidence": "plugin_lifecycle::install_plugin Steps 3+8 enforce install_record.verify_user_signature() + manifest_cid binding + consenting_user_did match + plugin_did match against InstallRecord on every invocation; no alt install path exists per §4.33 deletion (verified — module_ecosystem.rs has no install_plugin* pub fn at HEAD)."
+    },
+    {
+      "q": "§4.35 install-time-clock + §4.41 install-record-replay durability?",
+      "verdict": "PARTIAL",
+      "evidence": "§4.35 clock injection: validate_with_clock(now_secs) at Step 4 with MANIFEST_CLOCK_NOT_INJECTED_SENTINEL fail-closed for time-bounded manifests — fully wired. §4.41 install-record-replay: InstallRecordReplayStore atomic record_and_check shipped (`crates/benten-engine/src/install_record_replay.rs`); Engine::install_record_replay_store() always-initialized accessor present; InstallPorts::install_record_replay_check Option port wired into Step 3b. GAP: NO end-to-end test exercises install_plugin with install_record_replay_check: Some(...). The only e2e test (g_core_8_install_record_replay_atomic_record_and_check.rs install_record_replay_rejected_pre_cap_cascade_not_post_rollback) exercises the InstallRecordReplayStore primitive directly + asserts an irrelevant `ErrorCode::GraphInternal` discriminator's non-emptiness as a substrate proxy; the test's own commentary explicitly admits 'SHIPPED-SURFACE EXERCISE: …substrate for the ordering contract.' Per pim-18 (SHAPE-not-SUBSTANCE pre-flight) this fails the substantive-arm test. Production wire-up (V1-FROZEN-INTERFACE-DEFERRED Row D-2) IS named, but the test pin for ordering through install_plugin itself is missing today."
+    },
+    {
+      "q": "§4.20 + §4.19(b) + §4.32 hooks in plugin_lifecycle::install_plugin fire in correct order?",
+      "verdict": "PARTIAL",
+      "evidence": "§4.19(b) schema-author trust-list prompt + §4.32 within-envelope binding live at `plugin_manifest.rs::915` (verify_schema_author_trust). These are SCHEMA-author flows, NOT plugin-install. install_plugin's own params.user_trust_list at Step 2 is the PLUGIN-author trust-list check. §4.20 'install-time clock' coupling: validate_with_clock IS Step 4. Step ORDERING CORRECT but DOCSTRING DRIFT — see Finding F-1. The schema-author prompt seam at §4.19(b) is NOT consulted from inside install_plugin (intentional: it's a separate schema-author flow), no concern."
+    },
+    {
+      "q": "§4.33 legacy install-path: code path actually deleted (not just deprecated); no test exercises it; reference docs updated?",
+      "verdict": "YES",
+      "evidence": "`pub fn install_plugin` + `pub fn install_plugin_persisting_did` ABSENT from `crates/benten-platform-foundation/src/module_ecosystem.rs` (only `verify_install_record`, `decide_upgrade_consent`, `verify_upgrade_author_continuity`, `new_version_available_code`, `check_author_trust`, `UpgradeConsentDecision` remain). Test `tf_g_core_0_legacy_install_path_deletion_4_33.rs` pins absence structurally with 3 factual arms (legacy symbol absent + canonical path present + 4 legacy test files migrated/deleted). INTERNALS.md §175+§298 + V1-FROZEN-INTERFACE.md item 7 + Plan §1.A.FROZEN item 7 all cite the deletion consistently."
+    },
+    {
+      "q": "§6.4 manifest envelope chain validation invoked at install time?",
+      "verdict": "DESIGN-INTENTIONAL",
+      "evidence": "validate_chain_with_manifest_envelope at `benten-caps::manifest_envelope_chain_validation` is a UCAN-delegation-chain walker (Layer-2↔Layer-3 composition). At INSTALL time there is no UCAN chain yet — install MINTS root grants via the CapMinter port (Step 9) per CLAUDE.md #18 Layer-1 trace anchor. The chain validator's call site is downstream (production: sync-merge boundary via `apply_atrium_merge`'s manifest_envelope_recheck port at engine.rs:1448 — substantive ProductionManifestEnvelopeRechecker DEFERRED per Compromise #26 / V1-FROZEN-INTERFACE-DEFERRED Row D-4). The L7 question parsed as 'does install consult the validator' is properly answered NO + by design — install is the chain's ROOT, not a chain consumer."
+    }
+  ],
+  "convergence_baseline": "R6 R1 (first round of phase-close convergence council)",
+  "disposition": "APPROVE-WITH-FINDINGS",
+  "summary": "Install-lifecycle hardening + §4.33 legacy-path deletion are structurally sound at v1-beta. Step ordering for the 11-step pipeline correctly threads consent (Step 3) BEFORE expensive ed25519 peer-signature verify (Step 4 via validate_with_clock) per sec-r6r1-6 R6-FP-A reorder rationale, and §4.37 replay-defense is wired between (Step 3b). Legacy install-path deletion is verified structurally (absence pin + INTERNALS narrative + V1-FROZEN row). Two real findings: (F-1, MINOR) docstring on `pub fn install_plugin` documents the OLD pre-R6-FP-A step ordering (3=clock, 4=consent) — drift vs the current 3=consent-first, 4=clock implementation; the comment block at lines 797-824 also entirely omits Step 3b (§4.37 replay) and Step 7b (§4.41 caps-grew fresh-consent), both of which are real production gates with named typed ErrorCodes. (F-2, MAJOR) The end-to-end install_plugin × install_record_replay_check: Some(_) substantive test pin is absent — the only e2e test exercises the InstallRecordReplayStore primitive directly with a substrate proxy assertion (`GraphInternal.as_str() != empty`), violating pim-18 SHAPE-not-SUBSTANCE. Without the substantive pin, a regression that quietly stops invoking `replay_check()` at Step 3b would NOT be caught by the existing test family (a sentinel-presence test, not a behavioral pin). Both findings are fix-now per HARD RULE 12; both surgical (~15-50 LOC).",
+  "findings": [
+    {
+      "id": "L7-MIN-1",
+      "title": "install_plugin docstring documents stale step order (pre-R6-FP-A) + omits Step 3b §4.37 + Step 7b §4.41",
+      "severity": "MINOR",
+      "surface": "crates/benten-platform-foundation/src/plugin_lifecycle.rs lines 797-824 (#[allow(clippy::too_many_arguments)] pub fn install_plugin docstring 'Order:' enumeration)",
+      "evidence": "Docstring claims '3. Seam 2 — validate_with_clock(now_secs)…; 4. Consent gate — verify InstallRecord's user-DID signature…'. Implementation (lines 856-916) actually executes: 2=trust-list, 3=consent gate FIRST (sec-r6r1-6 R6-FP-A reorder; cheap-check-before-expensive ed25519 verify; lines 861-883), 3b=§4.37 InstallRecordReplayStore record-and-check (lines 885-905), 4=Seam 2 validate_with_clock (lines 907-916). The docstring is silent on Step 3b entirely AND silent on Step 7b §4.41 caps-grew fresh-consent (lines 937-968) which also lands a typed ErrorCode (E_PLUGIN_INSTALL_CONSENT_REQUIRED on upgrades that widen caps without a fresh-consent token).",
+      "would_fail_test_marker": "A reviewer reading the docstring to understand the security model would form the WRONG mental model of what fails first (consent vs clock + the missing §4.37 and §4.41 gates entirely). pim-1 §3.5b post-fix doc-coupling pre-flight discipline applies: the sec-r6r1-6 R6-FP-A R6-FP reorder changed code behavior but did not sweep the adjacent docstring; a §3.5b sweep at FP-A landing time would have caught it.",
+      "disposition": "FIX-NOW",
+      "fix_proposal": "Rewrite the 'Order:' enumeration to match current implementation: 1=decode+content-CID; 2=trust-list; 3=consent gate (user-sig + record.manifest_cid + record.consenting_user_did); 3b=§4.37 InstallRecordReplayStore record_and_check via install_record_replay_check Option port; 4=Seam 2 validate_with_clock (now AFTER consent per R6-FP-A); 5=heterogeneity; 6=cycle detection; 7=upgrade-DAG-descendant; 7b=§4.41 caps-grew fresh-consent (decide_upgrade_consent + install_record_covers_required_caps); 8=plugin-DID adoption (caller-mint-first); 9=cap-cascade; 10=private namespace; 11=library insert. ~25-40 LOC docstring edit, no code change. Cross-cite the existing inline section comments (the inline `// 3. Consent gate FIRST (sec-r6r1-6 R6-FP-A reorder)` at line 861 + the `// 3b. G-CORE-8 §4.37` at line 885 + the `// 7b. G-CORE-7 §4.41` at line 937 — those are the authoritative narratives; promote them into the pub-fn docstring 'Order:' block).",
+      "destination_if_deferred": "N/A — FIX-NOW per HARD RULE 12 (orchestrator-direct trivial fix, R6-R1 fix-pass scope).",
+      "convergence_disposition": "must-close"
+    },
+    {
+      "id": "L7-MAJ-1",
+      "title": "§4.37 install-record replay-defense end-to-end test pin is SHAPE-not-SUBSTANCE (no test wires `install_record_replay_check: Some(_)` through install_plugin)",
+      "severity": "MAJOR",
+      "surface": "crates/benten-engine/tests/g_core_8_install_record_replay_atomic_record_and_check.rs (test `install_record_replay_rejected_pre_cap_cascade_not_post_rollback`); coupled to `crates/benten-platform-foundation/src/plugin_lifecycle.rs` Step 3b at line 901.",
+      "evidence": "The named test 'install_record_replay_rejected_pre_cap_cascade_not_post_rollback' (lines 223-283) asserts (a) `ErrorCode::GraphInternal.as_str().is_empty() == false` as a 'Step-9-class ErrorCode' substrate proxy, and (b) the `InstallRecordReplayStore::record_and_check` primitive's atomic check-and-record contract. Neither arm exercises the WIRE-UP through `install_plugin` — i.e. nobody calls `install_plugin(.., InstallPorts { install_record_replay_check: Some(&mut |hash| store.record_and_check(*hash)), ..}, ..)` twice with the same install record and asserts the second call returns `Err(ErrorCode::PluginInstallRecordAlreadyApplied)` from the install pipeline. The test's own commentary admits this: 'SHIPPED-SURFACE EXERCISE: the substrate at HEAD is the SHIPPED install pipeline ordering' + 'exercise the SHIPPED ErrorCode discriminator on a Step-9-class error to anchor the structural contract.' This is precisely the SHAPE-not-SUBSTANCE pattern pim-18 §3.6f exists to surface: sentinel-presence asserts presence; no would-FAIL-if-no-op'd behavioral pin.",
+      "would_fail_test_marker": "A regression that quietly removed the `if let Some(replay_check) = ports.install_record_replay_check.as_mut() { … }` block at lines 901-905 of plugin_lifecycle.rs would NOT cause any existing test to fail: the InstallRecordReplayStore primitive tests still pass (the primitive itself is unchanged) AND the substrate-proxy `GraphInternal.as_str()` non-emptiness assertion still passes. The would-FAIL behavior the §4.37 contract names ('second presentation of the same canonical signing-payload bytes is rejected with typed PluginInstallRecordAlreadyApplied; zero duplicate-mint window per the §4.37 TOCTOU contract' per the comment at line 887) is not pinned at the install_plugin boundary.",
+      "disposition": "FIX-NOW",
+      "fix_proposal": "Add ONE substantive end-to-end test in `crates/benten-platform-foundation/tests/` (sibling of the existing r6fp_a_plugin_trust_blocker_closures.rs harness): (1) build a minimal valid PluginManifest + InstallRecord signed by a test user-DID; (2) construct `InstallPorts { install_record_replay_check: Some(&mut |hash| store.record_and_check(*hash)), .. }` wrapping a fresh `InstallRecordReplayStore`; (3) first `install_plugin(..)` call succeeds (`InstallOutcome.grants_minted > 0`, `store.consumed_count() == 1`); (4) second call with identical install_record returns `Err(ErrorCode::PluginInstallRecordAlreadyApplied)` and `store.consumed_count()` is still 1 (zero double-record) and `library.entries.len()` is still 1 (zero double-install). ~80-150 LOC test (reuses existing test helper patterns in r6fp_a_plugin_trust_blocker_closures.rs). Couples Engine + platform-foundation across the install_record_replay seam — placement: `crates/benten-platform-foundation/tests/g_core_8_install_record_replay_wired_through_install_plugin.rs` (platform-foundation tests already exercise install_plugin; benten-engine tests don't include platform-foundation).",
+      "destination_if_deferred": "N/A — FIX-NOW per HARD RULE 12 (test gap, not new scope; sibling harness exists; ~80-150 LOC).",
+      "convergence_disposition": "must-close"
+    }
+  ],
+  "non_findings_explicit": [
+    "Step ordering correctness: VERIFIED. Consent (Step 3) → replay (Step 3b) → clock-validate (Step 4) → hetero → cycle → upgrade-dag → caps-grew → plugin-DID → cap-cascade → ns-provision → library-insert. All rollback paths (Step 9 `rollback_step9`, Step 10 partial-rollback, Step 11 full unwind) preserve the 'no observable residue' invariant.",
+    "§4.33 legacy install-path deletion: VERIFIED structurally (3-arm absence pin at tf_g_core_0_legacy_install_path_deletion_4_33.rs); module_ecosystem.rs has zero `pub fn install_plugin*` symbols at HEAD; cargo-public-api baseline reflects deletion.",
+    "Caller-mint-first plugin-DID contract (Step 8): correctly enforced — `install_record.plugin_did == *params.expected_plugin_did` + `plugin_did_store.get(expected_plugin_did).is_some()` defensively assert before adoption; defends against the legacy pre-R6-FP-A fresh-mint-and-discard hazard.",
+    "Cap-cascade atomicity (Step 9 §4.35): VERIFIED — `rollback_step9` unwinds every mid-loop minted grant on any subsequent failure (Step 9 mid-loop, Step 10, Step 11) so the install_plugin call leaves zero observable residue.",
+    "InstallRecordReplayStore primitive thread-safety: VERIFIED end-to-end via the parallel-thread TOCTOU test (record_and_check atomic compare-and-swap under single Mutex critical section). The PRIMITIVE is well-tested; only the WIRE-UP through install_plugin is the gap (F-2).",
+    "Engine::install_record_replay_store() always-initialized: VERIFIED at engine.rs:1947 (`install_record_replay_store: Arc::new(crate::install_record_replay::InstallRecordReplayStore::new())` always-constructed; no Option / no lazy init).",
+    "apply_atrium_merge fail-CLOSED on unresolvable peer-DID (§4.36 + (b)): VERIFIED at engine.rs:1478-1491 (the literal-empty-set short-circuit returns ManifestEnvelopeRecheckUnresolvedDeny structurally BEFORE rechecker dispatch); the synthesized-fallback hardening is properly deferred per V1-FROZEN-INTERFACE-DEFERRED Row D-18.",
+    "Manifest-envelope chain validation (§6.4) deferral: properly named to Compromise #26 + V1-FROZEN-INTERFACE-DEFERRED Rows D-4 (ProductionManifestEnvelopeRechecker), D-5 (accept_atrium_share), D-6 (sync-hydrate UnresolvedDeny). Install-time path correctly does NOT invoke it by design (install MINTS the root chain).",
+    "InstallParams shape (R6-FP-A-fp): user_did + expected_plugin_did + version_chain + prior_installed_cid + user_trust_list + installer_shape + now_secs all distinct fields; no field-conflation hazard.",
+    "Symmetric InstallPorts/UninstallPorts split (Surf-1 #888): VERIFIED — both lifecycle entry-points share the pure-Ports / Params shape per the documented #888 disposition; install legitimately omits SubscriptionRegistry (lazy attach at first walk; documented as a scoped DISAGREE)."
+  ],
+  "spec_to_code_cross_check": {
+    "plan_§1.A.FROZEN_item_7": "DELETED — verified at HEAD; INTERNALS.md retains forensic note; V1-FROZEN-INTERFACE item 7 matches.",
+    "V1-FROZEN-INTERFACE_item_7": "Frozen — DELETION (not deprecation); cargo-public-api baseline absence-pinned; consistent.",
+    "V1-FROZEN-INTERFACE_item_12": "G-CORE-8 security-surface ManifestEnvelopeRecheckOutcome four-variant freeze + #[non_exhaustive] LANDED at G-CORE-9 commit `75a1d33a`; outcome_to_row_reject non-collapse invariant present; NoopManifestEnvelopeRechecker default + apply_atrium_merge structural fail-CLOSED on empty peer-DID resolution present; consistent.",
+    "Compromise_#26": "Substantive-adapter (ProductionManifestEnvelopeRechecker, accept_atrium_share, sync-hydrate UnresolvedDeny consumption) deferral matches V1-FROZEN-INTERFACE-DEFERRED Rows D-4/D-5/D-6; v1-beta posture documented end-to-end; consistent.",
+    "CLAUDE.md_#18_Layer_1": "User-DID anchors root cap-mint at Step 9 (user_did → plugin_did → req.scope grants); InstallRecord's user-sig at Step 3 is the consent anchor; consistent.",
+    "CLAUDE.md_#18_Layer_2": "Manifest envelope = `requires` + `shares` is `validate_with_clock` + `verify_peer_signature` (Step 4); structural binding at Step 3 (manifest_cid == record.manifest_cid); consistent.",
+    "CLAUDE.md_#18_Layer_3": "Runtime delegation-within-manifest is the SharesPolicyResolver + manifest_envelope_chain_validation path — install does not consult (install is the ROOT; downstream sync-merge / runtime delegation does); consistent."
+  },
+  "pim_n_pattern_signals": [
+    "pim-1 §3.5b post-fix doc-coupling pre-flight: F-1 is a fresh instance — the sec-r6r1-6 R6-FP-A reorder mutated code behavior at lines 861-916 but did not sweep the adjacent `Order:` docstring at lines 797-824. NOT a NEW pattern (already-codified); the failure is in the discipline's execution at FP-A landing time, not the rule. No new pim-N required.",
+    "pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight: F-2 is a fresh instance — substrate-proxy assertions (`GraphInternal.as_str().is_empty() == false`) without behavioral wire-up assertions through the install pipeline. NOT a NEW pattern; cleanup is one substantive test, NOT a new codification. Recurrence count for §3.6f remains within the existing-codified pattern."
+  ],
+  "convergence_outlook": {
+    "expected_r2_findings": "F-1 + F-2 close cleanly with surgical fix-pass (one docstring rewrite + one substantive test); expect R2 close to drop L7 findings to 0 if F-1+F-2 land; downstream-lens (L13 test-coverage) may surface adjacent F-2-flavored gaps in other §4.x install-lifecycle test surfaces, but those would be L13's lens, not L7.",
+    "no_blockers_at_r1": true,
+    "phase_close_readiness_signal": "STRONG-for-this-lens contingent on F-1 + F-2 closure; install-lifecycle hardening + §4.33 deletion are otherwise structurally complete + verifiable at v1-beta."
+  }
+}
