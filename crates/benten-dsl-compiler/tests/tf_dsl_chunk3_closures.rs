@@ -223,6 +223,27 @@ fn dsl_839_io_variant_surfaces_distinct_typed_error_code() {
     );
 }
 
+/// **Pre-G-CORE-9-FREEZE 2026-05-24 — `CompileError::Io` first-class
+/// typed-mirror routing.** `CompileError::code()` MUST return
+/// [`benten_errors::ErrorCode::DslIoError`] (the new first-class
+/// catalog variant), NOT `ErrorCode::Unknown(E_DSL_IO_ERROR)` (the
+/// pre-fix-up routing that collapsed at the napi `mapNativeError`
+/// boundary to `E_UNKNOWN` for lack of a catalog entry). Companion to
+/// `dsl_839_backend_variant_surfaces_typed_error_code` — exercises the
+/// §3.5g item 6 amendment closure for the `Io` variant.
+#[test]
+fn dsl_io_variant_routes_through_first_class_dsl_io_error_typed_code() {
+    let err = CompileError::Io("/tmp/missing.dsl: No such file or directory".to_string());
+    assert_eq!(
+        err.code(),
+        benten_errors::ErrorCode::DslIoError,
+        "CompileError::Io MUST route through first-class \
+         ErrorCode::DslIoError (post-2026-05-24 §3.5g item 6 amendment); \
+         routing through ErrorCode::Unknown(_) would silently regress \
+         the napi mapNativeError boundary back to E_UNKNOWN"
+    );
+}
+
 /// #839 substantive arm + §3.5g cross-language mirror: the Rust
 /// `E_DSL_BACKEND_REJECTED` constant matches the TS-side
 /// `EDslBackendRejected.code` value (the canonical wire shape).

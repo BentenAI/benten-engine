@@ -587,6 +587,18 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // `error_code` → `E_DSL_BACKEND_REJECTED`. CATALOG_VARIANT_COUNT
     // 188 → 189.
     ErrorCode::DslBackendRejected,
+    // Pre-G-CORE-9-FREEZE 2026-05-24 (closes the `CompileError::Io`
+    // first-class-mirror gap surfaced by PR #1339 chunk-3 + §3.5g item 6
+    // amendment): real file-IO failure during DSL compile
+    // (file-not-found / read-failure / stdin-read-failure). Distinct
+    // from `DslBackendRejected` (downstream-consumer rejection at the
+    // post-compile registration step). Mirrors the pre-existing
+    // `CompileError::Io` variant at
+    // `crates/benten-dsl-compiler/src/lib.rs::CompileError::Io` —
+    // pre-this-mirror the napi `mapNativeError` boundary collapsed
+    // `E_DSL_IO_ERROR` to `E_UNKNOWN` because no catalog entry existed.
+    // CATALOG_VARIANT_COUNT 190 → 191.
+    ErrorCode::DslIoError,
     // Phase 4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
     // C11b safety invariant per the PQ-default reframe): +1
     // `AuditNotLandedPurePqRejected`. The
@@ -984,8 +996,15 @@ fn variant_count_is_pinned() {
     // `AUDIT_LANDED_PURE_PQ_FLAG` is `false` — load-bearing v1-GM-gating
     // safety invariant; named arm is what the C-GM-AUDIT CI lane greps
     // for). 189 + 1 = 190.
+    //
+    // **Pre-G-CORE-9-FREEZE 2026-05-24 fix-up bundle**: +1 `DslIoError`
+    // — first-class mirror of the pre-existing `CompileError::Io`
+    // variant (§3.5g item 6 amendment closure; closes the
+    // CompileError::Io first-class-mirror gap surfaced by PR #1339
+    // chunk-3 where `Backend` was added as first-class but `Io` was
+    // left mapping to `E_UNKNOWN` at the napi boundary). 190 + 1 = 191.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 190,
+        CATALOG_VARIANT_COUNT, 191,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1259,6 +1278,9 @@ fn catalog_variant_count_matches_enum() {
             // at the DSL-compile boundary; closes the
             // `CompileError::Io`-variant abuse at the devserver site.
             | ErrorCode::DslBackendRejected
+            // Pre-G-CORE-9-FREEZE 2026-05-24 — first-class mirror of
+            // `CompileError::Io` (§3.5g item 6 amendment closure).
+            | ErrorCode::DslIoError
             // Phase 4-Meta-Core G-CORE-3c terminal swap-matrix wave.
             | ErrorCode::AuditNotLandedPurePqRejected => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary

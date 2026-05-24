@@ -426,8 +426,29 @@ impl CompileError {
             CompileError::Parse(d) | CompileError::Semantic(d) | CompileError::Build(d) => {
                 benten_errors::ErrorCode::Unknown(d.error_code.to_string())
             }
-            CompileError::Io(_) => benten_errors::ErrorCode::Unknown(E_DSL_IO_ERROR.to_string()),
+            // Pre-G-CORE-9-FREEZE 2026-05-24 — `CompileError::Io` now
+            // routes to the first-class catalog mirror
+            // `ErrorCode::DslIoError` (§3.5g item 6 amendment closure).
+            // Pre-this-mirror the napi `mapNativeError` boundary collapsed
+            // to `E_UNKNOWN` because no catalog entry existed for the raw
+            // `E_DSL_IO_ERROR` string; routing through the typed variant
+            // closes the gap.
+            CompileError::Io(_) => benten_errors::ErrorCode::DslIoError,
         }
+    }
+
+    /// **Pre-G-CORE-9-FREEZE 2026-05-24 reachability anchor.** Constructor
+    /// for [`CompileError::Io`] used by the drift-detect scanner's
+    /// reachability check (the `compile_file` helper that constructs the
+    /// variant in real code is cfg-test-gated under some test
+    /// configurations; this public constructor gives the scanner a
+    /// dependable `pub fn` entry point). Sibling of [`Self::backend`].
+    /// The `msg` carries the wrapped IO failure prose (file-path + reason);
+    /// no semantic difference from direct `CompileError::Io(msg.into())`
+    /// construction — purely a typed-API surface.
+    #[must_use]
+    pub fn io(msg: impl Into<String>) -> Self {
+        CompileError::Io(msg.into())
     }
 }
 
