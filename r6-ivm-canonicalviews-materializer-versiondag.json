@@ -1,0 +1,206 @@
+{
+  "lens": "L8 IVM + CanonicalViews + materializer + Version DAG + code-as-graph",
+  "disposition": "APPROVE-WITH-3-MAJOR-AND-3-MINOR",
+  "round": "G-CORE-9 FREEZE iterate-to-convergence R1",
+  "branch": "g-core-9/r1-l8-ivm-canonicalviews-materializer-versiondag",
+  "main_head": "8cc4eddd",
+  "scope": [
+    "crates/benten-ivm/ (Strategy + CanonicalViews + AlgorithmBView + materialize_inner_kernel_read + SubgraphSpec + KernelOutput + TypedOutputProjection)",
+    "crates/benten-platform-foundation/src/materializer.rs (Materializer / Renderer / RenderError; canonical_views/ module does NOT exist — brief reference is stale)",
+    "crates/benten-core/src/{version.rs, version_chain.rs, version_dag.rs, subgraph_spec/}",
+    "crates/benten-engine/src/engine_views.rs (EngineViewsHandle + register_user_view dispatch)",
+    "crates/benten-engine/src/engine_share_scope.rs (Engine::walk_share_scope thin wrapper)",
+    "CLAUDE.md baked-in #1 (12-primitive irreducibility) + #2 (arch-1 boundary)"
+  ],
+  "verified_passing": [
+    {
+      "id": "L8-PASS-1",
+      "claim": "CLAUDE.md #1 12-primitive irreducibility PRESERVED",
+      "evidence": [
+        "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs (un-ignored; explicit count assertion `assert_eq!(known.len(), 12)`)",
+        "crates/benten-core/src/subgraph_spec/walker.rs:183 walker_as_subgraph() uses exactly READ/TRANSFORM/BRANCH/ITERATE (4 of 12)",
+        "crates/benten-platform-foundation/src/materializer.rs walks only existing PrimitiveKind variants (lines 870/933/975/1036/1210/1257/1353)",
+        "crates/benten-platform-foundation/tests/materializer_walks_only_existing_12_primitives_no_extension.rs"
+      ]
+    },
+    {
+      "id": "L8-PASS-2",
+      "claim": "arch-1 boundary preserved: benten-ivm depends on benten-graph::ChangeSubscriber (NOT the reverse)",
+      "evidence": [
+        "crates/benten-ivm/Cargo.toml declares benten-graph dependency",
+        "crates/benten-ivm/src/subscriber.rs:31 `use benten_graph::{ChangeEvent, ChangeSubscriber}` + impl at line 363",
+        "crates/benten-graph/Cargo.toml does NOT depend on benten-ivm; only a doc-comment cross-reference at store.rs:466"
+      ]
+    },
+    {
+      "id": "L8-PASS-3",
+      "claim": "IVM Strategy dispatch — every arm reachable from production call sites",
+      "evidence": [
+        "Strategy::A — engine refuses user-view at engine_views.rs:690-693 → EngineError::ViewStrategyARefused (covered by crates/benten-engine/tests/user_view_strategy_refusals.rs:40)",
+        "Strategy::B — default user-view path; covered by user_view_strategy_refusals.rs + AlgorithmBView::register_subgraph end-to-end",
+        "Strategy::Reserved — engine_views.rs:695-699 refuses with EngineError::ViewStrategyCReserved (typed error; tested at user_view_strategy_refusals.rs:69)",
+        "All 5 canonical-view ids covered at tf5_431_ivm_inner_kernel_read_5arm_byte_equivalence.rs (5 per-view substantive byte-equality arms + tf5_431_five_arm_set_covers_exactly_the_canonical_view_ids guard)"
+      ]
+    },
+    {
+      "id": "L8-PASS-4",
+      "claim": "G-CORE-4 D1 A2 CanonicalViews registry-query type live + consumed by engine production sites",
+      "evidence": [
+        "benten-ivm/src/algorithm_b.rs:192 pub struct CanonicalViews + lookup/is_canonical/dispatch/ids methods",
+        "benten-engine/src/engine_views.rs:241 + 559 + 612 consume CanonicalViews::registry().lookup(...) at production read-gate label-hint + register_user_view paths",
+        "4 pre-collapse helpers (hardcoded_label_for_id / canonical_typed_output_projection_for / is_canonical_view_id / dispatch_for) narrowed to pub(crate) — G-CORE-4 exit criterion #1 satisfied"
+      ]
+    },
+    {
+      "id": "L8-PASS-5",
+      "claim": "materialize_inner_kernel_read seam (G-CORE-4 §4.31 5-arm byte-equivalence) shipped + un-ignored",
+      "evidence": [
+        "benten-ivm/src/algorithm_b.rs:1504 pub fn materialize_inner_kernel_read(view) -> Vec<u8>",
+        "crates/benten-ivm/tests/tf5_431_ivm_inner_kernel_read_5arm_byte_equivalence.rs all 5 tests un-ignored + substantive (no #[ignore] / sentinel-only arms)",
+        "Byte-equivalence asserted across BOTH AlgorithmBView::register_subgraph (G23-0a SubgraphSpec lane) + AlgorithmBView::register (G15-A legacy lane)"
+      ]
+    },
+    {
+      "id": "L8-PASS-6",
+      "claim": "VersionDag (G-CORE-5 D3) unified Anchor + Version + CURRENT pointer; branching supported per CLAUDE.md #18",
+      "evidence": [
+        "crates/benten-core/src/version_dag.rs Mode::Strict + Mode::Dag with shared VersionChain trait at line 186",
+        "Branching (Anchor → v1 → {v2-mainline, v1.5-fork}) is first-class via Mode::Dag (lines 83-89 doc + lines 338-348 cycle-only-rejection)",
+        "Per-device-local CURRENT pointer per CLAUDE.md #18 ratification #2 (line 264-266)",
+        "P-III canonical-bytes invariant preserved (lines 38-46 doc)",
+        "VersionDagError #[non_exhaustive] at line 105"
+      ]
+    },
+    {
+      "id": "L8-PASS-7",
+      "claim": "Engine::walk_share_scope is a thin wrapper composing existing primitives, NOT an evaluator special-case",
+      "evidence": [
+        "crates/benten-engine/src/engine_share_scope.rs:60 `walk_share_scope` body = single `walker::walk(spec).map_err(spec_err_to_engine)` delegation (no engine special-casing)",
+        "Engine handle `_ = self;` explicitly noted as 'reserved for principal-threading enrichment in Composing' (line 61) — confirms no evaluator coupling at v1-beta",
+        "Walker itself fractal-property pinned at crates/benten-core/src/subgraph_spec/walker.rs:183 (READ + TRANSFORM + BRANCH + ITERATE — 4 of the existing 12 primitives; NO new PrimitiveKind variant)",
+        "End-to-end test at crates/benten-engine/tests/g_core_9_walk_share_scope_e2e.rs asserts BFS-order parity vs benten_core walker output"
+      ]
+    },
+    {
+      "id": "L8-PASS-8",
+      "claim": "SubgraphSpecRestriction (post-G-CORE-9 rename) lives in benten-core::subgraph_spec::, not crossing evaluator-special-case land",
+      "evidence": [
+        "crates/benten-core/src/subgraph_spec/spec.rs:126 pub enum SubgraphSpecRestriction with #[non_exhaustive] at line 125",
+        "contains() method total + decidable at line 146-168 (no panic, no unimplemented!())",
+        "RestrictedScope (benten-caps::restricted_spec.rs:103) is the 6-dimension product per item 15(b); type-distinct from SubgraphSpecRestriction — name-collision resolved per V1-FROZEN-INTERFACE row 7"
+      ]
+    },
+    {
+      "id": "L8-PASS-9",
+      "claim": "AlgorithmError #[non_exhaustive] applied; item 11 must-apply for benten-ivm satisfied for this type",
+      "evidence": [
+        "crates/benten-ivm/src/algorithm_b.rs:464 #[non_exhaustive] on AlgorithmError",
+        "crates/benten-ivm/src/view.rs:41 #[non_exhaustive] on ViewError (R6b bp-17)"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "L8-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "Stale `Strategy::C` terminology locked into the public ErrorCode + EngineError variant name + observable error message string across 3 cross-language surfaces — freeze-time wire-locks the obsolete name forever post-`v1-beta`",
+      "category": "FREEZE-CORRECTNESS",
+      "description": "Strategy::C was renamed to Strategy::Reserved at G23-0a per arch-r1-14 (closing CRATES-DEEP-DIVE §4 named-but-deferred item); the variant lives at `crates/benten-ivm/src/strategy.rs:84` as `Reserved`. But the cross-language error mirror still encodes the obsolete `C` name across THREE surfaces that V1-FROZEN-INTERFACE item 4 (D2 v1-canonical-bytes) + item 10 (TS/JS public API) locks bytewise: (a) Rust variant `EngineError::ViewStrategyCReserved` at `crates/benten-engine/src/error.rs:119` with format-string `\"user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+\"` (the Rust variant FIRES from engine_views.rs:696 when caller supplied Strategy::Reserved — internal-inconsistency hazard at runtime), (b) `ErrorCode::ViewStrategyCReserved` + stable wire string `\"E_VIEW_STRATEGY_C_RESERVED\"` at `crates/benten-errors/src/lib.rs:334 + 1536 + 2367` (3 sites), (c) TS class `EViewStrategyCReserved` + wire code `E_VIEW_STRATEGY_C_RESERVED` at `packages/engine/src/errors.generated.ts:1320 + 3225` whose docstring at line 1318 says \"declared Strategy::Reserved\" — INCONSISTENT with the Rust format-string on the same code-path. Once `v1-beta` tags, the wire code `E_VIEW_STRATEGY_C_RESERVED` is bytewise-frozen forever (item 4 P-III); renaming post-`v1-GM` would be a SemVer break + a Phase-3+ wire-format break. The error message users see in production will permanently reference an enum variant name (`Strategy::C`) that does NOT exist in any Rust source.",
+      "evidence": [
+        "crates/benten-ivm/src/strategy.rs:53-66 documents the rename `Strategy::C → Strategy::Reserved` at G23-0a per arch-r1-14",
+        "crates/benten-engine/src/engine_views.rs:695-699 matches `benten_ivm::Strategy::Reserved` and returns `EngineError::ViewStrategyCReserved` (variant-name does not match runtime arm)",
+        "crates/benten-engine/src/error.rs:113-122 stale 'C' name in Rust docstring + variant identifier + Display string + fixHint",
+        "crates/benten-engine/src/outcome.rs:52 + 115 stale 'C' name in UserViewSpec doc-comment",
+        "crates/benten-errors/src/lib.rs:334 (variant), 1536 (wire string), 2058 (Display arm), 2367 (parse arm) — 4 sites lock the 'C' name",
+        "packages/engine/src/errors.generated.ts:1315-1327 TS docstring says 'declared Strategy::Reserved' but Rust format-string emits 'declared Strategy::C' — cross-language message drift on the SAME code path (§3.5g first-class mirror violation)",
+        "crates/benten-errors/tests/stable_shape.rs:112 + 682 + 1149 + 682 pins the stale name"
+      ],
+      "impact": "Freeze-time wire-bytes lock-in of obsolete terminology forever post-`v1-beta` tag. Cross-language message drift breaks the §3.5g 4-surface mirror discipline AT freeze time, becoming the locked-in observable.",
+      "disposition_for_freeze_wave": "FIX-NOW. Atomic rename across 4 surfaces BEFORE v1-beta tag: (a) Rust variant `ViewStrategyCReserved` → `ViewStrategyReservedReserved` OR `ViewStrategyReserved` (orchestrator-call) — touches benten-engine/src/error.rs + outcome.rs + engine_views.rs; (b) ErrorCode variant + wire string `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED` across benten-errors/src/lib.rs (4 sites); (c) TS class + wire code at packages/engine/src/errors.generated.ts (3 sites including docstring); (d) drift-detect scanner / stable_shape.rs pins. Without this rename, the freeze locks a name pointing to a Rust enum variant that doesn't exist + a runtime observable that lies. This is exactly the class of drift item 4 + item 10 freeze-blockers are written to catch. NOTE: this is the ARTIFACT-MUTATING finding per the §3.6h / §3.5g rule-ratification-must-close-origin discipline — the rename PR IS the resolution + the §3.5g 4-surface mirror sweep on the same PR closes the origin instance."
+    },
+    {
+      "id": "L8-MAJOR-2",
+      "severity": "MAJOR",
+      "title": "item 11 #[non_exhaustive] sweep INCOMPLETE for benten-ivm + benten-platform-foundation + benten-engine lens-scoped surface — multiple `pub enum` / `pub struct` in the published API still lack the attribute at FREEZE-WAVE HEAD `8cc4eddd`",
+      "category": "FREEZE-COMPLETENESS",
+      "description": "V1-FROZEN-INTERFACE.md item 11 enumerates 'verified MISSING at HEAD' types + commits to the maximalist application. Audit at HEAD `8cc4eddd` confirms the gap is STILL open for multiple lens-scoped types. Each missing item is a guaranteed SemVer break to extend post-`v1-GM`. Concretely missing #[non_exhaustive] (verified by 2-line preview grep against `^pub enum X` / `^pub struct X`):\n\nbenten-ivm (published prelude, lib.rs:65):\n  - `TypedOutputProjection` (subgraph_spec.rs:86) — wire-bytes-load-bearing for the materialize_inner_kernel_read 1-byte arm-discriminator at algorithm_b.rs:1507-1523\n  - `KernelOutput` (subgraph_spec.rs:296) — same wire-bytes-load-bearing property; the 4-arm discriminator (`Rows`/`Rules`/`Current None`/`Current Some`) is bytewise-stable per item 4 D2 contract\n  - `ViewResult` (view.rs) — published Outcome shape\n  - `ViewState` (view.rs) — published view-status enum\n  - `ViewQuery`, `ViewBudget`, `ViewDefinition` (view.rs) — published structs\n\nbenten-engine (lens-scoped + item-11-enumerated):\n  - `UserViewInputPattern` (outcome.rs) — item 11 explicit verified-MISSING\n  - `UserViewSpec` + `UserViewSpecBuilder` + `ReadViewOptions` + `Outcome` + `Trace` + `TraceStep` (outcome.rs) — six pub types from one file, zero non_exhaustive\n  - `StreamCursor` + `SubscribeCursor` + `NextChunkPoll` (engine_stream.rs / engine_subscribe.rs) — item 11 explicit verified-MISSING\n  - `DelegationResolution` (shares_policy_resolver.rs)\n  - `AtriumMode` (atrium_api.rs)\n  - `WriteBoundaryChainOutcome` (write_boundary_chain_validator.rs)\n  - `EngineViewsHandle` (engine_views.rs:1129)\n\nbenten-platform-foundation (lens-scoped):\n  - `VocabLabel` (schema_compiler/vocab.rs:14) — the 8-label typed-field-Node vocabulary (D-4F-NEW-TYPED-FIELD-NODE-VOCAB)\n  - `VocabEdge` (schema_compiler/vocab.rs:92) — the 5 labeled edges\n  - `Scalar` (schema_compiler/vocab.rs:157) — the 8 scalars\n  - `RenderError` (materializer.rs:567) — Renderer-trait error type\n  - `Mode` (benten-core/src/version_dag.rs:75) — the Strict/Dag selector; future hybrid modes are conceivable",
+      "evidence": [
+        "Per-file grep at lens-scoped surface: outcome.rs 0/15, thin_client.rs 1/6, atrium_api.rs 0/3, shares_policy_resolver.rs 0/2, engine_stream.rs 0/3, engine_subscribe.rs 0/2, write_boundary_chain_validator.rs 0/2 (each ratio = non_exhaustive / total pub types).",
+        "Per-type 2-line-preview grep — none of TypedOutputProjection / KernelOutput / ViewResult / ViewState / UserViewInputPattern / TraceStep / Mode / VocabLabel / VocabEdge / Scalar / RenderError carries the attribute",
+        "Item 11 explicitly enumerates these as APPLY (verified-MISSING table at V1-FROZEN-INTERFACE.md lines 884-890)",
+        "Item 11 verification mechanism `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` (BUILD-AT-FREEZE-WAVE per spec) is MISSING from the tree — only g_core_9_walk_share_scope_e2e.rs exists in benten-engine/tests/"
+      ],
+      "impact": "Every missing item ships a SemVer-locked exhaustive shape into v1-beta + v1-GM; additive future variants post-tag are SemVer breaks. The audit test pin to catch the next-such-type at PR time is also missing, so the gap will re-open silently in Composing.",
+      "disposition_for_freeze_wave": "FIX-NOW. Two atomic acts BEFORE v1-beta tag: (a) APPLY `#[non_exhaustive]` to every lens-scoped pub enum + pub struct listed above (the maximalist sweep — these are ~20 attribute additions across ~10 files); (b) LAND the missing `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` test pin per item 11 verification-mechanism. The audit walks every pub enum + pub struct workspace-wide + asserts #[non_exhaustive] OR membership in the carve-out registry. Carve-out registry MUST be expanded to include `Strategy` (carve-out per D8 — closed `{A, B, Reserved}` set documented at strategy.rs:53) — that's a real carve-out the freeze spec missed."
+    },
+    {
+      "id": "L8-MAJOR-3",
+      "severity": "MAJOR",
+      "title": "Item 11 carve-out registry MISSING `Strategy` — the only documented intentional non_exhaustive omission in benten-ivm is invisible to the freeze + its v1 audit-pin",
+      "category": "FREEZE-COMPLETENESS",
+      "description": "`benten_ivm::Strategy` (the engine-boundary dispatch type — CLAUDE.md baked-in #2's load-bearing seam) at `crates/benten-ivm/src/strategy.rs:53-58` carries an EXPLICIT in-source `#[non_exhaustive]` is **deliberately omitted** rationale per D8: 'A future maintenance algorithm would land as a NEW enum (e.g. `StrategyV2`) so the runtime contract here stays stable. Adding a fourth variant would be a breaking change; downstream matchers want the compiler to flag missing arms.' V1-FROZEN-INTERFACE item 11's carve-out registry only enumerates THREE carve-outs (`benten_caps::Scope` per 15(c) + `Subgraph::PrimitiveKind` per Planner-B + `GraphError::TxAborted` per Fwd-2 #997/#1207). `Strategy` is genuinely a 4th carve-out + the freeze spec misses it. When the missing audit test pin (per MAJOR-2) lands, `Strategy` will trigger a false-positive failure OR force a silent omission OR force a wrong-decision APPLY that breaks the D8 closed-set contract.",
+      "evidence": [
+        "crates/benten-ivm/src/strategy.rs:53-58 explicit in-source carve-out rationale",
+        "V1-FROZEN-INTERFACE.md item 11 carve-out enumeration (lines 866-877) — `Strategy` is absent"
+      ],
+      "impact": "Either (a) Strategy gets wrongly APPLY'd at the sweep + the closed `{A, B, Reserved}` exhaustive-match property breaks downstream consumers; or (b) the carve-out is silently omitted from the audit pin + the freeze spec loses provenance for the intentional omission.",
+      "disposition_for_freeze_wave": "FIX-NOW. Add `Strategy` to V1-FROZEN-INTERFACE.md item 11's carve-out enumeration (cite strategy.rs:53-58 + the D8 closed-`{A, B, Reserved}` rationale + the Strategy V2-as-new-enum migration path). When the audit test pin lands per MAJOR-2, it must consult an extended carve-out registry that includes `Strategy`. This is a 2-line spec edit + 1-line registry entry."
+    },
+    {
+      "id": "L8-MINOR-1",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE item 15(a) names verification mechanism `crates/benten-core/tests/g_core_9_no_thirteenth_primitive.rs` — file does NOT exist; the property IS covered by an alternately-named test, but the freeze-spec cite is stale",
+      "category": "FREEZE-DOC-DRIFT",
+      "description": "V1-FROZEN-INTERFACE.md item 15(a) at line 1237-1239 names 'A no-13th-primitive test pin (crates/benten-core/tests/g_core_9_no_thirteenth_primitive.rs) asserts PrimitiveKind::* discriminant count remains 12.' That filename does not exist; the actually-shipped test pin is `crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs`. The discriminant-count + 12-baseline-name-enumeration assertions DO live there. The freeze property is correctly verified at HEAD; the cite is what's stale.",
+      "evidence": [
+        "find crates/benten-core/tests -name '*thirteenth*' or '*primitive_count*' or '*irreducibility*' → empty",
+        "ls of crates/benten-core/tests/ shows `tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs`",
+        "grep of that file lines 76-95 + lines 100-115 — explicit 12-name enumeration + assert_eq!(known.len(), 12)"
+      ],
+      "impact": "Doc-drift only. A future agent reading the freeze spec will hunt a nonexistent file. Low blast-radius but freeze-spec citations are load-bearing per §3.5b HARDENED.",
+      "disposition_for_freeze_wave": "FIX-NOW (1-line edit). V1-FROZEN-INTERFACE.md item 15(a) line 1238: rename the cite to `crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs` (Arm P-2.1 specifically covers the count assertion at line 95)."
+    },
+    {
+      "id": "L8-MINOR-2",
+      "severity": "MINOR",
+      "title": "Lens brief required-reads cite `crates/benten-platform-foundation/src/canonical_views/` (which does NOT exist) + `crates/benten-core/src/version/` (also does NOT exist) — brief-text drift",
+      "category": "FREEZE-DOC-DRIFT",
+      "description": "The lens brief's required-reads list (item 3 + item 4) names two paths that don't exist at HEAD. CanonicalViews actually lives only in `benten-ivm` (per D1 A2 disposition — explicitly REJECTED the 'lift to a lower crate' framing per `RATIFIED-decisions-2026-05-17` D1 anchor). Version code lives at `version.rs` + `version_chain.rs` + `version_dag.rs` (no `version/` subdir). This is brief drift, not a code defect — the lens scope still applies via the actual file locations — but it suggests an upstream brief-template stale-prose hazard parallel to the §4.30 verdict/disposition issue (§3.6i schema discipline) that R6 R3 closed.",
+      "evidence": [
+        "find crates/benten-platform-foundation/ -name '*canonical*' returns only test files; no module directory",
+        "ls crates/benten-core/src/ shows version.rs / version_chain.rs / version_dag.rs at file-level, no subdir",
+        "algorithm_b.rs:172-178 explicitly anchors 'Stays in benten-ivm (D1 A2 + ivm-r1-2 DISAGREE-record) — future agent proposals to lift the type to benten-core / benten-graph must be rejected'"
+      ],
+      "impact": "Lens-brief drift only; lens execution proceeded by substituting actual paths. Pattern-induction signal: orchestrator brief-template may have a stale-cite class similar to the §4.30 verdict-disposition class.",
+      "disposition_for_freeze_wave": "FIX-NOW at next R-round brief template (sub-line in lens-brief drafting checklist): when citing `crates/<X>/src/<Y>/`, verify the subdirectory exists at HEAD before authoring the brief (parallel to §3.5b adjacent-doc sweep). Single-shot for THIS round: the orchestrator absorbs that the actual scope is benten-ivm CanonicalViews + benten-core version*.rs file-level + benten-platform-foundation materializer.rs (the canonical_views/ directory was never built — appropriately, per D1 A2)."
+    },
+    {
+      "id": "L8-MINOR-3",
+      "severity": "MINOR",
+      "title": "`Engine::walk_share_scope` is principal-unbearing at v1-beta; the principal-bearing `walk_share_scope_as` is named ADDITIVE Composing-time enhancement at engine_share_scope.rs:46-49 but the lack of an `_as` overload at v1-beta means EVERY consumer using walk_share_scope at v1-beta loses the per-principal recipient enumeration the BFS-order canonical-path contract assumes for path-tagged-key derivation (RATIFIED-S&C §R4 + 15(h)).",
+      "category": "FREEZE-SCOPE-VERIFY",
+      "description": "Engine::walk_share_scope per V1-FROZEN-INTERFACE item 15(h) is the v1-beta public consumer surface; its signature `(&self, &Spec) -> Result<WalkResult, EngineError>` does NOT carry a principal arg. The doc at engine_share_scope.rs:46-49 explicitly notes 'principal-bearing variants (e.g. walk_share_scope_as(&self, principal, spec)) are ADDITIVE Composing-time enhancements that may co-exist.' But the BFS canonical-path contract per RATIFIED-S&C §R4 + item 15(h) states 'recipients walk the same BFS the producer enumerated; canonical path carried in AuthorizationGrant.key_material per (d) + (f)' — this carries an implicit recipient-principal context. At v1-beta with only the non-`_as` variant exposed, every recipient-side walk_share_scope call walks AS the engine's default principal (whatever the call-site Engine handle is bound to), which is a semantic gap relative to the recipient-principal that produced the path-tagged key the recipient is consuming. The cross-walk parity test at g_core_9_walk_share_scope_e2e.rs validates BYTE-equality of the walk's enumeration order; it does NOT validate principal-aware semantics because there is none at v1-beta. This may be intentional (the recipient's local engine has only ONE principal — the recipient — so the implicit binding is correct in practice) — but it's worth surfacing whether the freeze codifies that property explicitly.",
+      "evidence": [
+        "crates/benten-engine/src/engine_share_scope.rs:60 walk_share_scope signature (no principal arg)",
+        "crates/benten-engine/src/engine_share_scope.rs:46-49 explicit Composing-time enhancement deferral",
+        "RATIFIED-S&C §R4 quoted in V1-FROZEN-INTERFACE.md lines 1520-1528 — recipient-side walk semantics"
+      ],
+      "impact": "Possible. If a deployment shape ever runs multi-principal in the same engine handle (e.g. test fixtures, plugin-as-principal sub-walks), the implicit principal binding will be ambiguous post-freeze + un-fixable without an additive `_as` variant. The Composing-time `_as` addition is genuinely additive (does not break the v1-beta surface), so the cost is asymmetric: missing the `_as` at v1-beta is recoverable; having a wrong implicit-principal pinning at v1-beta is also recoverable since the implicit semantic is conservative (default-engine-principal).",
+      "disposition_for_freeze_wave": "DISAGREE-WITH-EXPLANATION (lens-author's call). The freeze spec correctly defers `_as` to Composing. The v1-beta semantic that ships — implicit binding to the engine's default principal — is the conservative-correct shape for the single-principal recipient case (the common case for shape (a) full peers + shape (c) embedded webview). Multi-principal recipient walks are a Composing-time feature; the additive Composing addition does not break the v1-beta surface. RECOMMEND: surface this in the freeze-spec body as an explicit 'what's NOT frozen at v1-beta' bullet under item 15(h) (one line: 'Principal-bearing walk variants are ADDITIVE Composing-time enhancements; v1-beta walks bind implicitly to the engine handle's default principal'). Closes the disposition without code change."
+    }
+  ],
+  "summary": {
+    "verified_passing_count": 9,
+    "blocker_count": 0,
+    "major_count": 3,
+    "minor_count": 3,
+    "notes": "Lens-scope substantive properties (12-primitive irreducibility, arch-1 boundary, IVM Strategy reachability, CanonicalViews D1 A2 collapse, materialize_inner_kernel_read 5-arm coverage, VersionDag D3 unification with branching, walk_share_scope thin-wrapper composition) are ALL preserved at HEAD `8cc4eddd`. The 3 MAJOR findings cluster around freeze-time completeness: (a) cross-language ErrorCode rename `Strategy::C → Strategy::Reserved` is incomplete + locks obsolete terminology into v1-beta wire-bytes forever (L8-MAJOR-1); (b) the item 11 #[non_exhaustive] maximalist sweep is INCOMPLETE for lens-scoped types in benten-ivm + benten-engine + benten-platform-foundation (L8-MAJOR-2); (c) the item 11 carve-out registry MISSING `Strategy` (L8-MAJOR-3). All 3 are surgical fix-now PRs of moderate size — the rename is ~10 LOC across 4 surfaces (with §3.5g 4-surface mirror discipline guiding the sweep); the non_exhaustive sweep is ~20 attribute additions + 1 audit test pin (~80 LOC for the audit + ~5 LOC per type); the carve-out spec edit is 2 lines. None require architectural re-debate; all three close BEFORE v1-beta tag."
+  },
+  "session_provenance": {
+    "branch": "g-core-9/r1-l8-ivm-canonicalviews-materializer-versiondag",
+    "starting_head": "8cc4eddd",
+    "claude_md_baked_ins_consulted": ["#1 (12 primitives)", "#2 (IVM Algorithm B + arch-1 boundary)", "#5 (crypto-agility codepoint dispatch)", "#8 (Version chains as opt-in pattern)", "#17 (3 deployment shapes)", "#18 (Principal primitive + plugin trust model)"],
+    "v1_frozen_items_consulted": ["item 4 (D2 canonical bytes)", "item 10 (TS/JS public API)", "item 11 (non_exhaustive sweep)", "item 12 (security-surface lock)", "item 15(a)-(j) (S&C public surface)"],
+    "ratified_decisions_consulted": ["G-CORE-4 D1 A2 — CanonicalViews stays in benten-ivm", "G-CORE-5 D3 — unified VersionDag", "G23-0a rename Strategy::C → Strategy::Reserved per arch-r1-14"]
+  }
+}
