@@ -1028,9 +1028,21 @@ impl Engine {
     /// user code (Code-as-graph Major #1). Also reused by the
     /// `get_node_label_only_sub_1us` criterion bench.
     ///
+    /// # R6 R1 FP-A Bundle F2 — visibility tighten + rename
+    ///
+    /// **Renamed** `get_node_label_only` → `read_node_label_only` and
+    /// **tightened** `pub` → `pub(crate)` per V1-FROZEN-INTERFACE.md §1
+    /// (§8-A; Row D-7 closure). Engine-internal label-only un-attributed
+    /// read; the Inv-11 runtime probe + `get_node_label_only_sub_1us`
+    /// criterion bench reach it through the engine internals only.
+    ///
+    /// Test-helper re-export under the old `get_node_label_only` name is
+    /// available behind `cfg(any(test, feature = "test-helpers"))` at
+    /// [`crate::testing`].
+    ///
     /// # Errors
     /// Returns [`EngineError`] on backend failure.
-    pub fn get_node_label_only(&self, cid: &Cid) -> Result<Option<String>, EngineError> {
+    pub(crate) fn read_node_label_only(&self, cid: &Cid) -> Result<Option<String>, EngineError> {
         Ok(self.backend().get_node_label_only(cid)?)
     }
 
@@ -1059,11 +1071,21 @@ impl Engine {
     /// Returns [`EngineError`] on backend / transaction failure, or
     /// `E_BACKEND_READ_ONLY` when invoked against a snapshot-blob
     /// engine.
-    pub fn put_node(&self, node: &Node) -> Result<Cid, EngineError> {
+    /// # R6 R1 FP-A Bundle F2 — visibility tighten + disambiguating rename
+    ///
+    /// **Renamed** `put_node` → `put_node_inner` and **tightened**
+    /// `pub` → `pub(crate)` per V1-FROZEN-INTERFACE.md §1 (§8-A; Row D-7
+    /// closure). The rename disambiguates against the cfg-gated
+    /// test-helper re-export under the old `put_node` name in
+    /// [`crate::testing`] (preserves sibling-crate integration tests
+    /// without per-test migration). External writers reach the engine
+    /// through [`Engine::create_node`] (which fires the user-facing
+    /// Inv-11 + cap-policy gates) or through a transaction handle.
+    pub(crate) fn put_node_inner(&self, node: &Node) -> Result<Cid, EngineError> {
         if self.is_read_only_snapshot() {
             return Err(EngineError::Other {
                 code: ErrorCode::BackendReadOnly,
-                message: "backend is read-only: put_node rejected (snapshot-blob engine)"
+                message: "backend is read-only: put_node_inner rejected (snapshot-blob engine)"
                     .to_string(),
             });
         }
@@ -1138,9 +1160,19 @@ impl Engine {
     /// compiling; Phase-2a stub returns the concatenated ids until G2-B
     /// wires the real lookup.
     ///
+    /// # R6 R1 FP-A Bundle F2 — DELETED from public surface
+    ///
+    /// Renamed `resolve_subgraph_cid_for_test` →
+    /// `resolve_subgraph_cid_inner` and tightened `pub` → `pub(crate)`
+    /// per V1-FROZEN-INTERFACE.md §1 (§8-A; Row D-7 closure: "`_for_test`
+    /// `pub fn` is a red-flag — either real public API or belongs in
+    /// `testing` module"). The test-helper re-export under the old
+    /// `resolve_subgraph_cid_for_test` name is available behind
+    /// `cfg(any(test, feature = "test-helpers"))` at [`crate::testing`].
+    ///
     /// # Errors
     /// Returns [`EngineError`] if the handler is not registered.
-    pub fn resolve_subgraph_cid_for_test(
+    pub(crate) fn resolve_subgraph_cid_inner(
         &self,
         handler_id: &str,
         _op: &str,
