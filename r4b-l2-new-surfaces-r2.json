@@ -1,0 +1,62 @@
+{
+  "lens": "R4b-L2 new-surfaces",
+  "round": "R2",
+  "phase": "Phase-4-Meta-Core",
+  "branch": "phase-4-meta-core/r4b-r2-l2-new-surfaces",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "r1_base_sha": "a0b75637",
+  "merge_base_with_main": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "scope": "Re-review of edited artifact post R4b R1 fix-pass (PR #1350). Verify R1 closures held (3 MINOR + 2 OBSERVATION dispositions) + Q5 termination check for NEW MAJORs introduced by the fix-pass diff itself.",
+  "disposition": "APPROVE-CLEAN-CONVERGED",
+  "r4b_r2_convergence_disposition": "CONVERGED — 0 BLOCKER / 0 MAJOR / 0 MINOR / 0 OBSERVATION new at R2. All 3 R1 MINORs verified properly closed/deferred per their R1 dispositions; both R1 OBSERVATIONs remain informational. Q5 strict-termination satisfied (full lens re-run on the edited artifact returns zero substantive findings). L2 ready for R6 phase-close convergence council.",
+  "summary": "R4b R1 fix-pass (PR #1350 cluster: 753d9840 + 8240a56c + 4bbc4cac on top of a0b75637) is a tests/ + docs/ ONLY diff with respect to the L2 new-surfaces lens — zero changes under crates/*/src/, zero changes under bindings/*/src/, zero changes under docs/public-api/*.txt baselines. The fix-pass therefore introduces NO new pub surfaces, NO new napi bindings, NO new ErrorCode mints, and NO public-api baseline drift, so the R1 evaluation surface is identically intact at R2. Verification of each R1 finding's closure: (1) L2-r4b-l2-1 (envelope_sig direct test gap) DISAGREE-WITH-EXPLANATION still holds — envelope_sig.rs unchanged at 4bbc4cac vs a0b75637; tf3f_envelope_plus_per_node_sig_defense_in_depth.rs continues to exercise verify_envelope_signature + tamper_envelope_signature_for_test → EnvelopeSignatureInvalid end-to-end (lines 55+96+106); the indirect-but-genuine coverage argument is unchanged. (2) L2-r4b-l2-2 (DropBundleError AuthorizationGrantFailed + CodecError negative-arm pins) BELONGS-NAMED-NOW destination materialized in docs/phase-4-meta-core-r4b-followups.md §'L2 follow-ups (new-surfaces lens)' lines 30-55 with full named destination (crates/benten-drop/tests/, ~50-100 LOC), wave assignment (Phase-4-Meta-Composing alongside Row D-21 OR opportunistic), and anchor citation back to the R1 lens JSON. (3) L2-r4b-l2-3 (CryptoPrimitiveCallSiteAudit::scan_workspace integration test pin) BELONGS-NAMED-NOW destination materialized in docs/phase-4-meta-core-r4b-followups.md §'L2 follow-ups' lines 57-77 with full named test-file path (crates/benten-crypto-suite/tests/boundary_call_site_audit_workspace_clean.rs, ~20 LOC), assert shape, and wave + anchor. The tracked doc is real (tracked-and-grep-able space, NOT orchestrator-local .addl/) satisfying the HARD RULE 12 clause-(b) strict-reading requirement that the destination be a real grep-able destination. Both R1 OBSERVATIONs (r4b-l2-obs-1 23-vs-22 count footnote + r4b-l2-obs-2 public-api baseline transition milestone) remain informational; nothing in the fix-pass diff changes their disposition. Q5 termination: full lens re-run on the edited artifact returns ZERO new BLOCKER / MAJOR / MINOR / OBSERVATION. L2 is CONVERGED-AT-LENS-LEVEL and ready for R6 phase-close council.",
+  "findings": [],
+  "questions_answered": {
+    "Q1_pub_presence_pins": "UNCHANGED-FROM-R1 — fix-pass diff did not touch crates/*/src/ so the 14 public-api baselines + 314 integration test files surface is identically intact at R2.",
+    "Q2_napi_ts_mirrors": "UNCHANGED-FROM-R1 — fix-pass diff did not touch bindings/napi/src/ so install_module_signed + StreamHandleJs::next TS-side coverage is identically intact at R2.",
+    "Q3_new_crate_test_suites": "UNCHANGED-FROM-R1 — benten-crypto-suite + benten-drop integration test suites + downstream consumer coverage identically intact at R2.",
+    "Q4_errorcode_mints_ts_mirror": "UNCHANGED-FROM-R1 — fix-pass diff did not touch benten-errors src/; CATALOG_VARIANT_COUNT remains pinned at 192; code_to_ctor_codegen_covers_every_error_catalog_entry structural test continues to enforce TS-mirror completeness.",
+    "Q5_new_majors_from_fixpass": "SATISFIED — zero new MAJORs (zero substantive new findings of any severity). The fix-pass is exclusively tests/ ignore-message text retenses + DEFERRED.md row materialization + tracked-followups-doc authorship; none of those surfaces interact with the L2 new-surfaces lens questions."
+  },
+  "r1_finding_closure_verification": {
+    "L2-r4b-l2-1": {
+      "r1_disposition": "DISAGREE-WITH-EXPLANATION",
+      "r2_verification": "STILL HOLDS — crates/benten-drop/src/envelope_sig.rs unchanged between a0b75637 and 4bbc4cac; coverage path through DropBundle::verify_envelope_signature + tamper_envelope_signature_for_test → EnvelopeSignatureInvalid still genuine (tf3f_envelope_plus_per_node_sig_defense_in_depth.rs:55,96,106). DISAGREE rationale unchanged.",
+      "r2_action": "NONE"
+    },
+    "L2-r4b-l2-2": {
+      "r1_disposition": "BELONGS-NAMED-NOW",
+      "r2_verification": "PROPERLY DEFERRED — docs/phase-4-meta-core-r4b-followups.md lines 30-55 carry the full row with surface description + gap enumeration (2 variants AuthorizationGrantFailed + CodecError at 4 sites) + named destination (crates/benten-drop/tests/, ~50-100 LOC) + wave (Phase-4-Meta-Composing alongside Row D-21 OR opportunistic) + anchor (R4b L2-r4b-l2-2). Destination is in tracked-and-grep-able space.",
+      "r2_action": "NONE"
+    },
+    "L2-r4b-l2-3": {
+      "r1_disposition": "BELONGS-NAMED-NOW",
+      "r2_verification": "PROPERLY DEFERRED — docs/phase-4-meta-core-r4b-followups.md lines 57-77 carry the full row with surface (CryptoPrimitiveCallSiteAudit::scan_workspace at crates/benten-crypto-suite/src/boundary.rs) + gap (no integration test invokes scan_workspace + asserts direct_primitive_use_outside_suite empty) + named test-file path (crates/benten-crypto-suite/tests/boundary_call_site_audit_workspace_clean.rs, ~20 LOC, exact assert shape) + wave + anchor (R4b L2-r4b-l2-3 + #5 crypto-agility contract).",
+      "r2_action": "NONE"
+    },
+    "L2-r4b-l2-obs-1": {
+      "r1_disposition": "OBSERVATION",
+      "r2_verification": "UNCHANGED — count discrepancy (23 vs 22 brief) remains a footnote for the council scribe; no fix-pass action expected.",
+      "r2_action": "NONE"
+    },
+    "L2-r4b-l2-obs-2": {
+      "r1_disposition": "OBSERVATION",
+      "r2_verification": "UNCHANGED — public-api baseline transition is a load-bearing positive milestone for the Phase-4-Meta-Core retrospective; the baselines remain populated at HEAD (zero docs/public-api/*.txt drift in the fix-pass).",
+      "r2_action": "NONE"
+    }
+  },
+  "standing_law_verification": {
+    "hard_rule_12_dispositions": "All R1 dispositions verified at R2; both BELONGS-NAMED-NOW destinations are in tracked-and-grep-able space (docs/phase-4-meta-core-r4b-followups.md) satisfying the strict-reading requirement from feedback_no_defer_HARD_RULE.",
+    "no_phantom_destinations": "Both deferred-NAMED-NOW destinations point to real existing tracked files with concrete row anchors (lines 30-55 + lines 57-77).",
+    "pim_2_per_finding_granularity": "Each R1 finding cited a specific arm/variant; R2 verification preserves per-finding granularity.",
+    "json_schema_3_6i": "Top-level `disposition` field present (APPROVE-CLEAN-CONVERGED); no `verdict` field; findings[] array (empty at R2); well-formed JSON.",
+    "q5_termination": "Full lens re-run on the edited artifact returns 0 substantive findings (0 BLOCKER + 0 MAJOR + 0 MINOR + 0 OBSERVATION); CONVERGED at lens level."
+  },
+  "evidence_chain": {
+    "r1_lens_json": "origin/phase-4-meta-core/r4b-l2-new-surfaces:r4b-l2-new-surfaces.json (5 findings: 3 MINOR + 2 OBSERVATION)",
+    "r1_fix_pass_prs": "PR #1350 cluster — 753d9840 (L6-MAJOR-1 PIVOT) + 8240a56c (L1 3 MAJORs) + 4bbc4cac (10 MINORs sweep including L2-r4b-l2-2 + L2-r4b-l2-3 tracked-doc materialization)",
+    "edited_artifact_diff": "git diff a0b75637..4bbc4cac --stat -- crates/*/src/ bindings/*/src/ docs/public-api/ = EMPTY (zero changes to L2-evaluable surface)",
+    "tracked_followups_doc": "docs/phase-4-meta-core-r4b-followups.md = real tracked file (174-line authoritative R4b follow-ups doc); L2 §'L2 follow-ups (new-surfaces lens)' carries both L2-r4b-l2-2 + L2-r4b-l2-3 rows.",
+    "envelope_sig_unchanged": "git diff a0b75637..4bbc4cac -- crates/benten-drop/src/envelope_sig.rs = EMPTY (DISAGREE rationale for L2-r4b-l2-1 unchanged)."
+  }
+}
