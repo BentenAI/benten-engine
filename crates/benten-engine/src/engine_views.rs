@@ -321,7 +321,7 @@ impl Engine {
             // subsumed — behaviour is identical for the no-policy case.)
             let device_cid = self.device_cid();
             let mut ctx = benten_caps::ReadContext::default();
-            ctx.label = label_hint.clone();
+            ctx.label.clone_from(&label_hint);
             ctx.target_cid = None;
             ctx.device_cid = device_cid;
             // Refinement-audit-2026-05 D1 #1189 (Safe-1 #534 / META #593):

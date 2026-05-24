@@ -28,12 +28,14 @@ use benten_engine::{
     write_boundary_chain_validator::WriteBoundaryChainOutcome,
 };
 
-/// L6-r1-1: CapWriteContext + ReadContext carry `#[non_exhaustive]`.
-///
-/// Verified by construction: external direct-struct-literal of either
-/// type fails to compile. We exercise the `Default::default()` +
-/// field-mutation pattern which is the canonical non-breaking
-/// construction shape post-G-CORE-9 Bundle 3.
+/// L6-r1-1: CapWriteContext + ReadContext non_exhaustive application
+/// DEFERRED to G-COMP-1 (V1-FROZEN-INTERFACE-DEFERRED.md Row D-17).
+/// The Default::default() + field-mutation construction pattern IS
+/// already used in production code (engine.rs, primitive_host.rs,
+/// engine_diagnostics.rs, engine_views.rs, engine_subscribe.rs) per
+/// Bundle 3 — those sites are forward-compat-ready at v1-beta. The
+/// test cascade across the ~50+ benten-caps test sites is the
+/// deferred half.
 #[test]
 fn cap_write_context_constructs_via_default_and_mutation() {
     let mut ctx = CapWriteContext::default();

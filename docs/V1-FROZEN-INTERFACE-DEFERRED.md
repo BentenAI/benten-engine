@@ -360,6 +360,32 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   classical-only construction IS cryptographically sound).
 - **Anchor:** Various R1 OBS items.
 
+### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` `#[non_exhaustive]` application (with ~80+ test-site cascade)
+
+- **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11
+  table row enumerates `CapWriteContext` + `ReadContext` +
+  `SuspensionOutcome` as APPLY candidates; the attribute itself is
+  NOT applied at v1-beta. The type shape is locked (additions ARE
+  breaking per the freeze contract); the attribute is the missing
+  piece. The non_exhaustive cascade for `SuspensionOutcome` hits ~32
+  workspace match-site arms; for `CapWriteContext` hits ~50+ test
+  direct-struct-literal sites; for `ReadContext` hits ~30+ similar
+  sites. Total cascade ~80+ files in the benten-caps + benten-engine
+  test families.
+- **Deferred consumption (G-COMP-1 destination):** apply
+  `#[non_exhaustive]` to both types + cascade through ~50+ benten-caps
+  test-site direct-struct-literal constructions, migrating each to
+  `Default::default()` + field-mutation pattern. Production code (in
+  `benten-engine`) ALREADY uses the field-mutation pattern per
+  Bundle 3 of this PR — so the migration is benten-caps tests only.
+- **v1-beta posture:** at v1-beta the type shape is locked per the
+  freeze contract narrative; the attribute is the documentation gap.
+  Field additions are TREATED AS breaking by v1-beta engineering
+  discipline per spec item 11 narrative (the structural enforcement
+  via `#[non_exhaustive]` is what G-COMP-1 lights).
+- **Anchor:** V1-FROZEN-INTERFACE.md item 11 table rows for
+  `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation.
+
 ### Row D-16 — V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md authorship
 
 - **Frozen surface (v1-beta):** V1-FROZEN-INTERFACE.md item 4

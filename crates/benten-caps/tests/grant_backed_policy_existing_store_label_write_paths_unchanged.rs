@@ -68,11 +68,9 @@ fn grant_backed_policy_existing_store_label_write_paths_unchanged_when_scope_uns
     let policy = GrantBackedPolicy::new(grants);
 
     // Phase-1 caller shape: label populated, scope left empty (default).
-    let ctx = CapWriteContext {
-        label: "post".into(),
-        // scope: "" (default)
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "post".into();
+    // scope: "" (default)
 
     // Backward-compat: the label-derived `store:post:write` MUST
     // still match the granted scope when `CapWriteContext::scope` is

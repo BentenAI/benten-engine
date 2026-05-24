@@ -427,7 +427,7 @@ impl Engine {
                 // diagnostic-replay symmetry with the gate path above.
                 let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
                 let mut ctx = benten_caps::ReadContext::default();
-                ctx.label = label.clone();
+                ctx.label.clone_from(&label);
                 ctx.target_cid = Some(*cid);
                 ctx.device_cid = device_cid;
                 match policy.check_read(&ctx) {

@@ -124,13 +124,6 @@ pub(crate) fn call_with_suspension_adapter(
                 signal_name: signal_name_str,
             })
         }
-        // SuspensionOutcome is #[non_exhaustive] post-G-CORE-9 Bundle 3;
-        // forward-compat wildcard surfaces a typed-not-supported error
-        // rather than letting a future arm silently break the napi.
-        #[allow(unreachable_patterns)]
-        _ => Err(napi::Error::from_reason(
-            "unsupported SuspensionOutcome variant — napi binding needs update",
-        )),
     }
 }
 
