@@ -147,6 +147,18 @@ pub enum PendingOp {
 /// Carries the pending-ops batch, the actor identity (Phase-3), and a
 /// privileged-flag for engine-internal writes. Backends inspect these to
 /// decide whether to authorize the transaction.
+///
+/// `#[non_exhaustive]` application DEFERRED to G-COMP-1 per
+/// V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (G-CORE-9 R1 fix-pass): the
+/// attribute application cascades through ~50+ workspace test sites
+/// using struct-literal construction with `..Default::default()` (which
+/// is blocked from outside the defining crate); the cascade is genuinely
+/// large + the migration to `Default::default()` + field-mutation
+/// pattern is the right shape for G-COMP-1 to apply atomically. The
+/// signature shape is locked at v1-beta; the attribute is the missing
+/// piece per V1-FROZEN-INTERFACE.md item 11 — adding it post-v1-beta
+/// IS breaking and the v1-beta engineering MUST treat field additions
+/// as breaking until Row D-17 closes.
 #[derive(Debug, Clone, Default)]
 pub struct CapWriteContext {
     /// Label of the Node about to be written. For multi-op batches this
@@ -240,6 +252,10 @@ impl CapWriteContext {
 /// enforcement.
 ///
 /// See `docs/ERROR-CATALOG.md` for [`crate::CapError::DeniedRead`].
+///
+/// `#[non_exhaustive]` application DEFERRED to G-COMP-1 per
+/// V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (same rationale as
+/// CapWriteContext above): cascades through ~30+ workspace test sites.
 #[derive(Debug, Clone, Default)]
 pub struct ReadContext {
     /// Label of the Node (or view / anchor) the caller is trying to read.

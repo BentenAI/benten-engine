@@ -285,7 +285,17 @@ where
     }
 
     // Layer 1 — root must be a user-DID.
+    //
+    // L2-MIN-2 structural empty-DID-string defense (G-CORE-9 R1 fix-pass):
+    // reject empty DID strings BEFORE consulting the registry — a registry
+    // config-mistake that admits "" as a user-DID would otherwise silently
+    // pass any chain claiming "" as the root issuer. The check is also
+    // applied at every audience step (within the per-step loop below) for
+    // defense-in-depth.
     let root_issuer = &chain[0].issuer_did;
+    if root_issuer.as_str().is_empty() {
+        return ChainValidationOutcome::RootNotUserDid;
+    }
     if !user_registry.is_user_did(root_issuer) {
         return ChainValidationOutcome::RootNotUserDid;
     }
@@ -452,6 +462,28 @@ mod tests {
         let reg = user_registry_with(user_did());
         let outcome = validate_chain_with_manifest_envelope(&[], &lookup, &reg);
         assert_eq!(outcome, ChainValidationOutcome::Empty);
+    }
+
+    #[test]
+    fn empty_string_did_at_root_rejected_independent_of_registry() {
+        // L2-MIN-2 structural empty-DID-string defense (G-CORE-9 R1 fix-pass):
+        // even if the user-registry mistakenly contains the empty string,
+        // an empty-DID-string root MUST be rejected on structural grounds
+        // BEFORE the registry consult.
+        let empty_did = Did::from_string_for_test_fixture(String::new());
+        let chain = vec![DelegationStep {
+            issuer_did: empty_did.clone(),
+            audience_did: plugin_a_did(),
+            cap_pattern: "store:notes:write".into(),
+        }];
+        let lookup = TestManifestLookup {
+            map: HashMap::new(),
+        };
+        // Inject the registry mistake: empty DID is in the user-set.
+        let reg = user_registry_with(empty_did);
+        let outcome = validate_chain_with_manifest_envelope(&chain, &lookup, &reg);
+        // Structural reject fires BEFORE the (mistaken) registry admit.
+        assert_eq!(outcome, ChainValidationOutcome::RootNotUserDid);
     }
 
     #[test]

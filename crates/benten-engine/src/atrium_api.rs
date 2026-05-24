@@ -101,7 +101,11 @@ impl Default for AtriumConfig {
 }
 
 /// The Atrium-binding mode.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2
+/// (G-CORE-9 R1 fix-pass): adding a new mode post-v1 is breaking.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum AtriumMode {
     /// Loopback — for in-process integration tests + the load-bearing
     /// `atrium_sync_subgraph_two_peer_bidirectional` exit-criterion-1

@@ -85,7 +85,11 @@ use crate::module_manifest::{ManifestSignature, ModuleManifest};
 ///   against the registry key). When neither path is present,
 ///   `verify_manifest_with_mode` returns
 ///   [`ManifestVerifyError::NoPathPresent`].
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2
+/// (G-CORE-9 R1 fix-pass): adding a new mode post-v1 is breaking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ManifestVerifyMode {
     /// Skip signature verification entirely. Development-only;
     /// surfaces the relaxation explicitly at the call-site. Production

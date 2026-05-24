@@ -2030,7 +2030,36 @@ implementations of `get_node_label_only` / `put_node` / `read_node_as`
 manifest schema work shipped independently of the Class B β surface; both
 landed in the same pre-Phase-4-Foundation-close window.
 
-### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1
+### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1 (v1-beta posture retensed at G-CORE-9 FREEZE; cross-peer install verification NOT live at v1-beta)
+
+**G-CORE-9 FREEZE v1-beta posture (2026-05-24 retense).** Per the
+G-CORE-9 R1 triage Fork 2 doc-tighten ratification, this Compromise
+explicitly documents the v1-beta-shipped state and the G-COMP-1
+deferred destinations:
+
+- **Layer-3 manifest-envelope substantive rechecker (per-DID
+  PluginLibrary + UserDidRegistry consult)** = NOT LIVE at v1-beta;
+  default engine ships `NoopManifestEnvelopeRechecker` returning
+  `NotApplicable` for every input → admit-via-Layer-3. The structural
+  empty-peer-DID fail-CLOSED at `engine.rs:1462-1476` IS live (covers
+  the "I cannot identify the writer" case); the per-resolvable-DID
+  substantive recheck is deferred. Destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+  row "ProductionManifestEnvelopeRechecker production impl +
+  default-builder wiring".
+- **Cross-peer install verification (`accept_atrium_share` seam)** =
+  NOT LIVE at v1-beta; the function does NOT exist as a public
+  surface. The platform-foundation install pipeline at v1-beta
+  consumes plugins through user-DID-signed install records ONLY
+  (no cross-peer ingest). Destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+  row "accept_atrium_share cross-peer install seam (G24-D-FP-1
+  follow-up wave)".
+
+The remaining narrative below describes the seam half (LIVE at
+v1-beta), the substantive-adapter shape (G-COMP-1 destination), and
+the three G-CORE-8 R5 hardening deltas that landed in
+Phase-4-Meta-Core.
+
+### Compromise #26 — narrative (seam-shipped half, substantive-adapter deferred half)
 
 **Status.** **SEAM SHIPPED at R4b-FP-1 (Seam 3)** (post-Q4 ratification
 2026-05-13): the `apply_atrium_merge` path invokes a

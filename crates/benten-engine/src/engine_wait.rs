@@ -181,6 +181,12 @@ pub enum ResumePayload {
 
 /// Phase-2a G3-B return shape for `call_with_suspension`. A handler may
 /// complete inline or suspend awaiting an external signal.
+///
+/// `#[non_exhaustive]` application DEFERRED to G-COMP-1 per
+/// V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (G-CORE-9 R1 fix-pass):
+/// the attribute cascades through ~32 workspace test sites that
+/// exhaust-match `Complete + Suspended`; the freeze contract treats
+/// new variants as breaking at v1-beta engineering discipline.
 #[derive(Debug, Clone)]
 pub enum SuspensionOutcome {
     /// The handler ran to completion.

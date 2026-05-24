@@ -714,9 +714,8 @@ fn build_5_recipe_bundle_impl(
     // `key_material.bytes` MUST equal the AEAD key bytes above so
     // the recipient's `consume_offline` can decrypt.
     let ucan = UcanEnvelope::synthetic_for_test(audience);
-    let key_material = benten_caps::authorization_grant::GrantKeyMaterial {
-        bytes: key_bytes.clone(),
-    };
+    let key_material =
+        benten_caps::authorization_grant::GrantKeyMaterial::from_bytes_for_test(key_bytes.clone());
     // Note: PR #1336 (G-CORE-3e wave) reshaped `AuthorizationGrant::
     // issue_for_test` to a 4-arg keypair+audience-pubkey+scope+expiry
     // signature; the wave-3b 3-arg helper is now `issue_envelopes_for_test`.

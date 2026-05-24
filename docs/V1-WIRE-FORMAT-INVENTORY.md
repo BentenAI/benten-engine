@@ -71,7 +71,7 @@
 
 **Wire format:**
 - Per-chunk AEAD with chunk size = `IROH_BLOCK_SIZE = 16384` (`crates/benten-crypto-suite/src/aead.rs:52`).
-- AAD binds `(chunk_index: u64, total_chunks: u64, plaintext_cid: Cid)` per V1-FROZEN-INTERFACE §6 CI gate (13).
+- AAD binds `(plaintext_cid: &[u8], chunk_index: u64)` per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (2-tuple as-shipped at v1-beta per G-CORE-9 R1 triage Fork 1; the `total_chunks` defense against cross-chunk-truncation is deferred to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-15).
 - 64 KiB threshold for chunked-vs-whole-AEAD heuristic.
 - Codepoint-dispatched: `HYBRID_X25519_MLKEM768 = 0x647a` (default), `CLASSICAL_X25519 = 0x6400` (downgrade), `NONE_PLAINTEXT = 0x0000`, `HYBRID_MLKEM768_HQC = 0x647b` (reserved), `PURE_PQ_MLKEM768_ONLY = 0x647c` (reserved, audit-gated).
 

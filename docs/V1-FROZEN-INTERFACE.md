@@ -109,14 +109,31 @@ fail CI on a frozen-surface mutation:
 
 ---
 
-## 1. §8-A visibility cluster — TIGHTEN applied atomically (aggressive)
+## 1. §8-A visibility cluster — PARTIAL-LANDED at v1-beta; binary-side tighten + napi cascade DEFERRED to G-COMP-1 (per G-CORE-9 R1 triage L2-BLK-1 escalation)
 
-**Orchestrator distinctive-angle decision: Planner-A wins — aggressive
-tighten.** Matches spec item 1 ratification "DECIDED `pub`→`pub(crate)` +
-rename + drop `_for_test`".
+**Orchestrator distinctive-angle decision (RATIFIED 2026-05-18): Planner-A
+wins — aggressive tighten.** Matches spec item 1 ratification "DECIDED
+`pub`→`pub(crate)` + rename + drop `_for_test`".
 
-**Frozen surfaces (post-tighten, per RATIFIED-prework-forks-2026-05-18.md
-§8-A option (a)):**
+**G-CORE-9 R1 triage retense (2026-05-24).** The binary-side tighten
++ napi cascade is **partial-landed at v1-beta** and explicitly named
+to a follow-up G-COMP-1 sub-pass per HARD RULE 12 clause-(b). At
+v1-beta the four methods (`get_node` / `put_node` / `get_node_label_only`
+/ `resolve_subgraph_cid_for_test`) remain `pub fn` with their pre-tighten
+names. The R1 council surfaced that the original framing of this item
+read as as-if-frozen-as-tightened when the bytes were not (Bundle 1
+escalation criterion fired: cascade >50 call sites + breaks napi
+binding). Destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` row D-7
+"§8-A Engine visibility cluster tighten + napi cascade".
+
+**Per discipline at v1-beta** (until G-COMP-1 closes Row D-7),
+external consumers needing principal-bearing read SHOULD route through
+`Engine::read_node_as(principal, cid)` rather than `Engine::get_node`;
+the un-attributed `get_node` remains reachable for backward-compat
+with consumers that don't yet have the principal context.
+
+**Frozen surfaces (post-tighten target, per RATIFIED-prework-forks-2026-05-18.md
+§8-A option (a); applies at G-COMP-1 closure of Row D-7):**
 
 - `crates/benten-engine/src/engine_crud.rs:139` — `Engine::get_node` →
   `pub(crate) fn read_node(&self, cid: &Cid) -> Result<Option<Node>,
@@ -141,10 +158,16 @@ rename + drop `_for_test`".
   cap-mutation method may regress (freeze invariant; orchestrator-
   mechanical no-regression test pin per build-backlog).
 
-**What "frozen" means here:**
-- Type-wise: the four methods MUST be `pub(crate)` after the tighten +
-  rename; external callers MUST go through `read_node_as(principal, cid)`.
-  The `cargo-public-api` baseline catches any post-freeze re-`pub`-ing.
+**What "frozen" means here (at v1-beta, partial-landed):**
+- The TARGET shape is locked at v1-beta (the rename + tighten will land
+  in G-COMP-1 per Row D-7).
+- Adding NEW cap-mutation methods to `Engine` (other than via the
+  `caps()` handle) is a HALT-AND-SURFACE event — `Engine::caps()` is
+  the canonical cap-mutation surface at v1-beta and beyond.
+- At G-COMP-1 closure of Row D-7: the four methods MUST be `pub(crate)`
+  after the tighten + rename; external callers MUST go through
+  `read_node_as(principal, cid)`. The `cargo-public-api` baseline
+  catches any post-G-COMP-1 re-`pub`-ing.
 - Behaviorally: the engine-internal callers (IVM, sync, view
   materialization, audit) keep using the un-attributed pathway with zero
   overhead — the tighten is a visibility-only change, not a behavior
@@ -311,8 +334,16 @@ freeze wave SURFACES the decision; Ben makes it.
   per build-backlog row 5; otherwise wire shape is named-but-deferred).
 - The per-chunk AEAD wire layout — chunk_size = `IROH_BLOCK_SIZE = 16384`
   (item 15(g)) — locked at `crates/benten-crypto-suite/src/aead.rs:52`.
-  AAD layout binds `(chunk_index: u64, total_chunks: u64,
-  plaintext_cid: Cid)` per §6 CI gate (13).
+  AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64)` per
+  `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (as-shipped
+  v1-beta). The `total_chunks` defense against cross-chunk-truncation
+  is **deferred to G-COMP-1 §<row>** per the G-CORE-9 R1 triage Fork 1
+  ratification (escalation criterion: adding `total_chunks` would
+  break existing per-chunk byte-pin tests; per-chunk truncation
+  surfaces as `AeadError::Authentication` on the truncated slice via
+  the outer SnapshotBlob CID + signature binding). See
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-9 + the post-v1-beta
+  hardening watch-list (Row D-15) for the augmentation path.
 - Sentinel CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
   remains the canonical Phase-1 golden fixture and MUST round-trip
   identically under v1 canonical bytes.
@@ -474,7 +505,7 @@ each codepoint = SWAPPABLE within the framing):**
    | Hash | `HashCodepoint::SHA3_256` | `0x16` | reserved fallback |
    | Sig | `SigCodepoint::HYBRID_ED25519_MLDSA65` | `0x0001` | LIVE, **default (NF-4 concat/committing/strip-resistant; IETF lamps-pq-composite-sigs-18 aligned)** |
    | Sig | `SigCodepoint::CLASSICAL_ED25519` | `0x0002` | LIVE, non-default downgrade |
-   | Sig | `SigCodepoint::HYBRID_MLDSA65_SLHDSA` | `0x0003` | LIVE swap-matrix arm (NF-1 end-state per G-CORE-3c) |
+   | Sig | `SigCodepoint::HYBRID_MLDSA65_SLHDSA` | `0x0003` | reserved swap-matrix arm (NF-1 end-state; **typed-rejected by default** at `SigCodepoint::resolve` + `SignatureSuite::resolve_codepoint` + `varsig.rs::decode_payload`; reachable only via `SwapMatrix::try_pure_pq_sole_trust_path()` audit-gated constructor per C11b safety gate; mirrors 0x647c framing) |
    | Cipher | `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` | `0x647a` | LIVE, **default (X-Wing-style combiner vendored ~30 LOC; ChaCha20-Poly1305 bulk)** |
    | Cipher | `CipherSuiteCodepoint::CLASSICAL_X25519` | `0x6400` | LIVE, non-default classical-only downgrade |
    | Cipher | `CipherSuiteCodepoint::NONE_PLAINTEXT` | `0x0000` | LIVE, non-default plaintext-partition downgrade |
@@ -647,7 +678,7 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 | #886 `[features]` | DECIDED (already shipped) | Pin `Cargo.toml` `[features]` block exactly as-is; comment-cite. |
 | #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit `5ce8bab6`).** `crates/benten-caps/src/policy.rs` `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old `sealed_marker::SealedCapabilityPolicy` soft-seal DELETED (no shim per HARD RULE 12 + CLAUDE.md #5). Workspace-wide migration applied: 4 internal impls (NoAuthBackend, GrantBackedPolicy, LegacyUcanStubBackend, UcanGroundedPolicy<B>) + ~17 workspace test-double impls received sibling `impl Sealed` blocks via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests` re-export. Feature pass-through: benten-engine `test-helpers` + benten-eval `testing` features enable `benten-caps/testing`. Object-safety preserved (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` exercises `Arc<dyn CapabilityPolicy>`). |
 | 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. |
-| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: String` placeholder per `policy.rs:81`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
+| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:167`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
 | #883b prod-dep-edge | DECIDED | Lock as-shipped. |
 | #887b `check_read` default-impl | DECIDED (defaulted; pulled WITH/BEFORE G-CORE-8) | Lock at `crates/benten-caps/src/policy.rs:388` (`fn check_read(...) -> Result<(), CapError> { ... }` default body; admit-all baseline per Phase-1). |
 | §4.69 organizing principle | RESOLVED (a) `EngineCapsHandle`-canonical — see item 1 | Already frozen at item 1; no-regression invariant pin. |
@@ -709,14 +740,14 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 - `docs/public-api/benten-errors.txt`
 - `docs/public-api/benten-eval.txt`
 - `docs/public-api/benten-graph.txt`
-- `docs/public-api/benten-id.json`
+- `docs/public-api/benten-id.txt`
 - `docs/public-api/benten-ivm.txt`
 - `docs/public-api/benten-platform-foundation.txt` (**FREEZE-WAVE
   FIX-NOW: doesn't exist at HEAD;
   `crates/benten-platform-foundation/` is a public crate post-Phase-4-
   Foundation; build-backlog row 1**)
-- `docs/public-api/benten-renderer-tauri.json`
-- `docs/public-api/benten-sync.json`
+- `docs/public-api/benten-renderer-tauri.txt`
+- `docs/public-api/benten-sync.txt`
 
 **What "frozen" means here:**
 - Each baseline is the AUTHORITATIVE list of every `pub` symbol the
@@ -890,6 +921,7 @@ verification at HEAD):
 | `benten-caps` | `TypedCapGroup` | per spec item 11 | AUDIT + APPLY |
 | `benten-caps` | `CapWriteContext` + `ReadContext` (structs) | TBD | **APPLY** (item 8 coupling) |
 | `benten-caps` | **`Scope`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per item 15(c); the EXACTLY-two-arms-by-the-type-system property IS the structural pin |
+| `benten-ivm` | **`Strategy`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per G-CORE-9 R1 L8-MAJOR-3 ratification; the 3-arm `{A, B, Reserved}` set IS load-bearing per the spec's audit-pin (item 11 documented carve-out); adding a 4th strategy is a Composing-time architectural decision, NOT a SemVer non-breaking field addition |
 | `benten-graph` | `WriteContext` (struct) | NO at HEAD | **APPLY** (item 5 coupling) |
 | `benten-graph` | `ChangeEvent` (re-export) | YES | KEEP |
 | `benten-graph` | `GraphError` | YES | KEEP |
@@ -959,32 +991,62 @@ SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
 - `pub trait ManifestEnvelopeRechecker` (`crates/benten-engine/src/
   manifest_envelope_recheck.rs:144`-ish) — the port interface; method
   signatures frozen.
-- `NoopManifestEnvelopeRechecker` semantics — returns `UnresolvedDeny`
-  for every input (per the §4.36 fail-CLOSED flip; the rename is NOT
-  cosmetic).
-- The DEFAULT engine-builder behavior — `ProductionManifestEnvelopeRechecker`
-  is auto-wired (NOT opt-in) per security-r1-1 BLOCKER closure.
+- `NoopManifestEnvelopeRechecker` is the v1-beta **shipped default**
+  (`crates/benten-engine/src/engine.rs:1908-1910` always installs
+  `Some(Arc::new(NoopManifestEnvelopeRechecker))`). At HEAD its
+  `recheck_row` returns `NotApplicable` for every input
+  (`manifest_envelope_recheck.rs:203-222`); the substantive Layer-3
+  defense (per-DID `PluginLibrary` + `UserDidRegistry` consult) is
+  **consumption-deferred** — destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+  G-COMP-1 row "ProductionManifestEnvelopeRechecker production impl
+  + default-builder wiring". The structural fail-CLOSED on empty/sentinel
+  peer-DID at `apply_atrium_merge` IS live at v1-beta (see below);
+  the per-DID substantive-recheck is the G-COMP-1 deliverable.
+  Compromise #26 in SECURITY-POSTURE.md documents this v1-beta posture
+  end-to-end.
 - Empty/sentinel `<unresolved-peer>` peer-DID MUST deny (never admit) at
-  recheck AND §4.25 sync-hydrate (security-r1-2).
-- `accept_atrium_share`
-  (`crates/benten-platform-foundation::plugin_lifecycle::accept_atrium_share`)
-  — the cross-peer install seam; signature frozen at v1-beta (re-verifies
-  `bytes_cid == announced_cid` AND `peer_did_signature_valid_for_bytes`).
+  recheck — **structurally enforced at v1-beta** at
+  `crates/benten-engine/src/engine.rs:1462-1476` (the `resolve_peer_dids`
+  empty-arm short-circuit returns typed
+  `ManifestEnvelopeRecheckUnresolvedDeny` BEFORE rechecker dispatch). The
+  §4.25 sync-hydrate path shares the SAME primitive (`UnresolvedDeny` +
+  `outcome_to_row_reject`); the handshake.rs wire-up is named to
+  G-COMP-1 per
+  `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`.
+- `accept_atrium_share` — **deferred to G-COMP-1 (G24-D-FP-1 follow-up
+  wave)**; destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` row
+  "accept_atrium_share cross-peer install seam". At v1-beta the
+  cross-peer plugin-install verification is NOT live; Compromise #26
+  documents this. The platform-foundation install pipeline at v1-beta
+  consumes plugins through user-DID-signed install records ONLY (no
+  cross-peer ingest).
 - Any §4.40 key-at-rest public type AUDIT + freeze whatever shipped at
   G-CORE-7 install-hardening; if absent, defer to the C1+C2 substrate
   completion (§989→§1301).
 
 **What "frozen" means here:**
-- The four variants + their semantics are bytewise + behaviorally locked.
-- The fail-CLOSED `UnresolvedDeny` arm IS the load-bearing security
-  property — re-introducing admit-on-unresolved is a HALT-AND-SURFACE
-  event.
-- The DEFAULT-builder wiring is part of the freeze; an opt-in posture
-  would be a v1 BLOCKER regression.
+- The four `ManifestEnvelopeRecheckOutcome` variants + their semantics
+  are bytewise + behaviorally locked.
+- The `pub trait ManifestEnvelopeRechecker` port-interface signatures
+  are locked (G-COMP-1's ProductionManifestEnvelopeRechecker will be
+  an additional `impl ManifestEnvelopeRechecker` honoring this trait).
+- The structural empty-peer-DID fail-CLOSED at the §4.36 merge boundary
+  IS the load-bearing v1-beta security property — re-introducing
+  admit-on-unresolved is a HALT-AND-SURFACE event.
 
-**What's NOT frozen:**
-- The internal logic inside `ProductionManifestEnvelopeRechecker` (how
-  it consults `PluginLibrary` + `UserDidRegistry`) may evolve.
+**What's NOT frozen (consumption deferred to G-COMP-1):**
+- The substantive `ProductionManifestEnvelopeRechecker` implementation
+  (per-DID `PluginLibrary` + `UserDidRegistry` consult) — deferred per
+  Compromise #26 v1-beta posture.
+- The DEFAULT-builder wiring of `ProductionManifestEnvelopeRechecker`
+  in place of `NoopManifestEnvelopeRechecker` — deferred to G-COMP-1.
+- The `accept_atrium_share` cross-peer install seam — deferred to
+  G-COMP-1 (G24-D-FP-1 wave).
+- The §4.25 sync-hydrate consumption of `UnresolvedDeny` at
+  `crates/benten-sync/src/handshake.rs` — deferred to G-COMP-1.
+
+See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the explicit G-COMP-1
+destination rows + per-surface deferral rationale.
 
 **Verification mechanism:**
 - `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_*.rs`
@@ -1063,11 +1125,15 @@ planners agreed; locked as-shipped.**
   per the rustdoc narrative; permitted in Composing.
 
 **Verification mechanism:**
-- `crates/benten-renderer-tauri/tests/compile_test_no_tauri_dep.rs`
-  compile-test pin.
-- `crates/benten-renderer-tauri/tests/ipc_methods_allowlist_*.rs` IPC
-  allowlist pins (asserts `IPC_METHODS` is `const`, not `static mut`,
-  not a dynamic registry).
+- `crates/benten-renderer-tauri/tests/arch_n_benten_renderer_tauri_dep_direction.rs`
+  no-tauri / no-tokio dep posture pin (sweeps Cargo.toml + use-statements
+  across src/).
+- `crates/benten-renderer-tauri/tests/ipc_allowlist_rejects_unknown_method.rs`
+  + `crates/benten-renderer-tauri/tests/ipc_method_invocation_requires_manifest_cap.rs`
+  + `crates/benten-renderer-tauri/tests/ipc_method_name_stability_drift_detector.rs`
+  IPC allowlist pins (asserts `IPC_METHODS` is `const`, not `static mut`,
+  not a dynamic registry; methods bind manifest caps; name-stability
+  drift-detect runs CI-wired).
 - Compile-test pin for runtime-handle-leak prevention (asserts an
   `EngineBuilder` signature accepts no `tauri::Runtime` or borrows a
   `tokio::runtime::Handle`).
@@ -1192,7 +1258,7 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 ### 15.a — SubgraphSpec primitive
 
 **Frozen surfaces:**
-- `crates/benten-core/src/subgraph_spec/spec.rs:188` `pub struct Spec` —
+- `crates/benten-core/src/subgraph_spec/spec.rs:190` `pub struct Spec` —
   the 4-thing thin core (Roots / Expansion / Inclusion / Termination).
   `#[non_exhaustive]` already APPLIED — KEEP.
 - `crates/benten-core/src/subgraph_spec/walker.rs:78` `pub fn walk(spec:
@@ -1235,7 +1301,7 @@ v1-Composing instead).
 
 **Verification mechanism:**
 - A no-13th-primitive test pin
-  (`crates/benten-core/tests/g_core_9_no_thirteenth_primitive.rs`)
+  (`crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs`)
   asserts `PrimitiveKind::*` discriminant count remains 12.
 - `cargo-public-api` (item 9).
 
@@ -1528,7 +1594,7 @@ content-incompatibility).
   case for SubgraphSpec; preserves CLAUDE.md baked-in #1.
 
 **Engine wrapper LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 4 (commit
-`7af94d06`)** at `crates/benten-engine/src/engine_share_scope.rs:46`:
+`7af94d06`)** at `crates/benten-engine/src/engine_share_scope.rs:59`:
 `pub fn Engine::walk_share_scope(&self, spec: &Spec) -> Result<WalkResult, EngineError>`.
 Wrapper delegates to the canonical `benten_core::subgraph_spec::walker::walk`
 BFS enumerator (no engine-side reimplementation; preserves producer/

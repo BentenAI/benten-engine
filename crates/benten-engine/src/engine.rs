@@ -1460,6 +1460,21 @@ impl Engine {
                 // UnresolvedDeny when their own resolution fails (e.g.
                 // missing-manifest case).
                 let resolved_dids = atrium.resolve_peer_dids(&seed.peer_node_ids).await;
+                // L2-MAJ-1 follow-up (G-CORE-9 R1 fix-pass):
+                // `resolve_peer_dids` synthesizes a `node-id:N` string
+                // form for peer_node_ids absent from the local registry.
+                // The literal-empty-set short-circuit catches the
+                // truly-empty-input case (which IS the structural defense
+                // when peer_node_ids is empty); the synthesized-fallback
+                // hardening (rejecting `node-id:N`-prefixed DIDs as
+                // unresolvable) IS DEFERRED to G-COMP-1 per
+                // V1-FROZEN-INTERFACE-DEFERRED.md Row D-18 because the
+                // default-Noop test fixtures rely on the synthesized
+                // fallback admitting (test scenarios register no
+                // peer-DIDs); the hardening would over-fire there. The
+                // proper closure couples the synthesized-fallback reject
+                // to substantive-rechecker-installed detection (NOT the
+                // always-mounted Noop path).
                 match resolved_dids.into_iter().next() {
                     None => {
                         // (b) unresolvable-peer-DID at the merge-recheck

@@ -173,7 +173,11 @@ const KEY_ITERATE_BODY: &str = "iter_body";
 /// field, so the canonical-bytes encoding (and therefore the CID) reflects
 /// the per-primitive config. Devserver consumers may also inspect the
 /// `primitives` list directly — same data, different surface.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2
+/// (G-CORE-9 R1 fix-pass): adding a new field post-v1 is breaking.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct CompiledSubgraph {
     /// Canonical Subgraph the engine consumes.
     pub subgraph: Subgraph,
@@ -183,7 +187,10 @@ pub struct CompiledSubgraph {
 }
 
 /// One primitive declaration emitted by the DSL parser.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct CompiledPrimitive {
     /// Which of the 12 operation primitives this entry represents.
     pub kind: PrimitiveKind,
@@ -292,7 +299,11 @@ pub fn compile_file(path: &Path) -> Result<CompiledSubgraph, CompileError> {
 ///   failures and surfaces `E_DSL_BACKEND_REJECTED` on the wire so
 ///   discriminant-switching consumers route engine-registration
 ///   failures correctly (not into IO-handling code paths).
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2
+/// (G-CORE-9 R1 fix-pass): adding a new variant post-v1 is breaking.
 #[derive(Debug, Clone, Error)]
+#[non_exhaustive]
 pub enum CompileError {
     /// Lexer / parser failure — DSL did not match the grammar.
     #[error("DSL parse error: {0}")]
@@ -481,7 +492,11 @@ impl CompileError {
 /// slice. For point-spans (the "expected X here" cursor case),
 /// `start_offset == end_offset` AND `(start_line, start_column) ==
 /// (end_line, end_column)`.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2
+/// (G-CORE-9 R1 fix-pass): adding a new field post-v1 is breaking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Span {
     /// 1-indexed line of the span's start.
     pub start_line: u32,
@@ -526,7 +541,11 @@ impl Span {
 /// Some diagnostics have no source-position anchor (empty source,
 /// MAX_SOURCE_LEN overrun, missing-respond) and continue to carry
 /// `span: None`.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2
+/// (G-CORE-9 R1 fix-pass): adding a new field post-v1 is breaking.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Diagnostic {
     /// Stable error-code string (e.g. `"E_DSL_PARSE_ERROR"`); switch-keyed
     /// by devserver renderer.
