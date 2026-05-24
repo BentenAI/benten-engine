@@ -1,0 +1,186 @@
+{
+  "lens": "L8 IVM + CanonicalViews + materializer + Version DAG + code-as-graph — R3",
+  "disposition": "APPROVE-WITH-3-MINORS",
+  "round": "G-CORE-9 FREEZE iterate-to-convergence R3",
+  "branch": "g-core-9/r3-l8-ivm-canonicalviews-materializer-versiondag",
+  "main_head": "6c21e4f5",
+  "r2_branch_consulted": "g-core-9/r2-l8-ivm-canonicalviews-materializer-versiondag (commit c8bd8539)",
+  "r2_starting_head": "235ad861",
+  "r2_findings_baseline": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1,
+    "obs": 0,
+    "all_carries_no_new": true
+  },
+  "r3_findings_count_post_r2_fix_pass": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3,
+    "obs": 0
+  },
+  "r3_convergence_disposition": "NOT-CONVERGED-AT-MAJOR-OR-BLOCKER-THRESHOLD-BUT-CONVERGENCE-IS-OBSERVED: zero BLOCKER + zero MAJOR + 3 MINOR. Monotonic progression: R1 (0 BLK / 3 MAJ / 3 MIN) → R2 (0 BLK / 1 MAJ / 1 MIN) → R3 (0 BLK / 0 MAJ / 3 MIN). Per CLAUDE.md rule 9 Q5 + feedback_iterate_critical_reviews_to_convergence ('only BLOCKER/MAJOR block'), the BLK/MAJ threshold is met and L8 is APPROVE-FOR-FREEZE-WAVE-OR-COMPOSING-AT-ORCHESTRATOR-DISCRETION. The 3 MINORs are documented-incomplete-enumeration findings (named-destination phantoms per HARD-RULE-12 clause-(b)) suitable for a small R3 fix-pass extending V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 by ~4-6 type names + adding one new sub-row entry. NO new code regressions, NO new wire-format risks, NO new arch-1 boundary issues, NO new CLAUDE.md #1 12-primitive-irreducibility issues, NO new IVM kernel correctness issues.",
+  "scope_unchanged_from_r1_r2": [
+    "crates/benten-ivm/ (Strategy + CanonicalViews + AlgorithmBView + materialize_inner_kernel_read + SubgraphSpec + KernelOutput + TypedOutputProjection + LabelPattern + view.rs)",
+    "crates/benten-platform-foundation/src/materializer.rs + schema_compiler/vocab.rs",
+    "crates/benten-core/src/{version*.rs, subgraph.rs, subgraph_spec/}",
+    "crates/benten-engine/src/engine_views.rs + engine_share_scope.rs + outcome.rs + engine_stream.rs + engine_subscribe.rs + engine_wait.rs + atrium_api.rs + shares_policy_resolver.rs + write_boundary_chain_validator.rs + manifest_signing.rs + manifest_envelope_recheck.rs + write_boundary_chain_validator.rs",
+    "CLAUDE.md baked-in #1 (12-primitive irreducibility) + #2 (arch-1 boundary)"
+  ],
+  "r2_carries_status_at_head_6c21e4f5": [
+    {
+      "id": "L8-R2-MAJOR-CARRY-1",
+      "r2_title": "Strategy::C → Reserved rename named-destination phantom (D-15 cited but did not carry the entry)",
+      "r2_severity": "MAJOR",
+      "r2_disposition_path_chosen": "PATH (a) — disciplined deferral via new Row D-19 authorship",
+      "fix_pass_commit": "d209dfb9 (docs(g-core-9): close phantom-destination cluster — L8-MAJOR-1 Strategy rename + L9-MIN-2 3 DSL ErrorCodes → Row D-19 enumerated)",
+      "evidence_of_closure": [
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:454-472 NEW Row D-19 — 'G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)' — full atomic 4-surface rename script (Rust enum + wire string + TS class + ERROR-CATALOG + cargo-public-api baselines + stable_shape.rs regen) named with G-COMP-1 destination + CATALOG_VARIANT_COUNT 192→195 delta accounted (3 mints; Strategy rename = rename not mint)",
+        "Row D-19 Anchor line explicitly resolves the 'L8-R2-MAJOR-CARRY-1 / L9-r2-MIN-2 / L12-R2-MIN-1 phantom-destination cross-confirmed pattern (R2 council finding)' — named-destination phantom closed via Path (a) authorship per HARD-RULE-12 clause-(b)",
+        "docs/V1-BETA-BREAKING-CHANGES.md:152-156 Bundle 4 entry verified to no longer cite Row D-15 (per `git show d209dfb9 --stat` showing V1-BETA-BREAKING-CHANGES.md modified 2 +/- 1 -)",
+        "Row D-19 step 3 explicitly cites the cross-language docstring drift: 'TS class EViewStrategyCReserved → EViewStrategyReserved (packages/engine/src/errors.generated.ts 3 sites; docstring already says \"Strategy::Reserved\" — cross-language drift on SAME code path per §3.5g item 1)' — the R2 finding's secondary observation is captured in the closure"
+      ],
+      "v1_beta_posture_at_head": "Obsolete `Strategy::C` naming rides into v1-beta wire bytes per Row D-19 narrative ('the obsolete `Strategy::C` naming + the 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. No immediate exploit (the variant works correctly; the names are stale). The rename window IS specifically the G-CORE-9 freeze wave OR G-COMP-1 (any later is a SemVer break post-v1-beta tag).'). Engine internal-naming inconsistency (engine_views.rs:695-699 matches Strategy::Reserved but returns EngineError::ViewStrategyCReserved) ALSO rides into v1-beta — same row covers, no separate hazard.",
+      "verdict": "FULLY-CLOSED-AT-R3-via-Path-(a)-deferred-naming-discipline"
+    },
+    {
+      "id": "L8-R2-MAJOR-CARRY-2",
+      "r2_title": "Item 11 #[non_exhaustive] sweep partial — ~12+ R1-enumerated types still missing AND not covered by any DEFERRED row",
+      "r2_severity": "MAJOR",
+      "r2_disposition_path_chosen": "PATH (a)+(b) HYBRID — wire-bytes-bearing types APPLY-NOW (b); rest DEFER via D-17 extension (a)",
+      "fix_pass_commit": "05122f3c (fix(g-core-9): L8 IVM #[non_exhaustive] sweep extension + audit-test coverage — closes L8-R2 1 MAJ + 1 MIN; applies to wire-bytes types non-deferrable)",
+      "evidence_of_closure": [
+        "Wire-bytes-bearing applied at HEAD: crates/benten-ivm/src/subgraph_spec.rs:91-93 `#[non_exhaustive] pub enum TypedOutputProjection` + :306-308 `#[non_exhaustive] pub enum KernelOutput` BOTH carry the attribute at HEAD `6c21e4f5`. Doc-block at each callsite documents the wire-bytes-load-bearing 1-byte arm-discriminator rationale ('algorithm_b.rs:1507-1523 materialize_inner_kernel_read uses this enum as a wire-bytes-load-bearing discriminator; adding variants post-v1-GM would be a wire-format break — the attribute MUST land at v1-beta').",
+        "5-test-site cascade fix landed (per commit stat): tf3a_view_1_capability_grants_subgraph_spec_round_trip.rs + tf3a_view_2_event_dispatch_subgraph_spec_round_trip.rs + tf3a_view_4_governance_inheritance_subgraph_spec_round_trip.rs + tf3a_view_4_typed_output_projection_shape_pin.rs + tf3a_view_5_typed_output_projection_shape_pin.rs + tf3a_view_5_version_current_subgraph_spec_round_trip.rs each +2 lines (wildcard arm).",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:406-431 Row D-17 'G-CORE-9 R2 EXTENSION (L8-R2-MAJOR-CARRY-2 closure)' explicitly enumerates the remaining R2-NEW gaps with G-COMP-1 destination + per-type-citing: benten-engine 18 types (UserViewInputPattern, TraceStep, StreamCursor, SubscribeCursor, EngineViewsHandle, AtriumConfig, SyncStatus, plus 13 outcome.rs pub structs); benten-ivm 7 types (SubgraphSpec, KernelInput, ViewState, ViewBudget, ViewQuery, ViewResult, ViewDefinition); benten-platform-foundation 4 types (VocabLabel, VocabEdge, Scalar, RenderError); benten-core 1 type (Mode).",
+        "Row D-17 :426-431 'Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred): TypedOutputProjection + KernelOutput in benten-ivm/src/subgraph_spec.rs carry the attribute at v1-beta — the 1-byte arm-discriminator at algorithm_b.rs:1507-1523 makes them wire-format-bearing and they were not deferrable; closure landed via Bundle R2.8 with 5-test-site cascade fix.' — explicit recognition that the wire-bytes-bearing pair was correctly path-(b)-applied not path-(a)-deferred.",
+        "Audit-test extension verified at crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs: new test fns next_chunk_poll_audit_arm_coverage (lines 169-184) + suspension_outcome_d17_deferred_arm_coverage (lines 193-213). Existing 7 tests + 2 new tests = 9 total."
+      ],
+      "v1_beta_posture_at_head": "Wire-bytes-load-bearing pair (TypedOutputProjection + KernelOutput) is structurally locked at v1-beta — future variant addition post-v1-GM would compile-fail at the 5 round-trip pin sites + the wildcard arms; new 5th canonical view requires Row D-17 closure FIRST. All other lens-scoped types have type-shape locked at v1-beta per Row D-17 narrative ('at v1-beta the type shape is locked per the freeze contract narrative; the attribute is the documentation gap. Field additions are TREATED AS breaking by v1-beta engineering discipline per spec item 11 narrative (the structural enforcement via #[non_exhaustive] is what G-COMP-1 lights).')",
+      "verdict": "FULLY-CLOSED-AT-R3-via-PATH-(a)+(b)-HYBRID-disciplined-application"
+    },
+    {
+      "id": "L8-R2-MINOR-CARRY-1",
+      "r2_title": "Audit-test verification-mechanism does NOT match spec narrative — workspace-walker vs enumerated-per-type drift",
+      "r2_severity": "MINOR",
+      "r2_disposition_path_chosen": "PATH (b)+(a) HYBRID — spec retense to reflect reality (b) + workspace-walker enhancement deferred to G-COMP-1 (a)",
+      "fix_pass_commit": "05122f3c + V1-FROZEN-INTERFACE.md retense bundled into same Bundle R2.8 pass",
+      "evidence_of_closure": [
+        "docs/V1-FROZEN-INTERFACE.md:978-994 verification-mechanism section retensed: 'enumerated-per-type audit test pin crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs exercises arm-coverage matches + struct construction patterns for a curated set of v1-beta-load-bearing types (~10 named types covering the highest-leverage surfaces: WriteBoundaryChainOutcome / AtriumMode / DelegationResolution / ManifestVerifyMode / NextChunkPoll / Strategy carve-out + AuthorizationGrant constructor pattern + 2 CapWriteContext/ReadContext Default-construction + SuspensionOutcome D-17 deferred-arm coverage). The workspace-wide walker (consuming cargo-public-api JSON output OR a syn-based AST walker OR rustdoc-json walk to assert every pub enum/struct carries #[non_exhaustive] OR is in the carve-out registry) is DEFERRED to G-COMP-1 per docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (extended at G-CORE-9 R2 L8-R2-MINOR-CARRY-1 closure). At v1-beta the enumerated-per-type audit catches drift against the named-set; the workspace-walker is the regression-defense enhancement.'",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:433-437 Row D-17 G-COMP-1 deliverable extension: 'Audit-test workspace-walker enhancement: V1-FROZEN-INTERFACE.md:951-957 describes the audit test as walking every pub enum/struct workspace-wide; the shipped test enumerates ~10 named types only. Workspace-walker implementation (consume cargo-public-api JSON output OR syn-based AST walker OR rustdoc-json walk) deferred to G-COMP-1 as part of this row.'",
+        "Row D-17 :442-444 deliverable line: 'Production code (in benten-engine) ALREADY uses the field-mutation pattern per Bundle 3 of the R1 PR. Also implement the workspace-walker enhancement for the audit-test verification mechanism.'"
+      ],
+      "v1_beta_posture_at_head": "Spec narrative + implementation reconciled at v1-beta. Workspace-walker enhancement explicitly named in D-17 G-COMP-1 row. Future drift defended via the enumerated-per-type audit + D-17 closure obligation at G-COMP-1; the spec narrative no longer overstates the v1-beta verification mechanism.",
+      "verdict": "FULLY-CLOSED-AT-R3-via-Path-(b)+(a)-HYBRID-spec-retense-plus-deferred-enhancement"
+    }
+  ],
+  "r3_new_findings": [
+    {
+      "id": "L8-R3-MINOR-1",
+      "severity": "MINOR",
+      "title": "MaterializerError public error enum is L8-load-bearing (returned in production from materializer walks) but neither carries #[non_exhaustive] NOR is named in V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 enumeration",
+      "category": "FREEZE-COMPLETENESS-NAMED-DESTINATION-PHANTOM (HARD-RULE-12-clause-(b))",
+      "description": "MaterializerError at crates/benten-platform-foundation/src/materializer.rs:209 is a public error enum (4 variants: SchemaMismatch, SubscribeSeamFailure, UcanClockNotInjected, plus one anchor variant) returned in production from the materializer walk pipeline at materializer.rs:1329 (`return Err(MaterializerError::UcanClockNotInjected)`) + materializer.rs:1341 (`return Err(MaterializerError::SchemaMismatch { ... })`) + materializer.rs:501 (`return Err(MaterializerError::SubscribeSeamFailure { ... })`). The walk_subgraph + walk_handcoded_subgraph trait methods return `Result<MaterializerOutput, MaterializerError>`. This is squarely on L8's materializer-pipeline lens surface. R2's L8-R2-MAJOR-CARRY-2 evidence enumeration named `RenderError` (materializer.rs:567 — a sibling enum in the SAME file) but missed MaterializerError. Row D-17 :423 enumerates 'benten-platform-foundation: VocabLabel (vocab.rs:14), VocabEdge (vocab.rs:92), Scalar (vocab.rs:157), RenderError (materializer.rs:567)' — MaterializerError absent. Per item 11 maximalist-application-with-documented-carve-outs and per HARD-RULE-12 clause-(b), this is a named-destination phantom: the type ships exhaustive-by-type-system into v1-beta without either path-(a) deferred-naming or path-(b) apply-at-G-CORE-9. Adding a 5th variant post-v1-GM would compile-fail external matches that exhaustively pattern (currently only test+admin-ui consumers; per usage at engine tests/admin_ui_v0_shell_consumes_materializer_for_content_render.rs + 6 platform-foundation integration tests).",
+      "evidence": [
+        "crates/benten-platform-foundation/src/materializer.rs:208-209 `#[derive(Debug, Error)]` directly preceding `pub enum MaterializerError {` — NO `#[non_exhaustive]` attribute",
+        "crates/benten-platform-foundation/src/materializer.rs:1329 + :1341 + :501 production-call-site returns",
+        "Bash `grep -n 'MaterializerError' docs/V1-FROZEN-INTERFACE.md docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns ZERO hits — neither named in item 11 enumerated apply-set table NOR in Row D-17 G-COMP-1 deferred row",
+        "Sibling enum RenderError at materializer.rs:567 (same file, ~360 lines down) IS enumerated in Row D-17 :423 — same-file oversight is the most plausible omission mechanism",
+        "8+ test consumers exhaustively match MaterializerError (e.g. materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_primitive_boundary.rs) — these are internal so the within-crate exhaustive-match property is preserved when `#[non_exhaustive]` is added (only out-of-crate consumers need wildcards)"
+      ],
+      "impact": "FREEZE-COMPLETENESS gap. MaterializerError ships SemVer-locked-exhaustive into v1-beta; adding a 5th MaterializerError variant post-v1-GM is a SemVer break unless the attribute lands within the G-CORE-9 freeze wave OR the type is named-deferred to G-COMP-1 per Row D-17 discipline. The pattern matches L8-R2-MAJOR-CARRY-2's named-destination-phantom shape (Row D-17 was extended to close 30+ types but missed this one). Severity is MINOR rather than MAJOR because: (a) RenderError is the higher-leverage 'every materializer impl returns this' surface and IS named; (b) MaterializerError consumers at v1-beta are all in-crate or in test code; (c) the closure path is trivially symmetric to RenderError's row-D-17 enumeration line (one-line edit).",
+      "disposition_for_r3_fix_pass": "FIX-NOW (orchestrator one-line edit). Two equivalent paths: (a) extend Row D-17 :423 enumeration to include `MaterializerError (materializer.rs:209)` alongside the existing `RenderError (materializer.rs:567)` — single-token edit + Row D-17 narrative carries forward unchanged; (b) apply `#[non_exhaustive]` to MaterializerError at materializer.rs:208 with doc-block referencing 'L8-R3-MINOR-1 closure: materializer-walk return-type; in-crate exhaustive matches preserved; out-of-crate consumers add wildcard arm.' — also single-line edit; would need within-crate exhaustive match audit (currently the within-crate matches at materializer.rs lines 240-244 + 502 are exhaustive by-default and remain so after the attribute since within-defining-crate the attribute has no effect). Path (a) is the orchodox extension of the R2 deferral pattern; Path (b) closes the gap structurally and matches the wire-bytes-bearing pair's R2.8 application. Either path closes."
+    },
+    {
+      "id": "L8-R3-MINOR-2",
+      "severity": "MINOR",
+      "title": "Version DAG public error enums VersionError + VersionDagError lack #[non_exhaustive] AND are not named in Row D-17 enumeration (Version DAG is an explicitly named L8 lens-scope surface)",
+      "category": "FREEZE-COMPLETENESS-NAMED-DESTINATION-PHANTOM (HARD-RULE-12-clause-(b))",
+      "description": "Two public error enums on the Version DAG lens-scope surface lack #[non_exhaustive] AND are not named in V1-FROZEN-INTERFACE-DEFERRED.md Row D-17: (1) crates/benten-core/src/version.rs:105-124 `pub enum VersionError` (2 variants Branched + UnknownPrior — the linear chain error surface used by Phase-1 Anchor); (2) crates/benten-core/src/version_chain.rs:52 `pub enum VersionDagError` (the DAG-flavor sibling). Both are returned across the version chain public API surface (`Anchor::append_version` returns `Result<(), VersionError>`; `DagVersionChain::append` returns `Result<(), VersionDagError>`). Row D-17 :424 enumerates `benten-core: Mode (version_dag.rs:75)` from the same lens-scope area but misses the two error enums. Note `crates/benten-core/src/version_dag.rs:105-106` (the third `VersionDagError` — there are TWO enums by that name in different files) DOES carry `#[non_exhaustive]`; this means the version_chain.rs-flavor + version.rs-flavor are the laggards. Per item 11 maximalist policy + HARD-RULE-12 clause-(b), these need either path-(a) D-17 enumeration extension OR path-(b) attribute application within the G-CORE-9 freeze wave.",
+      "evidence": [
+        "crates/benten-core/src/version.rs:105 `#[derive(Debug, thiserror::Error)]` directly preceding `pub enum VersionError {` — NO `#[non_exhaustive]` attribute",
+        "crates/benten-core/src/version_chain.rs:52 `pub enum VersionDagError {` — NO `#[non_exhaustive]` attribute",
+        "crates/benten-core/src/version_dag.rs:105-106 `#[non_exhaustive] pub enum VersionDagError` — the OTHER enum with the same name DOES carry the attribute (asymmetry confirms the gap is oversight not deliberate)",
+        "Bash `grep -n 'VersionError\\|VersionDagError' docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns ZERO hits — neither enum named in any DEFERRED row",
+        "Brief Section 'Required reads' point 2 explicitly names crates/benten-ivm/ + crates/benten-engine/src/engine_views.rs as L8-load-bearing — Version DAG sits on the L8 scope per the lens title's 'Version DAG' coverage area; the version.rs/version_chain.rs error enums are the public surface of that scope area"
+      ],
+      "impact": "FREEZE-COMPLETENESS gap on the Version DAG lens-scope surface. Adding a new error variant (e.g. for a future cycle-detection path, depth-limit exceeded, etc.) post-v1-GM is a SemVer break unless attribute lands within G-CORE-9 OR D-17 enumeration extends. Severity is MINOR because: (a) the Anchor + DagVersionChain public APIs are stable + the existing variant set covers the documented error model; (b) the same lens-scope's third enum (version_dag.rs::VersionDagError) already carries the attribute so the within-namespace pattern is established; (c) one-line closure either path. Matches L8-R2-MAJOR-CARRY-2's same-named-destination-phantom shape.",
+      "disposition_for_r3_fix_pass": "FIX-NOW. Two equivalent paths: (a) extend Row D-17 :424 to read 'benten-core: Mode (version_dag.rs:75), VersionError (version.rs:105), VersionDagError (version_chain.rs:52)' — three-token edit; (b) apply `#[non_exhaustive]` at the two cite sites with doc-block referencing 'L8-R3-MINOR-2 closure: Version DAG error surface; pattern matches version_dag.rs::VersionDagError sibling at :105.' — two two-line edits. Path (b) preferred per cost-asymmetry — closes structurally + matches established within-crate pattern + the within-crate matches at version.rs::VersionError::code() at :128-ish are exhaustive within the defining crate so unaffected by the attribute. Path (a) acceptable per Row D-17 disciplined-deferral pattern."
+    },
+    {
+      "id": "L8-R3-MINOR-3",
+      "severity": "MINOR",
+      "title": "benten-ivm public LabelPattern enum lacks #[non_exhaustive] AND is not named in Row D-17 enumeration (IVM kernel pattern-selector surface is an explicitly named L8 lens-scope area)",
+      "category": "FREEZE-COMPLETENESS-NAMED-DESTINATION-PHANTOM (HARD-RULE-12-clause-(b))",
+      "description": "crates/benten-ivm/src/algorithm_b.rs:375 `pub enum LabelPattern { Exact(String), AnchorPrefix(String) }` is the kernel's public pattern-selector surface — used by SubgraphSpec to declare which Nodes a view watches. It's matched exhaustively at algorithm_b.rs:403-404 (`LabelPattern::Exact(...) | LabelPattern::AnchorPrefix(...)`) + at :416 (output of `.target_label()`). Both are within-crate so unaffected by `#[non_exhaustive]`. Row D-17 :418-421 'benten-ivm' enumeration covers SubgraphSpec + KernelInput + ViewState + ViewBudget + ViewQuery + ViewResult + ViewDefinition but omits LabelPattern. LabelPattern is on the IVM kernel surface (the brief's explicit 'IVM + CanonicalViews' lens-scope half) — a future third variant (e.g. `LabelPattern::Glob(String)` per a future query-language extension) post-v1-GM is a SemVer break for any external consumer matching. The pattern matches L8-R3-MINOR-1 + L8-R3-MINOR-2 shape: lens-scope-named public surface, attribute missing, not in DEFERRED row.",
+      "evidence": [
+        "crates/benten-ivm/src/algorithm_b.rs:374-375 `#[derive(Debug, Clone, PartialEq, Eq)]` directly preceding `pub enum LabelPattern {` — NO `#[non_exhaustive]` attribute",
+        "Bash `grep -n 'LabelPattern' docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns ZERO hits",
+        "Re-exported from benten-ivm root via lib.rs (visible at `benten_ivm::LabelPattern`)",
+        "Within-crate exhaustive matches at algorithm_b.rs:402-405 + :416 are unaffected by attribute (within-defining-crate)",
+        "Per the L8 R2 lens output 'L8-R2-MAJOR-CARRY-2 ... benten-ivm pub types not yet covered' enumeration (R2 JSON evidence-still-missing block) — LabelPattern was NOT included in R2's enumeration either; this is a pre-R2 gap surfaced fresh at R3 walk"
+      ],
+      "impact": "FREEZE-COMPLETENESS gap on the IVM kernel pattern-selector surface. Adding LabelPattern::Glob(String) or similar post-v1-GM is a SemVer break. Severity MINOR because: (a) the IVM kernel surface is internally consumed (no known external consumers outside benten-engine + benten-ivm itself); (b) the 2-variant set covers the documented use cases per the Phase-2b kernel design; (c) trivial one-line closure either path. Same shape as R3-MINOR-1 + R3-MINOR-2.",
+      "disposition_for_r3_fix_pass": "FIX-NOW. Two equivalent paths: (a) extend Row D-17 :418 to add `LabelPattern (algorithm_b.rs:375)` to the benten-ivm enumeration — one-token edit; (b) apply `#[non_exhaustive]` at algorithm_b.rs:374 with doc-block referencing 'L8-R3-MINOR-3 closure: IVM kernel pattern-selector; within-crate exhaustive matches at :403-404 + :416 unaffected; future external consumer pattern adds wildcard arm.' Path (b) preferred (consistent with R2.8 wire-bytes-bearing closure pattern); Path (a) acceptable per disciplined-deferral. Either path closes."
+    }
+  ],
+  "verified_passing_unchanged_from_r1_r2": [
+    "L8-PASS-1 IVM Strategy enum carve-out 3-arm shape locked (algorithm_b.rs + strategy.rs:59 — `Strategy::{A, B, Reserved}` exhaustive); audit-test g_core_9_non_exhaustive_audit.rs:151-163 carries the compile-fail-on-4th-arm pin; carve-out documented in V1-FROZEN-INTERFACE.md:952 with full L8-MAJOR-3 ratification rationale.",
+    "L8-PASS-2 12-primitive irreducibility (CLAUDE.md baked-in #1): crates/benten-core/src/subgraph.rs:69-104 `#[non_exhaustive] pub enum PrimitiveKind` enumerates exactly 12 variants (Read/Write/Transform/Branch/Iterate/Wait/Call/Respond/Emit/Sandbox/Subscribe/Stream); materializer at platform-foundation/src/materializer.rs:1785-1796 exhaustively matches all 12; `materializer_walks_only_existing_12_primitives_no_extension.rs` test pins this.",
+    "L8-PASS-3 arch-1 boundary: benten-graph has NO dependency on benten-ivm (verified via Cargo.toml + source grep); IVM is downstream-of-Graph only.",
+    "L8-PASS-4 Wire-bytes-bearing TypedOutputProjection + KernelOutput carry #[non_exhaustive] with documented wire-bytes-load-bearing rationale (R2.8 closure; lens-scope-load-bearing).",
+    "L8-PASS-5 Audit-test g_core_9_non_exhaustive_audit.rs extended to 9 tests at HEAD `6c21e4f5` (R2.8 added next_chunk_poll_audit_arm_coverage + suspension_outcome_d17_deferred_arm_coverage); test references the spec carve-out registry comment-cite + the D-17 deferred-arm coverage explicit pin.",
+    "L8-PASS-6 Strategy::C → Reserved internal-rename completed at G23-0a per arch-r1-14 (verified at benten-ivm::strategy.rs source); engine_views.rs:695-699 matches Strategy::Reserved (correct internal); EngineError variant name + wire-string + TS class lock-deferred to G-COMP-1 per Row D-19 (cross-language drift acknowledged + named for atomic rename).",
+    "L8-PASS-7 V1-FROZEN-INTERFACE.md item 11 carve-out registry includes Strategy + Scope + PrimitiveKind + GraphError::TxAborted — all 4 carve-outs documented with structural reason.",
+    "L8-PASS-8 Materializer surface walks only the 12 primitives (no 13th-primitive injection point); pluggable Materializer trait at materializer.rs:474+530 (HtmlJsonMaterializer + PlaintextMaterializer) confirms multi-impl support per L8 scope.",
+    "L8-PASS-9 Version DAG public types (Anchor + VersionDag + DagVersionChain) carry the established Phase-1 contract; mid-life mode-flip prevention documented at version_dag.rs:73-75 (`Mode` enum doc-block).",
+    "L8-PASS-10 Subgraph + SubgraphBuilder code-as-graph public surface stable; OperationNode carries #[non_exhaustive] at subgraph.rs:195-196; SubgraphBuilder::build() single-fallible-point per #506 (G-CORE-6 closure)."
+  ],
+  "summary": {
+    "verified_passing_count": 10,
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 3,
+    "obs_count": 0,
+    "r3_convergence": "CONVERGED-AT-BLK-MAJ-THRESHOLD-NOT-FULL-ZERO",
+    "monotonic_progression": "R1 (0 BLK / 3 MAJ / 3 MIN / 0 OBS) → R2 (0 BLK / 1 MAJ / 1 MIN / 0 OBS) → R3 (0 BLK / 0 MAJ / 3 MIN / 0 OBS). All R2 carries CLOSED via the R2 fix-pass (commits d209dfb9 + 05122f3c). 3 NEW R3 MINORs are documented-incomplete-enumeration findings (same-shape named-destination phantoms in Row D-17 enumeration — MaterializerError + VersionError + VersionDagError-version_chain-flavor + LabelPattern). Per CLAUDE.md rule 9 Q5 + iterate-to-convergence ('only BLOCKER/MAJOR block'), this meets the convergence threshold; the 3 MINORs are recommendation for an extending fix-pass (~6-line edit to Row D-17 + optional 3 attribute applications) but DO NOT block FREEZE-WAVE advancement.",
+    "notes": "Three R3 MINORs are all the same shape: a lens-scope-named public enum/struct that ships into v1-beta with the type-shape exhaustive-by-type-system, NOT yet protected by either #[non_exhaustive] or by a named-destination deferred-row entry. They are HARD-RULE-12 clause-(b) named-destination phantoms surfaced fresh by an R3 walk because the R2 fix-pass's D-17 enumeration extension covered ~30 types but missed these 4. Disposition recommendations per HARD-RULE-12: ALL THREE close trivially via Path (a) — three D-17 enumeration extensions (MaterializerError + VersionError + VersionDagError-version_chain-flavor + LabelPattern → 4 type names added in one Row D-17 narrative line edit). NO new code regressions, NO new wire-format risks, NO new arch-1 violations, NO new CLAUDE.md #1 12-primitive issues, NO new IVM correctness issues, NO new materializer pipeline correctness issues, NO new Version DAG cycle-detection or shape issues. The L8 IVM + CanonicalViews + materializer + Version DAG + code-as-graph lens is FREEZE-READY for v1-beta with the 3-MINOR fix-pass extension OR is FREEZE-READY-WITH-MINOR-CARRY at orchestrator discretion."
+  },
+  "session_provenance": {
+    "branch": "g-core-9/r3-l8-ivm-canonicalviews-materializer-versiondag",
+    "starting_head": "6c21e4f5",
+    "r1_branch_consulted": "origin/g-core-9/r1-l8-ivm-canonicalviews-materializer-versiondag (R1 JSON r6-ivm-canonicalviews-materializer-versiondag.json)",
+    "r2_branch_consulted": "origin/g-core-9/r2-l8-ivm-canonicalviews-materializer-versiondag (R2 JSON r6-ivm-canonicalviews-materializer-versiondag-r2.json at commit c8bd8539)",
+    "r2_fix_pass_commits_verified": [
+      "d209dfb9 docs(g-core-9): close phantom-destination cluster (L8-MAJOR-1 Strategy rename + L9-MIN-2 3 DSL ErrorCodes → Row D-19 enumerated)",
+      "05122f3c fix(g-core-9): L8 IVM #[non_exhaustive] sweep extension + audit-test coverage (closes L8-R2 1 MAJ + 1 MIN; applies to wire-bytes types non-deferrable)",
+      "6c21e4f5 (PR #1347 — 47 findings closed across 10 bundles 2 BLK + 10 MAJ + 18 MIN + 17 OBS) — full R2 fix-pass batch landed"
+    ],
+    "docs_consulted": [
+      "docs/V1-FROZEN-INTERFACE.md item 5 (WriteContext shape frozen) + item 11 (META #907 #[non_exhaustive] sweep maximalist application) + carve-out registry + verification-mechanism narrative",
+      "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-11 + D-15 + Row D-17 (extended at R2 to enumerate ~30 types) + Row D-19 (new at R2 carrying Strategy rename + 3 DSL ErrorCode mints)",
+      "docs/V1-BETA-BREAKING-CHANGES.md Bundle 4 entry (Strategy::C → Reserved rename)",
+      "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs (9 tests at HEAD after R2.8)",
+      "crates/benten-ivm/src/{lib.rs, subgraph_spec.rs, algorithm_b.rs, view.rs, strategy.rs, budget.rs, subscriber.rs}",
+      "crates/benten-platform-foundation/src/{materializer.rs, vocab.rs}",
+      "crates/benten-core/src/{subgraph.rs, version.rs, version_chain.rs, version_dag.rs}",
+      "crates/benten-engine/src/engine_views.rs (1233 LOC; Strategy::Reserved match arm at :695-699 + view_strategy public surface at :144)"
+    ],
+    "production_call_site_audits": [
+      "MaterializerError production returns: materializer.rs:501 + :1329 + :1341 (3 sites)",
+      "VersionError public surface: Anchor::append_version returns Result<(), VersionError>",
+      "VersionDagError public surface: DagVersionChain::append (version_chain.rs)",
+      "LabelPattern public surface: SubgraphSpec::label_pattern field + ::for_canonical_view + ::user_view constructors",
+      "Strategy::Reserved match arm at engine_views.rs:695 returns EngineError::ViewStrategyCReserved (internal-naming-inconsistency hazard — covered by Row D-19 deferral)"
+    ],
+    "test_runs": [
+      "git log --oneline -5 verified main HEAD = 6c21e4f5 (post-R2-fix-pass)",
+      "git show 05122f3c --stat verified Bundle R2.8 wire-bytes-bearing closure (2 attribute applications + 5 test-site wildcard arm additions + V1-FROZEN-INTERFACE.md + V1-FROZEN-INTERFACE-DEFERRED.md retenses)",
+      "git show d209dfb9 --stat verified Row D-19 authorship (V1-FROZEN-INTERFACE-DEFERRED.md +20 LOC + V1-BETA-BREAKING-CHANGES.md +2/-1)",
+      "Spec grep `grep -n MaterializerError docs/V1-FROZEN-INTERFACE.md docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns zero hits — phantom-uncovered (R3-MINOR-1)",
+      "Spec grep `grep -n VersionError\\|VersionDagError docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns zero hits — phantom-uncovered (R3-MINOR-2)",
+      "Spec grep `grep -n LabelPattern docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns zero hits — phantom-uncovered (R3-MINOR-3)"
+    ],
+    "iterate_to_convergence_disposition": "R3 closes the BLK/MAJ convergence threshold per CLAUDE.md rule 9 Q5 + feedback_iterate_critical_reviews_to_convergence ('only BLOCKER/MAJOR block'). R1→R2 was NOT-CONVERGED at MAJOR (1 MAJ carry); R2→R3 IS CONVERGED at MAJOR (0 MAJ). The 3 R3 MINORs are recommendation-for-trivial-extending-fix-pass, NOT convergence-blockers. Orchestrator may EITHER (a) accept the 3-MINOR carry into G-COMP-1 + advance L8 to FREEZE-WAVE-APPROVED OR (b) run a one-pass orchestrator-direct Row D-17 enumeration extension (~6-line edit naming MaterializerError + VersionError + VersionDagError-version_chain-flavor + LabelPattern) and re-confirm zero-MINOR before advance. Both paths are HARD-RULE-12 compliant. Recommendation: Path (b) — single-line edit cost is trivial; closes the R3 findings AND tightens Row D-17's coverage-completeness claim for downstream G-COMP-1 consumption."
+  }
+}
