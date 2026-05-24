@@ -118,6 +118,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   # -------------------------------------------------------------------------
@@ -361,29 +367,14 @@ jobs:
           echo "Load-bearing must-pass for this workflow at HEAD: bundle build + ≤600KB gzip cap + bundle-content audit (CLAUDE.md baked-in #17 defense-in-depth rung 3) + Compromise #19 transitional IDB guard."
 
   # -------------------------------------------------------------------------
-  # Legacy `cross-browser-determinism` job — RETIRED at Phase-3 G18-A
-  # wave-5a (replaced by `.github/workflows/cross-browser-determinism.yml`
-  # per-PR Playwright matrix per Compromise #20 closure narrative).
-  #
-  # Kept here as a no-op placeholder ONLY to avoid workflow-id churn
-  # at the branch-protection layer. Future cleanup commit will remove
-  # the job entirely once branch-protection settles.
+  # Legacy `cross-browser-determinism` job — REMOVED at R6-FP-D 2026-05-24
+  # per L19-r1-MIN-1 close. Branch-protection ground-truth-verified at
+  # R6 R1 L19 lens: the retired job name is NOT in the live
+  # required-status-checks list, so the "workflow-id churn avoidance"
+  # rationale that originally kept the no-op alive does not apply.
+  # The active per-PR cross-browser determinism Playwright matrix lives at
+  # `.github/workflows/cross-browser-determinism.yml` per Phase-3 G18-A
+  # wave-5a Compromise #20 closure (docs/SECURITY-POSTURE.md).
+  # Future restore (if ever needed) via git-history pull rather than
+  # maintaining dead code (per L19 codification note).
   # -------------------------------------------------------------------------
-  cross-browser-determinism-retired:
-    name: cross-browser determinism (RETIRED — see cross-browser-determinism.yml)
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-    needs: bundle-and-smoke
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Retirement notice
-        # Per `docs/SECURITY-POSTURE.md` Compromise #20 closure narrative:
-        # the per-PR cross-browser determinism Playwright matrix landed
-        # at Phase-3 G18-A wave-5a in
-        # `.github/workflows/cross-browser-determinism.yml`. This legacy
-        # release-era-cadence job is RETIRED; it remains as a no-op
-        # only to avoid workflow-id churn at the branch-protection layer.
-        run: |
-          echo "::warning::This legacy cross-browser-determinism job is RETIRED."
-          echo "The active per-PR Playwright matrix lives at .github/workflows/cross-browser-determinism.yml"
-          echo "per Phase-3 G18-A wave-5a Compromise #20 closure (docs/SECURITY-POSTURE.md)."

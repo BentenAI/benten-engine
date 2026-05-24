@@ -43,6 +43,14 @@ concurrency:
   group: multi-arch-cargo-check-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   cargo-check-multi-arch:
     name: cargo check (${{ matrix.leg }})
