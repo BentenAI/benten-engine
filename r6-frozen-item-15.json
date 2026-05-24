@@ -1,0 +1,57 @@
+{
+  "lens": "L17-frozen-item-15-verifier",
+  "round": "R1",
+  "disposition": "APPROVE-WITH-FIXES",
+  "summary": "All 10 §1.A.FROZEN item 15 sub-clauses (a-j) have concrete shipped surfaces verified at HEAD; 12-primitive irreducibility preserved; (a-h) code-level claims line up; (i)+(j) documented-design-constants present. Two MAJOR gaps: (1) the V1-FROZEN-INTERFACE doc Section 1 declares §8-A visibility tighten as frozen surfaces with concrete `pub(crate)` shapes but the HEAD code still has `pub fn get_node`, `pub fn put_node`, `pub fn get_node_label_only`, `pub fn resolve_subgraph_cid_for_test` — the tighten itself never landed (build-backlog row 1 explicitly defers napi cascade + test-site sweep + the visibility flip to a 'follow-up sub-pass'); freezing the un-tightened HEAD locks the WRONG surface into v1-beta. (2) Section 15.d explicitly directs `#[non_exhaustive]` APPLY at the freeze wave for `AuthorizationGrant` (+ companion `GrantKeyMaterial` / `UcanEnvelope`), but the attribute has not landed — adding it post-v1-beta is SemVer-breaking per the doc's own argument. Plus a handful of MINOR cite-drifts and the (c) wire-codepoint-dispatch claim that's overstated relative to the actual serde-tagged-enum shipped.",
+  "findings": [
+    {
+      "id": "L17-r1-1",
+      "severity": "MAJOR",
+      "description": "§8-A visibility tighten NOT landed at HEAD despite doc Section 1 declaring the post-tighten surfaces frozen. Verified HEAD: `Engine::get_node` is `pub fn get_node` (engine_crud.rs:139) NOT `pub(crate) fn read_node`; `Engine::put_node` is `pub fn put_node` (engine_wait.rs:1056) NOT `pub(crate)`; `Engine::get_node_label_only` is `pub fn get_node_label_only` (engine_wait.rs:1027) NOT `pub(crate) fn read_node_label_only`; `Engine::resolve_subgraph_cid_for_test` is `pub fn resolve_subgraph_cid_for_test` (engine_wait.rs:1137) — NOT deleted. Build-backlog Row 1 status row explicitly admits: 'Sub-tasks 1.a (napi cascade) + 1.b (test-site sweep) + 1.c (no-regression test pin) NAMED for the next follow-up sub-pass per HARD RULE 12 BELONGS-NAMED-NOW'. The cargo-public-api baseline at row 1 captures the UN-tightened surface as the freeze-time snapshot, so the structural backstop is locking the wrong shape. Spec item 1 says §8-A tighten is 'applied atomically'; HEAD does not match. This is L17's freeze-question 'visibility tighten landed' explicit answer = NO. Per Section 1's own 'What \"frozen\" means here' clause, 'cargo-public-api catches any post-freeze re-pub-ing' — but freezing the already-pub surface as the v1-beta baseline means the tighten can never apply without a re-open. Although the doc's authority/scope sections + L17 are scoped to item 15, item 15 cannot be evaluated in isolation: the SubgraphSpec/grant primitives all interoperate with the engine's read-attribution boundary (item 2's read_node_as is named as the sole public principal-bearing surface), so the §8-A tighten gap structurally undermines the item-15 plugin-trust contract per CLAUDE.md #18.",
+      "location": "crates/benten-engine/src/engine_crud.rs:139 + crates/benten-engine/src/engine_wait.rs:1027/1056/1137 vs docs/V1-FROZEN-INTERFACE.md:122-137 + docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:668",
+      "disposition": "FIX-NOW"
+    },
+    {
+      "id": "L17-r1-2",
+      "severity": "MAJOR",
+      "description": "AuthorizationGrant + GrantKeyMaterial + UcanEnvelope NOT annotated `#[non_exhaustive]` at HEAD, despite doc Section 15.d explicitly directing: '`#[non_exhaustive]` — APPLY at the freeze wave (per item 11; the struct grew between 3b + 3e and will plausibly grow further).' Verified HEAD: `pub struct AuthorizationGrant` at authorization_grant.rs:205 with only `#[derive(...)]` (line 204), no `#[non_exhaustive]`; same for `pub struct GrantKeyMaterial` (line 166) and `pub struct UcanEnvelope` (line 69). Adding `#[non_exhaustive]` post-v1-beta is SemVer-breaking per the doc's own item-11 reasoning ('SemVer-asymmetric (adding post-v1 is breaking)'); since item 15.d explicitly anticipates future-growth of `AuthorizationGrant`, omitting the attribute now locks the type into exhaustive-by-default. The build-backlog Row 8 sweep applied `#[non_exhaustive]` to `ManifestEnvelopeRecheckOutcome` (8b) and `WriteContext` (8c) per the same rule, but missed the three grant-envelope types — a coverage gap in the otherwise-thorough sweep.",
+      "location": "crates/benten-caps/src/authorization_grant.rs:69 (UcanEnvelope) + :166 (GrantKeyMaterial) + :205 (AuthorizationGrant) vs docs/V1-FROZEN-INTERFACE.md:1335",
+      "disposition": "FIX-NOW"
+    },
+    {
+      "id": "L17-r1-3",
+      "severity": "MINOR",
+      "description": "Cite-drift: doc Section 15.a names verification test as `crates/benten-core/tests/g_core_9_no_thirteenth_primitive.rs` (line 1238), but the actual test that asserts `PrimitiveKind::*` discriminant count == 12 is `crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs`. The test exists and discharges the verification (verified: exhaustive match at line 115-116 + count assertion at line 64), but the doc names a non-existent file. Per pim-N-sweep-completeness-self-verify (§3.6j) the verification-mechanism cite should match the actually-shipped test name.",
+      "location": "docs/V1-FROZEN-INTERFACE.md:1238 vs crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs",
+      "disposition": "FIX-NOW"
+    },
+    {
+      "id": "L17-r1-4",
+      "severity": "MINOR",
+      "description": "Cite-drift: doc Section 15.a cites `Spec` at `subgraph_spec/spec.rs:188`; actual is line 190. Doc Section 15.h cites `Engine::walk_share_scope` at `engine_share_scope.rs:46`; actual is line 59 (line 46 is mid-docstring). Doc Section 15.a cites walker `walker.rs:78` (`walk`) + `walker.rs:183` (`walker_as_subgraph`) — both correct. Single-line drifts are benign per the doc but per §3.5g cross-language rule-mirror discipline the rustdoc-style cites are a maintained surface; fix while attending L17-r1-2 since both touch the same artifact.",
+      "location": "docs/V1-FROZEN-INTERFACE.md:1196 (cites spec.rs:188; actual :190) + :1531 (cites engine_share_scope.rs:46; actual :59)",
+      "disposition": "FIX-NOW"
+    },
+    {
+      "id": "L17-r1-5",
+      "severity": "MINOR",
+      "description": "Section 15.c claim 'Wire envelope typed for additive future arms via codepoint-dispatch (same playbook as crypto-agility per CLAUDE.md #5)' is overstated relative to the actually-shipped `Scope` enum which uses plain `#[derive(Serialize, Deserialize)]` (scope.rs:45-46) with no explicit numeric codepoint table parallel to CipherSuiteCodepoint/SigCodepoint/HashCodepoint/EncryptionClass codepoint dispatch. Serde-tagged-enum dispatch IS additive-friendly (a new Hashes-equivalent arm at the wire layer can land at an unused serde tag), so the freeze contract is not broken — but the 'codepoint-dispatch' phrasing implies a numeric-table machinery that isn't present. Either downgrade the language to 'serde-tag dispatch' OR add a typed-reject codepoint mod alongside EncryptionClass's pattern (encryption_class.rs:57) to deliver on the explicit codepoint-dispatch claim. Spec §1.A.FROZEN item 15(c) carries the same phrasing, so this is plan-doc + contract-doc parallel drift.",
+      "location": "docs/V1-FROZEN-INTERFACE.md:1298 + .addl/phase-4-meta/00-implementation-plan.md:134 vs crates/benten-caps/src/scope.rs:25-52",
+      "disposition": "FIX-NOW"
+    },
+    {
+      "id": "L17-r1-6",
+      "severity": "OBS",
+      "description": "Forward-compat observation: `AuthorizationGrant.binding_sig` (authorization_grant.rs:585) is hardcoded `[u8; 64]` (Ed25519) + `issuer_verifying_key` parsed as `[u8; 32]` (Ed25519) at authorization_grant.rs:573. Doc Section 6 #7 (`no-hardcoded-sizes invariant`) is scoped to the #1300/#1301 crypto-suite surfaces; doc Section 15.d explicitly accepts Ed25519 binding_sig ('issuer's verifying-key bytes (Ed25519)'). This is intentional design at HEAD (binding_sig is structurally separate from the wrapped-key PQ-hybrid envelope), but observe that the AuthorizationGrant binding-sig path is NOT crypto-agile per the v1-beta PQ-hybrid-default discipline — a future swap (e.g. to hybrid Ed25519⊕ML-DSA-65 for the binding-sig itself) would be a SemVer break. If intentional + frozen at v1-beta, the freeze contract should explicitly state that the AuthorizationGrant binding_sig is Ed25519-pinned at v1-beta (NOT codepoint-dispatched), so a future agent doesn't propose a hybrid-binding-sig as 'additive' (it would be wire-format-breaking).",
+      "location": "crates/benten-caps/src/authorization_grant.rs:573-585 vs docs/V1-FROZEN-INTERFACE.md:1332",
+      "disposition": "DISAGREE: design-intentional at v1-beta per Section 15.d's explicit Ed25519 typing; observation only, no fix required for L17 R1. Surface to L09/L13 (crypto-agility / threat-model lenses) for cross-cite if they identify it as a freeze gap."
+    },
+    {
+      "id": "L17-r1-7",
+      "severity": "OBS",
+      "description": "Section 4 (D2 v1-canonical-bytes) names `docs/V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md` as the Ben-signed P-III decision-point artifact. Verified at HEAD: `docs/V1-WIRE-FORMAT-INVENTORY.md` exists (per build-backlog row 8.f) but the Ben-decision doc does not. Item 4 is OUT-OF-SCOPE for L17 (item 15 specific) but flagging as cross-cite for L02/L03/L08 (wire-format/canonical-bytes lenses) since item 15 wire-format hooks (per-chunk-AEAD + AuthorizationGrant CBOR + two-CID mapping) ride on item 4's P-III decision.",
+      "location": "docs/V1-FROZEN-INTERFACE.md:330 (cites missing V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md)",
+      "disposition": "OUT-OF-SCOPE: item 4 is L02/L03/L08 territory; L17 scope is item 15 only; record for cross-lens visibility."
+    }
+  ]
+}
