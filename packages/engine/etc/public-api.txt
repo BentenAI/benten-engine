@@ -1,0 +1,403 @@
+# @benten/engine TypeScript Public API Baseline
+#
+# Generated at G-CORE-9 V1-FROZEN-INTERFACE row 2 (2026-05-23).
+#
+# This baseline captures the structural shape of the public TS API
+# at the v1-beta freeze. The ts-public-api workflow diffs this file
+# against a fresh rebuild on every PR; any drift = baseline-update
+# PR + manifest-review per V1-FROZEN-INTERFACE.md item 10 contract.
+#
+# Per V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 2 the long-term path
+# is @microsoft/api-extractor (richer structural diff); this initial
+# baseline uses extract-exports-from-.d.ts as a simpler structural
+# backstop that catches add/remove of exports + obvious signature
+# changes. api-extractor migration is a v1-Composing window enhancement.
+
+## atrium.d.ts
+export declare function makeAtriumFactory(nativeFactory: NativeAtriumFactoryConstruct | undefined, nativeEngine?: NativeEngineWithAtrium): AtriumFactory;
+export interface Atrium {
+export interface AtriumConfig {
+export interface AtriumSubscription {
+export interface NativeAtrium {
+export interface NativeAtriumFactoryConstruct {
+export interface NativeEngineWithAtrium {
+export type AtriumFactory = (config: AtriumConfig) => Atrium;
+export type PeerLifecycleCallback = (peerDid: string) => void;
+export type SubscribeCallback = (event: unknown) => void;
+export {};
+
+## dsl.d.ts
+export declare class BranchBuilder {
+export declare class CaseBuilder {
+export declare class SubgraphBuilder {
+export declare const ATTRIBUTION_PROPERTY_KEY = "attribution";
+export declare function branch(args: BranchArgs): {
+export declare function call(args: CallArgs): {
+export declare function crud(label: string, opts?: CrudOptions): CrudHandler;
+export declare function emit(args: EmitArgs): {
+export declare function isCrudHandler(x: unknown): x is CrudHandler;
+export declare function isSubgraph(x: unknown): x is Subgraph;
+export declare function iterate(args: IterateArgs): {
+export declare function read(args: ReadArgs): {
+export declare function respond(args?: RespondArgs): {
+export declare function sandbox(args: SandboxArgs): {
+export declare function stream(args: StreamArgs): {
+export declare function subgraph(handlerId: string): SubgraphBuilder;
+export declare function subscribe(args: SubscribeArgs): {
+export declare function transform(args: TransformArgs): {
+export declare function typedCall(args: TypedCallNodeArgs): {
+export declare function wait(args: WaitArgs): {
+export declare function write(args: WriteArgs): {
+export interface BranchArgs {
+export interface CallArgs {
+export interface CrudHandler {
+export interface CrudOptions {
+export interface EmitArgs {
+export interface IterateArgs {
+export interface ReadArgs {
+export interface RespondArgs {
+export interface StreamArgs {
+export interface SubscribeArgs {
+export interface TransformArgs {
+export interface TypedCallNodeArgs {
+export interface WaitDurationArgs {
+export interface WaitSignalArgs {
+export interface WaitWithTtlArgs {
+export interface WriteArgs {
+export type WaitArgs = WaitSignalArgs | WaitDurationArgs;
+export type { SandboxArgs, SandboxArgsByCaps, SandboxArgsByName };
+
+## engine.d.ts
+export declare class Engine {
+export declare const PolicyKind: {
+export type PolicyKind = (typeof PolicyKind)[keyof typeof PolicyKind];
+
+## errors.d.ts
+export declare function extractCode(input: unknown): string | undefined;
+export declare function mapNativeError(err: unknown): BentenError;
+export { BentenError, CATALOG_CODES, type CatalogCode, CODE_TO_CTOR_GENERATED, EBackendNotFound, EBackendReadOnly, ECapAttenuation, ECapChainTooDeep, ECapDenied, ECapDeniedRead, ECapNotImplemented, ECapRevoked, ECapRevokedMidEval, ECapScopeLoneStarRejected, ECapWallclockExpired, ECidParse, ECidUnsupportedCodec, ECidUnsupportedHash, EDevServerStopped, EDslInvalidShape, EDslUnregisteredHandler, EDuplicateHandler, EExecStateTampered, EGraphInternal, EHlcSkewExceeded, EHostBackendUnavailable, EHostCapabilityExpired, EHostCapabilityRevoked, EHostNotFound, EHostWriteConflict, EInputLimit, EInvAttribution, EInvContentHash, EInvCycle, EInvDepthExceeded, EInvDeterminism, EInvFanoutExceeded, EInvImmutability, EInvIterateBudget, EInvIterateMaxMissing, EInvIterateNestDepth, EInvRegistration, EInvSandboxDepth, EInvSandboxOutput, EInvSystemZone, EInvTooManyEdges, EInvTooManyNodes, EIvmPatternMismatch, EIvmViewStale, ENestedTransactionNotSupported, ENoCapabilityPolicyConfigured, ENotFound, ENotImplemented, EPrimitiveNotImplemented, EProductionRequiresCaps, EReloadSubscriberUnsubscribed, EResumeActorMismatch, EResumeSubgraphDrift, ESandboxFuelExhausted, ESandboxWallclockExceeded, ESerialize, ESubsystemDisabled, ESyncCapUnverified, ESyncHashMismatch, ESyncHlcDrift, ESystemZoneWrite, ETransformSyntax, ETxAborted, EUnknown, EUnknownView, EViewLabelMismatch, EValueFloatNan, EValueFloatNonFinite, EVersionBranched, EVersionUnknownPrior, EWaitSignalShapeMismatch, EWaitTimeout, EWriteConflict, EModuleManifestCidMismatch, } from "./errors.generated.js";
+
+## errors.generated.d.ts
+export declare class BentenError extends Error {
+export declare class EAeadRebindingAttackDetected extends BentenError {
+export declare class EAtriumInactive extends BentenError {
+export declare class EAtriumRelayUnreachable extends BentenError {
+export declare class EAtriumTransportDegraded extends BentenError {
+export declare class EAuditNotLandedPurePqRejected extends BentenError {
+export declare class EAuthorizationGrantBindingSigInvalid extends BentenError {
+export declare class EBackendNotFound extends BentenError {
+export declare class EBackendReadOnly extends BentenError {
+export declare class ECapAttenuation extends BentenError {
+export declare class ECapBackendStorage extends BentenError {
+export declare class ECapChainTooDeep extends BentenError {
+export declare class ECapDenied extends BentenError {
+export declare class ECapDeniedRead extends BentenError {
+export declare class ECapNotImplemented extends BentenError {
+export declare class ECapPeerBandwidthExceeded extends BentenError {
+export declare class ECapRateLimitExceeded extends BentenError {
+export declare class ECapRevoked extends BentenError {
+export declare class ECapRevokedMidEval extends BentenError {
+export declare class ECapScopeLoneStarRejected extends BentenError {
+export declare class ECapSnapshotHashMismatch extends BentenError {
+export declare class ECapUcanAttenuationViolated extends BentenError {
+export declare class ECapUcanAudienceMismatch extends BentenError {
+export declare class ECapUcanBadSignature extends BentenError {
+export declare class ECapUcanExpired extends BentenError {
+export declare class ECapUcanNotYetValid extends BentenError {
+export declare class ECapWallclockExpired extends BentenError {
+export declare class EChainNarrowingViolation extends BentenError {
+export declare class ECidParse extends BentenError {
+export declare class ECidUnsupportedCodec extends BentenError {
+export declare class ECidUnsupportedHash extends BentenError {
+export declare class EDevServerStopped extends BentenError {
+export declare class EDeviceAttestationForged extends BentenError {
+export declare class EDropBundleEnvelopeSigInvalid extends BentenError {
+export declare class EDropBundleMode3InlineRejected extends BentenError {
+export declare class EDropBundleVersionUnsupported extends BentenError {
+export declare class EDslBackendRejected extends BentenError {
+export declare class EDslInvalidShape extends BentenError {
+export declare class EDslIoError extends BentenError {
+export declare class EDslUnregisteredHandler extends BentenError {
+export declare class EDuplicateHandler extends BentenError {
+export declare class EEngineConfigInvalid extends BentenError {
+export declare class EExecStateTampered extends BentenError {
+export declare class EGraphInternal extends BentenError {
+export declare class EGraphSchemaVersionMismatch extends BentenError {
+export declare class EHandshakeReplayWithinBoundedWindow extends BentenError {
+export declare class EHlcSkewExceeded extends BentenError {
+export declare class EHostBackendUnavailable extends BentenError {
+export declare class EHostCapabilityExpired extends BentenError {
+export declare class EHostCapabilityRevoked extends BentenError {
+export declare class EHostNotFound extends BentenError {
+export declare class EHostWriteConflict extends BentenError {
+export declare class EInputLimit extends BentenError {
+export declare class EInv11SystemZoneRead extends BentenError {
+export declare class EInvAttribution extends BentenError {
+export declare class EInvContentHash extends BentenError {
+export declare class EInvCycle extends BentenError {
+export declare class EInvDepthExceeded extends BentenError {
+export declare class EInvDeterminism extends BentenError {
+export declare class EInvFanoutExceeded extends BentenError {
+export declare class EInvImmutability extends BentenError {
+export declare class EInvIterateBudget extends BentenError {
+export declare class EInvIterateMaxMissing extends BentenError {
+export declare class EInvIterateNestDepth extends BentenError {
+export declare class EInvRegistration extends BentenError {
+export declare class EInvSandboxDepth extends BentenError {
+export declare class EInvSandboxOutput extends BentenError {
+export declare class EInvStreamConfig extends BentenError {
+export declare class EInvSystemZone extends BentenError {
+export declare class EInvTooManyEdges extends BentenError {
+export declare class EInvTooManyNodes extends BentenError {
+export declare class EIvmPatternMismatch extends BentenError {
+export declare class EIvmStrategyNotImplemented extends BentenError {
+export declare class EIvmViewStale extends BentenError {
+export declare class EManifestEnvelopeRecheckUnresolvedDeny extends BentenError {
+export declare class EMaterializerCapDenied extends BentenError {
+export declare class EMaterializerSchemaMismatch extends BentenError {
+export declare class EMaterializerSubscribeSeamFailure extends BentenError {
+export declare class EModuleManifestCidMismatch extends BentenError {
+export declare class EModuleMigrationsRequirePersistence extends BentenError {
+export declare class ENamespacedWriteUnsupported extends BentenError {
+export declare class ENestedTransactionNotSupported extends BentenError {
+export declare class ENoCapabilityPolicyConfigured extends BentenError {
+export declare class ENotFound extends BentenError {
+export declare class ENotImplemented extends BentenError {
+export declare class EPluginAuthorNotTrusted extends BentenError {
+export declare class EPluginContentCidMismatch extends BentenError {
+export declare class EPluginContentPeerKeyRotated extends BentenError {
+export declare class EPluginContentPeerSignatureInvalid extends BentenError {
+export declare class EPluginDelegationOutsideManifestEnvelope extends BentenError {
+export declare class EPluginDeviceAttestationForged extends BentenError {
+export declare class EPluginDidHandleDuplicate extends BentenError {
+export declare class EPluginDidHandleNotPreInserted extends BentenError {
+export declare class EPluginHeterogeneityIncompatible extends BentenError {
+export declare class EPluginInstallConsentRequired extends BentenError {
+export declare class EPluginInstallRecordAlreadyApplied extends BentenError {
+export declare class EPluginInstallRecordConsentingUserMismatch extends BentenError {
+export declare class EPluginInstallRecordManifestCidMismatch extends BentenError {
+export declare class EPluginInstallRecordPluginDidMismatch extends BentenError {
+export declare class EPluginInstallRecordUserSignatureInvalid extends BentenError {
+export declare class EPluginLibraryIndexTamper extends BentenError {
+export declare class EPluginManifestInvalid extends BentenError {
+export declare class EPluginMetaCompositionCycleRejected extends BentenError {
+export declare class EPluginNewVersionAvailable extends BentenError {
+export declare class EPluginPrivateNamespaceDelegationForbidden extends BentenError {
+export declare class EPrimitiveNotImplemented extends BentenError {
+export declare class EProductionRequiresCaps extends BentenError {
+export declare class ERecipientLacksKeysForSuite extends BentenError {
+export declare class ERegistryDiscoveryTimeout extends BentenError {
+export declare class EReloadSubscriberUnsubscribed extends BentenError {
+export declare class EReservedHandlerNamespace extends BentenError {
+export declare class EResumeActorMismatch extends BentenError {
+export declare class EResumeSubgraphDrift extends BentenError {
+export declare class ESandboxEscapeAttempt extends BentenError {
+export declare class ESandboxFuelExhausted extends BentenError {
+export declare class ESandboxHostFnDenied extends BentenError {
+export declare class ESandboxHostFnNotFound extends BentenError {
+export declare class ESandboxHostFnRandomBudgetExceeded extends BentenError {
+export declare class ESandboxManifestRegistrationDeferred extends BentenError {
+export declare class ESandboxManifestUnknown extends BentenError {
+export declare class ESandboxMemoryExhausted extends BentenError {
+export declare class ESandboxModuleInvalid extends BentenError {
+export declare class ESandboxModuleNotInstalled extends BentenError {
+export declare class ESandboxNestedDispatchDenied extends BentenError {
+export declare class ESandboxNestedDispatchDepthExceeded extends BentenError {
+export declare class ESandboxStackOverflow extends BentenError {
+export declare class ESandboxUnavailableOnWasm extends BentenError {
+export declare class ESandboxWallclockExceeded extends BentenError {
+export declare class ESandboxWallclockInvalid extends BentenError {
+export declare class ESchemaEmitNewPrimitiveRejected extends BentenError {
+export declare class ESchemaSandboxHostFnRejected extends BentenError {
+export declare class ESchemaValidationFailed extends BentenError {
+export declare class ESchemaVocabCycleRejected extends BentenError {
+export declare class ESchemaVocabEdgeMismatch extends BentenError {
+export declare class ESchemaVocabInvalidLabel extends BentenError {
+export declare class ESchemaVocabRefTargetMissing extends BentenError {
+export declare class ESchemaVocabRequiredPropertyMissing extends BentenError {
+export declare class ESchemaVocabScalarUnknown extends BentenError {
+export declare class ESerialize extends BentenError {
+export declare class ESnapshotBlobSchemaVersionMismatch extends BentenError {
+export declare class EStorageQuotaExceeded extends BentenError {
+export declare class EStreamBackpressureDropped extends BentenError {
+export declare class EStreamClosedByPeer extends BentenError {
+export declare class EStreamHandleLeaked extends BentenError {
+export declare class EStreamProducerWallclockExceeded extends BentenError {
+export declare class ESubgraphSpecWalkFailed extends BentenError {
+export declare class ESubscribeCursorLost extends BentenError {
+export declare class ESubscribeDeliveryFailed extends BentenError {
+export declare class ESubscribePatternInvalid extends BentenError {
+export declare class ESubscribeReplayWindowExceeded extends BentenError {
+export declare class ESubscribeRevokedMidStream extends BentenError {
+export declare class ESubsystemDisabled extends BentenError {
+export declare class ESyncCapUnverified extends BentenError {
+export declare class ESyncDivergentCidRejected extends BentenError {
+export declare class ESyncHashMismatch extends BentenError {
+export declare class ESyncHlcDrift extends BentenError {
+export declare class ESyncHopDepthExceeded extends BentenError {
+export declare class ESyncRevokedDuringSession extends BentenError {
+export declare class ESystemZoneWrite extends BentenError {
+export declare class EThinClientAuthRejected extends BentenError {
+export declare class EThinClientBridgePrincipalUnresolved extends BentenError {
+export declare class EThinClientChallengeReplay extends BentenError {
+export declare class EThinClientHandshakeInvalid extends BentenError {
+export declare class EThinClientOriginMismatch extends BentenError {
+export declare class EThinClientSessionExpired extends BentenError {
+export declare class ETransformSyntax extends BentenError {
+export declare class ETwoCidMappingIntegrityMismatch extends BentenError {
+export declare class ETwoCidMappingNotFound extends BentenError {
+export declare class ETxAborted extends BentenError {
+export declare class ETypedCallCapDenied extends BentenError {
+export declare class ETypedCallDispatchError extends BentenError {
+export declare class ETypedCallInvalidInput extends BentenError {
+export declare class ETypedCallUnknownOp extends BentenError {
+export declare class EUcanBlobsRequestNotInScope extends BentenError {
+export declare class EUcanBlobsRequestRejected extends BentenError {
+export declare class EUcanClockNotInjected extends BentenError {
+export declare class EUnknown extends BentenError {
+export declare class EUnknownView extends BentenError {
+export declare class EUnresolvedPeerDeny extends BentenError {
+export declare class EValueFloatNan extends BentenError {
+export declare class EValueFloatNonFinite extends BentenError {
+export declare class EValueOutOfRange extends BentenError {
+export declare class EVersionBranched extends BentenError {
+export declare class EVersionUnknownPrior extends BentenError {
+export declare class EViewLabelMismatch extends BentenError {
+export declare class EViewStrategyARefused extends BentenError {
+export declare class EViewStrategyCReserved extends BentenError {
+export declare class EWaitMetadataMissing extends BentenError {
+export declare class EWaitSignalShapeMismatch extends BentenError {
+export declare class EWaitSuspended extends BentenError {
+export declare class EWaitTimeout extends BentenError {
+export declare class EWaitTtlExpired extends BentenError {
+export declare class EWaitTtlInvalid extends BentenError {
+export declare class EWriteBoundaryChainNotUserRooted extends BentenError {
+export declare class EWriteConflict extends BentenError {
+export declare const CATALOG_CODES: readonly ["E_INV_CYCLE", "E_INV_DEPTH_EXCEEDED", "E_INV_FANOUT_EXCEEDED", "E_INV_TOO_MANY_NODES", "E_INV_TOO_MANY_EDGES", "E_INV_SYSTEM_ZONE", "E_INV_DETERMINISM", "E_INV_ITERATE_MAX_MISSING", "E_INV_ITERATE_BUDGET", "E_INV_ITERATE_NEST_DEPTH", "E_INV_CONTENT_HASH", "E_INV_REGISTRATION", "E_CAP_DENIED", "E_CAP_DENIED_READ", "E_CAP_REVOKED_MID_EVAL", "E_CAP_NOT_IMPLEMENTED", "E_CAP_REVOKED", "E_CAP_ATTENUATION", "E_WRITE_CONFLICT", "E_INV_SANDBOX_DEPTH", "E_INV_SANDBOX_OUTPUT", "E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED", "E_IVM_VIEW_STALE", "E_TX_ABORTED", "E_NESTED_TRANSACTION_NOT_SUPPORTED", "E_PRIMITIVE_NOT_IMPLEMENTED", "E_SYSTEM_ZONE_WRITE", "E_TRANSFORM_SYNTAX", "E_INPUT_LIMIT", "E_SERIALIZE", "E_SYNC_HASH_MISMATCH", "E_SYNC_HLC_DRIFT", "E_SYNC_CAP_UNVERIFIED", "E_VALUE_FLOAT_NAN", "E_VALUE_FLOAT_NONFINITE", "E_VALUE_OUT_OF_RANGE", "E_CID_PARSE", "E_CID_UNSUPPORTED_CODEC", "E_CID_UNSUPPORTED_HASH", "E_VERSION_BRANCHED", "E_BACKEND_NOT_FOUND", "E_NOT_FOUND", "E_GRAPH_INTERNAL", "E_GRAPH_SCHEMA_VERSION_MISMATCH", "E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH", "E_UNKNOWN", "E_DUPLICATE_HANDLER", "E_NO_CAPABILITY_POLICY_CONFIGURED", "E_PRODUCTION_REQUIRES_CAPS", "E_SUBSYSTEM_DISABLED", "E_UNKNOWN_VIEW", "E_NOT_IMPLEMENTED", "E_IVM_PATTERN_MISMATCH", "E_IVM_STRATEGY_NOT_IMPLEMENTED", "E_VERSION_UNKNOWN_PRIOR", "E_DSL_INVALID_SHAPE", "E_DSL_UNREGISTERED_HANDLER", "E_HOST_NOT_FOUND", "E_HOST_WRITE_CONFLICT", "E_HOST_BACKEND_UNAVAILABLE", "E_HOST_CAPABILITY_REVOKED", "E_HOST_CAPABILITY_EXPIRED", "E_EXEC_STATE_TAMPERED", "E_RESUME_ACTOR_MISMATCH", "E_RESUME_SUBGRAPH_DRIFT", "E_WAIT_TIMEOUT", "E_INV_IMMUTABILITY", "E_INV_ATTRIBUTION", "E_CAP_WALLCLOCK_EXPIRED", "E_CAP_CHAIN_TOO_DEEP", "E_CAP_SCOPE_LONE_STAR_REJECTED", "E_VIEW_STRATEGY_A_REFUSED", "E_VIEW_STRATEGY_C_RESERVED", "E_VIEW_LABEL_MISMATCH", "E_WAIT_SIGNAL_SHAPE_MISMATCH", "E_WAIT_SUSPENDED", "E_STREAM_BACKPRESSURE_DROPPED", "E_STREAM_CLOSED_BY_PEER", "E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED", "E_INV_STREAM_CONFIG", "E_STREAM_HANDLE_LEAKED", "E_SUBSCRIBE_DELIVERY_FAILED", "E_SUBSCRIBE_PATTERN_INVALID", "E_SUBSCRIBE_CURSOR_LOST", "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED", "E_INV_11_SYSTEM_ZONE_READ", "E_SANDBOX_FUEL_EXHAUSTED", "E_SANDBOX_MEMORY_EXHAUSTED", "E_SANDBOX_WALLCLOCK_EXCEEDED", "E_SANDBOX_WALLCLOCK_INVALID", "E_SANDBOX_HOST_FN_DENIED", "E_SANDBOX_HOST_FN_NOT_FOUND", "E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED", "E_SANDBOX_MANIFEST_UNKNOWN", "E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED", "E_SANDBOX_MODULE_INVALID", "E_SANDBOX_STACK_OVERFLOW", "E_SANDBOX_ESCAPE_ATTEMPT", "E_SANDBOX_MODULE_NOT_INSTALLED", "E_SANDBOX_NESTED_DISPATCH_DENIED", "E_MODULE_MANIFEST_CID_MISMATCH", "E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE", "E_ENGINE_CONFIG_INVALID", "E_BACKEND_READ_ONLY", "E_SANDBOX_UNAVAILABLE_ON_WASM", "E_RELOAD_SUBSCRIBER_UNSUBSCRIBED", "E_DEVSERVER_STOPPED", "E_STORAGE_QUOTA_EXCEEDED", "E_HLC_SKEW_EXCEEDED", "E_CAP_UCAN_EXPIRED", "E_CAP_UCAN_NOT_YET_VALID", "E_CAP_UCAN_BAD_SIGNATURE", "E_CAP_UCAN_ATTENUATION_VIOLATED", "E_CAP_BACKEND_STORAGE", "E_CAP_RATE_LIMIT_EXCEEDED", "E_CAP_PEER_BANDWIDTH_EXCEEDED", "E_CAP_SNAPSHOT_HASH_MISMATCH", "E_SUBSCRIBE_REVOKED_MID_STREAM", "E_SYNC_REVOKED_DURING_SESSION", "E_DEVICE_ATTESTATION_FORGED", "E_SYNC_HOP_DEPTH_EXCEEDED", "E_THIN_CLIENT_AUTH_REJECTED", "E_THIN_CLIENT_HANDSHAKE_INVALID", "E_THIN_CLIENT_CHALLENGE_REPLAY", "E_THIN_CLIENT_ORIGIN_MISMATCH", "E_THIN_CLIENT_SESSION_EXPIRED", "E_CAP_UCAN_AUDIENCE_MISMATCH", "E_ATRIUM_RELAY_UNREACHABLE", "E_ATRIUM_TRANSPORT_DEGRADED", "E_ATRIUM_INACTIVE", "E_SYNC_DIVERGENT_CID_REJECTED", "E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW", "E_WAIT_TTL_EXPIRED", "E_WAIT_TTL_INVALID", "E_WAIT_METADATA_MISSING", "E_TYPED_CALL_UNKNOWN_OP", "E_TYPED_CALL_INVALID_INPUT", "E_TYPED_CALL_CAP_DENIED", "E_TYPED_CALL_DISPATCH_ERROR", "E_UCAN_CLOCK_NOT_INJECTED", "E_RESERVED_HANDLER_NAMESPACE", "E_SCHEMA_VALIDATION_FAILED", "E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED", "E_SCHEMA_SANDBOX_HOST_FN_REJECTED", "E_SCHEMA_VOCAB_INVALID_LABEL", "E_SCHEMA_VOCAB_EDGE_MISMATCH", "E_SCHEMA_VOCAB_SCALAR_UNKNOWN", "E_SCHEMA_VOCAB_REF_TARGET_MISSING", "E_SCHEMA_VOCAB_CYCLE_REJECTED", "E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING", "E_PLUGIN_MANIFEST_INVALID", "E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID", "E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID", "E_PLUGIN_CONTENT_PEER_KEY_ROTATED", "E_PLUGIN_AUTHOR_NOT_TRUSTED", "E_PLUGIN_INSTALL_CONSENT_REQUIRED", "E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH", "E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH", "E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH", "E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED", "E_PLUGIN_DID_HANDLE_DUPLICATE", "E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE", "E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN", "E_PLUGIN_CONTENT_CID_MISMATCH", "E_PLUGIN_NEW_VERSION_AVAILABLE", "E_PLUGIN_HETEROGENEITY_INCOMPATIBLE", "E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED", "E_PLUGIN_DEVICE_ATTESTATION_FORGED", "E_PLUGIN_LIBRARY_INDEX_TAMPER", "E_REGISTRY_DISCOVERY_TIMEOUT", "E_MATERIALIZER_CAP_DENIED", "E_MATERIALIZER_SCHEMA_MISMATCH", "E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE", "E_NAMESPACED_WRITE_UNSUPPORTED", "E_RECIPIENT_LACKS_KEYS_FOR_SUITE", "E_AEAD_REBINDING_ATTACK_DETECTED", "E_TWO_CID_MAPPING_NOT_FOUND", "E_TWO_CID_MAPPING_INTEGRITY_MISMATCH", "E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID", "E_CHAIN_NARROWING_VIOLATION", "E_UCAN_BLOBS_REQUEST_REJECTED", "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE", "E_UNRESOLVED_PEER_DENY", "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID", "E_DROP_BUNDLE_VERSION_UNSUPPORTED", "E_DROP_BUNDLE_MODE3_INLINE_REJECTED", "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY", "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED", "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED", "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED", "E_DSL_BACKEND_REJECTED", "E_DSL_IO_ERROR", "E_SUBGRAPH_SPEC_WALK_FAILED", "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED"];
+export declare const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;
+export type CatalogCode = (typeof CATALOG_CODES)[number];
+
+## identity.d.ts
+export declare const BROWSER_THIN_CLIENT_ENVELOPE: IdentityHandshake["envelope"];
+export declare function declareDeviceAttestation(_handshake: IdentityHandshake): DeviceAttestation;
+export declare function generateKeypair(): KeypairHandle;
+export declare function issueVerifiableCredential(_issuer: KeypairHandle, _subject: Did, _claimName: string, _claimValue: string, _issuanceDate: number, _expirationDate?: number): VerifiableCredential;
+export declare function verifySignature(_issuerDid: Did, _message: Uint8Array, _signature: Uint8Array): boolean;
+export declare function verifyVerifiableCredentialAt(_vc: VerifiableCredential, _expectedIssuer: Did, _now: number): boolean;
+export interface Capability {
+export interface DeviceAttestation {
+export interface IdentityHandshake {
+export interface KeypairHandle {
+export interface SignedUcan {
+export interface UcanClaims {
+export interface VerifiableCredential {
+export type Did = string & {
+
+## index.d.ts
+export type { Atrium, AtriumConfig, AtriumFactory, AtriumSubscription, PeerLifecycleCallback, SubscribeCallback, } from "./atrium.js";
+export type { AttributionFrame, CapabilityClaim, CapabilityGrant, Chunk, DeviceAttestation, Edge, EmitSubscription, HandlerAdjacencies, JsonValue, ManifestSignature, MigrationStep, ModuleManifest, ModuleManifestEntry, Outcome, Primitive, RegisteredHandler, SandboxArgsByCaps, SandboxArgsByName, SandboxNodeDescription, SandboxOptions, SandboxResult, Strategy, StreamCursor, StreamHandle, Subgraph, SubgraphNode, SubscribeCursor, Subscription, SuspensionResult, Trace, TraceStep, TraceStepUnknown, TypedCallInput, TypedCallInputShapes, TypedCallOp, TypedCallOutput, TypedCallOutputShapes, UserView, UserViewInputPattern, UserViewSpec, Value, ViewDef, ViewDelta, } from "./types.js";
+export { Engine, PolicyKind } from "./engine.js";
+export { TYPED_CALL_PREFIX, TYPED_CALL_REQUIRED_CAP } from "./types.js";
+export { assertSandboxComposed, isSandboxBearing, } from "./sandbox.js";
+export { branch, call, crud, emit, isCrudHandler, isSubgraph, iterate, read, respond, sandbox, stream, subgraph, SubgraphBuilder, BranchBuilder, CaseBuilder, subscribe, transform, typedCall, wait, write, type BranchArgs, type CallArgs, type CrudHandler, type CrudOptions, type EmitArgs, type IterateArgs, type ReadArgs, type RespondArgs, type SandboxArgs, type StreamArgs, type SubscribeArgs, type TransformArgs, type TypedCallNodeArgs, type WaitArgs, type WriteArgs, } from "./dsl.js";
+export { buildUserViewHandle, resolveUserViewStrategy, userViewSpecToNativeJson, validateUserViewSpec, } from "./views.js";
+export { manifestSummary, renderManifestSummary, type ManifestSummary, } from "./manifest.js";
+export { toMermaid } from "./mermaid.js";
+export { wrapEmitSubscriptionHandle, wrapSubscriptionHandle, serializeCursor, validateOnChangeArgs, validateOnEmitArgs, type NativeEmitSubscriptionJs, type NativeSubscriptionJs, type OnChangeCallback, type OnEmitCallback, } from "./subscribe.js";
+export { wrapStreamHandle, validateStreamCallArgs, type NativeStreamHandle, } from "./stream.js";
+
+## manifest.d.ts
+export declare function manifestSummary(manifest: ModuleManifest): ManifestSummary;
+export declare function renderManifestSummary(summary: ManifestSummary): string;
+export interface ManifestSummary {
+export type { ManifestSignature, ModuleManifest, ModuleManifestEntry, } from "./types.js";
+
+## mermaid.d.ts
+export declare function toMermaid(sg: Subgraph): string;
+
+## sandbox.d.ts
+export declare function assertSandboxComposed(sg: Subgraph): SubgraphNode[];
+export declare function isSandboxBearing(sg: Subgraph): boolean;
+export type { ManifestSignature, ModuleManifest, ModuleManifestEntry, SandboxArgs, SandboxArgsByCaps, SandboxArgsByName, SandboxNodeDescription, SandboxResult, };
+
+## stream.d.ts
+export declare function fireStreamLeak(ev: StreamHandleLeakedEvent): void;
+export declare function registerStreamLeakCallback(cb: (ev: StreamHandleLeakedEvent) => void): () => void;
+export declare function validateStreamCallArgs(handlerId: string, action: string, input: JsonValue): void;
+export declare function wrapStreamHandle(native: NativeStreamHandle): StreamHandle;
+export interface NativeStreamHandle {
+export interface StreamHandleLeakedEvent {
+
+## subscribe.d.ts
+export declare function serializeCursor(cursor?: SubscribeCursor): unknown;
+export declare function validateOnChangeArgs(pattern: string, callback: OnChangeCallback): void;
+export declare function validateOnEmitArgs(channel: string, callback: OnEmitCallback): void;
+export declare function wrapEmitSubscriptionHandle(native: NativeEmitSubscriptionJs): EmitSubscription;
+export declare function wrapSubscriptionHandle(native: NativeSubscriptionJs, cursor: SubscribeCursor): Subscription;
+export interface NativeEmitSubscriptionJs {
+export interface NativeSubscriptionJs {
+export type OnChangeCallback = (seq: number, chunk: Chunk) => void;
+export type OnEmitCallback = (channel: string, payload: JsonValue) => void;
+
+## types.d.ts
+export declare const TYPED_CALL_PREFIX = "engine:typed:";
+export declare const TYPED_CALL_REQUIRED_CAP: Record<TypedCallOp, string>;
+export interface AttributionFrame {
+export interface CapabilityClaim {
+export interface CapabilityGrant {
+export interface DeviceAttestation {
+export interface Edge {
+export interface EmitSubscription {
+export interface HandlerAdjacencies {
+export interface HostFnsOverride {
+export interface ManifestSignature {
+export interface MigrationStep {
+export interface ModuleManifest {
+export interface ModuleManifestEntry {
+export interface Outcome {
+export interface RandomHostFnOverride {
+export interface RegisteredHandler {
+export interface SandboxArgsByCaps {
+export interface SandboxArgsByName {
+export interface SandboxNodeDescription {
+export interface SandboxResult {
+export interface StreamHandle extends AsyncIterable<Chunk> {
+export interface Subgraph {
+export interface SubgraphNode {
+export interface Subscription {
+export interface Trace {
+export interface TraceStepBudgetExhausted {
+export interface TraceStepPrimitive {
+export interface TraceStepResumeBoundary {
+export interface TraceStepSuspendBoundary {
+export interface TraceStepUnknown {
+export interface TypedCallInputShapes {
+export interface TypedCallOutputShapes {
+export interface UserView {
+export interface UserViewSpec {
+export interface ViewDef {
+export type Chunk = Buffer;
+export type JsonValue = null | boolean | number | string | JsonValue[] | {
+export type Primitive = "read" | "write" | "transform" | "branch" | "iterate" | "wait" | "call" | "respond" | "emit" | "sandbox" | "subscribe" | "stream";
+export type ResumeWithMetaResult = {
+export type SandboxArgs = SandboxArgsByName | SandboxArgsByCaps;
+export type SandboxOptions = SandboxArgs;
+export type Strategy = "A" | "B" | "C";
+export type StreamCursor = {
+export type SubscribeCursor = {
+export type SuspensionResult = {
+export type TraceStep = TraceStepPrimitive | TraceStepSuspendBoundary | TraceStepResumeBoundary | TraceStepBudgetExhausted | TraceStepUnknown;
+export type TypedCallInput<Op extends TypedCallOp> = TypedCallInputShapes[Op];
+export type TypedCallOp = "ed25519_sign" | "ed25519_verify" | "keypair_generate" | "keypair_from_seed" | "blake3_hash" | "multibase_encode" | "multibase_decode" | "did_resolve" | "ucan_validate_chain" | "vc_verify";
+export type TypedCallOutput<Op extends TypedCallOp> = TypedCallOutputShapes[Op];
+export type UserViewInputPattern = {
+export type Value = null | boolean | number | string | Uint8Array | Value[] | {
+export type ViewDelta<T = unknown> = {
+
+## views.d.ts
+export declare function buildUserViewHandle(spec: UserViewSpec, resolvedStrategy: Strategy, runtime?: UserViewRuntimeShim | null): UserView;
+export declare function resolveUserViewStrategy(spec: UserViewSpec): Strategy;
+export declare function userViewSpecToNativeJson(spec: UserViewSpec): Record<string, unknown>;
+export declare function validateUserViewSpec(spec: UserViewSpec): string | null;
+export interface UserViewRuntimeShim {
+
