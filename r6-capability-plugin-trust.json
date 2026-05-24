@@ -1,0 +1,169 @@
+{
+  "lens": "L6 capability-system implementation + plugin-trust 3-layer",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "round": "R1",
+  "branch": "g-core-9/r1-l6-capability-plugin-trust",
+  "head_sha": "8cc4edddac6f8008984ebc381a10ff6e786c7ec4",
+  "main_baseline_sha": "8cc4eddd",
+  "scope_inputs": [
+    "docs/V1-FROZEN-INTERFACE.md items 8 + 12",
+    "crates/benten-caps/src/policy.rs (sealed hard-promotion)",
+    "crates/benten-engine/src/{manifest_envelope_recheck.rs, install_record_replay.rs, thin_client_bridge.rs, write_boundary_chain_validator.rs}",
+    ".addl/phase-4-meta/RATIFIED-prework-forks-2026-05-18.md (sealed-discipline)",
+    "CLAUDE.md baked-in #18 (plugin-trust 3-layer) + #19 (engine-extensions compile-time-linked)"
+  ],
+  "disposition": "REQUEST_CHANGES",
+  "summary_one_line": "Sealed hard-promotion + AuthorizationGrant binding-sig + ThinClientBridge no-client-principal + apply_atrium_merge empty-peer-DID short-circuit are structurally sound; but two MAJOR freeze-contract violations (missing #[non_exhaustive] on 6+ enums incl. CapWriteContext/ReadContext/WriteBoundaryChainOutcome explicitly required by V1-FROZEN items 8+11; missing compile-fail trybuild for the seal explicitly required by item 8 verification mechanism) and three MAJOR substrate-without-consumption gaps (WriteBoundaryChainValidator + InstallRecordReplayStore + all three §8-E hooks are minted as frozen surfaces but have zero structural-always-on production consumers at HEAD; doc framing implies SHIPPED, ground-truth is named-G-CORE-8.2-follow-up).",
+  "findings": [
+    {
+      "id": "L6-r1-1",
+      "severity": "MAJOR",
+      "title": "CapWriteContext + ReadContext MISSING #[non_exhaustive] — direct V1-FROZEN item 8 contract violation",
+      "where": "crates/benten-caps/src/policy.rs:150 (CapWriteContext) + :243 (ReadContext)",
+      "evidence": "V1-FROZEN-INTERFACE.md L660-664 explicitly says: 'Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext` at the freeze (item 11 sweep coupling). They are context structs likely to grow new fields in Composing (e.g. tenant context, request-ID trace); adding fields post-v1 is breaking; the attribute is the cheap, correct affordance.' Ground-truth: both structs at HEAD carry `#[derive(Debug, Clone, Default)]` only — NO `#[non_exhaustive]`. Adding the attribute post-v1 is technically SemVer-breaking for external direct-struct-literal construction (per V1-FROZEN item 11 'Composing-phase escape valve' caveat). If shipped this way at `v1-beta` tag, the freeze contract is structurally locked at the wrong shape.",
+      "claude_md_anchor": "CLAUDE.md #18 Principal primitive; HARD RULE 12.",
+      "disposition": "FIX-NOW",
+      "fix": "Apply `#[non_exhaustive]` to both `CapWriteContext` and `ReadContext`. Audit downstream construction sites that currently use struct-literal syntax (`CapWriteContext { label: .., .. }`) and migrate to the existing `Default::default()` + field-mutation pattern OR add a builder. The two `synthetic_for_test` constructors stay valid; per-site mutation in engine code (e.g. engine.rs:1402) becomes `CapWriteContext { label, actor_cid, .., ..CapWriteContext::default() }`."
+    },
+    {
+      "id": "L6-r1-2",
+      "severity": "MAJOR",
+      "title": "Six+ public enums in L6/item-12 surface area MISSING #[non_exhaustive] — V1-FROZEN item 11 enumerated must-apply set incomplete",
+      "where": "crates/benten-engine/src/write_boundary_chain_validator.rs:64 (WriteBoundaryChainOutcome) + atrium_api.rs:105 (AtriumMode) + engine_wait.rs:185 (SuspensionOutcome) + shares_policy_resolver.rs:53 (DelegationResolution) + engine_stream.rs:127 (NextChunkPoll) + manifest_signing.rs:89 (ManifestVerifyMode)",
+      "evidence": "V1-FROZEN-INTERFACE.md L884 table row enumerates these (and 6+ more in `benten-engine`) as '12+ verified MISSING at HEAD | APPLY'. Ground-truth at HEAD: spot-checked 6 enums above; all 6 carry no `#[non_exhaustive]`. WriteBoundaryChainOutcome + DelegationResolution + ManifestVerifyMode are directly Layer-1/Layer-3 trust-model enums — adding a new variant post-v1 is a breaking SemVer event. Item 11 also requires the workspace-wide audit test pin at `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` ('A workspace-wide audit test pin (BUILD-AT-FREEZE-WAVE; new file ...) walks every `pub enum` + `pub struct` and asserts each carries #[non_exhaustive] OR is in the carve-out registry'). This file does NOT exist at HEAD.",
+      "claude_md_anchor": "HARD RULE 12; #18 Layer-1/Layer-3 enforcement enums are freeze-load-bearing.",
+      "disposition": "FIX-NOW",
+      "fix": "(a) Apply `#[non_exhaustive]` to each of the 6 enums above + complete the workspace sweep per V1-FROZEN item 11 table (audit every `pub enum` not in the carve-out set). Carve-outs documented at the type site. (b) Land the `g_core_9_non_exhaustive_audit.rs` workspace audit test that walks every `pub enum`/`pub struct` and asserts attribute presence OR carve-out-registry membership."
+    },
+    {
+      "id": "L6-r1-3",
+      "severity": "MAJOR",
+      "title": "Compile-fail trybuild test asserting external `impl CapabilityPolicy` is rejected DOES NOT EXIST — V1-FROZEN item 8 verification mechanism unfulfilled",
+      "where": "MISSING file: crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs",
+      "evidence": "V1-FROZEN-INTERFACE.md L686-688 verification mechanism: 'A compile-fail trybuild test (BUILD-AT-FREEZE-WAVE row 6) asserts an external `impl CapabilityPolicy for SomeExternalType` without `impl Sealed for SomeExternalType` fails to compile.' Build-backlog row 6 verification at V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:446: 'The compile-fail trybuild test fails-to-compile as expected (smoke-tests the seal).' Ground-truth: no `compile_fail/` directory under `crates/benten-caps/tests/`; no trybuild dep in workspace Cargo.toml. The existing pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` documents the seal narrative + exercises the `__sealed_for_workspace_tests::Sealed` POSITIVE path (workspace-test opt-in works) but does NOT compile-fail-test an external `impl CapabilityPolicy` without the Sealed marker — the NEGATIVE arm exists only as commented pseudo-code at L155-167. The hard-seal mechanism (private `pub(crate) mod sealed { pub trait Sealed {} }`) IS structurally sound; the v1-FREEZE guarantee is that an external impl fails to compile; absent the compile-fail test, that guarantee has no regression backstop.",
+      "claude_md_anchor": "CLAUDE.md #7 sealed-discipline refinement; #18 trust model.",
+      "disposition": "FIX-NOW",
+      "fix": "Land the `crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs` trybuild fixture (or equivalent ui-test mechanism — `trybuild` crate is the standard choice). Fixture asserts `impl benten_caps::CapabilityPolicy for AttackerPolicy { fn check_write(&self, ..) -> Ok(()) }` produces the 'trait bound `AttackerPolicy: benten_caps::sealed::Sealed` not satisfied' diagnostic. Add `trybuild = \"*\"` to workspace dev-deps."
+    },
+    {
+      "id": "L6-r1-4",
+      "severity": "MAJOR",
+      "title": "WriteBoundaryChainValidator has ZERO production consumers — Layer-1 user-as-root structural-always-on enforcement is NOT WIRED at the WRITE admission boundary",
+      "where": "crates/benten-engine/src/write_boundary_chain_validator.rs (module header L42-56 names G-CORE-8.2 deferral) + crates/benten-engine/src/engine.rs:1027 (field) + :1920 (Noop default install) + :1995 (setter); NO call site invokes `self.write_boundary_chain_validator.validate_chain(..)`",
+      "evidence": "V1-FROZEN-INTERFACE.md item 12 line 'WriteBoundaryChainValidator substrate landed; structural-always-on consumption named to G-CORE-8.2 with concrete destination?' is correctly named-to-G-CORE-8.2 in the module header. But (a) the V1-FROZEN doc surface lists `WriteBoundaryChainOutcome` among the must-apply non_exhaustive set (item 11 row); (b) the module-level CLAUDE.md #18 Layer-1 invariant 'EVERY WRITE's UCAN delegation chain MUST trace back to a registered user-DID root grant' is documented but unenforced at HEAD; (c) the Noop default returns NotApplicable for every chain → admit. Grep confirms ZERO call sites of `validate_chain` outside the test file at `crates/benten-engine/tests/g_core_8_write_boundary_user_root_chain_validator_4_23.rs`. The substrate is correctly factored (trait, outcome enum, typed reject ErrorCode, outcome_to_admission_reject helper, setter), but advertising a frozen v1 'Layer-1 elevation defense' shape when production code never invokes it is a freeze-discipline gap: external policy authors may believe Layer-1 is structurally enforced when it isn't.",
+      "claude_md_anchor": "CLAUDE.md baked-in #18 Layer-1 user-as-root invariant (runtime-enforced).",
+      "disposition": "FIX-NOW OR HALT-AND-SURFACE",
+      "fix": "Two options to surface for Ben at triage: (a) FIX-NOW — pull the G-CORE-8.2 WRITE-admission wire-up into G-CORE-9 (audit every `Engine::commit` / `Engine::put_node_with_context` call site, thread `validate_chain` consultation at admission; precedent: Phase-3 G16-B-F structural-always-on per-row cap-recheck wave-pull). LOC ~200-400 + ~10-15 test pins covering the WRITE call sites. (b) DESTINATION-REMAPPED named-NOW G-CORE-8.2 — keep the trait + setter frozen at G-CORE-9 explicitly noting that consumption is a Composing-window structural delivery; add a startup-time runtime warning when a NoopWriteBoundaryChainValidator is installed in a production build (post-v1-beta). Per HARD RULE 12, the latter requires a real named destination + entry NOW; V1-FROZEN already names G-CORE-8.2, so the disposition is structurally valid — but document the gap loudly so the freeze surface and the runtime semantics don't drift."
+    },
+    {
+      "id": "L6-r1-5",
+      "severity": "MAJOR",
+      "title": "InstallRecordReplayStore has effectively zero production wire-up — TOCTOU defense substrate exists but every test passes `install_record_replay_check: None`",
+      "where": "crates/benten-engine/src/install_record_replay.rs (substrate) + crates/benten-engine/src/engine.rs:1932 (always-mounted) + crates/benten-platform-foundation/src/plugin_lifecycle.rs:901 (sole opt-in call site, gated on `Some(replay_check)` port being supplied by caller); ALL workspace test callers verified to pass `install_record_replay_check: None`",
+      "evidence": "V1-FROZEN item 12 L956-958 references `install_record_replay_store` substrate. The substrate is correctly factored (atomic Mutex<HashSet<[u8;32]>> + typed `PluginInstallRecordAlreadyApplied` ErrorCode + parallel-presentation test). However: every test under `crates/benten-platform-foundation/tests/` that constructs `InstallPorts` sets `install_record_replay_check: None`. Grep confirms ONE production code site that consumes the port (plugin_lifecycle.rs:901 — gated on `Some`). Zero call sites supply `Some(closure_that_calls_engine.install_record_replay_store().record_and_check)`. Engine::install_plugin per-process invariant the module header claims (install_record_replay.rs:33 'install pipeline ALWAYS goes through Engine::install_plugin which is per-process') does NOT exist on `Engine` itself — `install_plugin` lives at `benten_platform_foundation::plugin_lifecycle::install_plugin` + `benten_platform_foundation::manifest_store::ManifestStore::install_plugin` (the latter bypasses the lifecycle entirely + has no replay check).",
+      "claude_md_anchor": "HARD RULE 12; #18 trust model.",
+      "disposition": "FIX-NOW",
+      "fix": "(a) Wire `install_record_replay_check: Some(Box::new(move |hash| engine.install_record_replay_store().record_and_check(hash)))` at the canonical `install_plugin` entrypoint(s). (b) Either gate `manifest_store::install_plugin` to require the replay check OR DOC-PIN that it's an internal-only path that lifecycle wraps. (c) Convert the lifecycle port from `Option<&mut InstallRecordReplayCheckFn>` to required `&mut InstallRecordReplayCheckFn` per the structural-always-on discipline (the `None` arm is a fail-open default that contradicts the §4.37 TOCTOU contract — there is no legitimate production reason to opt out)."
+    },
+    {
+      "id": "L6-r1-6",
+      "severity": "MAJOR",
+      "title": "All three §8-E hooks (check_install_consent, check_per_delegation, check_write_with_audience) have ZERO production call sites — frozen surfaces are advertised but never consulted",
+      "where": "crates/benten-caps/src/policy.rs:492-557 (the three defaulted hook signatures)",
+      "evidence": "V1-FROZEN item 8 row 'Lock the new method signatures + the new field. Object-safety preserved.' is met at the trait definition level (signatures locked, defaults provided, object-safety preserved per compile-test pin). However: workspace grep finds ZERO production call sites for any of the three hooks. The only consumers are inside `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` which dispatches each hook via `Arc<dyn CapabilityPolicy>` to demonstrate object-safety only. Engine::apply_atrium_merge at engine.rs:1413 calls plain `policy.check_write(&ctx)`, NOT `check_write_with_audience(&ctx)` — so the audience field on CapWriteContext is populated but never enforced. install_plugin at plugin_lifecycle.rs has no `check_install_consent` consultation. delegate_capability at engine_caps.rs has no `check_per_delegation` consultation. The freeze surface advertises three security hooks that, at HEAD, are pure-trait-shape with no runtime effect — a future custom CapabilityPolicy author overriding `check_per_delegation` will be silently ignored.",
+      "claude_md_anchor": "CLAUDE.md #18 trust model Layer-2 (install-time manifest) + Layer-3 (runtime delegation within envelope).",
+      "disposition": "FIX-NOW OR HALT-AND-SURFACE",
+      "fix": "Two options: (a) FIX-NOW — at G-CORE-9, wire the three hooks at their semantically-canonical call sites: `check_install_consent` at the install-pipeline admission (plugin_lifecycle.rs step 3b alongside replay-check), `check_per_delegation` at the cross-plugin delegation runtime boundary inside `delegate_capability` (engine_caps.rs:541 alongside the shares_policy_resolver call), `check_write_with_audience` at `apply_atrium_merge`'s per-row check_write call (engine.rs:1413 — switch unconditionally; default impl delegates to check_write preserving back-compat). (b) HOLD — explicitly document in V1-FROZEN item 8 that the hooks are signature-frozen-but-consumption-deferred to G-CORE-8.2 and that overriding them at HEAD has no runtime effect. Per HARD RULE 12 clause-(b) this requires the named destination (G-CORE-8.2 already named); but the freeze contract should not LOOK like an active security boundary if it isn't one."
+    },
+    {
+      "id": "L6-r1-7",
+      "severity": "MINOR",
+      "title": "V1-FROZEN item 8 row 'actor_hint: String' cites wrong shape — ground-truth is `Option<String>`",
+      "where": "docs/V1-FROZEN-INTERFACE.md L650 vs crates/benten-caps/src/policy.rs:167",
+      "evidence": "V1-FROZEN item 8 row says 'Lock as-shipped (the `actor_hint: String` placeholder per `policy.rs:81`)'. Ground-truth at HEAD: `pub actor_hint: Option<String>` at policy.rs:167. The doc cite is also wrong line number (:81 → :167). Cite-drift in the freeze doc itself.",
+      "claude_md_anchor": "pim-1 / §3.5b post-fix doc-coupling pre-flight.",
+      "disposition": "FIX-NOW",
+      "fix": "Update V1-FROZEN-INTERFACE.md L650 to read 'the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:167`'."
+    },
+    {
+      "id": "L6-r1-8",
+      "severity": "MINOR",
+      "title": "V1-FROZEN item 12 'Empty/sentinel <unresolved-peer> peer-DID MUST deny ... at §4.25 sync-hydrate' references unbuilt surface",
+      "where": "docs/V1-FROZEN-INTERFACE.md L968 vs ground-truth at crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314 (§4.25 wire-up named G-CORE-8.2 follow-up; tested in shared-primitive shape but not at the handshake.rs boundary)",
+      "evidence": "V1-FROZEN item 12 claim: 'Empty/sentinel `<unresolved-peer>` peer-DID MUST deny (never admit) at recheck AND §4.25 sync-hydrate (security-r1-2).' The §4.36 merge-recheck half IS enforced structurally (engine.rs:1462-1476 short-circuits to typed UnresolvedDeny BEFORE rechecker dispatch). The §4.25 sync-hydrate half is documented as 'lands in crates/benten-sync/src/handshake.rs (G-CORE-8.2 follow-up wave)' per the test comment at L307; verified: no §4.25 enforcement at `crates/benten-sync/src/handshake.rs`. The freeze claim is therefore half-true; honest disposition is 'recheck half frozen structurally; §4.25 sync-hydrate half is named-to-G-CORE-8.2 with the SHARED primitive (UnresolvedDeny+outcome_to_row_reject) ready for consumption'.",
+      "claude_md_anchor": "HARD RULE 12 clause-(b): named-now destination required for any 'deferred at v1' framing.",
+      "disposition": "FIX-NOW",
+      "fix": "Update V1-FROZEN-INTERFACE.md L968 to read 'Empty/sentinel `<unresolved-peer>` peer-DID MUST deny (never admit) at recheck (structurally enforced at engine.rs:1462-1476); the §4.25 sync-hydrate path shares the same primitive (UnresolvedDeny + outcome_to_row_reject) — handshake.rs wire-up named at G-CORE-8.2 per the test pin at g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314.'"
+    },
+    {
+      "id": "L6-r1-9",
+      "severity": "MINOR",
+      "title": "AuthorizationGrant.audience_pubkey is `Option<Vec<u8>>` for back-compat — defense-in-depth EndpointId-vs-audience binding is OPTIONAL at v1-FREEZE",
+      "where": "crates/benten-caps/src/authorization_grant.rs:234",
+      "evidence": "The wave-3e handler at the ALPN boundary uses `audience_pubkey` to assert the connection's verified `EndpointId` (the requester's pubkey per Spike A2's zero-conversion plumbing) matches the UCAN audience — defense-in-depth against grant-swap-to-different-audience attacks under the same `binding_sig`. The `Option<>` wrap is documented as 'back-compat with wave-3b's issue_envelopes_for_test helper which uses a Cid-form audience and doesn't carry the raw pubkey bytes.' Production grants with `audience_pubkey: None` SKIP the EndpointId-mismatch check at the handler boundary. The `binding_sig` already covers `audience` per binding_message; so the structural risk is limited (the audience CID IS bound), but the connection-time double-check is silently disabled when the field is None.",
+      "claude_md_anchor": "CLAUDE.md #5 crypto-agility refinement (audience-binding part of A-3 wrong-audience-swap defense).",
+      "disposition": "FIX-NOW OR HOLD",
+      "fix": "Two options for triage: (a) FIX-NOW — at the v1-FREEZE wave, require `audience_pubkey` non-None for production grants by minting a separate constructor `AuthorizationGrant::issue_production(..)` that mandates the bytes + the existing `issue_envelopes_for_test` constructor stays None-permitting; assert at the handler-boundary that None grants are test-only via a runtime-check on a `cfg(test)` flag or by changing the production code path to require the field. (b) HOLD — explicitly document in V1-FROZEN item 8 that `audience_pubkey: Option<Vec<u8>>` is a frozen v1 shape and that production grants MUST populate it (advisory, not structural); production wire-up at the ALPN handler enforces by rejecting None at admission."
+    },
+    {
+      "id": "L6-r1-10",
+      "severity": "OBS",
+      "title": "PluginInstallRecord idempotency atomic primitive is correct + test-pinned; substrate gives `Err(PluginInstallRecordAlreadyApplied)` typed-reject reachable",
+      "where": "crates/benten-engine/src/install_record_replay.rs:111 (atomic record_and_check) + :192 (parallel_presentation_serialized_one_admits_one_rejects test)",
+      "evidence": "The atomic primitive correctness is well-tested: single-Mutex critical section spans contains-check + insert; the parallel-presentation test confirms exactly-one-admits / fifteen-reject under 16 parallel threads; consumed_count is invariant after replay; typed PluginInstallRecordAlreadyApplied is reachable. The TOCTOU defense substrate (in-process per-engine) is structurally sound. The L6-r1-5 finding above is the LIFE-OF-the-substrate gap — the substrate itself is correctly built.",
+      "claude_md_anchor": "n/a",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; observation that the substrate is sound."
+    },
+    {
+      "id": "L6-r1-11",
+      "severity": "OBS",
+      "title": "ThinClientBridge structural invariant — `resolve_principal_for_request(session_token, presented_origin)` has NO client-supplied principal field by construction; compile-time pin in place",
+      "where": "crates/benten-engine/src/thin_client_bridge.rs:119 (signature) + :269 (bridge_api_has_no_client_principal_parameter_structural_pin test) + :189-198 (deny.toml host-shell-runtime-leak compile-test backstop)",
+      "evidence": "The bridge's frozen invariant 'no client-supplied principal field' is structurally enforced: signature is exactly `(&SessionToken, &str)`; test pin asserts the call has exactly two arguments; deny.toml backstop comment confirms no host-shell runtime types leak. ThinClientSessionError wildcard-arm SessionErrorRender at L177 has `#[allow(unreachable_patterns)]` for the `#[non_exhaustive]` ThinClientSessionError forward-compat — that's correct discipline. No client-principal-elevation attack surface possible through this API.",
+      "claude_md_anchor": "CLAUDE.md #17 deployment shape (b)/(c); #18 trust model.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; structural invariant frozen correctly."
+    },
+    {
+      "id": "L6-r1-12",
+      "severity": "OBS",
+      "title": "Sealed hard-promotion mechanism (private `sealed::Sealed` supertrait + `pub(crate) mod sealed`) is structurally sound; workspace-test opt-in via `__sealed_for_workspace_tests` re-export under `testing` feature is the correct shape; object-safety preserved",
+      "where": "crates/benten-caps/src/policy.rs:50-64 (sealed module) + :338 (CapabilityPolicy trait def) + crates/benten-caps/src/lib.rs:342-346 (workspace-test opt-in re-export)",
+      "evidence": "Mechanism: `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. External crates cannot reach `sealed::Sealed` (crate-private path), so external `impl CapabilityPolicy for X` fails to compile (the `Sealed` supertrait bound cannot be satisfied). Workspace test crates that need a test-double opt into the `testing` feature which exposes `__sealed_for_workspace_tests::Sealed` for explicit impl. Object-safety preserved: Sealed has no methods, so `Arc<dyn CapabilityPolicy>` boxing is unchanged (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs::capability_policy_arc_dyn_boxing_compiles_object_safe_at_head_and_post_seal`). Three new §8-E hooks compose backward-compat under `Arc<dyn>` per pin `sealed_capability_policy_check_write_remains_dyn_dispatchable_with_three_new_hooks`. Mechanism is correct; L6-r1-3 is the MISSING-NEGATIVE-TEST concern, not a mechanism flaw.",
+      "claude_md_anchor": "CLAUDE.md #7 sealed-discipline refinement; #19 engine-extensions-compile-time-linked discipline.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; mechanism correctly implements §8-E sealed-discipline."
+    },
+    {
+      "id": "L6-r1-13",
+      "severity": "OBS",
+      "title": "GrantKeyMaterial (post-rename) + RestrictedScope (post-rename) + audience-bound binding_sig over (BINDING_SIG_DOMAIN || ucan-cbor || key_material-cbor || audience-cid-bytes) — typed correctly; A-1/A-2/A-3 attack arms structurally rejected",
+      "where": "crates/benten-caps/src/authorization_grant.rs:205-246 (AuthorizationGrant struct) + :324-347 (binding_message domain-separated composition) + :283-310 (AuthorizationGrantError typed reject) + :17-30 (A-1/A-2/A-3 attack-arm doc-block)",
+      "evidence": "Renames `KeyMaterial → GrantKeyMaterial` + `RestrictedSpec → RestrictedScope` (caps side) + `RestrictedSpec → SubgraphSpecRestriction` (core side) all landed clean; public re-exports at `benten_caps::lib.rs:163, 169-171` use post-rename names; chain-validator integrates `RestrictedScope` via `Scope::RestrictedSelector(RestrictedScope)` at `scope.rs:51`. The `BINDING_SIG_DOMAIN = b\"benten/g-core-3b/authorization-grant/v1\"` domain-separation tag prevents cross-surface signature re-use. Binding message composition is byte-canonical (CBOR-encoded inputs + audience CID bytes in fixed order). A-1 (stolen-UCAN-without-keys) + A-2 (key-tamper) + A-3 (wrong-audience-swap) all surface typed `BindingMismatch` / `AudienceMismatch` rejects per the documented coverage at the module-doc top.",
+      "claude_md_anchor": "CLAUDE.md #5 crypto-agility (multiformats framing + crypto-suite codepoint table) + #18 Principal primitive.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; AuthorizationGrant shape correctly enforces audience-bound multi-arm-resistant binding."
+    },
+    {
+      "id": "L6-r1-14",
+      "severity": "OBS",
+      "title": "Empty-peer-DID structural fail-CLOSED at apply_atrium_merge fires unconditionally (always-mounted NoopRechecker default + short-circuit BEFORE rechecker dispatch)",
+      "where": "crates/benten-engine/src/engine.rs:1448-1484 (the `if let Some(rechecker)` guard) + :1908-1910 (always-mounted `Some(Arc::new(Noop))` default)",
+      "evidence": "The engine constructor at engine.rs:1908 ALWAYS installs `Some(Arc::new(NoopManifestEnvelopeRechecker))` — there is no path that constructs an engine with `manifest_envelope_rechecker: None`. Therefore the `if let Some(rechecker)` guard at L1448 ALWAYS fires, and the empty-peer-DID short-circuit at L1462-1476 (when `resolve_peer_dids` returns None) ALWAYS short-circuits to typed `Err(ManifestEnvelopeRecheckUnresolvedDeny)` BEFORE calling the rechecker — independent of whether a substantive ProductionRechecker or the Noop is installed. This is the structurally-always-on fail-CLOSED that security-r1-2 requires.",
+      "claude_md_anchor": "CLAUDE.md #18 Layer-3 envelope semantics.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; structural fail-CLOSED is correctly always-on at the §4.36 merge boundary."
+    }
+  ],
+  "metrics": {
+    "BLOCKER_count": 0,
+    "MAJOR_count": 6,
+    "MINOR_count": 3,
+    "OBS_count": 5,
+    "total_findings": 14,
+    "files_reviewed": 11,
+    "v1_frozen_items_in_scope": ["item 8", "item 11 (coupled)", "item 12", "item 13 (ThinClientBridge cross-cite)", "item 15 (Scope/RestrictedScope cross-cite)"]
+  },
+  "convergence_status": "REQUEST_CHANGES — 6 MAJOR + 3 MINOR + 5 OBS verify-stays. The substrate work in this surface area (sealed-discipline mechanism, AuthorizationGrant binding, ThinClientBridge no-client-principal, atomic install-record replay, apply_atrium_merge empty-peer-DID structural fail-CLOSED) is correctly factored. The freeze CONTRACT itself has the structural integrity concerns above — #[non_exhaustive] gaps that bake the wrong shape into the v1 SemVer lock + frozen surfaces (WriteBoundaryChainValidator, three §8-E hooks, install-record replay wire-up) that are advertised as SHIPPED but lack production consumption. Convergence requires either (a) closing the gaps at G-CORE-9 OR (b) explicit V1-FROZEN doc tightening that distinguishes signature-frozen-but-consumption-deferred surfaces from signature-frozen-and-consumed surfaces, so external consumers do not over-rely on advertised security boundaries."
+}
