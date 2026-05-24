@@ -47,6 +47,7 @@ pub const DROP_BUNDLE_VERSION_V1: u16 = 1;
 /// version values to assert the typed-reject contract).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "tag", content = "value")]
+#[non_exhaustive]
 pub enum DropBundleVersion {
     /// v1 — the only production-known version at G-CORE-3f.
     V1,

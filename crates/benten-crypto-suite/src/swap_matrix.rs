@@ -776,6 +776,7 @@ impl SwapMatrix {
 
 /// Typed error envelope for the swap-matrix.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum SwapMatrixError {
     /// Codepoint/config mismatch (e.g. classical-decrypt of hybrid
     /// envelope; missing recipient keypair half).

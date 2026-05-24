@@ -350,6 +350,7 @@ pub fn unwrap(
 
 /// AEAD-side typed error envelope.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum AeadError {
     /// AEAD authentication failed — tag-mismatch or rebinding (the AAD
     /// doesn't match what the seal-time AAD bound). The load-bearing

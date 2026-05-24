@@ -569,6 +569,7 @@ fn make_key_material_matching(
 /// storage-specific pre-flight cases (key length mismatch +
 /// structurally-too-short ciphertext).
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum AeadError {
     /// AEAD authentication failed — tag mismatch or AAD rebinding.
     /// The load-bearing rebinding-attack defense per §1.A.FROZEN item
@@ -629,6 +630,13 @@ impl From<SuiteAeadError> for AeadError {
             SuiteAeadError::Unsupported(unsupported) => Self::Unsupported {
                 note: format!("{unsupported:?}"),
             },
+            // L1-r6r1-MIN-1 (R6 R1): SuiteAeadError is #[non_exhaustive];
+            // future-variant additions surface here as opaque
+            // Authentication-class failures (fail-CLOSED default; specific
+            // arm-mapping ratchets up at the wave that mints the variant).
+            other => Self::Authentication(format!(
+                "unmapped cipher-suite AeadError variant (post-non_exhaustive forward-compat): {other:?}"
+            )),
         }
     }
 }
