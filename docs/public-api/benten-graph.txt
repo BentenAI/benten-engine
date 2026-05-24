@@ -1,11 +1,1696 @@
-# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
-#
-# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
-# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). Seed
-# baseline; first nightly cargo-public-api run replaces with full
-# `cargo public-api -p benten-graph --simplified` output.
-#
-# Pinned by `crates/benten-engine/tests/cargo_public_api_drift.rs`.
-
-crate = benten-graph
-phase_3_seeded_at = G20-A3 wave-8a
+ Documenting benten-graph v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-graph)
+pub mod benten_graph
+pub use benten_graph::ErrorCode
+pub use benten_graph::WriteAuthority
+pub mod benten_graph::aead_wrap
+pub enum benten_graph::aead_wrap::AeadError
+pub benten_graph::aead_wrap::AeadError::Authentication(alloc::string::String)
+pub benten_graph::aead_wrap::AeadError::CiphertextTooShort
+pub benten_graph::aead_wrap::AeadError::CiphertextTooShort::got: usize
+pub benten_graph::aead_wrap::AeadError::KeyMismatch
+pub benten_graph::aead_wrap::AeadError::KeyMismatch::reason: alloc::string::String
+pub benten_graph::aead_wrap::AeadError::TagMismatch
+pub benten_graph::aead_wrap::AeadError::TagMismatch::note: &'static str
+pub benten_graph::aead_wrap::AeadError::Unsupported
+pub benten_graph::aead_wrap::AeadError::Unsupported::note: alloc::string::String
+impl core::convert::From<benten_crypto_suite::aead::AeadError> for benten_graph::aead_wrap::AeadError
+pub fn benten_graph::aead_wrap::AeadError::from(value: benten_crypto_suite::aead::AeadError) -> Self
+impl core::error::Error for benten_graph::aead_wrap::AeadError
+impl core::fmt::Debug for benten_graph::aead_wrap::AeadError
+pub fn benten_graph::aead_wrap::AeadError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::aead_wrap::AeadError
+pub fn benten_graph::aead_wrap::AeadError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::aead_wrap::AeadError
+impl core::marker::Send for benten_graph::aead_wrap::AeadError
+impl core::marker::Sync for benten_graph::aead_wrap::AeadError
+impl core::marker::Unpin for benten_graph::aead_wrap::AeadError
+impl core::marker::UnsafeUnpin for benten_graph::aead_wrap::AeadError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::aead_wrap::AeadError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::aead_wrap::AeadError
+pub enum benten_graph::aead_wrap::EncryptedNode
+pub benten_graph::aead_wrap::EncryptedNode::Chunked
+pub benten_graph::aead_wrap::EncryptedNode::Chunked::chunked: benten_graph::aead_wrap::ChunkedCiphertext
+pub benten_graph::aead_wrap::EncryptedNode::Chunked::plaintext_cid: benten_core::Cid
+pub benten_graph::aead_wrap::EncryptedNode::Whole
+pub benten_graph::aead_wrap::EncryptedNode::Whole::envelope: benten_crypto_suite::aead::AeadEnvelope
+pub benten_graph::aead_wrap::EncryptedNode::Whole::plaintext_cid: benten_core::Cid
+impl benten_graph::aead_wrap::EncryptedNode
+pub fn benten_graph::aead_wrap::EncryptedNode::encrypt(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<Self, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::EncryptedNode::plaintext_cid(&self) -> &benten_core::Cid
+impl core::clone::Clone for benten_graph::aead_wrap::EncryptedNode
+pub fn benten_graph::aead_wrap::EncryptedNode::clone(&self) -> benten_graph::aead_wrap::EncryptedNode
+impl core::fmt::Debug for benten_graph::aead_wrap::EncryptedNode
+pub fn benten_graph::aead_wrap::EncryptedNode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::aead_wrap::EncryptedNode
+impl core::marker::Send for benten_graph::aead_wrap::EncryptedNode
+impl core::marker::Sync for benten_graph::aead_wrap::EncryptedNode
+impl core::marker::Unpin for benten_graph::aead_wrap::EncryptedNode
+impl core::marker::UnsafeUnpin for benten_graph::aead_wrap::EncryptedNode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::aead_wrap::EncryptedNode
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::aead_wrap::EncryptedNode
+pub struct benten_graph::aead_wrap::ChunkedCiphertext
+impl benten_graph::aead_wrap::ChunkedCiphertext
+pub fn benten_graph::aead_wrap::ChunkedCiphertext::chunks(&self) -> &[benten_crypto_suite::aead::AeadEnvelope]
+pub fn benten_graph::aead_wrap::ChunkedCiphertext::encrypt(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<Self, benten_graph::aead_wrap::AeadError>
+impl core::clone::Clone for benten_graph::aead_wrap::ChunkedCiphertext
+pub fn benten_graph::aead_wrap::ChunkedCiphertext::clone(&self) -> benten_graph::aead_wrap::ChunkedCiphertext
+impl core::fmt::Debug for benten_graph::aead_wrap::ChunkedCiphertext
+pub fn benten_graph::aead_wrap::ChunkedCiphertext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::aead_wrap::ChunkedCiphertext
+impl core::marker::Send for benten_graph::aead_wrap::ChunkedCiphertext
+impl core::marker::Sync for benten_graph::aead_wrap::ChunkedCiphertext
+impl core::marker::Unpin for benten_graph::aead_wrap::ChunkedCiphertext
+impl core::marker::UnsafeUnpin for benten_graph::aead_wrap::ChunkedCiphertext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::aead_wrap::ChunkedCiphertext
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::aead_wrap::ChunkedCiphertext
+pub const benten_graph::aead_wrap::IROH_BLOCK_SIZE: usize
+pub const benten_graph::aead_wrap::WHOLE_AEAD_THRESHOLD: usize
+pub fn benten_graph::aead_wrap::decode_encrypted_node(bytes: &[u8]) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::decrypt(envelope: &benten_graph::aead_wrap::EncryptedNode, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::decrypt_chunk(chunk: &benten_crypto_suite::aead::AeadEnvelope, chunk_index: usize, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::encode_encrypted_node(encrypted: &benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::encrypt(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::encrypt_chunk(chunk_plaintext: &[u8], chunk_index: usize, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_graph::aead_wrap::AeadError>
+pub mod benten_graph::backend
+pub enum benten_graph::backend::DurabilityMode
+pub benten_graph::backend::DurabilityMode::Async
+pub benten_graph::backend::DurabilityMode::Group
+pub benten_graph::backend::DurabilityMode::Immediate
+impl core::clone::Clone for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::clone(&self) -> benten_graph::backend::DurabilityMode
+impl core::cmp::Eq for benten_graph::backend::DurabilityMode
+impl core::cmp::PartialEq for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::eq(&self, other: &benten_graph::backend::DurabilityMode) -> bool
+impl core::default::Default for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::default() -> Self
+impl core::fmt::Debug for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::backend::DurabilityMode
+impl core::marker::StructuralPartialEq for benten_graph::backend::DurabilityMode
+impl core::marker::Freeze for benten_graph::backend::DurabilityMode
+impl core::marker::Send for benten_graph::backend::DurabilityMode
+impl core::marker::Sync for benten_graph::backend::DurabilityMode
+impl core::marker::Unpin for benten_graph::backend::DurabilityMode
+impl core::marker::UnsafeUnpin for benten_graph::backend::DurabilityMode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backend::DurabilityMode
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backend::DurabilityMode
+pub struct benten_graph::backend::ScanIter(_)
+impl core::iter::traits::exact_size::ExactSizeIterator for benten_graph::backend::ScanIter
+pub fn benten_graph::backend::ScanIter::len(&self) -> usize
+impl core::iter::traits::iterator::Iterator for benten_graph::backend::ScanIter
+pub type benten_graph::backend::ScanIter::Item = (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)
+pub fn benten_graph::backend::ScanIter::next(&mut self) -> core::option::Option<Self::Item>
+pub fn benten_graph::backend::ScanIter::size_hint(&self) -> (usize, core::option::Option<usize>)
+impl core::marker::Freeze for benten_graph::backend::ScanIter
+impl core::marker::Send for benten_graph::backend::ScanIter
+impl core::marker::Sync for benten_graph::backend::ScanIter
+impl core::marker::Unpin for benten_graph::backend::ScanIter
+impl core::marker::UnsafeUnpin for benten_graph::backend::ScanIter
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backend::ScanIter
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backend::ScanIter
+pub struct benten_graph::backend::ScanResult(_)
+impl benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::as_slice(&self) -> &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]
+pub fn benten_graph::backend::ScanResult::is_empty(&self) -> bool
+pub fn benten_graph::backend::ScanResult::iter(&self) -> core::slice::iter::Iter<'_, (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub fn benten_graph::backend::ScanResult::len(&self) -> usize
+pub fn benten_graph::backend::ScanResult::new() -> Self
+impl core::clone::Clone for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::clone(&self) -> benten_graph::backend::ScanResult
+impl core::cmp::Eq for benten_graph::backend::ScanResult
+impl core::cmp::PartialEq for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::eq(&self, other: &benten_graph::backend::ScanResult) -> bool
+impl core::default::Default for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::default() -> benten_graph::backend::ScanResult
+impl core::fmt::Debug for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::iter::traits::collect::FromIterator<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)> for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::from_iter<I: core::iter::traits::collect::IntoIterator<Item = (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>>(iter: I) -> Self
+impl core::iter::traits::collect::IntoIterator for benten_graph::backend::ScanResult
+pub type benten_graph::backend::ScanResult::IntoIter = benten_graph::backend::ScanIter
+pub type benten_graph::backend::ScanResult::Item = (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)
+pub fn benten_graph::backend::ScanResult::into_iter(self) -> Self::IntoIter
+impl core::marker::StructuralPartialEq for benten_graph::backend::ScanResult
+impl<'a> core::iter::traits::collect::IntoIterator for &'a benten_graph::backend::ScanResult
+pub type &'a benten_graph::backend::ScanResult::IntoIter = core::slice::iter::Iter<'a, (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub type &'a benten_graph::backend::ScanResult::Item = &'a (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)
+pub fn &'a benten_graph::backend::ScanResult::into_iter(self) -> Self::IntoIter
+impl core::marker::Freeze for benten_graph::backend::ScanResult
+impl core::marker::Send for benten_graph::backend::ScanResult
+impl core::marker::Sync for benten_graph::backend::ScanResult
+impl core::marker::Unpin for benten_graph::backend::ScanResult
+impl core::marker::UnsafeUnpin for benten_graph::backend::ScanResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backend::ScanResult
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backend::ScanResult
+pub trait benten_graph::backend::KVBackend: core::marker::Send + core::marker::Sync
+pub type benten_graph::backend::KVBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::backend::KVBackend::delete(&self, key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backend::KVBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backend::KVBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backend::KVBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backend::KVBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backend::KVBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan(&self, _prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
+pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::supports_durability(&self) -> bool
+pub mod benten_graph::backends
+pub mod benten_graph::backends::blob_backend
+#[non_exhaustive] pub enum benten_graph::backends::blob_backend::BlobError
+pub benten_graph::backends::blob_backend::BlobError::CidMismatch
+pub benten_graph::backends::blob_backend::BlobError::CidMismatch::computed: benten_core::Cid
+pub benten_graph::backends::blob_backend::BlobError::CidMismatch::expected: benten_core::Cid
+pub benten_graph::backends::blob_backend::BlobError::Graph(benten_graph::GraphError)
+impl benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::code(&self) -> benten_errors::ErrorCode
+impl core::convert::From<benten_graph::GraphError> for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::from(source: benten_graph::GraphError) -> Self
+impl core::error::Error for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::blob_backend::BlobError
+impl core::marker::Send for benten_graph::backends::blob_backend::BlobError
+impl core::marker::Sync for benten_graph::backends::blob_backend::BlobError
+impl core::marker::Unpin for benten_graph::backends::blob_backend::BlobError
+impl core::marker::UnsafeUnpin for benten_graph::backends::blob_backend::BlobError
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::blob_backend::BlobError
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::backends::blob_backend::BlobError
+pub struct benten_graph::backends::blob_backend::RedbBlobBackend
+impl benten_graph::backends::blob_backend::RedbBlobBackend
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete_sync(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_graph::backends::blob_backend::BlobError>
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get_sync(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_blob_cids(&self) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::new(backend: alloc::sync::Arc<benten_graph::redb_backend::RedbBackend>) -> Self
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put_sync(&self, cid: &benten_core::Cid, bytes: &[u8]) -> core::result::Result<(), benten_graph::backends::blob_backend::BlobError>
+impl benten_graph::backends::blob_backend_trait::BlobBackend for benten_graph::backends::blob_backend::RedbBlobBackend
+pub type benten_graph::backends::blob_backend::RedbBlobBackend::Error = benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+impl core::clone::Clone for benten_graph::backends::blob_backend::RedbBlobBackend
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::clone(&self) -> benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Freeze for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Send for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Sync for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Unpin for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::blob_backend::RedbBlobBackend
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::blob_backend::RedbBlobBackend
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::backends::blob_backend::RedbBlobBackend
+pub const benten_graph::backends::blob_backend::BLOB_BYTES_PROPERTY: &str
+pub const benten_graph::backends::blob_backend::BLOB_CID_PROPERTY: &str
+pub const benten_graph::backends::blob_backend::MAX_MODULE_BYTES_ZONE_SCAN: usize
+pub const benten_graph::backends::blob_backend::MODULE_BYTES_LABEL: &str
+pub mod benten_graph::backends::blob_backend_trait
+pub trait benten_graph::backends::blob_backend_trait::BlobBackend: core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::backends::blob_backend_trait::BlobBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::backends::blob_backend_trait::BlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend_trait::BlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend_trait::BlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::blob_backend_trait::BlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend_trait::BlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+impl benten_graph::backends::blob_backend_trait::BlobBackend for benten_graph::backends::blob_backend::RedbBlobBackend
+pub type benten_graph::backends::blob_backend::RedbBlobBackend::Error = benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub mod benten_graph::backends::network_fetch_stub
+#[non_exhaustive] pub enum benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub benten_graph::backends::network_fetch_stub::NetworkFetchStubError::Phase3DeferredFetch
+pub benten_graph::backends::network_fetch_stub::NetworkFetchStubError::Phase3DeferredFetch::label: alloc::string::String
+pub benten_graph::backends::network_fetch_stub::NetworkFetchStubError::Phase3DeferredFetch::operation: &'static str
+pub benten_graph::backends::network_fetch_stub::NetworkFetchStubError::ReadOnly
+pub benten_graph::backends::network_fetch_stub::NetworkFetchStubError::ReadOnly::label: alloc::string::String
+pub benten_graph::backends::network_fetch_stub::NetworkFetchStubError::ReadOnly::operation: &'static str
+impl benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::fmt::Debug for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Send for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Sync for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Unpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::UnsafeUnpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub struct benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::label(&self) -> core::option::Option<&str>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::new() -> Self
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::with_label(label: impl core::convert::Into<alloc::string::String>) -> Self
+impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan(&self, _prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
+impl core::clone::Clone for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::clone(&self) -> benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::default::Default for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::default() -> benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::fmt::Debug for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Send for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Sync for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Unpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub mod benten_graph::backends::snapshot_blob
+#[non_exhaustive] pub enum benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::Decode(benten_core::CoreError)
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::ReadOnly
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::ReadOnly::operation: &'static str
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::SchemaVersion
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::SchemaVersion::actual: u32
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::SchemaVersion::expected: u32
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::TooLarge
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::TooLarge::actual: usize
+pub benten_graph::backends::snapshot_blob::SnapshotBlobError::TooLarge::limit: usize
+impl benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::code(&self) -> benten_errors::ErrorCode
+impl core::convert::From<benten_core::CoreError> for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::from(source: benten_core::CoreError) -> Self
+impl core::error::Error for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub struct benten_graph::backends::snapshot_blob::SnapshotBlob
+pub benten_graph::backends::snapshot_blob::SnapshotBlob::anchor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::backends::snapshot_blob::SnapshotBlob::merkle_root: core::option::Option<benten_core::Cid>
+pub benten_graph::backends::snapshot_blob::SnapshotBlob::nodes: alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::vec::Vec<u8>>
+pub benten_graph::backends::snapshot_blob::SnapshotBlob::schema_version: u32
+pub benten_graph::backends::snapshot_blob::SnapshotBlob::system_zone_index: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<benten_core::Cid>>
+impl benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::compute_cid(bytes: &[u8]) -> benten_core::Cid
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::cmp::Eq for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::cmp::PartialEq for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::eq(&self, other: &benten_graph::backends::snapshot_blob::SnapshotBlob) -> bool
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl serde_core::ser::Serialize for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub struct benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::blob(&self) -> &benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compute_blob_cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::export_blob(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_graph::backends::snapshot_blob::SnapshotBlobError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes_with_cap(bytes: &[u8], limit: usize) -> core::result::Result<Self, benten_graph::backends::snapshot_blob::SnapshotBlobError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::new(blob: benten_graph::backends::snapshot_blob::SnapshotBlob) -> Self
+impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
+impl benten_graph::graph_backend::GraphBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Snapshot = benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Transaction = benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node_with_context(&self, _node: &benten_core::Node, _ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::register_subscriber(&self, _subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::store::EdgeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_from(&self, _source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_to(&self, _target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_edge(&self, _edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_node(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node(&self, _node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub struct benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::cmp::Eq for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::cmp::PartialEq for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle::eq(&self, other: &benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle) -> bool
+impl core::default::Default for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle::default() -> benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::marker::StructuralPartialEq for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub struct benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::cmp::Eq for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::cmp::PartialEq for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner::eq(&self, other: &benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner) -> bool
+impl core::default::Default for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner::default() -> benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::marker::StructuralPartialEq for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub const benten_graph::backends::snapshot_blob::MAX_SNAPSHOT_BLOB_BYTES: usize
+pub const benten_graph::backends::snapshot_blob::SNAPSHOT_BLOB_SCHEMA_VERSION: u32
+#[non_exhaustive] pub enum benten_graph::backends::BlobError
+pub benten_graph::backends::BlobError::CidMismatch
+pub benten_graph::backends::BlobError::CidMismatch::computed: benten_core::Cid
+pub benten_graph::backends::BlobError::CidMismatch::expected: benten_core::Cid
+pub benten_graph::backends::BlobError::Graph(benten_graph::GraphError)
+impl benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::code(&self) -> benten_errors::ErrorCode
+impl core::convert::From<benten_graph::GraphError> for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::from(source: benten_graph::GraphError) -> Self
+impl core::error::Error for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::blob_backend::BlobError
+impl core::marker::Send for benten_graph::backends::blob_backend::BlobError
+impl core::marker::Sync for benten_graph::backends::blob_backend::BlobError
+impl core::marker::Unpin for benten_graph::backends::blob_backend::BlobError
+impl core::marker::UnsafeUnpin for benten_graph::backends::blob_backend::BlobError
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::blob_backend::BlobError
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::backends::blob_backend::BlobError
+#[non_exhaustive] pub enum benten_graph::backends::NetworkFetchStubError
+pub benten_graph::backends::NetworkFetchStubError::Phase3DeferredFetch
+pub benten_graph::backends::NetworkFetchStubError::Phase3DeferredFetch::label: alloc::string::String
+pub benten_graph::backends::NetworkFetchStubError::Phase3DeferredFetch::operation: &'static str
+pub benten_graph::backends::NetworkFetchStubError::ReadOnly
+pub benten_graph::backends::NetworkFetchStubError::ReadOnly::label: alloc::string::String
+pub benten_graph::backends::NetworkFetchStubError::ReadOnly::operation: &'static str
+impl benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::fmt::Debug for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Send for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Sync for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Unpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::UnsafeUnpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+#[non_exhaustive] pub enum benten_graph::backends::SnapshotBlobError
+pub benten_graph::backends::SnapshotBlobError::Decode(benten_core::CoreError)
+pub benten_graph::backends::SnapshotBlobError::ReadOnly
+pub benten_graph::backends::SnapshotBlobError::ReadOnly::operation: &'static str
+pub benten_graph::backends::SnapshotBlobError::SchemaVersion
+pub benten_graph::backends::SnapshotBlobError::SchemaVersion::actual: u32
+pub benten_graph::backends::SnapshotBlobError::SchemaVersion::expected: u32
+pub benten_graph::backends::SnapshotBlobError::TooLarge
+pub benten_graph::backends::SnapshotBlobError::TooLarge::actual: usize
+pub benten_graph::backends::SnapshotBlobError::TooLarge::limit: usize
+impl benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::code(&self) -> benten_errors::ErrorCode
+impl core::convert::From<benten_core::CoreError> for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::from(source: benten_core::CoreError) -> Self
+impl core::error::Error for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub struct benten_graph::backends::NetworkFetchStubBackend
+impl benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::label(&self) -> core::option::Option<&str>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::new() -> Self
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::with_label(label: impl core::convert::Into<alloc::string::String>) -> Self
+impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan(&self, _prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
+impl core::clone::Clone for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::clone(&self) -> benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::default::Default for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::default() -> benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::fmt::Debug for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Send for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Sync for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Unpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub struct benten_graph::backends::RedbBlobBackend
+impl benten_graph::backends::blob_backend::RedbBlobBackend
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete_sync(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_graph::backends::blob_backend::BlobError>
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get_sync(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_blob_cids(&self) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::new(backend: alloc::sync::Arc<benten_graph::redb_backend::RedbBackend>) -> Self
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put_sync(&self, cid: &benten_core::Cid, bytes: &[u8]) -> core::result::Result<(), benten_graph::backends::blob_backend::BlobError>
+impl benten_graph::backends::blob_backend_trait::BlobBackend for benten_graph::backends::blob_backend::RedbBlobBackend
+pub type benten_graph::backends::blob_backend::RedbBlobBackend::Error = benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+impl core::clone::Clone for benten_graph::backends::blob_backend::RedbBlobBackend
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::clone(&self) -> benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Freeze for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Send for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Sync for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::Unpin for benten_graph::backends::blob_backend::RedbBlobBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::blob_backend::RedbBlobBackend
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::blob_backend::RedbBlobBackend
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::backends::blob_backend::RedbBlobBackend
+pub struct benten_graph::backends::SnapshotBlob
+pub benten_graph::backends::SnapshotBlob::anchor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::backends::SnapshotBlob::merkle_root: core::option::Option<benten_core::Cid>
+pub benten_graph::backends::SnapshotBlob::nodes: alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::vec::Vec<u8>>
+pub benten_graph::backends::SnapshotBlob::schema_version: u32
+pub benten_graph::backends::SnapshotBlob::system_zone_index: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<benten_core::Cid>>
+impl benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::compute_cid(bytes: &[u8]) -> benten_core::Cid
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::cmp::Eq for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::cmp::PartialEq for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::eq(&self, other: &benten_graph::backends::snapshot_blob::SnapshotBlob) -> bool
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl serde_core::ser::Serialize for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub struct benten_graph::backends::SnapshotBlobBackend
+impl benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::blob(&self) -> &benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compute_blob_cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::export_blob(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_graph::backends::snapshot_blob::SnapshotBlobError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes_with_cap(bytes: &[u8], limit: usize) -> core::result::Result<Self, benten_graph::backends::snapshot_blob::SnapshotBlobError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::new(blob: benten_graph::backends::snapshot_blob::SnapshotBlob) -> Self
+impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
+impl benten_graph::graph_backend::GraphBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Snapshot = benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Transaction = benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node_with_context(&self, _node: &benten_core::Node, _ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::register_subscriber(&self, _subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::store::EdgeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_from(&self, _source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_to(&self, _target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_edge(&self, _edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_node(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node(&self, _node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub const benten_graph::backends::BLOB_BYTES_PROPERTY: &str
+pub const benten_graph::backends::BLOB_CID_PROPERTY: &str
+pub const benten_graph::backends::MAX_MODULE_BYTES_ZONE_SCAN: usize
+pub const benten_graph::backends::MAX_SNAPSHOT_BLOB_BYTES: usize
+pub const benten_graph::backends::MODULE_BYTES_LABEL: &str
+pub trait benten_graph::backends::BlobBackend: core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::backends::BlobBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::backends::BlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::BlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::BlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::BlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::BlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+impl benten_graph::backends::blob_backend_trait::BlobBackend for benten_graph::backends::blob_backend::RedbBlobBackend
+pub type benten_graph::backends::blob_backend::RedbBlobBackend::Error = benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub mod benten_graph::graph_backend
+pub struct benten_graph::graph_backend::RedbTransactionRunner
+impl benten_graph::graph_backend::RedbTransactionRunner
+pub const fn benten_graph::graph_backend::RedbTransactionRunner::new() -> Self
+impl core::clone::Clone for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::clone(&self) -> benten_graph::graph_backend::RedbTransactionRunner
+impl core::cmp::Eq for benten_graph::graph_backend::RedbTransactionRunner
+impl core::cmp::PartialEq for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::eq(&self, other: &benten_graph::graph_backend::RedbTransactionRunner) -> bool
+impl core::default::Default for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::default() -> benten_graph::graph_backend::RedbTransactionRunner
+impl core::fmt::Debug for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::StructuralPartialEq for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Freeze for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Send for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Sync for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Unpin for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::UnsafeUnpin for benten_graph::graph_backend::RedbTransactionRunner
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::graph_backend::RedbTransactionRunner
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::graph_backend::RedbTransactionRunner
+pub trait benten_graph::graph_backend::GraphBackend: benten_graph::backend::KVBackend<Error = <Self as benten_graph::graph_backend::GraphBackend>::Error> + benten_graph::store::NodeStore<Error = <Self as benten_graph::graph_backend::GraphBackend>::Error> + benten_graph::store::EdgeStore<Error = <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub type benten_graph::graph_backend::GraphBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::graph_backend::GraphBackend::Snapshot: core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::graph_backend::GraphBackend::Transaction
+pub fn benten_graph::graph_backend::GraphBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::graph_backend::GraphBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::graph_backend::GraphBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::graph_backend::GraphBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::graph_backend::GraphBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Snapshot = benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Transaction = benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node_with_context(&self, _node: &benten_core::Node, _ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::register_subscriber(&self, _subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::graph_backend::GraphBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub type benten_graph::redb_backend::RedbBackend::Snapshot = benten_graph::SnapshotHandle
+pub type benten_graph::redb_backend::RedbBackend::Transaction = benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::redb_backend::RedbBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::redb_backend::RedbBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::redb_backend::RedbBackend::transaction(&self) -> Self::Transaction
+pub mod benten_graph::immutability
+pub struct benten_graph::immutability::CidExistenceCache
+impl benten_graph::immutability::CidExistenceCache
+pub fn benten_graph::immutability::CidExistenceCache::force_collision_next(&mut self)
+pub fn benten_graph::immutability::CidExistenceCache::force_positive_for_test(&mut self, cid: &benten_core::Cid)
+pub fn benten_graph::immutability::CidExistenceCache::insert(&mut self, cid: &benten_core::Cid)
+pub fn benten_graph::immutability::CidExistenceCache::may_contain(&mut self, cid: &benten_core::Cid) -> bool
+pub fn benten_graph::immutability::CidExistenceCache::may_contain_peek(&self, cid: &benten_core::Cid) -> bool
+pub fn benten_graph::immutability::CidExistenceCache::new() -> Self
+pub fn benten_graph::immutability::CidExistenceCache::with_sizing(expected_inserts: usize, fp_rate: f64) -> Self
+impl core::default::Default for benten_graph::immutability::CidExistenceCache
+pub fn benten_graph::immutability::CidExistenceCache::default() -> Self
+impl core::marker::Freeze for benten_graph::immutability::CidExistenceCache
+impl core::marker::Send for benten_graph::immutability::CidExistenceCache
+impl core::marker::Sync for benten_graph::immutability::CidExistenceCache
+impl core::marker::Unpin for benten_graph::immutability::CidExistenceCache
+impl core::marker::UnsafeUnpin for benten_graph::immutability::CidExistenceCache
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::immutability::CidExistenceCache
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::immutability::CidExistenceCache
+pub mod benten_graph::in_memory_backend
+pub struct benten_graph::in_memory_backend::InMemoryBackend
+impl benten_graph::in_memory_backend::InMemoryBackend
+pub fn benten_graph::in_memory_backend::InMemoryBackend::new() -> Self
+impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
+pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::supports_durability(&self) -> bool
+impl core::default::Default for benten_graph::in_memory_backend::InMemoryBackend
+pub fn benten_graph::in_memory_backend::InMemoryBackend::default() -> benten_graph::in_memory_backend::InMemoryBackend
+impl core::fmt::Debug for benten_graph::in_memory_backend::InMemoryBackend
+pub fn benten_graph::in_memory_backend::InMemoryBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::Send for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::Sync for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::Unpin for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::UnsafeUnpin for benten_graph::in_memory_backend::InMemoryBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::in_memory_backend::InMemoryBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::in_memory_backend::InMemoryBackend
+pub mod benten_graph::mutex_ext
+pub trait benten_graph::mutex_ext::MutexExt<T>
+pub fn benten_graph::mutex_ext::MutexExt::lock_recover(&self) -> std::sync::poison::mutex::MutexGuard<'_, T>
+impl<T> benten_graph::mutex_ext::MutexExt<T> for std::sync::poison::mutex::Mutex<T>
+pub fn std::sync::poison::mutex::Mutex<T>::lock_recover(&self) -> std::sync::poison::mutex::MutexGuard<'_, T>
+pub trait benten_graph::mutex_ext::RwLockExt<T>
+pub fn benten_graph::mutex_ext::RwLockExt::read_recover(&self) -> std::sync::poison::rwlock::RwLockReadGuard<'_, T>
+pub fn benten_graph::mutex_ext::RwLockExt::write_recover(&self) -> std::sync::poison::rwlock::RwLockWriteGuard<'_, T>
+impl<T> benten_graph::mutex_ext::RwLockExt<T> for std::sync::poison::rwlock::RwLock<T>
+pub fn std::sync::poison::rwlock::RwLock<T>::read_recover(&self) -> std::sync::poison::rwlock::RwLockReadGuard<'_, T>
+pub fn std::sync::poison::rwlock::RwLock<T>::write_recover(&self) -> std::sync::poison::rwlock::RwLockWriteGuard<'_, T>
+pub mod benten_graph::redb_backend
+pub struct benten_graph::redb_backend::RedbBackend
+impl benten_graph::redb_backend::RedbBackend
+pub fn benten_graph::redb_backend::RedbBackend::benchmark_helper_crud_post_create_dispatch(&self, durability: benten_graph::backend::DurabilityMode)
+pub fn benten_graph::redb_backend::RedbBackend::create(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::load_subgraph_verified(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::subgraph::Subgraph>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::store_subgraph(&self, sg: &benten_core::subgraph::Subgraph) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+impl benten_graph::redb_backend::RedbBackend
+pub fn benten_graph::redb_backend::RedbBackend::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_by_label(&self, label: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_by_property(&self, label: &str, prop_name: &str, value: &benten_core::value::Value) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_encrypted_node(&self, ciphertext_cid: &benten_core::Cid) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_existing(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_existing_with_durability(path: impl core::convert::AsRef<std::path::Path>, durability: benten_graph::backend::DurabilityMode) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_in_memory() -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_or_create(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_or_create_with_durability(path: impl core::convert::AsRef<std::path::Path>, durability: benten_graph::backend::DurabilityMode) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge_with_context(&self, edge: &benten_core::edge::Edge, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::read_via_two_cid(&self, plaintext_cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::two_cid_map::TwoCidMapError>
+pub fn benten_graph::redb_backend::RedbBackend::read_via_two_cid_scoped(&self, plaintext_cid: &benten_core::Cid, ctx: &benten_graph::WriteContext) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::two_cid_map::TwoCidMapError>
+pub fn benten_graph::redb_backend::RedbBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::scoped(&self, namespace_did: benten_core::Cid) -> benten_graph::redb_backend::ScopedView<'_>
+pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> core::result::Result<benten_graph::SnapshotHandle, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::subscriber_count(&self) -> usize
+pub fn benten_graph::redb_backend::RedbBackend::transaction<F, R>(&self, f: F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::transaction_with_deny_on_commit<F, R>(&self, f: F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup(&self, plaintext_cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_scoped(&self, plaintext_cid: &benten_core::Cid, ctx: &benten_graph::WriteContext) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_with_namespace(&self, plaintext_cid: &benten_core::Cid) -> core::result::Result<core::option::Option<(benten_core::Cid, core::option::Option<benten_core::Cid>)>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::writes_committed(&self) -> u64
+impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::supports_durability(&self) -> bool
+impl benten_graph::graph_backend::GraphBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub type benten_graph::redb_backend::RedbBackend::Snapshot = benten_graph::SnapshotHandle
+pub type benten_graph::redb_backend::RedbBackend::Transaction = benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::redb_backend::RedbBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::redb_backend::RedbBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::redb_backend::RedbBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::store::EdgeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl core::fmt::Debug for benten_graph::redb_backend::RedbBackend
+pub fn benten_graph::redb_backend::RedbBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::redb_backend::RedbBackend
+impl core::marker::Send for benten_graph::redb_backend::RedbBackend
+impl core::marker::Sync for benten_graph::redb_backend::RedbBackend
+impl core::marker::Unpin for benten_graph::redb_backend::RedbBackend
+impl core::marker::UnsafeUnpin for benten_graph::redb_backend::RedbBackend
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::redb_backend::RedbBackend
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::redb_backend::RedbBackend
+pub struct benten_graph::redb_backend::ScopedView<'a>
+impl<'a> benten_graph::redb_backend::ScopedView<'a>
+pub fn benten_graph::redb_backend::ScopedView<'a>::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::get_by_label(&self, label: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::iter_node_cids(&self) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::namespace_did(&self) -> &benten_core::Cid
+pub fn benten_graph::redb_backend::ScopedView<'a>::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>) -> core::result::Result<(), benten_graph::GraphError>
+impl<'a> core::marker::Freeze for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::Send for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::Sync for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::Unpin for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::UnsafeUnpin for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_graph::redb_backend::ScopedView<'a>
+pub fn benten_graph::redb_backend::derive_test_seam_key_from_cid_with_namespace(did: core::option::Option<&benten_core::Cid>, cid: &benten_core::Cid) -> alloc::vec::Vec<u8>
+pub mod benten_graph::store
+pub enum benten_graph::store::ChangeKind
+pub benten_graph::store::ChangeKind::Created
+pub benten_graph::store::ChangeKind::Deleted
+pub benten_graph::store::ChangeKind::EdgeCreated
+pub benten_graph::store::ChangeKind::EdgeDeleted
+pub benten_graph::store::ChangeKind::Updated
+impl core::clone::Clone for benten_graph::store::ChangeKind
+pub fn benten_graph::store::ChangeKind::clone(&self) -> benten_graph::store::ChangeKind
+impl core::cmp::Eq for benten_graph::store::ChangeKind
+impl core::cmp::PartialEq for benten_graph::store::ChangeKind
+pub fn benten_graph::store::ChangeKind::eq(&self, other: &benten_graph::store::ChangeKind) -> bool
+impl core::fmt::Debug for benten_graph::store::ChangeKind
+pub fn benten_graph::store::ChangeKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::store::ChangeKind
+impl core::marker::StructuralPartialEq for benten_graph::store::ChangeKind
+impl core::marker::Freeze for benten_graph::store::ChangeKind
+impl core::marker::Send for benten_graph::store::ChangeKind
+impl core::marker::Sync for benten_graph::store::ChangeKind
+impl core::marker::Unpin for benten_graph::store::ChangeKind
+impl core::marker::UnsafeUnpin for benten_graph::store::ChangeKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::store::ChangeKind
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::store::ChangeKind
+pub struct benten_graph::store::ChangeEvent
+pub benten_graph::store::ChangeEvent::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::store::ChangeEvent::capability_grant_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::store::ChangeEvent::cid: benten_core::Cid
+pub benten_graph::store::ChangeEvent::edge_endpoints: core::option::Option<(benten_core::Cid, benten_core::Cid, alloc::string::String)>
+pub benten_graph::store::ChangeEvent::handler_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::store::ChangeEvent::kind: benten_graph::store::ChangeKind
+pub benten_graph::store::ChangeEvent::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_graph::store::ChangeEvent::node: core::option::Option<benten_core::Node>
+pub benten_graph::store::ChangeEvent::tx_id: u64
+impl benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::has_label(&self, label: &str) -> bool
+pub fn benten_graph::store::ChangeEvent::kind_str(&self) -> &'static str
+pub fn benten_graph::store::ChangeEvent::primary_label(&self) -> &str
+impl benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::new_node(cid: benten_core::Cid, labels: alloc::vec::Vec<alloc::string::String>, kind: benten_graph::store::ChangeKind, tx_id: u64, node: core::option::Option<benten_core::Node>) -> Self
+impl core::clone::Clone for benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::clone(&self) -> benten_graph::store::ChangeEvent
+impl core::fmt::Debug for benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::store::ChangeEvent
+impl core::marker::Send for benten_graph::store::ChangeEvent
+impl core::marker::Sync for benten_graph::store::ChangeEvent
+impl core::marker::Unpin for benten_graph::store::ChangeEvent
+impl core::marker::UnsafeUnpin for benten_graph::store::ChangeEvent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::store::ChangeEvent
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::store::ChangeEvent
+pub trait benten_graph::store::ChangeSubscriber: core::marker::Send + core::marker::Sync
+pub fn benten_graph::store::ChangeSubscriber::on_change(&self, event: &benten_graph::store::ChangeEvent)
+pub trait benten_graph::store::EdgeStore
+pub type benten_graph::store::EdgeStore::Error
+pub fn benten_graph::store::EdgeStore::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::store::EdgeStore::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::store::EdgeStore::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::store::EdgeStore::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::store::EdgeStore::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::EdgeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_from(&self, _source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_to(&self, _target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_edge(&self, _edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::EdgeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+pub trait benten_graph::store::NodeStore
+pub type benten_graph::store::NodeStore::Error
+pub fn benten_graph::store::NodeStore::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::store::NodeStore::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::store::NodeStore::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::store::NodeStore::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_node(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node(&self, _node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+pub mod benten_graph::transaction
+pub enum benten_graph::transaction::PendingOp
+pub benten_graph::transaction::PendingOp::DeleteEdge
+pub benten_graph::transaction::PendingOp::DeleteEdge::cid: benten_core::Cid
+pub benten_graph::transaction::PendingOp::DeleteEdge::label: core::option::Option<alloc::string::String>
+pub benten_graph::transaction::PendingOp::DeleteEdge::source: core::option::Option<benten_core::Cid>
+pub benten_graph::transaction::PendingOp::DeleteEdge::target: core::option::Option<benten_core::Cid>
+pub benten_graph::transaction::PendingOp::DeleteNode
+pub benten_graph::transaction::PendingOp::DeleteNode::cid: benten_core::Cid
+pub benten_graph::transaction::PendingOp::DeleteNode::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_graph::transaction::PendingOp::DeleteNode::node: core::option::Option<benten_core::Node>
+pub benten_graph::transaction::PendingOp::PutEdge
+pub benten_graph::transaction::PendingOp::PutEdge::cid: benten_core::Cid
+pub benten_graph::transaction::PendingOp::PutEdge::label: alloc::string::String
+pub benten_graph::transaction::PendingOp::PutEdge::source: benten_core::Cid
+pub benten_graph::transaction::PendingOp::PutEdge::target: benten_core::Cid
+pub benten_graph::transaction::PendingOp::PutNode
+pub benten_graph::transaction::PendingOp::PutNode::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::transaction::PendingOp::PutNode::capability_grant_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::transaction::PendingOp::PutNode::cid: benten_core::Cid
+pub benten_graph::transaction::PendingOp::PutNode::handler_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::transaction::PendingOp::PutNode::node: benten_core::Node
+impl core::clone::Clone for benten_graph::transaction::PendingOp
+pub fn benten_graph::transaction::PendingOp::clone(&self) -> benten_graph::transaction::PendingOp
+impl core::fmt::Debug for benten_graph::transaction::PendingOp
+pub fn benten_graph::transaction::PendingOp::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::transaction::PendingOp
+impl core::marker::Send for benten_graph::transaction::PendingOp
+impl core::marker::Sync for benten_graph::transaction::PendingOp
+impl core::marker::Unpin for benten_graph::transaction::PendingOp
+impl core::marker::UnsafeUnpin for benten_graph::transaction::PendingOp
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::transaction::PendingOp
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::transaction::PendingOp
+pub struct benten_graph::transaction::Transaction<'a>
+impl<'a> benten_graph::transaction::Transaction<'a>
+pub fn benten_graph::transaction::Transaction<'a>::delete_edge(&mut self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::delete_node(&mut self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::put_edge(&mut self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::put_node(&mut self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::put_node_with_attribution(&mut self, node: &benten_core::Node, precomputed_cid: core::option::Option<benten_core::Cid>, actor_cid: core::option::Option<benten_core::Cid>, handler_cid: core::option::Option<benten_core::Cid>, capability_grant_cid: core::option::Option<benten_core::Cid>) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::transaction<F, R>(&mut self, _f: F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
+impl<'a> !core::marker::Freeze for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::Send for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::Sync for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::Unpin for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::UnsafeUnpin for benten_graph::transaction::Transaction<'a>
+impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_graph::transaction::Transaction<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_graph::transaction::Transaction<'a>
+pub mod benten_graph::two_cid_map
+pub enum benten_graph::two_cid_map::TwoCidMapError
+pub benten_graph::two_cid_map::TwoCidMapError::AeadAuthenticationFailed
+pub benten_graph::two_cid_map::TwoCidMapError::AeadAuthenticationFailed::reason: alloc::string::String
+pub benten_graph::two_cid_map::TwoCidMapError::IntegrityMismatch
+pub benten_graph::two_cid_map::TwoCidMapError::IntegrityMismatch::actual: alloc::string::String
+pub benten_graph::two_cid_map::TwoCidMapError::IntegrityMismatch::expected: alloc::string::String
+pub benten_graph::two_cid_map::TwoCidMapError::NotFound
+pub benten_graph::two_cid_map::TwoCidMapError::NotFound::plaintext_cid: alloc::string::String
+pub benten_graph::two_cid_map::TwoCidMapError::Storage
+pub benten_graph::two_cid_map::TwoCidMapError::Storage::reason: alloc::string::String
+impl core::error::Error for benten_graph::two_cid_map::TwoCidMapError
+impl core::fmt::Debug for benten_graph::two_cid_map::TwoCidMapError
+pub fn benten_graph::two_cid_map::TwoCidMapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::two_cid_map::TwoCidMapError
+pub fn benten_graph::two_cid_map::TwoCidMapError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::two_cid_map::TwoCidMapError
+impl core::marker::Send for benten_graph::two_cid_map::TwoCidMapError
+impl core::marker::Sync for benten_graph::two_cid_map::TwoCidMapError
+impl core::marker::Unpin for benten_graph::two_cid_map::TwoCidMapError
+impl core::marker::UnsafeUnpin for benten_graph::two_cid_map::TwoCidMapError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::two_cid_map::TwoCidMapError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::two_cid_map::TwoCidMapError
+pub struct benten_graph::two_cid_map::TwoCidMap
+impl benten_graph::two_cid_map::TwoCidMap
+pub fn benten_graph::two_cid_map::TwoCidMap::partition_table_key(namespace_did: &benten_core::Cid, plaintext_cid: &benten_core::Cid) -> alloc::vec::Vec<u8>
+pub fn benten_graph::two_cid_map::TwoCidMap::table_key(plaintext_cid: &benten_core::Cid) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_graph::two_cid_map::TwoCidMap
+pub fn benten_graph::two_cid_map::TwoCidMap::clone(&self) -> benten_graph::two_cid_map::TwoCidMap
+impl core::default::Default for benten_graph::two_cid_map::TwoCidMap
+pub fn benten_graph::two_cid_map::TwoCidMap::default() -> benten_graph::two_cid_map::TwoCidMap
+impl core::fmt::Debug for benten_graph::two_cid_map::TwoCidMap
+pub fn benten_graph::two_cid_map::TwoCidMap::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::two_cid_map::TwoCidMap
+impl core::marker::Freeze for benten_graph::two_cid_map::TwoCidMap
+impl core::marker::Send for benten_graph::two_cid_map::TwoCidMap
+impl core::marker::Sync for benten_graph::two_cid_map::TwoCidMap
+impl core::marker::Unpin for benten_graph::two_cid_map::TwoCidMap
+impl core::marker::UnsafeUnpin for benten_graph::two_cid_map::TwoCidMap
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::two_cid_map::TwoCidMap
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::two_cid_map::TwoCidMap
+pub enum benten_graph::ChangeKind
+pub benten_graph::ChangeKind::Created
+pub benten_graph::ChangeKind::Deleted
+pub benten_graph::ChangeKind::EdgeCreated
+pub benten_graph::ChangeKind::EdgeDeleted
+pub benten_graph::ChangeKind::Updated
+impl core::clone::Clone for benten_graph::store::ChangeKind
+pub fn benten_graph::store::ChangeKind::clone(&self) -> benten_graph::store::ChangeKind
+impl core::cmp::Eq for benten_graph::store::ChangeKind
+impl core::cmp::PartialEq for benten_graph::store::ChangeKind
+pub fn benten_graph::store::ChangeKind::eq(&self, other: &benten_graph::store::ChangeKind) -> bool
+impl core::fmt::Debug for benten_graph::store::ChangeKind
+pub fn benten_graph::store::ChangeKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::store::ChangeKind
+impl core::marker::StructuralPartialEq for benten_graph::store::ChangeKind
+impl core::marker::Freeze for benten_graph::store::ChangeKind
+impl core::marker::Send for benten_graph::store::ChangeKind
+impl core::marker::Sync for benten_graph::store::ChangeKind
+impl core::marker::Unpin for benten_graph::store::ChangeKind
+impl core::marker::UnsafeUnpin for benten_graph::store::ChangeKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::store::ChangeKind
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::store::ChangeKind
+pub enum benten_graph::DurabilityMode
+pub benten_graph::DurabilityMode::Async
+pub benten_graph::DurabilityMode::Group
+pub benten_graph::DurabilityMode::Immediate
+impl core::clone::Clone for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::clone(&self) -> benten_graph::backend::DurabilityMode
+impl core::cmp::Eq for benten_graph::backend::DurabilityMode
+impl core::cmp::PartialEq for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::eq(&self, other: &benten_graph::backend::DurabilityMode) -> bool
+impl core::default::Default for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::default() -> Self
+impl core::fmt::Debug for benten_graph::backend::DurabilityMode
+pub fn benten_graph::backend::DurabilityMode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::backend::DurabilityMode
+impl core::marker::StructuralPartialEq for benten_graph::backend::DurabilityMode
+impl core::marker::Freeze for benten_graph::backend::DurabilityMode
+impl core::marker::Send for benten_graph::backend::DurabilityMode
+impl core::marker::Sync for benten_graph::backend::DurabilityMode
+impl core::marker::Unpin for benten_graph::backend::DurabilityMode
+impl core::marker::UnsafeUnpin for benten_graph::backend::DurabilityMode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backend::DurabilityMode
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backend::DurabilityMode
+#[non_exhaustive] pub enum benten_graph::GraphError
+#[non_exhaustive] pub benten_graph::GraphError::BackendNotFound
+pub benten_graph::GraphError::BackendNotFound::path: std::path::PathBuf
+pub benten_graph::GraphError::Core(benten_core::CoreError)
+pub benten_graph::GraphError::Decode(alloc::string::String)
+#[non_exhaustive] pub benten_graph::GraphError::DecodeTooLarge
+pub benten_graph::GraphError::DecodeTooLarge::actual: usize
+pub benten_graph::GraphError::DecodeTooLarge::limit: usize
+#[non_exhaustive] pub benten_graph::GraphError::InvImmutability
+pub benten_graph::GraphError::InvImmutability::attempted_authority: benten_core::WriteAuthority
+pub benten_graph::GraphError::InvImmutability::cid: benten_core::Cid
+#[non_exhaustive] pub benten_graph::GraphError::NamespacedWriteUnsupported
+pub benten_graph::GraphError::NamespacedWriteUnsupported::backend: &'static str
+pub benten_graph::GraphError::NestedTransactionNotSupported
+pub benten_graph::GraphError::Redb(alloc::string::String)
+pub benten_graph::GraphError::RedbSource(redb::error::Error)
+pub benten_graph::GraphError::SchemaVersionMismatch
+pub benten_graph::GraphError::SchemaVersionMismatch::actual: u32
+pub benten_graph::GraphError::SchemaVersionMismatch::expected: u32
+#[non_exhaustive] pub benten_graph::GraphError::SystemZoneWrite
+pub benten_graph::GraphError::SystemZoneWrite::label: alloc::string::String
+pub benten_graph::GraphError::TxAborted
+pub benten_graph::GraphError::TxAborted::reason: alloc::string::String
+impl benten_graph::GraphError
+pub fn benten_graph::GraphError::backend_not_found(path: impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn benten_graph::GraphError::code(&self) -> benten_errors::ErrorCode
+pub fn benten_graph::GraphError::inv_immutability(cid: benten_core::Cid, attempted_authority: benten_core::WriteAuthority) -> Self
+pub fn benten_graph::GraphError::system_zone_write(label: impl core::convert::Into<alloc::string::String>) -> Self
+impl core::convert::From<benten_core::CoreError> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(source: benten_core::CoreError) -> Self
+impl core::convert::From<benten_graph::GraphError> for benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::BlobError::from(source: benten_graph::GraphError) -> Self
+impl core::convert::From<redb::error::CommitError> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(e: redb::error::CommitError) -> Self
+impl core::convert::From<redb::error::DatabaseError> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(e: redb::error::DatabaseError) -> Self
+impl core::convert::From<redb::error::Error> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(source: redb::error::Error) -> Self
+impl core::convert::From<redb::error::StorageError> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(e: redb::error::StorageError) -> Self
+impl core::convert::From<redb::error::TableError> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(e: redb::error::TableError) -> Self
+impl core::convert::From<redb::error::TransactionError> for benten_graph::GraphError
+pub fn benten_graph::GraphError::from(e: redb::error::TransactionError) -> Self
+impl core::error::Error for benten_graph::GraphError
+pub fn benten_graph::GraphError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_graph::GraphError
+pub fn benten_graph::GraphError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::GraphError
+pub fn benten_graph::GraphError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::GraphError
+impl core::marker::Send for benten_graph::GraphError
+impl core::marker::Sync for benten_graph::GraphError
+impl core::marker::Unpin for benten_graph::GraphError
+impl core::marker::UnsafeUnpin for benten_graph::GraphError
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::GraphError
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::GraphError
+#[non_exhaustive] pub enum benten_graph::NetworkFetchStubError
+pub benten_graph::NetworkFetchStubError::Phase3DeferredFetch
+pub benten_graph::NetworkFetchStubError::Phase3DeferredFetch::label: alloc::string::String
+pub benten_graph::NetworkFetchStubError::Phase3DeferredFetch::operation: &'static str
+pub benten_graph::NetworkFetchStubError::ReadOnly
+pub benten_graph::NetworkFetchStubError::ReadOnly::label: alloc::string::String
+pub benten_graph::NetworkFetchStubError::ReadOnly::operation: &'static str
+impl benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::fmt::Debug for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Send for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Sync for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::Unpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::marker::UnsafeUnpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub enum benten_graph::PendingOp
+pub benten_graph::PendingOp::DeleteEdge
+pub benten_graph::PendingOp::DeleteEdge::cid: benten_core::Cid
+pub benten_graph::PendingOp::DeleteEdge::label: core::option::Option<alloc::string::String>
+pub benten_graph::PendingOp::DeleteEdge::source: core::option::Option<benten_core::Cid>
+pub benten_graph::PendingOp::DeleteEdge::target: core::option::Option<benten_core::Cid>
+pub benten_graph::PendingOp::DeleteNode
+pub benten_graph::PendingOp::DeleteNode::cid: benten_core::Cid
+pub benten_graph::PendingOp::DeleteNode::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_graph::PendingOp::DeleteNode::node: core::option::Option<benten_core::Node>
+pub benten_graph::PendingOp::PutEdge
+pub benten_graph::PendingOp::PutEdge::cid: benten_core::Cid
+pub benten_graph::PendingOp::PutEdge::label: alloc::string::String
+pub benten_graph::PendingOp::PutEdge::source: benten_core::Cid
+pub benten_graph::PendingOp::PutEdge::target: benten_core::Cid
+pub benten_graph::PendingOp::PutNode
+pub benten_graph::PendingOp::PutNode::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::PendingOp::PutNode::capability_grant_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::PendingOp::PutNode::cid: benten_core::Cid
+pub benten_graph::PendingOp::PutNode::handler_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::PendingOp::PutNode::node: benten_core::Node
+impl core::clone::Clone for benten_graph::transaction::PendingOp
+pub fn benten_graph::transaction::PendingOp::clone(&self) -> benten_graph::transaction::PendingOp
+impl core::fmt::Debug for benten_graph::transaction::PendingOp
+pub fn benten_graph::transaction::PendingOp::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::transaction::PendingOp
+impl core::marker::Send for benten_graph::transaction::PendingOp
+impl core::marker::Sync for benten_graph::transaction::PendingOp
+impl core::marker::Unpin for benten_graph::transaction::PendingOp
+impl core::marker::UnsafeUnpin for benten_graph::transaction::PendingOp
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::transaction::PendingOp
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::transaction::PendingOp
+#[non_exhaustive] pub enum benten_graph::SnapshotBlobError
+pub benten_graph::SnapshotBlobError::Decode(benten_core::CoreError)
+pub benten_graph::SnapshotBlobError::ReadOnly
+pub benten_graph::SnapshotBlobError::ReadOnly::operation: &'static str
+pub benten_graph::SnapshotBlobError::SchemaVersion
+pub benten_graph::SnapshotBlobError::SchemaVersion::actual: u32
+pub benten_graph::SnapshotBlobError::SchemaVersion::expected: u32
+pub benten_graph::SnapshotBlobError::TooLarge
+pub benten_graph::SnapshotBlobError::TooLarge::actual: usize
+pub benten_graph::SnapshotBlobError::TooLarge::limit: usize
+impl benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::code(&self) -> benten_errors::ErrorCode
+impl core::convert::From<benten_core::CoreError> for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::from(source: benten_core::CoreError) -> Self
+impl core::error::Error for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobError
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub struct benten_graph::ChangeEvent
+pub benten_graph::ChangeEvent::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::ChangeEvent::capability_grant_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::ChangeEvent::cid: benten_core::Cid
+pub benten_graph::ChangeEvent::edge_endpoints: core::option::Option<(benten_core::Cid, benten_core::Cid, alloc::string::String)>
+pub benten_graph::ChangeEvent::handler_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::ChangeEvent::kind: benten_graph::store::ChangeKind
+pub benten_graph::ChangeEvent::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_graph::ChangeEvent::node: core::option::Option<benten_core::Node>
+pub benten_graph::ChangeEvent::tx_id: u64
+impl benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::has_label(&self, label: &str) -> bool
+pub fn benten_graph::store::ChangeEvent::kind_str(&self) -> &'static str
+pub fn benten_graph::store::ChangeEvent::primary_label(&self) -> &str
+impl benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::new_node(cid: benten_core::Cid, labels: alloc::vec::Vec<alloc::string::String>, kind: benten_graph::store::ChangeKind, tx_id: u64, node: core::option::Option<benten_core::Node>) -> Self
+impl core::clone::Clone for benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::clone(&self) -> benten_graph::store::ChangeEvent
+impl core::fmt::Debug for benten_graph::store::ChangeEvent
+pub fn benten_graph::store::ChangeEvent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::store::ChangeEvent
+impl core::marker::Send for benten_graph::store::ChangeEvent
+impl core::marker::Sync for benten_graph::store::ChangeEvent
+impl core::marker::Unpin for benten_graph::store::ChangeEvent
+impl core::marker::UnsafeUnpin for benten_graph::store::ChangeEvent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::store::ChangeEvent
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::store::ChangeEvent
+pub struct benten_graph::InMemoryBackend
+impl benten_graph::in_memory_backend::InMemoryBackend
+pub fn benten_graph::in_memory_backend::InMemoryBackend::new() -> Self
+impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
+pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::supports_durability(&self) -> bool
+impl core::default::Default for benten_graph::in_memory_backend::InMemoryBackend
+pub fn benten_graph::in_memory_backend::InMemoryBackend::default() -> benten_graph::in_memory_backend::InMemoryBackend
+impl core::fmt::Debug for benten_graph::in_memory_backend::InMemoryBackend
+pub fn benten_graph::in_memory_backend::InMemoryBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::Send for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::Sync for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::Unpin for benten_graph::in_memory_backend::InMemoryBackend
+impl core::marker::UnsafeUnpin for benten_graph::in_memory_backend::InMemoryBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::in_memory_backend::InMemoryBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::in_memory_backend::InMemoryBackend
+pub struct benten_graph::NetworkFetchStubBackend
+impl benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::label(&self) -> core::option::Option<&str>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::new() -> Self
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::with_label(label: impl core::convert::Into<alloc::string::String>) -> Self
+impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan(&self, _prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
+impl core::clone::Clone for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::clone(&self) -> benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::default::Default for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::default() -> benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::fmt::Debug for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Send for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Sync for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::Unpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub struct benten_graph::RedbBackend
+impl benten_graph::redb_backend::RedbBackend
+pub fn benten_graph::redb_backend::RedbBackend::benchmark_helper_crud_post_create_dispatch(&self, durability: benten_graph::backend::DurabilityMode)
+pub fn benten_graph::redb_backend::RedbBackend::create(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::load_subgraph_verified(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::subgraph::Subgraph>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::store_subgraph(&self, sg: &benten_core::subgraph::Subgraph) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+impl benten_graph::redb_backend::RedbBackend
+pub fn benten_graph::redb_backend::RedbBackend::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_by_label(&self, label: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_by_property(&self, label: &str, prop_name: &str, value: &benten_core::value::Value) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_encrypted_node(&self, ciphertext_cid: &benten_core::Cid) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_existing(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_existing_with_durability(path: impl core::convert::AsRef<std::path::Path>, durability: benten_graph::backend::DurabilityMode) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_in_memory() -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_or_create(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::open_or_create_with_durability(path: impl core::convert::AsRef<std::path::Path>, durability: benten_graph::backend::DurabilityMode) -> core::result::Result<Self, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge_with_context(&self, edge: &benten_core::edge::Edge, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::read_via_two_cid(&self, plaintext_cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::two_cid_map::TwoCidMapError>
+pub fn benten_graph::redb_backend::RedbBackend::read_via_two_cid_scoped(&self, plaintext_cid: &benten_core::Cid, ctx: &benten_graph::WriteContext) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::two_cid_map::TwoCidMapError>
+pub fn benten_graph::redb_backend::RedbBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::scoped(&self, namespace_did: benten_core::Cid) -> benten_graph::redb_backend::ScopedView<'_>
+pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> core::result::Result<benten_graph::SnapshotHandle, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::subscriber_count(&self) -> usize
+pub fn benten_graph::redb_backend::RedbBackend::transaction<F, R>(&self, f: F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::transaction_with_deny_on_commit<F, R>(&self, f: F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup(&self, plaintext_cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_scoped(&self, plaintext_cid: &benten_core::Cid, ctx: &benten_graph::WriteContext) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_with_namespace(&self, plaintext_cid: &benten_core::Cid) -> core::result::Result<core::option::Option<(benten_core::Cid, core::option::Option<benten_core::Cid>)>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::writes_committed(&self) -> u64
+impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::supports_durability(&self) -> bool
+impl benten_graph::graph_backend::GraphBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub type benten_graph::redb_backend::RedbBackend::Snapshot = benten_graph::SnapshotHandle
+pub type benten_graph::redb_backend::RedbBackend::Transaction = benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::redb_backend::RedbBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::redb_backend::RedbBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::redb_backend::RedbBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::store::EdgeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl core::fmt::Debug for benten_graph::redb_backend::RedbBackend
+pub fn benten_graph::redb_backend::RedbBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::redb_backend::RedbBackend
+impl core::marker::Send for benten_graph::redb_backend::RedbBackend
+impl core::marker::Sync for benten_graph::redb_backend::RedbBackend
+impl core::marker::Unpin for benten_graph::redb_backend::RedbBackend
+impl core::marker::UnsafeUnpin for benten_graph::redb_backend::RedbBackend
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::redb_backend::RedbBackend
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::redb_backend::RedbBackend
+pub struct benten_graph::RedbTransactionRunner
+impl benten_graph::graph_backend::RedbTransactionRunner
+pub const fn benten_graph::graph_backend::RedbTransactionRunner::new() -> Self
+impl core::clone::Clone for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::clone(&self) -> benten_graph::graph_backend::RedbTransactionRunner
+impl core::cmp::Eq for benten_graph::graph_backend::RedbTransactionRunner
+impl core::cmp::PartialEq for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::eq(&self, other: &benten_graph::graph_backend::RedbTransactionRunner) -> bool
+impl core::default::Default for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::default() -> benten_graph::graph_backend::RedbTransactionRunner
+impl core::fmt::Debug for benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::graph_backend::RedbTransactionRunner::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::StructuralPartialEq for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Freeze for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Send for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Sync for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::Unpin for benten_graph::graph_backend::RedbTransactionRunner
+impl core::marker::UnsafeUnpin for benten_graph::graph_backend::RedbTransactionRunner
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::graph_backend::RedbTransactionRunner
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::graph_backend::RedbTransactionRunner
+pub struct benten_graph::ScanResult(_)
+impl benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::as_slice(&self) -> &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]
+pub fn benten_graph::backend::ScanResult::is_empty(&self) -> bool
+pub fn benten_graph::backend::ScanResult::iter(&self) -> core::slice::iter::Iter<'_, (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub fn benten_graph::backend::ScanResult::len(&self) -> usize
+pub fn benten_graph::backend::ScanResult::new() -> Self
+impl core::clone::Clone for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::clone(&self) -> benten_graph::backend::ScanResult
+impl core::cmp::Eq for benten_graph::backend::ScanResult
+impl core::cmp::PartialEq for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::eq(&self, other: &benten_graph::backend::ScanResult) -> bool
+impl core::default::Default for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::default() -> benten_graph::backend::ScanResult
+impl core::fmt::Debug for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::iter::traits::collect::FromIterator<(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)> for benten_graph::backend::ScanResult
+pub fn benten_graph::backend::ScanResult::from_iter<I: core::iter::traits::collect::IntoIterator<Item = (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>>(iter: I) -> Self
+impl core::iter::traits::collect::IntoIterator for benten_graph::backend::ScanResult
+pub type benten_graph::backend::ScanResult::IntoIter = benten_graph::backend::ScanIter
+pub type benten_graph::backend::ScanResult::Item = (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)
+pub fn benten_graph::backend::ScanResult::into_iter(self) -> Self::IntoIter
+impl core::marker::StructuralPartialEq for benten_graph::backend::ScanResult
+impl<'a> core::iter::traits::collect::IntoIterator for &'a benten_graph::backend::ScanResult
+pub type &'a benten_graph::backend::ScanResult::IntoIter = core::slice::iter::Iter<'a, (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)>
+pub type &'a benten_graph::backend::ScanResult::Item = &'a (alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)
+pub fn &'a benten_graph::backend::ScanResult::into_iter(self) -> Self::IntoIter
+impl core::marker::Freeze for benten_graph::backend::ScanResult
+impl core::marker::Send for benten_graph::backend::ScanResult
+impl core::marker::Sync for benten_graph::backend::ScanResult
+impl core::marker::Unpin for benten_graph::backend::ScanResult
+impl core::marker::UnsafeUnpin for benten_graph::backend::ScanResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backend::ScanResult
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backend::ScanResult
+pub struct benten_graph::ScopedView<'a>
+impl<'a> benten_graph::redb_backend::ScopedView<'a>
+pub fn benten_graph::redb_backend::ScopedView<'a>::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::get_by_label(&self, label: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::iter_node_cids(&self) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::ScopedView<'a>::namespace_did(&self) -> &benten_core::Cid
+pub fn benten_graph::redb_backend::ScopedView<'a>::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>) -> core::result::Result<(), benten_graph::GraphError>
+impl<'a> core::marker::Freeze for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::Send for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::Sync for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::Unpin for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> core::marker::UnsafeUnpin for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_graph::redb_backend::ScopedView<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_graph::redb_backend::ScopedView<'a>
+pub struct benten_graph::SnapshotBlob
+pub benten_graph::SnapshotBlob::anchor_cid: core::option::Option<benten_core::Cid>
+pub benten_graph::SnapshotBlob::merkle_root: core::option::Option<benten_core::Cid>
+pub benten_graph::SnapshotBlob::nodes: alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::vec::Vec<u8>>
+pub benten_graph::SnapshotBlob::schema_version: u32
+pub benten_graph::SnapshotBlob::system_zone_index: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<benten_core::Cid>>
+impl benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::compute_cid(bytes: &[u8]) -> benten_core::Cid
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::cmp::Eq for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::cmp::PartialEq for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::eq(&self, other: &benten_graph::backends::snapshot_blob::SnapshotBlob) -> bool
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl serde_core::ser::Serialize for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlob::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlob
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlob
+pub struct benten_graph::SnapshotBlobBackend
+impl benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::blob(&self) -> &benten_graph::backends::snapshot_blob::SnapshotBlob
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compute_blob_cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::export_blob(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_graph::backends::snapshot_blob::SnapshotBlobError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes_with_cap(bytes: &[u8], limit: usize) -> core::result::Result<Self, benten_graph::backends::snapshot_blob::SnapshotBlobError>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::new(blob: benten_graph::backends::snapshot_blob::SnapshotBlob) -> Self
+impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
+impl benten_graph::graph_backend::GraphBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Snapshot = benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Transaction = benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node_with_context(&self, _node: &benten_core::Node, _ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::register_subscriber(&self, _subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::store::EdgeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_from(&self, _source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_to(&self, _target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_edge(&self, _edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_node(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node(&self, _node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl core::clone::Clone for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::clone(&self) -> benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::fmt::Debug for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Send for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Sync for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::Unpin for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::marker::UnsafeUnpin for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub struct benten_graph::SnapshotHandle
+impl benten_graph::SnapshotHandle
+pub fn benten_graph::SnapshotHandle::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_graph::GraphError>
+pub fn benten_graph::SnapshotHandle::scan_label(&self, label: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_graph::GraphError>
+impl core::ops::drop::Drop for benten_graph::SnapshotHandle
+pub fn benten_graph::SnapshotHandle::drop(&mut self)
+impl core::marker::Freeze for benten_graph::SnapshotHandle
+impl core::marker::Send for benten_graph::SnapshotHandle
+impl core::marker::Sync for benten_graph::SnapshotHandle
+impl core::marker::Unpin for benten_graph::SnapshotHandle
+impl core::marker::UnsafeUnpin for benten_graph::SnapshotHandle
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_graph::SnapshotHandle
+impl !core::panic::unwind_safe::UnwindSafe for benten_graph::SnapshotHandle
+pub struct benten_graph::Transaction<'a>
+impl<'a> benten_graph::transaction::Transaction<'a>
+pub fn benten_graph::transaction::Transaction<'a>::delete_edge(&mut self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::delete_node(&mut self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::put_edge(&mut self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::put_node(&mut self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::put_node_with_attribution(&mut self, node: &benten_core::Node, precomputed_cid: core::option::Option<benten_core::Cid>, actor_cid: core::option::Option<benten_core::Cid>, handler_cid: core::option::Option<benten_core::Cid>, capability_grant_cid: core::option::Option<benten_core::Cid>) -> core::result::Result<benten_core::Cid, benten_graph::GraphError>
+pub fn benten_graph::transaction::Transaction<'a>::transaction<F, R>(&mut self, _f: F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
+impl<'a> !core::marker::Freeze for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::Send for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::Sync for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::Unpin for benten_graph::transaction::Transaction<'a>
+impl<'a> core::marker::UnsafeUnpin for benten_graph::transaction::Transaction<'a>
+impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_graph::transaction::Transaction<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_graph::transaction::Transaction<'a>
+#[non_exhaustive] pub struct benten_graph::WriteContext
+pub benten_graph::WriteContext::authority: benten_core::WriteAuthority
+pub benten_graph::WriteContext::is_privileged: bool
+pub benten_graph::WriteContext::label: alloc::string::String
+pub benten_graph::WriteContext::namespace_did: core::option::Option<benten_core::Cid>
+impl benten_graph::WriteContext
+pub fn benten_graph::WriteContext::enforce_system_zone(&self) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::WriteContext::namespace_did(&self) -> core::option::Option<&benten_core::Cid>
+pub fn benten_graph::WriteContext::new(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_graph::WriteContext::privileged_for_engine_api() -> Self
+pub fn benten_graph::WriteContext::with_authority(self, authority: benten_core::WriteAuthority) -> Self
+pub fn benten_graph::WriteContext::with_namespace_did(self, namespace_did: core::option::Option<benten_core::Cid>) -> Self
+impl core::clone::Clone for benten_graph::WriteContext
+pub fn benten_graph::WriteContext::clone(&self) -> benten_graph::WriteContext
+impl core::default::Default for benten_graph::WriteContext
+pub fn benten_graph::WriteContext::default() -> Self
+impl core::fmt::Debug for benten_graph::WriteContext
+pub fn benten_graph::WriteContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_graph::WriteContext
+impl core::marker::Send for benten_graph::WriteContext
+impl core::marker::Sync for benten_graph::WriteContext
+impl core::marker::Unpin for benten_graph::WriteContext
+impl core::marker::UnsafeUnpin for benten_graph::WriteContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::WriteContext
+impl core::panic::unwind_safe::UnwindSafe for benten_graph::WriteContext
+pub const benten_graph::MAX_SNAPSHOT_BLOB_BYTES: usize
+pub trait benten_graph::BlobBackend: core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::BlobBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::BlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::BlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::BlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::BlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::BlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+impl benten_graph::backends::blob_backend_trait::BlobBackend for benten_graph::backends::blob_backend::RedbBlobBackend
+pub type benten_graph::backends::blob_backend::RedbBlobBackend::Error = benten_graph::backends::blob_backend::BlobError
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::delete(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::get(&self, cid: &benten_core::Cid) -> impl core::future::future::Future<Output = core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::is_persistent(&self) -> bool
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::list_cids(&self) -> impl core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<benten_core::Cid>, Self::Error>> + core::marker::Send
+pub fn benten_graph::backends::blob_backend::RedbBlobBackend::put(&self, cid: &benten_core::Cid, bytes: &[u8]) -> impl core::future::future::Future<Output = core::result::Result<(), Self::Error>> + core::marker::Send
+pub trait benten_graph::ChangeSubscriber: core::marker::Send + core::marker::Sync
+pub fn benten_graph::ChangeSubscriber::on_change(&self, event: &benten_graph::store::ChangeEvent)
+pub trait benten_graph::EdgeStore
+pub type benten_graph::EdgeStore::Error
+pub fn benten_graph::EdgeStore::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::EdgeStore::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::EdgeStore::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::EdgeStore::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::EdgeStore::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::EdgeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_from(&self, _source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::edges_to(&self, _target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_edge(&self, _cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_edge(&self, _edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::EdgeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_from(&self, source: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::edges_to(&self, target: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_edge(&self, edge: &benten_core::edge::Edge) -> core::result::Result<benten_core::Cid, Self::Error>
+pub trait benten_graph::GraphBackend: benten_graph::backend::KVBackend<Error = <Self as benten_graph::graph_backend::GraphBackend>::Error> + benten_graph::store::NodeStore<Error = <Self as benten_graph::graph_backend::GraphBackend>::Error> + benten_graph::store::EdgeStore<Error = <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub type benten_graph::GraphBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::GraphBackend::Snapshot: core::marker::Send + core::marker::Sync + 'static
+pub type benten_graph::GraphBackend::Transaction
+pub fn benten_graph::GraphBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::GraphBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::GraphBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::GraphBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::graph_backend::GraphBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Snapshot = benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Transaction = benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node_with_context(&self, _node: &benten_core::Node, _ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::register_subscriber(&self, _subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::transaction(&self) -> Self::Transaction
+impl benten_graph::graph_backend::GraphBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub type benten_graph::redb_backend::RedbBackend::Snapshot = benten_graph::SnapshotHandle
+pub type benten_graph::redb_backend::RedbBackend::Transaction = benten_graph::graph_backend::RedbTransactionRunner
+pub fn benten_graph::redb_backend::RedbBackend::put_node_with_context(&self, node: &benten_core::Node, ctx: &benten_graph::WriteContext) -> core::result::Result<benten_core::Cid, <Self as benten_graph::graph_backend::GraphBackend>::Error>
+pub fn benten_graph::redb_backend::RedbBackend::register_subscriber(&self, subscriber: alloc::sync::Arc<dyn benten_graph::store::ChangeSubscriber>)
+pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> Self::Snapshot
+pub fn benten_graph::redb_backend::RedbBackend::transaction(&self) -> Self::Transaction
+pub trait benten_graph::KVBackend: core::marker::Send + core::marker::Sync
+pub type benten_graph::KVBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::KVBackend::delete(&self, key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::KVBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::KVBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::KVBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::KVBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::KVBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
+pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan(&self, _prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_batch(&self, _pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
+pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::in_memory_backend::InMemoryBackend::supports_durability(&self) -> bool
+impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::put_batch(&self, pairs: &[(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>)]) -> core::result::Result<(), benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::scan(&self, prefix: &[u8]) -> core::result::Result<benten_graph::backend::ScanResult, benten_graph::GraphError>
+pub fn benten_graph::redb_backend::RedbBackend::supports_durability(&self) -> bool
+pub trait benten_graph::MutexExt<T>
+pub fn benten_graph::MutexExt::lock_recover(&self) -> std::sync::poison::mutex::MutexGuard<'_, T>
+impl<T> benten_graph::mutex_ext::MutexExt<T> for std::sync::poison::mutex::Mutex<T>
+pub fn std::sync::poison::mutex::Mutex<T>::lock_recover(&self) -> std::sync::poison::mutex::MutexGuard<'_, T>
+pub trait benten_graph::NodeStore
+pub type benten_graph::NodeStore::Error
+pub fn benten_graph::NodeStore::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::NodeStore::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::NodeStore::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::NodeStore::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
+pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete_node(&self, _cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put_node(&self, _node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+impl benten_graph::store::NodeStore for benten_graph::redb_backend::RedbBackend
+pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, Self::Error>
+pub fn benten_graph::redb_backend::RedbBackend::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, Self::Error>
+pub trait benten_graph::RwLockExt<T>
+pub fn benten_graph::RwLockExt::read_recover(&self) -> std::sync::poison::rwlock::RwLockReadGuard<'_, T>
+pub fn benten_graph::RwLockExt::write_recover(&self) -> std::sync::poison::rwlock::RwLockWriteGuard<'_, T>
+impl<T> benten_graph::mutex_ext::RwLockExt<T> for std::sync::poison::rwlock::RwLock<T>
+pub fn std::sync::poison::rwlock::RwLock<T>::read_recover(&self) -> std::sync::poison::rwlock::RwLockReadGuard<'_, T>
+pub fn std::sync::poison::rwlock::RwLock<T>::write_recover(&self) -> std::sync::poison::rwlock::RwLockWriteGuard<'_, T>

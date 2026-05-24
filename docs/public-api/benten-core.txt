@@ -1,27 +1,1474 @@
-# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
-#
-# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
-# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). The
-# per-NEW-crate baselines for `benten-id` + `benten-sync` landed in JSON
-# at G14-A1 + G16-A respectively (per seq-minor-5); this directory now
-# carries the existing-crate `.txt` baselines so the cargo-public-api
-# workflow at `.github/workflows/cargo-public-api.yml` has a stable
-# diff base for every workspace member.
-#
-# Format is the canonical `cargo public-api --simplified` text output.
-# This file is a SEED baseline — populated on the first run of
-# `cargo public-api -p benten-core --simplified > docs/public-api/benten-core.txt`
-# in a developer or CI environment that has a nightly toolchain
-# installed (cargo-public-api requires nightly rustdoc-json output).
-#
-# Pinned by:
-#   `crates/benten-engine/tests/cargo_public_api_drift.rs::cargo_public_api_baseline_committed`
-# Baseline-shape pin only — the workflow's diff against the actual
-# rustdoc-json output is the authoritative drift check.
-
-# === SEED — populate on first nightly run ===
-# Seed marker so the file is non-empty + the baseline-committed test
-# detects presence. Replace with the cargo-public-api output on first
-# CI populate-pass.
-crate = benten-core
-phase_3_seeded_at = G20-A3 wave-8a
+ Documenting benten-core v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-core)
+pub mod benten_core
+pub mod benten_core::change_stream
+#[non_exhaustive] pub enum benten_core::change_stream::ChangeKind
+pub benten_core::change_stream::ChangeKind::Created
+pub benten_core::change_stream::ChangeKind::Deleted
+pub benten_core::change_stream::ChangeKind::Updated
+impl core::clone::Clone for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::clone(&self) -> benten_core::change_stream::ChangeKind
+impl core::cmp::Eq for benten_core::change_stream::ChangeKind
+impl core::cmp::PartialEq for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::eq(&self, other: &benten_core::change_stream::ChangeKind) -> bool
+impl core::fmt::Debug for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::change_stream::ChangeKind
+impl core::marker::StructuralPartialEq for benten_core::change_stream::ChangeKind
+impl core::marker::Freeze for benten_core::change_stream::ChangeKind
+impl core::marker::Send for benten_core::change_stream::ChangeKind
+impl core::marker::Sync for benten_core::change_stream::ChangeKind
+impl core::marker::Unpin for benten_core::change_stream::ChangeKind
+impl core::marker::UnsafeUnpin for benten_core::change_stream::ChangeKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::change_stream::ChangeKind
+impl core::panic::unwind_safe::UnwindSafe for benten_core::change_stream::ChangeKind
+#[non_exhaustive] pub struct benten_core::change_stream::ChangeEvent
+pub benten_core::change_stream::ChangeEvent::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_core::change_stream::ChangeEvent::anchor_cid: benten_core::Cid
+pub benten_core::change_stream::ChangeEvent::capability_grant_cid: core::option::Option<benten_core::Cid>
+pub benten_core::change_stream::ChangeEvent::handler_cid: core::option::Option<benten_core::Cid>
+pub benten_core::change_stream::ChangeEvent::kind: benten_core::change_stream::ChangeKind
+pub benten_core::change_stream::ChangeEvent::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_core::change_stream::ChangeEvent::payload_bytes: alloc::vec::Vec<u8>
+pub benten_core::change_stream::ChangeEvent::seq: u64
+pub benten_core::change_stream::ChangeEvent::tx_id: u64
+impl benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::for_bridge(anchor_cid: benten_core::Cid, kind: benten_core::change_stream::ChangeKind, seq: u64, payload_bytes: alloc::vec::Vec<u8>, labels: alloc::vec::Vec<alloc::string::String>, tx_id: u64, actor_cid: core::option::Option<benten_core::Cid>, handler_cid: core::option::Option<benten_core::Cid>, capability_grant_cid: core::option::Option<benten_core::Cid>) -> Self
+pub fn benten_core::change_stream::ChangeEvent::minimal(anchor_cid: benten_core::Cid, kind: benten_core::change_stream::ChangeKind, seq: u64, payload_bytes: alloc::vec::Vec<u8>) -> Self
+impl core::clone::Clone for benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::clone(&self) -> benten_core::change_stream::ChangeEvent
+impl core::cmp::Eq for benten_core::change_stream::ChangeEvent
+impl core::cmp::PartialEq for benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::eq(&self, other: &benten_core::change_stream::ChangeEvent) -> bool
+impl core::fmt::Debug for benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::change_stream::ChangeEvent
+impl core::marker::Freeze for benten_core::change_stream::ChangeEvent
+impl core::marker::Send for benten_core::change_stream::ChangeEvent
+impl core::marker::Sync for benten_core::change_stream::ChangeEvent
+impl core::marker::Unpin for benten_core::change_stream::ChangeEvent
+impl core::marker::UnsafeUnpin for benten_core::change_stream::ChangeEvent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::change_stream::ChangeEvent
+impl core::panic::unwind_safe::UnwindSafe for benten_core::change_stream::ChangeEvent
+pub struct benten_core::change_stream::SubscriberId(_)
+impl benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::as_cid(&self) -> &benten_core::Cid
+pub fn benten_core::change_stream::SubscriberId::from_cid(cid: benten_core::Cid) -> Self
+impl core::clone::Clone for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::clone(&self) -> benten_core::change_stream::SubscriberId
+impl core::cmp::Eq for benten_core::change_stream::SubscriberId
+impl core::cmp::Ord for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::cmp(&self, other: &benten_core::change_stream::SubscriberId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::eq(&self, other: &benten_core::change_stream::SubscriberId) -> bool
+impl core::cmp::PartialOrd for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::partial_cmp(&self, other: &benten_core::change_stream::SubscriberId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::change_stream::SubscriberId
+impl core::marker::StructuralPartialEq for benten_core::change_stream::SubscriberId
+impl core::marker::Freeze for benten_core::change_stream::SubscriberId
+impl core::marker::Send for benten_core::change_stream::SubscriberId
+impl core::marker::Sync for benten_core::change_stream::SubscriberId
+impl core::marker::Unpin for benten_core::change_stream::SubscriberId
+impl core::marker::UnsafeUnpin for benten_core::change_stream::SubscriberId
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::change_stream::SubscriberId
+impl core::panic::unwind_safe::UnwindSafe for benten_core::change_stream::SubscriberId
+pub trait benten_core::change_stream::ChangeStream: core::marker::Send + core::marker::Sync
+pub fn benten_core::change_stream::ChangeStream::next_event(&mut self, id: &benten_core::change_stream::SubscriberId) -> core::result::Result<core::option::Option<benten_core::change_stream::ChangeEvent>, alloc::string::String>
+pub fn benten_core::change_stream::ChangeStream::subscribe(&mut self, pattern: &str, id: benten_core::change_stream::SubscriberId) -> core::result::Result<(), alloc::string::String>
+pub fn benten_core::change_stream::ChangeStream::unsubscribe(&mut self, id: &benten_core::change_stream::SubscriberId) -> core::result::Result<(), alloc::string::String>
+pub mod benten_core::edge
+pub struct benten_core::edge::Edge
+pub benten_core::edge::Edge::label: alloc::string::String
+pub benten_core::edge::Edge::properties: core::option::Option<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>>
+pub benten_core::edge::Edge::source: benten_core::Cid
+pub benten_core::edge::Edge::target: benten_core::Cid
+impl benten_core::edge::Edge
+pub fn benten_core::edge::Edge::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_core::edge::Edge::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
+pub fn benten_core::edge::Edge::new(source: benten_core::Cid, target: benten_core::Cid, label: impl core::convert::Into<alloc::string::String>, properties: core::option::Option<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>>) -> Self
+pub fn benten_core::edge::Edge::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+impl core::clone::Clone for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::clone(&self) -> benten_core::edge::Edge
+impl core::cmp::PartialEq for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::eq(&self, other: &benten_core::edge::Edge) -> bool
+impl core::fmt::Debug for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::edge::Edge
+impl serde_core::ser::Serialize for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::edge::Edge
+impl core::marker::Send for benten_core::edge::Edge
+impl core::marker::Sync for benten_core::edge::Edge
+impl core::marker::Unpin for benten_core::edge::Edge
+impl core::marker::UnsafeUnpin for benten_core::edge::Edge
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::edge::Edge
+impl core::panic::unwind_safe::UnwindSafe for benten_core::edge::Edge
+pub mod benten_core::encryption_class
+pub mod benten_core::encryption_class::codepoint
+pub const benten_core::encryption_class::codepoint::CONFIDENTIAL: u8
+pub const benten_core::encryption_class::codepoint::PUBLIC: u8
+#[non_exhaustive] pub enum benten_core::encryption_class::EncryptionClass
+pub benten_core::encryption_class::EncryptionClass::Confidential
+pub benten_core::encryption_class::EncryptionClass::Public
+impl benten_core::encryption_class::EncryptionClass
+pub const fn benten_core::encryption_class::EncryptionClass::codepoint(self) -> u8
+pub fn benten_core::encryption_class::EncryptionClass::from_codepoint(codepoint: u8) -> core::result::Result<Self, benten_core::encryption_class::EncryptionClassError>
+impl core::clone::Clone for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::clone(&self) -> benten_core::encryption_class::EncryptionClass
+impl core::cmp::Eq for benten_core::encryption_class::EncryptionClass
+impl core::cmp::PartialEq for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::eq(&self, other: &benten_core::encryption_class::EncryptionClass) -> bool
+impl core::fmt::Debug for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::encryption_class::EncryptionClass
+impl core::marker::StructuralPartialEq for benten_core::encryption_class::EncryptionClass
+impl serde_core::ser::Serialize for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::encryption_class::EncryptionClass
+impl core::marker::Send for benten_core::encryption_class::EncryptionClass
+impl core::marker::Sync for benten_core::encryption_class::EncryptionClass
+impl core::marker::Unpin for benten_core::encryption_class::EncryptionClass
+impl core::marker::UnsafeUnpin for benten_core::encryption_class::EncryptionClass
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::encryption_class::EncryptionClass
+impl core::panic::unwind_safe::UnwindSafe for benten_core::encryption_class::EncryptionClass
+#[non_exhaustive] pub enum benten_core::encryption_class::EncryptionClassError
+pub benten_core::encryption_class::EncryptionClassError::UnsupportedClass
+pub benten_core::encryption_class::EncryptionClassError::UnsupportedClass::raw: u8
+impl core::clone::Clone for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::clone(&self) -> benten_core::encryption_class::EncryptionClassError
+impl core::cmp::Eq for benten_core::encryption_class::EncryptionClassError
+impl core::cmp::PartialEq for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::eq(&self, other: &benten_core::encryption_class::EncryptionClassError) -> bool
+impl core::error::Error for benten_core::encryption_class::EncryptionClassError
+impl core::fmt::Debug for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Freeze for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Send for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Sync for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Unpin for benten_core::encryption_class::EncryptionClassError
+impl core::marker::UnsafeUnpin for benten_core::encryption_class::EncryptionClassError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::encryption_class::EncryptionClassError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::encryption_class::EncryptionClassError
+pub mod benten_core::hlc
+pub struct benten_core::hlc::BentenHlc
+impl benten_core::hlc::BentenHlc
+pub const fn benten_core::hlc::BentenHlc::logical(&self) -> u32
+pub const fn benten_core::hlc::BentenHlc::new(physical_ms: u64, logical: u32, node_id: u64) -> Self
+pub const fn benten_core::hlc::BentenHlc::node_id(&self) -> u64
+pub const fn benten_core::hlc::BentenHlc::node_id_from_peer_id_bytes(prefix: [u8; 8]) -> u64
+pub const fn benten_core::hlc::BentenHlc::physical_ms(&self) -> u64
+impl core::clone::Clone for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::clone(&self) -> benten_core::hlc::BentenHlc
+impl core::cmp::Eq for benten_core::hlc::BentenHlc
+impl core::cmp::Ord for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::cmp(&self, other: &benten_core::hlc::BentenHlc) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::eq(&self, other: &benten_core::hlc::BentenHlc) -> bool
+impl core::cmp::PartialOrd for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::partial_cmp(&self, other: &benten_core::hlc::BentenHlc) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::hlc::BentenHlc
+impl core::marker::StructuralPartialEq for benten_core::hlc::BentenHlc
+impl core::marker::Freeze for benten_core::hlc::BentenHlc
+impl core::marker::Send for benten_core::hlc::BentenHlc
+impl core::marker::Sync for benten_core::hlc::BentenHlc
+impl core::marker::Unpin for benten_core::hlc::BentenHlc
+impl core::marker::UnsafeUnpin for benten_core::hlc::BentenHlc
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::hlc::BentenHlc
+impl core::panic::unwind_safe::UnwindSafe for benten_core::hlc::BentenHlc
+pub struct benten_core::hlc::Hlc
+impl benten_core::hlc::Hlc
+pub const benten_core::hlc::Hlc::DEFAULT_SKEW_TOLERANCE_MS: u64
+pub fn benten_core::hlc::Hlc::new(node_id: u64, physical_clock: benten_core::hlc::PhysicalClockFn) -> Self
+pub fn benten_core::hlc::Hlc::node_id(&self) -> u64
+pub fn benten_core::hlc::Hlc::now(&self) -> benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::Hlc::skew_tolerance_ms(&self) -> u64
+pub fn benten_core::hlc::Hlc::update(&self, remote: &benten_core::hlc::BentenHlc) -> core::result::Result<benten_core::hlc::BentenHlc, benten_core::CoreError>
+pub fn benten_core::hlc::Hlc::with_skew_tolerance(node_id: u64, physical_clock: benten_core::hlc::PhysicalClockFn, skew_tolerance_ms: u64) -> Self
+impl core::fmt::Debug for benten_core::hlc::Hlc
+pub fn benten_core::hlc::Hlc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_core::hlc::Hlc
+impl core::marker::Send for benten_core::hlc::Hlc
+impl core::marker::Sync for benten_core::hlc::Hlc
+impl core::marker::Unpin for benten_core::hlc::Hlc
+impl core::marker::UnsafeUnpin for benten_core::hlc::Hlc
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_core::hlc::Hlc
+impl core::panic::unwind_safe::UnwindSafe for benten_core::hlc::Hlc
+pub type benten_core::hlc::PhysicalClockFn = fn() -> u64
+pub mod benten_core::subgraph
+#[non_exhaustive] pub enum benten_core::subgraph::PrimitiveKind
+pub benten_core::subgraph::PrimitiveKind::Branch
+pub benten_core::subgraph::PrimitiveKind::Call
+pub benten_core::subgraph::PrimitiveKind::Emit
+pub benten_core::subgraph::PrimitiveKind::Iterate
+pub benten_core::subgraph::PrimitiveKind::Read
+pub benten_core::subgraph::PrimitiveKind::Respond
+pub benten_core::subgraph::PrimitiveKind::Sandbox
+pub benten_core::subgraph::PrimitiveKind::Stream
+pub benten_core::subgraph::PrimitiveKind::Subscribe
+pub benten_core::subgraph::PrimitiveKind::Transform
+pub benten_core::subgraph::PrimitiveKind::Wait
+pub benten_core::subgraph::PrimitiveKind::Write
+impl benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::canonical_tag(&self) -> &'static str
+pub fn benten_core::subgraph::PrimitiveKind::error_edges(&self) -> &'static [&'static str]
+pub fn benten_core::subgraph::PrimitiveKind::is_deterministic(&self) -> bool
+pub fn benten_core::subgraph::PrimitiveKind::is_phase_1_executable(&self) -> bool
+impl core::clone::Clone for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::clone(&self) -> benten_core::subgraph::PrimitiveKind
+impl core::cmp::Eq for benten_core::subgraph::PrimitiveKind
+impl core::cmp::PartialEq for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::eq(&self, other: &benten_core::subgraph::PrimitiveKind) -> bool
+impl core::fmt::Debug for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::subgraph::PrimitiveKind
+impl core::marker::StructuralPartialEq for benten_core::subgraph::PrimitiveKind
+impl core::marker::Freeze for benten_core::subgraph::PrimitiveKind
+impl core::marker::Send for benten_core::subgraph::PrimitiveKind
+impl core::marker::Sync for benten_core::subgraph::PrimitiveKind
+impl core::marker::Unpin for benten_core::subgraph::PrimitiveKind
+impl core::marker::UnsafeUnpin for benten_core::subgraph::PrimitiveKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::PrimitiveKind
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::PrimitiveKind
+pub struct benten_core::subgraph::NodeHandle(pub u32)
+impl core::clone::Clone for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::clone(&self) -> benten_core::subgraph::NodeHandle
+impl core::cmp::Eq for benten_core::subgraph::NodeHandle
+impl core::cmp::PartialEq for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::eq(&self, other: &benten_core::subgraph::NodeHandle) -> bool
+impl core::fmt::Debug for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::subgraph::NodeHandle
+impl core::marker::StructuralPartialEq for benten_core::subgraph::NodeHandle
+impl core::marker::Freeze for benten_core::subgraph::NodeHandle
+impl core::marker::Send for benten_core::subgraph::NodeHandle
+impl core::marker::Sync for benten_core::subgraph::NodeHandle
+impl core::marker::Unpin for benten_core::subgraph::NodeHandle
+impl core::marker::UnsafeUnpin for benten_core::subgraph::NodeHandle
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::NodeHandle
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::NodeHandle
+#[non_exhaustive] pub struct benten_core::subgraph::OperationNode
+pub benten_core::subgraph::OperationNode::id: alloc::string::String
+pub benten_core::subgraph::OperationNode::kind: benten_core::subgraph::PrimitiveKind
+pub benten_core::subgraph::OperationNode::properties: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
+impl benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::new(id: impl core::convert::Into<alloc::string::String>, kind: benten_core::subgraph::PrimitiveKind) -> Self
+pub fn benten_core::subgraph::OperationNode::primitive_kind(&self) -> benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::OperationNode::property(&self, k: &str) -> core::option::Option<&benten_core::value::Value>
+pub fn benten_core::subgraph::OperationNode::with_property(self, k: impl core::convert::Into<alloc::string::String>, v: benten_core::value::Value) -> Self
+impl core::clone::Clone for benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::clone(&self) -> benten_core::subgraph::OperationNode
+impl core::cmp::PartialEq for benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::eq(&self, other: &benten_core::subgraph::OperationNode) -> bool
+impl core::fmt::Debug for benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph::OperationNode
+impl core::marker::Freeze for benten_core::subgraph::OperationNode
+impl core::marker::Send for benten_core::subgraph::OperationNode
+impl core::marker::Sync for benten_core::subgraph::OperationNode
+impl core::marker::Unpin for benten_core::subgraph::OperationNode
+impl core::marker::UnsafeUnpin for benten_core::subgraph::OperationNode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::OperationNode
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::OperationNode
+pub struct benten_core::subgraph::Subgraph
+pub benten_core::subgraph::Subgraph::deterministic: bool
+pub benten_core::subgraph::Subgraph::edges: alloc::vec::Vec<(alloc::string::String, alloc::string::String, alloc::string::String)>
+pub benten_core::subgraph::Subgraph::handler_id: alloc::string::String
+pub benten_core::subgraph::Subgraph::nodes: alloc::vec::Vec<benten_core::subgraph::OperationNode>
+impl benten_core::subgraph::Subgraph
+pub const benten_core::subgraph::Subgraph::MAX_DECODE_BYTES: usize
+pub fn benten_core::subgraph::Subgraph::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::edges(&self) -> &[(alloc::string::String, alloc::string::String, alloc::string::String)]
+pub fn benten_core::subgraph::Subgraph::empty_for_test(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::Subgraph::first_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
+pub fn benten_core::subgraph::Subgraph::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::handle_of(&self, id: &str) -> core::option::Option<benten_core::subgraph::NodeHandle>
+pub fn benten_core::subgraph::Subgraph::handler_id(&self) -> &str
+pub fn benten_core::subgraph::Subgraph::is_declared_deterministic(&self) -> bool
+pub fn benten_core::subgraph::Subgraph::load_verified(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::load_verified_with_cid(expected_cid: &benten_core::Cid, bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::new(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::Subgraph::node_by_handle(&self, h: benten_core::subgraph::NodeHandle) -> core::option::Option<&benten_core::subgraph::OperationNode>
+pub fn benten_core::subgraph::Subgraph::nodes(&self) -> &[benten_core::subgraph::OperationNode]
+pub fn benten_core::subgraph::Subgraph::op_by_id_mut(&mut self, id: &str) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
+pub fn benten_core::subgraph::Subgraph::primitive_count(&self) -> usize
+pub fn benten_core::subgraph::Subgraph::push_edge_raw(self, from: impl core::convert::Into<alloc::string::String>, to: impl core::convert::Into<alloc::string::String>, label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::Subgraph::push_node_raw(self, n: benten_core::subgraph::OperationNode) -> Self
+pub fn benten_core::subgraph::Subgraph::set_deterministic(&mut self, value: bool)
+pub fn benten_core::subgraph::Subgraph::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::write_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
+impl core::clone::Clone for benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::Subgraph::clone(&self) -> benten_core::subgraph::Subgraph
+impl core::cmp::PartialEq for benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::Subgraph::eq(&self, other: &benten_core::subgraph::Subgraph) -> bool
+impl core::fmt::Debug for benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::Subgraph::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph::Subgraph
+impl core::marker::Freeze for benten_core::subgraph::Subgraph
+impl core::marker::Send for benten_core::subgraph::Subgraph
+impl core::marker::Sync for benten_core::subgraph::Subgraph
+impl core::marker::Unpin for benten_core::subgraph::Subgraph
+impl core::marker::UnsafeUnpin for benten_core::subgraph::Subgraph
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::Subgraph
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::Subgraph
+pub struct benten_core::subgraph::SubgraphBuilder
+pub benten_core::subgraph::SubgraphBuilder::build_errors: alloc::vec::Vec<benten_core::CoreError>
+pub benten_core::subgraph::SubgraphBuilder::deterministic: bool
+pub benten_core::subgraph::SubgraphBuilder::edges: alloc::vec::Vec<(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)>
+pub benten_core::subgraph::SubgraphBuilder::extra_edges: usize
+pub benten_core::subgraph::SubgraphBuilder::handler_id: alloc::string::String
+pub benten_core::subgraph::SubgraphBuilder::iterate_depth: alloc::vec::Vec<usize>
+pub benten_core::subgraph::SubgraphBuilder::nodes: alloc::vec::Vec<benten_core::subgraph::OperationNode>
+pub benten_core::subgraph::SubgraphBuilder::parallel_fanout: alloc::vec::Vec<usize>
+impl benten_core::subgraph::SubgraphBuilder
+pub fn benten_core::subgraph::SubgraphBuilder::add_edge(&mut self, from: benten_core::subgraph::NodeHandle, to: benten_core::subgraph::NodeHandle) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::add_edge_labeled(&mut self, from: benten_core::subgraph::NodeHandle, to: benten_core::subgraph::NodeHandle, label: impl core::convert::Into<alloc::string::String>) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::branch(&mut self, prev: benten_core::subgraph::NodeHandle, _expr: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::build(self) -> core::result::Result<benten_core::subgraph::Subgraph, benten_core::CoreError>
+pub fn benten_core::subgraph::SubgraphBuilder::build_unvalidated_for_test(self) -> benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::SubgraphBuilder::call_handler(&mut self, prev: benten_core::subgraph::NodeHandle, handler_id: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::call_with_isolated(&mut self, prev: benten_core::subgraph::NodeHandle, handler: &str, isolated: bool) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::declare_deterministic(&mut self, value: bool) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::deterministic_for_validator(&self) -> bool
+pub fn benten_core::subgraph::SubgraphBuilder::edges_for_validator(&self) -> &[(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)]
+pub fn benten_core::subgraph::SubgraphBuilder::emit(&mut self, prev: benten_core::subgraph::NodeHandle, _topic: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::extra_edges_for_validator(&self) -> usize
+pub fn benten_core::subgraph::SubgraphBuilder::force_add_cross_edges_for_testing(&mut self, n: usize) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::handler_id_for_validator(&self) -> &str
+pub fn benten_core::subgraph::SubgraphBuilder::iterate(&mut self, prev: benten_core::subgraph::NodeHandle, _body: &str, max_iterations: u64) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::iterate_depth_for_validator(&self) -> &[usize]
+pub fn benten_core::subgraph::SubgraphBuilder::iterate_parallel(&mut self, prev: benten_core::subgraph::NodeHandle, _body: &str, parallel_fanout: usize) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::new(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::SubgraphBuilder::nodes_for_validator(&self) -> &[benten_core::subgraph::OperationNode]
+pub fn benten_core::subgraph::SubgraphBuilder::parallel_fanout_for_validator(&self) -> &[usize]
+pub fn benten_core::subgraph::SubgraphBuilder::push_primitive(&mut self, id: impl core::convert::Into<alloc::string::String>, kind: benten_core::subgraph::PrimitiveKind) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::read(&mut self, id: impl core::convert::Into<alloc::string::String>) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::respond(&mut self, prev: benten_core::subgraph::NodeHandle) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::sandbox(&mut self, prev: benten_core::subgraph::NodeHandle, module: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::set_property_for_test(&mut self, h: benten_core::subgraph::NodeHandle, key: &str, value: benten_core::value::Value) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::transform(&mut self, prev: benten_core::subgraph::NodeHandle, _expr: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::wait_duration(&mut self, prev: benten_core::subgraph::NodeHandle, duration: core::time::Duration) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::wait_signal(&mut self, prev: benten_core::subgraph::NodeHandle, signal_name: impl core::convert::Into<alloc::string::String>) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::wait_signal_with_timeout(&mut self, prev: benten_core::subgraph::NodeHandle, signal_name: impl core::convert::Into<alloc::string::String>, timeout: core::time::Duration) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::write(&mut self, id: impl core::convert::Into<alloc::string::String>) -> benten_core::subgraph::NodeHandle
+impl core::marker::Freeze for benten_core::subgraph::SubgraphBuilder
+impl core::marker::Send for benten_core::subgraph::SubgraphBuilder
+impl core::marker::Sync for benten_core::subgraph::SubgraphBuilder
+impl core::marker::Unpin for benten_core::subgraph::SubgraphBuilder
+impl core::marker::UnsafeUnpin for benten_core::subgraph::SubgraphBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::SubgraphBuilder
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::SubgraphBuilder
+pub const benten_core::subgraph::ATTRIBUTION_PROPERTY_KEY: &str
+pub fn benten_core::subgraph::canonical_subgraph_bytes(sg: &benten_core::subgraph::Subgraph) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub mod benten_core::subgraph_spec
+pub mod benten_core::subgraph_spec::combinators
+pub fn benten_core::subgraph_spec::combinators::filter<F>(spec: &benten_core::subgraph_spec::spec::Spec, narrow: F) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError> where F: core::ops::function::FnOnce(benten_core::subgraph_spec::spec::SpecBuilder) -> benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::combinators::intersect(a: &benten_core::subgraph_spec::spec::Spec, b: &benten_core::subgraph_spec::spec::Spec) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::combinators::union(a: &benten_core::subgraph_spec::spec::Spec, b: &benten_core::subgraph_spec::spec::Spec) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub mod benten_core::subgraph_spec::errors
+#[non_exhaustive] pub enum benten_core::subgraph_spec::errors::SubgraphSpecError
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::CidMissing(benten_core::Cid)
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::ConflictingLabelPredicates
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::ConflictingLabelPredicates::label: alloc::string::String
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::EmptyIntersection
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::Encode(alloc::string::String)
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::MaxDepthExceeded
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::MaxDepthExceeded::cid: benten_core::Cid
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::MaxDepthExceeded::max_depth: u32
+pub benten_core::subgraph_spec::errors::SubgraphSpecError::SelfReferentialCycle
+impl core::clone::Clone for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::clone(&self) -> benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::cmp::Eq for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::cmp::PartialEq for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::eq(&self, other: &benten_core::subgraph_spec::errors::SubgraphSpecError) -> bool
+impl core::error::Error for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::fmt::Debug for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Freeze for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Send for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Sync for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Unpin for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub mod benten_core::subgraph_spec::spec
+#[non_exhaustive] pub enum benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub benten_core::subgraph_spec::spec::SubgraphSpecRestriction::ByLabel
+pub benten_core::subgraph_spec::spec::SubgraphSpecRestriction::ByLabel::allow: alloc::collections::btree::set::BTreeSet<alloc::string::String>
+pub benten_core::subgraph_spec::spec::SubgraphSpecRestriction::ByLabel::deny: alloc::collections::btree::set::BTreeSet<alloc::string::String>
+pub benten_core::subgraph_spec::spec::SubgraphSpecRestriction::Unrestricted
+impl benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::contains(&self, other: &benten_core::subgraph_spec::spec::SubgraphSpecRestriction) -> bool
+impl core::clone::Clone for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::clone(&self) -> benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::cmp::Eq for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::cmp::PartialEq for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::eq(&self, other: &benten_core::subgraph_spec::spec::SubgraphSpecRestriction) -> bool
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl serde_core::ser::Serialize for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::Send for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::Sync for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub struct benten_core::subgraph_spec::spec::Spec
+impl benten_core::subgraph_spec::spec::Spec
+pub const benten_core::subgraph_spec::spec::Spec::DEFAULT_MAX_DEPTH: u32
+pub fn benten_core::subgraph_spec::spec::Spec::builder() -> benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::Spec::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::spec::Spec::contains_spec(&self, other: &benten_core::subgraph_spec::spec::Spec) -> bool
+pub fn benten_core::subgraph_spec::spec::Spec::edges(&self) -> &alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::Cid>>
+pub fn benten_core::subgraph_spec::spec::Spec::inclusion(&self) -> &benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::Spec::max_depth(&self) -> u32
+pub fn benten_core::subgraph_spec::spec::Spec::roots(&self) -> &[benten_core::Cid]
+pub fn benten_core::subgraph_spec::spec::Spec::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::subgraph_spec::errors::SubgraphSpecError>
+impl core::clone::Clone for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::clone(&self) -> benten_core::subgraph_spec::spec::Spec
+impl core::cmp::Eq for benten_core::subgraph_spec::spec::Spec
+impl core::cmp::PartialEq for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::eq(&self, other: &benten_core::subgraph_spec::spec::Spec) -> bool
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::spec::Spec
+impl serde_core::ser::Serialize for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::Spec
+impl core::marker::Send for benten_core::subgraph_spec::spec::Spec
+impl core::marker::Sync for benten_core::subgraph_spec::spec::Spec
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::Spec
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::Spec
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::Spec
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::Spec
+pub struct benten_core::subgraph_spec::spec::SpecBuilder
+impl benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::build(self) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::deny_label(self, label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::new() -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_edge(self, from: benten_core::Cid, label: alloc::string::String, to: benten_core::Cid) -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_label_allowlist<I, S>(self, labels: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_label_denylist<I, S>(self, labels: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_max_depth(self, max_depth: u32) -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_root(self, cid: benten_core::Cid) -> Self
+impl core::clone::Clone for benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::clone(&self) -> benten_core::subgraph_spec::spec::SpecBuilder
+impl core::default::Default for benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::default() -> benten_core::subgraph_spec::spec::SpecBuilder
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::Send for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::Sync for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::SpecBuilder
+pub struct benten_core::subgraph_spec::spec::StructuralPath
+impl benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::as_strings(&self) -> &[alloc::string::String]
+pub fn benten_core::subgraph_spec::spec::StructuralPath::depth(&self) -> u32
+pub fn benten_core::subgraph_spec::spec::StructuralPath::edge_labels(&self) -> alloc::vec::Vec<&str>
+pub fn benten_core::subgraph_spec::spec::StructuralPath::extended(&self, edge_label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph_spec::spec::StructuralPath::from_labels<I, S>(labels: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+pub fn benten_core::subgraph_spec::spec::StructuralPath::root() -> Self
+impl core::clone::Clone for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::clone(&self) -> benten_core::subgraph_spec::spec::StructuralPath
+impl core::cmp::Eq for benten_core::subgraph_spec::spec::StructuralPath
+impl core::cmp::Ord for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::cmp(&self, other: &benten_core::subgraph_spec::spec::StructuralPath) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::eq(&self, other: &benten_core::subgraph_spec::spec::StructuralPath) -> bool
+impl core::cmp::PartialOrd for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::partial_cmp(&self, other: &benten_core::subgraph_spec::spec::StructuralPath) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::spec::StructuralPath
+impl serde_core::ser::Serialize for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::Send for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::Sync for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::StructuralPath
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::StructuralPath
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::StructuralPath
+pub mod benten_core::subgraph_spec::walker
+pub struct benten_core::subgraph_spec::walker::WalkResult
+pub benten_core::subgraph_spec::walker::WalkResult::enumerated: alloc::vec::Vec<(benten_core::Cid, benten_core::subgraph_spec::spec::StructuralPath)>
+impl core::clone::Clone for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::WalkResult::clone(&self) -> benten_core::subgraph_spec::walker::WalkResult
+impl core::cmp::Eq for benten_core::subgraph_spec::walker::WalkResult
+impl core::cmp::PartialEq for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::WalkResult::eq(&self, other: &benten_core::subgraph_spec::walker::WalkResult) -> bool
+impl core::fmt::Debug for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::WalkResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Freeze for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Send for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Sync for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Unpin for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::walker::WalkResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::walker::WalkResult
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::walk(spec: &benten_core::subgraph_spec::spec::Spec) -> core::result::Result<benten_core::subgraph_spec::walker::WalkResult, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::walker::walker_as_subgraph() -> benten_core::subgraph::Subgraph
+pub macro benten_core::subgraph_spec::query!
+#[non_exhaustive] pub enum benten_core::subgraph_spec::SubgraphSpecError
+pub benten_core::subgraph_spec::SubgraphSpecError::CidMissing(benten_core::Cid)
+pub benten_core::subgraph_spec::SubgraphSpecError::ConflictingLabelPredicates
+pub benten_core::subgraph_spec::SubgraphSpecError::ConflictingLabelPredicates::label: alloc::string::String
+pub benten_core::subgraph_spec::SubgraphSpecError::EmptyIntersection
+pub benten_core::subgraph_spec::SubgraphSpecError::Encode(alloc::string::String)
+pub benten_core::subgraph_spec::SubgraphSpecError::MaxDepthExceeded
+pub benten_core::subgraph_spec::SubgraphSpecError::MaxDepthExceeded::cid: benten_core::Cid
+pub benten_core::subgraph_spec::SubgraphSpecError::MaxDepthExceeded::max_depth: u32
+pub benten_core::subgraph_spec::SubgraphSpecError::SelfReferentialCycle
+impl core::clone::Clone for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::clone(&self) -> benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::cmp::Eq for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::cmp::PartialEq for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::eq(&self, other: &benten_core::subgraph_spec::errors::SubgraphSpecError) -> bool
+impl core::error::Error for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::fmt::Debug for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::subgraph_spec::errors::SubgraphSpecError
+pub fn benten_core::subgraph_spec::errors::SubgraphSpecError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Freeze for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Send for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Sync for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::Unpin for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::errors::SubgraphSpecError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::errors::SubgraphSpecError
+#[non_exhaustive] pub enum benten_core::subgraph_spec::SubgraphSpecRestriction
+pub benten_core::subgraph_spec::SubgraphSpecRestriction::ByLabel
+pub benten_core::subgraph_spec::SubgraphSpecRestriction::ByLabel::allow: alloc::collections::btree::set::BTreeSet<alloc::string::String>
+pub benten_core::subgraph_spec::SubgraphSpecRestriction::ByLabel::deny: alloc::collections::btree::set::BTreeSet<alloc::string::String>
+pub benten_core::subgraph_spec::SubgraphSpecRestriction::Unrestricted
+impl benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::contains(&self, other: &benten_core::subgraph_spec::spec::SubgraphSpecRestriction) -> bool
+impl core::clone::Clone for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::clone(&self) -> benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::cmp::Eq for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::cmp::PartialEq for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::eq(&self, other: &benten_core::subgraph_spec::spec::SubgraphSpecRestriction) -> bool
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl serde_core::ser::Serialize for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::SubgraphSpecRestriction::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::Send for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::Sync for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub struct benten_core::subgraph_spec::Spec
+impl benten_core::subgraph_spec::spec::Spec
+pub const benten_core::subgraph_spec::spec::Spec::DEFAULT_MAX_DEPTH: u32
+pub fn benten_core::subgraph_spec::spec::Spec::builder() -> benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::Spec::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::spec::Spec::contains_spec(&self, other: &benten_core::subgraph_spec::spec::Spec) -> bool
+pub fn benten_core::subgraph_spec::spec::Spec::edges(&self) -> &alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::Cid>>
+pub fn benten_core::subgraph_spec::spec::Spec::inclusion(&self) -> &benten_core::subgraph_spec::spec::SubgraphSpecRestriction
+pub fn benten_core::subgraph_spec::spec::Spec::max_depth(&self) -> u32
+pub fn benten_core::subgraph_spec::spec::Spec::roots(&self) -> &[benten_core::Cid]
+pub fn benten_core::subgraph_spec::spec::Spec::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::subgraph_spec::errors::SubgraphSpecError>
+impl core::clone::Clone for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::clone(&self) -> benten_core::subgraph_spec::spec::Spec
+impl core::cmp::Eq for benten_core::subgraph_spec::spec::Spec
+impl core::cmp::PartialEq for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::eq(&self, other: &benten_core::subgraph_spec::spec::Spec) -> bool
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::spec::Spec
+impl serde_core::ser::Serialize for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::subgraph_spec::spec::Spec
+pub fn benten_core::subgraph_spec::spec::Spec::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::Spec
+impl core::marker::Send for benten_core::subgraph_spec::spec::Spec
+impl core::marker::Sync for benten_core::subgraph_spec::spec::Spec
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::Spec
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::Spec
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::Spec
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::Spec
+pub struct benten_core::subgraph_spec::SpecBuilder
+impl benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::build(self) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::deny_label(self, label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::new() -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_edge(self, from: benten_core::Cid, label: alloc::string::String, to: benten_core::Cid) -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_label_allowlist<I, S>(self, labels: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_label_denylist<I, S>(self, labels: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_max_depth(self, max_depth: u32) -> Self
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::with_root(self, cid: benten_core::Cid) -> Self
+impl core::clone::Clone for benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::clone(&self) -> benten_core::subgraph_spec::spec::SpecBuilder
+impl core::default::Default for benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::default() -> benten_core::subgraph_spec::spec::SpecBuilder
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::spec::SpecBuilder::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::Send for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::Sync for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::SpecBuilder
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::SpecBuilder
+pub struct benten_core::subgraph_spec::StructuralPath
+impl benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::as_strings(&self) -> &[alloc::string::String]
+pub fn benten_core::subgraph_spec::spec::StructuralPath::depth(&self) -> u32
+pub fn benten_core::subgraph_spec::spec::StructuralPath::edge_labels(&self) -> alloc::vec::Vec<&str>
+pub fn benten_core::subgraph_spec::spec::StructuralPath::extended(&self, edge_label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph_spec::spec::StructuralPath::from_labels<I, S>(labels: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+pub fn benten_core::subgraph_spec::spec::StructuralPath::root() -> Self
+impl core::clone::Clone for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::clone(&self) -> benten_core::subgraph_spec::spec::StructuralPath
+impl core::cmp::Eq for benten_core::subgraph_spec::spec::StructuralPath
+impl core::cmp::Ord for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::cmp(&self, other: &benten_core::subgraph_spec::spec::StructuralPath) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::eq(&self, other: &benten_core::subgraph_spec::spec::StructuralPath) -> bool
+impl core::cmp::PartialOrd for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::partial_cmp(&self, other: &benten_core::subgraph_spec::spec::StructuralPath) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::spec::StructuralPath
+impl serde_core::ser::Serialize for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::subgraph_spec::spec::StructuralPath
+pub fn benten_core::subgraph_spec::spec::StructuralPath::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::Send for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::Sync for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::Unpin for benten_core::subgraph_spec::spec::StructuralPath
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::spec::StructuralPath
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::spec::StructuralPath
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::spec::StructuralPath
+pub struct benten_core::subgraph_spec::WalkResult
+pub benten_core::subgraph_spec::WalkResult::enumerated: alloc::vec::Vec<(benten_core::Cid, benten_core::subgraph_spec::spec::StructuralPath)>
+impl core::clone::Clone for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::WalkResult::clone(&self) -> benten_core::subgraph_spec::walker::WalkResult
+impl core::cmp::Eq for benten_core::subgraph_spec::walker::WalkResult
+impl core::cmp::PartialEq for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::WalkResult::eq(&self, other: &benten_core::subgraph_spec::walker::WalkResult) -> bool
+impl core::fmt::Debug for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::walker::WalkResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Freeze for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Send for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Sync for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::Unpin for benten_core::subgraph_spec::walker::WalkResult
+impl core::marker::UnsafeUnpin for benten_core::subgraph_spec::walker::WalkResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph_spec::walker::WalkResult
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph_spec::walker::WalkResult
+pub fn benten_core::subgraph_spec::filter<F>(spec: &benten_core::subgraph_spec::spec::Spec, narrow: F) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError> where F: core::ops::function::FnOnce(benten_core::subgraph_spec::spec::SpecBuilder) -> benten_core::subgraph_spec::spec::SpecBuilder
+pub fn benten_core::subgraph_spec::intersect(a: &benten_core::subgraph_spec::spec::Spec, b: &benten_core::subgraph_spec::spec::Spec) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::union(a: &benten_core::subgraph_spec::spec::Spec, b: &benten_core::subgraph_spec::spec::Spec) -> core::result::Result<benten_core::subgraph_spec::spec::Spec, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::walk(spec: &benten_core::subgraph_spec::spec::Spec) -> core::result::Result<benten_core::subgraph_spec::walker::WalkResult, benten_core::subgraph_spec::errors::SubgraphSpecError>
+pub fn benten_core::subgraph_spec::walker_as_subgraph() -> benten_core::subgraph::Subgraph
+pub mod benten_core::testing
+pub fn benten_core::testing::canonical_test_node() -> benten_core::Node
+pub mod benten_core::value
+pub enum benten_core::value::Value
+pub benten_core::value::Value::Bool(bool)
+pub benten_core::value::Value::Bytes(alloc::vec::Vec<u8>)
+pub benten_core::value::Value::Float(f64)
+pub benten_core::value::Value::Int(i64)
+pub benten_core::value::Value::List(alloc::vec::Vec<benten_core::value::Value>)
+pub benten_core::value::Value::Map(alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>)
+pub benten_core::value::Value::Null
+pub benten_core::value::Value::Text(alloc::string::String)
+impl benten_core::value::Value
+pub fn benten_core::value::Value::map_of<I, K>(entries: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = (K, benten_core::value::Value)>, K: core::convert::Into<alloc::string::String>
+pub fn benten_core::value::Value::text(s: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::value::Value::to_canonical(&self) -> core::result::Result<benten_core::value::Value, benten_core::CoreError>
+pub fn benten_core::value::Value::unit() -> Self
+impl core::clone::Clone for benten_core::value::Value
+pub fn benten_core::value::Value::clone(&self) -> benten_core::value::Value
+impl core::cmp::PartialEq for benten_core::value::Value
+pub fn benten_core::value::Value::eq(&self, other: &benten_core::value::Value) -> bool
+impl core::fmt::Debug for benten_core::value::Value
+pub fn benten_core::value::Value::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::value::Value
+impl serde_core::ser::Serialize for benten_core::value::Value
+pub fn benten_core::value::Value::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::value::Value
+pub fn benten_core::value::Value::deserialize<D: serde_core::de::Deserializer<'de>>(deserializer: D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
+impl core::marker::Freeze for benten_core::value::Value
+impl core::marker::Send for benten_core::value::Value
+impl core::marker::Sync for benten_core::value::Value
+impl core::marker::Unpin for benten_core::value::Value
+impl core::marker::UnsafeUnpin for benten_core::value::Value
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::value::Value
+impl core::panic::unwind_safe::UnwindSafe for benten_core::value::Value
+pub const benten_core::value::MAX_VALUE_DECODE_DEPTH: usize
+pub mod benten_core::version
+pub enum benten_core::version::VersionError
+pub benten_core::version::VersionError::Branched
+pub benten_core::version::VersionError::Branched::attempted: benten_core::Cid
+pub benten_core::version::VersionError::Branched::seen: benten_core::Cid
+pub benten_core::version::VersionError::UnknownPrior
+pub benten_core::version::VersionError::UnknownPrior::supplied: benten_core::Cid
+impl benten_core::version::VersionError
+pub fn benten_core::version::VersionError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_core::version::VersionError
+impl core::fmt::Debug for benten_core::version::VersionError
+pub fn benten_core::version::VersionError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::version::VersionError
+pub fn benten_core::version::VersionError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::version::VersionError
+impl core::marker::Send for benten_core::version::VersionError
+impl core::marker::Sync for benten_core::version::VersionError
+impl core::marker::Unpin for benten_core::version::VersionError
+impl core::marker::UnsafeUnpin for benten_core::version::VersionError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version::VersionError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::version::VersionError
+pub struct benten_core::version::Anchor
+pub benten_core::version::Anchor::head: benten_core::Cid
+impl benten_core::version::Anchor
+pub fn benten_core::version::Anchor::new(head: benten_core::Cid) -> Self
+impl core::clone::Clone for benten_core::version::Anchor
+pub fn benten_core::version::Anchor::clone(&self) -> benten_core::version::Anchor
+impl core::cmp::PartialEq for benten_core::version::Anchor
+pub fn benten_core::version::Anchor::eq(&self, other: &Self) -> bool
+impl core::fmt::Debug for benten_core::version::Anchor
+pub fn benten_core::version::Anchor::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::version::Anchor
+impl core::marker::Send for benten_core::version::Anchor
+impl core::marker::Sync for benten_core::version::Anchor
+impl core::marker::Unpin for benten_core::version::Anchor
+impl core::marker::UnsafeUnpin for benten_core::version::Anchor
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_core::version::Anchor
+impl !core::panic::unwind_safe::UnwindSafe for benten_core::version::Anchor
+pub fn benten_core::version::append_version(anchor: &benten_core::version::Anchor, prior_head: &benten_core::Cid, new_head: &benten_core::Cid) -> core::result::Result<(), benten_core::version::VersionError>
+pub fn benten_core::version::walk_versions(anchor: &benten_core::version::Anchor) -> alloc::vec::into_iter::IntoIter<benten_core::Cid>
+pub mod benten_core::version_chain
+pub enum benten_core::version_chain::VersionDagError
+pub benten_core::version_chain::VersionDagError::Cycle
+pub benten_core::version_chain::VersionDagError::Cycle::child: benten_core::Cid
+pub benten_core::version_chain::VersionDagError::Cycle::parent: benten_core::Cid
+pub benten_core::version_chain::VersionDagError::UnknownCurrent
+pub benten_core::version_chain::VersionDagError::UnknownCurrent::supplied: benten_core::Cid
+pub benten_core::version_chain::VersionDagError::UnknownParent
+pub benten_core::version_chain::VersionDagError::UnknownParent::supplied: benten_core::Cid
+impl benten_core::version_chain::VersionDagError
+pub fn benten_core::version_chain::VersionDagError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_core::version_chain::VersionDagError
+impl core::fmt::Debug for benten_core::version_chain::VersionDagError
+pub fn benten_core::version_chain::VersionDagError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::version_chain::VersionDagError
+pub fn benten_core::version_chain::VersionDagError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::version_chain::VersionDagError
+impl core::marker::Send for benten_core::version_chain::VersionDagError
+impl core::marker::Sync for benten_core::version_chain::VersionDagError
+impl core::marker::Unpin for benten_core::version_chain::VersionDagError
+impl core::marker::UnsafeUnpin for benten_core::version_chain::VersionDagError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_chain::VersionDagError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::version_chain::VersionDagError
+pub struct benten_core::version_chain::DagVersionChain
+impl benten_core::version_chain::DagVersionChain
+pub fn benten_core::version_chain::DagVersionChain::add_version(&mut self, parent: benten_core::Cid, child: benten_core::Cid) -> core::result::Result<(), benten_core::version_chain::VersionDagError>
+pub fn benten_core::version_chain::DagVersionChain::current(&self) -> core::option::Option<&benten_core::Cid>
+pub fn benten_core::version_chain::DagVersionChain::is_ancestor_of(&self, candidate: &benten_core::Cid, target: &benten_core::Cid) -> bool
+pub fn benten_core::version_chain::DagVersionChain::is_descendant_of(&self, target: &benten_core::Cid, candidate: &benten_core::Cid) -> bool
+pub fn benten_core::version_chain::DagVersionChain::is_empty(&self) -> bool
+pub fn benten_core::version_chain::DagVersionChain::len(&self) -> usize
+pub fn benten_core::version_chain::DagVersionChain::new(root_cid: benten_core::Cid) -> Self
+pub fn benten_core::version_chain::DagVersionChain::set_current(&mut self, cid: benten_core::Cid) -> core::result::Result<(), benten_core::version_chain::VersionDagError>
+pub fn benten_core::version_chain::DagVersionChain::tips(&self) -> alloc::vec::Vec<benten_core::Cid>
+impl core::clone::Clone for benten_core::version_chain::DagVersionChain
+pub fn benten_core::version_chain::DagVersionChain::clone(&self) -> benten_core::version_chain::DagVersionChain
+impl core::fmt::Debug for benten_core::version_chain::DagVersionChain
+pub fn benten_core::version_chain::DagVersionChain::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::version_chain::DagVersionChain
+impl core::marker::Send for benten_core::version_chain::DagVersionChain
+impl core::marker::Sync for benten_core::version_chain::DagVersionChain
+impl core::marker::Unpin for benten_core::version_chain::DagVersionChain
+impl core::marker::UnsafeUnpin for benten_core::version_chain::DagVersionChain
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_chain::DagVersionChain
+impl core::panic::unwind_safe::UnwindSafe for benten_core::version_chain::DagVersionChain
+pub mod benten_core::version_dag
+pub enum benten_core::version_dag::Mode
+pub benten_core::version_dag::Mode::Dag
+pub benten_core::version_dag::Mode::Strict
+impl core::clone::Clone for benten_core::version_dag::Mode
+pub fn benten_core::version_dag::Mode::clone(&self) -> benten_core::version_dag::Mode
+impl core::cmp::Eq for benten_core::version_dag::Mode
+impl core::cmp::PartialEq for benten_core::version_dag::Mode
+pub fn benten_core::version_dag::Mode::eq(&self, other: &benten_core::version_dag::Mode) -> bool
+impl core::fmt::Debug for benten_core::version_dag::Mode
+pub fn benten_core::version_dag::Mode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::version_dag::Mode
+pub fn benten_core::version_dag::Mode::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::version_dag::Mode
+impl core::marker::StructuralPartialEq for benten_core::version_dag::Mode
+impl core::marker::Freeze for benten_core::version_dag::Mode
+impl core::marker::Send for benten_core::version_dag::Mode
+impl core::marker::Sync for benten_core::version_dag::Mode
+impl core::marker::Unpin for benten_core::version_dag::Mode
+impl core::marker::UnsafeUnpin for benten_core::version_dag::Mode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_dag::Mode
+impl core::panic::unwind_safe::UnwindSafe for benten_core::version_dag::Mode
+#[non_exhaustive] pub enum benten_core::version_dag::VersionDagError
+pub benten_core::version_dag::VersionDagError::Branched
+pub benten_core::version_dag::VersionDagError::Branched::attempted: benten_core::Cid
+pub benten_core::version_dag::VersionDagError::Branched::seen: benten_core::Cid
+pub benten_core::version_dag::VersionDagError::Cycle
+pub benten_core::version_dag::VersionDagError::Cycle::child: benten_core::Cid
+pub benten_core::version_dag::VersionDagError::Cycle::parent: benten_core::Cid
+pub benten_core::version_dag::VersionDagError::UnknownCurrent
+pub benten_core::version_dag::VersionDagError::UnknownCurrent::supplied: benten_core::Cid
+pub benten_core::version_dag::VersionDagError::UnknownPrior
+pub benten_core::version_dag::VersionDagError::UnknownPrior::supplied: benten_core::Cid
+impl benten_core::version_dag::VersionDagError
+pub fn benten_core::version_dag::VersionDagError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_core::version_dag::VersionDagError
+impl core::fmt::Debug for benten_core::version_dag::VersionDagError
+pub fn benten_core::version_dag::VersionDagError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::version_dag::VersionDagError
+pub fn benten_core::version_dag::VersionDagError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::version_dag::VersionDagError
+impl core::marker::Send for benten_core::version_dag::VersionDagError
+impl core::marker::Sync for benten_core::version_dag::VersionDagError
+impl core::marker::Unpin for benten_core::version_dag::VersionDagError
+impl core::marker::UnsafeUnpin for benten_core::version_dag::VersionDagError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_dag::VersionDagError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::version_dag::VersionDagError
+pub struct benten_core::version_dag::VersionDag
+impl benten_core::version_dag::VersionDag
+pub fn benten_core::version_dag::VersionDag::append(&mut self, prior_head: &benten_core::Cid, new_head: &benten_core::Cid) -> core::result::Result<(), benten_core::version_dag::VersionDagError>
+pub fn benten_core::version_dag::VersionDag::is_ancestor_of(&self, candidate: &benten_core::Cid, target: &benten_core::Cid) -> bool
+pub fn benten_core::version_dag::VersionDag::is_empty(&self) -> bool
+pub fn benten_core::version_dag::VersionDag::len(&self) -> usize
+pub fn benten_core::version_dag::VersionDag::mode(&self) -> benten_core::version_dag::Mode
+pub fn benten_core::version_dag::VersionDag::new(root: benten_core::Cid, mode: benten_core::version_dag::Mode) -> Self
+pub fn benten_core::version_dag::VersionDag::root(&self) -> benten_core::Cid
+pub fn benten_core::version_dag::VersionDag::tips(&self) -> alloc::vec::Vec<benten_core::Cid>
+impl benten_core::version_dag::VersionChain for benten_core::version_dag::VersionDag
+pub fn benten_core::version_dag::VersionDag::current(&self) -> core::option::Option<&benten_core::Cid>
+pub fn benten_core::version_dag::VersionDag::set_current(&mut self, cid: benten_core::Cid) -> core::result::Result<(), benten_core::version_dag::VersionDagError>
+pub fn benten_core::version_dag::VersionDag::walk(&self) -> alloc::boxed::Box<(dyn core::iter::traits::iterator::Iterator<Item = benten_core::Cid> + '_)>
+impl core::clone::Clone for benten_core::version_dag::VersionDag
+pub fn benten_core::version_dag::VersionDag::clone(&self) -> benten_core::version_dag::VersionDag
+impl core::fmt::Debug for benten_core::version_dag::VersionDag
+pub fn benten_core::version_dag::VersionDag::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::version_dag::VersionDag
+impl core::marker::Send for benten_core::version_dag::VersionDag
+impl core::marker::Sync for benten_core::version_dag::VersionDag
+impl core::marker::Unpin for benten_core::version_dag::VersionDag
+impl core::marker::UnsafeUnpin for benten_core::version_dag::VersionDag
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_dag::VersionDag
+impl core::panic::unwind_safe::UnwindSafe for benten_core::version_dag::VersionDag
+pub trait benten_core::version_dag::VersionChain
+pub fn benten_core::version_dag::VersionChain::current(&self) -> core::option::Option<&benten_core::Cid>
+pub fn benten_core::version_dag::VersionChain::set_current(&mut self, cid: benten_core::Cid) -> core::result::Result<(), benten_core::version_dag::VersionDagError>
+pub fn benten_core::version_dag::VersionChain::walk(&self) -> alloc::boxed::Box<(dyn core::iter::traits::iterator::Iterator<Item = benten_core::Cid> + '_)>
+impl benten_core::version_dag::VersionChain for benten_core::version_dag::VersionDag
+pub fn benten_core::version_dag::VersionDag::current(&self) -> core::option::Option<&benten_core::Cid>
+pub fn benten_core::version_dag::VersionDag::set_current(&mut self, cid: benten_core::Cid) -> core::result::Result<(), benten_core::version_dag::VersionDagError>
+pub fn benten_core::version_dag::VersionDag::walk(&self) -> alloc::boxed::Box<(dyn core::iter::traits::iterator::Iterator<Item = benten_core::Cid> + '_)>
+pub macro benten_core::query!
+#[non_exhaustive] pub enum benten_core::ChangeKind
+pub benten_core::ChangeKind::Created
+pub benten_core::ChangeKind::Deleted
+pub benten_core::ChangeKind::Updated
+impl core::clone::Clone for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::clone(&self) -> benten_core::change_stream::ChangeKind
+impl core::cmp::Eq for benten_core::change_stream::ChangeKind
+impl core::cmp::PartialEq for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::eq(&self, other: &benten_core::change_stream::ChangeKind) -> bool
+impl core::fmt::Debug for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::change_stream::ChangeKind
+pub fn benten_core::change_stream::ChangeKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::change_stream::ChangeKind
+impl core::marker::StructuralPartialEq for benten_core::change_stream::ChangeKind
+impl core::marker::Freeze for benten_core::change_stream::ChangeKind
+impl core::marker::Send for benten_core::change_stream::ChangeKind
+impl core::marker::Sync for benten_core::change_stream::ChangeKind
+impl core::marker::Unpin for benten_core::change_stream::ChangeKind
+impl core::marker::UnsafeUnpin for benten_core::change_stream::ChangeKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::change_stream::ChangeKind
+impl core::panic::unwind_safe::UnwindSafe for benten_core::change_stream::ChangeKind
+#[non_exhaustive] pub enum benten_core::CoreError
+pub benten_core::CoreError::CidParse(&'static str)
+pub benten_core::CoreError::CidUnsupportedCodec
+pub benten_core::CoreError::CidUnsupportedHash
+pub benten_core::CoreError::ContentHashMismatch
+pub benten_core::CoreError::ContentHashMismatch::actual: benten_core::Cid
+pub benten_core::CoreError::ContentHashMismatch::expected: benten_core::Cid
+pub benten_core::CoreError::ContentHashMismatch::path: &'static str
+pub benten_core::CoreError::FloatNan
+pub benten_core::CoreError::FloatNonFinite
+pub benten_core::CoreError::HlcSkewExceeded
+pub benten_core::CoreError::HlcSkewExceeded::local_physical_ms: u64
+pub benten_core::CoreError::HlcSkewExceeded::remote_physical_ms: u64
+pub benten_core::CoreError::HlcSkewExceeded::tolerance_ms: u64
+pub benten_core::CoreError::InvalidCid(&'static str)
+pub benten_core::CoreError::NotFound
+pub benten_core::CoreError::Serialize(alloc::string::String)
+pub benten_core::CoreError::ValueOutOfRange
+pub benten_core::CoreError::ValueOutOfRange::bound: &'static str
+pub benten_core::CoreError::ValueOutOfRange::field: &'static str
+pub benten_core::CoreError::ValueOutOfRange::value: alloc::string::String
+pub benten_core::CoreError::VersionBranched
+impl benten_core::CoreError
+pub fn benten_core::CoreError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_core::CoreError
+impl core::fmt::Debug for benten_core::CoreError
+pub fn benten_core::CoreError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::CoreError
+pub fn benten_core::CoreError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_core::CoreError
+impl core::marker::Send for benten_core::CoreError
+impl core::marker::Sync for benten_core::CoreError
+impl core::marker::Unpin for benten_core::CoreError
+impl core::marker::UnsafeUnpin for benten_core::CoreError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::CoreError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::CoreError
+#[non_exhaustive] pub enum benten_core::EncryptionClass
+pub benten_core::EncryptionClass::Confidential
+pub benten_core::EncryptionClass::Public
+impl benten_core::encryption_class::EncryptionClass
+pub const fn benten_core::encryption_class::EncryptionClass::codepoint(self) -> u8
+pub fn benten_core::encryption_class::EncryptionClass::from_codepoint(codepoint: u8) -> core::result::Result<Self, benten_core::encryption_class::EncryptionClassError>
+impl core::clone::Clone for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::clone(&self) -> benten_core::encryption_class::EncryptionClass
+impl core::cmp::Eq for benten_core::encryption_class::EncryptionClass
+impl core::cmp::PartialEq for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::eq(&self, other: &benten_core::encryption_class::EncryptionClass) -> bool
+impl core::fmt::Debug for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::encryption_class::EncryptionClass
+impl core::marker::StructuralPartialEq for benten_core::encryption_class::EncryptionClass
+impl serde_core::ser::Serialize for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::encryption_class::EncryptionClass
+pub fn benten_core::encryption_class::EncryptionClass::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::encryption_class::EncryptionClass
+impl core::marker::Send for benten_core::encryption_class::EncryptionClass
+impl core::marker::Sync for benten_core::encryption_class::EncryptionClass
+impl core::marker::Unpin for benten_core::encryption_class::EncryptionClass
+impl core::marker::UnsafeUnpin for benten_core::encryption_class::EncryptionClass
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::encryption_class::EncryptionClass
+impl core::panic::unwind_safe::UnwindSafe for benten_core::encryption_class::EncryptionClass
+#[non_exhaustive] pub enum benten_core::EncryptionClassError
+pub benten_core::EncryptionClassError::UnsupportedClass
+pub benten_core::EncryptionClassError::UnsupportedClass::raw: u8
+impl core::clone::Clone for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::clone(&self) -> benten_core::encryption_class::EncryptionClassError
+impl core::cmp::Eq for benten_core::encryption_class::EncryptionClassError
+impl core::cmp::PartialEq for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::eq(&self, other: &benten_core::encryption_class::EncryptionClassError) -> bool
+impl core::error::Error for benten_core::encryption_class::EncryptionClassError
+impl core::fmt::Debug for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::encryption_class::EncryptionClassError
+pub fn benten_core::encryption_class::EncryptionClassError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Freeze for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Send for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Sync for benten_core::encryption_class::EncryptionClassError
+impl core::marker::Unpin for benten_core::encryption_class::EncryptionClassError
+impl core::marker::UnsafeUnpin for benten_core::encryption_class::EncryptionClassError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::encryption_class::EncryptionClassError
+impl core::panic::unwind_safe::UnwindSafe for benten_core::encryption_class::EncryptionClassError
+#[non_exhaustive] pub enum benten_core::PrimitiveKind
+pub benten_core::PrimitiveKind::Branch
+pub benten_core::PrimitiveKind::Call
+pub benten_core::PrimitiveKind::Emit
+pub benten_core::PrimitiveKind::Iterate
+pub benten_core::PrimitiveKind::Read
+pub benten_core::PrimitiveKind::Respond
+pub benten_core::PrimitiveKind::Sandbox
+pub benten_core::PrimitiveKind::Stream
+pub benten_core::PrimitiveKind::Subscribe
+pub benten_core::PrimitiveKind::Transform
+pub benten_core::PrimitiveKind::Wait
+pub benten_core::PrimitiveKind::Write
+impl benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::canonical_tag(&self) -> &'static str
+pub fn benten_core::subgraph::PrimitiveKind::error_edges(&self) -> &'static [&'static str]
+pub fn benten_core::subgraph::PrimitiveKind::is_deterministic(&self) -> bool
+pub fn benten_core::subgraph::PrimitiveKind::is_phase_1_executable(&self) -> bool
+impl core::clone::Clone for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::clone(&self) -> benten_core::subgraph::PrimitiveKind
+impl core::cmp::Eq for benten_core::subgraph::PrimitiveKind
+impl core::cmp::PartialEq for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::eq(&self, other: &benten_core::subgraph::PrimitiveKind) -> bool
+impl core::fmt::Debug for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::PrimitiveKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::subgraph::PrimitiveKind
+impl core::marker::StructuralPartialEq for benten_core::subgraph::PrimitiveKind
+impl core::marker::Freeze for benten_core::subgraph::PrimitiveKind
+impl core::marker::Send for benten_core::subgraph::PrimitiveKind
+impl core::marker::Sync for benten_core::subgraph::PrimitiveKind
+impl core::marker::Unpin for benten_core::subgraph::PrimitiveKind
+impl core::marker::UnsafeUnpin for benten_core::subgraph::PrimitiveKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::PrimitiveKind
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::PrimitiveKind
+pub enum benten_core::Value
+pub benten_core::Value::Bool(bool)
+pub benten_core::Value::Bytes(alloc::vec::Vec<u8>)
+pub benten_core::Value::Float(f64)
+pub benten_core::Value::Int(i64)
+pub benten_core::Value::List(alloc::vec::Vec<benten_core::value::Value>)
+pub benten_core::Value::Map(alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>)
+pub benten_core::Value::Null
+pub benten_core::Value::Text(alloc::string::String)
+impl benten_core::value::Value
+pub fn benten_core::value::Value::map_of<I, K>(entries: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = (K, benten_core::value::Value)>, K: core::convert::Into<alloc::string::String>
+pub fn benten_core::value::Value::text(s: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::value::Value::to_canonical(&self) -> core::result::Result<benten_core::value::Value, benten_core::CoreError>
+pub fn benten_core::value::Value::unit() -> Self
+impl core::clone::Clone for benten_core::value::Value
+pub fn benten_core::value::Value::clone(&self) -> benten_core::value::Value
+impl core::cmp::PartialEq for benten_core::value::Value
+pub fn benten_core::value::Value::eq(&self, other: &benten_core::value::Value) -> bool
+impl core::fmt::Debug for benten_core::value::Value
+pub fn benten_core::value::Value::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::value::Value
+impl serde_core::ser::Serialize for benten_core::value::Value
+pub fn benten_core::value::Value::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::value::Value
+pub fn benten_core::value::Value::deserialize<D: serde_core::de::Deserializer<'de>>(deserializer: D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
+impl core::marker::Freeze for benten_core::value::Value
+impl core::marker::Send for benten_core::value::Value
+impl core::marker::Sync for benten_core::value::Value
+impl core::marker::Unpin for benten_core::value::Value
+impl core::marker::UnsafeUnpin for benten_core::value::Value
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::value::Value
+impl core::panic::unwind_safe::UnwindSafe for benten_core::value::Value
+#[non_exhaustive] pub enum benten_core::WriteAuthority
+pub benten_core::WriteAuthority::EnginePrivileged
+pub benten_core::WriteAuthority::SyncReplica
+pub benten_core::WriteAuthority::SyncReplica::origin_peer: benten_core::Cid
+pub benten_core::WriteAuthority::User
+impl core::clone::Clone for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::clone(&self) -> benten_core::WriteAuthority
+impl core::cmp::Eq for benten_core::WriteAuthority
+impl core::cmp::PartialEq for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::eq(&self, other: &benten_core::WriteAuthority) -> bool
+impl core::default::Default for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::default() -> Self
+impl core::fmt::Debug for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::WriteAuthority
+impl core::marker::StructuralPartialEq for benten_core::WriteAuthority
+impl serde_core::ser::Serialize for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::WriteAuthority
+pub fn benten_core::WriteAuthority::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::WriteAuthority
+impl core::marker::Send for benten_core::WriteAuthority
+impl core::marker::Sync for benten_core::WriteAuthority
+impl core::marker::Unpin for benten_core::WriteAuthority
+impl core::marker::UnsafeUnpin for benten_core::WriteAuthority
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::WriteAuthority
+impl core::panic::unwind_safe::UnwindSafe for benten_core::WriteAuthority
+pub struct benten_core::BentenHlc
+impl benten_core::hlc::BentenHlc
+pub const fn benten_core::hlc::BentenHlc::logical(&self) -> u32
+pub const fn benten_core::hlc::BentenHlc::new(physical_ms: u64, logical: u32, node_id: u64) -> Self
+pub const fn benten_core::hlc::BentenHlc::node_id(&self) -> u64
+pub const fn benten_core::hlc::BentenHlc::node_id_from_peer_id_bytes(prefix: [u8; 8]) -> u64
+pub const fn benten_core::hlc::BentenHlc::physical_ms(&self) -> u64
+impl core::clone::Clone for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::clone(&self) -> benten_core::hlc::BentenHlc
+impl core::cmp::Eq for benten_core::hlc::BentenHlc
+impl core::cmp::Ord for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::cmp(&self, other: &benten_core::hlc::BentenHlc) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::eq(&self, other: &benten_core::hlc::BentenHlc) -> bool
+impl core::cmp::PartialOrd for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::partial_cmp(&self, other: &benten_core::hlc::BentenHlc) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::BentenHlc::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::hlc::BentenHlc
+impl core::marker::StructuralPartialEq for benten_core::hlc::BentenHlc
+impl core::marker::Freeze for benten_core::hlc::BentenHlc
+impl core::marker::Send for benten_core::hlc::BentenHlc
+impl core::marker::Sync for benten_core::hlc::BentenHlc
+impl core::marker::Unpin for benten_core::hlc::BentenHlc
+impl core::marker::UnsafeUnpin for benten_core::hlc::BentenHlc
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::hlc::BentenHlc
+impl core::panic::unwind_safe::UnwindSafe for benten_core::hlc::BentenHlc
+#[non_exhaustive] pub struct benten_core::ChangeEvent
+pub benten_core::ChangeEvent::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_core::ChangeEvent::anchor_cid: benten_core::Cid
+pub benten_core::ChangeEvent::capability_grant_cid: core::option::Option<benten_core::Cid>
+pub benten_core::ChangeEvent::handler_cid: core::option::Option<benten_core::Cid>
+pub benten_core::ChangeEvent::kind: benten_core::change_stream::ChangeKind
+pub benten_core::ChangeEvent::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_core::ChangeEvent::payload_bytes: alloc::vec::Vec<u8>
+pub benten_core::ChangeEvent::seq: u64
+pub benten_core::ChangeEvent::tx_id: u64
+impl benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::for_bridge(anchor_cid: benten_core::Cid, kind: benten_core::change_stream::ChangeKind, seq: u64, payload_bytes: alloc::vec::Vec<u8>, labels: alloc::vec::Vec<alloc::string::String>, tx_id: u64, actor_cid: core::option::Option<benten_core::Cid>, handler_cid: core::option::Option<benten_core::Cid>, capability_grant_cid: core::option::Option<benten_core::Cid>) -> Self
+pub fn benten_core::change_stream::ChangeEvent::minimal(anchor_cid: benten_core::Cid, kind: benten_core::change_stream::ChangeKind, seq: u64, payload_bytes: alloc::vec::Vec<u8>) -> Self
+impl core::clone::Clone for benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::clone(&self) -> benten_core::change_stream::ChangeEvent
+impl core::cmp::Eq for benten_core::change_stream::ChangeEvent
+impl core::cmp::PartialEq for benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::eq(&self, other: &benten_core::change_stream::ChangeEvent) -> bool
+impl core::fmt::Debug for benten_core::change_stream::ChangeEvent
+pub fn benten_core::change_stream::ChangeEvent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::change_stream::ChangeEvent
+impl core::marker::Freeze for benten_core::change_stream::ChangeEvent
+impl core::marker::Send for benten_core::change_stream::ChangeEvent
+impl core::marker::Sync for benten_core::change_stream::ChangeEvent
+impl core::marker::Unpin for benten_core::change_stream::ChangeEvent
+impl core::marker::UnsafeUnpin for benten_core::change_stream::ChangeEvent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::change_stream::ChangeEvent
+impl core::panic::unwind_safe::UnwindSafe for benten_core::change_stream::ChangeEvent
+pub struct benten_core::Cid(_)
+impl benten_core::Cid
+pub fn benten_core::Cid::as_bytes(&self) -> &[u8; 36]
+pub fn benten_core::Cid::from_blake3_digest(digest: [u8; 32]) -> Self
+pub fn benten_core::Cid::from_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::Cid::to_base32(&self) -> alloc::string::String
+impl core::clone::Clone for benten_core::Cid
+pub fn benten_core::Cid::clone(&self) -> benten_core::Cid
+impl core::cmp::Eq for benten_core::Cid
+impl core::cmp::Ord for benten_core::Cid
+pub fn benten_core::Cid::cmp(&self, other: &benten_core::Cid) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::Cid
+pub fn benten_core::Cid::eq(&self, other: &benten_core::Cid) -> bool
+impl core::cmp::PartialOrd for benten_core::Cid
+pub fn benten_core::Cid::partial_cmp(&self, other: &benten_core::Cid) -> core::option::Option<core::cmp::Ordering>
+impl core::convert::From<[u8; 32]> for benten_core::Cid
+pub fn benten_core::Cid::from(digest: [u8; 32]) -> Self
+impl core::convert::TryFrom<&[u8]> for benten_core::Cid
+pub type benten_core::Cid::Error = benten_core::CoreError
+pub fn benten_core::Cid::try_from(bytes: &[u8]) -> core::result::Result<Self, Self::Error>
+impl core::fmt::Debug for benten_core::Cid
+pub fn benten_core::Cid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::Cid
+pub fn benten_core::Cid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::Cid
+pub fn benten_core::Cid::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::Cid
+impl core::marker::StructuralPartialEq for benten_core::Cid
+impl core::str::traits::FromStr for benten_core::Cid
+pub type benten_core::Cid::Err = benten_core::CoreError
+pub fn benten_core::Cid::from_str(s: &str) -> core::result::Result<Self, Self::Err>
+impl serde_core::ser::Serialize for benten_core::Cid
+pub fn benten_core::Cid::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::Cid
+pub fn benten_core::Cid::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::Cid
+impl core::marker::Send for benten_core::Cid
+impl core::marker::Sync for benten_core::Cid
+impl core::marker::Unpin for benten_core::Cid
+impl core::marker::UnsafeUnpin for benten_core::Cid
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::Cid
+impl core::panic::unwind_safe::UnwindSafe for benten_core::Cid
+pub struct benten_core::Edge
+pub benten_core::Edge::label: alloc::string::String
+pub benten_core::Edge::properties: core::option::Option<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>>
+pub benten_core::Edge::source: benten_core::Cid
+pub benten_core::Edge::target: benten_core::Cid
+impl benten_core::edge::Edge
+pub fn benten_core::edge::Edge::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_core::edge::Edge::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
+pub fn benten_core::edge::Edge::new(source: benten_core::Cid, target: benten_core::Cid, label: impl core::convert::Into<alloc::string::String>, properties: core::option::Option<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>>) -> Self
+pub fn benten_core::edge::Edge::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+impl core::clone::Clone for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::clone(&self) -> benten_core::edge::Edge
+impl core::cmp::PartialEq for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::eq(&self, other: &benten_core::edge::Edge) -> bool
+impl core::fmt::Debug for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::edge::Edge
+impl serde_core::ser::Serialize for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::edge::Edge
+pub fn benten_core::edge::Edge::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::edge::Edge
+impl core::marker::Send for benten_core::edge::Edge
+impl core::marker::Sync for benten_core::edge::Edge
+impl core::marker::Unpin for benten_core::edge::Edge
+impl core::marker::UnsafeUnpin for benten_core::edge::Edge
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::edge::Edge
+impl core::panic::unwind_safe::UnwindSafe for benten_core::edge::Edge
+pub struct benten_core::Hlc
+impl benten_core::hlc::Hlc
+pub const benten_core::hlc::Hlc::DEFAULT_SKEW_TOLERANCE_MS: u64
+pub fn benten_core::hlc::Hlc::new(node_id: u64, physical_clock: benten_core::hlc::PhysicalClockFn) -> Self
+pub fn benten_core::hlc::Hlc::node_id(&self) -> u64
+pub fn benten_core::hlc::Hlc::now(&self) -> benten_core::hlc::BentenHlc
+pub fn benten_core::hlc::Hlc::skew_tolerance_ms(&self) -> u64
+pub fn benten_core::hlc::Hlc::update(&self, remote: &benten_core::hlc::BentenHlc) -> core::result::Result<benten_core::hlc::BentenHlc, benten_core::CoreError>
+pub fn benten_core::hlc::Hlc::with_skew_tolerance(node_id: u64, physical_clock: benten_core::hlc::PhysicalClockFn, skew_tolerance_ms: u64) -> Self
+impl core::fmt::Debug for benten_core::hlc::Hlc
+pub fn benten_core::hlc::Hlc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_core::hlc::Hlc
+impl core::marker::Send for benten_core::hlc::Hlc
+impl core::marker::Sync for benten_core::hlc::Hlc
+impl core::marker::Unpin for benten_core::hlc::Hlc
+impl core::marker::UnsafeUnpin for benten_core::hlc::Hlc
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_core::hlc::Hlc
+impl core::panic::unwind_safe::UnwindSafe for benten_core::hlc::Hlc
+pub struct benten_core::Node
+pub benten_core::Node::anchor_id: core::option::Option<u64>
+pub benten_core::Node::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_core::Node::properties: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
+impl benten_core::Node
+pub fn benten_core::Node::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_core::Node::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
+pub fn benten_core::Node::empty() -> Self
+pub fn benten_core::Node::load_verified(cid: &benten_core::Cid, bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::Node::new(labels: alloc::vec::Vec<alloc::string::String>, properties: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>) -> Self
+pub fn benten_core::Node::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+impl core::clone::Clone for benten_core::Node
+pub fn benten_core::Node::clone(&self) -> benten_core::Node
+impl core::cmp::PartialEq for benten_core::Node
+pub fn benten_core::Node::eq(&self, other: &benten_core::Node) -> bool
+impl core::fmt::Debug for benten_core::Node
+pub fn benten_core::Node::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::Node
+impl serde_core::ser::Serialize for benten_core::Node
+pub fn benten_core::Node::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_core::Node
+pub fn benten_core::Node::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_core::Node
+impl core::marker::Send for benten_core::Node
+impl core::marker::Sync for benten_core::Node
+impl core::marker::Unpin for benten_core::Node
+impl core::marker::UnsafeUnpin for benten_core::Node
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::Node
+impl core::panic::unwind_safe::UnwindSafe for benten_core::Node
+pub struct benten_core::NodeHandle(pub u32)
+impl core::clone::Clone for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::clone(&self) -> benten_core::subgraph::NodeHandle
+impl core::cmp::Eq for benten_core::subgraph::NodeHandle
+impl core::cmp::PartialEq for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::eq(&self, other: &benten_core::subgraph::NodeHandle) -> bool
+impl core::fmt::Debug for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::NodeHandle::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::subgraph::NodeHandle
+impl core::marker::StructuralPartialEq for benten_core::subgraph::NodeHandle
+impl core::marker::Freeze for benten_core::subgraph::NodeHandle
+impl core::marker::Send for benten_core::subgraph::NodeHandle
+impl core::marker::Sync for benten_core::subgraph::NodeHandle
+impl core::marker::Unpin for benten_core::subgraph::NodeHandle
+impl core::marker::UnsafeUnpin for benten_core::subgraph::NodeHandle
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::NodeHandle
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::NodeHandle
+#[non_exhaustive] pub struct benten_core::OperationNode
+pub benten_core::OperationNode::id: alloc::string::String
+pub benten_core::OperationNode::kind: benten_core::subgraph::PrimitiveKind
+pub benten_core::OperationNode::properties: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
+impl benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::new(id: impl core::convert::Into<alloc::string::String>, kind: benten_core::subgraph::PrimitiveKind) -> Self
+pub fn benten_core::subgraph::OperationNode::primitive_kind(&self) -> benten_core::subgraph::PrimitiveKind
+pub fn benten_core::subgraph::OperationNode::property(&self, k: &str) -> core::option::Option<&benten_core::value::Value>
+pub fn benten_core::subgraph::OperationNode::with_property(self, k: impl core::convert::Into<alloc::string::String>, v: benten_core::value::Value) -> Self
+impl core::clone::Clone for benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::clone(&self) -> benten_core::subgraph::OperationNode
+impl core::cmp::PartialEq for benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::eq(&self, other: &benten_core::subgraph::OperationNode) -> bool
+impl core::fmt::Debug for benten_core::subgraph::OperationNode
+pub fn benten_core::subgraph::OperationNode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph::OperationNode
+impl core::marker::Freeze for benten_core::subgraph::OperationNode
+impl core::marker::Send for benten_core::subgraph::OperationNode
+impl core::marker::Sync for benten_core::subgraph::OperationNode
+impl core::marker::Unpin for benten_core::subgraph::OperationNode
+impl core::marker::UnsafeUnpin for benten_core::subgraph::OperationNode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::OperationNode
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::OperationNode
+pub struct benten_core::Subgraph
+pub benten_core::Subgraph::deterministic: bool
+pub benten_core::Subgraph::edges: alloc::vec::Vec<(alloc::string::String, alloc::string::String, alloc::string::String)>
+pub benten_core::Subgraph::handler_id: alloc::string::String
+pub benten_core::Subgraph::nodes: alloc::vec::Vec<benten_core::subgraph::OperationNode>
+impl benten_core::subgraph::Subgraph
+pub const benten_core::subgraph::Subgraph::MAX_DECODE_BYTES: usize
+pub fn benten_core::subgraph::Subgraph::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::edges(&self) -> &[(alloc::string::String, alloc::string::String, alloc::string::String)]
+pub fn benten_core::subgraph::Subgraph::empty_for_test(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::Subgraph::first_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
+pub fn benten_core::subgraph::Subgraph::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::handle_of(&self, id: &str) -> core::option::Option<benten_core::subgraph::NodeHandle>
+pub fn benten_core::subgraph::Subgraph::handler_id(&self) -> &str
+pub fn benten_core::subgraph::Subgraph::is_declared_deterministic(&self) -> bool
+pub fn benten_core::subgraph::Subgraph::load_verified(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::load_verified_with_cid(expected_cid: &benten_core::Cid, bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::new(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::Subgraph::node_by_handle(&self, h: benten_core::subgraph::NodeHandle) -> core::option::Option<&benten_core::subgraph::OperationNode>
+pub fn benten_core::subgraph::Subgraph::nodes(&self) -> &[benten_core::subgraph::OperationNode]
+pub fn benten_core::subgraph::Subgraph::op_by_id_mut(&mut self, id: &str) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
+pub fn benten_core::subgraph::Subgraph::primitive_count(&self) -> usize
+pub fn benten_core::subgraph::Subgraph::push_edge_raw(self, from: impl core::convert::Into<alloc::string::String>, to: impl core::convert::Into<alloc::string::String>, label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::Subgraph::push_node_raw(self, n: benten_core::subgraph::OperationNode) -> Self
+pub fn benten_core::subgraph::Subgraph::set_deterministic(&mut self, value: bool)
+pub fn benten_core::subgraph::Subgraph::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::write_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
+impl core::clone::Clone for benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::Subgraph::clone(&self) -> benten_core::subgraph::Subgraph
+impl core::cmp::PartialEq for benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::Subgraph::eq(&self, other: &benten_core::subgraph::Subgraph) -> bool
+impl core::fmt::Debug for benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::Subgraph::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_core::subgraph::Subgraph
+impl core::marker::Freeze for benten_core::subgraph::Subgraph
+impl core::marker::Send for benten_core::subgraph::Subgraph
+impl core::marker::Sync for benten_core::subgraph::Subgraph
+impl core::marker::Unpin for benten_core::subgraph::Subgraph
+impl core::marker::UnsafeUnpin for benten_core::subgraph::Subgraph
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::Subgraph
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::Subgraph
+pub struct benten_core::SubgraphBuilder
+pub benten_core::SubgraphBuilder::build_errors: alloc::vec::Vec<benten_core::CoreError>
+pub benten_core::SubgraphBuilder::deterministic: bool
+pub benten_core::SubgraphBuilder::edges: alloc::vec::Vec<(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)>
+pub benten_core::SubgraphBuilder::extra_edges: usize
+pub benten_core::SubgraphBuilder::handler_id: alloc::string::String
+pub benten_core::SubgraphBuilder::iterate_depth: alloc::vec::Vec<usize>
+pub benten_core::SubgraphBuilder::nodes: alloc::vec::Vec<benten_core::subgraph::OperationNode>
+pub benten_core::SubgraphBuilder::parallel_fanout: alloc::vec::Vec<usize>
+impl benten_core::subgraph::SubgraphBuilder
+pub fn benten_core::subgraph::SubgraphBuilder::add_edge(&mut self, from: benten_core::subgraph::NodeHandle, to: benten_core::subgraph::NodeHandle) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::add_edge_labeled(&mut self, from: benten_core::subgraph::NodeHandle, to: benten_core::subgraph::NodeHandle, label: impl core::convert::Into<alloc::string::String>) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::branch(&mut self, prev: benten_core::subgraph::NodeHandle, _expr: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::build(self) -> core::result::Result<benten_core::subgraph::Subgraph, benten_core::CoreError>
+pub fn benten_core::subgraph::SubgraphBuilder::build_unvalidated_for_test(self) -> benten_core::subgraph::Subgraph
+pub fn benten_core::subgraph::SubgraphBuilder::call_handler(&mut self, prev: benten_core::subgraph::NodeHandle, handler_id: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::call_with_isolated(&mut self, prev: benten_core::subgraph::NodeHandle, handler: &str, isolated: bool) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::declare_deterministic(&mut self, value: bool) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::deterministic_for_validator(&self) -> bool
+pub fn benten_core::subgraph::SubgraphBuilder::edges_for_validator(&self) -> &[(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)]
+pub fn benten_core::subgraph::SubgraphBuilder::emit(&mut self, prev: benten_core::subgraph::NodeHandle, _topic: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::extra_edges_for_validator(&self) -> usize
+pub fn benten_core::subgraph::SubgraphBuilder::force_add_cross_edges_for_testing(&mut self, n: usize) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::handler_id_for_validator(&self) -> &str
+pub fn benten_core::subgraph::SubgraphBuilder::iterate(&mut self, prev: benten_core::subgraph::NodeHandle, _body: &str, max_iterations: u64) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::iterate_depth_for_validator(&self) -> &[usize]
+pub fn benten_core::subgraph::SubgraphBuilder::iterate_parallel(&mut self, prev: benten_core::subgraph::NodeHandle, _body: &str, parallel_fanout: usize) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::new(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_core::subgraph::SubgraphBuilder::nodes_for_validator(&self) -> &[benten_core::subgraph::OperationNode]
+pub fn benten_core::subgraph::SubgraphBuilder::parallel_fanout_for_validator(&self) -> &[usize]
+pub fn benten_core::subgraph::SubgraphBuilder::push_primitive(&mut self, id: impl core::convert::Into<alloc::string::String>, kind: benten_core::subgraph::PrimitiveKind) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::read(&mut self, id: impl core::convert::Into<alloc::string::String>) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::respond(&mut self, prev: benten_core::subgraph::NodeHandle) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::sandbox(&mut self, prev: benten_core::subgraph::NodeHandle, module: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::set_property_for_test(&mut self, h: benten_core::subgraph::NodeHandle, key: &str, value: benten_core::value::Value) -> &mut Self
+pub fn benten_core::subgraph::SubgraphBuilder::transform(&mut self, prev: benten_core::subgraph::NodeHandle, _expr: &str) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::wait_duration(&mut self, prev: benten_core::subgraph::NodeHandle, duration: core::time::Duration) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::wait_signal(&mut self, prev: benten_core::subgraph::NodeHandle, signal_name: impl core::convert::Into<alloc::string::String>) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::wait_signal_with_timeout(&mut self, prev: benten_core::subgraph::NodeHandle, signal_name: impl core::convert::Into<alloc::string::String>, timeout: core::time::Duration) -> benten_core::subgraph::NodeHandle
+pub fn benten_core::subgraph::SubgraphBuilder::write(&mut self, id: impl core::convert::Into<alloc::string::String>) -> benten_core::subgraph::NodeHandle
+impl core::marker::Freeze for benten_core::subgraph::SubgraphBuilder
+impl core::marker::Send for benten_core::subgraph::SubgraphBuilder
+impl core::marker::Sync for benten_core::subgraph::SubgraphBuilder
+impl core::marker::Unpin for benten_core::subgraph::SubgraphBuilder
+impl core::marker::UnsafeUnpin for benten_core::subgraph::SubgraphBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::SubgraphBuilder
+impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::SubgraphBuilder
+pub struct benten_core::SubscriberId(_)
+impl benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::as_cid(&self) -> &benten_core::Cid
+pub fn benten_core::change_stream::SubscriberId::from_cid(cid: benten_core::Cid) -> Self
+impl core::clone::Clone for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::clone(&self) -> benten_core::change_stream::SubscriberId
+impl core::cmp::Eq for benten_core::change_stream::SubscriberId
+impl core::cmp::Ord for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::cmp(&self, other: &benten_core::change_stream::SubscriberId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::eq(&self, other: &benten_core::change_stream::SubscriberId) -> bool
+impl core::cmp::PartialOrd for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::partial_cmp(&self, other: &benten_core::change_stream::SubscriberId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_core::change_stream::SubscriberId
+pub fn benten_core::change_stream::SubscriberId::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_core::change_stream::SubscriberId
+impl core::marker::StructuralPartialEq for benten_core::change_stream::SubscriberId
+impl core::marker::Freeze for benten_core::change_stream::SubscriberId
+impl core::marker::Send for benten_core::change_stream::SubscriberId
+impl core::marker::Sync for benten_core::change_stream::SubscriberId
+impl core::marker::Unpin for benten_core::change_stream::SubscriberId
+impl core::marker::UnsafeUnpin for benten_core::change_stream::SubscriberId
+impl core::panic::unwind_safe::RefUnwindSafe for benten_core::change_stream::SubscriberId
+impl core::panic::unwind_safe::UnwindSafe for benten_core::change_stream::SubscriberId
+pub const benten_core::ATTRIBUTION_PROPERTY_KEY: &str
+pub const benten_core::BLAKE3_DIGEST_LEN: u8
+pub const benten_core::CID_LEN: usize
+pub const benten_core::CID_V1: u8
+pub const benten_core::LABEL_CURRENT: &str
+pub const benten_core::LABEL_NEXT_VERSION: &str
+pub const benten_core::MAX_VALUE_DECODE_DEPTH: usize
+pub const benten_core::MULTICODEC_DAG_CBOR: u8
+pub const benten_core::MULTIHASH_BLAKE3: u8
+pub trait benten_core::ChangeStream: core::marker::Send + core::marker::Sync
+pub fn benten_core::ChangeStream::next_event(&mut self, id: &benten_core::change_stream::SubscriberId) -> core::result::Result<core::option::Option<benten_core::change_stream::ChangeEvent>, alloc::string::String>
+pub fn benten_core::ChangeStream::subscribe(&mut self, pattern: &str, id: benten_core::change_stream::SubscriberId) -> core::result::Result<(), alloc::string::String>
+pub fn benten_core::ChangeStream::unsubscribe(&mut self, id: &benten_core::change_stream::SubscriberId) -> core::result::Result<(), alloc::string::String>
+pub fn benten_core::canonical_subgraph_bytes(sg: &benten_core::subgraph::Subgraph) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
+pub type benten_core::PhysicalClockFn = fn() -> u64

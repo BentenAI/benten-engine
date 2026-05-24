@@ -67,7 +67,16 @@ jobs:
           {
             echo '## cargo-public-api drift report'
             echo
-            for crate in benten-core benten-errors benten-graph benten-caps benten-ivm benten-eval benten-engine benten-dsl-compiler; do
+            # G-CORE-9 V1-FROZEN-INTERFACE row 1 (2026-05-23): expanded
+            # from 8 → 14 crates to cover the full v1-beta surface. Added
+            # `benten-crypto-suite` + `benten-drop` + `benten-sync` +
+            # `benten-id` + `benten-platform-foundation` +
+            # `benten-renderer-tauri` so the freeze drift gate catches
+            # any post-freeze public-API delta workspace-wide. The
+            # baselines at `docs/public-api/<crate>.txt` are now real
+            # `cargo public-api --simplified` output (not the G20-A3
+            # seed stubs they were pre-G-CORE-9).
+            for crate in benten-core benten-errors benten-graph benten-caps benten-ivm benten-eval benten-engine benten-dsl-compiler benten-crypto-suite benten-drop benten-sync benten-id benten-platform-foundation benten-renderer-tauri; do
               echo "### $crate"
               echo
               echo '```'
