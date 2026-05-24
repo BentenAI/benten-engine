@@ -1,0 +1,174 @@
+{
+  "lens": "L2-crypto-adversarial-and-threat-model",
+  "round": "R2",
+  "wave": "G-CORE-9-FREEZE",
+  "branch": "g-core-9/r2-l2-adversarial-threat-model",
+  "base_commit": "235ad861",
+  "r1_findings_summary": {
+    "blocker": 3,
+    "major": 4,
+    "minor": 2,
+    "obs": 3
+  },
+  "r1_fix_pass_disposition_audit": {
+    "L2-BLK-1": {
+      "r1_class": "BLOCKER — §8-A pub→pub(crate) tighten declared frozen but not landed",
+      "fix_pass_action": "Doc-tighten + escalate to DEFERRED.md Row D-7 (per HARD RULE 12 clause-(b)); freeze-doc item 1 retensed to PARTIAL-LANDED narrative; v1-beta posture honestly states the four methods remain pub fn with pre-tighten names",
+      "ground_truth_verify": "PASS — crates/benten-engine/src/engine_crud.rs:139 still `pub fn get_node`; engine_wait.rs:1033/1062/1143 still pub for get_node_label_only/put_node/resolve_subgraph_cid_for_test; docs/public-api/benten-engine.txt baseline locks the un-tightened surface verbatim; Row D-7 names the G-COMP-1 destination including 75+ call-site cascade + napi binding migration (lib.rs:337 confirmed still calls get_node)",
+      "r2_disposition": "CONVERGED — doc-vs-code drift is closed; v1-beta posture is honest about partial-landed state; D-7 is a HARD RULE 12 clause-(b) compliant deferral"
+    },
+    "L2-BLK-2": {
+      "r1_class": "BLOCKER — ProductionManifestEnvelopeRechecker frozen as auto-wired default but type does not exist; Noop returns NotApplicable not UnresolvedDeny",
+      "fix_pass_action": "Freeze-doc item 12 narrative retensed to explicitly state v1-beta default ships Noop returning NotApplicable (admit-via-Layer-3); DEFERRED.md Row D-4 names ProductionManifestEnvelopeRechecker + default-builder wiring for G-COMP-1; SECURITY-POSTURE.md Compromise #26 received new G-CORE-9 v1-beta retense block (lines 2033-2060) explicitly disclosing 'Layer-3 manifest-envelope substantive rechecker = NOT LIVE at v1-beta'",
+      "ground_truth_verify": "PASS — crates/benten-engine/src/manifest_envelope_recheck.rs:203-222 still returns NotApplicable verbatim; engine.rs:1924 still wires NoopManifestEnvelopeRechecker; ProductionManifestEnvelopeRechecker still does not exist (zero grep matches); the post-fix-pass freeze-doc lines 994-1042 + DEFERRED.md Row D-4 + Compromise #26 retense are now mutually consistent",
+      "r2_disposition": "CONVERGED — the three previously-contradictory authoritative sources (freeze-doc / code / security-posture) now agree; doc-tighten is honest"
+    },
+    "L2-BLK-3": {
+      "r1_class": "BLOCKER — accept_atrium_share frozen but does not exist",
+      "fix_pass_action": "Freeze-doc item 12 line 1016 retensed to 'deferred to G-COMP-1 (G24-D-FP-1 follow-up wave)'; DEFERRED.md Row D-5 names destination; SECURITY-POSTURE.md Compromise #26 line 2049-2055 explicitly discloses 'Cross-peer install verification = NOT LIVE at v1-beta; the function does NOT exist as a public surface'",
+      "ground_truth_verify": "PASS — zero grep matches for `pub fn accept_atrium_share` across crates/; commented-out test bodies at admin_ui_v0_atrium_share_unattested_peer_rejected.rs:42-107 + admin_ui_v0_install_as_signed_plugin_across_two_atrium_peers.rs:24 still in deferred state; freeze-doc + DEFERRED.md + Compromise #26 are mutually consistent",
+      "r2_disposition": "CONVERGED — phantom-surface freeze removed; HARD RULE 12 clause-(b) destination present"
+    },
+    "L2-MAJ-1": {
+      "r1_class": "MAJOR — synthesized node-id:N fallback bypasses empty-peer-DID structural fail-CLOSED",
+      "fix_pass_action": "Attempted Bundle 11 fix (commit 34053ed4) then REVERTED in commit 3d6f4d66 'defer L2-MAJ-1 synthesized-peer-DID hardening to G-COMP-1 Row D-18 (test regression closure)'; engine.rs:1463-1477 received inline comment explaining the deferral rationale (the always-mounted Noop test fixtures register no peer-DIDs so the always-on filter over-fires for the Noop path; proper closure couples synthesized-fallback reject to substantive-rechecker-installed detection); DEFERRED.md Row D-18 names destination",
+      "ground_truth_verify": "PASS for the deferral itself — engine.rs:1478-1498 has zero node-id:-prefix filter; Row D-18 honestly explains 'L2-MAJ-1 attack vector is admit-only if the rechecker is Noop (admit-everything anyway); under a substantive ProductionRechecker (G-COMP-1 deliverable per Row D-4) the rechecker is responsible for per-DID resolution including rejecting synthesized DIDs. So the gap closes at Row D-4 closure'. This is internally consistent: at v1-beta the Noop admits everything so the synthesis-fallback adds zero NEW admit risk beyond what BLK-2 already discloses.",
+      "r2_disposition": "CONVERGED-AS-DEFERRED — substantively-honest disposition with proper Row D-4-coupled close-gap argument; HOWEVER see L2-R2-BLK-1 below for the stale BREAKING-CHANGES claim that contradicts this deferral"
+    },
+    "L2-MAJ-2": {
+      "r1_class": "MAJOR — FrameReplayMarker TOCTOU race between get + put (separate redb transactions)",
+      "fix_pass_action": "DEFERRED.md Row D-8 names destination G-COMP-1; Row D-8 v1-beta-posture text states 'F3 anti-replay defense is racy under concurrent inbound apply_atrium_merge presentations of the same session_nonce. Compromise #23 retensed to disclose.'",
+      "ground_truth_verify": "FAIL — Compromise #23 retense did NOT land. SECURITY-POSTURE.md Compromise #23 (lines 1680-1697) is unchanged from the COLLAPSE narrative; zero matches for 'TOCTOU', 'racy', 'race', 'in-window', 'mark_and_check_frame', 'atomicity', 'concurrent.*nonce' in SECURITY-POSTURE.md. The git diff 8cc4eddd..235ad861 -- docs/SECURITY-POSTURE.md shows ONLY Compromise #26 edits (BLK-2 closure), NOT Compromise #23. Code-side state at crates/benten-caps/src/chain_authority.rs:404-421 still has the non-atomic get + put pair across separate KVBackend txns. DEFERRED.md Row D-8 makes a promise about Compromise #23 retense that was never honored.",
+      "r2_disposition": "REJECT — NEW BLOCKER (L2-R2-BLK-2): DEFERRED.md Row D-8 promises a Compromise #23 retense that did not land; SECURITY-POSTURE.md does not disclose the F3 in-window racy property anywhere. Operator reading SECURITY-POSTURE.md at v1-beta will believe anti-replay is atomic when it is not."
+    },
+    "L2-MAJ-3": {
+      "r1_class": "MAJOR — no consumer-side policy to require PQ-hybrid (silent acceptance of 0x6400 classical-only downgrade)",
+      "fix_pass_action": "DEFERRED.md Row D-15 watch-list item names CryptoPolicy::require_hybrid_pq destination at Phase-4-Meta-Composing v1-assessment-window; V1-BETA-BREAKING-CHANGES.md Cohort 4 line 196 surfaces it for downstream-implementer visibility",
+      "ground_truth_verify": "PASS-AS-DEFERRED — zero grep matches for require_hybrid_pq / DowngradeArmRejectedByPolicy across crates/ (consistent with deferral); Row D-15 honestly notes 'classical-only construction IS cryptographically sound' so no immediate exploit; the disposition matches the original L2-MAJ-3 disposition which permitted DEFER-NAMED-NOW. However: no operator-visible disclosure in SECURITY-POSTURE.md that 0x6400-sealed content silently admits at recipient — would be useful for operator awareness but the original finding's FIX-NOW-lite disposition admits this is scope-bleed past G-CORE-9.",
+      "r2_disposition": "CONVERGED-AS-DEFERRED-WITH-OBSERVATION (L2-R2-OBS-1 below): operator-visible disclosure missing from SECURITY-POSTURE.md is a minor gap, observation-level"
+    },
+    "L2-MAJ-4": {
+      "r1_class": "MAJOR — graph-AEAD make_key_material_matching trusts attacker-controlled envelope codepoint",
+      "fix_pass_action": "DEFERRED.md Row D-13 names structural_kdf info-tag codepoint-binding destination G-COMP-1; Row D-13 notes the natural ChaCha20-Poly1305 defense via K_root divergence IS structurally present at v1-beta (per the L2-MAJ-4 disposition's own 'natural defense dependency' analysis); the codepoint-binding via KDF info is the defense-in-depth follow-up",
+      "ground_truth_verify": "PASS — crates/benten-graph/src/aead_wrap.rs:500-526 docstring unchanged + the natural defense via K_root divergence still holds; Row D-13 v1-beta-posture text accurately captures the original finding's nuance ('natural defense via K_root divergence IS present at v1-beta; codepoint-binding via KDF info is incidental not explicit')",
+      "r2_disposition": "CONVERGED-AS-DEFERRED — accurate v1-beta posture statement; deferred-row preserves the K_root-divergence argument"
+    },
+    "L2-MIN-1": {
+      "r1_class": "MINOR — §15.j live-per-request resolver-evaluation: NO test pin at HEAD",
+      "fix_pass_action": "DEFERRED.md Row D-10 names destination G-COMP-1 with the exact test-pin shape from V1-FROZEN-INTERFACE.md:1617-1619",
+      "ground_truth_verify": "PASS-AS-DEFERRED — find for *share_scope_live_per_request* / *live_per_request* returns nothing; Row D-10 honestly notes 'live-per-request property is structurally in place (resolver IS called per request); regression-defense test pin is absent'",
+      "r2_disposition": "CONVERGED-AS-DEFERRED — accurate deferral"
+    },
+    "L2-MIN-2": {
+      "r1_class": "MINOR — chain-validator empty-string DID structural reject missing",
+      "fix_pass_action": "FIX-NOW landed inline at crates/benten-caps/src/manifest_envelope_chain_validation.rs:289-300 (structural empty-DID reject BEFORE registry consult) + test pin at line 468 (empty_string_did_at_root_rejected_independent_of_registry)",
+      "ground_truth_verify": "PASS — code matches the original disposition's ~5 LOC + 1 test recommendation verbatim; test pin asserts the empty-string-DID is rejected even when (deliberately misconfigured) registry contains the empty-string entry",
+      "r2_disposition": "CONVERGED-CLOSED — exemplary FIX-NOW closure with test pin"
+    },
+    "L2-OBS-1": {
+      "r1_class": "OBSERVATION — C11b safety gate clean (force_pure_pq_for_test cfg(test) gated)",
+      "fix_pass_action": "No action needed (positive control)",
+      "ground_truth_verify": "PASS — crates/benten-crypto-suite/src/swap_matrix.rs:280-287 still has #[cfg(test)] gate verbatim; no production reachability",
+      "r2_disposition": "CONVERGED-CLEAN"
+    },
+    "L2-OBS-2": {
+      "r1_class": "OBSERVATION — hybrid sig strip-resistance F-1 defenses structurally complete",
+      "fix_pass_action": "No action needed",
+      "ground_truth_verify": "PASS — crates/benten-crypto-suite/src/sig.rs verify path unchanged; tf2_hybrid_both_must_verify_strip_resistant.rs + tf2_strip_resistance_negative.rs still present",
+      "r2_disposition": "CONVERGED-CLEAN"
+    },
+    "L2-OBS-3": {
+      "r1_class": "OBSERVATION — AAD-rebinding + AEAD codepoint-mismatch typed-reject (cipher-suite layer) properly enforced",
+      "fix_pass_action": "No action needed at cipher-suite layer (L2-MAJ-4 captures graph-AEAD-layer concern)",
+      "ground_truth_verify": "PASS — aead.rs:282-299 cipher_codepoint mismatch reject unchanged; AAD layout doc-retense per Bundle 11 (3-tuple → 2-tuple) is an honest retense of doc to as-shipped 2-arg layout, not a regression",
+      "r2_disposition": "CONVERGED-CLEAN"
+    }
+  },
+  "new_findings_from_r1_fix_pass": [
+    {
+      "id": "L2-R2-BLK-1",
+      "severity": "BLOCKER",
+      "title": "V1-BETA-BREAKING-CHANGES.md Bundle 11 line 178-181 falsely claims L2-MAJ-1 node-id:N synthesized-fallback filter LANDED — but commit 3d6f4d66 reverted it and engine.rs:1463-1477 explicitly defers it to Row D-18",
+      "evidence": {
+        "stale_breaking_changes_claim": "docs/V1-BETA-BREAKING-CHANGES.md:178-181 — '### G-CORE-9 R1 Bundle 11 — L2-MAJ-1 empty-peer-DID synthesized fallback structural defense — **What changed:** `apply_atrium_merge` short-circuit at engine.rs:1462 now filters out synthesized `node-id:N` fallbacks BEFORE rechecker dispatch.'",
+        "contradicting_code": "crates/benten-engine/src/engine.rs:1478-1498 match arm has zero node-id:-prefix filtering; comment lines 1463-1477 explicitly state 'the synthesized-fallback hardening (rejecting node-id:N-prefixed DIDs as unresolvable) IS DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-18'",
+        "git_log_proof": "commit 34053ed4 'fix(crypto + caps + engine): close L1 + L2 surgical crypto-correctness findings (Bundle 11)' attempted the fix; commit 3d6f4d66 'fix(g-core-9): defer L2-MAJ-1 synthesized-peer-DID hardening to G-COMP-1 Row D-18 (test regression closure)' reverted it. BREAKING-CHANGES.md narrative was not updated to reflect the revert.",
+        "deferred_md_corroboration": "DEFERRED.md Row D-18 (lines 363-386) names the deferral as the proper closure and explains why the always-on filter over-fires for default-Noop test fixtures"
+      },
+      "attack_surface": "Doc-vs-code drift at the freeze boundary. An operator/integrator reading BREAKING-CHANGES.md believes a defense is live at v1-beta (Bundle 11 narrative says 'transparent migration; no public-API change') when the defense was reverted. This is the canonical pim-1 §3.5b doc-coupling violation. The freeze contract cannot ship while three authoritative sources disagree on whether the L2-MAJ-1 defense LANDED (BREAKING-CHANGES says YES, code + DEFERRED.md Row D-18 say DEFERRED). Same shape as the R1 L2-BLK-2 drift, surfaced anew by the fix-pass itself.",
+      "disposition": "FIX-NOW — retense V1-BETA-BREAKING-CHANGES.md lines 178-181 to reflect the deferral: '**What changed:** L2-MAJ-1 synthesized-fallback hardening DEFERRED to G-COMP-1 per Row D-18; v1-beta engine.rs:1463-1477 carries an inline comment naming the deferral rationale (always-on filter over-fires for default-Noop test fixtures registering no peer-DIDs).' OR remove the Bundle 11 entry entirely (the inline comment + Row D-18 are sufficient). Per HARD RULE 12: this is a doc-vs-code drift that violates 'no deferred fix without specific destination presented as deferred'."
+    },
+    {
+      "id": "L2-R2-BLK-2",
+      "severity": "BLOCKER",
+      "title": "DEFERRED.md Row D-8 promises 'Compromise #23 retensed to disclose F3 in-window racy' — but no such retense exists in SECURITY-POSTURE.md",
+      "evidence": {
+        "deferred_md_claim_1": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:225-227 (Row D-8 frozen-surface clause) — 'Compromise #23 IS retensed to acknowledge in-window racy.'",
+        "deferred_md_claim_2": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:238-239 (Row D-8 v1-beta-posture clause) — 'F3 anti-replay defense is racy under concurrent inbound apply_atrium_merge presentations of the same session_nonce. Compromise #23 retensed to disclose.'",
+        "contradicting_security_posture": "docs/SECURITY-POSTURE.md Compromise #23 (lines 1680-1697) carries zero matches for 'TOCTOU', 'racy', 'race', 'in-window', 'mark_and_check_frame', 'atomicity', or 'concurrent.*nonce'. Compromise #23 line 1689 still reads 'The freshness-window + nonce-replay defenses are re-homed into the unified chain-validation seam's existing time-window + durable-revocation-marker machinery — not dropped.' — the durable-marker disclosure says 'not dropped' but says nothing about the marker being non-atomic.",
+        "git_diff_proof": "git diff 8cc4eddd..235ad861 -- docs/SECURITY-POSTURE.md shows ONLY Compromise #26 edits (BLK-2 closure), zero edits to Compromise #23.",
+        "triage_doc_corroborates_intent": "docs/g-core-9-r1-triage.md:104 explicitly named the requirement 'Compromise #23 retense to acknowledge in-window racy' as part of the L2-MAJ-2 deferral closure"
+      },
+      "attack_surface": "Doc-vs-code-vs-deferral drift at the freeze boundary. An operator reading SECURITY-POSTURE.md Compromise #23 at v1-beta believes the F3 anti-replay defense composes the durable replay-marker as a complete atomic primitive (the narrative emphasizes 're-homed, not dropped'). DEFERRED.md Row D-8 (which is intended for G-COMP-1 implementers, not operators) DOES disclose the in-window racy property. SECURITY-POSTURE.md is the operator-visible threat model; the racy property MUST be disclosed there. Same class as L2-R2-BLK-1: the fix-pass made a deferral commitment that requires a corresponding doc edit, and the doc edit did not land. The freeze contract cannot ship while DEFERRED.md asserts a retense that does not exist.",
+      "disposition": "FIX-NOW — add the promised retense to Compromise #23 in docs/SECURITY-POSTURE.md. Suggested wording (~50-100 LOC insert): a new sub-section 'F3 anti-replay durable replay-marker — in-window TOCTOU race at v1-beta' that (a) cites crates/benten-caps/src/chain_authority.rs:404-421 FrameReplayMarker::mark_and_check_frame's non-atomic get+put pair across separate KVBackend txns, (b) cites engine.rs:1524-1547 apply_atrium_merge caller without per-engine serializing lock, (c) describes the attack class (two concurrent apply_atrium_merge tasks delivering the same session_nonce in parallel), (d) names the G-COMP-1 destination per Row D-8 (KVBackend trait extension OR GraphBackend::transaction wrap OR per-engine lock), (e) labels this 'NOT live at v1-beta'. Alternative: rebut Row D-8's retense claim by removing those two clauses from Row D-8 — but that increases the v1-beta security-posture honesty gap, not closes it."
+    },
+    {
+      "id": "L2-R2-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "L2-MAJ-3 0x6400 silent acceptance: deferred to Row D-15 but no operator-visible disclosure in SECURITY-POSTURE.md",
+      "evidence": {
+        "row_d_15": "DEFERRED.md Row D-15 lists 'CryptoPolicy::require_hybrid_pq consumer-side policy flag for rejecting 0x6400 classical-only envelopes' as Phase-4-Meta-Composing v1-assessment-window destination",
+        "breaking_changes_disclosure": "V1-BETA-BREAKING-CHANGES.md Cohort 4 line 196 surfaces the deferral",
+        "missing_security_posture": "SECURITY-POSTURE.md does not disclose anywhere that 0x6400-sealed content silently admits at recipient under the default v1-beta consumer-side policy"
+      },
+      "attack_surface": "An operator deploying v1-beta cannot tell from SECURITY-POSTURE.md that the platform's marketing-position default (PQ-hybrid by default per CLAUDE.md #5) is producer-side-only. A coerced/hostile peer producing 0x6400 content silently admits at recipient with no operator-visible disclosure of the harvest-now-decrypt-later loss. The original L2-MAJ-3 disposition permitted DEFER-NAMED-NOW with 'an SECURITY-POSTURE.md row acknowledging 0x6400 is silently accepted at recipient at v1-beta' — that row did not land.",
+      "disposition": "OBSERVATION — minor; the deferral itself is HARD RULE 12 clause-(b) compliant via Row D-15 + BREAKING-CHANGES.md Cohort 4 visibility. Operator-visible disclosure in SECURITY-POSTURE.md would close the original L2-MAJ-3's full intent but is observation-level relative to the BLOCKER-class L2-R2-BLK-1/2 doc-vs-code drift. Recommend adding a brief paragraph under Compromise #30 (or a new Compromise #31) noting the consumer-side policy gap and naming Row D-15 as destination. If orchestrator deems out-of-scope for R2-FP, defer to G-COMP-1 with explicit named destination (consistent with R1 disposition flexibility)."
+    },
+    {
+      "id": "L2-R2-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "DEFERRED.md Row D-18 honest about L2-MAJ-1 deferral rationale + Row-D-4-coupled gap-close argument is sound",
+      "evidence": {
+        "row_d_18_text": "DEFERRED.md:378-386 — 'L2-MAJ-1 attack vector (adversarial peer presenting an unmapped node-id:N DID) is admit-only if the rechecker is Noop (admit-everything anyway); under a substantive ProductionRechecker (G-COMP-1 deliverable per Row D-4), the rechecker is responsible for its own per-DID resolution including rejecting synthesized DIDs. So the gap closes at Row D-4 closure; Row D-18 is the substrate-level defense-in-depth follow-up.'",
+        "engine_rs_corroboration": "engine.rs:1463-1477 inline comment reproduces the same logic: default-Noop test fixtures rely on synthesized fallback admitting (test scenarios register no peer-DIDs); always-on filter would over-fire on those test paths"
+      },
+      "attack_surface": "Positive control — the deferral rationale is substantively sound. At v1-beta with Noop default everything admits anyway; under G-COMP-1 ProductionRechecker the rechecker becomes responsible for synthesized-DID rejection.",
+      "disposition": "OBSERVATION — positive evidence; record explicitly per orthogonal-lens cross-confirmation discipline. L2-MAJ-1 disposition is internally consistent at v1-beta."
+    },
+    {
+      "id": "L2-R2-OBS-3",
+      "severity": "OBSERVATION",
+      "title": "Compromise #26 retense (lines 2033-2060) is the gold-standard fix-pass shape — HARD RULE 12 clause-(b) compliant disclosure",
+      "evidence": {
+        "retense_text": "SECURITY-POSTURE.md:2035-2055 explicitly enumerates BOTH (a) Layer-3 substantive rechecker NOT LIVE at v1-beta + (b) cross-peer install verification NOT LIVE at v1-beta, with both rows pointing to DEFERRED.md destinations",
+        "consistency": "Three previously-contradictory authoritative sources (V1-FROZEN-INTERFACE.md item 12 / engine code at HEAD / SECURITY-POSTURE.md Compromise #26) now agree"
+      },
+      "attack_surface": "Positive control — the BLK-2 + BLK-3 fix-pass closure exemplifies what BLK-2-class doc-vs-code drift remediation should look like.",
+      "disposition": "OBSERVATION — positive evidence. The L2-R2-BLK-2 fix should follow this exact shape: add a parallel retense to Compromise #23 disclosing the F3 in-window racy property the same way Compromise #26 discloses the Layer-3 substantive recheck deferral."
+    }
+  ],
+  "findings_summary_r2": {
+    "blocker": 2,
+    "major": 0,
+    "minor": 0,
+    "obs": 3,
+    "r1_findings_disposition": {
+      "converged_closed": ["L2-BLK-1", "L2-BLK-2", "L2-BLK-3", "L2-MIN-2"],
+      "converged_as_deferred": ["L2-MAJ-1", "L2-MAJ-3", "L2-MAJ-4", "L2-MIN-1"],
+      "converged_clean": ["L2-OBS-1", "L2-OBS-2", "L2-OBS-3"],
+      "rejected_new_blocker_surfaced": ["L2-MAJ-2 (via L2-R2-BLK-2: Compromise #23 retense never landed)"]
+    }
+  },
+  "disposition": "REJECT — NEW BLOCKERS surfaced by fix-pass: (1) V1-BETA-BREAKING-CHANGES.md Bundle 11 lines 178-181 falsely claim L2-MAJ-1 synthesized-fallback filter LANDED — it was attempted (commit 34053ed4) then reverted (commit 3d6f4d66); BREAKING-CHANGES narrative was not updated. (2) DEFERRED.md Row D-8 (L2-MAJ-2 deferral) twice promises 'Compromise #23 retensed to disclose F3 in-window racy' but SECURITY-POSTURE.md Compromise #23 received zero edits in the fix-pass. Both are the same shape as the R1 BLK-2 drift (doc-vs-code disagreement at the freeze boundary). The 10 of 12 R1 findings that converged demonstrate the fix-pass was substantively correct; these two residuals are doc-coupling pim-1 §3.5b misses that the convergence-discipline requires closing before tag.",
+  "r2_convergence_disposition": "NEEDS-R3 — 2 net-new BLOCKERs from fix-pass doc-coupling drift (L2-R2-BLK-1 + L2-R2-BLK-2); both are 1-paragraph doc-only edits at known file:line targets (V1-BETA-BREAKING-CHANGES.md:178-181 + SECURITY-POSTURE.md Compromise #23 ~line 1689 area). Per Q5 cadence iterate-to-convergence: a small R2-FP closing both, then R3 full council to confirm zero substantive findings.",
+  "positive_controls_passed_r2": [
+    "L2-BLK-1 §8-A doc-vs-code drift CLOSED via Row D-7 partial-landed narrative retense + cargo-public-api baseline locks the un-tightened surface honestly",
+    "L2-BLK-2 ProductionManifestEnvelopeRechecker phantom CLOSED via three-source consistency restoration (freeze-doc item 12 + DEFERRED.md Row D-4 + SECURITY-POSTURE.md Compromise #26 retense)",
+    "L2-BLK-3 accept_atrium_share phantom CLOSED via freeze-doc cite retract + DEFERRED.md Row D-5 + Compromise #26 cross-peer-install disclosure",
+    "L2-MIN-2 empty-DID-string structural reject + test pin landed verbatim per original disposition (~5 LOC + 1 test)",
+    "L2-OBS-1/2/3 positive controls remain clean (C11b cfg(test) gate; hybrid sig F-1 verify path; AAD-rebinding + cipher-suite codepoint-mismatch reject)",
+    "L2-MAJ-1/3/4 + L2-MIN-1 honestly deferred with named G-COMP-1 destinations + accurate v1-beta posture statements"
+  ],
+  "cross_ref_l1_l17": "L1 positive-control + L17 doc-coupling lenses should ground-truth-verify the same L2-R2-BLK-1 (BREAKING-CHANGES.md staleness) + L2-R2-BLK-2 (Compromise #23 retense gap) findings. If both lenses independently surface the same drift, R2 council reaches strong cross-confirmation; if only L2 finds them, the orthogonal-lens cross-check still confirms the BLOCKER class per the original R1 BLK-2 precedent.",
+  "termination_criterion_per_q5": "NOT-TERMINATED — 2 BLOCKER findings remain; full council must converge to 0 substantive (BLOCKER/MAJOR) per CLAUDE.md rule 9 Q5 + iterate-to-convergence generalization (feedback_iterate_critical_reviews_to_convergence). R3 dispatches a full council after R2-FP closes the two doc-coupling drifts."
+}
