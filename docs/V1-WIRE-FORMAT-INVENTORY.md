@@ -202,6 +202,224 @@
 
 ---
 
+## 11. ExecutionStateEnvelope (redb-persisted resume state)
+
+**Surface:** `benten_eval::ExecutionStateEnvelope` — carries `schema_version: u8 = 1` discriminator + the persisted resume state; cross-process round-trip mandatory.
+
+**Wire format:** DAG-CBOR over the envelope shape; redb-persisted in the `execution_state` table.
+
+**Format version:** `schema_version: u8 = 1` (additive-via-discriminator; v2 path is the explicit re-open mechanism).
+
+**Byte-pin test coverage:**
+- `crates/benten-eval/tests/execution_state_envelope_*.rs` round-trip pins.
+- Cross-process resume coverage at the engine-eval boundary tests.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level (round-trip + schema-version discriminator); hex-byte regression-pin deferred to G-COMP-1 inventory walk per Row D-9 widening.
+
+---
+
+## 12. RedbBackend whole-file schema-version envelope
+
+**Surface:** `benten_graph::redb_backend` `GRAPH_SCHEMA_VERSION: u32 = 1` + the `__benten_schema_version` reserved table key (per #992).
+
+**Wire format:** redb single-byte / single-u32 record at a reserved table key; gates open of any subsequent table.
+
+**Format version:** `GRAPH_SCHEMA_VERSION: u32 = 1`.
+
+**Byte-pin test coverage:**
+- `crates/benten-graph/tests/redb_schema_version_envelope_pin.rs` — 3 arms (open-at-current / refuse-at-older / refuse-at-newer).
+
+**FREEZE-WAVE status:** ✅ COVERED.
+
+---
+
+## 13. DeviceAttestationEnvelope (on-the-wire Atrium handshake)
+
+**Surface:** `benten_engine::DeviceAttestationEnvelope` + `MAX_WIRE_VERSION: u8 = 2`; consumed by `apply_atrium_merge`.
+
+**Wire format:** CBOR with explicit version-byte + Ed25519 attestation signature + nonce; per Phase-3 G16-D wave-6b.
+
+**Format version:** `MAX_WIRE_VERSION: u8 = 2`.
+
+**Byte-pin test coverage:**
+- `crates/benten-engine/tests/g16_d_*.rs` device-attestation pins.
+- Cross-wire-version negotiation pins inside `apply_atrium_merge`.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; G-COMP-1 byte-walk deferred per Row D-9 widening.
+
+---
+
+## 14. DeviceAttestation (signed inner record, distinct from envelope)
+
+**Surface:** `benten_id::DeviceAttestation` — signed Ed25519 inner record carried by the envelope above.
+
+**Wire format:** CBOR-canonical; CanonicalBytes-trait byte-identity contract.
+
+**Format version:** the parent envelope's `MAX_WIRE_VERSION` discriminates.
+
+**Byte-pin test coverage:**
+- `crates/benten-id/tests/device_attestation_canonical_*.rs` round-trip + signature-verification pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
+
+---
+
+## 15. RotationLog + RotationAttestation (durable signed DID-rotation chain)
+
+**Surface:** `benten_id::RotationLog` + `benten_id::RotationAttestation` (a chain of signed DID-key rotation records; durable per-DID).
+
+**Wire format:** CBOR-canonical sequence; each entry carries the prior-key Ed25519 signature; CanonicalBytes-trait identity contract.
+
+**Format version:** N/A baseline; additive-via-record-append.
+
+**Byte-pin test coverage:**
+- `crates/benten-id/tests/rotation_*.rs` chain-extension + signature-verification + replay-prevention pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
+
+---
+
+## 16. UCAN body canonical bytes (distinct from UCAN-Varsig v1 HEADER at item 5)
+
+**Surface:** `benten_id::Ucan` canonical bytes (the UCAN body — claims/audience/issuer/expiry — that the Varsig header signs over).
+
+**Wire format:** CBOR-canonical UCAN body shape per ssi-ucan upstream.
+
+**Format version:** UCAN spec version; v1 frozen per the Varsig-header coupling at item 5.
+
+**Byte-pin test coverage:**
+- `crates/benten-id/tests/ucan_*.rs` round-trip + canonical-bytes pins.
+- `crates/benten-caps/tests/prop_ucan_window.rs` proptests over nbf/exp time-window properties.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; the Varsig HEADER is item 5 (separately frozen); this is the SIGNED-OVER BODY.
+
+---
+
+## 17. ModuleManifest (Phase-2b SANDBOX-module envelope)
+
+**Surface:** `benten_engine::ModuleManifest` — persisted into the `system:ModuleManifest` zone; the manifest schema the SANDBOX runtime walks at execute time.
+
+**Wire format:** CBOR-canonical; declares host-fn `requires` + module-identity bytes.
+
+**Format version:** the manifest's own `schema_version` field.
+
+**Byte-pin test coverage:**
+- `crates/benten-engine/tests/g_core_sandbox_*.rs` round-trip pins + module-store reopen pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
+
+---
+
+## 18. PluginManifest (shareable + signing-payload — two distinct canonical-bytes surfaces)
+
+**Surface:** `benten_platform_foundation::PluginManifest` — the load-bearing CLAUDE.md #18 plugin-trust-model substrate; surfaces TWO distinct CBOR shapes:
+- (a) shareable form (with `peer_signature` field populated; the wire-distributed form).
+- (b) signing-payload form (without `peer_signature`; the form the peer signs).
+
+**Wire format:** CBOR-canonical per each shape; (b) is a strict prefix of (a) by serde shape.
+
+**Format version:** the manifest carries no own version; CID identity (per CLAUDE.md #18 — CID covers shape).
+
+**Byte-pin test coverage:**
+- `crates/benten-platform-foundation/tests/plugin_manifest_*.rs` round-trip + signing-payload-shape pins.
+- `crates/benten-platform-foundation/tests/admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs` end-to-end signature-verification pin.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: `peer_signature` is classical-only Ed25519 at v1-beta per the R6 R1 L2-R6-MAJOR-2 fork (path-(b) defer; see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15e + sister-rows pending orchestrator selection).
+
+---
+
+## 19. ManifestStore records (persisted PluginManifestRecord)
+
+**Surface:** `benten_platform_foundation::manifest_store::PluginManifestRecord` (persisted to redb; carries the full PluginManifest + install-time metadata).
+
+**Wire format:** CBOR-canonical; redb-persisted at the manifest-store table.
+
+**Format version:** record-level `schema_version` field.
+
+**Byte-pin test coverage:**
+- `crates/benten-platform-foundation/tests/tf7_*.rs` redb-reopen + cross-process resume pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
+
+---
+
+## 20. Atrium HandshakeFrame + HandshakePayload + RevocationEntry
+
+**Surface:** `benten_sync::HandshakeFrame` + `HandshakePayload` + `RevocationEntry` — Phase-3 Atrium handshake wire protocol.
+
+**Wire format:** CBOR-canonical; on-the-wire ALPN handshake; carries device-attestation + revocation deltas.
+
+**Format version:** the frame carries an explicit `wire_version: u8` field.
+
+**Byte-pin test coverage:**
+- `crates/benten-sync/tests/handshake_*.rs` round-trip + wire-version-negotiation pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; hex-byte regression-pin deferred to G-COMP-1 inventory walk per Row D-9 widening.
+
+---
+
+## 21. MST proto messages + MST canonical encoding
+
+**Surface:** `benten_sync` Merkle Search Tree diff protocol messages + the MST canonical encoding (Phase-3 sync diff protocol).
+
+**Wire format:** CBOR-canonical per the diff-message shape + MST-internal canonical encoding for the merkle-prefix nodes.
+
+**Format version:** message-tagged; per-message-type discriminator.
+
+**Byte-pin test coverage:**
+- `crates/benten-sync/tests/mst_*.rs` round-trip + diff-application pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
+
+---
+
+## 22. Atrium PeerId
+
+**Surface:** `benten_sync::PeerId` — Phase-3 sync identity primitive; per Spike A2 ratification IS byte-identical to `ed25519_dalek::VerifyingKey` (iroh EndpointId zero-conversion contract).
+
+**Wire format:** 32-byte fixed-width Ed25519 public-key bytes.
+
+**Format version:** N/A baseline (32-byte width is the contract).
+
+**Byte-pin test coverage:**
+- `crates/benten-id/tests/tf3e_endpoint_id_*.rs` byte-identity contract pin.
+- `crates/benten-sync/tests/peer_id_*.rs` round-trip pins.
+
+**FREEZE-WAVE status:** ✅ COVERED.
+
+---
+
+## 23. LoroDoc canonical export + StampedValue codec (CRDT format)
+
+**Surface:** `benten_sync` LoroDoc canonical export + `StampedValue` codec (the CRDT-internal format the Loro upstream dependency encodes).
+
+**Wire format:** Loro's own canonical-export shape (binary-canonical per the Loro upstream); StampedValue is a codec wrapper for the per-update timestamp + author.
+
+**Format version:** Loro upstream version is the discriminator; pinned via Cargo.toml.
+
+**Byte-pin test coverage:**
+- `crates/benten-sync/tests/loro_*.rs` round-trip pins.
+- `crates/benten-sync/tests/stamped_value_*.rs` codec-roundtrip pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: upstream Loro is a dependency-pinned wire-format; mutating it requires a Loro upstream-version bump which couples to the sync wire-protocol freeze.
+
+---
+
+## 24. suspension_store on-disk records (crate-private wire-format-bearing)
+
+**Surface:** `benten_engine::suspension_store` persisted records — `PersistedCursorMeta` + `PersistedRetentionWindow` + `SerializableCapSnapshot` + `SerializableWaitMetadata`.
+
+**Wire format:** CBOR-canonical; redb-persisted; `#[serde(default)]` forward-compat discipline per per-field defaults.
+
+**Format version:** record-level discriminator on each record-type.
+
+**Byte-pin test coverage:**
+- `crates/benten-engine/tests/suspension_store_*.rs` round-trip + cross-process resume + forward-compat pins.
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: these are CRATE-PRIVATE wire-format-bearing surfaces (not part of the public freeze contract — listed here for completeness per the L11 phase-wide sweep; the freeze-contract-public scope covers items 1-23).
+
+---
+
 ## Summary
 
 | # | Surface | Format-version discriminator | Byte-pin test | Status |
@@ -209,15 +427,29 @@
 | 1 | Node/Edge canonical CBOR + sentinel CID | N/A (Phase-1 baseline) | canonical_bytes_fastpath_stable.rs + node_cid.rs (benten-core) | ✅ COVERED |
 | 2 | SnapshotBlob v2 | `SNAPSHOT_BLOB_SCHEMA_VERSION = 2` | snapshot_blob_backend.rs + tf11_*.rs | ✅ COVERED |
 | 3 | MerkleRangeProof v2 | TBD per Option (b) | — | ⚠️ DEFERRED to G-COMP-1 |
-| 4 | Per-chunk AEAD | Cipher codepoint | tf3a_*.rs + tf4_*.rs + tf3a_pq_hybrid_wasm32 | ✅ COVERED |
+| 4 | Per-chunk AEAD (4-segment AAD per F3 R6 R1 fix-pass) | Cipher codepoint | tf3a_*.rs + tf4_*.rs + canonical_bytes_v1_codepoints_and_aad.rs (aad_per_chunk_canonical_layout_pinned) | ✅ COVERED |
 | 5 | UCAN-Varsig v1 header | Sig codepoint | tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs | ✅ COVERED |
-| 6 | AuthorizationGrant CBOR | #[non_exhaustive] | tf3b_authorization_grant_*.rs | ✅ COVERED |
+| 6 | AuthorizationGrant CBOR (scope-binding-message at v2 per L3-r1-1 R6 R1 fix-pass) | #[non_exhaustive] + BINDING_SIG_DOMAIN v2 | tf3b_authorization_grant_*.rs + tf3b_scope_substitution_post_sign_rejected.rs | ✅ COVERED |
 | 7 | Drop bundle CBOR | `DropBundleVersion` enum | benten-drop/tests/ | ✅ COVERED |
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |
 | 9 | EncryptionClass codepoint (NEW G-CORE-9) | #[non_exhaustive] + codepoint table | encryption_class.rs unit tests | ✅ COVERED |
 | 10 | Crypto-suite codepoint table | V1-FROZEN §6 integers | canonical_bytes_v1_codepoints_and_aad.rs + tf4_gcore3c_swap_matrix_*.rs | ✅ COVERED |
+| 11 | ExecutionStateEnvelope (redb-persisted resume) | `schema_version: u8 = 1` | benten-eval execution_state_envelope_*.rs round-trip | ✅ COVERED (substrate-level) |
+| 12 | RedbBackend whole-file schema-version | `GRAPH_SCHEMA_VERSION: u32 = 1` | redb_schema_version_envelope_pin.rs (3 arms) | ✅ COVERED |
+| 13 | DeviceAttestationEnvelope (Atrium handshake) | `MAX_WIRE_VERSION: u8 = 2` | g16_d_*.rs + apply_atrium_merge pins | ✅ COVERED (substrate-level) |
+| 14 | DeviceAttestation (signed inner record) | parent envelope version | device_attestation_canonical_*.rs | ✅ COVERED (substrate-level) |
+| 15 | RotationLog + RotationAttestation (DID-rotation chain) | additive-via-record | rotation_*.rs | ✅ COVERED (substrate-level) |
+| 16 | UCAN body canonical bytes (distinct from Varsig header) | UCAN spec v1 | ucan_*.rs + prop_ucan_window.rs | ✅ COVERED (substrate-level) |
+| 17 | ModuleManifest (SANDBOX-module envelope) | manifest schema_version | g_core_sandbox_*.rs | ✅ COVERED (substrate-level) |
+| 18 | PluginManifest (2 shapes: shareable + signing-payload) | CID identity (#18) | plugin_manifest_*.rs + admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs | ✅ COVERED (substrate-level; PQ-hybrid app-layer sig pending per L2-R6-MAJOR-2 fork) |
+| 19 | ManifestStore records (PluginManifestRecord) | record schema_version | tf7_*.rs reopen pins | ✅ COVERED (substrate-level) |
+| 20 | HandshakeFrame + HandshakePayload + RevocationEntry | `wire_version: u8` | handshake_*.rs | ✅ COVERED (substrate-level) |
+| 21 | MST proto messages + canonical encoding | message-tagged discriminator | mst_*.rs | ✅ COVERED (substrate-level) |
+| 22 | Atrium PeerId (== iroh EndpointId byte-identical) | 32-byte width contract | tf3e_endpoint_id_*.rs + peer_id_*.rs | ✅ COVERED |
+| 23 | LoroDoc canonical export + StampedValue codec | Loro upstream version | loro_*.rs + stamped_value_*.rs | ✅ COVERED (upstream-pinned) |
+| 24 | suspension_store on-disk records (crate-private) | per-record discriminator + #[serde(default)] | suspension_store_*.rs | ✅ COVERED (substrate-level; crate-private — not in public freeze scope) |
 
-**Outcome:** 9 of 10 surfaces have byte-pin coverage at v1-beta. The one DEFERRED surface (MerkleRangeProof) is genuinely-not-built (no phantom freeze).
+**Outcome (R6 R1 L11 expansion, 2026-05-24):** 23 of 24 surfaces have byte-pin / round-trip coverage at v1-beta substrate-level (items 11-24 added at R6 R1 L11 closure per the lens's phase-wide sweep finding L11-R6-R1-MAJOR-1). The one DEFERRED public surface (MerkleRangeProof, item 3) is genuinely-not-built (no phantom freeze). The G-COMP-1 wave consumes this expanded inventory for the hex-byte regression-pin sweep per Row D-9 widening. Item 24 is crate-private + retained for completeness; it is NOT in the public freeze contract scope.
 
 ---
 
@@ -225,9 +457,11 @@
 
 This inventory is the wave-time enumeration; Ben signs the freeze decision separately at the V1-FROZEN-INTERFACE.md item 4 P-III decision-point sweep. The decision-point question Ben answers:
 
-> "Are the 9 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
+> "Are the 23 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
 
 A "yes, complete" answer locks the inventory; a "no, add X" answer adds the missing surface inline + extends the byte-pin coverage at the same wave.
+
+**R6 R1 expansion provenance (2026-05-24):** items 11-24 were added at R6 R1 phase-close council per L11 lens finding `L11-R6-R1-MAJOR-1` (phase-wide canonical-bytes sweep). The 9-of-10 prior framing was scoped to the G-CORE-9 R4 FREEZE subset; R6 R1 widened to phase-wide which surfaced 14 additional wire-format-bearing surfaces. Per L11 lens recommendation path-(1): expand inventory items 11-24 for the 12 publicly-observable surfaces + retain item 24 (crate-private suspension_store) for completeness.
 
 ---
 
