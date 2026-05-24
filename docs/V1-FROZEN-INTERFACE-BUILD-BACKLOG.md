@@ -665,16 +665,21 @@ text).
 
 | Row | Item | Status |
 |---|---|---|
-| 1 | cargo-public-api baselines + napi cascade + test-site sweep | NOT STARTED |
-| 2 | #1204 TS parity gate | NOT STARTED |
-| 3 | EncryptionClass enum mint | NOT STARTED |
-| 4 | Engine::walk_share_scope verify-or-build | NOT STARTED |
-| 5 | MerkleRangeProofBackend verify-or-defer | NOT STARTED (recommend defer per Option A) |
-| 6 | CapabilityPolicy hard-seal promotion | NOT STARTED |
-| 7 | Name-collision renames (RestrictedSpec + KeyMaterial) | NOT STARTED (tentatively-decided; Ben morning-rebuttable) |
-| 8 | Errors parity + non_exhaustive sweep + wire-format inventory + Compromise # | NOT STARTED |
+| 1 | cargo-public-api baselines + napi cascade + test-site sweep | **PARTIALLY LANDED** (commit `fb7c212d`) — 14 baselines regenerated; CI workflow expanded 8→14 crates. Sub-tasks 1.a (napi cascade) + 1.b (test-site sweep) + 1.c (no-regression test pin) NAMED for the next follow-up sub-pass per HARD RULE 12 BELONGS-NAMED-NOW (visibility-tighten work; current baselines reflect HEAD surface which is the right freeze-time snapshot). |
+| 2 | #1204 TS parity gate | **LANDED** (commit `13322df4`) — workflow at `.github/workflows/ts-public-api.yml`; baseline at `packages/engine/etc/public-api.txt` (403 LOC; extract-from-.d.ts structural diff). api-extractor migration NAMED for v1-Composing. |
+| 3 | EncryptionClass enum mint | **LANDED** (commit `a9d2753c`) — `pub enum EncryptionClass { Public, Confidential }` at `crates/benten-core/src/encryption_class.rs:36` + codepoint table + typed-reject dispatch + 4 unit tests. Annotated `drift-detect-mirror: ignore` for `EncryptionClassError` (internal-only until v1-Composing §8-CC consumer wires up). |
+| 4 | Engine::walk_share_scope verify-or-build | **LANDED** (commit `7af94d06`) — `Engine::walk_share_scope` minted at `crates/benten-engine/src/engine_share_scope.rs:46` + new `ErrorCode::SubgraphSpecWalkFailed` (CATALOG_VARIANT_COUNT 191 → 192) + end-to-end test pin. |
+| 5 | MerkleRangeProofBackend verify-or-defer | **DEFERRED to G-COMP-1 per Option A** (commit `d2616800`) — verified trait does NOT exist at HEAD; deferral named in `docs/future/phase-4-backlog.md §4.64`. |
+| 6 | CapabilityPolicy hard-seal promotion | **LANDED** (commit `5ce8bab6`) — hard-seal via `pub(crate) mod sealed { pub trait Sealed {} }`; `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old soft-seal marker DELETED. 4 internal + ~17 workspace test-double impls migrated. `benten-caps/testing` feature added for the workspace-test re-export. |
+| 7 | Name-collision renames (RestrictedSpec + KeyMaterial) | **LANDED** (commit `dd12f394`) — `subgraph_spec::RestrictedSpec` → `SubgraphSpecRestriction`; `caps::RestrictedSpec` → `RestrictedScope`; `crypto_suite::aead::KeyMaterial` → `AeadKeyMaterial`; `caps::KeyMaterial` → `GrantKeyMaterial`. 36 files / 229 insertions / 229 deletions. Tentatively-decided per night-shift stance; rebuttable at morning Ben review. |
+| 8 | Errors parity + non_exhaustive sweep + wire-format inventory + Compromise # | **LANDED** (commit `75a1d33a`) — 8a TS class count investigation outcome (delta is legitimate retained envelope); 8b/8c `#[non_exhaustive]` applied to `ManifestEnvelopeRecheckOutcome` + `WriteContext`; 8d wire-format inventory authored at `docs/V1-WIRE-FORMAT-INVENTORY.md` (10 surfaces; 9 covered + 1 deferred); 8e SECURITY-POSTURE Compromise #31 minted (revocation reach in encryption-at-rest). |
 
-The fix-up wave dispatch updates this table as each row lands.
+**Wave outcome:** 7 of 8 rows fully LANDED; row 5 DEFERRED per Option A
+(named destination); row 1 partial (baselines done; napi/test-site
+cascade named for follow-up). The 8 build-backlog rows close at the
+G-CORE-9 V1-FROZEN-INTERFACE build-out wave (commits
+`dd12f394` → `5ce8bab6` → `a9d2753c` → `7af94d06` → `d2616800` →
+`75a1d33a` → `fb7c212d` → `13322df4` on branch `g-core-9/build-out-wave`).
 
 ---
 

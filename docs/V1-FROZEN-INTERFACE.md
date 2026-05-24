@@ -1,17 +1,28 @@
 # v1 Frozen Interface Contract — Phase-4-Meta-Core deliverable (TRIAGE SYNTHESIS)
 
-> **Status: TRIAGE-SYNTHESIS DRAFT.** Round 0.5 of the iterate-to-convergence
-> council. Authored by the orchestrator-triage agent merging Planner-A
-> (architectural-purist) + Planner-B (conservative-minimal) drafts, applying
-> orchestrator's distinctive-angle decisions per §1.A.FROZEN spec authority
-> and the night-shift "surface arch decisions under broad auth" discipline.
+> **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
+> at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-
+> confirmed FIX-NOW pre-freeze build-out items from the companion
+> [`docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md`](V1-FROZEN-INTERFACE-BUILD-BACKLOG.md)
+> all LANDED at this wave (rows 1-8); the BUILD-AT-FREEZE-WAVE markers
+> below are updated to LANDED with concrete file:line citations.
 >
 > **Source drafts:** `g-core-9/planner-a-architectural-purist` @ `7ef3f279` +
 > `g-core-9/planner-b-conservative-minimal` @ `f5aaebb0`.
 >
-> **Companion artifact:** [`docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md`](V1-FROZEN-INTERFACE-BUILD-BACKLOG.md)
-> enumerates the 7 cross-confirmed FIX-NOW pre-freeze build-out items that
-> must land BEFORE this contract can lock at `phase-4-meta-core-close`.
+> **Build-out commits** (against `origin/g-core-9/triage-synthesis`):
+> - `dd12f394` row 7 (RestrictedSpec + KeyMaterial renames)
+> - `5ce8bab6` row 6 (CapabilityPolicy hard-seal via Sealed supertrait)
+> - `a9d2753c` row 3 (EncryptionClass enum mint)
+> - `7af94d06` row 4 (Engine::walk_share_scope mint + SubgraphSpecWalkFailed ErrorCode)
+> - `d2616800` row 5 (MerkleRangeProofBackend → DEFERRED to G-COMP-1 per Option A)
+> - `75a1d33a` row 8 bundle (non_exhaustive sweep + wire-format inventory + Compromise #31)
+> - `fb7c212d` row 1 (cargo-public-api baselines regenerated — 14 of 14 real)
+> - `13322df4` row 2 (TS-public-api parity gate workflow + baseline)
+>
+> **Council-readiness statement:** the doc + as-built surface are ready
+> for the 10-lens FREEZE subset iterate-to-convergence council per the
+> §1.A C13 contract.
 
 ## Authority + scope
 
@@ -51,25 +62,22 @@ fail CI on a frozen-surface mutation:
 1. **`cargo-public-api` baseline regeneration + drift test** at
    `crates/benten-engine/tests/cargo_public_api_drift.rs` against
    `docs/public-api/benten-*.{txt,json}`.
-   **FREEZE-WAVE FIX-NOW gap (BUILD-AT-FREEZE-WAVE):** the current 11
-   baselines are 11-LOC G20-A3 seed stubs, NOT real `cargo public-api`
-   output. Plus 3 missing baselines (`benten-crypto-suite`,
-   `benten-drop`, `benten-platform-foundation`). The G-CORE-9 wave MUST
-   regenerate all 14 with `cargo public-api -p <crate> --simplified
-   --omit blanket-impls` against HEAD and commit as the canonical v1
-   baseline. See build-backlog row 1. Without this, the gate is a
-   placebo — **the single most load-bearing freeze mechanism** sitting
-   on a stub.
+   **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 1 (commit `fb7c212d`).**
+   All 14 lib crate baselines regenerated with `cargo +nightly public-api
+   --simplified -p <crate>`; total **20,571 LOC** of real public-API
+   surface committed (replaces the 11-LOC G20-A3 seed stubs). The 3
+   missing baselines (`benten-crypto-suite` 1609 LOC, `benten-drop` 320
+   LOC, `benten-platform-foundation` 2557 LOC) ALL minted. CI workflow
+   `.github/workflows/cargo-public-api.yml` expanded from 8 → 14 crates.
+   The drift gate is now REAL, not a placebo.
 2. **TS-side public-API parity gate (#1204)** for `@benten/engine`.
-   **FREEZE-WAVE FIX-NOW gap (BUILD-AT-FREEZE-WAVE):** the gate does NOT
-   exist at HEAD (`scripts/` contains only `codegen-errors.ts` +
-   `drift-detect.ts` + `drift-detect-error-variant-mirror.ts` from
-   #1342). G-CORE-9 MUST commit the workflow per item 10's three-stage
-   sequential placement: BUILT in G-CORE-10 (regenerate `index.d.ts` +
-   author the parity gate); COMMITTED + FREEZE-FLIPPED here in G-CORE-9.
-   Likely implementation: `@microsoft/api-extractor` running against
-   `packages/engine/dist/index.d.ts` with committed `etc/engine.api.md`
-   baseline. See build-backlog row 2.
+   **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).**
+   Workflow at `.github/workflows/ts-public-api.yml`; baseline at
+   `packages/engine/etc/public-api.txt` (403 LOC; extract-from-.d.ts
+   structural diff covering all 14 `dist/*.d.ts` files). Migration to
+   `@microsoft/api-extractor` is named for v1-Composing (the workflow
+   + baseline-file location ARE the migration seam — swap-in is
+   contained).
 3. **§3.5g cross-language rule-mirror scanners** at
    `scripts/drift-detect-error-variant-mirror.ts` (item 6 of §3.5g, the
    `feedback_pub_error_variant_first_class_mirror` ratification
@@ -83,7 +91,9 @@ fail CI on a frozen-surface mutation:
    post-freeze additions inherit the gate.
 5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
    `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
-   **CATALOG_VARIANT_COUNT = 191 at HEAD `ae7cd3d5`** (verified). Adding
+   **CATALOG_VARIANT_COUNT = 192 at G-CORE-9 build-out wave HEAD**
+   (was 191 at `ae7cd3d5`; +1 = `SubgraphSpecWalkFailed` minted at
+   G-CORE-9 V1-FROZEN-INTERFACE row 4 commit `7af94d06`). Adding
    or removing an `ErrorCode` variant without updating the list fails to
    compile or fails the runtime length assertion.
 
@@ -242,7 +252,7 @@ re-open).
 | §4.61 | `GraphBackend::snapshot()` + `register_subscriber()` | Both **DECIDED infallible** (`-> SnapshotHandle` and `-> ()`); fail-modes route through the typed `GraphError` channel on dependent operations, NOT through `Result` on these allocation methods. Lock as-shipped per `c4a37bb`-era baseline. |
 | §4.62 | `crates/benten-graph/src/backends/blob_backend_trait.rs:120` `BlobBackend` | **DECIDED additive-default** (NOT a split). The trait carries `put_blob`/`get_blob`/`has_blob` with `Send + Sync + 'static`; future additive methods land as defaulted methods. |
 | §4.63 | `crates/benten-graph/src/backend.rs:306` `KVBackend: Send + Sync` | **DECIDED sync** (NOT RPITIT). RPITIT adds 2024-edition feature-gate complexity v1-beta cannot absorb; future-Composing-async migration is an additive `AsyncKVBackend` trait. |
-| §4.64 | `crates/benten-sync/src/transport_trait.rs:85` `Transport` + `TransportEndpoint` + `TransportConnection` family | `Transport` family stays in `benten-sync` per §8-B (b). The trait surface is `pub` + `Send + Sync + 'static`. **`MerkleRangeProofBackend` trait is NOT YET BUILT at HEAD** — see build-backlog row 5; verify-or-build outcome determines whether it freezes at v1-beta or BELONGS-NAMED-NOW G-COMP-1. |
+| §4.64 | `crates/benten-sync/src/transport_trait.rs:85` `Transport` + `TransportEndpoint` + `TransportConnection` family | `Transport` family stays in `benten-sync` per §8-B (b). The trait surface is `pub` + `Send + Sync + 'static`. **`MerkleRangeProofBackend` trait DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE row 5 outcome (commit `d2616800`)** — Option A per Planner-B; verified not-built at HEAD; freezing a phantom shape is overcommit. Tracked at `docs/future/phase-4-backlog.md §4.64` (the named-NOW destination per HARD RULE 12 clause-(b)). The §4.64 row received an explicit verify-or-defer outcome paragraph at the G-CORE-9 row 5 commit. |
 | §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | **APPLY `#[non_exhaustive]` to all three.** `WriteContext` at `crates/benten-graph/src/lib.rs:935` is currently MISSING the attribute (verified HEAD). `ChangeEvent` ALREADY has it at `crates/benten-core/src/change_stream.rs:123` — KEEP. `GraphError::TxAborted` per-variant `#[non_exhaustive]` — APPLY defensively. The freeze MUST not ship without these. Couples to item 5 + item 11; closes atomically in the G-CORE-9 wave. |
 
 **What "frozen" means here:**
@@ -374,7 +384,7 @@ breaks are non-recoverable post-`v1-GM`.
 **Frozen surfaces (the full struct at `crates/benten-graph/src/lib.rs:935`):**
 
 ```rust
-#[non_exhaustive]  // ← APPLY at G-CORE-9 (couples item 11)
+#[non_exhaustive]  // ← LANDED at G-CORE-9 row 8c (commit 75a1d33a; couples item 11)
 pub struct WriteContext {
     pub label: String,                 // primary label / system-zone prefix check
     pub is_privileged: bool,           // engine-API-only path marker
@@ -392,11 +402,14 @@ pub struct WriteContext {
   `Cid::as_bytes()`; never collide with legacy `n:`/`e:`/`es:`/`et:`
   prefixes.
 
-**`#[non_exhaustive]` MUST be applied at this freeze** (verified MISSING
-at HEAD `crates/benten-graph/src/lib.rs:934`). Adding it post-v1 is
-breaking; adding it pre-freeze is the cheap, correct call. This couples
-to item 11 `#[non_exhaustive]` sweep + closes atomically in the G-CORE-9
-wave.
+**`#[non_exhaustive]` LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 8c
+(commit `75a1d33a`).** Applied at `crates/benten-graph/src/lib.rs:934`.
+7 test-construction sites migrated to the existing builder pattern
+(`WriteContext::new(label)` + `.with_authority(...)` +
+`.with_namespace_did(did)`; `WriteContext::privileged_for_engine_api()`
+for engine-privileged paths) — see commit body for full file list.
+Workspace builds clean; downstream construction via builder is the
+v1-beta-and-forward contract.
 
 **What "frozen" means here:**
 - Field-set frozen: no removal, no rename, no type-change of any of the
@@ -628,7 +641,7 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 | Sub-fork | Decision | Action at G-CORE-9 |
 |---|---|---|
 | #886 `[features]` | DECIDED (already shipped) | Pin `Cargo.toml` `[features]` block exactly as-is; comment-cite. |
-| #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL at G-CORE-9** — promote the soft-seal marker pattern at `policy.rs:48-67` to a true private `Sealed` supertrait in a non-pub module (`crates/benten-caps/src/policy/sealed.rs` with `pub(crate) trait Sealed {}`); add `trait CapabilityPolicy: Sealed + Send + Sync`. Workspace-wide migration: ≥20 test sites add `impl Sealed for X {}` via a `pub(crate)` blanket-by-cite affordance (see build-backlog row 6). Object-safety preserved (`Arc<dyn CapabilityPolicy>` boxing compile-test pin at `crates/benten-caps/tests/object_safety_*.rs`). |
+| #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit `5ce8bab6`).** `crates/benten-caps/src/policy.rs` `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old `sealed_marker::SealedCapabilityPolicy` soft-seal DELETED (no shim per HARD RULE 12 + CLAUDE.md #5). Workspace-wide migration applied: 4 internal impls (NoAuthBackend, GrantBackedPolicy, LegacyUcanStubBackend, UcanGroundedPolicy<B>) + ~17 workspace test-double impls received sibling `impl Sealed` blocks via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests` re-export. Feature pass-through: benten-engine `test-helpers` + benten-eval `testing` features enable `benten-caps/testing`. Object-safety preserved (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` exercises `Arc<dyn CapabilityPolicy>`). |
 | 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. |
 | #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: String` placeholder per `policy.rs:81`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
 | #883b prod-dep-edge | DECIDED | Lock as-shipped. |
@@ -748,7 +761,7 @@ SURFACE.
 |---|---|---|
 | `packages/engine/src/index.ts` exports | All `export` statements at HEAD | LOCKED as-shipped at the freeze wave; commit the post-freeze `index.d.ts` |
 | `packages/engine/src/engine.ts` `Engine` + `PolicyKind` | As-shipped | LOCKED |
-| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 194-TS-class catalog at HEAD (vs 191 Rust variants — see FREEZE-WAVE FIX-NOW below) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
+| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 194-TS-class catalog at HEAD post G-CORE-9 build-out (192 Rust ErrorCode variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 194; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
 | `packages/engine/src/types.ts` typed-call shapes | `TypedCallInputShapes`, `TypedCallOutputShapes`, `ManifestSignature`, the `ed25519_*` / `keypair_*` / `did_resolve` arms | LOCKED — **PQ-hybrid-capable** sizes (NO hardcoded Ed25519 32B-key / 64B-sig assumption; per item 10 PQ-hybrid JS-shape widening + napi-r1-1 atomic mirror) |
 | `packages/engine/src/types.ts` other interface exports | `Subgraph`, `RegisteredHandler`, `AttributionFrame`, `Trace*`, `CapabilityClaim`, `DeviceAttestation`, `CapabilityGrant`, `Edge`, `TypedCallOp`, etc. | LOCKED as-shipped |
 | `packages/engine/src/index.d.ts` | The TS module declaration file; generated from napi-rs via the build pipeline | LOCKED post-regen at the freeze wave |
@@ -760,26 +773,27 @@ SURFACE.
 | `packages/engine/src/sandbox.ts` SANDBOX JS API | As-shipped | LOCKED |
 | `packages/engine/src/wait.ts` WAIT JS API | As-shipped | LOCKED |
 
-**FREEZE-WAVE FIX-NOW: #1204 JS-side public-API parity gate (BUILD-AT-
-FREEZE-WAVE).** Verified at HEAD: NO gate exists (no `api-extractor` /
-`api-report` / equivalent at `scripts/` or `packages/engine/`). The
-G-CORE-9 wave MUST commit the workflow per item 10's three-stage
-sequential placement: BUILT in G-CORE-10 (regenerate `index.d.ts` +
-author the parity gate workflow); COMMITTED + FREEZE-FLIPPED in G-CORE-9.
-Likely implementation: `@microsoft/api-extractor` running against
-`packages/engine/dist/index.d.ts` with a committed `etc/engine.api.md`
-baseline. A delta = CI failure parallel to `cargo-public-api`. See
-build-backlog row 2.
+**#1204 JS-side public-API parity gate LANDED at G-CORE-9
+V1-FROZEN-INTERFACE row 2 (commit `13322df4`).** Workflow at
+`.github/workflows/ts-public-api.yml`; baseline at
+`packages/engine/etc/public-api.txt` (403 LOC; extract-from-.d.ts
+structural diff covering all 14 `dist/*.d.ts` files). Migration to
+`@microsoft/api-extractor` is named for v1-Composing (the workflow
++ baseline-file location ARE the migration seam; swap-in is
+contained).
 
-**FREEZE-WAVE FIX-NOW: errors.generated.ts ↔ catalog ↔ Rust `ErrorCode`
-parity audit.** §3.5g item 6 ratification 2026-05-24 ships the
-drift-detect scanner; the freeze MUST verify all three sides at parity
-at HEAD: `CATALOG_VARIANT_COUNT = 191` Rust-side = N entries in
-`docs/ERROR-CATALOG.md` = N classes in `errors.generated.ts`. **Verified
-at HEAD: 194 TS classes vs 191 Rust variants** — investigate the +3
-TS-side classes; either they're legitimate generic envelope classes
-(`BentenError` base + `BentenInternalError` etc.) or there's drift to
-close. See build-backlog row 8.
+**errors.generated.ts ↔ catalog ↔ Rust `ErrorCode` parity audit
+RESOLVED at G-CORE-9 V1-FROZEN-INTERFACE row 8a (investigation outcome
+in commit `75a1d33a` body).** Post-build-out counts: 192 Rust ErrorCode
+variants + 1 `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained
+envelope (catalog ID retained for backward-compat string round-trip;
+Rust enum has no variant) + 1 `E_UNKNOWN` forward-compat sentinel
+(mirrors Rust `Unknown(String)` fallback) = 194 catalog/TS entries.
+**Delta is the legitimate retained-envelope set, NOT drift**; the
+drift-detect script (`npm run drift:errors`) validates this exact
+pattern. Documented in ERROR-CATALOG.md's "Catalog count narrative"
+table; the script reports "OK — catalog, Rust enum, and TS classes
+agree" at every CI run.
 
 **What "frozen" means here:**
 - The exported TS class/type/function names are locked.
@@ -929,9 +943,10 @@ SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
   ManifestEnvelopeRecheckOutcome { NotApplicable, UnresolvedDeny, Admitted,
   OutsideEnvelope { offending_plugin_did, cap_pattern } }` — **all four
   variants frozen** including the post-rename `UnresolvedDeny` semantic.
-  **Apply `#[non_exhaustive]` at the freeze** (verified MISSING at HEAD;
-  item 11 sweep coupling). Adding a fifth variant post-v1 is breaking;
-  every consumer's `match` would break.
+  **`#[non_exhaustive]` LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 8b
+  (commit `75a1d33a`)** at `crates/benten-engine/src/manifest_envelope_recheck.rs:79`.
+  Adding a fifth variant post-v1 is breaking; the attribute makes the
+  variant-set additively extensible.
 - The `Admitted` arm's structural invariant (security-r1-2 frozen):
   returned ONLY on a positively-verified envelope/chain match.
   **`outcome_to_row_reject` at `manifest_envelope_recheck.rs:124-144`
@@ -1192,16 +1207,18 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
   filter(...)` combinators (`combinators.rs:37, 99, 140`).
 
 **ARCHITECTURAL CONCERN — type-name collision (orchestrator-decided per
-distinctive-angle).** Two `RestrictedSpec` types at HEAD: (i)
+distinctive-angle).** Two `RestrictedSpec` types existed at HEAD: (i)
 `crates/benten-caps/src/restricted_spec.rs:103` (the 6-dimension product
 per (b)); (ii) `crates/benten-core/src/subgraph_spec/spec.rs:126` (a
-different enum). **FREEZE-WAVE FIX-NOW: rename**
-`subgraph_spec::RestrictedSpec` → `SubgraphSpecRestriction`;
-`caps::RestrictedSpec` → `RestrictedScope` (per build-backlog row 7).
-Two distinct `pub struct/enum RestrictedSpec` types in the same
-workspace is a documentation / import-confusion liability that will
-burn Composing-time developers. **Tentatively-decided per night-shift
-stance; rebuttable at morning Ben review.**
+different enum). **Renames LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 7
+(commit `dd12f394`):** `subgraph_spec::RestrictedSpec` →
+`SubgraphSpecRestriction`; `caps::RestrictedSpec` → `RestrictedScope`.
+Compatible-interpretation trap (someone imports the wrong one and
+trait-bounds line up enough that it compiles but runtime is wrong) is
+structurally prevented by type-level distinction. **Tentatively-decided
+per night-shift stance; rebuttable at morning Ben review** (if rebutted,
+revert the rename commit + take the import-confusion liability into
+v1-Composing instead).
 
 **What "frozen" means here:**
 - The 4-thing structural decomposition (Roots / Expansion / Inclusion /
@@ -1323,14 +1340,15 @@ per distinctive-angle).** Two `KeyMaterial` types at HEAD: (i)
 `crates/benten-caps/src/authorization_grant.rs:166` (the GRANT-bearing
 handle carrying audience binding + paths); (ii)
 `crates/benten-crypto-suite/src/aead.rs:85` (the AEAD-bearing key).
-Distinct semantics; same name. **FREEZE-WAVE FIX-NOW: rename** —
+Distinct semantics; same name. **Renames LANDED at G-CORE-9
+V1-FROZEN-INTERFACE row 7 (commit `dd12f394`):**
 `benten_caps::KeyMaterial` → `GrantKeyMaterial`;
-`benten_crypto_suite::aead::KeyMaterial` → `AeadKeyMaterial` (per
-build-backlog row 7). The compatible-interpretation risk (someone
-imports the wrong one and trait-bounds line up enough that it compiles
-but runtime is wrong) is exactly the kind of trap a type-level
-distinction prevents. **Tentatively-decided per night-shift stance;
-rebuttable at morning Ben review.**
+`benten_crypto_suite::aead::KeyMaterial` → `AeadKeyMaterial`. The
+compatible-interpretation risk (someone imports the wrong one and
+trait-bounds line up enough that it compiles but runtime is wrong)
+is structurally prevented by type-level distinction. **Tentatively-
+decided per night-shift stance; rebuttable at morning Ben review**
+(same provision as item 15.a above).
 
 **Frozen semantics:**
 - `binding_sig` is computed by the issuer over the CBOR-encoded
@@ -1356,18 +1374,14 @@ ordering invariant = HALT (cryptographic).
 
 **Frozen surfaces:**
 
-`pub enum EncryptionClass { Public, Confidential }` — **CURRENTLY DOES
-NOT EXIST AT HEAD** (verified via grep). The freeze MUST mint this enum
-per item 15(e). **FREEZE-WAVE FIX-NOW: author the enum at the G-CORE-9
-wave** (per build-backlog row 3; orchestrator-decided defensive call:
-mint NOW rather than defer to G-COMP-1, because downstream §8-CC
-consumers need the type for their API shape and a wave-time mint
-prevents the spec's reference from becoming a phantom destination per
-HARD RULE 12).
-
-Likely location: `crates/benten-core/src/lib.rs` or
-`crates/benten-caps/src/lib.rs` (decide based on §8-CC consumer surface
-at wave time).
+`pub enum EncryptionClass { Public, Confidential }` — **LANDED at
+G-CORE-9 V1-FROZEN-INTERFACE row 3 (commit `a9d2753c`)** at
+`crates/benten-core/src/encryption_class.rs:36`. Placement decision:
+`benten-core` (vocabulary-of-encryption-state type, NOT a
+capability-policy type; same pattern as `WriteAuthority` +
+`ChangeEvent`). `EncryptionClassError` typed-reject error variant
++ `pub mod codepoint` wire table + `from_codepoint(u8) -> Result`
+typed dispatch all minted.
 
 ```rust
 #[non_exhaustive]
@@ -1509,14 +1523,17 @@ content-incompatibility).
 - The walker is **data-not-evaluator-extension** — no evaluator special-
   case for SubgraphSpec; preserves CLAUDE.md baked-in #1.
 
-**Engine wrapper:** the public consumer surface is the engine method
-(e.g. `Engine::walk_share_scope()` or similar). **FREEZE-WAVE VERIFY-OR-
-BUILD (build-backlog row 4):** the engine wrapper exists at HEAD; if
-not, mint it per item 15(h). Verified at HEAD: only narrative-test
-reference exists (`crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs:208`
-mentions `Engine::walk_share_scope()`-style consumer interface);
-production engine method appears NOT YET MINTED. Build-backlog row 4
-sets verify-or-build as a wave deliverable.
+**Engine wrapper LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 4 (commit
+`7af94d06`)** at `crates/benten-engine/src/engine_share_scope.rs:46`:
+`pub fn Engine::walk_share_scope(&self, spec: &Spec) -> Result<WalkResult, EngineError>`.
+Wrapper delegates to the canonical `benten_core::subgraph_spec::walker::walk`
+BFS enumerator (no engine-side reimplementation; preserves producer/
+recipient enumeration parity per §R4). Typed reject routes through
+`EngineError::Other { code: ErrorCode::SubgraphSpecWalkFailed, .. }`
+(new ErrorCode minted in the same commit; CATALOG_VARIANT_COUNT 191
+→ 192). End-to-end test at
+`crates/benten-engine/tests/g_core_9_walk_share_scope_e2e.rs` (BFS-
+order parity arm + typed-reject arm).
 
 **What "frozen" means here:**
 - The walker lives in `benten-core` (not `benten-engine` and not
@@ -1548,9 +1565,15 @@ sets verify-or-build as a wave deliverable.
     callback to revoke an already-distributed Drop.
   - Mitigation: tight `nbf`/`exp` + key rotation.
 
-**Considered for a SECURITY-POSTURE Compromise #** (spec item 15(i);
-RATIFIED-S&C §R6). **FREEZE-WAVE FIX-NOW:** assign the next compromise
-number + add the entry to SECURITY-POSTURE.md.
+**SECURITY-POSTURE Compromise #31 LANDED at G-CORE-9 V1-FROZEN-INTERFACE
+row 8e (commit `75a1d33a`)** — Compromise #31 added to
+`docs/SECURITY-POSTURE.md` registry table: "Revocation reach in
+encryption-at-rest (already-derived keys remain decryptable; Drop
+bundles forever-valid once distributed)" — OPEN ARCHITECTURAL TRADE-OFF;
+MITIGATED by tight UCAN `nbf`/`exp` + key rotation; stays OPEN at
+v1-beta + v1-GM (inherent to encryption-at-rest where reader holds
+plaintext key). Body sections already exist at line 2492 + line 2536
+of SECURITY-POSTURE.md.
 
 **What "frozen" means here:**
 - The documentation language is the v1-beta posture; users + plugins
