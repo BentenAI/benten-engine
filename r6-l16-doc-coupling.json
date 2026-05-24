@@ -1,0 +1,147 @@
+{
+  "lens": "L16",
+  "lens_name": "doc-coupling sweep (pim-1 §3.5b)",
+  "branch": "phase-4-meta-core/r6-r1-l16-doc-coupling",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "phase": "Phase-4-Meta-Core",
+  "tier": "R6 R1",
+  "scope": "Every public-shape change in R5 (G-CORE-0..10 + G-CORE-3a/b/c/d/e/f/w + G-CORE-6a/b + G-CORE-7 + G-CORE-9 FREEZE + G-CORE-DSL chunks 1/2/3) × every adjacent doc (INTERNALS.md, CRATES-DEEP-DIVE.md, SECURITY-POSTURE.md, ERROR-CATALOG.md, GLOSSARY.md, ARCHITECTURE.md, HOW-IT-WORKS.md, SCHEMA-DRIVEN-RENDERING.md, DEVELOPMENT-METHODOLOGY.md, PRIMER.md, ENGINE-SPEC.md). Reviewed against pim-1 §3.5b cross-doc-mirror discipline (origin: 7+ Phase-2b recurrences; HARDENED across phases per feedback_post_fix_doc_coupling_preflight) + pim-N-cross-language-rule-mirror §3.5g extension for type-name cross-doc mirrors (TauriRender vs TauriRenderer 8-cite drift precedent).",
+  "disposition": "DISAPPROVE-WITH-FIX-PASS",
+  "summary": "Body content tracks the phase well — ARCHITECTURE.md fully retensed (14 crates, both new crates fully described with dependency-edge + provenance + safety invariants), GLOSSARY.md has new entries (benten-drop, crypto-suite, codepoint dispatch), SECURITY-POSTURE.md has Compromise #31 + the 'Revocation reach' online-vs-offline-Drop section + Drop-bundle threat model section + benten-drop code-cites, ERROR-CATALOG.md has all G-CORE-3a/3c/3f mints + the 192-throwable preamble retense, V1-FROZEN-INTERFACE.md exists + is current. BUT: (a) two new crates (benten-crypto-suite 13th, benten-drop 14th) ship without INTERNALS.md at all — the L16 explicit question 2 (added-crate INTERNALS present?) fails; (b) CRATES-DEEP-DIVE.md is partial-drift: its § 1 per-crate walk still names 'Twelve crates' + describes only 12 (silently omits benten-crypto-suite + benten-drop) while §§ 2 + 9 say 14 — internal-doc inconsistency; (c) PRIMER.md narrative names only the 13th crate (benten-crypto-suite) in the Phase-4-Meta-Core mention + never names benten-drop, while listing 'twelve crates together'; (d) HOW-IT-WORKS.md has the same '13th only, no 14th' mid-doc inconsistency in §142 prose vs §153 footer list; (e) ENGINE-SPEC.md L4 + L5 + L448 still say '12-crate workspace'/'12-crate structure' (stale × 3); (f) CRATES-DEEP-DIVE.md L17 cites stale '168 production-throwable named variants' (now 192 per ERROR-CATALOG); (g) most touched-crate INTERNALS.md last-refresh SHA pointers pin to 8141b94 (phase-4-foundation-close pre-tag) even though significant phase-4-meta-core work landed in those crates — explicit L16 question 5 violation, mostly cosmetic per-file body content was extended but the front-matter pointer wasn't bumped; (h) benten-graph INTERNALS.md body has the larger problem — it lists no aead_wrap.rs or two_cid_map.rs modules despite G-CORE-3d adding both to src/, and its 'last source change was dcd1275 + 92bd65e' provenance line is wrong post-G-CORE-3d/-6a/-6b; (i) benten-renderer-tauri INTERNALS.md carries no SHA pointer at all (skipped front-matter); (j) SCHEMA-DRIVEN-RENDERING.md L213 cite uses §\"14 crates\" but the actual ARCHITECTURE.md section header is 'Fourteen crates' — link-anchor drift. Net: 14 findings total, 0 BLOCKER, 4 MAJOR, 7 MINOR, 3 OBS. R6-R1-convergence-disposition = WAVE_FIX_NEEDED (fix-pass required; iterate per Q5 / iterate-critical-reviews-to-convergence).",
+  "r6_r1_convergence_disposition": "WAVE_FIX_NEEDED",
+  "method": "1) Diff phase-4-foundation-close..4bbc4cac to enumerate this-phase commits + which crates moved (14 crates final; benten-crypto-suite + benten-drop new). 2) For each touched crate, walked INTERNALS.md head + grep-checked phase-4-meta-core content presence (G-CORE-X mentions). 3) Cross-referenced ARCHITECTURE.md narrative crate-count + crate-list against `git ls-files crates/*/Cargo.toml`. 4) Grep-swept docs/*.md + CLAUDE.md + README.md for 'twelve|fourteen|thirteen|12 crates|13 crates|14 crates|10 crates' to enumerate stale narrative counts. 5) Grep-swept docs/*.md for 'benten-drop|benten-crypto-suite' to find missing mentions per pim-1 cross-doc-mirror discipline. 6) Cross-checked ERROR-CATALOG.md preamble count (192) against narrative cites elsewhere. 7) Verified INTERNALS.md last-refresh SHA pointer per L16 explicit question 5. 8) Verified GLOSSARY entries + SECURITY-POSTURE compromise count + ERROR-CATALOG variant mints all sync to phase artifacts. No code compile / no cargo runs (pure doc-coupling sweep).",
+  "findings": [
+    {
+      "id": "L16-MAJOR-1",
+      "severity": "MAJOR",
+      "claim": "Two new crates added in this phase ship without INTERNALS.md present",
+      "evidence": "`crates/benten-crypto-suite/INTERNALS.md` MISSING; `crates/benten-drop/INTERNALS.md` MISSING. Confirmed via `for c in crates/*/; do f=${c}INTERNALS.md; [ ! -f $f ] && echo MISSING; done`. Both crates added in Phase-4-Meta-Core: benten-crypto-suite at #1303/#1307 (G-CORE-2 + G-CORE-3a CANARY at #1319), benten-drop at #1340 (G-CORE-3f). All 12 other workspace crates have INTERNALS.md. L16 question 2 explicit: 'Every wave that added a crate ... INTERNALS.md present?'",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Mint `crates/benten-crypto-suite/INTERNALS.md` + `crates/benten-drop/INTERNALS.md` in R6 R1 fix-pass. Each must cover: what the crate does, dep-chain, public surface, key seams (for crypto-suite: codepoint-dispatch + only-call-site rule + swap-matrix; for benten-drop: DropBundle envelope + per-Node AEAD layer + envelope-sig + Mode 1/2/3 framing + revocation-reach), Phase-4-Meta-Core wave provenance (G-CORE-2 + 3a/3c for crypto-suite; G-CORE-3f for drop), and 2026-05-24 SHA pointer. Pattern-match the existing benten-platform-foundation + benten-renderer-tauri INTERNALS shape."
+    },
+    {
+      "id": "L16-MAJOR-2",
+      "severity": "MAJOR",
+      "claim": "CRATES-DEEP-DIVE.md § 1 per-crate walk silently omits benten-crypto-suite + benten-drop and still says 'Twelve crates'",
+      "evidence": "docs/CRATES-DEEP-DIVE.md L3 'across the 12 workspace crates'; L15 'Twelve crates. Roughly stacked ...'; § 1 body covers exactly 12 crates (benten-errors through benten-renderer-tauri); `grep -n 'benten-crypto-suite\\|benten-drop' docs/CRATES-DEEP-DIVE.md` returns 0 hits. Meanwhile L46 says '(14 crates, top of stack)' inside the dep-graph diagram and L482 says 'all 14 crates' — internal inconsistency between §1 and §§ 2/9. Doc claims to be a per-crate workspace synthesis pinning INTERNALS.md sources; the two new crates are invisible in that synthesis. pim-1 §3.5b cross-doc-mirror direct violation: ARCHITECTURE.md is the source-of-truth for crate-count + the CRATES-DEEP-DIVE.md is the citing-doc that drifted.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Update CRATES-DEEP-DIVE.md § 1 + L3 + L15 to 'fourteen crates'/'Fourteen crates' + add per-crate paragraphs for benten-crypto-suite (between benten-engine and benten-platform-foundation per dep-graph order) and benten-drop (after benten-renderer-tauri, or grouped near benten-platform-foundation per dep-direction) in R6 R1 fix-pass."
+    },
+    {
+      "id": "L16-MAJOR-3",
+      "severity": "MAJOR",
+      "claim": "benten-graph INTERNALS.md body fails to mention G-CORE-3d's new modules (aead_wrap.rs, two_cid_map.rs) despite both shipping in #1323",
+      "evidence": "`crates/benten-graph/src/aead_wrap.rs` + `crates/benten-graph/src/two_cid_map.rs` exist at HEAD per `ls crates/benten-graph/src/`. `grep -E 'aead_wrap|two_cid_map' crates/benten-graph/INTERNALS.md` returns 0 hits. The INTERNALS.md L6-9 header still claims 'last code change was dcd1275 (2026-05-10) + 92bd65e (2026-05-08)' — both pre-G-CORE-3d. G-CORE-3d shipped at #1323 (per-Node AEAD + two-CID map + per-chunk AEAD >=64KiB) is a substantive public-surface-affecting change (new modules + new public types) and is invisible in the deep-dive. Only G-CORE-6b SnapshotBlob v2 was woven in (L234-244). This is the largest single-crate body-drift the lens found.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "benten-graph INTERNALS.md fix-pass at R6 R1 — add aead_wrap.rs + two_cid_map.rs module entries in §3 + §5 (or equivalents), update the L6-9 'last code change' provenance line to reference #1323 #1331 #1325 etc, refresh the L4 'HEAD 8141b94' pin to 4bbc4cac (base) or main HEAD at convergence time."
+    },
+    {
+      "id": "L16-MAJOR-4",
+      "severity": "MAJOR",
+      "claim": "Touched-crate INTERNALS.md last-refresh SHA pointers all pin to 8141b94 (phase-4-foundation-close pre-tag) despite substantial phase-4-meta-core work",
+      "evidence": "L16 question 5 explicit: 'INTERNALS.md last-refresh SHA pointers updated for every touched crate?' Per `git diff --stat phase-4-foundation-close..4bbc4cac -- crates/`: benten-caps (215 LOC INTERNALS diff), benten-core (128), benten-engine (106), benten-errors (167), benten-eval (38), benten-graph (86), benten-id (332), benten-ivm (875), benten-platform-foundation (307), benten-sync (50) all changed in this phase. Per-file SHA pointer audit: benten-caps L5 'Last refreshed: 2026-05-14 against main HEAD 8141b94 post Phase-4-Foundation R6-FP cluster admin-merge' (stale phase); benten-core L5 'Current as of HEAD 8141b94 (post phase-4-foundation-close tag)' (stale phase); benten-engine L3 'Snapshot HEAD: 8141b94' (stale phase); benten-errors L3 'Rewritten 2026-05-14 against HEAD 8141b94'; benten-eval L7 'Status at HEAD 8141b94' (claims 'exactly one source change landed' — wrong, phase-4-meta-core added 213 LOC to evaluator.rs); benten-id L5 'State as of HEAD 8141b94 (2026-05-14)'; benten-ivm L8 'State: HEAD 8141b94'; benten-platform-foundation L3 'Snapshot: post phase-4-foundation-close tag (main HEAD 8141b94; PR #242–#250 all merged)'; benten-sync L5 'State pinned to HEAD 8141b94'. Only benten-dsl-compiler L5 reflects post-tag work (G-CORE-DSL chunk-3 + 2026-05-23). The bodies were extended for phase-4-meta-core in most cases but the front-matter SHA pointer was not bumped — pim-1 §3.5b cross-doc-mirror violation against the OWN-front-matter source-of-truth (the SHA line itself).",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Bulk update front-matter SHA pointers across 10 INTERNALS.md files in R6 R1 fix-pass to reference 4bbc4cac (current base) or main HEAD at convergence-time + name the Phase-4-Meta-Core wave provenance (G-CORE-X for each touched crate). Pair the SHA pointer update with the corresponding 'last code change' + 'work this phase' narrative addendum for each crate (small for benten-sync; substantial for benten-caps + benten-graph + benten-platform-foundation per their LOC diffs)."
+    },
+    {
+      "id": "L16-MINOR-1",
+      "severity": "MINOR",
+      "claim": "CRATES-DEEP-DIVE.md L17 cites stale 'benten-errors: 168 production-throwable named variants today (169 with Unknown(String))' — now 192/193",
+      "evidence": "ERROR-CATALOG.md L5 preamble (authoritative): 'Throwable enum variants: 192 (192 in test list, 193 rust enum with Unknown(String), 194 catalog entries with E_UNKNOWN + E_INV_ITERATE_NEST_DEPTH)'. CRATES-DEEP-DIVE.md L17 still says '168 production-throwable named variants today (169 with the Unknown(String) forward-compat fallback)'. Stale narrative count; the cross-doc cite trails the source-of-truth by ~24 mints.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "CRATES-DEEP-DIVE.md L17 fix-pass — replace '168 production-throwable ... (169 with ...)' with the current 192/193 four-count reconciliation, citing ERROR-CATALOG.md preamble. Inline in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-MINOR-2",
+      "severity": "MINOR",
+      "claim": "PRIMER.md L54 narrative names benten-crypto-suite as 13th but never names benten-drop as 14th",
+      "evidence": "docs/PRIMER.md L54 prose: 'Phase 4-Meta-Core adds the **13th workspace crate** benten-crypto-suite — the ONE thin Benten-owned signature / hash / cipher-suite agility integration crate (the only crypto-primitive call site).' Then the sentence ends without naming the 14th. Earlier in the same paragraph: 'The twelve crates together are benten-errors, benten-core, ... and benten-renderer-tauri' — the listed crates total 12 (no benten-crypto-suite, no benten-drop). Per `grep -nE 'benten-drop|DropBundle' docs/PRIMER.md`: 0 hits. pim-1 §3.5b: PRIMER as cite-from-elsewhere doc drifted from ARCHITECTURE.md source-of-truth.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "PRIMER.md L54 fix-pass — extend the 'Phase 4-Meta-Core adds ...' clause to name both the 13th (benten-crypto-suite) and the 14th (benten-drop, Drop bundle format per RATIFIED-S&C §R6) crates, and update the 'twelve crates together are ...' explicit list to fourteen. Inline in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-MINOR-3",
+      "severity": "MINOR",
+      "claim": "HOW-IT-WORKS.md L142 prose names only 13th workspace crate (benten-crypto-suite); §144 Phase-4-Meta-Core para omits benten-drop / G-CORE-3f entirely",
+      "evidence": "docs/HOW-IT-WORKS.md L142 prose: 'adds the 13th workspace crate benten-crypto-suite as the ONE thin Benten-owned crypto-primitive integration crate' — no 14th. L144 substantive Phase-4-Meta-Core paragraph mentions only storage-partition seam (#989) + Principal primitive confidentiality half + #1301 — no mention of G-CORE-3 family (S&C surface) + Drop bundle format + iroh-blobs two-CID seam + the 6 ratifications. L153 footer correctly lists all 14 crates. Mid-doc inconsistency (prose says 13, footer says 14).",
+      "disposition": "FIX-NOW",
+      "fix_destination": "HOW-IT-WORKS.md L142 + L144 fix-pass — extend L142 prose to name both 13th (benten-crypto-suite) + 14th (benten-drop) crates; extend L144 to summarize G-CORE-3 S&C surface + Drop bundle + iroh-blobs two-CID seam + the 6 ratifications. Inline in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-MINOR-4",
+      "severity": "MINOR",
+      "claim": "ENGINE-SPEC.md L4 + L5 + L448 all carry stale '12-crate' narrative",
+      "evidence": "docs/ENGINE-SPEC.md L4 'Last Updated: 2026-05-13 (Phase-4-Foundation close retense: 12-crate structure ...)'; L5 '12-crate Phase-4-Foundation transition'; L448 'Phase-4-Foundation-close authoritative (2026-05-13): all 12 primitives executable; all 14 invariants enforced ...; 12-crate workspace.' Stale × 3 (workspace is 14 crates at HEAD post G-CORE-3f).",
+      "disposition": "FIX-NOW",
+      "fix_destination": "ENGINE-SPEC.md fix-pass — update L4 + L5 + L448 to '14-crate workspace' and bump Last Updated to a phase-4-meta-core date. Inline in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-MINOR-5",
+      "severity": "MINOR",
+      "claim": "benten-renderer-tauri INTERNALS.md carries no front-matter 'Last refreshed / SHA pointer' at all",
+      "evidence": "head -15 crates/benten-renderer-tauri/INTERNALS.md → no 'Last refreshed' or 'HEAD' or 'State as of' line in the front-matter. Every other crate INTERNALS.md (except benten-core uses 'Current as of') carries some form of SHA pointer; this one only references 'Phase 4-Foundation wave G24-E' historically. L16 question 5 violation by-omission.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Add a 'Last refreshed: <date> against HEAD <sha>' line to the front-matter of benten-renderer-tauri INTERNALS.md in R6 R1 fix-pass."
+    },
+    {
+      "id": "L16-MINOR-6",
+      "severity": "MINOR",
+      "claim": "SCHEMA-DRIVEN-RENDERING.md L213 link-anchor cite uses §\"14 crates\" but the actual ARCHITECTURE.md section header is 'Fourteen crates'",
+      "evidence": "docs/SCHEMA-DRIVEN-RENDERING.md L213: '[ARCHITECTURE.md](ARCHITECTURE.md) §\"14 crates\" — benten-platform-foundation is the 11th crate ... the workspace expanded to 14 with benten-renderer-tauri (12th), benten-crypto-suite (13th), and benten-drop (14th)'. docs/ARCHITECTURE.md L9 actual heading: '## Fourteen crates (post-Phase-4-Meta-Core G-CORE-3f)'. The cite uses '14 crates' but the section is 'Fourteen crates'; section anchors are derived from the rendered heading text. Link will not anchor-jump in markdown renderers. Minor cite drift per pim-1.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "SCHEMA-DRIVEN-RENDERING.md L213 fix-pass — change §\"14 crates\" to §\"Fourteen crates\" (or use the explicit anchor) to match the rendered heading. Inline in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-MINOR-7",
+      "severity": "MINOR",
+      "claim": "benten-engine INTERNALS.md still frames §8-A visibility tightening as 'deferred to Phase-4-Meta' rather than partial-LANDED-at-v1-beta / DEFERRED-to-G-COMP-1",
+      "evidence": "crates/benten-engine/INTERNALS.md L141: 'The v1-assessment-window question about tightening Engine::get_node from pub → pub(crate) per docs/future/phase-4-backlog.md §4.43 remains deferred to Phase-4-Meta.' V1-FROZEN-INTERFACE.md L112 actual current state: '§8-A visibility cluster — PARTIAL-LANDED at v1-beta; binary-side tighten + napi cascade DEFERRED to G-COMP-1 (per G-CORE-9 R1 triage L2-BLK-1 escalation)'. The INTERNALS narrative trails the V1-FROZEN-INTERFACE source-of-truth.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "benten-engine INTERNALS.md fix-pass — rewrite the L141 parenthetical to reflect the current V1-FROZEN-INTERFACE §8-A state (partial-landed at v1-beta + binary-side tighten DEFERRED to G-COMP-1). Inline in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-OBS-1",
+      "severity": "OBS",
+      "claim": "benten-eval INTERNALS.md L7 narrative 'exactly one source change landed' (PR #210) is wrong post-phase-4-meta-core",
+      "evidence": "crates/benten-eval/INTERNALS.md L7: 'Substantive Phase 4-Foundation work in this crate is bounded — exactly one source change landed (PR #210 / f3930e1: SUBSCRIBE per-event cap-recheck enum lift; see §10 below).' Per `git diff --stat phase-4-foundation-close..4bbc4cac -- crates/benten-eval/src/`: evaluator.rs +213/-/ , exec_state.rs +31, host.rs +23, plus benches/diag/expr touches. Phase-4-Meta-Core P-II (#1295) refinement-audit consolidations + mega6 batch (#1277) substantially changed this crate post-tag. The L7 framing is correct for the cited window (PHASE-4-FOUNDATION) but the surrounding 'Status at HEAD 8141b94' framing makes it read as a current-state claim. Cosmetic, but pairs with L16-MAJOR-4 — sub-element of the same cluster.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "benten-eval INTERNALS.md L7 fix-pass — extend the framing to acknowledge phase-4-meta-core work (refinement-audit consolidations + mega6 evaluator touches) under a separate 'Phase-4-Meta-Core delta' subsection or extended status line. Pair with the SHA pointer bump from L16-MAJOR-4 in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-OBS-2",
+      "severity": "OBS",
+      "claim": "benten-graph INTERNALS.md L7 '00f2784 docs(phase-rename) retense' is the wrong characterization of 'last source change'",
+      "evidence": "crates/benten-graph/INTERNALS.md L6-8: 'the last source change was the docs(phase-rename) retense at 00f2784 2026-05-11, and the last code change was dcd1275 (class-e bug fixes, 2026-05-10) + 92bd65e (W9-T6 verify-on-read, 2026-05-08).' Per `git log --oneline phase-4-foundation-close..4bbc4cac -- crates/benten-graph/src/`: G-CORE-1 (#1304 ec9f0e8e), G-CORE-3d (#1323 5ccdd0da), G-CORE-6a (#1325 132dde91), G-CORE-6b (#1331 ecc5111e), mega6 (#1277 9b0f327f), P-II (#1295 a15d6af4), batch-D2-D10 (#1290 20fb5c78) all touched benten-graph/src/*.rs. The L6-8 line is materially false at HEAD 4bbc4cac. Tied to L16-MAJOR-3 (the body modules drift).",
+      "disposition": "FIX-NOW",
+      "fix_destination": "benten-graph INTERNALS.md L6-8 fix-pass — rewrite the 'last source change' provenance line to cite the actual last code-change SHA + a small inventory of phase-4-meta-core changes. Pair with the L16-MAJOR-3 aead_wrap/two_cid_map module additions in R6 R1 cleanup."
+    },
+    {
+      "id": "L16-OBS-3",
+      "severity": "OBS",
+      "claim": "benten-errors INTERNALS.md L17 narrative says 'workspace is now 12 crates' — stale (14 at HEAD)",
+      "evidence": "crates/benten-errors/INTERNALS.md L17: '**Workspace consumers (out):** every other workspace crate. Confirmed at HEAD (workspace is now 12 crates — benten-platform-foundation 11th + benten-renderer-tauri 12th, both landed during Phase 4-Foundation):'. Stale crate count post G-CORE-2 + G-CORE-3f. Same pattern as L16-MAJOR-2 + L16-MINOR-4 (cross-doc workspace-count drift) but localized to benten-errors INTERNALS.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "benten-errors INTERNALS.md L17 fix-pass — change 'workspace is now 12 crates' to '14 crates' and extend the parenthetical to name benten-crypto-suite (13th) + benten-drop (14th). Inline in R6 R1 cleanup."
+    }
+  ],
+  "approve_conditions": "All 4 MAJORs + all 7 MINORs + all 3 OBS dispositioned (FIX-NOW per HARD RULE 12); R6 R2 re-review of fix-pass edits (full lens; pim-2 §3.6b sub-rule 4 per-finding granularity) returns 0 substantive (BLOCKER/MAJOR/MINOR) findings on the same surface. Per feedback_iterate_critical_reviews_to_convergence: R6 + post-fix-pass re-review iterates until full council returns 0 substantive.",
+  "non_findings_observed_for_completeness": [
+    "ARCHITECTURE.md ‘Fourteen crates’ section + workspace pin test (line 225) correctly names all 14 crates including benten-crypto-suite + benten-drop with full provenance + dep-edges + safety invariants — exemplary cross-doc mirror.",
+    "GLOSSARY.md has live entries for benten-drop + Drop bundle (L49) + benten-crypto-suite (L35) + Codepoint dispatch (L33). Both new crates have GLOSSARY presence per L16 question 2 sub-clause.",
+    "SECURITY-POSTURE.md has Compromise #31 (Revocation reach, L47) + 'Revocation reach (§R6)' section (L2531) + 'Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)' section (L2575) + benten-drop code-cites (L2592, L2628, L2634) + benten-crypto-suite code-cite (L2284). Doc-coupling on the encryption + Drop side is honest.",
+    "ERROR-CATALOG.md has all G-CORE-3a (RecipientLacksKeysForSuite L1601) + G-CORE-3c (AuditNotLandedPurePqRejected L1773) + G-CORE-3f (DropBundleEnvelopeSigInvalid L1687 / DropBundleVersionUnsupported L1697 / DropBundleMode3InlineRejected L1707) mints with full Thrown-at site cites + 192-throwable preamble retense at L5-15. Cross-doc mirror with benten-errors is sound.",
+    "V1-FROZEN-INTERFACE.md exists + tracks all 11 sub-clauses of §1.A.FROZEN item 15 + ties G-COMP-1 deferrals to the FREEZE wave. Frozen-interface doc-coupling fits L17 territory (deferred per intent), and L16 confirms it does not interfere with the doc-coupling lens here.",
+    "docs/public-api/ has benten-crypto-suite.txt + benten-drop.txt + benten-dsl-compiler.txt — cargo-public-api pins are in place for both new crates (L17 + §3.5g territory, but noted here because L16 sweeps adjacent ‘every doc that should reflect new crate addition’).",
+    "ADMIN-UI.md + SECURITY-POSTURE.md + PLUGIN-MANIFEST.md all received G-CORE-7 install-lifecycle + G-CORE-9 R1/R2/R3/R4-FP retense traffic (per git log) and are aligned with current code state; no new drift found on those surfaces beyond what other lenses cover.",
+    "CLAUDE.md baked-in items #5/#15/#18 + ARCHITECTURE Fourteen-crates section + V1-FROZEN-INTERFACE.md form a coherent triad — the doc-coupling on the upper-level architectural narrative is honest."
+  ],
+  "process_pim_n_candidate": {
+    "name": "pim-N-new-crate-internals-mint-checklist",
+    "category": "wave-completion gap recurrence",
+    "evidence_count": 2,
+    "instances": ["benten-crypto-suite (G-CORE-2 #1303) no INTERNALS.md", "benten-drop (G-CORE-3f #1340) no INTERNALS.md"],
+    "proposed_codification": "Add a mandatory pre-merge checklist item to dispatch-conventions §3.5b: every wave that mints a new workspace crate MUST land `crates/<new-crate>/INTERNALS.md` in the same wave (or as a paired follow-up PR landing before the next phase-close R6). Drift-detector to scan `crates/*/Cargo.toml` for crates missing INTERNALS.md and fail wave merge if any new-crate INTERNALS is missing. This phase had 2 instances (G-CORE-2 + G-CORE-3f); below 3-recurrence threshold for promotion, but worth tracking. Sub-threshold per feedback_pattern_induction_meta_sweep — codify only if a third instance fires.",
+    "disposition": "TRACKING_SUB_THRESHOLD",
+    "tracking_destination": "docs/future/phase-4-backlog.md or .addl/dispatch-conventions.md §3.5b watch-list"
+  }
+}
