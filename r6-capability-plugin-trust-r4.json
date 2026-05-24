@@ -1,0 +1,108 @@
+{
+  "lens": "L6 capability-system implementation + plugin-trust 3-layer",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "round": "R4",
+  "branch": "g-core-9/r4-l6-capability-plugin-trust",
+  "head_sha": "25576cb15566aa096499f6951d350182f4451ac4",
+  "main_baseline_sha": "25576cb1",
+  "scope_inputs": [
+    "docs/V1-FROZEN-INTERFACE.md items 8 + 12 post-R3-FP (commit 25576cb1 Bundle R3.1 + R3.2)",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md Rows D-1, D-2, D-3, D-17, D-20",
+    "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 6 (CapabilityPolicy hard-seal substeps + verification clause + Row D-20 cross-ref)",
+    "crates/benten-caps/src/policy.rs (sealed module + CapabilityPolicy trait + 3 §8-E hooks + actor_hint + check_read default + CapWriteContext/ReadContext/PendingOp)",
+    "crates/benten-engine/src/manifest_envelope_recheck.rs (post-R3-FP)",
+    "crates/benten-engine/src/engine.rs (NoopManifestEnvelopeRechecker installation site)",
+    "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs (NextChunkPoll + SuspensionOutcome arm-coverage tests verify-stays)",
+    "R3 lens output (commit fcf98df0; r6-capability-plugin-trust-r3.json)",
+    "R3-FP commit 25576cb1 'feat(g-core-9-r3-fp): FREEZE wave R3 fix-pass — close 3 MAJORs + 9 MINORs (strict Q5 convergence prep)'"
+  ],
+  "disposition": "APPROVE",
+  "summary_one_line": "R3 substantive 1 MAJOR + 1 MINOR closed cleanly at R3-FP Bundle R3.1 (L6-r3-1 path::symbol conversion across §1 + §2 + §8 + §12 — verified by zero `path:line` form cites remaining in §8 + §11 + §12 ranges per `grep -E 'policy\\.rs:[0-9]+|manifest_envelope_recheck\\.rs:[0-9]+|engine\\.rs:[0-9]+'`) + Bundle R3.2 (L6-r3-2 BUILD-BACKLOG row 6 substep 3 + verification clause both now carry explicit DEFERRED-to-G-COMP-1 per Row D-20 cross-reference). Substrate verify-stays: `cargo check -p benten-caps` green at HEAD (47.87s wall-clock); object-safety pin compiles; all 5 in-scope DEFERRED rows (D-1 + D-2 + D-3 + D-17 + D-20) present + 4-field-shape honest; audit-test arm-coverage (NextChunkPoll + SuspensionOutcome D-17 deferral discipline pin) intact at g_core_9_non_exhaustive_audit.rs:170 + :194; ground-truth `grep -n` confirms every cited symbol exists at the cited path (sealed mod policy.rs:50-64, CapabilityPolicy trait :354, check_read default :401, CapWriteContext :163 + actor_hint :179, ReadContext :260, PendingOp :100, ManifestEnvelopeRecheckOutcome enum manifest_envelope_recheck.rs:85 + #[non_exhaustive] attr :83, outcome_to_row_reject :234, ManifestEnvelopeRechecker trait :152, NoopManifestEnvelopeRechecker :201, recheck_row :203, engine.rs:1923 Some(Arc::new(NoopManifestEnvelopeRechecker)) initializer). Trend: R1 6 MAJ + 3 MIN + 5 OBS → R2 2 MAJ + 2 MIN + 6 OBS → R3 1 MAJ + 1 MIN + 6 OBS → R4 0 MAJ + 0 MIN + 7 OBS. CONVERGED per Q5 cadence (0 substantive findings on a full lens pass).",
+  "findings": [
+    {
+      "id": "L6-r4-1",
+      "severity": "OBS",
+      "title": "L6-r3-1 (V1-FROZEN §1 + §8 + §12 cite-drift cluster) CLOSED via path::symbol conversion per §3.5b HARDENED point 3 — convergence-shaped Option (b) path landed; zero `path:line` form cites remain in §8 + §11 + §12 ranges",
+      "where": "docs/V1-FROZEN-INTERFACE.md:698 (actor_hint cite via `crates/benten-caps/src/policy.rs::CapWriteContext::actor_hint`), :700 (check_read via `crates/benten-caps/src/policy.rs::CapabilityPolicy::check_read`), :704-708 (CapabilityPolicy + CapWriteContext + ReadContext + PendingOp via `path::symbol`), :739 (sealed module via `crates/benten-caps/src/policy.rs::sealed`), :1012 + :1017 (ManifestEnvelopeRecheckOutcome via `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRecheckOutcome`), :1022 (outcome_to_row_reject via `path::symbol`), :1025 (ManifestEnvelopeRechecker via `path::symbol`), :1028 (Engine::new_with_engine_caps_handle via `path::symbol`), :1032 (NoopManifestEnvelopeRechecker::recheck_row via `path::symbol`)",
+      "evidence": "Verification: `awk 'NR>=681 && NR<=1100' docs/V1-FROZEN-INTERFACE.md | grep -E 'policy\\.rs:[0-9]+|manifest_envelope_recheck\\.rs:[0-9]+|engine\\.rs:[0-9]+'` returns ZERO matches — all in-scope (item 8 + item 11 + item 12) cites converted to `path::symbol` form. Symbol-form is line-drift-immune: future Bundle-N retenses moving symbols across line numbers do NOT invalidate the cite. Ground-truth: every cited symbol exists at HEAD per `grep -n` (sealed mod at policy.rs:50-64, CapabilityPolicy at :354, check_read at :401, CapWriteContext at :163, actor_hint at :179, ReadContext at :260, PendingOp at :100, ManifestEnvelopeRecheckOutcome at manifest_envelope_recheck.rs:85, #[non_exhaustive] at :83, outcome_to_row_reject at :234, ManifestEnvelopeRechecker at :152, NoopManifestEnvelopeRechecker at :201, recheck_row at :203, engine.rs:1923 Some(Arc::new(NoopManifestEnvelopeRechecker)) initializer). The R3-FP commit 25576cb1 Bundle R3.1 narrative names this exact convergence-shaped Option (b) path per §3.5b HARDENED point 3 — pim-N-cite-drift-fp1-recurrence + pim-N-sweep-completeness-self-verify (§3.6j) both satisfied.",
+      "claude_md_anchor": "§3.5b HARDENED point 3 (path::symbol on high-churn surfaces); pim-N-cite-drift-fp1-recurrence (§3.5h MANDATORY-PRE-MERGE-AFTER-MINI-REVIEW-APPROVE); §3.6j sweep-completeness self-verify; HARD RULE 12 clause-(b) freeze-doc integrity.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L6-r3-1 closed per convergence-shaped Option (b) per R3 fix-suggestion."
+    },
+    {
+      "id": "L6-r4-2",
+      "severity": "OBS",
+      "title": "L6-r3-2 (BUILD-BACKLOG row 6 substep 3 + Verification clause ↔ DEFERRED.md Row D-20 cross-ref gap) CLOSED — both bullet sites now carry explicit DEFERRED-to-G-COMP-1 + Row D-20 cross-reference; Fork 2 DOC-TIGHTEN reading-direction integrity wired symmetrically with V1-FROZEN-INTERFACE.md §8",
+      "where": "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:424-433 (substep 3 'Compile-fail trybuild test:' bullet with explicit DEFERRED-to-G-COMP-1 per Row D-20) + :451-455 (Verification clause bullet 'The compile-fail trybuild test fails-to-compile as expected (smoke-tests the seal). DEFERRED to G-COMP-1 per Row D-20; at v1-beta the hard-seal mechanism is verified by `cargo check -p benten-caps` (rustc refuses external impls because `Sealed` is `pub(crate)`)')",
+      "evidence": "Both edit sites now read DEFERRED-to-G-COMP-1 explicitly with Row D-20 cross-reference. A downstream reader walking BUILD-BACKLOG row 6 alone sees the deferral without traversing to DEFERRED.md (the reading-direction integrity property L6-r2-2 closed for V1-FROZEN-INTERFACE.md §8 + the L6-r3-2 fix-suggestion called for here). Substrate verification (cargo check) replaces the deferred trybuild fixture as the v1-beta verification mechanism — honest about what ships vs what is deferred. Per Fork 2 DOC-TIGHTEN symmetric application across freeze-related docs.",
+      "claude_md_anchor": "HARD RULE 12 clause-(b) reading-direction integrity; Fork 2 DOC-TIGHTEN symmetric application.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L6-r3-2 closed per fix-suggestion (a)+(b) both landed."
+    },
+    {
+      "id": "L6-r4-3",
+      "severity": "OBS",
+      "title": "Substrate ground-truth verify-stays — hard-seal MECHANISM structurally enforced by rustc; sealed::Sealed pub(crate) supertrait at policy.rs:50-64; __sealed_for_workspace_tests workspace-test opt-in re-export under testing feature; CapabilityPolicy: sealed::Sealed bound at policy.rs:354; object-safety pin compiles + runs at HEAD",
+      "where": "crates/benten-caps/src/policy.rs:50-64 (sealed module) + :354 (CapabilityPolicy bound) + crates/benten-caps/src/lib.rs (__sealed_for_workspace_tests re-export) + crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs (object-safety pin)",
+      "evidence": "`grep -n 'pub trait CapabilityPolicy\\|mod sealed\\|pub trait Sealed' crates/benten-caps/src/policy.rs` returns L50 `pub(crate) mod sealed`, L63 `pub trait Sealed {}`, L354 `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. The hard-seal mechanism is intact: pub(crate) visibility on sealed mod means external crates cannot reach `Sealed` and therefore cannot impl `CapabilityPolicy`. `cargo check -p benten-caps` at HEAD completes successfully (47.87s wall-clock) — no regression. Object-safety pin still in place (`Arc<dyn CapabilityPolicy>` boxing).",
+      "claude_md_anchor": "CLAUDE.md baked-in #7 sealed-discipline + #19 engine-extensions-compile-time-linked.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; substrate object-safety + hard-seal mechanism + workspace-test opt-in all sound; unchanged across R3→R4."
+    },
+    {
+      "id": "L6-r4-4",
+      "severity": "OBS",
+      "title": "DEFERRED.md Rows D-1 + D-2 + D-3 + D-17 + D-20 all verify-stays HONEST — each carries the 4-field shape (frozen surface + deferred consumption + v1-beta posture + anchor); cross-references from V1-FROZEN-INTERFACE.md §8 + §12 + BUILD-BACKLOG row 6 all wired",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Rows D-1 (:62), D-2 (:86), D-3 (:111), D-17 (:398), D-20 (:490)",
+      "evidence": "All 5 in-scope rows present at the cited line offsets per `grep -n '^### Row D-1\\b\\|^### Row D-2\\b\\|^### Row D-3\\b\\|^### Row D-17\\b\\|^### Row D-20\\b' docs/V1-FROZEN-INTERFACE-DEFERRED.md`. R3-FP commit 25576cb1 did not regress any row content (the diff was scoped to V1-FROZEN-INTERFACE.md path::symbol conversion + BUILD-BACKLOG row 6 cross-ref edits per Bundle R3.1+R3.2 commit narrative). Cross-references from V1-FROZEN-INTERFACE.md §8 (L745-750 'See DEFERRED.md' enumerating D-3 + D-17 + D-20), §12 (deferral narrative naming G-COMP-1 destinations), and BUILD-BACKLOG row 6 (substep 3 + Verification clause both citing Row D-20) all wired post-R3-FP.",
+      "claude_md_anchor": "CLAUDE.md #18 Layer-1/2/3 trust model + HARD RULE 12 clause-(b) named-NOW destination.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; DEFERRED rows D-1/D-2/D-3/D-17/D-20 all 4-field-shape honest; cross-references wired."
+    },
+    {
+      "id": "L6-r4-5",
+      "severity": "OBS",
+      "title": "Audit-test arm-coverage tests (next_chunk_poll_audit_arm_coverage + suspension_outcome_d17_deferred_arm_coverage) verify-stays present at g_core_9_non_exhaustive_audit.rs:170 + :194; SuspensionOutcome test continues to serve as D-17 deferral discipline pin",
+      "where": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs:170 (next_chunk_poll_audit_arm_coverage) + :194 (suspension_outcome_d17_deferred_arm_coverage)",
+      "evidence": "`grep -n 'next_chunk_poll_audit_arm_coverage\\|suspension_outcome_d17\\|fn test' crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` returns both fns at the documented lines. The L6-r2-3 fix lands unchanged at R3 + R4; SuspensionOutcome test continues to serve as the D-17 deferral discipline pin (when D-17 closes and #[non_exhaustive] lands, this exhaustive-match-without-wildcard test will start failing-to-compile and force the wildcard arm addition — the cascade Row D-17 enumerates).",
+      "claude_md_anchor": "pim-N-sweep-completeness-self-verify (§3.6j); pim-13 (§3.12) R7-equivalent spec-to-code compliance.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L6-r2-3 closure preserved across R3→R4."
+    },
+    {
+      "id": "L6-r4-6",
+      "severity": "OBS",
+      "title": "§4.36 structural fail-CLOSED on empty/sentinel peer-DID continues to verify-stays at engine.rs apply_atrium_merge body via resolve_peer_dids empty-arm short-circuit (returns ManifestEnvelopeRecheckUnresolvedDeny BEFORE rechecker dispatch); independent of installed rechecker per Layer-1 user-root + per-row cap-recheck baseline",
+      "where": "crates/benten-engine/src/engine.rs apply_atrium_merge body + crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs (would-FAIL pin)",
+      "evidence": "V1-FROZEN-INTERFACE.md §12 (L1041-1049) names the structural enforcement: 'Empty/sentinel <unresolved-peer> peer-DID MUST deny (never admit) at recheck — structurally enforced at v1-beta in the apply_atrium_merge body at crates/benten-engine/src/engine.rs (the resolve_peer_dids empty-arm short-circuit returns typed ManifestEnvelopeRecheckUnresolvedDeny BEFORE rechecker dispatch). The §4.25 sync-hydrate path shares the SAME primitive (UnresolvedDeny + outcome_to_row_reject); the handshake.rs wire-up is named to G-COMP-1 per crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs.' R3-FP did not touch this surface; structural defense intact at HEAD.",
+      "claude_md_anchor": "CLAUDE.md #18 Layer-1 user-root + Layer-3 envelope-recheck; HARD RULE 12 clause-(b) named-NOW destination (handshake.rs wire-up → G-COMP-1).",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; §4.36 structural fail-CLOSED intact + handshake.rs wire-up named to G-COMP-1."
+    },
+    {
+      "id": "L6-r4-7",
+      "severity": "OBS",
+      "title": "3-layer trust model (CLAUDE.md #18) wired structurally — Layer-1 user-as-root via UCAN chain (UcanGroundedPolicy) + Layer-2 install-manifest envelope (Apply #[non_exhaustive] D-17-deferred + WriteBoundaryChainValidator substrate D-1-deferred) + Layer-3 runtime-delegation-within-envelope (ManifestEnvelopeRechecker port-interface + structural fail-CLOSED at §4.36); the 3 §8-E hooks (check_install_consent / check_per_delegation / check_write_with_audience) are signature-frozen at v1-beta with consumption deferred to G-COMP-1 per Row D-3",
+      "where": "crates/benten-caps/src/policy.rs::CapabilityPolicy (Layer-1 trait) + crates/benten-engine/src/manifest_envelope_recheck.rs (Layer-3 port) + V1-FROZEN-INTERFACE.md §8 §8-E hooks table cell + Row D-3 + D-17 cross-references",
+      "evidence": "Layer-1: `UcanGroundedPolicy` (production cap-chain UCAN walker) per V1-FROZEN-INTERFACE.md §8 'What's NOT frozen: UcanGroundedPolicy impl bodies may evolve'. Layer-2: WriteBoundaryChainValidator substrate landed at G-CORE-9 row 6 + consumption deferred to G-COMP-1 per Row D-1; PluginInstallRecord idempotency pattern named for G-CORE-7 install-lifecycle hardening (L7 surface). Layer-3: ManifestEnvelopeRechecker port-interface signature-frozen with NoopManifestEnvelopeRechecker as v1-beta default returning NotApplicable + structural empty-peer-DID fail-CLOSED at §4.36 IS live; ProductionManifestEnvelopeRechecker per-DID-substantive-recheck deferred to G-COMP-1 (Compromise #26 documents this v1-beta posture end-to-end). The 3 §8-E hooks (check_install_consent / check_per_delegation / check_write_with_audience) signature-frozen at v1-beta + Object-safety preserved per the Arc<dyn CapabilityPolicy> compile-test pin. R3-FP did not touch this surface.",
+      "claude_md_anchor": "CLAUDE.md #18 3-layer trust model (Layer-1 user-as-root + Layer-2 install-manifest + Layer-3 runtime-delegation-within-envelope); CLAUDE.md baked-in #7 sealed-discipline.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; 3-layer trust model structurally wired at v1-beta; consumption-deferred halves named to G-COMP-1 per Rows D-1 + D-3 + Compromise #26."
+    }
+  ],
+  "metrics": {
+    "BLOCKER_count": 0,
+    "MAJOR_count": 0,
+    "MINOR_count": 0,
+    "OBS_count": 7,
+    "total_findings": 7,
+    "files_reviewed": 8,
+    "v1_frozen_items_in_scope": ["item 8", "item 12", "DEFERRED Rows D-1, D-2, D-3, D-17, D-20", "BUILD-BACKLOG row 6"]
+  },
+  "r3_findings_closed_at_r4": [
+    "L6-r3-1 (MAJOR §1 + §8 + §12 cite-drift cluster) — CLOSED via R3-FP Bundle R3.1 path::symbol conversion per §3.5b HARDENED point 3; convergence-shaped Option (b) path landed; zero `path:line` form cites remain in §8 + §11 + §12 ranges; ground-truth verified by `awk 'NR>=681 && NR<=1100' docs/V1-FROZEN-INTERFACE.md | grep -E 'policy\\.rs:[0-9]+|manifest_envelope_recheck\\.rs:[0-9]+|engine\\.rs:[0-9]+'` returning ZERO matches; every cited symbol exists at HEAD per per-symbol grep",
+    "L6-r3-2 (MINOR BUILD-BACKLOG row 6 ↔ DEFERRED.md Row D-20 cross-ref gap) — CLOSED via R3-FP Bundle R3.2 explicit DEFERRED-to-G-COMP-1 + Row D-20 cross-reference at both BUILD-BACKLOG:424-433 (substep 3) + :451-455 (Verification clause); Fork 2 DOC-TIGHTEN reading-direction integrity wired symmetrically with V1-FROZEN-INTERFACE.md §8 verification-mechanism bullet",
+    "L6-r3-3..L6-r3-8 (6 OBS verify-stays) — unchanged; substrate ground-truth still sound + DEFERRED rows still honest + audit-test arm-coverage still in place + §4.36 fail-CLOSED still structural"
+  ],
+  "convergence_status": "APPROVE — CONVERGED per Q5 cadence. R3 substantive 1 MAJOR + 1 MINOR both closed cleanly at R3-FP Bundle R3.1 + R3.2. 7 verify-stays + 0 substantive findings at R4. Trend: R1 6 MAJ + 3 MIN + 5 OBS → R2 2 MAJ + 2 MIN + 6 OBS → R3 1 MAJ + 1 MIN + 6 OBS → R4 0 MAJ + 0 MIN + 7 OBS — strict monotonic convergence per Q5 cadence requirement (every post-R1 round full council; iterate until 0 substantive findings). Substrate ground-truth (object-safety, hard-seal MECHANISM verified by `cargo check -p benten-caps` green at HEAD, #[non_exhaustive] applied + D-17 deferral discipline pin via SuspensionOutcome arm-coverage test, §4.36 structural fail-CLOSED at apply_atrium_merge body, 3-layer trust model wired per CLAUDE.md #18 with signature-frozen + consumption-deferred halves cleanly separated) all verify-stays. Lens-side R4 disposition: APPROVE for FREEZE-wave convergence; no further R5+ needed from L6 surface."
+}
