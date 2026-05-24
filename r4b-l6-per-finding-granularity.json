@@ -1,0 +1,145 @@
+{
+  "lens": "L6 — pim-2 §3.6b sub-rule 4 per-finding granularity discipline",
+  "tier": "R4b (post-impl test review; Pattern-6 mirror of R4)",
+  "phase": "phase-4-meta-core",
+  "base_sha": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+  "branch": "phase-4-meta-core/r4b-l6-per-finding-granularity",
+  "review_date": "2026-05-24",
+  "scope_questions": {
+    "Q1_closure_pins_target_specific_arms": "PASS-WITH-FINDING",
+    "Q2_deferral_destinations_cite_specific_row": "PASS",
+    "Q3_per_sub_wave_test_cluster_decomposition": "PASS",
+    "Q4_wave_completion_checklist_coverage": "PASS-WITH-FINDING"
+  },
+  "disposition": "APPROVE-WITH-FIXES",
+  "r4b_convergence_disposition": "ITERATE_NEEDED_IF_MAJOR_LANDS — 1 MAJOR + 2 MINOR + 1 OBS surfaced. If MAJOR-1 is fix-now-ratified for R4b-FP, iterate to R4b.2; if MAJOR-1 is DEFER-NAMED-NOW (named to a NEW V1-FROZEN-INTERFACE-DEFERRED.md Row D-22), R4b converges at this round and feeds R6. The 2 MINORs + 1 OBS are R4b-FP / orchestrator-direct shape.",
+  "summary": {
+    "headline": "Per-finding granularity discipline is STRONG across the G-CORE-3 sub-wave decomposition + the per-row deferral artifact V1-FROZEN-INTERFACE-DEFERRED.md. Test cluster decomposition is exemplary (4 dedicated test files per sub-wave a/b/w/d/e/f/c; zero shared tf3_*.rs umbrella). Inline #[ignore] citations carry specific row destinations (§4.19, §3.1, Row D-N) without umbrella violations. Per-arm test pin granularity inside test files is excellent (P-3.1 / A-1 / A-2 / A-3 named arms vs umbrella feature-as-a-whole). However, ONE substantive gap surfaced: the 115 pub fn _for_test surfaces across benten-caps (37) + benten-crypto-suite (52) + benten-drop (14) + benten-core (8) + benten-sync (3) + benten-graph (1) are LOCKED into the v1-beta frozen baselines, but V1-FROZEN-INTERFACE.md:154 explicitly states 'Public surface MUST NOT carry _for_test suffixes (a _for_test pub fn is a red-flag — either real public API or belongs in `testing` module).' Only the 1 Engine::resolve_subgraph_cid_for_test surface is named to a specific deferral row (Row D-7). The remaining 114 are unnamed — a per-finding granularity gap against the explicit V1-FROZEN.md:154 rule.",
+    "monotonic_convergence_signal": "Test-cluster decomposition + deferral-row granularity show the discipline INTERNALIZED. The MAJOR-1 finding is a SCOPE gap (only Engine _for_test was triaged at the FREEZE; the broader workspace cluster was missed) — a per-finding granularity miss at the FREEZE-time triage, NOT a per-pin granularity miss in shipped test code.",
+    "files_reviewed": [
+      "/Users/benwork/Documents/benten-engine/.addl/dispatch-conventions.md §3.6b sub-rule 4 + §3.6e",
+      "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/00-implementation-plan.md §3 G-CORE-3 sub-wave decomposition (a/b/w/d/e/f/c)",
+      "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/R5-BRIEF-common.md wave-completion checklist coverage",
+      "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/R5-WAVE-STATE.md per-wave state tracker",
+      "/Users/benwork/Documents/benten-engine/docs/V1-FROZEN-INTERFACE-DEFERRED.md per-row enumeration (21 rows D-1..D-21)",
+      "/Users/benwork/Documents/benten-engine/docs/V1-FROZEN-INTERFACE.md §8-A item 1 + line 154 _for_test prohibition",
+      "/Users/benwork/Documents/benten-engine/docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md Row 1 baseline regen + Sub-task 1.a-1.c",
+      "/Users/benwork/Documents/benten-engine/crates/benten-caps/tests/tf3b_*.rs (4 files) — per-arm pin discipline",
+      "/Users/benwork/Documents/benten-engine/crates/benten-crypto-suite/tests/tf3a_*.rs (4 files) + tf4_*.rs (4 files G-CORE-3c) — per-arm pin discipline",
+      "/Users/benwork/Documents/benten-engine/crates/benten-core/tests/tf3w_*.rs (4 files)",
+      "/Users/benwork/Documents/benten-engine/crates/benten-graph/tests/tf3d_*.rs (4 files)",
+      "/Users/benwork/Documents/benten-engine/crates/benten-sync/tests/tf3e_*.rs (4 files)",
+      "/Users/benwork/Documents/benten-engine/crates/benten-drop/tests/tf3f_*.rs (4 files)",
+      "/Users/benwork/Documents/benten-engine/crates/benten-dsl-compiler/tests/tf10_dsl_chunk1_closures.rs (per-issue-number granularity exemplar)",
+      "/Users/benwork/Documents/benten-engine/docs/g-core-9-r1-triage.md + r2-triage.md + r3-triage.md + r4-triage.md",
+      "/Users/benwork/Documents/benten-engine/docs/public-api/benten-{caps,crypto-suite,drop,core,sync,graph}.txt baseline _for_test counts"
+    ]
+  },
+  "findings": [
+    {
+      "id": "L6-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "115 pub fn _for_test surfaces locked into v1-beta frozen baselines without per-finding deferral citation — V1-FROZEN-INTERFACE.md:154 prohibition is workspace-violated at FREEZE",
+      "category": "per-finding-granularity-at-FREEZE-time-triage",
+      "evidence": {
+        "rule_violated": "V1-FROZEN-INTERFACE.md:154 — 'Public surface MUST NOT carry _for_test suffixes (a _for_test pub fn is a red-flag — either real public API or belongs in `testing` module).'",
+        "count_by_crate": {
+          "benten-crypto-suite": 52,
+          "benten-caps": 37,
+          "benten-drop": 14,
+          "benten-core": 8,
+          "benten-sync": 3,
+          "benten-graph": 1,
+          "total": 115
+        },
+        "sample_sites": [
+          "crates/benten-caps/src/authorization_grant.rs:138 pub fn synthetic_for_test(audience: Cid) -> Self",
+          "crates/benten-caps/src/authorization_grant.rs:431 pub fn issue_for_test(...)",
+          "crates/benten-caps/src/authorization_grant.rs:529 pub fn malformed_for_test(...)",
+          "crates/benten-crypto-suite/src/cipher_suite.rs:118 pub fn generate_recipient_keypair_for_test",
+          "crates/benten-crypto-suite/src/sig.rs:198 pub fn without_pq_half_for_test",
+          "crates/benten-crypto-suite/src/codepoint.rs:87 pub const fn from_raw_for_test",
+          "crates/benten-caps/src/policy.rs:232 pub fn synthetic_for_test (Scope::synthetic_for_test)"
+        ],
+        "precedent_pattern_followed": "crates/benten-core/src/lib.rs:520 Cid::sample_for_test IS #[cfg(any(test, feature = \"testing\"))] gated per its own docstring 'Gated on cfg(any(test, feature = \"testing\")) so production builds cannot accidentally mint synthetic CIDs.'",
+        "deferral_row_citation_present": "Only crates/benten-engine/src/engine_wait.rs::Engine::resolve_subgraph_cid_for_test (1 site) is named to V1-FROZEN-INTERFACE-DEFERRED.md Row D-7. The remaining 114 surfaces are UNNAMED at any deferred row.",
+        "FREEZE_triage_coverage": "Searched docs/g-core-9-r{1,2,3,4}-triage.md for 'for_test' — only 1 hit (R1 triage L2-BLK-1 referencing Engine::resolve_subgraph_cid_for_test cascade); the broader workspace cluster was not surfaced at any of the 4 FREEZE triage rounds.",
+        "baseline_lock_at_v1_beta": "docs/public-api/benten-caps.txt + benten-crypto-suite.txt + 4 sibling baselines record these surfaces; the cargo-public-api drift gate will FAIL any post-v1-beta cleanup that tightens them — locking the violation in."
+      },
+      "per_finding_granularity_violation_shape": "The single FREEZE-triage finding ('drop _for_test on Engine via Row D-7') covered 1 of 115 instances of a workspace-pattern bug. Per §3.6b sub-rule 4 sub-clause 2 (deferral-destination granularity), a workspace-pattern bug with 115 instances should either be (a) closed in a single sweep at FREEZE-time as an umbrella fix-now, or (b) named to a SPECIFIC deferral row (e.g. Row D-22 \"workspace _for_test → testing-module/feature-flag relocation sweep\") with the 115 sites enumerated or counted. The current shape (1 site named, 114 silently locked) is the pattern §3.6b sub-rule 4 forbids: umbrella-named exposure with finding-level closure.",
+      "disposition_options": {
+        "(a) FIX-NOW orchestrator-direct sweep (preferred per HARD RULE 12 default)": "Add #[cfg(any(test, feature = \"testing\"))] gating to all 115 surfaces + regenerate 6 baselines + run §3.5h workspace pre-push. LOC estimate: ~150-200 LOC (mostly cfg-attr lines + 6 baseline regen). The brief for each implementer said 'gated by #[cfg(test)] or a testing feature; this is the SAME pattern as Cid::sample_for_test' — this is closing the brief's stated discipline as orchestrator-direct cleanup, not new design.",
+        "(b) DEFER-NAMED-NOW to NEW V1-FROZEN-INTERFACE-DEFERRED.md Row D-22": "Author Row D-22 'workspace pub fn _for_test → testing-module-or-feature-flag relocation sweep' enumerating all 115 sites (or citing this finding's count + crate breakdown). Couple with a no-regression test pin that asserts new pub fn _for_test surfaces require either #[cfg] gating or a Row D-22 citation. Cost: ~50-80 LOC for Row D-22 + ~30-50 LOC for the pin. Defers the bytes-fix to G-COMP-1.",
+        "(c) DISAGREE-WITH-EXPLANATION": "Argue that V1-FROZEN-INTERFACE.md:154 was always intended to apply to the Engine §8-A cluster ONLY (not workspace-wide). If this disposition is chosen, retense V1-FROZEN-INTERFACE.md:154 to scope-restrict the prohibition, document the workspace-wide _for_test surface as ratified-by-baseline, and note the precedent (Cid::sample_for_test gates) is now non-uniform."
+      },
+      "recommended_disposition": "(a) FIX-NOW orchestrator-direct sweep — lowest risk (closes the brief's stated discipline as cleanup, not new design), zero v1-beta behaviour impact (visibility-only change to the test-helper surfaces), preserves the V1-FROZEN-INTERFACE.md:154 rule's load-bearing property (no silent _for_test on public surface), is the agent-economics-thorough-cleanup default per memory. Couples to the upcoming baseline regen at G-CORE-9 R5 next iteration so the fix lands atomically with the next baseline refresh.",
+      "ground_truth_verification_per_3_5n": "Workspace grep `grep -rn '^\\s*pub fn .*_for_test\\b' crates/benten-caps/src crates/benten-crypto-suite/src crates/benten-core/src crates/benten-sync/src crates/benten-drop/src crates/benten-graph/src` returns 115 hits; `grep -B1 ... | grep cfg(any` returns 0 hits for these 115. Cid::sample_for_test gating verified at crates/benten-core/src/lib.rs:519 `#[cfg(any(test, feature = \"testing\"))]`. Frozen baseline contents verified via `grep -c for_test docs/public-api/benten-{caps,crypto-suite,drop,core,sync,graph}.txt` = 37+52+14+8+3+1 = 115. V1-FROZEN-INTERFACE.md:154 verbatim text re-read."
+    },
+    {
+      "id": "L6-MINOR-1",
+      "severity": "MINOR",
+      "title": "G-CORE-3 sub-wave briefs absent from .addl/phase-4-meta/ folder — process-traceability gap (not a per-finding granularity violation in shipped code)",
+      "category": "process-artifact-traceability",
+      "evidence": {
+        "expected_paths": [
+          ".addl/phase-4-meta/R5-G-CORE-3a-BRIEF.md (CANARY)",
+          ".addl/phase-4-meta/R5-G-CORE-3b-BRIEF.md",
+          ".addl/phase-4-meta/R5-G-CORE-3w-BRIEF.md",
+          ".addl/phase-4-meta/R5-G-CORE-3d-BRIEF.md",
+          ".addl/phase-4-meta/R5-G-CORE-3e-BRIEF.md",
+          ".addl/phase-4-meta/R5-G-CORE-3f-BRIEF.md",
+          ".addl/phase-4-meta/R5-G-CORE-3c-BRIEF.md (swap-matrix)"
+        ],
+        "verification": "`ls .addl/phase-4-meta/R5-G-CORE-*BRIEF*.md` returns only R5-G-CORE-{0,1,2,4,5,7}-BRIEF.md — 0 G-CORE-3 sub-wave briefs are persisted at this path",
+        "git_history_check": "`git log --all --diff-filter=A -- '.addl/phase-4-meta/R5-G-CORE-3*'` returns 0 commits — the per-sub-wave briefs were never created at this path"
+      },
+      "impact": "Reconstructable from (a) plan-doc §3 G-CORE-3 sub-wave defs (line 332-337) + (b) PR descriptions (#1319 / #1323 / #1324 / #1325 / #1340) + (c) the per-sub-wave test cluster comments. Future-self / next-phase R0 reviewer cannot grep for the per-sub-wave dispatch contract in one place.",
+      "recommended_disposition": "(b) BELONGS-NAMED-NOW — add a one-line note to .addl/phase-4-meta/R5-WAVE-STATE.md acknowledging the briefs were dispatched orchestrator-inline (not via persisted .md briefs) + cite plan-doc §3 + the relevant PR descriptions as the recoverable contract source. ~10-15 LOC."
+    },
+    {
+      "id": "L6-MINOR-2",
+      "severity": "MINOR",
+      "title": "Brief intent vs shipped pattern asymmetry — R5-BRIEF-common.md doesn't enumerate the '_for_test must be cfg-gated' rule as a literal pre-flight line per §3.6g",
+      "category": "brief-template-completeness",
+      "evidence": {
+        "brief_text_at_R5_BRIEF_common_line_53": "'NEVER unimplemented!() / todo!() in shipped code. NEVER deprecated aliases or backward-compat shims (CLAUDE.md non-negotiable #5; fresh project — delete, don't comment).' — does NOT mention _for_test surface discipline.",
+        "test_brief_text_at_tf3b_authorization_grant_line_57": "'the implementer mints synthetic constructors gated by `#[cfg(test)]` or a `testing` feature; this is the SAME pattern as `Cid::sample_for_test`' — the discipline IS stated, but inline in a test-file head comment, not in the R5 common brief checklist.",
+        "consequence": "Each G-CORE-3 sub-wave implementer would have seen the cfg-gating discipline only by reading the per-arm test file head comments, not by §3.6g LITERAL pim-N enumerated checklist exposure. Result: 5 of 6 sub-wave implementers shipped pub fn _for_test ungated (L6-MAJOR-1 root cause)."
+      },
+      "recommended_disposition": "(b) BELONGS-NAMED-NOW — append a checklist line to R5-BRIEF-common.md §3.6g LITERAL pim-N enumerated checklist (line 39 area): '§8-A item 1 sub-clause _for_test discipline — any new pub fn ending in _for_test MUST carry #[cfg(any(test, feature = \"testing\"))] gating OR a V1-FROZEN-INTERFACE-DEFERRED.md Row D-N citation; precedent Cid::sample_for_test at crates/benten-core/src/lib.rs:519.' Couples to MAJOR-1 closure: as the brief-template lift to prevent recurrence in G-COMP-1+."
+    },
+    {
+      "id": "L6-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "Per-finding granularity discipline INTERNALIZED — exemplary signals worth recording",
+      "category": "positive-evidence",
+      "evidence": {
+        "test_cluster_decomposition": "Each G-CORE-3 sub-wave (a/b/w/d/e/f) shipped exactly 4 dedicated test files (28 files total + 4 for G-CORE-3c swap matrix); zero shared tf3_*.rs umbrella — exactly the §3.6b sub-rule 4 sub-clause 1 + Question 3 prescribes.",
+        "per_arm_pin_naming": "tf3b_authorization_grant exemplifies the per-arm pattern (P-3.1 round-trip + A-1 stolen-UCAN + A-2 stolen-keys + A-3 wrong-audience-swap + P-3.2 byte-equality — each as its own #[test] fn with assertion content tied to THAT arm's observable consequence).",
+        "deferral_row_count": "V1-FROZEN-INTERFACE-DEFERRED.md contains 21 specific rows (D-1..D-21), each carrying (i) frozen surface + (ii) deferred consumption + (iii) v1-beta posture + (iv) anchor — exactly the per-row granularity sub-rule 4 sub-clause 2 prescribes.",
+        "self_caught_phantom_alpha_at_R2": "docs/g-core-9-r2-triage.md Pattern α — Phantom Row D-15 cluster — caught + closed by adding Row D-19 mid-FREEZE-iteration; the discipline self-corrected when a previous deferral cited the wrong row. This is iterate-to-convergence at the per-row level.",
+        "DSL_chunk_per_issue_granularity": "tf10_dsl_chunk1_closures.rs head comment enumerates 5 of 13 specific issue numbers (#545 / #608 / #671 / #841 / #848) with the remaining 8 (#1000 / #934 / #931 / #929 / #839 / #790 / #760 / #663) explicitly retaining BELONGS-NAMED-NOW disposition to chunk-2/3. The chunk-2 (#86b82de2 commit) + chunk-3 (#f36ccacd commit) merged each of those specific issues per the disposition.",
+        "live_ignore_count_zero_against_G_CORE_3": "All 12 G-CORE-3 sub-wave test files (tf3a/3b/3w/3d/3e/3f) have ZERO live #[ignore] attributes at HEAD — every RED-PHASE pin was un-ignored at its named sub-wave per §3.6e (the discipline §3.6b sub-rule 4 composes with). Reviewer's grep against G-CORE-3-citing tests returns only narrative //! comments, not live attributes.",
+        "self_correction_rename_3c_to_3w_at_R0_8": "Plan-doc R0.7→R0.8 rename of subgraph_spec sub-wave from G-CORE-3c to G-CORE-3w (to avoid label-collision with the pre-existing swap-matrix wave) was caught at R1.4 → R1.5 → R0.8.1 single-substring fix-pass — per-finding granularity at the plan-doc level (1 missed rename site at L335 escalated as a NEW MAJOR rather than collapsed into the cluster)."
+      },
+      "implication": "The discipline IS internalized at the structural level (test decomposition + deferral artifact + inline citations). The MAJOR-1 finding is a SCOPE gap (FREEZE-time triage missed a workspace-pattern bug), not a discipline-failure. The 2 MINORs are process-artifact gaps that don't degrade the discipline's load-bearing property."
+    }
+  ],
+  "convergence_state_assessment": {
+    "if_MAJOR_1_fix_now_orchestrator_direct": "R4b-L6 converges next round with 0 findings (the cfg-gating sweep is mechanical + leaves the granularity discipline at SHAPE-passing).",
+    "if_MAJOR_1_defer_named_now_row_D22": "R4b-L6 converges THIS round (deferral row is the named destination — the per-finding granularity rule is satisfied by per-row citation per §3.6b sub-rule 4 sub-clause 2).",
+    "if_MAJOR_1_disagree_with_explanation": "R4b-L6 converges THIS round (DISAGREE is a valid HARD RULE 12 disposition).",
+    "MINOR_findings_disposition_independent_of_convergence": "L6-MINOR-1 + L6-MINOR-2 are orchestrator-direct documentation cleanups; they do NOT block R4b convergence regardless of MAJOR-1 disposition. R6 phase-close will re-verify."
+  },
+  "pim_n_pattern_induction_signal": {
+    "candidate": "pim-N — workspace-pattern bug discovery at FREEZE-time triage needs explicit grep-sweep step",
+    "evidence_threshold": "1 instance at HEAD (the _for_test cluster); below the 3+-recurrence threshold for codification. RECORD as watch-list pattern; if a 2nd instance surfaces at G-COMP-1 closure or beyond, escalate to pim-N codification.",
+    "shape_if_codified": "FREEZE-time triage briefs MUST include a 'workspace-pattern bug discovery' step: for each named surface gap (e.g. `Engine::resolve_subgraph_cid_for_test`), run a workspace grep for the pattern (e.g. `grep -rn 'pub fn .*_for_test' crates/`) and verify the gap is bounded to the named surface OR escalate the broader cluster as a single deferral row with the count.",
+    "couples_to": "§3.6b sub-rule 4 (per-finding granularity) + §3.5n (orchestrator ground-truth-verify) + memory feedback_3_plus_recurrence_deep_sweep"
+  },
+  "process_notes": {
+    "isolation_compliance": "Stayed inside ${WORKTREE_ROOT} for all writes. Used absolute paths only for read operations on the main repo (read-only; no commits to main).",
+    "commit_before_return_compliance_pending": "JSON authored; pending commit + push.",
+    "ground_truth_verify_per_3_5n_applied": "Independently re-verified each citation (grep counts, file existence, baseline contents, brief contents) before recording findings — did not trust agent/document claims without verification."
+  }
+}
