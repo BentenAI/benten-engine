@@ -99,6 +99,15 @@ path = "doc_drift_invariant_coverage.rs"
 name = "doc_drift_security_posture"
 path = "doc_drift_security_posture.rs"
 
+[[test]]
+# R6 R1 FP-A Bundle F1.d — no-regression pin asserting every
+# `pub fn .*_for_test*` carries a `#[cfg(any(test, feature = "testing"))]`
+# (or `feature = "test-helpers"` for benten-engine) attribute, OR is in
+# the EXEMPT_PUB_ITEMS production-shaped allow-list. See
+# V1-FROZEN-INTERFACE.md §1 + V1-FROZEN-INTERFACE-DEFERRED.md Row D-22.
+name = "for_test_symbols_are_feature_gated"
+path = "for_test_symbols_are_feature_gated.rs"
+
 #
 # Note: 4 atrium end-to-end tests (atrium_two_peer / atrium_three_peer /
 # atrium_two_process / atrium_two_device) were RELOCATED at R4-FP/R3-C
