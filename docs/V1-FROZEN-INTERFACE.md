@@ -971,12 +971,21 @@ verification at HEAD):
 - The struct FIELD SET (same — additive future fields).
 
 **Verification mechanism:**
-- A workspace-wide audit test pin (BUILD-AT-FREEZE-WAVE; new file
-  `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs`) walks
-  every `pub enum` + `pub struct` and asserts each carries
-  `#[non_exhaustive]` OR is in the carve-out registry. Fails CI on any
-  new public enum/struct lacking the attribute + the carve-out
-  justification.
+- An enumerated-per-type audit test pin
+  `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` exercises
+  arm-coverage matches + struct construction patterns for a curated set
+  of v1-beta-load-bearing types (~10 named types covering the highest-leverage
+  surfaces: WriteBoundaryChainOutcome / AtriumMode / DelegationResolution /
+  ManifestVerifyMode / NextChunkPoll / Strategy carve-out + AuthorizationGrant
+  constructor pattern + 2 CapWriteContext/ReadContext Default-construction
+  + SuspensionOutcome D-17 deferred-arm coverage). **The workspace-wide
+  walker** (consuming cargo-public-api JSON output OR a syn-based AST walker
+  OR rustdoc-json walk to assert every pub enum/struct carries
+  `#[non_exhaustive]` OR is in the carve-out registry) is **DEFERRED to
+  G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17** (extended
+  at G-CORE-9 R2 L8-R2-MINOR-CARRY-1 closure). At v1-beta the
+  enumerated-per-type audit catches drift against the named-set; the
+  workspace-walker is the regression-defense enhancement.
 - `cargo-public-api` baseline catches the attribute (it's part of the
   declaration shape).
 

@@ -390,7 +390,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** L2-MAJ-1 G-CORE-9 R1 finding + Compromise #26 NOT-live
   v1-beta posture.
 
-### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` `#[non_exhaustive]` application (with ~80+ test-site cascade)
+### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` + lens-scoped pub-type extension `#[non_exhaustive]` application (with cascade)
 
 - **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11
   table row enumerates `CapWriteContext` + `ReadContext` +
@@ -402,19 +402,53 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   direct-struct-literal sites; for `ReadContext` hits ~30+ similar
   sites. Total cascade ~80+ files in the benten-caps + benten-engine
   test families.
+
+  **G-CORE-9 R2 EXTENSION (L8-R2-MAJOR-CARRY-2 closure):** the R1-enumerated
+  remaining pub types not yet covered by any DEFERRED row are added here:
+  - `benten-engine`: `UserViewInputPattern` (outcome.rs:39), `TraceStep`
+    (outcome.rs:362), `StreamCursor` (engine_stream.rs:150),
+    `SubscribeCursor` (engine_subscribe.rs:72), `EngineViewsHandle`
+    (engine_views.rs:1129), `AtriumConfig` (atrium_api.rs:64), `SyncStatus`
+    (atrium_api.rs:128), plus the outcome.rs 13-pub-struct set
+    (`UserViewSpec`, `UserViewSpecBuilder`, `ReadViewOptions`, `Outcome`,
+    `Trace`, `TerminalError`, `BudgetExhaustedView`, `AnchorHandle`,
+    `RegisterReplaceOutcome`, `HandlerPredecessors`, `DiagnosticInfo`,
+    `NestedTx`)
+  - `benten-ivm`: `SubgraphSpec` (subgraph_spec.rs:107), `KernelInput`
+    (subgraph_spec.rs:262), `ViewState` (view.rs:157), `ViewBudget`
+    (view.rs:180), `ViewQuery` (view.rs:223), `ViewResult` (view.rs:242),
+    `ViewDefinition` (view.rs:387)
+  - `benten-platform-foundation`: `VocabLabel` (vocab.rs:14), `VocabEdge`
+    (vocab.rs:92), `Scalar` (vocab.rs:157), `RenderError` (materializer.rs:567)
+  - `benten-core`: `Mode` (version_dag.rs:75)
+
+  **Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred):**
+  `TypedOutputProjection` + `KernelOutput` in `benten-ivm/src/subgraph_spec.rs`
+  carry the attribute at v1-beta — the 1-byte arm-discriminator at
+  `algorithm_b.rs:1507-1523` makes them wire-format-bearing and they were
+  not deferrable; closure landed via Bundle R2.8 with 5-test-site cascade
+  fix (`view_2 / view_4 / view_5 round_trip + view_4 / view_5 shape_pin`).
+
+  Audit-test workspace-walker enhancement: V1-FROZEN-INTERFACE.md:951-957
+  describes the audit test as walking every pub enum/struct workspace-wide;
+  the shipped test enumerates ~10 named types only. Workspace-walker
+  implementation (consume cargo-public-api JSON output OR syn-based AST
+  walker OR rustdoc-json walk) deferred to G-COMP-1 as part of this row.
 - **Deferred consumption (G-COMP-1 destination):** apply
-  `#[non_exhaustive]` to both types + cascade through ~50+ benten-caps
-  test-site direct-struct-literal constructions, migrating each to
-  `Default::default()` + field-mutation pattern. Production code (in
-  `benten-engine`) ALREADY uses the field-mutation pattern per
-  Bundle 3 of this PR — so the migration is benten-caps tests only.
+  `#[non_exhaustive]` to each type + cascade through test-site
+  direct-struct-literal constructions + cross-crate match sites,
+  migrating each to `Default::default()` + field-mutation pattern OR
+  adding the wildcard arm. Production code (in `benten-engine`) ALREADY
+  uses the field-mutation pattern per Bundle 3 of the R1 PR. Also implement
+  the workspace-walker enhancement for the audit-test verification mechanism.
 - **v1-beta posture:** at v1-beta the type shape is locked per the
   freeze contract narrative; the attribute is the documentation gap.
   Field additions are TREATED AS breaking by v1-beta engineering
   discipline per spec item 11 narrative (the structural enforcement
   via `#[non_exhaustive]` is what G-COMP-1 lights).
 - **Anchor:** V1-FROZEN-INTERFACE.md item 11 table rows for
-  `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation.
+  `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation;
+  L8-R2-MAJOR-CARRY-2 + L8-R2-MINOR-CARRY-1 G-CORE-9 R2 extensions.
 
 ### Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)
 

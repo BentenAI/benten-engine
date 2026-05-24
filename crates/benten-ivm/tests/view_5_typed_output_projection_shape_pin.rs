@@ -130,6 +130,8 @@ fn view_5_typed_output_projection_emits_current_kernel_output() {
              Current KernelOutput — mat-r1-1 violation. A re-expression \
              that defaults all views to Rows fails this gate."
         ),
+        // G-CORE-9 R2: `#[non_exhaustive]` per L8-R2-MAJOR-CARRY-2 closure.
+        _ => panic!("unexpected KernelOutput variant (non_exhaustive guard)"),
     }
 }
 

@@ -82,7 +82,14 @@ pub const CANONICAL_VIEW_IDS: &[&str] = &[
 // `Copy` (refinement-audit #682): all variants are unit — `Copy` lets the
 // single-source-of-truth `CANONICAL_VIEW_META` table return the projection
 // by value without a clone, and is a non-breaking additive trait impl.
+//
+// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L8-R2-MAJOR-CARRY-2
+// (G-CORE-9 R2 fix-pass): the 1-byte arm-discriminator at
+// `algorithm_b.rs:1507-1523` materialize_inner_kernel_read uses this enum as
+// a wire-bytes-load-bearing discriminator; adding variants post-v1-GM would
+// be a wire-format break — the attribute MUST land at v1-beta.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TypedOutputProjection {
     /// View 4 emits rule sets (a map of governance-rules, not Cids).
     Rules,
@@ -292,7 +299,12 @@ impl KernelInput {
 /// - `Rules` — rule-set output (View 4, governance_inheritance).
 /// - `Current` — current-pointer output (View 5, version_current). `None`
 ///   when no CURRENT pointer exists.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L8-R2-MAJOR-CARRY-2
+/// (G-CORE-9 R2 fix-pass): wire-bytes-load-bearing per the same 1-byte
+/// arm-discriminator argument as `TypedOutputProjection` — must NOT defer.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KernelOutput {
     /// Row-set output. Canonical sorted bytes of the materialised CID set.
     Rows(Vec<u8>),
