@@ -19,6 +19,22 @@
 > consumption-deferred surfaces; updates land via PR + cite-drift
 > sweep.
 
+## Revision history (selected)
+
+- **2026-05-24** — R6 R1 FP-A: **Row D-7 + Row D-22 RETRACTED / CLOSED**
+  per Ben PM ratification of HARD RULE 12 over the prior path-(b)
+  defers ("do the full ~13-site cascade now"). F2 closes Row D-7
+  (§8-A Engine visibility cluster tighten + napi cascade) by
+  renaming + tightening the 4 methods and migrating napi to
+  `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)`. F1.a-e
+  closes Row D-22 (workspace `_for_test` cfg-gating sweep) with
+  70+ declarations gated + 14-item EXEMPT_PUB_ITEMS allow-list +
+  no-regression test pin at
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
+  + 8 cargo-public-api baseline regens. Both rows retained for
+  forensic context per pim-13 / §3.12; closure annotations
+  inline in each row body.
+
 ---
 
 ## Why this document exists
@@ -190,7 +206,18 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   primitive is available + the consumer wire-up is the deferred half).
 - **Anchor:** spec item 12 (retensed in Bundle 2).
 
-### Row D-7 — §8-A Engine visibility cluster tighten + napi cascade
+### ~~Row D-7~~ — §8-A Engine visibility cluster tighten + napi cascade — **CLOSED at R6 R1 FP-A Bundle F2** (2026-05-24)
+
+> **STATUS: RETRACTED / CLOSED.** Per Ben 2026-05-24 PM ratification of
+> HARD RULE 12 over the prior path-(b) defer ("if we're going to want
+> to do them all eventually, then I say do the full ~13-site cascade
+> now"), the §8-A visibility tighten + napi cascade LANDED at R6 R1
+> FP-A Bundle F2 — the four methods are now `pub(crate)` with their
+> v1-GM target names + napi migrated to
+> `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)` +
+> test-helper re-exports at `crate::testing` preserve sibling-crate
+> integration tests. Row retained for forensic context per
+> pim-13 / §3.12.
 
 - **Frozen surface (v1-beta):** NONE TIGHTENED at v1-beta — per the
   G-CORE-9 R1 triage L2-BLK-1 escalation, the §8-A tighten cascades
@@ -744,7 +771,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** R2-test-landscape.md §4-C + CLAUDE.md baked-in #18
   trust model + R4b L1 finding r4b-l1-2.
 
-### Row D-22 — workspace `pub fn .*_for_test` / `_for_testing` `#[cfg]` gating sweep
+### ~~Row D-22~~ — workspace `pub fn .*_for_test` / `_for_testing` `#[cfg]` gating sweep — **CLOSED at R6 R1 FP-A Bundle F1** (2026-05-24)
+
+> **STATUS: RETRACTED / CLOSED.** Per Ben 2026-05-24 PM ratification of
+> HARD RULE 12 over the R4b L6-MAJOR-1 path-(b) defer ("do the full
+> ~13-site cascade now"), the workspace cfg-gating sweep LANDED at
+> R6 R1 FP-A Bundle F1.a (cfg attributes) + F1.b (testing feature
+> additions) + F1.c (CI workflow updates) + F1.d (no-regression test
+> pin at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
+> with EXEMPT_PUB_ITEMS table) + F1.e (8 cargo-public-api baseline
+> regens). 70+ `pub fn .*_for_test*` declarations cfg-gated; 14
+> production-shaped items added to the EXEMPT_PUB_ITEMS allow-list.
+> Row retained for forensic context per pim-13 / §3.12. The original
+> deferred-consumption body below is preserved verbatim.
 
 - **Frozen surface (v1-beta):** 115 baseline entries across 6
   cargo-public-api baselines (`docs/public-api/benten-caps.txt` 37 +

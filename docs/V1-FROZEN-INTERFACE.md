@@ -109,31 +109,37 @@ fail CI on a frozen-surface mutation:
 
 ---
 
-## 1. §8-A visibility cluster — PARTIAL-LANDED at v1-beta; binary-side tighten + napi cascade DEFERRED to G-COMP-1 (per G-CORE-9 R1 triage L2-BLK-1 escalation)
+## 1. §8-A visibility cluster — FULLY LANDED at v1-beta (R6 R1 FP-A Bundle F2, 2026-05-24)
 
 **Orchestrator distinctive-angle decision (RATIFIED 2026-05-18): Planner-A
 wins — aggressive tighten.** Matches spec item 1 ratification "DECIDED
 `pub`→`pub(crate)` + rename + drop `_for_test`".
 
-**G-CORE-9 R1 triage retense (2026-05-24).** The binary-side tighten
-+ napi cascade is **partial-landed at v1-beta** and explicitly named
-to a follow-up G-COMP-1 sub-pass per HARD RULE 12 clause-(b). At
-v1-beta the four methods (`get_node` / `put_node` / `get_node_label_only`
-/ `resolve_subgraph_cid_for_test`) remain `pub fn` with their pre-tighten
-names. The R1 council surfaced that the original framing of this item
-read as as-if-frozen-as-tightened when the bytes were not (Bundle 1
-escalation criterion fired: cascade >50 call sites + breaks napi
-binding). Destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` row D-7
-"§8-A Engine visibility cluster tighten + napi cascade".
+**R6 R1 FP-A status (2026-05-24).** The binary-side tighten + napi cascade
+**LANDED in full** at R6 R1 FP-A Bundle F2 per Ben PM ratification of
+HARD RULE 12 ("if we're going to want to do them all eventually, then
+I say do the full ~13-site cascade now") over the prior G-CORE-9 R1
+triage L2-BLK-1 path-(b) defer. The four methods are now
+`pub(crate)` with their v1-GM target names; the napi binding migrates
+to `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)` per CLAUDE.md
+baked-in #18; ~80 sibling-crate integration tests are preserved via
+test-helper re-exports under `cfg(any(test, feature = "test-helpers"))`
+in `crates/benten-engine/src/testing.rs`. Row D-7 in
+`docs/V1-FROZEN-INTERFACE-DEFERRED.md` is RETRACTED / CLOSED.
 
-**Per discipline at v1-beta** (until G-COMP-1 closes Row D-7),
-external consumers needing principal-bearing read SHOULD route through
-`Engine::read_node_as(principal, cid)` rather than `Engine::get_node`;
-the un-attributed `get_node` remains reachable for backward-compat
-with consumers that don't yet have the principal context.
+**Per discipline at v1-beta**, external consumers needing principal-bearing
+read use `Engine::read_node_as(principal, cid)`. Benten-owned boundary
+callers (e.g. the napi binding) that lack a caller-supplied principal
+use `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)` — the
+always-on sentinel constant minted in
+`crates/benten-engine/src/internal_principal.rs` + re-exported at the
+crate root. External `benten-engine`-as-library consumers requiring
+direct un-attributed engine reads (NOT routable through `read_node_as`)
+must surface to Ben for sealed-trait extension per the Composing-phase
+escape valve below.
 
-**Frozen surfaces (post-tighten target, per RATIFIED-prework-forks-2026-05-18.md
-§8-A option (a); applies at G-COMP-1 closure of Row D-7):**
+**Frozen surfaces (LANDED at v1-beta via R6 R1 FP-A Bundle F2; per
+RATIFIED-prework-forks-2026-05-18.md §8-A option (a)):**
 
 - `crates/benten-engine/src/engine_crud.rs::Engine::get_node` →
   `pub(crate) fn read_node(&self, cid: &Cid) -> Result<Option<Node>,
@@ -142,46 +148,60 @@ with consumers that don't yet have the principal context.
   (at `crates/benten-engine/src/engine_wait.rs::Engine::read_node_as`)
   carries the principal-bearing semantic.
 - `crates/benten-engine/src/engine_wait.rs::Engine::put_node` →
-  `pub(crate) fn put_node`.
+  `pub(crate) fn put_node_inner` (disambiguating rename so the cfg-gated
+  test-helper re-export under `Engine::put_node` in `crate::testing`
+  preserves sibling-crate integration tests).
 - `crates/benten-engine/src/engine_wait.rs::Engine::get_node_label_only`
   → `pub(crate) fn read_node_label_only`
   (renamed; un-attributed label-only read; engine-internal only).
 - `crates/benten-engine/src/engine_wait.rs::Engine::resolve_subgraph_cid_for_test`
-  → **DELETED from the public
-  surface entirely**. Test-only use sites move into `pub(crate)` helpers
-  inside `crates/benten-engine/src/testing.rs` (Test-API module already
-  exists; that's the canonical location for test-only surfaces). Public
-  surface MUST NOT carry `_for_test` suffixes at v1-GM (a `_for_test`
-  `pub fn` is a red-flag — either real public API or belongs in
-  `testing` module). **v1-beta carve-out:** the cargo-public-api
-  baselines at HEAD carry 115 such surfaces across
-  `benten-caps` / `benten-crypto-suite` / `benten-drop` /
-  `benten-core` / `benten-sync` / `benten-graph` — these are
-  ENUMERATED + named-deferred at
-  [`docs/V1-FROZEN-INTERFACE-DEFERRED.md`](V1-FROZEN-INTERFACE-DEFERRED.md)
-  Row D-22 (visibility-only `#[cfg(any(test, feature = "testing"))]`
-  gating sweep + 6 baseline regens at G-COMP-1). New `_for_test` /
-  `_for_testing` declarations MUST carry `#[cfg]` gating per the
-  no-regression pin at Row D-22 sub-task 5.
+  → `pub(crate) fn resolve_subgraph_cid_inner` (DELETED from the public
+  surface entirely; test-helper re-export under the historical
+  `_for_test` spelling lives in `crates/benten-engine/src/testing.rs`).
+  Public surface MUST NOT carry `_for_test` suffixes at v1-GM (a
+  `_for_test` `pub fn` is a red-flag — either real public API or
+  belongs in `testing` module). **R6 R1 FP-A Bundle F1 closure (2026-05-24):**
+  the workspace cfg-gating sweep is COMPLETE — 70+ `pub fn .*_for_test*`
+  declarations across `benten-caps` / `benten-crypto-suite` /
+  `benten-drop` / `benten-core` / `benten-sync` / `benten-graph` /
+  `benten-eval` / `benten-engine` / `benten-id` /
+  `benten-platform-foundation` / `tools/benten-dev` are gated under
+  `#[cfg(any(test, feature = "testing"))]` (or
+  `feature = "test-helpers"` for benten-engine). 14 production-shaped
+  items (whose `_for_test*` name is a misleading suffix; production
+  code paths consume them) remain `pub` per the EXEMPT_PUB_ITEMS table
+  at
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` +
+  V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ EXEMPT_PUB_ITEMS section
+  (the row is RETRACTED / CLOSED; preserved for forensic context). The
+  no-regression pin at the test path above blocks any future
+  re-introduction of newly-public ungated `_for_test*` items. Row D-22
+  closure means the v1-beta cargo-public-api baselines no longer carry
+  the bulk of the `_for_test*` surfaces; renaming the 14 exempts is a
+  v1-GM-target cleanup tracked separately.
 - `crates/benten-engine/src/engine.rs::Engine::caps` (`fn caps(&self) ->
   &EngineCapsHandle`) stays `pub`; this is the canonical cap-mutation
   surface per the §4.69-ALREADY-SHIPPED ground-truth. No `Engine`-direct
   cap-mutation method may regress (freeze invariant; orchestrator-
   mechanical no-regression test pin per build-backlog).
 
-**What "frozen" means here (at v1-beta, partial-landed):**
-- The TARGET shape is locked at v1-beta (the rename + tighten will land
-  in G-COMP-1 per Row D-7).
+**What "frozen" means here (at v1-beta, FULLY LANDED at R6 R1 FP-A
+Bundle F2):**
+- The four methods are `pub(crate) fn read_node` /
+  `pub(crate) fn read_node_label_only` / `pub(crate) fn put_node_inner` /
+  `pub(crate) fn resolve_subgraph_cid_inner`. External callers MUST go
+  through `read_node_as(principal, cid)` (or
+  `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)` for un-attributed
+  Benten-owned-boundary reads).
 - Adding NEW cap-mutation methods to `Engine` (other than via the
   `caps()` handle) is a HALT-AND-SURFACE event — `Engine::caps()` is
   the canonical cap-mutation surface at v1-beta and beyond.
-- At G-COMP-1 closure of Row D-7: the four methods MUST be `pub(crate)`
-  after the tighten + rename; external callers MUST go through
-  `read_node_as(principal, cid)`. The `cargo-public-api` baseline
-  catches any post-G-COMP-1 re-`pub`-ing.
+- The `cargo-public-api` baseline at `docs/public-api/benten-engine.txt`
+  enforces the visibility: any post-fix-pass re-`pub`-ing of the four
+  methods fails the drift test.
 - Behaviorally: the engine-internal callers (IVM, sync, view
   materialization, audit) keep using the un-attributed pathway with zero
-  overhead — the tighten is a visibility-only change, not a behavior
+  overhead — the tighten was a visibility-only change, not a behavior
   change.
 - The `Engine::caps()` handle pattern is the SemVer-locked cap-mutation
   organizing principle (item 1's §4.69 sub-clause; ALREADY SHIPPED at
@@ -196,26 +216,28 @@ with consumers that don't yet have the principal context.
 
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-engine.txt`
-  (regenerated at the G-CORE-9 build-out wave per build-backlog row 1) carries the locked
-  `pub` set. The renamed/tightened symbols MUST NOT appear with `pub`
-  visibility. Re-`pub`-ing fails the drift test.
-- **napi cascade migration** (BUILD-AT-FREEZE-WAVE; see build-backlog
-  row 1.a): `bindings/napi/src/*.rs` MUST be swept for any
-  `engine.get_node(...)` / `engine.put_node(...)` call — refactor to
-  `engine.read_node_as(principal, cid)` or
-  `engine.transaction().put_node(...)`. Atomic G-CORE-9 commit-set per
-  §8-A's "applied atomically" requirement.
-- Test-site sweep (BUILD-AT-FREEZE-WAVE): every integration test
-  currently calling `Engine::get_node` (per Planner-B's enumeration:
-  `crates/benten-eval/tests/read_denial.rs:96/100`,
-  `crates/benten-engine/tests/inv_11_*.rs:93/155/159`,
-  `crates/benten-engine/tests/noauth_startup_log.rs:47`, plus others)
-  migrates to `read_node_as` with appropriate `ENGINE_INTERNAL_PRINCIPAL_CID`
-  or test-only `testing::read_node` helper.
-- No-regression test pin
+  (regenerated at R6 R1 FP-A Bundle F1.e) carries the locked `pub`
+  set with the 6 §8-A surfaces tightened out and the new
+  `internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID` sentinel
+  surface added. Re-`pub`-ing fails the
+  `.github/workflows/cargo-public-api.yml` drift gate.
+- **napi cascade migration LANDED at R6 R1 FP-A Bundle F2.**
+  `bindings/napi/src/lib.rs::Engine::get_node` migrated to
+  `self.inner.read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)`;
+  no other `engine.get_node` / `engine.put_node` direct calls remain
+  on the napi production surface.
+- **Test-site preservation:** ~80 sibling-crate integration tests
+  that called `Engine::get_node` / `put_node` / `get_node_label_only` /
+  `resolve_subgraph_cid_for_test` under their historical spellings
+  continue to compile via the test-helper re-export `impl
+  crate::Engine` block at the end of
+  `crates/benten-engine/src/testing.rs` (cfg-gated by the existing
+  `#[cfg(any(test, feature = "test-helpers"))]` attribute on
+  `pub mod testing`). No per-test migration was needed.
+- No-regression test pin (forthcoming Composing-phase build-out):
   `crates/benten-engine/tests/g_core_9_engine_no_direct_cap_mutation.rs`
-  uses `cargo-public-api` output to assert ZERO cap-mutation methods on
-  `Engine` (other than `caps()`).
+  will use `cargo-public-api` output to assert ZERO cap-mutation
+  methods on `Engine` (other than `caps()`).
 
 **Composing-phase escape valve:**
 A Composing-time discovery that genuinely needs un-attributed
