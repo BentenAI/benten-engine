@@ -557,6 +557,38 @@ impl<'eng> EngineCapsHandle<'eng> {
             }
         }
 
+        // **R6 R1 FP-F4 §S3b (Row D-3-b closure)** — CLAUDE.md baked-in
+        // #18 §8-E hook #2 per-delegation runtime check. Consult the
+        // configured `CapabilityPolicy::check_per_delegation` AFTER
+        // Step 2b's Layer-3 manifest-`shares` envelope enforcement +
+        // BEFORE Step 3's effective-scope pick + the Step 4 grant
+        // write. Forensic-discrimination symmetry with §S3a's install-
+        // time hook (per CRITIC-1 FIX-5 + Δv3-3).
+        //
+        // Default policy impl returns `Ok(())` (admit-all-delegations);
+        // a custom CapabilityPolicy that wants rate-limiting / audit-
+        // trail / time-bounded policy on per-request delegations
+        // overrides.
+        if let Some(policy) = self.engine.policy.as_ref()
+            && policy
+                .check_per_delegation(
+                    source_principal_did.as_str(),
+                    plugin_did,
+                    resolved_scope.as_str(),
+                )
+                .is_err()
+        {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::PluginPerDelegationDenied,
+                message: format!(
+                    "delegate_capability: delegation of `{resolved_scope}` from \
+                     `{source_principal_did}` to `{plugin_did}` denied by \
+                     CapabilityPolicy::check_per_delegation (Layer-3 §8-E hook #2 \
+                     enforcement)",
+                ),
+            });
+        }
+
         // Step 3 — pick effective scope for the new delegation grant.
         // Attenuation here is the simplest "narrowed-or-identical
         // scope" form per the G24-D-FP-3 brief; full attenuation
