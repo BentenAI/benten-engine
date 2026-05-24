@@ -63,8 +63,10 @@ impl SigCodepoint {
     /// surfaces [`UnsupportedAlgorithm::Signature`].
     pub const HYBRID_MLDSA65_SLHDSA: Self = Self(0x0003);
 
-    /// Raw 16-bit codepoint value (P-III deferred; G-CORE-9 freezes the
-    /// canonical wire form).
+    /// Raw 16-bit codepoint value. **FROZEN at G-CORE-9
+    /// V1-FROZEN-INTERFACE row 6** (the integer values are PERMANENT
+    /// per V1-FROZEN-INTERFACE.md item 6.2 codepoint table; never reuse
+    /// a value for a different algorithm).
     #[must_use]
     pub const fn raw(self) -> u16 {
         self.0

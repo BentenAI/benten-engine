@@ -206,11 +206,11 @@
 
 | # | Surface | Format-version discriminator | Byte-pin test | Status |
 |---|---|---|---|---|
-| 1 | Node/Edge canonical CBOR + sentinel CID | N/A (Phase-1 baseline) | canonical_test_node_sentinel_cid.rs + redb backends | ✅ COVERED |
+| 1 | Node/Edge canonical CBOR + sentinel CID | N/A (Phase-1 baseline) | canonical_bytes_fastpath_stable.rs + node_cid.rs (benten-core) | ✅ COVERED |
 | 2 | SnapshotBlob v2 | `SNAPSHOT_BLOB_SCHEMA_VERSION = 2` | snapshot_blob_backend.rs + tf11_*.rs | ✅ COVERED |
 | 3 | MerkleRangeProof v2 | TBD per Option (b) | — | ⚠️ DEFERRED to G-COMP-1 |
 | 4 | Per-chunk AEAD | Cipher codepoint | tf3a_*.rs + tf4_*.rs + tf3a_pq_hybrid_wasm32 | ✅ COVERED |
-| 5 | UCAN-Varsig v1 header | Sig codepoint | ucan_envelope_*.rs + tf4_gcore3c_*.rs | ✅ COVERED |
+| 5 | UCAN-Varsig v1 header | Sig codepoint | tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs | ✅ COVERED |
 | 6 | AuthorizationGrant CBOR | #[non_exhaustive] | tf3b_authorization_grant_*.rs | ✅ COVERED |
 | 7 | Drop bundle CBOR | `DropBundleVersion` enum | benten-drop/tests/ | ✅ COVERED |
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |

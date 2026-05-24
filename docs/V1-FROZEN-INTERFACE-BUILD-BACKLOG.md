@@ -426,6 +426,11 @@ pub trait CapabilityPolicy: Sealed + Send + Sync {
      — asserts that an external `impl CapabilityPolicy for
      SomeExternalType` without `impl Sealed for SomeExternalType` fails
      to compile.
+   - **DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+     Row D-20** (added at G-CORE-9 R2 fix-pass); the hard-seal MECHANISM
+     ships in this row + is structurally enforced by rustc on every
+     workspace build, but the explicit compile-fail trybuild test fixture
+     is the regression-defense backstop named-deferred to G-COMP-1.
 
 4. **Object-safety preserved:**
    - `crates/benten-caps/tests/object_safety_*.rs` continues to pass
@@ -444,7 +449,10 @@ pub trait CapabilityPolicy: Sealed + Send + Sync {
 - `cargo nextest run --workspace` green (every test-impl carries the
   Sealed marker).
 - The compile-fail trybuild test fails-to-compile as expected (smoke-
-  tests the seal).
+  tests the seal). **DEFERRED to G-COMP-1 per
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-20**; at v1-beta the
+  hard-seal mechanism is verified by `cargo check -p benten-caps` (rustc
+  refuses external impls because `Sealed` is `pub(crate)`).
 - `cargo-public-api` baseline for `benten-caps` (row 1) does NOT expose
   `Sealed` publicly (verify `pub(crate)` visibility).
 - `crates/benten-caps/tests/object_safety_*.rs` passes.
