@@ -37,6 +37,7 @@ fn caps_wallclock_bound_refreshes_at_300s_default() {
 #[test]
 fn caps_wallclock_refresh_ceiling_cap_grant_configurable() {
     struct TightPolicy;
+    impl benten_caps::__sealed_for_workspace_tests::Sealed for TightPolicy {}
     impl CapabilityPolicy for TightPolicy {
         fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
             Ok(())
@@ -63,6 +64,7 @@ fn caps_iterate_batch_delegation_end_to_end() {
         calls: Arc<AtomicUsize>,
         boundary: usize,
     }
+    impl benten_caps::__sealed_for_workspace_tests::Sealed for CountingPolicy {}
     impl CapabilityPolicy for CountingPolicy {
         fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
             Ok(())

@@ -201,9 +201,9 @@ fn walker_max_depth_bound_enforced() {
 // Arm A-1 — Adversarial: a Spec with conflicting label-allow AND
 // label-deny on the SAME label → typed construction error.
 //
-// Note: this pin targets `RestrictedSpec` shape via the Spec→Inclusion
+// Note: this pin targets `SubgraphSpecRestriction` shape via the Spec→Inclusion
 // predicate. The walker consumes a Spec whose Inclusion predicate
-// uses RestrictedSpec; the construction-time validation lives at
+// uses SubgraphSpecRestriction; the construction-time validation lives at
 // `Spec::builder().build()` per the decidable-non-emptiness contract.
 // ---------------------------------------------------------------------------
 

@@ -44,6 +44,7 @@ table narrative.
 | 28 | (RESERVED for META #629 closure — DoS-via-unbounded-decode workspace pattern; 26 instances / 9 crates) | 4-Foundation | **OPEN; tracking via [META #629](https://github.com/BentenAI/benten-engine/issues/629) + [#1126](https://github.com/BentenAI/benten-engine/issues/1126) Compromise #28 mint task.** Reserved row; row body lands when META #629 closure or honest-disclosure mint lands. |
 | 29 | Engine-level extensions — compile-time trust posture (CLAUDE.md baked-in #19) | 4-Foundation | **OPEN ARCHITECTURAL COMMITMENT; registry-tracked for cross-reference completeness.** Engine extensions are Rust crates compile-time linked into the engine binary; trust is `cargo` + code review, not the type system. Future post-Ed25519 / post-iroh / post-redb / post-wasmtime engine-extension migrations land under this Compromise's namespace per Phase-9+ scope. The trust model is comprehensively narrated below at §"Engine-level extensions — compile-time trust"; this row makes the claim registry-discoverable for the §3.12 R7-equivalent audit walk. Tracking via [#1131](https://github.com/BentenAI/benten-engine/issues/1131). |
 | 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` / `ml-kem` have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 concatenated/committing; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD) and the concatenated combiner is **committing / strip-resistant** (both halves must verify; the typed-unsupported-arm-never-silent-fallback contract enforces fail-closed) — so **unaudited PQC is never the SOLE trust path**. **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem` audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
+| 31 | Revocation reach in encryption-at-rest (already-derived keys remain decryptable; Drop bundles forever-valid once distributed) | 4-Meta-Core | **OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN `nbf`/`exp` + key rotation.** Per RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i): UCAN revocation cuts FUTURE serves (the per-request `CapabilityPolicy::check_read` consultation fails for subsequent requests against the granted CID), but already-derived keys remain decryptable forever. Once Bob has derived `K(N)` for some Node, Bob can decrypt any ciphertext he obtains for that Node, regardless of subsequent UCAN revocation. Re-keying the Node requires Alice to re-encrypt + re-issue (a heavy operation; per-Node + per-recipient cost scales). Drop bundles are forever-valid once distributed — the producer has no callback to revoke an already-distributed Drop. **Mitigation:** tight UCAN `nbf`/`exp` windows + key rotation discipline + the typed `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate. **Stays OPEN at v1-beta + v1-GM** — this is an inherent property of encryption-at-rest where the reader holds plaintext key material; closing it would require structural changes (e.g. forward-secret re-keying on every revocation; MLS-style per-message keys) that are out of scope for v1. Authored at G-CORE-9 V1-FROZEN-INTERFACE row 8e per Ben morning queue item; tracking via the V1-FROZEN-INTERFACE.md item 15(i) FREEZE-WAVE FIX-NOW. |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. See `docs/future/refinement-audit-2026-05.md §15` for the v1-platform-shippable BLOCKER cluster framing.
 
@@ -2400,7 +2401,7 @@ regression pin.
 The AEAD primitive is **ChaCha20-Poly1305** (RFC 8439) per CLAUDE.md
 baked-in #5 crypto-agility refinement. Dispatched via
 `benten_crypto_suite::aead::wrap` / `::unwrap` over the
-codepoint-tagged `KeyMaterial` (X-Wing-hybrid `0x647a` v1-beta default;
+codepoint-tagged `AeadKeyMaterial` (X-Wing-hybrid `0x647a` v1-beta default;
 classical-only X25519 `0x6400` downgrade arm; both feed the same
 ChaCha20-Poly1305 bulk layer). The integration crate is the ONLY
 crypto-primitive call site (crypto-agility-contract:6). Never
@@ -2466,7 +2467,7 @@ audience-binding:
    without-keys, A-2 stolen-keys-without-UCAN, A-3 wrong-audience-
    swap uniformly).
 6. **Scope check** (F-2 arm). The requested `ciphertext_hash` MUST
-   be in the granted `RestrictedSpec`'s `roots` allowlist (per
+   be in the granted `RestrictedScope`'s `roots` allowlist (per
    `with_hashes` constructor). Out-of-scope → typed `NotInScope`.
 
 ONLY after all six arms pass does the handler dispatch to

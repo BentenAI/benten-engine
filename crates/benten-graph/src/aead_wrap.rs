@@ -44,7 +44,7 @@ use benten_crypto_suite::aead::{
     unwrap as suite_unwrap, wrap as suite_wrap,
 };
 use benten_crypto_suite::{
-    AeadEnvelope, AeadError as SuiteAeadError, CipherSuiteCodepoint, KeyMaterial,
+    AeadEnvelope, AeadError as SuiteAeadError, AeadKeyMaterial, CipherSuiteCodepoint,
 };
 use thiserror::Error;
 
@@ -330,7 +330,7 @@ pub fn decrypt_chunk(
     plaintext_cid: &Cid,
     key: &[u8],
 ) -> Result<Vec<u8>, AeadError> {
-    let key_material = KeyMaterial::from_raw_bytes(chunk.cipher_codepoint, key);
+    let key_material = AeadKeyMaterial::from_raw_bytes(chunk.cipher_codepoint, key);
     let chunk_index_u64 = u64::try_from(chunk_index)
         .map_err(|_| AeadError::Authentication("chunk index exceeds u64".to_string()))?;
     let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64);
@@ -480,24 +480,24 @@ pub fn decode_encrypted_node(bytes: &[u8]) -> Result<EncryptedNode, AeadError> {
     }
 }
 
-/// Build a `KeyMaterial` from raw bytes for the wave-live default
+/// Build a `AeadKeyMaterial` from raw bytes for the wave-live default
 /// codepoint (X-Wing-hybrid `0x647a`). Production key-derivation paths
-/// already produce typed `KeyMaterial` via the cipher-suite; this
+/// already produce typed `AeadKeyMaterial` via the cipher-suite; this
 /// helper is for the storage-layer surface that accepts a `&[u8]` key
 /// (the `decrypt(&envelope, &key: &[u8])` shape the R3 pins use).
-fn make_key_material(key: &[u8]) -> Result<KeyMaterial, AeadError> {
+fn make_key_material(key: &[u8]) -> Result<AeadKeyMaterial, AeadError> {
     if key.len() != 32 {
         return Err(AeadError::KeyMismatch {
             reason: "AEAD key MUST be 32 B for ChaCha20-Poly1305 dispatch".to_string(),
         });
     }
-    Ok(KeyMaterial::from_raw_bytes(
+    Ok(AeadKeyMaterial::from_raw_bytes(
         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
         key,
     ))
 }
 
-/// Build a `KeyMaterial` whose codepoint matches the envelope's. The
+/// Build a `AeadKeyMaterial` whose codepoint matches the envelope's. The
 /// cipher-suite `unwrap` typed-rejects on codepoint mismatch; this
 /// helper threads the envelope's codepoint into the key newtype so a
 /// caller that presents the *correct* key for an envelope sealed under
@@ -507,7 +507,7 @@ fn make_key_material(key: &[u8]) -> Result<KeyMaterial, AeadError> {
 fn make_key_material_matching(
     envelope: &EncryptedNode,
     key: &[u8],
-) -> Result<KeyMaterial, AeadError> {
+) -> Result<AeadKeyMaterial, AeadError> {
     if key.len() != 32 {
         return Err(AeadError::KeyMismatch {
             reason: "AEAD key MUST be 32 B for ChaCha20-Poly1305 dispatch".to_string(),
@@ -522,7 +522,7 @@ fn make_key_material_matching(
                 e.cipher_codepoint
             }),
     };
-    Ok(KeyMaterial::from_raw_bytes(codepoint, key))
+    Ok(AeadKeyMaterial::from_raw_bytes(codepoint, key))
 }
 
 /// Graph-side AEAD error envelope. Maps the cipher-suite's typed errors

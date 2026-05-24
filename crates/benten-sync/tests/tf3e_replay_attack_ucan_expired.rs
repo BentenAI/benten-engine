@@ -32,7 +32,7 @@
 use benten_id::keypair::Keypair;
 // RED-PHASE failure points.
 use benten_caps::authorization_grant::AuthorizationGrant;
-use benten_caps::restricted_spec::RestrictedSpec;
+use benten_caps::restricted_spec::RestrictedScope;
 use benten_sync::ucan_blobs_protocol::{UcanBlobsHandler, UcanBlobsHandlerError, UcanBlobsRequest};
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ fn tf3e_expired_ucan_replay_yields_typed_ucan_expired() {
 
     let handler = UcanBlobsHandler::new_with_clock(&kp_alice, now_secs);
 
-    let spec = RestrictedSpec::with_hashes(vec![[11u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[11u8; 32].into()]);
     let expired_grant =
         AuthorizationGrant::issue_for_test(&kp_alice, kp_bob.public_key(), spec, exp_secs);
 
@@ -87,7 +87,7 @@ fn tf3e_ucan_nbf_in_future_typed_not_yet_valid() {
     let nbf_secs: u64 = 2_000_000_000; // future
 
     let handler = UcanBlobsHandler::new_with_clock(&kp_alice, now_secs);
-    let spec = RestrictedSpec::with_hashes(vec![[13u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[13u8; 32].into()]);
     let early_grant = AuthorizationGrant::issue_with_nbf_for_test(
         &kp_alice,
         kp_bob.public_key(),
@@ -128,7 +128,7 @@ fn tf3e_revoked_grant_yields_typed_revoked() {
     let kp_bob = Keypair::generate();
     let handler = UcanBlobsHandler::new(&kp_alice);
 
-    let spec = RestrictedSpec::with_hashes(vec![[15u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[15u8; 32].into()]);
     let grant = AuthorizationGrant::issue_for_test(&kp_alice, kp_bob.public_key(), spec, u64::MAX);
     let grant_cid = grant.grant_cid_for_test();
 

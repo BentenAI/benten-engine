@@ -47,7 +47,11 @@ default = []
 # keep working unchanged. Production cdylib consumers do NOT see this
 # method unless they explicitly opt in.
 iteration-budget-test-grade = []
-test-helpers = ["iteration-budget-test-grade"]
+# G-CORE-9 V1-FROZEN-INTERFACE row 6: `test-helpers` also enables
+# `benten-caps/testing` so the workspace test crates can implement
+# `CapabilityPolicy` for test-doubles via the
+# `benten_caps::__sealed_for_workspace_tests::Sealed` opt-in re-export.
+test-helpers = ["iteration-budget-test-grade", "benten-caps/testing"]
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
 # for the 4 exit-gate composite files (wait_resume_determinism,

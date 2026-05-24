@@ -37,6 +37,7 @@
 #[path = "common/schema_fixtures.rs"]
 mod schema_fixtures;
 
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -60,6 +61,8 @@ impl RecordingCapPolicy {
         self.writes.load(Ordering::SeqCst) + self.reads.load(Ordering::SeqCst)
     }
 }
+
+impl Sealed for RecordingCapPolicy {}
 
 impl CapabilityPolicy for RecordingCapPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

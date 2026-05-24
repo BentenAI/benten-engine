@@ -7,8 +7,8 @@
 //!
 //! - **`Hashes(Vec<Cid>)`** — explicit content-CID set. The recipient
 //!   may serve / decrypt the exact named CIDs.
-//! - **`RestrictedSelector(RestrictedSpec)`** — structural restriction
-//!   over a sub-graph language (Path (a)). See [`RestrictedSpec`] for
+//! - **`RestrictedSelector(RestrictedScope)`** — structural restriction
+//!   over a sub-graph language (Path (a)). See [`RestrictedScope`] for
 //!   the 6-dimensional language.
 //!
 //! **THERE IS NO `OpaqueSelector` ARM.** Path (b) (refinement-witness
@@ -25,7 +25,7 @@
 use benten_core::Cid;
 use serde::{Deserialize, Serialize};
 
-use crate::restricted_spec::RestrictedSpec;
+use crate::restricted_spec::RestrictedScope;
 
 /// Structured cap-grant scope. EXACTLY two arms by the
 /// `no-opaque-arm` decision (RATIFIED-S&C 2026-05-21 §R1).
@@ -48,5 +48,5 @@ pub enum Scope {
     /// named CIDs (and only those).
     Hashes(Vec<Cid>),
     /// Structural sub-graph restriction (Path (a) of RATIFIED §R1).
-    RestrictedSelector(RestrictedSpec),
+    RestrictedSelector(RestrictedScope),
 }

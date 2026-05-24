@@ -1,11 +1,1296 @@
-# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
-#
-# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
-# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). Seed
-# baseline; first nightly cargo-public-api run replaces with full
-# `cargo public-api -p benten-ivm --simplified` output.
-#
-# Pinned by `crates/benten-engine/tests/cargo_public_api_drift.rs`.
-
-crate = benten-ivm
-phase_3_seeded_at = G20-A3 wave-8a
+ Documenting benten-ivm v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-ivm)
+pub mod benten_ivm
+pub mod benten_ivm::algorithm_b
+#[non_exhaustive] pub enum benten_ivm::algorithm_b::AlgorithmError
+pub benten_ivm::algorithm_b::AlgorithmError::CanonicalIdAnchorPrefixRefused
+pub benten_ivm::algorithm_b::AlgorithmError::CanonicalIdAnchorPrefixRefused::got_prefix: alloc::string::String
+pub benten_ivm::algorithm_b::AlgorithmError::CanonicalIdAnchorPrefixRefused::view_id: alloc::string::String
+pub benten_ivm::algorithm_b::AlgorithmError::SelfReferentialSubgraphRejected
+pub benten_ivm::algorithm_b::AlgorithmError::SelfReferentialSubgraphRejected::view_id: alloc::string::String
+pub benten_ivm::algorithm_b::AlgorithmError::TypedOutputProjectionMismatch
+pub benten_ivm::algorithm_b::AlgorithmError::TypedOutputProjectionMismatch::declared: core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+pub benten_ivm::algorithm_b::AlgorithmError::TypedOutputProjectionMismatch::required: core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+pub benten_ivm::algorithm_b::AlgorithmError::TypedOutputProjectionMismatch::view_id: alloc::string::String
+pub benten_ivm::algorithm_b::AlgorithmError::ViewLabelMismatch
+pub benten_ivm::algorithm_b::AlgorithmError::ViewLabelMismatch::expected_label: alloc::string::String
+pub benten_ivm::algorithm_b::AlgorithmError::ViewLabelMismatch::got_pattern: benten_ivm::algorithm_b::LabelPattern
+pub benten_ivm::algorithm_b::AlgorithmError::ViewLabelMismatch::view_id: alloc::string::String
+impl core::error::Error for benten_ivm::algorithm_b::AlgorithmError
+impl core::fmt::Debug for benten_ivm::algorithm_b::AlgorithmError
+pub fn benten_ivm::algorithm_b::AlgorithmError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_ivm::algorithm_b::AlgorithmError
+pub fn benten_ivm::algorithm_b::AlgorithmError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::Send for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::Sync for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmError
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmError
+pub enum benten_ivm::algorithm_b::LabelPattern
+pub benten_ivm::algorithm_b::LabelPattern::AnchorPrefix(alloc::string::String)
+pub benten_ivm::algorithm_b::LabelPattern::Exact(alloc::string::String)
+impl benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::anchor_prefix(prefix: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_ivm::algorithm_b::LabelPattern::as_label_str(&self) -> &str
+pub fn benten_ivm::algorithm_b::LabelPattern::exact(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_ivm::algorithm_b::LabelPattern::matches(&self, label: &str) -> bool
+impl core::clone::Clone for benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::clone(&self) -> benten_ivm::algorithm_b::LabelPattern
+impl core::cmp::Eq for benten_ivm::algorithm_b::LabelPattern
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::eq(&self, other: &benten_ivm::algorithm_b::LabelPattern) -> bool
+impl core::fmt::Debug for benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Freeze for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Send for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Sync for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Unpin for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::LabelPattern
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::LabelPattern
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::LabelPattern
+pub struct benten_ivm::algorithm_b::AlgorithmBView
+impl benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id(view_id: &str, definition: benten_ivm::view::ViewDefinition) -> core::result::Result<Self, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id_with_budget(view_id: &str, definition: benten_ivm::view::ViewDefinition, budget: u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::materialize(&self) -> benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::algorithm_b::AlgorithmBView::register(view_id: &str, label_pattern: benten_ivm::algorithm_b::LabelPattern, projection: benten_ivm::algorithm_b::Projection) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::register_subgraph(spec: benten_ivm::subgraph_spec::SubgraphSpec) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::register_with_budget(view_id: &str, label_pattern: benten_ivm::algorithm_b::LabelPattern, projection: benten_ivm::algorithm_b::Projection, budget: u64) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::try_register(view_id: &str, label_pattern: benten_ivm::algorithm_b::LabelPattern, projection: benten_ivm::algorithm_b::Projection) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::walk_writes(&mut self, writes: &[benten_ivm::subgraph_spec::KernelInput]) -> core::result::Result<benten_ivm::subgraph_spec::KernelOutput, benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::id(&self) -> &str
+pub fn benten_ivm::algorithm_b::AlgorithmBView::is_stale(&self) -> bool
+pub fn benten_ivm::algorithm_b::AlgorithmBView::mark_stale(&mut self)
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::algorithm_b::AlgorithmBView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::fmt::Debug for benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::Send for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::Sync for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmBView
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
+impl !core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
+pub struct benten_ivm::algorithm_b::CanonicalViewEntry
+impl benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::hardcoded_label(&self) -> core::option::Option<&'static str>
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::id(&self) -> &'static str
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::legacy_input_pattern_label(&self) -> &'static str
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::typed_output_projection(&self) -> core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+impl core::clone::Clone for benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::clone(&self) -> benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::cmp::Eq for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::eq(&self, other: &benten_ivm::algorithm_b::CanonicalViewEntry) -> bool
+impl core::fmt::Debug for benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Freeze for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Send for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Sync for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Unpin for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::CanonicalViewEntry
+pub struct benten_ivm::algorithm_b::CanonicalViews
+impl benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::dispatch(&self, view_id: &str) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::algorithm_b::CanonicalViews::ids(&self) -> impl core::iter::traits::iterator::Iterator<Item = &'static str>
+pub fn benten_ivm::algorithm_b::CanonicalViews::is_canonical(&self, view_id: &str) -> bool
+pub fn benten_ivm::algorithm_b::CanonicalViews::lookup(&self, view_id: &str) -> core::option::Option<benten_ivm::algorithm_b::CanonicalViewEntry>
+pub fn benten_ivm::algorithm_b::CanonicalViews::registry() -> Self
+impl core::clone::Clone for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::clone(&self) -> benten_ivm::algorithm_b::CanonicalViews
+impl core::cmp::Eq for benten_ivm::algorithm_b::CanonicalViews
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::eq(&self, other: &benten_ivm::algorithm_b::CanonicalViews) -> bool
+impl core::default::Default for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::default() -> benten_ivm::algorithm_b::CanonicalViews
+impl core::fmt::Debug for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Freeze for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Send for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Sync for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Unpin for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::CanonicalViews
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::CanonicalViews
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::CanonicalViews
+pub struct benten_ivm::algorithm_b::Projection
+impl benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::all_props() -> Self
+pub fn benten_ivm::algorithm_b::Projection::apply(&self, node: benten_core::Node) -> benten_core::Node
+impl core::clone::Clone for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::clone(&self) -> benten_ivm::algorithm_b::Projection
+impl core::cmp::Eq for benten_ivm::algorithm_b::Projection
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::eq(&self, other: &benten_ivm::algorithm_b::Projection) -> bool
+impl core::default::Default for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::default() -> benten_ivm::algorithm_b::Projection
+impl core::fmt::Debug for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::algorithm_b::Projection
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::Projection
+impl core::marker::Freeze for benten_ivm::algorithm_b::Projection
+impl core::marker::Send for benten_ivm::algorithm_b::Projection
+impl core::marker::Sync for benten_ivm::algorithm_b::Projection
+impl core::marker::Unpin for benten_ivm::algorithm_b::Projection
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::Projection
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::Projection
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::materialize_inner_kernel_read(view: &benten_ivm::algorithm_b::AlgorithmBView) -> alloc::vec::Vec<u8>
+pub type benten_ivm::algorithm_b::Algorithm = benten_ivm::algorithm_b::AlgorithmBView
+pub mod benten_ivm::budget
+pub struct benten_ivm::budget::BudgetTracker
+impl benten_ivm::budget::BudgetTracker
+pub const fn benten_ivm::budget::BudgetTracker::is_stale(&self) -> bool
+pub fn benten_ivm::budget::BudgetTracker::mark_stale(&mut self)
+pub const fn benten_ivm::budget::BudgetTracker::new(max: u64) -> Self
+pub const fn benten_ivm::budget::BudgetTracker::original(&self) -> u64
+pub fn benten_ivm::budget::BudgetTracker::rebuild(&mut self)
+pub const fn benten_ivm::budget::BudgetTracker::remaining(&self) -> u64
+pub fn benten_ivm::budget::BudgetTracker::stale_error(view_id: &str) -> benten_ivm::view::ViewError
+pub fn benten_ivm::budget::BudgetTracker::try_consume(&mut self, cost: u64, view_id: &str) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub const fn benten_ivm::budget::BudgetTracker::unlimited() -> Self
+impl core::clone::Clone for benten_ivm::budget::BudgetTracker
+pub fn benten_ivm::budget::BudgetTracker::clone(&self) -> benten_ivm::budget::BudgetTracker
+impl core::cmp::Eq for benten_ivm::budget::BudgetTracker
+impl core::cmp::PartialEq for benten_ivm::budget::BudgetTracker
+pub fn benten_ivm::budget::BudgetTracker::eq(&self, other: &benten_ivm::budget::BudgetTracker) -> bool
+impl core::fmt::Debug for benten_ivm::budget::BudgetTracker
+pub fn benten_ivm::budget::BudgetTracker::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::budget::BudgetTracker
+impl core::marker::StructuralPartialEq for benten_ivm::budget::BudgetTracker
+impl core::marker::Freeze for benten_ivm::budget::BudgetTracker
+impl core::marker::Send for benten_ivm::budget::BudgetTracker
+impl core::marker::Sync for benten_ivm::budget::BudgetTracker
+impl core::marker::Unpin for benten_ivm::budget::BudgetTracker
+impl core::marker::UnsafeUnpin for benten_ivm::budget::BudgetTracker
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::budget::BudgetTracker
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::budget::BudgetTracker
+pub mod benten_ivm::strategy
+pub enum benten_ivm::strategy::Strategy
+pub benten_ivm::strategy::Strategy::A
+pub benten_ivm::strategy::Strategy::B
+pub benten_ivm::strategy::Strategy::Reserved
+impl core::clone::Clone for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::clone(&self) -> benten_ivm::strategy::Strategy
+impl core::cmp::Eq for benten_ivm::strategy::Strategy
+impl core::cmp::PartialEq for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::eq(&self, other: &benten_ivm::strategy::Strategy) -> bool
+impl core::fmt::Debug for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_ivm::strategy::Strategy
+impl core::marker::StructuralPartialEq for benten_ivm::strategy::Strategy
+impl core::marker::Freeze for benten_ivm::strategy::Strategy
+impl core::marker::Send for benten_ivm::strategy::Strategy
+impl core::marker::Sync for benten_ivm::strategy::Strategy
+impl core::marker::Unpin for benten_ivm::strategy::Strategy
+impl core::marker::UnsafeUnpin for benten_ivm::strategy::Strategy
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::strategy::Strategy
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::strategy::Strategy
+pub mod benten_ivm::subgraph_spec
+pub enum benten_ivm::subgraph_spec::KernelOutput
+pub benten_ivm::subgraph_spec::KernelOutput::Current(core::option::Option<alloc::vec::Vec<u8>>)
+pub benten_ivm::subgraph_spec::KernelOutput::Rows(alloc::vec::Vec<u8>)
+pub benten_ivm::subgraph_spec::KernelOutput::Rules(alloc::vec::Vec<u8>)
+impl core::clone::Clone for benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::subgraph_spec::KernelOutput::clone(&self) -> benten_ivm::subgraph_spec::KernelOutput
+impl core::cmp::Eq for benten_ivm::subgraph_spec::KernelOutput
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::subgraph_spec::KernelOutput::eq(&self, other: &benten_ivm::subgraph_spec::KernelOutput) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::subgraph_spec::KernelOutput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Freeze for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Send for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Sync for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelOutput
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelOutput
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelOutput
+pub enum benten_ivm::subgraph_spec::TypedOutputProjection
+pub benten_ivm::subgraph_spec::TypedOutputProjection::Current
+pub benten_ivm::subgraph_spec::TypedOutputProjection::Rules
+impl core::clone::Clone for benten_ivm::subgraph_spec::TypedOutputProjection
+pub fn benten_ivm::subgraph_spec::TypedOutputProjection::clone(&self) -> benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::cmp::Eq for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::TypedOutputProjection
+pub fn benten_ivm::subgraph_spec::TypedOutputProjection::eq(&self, other: &benten_ivm::subgraph_spec::TypedOutputProjection) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::TypedOutputProjection
+pub fn benten_ivm::subgraph_spec::TypedOutputProjection::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Freeze for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Send for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Sync for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Unpin for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::TypedOutputProjection
+pub struct benten_ivm::subgraph_spec::KernelInput
+pub benten_ivm::subgraph_spec::KernelInput::created_at: i64
+pub benten_ivm::subgraph_spec::KernelInput::disambiguator: u64
+pub benten_ivm::subgraph_spec::KernelInput::label: alloc::string::String
+impl benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::new(label: impl core::convert::Into<alloc::string::String>, created_at: i64, disambiguator: u64) -> Self
+impl core::clone::Clone for benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::clone(&self) -> benten_ivm::subgraph_spec::KernelInput
+impl core::cmp::Eq for benten_ivm::subgraph_spec::KernelInput
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::eq(&self, other: &benten_ivm::subgraph_spec::KernelInput) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Freeze for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Send for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Sync for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelInput
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelInput
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelInput
+pub struct benten_ivm::subgraph_spec::SubgraphSpec
+pub benten_ivm::subgraph_spec::SubgraphSpec::budget: core::option::Option<u64>
+pub benten_ivm::subgraph_spec::SubgraphSpec::label_pattern: benten_ivm::algorithm_b::LabelPattern
+pub benten_ivm::subgraph_spec::SubgraphSpec::projection: benten_ivm::algorithm_b::Projection
+pub benten_ivm::subgraph_spec::SubgraphSpec::self_referential: bool
+pub benten_ivm::subgraph_spec::SubgraphSpec::typed_output_projection: core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+pub benten_ivm::subgraph_spec::SubgraphSpec::view_id: alloc::string::String
+impl benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::for_canonical_view(view_id: &str) -> core::result::Result<Self, alloc::string::String>
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::is_canonical(&self) -> bool
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::user_view(view_id: impl core::convert::Into<alloc::string::String>, label_pattern: benten_ivm::algorithm_b::LabelPattern) -> core::result::Result<Self, alloc::string::String>
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::with_budget(self, budget: core::option::Option<u64>) -> Self
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::with_label_pattern(self, label_pattern: benten_ivm::algorithm_b::LabelPattern) -> Self
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::with_self_reference(self) -> Self
+impl core::clone::Clone for benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::clone(&self) -> benten_ivm::subgraph_spec::SubgraphSpec
+impl core::cmp::Eq for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::eq(&self, other: &benten_ivm::subgraph_spec::SubgraphSpec) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Freeze for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Send for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Sync for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Unpin for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
+pub const benten_ivm::subgraph_spec::CANONICAL_VIEW_IDS: &[&str]
+pub mod benten_ivm::subscriber
+pub struct benten_ivm::subscriber::Subscriber
+impl benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::new() -> Self
+pub fn benten_ivm::subscriber::Subscriber::read_view(&self, view_id: &str, query: &benten_ivm::view::ViewQuery) -> core::option::Option<core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>>
+pub fn benten_ivm::subscriber::Subscriber::read_view_allow_stale(&self, view_id: &str, query: &benten_ivm::view::ViewQuery) -> core::option::Option<core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>>
+pub fn benten_ivm::subscriber::Subscriber::register_view(&self, view: alloc::boxed::Box<dyn benten_ivm::view::View>)
+pub fn benten_ivm::subscriber::Subscriber::register_view_if_absent(&self, view: alloc::boxed::Box<dyn benten_ivm::view::View>) -> bool
+pub fn benten_ivm::subscriber::Subscriber::route_change_event(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<usize, benten_ivm::view::ViewError>
+pub fn benten_ivm::subscriber::Subscriber::stale_count_tally(&self) -> usize
+pub fn benten_ivm::subscriber::Subscriber::view_count(&self) -> usize
+pub fn benten_ivm::subscriber::Subscriber::view_ids(&self) -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_ivm::subscriber::Subscriber::view_is_stale(&self, view_id: &str) -> core::option::Option<bool>
+pub fn benten_ivm::subscriber::Subscriber::view_strategy(&self, view_id: &str) -> core::option::Option<benten_ivm::strategy::Strategy>
+pub fn benten_ivm::subscriber::Subscriber::with_view(self, view: alloc::boxed::Box<dyn benten_ivm::view::View>) -> Self
+impl benten_graph::store::ChangeSubscriber for benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::on_change(&self, event: &benten_graph::store::ChangeEvent)
+impl core::default::Default for benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::default() -> Self
+impl core::fmt::Debug for benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_ivm::subscriber::Subscriber
+impl core::marker::Send for benten_ivm::subscriber::Subscriber
+impl core::marker::Sync for benten_ivm::subscriber::Subscriber
+impl core::marker::Unpin for benten_ivm::subscriber::Subscriber
+impl core::marker::UnsafeUnpin for benten_ivm::subscriber::Subscriber
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subscriber::Subscriber
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subscriber::Subscriber
+pub mod benten_ivm::testing
+pub fn benten_ivm::testing::criterion_estimates_mean_ns(group: &str, view: &str, axis: &str, value: &str) -> core::result::Result<f64, alloc::string::String>
+pub fn benten_ivm::testing::testing_construct_view_with_strategy(strategy: benten_ivm::strategy::Strategy) -> alloc::boxed::Box<dyn benten_ivm::view::View>
+pub fn benten_ivm::testing::try_construct_view_with_strategy(strategy: benten_ivm::strategy::Strategy) -> core::result::Result<alloc::boxed::Box<dyn benten_ivm::view::View>, benten_ivm::view::ViewError>
+pub mod benten_ivm::view
+#[non_exhaustive] pub enum benten_ivm::view::ViewError
+pub benten_ivm::view::ViewError::BudgetExceeded(alloc::string::String)
+pub benten_ivm::view::ViewError::NodeCidComputeFailed
+pub benten_ivm::view::ViewError::NodeCidComputeFailed::detail: alloc::string::String
+pub benten_ivm::view::ViewError::NodeCidComputeFailed::view_id: alloc::string::String
+pub benten_ivm::view::ViewError::PatternMismatch(alloc::string::String)
+pub benten_ivm::view::ViewError::Stale
+pub benten_ivm::view::ViewError::Stale::view_id: alloc::string::String
+pub benten_ivm::view::ViewError::StrategyNotImplemented
+pub benten_ivm::view::ViewError::StrategyNotImplemented::deferred_to_phase: alloc::string::String
+pub benten_ivm::view::ViewError::StrategyNotImplemented::strategy: benten_ivm::strategy::Strategy
+impl benten_ivm::view::ViewError
+pub fn benten_ivm::view::ViewError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_ivm::view::ViewError
+impl core::fmt::Debug for benten_ivm::view::ViewError
+pub fn benten_ivm::view::ViewError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_ivm::view::ViewError
+pub fn benten_ivm::view::ViewError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::view::ViewError
+impl core::marker::Send for benten_ivm::view::ViewError
+impl core::marker::Sync for benten_ivm::view::ViewError
+impl core::marker::Unpin for benten_ivm::view::ViewError
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewError
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewError
+pub enum benten_ivm::view::ViewResult
+pub benten_ivm::view::ViewResult::Cids(alloc::vec::Vec<benten_core::Cid>)
+pub benten_ivm::view::ViewResult::Current(core::option::Option<benten_core::Cid>)
+pub benten_ivm::view::ViewResult::Rules(alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>)
+impl core::clone::Clone for benten_ivm::view::ViewResult
+pub fn benten_ivm::view::ViewResult::clone(&self) -> benten_ivm::view::ViewResult
+impl core::fmt::Debug for benten_ivm::view::ViewResult
+pub fn benten_ivm::view::ViewResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::view::ViewResult
+impl core::marker::Send for benten_ivm::view::ViewResult
+impl core::marker::Sync for benten_ivm::view::ViewResult
+impl core::marker::Unpin for benten_ivm::view::ViewResult
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewResult
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewResult
+pub enum benten_ivm::view::ViewState
+pub benten_ivm::view::ViewState::Fresh
+pub benten_ivm::view::ViewState::Stale
+impl core::clone::Clone for benten_ivm::view::ViewState
+pub fn benten_ivm::view::ViewState::clone(&self) -> benten_ivm::view::ViewState
+impl core::cmp::Eq for benten_ivm::view::ViewState
+impl core::cmp::PartialEq for benten_ivm::view::ViewState
+pub fn benten_ivm::view::ViewState::eq(&self, other: &benten_ivm::view::ViewState) -> bool
+impl core::fmt::Debug for benten_ivm::view::ViewState
+pub fn benten_ivm::view::ViewState::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::view::ViewState
+impl core::marker::StructuralPartialEq for benten_ivm::view::ViewState
+impl core::marker::Freeze for benten_ivm::view::ViewState
+impl core::marker::Send for benten_ivm::view::ViewState
+impl core::marker::Sync for benten_ivm::view::ViewState
+impl core::marker::Unpin for benten_ivm::view::ViewState
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewState
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewState
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewState
+pub struct benten_ivm::view::ViewBudget
+pub benten_ivm::view::ViewBudget::max_work_per_update: u64
+impl benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::new(max_work_per_update: u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
+impl core::clone::Clone for benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::clone(&self) -> benten_ivm::view::ViewBudget
+impl core::cmp::Eq for benten_ivm::view::ViewBudget
+impl core::cmp::PartialEq for benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::eq(&self, other: &benten_ivm::view::ViewBudget) -> bool
+impl core::fmt::Debug for benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::view::ViewBudget
+impl core::marker::StructuralPartialEq for benten_ivm::view::ViewBudget
+impl core::marker::Freeze for benten_ivm::view::ViewBudget
+impl core::marker::Send for benten_ivm::view::ViewBudget
+impl core::marker::Sync for benten_ivm::view::ViewBudget
+impl core::marker::Unpin for benten_ivm::view::ViewBudget
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewBudget
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewBudget
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewBudget
+pub struct benten_ivm::view::ViewDefinition
+pub benten_ivm::view::ViewDefinition::input_pattern_label: core::option::Option<alloc::string::String>
+pub benten_ivm::view::ViewDefinition::output_label: alloc::string::String
+pub benten_ivm::view::ViewDefinition::strategy: benten_ivm::strategy::Strategy
+pub benten_ivm::view::ViewDefinition::view_id: alloc::string::String
+impl benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::as_node(&self) -> benten_core::Node
+pub fn benten_ivm::view::ViewDefinition::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+impl core::clone::Clone for benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::clone(&self) -> benten_ivm::view::ViewDefinition
+impl core::cmp::Eq for benten_ivm::view::ViewDefinition
+impl core::cmp::PartialEq for benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::eq(&self, other: &benten_ivm::view::ViewDefinition) -> bool
+impl core::fmt::Debug for benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::view::ViewDefinition
+impl core::marker::Freeze for benten_ivm::view::ViewDefinition
+impl core::marker::Send for benten_ivm::view::ViewDefinition
+impl core::marker::Sync for benten_ivm::view::ViewDefinition
+impl core::marker::Unpin for benten_ivm::view::ViewDefinition
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewDefinition
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewDefinition
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewDefinition
+pub struct benten_ivm::view::ViewQuery
+pub benten_ivm::view::ViewQuery::anchor_id: core::option::Option<u64>
+pub benten_ivm::view::ViewQuery::entity_cid: core::option::Option<benten_core::Cid>
+pub benten_ivm::view::ViewQuery::event_name: core::option::Option<alloc::string::String>
+pub benten_ivm::view::ViewQuery::label: core::option::Option<alloc::string::String>
+pub benten_ivm::view::ViewQuery::limit: core::option::Option<usize>
+pub benten_ivm::view::ViewQuery::offset: core::option::Option<usize>
+impl core::clone::Clone for benten_ivm::view::ViewQuery
+pub fn benten_ivm::view::ViewQuery::clone(&self) -> benten_ivm::view::ViewQuery
+impl core::default::Default for benten_ivm::view::ViewQuery
+pub fn benten_ivm::view::ViewQuery::default() -> benten_ivm::view::ViewQuery
+impl core::fmt::Debug for benten_ivm::view::ViewQuery
+pub fn benten_ivm::view::ViewQuery::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::view::ViewQuery
+impl core::marker::Send for benten_ivm::view::ViewQuery
+impl core::marker::Sync for benten_ivm::view::ViewQuery
+impl core::marker::Unpin for benten_ivm::view::ViewQuery
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewQuery
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewQuery
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewQuery
+pub trait benten_ivm::view::View: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub fn benten_ivm::view::View::id(&self) -> &str
+pub fn benten_ivm::view::View::is_stale(&self) -> bool
+pub fn benten_ivm::view::View::mark_stale(&mut self)
+pub fn benten_ivm::view::View::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::view::View::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::view::View::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::view::View::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::view::View::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::id(&self) -> &str
+pub fn benten_ivm::algorithm_b::AlgorithmBView::is_stale(&self) -> bool
+pub fn benten_ivm::algorithm_b::AlgorithmBView::mark_stale(&mut self)
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::algorithm_b::AlgorithmBView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::id(&self) -> &str
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::is_stale(&self) -> bool
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::mark_stale(&mut self)
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::id(&self) -> &str
+pub fn benten_ivm::views::content_listing::ContentListingView::is_stale(&self) -> bool
+pub fn benten_ivm::views::content_listing::ContentListingView::mark_stale(&mut self)
+pub fn benten_ivm::views::content_listing::ContentListingView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::content_listing::ContentListingView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::id(&self) -> &str
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::is_stale(&self) -> bool
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::mark_stale(&mut self)
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::id(&self) -> &str
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::is_stale(&self) -> bool
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::mark_stale(&mut self)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::id(&self) -> &str
+pub fn benten_ivm::views::version_current::VersionCurrentView::is_stale(&self) -> bool
+pub fn benten_ivm::views::version_current::VersionCurrentView::mark_stale(&mut self)
+pub fn benten_ivm::views::version_current::VersionCurrentView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::version_current::VersionCurrentView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub mod benten_ivm::views
+pub mod benten_ivm::views::capability_grants
+pub struct benten_ivm::views::capability_grants::CapabilityGrantsView
+impl benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::new() -> Self
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read_for_entity(&self, entity: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::id(&self) -> &str
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::is_stale(&self) -> bool
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::mark_stale(&mut self)
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::Send for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::Sync for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::Unpin for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::UnsafeUnpin for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub mod benten_ivm::views::content_listing
+pub struct benten_ivm::views::content_listing::ContentListingView
+impl benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::content_listing::ContentListingView::new(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_ivm::views::content_listing::ContentListingView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::content_listing::ContentListingView::read_page(&self, offset: usize, limit: usize) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::read_page_allow_stale(&self, offset: usize, limit: usize) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::rebuild_from_scratch(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::content_listing::ContentListingView::try_with_budget(budget: u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::with_budget_for_testing(budget: u64) -> Self
+pub fn benten_ivm::views::content_listing::ContentListingView::with_label_and_budget(label: impl core::convert::Into<alloc::string::String>, budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::id(&self) -> &str
+pub fn benten_ivm::views::content_listing::ContentListingView::is_stale(&self) -> bool
+pub fn benten_ivm::views::content_listing::ContentListingView::mark_stale(&mut self)
+pub fn benten_ivm::views::content_listing::ContentListingView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::content_listing::ContentListingView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::fmt::Debug for benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::Send for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::Sync for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::Unpin for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::UnsafeUnpin for benten_ivm::views::content_listing::ContentListingView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::content_listing::ContentListingView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::content_listing::ContentListingView
+pub mod benten_ivm::views::event_handler_dispatch
+pub struct benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::new() -> Self
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read_handlers_for_event(&self, event: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::id(&self) -> &str
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::is_stale(&self) -> bool
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::mark_stale(&mut self)
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::Send for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::Sync for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::Unpin for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::UnsafeUnpin for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub mod benten_ivm::views::governance_inheritance
+pub struct benten_ivm::views::governance_inheritance::EffectiveRules
+impl benten_ivm::views::governance_inheritance::EffectiveRules
+pub fn benten_ivm::views::governance_inheritance::EffectiveRules::cycle_detected(&self) -> bool
+pub fn benten_ivm::views::governance_inheritance::EffectiveRules::depth(&self) -> usize
+pub fn benten_ivm::views::governance_inheritance::EffectiveRules::rules(&self) -> &[benten_core::Cid]
+pub fn benten_ivm::views::governance_inheritance::EffectiveRules::was_truncated(&self) -> bool
+impl core::clone::Clone for benten_ivm::views::governance_inheritance::EffectiveRules
+pub fn benten_ivm::views::governance_inheritance::EffectiveRules::clone(&self) -> benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::fmt::Debug for benten_ivm::views::governance_inheritance::EffectiveRules
+pub fn benten_ivm::views::governance_inheritance::EffectiveRules::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::marker::Send for benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::marker::Sync for benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::marker::Unpin for benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::marker::UnsafeUnpin for benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::governance_inheritance::EffectiveRules
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::governance_inheritance::EffectiveRules
+pub struct benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::add_edge(&mut self, child: &benten_core::Cid, parent: &benten_core::Cid)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::effective_rules(&self, entity: &benten_core::Cid) -> benten_ivm::views::governance_inheritance::EffectiveRules
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::new() -> Self
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::on_change(&mut self, _node: benten_core::Node)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read_effective_rules(&self, entity: &benten_core::Cid) -> core::result::Result<benten_ivm::views::governance_inheritance::EffectiveRules, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::id(&self) -> &str
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::is_stale(&self) -> bool
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::mark_stale(&mut self)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::Send for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::Sync for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::Unpin for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::UnsafeUnpin for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub const benten_ivm::views::governance_inheritance::MAX_GOVERNANCE_DEPTH: usize
+pub mod benten_ivm::views::version_current
+pub struct benten_ivm::views::version_current::VersionCurrentView
+impl benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::version_current::VersionCurrentView::new() -> Self
+pub fn benten_ivm::views::version_current::VersionCurrentView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::version_current::VersionCurrentView::resolve<A: benten_ivm::views::version_current::AnchorRef>(&self, anchor: A) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::version_current::VersionCurrentView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::id(&self) -> &str
+pub fn benten_ivm::views::version_current::VersionCurrentView::is_stale(&self) -> bool
+pub fn benten_ivm::views::version_current::VersionCurrentView::mark_stale(&mut self)
+pub fn benten_ivm::views::version_current::VersionCurrentView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::version_current::VersionCurrentView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::Send for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::Sync for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::Unpin for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::UnsafeUnpin for benten_ivm::views::version_current::VersionCurrentView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::version_current::VersionCurrentView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::version_current::VersionCurrentView
+pub trait benten_ivm::views::version_current::AnchorRef
+pub fn benten_ivm::views::version_current::AnchorRef::to_anchor_id(&self) -> u64
+impl benten_ivm::views::version_current::AnchorRef for &benten_core::Cid
+pub fn &benten_core::Cid::to_anchor_id(&self) -> u64
+pub struct benten_ivm::views::CapabilityGrantsView
+impl benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::new() -> Self
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read_for_entity(&self, entity: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::id(&self) -> &str
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::is_stale(&self) -> bool
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::mark_stale(&mut self)
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::Send for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::Sync for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::Unpin for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::marker::UnsafeUnpin for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub struct benten_ivm::views::ContentListingView
+impl benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::content_listing::ContentListingView::new(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_ivm::views::content_listing::ContentListingView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::content_listing::ContentListingView::read_page(&self, offset: usize, limit: usize) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::read_page_allow_stale(&self, offset: usize, limit: usize) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::rebuild_from_scratch(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::content_listing::ContentListingView::try_with_budget(budget: u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::with_budget_for_testing(budget: u64) -> Self
+pub fn benten_ivm::views::content_listing::ContentListingView::with_label_and_budget(label: impl core::convert::Into<alloc::string::String>, budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::id(&self) -> &str
+pub fn benten_ivm::views::content_listing::ContentListingView::is_stale(&self) -> bool
+pub fn benten_ivm::views::content_listing::ContentListingView::mark_stale(&mut self)
+pub fn benten_ivm::views::content_listing::ContentListingView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::content_listing::ContentListingView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::fmt::Debug for benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::Send for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::Sync for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::Unpin for benten_ivm::views::content_listing::ContentListingView
+impl core::marker::UnsafeUnpin for benten_ivm::views::content_listing::ContentListingView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::content_listing::ContentListingView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::content_listing::ContentListingView
+pub struct benten_ivm::views::EventDispatchView
+impl benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::new() -> Self
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read_handlers_for_event(&self, event: &str) -> core::result::Result<alloc::vec::Vec<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::id(&self) -> &str
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::is_stale(&self) -> bool
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::mark_stale(&mut self)
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::Send for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::Sync for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::Unpin for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::marker::UnsafeUnpin for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub struct benten_ivm::views::GovernanceInheritanceView
+impl benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::add_edge(&mut self, child: &benten_core::Cid, parent: &benten_core::Cid)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::effective_rules(&self, entity: &benten_core::Cid) -> benten_ivm::views::governance_inheritance::EffectiveRules
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::new() -> Self
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::on_change(&mut self, _node: benten_core::Node)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read_effective_rules(&self, entity: &benten_core::Cid) -> core::result::Result<benten_ivm::views::governance_inheritance::EffectiveRules, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::id(&self) -> &str
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::is_stale(&self) -> bool
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::mark_stale(&mut self)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::Send for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::Sync for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::Unpin for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::marker::UnsafeUnpin for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub struct benten_ivm::views::VersionCurrentView
+impl benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::definition() -> benten_ivm::view::ViewDefinition
+pub fn benten_ivm::views::version_current::VersionCurrentView::new() -> Self
+pub fn benten_ivm::views::version_current::VersionCurrentView::on_change(&mut self, node: benten_core::Node)
+pub fn benten_ivm::views::version_current::VersionCurrentView::resolve<A: benten_ivm::views::version_current::AnchorRef>(&self, anchor: A) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::state(&self) -> benten_ivm::view::ViewState
+pub fn benten_ivm::views::version_current::VersionCurrentView::with_budget_for_testing(budget: u64) -> Self
+impl benten_ivm::view::View for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::id(&self) -> &str
+pub fn benten_ivm::views::version_current::VersionCurrentView::is_stale(&self) -> bool
+pub fn benten_ivm::views::version_current::VersionCurrentView::mark_stale(&mut self)
+pub fn benten_ivm::views::version_current::VersionCurrentView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::version_current::VersionCurrentView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::default::Default for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::default() -> Self
+impl core::fmt::Debug for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::Send for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::Sync for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::Unpin for benten_ivm::views::version_current::VersionCurrentView
+impl core::marker::UnsafeUnpin for benten_ivm::views::version_current::VersionCurrentView
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::version_current::VersionCurrentView
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::version_current::VersionCurrentView
+#[non_exhaustive] pub enum benten_ivm::AlgorithmError
+pub benten_ivm::AlgorithmError::CanonicalIdAnchorPrefixRefused
+pub benten_ivm::AlgorithmError::CanonicalIdAnchorPrefixRefused::got_prefix: alloc::string::String
+pub benten_ivm::AlgorithmError::CanonicalIdAnchorPrefixRefused::view_id: alloc::string::String
+pub benten_ivm::AlgorithmError::SelfReferentialSubgraphRejected
+pub benten_ivm::AlgorithmError::SelfReferentialSubgraphRejected::view_id: alloc::string::String
+pub benten_ivm::AlgorithmError::TypedOutputProjectionMismatch
+pub benten_ivm::AlgorithmError::TypedOutputProjectionMismatch::declared: core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+pub benten_ivm::AlgorithmError::TypedOutputProjectionMismatch::required: core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+pub benten_ivm::AlgorithmError::TypedOutputProjectionMismatch::view_id: alloc::string::String
+pub benten_ivm::AlgorithmError::ViewLabelMismatch
+pub benten_ivm::AlgorithmError::ViewLabelMismatch::expected_label: alloc::string::String
+pub benten_ivm::AlgorithmError::ViewLabelMismatch::got_pattern: benten_ivm::algorithm_b::LabelPattern
+pub benten_ivm::AlgorithmError::ViewLabelMismatch::view_id: alloc::string::String
+impl core::error::Error for benten_ivm::algorithm_b::AlgorithmError
+impl core::fmt::Debug for benten_ivm::algorithm_b::AlgorithmError
+pub fn benten_ivm::algorithm_b::AlgorithmError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_ivm::algorithm_b::AlgorithmError
+pub fn benten_ivm::algorithm_b::AlgorithmError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::Send for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::Sync for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmError
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmError
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmError
+pub enum benten_ivm::KernelOutput
+pub benten_ivm::KernelOutput::Current(core::option::Option<alloc::vec::Vec<u8>>)
+pub benten_ivm::KernelOutput::Rows(alloc::vec::Vec<u8>)
+pub benten_ivm::KernelOutput::Rules(alloc::vec::Vec<u8>)
+impl core::clone::Clone for benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::subgraph_spec::KernelOutput::clone(&self) -> benten_ivm::subgraph_spec::KernelOutput
+impl core::cmp::Eq for benten_ivm::subgraph_spec::KernelOutput
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::subgraph_spec::KernelOutput::eq(&self, other: &benten_ivm::subgraph_spec::KernelOutput) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::subgraph_spec::KernelOutput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Freeze for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Send for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Sync for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelOutput
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelOutput
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelOutput
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelOutput
+pub enum benten_ivm::LabelPattern
+pub benten_ivm::LabelPattern::AnchorPrefix(alloc::string::String)
+pub benten_ivm::LabelPattern::Exact(alloc::string::String)
+impl benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::anchor_prefix(prefix: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_ivm::algorithm_b::LabelPattern::as_label_str(&self) -> &str
+pub fn benten_ivm::algorithm_b::LabelPattern::exact(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_ivm::algorithm_b::LabelPattern::matches(&self, label: &str) -> bool
+impl core::clone::Clone for benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::clone(&self) -> benten_ivm::algorithm_b::LabelPattern
+impl core::cmp::Eq for benten_ivm::algorithm_b::LabelPattern
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::eq(&self, other: &benten_ivm::algorithm_b::LabelPattern) -> bool
+impl core::fmt::Debug for benten_ivm::algorithm_b::LabelPattern
+pub fn benten_ivm::algorithm_b::LabelPattern::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Freeze for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Send for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Sync for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::Unpin for benten_ivm::algorithm_b::LabelPattern
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::LabelPattern
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::LabelPattern
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::LabelPattern
+pub enum benten_ivm::Strategy
+pub benten_ivm::Strategy::A
+pub benten_ivm::Strategy::B
+pub benten_ivm::Strategy::Reserved
+impl core::clone::Clone for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::clone(&self) -> benten_ivm::strategy::Strategy
+impl core::cmp::Eq for benten_ivm::strategy::Strategy
+impl core::cmp::PartialEq for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::eq(&self, other: &benten_ivm::strategy::Strategy) -> bool
+impl core::fmt::Debug for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_ivm::strategy::Strategy
+pub fn benten_ivm::strategy::Strategy::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for benten_ivm::strategy::Strategy
+impl core::marker::StructuralPartialEq for benten_ivm::strategy::Strategy
+impl core::marker::Freeze for benten_ivm::strategy::Strategy
+impl core::marker::Send for benten_ivm::strategy::Strategy
+impl core::marker::Sync for benten_ivm::strategy::Strategy
+impl core::marker::Unpin for benten_ivm::strategy::Strategy
+impl core::marker::UnsafeUnpin for benten_ivm::strategy::Strategy
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::strategy::Strategy
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::strategy::Strategy
+pub enum benten_ivm::TypedOutputProjection
+pub benten_ivm::TypedOutputProjection::Current
+pub benten_ivm::TypedOutputProjection::Rules
+impl core::clone::Clone for benten_ivm::subgraph_spec::TypedOutputProjection
+pub fn benten_ivm::subgraph_spec::TypedOutputProjection::clone(&self) -> benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::cmp::Eq for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::TypedOutputProjection
+pub fn benten_ivm::subgraph_spec::TypedOutputProjection::eq(&self, other: &benten_ivm::subgraph_spec::TypedOutputProjection) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::TypedOutputProjection
+pub fn benten_ivm::subgraph_spec::TypedOutputProjection::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Freeze for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Send for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Sync for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::Unpin for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::TypedOutputProjection
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::TypedOutputProjection
+#[non_exhaustive] pub enum benten_ivm::ViewError
+pub benten_ivm::ViewError::BudgetExceeded(alloc::string::String)
+pub benten_ivm::ViewError::NodeCidComputeFailed
+pub benten_ivm::ViewError::NodeCidComputeFailed::detail: alloc::string::String
+pub benten_ivm::ViewError::NodeCidComputeFailed::view_id: alloc::string::String
+pub benten_ivm::ViewError::PatternMismatch(alloc::string::String)
+pub benten_ivm::ViewError::Stale
+pub benten_ivm::ViewError::Stale::view_id: alloc::string::String
+pub benten_ivm::ViewError::StrategyNotImplemented
+pub benten_ivm::ViewError::StrategyNotImplemented::deferred_to_phase: alloc::string::String
+pub benten_ivm::ViewError::StrategyNotImplemented::strategy: benten_ivm::strategy::Strategy
+impl benten_ivm::view::ViewError
+pub fn benten_ivm::view::ViewError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_ivm::view::ViewError
+impl core::fmt::Debug for benten_ivm::view::ViewError
+pub fn benten_ivm::view::ViewError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_ivm::view::ViewError
+pub fn benten_ivm::view::ViewError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::view::ViewError
+impl core::marker::Send for benten_ivm::view::ViewError
+impl core::marker::Sync for benten_ivm::view::ViewError
+impl core::marker::Unpin for benten_ivm::view::ViewError
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewError
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewError
+pub enum benten_ivm::ViewResult
+pub benten_ivm::ViewResult::Cids(alloc::vec::Vec<benten_core::Cid>)
+pub benten_ivm::ViewResult::Current(core::option::Option<benten_core::Cid>)
+pub benten_ivm::ViewResult::Rules(alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>)
+impl core::clone::Clone for benten_ivm::view::ViewResult
+pub fn benten_ivm::view::ViewResult::clone(&self) -> benten_ivm::view::ViewResult
+impl core::fmt::Debug for benten_ivm::view::ViewResult
+pub fn benten_ivm::view::ViewResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::view::ViewResult
+impl core::marker::Send for benten_ivm::view::ViewResult
+impl core::marker::Sync for benten_ivm::view::ViewResult
+impl core::marker::Unpin for benten_ivm::view::ViewResult
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewResult
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewResult
+pub enum benten_ivm::ViewState
+pub benten_ivm::ViewState::Fresh
+pub benten_ivm::ViewState::Stale
+impl core::clone::Clone for benten_ivm::view::ViewState
+pub fn benten_ivm::view::ViewState::clone(&self) -> benten_ivm::view::ViewState
+impl core::cmp::Eq for benten_ivm::view::ViewState
+impl core::cmp::PartialEq for benten_ivm::view::ViewState
+pub fn benten_ivm::view::ViewState::eq(&self, other: &benten_ivm::view::ViewState) -> bool
+impl core::fmt::Debug for benten_ivm::view::ViewState
+pub fn benten_ivm::view::ViewState::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::view::ViewState
+impl core::marker::StructuralPartialEq for benten_ivm::view::ViewState
+impl core::marker::Freeze for benten_ivm::view::ViewState
+impl core::marker::Send for benten_ivm::view::ViewState
+impl core::marker::Sync for benten_ivm::view::ViewState
+impl core::marker::Unpin for benten_ivm::view::ViewState
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewState
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewState
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewState
+pub struct benten_ivm::AlgorithmBView
+impl benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id(view_id: &str, definition: benten_ivm::view::ViewDefinition) -> core::result::Result<Self, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id_with_budget(view_id: &str, definition: benten_ivm::view::ViewDefinition, budget: u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::materialize(&self) -> benten_ivm::subgraph_spec::KernelOutput
+pub fn benten_ivm::algorithm_b::AlgorithmBView::register(view_id: &str, label_pattern: benten_ivm::algorithm_b::LabelPattern, projection: benten_ivm::algorithm_b::Projection) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::register_subgraph(spec: benten_ivm::subgraph_spec::SubgraphSpec) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::register_with_budget(view_id: &str, label_pattern: benten_ivm::algorithm_b::LabelPattern, projection: benten_ivm::algorithm_b::Projection, budget: u64) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::try_register(view_id: &str, label_pattern: benten_ivm::algorithm_b::LabelPattern, projection: benten_ivm::algorithm_b::Projection) -> core::result::Result<Self, benten_ivm::algorithm_b::AlgorithmError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::walk_writes(&mut self, writes: &[benten_ivm::subgraph_spec::KernelInput]) -> core::result::Result<benten_ivm::subgraph_spec::KernelOutput, benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::id(&self) -> &str
+pub fn benten_ivm::algorithm_b::AlgorithmBView::is_stale(&self) -> bool
+pub fn benten_ivm::algorithm_b::AlgorithmBView::mark_stale(&mut self)
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::algorithm_b::AlgorithmBView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl core::fmt::Debug for benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::Send for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::Sync for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmBView
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmBView
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
+impl !core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
+pub struct benten_ivm::CanonicalViewEntry
+impl benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::hardcoded_label(&self) -> core::option::Option<&'static str>
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::id(&self) -> &'static str
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::legacy_input_pattern_label(&self) -> &'static str
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::typed_output_projection(&self) -> core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+impl core::clone::Clone for benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::clone(&self) -> benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::cmp::Eq for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::eq(&self, other: &benten_ivm::algorithm_b::CanonicalViewEntry) -> bool
+impl core::fmt::Debug for benten_ivm::algorithm_b::CanonicalViewEntry
+pub fn benten_ivm::algorithm_b::CanonicalViewEntry::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Freeze for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Send for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Sync for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::Unpin for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::CanonicalViewEntry
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::CanonicalViewEntry
+pub struct benten_ivm::CanonicalViews
+impl benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::dispatch(&self, view_id: &str) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::algorithm_b::CanonicalViews::ids(&self) -> impl core::iter::traits::iterator::Iterator<Item = &'static str>
+pub fn benten_ivm::algorithm_b::CanonicalViews::is_canonical(&self, view_id: &str) -> bool
+pub fn benten_ivm::algorithm_b::CanonicalViews::lookup(&self, view_id: &str) -> core::option::Option<benten_ivm::algorithm_b::CanonicalViewEntry>
+pub fn benten_ivm::algorithm_b::CanonicalViews::registry() -> Self
+impl core::clone::Clone for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::clone(&self) -> benten_ivm::algorithm_b::CanonicalViews
+impl core::cmp::Eq for benten_ivm::algorithm_b::CanonicalViews
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::eq(&self, other: &benten_ivm::algorithm_b::CanonicalViews) -> bool
+impl core::default::Default for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::default() -> benten_ivm::algorithm_b::CanonicalViews
+impl core::fmt::Debug for benten_ivm::algorithm_b::CanonicalViews
+pub fn benten_ivm::algorithm_b::CanonicalViews::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Freeze for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Send for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Sync for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::Unpin for benten_ivm::algorithm_b::CanonicalViews
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::CanonicalViews
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::CanonicalViews
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::CanonicalViews
+pub struct benten_ivm::KernelInput
+pub benten_ivm::KernelInput::created_at: i64
+pub benten_ivm::KernelInput::disambiguator: u64
+pub benten_ivm::KernelInput::label: alloc::string::String
+impl benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::new(label: impl core::convert::Into<alloc::string::String>, created_at: i64, disambiguator: u64) -> Self
+impl core::clone::Clone for benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::clone(&self) -> benten_ivm::subgraph_spec::KernelInput
+impl core::cmp::Eq for benten_ivm::subgraph_spec::KernelInput
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::eq(&self, other: &benten_ivm::subgraph_spec::KernelInput) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::KernelInput
+pub fn benten_ivm::subgraph_spec::KernelInput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Freeze for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Send for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Sync for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelInput
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelInput
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelInput
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelInput
+pub struct benten_ivm::Projection
+impl benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::all_props() -> Self
+pub fn benten_ivm::algorithm_b::Projection::apply(&self, node: benten_core::Node) -> benten_core::Node
+impl core::clone::Clone for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::clone(&self) -> benten_ivm::algorithm_b::Projection
+impl core::cmp::Eq for benten_ivm::algorithm_b::Projection
+impl core::cmp::PartialEq for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::eq(&self, other: &benten_ivm::algorithm_b::Projection) -> bool
+impl core::default::Default for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::default() -> benten_ivm::algorithm_b::Projection
+impl core::fmt::Debug for benten_ivm::algorithm_b::Projection
+pub fn benten_ivm::algorithm_b::Projection::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::algorithm_b::Projection
+impl core::marker::StructuralPartialEq for benten_ivm::algorithm_b::Projection
+impl core::marker::Freeze for benten_ivm::algorithm_b::Projection
+impl core::marker::Send for benten_ivm::algorithm_b::Projection
+impl core::marker::Sync for benten_ivm::algorithm_b::Projection
+impl core::marker::Unpin for benten_ivm::algorithm_b::Projection
+impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::Projection
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::Projection
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::Projection
+pub struct benten_ivm::SubgraphSpec
+pub benten_ivm::SubgraphSpec::budget: core::option::Option<u64>
+pub benten_ivm::SubgraphSpec::label_pattern: benten_ivm::algorithm_b::LabelPattern
+pub benten_ivm::SubgraphSpec::projection: benten_ivm::algorithm_b::Projection
+pub benten_ivm::SubgraphSpec::self_referential: bool
+pub benten_ivm::SubgraphSpec::typed_output_projection: core::option::Option<benten_ivm::subgraph_spec::TypedOutputProjection>
+pub benten_ivm::SubgraphSpec::view_id: alloc::string::String
+impl benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::for_canonical_view(view_id: &str) -> core::result::Result<Self, alloc::string::String>
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::is_canonical(&self) -> bool
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::user_view(view_id: impl core::convert::Into<alloc::string::String>, label_pattern: benten_ivm::algorithm_b::LabelPattern) -> core::result::Result<Self, alloc::string::String>
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::with_budget(self, budget: core::option::Option<u64>) -> Self
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::with_label_pattern(self, label_pattern: benten_ivm::algorithm_b::LabelPattern) -> Self
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::with_self_reference(self) -> Self
+impl core::clone::Clone for benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::clone(&self) -> benten_ivm::subgraph_spec::SubgraphSpec
+impl core::cmp::Eq for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::cmp::PartialEq for benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::eq(&self, other: &benten_ivm::subgraph_spec::SubgraphSpec) -> bool
+impl core::fmt::Debug for benten_ivm::subgraph_spec::SubgraphSpec
+pub fn benten_ivm::subgraph_spec::SubgraphSpec::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Freeze for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Send for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Sync for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::Unpin for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
+pub struct benten_ivm::Subscriber
+impl benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::new() -> Self
+pub fn benten_ivm::subscriber::Subscriber::read_view(&self, view_id: &str, query: &benten_ivm::view::ViewQuery) -> core::option::Option<core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>>
+pub fn benten_ivm::subscriber::Subscriber::read_view_allow_stale(&self, view_id: &str, query: &benten_ivm::view::ViewQuery) -> core::option::Option<core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>>
+pub fn benten_ivm::subscriber::Subscriber::register_view(&self, view: alloc::boxed::Box<dyn benten_ivm::view::View>)
+pub fn benten_ivm::subscriber::Subscriber::register_view_if_absent(&self, view: alloc::boxed::Box<dyn benten_ivm::view::View>) -> bool
+pub fn benten_ivm::subscriber::Subscriber::route_change_event(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<usize, benten_ivm::view::ViewError>
+pub fn benten_ivm::subscriber::Subscriber::stale_count_tally(&self) -> usize
+pub fn benten_ivm::subscriber::Subscriber::view_count(&self) -> usize
+pub fn benten_ivm::subscriber::Subscriber::view_ids(&self) -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_ivm::subscriber::Subscriber::view_is_stale(&self, view_id: &str) -> core::option::Option<bool>
+pub fn benten_ivm::subscriber::Subscriber::view_strategy(&self, view_id: &str) -> core::option::Option<benten_ivm::strategy::Strategy>
+pub fn benten_ivm::subscriber::Subscriber::with_view(self, view: alloc::boxed::Box<dyn benten_ivm::view::View>) -> Self
+impl benten_graph::store::ChangeSubscriber for benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::on_change(&self, event: &benten_graph::store::ChangeEvent)
+impl core::default::Default for benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::default() -> Self
+impl core::fmt::Debug for benten_ivm::subscriber::Subscriber
+pub fn benten_ivm::subscriber::Subscriber::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_ivm::subscriber::Subscriber
+impl core::marker::Send for benten_ivm::subscriber::Subscriber
+impl core::marker::Sync for benten_ivm::subscriber::Subscriber
+impl core::marker::Unpin for benten_ivm::subscriber::Subscriber
+impl core::marker::UnsafeUnpin for benten_ivm::subscriber::Subscriber
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subscriber::Subscriber
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subscriber::Subscriber
+pub struct benten_ivm::ViewBudget
+pub benten_ivm::ViewBudget::max_work_per_update: u64
+impl benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::new(max_work_per_update: u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
+impl core::clone::Clone for benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::clone(&self) -> benten_ivm::view::ViewBudget
+impl core::cmp::Eq for benten_ivm::view::ViewBudget
+impl core::cmp::PartialEq for benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::eq(&self, other: &benten_ivm::view::ViewBudget) -> bool
+impl core::fmt::Debug for benten_ivm::view::ViewBudget
+pub fn benten_ivm::view::ViewBudget::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_ivm::view::ViewBudget
+impl core::marker::StructuralPartialEq for benten_ivm::view::ViewBudget
+impl core::marker::Freeze for benten_ivm::view::ViewBudget
+impl core::marker::Send for benten_ivm::view::ViewBudget
+impl core::marker::Sync for benten_ivm::view::ViewBudget
+impl core::marker::Unpin for benten_ivm::view::ViewBudget
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewBudget
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewBudget
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewBudget
+pub struct benten_ivm::ViewDefinition
+pub benten_ivm::ViewDefinition::input_pattern_label: core::option::Option<alloc::string::String>
+pub benten_ivm::ViewDefinition::output_label: alloc::string::String
+pub benten_ivm::ViewDefinition::strategy: benten_ivm::strategy::Strategy
+pub benten_ivm::ViewDefinition::view_id: alloc::string::String
+impl benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::as_node(&self) -> benten_core::Node
+pub fn benten_ivm::view::ViewDefinition::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+impl core::clone::Clone for benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::clone(&self) -> benten_ivm::view::ViewDefinition
+impl core::cmp::Eq for benten_ivm::view::ViewDefinition
+impl core::cmp::PartialEq for benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::eq(&self, other: &benten_ivm::view::ViewDefinition) -> bool
+impl core::fmt::Debug for benten_ivm::view::ViewDefinition
+pub fn benten_ivm::view::ViewDefinition::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_ivm::view::ViewDefinition
+impl core::marker::Freeze for benten_ivm::view::ViewDefinition
+impl core::marker::Send for benten_ivm::view::ViewDefinition
+impl core::marker::Sync for benten_ivm::view::ViewDefinition
+impl core::marker::Unpin for benten_ivm::view::ViewDefinition
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewDefinition
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewDefinition
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewDefinition
+pub struct benten_ivm::ViewQuery
+pub benten_ivm::ViewQuery::anchor_id: core::option::Option<u64>
+pub benten_ivm::ViewQuery::entity_cid: core::option::Option<benten_core::Cid>
+pub benten_ivm::ViewQuery::event_name: core::option::Option<alloc::string::String>
+pub benten_ivm::ViewQuery::label: core::option::Option<alloc::string::String>
+pub benten_ivm::ViewQuery::limit: core::option::Option<usize>
+pub benten_ivm::ViewQuery::offset: core::option::Option<usize>
+impl core::clone::Clone for benten_ivm::view::ViewQuery
+pub fn benten_ivm::view::ViewQuery::clone(&self) -> benten_ivm::view::ViewQuery
+impl core::default::Default for benten_ivm::view::ViewQuery
+pub fn benten_ivm::view::ViewQuery::default() -> benten_ivm::view::ViewQuery
+impl core::fmt::Debug for benten_ivm::view::ViewQuery
+pub fn benten_ivm::view::ViewQuery::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_ivm::view::ViewQuery
+impl core::marker::Send for benten_ivm::view::ViewQuery
+impl core::marker::Sync for benten_ivm::view::ViewQuery
+impl core::marker::Unpin for benten_ivm::view::ViewQuery
+impl core::marker::UnsafeUnpin for benten_ivm::view::ViewQuery
+impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewQuery
+impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewQuery
+pub trait benten_ivm::View: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub fn benten_ivm::View::id(&self) -> &str
+pub fn benten_ivm::View::is_stale(&self) -> bool
+pub fn benten_ivm::View::mark_stale(&mut self)
+pub fn benten_ivm::View::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::View::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::View::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::View::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::View::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::algorithm_b::AlgorithmBView
+pub fn benten_ivm::algorithm_b::AlgorithmBView::id(&self) -> &str
+pub fn benten_ivm::algorithm_b::AlgorithmBView::is_stale(&self) -> bool
+pub fn benten_ivm::algorithm_b::AlgorithmBView::mark_stale(&mut self)
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::algorithm_b::AlgorithmBView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::algorithm_b::AlgorithmBView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::capability_grants::CapabilityGrantsView
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::id(&self) -> &str
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::is_stale(&self) -> bool
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::mark_stale(&mut self)
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::content_listing::ContentListingView
+pub fn benten_ivm::views::content_listing::ContentListingView::id(&self) -> &str
+pub fn benten_ivm::views::content_listing::ContentListingView::is_stale(&self) -> bool
+pub fn benten_ivm::views::content_listing::ContentListingView::mark_stale(&mut self)
+pub fn benten_ivm::views::content_listing::ContentListingView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::content_listing::ContentListingView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::content_listing::ContentListingView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::event_handler_dispatch::EventDispatchView
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::id(&self) -> &str
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::is_stale(&self) -> bool
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::mark_stale(&mut self)
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::id(&self) -> &str
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::is_stale(&self) -> bool
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::mark_stale(&mut self)
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+impl benten_ivm::view::View for benten_ivm::views::version_current::VersionCurrentView
+pub fn benten_ivm::views::version_current::VersionCurrentView::id(&self) -> &str
+pub fn benten_ivm::views::version_current::VersionCurrentView::is_stale(&self) -> bool
+pub fn benten_ivm::views::version_current::VersionCurrentView::mark_stale(&mut self)
+pub fn benten_ivm::views::version_current::VersionCurrentView::read(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::read_allow_stale(&self, query: &benten_ivm::view::ViewQuery) -> core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::rebuild(&mut self) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::views::version_current::VersionCurrentView::strategy(&self) -> benten_ivm::strategy::Strategy
+pub fn benten_ivm::views::version_current::VersionCurrentView::update(&mut self, event: &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
+pub fn benten_ivm::materialize_inner_kernel_read(view: &benten_ivm::algorithm_b::AlgorithmBView) -> alloc::vec::Vec<u8>
+pub type benten_ivm::Algorithm = benten_ivm::algorithm_b::AlgorithmBView

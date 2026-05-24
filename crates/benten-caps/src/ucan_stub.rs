@@ -43,6 +43,8 @@ impl LegacyUcanStubBackend {
     }
 }
 
+impl crate::policy::sealed::Sealed for LegacyUcanStubBackend {}
+
 impl CapabilityPolicy for LegacyUcanStubBackend {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         Err(CapError::NotImplemented {

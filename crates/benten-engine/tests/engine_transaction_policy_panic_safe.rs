@@ -19,6 +19,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy};
 use benten_core::{Node, Value};
 use benten_engine::Engine;
@@ -29,6 +30,8 @@ use std::collections::BTreeMap;
 /// callback, inside the engine's outer `Mutex::lock()` path.
 #[derive(Debug)]
 struct PanickingPolicy;
+
+impl Sealed for PanickingPolicy {}
 
 impl CapabilityPolicy for PanickingPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

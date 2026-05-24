@@ -45,13 +45,13 @@ use benten_core::Cid;
 // RED: `benten_caps::authorization_grant` does NOT exist at HEAD.
 // G-CORE-3b creates it with `AuthorizationGrant` carrying the
 // ONE-signed-artifact shape per D-4M-R3 + §1.A.FROZEN item 15(d).
-// `KeyMaterial` is the spike-validated wrapped-key envelope (one-field
+// `GrantKeyMaterial` is the spike-validated wrapped-key envelope (one-field
 // swap from `ByteBuf` to `WrappedKey` per Spike I).
 use benten_caps::authorization_grant::{
-    AuthorizationGrant, AuthorizationGrantError, KeyMaterial, UcanEnvelope,
+    AuthorizationGrant, AuthorizationGrantError, GrantKeyMaterial, UcanEnvelope,
 };
 
-// Stub-ish helpers that construct synthetic UCAN + KeyMaterial inputs the
+// Stub-ish helpers that construct synthetic UCAN + GrantKeyMaterial inputs the
 // G-CORE-3b implementer's production types will accept. Their concrete
 // shape is named at the surface but their fields are implementation
 // details the implementer owns. We use `*_for_test` helpers the implementer
@@ -71,8 +71,8 @@ fn audience_bob() -> Cid {
 fn synthetic_ucan_for(audience: Cid) -> UcanEnvelope {
     UcanEnvelope::synthetic_for_test(audience)
 }
-fn synthetic_key_material() -> KeyMaterial {
-    KeyMaterial::synthetic_for_test()
+fn synthetic_key_material() -> GrantKeyMaterial {
+    GrantKeyMaterial::synthetic_for_test()
 }
 
 // ---------------------------------------------------------------------------
@@ -123,13 +123,13 @@ fn stolen_ucan_without_keys_binding_sig_rejects() {
     let km_issued = synthetic_key_material();
     let grant = AuthorizationGrant::issue_envelopes_for_test(ucan, km_issued, audience).unwrap();
 
-    // Attacker swaps the KeyMaterial half AFTER the issuer signed.
-    let km_attacker_fresh = KeyMaterial::synthetic_for_test_distinct(1);
+    // Attacker swaps the GrantKeyMaterial half AFTER the issuer signed.
+    let km_attacker_fresh = GrantKeyMaterial::synthetic_for_test_distinct(1);
     let tampered = grant.with_swapped_key_material_for_test(km_attacker_fresh);
 
     let err = tampered
         .verify_binding(audience)
-        .expect_err("stolen-UCAN + attacker KeyMaterial MUST fail (A-1)");
+        .expect_err("stolen-UCAN + attacker GrantKeyMaterial MUST fail (A-1)");
     assert!(
         matches!(err, AuthorizationGrantError::BindingMismatch { .. }),
         "expected BindingMismatch typed-reject; got {:?}",
@@ -138,11 +138,11 @@ fn stolen_ucan_without_keys_binding_sig_rejects() {
 }
 
 // ---------------------------------------------------------------------------
-// Arm A-2 — Stolen-keys-without-UCAN: present KeyMaterial without a
+// Arm A-2 — Stolen-keys-without-UCAN: present GrantKeyMaterial without a
 // matching UCAN ⇒ grant validator rejects.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: an attacker who lifts `KeyMaterial` but presents
+/// RED until G-CORE-3b: an attacker who lifts `GrantKeyMaterial` but presents
 /// a DIFFERENT UCAN (e.g. one with different `aud`/`exp`/`nbf`) cannot
 /// satisfy `binding_sig` ⇒ typed `BindingMismatch`.
 #[test]
@@ -158,7 +158,7 @@ fn stolen_keys_without_ucan_binding_sig_rejects() {
 
     let err = tampered
         .verify_binding(audience)
-        .expect_err("stolen-KeyMaterial + attacker UCAN MUST fail (A-2)");
+        .expect_err("stolen-GrantKeyMaterial + attacker UCAN MUST fail (A-2)");
     assert!(
         matches!(err, AuthorizationGrantError::BindingMismatch { .. }),
         "expected BindingMismatch typed-reject; got {:?}",

@@ -1,11 +1,111 @@
-# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
-#
-# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
-# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). Seed
-# baseline; first nightly cargo-public-api run replaces with full
-# `cargo public-api -p benten-dsl-compiler --simplified` output.
-#
-# Pinned by `crates/benten-engine/tests/cargo_public_api_drift.rs`.
-
-crate = benten-dsl-compiler
-phase_3_seeded_at = G20-A3 wave-8a
+ Documenting benten-dsl-compiler v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-dsl-compiler)
+pub mod benten_dsl_compiler
+pub use benten_dsl_compiler::PrimitiveKind
+pub enum benten_dsl_compiler::CompileError
+pub benten_dsl_compiler::CompileError::Backend(alloc::string::String)
+pub benten_dsl_compiler::CompileError::Build(benten_dsl_compiler::Diagnostic)
+pub benten_dsl_compiler::CompileError::Io(alloc::string::String)
+pub benten_dsl_compiler::CompileError::Parse(benten_dsl_compiler::Diagnostic)
+pub benten_dsl_compiler::CompileError::Semantic(benten_dsl_compiler::Diagnostic)
+impl benten_dsl_compiler::CompileError
+pub fn benten_dsl_compiler::CompileError::backend(msg: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_dsl_compiler::CompileError::code(&self) -> benten_errors::ErrorCode
+pub fn benten_dsl_compiler::CompileError::diagnostic(&self) -> core::option::Option<&benten_dsl_compiler::Diagnostic>
+pub fn benten_dsl_compiler::CompileError::error_code(&self) -> &'static str
+pub fn benten_dsl_compiler::CompileError::io(msg: impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for benten_dsl_compiler::CompileError
+pub fn benten_dsl_compiler::CompileError::clone(&self) -> benten_dsl_compiler::CompileError
+impl core::error::Error for benten_dsl_compiler::CompileError
+impl core::fmt::Debug for benten_dsl_compiler::CompileError
+pub fn benten_dsl_compiler::CompileError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_dsl_compiler::CompileError
+pub fn benten_dsl_compiler::CompileError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_dsl_compiler::CompileError
+impl core::marker::Send for benten_dsl_compiler::CompileError
+impl core::marker::Sync for benten_dsl_compiler::CompileError
+impl core::marker::Unpin for benten_dsl_compiler::CompileError
+impl core::marker::UnsafeUnpin for benten_dsl_compiler::CompileError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::CompileError
+impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::CompileError
+pub struct benten_dsl_compiler::CompiledPrimitive
+pub benten_dsl_compiler::CompiledPrimitive::kind: benten_core::subgraph::PrimitiveKind
+pub benten_dsl_compiler::CompiledPrimitive::properties: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
+impl core::clone::Clone for benten_dsl_compiler::CompiledPrimitive
+pub fn benten_dsl_compiler::CompiledPrimitive::clone(&self) -> benten_dsl_compiler::CompiledPrimitive
+impl core::fmt::Debug for benten_dsl_compiler::CompiledPrimitive
+pub fn benten_dsl_compiler::CompiledPrimitive::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_dsl_compiler::CompiledPrimitive
+impl core::marker::Send for benten_dsl_compiler::CompiledPrimitive
+impl core::marker::Sync for benten_dsl_compiler::CompiledPrimitive
+impl core::marker::Unpin for benten_dsl_compiler::CompiledPrimitive
+impl core::marker::UnsafeUnpin for benten_dsl_compiler::CompiledPrimitive
+impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::CompiledPrimitive
+impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::CompiledPrimitive
+pub struct benten_dsl_compiler::CompiledSubgraph
+pub benten_dsl_compiler::CompiledSubgraph::primitives: alloc::vec::Vec<benten_dsl_compiler::CompiledPrimitive>
+pub benten_dsl_compiler::CompiledSubgraph::subgraph: benten_core::subgraph::Subgraph
+impl core::clone::Clone for benten_dsl_compiler::CompiledSubgraph
+pub fn benten_dsl_compiler::CompiledSubgraph::clone(&self) -> benten_dsl_compiler::CompiledSubgraph
+impl core::fmt::Debug for benten_dsl_compiler::CompiledSubgraph
+pub fn benten_dsl_compiler::CompiledSubgraph::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_dsl_compiler::CompiledSubgraph
+impl core::marker::Send for benten_dsl_compiler::CompiledSubgraph
+impl core::marker::Sync for benten_dsl_compiler::CompiledSubgraph
+impl core::marker::Unpin for benten_dsl_compiler::CompiledSubgraph
+impl core::marker::UnsafeUnpin for benten_dsl_compiler::CompiledSubgraph
+impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::CompiledSubgraph
+impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::CompiledSubgraph
+pub struct benten_dsl_compiler::Diagnostic
+pub benten_dsl_compiler::Diagnostic::error_code: &'static str
+pub benten_dsl_compiler::Diagnostic::message: alloc::string::String
+pub benten_dsl_compiler::Diagnostic::span: core::option::Option<benten_dsl_compiler::Span>
+impl benten_dsl_compiler::Diagnostic
+pub fn benten_dsl_compiler::Diagnostic::column(&self) -> core::option::Option<u32>
+pub fn benten_dsl_compiler::Diagnostic::line(&self) -> core::option::Option<u32>
+impl core::clone::Clone for benten_dsl_compiler::Diagnostic
+pub fn benten_dsl_compiler::Diagnostic::clone(&self) -> benten_dsl_compiler::Diagnostic
+impl core::fmt::Debug for benten_dsl_compiler::Diagnostic
+pub fn benten_dsl_compiler::Diagnostic::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_dsl_compiler::Diagnostic
+pub fn benten_dsl_compiler::Diagnostic::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_dsl_compiler::Diagnostic
+impl core::marker::Send for benten_dsl_compiler::Diagnostic
+impl core::marker::Sync for benten_dsl_compiler::Diagnostic
+impl core::marker::Unpin for benten_dsl_compiler::Diagnostic
+impl core::marker::UnsafeUnpin for benten_dsl_compiler::Diagnostic
+impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::Diagnostic
+impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::Diagnostic
+pub struct benten_dsl_compiler::Span
+pub benten_dsl_compiler::Span::end_column: u32
+pub benten_dsl_compiler::Span::end_line: u32
+pub benten_dsl_compiler::Span::end_offset: u32
+pub benten_dsl_compiler::Span::start_column: u32
+pub benten_dsl_compiler::Span::start_line: u32
+pub benten_dsl_compiler::Span::start_offset: u32
+impl benten_dsl_compiler::Span
+pub fn benten_dsl_compiler::Span::point(line: u32, column: u32, offset: u32) -> Self
+impl core::clone::Clone for benten_dsl_compiler::Span
+pub fn benten_dsl_compiler::Span::clone(&self) -> benten_dsl_compiler::Span
+impl core::cmp::Eq for benten_dsl_compiler::Span
+impl core::cmp::PartialEq for benten_dsl_compiler::Span
+pub fn benten_dsl_compiler::Span::eq(&self, other: &benten_dsl_compiler::Span) -> bool
+impl core::fmt::Debug for benten_dsl_compiler::Span
+pub fn benten_dsl_compiler::Span::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_dsl_compiler::Span
+impl core::marker::StructuralPartialEq for benten_dsl_compiler::Span
+impl core::marker::Freeze for benten_dsl_compiler::Span
+impl core::marker::Send for benten_dsl_compiler::Span
+impl core::marker::Sync for benten_dsl_compiler::Span
+impl core::marker::Unpin for benten_dsl_compiler::Span
+impl core::marker::UnsafeUnpin for benten_dsl_compiler::Span
+impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::Span
+impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::Span
+pub const benten_dsl_compiler::E_DSL_BACKEND_REJECTED: &str
+pub const benten_dsl_compiler::E_DSL_INVALID_SHAPE: &str
+pub const benten_dsl_compiler::E_DSL_IO_ERROR: &str
+pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND: &str
+pub const benten_dsl_compiler::E_DSL_PARSE_ERROR: &str
+pub const benten_dsl_compiler::E_DSL_UNKNOWN_PRIMITIVE: &str
+pub const benten_dsl_compiler::MAX_SOURCE_LEN: usize
+pub fn benten_dsl_compiler::compile_file(path: &std::path::Path) -> core::result::Result<benten_dsl_compiler::CompiledSubgraph, benten_dsl_compiler::CompileError>
+pub fn benten_dsl_compiler::compile_str(source: &str) -> core::result::Result<benten_dsl_compiler::CompiledSubgraph, benten_dsl_compiler::CompileError>

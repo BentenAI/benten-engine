@@ -76,6 +76,11 @@ use benten_errors::ErrorCode;
 /// - `OutsideEnvelope` = "plugin chain present BUT a step is outside
 ///   the source plugin's `shares` policy" — row-rejects with the
 ///   pre-existing typed code.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + item 12 —
+/// a future fifth variant would break every consumer's `match`; the
+/// attribute makes the variant-set additively extensible.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestEnvelopeRecheckOutcome {
     /// No manifest-envelope chain is in scope for this row (e.g.

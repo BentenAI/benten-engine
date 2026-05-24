@@ -19,7 +19,7 @@
 //!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
-//! At HEAD `c9c11c56` `KeyMaterial` + `AeadEnvelope` + the
+//! At HEAD `c9c11c56` `AeadKeyMaterial` + `AeadEnvelope` + the
 //! `wrap_key_material` / `unwrap_key_material` / `seal_aead` / `open_aead`
 //! cipher-suite production API DO NOT EXIST yet (the cipher-suite
 //! codepoint dispatch typed-rejects all arms). G-CORE-3a R5 mints these
@@ -83,7 +83,7 @@ use benten_crypto_suite::cipher_suite::CipherSuiteCodepoint;
 use benten_crypto_suite::error::UnsupportedAlgorithm;
 
 // G-CORE-3a R5: stub module DELETED; real production surface wired.
-use benten_crypto_suite::aead::{AeadEnvelope, KeyMaterial};
+use benten_crypto_suite::aead::{AeadEnvelope, AeadKeyMaterial};
 use benten_crypto_suite::cipher_suite::CipherSuite;
 
 // ---------------------------------------------------------------------
@@ -140,9 +140,10 @@ fn tf3a_pq_hybrid_wasm32_envelope_round_trip_native() {
     assert!(wire.len() >= 5);
     let _ = AeadEnvelope::from_wire_bytes(&wire).expect("envelope parses back from wire bytes");
 
-    // Witness the KeyMaterial type compiles + is reachable from the
+    // Witness the AeadKeyMaterial type compiles + is reachable from the
     // BrowserBackend wasm32 deployment shape (CLAUDE.md baked-in #17).
-    let _km = KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
+    let _km =
+        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
 }
 
 #[test]
@@ -181,5 +182,6 @@ fn tf3a_pq_hybrid_wasm32_envelope_round_trip_wasm() {
          std API; BrowserBackend ships this binary)"
     );
 
-    let _km = KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
+    let _km =
+        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
 }

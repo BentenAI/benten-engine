@@ -24,6 +24,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use std::sync::{Arc, Mutex};
 
 use benten_caps::{
@@ -59,6 +60,8 @@ impl RevokeAfterNPolicy {
         )
     }
 }
+
+impl Sealed for RevokeAfterNPolicy {}
 
 impl CapabilityPolicy for RevokeAfterNPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

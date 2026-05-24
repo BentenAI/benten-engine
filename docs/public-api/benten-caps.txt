@@ -1,11 +1,1733 @@
-# Phase-3 G20-A3 wave-8a — cargo-public-api existing-crate baseline.
-#
-# Per `.addl/phase-3/00-implementation-plan.md` §3 G20-A3 +
-# `docs/future/phase-3-backlog.md` §7.3.A.9 (sub-cluster 9a). Seed
-# baseline; first nightly cargo-public-api run replaces with full
-# `cargo public-api -p benten-caps --simplified` output.
-#
-# Pinned by `crates/benten-engine/tests/cargo_public_api_drift.rs`.
-
-crate = benten-caps
-phase_3_seeded_at = G20-A3 wave-8a
+ Documenting benten-caps v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-caps)
+pub mod benten_caps
+pub use benten_caps::WriteAuthority
+pub mod benten_caps::attenuation
+pub trait benten_caps::attenuation::AsAttenuationScope
+pub fn benten_caps::attenuation::AsAttenuationScope::as_scope_str(&self) -> &str
+impl benten_caps::attenuation::AsAttenuationScope for &alloc::string::String
+pub fn &alloc::string::String::as_scope_str(&self) -> &str
+impl benten_caps::attenuation::AsAttenuationScope for &benten_caps::grant::GrantScope
+pub fn &benten_caps::grant::GrantScope::as_scope_str(&self) -> &str
+impl benten_caps::attenuation::AsAttenuationScope for &str
+pub fn &str::as_scope_str(&self) -> &str
+impl benten_caps::attenuation::AsAttenuationScope for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::as_scope_str(&self) -> &str
+pub fn benten_caps::attenuation::check_attenuation(parent_scope: impl benten_caps::attenuation::AsAttenuationScope, child_required: impl benten_caps::attenuation::AsAttenuationScope) -> core::result::Result<(), benten_caps::error::CapError>
+pub mod benten_caps::authorization_grant
+#[non_exhaustive] pub enum benten_caps::authorization_grant::AuthorizationGrantError
+pub benten_caps::authorization_grant::AuthorizationGrantError::AudienceMismatch
+pub benten_caps::authorization_grant::AuthorizationGrantError::AudienceMismatch::bound_audience: benten_core::Cid
+pub benten_caps::authorization_grant::AuthorizationGrantError::AudienceMismatch::presented_audience: benten_core::Cid
+pub benten_caps::authorization_grant::AuthorizationGrantError::BindingMismatch
+pub benten_caps::authorization_grant::AuthorizationGrantError::BindingMismatch::detail: alloc::string::String
+pub benten_caps::authorization_grant::AuthorizationGrantError::Serialization(alloc::string::String)
+pub benten_caps::authorization_grant::AuthorizationGrantError::VerifyingKeyMalformed(&'static str)
+impl core::error::Error for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrantError
+pub fn benten_caps::authorization_grant::AuthorizationGrantError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_caps::authorization_grant::AuthorizationGrantError
+pub fn benten_caps::authorization_grant::AuthorizationGrantError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::Send for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::Sync for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrantError
+pub struct benten_caps::authorization_grant::AuthorizationGrant
+pub benten_caps::authorization_grant::AuthorizationGrant::audience_binding: benten_core::Cid
+pub benten_caps::authorization_grant::AuthorizationGrant::audience_pubkey: core::option::Option<alloc::vec::Vec<u8>>
+pub benten_caps::authorization_grant::AuthorizationGrant::binding_sig: alloc::vec::Vec<u8>
+pub benten_caps::authorization_grant::AuthorizationGrant::issuer_verifying_key: alloc::vec::Vec<u8>
+pub benten_caps::authorization_grant::AuthorizationGrant::key_material: benten_caps::authorization_grant::GrantKeyMaterial
+pub benten_caps::authorization_grant::AuthorizationGrant::scope: core::option::Option<benten_caps::restricted_spec::RestrictedScope>
+pub benten_caps::authorization_grant::AuthorizationGrant::ucan: benten_caps::authorization_grant::UcanEnvelope
+impl benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_envelopes_for_test(ucan: benten_caps::authorization_grant::UcanEnvelope, key_material: benten_caps::authorization_grant::GrantKeyMaterial, audience: benten_core::Cid) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_nbf_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, nbf_secs: u64, exp_secs: u64) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_unresolved_peer_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::malformed_for_test(audience_kp: &benten_id::keypair::Keypair) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::verify_binding(&self, audience: benten_core::Cid) -> core::result::Result<(), benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_key_material_for_test(&self, km: benten_caps::authorization_grant::GrantKeyMaterial) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_ucan_for_test(&self, ucan: benten_caps::authorization_grant::UcanEnvelope) -> Self
+impl core::clone::Clone for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::clone(&self) -> benten_caps::authorization_grant::AuthorizationGrant
+impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::Send for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::Sync for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrant
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
+pub struct benten_caps::authorization_grant::GrantKeyMaterial
+pub benten_caps::authorization_grant::GrantKeyMaterial::bytes: alloc::vec::Vec<u8>
+impl benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test() -> Self
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test_distinct(discriminator: u8) -> Self
+impl core::clone::Clone for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::clone(&self) -> benten_caps::authorization_grant::GrantKeyMaterial
+impl core::cmp::Eq for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::cmp::PartialEq for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::eq(&self, other: &benten_caps::authorization_grant::GrantKeyMaterial) -> bool
+impl core::fmt::Debug for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::authorization_grant::GrantKeyMaterial
+impl serde_core::ser::Serialize for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::Send for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::Sync for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::Unpin for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
+pub struct benten_caps::authorization_grant::UcanEnvelope
+pub benten_caps::authorization_grant::UcanEnvelope::audience: benten_core::Cid
+pub benten_caps::authorization_grant::UcanEnvelope::discriminator: u32
+pub benten_caps::authorization_grant::UcanEnvelope::exp_secs: u64
+pub benten_caps::authorization_grant::UcanEnvelope::nbf_secs: u64
+pub benten_caps::authorization_grant::UcanEnvelope::unresolved_peer: bool
+impl benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test(audience: benten_core::Cid) -> Self
+pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test_distinct(audience: benten_core::Cid, discriminator: u32) -> Self
+impl core::clone::Clone for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::clone(&self) -> benten_caps::authorization_grant::UcanEnvelope
+impl core::cmp::Eq for benten_caps::authorization_grant::UcanEnvelope
+impl core::cmp::PartialEq for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::eq(&self, other: &benten_caps::authorization_grant::UcanEnvelope) -> bool
+impl core::fmt::Debug for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::authorization_grant::UcanEnvelope
+impl serde_core::ser::Serialize for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::Send for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::Sync for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::Unpin for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::UcanEnvelope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::UcanEnvelope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::UcanEnvelope
+pub mod benten_caps::backends
+pub mod benten_caps::backends::ucan
+pub struct benten_caps::backends::ucan::UCANBackend<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::backends::ucan::UCANBackend<B>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::graph_backend(&self) -> &B
+pub fn benten_caps::backends::ucan::UCANBackend<B>::install_proof(&self, ucan: &benten_id::ucan::Ucan) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, ucan_cid: &benten_core::Cid) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::iter_installed_proofs(&self) -> core::result::Result<alloc::vec::Vec<benten_id::ucan::Ucan>, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::new(backend: alloc::sync::Arc<B>) -> Self
+pub fn benten_caps::backends::ucan::UCANBackend<B>::rate_limit_policy(&self) -> &dyn benten_caps::rate_limit::RateLimitPolicy
+pub fn benten_caps::backends::ucan::UCANBackend<B>::record_grant(&self, ucan: &benten_id::ucan::Ucan, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, ucan_cid: &benten_core::Cid) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain(&self, chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_at(&self, chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_for_audience_at(&self, chain: &[benten_id::ucan::Ucan], audience: &benten_id::did::Did, now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::with_rate_limit_policy(self, policy: alloc::sync::Arc<dyn benten_caps::rate_limit::RateLimitPolicy>) -> Self
+impl<B: benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::backends::ucan::UCANBackend<B>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Send for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Sync for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Unpin for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> !core::panic::unwind_safe::RefUnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> !core::panic::unwind_safe::UnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
+pub struct benten_caps::backends::UCANBackend<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::backends::ucan::UCANBackend<B>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::graph_backend(&self) -> &B
+pub fn benten_caps::backends::ucan::UCANBackend<B>::install_proof(&self, ucan: &benten_id::ucan::Ucan) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, ucan_cid: &benten_core::Cid) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::iter_installed_proofs(&self) -> core::result::Result<alloc::vec::Vec<benten_id::ucan::Ucan>, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::new(backend: alloc::sync::Arc<B>) -> Self
+pub fn benten_caps::backends::ucan::UCANBackend<B>::rate_limit_policy(&self) -> &dyn benten_caps::rate_limit::RateLimitPolicy
+pub fn benten_caps::backends::ucan::UCANBackend<B>::record_grant(&self, ucan: &benten_id::ucan::Ucan, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, ucan_cid: &benten_core::Cid) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain(&self, chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_at(&self, chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_for_audience_at(&self, chain: &[benten_id::ucan::Ucan], audience: &benten_id::did::Did, now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::with_rate_limit_policy(self, policy: alloc::sync::Arc<dyn benten_caps::rate_limit::RateLimitPolicy>) -> Self
+impl<B: benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::backends::ucan::UCANBackend<B>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Send for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Sync for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Unpin for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> !core::panic::unwind_safe::RefUnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> !core::panic::unwind_safe::UnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
+pub mod benten_caps::chain_authority
+pub struct benten_caps::chain_authority::FrameReplayMarker<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::chain_authority::FrameReplayMarker<B>
+pub fn benten_caps::chain_authority::FrameReplayMarker<B>::mark_and_check_frame(&self, nonce: &[u8]) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::chain_authority::FrameReplayMarker<B>::new(backend: alloc::sync::Arc<B>) -> Self
+impl<B: core::fmt::Debug + benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::chain_authority::FrameReplayMarker<B>
+pub fn benten_caps::chain_authority::FrameReplayMarker<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::Send for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::Sync for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::Unpin for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::panic::unwind_safe::RefUnwindSafe for benten_caps::chain_authority::FrameReplayMarker<B> where B: core::panic::unwind_safe::RefUnwindSafe
+impl<B> core::panic::unwind_safe::UnwindSafe for benten_caps::chain_authority::FrameReplayMarker<B> where B: core::panic::unwind_safe::RefUnwindSafe
+pub fn benten_caps::chain_authority::envelope_ceiling_first_rejected_resource<'a>(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, cap_resources: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> core::option::Option<alloc::string::String>
+pub fn benten_caps::chain_authority::envelope_ceiling_rejects_cap(envelope: &benten_id::device_attestation::CapabilityEnvelope, resource: &str) -> bool
+pub fn benten_caps::chain_authority::manifest_to_envelope_ceiling(manifest: &benten_platform_foundation::plugin_manifest::PluginManifest) -> benten_id::device_attestation::CapabilityEnvelope
+pub fn benten_caps::chain_authority::validate_chain_with_envelope_ceiling(chain: &[benten_id::ucan::Ucan], attestations: &[benten_id::device_attestation::DeviceAttestation]) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_caps::chain_authority::validate_chain_with_manifest_ceiling(chain: &[benten_id::ucan::Ucan], manifest: &benten_platform_foundation::plugin_manifest::PluginManifest, plugin_did: &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_caps::chain_authority::validate_chain_with_rotation_log(chain: &[benten_id::ucan::Ucan], log: &benten_id::did_rotation::RotationLog) -> core::result::Result<(), benten_id::errors::UcanError>
+pub mod benten_caps::chain_validator
+#[non_exhaustive] pub enum benten_caps::chain_validator::ChainValidationError
+pub benten_caps::chain_validator::ChainValidationError::ChainNotNarrowing
+pub benten_caps::chain_validator::ChainValidationError::ChainNotNarrowing::step_index: usize
+pub benten_caps::chain_validator::ChainValidationError::EmptyChain
+impl core::clone::Clone for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::clone(&self) -> benten_caps::chain_validator::ChainValidationError
+impl core::cmp::Eq for benten_caps::chain_validator::ChainValidationError
+impl core::cmp::PartialEq for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::eq(&self, other: &benten_caps::chain_validator::ChainValidationError) -> bool
+impl core::error::Error for benten_caps::chain_validator::ChainValidationError
+impl core::fmt::Debug for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Freeze for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Send for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Sync for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Unpin for benten_caps::chain_validator::ChainValidationError
+impl core::marker::UnsafeUnpin for benten_caps::chain_validator::ChainValidationError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::chain_validator::ChainValidationError
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::chain_validator::ChainValidationError
+pub enum benten_caps::chain_validator::ChainValidatorOutcome
+pub benten_caps::chain_validator::ChainValidatorOutcome::Admitted
+impl core::clone::Clone for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::ChainValidatorOutcome::clone(&self) -> benten_caps::chain_validator::ChainValidatorOutcome
+impl core::cmp::Eq for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::cmp::PartialEq for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::ChainValidatorOutcome::eq(&self, other: &benten_caps::chain_validator::ChainValidatorOutcome) -> bool
+impl core::fmt::Debug for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::ChainValidatorOutcome::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Freeze for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Send for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Sync for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Unpin for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::UnsafeUnpin for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::validate_chain_narrowing(chain: &[benten_caps::scope::Scope]) -> core::result::Result<benten_caps::chain_validator::ChainValidatorOutcome, benten_caps::chain_validator::ChainValidationError>
+pub mod benten_caps::error
+#[non_exhaustive] pub enum benten_caps::error::CapError
+pub benten_caps::error::CapError::Attenuation
+pub benten_caps::error::CapError::BackendStorage
+pub benten_caps::error::CapError::BackendStorage::reason: alloc::string::String
+pub benten_caps::error::CapError::ChainTooDeep
+pub benten_caps::error::CapError::ChainTooDeep::depth: usize
+pub benten_caps::error::CapError::ChainTooDeep::limit: usize
+pub benten_caps::error::CapError::Denied
+pub benten_caps::error::CapError::Denied::entity: alloc::string::String
+pub benten_caps::error::CapError::Denied::required: alloc::string::String
+pub benten_caps::error::CapError::DeniedRead
+pub benten_caps::error::CapError::DeniedRead::entity: alloc::string::String
+pub benten_caps::error::CapError::DeniedRead::required: alloc::string::String
+pub benten_caps::error::CapError::NotImplemented
+pub benten_caps::error::CapError::NotImplemented::backend: &'static str
+pub benten_caps::error::CapError::NotImplemented::lands_in_phase: u8
+pub benten_caps::error::CapError::PeerBandwidthExceeded
+pub benten_caps::error::CapError::PeerBandwidthExceeded::bytes: usize
+pub benten_caps::error::CapError::PeerBandwidthExceeded::peer: alloc::string::String
+pub benten_caps::error::CapError::RateLimitExceeded
+pub benten_caps::error::CapError::RateLimitExceeded::actor: alloc::string::String
+pub benten_caps::error::CapError::RateLimitExceeded::zone: alloc::string::String
+pub benten_caps::error::CapError::Revoked
+pub benten_caps::error::CapError::RevokedMidEval
+pub benten_caps::error::CapError::ScopeLoneStarRejected
+pub benten_caps::error::CapError::UcanAttenuationViolated
+pub benten_caps::error::CapError::UcanAttenuationViolated::child_cap: alloc::string::String
+pub benten_caps::error::CapError::UcanAttenuationViolated::link_index: usize
+pub benten_caps::error::CapError::UcanAudienceMismatch
+pub benten_caps::error::CapError::UcanAudienceMismatch::actual: alloc::string::String
+pub benten_caps::error::CapError::UcanAudienceMismatch::expected: alloc::string::String
+pub benten_caps::error::CapError::UcanBadSignature
+pub benten_caps::error::CapError::UcanBadSignature::link_index: usize
+pub benten_caps::error::CapError::UcanClockNotInjected
+pub benten_caps::error::CapError::UcanExpired
+pub benten_caps::error::CapError::UcanExpired::exp: u64
+pub benten_caps::error::CapError::UcanExpired::now: u64
+pub benten_caps::error::CapError::UcanNotYetValid
+pub benten_caps::error::CapError::UcanNotYetValid::nbf: u64
+pub benten_caps::error::CapError::UcanNotYetValid::now: u64
+pub benten_caps::error::CapError::WallclockExpired
+impl benten_caps::error::CapError
+pub fn benten_caps::error::CapError::chain_depth_context(&self) -> core::option::Option<(usize, usize)>
+pub fn benten_caps::error::CapError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_caps::error::CapError
+impl core::fmt::Debug for benten_caps::error::CapError
+pub fn benten_caps::error::CapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_caps::error::CapError
+pub fn benten_caps::error::CapError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::error::CapError
+impl core::marker::Send for benten_caps::error::CapError
+impl core::marker::Sync for benten_caps::error::CapError
+impl core::marker::Unpin for benten_caps::error::CapError
+impl core::marker::UnsafeUnpin for benten_caps::error::CapError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::error::CapError
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::error::CapError
+pub mod benten_caps::evaluator_delegation
+pub fn benten_caps::evaluator_delegation::iterate_batch_boundary_for<P: benten_caps::policy::CapabilityPolicy + ?core::marker::Sized>(policy: &P) -> usize
+pub mod benten_caps::grant
+pub struct benten_caps::grant::CapabilityGrant
+pub benten_caps::grant::CapabilityGrant::grantee: benten_core::Cid
+pub benten_caps::grant::CapabilityGrant::hlc_stamp: u64
+pub benten_caps::grant::CapabilityGrant::issuer: benten_core::Cid
+pub benten_caps::grant::CapabilityGrant::scope: alloc::string::String
+pub benten_caps::grant::CapabilityGrant::ttl_hlc_duration: core::option::Option<core::time::Duration>
+impl benten_caps::grant::CapabilityGrant
+pub fn benten_caps::grant::CapabilityGrant::as_node(&self) -> benten_core::Node
+pub fn benten_caps::grant::CapabilityGrant::attenuated_for_test(actor: &benten_core::Cid, scope: &str, i: usize) -> Self
+pub fn benten_caps::grant::CapabilityGrant::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_caps::grant::CapabilityGrant::new(grantee: benten_core::Cid, issuer: benten_core::Cid, scope: benten_caps::grant::GrantScope) -> Self
+impl core::clone::Clone for benten_caps::grant::CapabilityGrant
+pub fn benten_caps::grant::CapabilityGrant::clone(&self) -> benten_caps::grant::CapabilityGrant
+impl core::fmt::Debug for benten_caps::grant::CapabilityGrant
+pub fn benten_caps::grant::CapabilityGrant::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::grant::CapabilityGrant
+impl core::marker::Send for benten_caps::grant::CapabilityGrant
+impl core::marker::Sync for benten_caps::grant::CapabilityGrant
+impl core::marker::Unpin for benten_caps::grant::CapabilityGrant
+impl core::marker::UnsafeUnpin for benten_caps::grant::CapabilityGrant
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant::CapabilityGrant
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant::CapabilityGrant
+pub struct benten_caps::grant::GrantScope(pub alloc::string::String)
+impl benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::as_str(&self) -> &str
+pub fn benten_caps::grant::GrantScope::parse(s: &str) -> core::result::Result<Self, benten_caps::error::CapError>
+impl benten_caps::attenuation::AsAttenuationScope for &benten_caps::grant::GrantScope
+pub fn &benten_caps::grant::GrantScope::as_scope_str(&self) -> &str
+impl benten_caps::attenuation::AsAttenuationScope for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::as_scope_str(&self) -> &str
+impl core::clone::Clone for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::clone(&self) -> benten_caps::grant::GrantScope
+impl core::cmp::Eq for benten_caps::grant::GrantScope
+impl core::cmp::PartialEq for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::eq(&self, other: &benten_caps::grant::GrantScope) -> bool
+impl core::fmt::Debug for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::grant::GrantScope
+impl core::marker::Freeze for benten_caps::grant::GrantScope
+impl core::marker::Send for benten_caps::grant::GrantScope
+impl core::marker::Sync for benten_caps::grant::GrantScope
+impl core::marker::Unpin for benten_caps::grant::GrantScope
+impl core::marker::UnsafeUnpin for benten_caps::grant::GrantScope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant::GrantScope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant::GrantScope
+pub const benten_caps::grant::CAPABILITY_GRANT_LABEL: &str
+pub const benten_caps::grant::GRANTED_TO_LABEL: &str
+pub const benten_caps::grant::REVOKED_AT_LABEL: &str
+pub mod benten_caps::grant_backed
+pub struct benten_caps::grant_backed::GrantBackedPolicy
+impl benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::new(grants: alloc::sync::Arc<dyn benten_caps::grant_backed::GrantReader>) -> Self
+impl benten_caps::policy::CapabilityPolicy for benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::grant_backed::GrantBackedPolicy::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl core::fmt::Debug for benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::Send for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::Sync for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::Unpin for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantBackedPolicy
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
+impl !core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
+pub struct benten_caps::grant_backed::GrantReaderChain
+impl benten_caps::grant_backed::GrantReaderChain
+pub fn benten_caps::grant_backed::GrantReaderChain::check_attenuation_for_test(&self, _scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_and_config_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>, config: benten_caps::grant_backed::GrantReaderConfig) -> Self
+pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>) -> Self
+impl core::marker::Freeze for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::Send for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::Sync for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::Unpin for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantReaderChain
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantReaderChain
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantReaderChain
+pub struct benten_caps::grant_backed::GrantReaderConfig
+pub benten_caps::grant_backed::GrantReaderConfig::max_chain_depth: usize
+impl core::clone::Clone for benten_caps::grant_backed::GrantReaderConfig
+pub fn benten_caps::grant_backed::GrantReaderConfig::clone(&self) -> benten_caps::grant_backed::GrantReaderConfig
+impl core::default::Default for benten_caps::grant_backed::GrantReaderConfig
+pub fn benten_caps::grant_backed::GrantReaderConfig::default() -> Self
+impl core::fmt::Debug for benten_caps::grant_backed::GrantReaderConfig
+pub fn benten_caps::grant_backed::GrantReaderConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::Send for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::Sync for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::Unpin for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantReaderConfig
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantReaderConfig
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantReaderConfig
+pub trait benten_caps::grant_backed::GrantReader: core::marker::Send + core::marker::Sync
+pub fn benten_caps::grant_backed::GrantReader::has_unrevoked_grant_for_any(&self, scopes: &[&str]) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantReader::has_unrevoked_grant_for_scope(&self, scope: &str) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantReader::has_unrevoked_grant_for_scope_and_actor(&self, scope: &str, actor_cid: core::option::Option<&benten_core::Cid>) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantReader::has_unrevoked_grant_matching(&self, required_scope: &str, actor_cid: core::option::Option<&benten_core::Cid>) -> core::result::Result<bool, benten_caps::error::CapError>
+pub mod benten_caps::manifest_envelope_chain_validation
+pub enum benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::Admitted
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::ChainTooDeep
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::ChainTooDeep::depth: usize
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::ChainTooDeep::limit: usize
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::Empty
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::NoManifestForIssuer
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::NoManifestForIssuer::issuer_did: benten_id::did::Did
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::PrivateNamespaceLeaked
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::PrivateNamespaceLeaked::cap_pattern: alloc::string::String
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::RootNotUserDid
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::StepOutsideEnvelope
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::StepOutsideEnvelope::cap_pattern: alloc::string::String
+pub benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::StepOutsideEnvelope::issuer_did: benten_id::did::Did
+impl benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::into_result(self) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::clone::Clone for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::clone(&self) -> benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::cmp::Eq for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::cmp::PartialEq for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::eq(&self, other: &benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome) -> bool
+impl core::fmt::Debug for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Freeze for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Send for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Sync for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Unpin for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::UnsafeUnpin for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub struct benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub benten_caps::manifest_envelope_chain_validation::DelegationStep::audience_did: benten_id::did::Did
+pub benten_caps::manifest_envelope_chain_validation::DelegationStep::cap_pattern: alloc::string::String
+pub benten_caps::manifest_envelope_chain_validation::DelegationStep::issuer_did: benten_id::did::Did
+impl core::clone::Clone for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub fn benten_caps::manifest_envelope_chain_validation::DelegationStep::clone(&self) -> benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::cmp::Eq for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::cmp::PartialEq for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub fn benten_caps::manifest_envelope_chain_validation::DelegationStep::eq(&self, other: &benten_caps::manifest_envelope_chain_validation::DelegationStep) -> bool
+impl core::fmt::Debug for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub fn benten_caps::manifest_envelope_chain_validation::DelegationStep::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Freeze for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Send for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Sync for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Unpin for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::UnsafeUnpin for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub const benten_caps::manifest_envelope_chain_validation::MAX_CHAIN_DEPTH: usize
+pub trait benten_caps::manifest_envelope_chain_validation::ManifestEnvelopeLookup
+pub type benten_caps::manifest_envelope_chain_validation::ManifestEnvelopeLookup::View<'a> where Self: 'a: benten_caps::plugin_delegation::SharesPolicyView
+pub fn benten_caps::manifest_envelope_chain_validation::ManifestEnvelopeLookup::lookup<'a>(&'a self, plugin_did: &benten_id::did::Did) -> core::option::Option<Self::View>
+pub trait benten_caps::manifest_envelope_chain_validation::UserDidRegistry
+pub fn benten_caps::manifest_envelope_chain_validation::UserDidRegistry::is_user_did(&self, did: &benten_id::did::Did) -> bool
+pub fn benten_caps::manifest_envelope_chain_validation::validate_chain_with_manifest_envelope<L, U>(chain: &[benten_caps::manifest_envelope_chain_validation::DelegationStep], manifest_lookup: &L, user_registry: &U) -> benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome where L: benten_caps::manifest_envelope_chain_validation::ManifestEnvelopeLookup, U: benten_caps::manifest_envelope_chain_validation::UserDidRegistry
+pub mod benten_caps::manifest_scope
+pub const benten_caps::manifest_scope::PRIVATE_PREFIX: &str
+pub const benten_caps::manifest_scope::REQUIRES_PREFIX: &str
+pub const benten_caps::manifest_scope::SHARES_PREFIX: &str
+pub fn benten_caps::manifest_scope::check_scope_within_envelope(cap_scope: &str, target_plugin_did: &benten_id::did::Did, source_manifest: &benten_platform_foundation::plugin_manifest::PluginManifest) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::manifest_scope::manifest_requires_to_scope(manifest: &benten_platform_foundation::plugin_manifest::PluginManifest, plugin_did: &benten_id::did::Did) -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_caps::manifest_scope::manifest_shares_to_scope(manifest: &benten_platform_foundation::plugin_manifest::PluginManifest, plugin_did: &benten_id::did::Did) -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_caps::manifest_scope::private_namespace_scope_admits_actor(cap_scope: &str, owning_plugin_did: &benten_id::did::Did) -> bool
+pub mod benten_caps::noauth
+pub struct benten_caps::noauth::NoAuthBackend
+impl benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::new() -> Self
+pub fn benten_caps::noauth::NoAuthBackend::pseudo_actor_label() -> &'static str
+impl benten_caps::policy::CapabilityPolicy for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::noauth::NoAuthBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl core::clone::Clone for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::clone(&self) -> benten_caps::noauth::NoAuthBackend
+impl core::default::Default for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::default() -> benten_caps::noauth::NoAuthBackend
+impl core::fmt::Debug for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::noauth::NoAuthBackend
+impl core::marker::Freeze for benten_caps::noauth::NoAuthBackend
+impl core::marker::Send for benten_caps::noauth::NoAuthBackend
+impl core::marker::Sync for benten_caps::noauth::NoAuthBackend
+impl core::marker::Unpin for benten_caps::noauth::NoAuthBackend
+impl core::marker::UnsafeUnpin for benten_caps::noauth::NoAuthBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::noauth::NoAuthBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::noauth::NoAuthBackend
+pub mod benten_caps::plugin_delegation
+pub enum benten_caps::plugin_delegation::DelegationDecision
+pub benten_caps::plugin_delegation::DelegationDecision::OutsideEnvelope
+pub benten_caps::plugin_delegation::DelegationDecision::Permitted
+pub benten_caps::plugin_delegation::DelegationDecision::PrivateNamespaceForbidden
+impl benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::into_result(self) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::clone::Clone for benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::clone(&self) -> benten_caps::plugin_delegation::DelegationDecision
+impl core::cmp::Eq for benten_caps::plugin_delegation::DelegationDecision
+impl core::cmp::PartialEq for benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::eq(&self, other: &benten_caps::plugin_delegation::DelegationDecision) -> bool
+impl core::fmt::Debug for benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Freeze for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Send for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Sync for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Unpin for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::UnsafeUnpin for benten_caps::plugin_delegation::DelegationDecision
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::plugin_delegation::DelegationDecision
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::plugin_delegation::DelegationDecision
+pub trait benten_caps::plugin_delegation::SharesPolicyView
+pub fn benten_caps::plugin_delegation::SharesPolicyView::permits(&self, cap_pattern: &str, target_plugin_did: &benten_id::did::Did) -> bool
+impl benten_caps::plugin_delegation::SharesPolicyView for benten_platform_foundation::plugin_manifest::SharesPolicy
+pub fn benten_platform_foundation::plugin_manifest::SharesPolicy::permits(&self, cap_pattern: &str, target_plugin_did: &benten_id::did::Did) -> bool
+impl<T: benten_caps::plugin_delegation::SharesPolicyView + ?core::marker::Sized> benten_caps::plugin_delegation::SharesPolicyView for &T
+pub fn &T::permits(&self, cap_pattern: &str, target_plugin_did: &benten_id::did::Did) -> bool
+pub fn benten_caps::plugin_delegation::check_delegation_within_envelope<P: benten_caps::plugin_delegation::SharesPolicyView>(cap_pattern: &str, target_plugin_did: &benten_id::did::Did, source_shares: &P) -> benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::is_private_namespace_cap(cap_scope: &str) -> bool
+pub mod benten_caps::policy
+pub use benten_caps::policy::WriteAuthority
+#[non_exhaustive] pub enum benten_caps::policy::PendingOp
+pub benten_caps::policy::PendingOp::DeleteEdge
+pub benten_caps::policy::PendingOp::DeleteEdge::cid: benten_core::Cid
+pub benten_caps::policy::PendingOp::DeleteEdge::label: core::option::Option<alloc::string::String>
+pub benten_caps::policy::PendingOp::DeleteNode
+pub benten_caps::policy::PendingOp::DeleteNode::cid: benten_core::Cid
+pub benten_caps::policy::PendingOp::DeleteNode::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_caps::policy::PendingOp::PutEdge
+pub benten_caps::policy::PendingOp::PutEdge::cid: benten_core::Cid
+pub benten_caps::policy::PendingOp::PutEdge::label: alloc::string::String
+pub benten_caps::policy::PendingOp::PutNode
+pub benten_caps::policy::PendingOp::PutNode::cid: benten_core::Cid
+pub benten_caps::policy::PendingOp::PutNode::labels: alloc::vec::Vec<alloc::string::String>
+impl core::clone::Clone for benten_caps::policy::PendingOp
+pub fn benten_caps::policy::PendingOp::clone(&self) -> benten_caps::policy::PendingOp
+impl core::fmt::Debug for benten_caps::policy::PendingOp
+pub fn benten_caps::policy::PendingOp::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::policy::PendingOp
+impl core::marker::Send for benten_caps::policy::PendingOp
+impl core::marker::Sync for benten_caps::policy::PendingOp
+impl core::marker::Unpin for benten_caps::policy::PendingOp
+impl core::marker::UnsafeUnpin for benten_caps::policy::PendingOp
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::PendingOp
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::PendingOp
+pub struct benten_caps::policy::CapWriteContext
+pub benten_caps::policy::CapWriteContext::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::policy::CapWriteContext::actor_hint: core::option::Option<alloc::string::String>
+pub benten_caps::policy::CapWriteContext::audience_did: core::option::Option<alloc::string::String>
+pub benten_caps::policy::CapWriteContext::authority: benten_core::WriteAuthority
+pub benten_caps::policy::CapWriteContext::device_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::policy::CapWriteContext::is_privileged: bool
+pub benten_caps::policy::CapWriteContext::label: alloc::string::String
+pub benten_caps::policy::CapWriteContext::pending_ops: alloc::vec::Vec<benten_caps::policy::PendingOp>
+pub benten_caps::policy::CapWriteContext::scope: alloc::string::String
+impl benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::synthetic_for_test() -> Self
+impl core::clone::Clone for benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::clone(&self) -> benten_caps::policy::CapWriteContext
+impl core::default::Default for benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::default() -> benten_caps::policy::CapWriteContext
+impl core::fmt::Debug for benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::policy::CapWriteContext
+impl core::marker::Send for benten_caps::policy::CapWriteContext
+impl core::marker::Sync for benten_caps::policy::CapWriteContext
+impl core::marker::Unpin for benten_caps::policy::CapWriteContext
+impl core::marker::UnsafeUnpin for benten_caps::policy::CapWriteContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::CapWriteContext
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::CapWriteContext
+pub struct benten_caps::policy::ReadContext
+pub benten_caps::policy::ReadContext::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::policy::ReadContext::actor_hint: core::option::Option<alloc::string::String>
+pub benten_caps::policy::ReadContext::audience_did: core::option::Option<alloc::string::String>
+pub benten_caps::policy::ReadContext::device_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::policy::ReadContext::label: alloc::string::String
+pub benten_caps::policy::ReadContext::target_cid: core::option::Option<benten_core::Cid>
+impl benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::by_cid_only(cid: benten_core::Cid) -> Self
+pub fn benten_caps::policy::ReadContext::by_label_only(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_caps::policy::ReadContext::synthetic_for_test() -> Self
+impl core::clone::Clone for benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::clone(&self) -> benten_caps::policy::ReadContext
+impl core::default::Default for benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::default() -> benten_caps::policy::ReadContext
+impl core::fmt::Debug for benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::policy::ReadContext
+impl core::marker::Send for benten_caps::policy::ReadContext
+impl core::marker::Sync for benten_caps::policy::ReadContext
+impl core::marker::Unpin for benten_caps::policy::ReadContext
+impl core::marker::UnsafeUnpin for benten_caps::policy::ReadContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::ReadContext
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::ReadContext
+pub trait benten_caps::policy::CapabilityPolicy: benten_caps::policy::sealed::Sealed + core::marker::Send + core::marker::Sync
+pub fn benten_caps::policy::CapabilityPolicy::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::policy::CapabilityPolicy::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::policy::CapabilityPolicy::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::policy::CapabilityPolicy::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::policy::CapabilityPolicy::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::policy::CapabilityPolicy::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::policy::CapabilityPolicy::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl benten_caps::policy::CapabilityPolicy for benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::grant_backed::GrantBackedPolicy::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl benten_caps::policy::CapabilityPolicy for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::noauth::NoAuthBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl benten_caps::policy::CapabilityPolicy for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::policy::CapabilityPolicy for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::wallclock_refresh_ceiling(&self) -> core::time::Duration
+pub mod benten_caps::rate_limit
+pub struct benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::builder() -> benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::empty() -> Self
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_peer_bandwidth(&self, peer: &str, bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_read_budget(&self, actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_writes_per_sec(&self, actor: &str, zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::is_peer_back_pressured(&self, peer: &str) -> bool
+impl core::fmt::Debug for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::Send for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::Sync for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::Unpin for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::UnsafeUnpin for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl !core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub struct benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::actor_reads_per_second(self, actor: impl core::convert::Into<alloc::string::String>, budget: u32) -> Self
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::actor_writes_per_second(self, actor: impl core::convert::Into<alloc::string::String>, zone: impl core::convert::Into<alloc::string::String>, budget: u32) -> Self
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::build(self) -> benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::peer_bandwidth_bytes_per_second(self, peer: impl core::convert::Into<alloc::string::String>, bytes_per_sec: usize) -> Self
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::with_clock(self, clock: impl core::ops::function::Fn() -> std::time::Instant + core::marker::Send + core::marker::Sync + 'static) -> Self
+impl core::default::Default for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::default() -> benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Freeze for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Send for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Sync for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Unpin for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::UnsafeUnpin for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl !core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub struct benten_caps::rate_limit::NullRateLimitPolicy
+impl benten_caps::rate_limit::NullRateLimitPolicy
+pub const fn benten_caps::rate_limit::NullRateLimitPolicy::new() -> Self
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_peer_bandwidth(&self, _peer: &str, _bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_read_budget(&self, _actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_writes_per_sec(&self, _actor: &str, _zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::is_peer_back_pressured(&self, _peer: &str) -> bool
+impl core::clone::Clone for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::clone(&self) -> benten_caps::rate_limit::NullRateLimitPolicy
+impl core::default::Default for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::default() -> benten_caps::rate_limit::NullRateLimitPolicy
+impl core::fmt::Debug for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Freeze for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Send for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Sync for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Unpin for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::UnsafeUnpin for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::NullRateLimitPolicy
+pub trait benten_caps::rate_limit::RateLimitPolicy: core::marker::Send + core::marker::Sync
+pub fn benten_caps::rate_limit::RateLimitPolicy::check_peer_bandwidth(&self, peer: &str, bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::RateLimitPolicy::check_read_budget(&self, actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::RateLimitPolicy::check_writes_per_sec(&self, actor: &str, zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::RateLimitPolicy::is_peer_back_pressured(&self, peer: &str) -> bool
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_peer_bandwidth(&self, peer: &str, bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_read_budget(&self, actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_writes_per_sec(&self, actor: &str, zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::is_peer_back_pressured(&self, peer: &str) -> bool
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_peer_bandwidth(&self, _peer: &str, _bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_read_budget(&self, _actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_writes_per_sec(&self, _actor: &str, _zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::is_peer_back_pressured(&self, _peer: &str) -> bool
+pub mod benten_caps::restricted_spec
+#[non_exhaustive] pub enum benten_caps::restricted_spec::PropertyValue
+pub benten_caps::restricted_spec::PropertyValue::Bool(bool)
+pub benten_caps::restricted_spec::PropertyValue::Integer(i64)
+pub benten_caps::restricted_spec::PropertyValue::Text(alloc::string::String)
+impl benten_caps::restricted_spec::PropertyValue
+pub const fn benten_caps::restricted_spec::PropertyValue::boolean(b: bool) -> Self
+pub const fn benten_caps::restricted_spec::PropertyValue::integer(n: i64) -> Self
+pub fn benten_caps::restricted_spec::PropertyValue::text<S: core::convert::Into<alloc::string::String>>(s: S) -> Self
+impl core::clone::Clone for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::clone(&self) -> benten_caps::restricted_spec::PropertyValue
+impl core::cmp::Eq for benten_caps::restricted_spec::PropertyValue
+impl core::cmp::PartialEq for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::eq(&self, other: &benten_caps::restricted_spec::PropertyValue) -> bool
+impl core::fmt::Debug for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::restricted_spec::PropertyValue
+impl serde_core::ser::Serialize for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::restricted_spec::PropertyValue
+impl core::marker::Send for benten_caps::restricted_spec::PropertyValue
+impl core::marker::Sync for benten_caps::restricted_spec::PropertyValue
+impl core::marker::Unpin for benten_caps::restricted_spec::PropertyValue
+impl core::marker::UnsafeUnpin for benten_caps::restricted_spec::PropertyValue
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::restricted_spec::PropertyValue
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::restricted_spec::PropertyValue
+#[non_exhaustive] pub struct benten_caps::restricted_spec::RestrictedScope
+pub benten_caps::restricted_spec::RestrictedScope::edge_allowlist: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub benten_caps::restricted_spec::RestrictedScope::label_allowlist: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub benten_caps::restricted_spec::RestrictedScope::label_denylist: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub benten_caps::restricted_spec::RestrictedScope::max_depth: core::option::Option<u32>
+pub benten_caps::restricted_spec::RestrictedScope::property_equalities: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_caps::restricted_spec::PropertyValue>
+pub benten_caps::restricted_spec::RestrictedScope::roots: core::option::Option<alloc::vec::Vec<benten_core::Cid>>
+impl benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::contains(&self, other: &Self) -> bool
+pub const fn benten_caps::restricted_spec::RestrictedScope::new() -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_edge_allowlist(self, labels: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_hashes(hashes: alloc::vec::Vec<benten_core::Cid>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_label_allowlist(self, labels: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_label_denylist(self, labels: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_max_depth(self, depth: u32) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_property_equality(self, key: alloc::string::String, value: benten_caps::restricted_spec::PropertyValue) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_roots(self, roots: alloc::vec::Vec<benten_core::Cid>) -> Self
+impl core::clone::Clone for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::clone(&self) -> benten_caps::restricted_spec::RestrictedScope
+impl core::cmp::Eq for benten_caps::restricted_spec::RestrictedScope
+impl core::cmp::PartialEq for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::eq(&self, other: &benten_caps::restricted_spec::RestrictedScope) -> bool
+impl core::default::Default for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::default() -> Self
+impl core::fmt::Debug for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::restricted_spec::RestrictedScope
+impl serde_core::ser::Serialize for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::Send for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::Sync for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::Unpin for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::UnsafeUnpin for benten_caps::restricted_spec::RestrictedScope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::restricted_spec::RestrictedScope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::restricted_spec::RestrictedScope
+pub mod benten_caps::scope
+pub enum benten_caps::scope::Scope
+pub benten_caps::scope::Scope::Hashes(alloc::vec::Vec<benten_core::Cid>)
+pub benten_caps::scope::Scope::RestrictedSelector(benten_caps::restricted_spec::RestrictedScope)
+impl core::clone::Clone for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::clone(&self) -> benten_caps::scope::Scope
+impl core::cmp::Eq for benten_caps::scope::Scope
+impl core::cmp::PartialEq for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::eq(&self, other: &benten_caps::scope::Scope) -> bool
+impl core::fmt::Debug for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::scope::Scope
+impl serde_core::ser::Serialize for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::scope::Scope
+impl core::marker::Send for benten_caps::scope::Scope
+impl core::marker::Sync for benten_caps::scope::Scope
+impl core::marker::Unpin for benten_caps::scope::Scope
+impl core::marker::UnsafeUnpin for benten_caps::scope::Scope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::scope::Scope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::scope::Scope
+pub mod benten_caps::testing
+pub struct benten_caps::testing::WallclockProbe
+impl benten_caps::testing::WallclockProbe
+pub fn benten_caps::testing::WallclockProbe::check_elapsed(&self, ceiling: core::time::Duration) -> bool
+pub fn benten_caps::testing::WallclockProbe::force_refresh(&self) -> usize
+impl core::clone::Clone for benten_caps::testing::WallclockProbe
+pub fn benten_caps::testing::WallclockProbe::clone(&self) -> benten_caps::testing::WallclockProbe
+impl core::fmt::Debug for benten_caps::testing::WallclockProbe
+pub fn benten_caps::testing::WallclockProbe::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::testing::WallclockProbe
+impl core::marker::Send for benten_caps::testing::WallclockProbe
+impl core::marker::Sync for benten_caps::testing::WallclockProbe
+impl core::marker::Unpin for benten_caps::testing::WallclockProbe
+impl core::marker::UnsafeUnpin for benten_caps::testing::WallclockProbe
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::testing::WallclockProbe
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::testing::WallclockProbe
+pub fn benten_caps::testing::check_attenuation(parent_scope: impl benten_caps::attenuation::AsAttenuationScope, child_required: impl benten_caps::attenuation::AsAttenuationScope) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::testing::wallclock_refresh_probe_expired() -> benten_caps::testing::WallclockProbe
+pub fn benten_caps::testing::wallclock_refresh_probe_fresh() -> benten_caps::testing::WallclockProbe
+pub mod benten_caps::typed_cap_mapping
+#[non_exhaustive] pub enum benten_caps::typed_cap_mapping::TypedCapGroup
+pub benten_caps::typed_cap_mapping::TypedCapGroup::Codec
+pub benten_caps::typed_cap_mapping::TypedCapGroup::CryptoKeygen
+pub benten_caps::typed_cap_mapping::TypedCapGroup::CryptoSign
+pub benten_caps::typed_cap_mapping::TypedCapGroup::CryptoVerify
+pub benten_caps::typed_cap_mapping::TypedCapGroup::DidResolve
+pub benten_caps::typed_cap_mapping::TypedCapGroup::Hash
+pub benten_caps::typed_cap_mapping::TypedCapGroup::UcanValidate
+pub benten_caps::typed_cap_mapping::TypedCapGroup::VcVerify
+impl benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::cap_string(self) -> &'static str
+impl core::clone::Clone for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::clone(&self) -> benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::cmp::Eq for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::cmp::PartialEq for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::eq(&self, other: &benten_caps::typed_cap_mapping::TypedCapGroup) -> bool
+impl core::fmt::Debug for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::StructuralPartialEq for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Freeze for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Send for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Sync for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Unpin for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::UnsafeUnpin for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::typed_cap_for_ucan_claim(resource: &str, ability: &str) -> core::option::Option<benten_caps::typed_cap_mapping::TypedCapGroup>
+pub mod benten_caps::ucan_grounded
+pub struct benten_caps::ucan_grounded::UcanGroundedPolicy<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::new(inner: benten_caps::grant_backed::GrantBackedPolicy, ucan: alloc::sync::Arc<benten_caps::backends::ucan::UCANBackend<B>>) -> Self
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::ucan_backend(&self) -> &alloc::sync::Arc<benten_caps::backends::ucan::UCANBackend<B>>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::with_now_secs(self, now_secs: u64) -> Self
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::policy::CapabilityPolicy for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl<B: benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::Send for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::Sync for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::Unpin for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> !core::panic::unwind_safe::RefUnwindSafe for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> !core::panic::unwind_safe::UnwindSafe for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub mod benten_caps::ucan_stub
+pub struct benten_caps::ucan_stub::LegacyUcanStubBackend
+impl benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::new() -> Self
+impl benten_caps::policy::CapabilityPolicy for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl core::clone::Clone for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::clone(&self) -> benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::default::Default for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::default() -> benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::fmt::Debug for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Freeze for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Send for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Sync for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Unpin for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::UnsafeUnpin for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::ucan_stub::LegacyUcanStubBackend
+#[non_exhaustive] pub enum benten_caps::AuthorizationGrantError
+pub benten_caps::AuthorizationGrantError::AudienceMismatch
+pub benten_caps::AuthorizationGrantError::AudienceMismatch::bound_audience: benten_core::Cid
+pub benten_caps::AuthorizationGrantError::AudienceMismatch::presented_audience: benten_core::Cid
+pub benten_caps::AuthorizationGrantError::BindingMismatch
+pub benten_caps::AuthorizationGrantError::BindingMismatch::detail: alloc::string::String
+pub benten_caps::AuthorizationGrantError::Serialization(alloc::string::String)
+pub benten_caps::AuthorizationGrantError::VerifyingKeyMalformed(&'static str)
+impl core::error::Error for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrantError
+pub fn benten_caps::authorization_grant::AuthorizationGrantError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_caps::authorization_grant::AuthorizationGrantError
+pub fn benten_caps::authorization_grant::AuthorizationGrantError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::Send for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::Sync for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrantError
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrantError
+#[non_exhaustive] pub enum benten_caps::CapError
+pub benten_caps::CapError::Attenuation
+pub benten_caps::CapError::BackendStorage
+pub benten_caps::CapError::BackendStorage::reason: alloc::string::String
+pub benten_caps::CapError::ChainTooDeep
+pub benten_caps::CapError::ChainTooDeep::depth: usize
+pub benten_caps::CapError::ChainTooDeep::limit: usize
+pub benten_caps::CapError::Denied
+pub benten_caps::CapError::Denied::entity: alloc::string::String
+pub benten_caps::CapError::Denied::required: alloc::string::String
+pub benten_caps::CapError::DeniedRead
+pub benten_caps::CapError::DeniedRead::entity: alloc::string::String
+pub benten_caps::CapError::DeniedRead::required: alloc::string::String
+pub benten_caps::CapError::NotImplemented
+pub benten_caps::CapError::NotImplemented::backend: &'static str
+pub benten_caps::CapError::NotImplemented::lands_in_phase: u8
+pub benten_caps::CapError::PeerBandwidthExceeded
+pub benten_caps::CapError::PeerBandwidthExceeded::bytes: usize
+pub benten_caps::CapError::PeerBandwidthExceeded::peer: alloc::string::String
+pub benten_caps::CapError::RateLimitExceeded
+pub benten_caps::CapError::RateLimitExceeded::actor: alloc::string::String
+pub benten_caps::CapError::RateLimitExceeded::zone: alloc::string::String
+pub benten_caps::CapError::Revoked
+pub benten_caps::CapError::RevokedMidEval
+pub benten_caps::CapError::ScopeLoneStarRejected
+pub benten_caps::CapError::UcanAttenuationViolated
+pub benten_caps::CapError::UcanAttenuationViolated::child_cap: alloc::string::String
+pub benten_caps::CapError::UcanAttenuationViolated::link_index: usize
+pub benten_caps::CapError::UcanAudienceMismatch
+pub benten_caps::CapError::UcanAudienceMismatch::actual: alloc::string::String
+pub benten_caps::CapError::UcanAudienceMismatch::expected: alloc::string::String
+pub benten_caps::CapError::UcanBadSignature
+pub benten_caps::CapError::UcanBadSignature::link_index: usize
+pub benten_caps::CapError::UcanClockNotInjected
+pub benten_caps::CapError::UcanExpired
+pub benten_caps::CapError::UcanExpired::exp: u64
+pub benten_caps::CapError::UcanExpired::now: u64
+pub benten_caps::CapError::UcanNotYetValid
+pub benten_caps::CapError::UcanNotYetValid::nbf: u64
+pub benten_caps::CapError::UcanNotYetValid::now: u64
+pub benten_caps::CapError::WallclockExpired
+impl benten_caps::error::CapError
+pub fn benten_caps::error::CapError::chain_depth_context(&self) -> core::option::Option<(usize, usize)>
+pub fn benten_caps::error::CapError::code(&self) -> benten_errors::ErrorCode
+impl core::error::Error for benten_caps::error::CapError
+impl core::fmt::Debug for benten_caps::error::CapError
+pub fn benten_caps::error::CapError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_caps::error::CapError
+pub fn benten_caps::error::CapError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::error::CapError
+impl core::marker::Send for benten_caps::error::CapError
+impl core::marker::Sync for benten_caps::error::CapError
+impl core::marker::Unpin for benten_caps::error::CapError
+impl core::marker::UnsafeUnpin for benten_caps::error::CapError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::error::CapError
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::error::CapError
+#[non_exhaustive] pub enum benten_caps::ChainValidationError
+pub benten_caps::ChainValidationError::ChainNotNarrowing
+pub benten_caps::ChainValidationError::ChainNotNarrowing::step_index: usize
+pub benten_caps::ChainValidationError::EmptyChain
+impl core::clone::Clone for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::clone(&self) -> benten_caps::chain_validator::ChainValidationError
+impl core::cmp::Eq for benten_caps::chain_validator::ChainValidationError
+impl core::cmp::PartialEq for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::eq(&self, other: &benten_caps::chain_validator::ChainValidationError) -> bool
+impl core::error::Error for benten_caps::chain_validator::ChainValidationError
+impl core::fmt::Debug for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_caps::chain_validator::ChainValidationError
+pub fn benten_caps::chain_validator::ChainValidationError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Freeze for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Send for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Sync for benten_caps::chain_validator::ChainValidationError
+impl core::marker::Unpin for benten_caps::chain_validator::ChainValidationError
+impl core::marker::UnsafeUnpin for benten_caps::chain_validator::ChainValidationError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::chain_validator::ChainValidationError
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::chain_validator::ChainValidationError
+pub enum benten_caps::ChainValidationOutcome
+pub benten_caps::ChainValidationOutcome::Admitted
+pub benten_caps::ChainValidationOutcome::ChainTooDeep
+pub benten_caps::ChainValidationOutcome::ChainTooDeep::depth: usize
+pub benten_caps::ChainValidationOutcome::ChainTooDeep::limit: usize
+pub benten_caps::ChainValidationOutcome::Empty
+pub benten_caps::ChainValidationOutcome::NoManifestForIssuer
+pub benten_caps::ChainValidationOutcome::NoManifestForIssuer::issuer_did: benten_id::did::Did
+pub benten_caps::ChainValidationOutcome::PrivateNamespaceLeaked
+pub benten_caps::ChainValidationOutcome::PrivateNamespaceLeaked::cap_pattern: alloc::string::String
+pub benten_caps::ChainValidationOutcome::RootNotUserDid
+pub benten_caps::ChainValidationOutcome::StepOutsideEnvelope
+pub benten_caps::ChainValidationOutcome::StepOutsideEnvelope::cap_pattern: alloc::string::String
+pub benten_caps::ChainValidationOutcome::StepOutsideEnvelope::issuer_did: benten_id::did::Did
+impl benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::into_result(self) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::clone::Clone for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::clone(&self) -> benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::cmp::Eq for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::cmp::PartialEq for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::eq(&self, other: &benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome) -> bool
+impl core::fmt::Debug for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub fn benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Freeze for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Send for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Sync for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::Unpin for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::marker::UnsafeUnpin for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome
+pub enum benten_caps::ChainValidatorOutcome
+pub benten_caps::ChainValidatorOutcome::Admitted
+impl core::clone::Clone for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::ChainValidatorOutcome::clone(&self) -> benten_caps::chain_validator::ChainValidatorOutcome
+impl core::cmp::Eq for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::cmp::PartialEq for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::ChainValidatorOutcome::eq(&self, other: &benten_caps::chain_validator::ChainValidatorOutcome) -> bool
+impl core::fmt::Debug for benten_caps::chain_validator::ChainValidatorOutcome
+pub fn benten_caps::chain_validator::ChainValidatorOutcome::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Freeze for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Send for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Sync for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::Unpin for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::marker::UnsafeUnpin for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::chain_validator::ChainValidatorOutcome
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::chain_validator::ChainValidatorOutcome
+pub enum benten_caps::DelegationDecision
+pub benten_caps::DelegationDecision::OutsideEnvelope
+pub benten_caps::DelegationDecision::Permitted
+pub benten_caps::DelegationDecision::PrivateNamespaceForbidden
+impl benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::into_result(self) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::clone::Clone for benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::clone(&self) -> benten_caps::plugin_delegation::DelegationDecision
+impl core::cmp::Eq for benten_caps::plugin_delegation::DelegationDecision
+impl core::cmp::PartialEq for benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::eq(&self, other: &benten_caps::plugin_delegation::DelegationDecision) -> bool
+impl core::fmt::Debug for benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::plugin_delegation::DelegationDecision::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Freeze for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Send for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Sync for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::Unpin for benten_caps::plugin_delegation::DelegationDecision
+impl core::marker::UnsafeUnpin for benten_caps::plugin_delegation::DelegationDecision
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::plugin_delegation::DelegationDecision
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::plugin_delegation::DelegationDecision
+#[non_exhaustive] pub enum benten_caps::PendingOp
+pub benten_caps::PendingOp::DeleteEdge
+pub benten_caps::PendingOp::DeleteEdge::cid: benten_core::Cid
+pub benten_caps::PendingOp::DeleteEdge::label: core::option::Option<alloc::string::String>
+pub benten_caps::PendingOp::DeleteNode
+pub benten_caps::PendingOp::DeleteNode::cid: benten_core::Cid
+pub benten_caps::PendingOp::DeleteNode::labels: alloc::vec::Vec<alloc::string::String>
+pub benten_caps::PendingOp::PutEdge
+pub benten_caps::PendingOp::PutEdge::cid: benten_core::Cid
+pub benten_caps::PendingOp::PutEdge::label: alloc::string::String
+pub benten_caps::PendingOp::PutNode
+pub benten_caps::PendingOp::PutNode::cid: benten_core::Cid
+pub benten_caps::PendingOp::PutNode::labels: alloc::vec::Vec<alloc::string::String>
+impl core::clone::Clone for benten_caps::policy::PendingOp
+pub fn benten_caps::policy::PendingOp::clone(&self) -> benten_caps::policy::PendingOp
+impl core::fmt::Debug for benten_caps::policy::PendingOp
+pub fn benten_caps::policy::PendingOp::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::policy::PendingOp
+impl core::marker::Send for benten_caps::policy::PendingOp
+impl core::marker::Sync for benten_caps::policy::PendingOp
+impl core::marker::Unpin for benten_caps::policy::PendingOp
+impl core::marker::UnsafeUnpin for benten_caps::policy::PendingOp
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::PendingOp
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::PendingOp
+#[non_exhaustive] pub enum benten_caps::PropertyValue
+pub benten_caps::PropertyValue::Bool(bool)
+pub benten_caps::PropertyValue::Integer(i64)
+pub benten_caps::PropertyValue::Text(alloc::string::String)
+impl benten_caps::restricted_spec::PropertyValue
+pub const fn benten_caps::restricted_spec::PropertyValue::boolean(b: bool) -> Self
+pub const fn benten_caps::restricted_spec::PropertyValue::integer(n: i64) -> Self
+pub fn benten_caps::restricted_spec::PropertyValue::text<S: core::convert::Into<alloc::string::String>>(s: S) -> Self
+impl core::clone::Clone for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::clone(&self) -> benten_caps::restricted_spec::PropertyValue
+impl core::cmp::Eq for benten_caps::restricted_spec::PropertyValue
+impl core::cmp::PartialEq for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::eq(&self, other: &benten_caps::restricted_spec::PropertyValue) -> bool
+impl core::fmt::Debug for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::restricted_spec::PropertyValue
+impl serde_core::ser::Serialize for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::restricted_spec::PropertyValue
+pub fn benten_caps::restricted_spec::PropertyValue::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::restricted_spec::PropertyValue
+impl core::marker::Send for benten_caps::restricted_spec::PropertyValue
+impl core::marker::Sync for benten_caps::restricted_spec::PropertyValue
+impl core::marker::Unpin for benten_caps::restricted_spec::PropertyValue
+impl core::marker::UnsafeUnpin for benten_caps::restricted_spec::PropertyValue
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::restricted_spec::PropertyValue
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::restricted_spec::PropertyValue
+pub enum benten_caps::Scope
+pub benten_caps::Scope::Hashes(alloc::vec::Vec<benten_core::Cid>)
+pub benten_caps::Scope::RestrictedSelector(benten_caps::restricted_spec::RestrictedScope)
+impl core::clone::Clone for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::clone(&self) -> benten_caps::scope::Scope
+impl core::cmp::Eq for benten_caps::scope::Scope
+impl core::cmp::PartialEq for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::eq(&self, other: &benten_caps::scope::Scope) -> bool
+impl core::fmt::Debug for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::scope::Scope
+impl serde_core::ser::Serialize for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::scope::Scope
+pub fn benten_caps::scope::Scope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::scope::Scope
+impl core::marker::Send for benten_caps::scope::Scope
+impl core::marker::Sync for benten_caps::scope::Scope
+impl core::marker::Unpin for benten_caps::scope::Scope
+impl core::marker::UnsafeUnpin for benten_caps::scope::Scope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::scope::Scope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::scope::Scope
+#[non_exhaustive] pub enum benten_caps::TypedCapGroup
+pub benten_caps::TypedCapGroup::Codec
+pub benten_caps::TypedCapGroup::CryptoKeygen
+pub benten_caps::TypedCapGroup::CryptoSign
+pub benten_caps::TypedCapGroup::CryptoVerify
+pub benten_caps::TypedCapGroup::DidResolve
+pub benten_caps::TypedCapGroup::Hash
+pub benten_caps::TypedCapGroup::UcanValidate
+pub benten_caps::TypedCapGroup::VcVerify
+impl benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::cap_string(self) -> &'static str
+impl core::clone::Clone for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::clone(&self) -> benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::cmp::Eq for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::cmp::PartialEq for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::eq(&self, other: &benten_caps::typed_cap_mapping::TypedCapGroup) -> bool
+impl core::fmt::Debug for benten_caps::typed_cap_mapping::TypedCapGroup
+pub fn benten_caps::typed_cap_mapping::TypedCapGroup::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::StructuralPartialEq for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Freeze for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Send for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Sync for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::Unpin for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::marker::UnsafeUnpin for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::typed_cap_mapping::TypedCapGroup
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::typed_cap_mapping::TypedCapGroup
+pub struct benten_caps::AuthorizationGrant
+pub benten_caps::AuthorizationGrant::audience_binding: benten_core::Cid
+pub benten_caps::AuthorizationGrant::audience_pubkey: core::option::Option<alloc::vec::Vec<u8>>
+pub benten_caps::AuthorizationGrant::binding_sig: alloc::vec::Vec<u8>
+pub benten_caps::AuthorizationGrant::issuer_verifying_key: alloc::vec::Vec<u8>
+pub benten_caps::AuthorizationGrant::key_material: benten_caps::authorization_grant::GrantKeyMaterial
+pub benten_caps::AuthorizationGrant::scope: core::option::Option<benten_caps::restricted_spec::RestrictedScope>
+pub benten_caps::AuthorizationGrant::ucan: benten_caps::authorization_grant::UcanEnvelope
+impl benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_envelopes_for_test(ucan: benten_caps::authorization_grant::UcanEnvelope, key_material: benten_caps::authorization_grant::GrantKeyMaterial, audience: benten_core::Cid) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_nbf_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, nbf_secs: u64, exp_secs: u64) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_unresolved_peer_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::malformed_for_test(audience_kp: &benten_id::keypair::Keypair) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::verify_binding(&self, audience: benten_core::Cid) -> core::result::Result<(), benten_caps::authorization_grant::AuthorizationGrantError>
+pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_key_material_for_test(&self, km: benten_caps::authorization_grant::GrantKeyMaterial) -> Self
+pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_ucan_for_test(&self, ucan: benten_caps::authorization_grant::UcanEnvelope) -> Self
+impl core::clone::Clone for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::clone(&self) -> benten_caps::authorization_grant::AuthorizationGrant
+impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::authorization_grant::AuthorizationGrant
+pub fn benten_caps::authorization_grant::AuthorizationGrant::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::Send for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::Sync for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGrant
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrant
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
+pub struct benten_caps::CapWriteContext
+pub benten_caps::CapWriteContext::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::CapWriteContext::actor_hint: core::option::Option<alloc::string::String>
+pub benten_caps::CapWriteContext::audience_did: core::option::Option<alloc::string::String>
+pub benten_caps::CapWriteContext::authority: benten_core::WriteAuthority
+pub benten_caps::CapWriteContext::device_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::CapWriteContext::is_privileged: bool
+pub benten_caps::CapWriteContext::label: alloc::string::String
+pub benten_caps::CapWriteContext::pending_ops: alloc::vec::Vec<benten_caps::policy::PendingOp>
+pub benten_caps::CapWriteContext::scope: alloc::string::String
+impl benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::synthetic_for_test() -> Self
+impl core::clone::Clone for benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::clone(&self) -> benten_caps::policy::CapWriteContext
+impl core::default::Default for benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::default() -> benten_caps::policy::CapWriteContext
+impl core::fmt::Debug for benten_caps::policy::CapWriteContext
+pub fn benten_caps::policy::CapWriteContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::policy::CapWriteContext
+impl core::marker::Send for benten_caps::policy::CapWriteContext
+impl core::marker::Sync for benten_caps::policy::CapWriteContext
+impl core::marker::Unpin for benten_caps::policy::CapWriteContext
+impl core::marker::UnsafeUnpin for benten_caps::policy::CapWriteContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::CapWriteContext
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::CapWriteContext
+pub struct benten_caps::CapabilityGrant
+pub benten_caps::CapabilityGrant::grantee: benten_core::Cid
+pub benten_caps::CapabilityGrant::hlc_stamp: u64
+pub benten_caps::CapabilityGrant::issuer: benten_core::Cid
+pub benten_caps::CapabilityGrant::scope: alloc::string::String
+pub benten_caps::CapabilityGrant::ttl_hlc_duration: core::option::Option<core::time::Duration>
+impl benten_caps::grant::CapabilityGrant
+pub fn benten_caps::grant::CapabilityGrant::as_node(&self) -> benten_core::Node
+pub fn benten_caps::grant::CapabilityGrant::attenuated_for_test(actor: &benten_core::Cid, scope: &str, i: usize) -> Self
+pub fn benten_caps::grant::CapabilityGrant::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_caps::grant::CapabilityGrant::new(grantee: benten_core::Cid, issuer: benten_core::Cid, scope: benten_caps::grant::GrantScope) -> Self
+impl core::clone::Clone for benten_caps::grant::CapabilityGrant
+pub fn benten_caps::grant::CapabilityGrant::clone(&self) -> benten_caps::grant::CapabilityGrant
+impl core::fmt::Debug for benten_caps::grant::CapabilityGrant
+pub fn benten_caps::grant::CapabilityGrant::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::grant::CapabilityGrant
+impl core::marker::Send for benten_caps::grant::CapabilityGrant
+impl core::marker::Sync for benten_caps::grant::CapabilityGrant
+impl core::marker::Unpin for benten_caps::grant::CapabilityGrant
+impl core::marker::UnsafeUnpin for benten_caps::grant::CapabilityGrant
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant::CapabilityGrant
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant::CapabilityGrant
+pub struct benten_caps::DelegationStep
+pub benten_caps::DelegationStep::audience_did: benten_id::did::Did
+pub benten_caps::DelegationStep::cap_pattern: alloc::string::String
+pub benten_caps::DelegationStep::issuer_did: benten_id::did::Did
+impl core::clone::Clone for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub fn benten_caps::manifest_envelope_chain_validation::DelegationStep::clone(&self) -> benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::cmp::Eq for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::cmp::PartialEq for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub fn benten_caps::manifest_envelope_chain_validation::DelegationStep::eq(&self, other: &benten_caps::manifest_envelope_chain_validation::DelegationStep) -> bool
+impl core::fmt::Debug for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub fn benten_caps::manifest_envelope_chain_validation::DelegationStep::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Freeze for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Send for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Sync for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::Unpin for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::marker::UnsafeUnpin for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::manifest_envelope_chain_validation::DelegationStep
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::manifest_envelope_chain_validation::DelegationStep
+pub struct benten_caps::FrameReplayMarker<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::chain_authority::FrameReplayMarker<B>
+pub fn benten_caps::chain_authority::FrameReplayMarker<B>::mark_and_check_frame(&self, nonce: &[u8]) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::chain_authority::FrameReplayMarker<B>::new(backend: alloc::sync::Arc<B>) -> Self
+impl<B: core::fmt::Debug + benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::chain_authority::FrameReplayMarker<B>
+pub fn benten_caps::chain_authority::FrameReplayMarker<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::Send for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::Sync for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::Unpin for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::chain_authority::FrameReplayMarker<B>
+impl<B> core::panic::unwind_safe::RefUnwindSafe for benten_caps::chain_authority::FrameReplayMarker<B> where B: core::panic::unwind_safe::RefUnwindSafe
+impl<B> core::panic::unwind_safe::UnwindSafe for benten_caps::chain_authority::FrameReplayMarker<B> where B: core::panic::unwind_safe::RefUnwindSafe
+pub struct benten_caps::GrantBackedPolicy
+impl benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::new(grants: alloc::sync::Arc<dyn benten_caps::grant_backed::GrantReader>) -> Self
+impl benten_caps::policy::CapabilityPolicy for benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::grant_backed::GrantBackedPolicy::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl core::fmt::Debug for benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::Send for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::Sync for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::Unpin for benten_caps::grant_backed::GrantBackedPolicy
+impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantBackedPolicy
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
+impl !core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
+pub struct benten_caps::GrantKeyMaterial
+pub benten_caps::GrantKeyMaterial::bytes: alloc::vec::Vec<u8>
+impl benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test() -> Self
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test_distinct(discriminator: u8) -> Self
+impl core::clone::Clone for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::clone(&self) -> benten_caps::authorization_grant::GrantKeyMaterial
+impl core::cmp::Eq for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::cmp::PartialEq for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::eq(&self, other: &benten_caps::authorization_grant::GrantKeyMaterial) -> bool
+impl core::fmt::Debug for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::authorization_grant::GrantKeyMaterial
+impl serde_core::ser::Serialize for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::Send for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::Sync for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::Unpin for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
+pub struct benten_caps::GrantReaderChain
+impl benten_caps::grant_backed::GrantReaderChain
+pub fn benten_caps::grant_backed::GrantReaderChain::check_attenuation_for_test(&self, _scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_and_config_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>, config: benten_caps::grant_backed::GrantReaderConfig) -> Self
+pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>) -> Self
+impl core::marker::Freeze for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::Send for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::Sync for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::Unpin for benten_caps::grant_backed::GrantReaderChain
+impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantReaderChain
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantReaderChain
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantReaderChain
+pub struct benten_caps::GrantReaderConfig
+pub benten_caps::GrantReaderConfig::max_chain_depth: usize
+impl core::clone::Clone for benten_caps::grant_backed::GrantReaderConfig
+pub fn benten_caps::grant_backed::GrantReaderConfig::clone(&self) -> benten_caps::grant_backed::GrantReaderConfig
+impl core::default::Default for benten_caps::grant_backed::GrantReaderConfig
+pub fn benten_caps::grant_backed::GrantReaderConfig::default() -> Self
+impl core::fmt::Debug for benten_caps::grant_backed::GrantReaderConfig
+pub fn benten_caps::grant_backed::GrantReaderConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::Send for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::Sync for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::Unpin for benten_caps::grant_backed::GrantReaderConfig
+impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantReaderConfig
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantReaderConfig
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantReaderConfig
+pub struct benten_caps::GrantScope(pub alloc::string::String)
+impl benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::as_str(&self) -> &str
+pub fn benten_caps::grant::GrantScope::parse(s: &str) -> core::result::Result<Self, benten_caps::error::CapError>
+impl benten_caps::attenuation::AsAttenuationScope for &benten_caps::grant::GrantScope
+pub fn &benten_caps::grant::GrantScope::as_scope_str(&self) -> &str
+impl benten_caps::attenuation::AsAttenuationScope for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::as_scope_str(&self) -> &str
+impl core::clone::Clone for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::clone(&self) -> benten_caps::grant::GrantScope
+impl core::cmp::Eq for benten_caps::grant::GrantScope
+impl core::cmp::PartialEq for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::eq(&self, other: &benten_caps::grant::GrantScope) -> bool
+impl core::fmt::Debug for benten_caps::grant::GrantScope
+pub fn benten_caps::grant::GrantScope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_caps::grant::GrantScope
+impl core::marker::Freeze for benten_caps::grant::GrantScope
+impl core::marker::Send for benten_caps::grant::GrantScope
+impl core::marker::Sync for benten_caps::grant::GrantScope
+impl core::marker::Unpin for benten_caps::grant::GrantScope
+impl core::marker::UnsafeUnpin for benten_caps::grant::GrantScope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant::GrantScope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::grant::GrantScope
+pub struct benten_caps::HlcStampedRefreshEvent
+pub benten_caps::HlcStampedRefreshEvent::hlc_stamp: core::option::Option<u64>
+pub benten_caps::HlcStampedRefreshEvent::monotonic_authoritative: bool
+impl core::clone::Clone for benten_caps::HlcStampedRefreshEvent
+pub fn benten_caps::HlcStampedRefreshEvent::clone(&self) -> benten_caps::HlcStampedRefreshEvent
+impl core::fmt::Debug for benten_caps::HlcStampedRefreshEvent
+pub fn benten_caps::HlcStampedRefreshEvent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::HlcStampedRefreshEvent
+impl core::marker::Send for benten_caps::HlcStampedRefreshEvent
+impl core::marker::Sync for benten_caps::HlcStampedRefreshEvent
+impl core::marker::Unpin for benten_caps::HlcStampedRefreshEvent
+impl core::marker::UnsafeUnpin for benten_caps::HlcStampedRefreshEvent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::HlcStampedRefreshEvent
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::HlcStampedRefreshEvent
+pub struct benten_caps::InMemoryRateLimitPolicy
+impl benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::builder() -> benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::empty() -> Self
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_peer_bandwidth(&self, peer: &str, bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_read_budget(&self, actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_writes_per_sec(&self, actor: &str, zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::is_peer_back_pressured(&self, peer: &str) -> bool
+impl core::fmt::Debug for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::Send for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::Sync for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::Unpin for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl core::marker::UnsafeUnpin for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicy
+impl !core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub struct benten_caps::InMemoryRateLimitPolicyBuilder
+impl benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::actor_reads_per_second(self, actor: impl core::convert::Into<alloc::string::String>, budget: u32) -> Self
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::actor_writes_per_second(self, actor: impl core::convert::Into<alloc::string::String>, zone: impl core::convert::Into<alloc::string::String>, budget: u32) -> Self
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::build(self) -> benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::peer_bandwidth_bytes_per_second(self, peer: impl core::convert::Into<alloc::string::String>, bytes_per_sec: usize) -> Self
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::with_clock(self, clock: impl core::ops::function::Fn() -> std::time::Instant + core::marker::Send + core::marker::Sync + 'static) -> Self
+impl core::default::Default for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder::default() -> benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Freeze for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Send for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Sync for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::Unpin for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl core::marker::UnsafeUnpin for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+impl !core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::InMemoryRateLimitPolicyBuilder
+pub struct benten_caps::LegacyUcanStubBackend
+impl benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::new() -> Self
+impl benten_caps::policy::CapabilityPolicy for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl core::clone::Clone for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::clone(&self) -> benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::default::Default for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::default() -> benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::fmt::Debug for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Freeze for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Send for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Sync for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::Unpin for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::marker::UnsafeUnpin for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::ucan_stub::LegacyUcanStubBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub struct benten_caps::NoAuthBackend
+impl benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::new() -> Self
+pub fn benten_caps::noauth::NoAuthBackend::pseudo_actor_label() -> &'static str
+impl benten_caps::policy::CapabilityPolicy for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::noauth::NoAuthBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl core::clone::Clone for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::clone(&self) -> benten_caps::noauth::NoAuthBackend
+impl core::default::Default for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::default() -> benten_caps::noauth::NoAuthBackend
+impl core::fmt::Debug for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::noauth::NoAuthBackend
+impl core::marker::Freeze for benten_caps::noauth::NoAuthBackend
+impl core::marker::Send for benten_caps::noauth::NoAuthBackend
+impl core::marker::Sync for benten_caps::noauth::NoAuthBackend
+impl core::marker::Unpin for benten_caps::noauth::NoAuthBackend
+impl core::marker::UnsafeUnpin for benten_caps::noauth::NoAuthBackend
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::noauth::NoAuthBackend
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::noauth::NoAuthBackend
+pub struct benten_caps::NullRateLimitPolicy
+impl benten_caps::rate_limit::NullRateLimitPolicy
+pub const fn benten_caps::rate_limit::NullRateLimitPolicy::new() -> Self
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_peer_bandwidth(&self, _peer: &str, _bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_read_budget(&self, _actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_writes_per_sec(&self, _actor: &str, _zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::is_peer_back_pressured(&self, _peer: &str) -> bool
+impl core::clone::Clone for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::clone(&self) -> benten_caps::rate_limit::NullRateLimitPolicy
+impl core::default::Default for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::default() -> benten_caps::rate_limit::NullRateLimitPolicy
+impl core::fmt::Debug for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Freeze for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Send for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Sync for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::Unpin for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::marker::UnsafeUnpin for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::NullRateLimitPolicy
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::NullRateLimitPolicy
+pub struct benten_caps::ReadContext
+pub benten_caps::ReadContext::actor_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::ReadContext::actor_hint: core::option::Option<alloc::string::String>
+pub benten_caps::ReadContext::audience_did: core::option::Option<alloc::string::String>
+pub benten_caps::ReadContext::device_cid: core::option::Option<benten_core::Cid>
+pub benten_caps::ReadContext::label: alloc::string::String
+pub benten_caps::ReadContext::target_cid: core::option::Option<benten_core::Cid>
+impl benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::by_cid_only(cid: benten_core::Cid) -> Self
+pub fn benten_caps::policy::ReadContext::by_label_only(label: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_caps::policy::ReadContext::synthetic_for_test() -> Self
+impl core::clone::Clone for benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::clone(&self) -> benten_caps::policy::ReadContext
+impl core::default::Default for benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::default() -> benten_caps::policy::ReadContext
+impl core::fmt::Debug for benten_caps::policy::ReadContext
+pub fn benten_caps::policy::ReadContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_caps::policy::ReadContext
+impl core::marker::Send for benten_caps::policy::ReadContext
+impl core::marker::Sync for benten_caps::policy::ReadContext
+impl core::marker::Unpin for benten_caps::policy::ReadContext
+impl core::marker::UnsafeUnpin for benten_caps::policy::ReadContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::ReadContext
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::ReadContext
+#[non_exhaustive] pub struct benten_caps::RestrictedScope
+pub benten_caps::RestrictedScope::edge_allowlist: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub benten_caps::RestrictedScope::label_allowlist: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub benten_caps::RestrictedScope::label_denylist: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub benten_caps::RestrictedScope::max_depth: core::option::Option<u32>
+pub benten_caps::RestrictedScope::property_equalities: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_caps::restricted_spec::PropertyValue>
+pub benten_caps::RestrictedScope::roots: core::option::Option<alloc::vec::Vec<benten_core::Cid>>
+impl benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::contains(&self, other: &Self) -> bool
+pub const fn benten_caps::restricted_spec::RestrictedScope::new() -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_edge_allowlist(self, labels: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_hashes(hashes: alloc::vec::Vec<benten_core::Cid>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_label_allowlist(self, labels: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_label_denylist(self, labels: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_max_depth(self, depth: u32) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_property_equality(self, key: alloc::string::String, value: benten_caps::restricted_spec::PropertyValue) -> Self
+pub fn benten_caps::restricted_spec::RestrictedScope::with_roots(self, roots: alloc::vec::Vec<benten_core::Cid>) -> Self
+impl core::clone::Clone for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::clone(&self) -> benten_caps::restricted_spec::RestrictedScope
+impl core::cmp::Eq for benten_caps::restricted_spec::RestrictedScope
+impl core::cmp::PartialEq for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::eq(&self, other: &benten_caps::restricted_spec::RestrictedScope) -> bool
+impl core::default::Default for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::default() -> Self
+impl core::fmt::Debug for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::restricted_spec::RestrictedScope
+impl serde_core::ser::Serialize for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::restricted_spec::RestrictedScope
+pub fn benten_caps::restricted_spec::RestrictedScope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::Send for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::Sync for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::Unpin for benten_caps::restricted_spec::RestrictedScope
+impl core::marker::UnsafeUnpin for benten_caps::restricted_spec::RestrictedScope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::restricted_spec::RestrictedScope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::restricted_spec::RestrictedScope
+pub struct benten_caps::UCANBackend<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::backends::ucan::UCANBackend<B>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::graph_backend(&self) -> &B
+pub fn benten_caps::backends::ucan::UCANBackend<B>::install_proof(&self, ucan: &benten_id::ucan::Ucan) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, ucan_cid: &benten_core::Cid) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::iter_installed_proofs(&self) -> core::result::Result<alloc::vec::Vec<benten_id::ucan::Ucan>, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::new(backend: alloc::sync::Arc<B>) -> Self
+pub fn benten_caps::backends::ucan::UCANBackend<B>::rate_limit_policy(&self) -> &dyn benten_caps::rate_limit::RateLimitPolicy
+pub fn benten_caps::backends::ucan::UCANBackend<B>::record_grant(&self, ucan: &benten_id::ucan::Ucan, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, ucan_cid: &benten_core::Cid) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain(&self, chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_at(&self, chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_for_audience_at(&self, chain: &[benten_id::ucan::Ucan], audience: &benten_id::did::Did, now: u64) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::with_rate_limit_policy(self, policy: alloc::sync::Arc<dyn benten_caps::rate_limit::RateLimitPolicy>) -> Self
+impl<B: benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::backends::ucan::UCANBackend<B>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Send for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Sync for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::Unpin for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> !core::panic::unwind_safe::RefUnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
+impl<B> !core::panic::unwind_safe::UnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
+pub struct benten_caps::UcanEnvelope
+pub benten_caps::UcanEnvelope::audience: benten_core::Cid
+pub benten_caps::UcanEnvelope::discriminator: u32
+pub benten_caps::UcanEnvelope::exp_secs: u64
+pub benten_caps::UcanEnvelope::nbf_secs: u64
+pub benten_caps::UcanEnvelope::unresolved_peer: bool
+impl benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test(audience: benten_core::Cid) -> Self
+pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test_distinct(audience: benten_core::Cid, discriminator: u32) -> Self
+impl core::clone::Clone for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::clone(&self) -> benten_caps::authorization_grant::UcanEnvelope
+impl core::cmp::Eq for benten_caps::authorization_grant::UcanEnvelope
+impl core::cmp::PartialEq for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::eq(&self, other: &benten_caps::authorization_grant::UcanEnvelope) -> bool
+impl core::fmt::Debug for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_caps::authorization_grant::UcanEnvelope
+impl serde_core::ser::Serialize for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_caps::authorization_grant::UcanEnvelope
+pub fn benten_caps::authorization_grant::UcanEnvelope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::Send for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::Sync for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::Unpin for benten_caps::authorization_grant::UcanEnvelope
+impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::UcanEnvelope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::UcanEnvelope
+impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::UcanEnvelope
+pub struct benten_caps::UcanGroundedPolicy<B: benten_graph::graph_backend::GraphBackend>
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::new(inner: benten_caps::grant_backed::GrantBackedPolicy, ucan: alloc::sync::Arc<benten_caps::backends::ucan::UCANBackend<B>>) -> Self
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::ucan_backend(&self) -> &alloc::sync::Arc<benten_caps::backends::ucan::UCANBackend<B>>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::with_now_secs(self, now_secs: u64) -> Self
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::policy::CapabilityPolicy for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl<B: benten_graph::graph_backend::GraphBackend> core::fmt::Debug for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<B> core::marker::Freeze for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::Send for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::Sync for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::Unpin for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> core::marker::UnsafeUnpin for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> !core::panic::unwind_safe::RefUnwindSafe for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+impl<B> !core::panic::unwind_safe::UnwindSafe for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub const benten_caps::CAPABILITY_GRANT_LABEL: &str
+pub const benten_caps::DEFAULT_BATCH_BOUNDARY: usize
+pub const benten_caps::GRANTED_TO_LABEL: &str
+pub const benten_caps::PRIVATE_PREFIX: &str
+pub const benten_caps::REQUIRES_PREFIX: &str
+pub const benten_caps::REVOKED_AT_LABEL: &str
+pub const benten_caps::SHARES_PREFIX: &str
+pub trait benten_caps::CapabilityPolicy: benten_caps::policy::sealed::Sealed + core::marker::Send + core::marker::Sync
+pub fn benten_caps::CapabilityPolicy::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::CapabilityPolicy::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::CapabilityPolicy::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::CapabilityPolicy::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::CapabilityPolicy::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::CapabilityPolicy::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::CapabilityPolicy::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl benten_caps::policy::CapabilityPolicy for benten_caps::grant_backed::GrantBackedPolicy
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::grant_backed::GrantBackedPolicy::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::grant_backed::GrantBackedPolicy::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl benten_caps::policy::CapabilityPolicy for benten_caps::noauth::NoAuthBackend
+pub fn benten_caps::noauth::NoAuthBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::noauth::NoAuthBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::noauth::NoAuthBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl benten_caps::policy::CapabilityPolicy for benten_caps::ucan_stub::LegacyUcanStubBackend
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_read(&self, _ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write(&self, _ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_stub::LegacyUcanStubBackend::wallclock_refresh_ceiling(&self) -> core::time::Duration
+impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::policy::CapabilityPolicy for benten_caps::ucan_grounded::UcanGroundedPolicy<B>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_per_delegation(&self, _source_plugin_did: &str, _target_plugin_did: &str, _cap_scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_read(&self, ctx: &benten_caps::policy::ReadContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::check_write_with_audience(&self, ctx: &benten_caps::policy::CapWriteContext) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::iterate_batch_boundary(&self) -> usize
+pub fn benten_caps::ucan_grounded::UcanGroundedPolicy<B>::wallclock_refresh_ceiling(&self) -> core::time::Duration
+pub trait benten_caps::GrantReader: core::marker::Send + core::marker::Sync
+pub fn benten_caps::GrantReader::has_unrevoked_grant_for_any(&self, scopes: &[&str]) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::GrantReader::has_unrevoked_grant_for_scope(&self, scope: &str) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::GrantReader::has_unrevoked_grant_for_scope_and_actor(&self, scope: &str, actor_cid: core::option::Option<&benten_core::Cid>) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::GrantReader::has_unrevoked_grant_matching(&self, required_scope: &str, actor_cid: core::option::Option<&benten_core::Cid>) -> core::result::Result<bool, benten_caps::error::CapError>
+pub trait benten_caps::ManifestEnvelopeLookup
+pub type benten_caps::ManifestEnvelopeLookup::View<'a> where Self: 'a: benten_caps::plugin_delegation::SharesPolicyView
+pub fn benten_caps::ManifestEnvelopeLookup::lookup<'a>(&'a self, plugin_did: &benten_id::did::Did) -> core::option::Option<Self::View>
+pub trait benten_caps::RateLimitPolicy: core::marker::Send + core::marker::Sync
+pub fn benten_caps::RateLimitPolicy::check_peer_bandwidth(&self, peer: &str, bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::RateLimitPolicy::check_read_budget(&self, actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::RateLimitPolicy::check_writes_per_sec(&self, actor: &str, zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::RateLimitPolicy::is_peer_back_pressured(&self, peer: &str) -> bool
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::InMemoryRateLimitPolicy
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_peer_bandwidth(&self, peer: &str, bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_read_budget(&self, actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::check_writes_per_sec(&self, actor: &str, zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::InMemoryRateLimitPolicy::is_peer_back_pressured(&self, peer: &str) -> bool
+impl benten_caps::rate_limit::RateLimitPolicy for benten_caps::rate_limit::NullRateLimitPolicy
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_peer_bandwidth(&self, _peer: &str, _bytes: usize) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_read_budget(&self, _actor: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::check_writes_per_sec(&self, _actor: &str, _zone: &str) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::rate_limit::NullRateLimitPolicy::is_peer_back_pressured(&self, _peer: &str) -> bool
+pub trait benten_caps::SharesPolicyView
+pub fn benten_caps::SharesPolicyView::permits(&self, cap_pattern: &str, target_plugin_did: &benten_id::did::Did) -> bool
+impl benten_caps::plugin_delegation::SharesPolicyView for benten_platform_foundation::plugin_manifest::SharesPolicy
+pub fn benten_platform_foundation::plugin_manifest::SharesPolicy::permits(&self, cap_pattern: &str, target_plugin_did: &benten_id::did::Did) -> bool
+impl<T: benten_caps::plugin_delegation::SharesPolicyView + ?core::marker::Sized> benten_caps::plugin_delegation::SharesPolicyView for &T
+pub fn &T::permits(&self, cap_pattern: &str, target_plugin_did: &benten_id::did::Did) -> bool
+pub trait benten_caps::UserDidRegistry
+pub fn benten_caps::UserDidRegistry::is_user_did(&self, did: &benten_id::did::Did) -> bool
+pub fn benten_caps::check_attenuation(parent_scope: impl benten_caps::attenuation::AsAttenuationScope, child_required: impl benten_caps::attenuation::AsAttenuationScope) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::check_delegation_within_envelope<P: benten_caps::plugin_delegation::SharesPolicyView>(cap_pattern: &str, target_plugin_did: &benten_id::did::Did, source_shares: &P) -> benten_caps::plugin_delegation::DelegationDecision
+pub fn benten_caps::check_scope_within_envelope(cap_scope: &str, target_plugin_did: &benten_id::did::Did, source_manifest: &benten_platform_foundation::plugin_manifest::PluginManifest) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::emit_refresh_event_for_test() -> benten_caps::HlcStampedRefreshEvent
+pub fn benten_caps::envelope_ceiling_first_rejected_resource<'a>(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, cap_resources: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> core::option::Option<alloc::string::String>
+pub fn benten_caps::envelope_ceiling_rejects_cap(envelope: &benten_id::device_attestation::CapabilityEnvelope, resource: &str) -> bool
+pub fn benten_caps::is_private_namespace_cap(cap_scope: &str) -> bool
+pub fn benten_caps::manifest_requires_to_scope(manifest: &benten_platform_foundation::plugin_manifest::PluginManifest, plugin_did: &benten_id::did::Did) -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_caps::manifest_shares_to_scope(manifest: &benten_platform_foundation::plugin_manifest::PluginManifest, plugin_did: &benten_id::did::Did) -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_caps::manifest_to_envelope_ceiling(manifest: &benten_platform_foundation::plugin_manifest::PluginManifest) -> benten_id::device_attestation::CapabilityEnvelope
+pub fn benten_caps::private_namespace_scope_admits_actor(cap_scope: &str, owning_plugin_did: &benten_id::did::Did) -> bool
+pub fn benten_caps::typed_cap_for_ucan_claim(resource: &str, ability: &str) -> core::option::Option<benten_caps::typed_cap_mapping::TypedCapGroup>
+pub fn benten_caps::validate_chain_narrowing(chain: &[benten_caps::scope::Scope]) -> core::result::Result<benten_caps::chain_validator::ChainValidatorOutcome, benten_caps::chain_validator::ChainValidationError>
+pub fn benten_caps::validate_chain_with_envelope_ceiling(chain: &[benten_id::ucan::Ucan], attestations: &[benten_id::device_attestation::DeviceAttestation]) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_caps::validate_chain_with_manifest_ceiling(chain: &[benten_id::ucan::Ucan], manifest: &benten_platform_foundation::plugin_manifest::PluginManifest, plugin_did: &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_caps::validate_chain_with_manifest_envelope<L, U>(chain: &[benten_caps::manifest_envelope_chain_validation::DelegationStep], manifest_lookup: &L, user_registry: &U) -> benten_caps::manifest_envelope_chain_validation::ChainValidationOutcome where L: benten_caps::manifest_envelope_chain_validation::ManifestEnvelopeLookup, U: benten_caps::manifest_envelope_chain_validation::UserDidRegistry
+pub fn benten_caps::validate_chain_with_rotation_log(chain: &[benten_id::ucan::Ucan], log: &benten_id::did_rotation::RotationLog) -> core::result::Result<(), benten_id::errors::UcanError>

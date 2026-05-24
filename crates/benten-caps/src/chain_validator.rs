@@ -15,7 +15,7 @@
 //!   (adding a hash) ⇒ reject.
 //! - **`Scope::RestrictedSelector(parent)` → `Scope::RestrictedSelector(child)`** —
 //!   `parent.contains(&child)` per the 6-dim AND-composed
-//!   [`crate::restricted_spec::RestrictedSpec::contains`].
+//!   [`crate::restricted_spec::RestrictedScope::contains`].
 //! - **Cross-arm** — at v1-beta, cross-arm transitions are rejected as
 //!   structurally non-narrowing (a `Hashes`-to-`RestrictedSelector`
 //!   transition would require a structural-comparability seam that

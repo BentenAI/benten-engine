@@ -112,7 +112,7 @@ use ml_dsa::{
     VerifyingKey as MlDsaVerifyingKey,
 };
 
-use crate::aead::{AeadEnvelope, AeadError, KeyMaterial};
+use crate::aead::{AeadEnvelope, AeadError, AeadKeyMaterial};
 use crate::cipher_suite::{CipherSuite, RecipientKeypair, RecipientPublic, RecipientSecret};
 use crate::codepoint::{CipherSuiteCodepoint, SigCodepoint, UnsupportedAlgorithm};
 use crate::sig::{
@@ -453,7 +453,7 @@ impl SwapMatrix {
                     &signature_bytes,
                 );
                 let plaintext_with_sig = compose_plaintext_with_sig(&signature_bytes, payload);
-                let key = KeyMaterial::from_raw_bytes(cipher_codepoint, &k_root);
+                let key = AeadKeyMaterial::from_raw_bytes(cipher_codepoint, &k_root);
                 let aead_env = crate::aead::wrap(&plaintext_with_sig, &key, &aad)
                     .map_err(SwapMatrixError::from_aead)?;
                 Some(SealedEnvelope {
@@ -470,8 +470,10 @@ impl SwapMatrix {
                             detail: "pure-PQ encryption requires a pure-PQ ML-KEM recipient",
                         })?;
                 let (ct, ss) = pure_pq_mlkem_encapsulate(&recip_kem.public_bytes)?;
-                let key =
-                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY, &ss);
+                let key = AeadKeyMaterial::from_raw_bytes(
+                    CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
+                    &ss,
+                );
                 let aad = compose_aad(
                     self.signature_codepoint(),
                     self.cipher_suite_codepoint(),
@@ -547,7 +549,7 @@ impl SwapMatrix {
                     .unwrap_key_material(recip_secret, &sealed.wrapped)
                     .map_err(SwapMatrixError::from_aead)?;
                 let k_root = unwrapped.as_bytes().to_vec();
-                let key = KeyMaterial::from_raw_bytes(cipher_codepoint, &k_root);
+                let key = AeadKeyMaterial::from_raw_bytes(cipher_codepoint, &k_root);
                 let aad = compose_aad(
                     envelope.sig_codepoint,
                     envelope.cipher_codepoint,
@@ -564,8 +566,10 @@ impl SwapMatrix {
                         })?;
                 let ct_bytes = sealed.wrapped.ek_mlkem.clone();
                 let ss = pure_pq_mlkem_decapsulate(&recip_kem.secret_bytes, &ct_bytes)?;
-                let key =
-                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY, &ss);
+                let key = AeadKeyMaterial::from_raw_bytes(
+                    CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
+                    &ss,
+                );
                 let aad = compose_aad(
                     envelope.sig_codepoint,
                     envelope.cipher_codepoint,
@@ -1668,7 +1672,7 @@ fn pure_pq_mlkem_decapsulate(
 
 fn aead_wrap_pure_pq(
     plaintext: &[u8],
-    key: &KeyMaterial,
+    key: &AeadKeyMaterial,
     aad: &[u8],
 ) -> Result<AeadEnvelope, SwapMatrixError> {
     use chacha20poly1305::aead::{Aead, AeadCore, KeyInit};
@@ -1699,7 +1703,7 @@ fn aead_wrap_pure_pq(
 
 fn aead_unwrap_pure_pq(
     envelope: &AeadEnvelope,
-    key: &KeyMaterial,
+    key: &AeadKeyMaterial,
     aad: &[u8],
 ) -> Result<Vec<u8>, SwapMatrixError> {
     use chacha20poly1305::aead::{Aead, KeyInit};

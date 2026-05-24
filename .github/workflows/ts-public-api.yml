@@ -1,0 +1,114 @@
+name: ts-public-api (TS API drift detector)
+
+# G-CORE-9 V1-FROZEN-INTERFACE row 2 / item 10 (#1204 TS-side public-API
+# parity gate). Per V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 2: built +
+# committed + FREEZE-FLIPPED at G-CORE-9. JS analog of the
+# `cargo-public-api` workflow at `.github/workflows/cargo-public-api.yml`.
+#
+# Trigger discipline: pull_request branches: [main] + push branches:
+# [main] + workflow_dispatch.
+#
+# Status: INFORMATIONAL ONLY at v1-beta — drift surfaces as a step
+# summary; the workflow always exits 0. Promotion to required is a
+# v1-Composing or post-v1 OSS-launch-era decision (mirrors the
+# cargo-public-api workflow's ci-decisions-2026-04-22.md §4 framing).
+#
+# Initial implementation uses an extract-from-.d.ts structural diff
+# against `packages/engine/etc/public-api.txt`. Migration to
+# `@microsoft/api-extractor` (richer structural diff per the
+# build-backlog recommendation) is a v1-Composing window enhancement
+# — the seam is the workflow itself + the baseline-file location.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ts-public-api-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ts-public-api:
+    name: TS API drift detector (informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0   # need full history for main..HEAD diff
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+        with:
+          version: 9
+
+      - name: Install Rust stable (for napi build)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable; sets up rustc for the napi build step below
+        with:
+          toolchain: stable
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @benten/engine TypeScript
+        run: pnpm --filter @benten/engine build
+
+      - name: Regenerate baseline (against fresh build)
+        # Same shape as the baseline-author script; the diff against the
+        # committed baseline file is the drift signal.
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p packages/engine/etc
+          {
+            echo "# @benten/engine TypeScript Public API Baseline"
+            echo "#"
+            echo "# Generated at G-CORE-9 V1-FROZEN-INTERFACE row 2 (2026-05-23)."
+            echo "#"
+            echo "# This baseline captures the structural shape of the public TS API"
+            echo "# at the v1-beta freeze. The ts-public-api workflow diffs this file"
+            echo "# against a fresh rebuild on every PR; any drift = baseline-update"
+            echo "# PR + manifest-review per V1-FROZEN-INTERFACE.md item 10 contract."
+            echo "#"
+            echo "# Per V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 2 the long-term path"
+            echo "# is @microsoft/api-extractor (richer structural diff); this initial"
+            echo "# baseline uses extract-exports-from-.d.ts as a simpler structural"
+            echo "# backstop that catches add/remove of exports + obvious signature"
+            echo "# changes. api-extractor migration is a v1-Composing window enhancement."
+            echo ""
+            for f in $(ls packages/engine/dist/*.d.ts | sort); do
+              basename=$(basename "$f")
+              echo "## $basename"
+              grep -E "^(export |declare )" "$f" | sort -u
+              echo ""
+            done
+          } > packages/engine/etc/public-api.txt.regen
+
+      - name: Diff regenerated vs committed baseline (informational)
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            echo '## ts-public-api drift report'
+            echo
+            echo '```diff'
+            diff -u packages/engine/etc/public-api.txt packages/engine/etc/public-api.txt.regen || true
+            echo '```'
+            echo
+            echo "If the diff is non-empty: review the change. If intentional"
+            echo "(new public API export, type signature change), update the"
+            echo "committed baseline in the same PR + flag the addition for"
+            echo "manifest-review per V1-FROZEN-INTERFACE.md item 10 contract."
+            echo "If unintentional, revert the source change."
+          } | tee -a "$GITHUB_STEP_SUMMARY"

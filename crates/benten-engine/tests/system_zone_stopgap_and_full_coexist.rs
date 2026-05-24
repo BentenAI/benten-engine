@@ -71,11 +71,7 @@ fn phase_1_storage_stopgap_still_fires_for_direct_backend_put() {
     props.insert("k".into(), Value::text("v"));
     let node = Node::new(vec!["system:internal:forbidden".into()], props);
 
-    let ctx = WriteContext {
-        label: "system:internal:forbidden".into(),
-        authority: WriteAuthority::User,
-        ..WriteContext::default()
-    };
+    let ctx = WriteContext::new("system:internal:forbidden").with_authority(WriteAuthority::User);
 
     let err = backend
         .put_node_with_context(&node, &ctx)
@@ -131,11 +127,7 @@ fn both_paths_agree_on_deniable_set() {
     let mut props = BTreeMap::new();
     props.insert("k".into(), Value::text("v"));
     let node = Node::new(vec![label.into()], props);
-    let ctx = WriteContext {
-        label: label.into(),
-        authority: WriteAuthority::User,
-        ..WriteContext::default()
-    };
+    let ctx = WriteContext::new(label).with_authority(WriteAuthority::User);
     let err_storage = backend
         .put_node_with_context(&node, &ctx)
         .expect_err("storage must deny")

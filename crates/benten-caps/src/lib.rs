@@ -77,7 +77,7 @@ pub mod manifest_scope;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod manifest_envelope_chain_validation;
 
-// G-CORE-3b — structured `RestrictedSpec` sub-graph restriction
+// G-CORE-3b — structured `RestrictedScope` sub-graph restriction
 // language (Path (a) of RATIFIED-S&C 2026-05-21 §R1; Path (b)
 // refinement-witness over opaque specs structurally unsound per Spike
 // H+1.1). Six dimensions: roots + edge-allowlist + max_depth +
@@ -113,7 +113,7 @@ pub mod authorization_grant;
 // G-CORE-3b — structured `Scope` chain validator with monotonic-
 // narrowing semantics. Distinct from the existing `chain_authority`
 // envelope-ceiling seam: this validator enforces non-widening over
-// the structured `RestrictedSpec` 6-dim language. Returns typed
+// the structured `RestrictedScope` 6-dim language. Returns typed
 // `ChainNotNarrowing { step_index }` for the first widening edge.
 pub mod chain_validator;
 
@@ -157,17 +157,17 @@ pub use ucan_grounded::UcanGroundedPolicy;
 pub use ucan_stub::LegacyUcanStubBackend;
 
 // G-CORE-3b — structured sharing-and-confidentiality public surface
-// (the v1-frozen `RestrictedSpec` + `Scope` + chain validator types;
+// (the v1-frozen `RestrictedScope` + `Scope` + chain validator types;
 // `AuthorizationGrant` is native-only and re-exports below).
 pub use chain_validator::{ChainValidationError, ChainValidatorOutcome, validate_chain_narrowing};
-pub use restricted_spec::{PropertyValue, RestrictedSpec};
+pub use restricted_spec::{PropertyValue, RestrictedScope};
 pub use scope::Scope;
 
 // G-CORE-3b — `AuthorizationGrant` re-export native-only (matches the
 // existing `UCANBackend` re-export discipline above).
 #[cfg(not(target_arch = "wasm32"))]
 pub use authorization_grant::{
-    AuthorizationGrant, AuthorizationGrantError, KeyMaterial, UcanEnvelope,
+    AuthorizationGrant, AuthorizationGrantError, GrantKeyMaterial, UcanEnvelope,
 };
 
 // Surf-1 #884 (v1-API-stabilization): the three plugin-trust modules
@@ -319,4 +319,28 @@ pub mod testing {
             elapsed: Duration::from_secs(301),
         }
     }
+}
+
+// =====================================================================
+// G-CORE-9 V1-FROZEN-INTERFACE row 6 — workspace-test `Sealed` opt-in
+// =====================================================================
+//
+// `policy::sealed::Sealed` is `pub(crate)` so external crates
+// CANNOT implement `CapabilityPolicy` in production builds — the
+// hard-seal contract per CLAUDE.md baked-in #7 + V1-FROZEN-INTERFACE
+// item 8. Workspace test crates that need to implement
+// `CapabilityPolicy` for test-doubles enable the `testing` feature
+// and write `impl benten_caps::__sealed_for_workspace_tests::Sealed
+// for MyTestDouble {}` as a sibling of their `impl CapabilityPolicy
+// for MyTestDouble`.
+//
+// The `#[doc(hidden)]` annotation marks this as not-part-of-the-public-
+// docs surface. Production downstream consumers should NOT enable the
+// `testing` feature; doing so circumvents the seal and is a
+// HALT-AND-SURFACE-TO-BEN event per the V1-FROZEN-INTERFACE row 6
+// escape valve.
+#[cfg(feature = "testing")]
+#[doc(hidden)]
+pub mod __sealed_for_workspace_tests {
+    pub use crate::policy::sealed::Sealed;
 }

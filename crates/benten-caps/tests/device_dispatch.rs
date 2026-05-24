@@ -31,6 +31,7 @@
 
 #![allow(clippy::unwrap_used)]
 
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use benten_caps::policy::{CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_caps::{CapError, NoAuthBackend};
 use benten_core::Cid;
@@ -51,6 +52,8 @@ fn capability_policy_can_dispatch_per_device_cid_when_provided() {
     struct PerDevicePolicy {
         desktop: Cid,
     }
+    impl Sealed for PerDevicePolicy {}
+
     impl CapabilityPolicy for PerDevicePolicy {
         fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
             match ctx.device_cid.as_ref() {

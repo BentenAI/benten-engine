@@ -12,7 +12,7 @@
 //!   witness over opaque specs structurally unsound).
 //!
 //! R2-seed: R2-test-landscape.md §2 G-CORE-3b (P-2) — "Chain validator:
-//! a delegation chain that *narrows* RestrictedSpec is accepted; one that
+//! a delegation chain that *narrows* RestrictedScope is accepted; one that
 //! *widens* is rejected with typed `ChainNotNarrowing`."
 //!
 //! Named destination (HARD RULE 12 clause-(b)): the post-G-CORE-3b
@@ -22,7 +22,7 @@
 //! widening step. The R5 implementer mints
 //! `crates/benten-caps/src/chain_validator.rs` (NEW; distinct from the
 //! existing `chain_authority.rs` envelope-ceiling seam — this is the
-//! structured-`Scope`/`RestrictedSpec` validator) and un-ignores these
+//! structured-`Scope`/`RestrictedScope` validator) and un-ignores these
 //! pins.
 //!
 //! ─────────────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ use benten_core::Cid;
 use benten_caps::chain_validator::{
     ChainValidationError, ChainValidatorOutcome, validate_chain_narrowing,
 };
-use benten_caps::restricted_spec::RestrictedSpec;
+use benten_caps::restricted_spec::RestrictedScope;
 use benten_caps::scope::Scope;
 
 fn root_cid(label: &str) -> Cid {
@@ -48,12 +48,12 @@ fn root_cid(label: &str) -> Cid {
 }
 
 fn scope_with_max_depth(d: u32) -> Scope {
-    Scope::RestrictedSelector(RestrictedSpec::new().with_max_depth(d))
+    Scope::RestrictedSelector(RestrictedScope::new().with_max_depth(d))
 }
 
 fn scope_with_labels(labels: &[&str]) -> Scope {
     Scope::RestrictedSelector(
-        RestrictedSpec::new().with_label_allowlist(labels.iter().map(|s| s.to_string()).collect()),
+        RestrictedScope::new().with_label_allowlist(labels.iter().map(|s| s.to_string()).collect()),
     )
 }
 
@@ -119,12 +119,12 @@ fn widening_step_rejected_with_typed_chain_not_narrowing() {
 #[test]
 fn mixed_dim_one_widening_rejects() {
     let parent_scope = Scope::RestrictedSelector(
-        RestrictedSpec::new()
+        RestrictedScope::new()
             .with_max_depth(8)
             .with_label_allowlist(vec!["Recipe".to_string()]),
     );
     let widens_labels = Scope::RestrictedSelector(
-        RestrictedSpec::new()
+        RestrictedScope::new()
             .with_max_depth(4) // narrows
             .with_label_allowlist(vec!["Recipe".to_string(), "Ingredient".to_string()]), // WIDENS
     );

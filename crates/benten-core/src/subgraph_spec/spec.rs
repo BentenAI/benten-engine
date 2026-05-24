@@ -1,4 +1,4 @@
-//! `Spec`, `SpecBuilder`, `RestrictedSpec`, `StructuralPath`.
+//! `Spec`, `SpecBuilder`, `SubgraphSpecRestriction`, `StructuralPath`.
 //!
 //! The 4-thing thin-core SubgraphSpec primitive + its builder, restricted-
 //! spec predicates, and the path-as-data `StructuralPath` carrier.
@@ -95,7 +95,7 @@ impl StructuralPath {
 }
 
 // ---------------------------------------------------------------------------
-// RestrictedSpec — Inclusion predicate (Path (a) per R1)
+// SubgraphSpecRestriction — Inclusion predicate (Path (a) per R1)
 // ---------------------------------------------------------------------------
 
 /// The `Inclusion` half of the 4-thing thin core: a restricted-spec
@@ -115,15 +115,15 @@ impl StructuralPath {
 /// The current v1 surface covers what the post-RATIFIED design needs to
 /// express AuthorizationGrant scopes:
 ///
-/// - [`RestrictedSpec::Unrestricted`] — predicate matches every Node
+/// - [`SubgraphSpecRestriction::Unrestricted`] — predicate matches every Node
 ///   reached by walking; the structural shape (Roots/Expansion/
 ///   Termination) alone determines membership.
-/// - [`RestrictedSpec::ByLabel`] — allowlist / denylist over Node labels.
+/// - [`SubgraphSpecRestriction::ByLabel`] — allowlist / denylist over Node labels.
 ///   Constructing a Spec with overlapping allow + deny on the same label
 ///   surfaces typed `ConflictingLabelPredicates` at build time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum RestrictedSpec {
+pub enum SubgraphSpecRestriction {
     /// No additional inclusion filter; every walker-reached Node passes.
     Unrestricted,
     /// Label-based allowlist + denylist (overlap rejected at build time).
@@ -136,23 +136,25 @@ pub enum RestrictedSpec {
     },
 }
 
-impl RestrictedSpec {
+impl SubgraphSpecRestriction {
     /// Spec-vs-Spec containment over the Inclusion dimension: this
     /// restricted-spec admits a `superset` of what `other` admits.
     ///
     /// `Unrestricted.contains(any)` is always `true`; this models "no
     /// inclusion filter = matches every Node".
     #[must_use]
-    pub fn contains(&self, other: &RestrictedSpec) -> bool {
+    pub fn contains(&self, other: &SubgraphSpecRestriction) -> bool {
         match (self, other) {
-            (RestrictedSpec::Unrestricted, _) => true,
-            (RestrictedSpec::ByLabel { .. }, RestrictedSpec::Unrestricted) => false,
+            (SubgraphSpecRestriction::Unrestricted, _) => true,
+            (SubgraphSpecRestriction::ByLabel { .. }, SubgraphSpecRestriction::Unrestricted) => {
+                false
+            }
             (
-                RestrictedSpec::ByLabel {
+                SubgraphSpecRestriction::ByLabel {
                     allow: self_allow,
                     deny: self_deny,
                 },
-                RestrictedSpec::ByLabel {
+                SubgraphSpecRestriction::ByLabel {
                     allow: other_allow,
                     deny: other_deny,
                 },
@@ -197,7 +199,7 @@ pub struct Spec {
     edges: BTreeMap<Cid, BTreeMap<String, Cid>>,
 
     /// **Inclusion** — restricted-spec predicate per Path (a).
-    inclusion: RestrictedSpec,
+    inclusion: SubgraphSpecRestriction,
 
     /// **Termination** — `max_depth` bound + cycle detection. Required;
     /// builder defaults to a sensible cap if unset.
@@ -229,7 +231,7 @@ impl Spec {
 
     /// The Spec's Inclusion predicate.
     #[must_use]
-    pub fn inclusion(&self) -> &RestrictedSpec {
+    pub fn inclusion(&self) -> &SubgraphSpecRestriction {
         &self.inclusion
     }
 
@@ -413,9 +415,9 @@ impl SpecBuilder {
         roots.sort_by_key(|c| *c.as_bytes());
 
         let inclusion = if self.allow_labels.is_empty() && self.deny_labels.is_empty() {
-            RestrictedSpec::Unrestricted
+            SubgraphSpecRestriction::Unrestricted
         } else {
-            RestrictedSpec::ByLabel {
+            SubgraphSpecRestriction::ByLabel {
                 allow: self.allow_labels,
                 deny: self.deny_labels,
             }

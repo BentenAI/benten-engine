@@ -32,13 +32,8 @@ fn caches_stay_bounded_under_many_distinct_inserts() {
         let mut props = BTreeMap::new();
         props.insert("i".to_string(), Value::Int(i64::try_from(i).unwrap_or(0)));
         let node = Node::new(vec![format!("label-{i}")], props);
-        let ctx = WriteContext {
-            label: format!("label-{i}"),
-            is_privileged: false,
-            authority: WriteAuthority::User,
-            // G-CORE-1 #989: legacy un-namespaced path.
-            namespace_did: None,
-        };
+        // G-CORE-1 #989: legacy un-namespaced path.
+        let ctx = WriteContext::new(format!("label-{i}")).with_authority(WriteAuthority::User);
         backend.put_node_with_context(&node, &ctx).unwrap();
     }
 

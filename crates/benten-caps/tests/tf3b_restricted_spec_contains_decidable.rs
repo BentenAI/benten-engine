@@ -1,6 +1,6 @@
-//! TF-3b (R3-W2) — `RestrictedSpec::contains()` decidable across all 6 dimensions.
+//! TF-3b (R3-W2) — `RestrictedScope::contains()` decidable across all 6 dimensions.
 //!
-//! Family: TF-3b — G-CORE-3b `benten_caps::RestrictedSpec` shape pins.
+//! Family: TF-3b — G-CORE-3b `benten_caps::RestrictedScope` shape pins.
 //! Plan: `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3b def
 //! (line 333) + §1.A.FROZEN item 15(b) (lines 133, 138-139) + §5 D-list
 //! row D-4M-R1 (line 397).
@@ -10,14 +10,14 @@
 //!   §R1 ("Path (a) restricted-spec language only"; Path (b) refinement-
 //!   witness over opaque specs is structurally unsound) + Spike H+1.1.
 //!
-//! R2-seed: `R2-test-landscape.md` §2 G-CORE-3b (P-1) — "RestrictedSpec::
+//! R2-seed: `R2-test-landscape.md` §2 G-CORE-3b (P-1) — "RestrictedScope::
 //! contains(other) decidable across all 6 dimensions (roots + edge-allowlist
 //! + max_depth + label-allowlist + label-denylist + property-equalities);
 //! composition with `&&` is correct. Spike H+1.1's 7 use cases (A-G) each
 //! round-trip through `contains` with the documented outcome."
 //!
 //! Named destination (HARD RULE 12 clause-(b)): the post-G-CORE-3b
-//! production surface = `benten_caps::restricted_spec::RestrictedSpec` +
+//! production surface = `benten_caps::restricted_spec::RestrictedScope` +
 //! its inherent `pub fn contains(&self, other: &Self) -> bool` and the
 //! six per-dimension predicate constructors. The R5 G-CORE-3b implementer
 //! mints those files (`crates/benten-caps/src/restricted_spec.rs`) and
@@ -29,7 +29,7 @@
 //!     N/A in R3 (the G-CORE-3b implementer owns ENGINE-SPEC / SECURITY-
 //!     POSTURE / GLOSSARY retense when the surface lands).
 //!  2. §3.6b + sub-rule 4 (pim-2 + amendment) — every pin is a production-
-//!     arm against the (post-G-CORE-3b) `RestrictedSpec::contains`, with
+//!     arm against the (post-G-CORE-3b) `RestrictedScope::contains`, with
 //!     an OBSERVABLE byte/bool consequence, WOULD-FAIL-IF-NO-OP'd for the
 //!     specific 6-dim arm (not an umbrella sentinel).
 //!  3. §3.6e (pim-12) — every arm is `#[ignore]`d with the literal
@@ -38,8 +38,8 @@
 //!  4. §3.6f (pim-18) — SHAPE-not-SUBSTANCE: each test body exercises the
 //!     real (future) production `contains` over the SPECIFIC dimension +
 //!     asserts an observable bool consequence; NO aspirational-prose-only
-//!     arm; production call-site is `RestrictedSpec::contains`.
-//!  5. §3.5g — cross-language rule-mirror N/A here (RestrictedSpec is a
+//!     arm; production call-site is `RestrictedScope::contains`.
+//!  5. §3.5g — cross-language rule-mirror N/A here (RestrictedScope is a
 //!     Rust-internal cap surface for v1-beta; future TS mirror lives with
 //!     PR-B / freeze).
 //!  6. §3.5i — mini-reviewer FIRST action = tree-state-freshness vs
@@ -51,11 +51,11 @@
 //! 10. §3.6i — R3 report JSON canonical schema applies to the W2 return.
 //! 11. §3.6j — sweep-completeness validator: N/A at R3 file scope.
 //! 12. §3.13 — per-test static decomposition: this file introduces ZERO
-//!     statics; every test constructs `RestrictedSpec`s locally.
+//!     statics; every test constructs `RestrictedScope`s locally.
 //! 13. §3.5h — base pre-push 5-check; the W2 return JSON must `jq .`-validate.
 //! 14. §3.11 — checkpoint-pre-flight: N/A (small file).
 //! 15. §3.5l — mega-batch combined-branch verify directive to orchestrator.
-//! 16. §3.5m — fork-disposition: P-I (RestrictedSpec is part of the v1
+//! 16. §3.5m — fork-disposition: P-I (RestrictedScope is part of the v1
 //!     FROZEN-INTERFACE per §1.A.FROZEN item 15(b) — no dual track).
 //! 17. §3.5n — orchestrator ground-truth-verifies every finding.
 //! 18. Iterate-to-convergence (CLAUDE.md rule 9) — R3 single-pass.
@@ -72,10 +72,10 @@
 
 use benten_core::Cid;
 // RED: `benten_caps::restricted_spec` does NOT exist at HEAD. G-CORE-3b
-// creates it with `RestrictedSpec` carrying the 6 dimensions: roots,
+// creates it with `RestrictedScope` carrying the 6 dimensions: roots,
 // edge_allowlist, max_depth, label_allowlist, label_denylist,
 // property_equalities (per §1.A.FROZEN item 15(b) + D-4M-R1).
-use benten_caps::restricted_spec::{PropertyValue, RestrictedSpec};
+use benten_caps::restricted_spec::{PropertyValue, RestrictedScope};
 
 fn sample_root(label: &str) -> Cid {
     // Use the public, always-available `from_blake3_digest` constructor
@@ -93,7 +93,7 @@ fn sample_root(label: &str) -> Cid {
 // roots ⊆ producer's; contains() == true.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a `RestrictedSpec` whose roots are a STRICT SUBSET
+/// RED until G-CORE-3b: a `RestrictedScope` whose roots are a STRICT SUBSET
 /// of `parent`'s roots is contained by `parent`. WOULD-FAIL if the roots
 /// dimension is omitted from `contains` (umbrella-sentinel masking).
 #[test]
@@ -102,8 +102,8 @@ fn contains_roots_subset_narrows() {
     let r2 = sample_root("root-2");
     let r3 = sample_root("root-3");
 
-    let parent = RestrictedSpec::new().with_roots(vec![r1, r2, r3]);
-    let child = RestrictedSpec::new().with_roots(vec![r1, r2]);
+    let parent = RestrictedScope::new().with_roots(vec![r1, r2, r3]);
+    let child = RestrictedScope::new().with_roots(vec![r1, r2]);
 
     // Subset on roots → contains == true.
     assert!(
@@ -111,7 +111,7 @@ fn contains_roots_subset_narrows() {
         "roots subset must be contained (P-1.1)"
     );
     // Superset on roots → contains == false (widening rejected).
-    let widened = RestrictedSpec::new().with_roots(vec![r1, r2, r3, sample_root("root-extra")]);
+    let widened = RestrictedScope::new().with_roots(vec![r1, r2, r3, sample_root("root-extra")]);
     assert!(
         !parent.contains(&widened),
         "roots superset must NOT be contained (widening rejected)"
@@ -127,15 +127,15 @@ fn contains_roots_subset_narrows() {
 /// label-allowlist.
 #[test]
 fn contains_edge_allowlist_subset_narrows() {
-    let parent = RestrictedSpec::new()
+    let parent = RestrictedScope::new()
         .with_edge_allowlist(vec!["VERSION_OF".to_string(), "AUTHORED_BY".to_string()]);
-    let child = RestrictedSpec::new().with_edge_allowlist(vec!["VERSION_OF".to_string()]);
+    let child = RestrictedScope::new().with_edge_allowlist(vec!["VERSION_OF".to_string()]);
 
     assert!(
         parent.contains(&child),
         "edge_allowlist subset narrows (P-1.2)"
     );
-    let widened = RestrictedSpec::new().with_edge_allowlist(vec![
+    let widened = RestrictedScope::new().with_edge_allowlist(vec![
         "VERSION_OF".to_string(),
         "AUTHORED_BY".to_string(),
         "INSTALL_RECORD".to_string(),
@@ -154,9 +154,9 @@ fn contains_edge_allowlist_subset_narrows() {
 /// max_depth(child) > max_depth(parent) ⇒ NOT contains.
 #[test]
 fn contains_max_depth_subset_narrows() {
-    let parent = RestrictedSpec::new().with_max_depth(8);
-    let child = RestrictedSpec::new().with_max_depth(4);
-    let widened = RestrictedSpec::new().with_max_depth(9);
+    let parent = RestrictedScope::new().with_max_depth(8);
+    let child = RestrictedScope::new().with_max_depth(4);
+    let widened = RestrictedScope::new().with_max_depth(9);
 
     assert!(parent.contains(&child), "max_depth narrows (P-1.3)");
     assert!(
@@ -172,15 +172,15 @@ fn contains_max_depth_subset_narrows() {
 /// RED until G-CORE-3b: label_allowlist subset narrows.
 #[test]
 fn contains_label_allowlist_subset_narrows() {
-    let parent = RestrictedSpec::new()
+    let parent = RestrictedScope::new()
         .with_label_allowlist(vec!["Recipe".to_string(), "Ingredient".to_string()]);
-    let child = RestrictedSpec::new().with_label_allowlist(vec!["Recipe".to_string()]);
+    let child = RestrictedScope::new().with_label_allowlist(vec!["Recipe".to_string()]);
 
     assert!(
         parent.contains(&child),
         "label_allowlist subset narrows (P-1.4)"
     );
-    let widened = RestrictedSpec::new().with_label_allowlist(vec![
+    let widened = RestrictedScope::new().with_label_allowlist(vec![
         "Recipe".to_string(),
         "Ingredient".to_string(),
         "Equipment".to_string(),
@@ -203,8 +203,8 @@ fn contains_label_allowlist_subset_narrows() {
 /// (a critical inverse-direction bug class).
 #[test]
 fn contains_label_denylist_superset_narrows() {
-    let parent = RestrictedSpec::new().with_label_denylist(vec!["Draft".to_string()]);
-    let child = RestrictedSpec::new()
+    let parent = RestrictedScope::new().with_label_denylist(vec!["Draft".to_string()]);
+    let child = RestrictedScope::new()
         .with_label_denylist(vec!["Draft".to_string(), "Internal".to_string()]);
 
     // child denies MORE labels → child is narrower → parent contains it.
@@ -213,7 +213,7 @@ fn contains_label_denylist_superset_narrows() {
         "label_denylist SUPERSET narrows (P-1.5 inverse)"
     );
     // child denies FEWER labels → child is WIDER → NOT contained.
-    let widened = RestrictedSpec::new().with_label_denylist(vec![]);
+    let widened = RestrictedScope::new().with_label_denylist(vec![]);
     assert!(
         !parent.contains(&widened),
         "label_denylist SUBSET widens (rejected)"
@@ -230,9 +230,9 @@ fn contains_label_denylist_superset_narrows() {
 /// contained.
 #[test]
 fn contains_property_equalities_superset_narrows_and_conflicts_reject() {
-    let parent = RestrictedSpec::new()
+    let parent = RestrictedScope::new()
         .with_property_equality("status".to_string(), PropertyValue::text("published"));
-    let child = RestrictedSpec::new()
+    let child = RestrictedScope::new()
         .with_property_equality("status".to_string(), PropertyValue::text("published"))
         .with_property_equality("language".to_string(), PropertyValue::text("en"));
 
@@ -243,7 +243,7 @@ fn contains_property_equalities_superset_narrows_and_conflicts_reject() {
     );
 
     // Conflicting value on shared key ⇒ not contained.
-    let conflict = RestrictedSpec::new()
+    let conflict = RestrictedScope::new()
         .with_property_equality("status".to_string(), PropertyValue::text("draft"));
     assert!(
         !parent.contains(&conflict),
@@ -263,13 +263,13 @@ fn contains_property_equalities_superset_narrows_and_conflicts_reject() {
 #[test]
 fn contains_composes_per_dimension_with_and() {
     let r = sample_root("compose-root");
-    let parent = RestrictedSpec::new()
+    let parent = RestrictedScope::new()
         .with_roots(vec![r])
         .with_max_depth(8)
         .with_label_allowlist(vec!["Recipe".to_string(), "Ingredient".to_string()]);
 
     // Narrowed on roots (same), depth (4 ≤ 8), labels (subset) — contained.
-    let child_all_narrow = RestrictedSpec::new()
+    let child_all_narrow = RestrictedScope::new()
         .with_roots(vec![r])
         .with_max_depth(4)
         .with_label_allowlist(vec!["Recipe".to_string()]);
@@ -279,7 +279,7 @@ fn contains_composes_per_dimension_with_and() {
     );
 
     // Narrowed on labels + depth, but WIDENED on roots ⇒ NOT contained.
-    let child_widens_roots = RestrictedSpec::new()
+    let child_widens_roots = RestrictedScope::new()
         .with_roots(vec![r, sample_root("extra-root")])
         .with_max_depth(4)
         .with_label_allowlist(vec!["Recipe".to_string()]);
@@ -294,12 +294,12 @@ fn contains_composes_per_dimension_with_and() {
 // ---------------------------------------------------------------------------
 
 /// RED until G-CORE-3b: `s.contains(&s) == true` for every constructable
-/// RestrictedSpec (reflexivity is required for chain validation's
+/// RestrictedScope (reflexivity is required for chain validation's
 /// no-op-step admission).
 #[test]
 fn contains_is_reflexive() {
     let r = sample_root("reflexive-root");
-    let s = RestrictedSpec::new()
+    let s = RestrictedScope::new()
         .with_roots(vec![r])
         .with_max_depth(5)
         .with_label_allowlist(vec!["Recipe".to_string()])
@@ -320,7 +320,7 @@ fn contains_is_reflexive() {
 /// vs-signed depth comparison off-by-one).
 #[test]
 fn contains_is_transitive() {
-    let a = RestrictedSpec::new()
+    let a = RestrictedScope::new()
         .with_max_depth(10)
         .with_label_allowlist(
             vec!["Recipe", "Ingredient", "Equipment", "Step"]
@@ -328,7 +328,7 @@ fn contains_is_transitive() {
                 .map(String::from)
                 .collect(),
         );
-    let b = RestrictedSpec::new()
+    let b = RestrictedScope::new()
         .with_max_depth(6)
         .with_label_allowlist(
             vec!["Recipe", "Ingredient", "Step"]
@@ -336,7 +336,7 @@ fn contains_is_transitive() {
                 .map(String::from)
                 .collect(),
         );
-    let c = RestrictedSpec::new()
+    let c = RestrictedScope::new()
         .with_max_depth(3)
         .with_label_allowlist(vec!["Recipe".to_string()]);
 
@@ -358,8 +358,8 @@ fn contains_is_transitive() {
 fn spike_h_one_one_use_case_a_roots_narrowing_round_trips() {
     let r1 = sample_root("A1");
     let r2 = sample_root("A2");
-    let parent = RestrictedSpec::new().with_roots(vec![r1, r2]);
-    let child = RestrictedSpec::new().with_roots(vec![r1]);
+    let parent = RestrictedScope::new().with_roots(vec![r1, r2]);
+    let child = RestrictedScope::new().with_roots(vec![r1]);
     assert!(
         parent.contains(&child),
         "Spike H+1.1 use case A: roots-subset narrows"

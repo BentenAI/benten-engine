@@ -104,6 +104,8 @@ impl CountingPolicy {
     }
 }
 
+impl benten_caps::__sealed_for_workspace_tests::Sealed for CountingPolicy {}
+
 impl benten_caps::CapabilityPolicy for CountingPolicy {
     fn check_write(
         &self,

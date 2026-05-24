@@ -17,6 +17,14 @@ workspace = true
 # benten-core/Cargo.toml for the longer rationale.
 bench = false
 
+[features]
+# G-CORE-9 V1-FROZEN-INTERFACE row 6 — `testing` feature gates the
+# `#[doc(hidden)] pub` re-export of `policy::sealed::Sealed` so
+# workspace test crates can implement `CapabilityPolicy` for
+# test-doubles. Production downstream consumers do NOT enable this
+# feature, so the hard-seal contract holds for non-`testing` builds.
+testing = []
+
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }
@@ -34,7 +42,7 @@ blake3 = { workspace = true }
 # DeviceRevocation entries (matches the workspace canonical-bytes
 # discipline).
 serde_ipld_dagcbor = { workspace = true }
-# G-CORE-3b — `RestrictedSpec` + `Scope` + `AuthorizationGrant` carry
+# G-CORE-3b — `RestrictedScope` + `Scope` + `AuthorizationGrant` carry
 # `derive(Serialize, Deserialize)` for canonical-bytes encode/decode
 # parity across online (G-CORE-3e ALPN) + offline (G-CORE-3f Drop
 # bundle) surfaces. `serde_bytes` for the `#[serde(with = "serde_bytes")]`

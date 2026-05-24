@@ -1152,7 +1152,7 @@ pub enum ErrorCode {
     /// chain-narrowing contract): a structured-`Scope` delegation
     /// chain widens its predecessor at some step — the chain validator
     /// surfaces this typed code with the offending `step_index`.
-    /// Covers Path (a) `RestrictedSpec`-language widening + `Scope::
+    /// Covers Path (a) `RestrictedScope`-language widening + `Scope::
     /// Hashes` subset-violation widening + cross-arm transitions.
     /// Path (b) refinement-witness over opaque specs is structurally
     /// unsound (Spike H+1.1) so no opaque-arm closure path exists; the
@@ -1170,7 +1170,7 @@ pub enum ErrorCode {
     /// rejection). Distinct from
     /// [`Self::UcanBlobsRequestNotInScope`] (scope-specific reject
     /// when the requested ciphertext_hash is NOT in the granted
-    /// `RestrictedSpec` roots allowlist) and from
+    /// `RestrictedScope` roots allowlist) and from
     /// [`Self::UnresolvedPeerDeny`] (sentinel arm for the unresolvable
     /// peer-DID adversarial pattern). Per the "binding is the
     /// foundation" §R3 contract, the handler validates the request's
@@ -1181,7 +1181,7 @@ pub enum ErrorCode {
     UcanBlobsRequestRejected,
     /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
     /// online-share contract; F-2 scope-check arm): the requested
-    /// ciphertext_hash is NOT in the granted `RestrictedSpec`'s
+    /// ciphertext_hash is NOT in the granted `RestrictedScope`'s
     /// `roots` allowlist. The handler returns this typed code +
     /// serves zero bytes. Distinct from
     /// [`Self::UcanBlobsRequestRejected`] (umbrella per-request
@@ -1342,6 +1342,16 @@ pub enum ErrorCode {
     /// that gap + makes the §3.5g pub-error-variant-first-class-mirror
     /// rule enforceable by the drift-detect scanner.
     DslIoError,
+    /// G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h): the
+    /// `Engine::walk_share_scope` public consumer surface wraps the
+    /// canonical `benten_core::subgraph_spec::walker::walk` BFS
+    /// enumerator + maps any `benten_core::subgraph_spec::SubgraphSpecError`
+    /// through this typed catalog code. The walker fails when the spec
+    /// is malformed (root CID absent, edge-allowlist contradicts the
+    /// walker's reachable set, etc.); typed reject preserves the
+    /// fail-closed discipline at the engine boundary so consumers can
+    /// match the failure class without inspecting an opaque message.
+    SubgraphSpecWalkFailed,
     /// Phase-4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
     /// C11b safety invariant per the PQ-default reframe): a caller
     /// attempted to construct a pure-PQ-sole-trust-path crypto
@@ -1694,6 +1704,7 @@ impl ErrorCode {
             // pre-existing `CompileError::Io` variant (§3.5g item 6
             // amendment closure).
             ErrorCode::DslIoError => "E_DSL_IO_ERROR",
+            ErrorCode::SubgraphSpecWalkFailed => "E_SUBGRAPH_SPEC_WALK_FAILED",
             ErrorCode::AuditNotLandedPurePqRejected => "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
@@ -2206,6 +2217,11 @@ impl ErrorCode {
             // error (no graceful primitive-edge route); mirrors the
             // `DslBackendRejected` disposition for the same reason.
             ErrorCode::DslIoError => Some("ON_ERROR"),
+            // G-CORE-9 V1-FROZEN-INTERFACE row 4 — `Engine::walk_share_scope`
+            // typed reject. Routes to ON_ERROR — a malformed spec is a
+            // construction-time / configuration concern, no primitive-edge
+            // routing nuance applies.
+            ErrorCode::SubgraphSpecWalkFailed => Some("ON_ERROR"),
 
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
@@ -2520,6 +2536,9 @@ impl core::str::FromStr for ErrorCode {
             // Pre-G-CORE-9-FREEZE 2026-05-24 — first-class mirror of
             // `CompileError::Io` (§3.5g item 6 amendment closure).
             "E_DSL_IO_ERROR" => ErrorCode::DslIoError,
+            // G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h):
+            // `Engine::walk_share_scope` typed-reject mapping.
+            "E_SUBGRAPH_SPEC_WALK_FAILED" => ErrorCode::SubgraphSpecWalkFailed,
             // Phase 4-Meta-Core G-CORE-3c full swap-matrix conformance.
             "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED" => ErrorCode::AuditNotLandedPurePqRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),

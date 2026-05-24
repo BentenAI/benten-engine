@@ -184,7 +184,7 @@ crates/
                         # documented at SECURITY-POSTURE.md
                         # "Revocation reach"). Dependency edges:
                         # benten-core (Cid), benten-caps
-                        # (AuthorizationGrant + RestrictedSpec +
+                        # (AuthorizationGrant + RestrictedScope +
                         # UcanEnvelope), benten-graph
                         # (EncryptedNode + encode/decode), benten-id
                         # (Keypair for envelope-sig), benten-crypto-suite

@@ -1,0 +1,143 @@
+ Documenting benten-renderer-tauri v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-renderer-tauri)
+pub mod benten_renderer_tauri
+pub enum benten_renderer_tauri::CapRequirement
+pub benten_renderer_tauri::CapRequirement::None
+pub benten_renderer_tauri::CapRequirement::Required(&'static str)
+impl core::clone::Clone for benten_renderer_tauri::CapRequirement
+pub fn benten_renderer_tauri::CapRequirement::clone(&self) -> benten_renderer_tauri::CapRequirement
+impl core::cmp::Eq for benten_renderer_tauri::CapRequirement
+impl core::cmp::PartialEq for benten_renderer_tauri::CapRequirement
+pub fn benten_renderer_tauri::CapRequirement::eq(&self, other: &benten_renderer_tauri::CapRequirement) -> bool
+impl core::fmt::Debug for benten_renderer_tauri::CapRequirement
+pub fn benten_renderer_tauri::CapRequirement::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_renderer_tauri::CapRequirement
+impl core::marker::StructuralPartialEq for benten_renderer_tauri::CapRequirement
+impl core::marker::Freeze for benten_renderer_tauri::CapRequirement
+impl core::marker::Send for benten_renderer_tauri::CapRequirement
+impl core::marker::Sync for benten_renderer_tauri::CapRequirement
+impl core::marker::Unpin for benten_renderer_tauri::CapRequirement
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::CapRequirement
+impl core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::CapRequirement
+impl core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::CapRequirement
+#[non_exhaustive] pub enum benten_renderer_tauri::IpcError
+pub benten_renderer_tauri::IpcError::CapabilityNotInManifest
+pub benten_renderer_tauri::IpcError::CapabilityNotInManifest::cap: alloc::string::String
+pub benten_renderer_tauri::IpcError::CapabilityNotInManifest::method: alloc::string::String
+pub benten_renderer_tauri::IpcError::MethodNotInAllowlist
+pub benten_renderer_tauri::IpcError::MethodNotInAllowlist::method: alloc::string::String
+pub benten_renderer_tauri::IpcError::MissingSession
+pub benten_renderer_tauri::IpcError::SessionResolve(benten_engine::thin_client::ThinClientSessionError)
+impl benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::clone(&self) -> benten_renderer_tauri::IpcError
+impl core::cmp::Eq for benten_renderer_tauri::IpcError
+impl core::cmp::PartialEq for benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::eq(&self, other: &benten_renderer_tauri::IpcError) -> bool
+impl core::convert::From<benten_engine::thin_client::ThinClientSessionError> for benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::from(source: benten_engine::thin_client::ThinClientSessionError) -> Self
+impl core::error::Error for benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_renderer_tauri::IpcError
+pub fn benten_renderer_tauri::IpcError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_renderer_tauri::IpcError
+impl core::marker::Freeze for benten_renderer_tauri::IpcError
+impl core::marker::Send for benten_renderer_tauri::IpcError
+impl core::marker::Sync for benten_renderer_tauri::IpcError
+impl core::marker::Unpin for benten_renderer_tauri::IpcError
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::IpcError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::IpcError
+impl core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::IpcError
+pub struct benten_renderer_tauri::AdminUiManifest
+pub benten_renderer_tauri::AdminUiManifest::granted_caps: alloc::collections::btree::set::BTreeSet<alloc::string::String>
+impl benten_renderer_tauri::AdminUiManifest
+pub fn benten_renderer_tauri::AdminUiManifest::grants(&self, req: &benten_renderer_tauri::CapRequirement) -> bool
+pub fn benten_renderer_tauri::AdminUiManifest::with_caps<I, S>(caps: I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
+impl core::clone::Clone for benten_renderer_tauri::AdminUiManifest
+pub fn benten_renderer_tauri::AdminUiManifest::clone(&self) -> benten_renderer_tauri::AdminUiManifest
+impl core::default::Default for benten_renderer_tauri::AdminUiManifest
+pub fn benten_renderer_tauri::AdminUiManifest::default() -> benten_renderer_tauri::AdminUiManifest
+impl core::fmt::Debug for benten_renderer_tauri::AdminUiManifest
+pub fn benten_renderer_tauri::AdminUiManifest::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_renderer_tauri::AdminUiManifest
+impl core::marker::Send for benten_renderer_tauri::AdminUiManifest
+impl core::marker::Sync for benten_renderer_tauri::AdminUiManifest
+impl core::marker::Unpin for benten_renderer_tauri::AdminUiManifest
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::AdminUiManifest
+impl core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::AdminUiManifest
+impl core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::AdminUiManifest
+pub struct benten_renderer_tauri::InProcessSessionBridge
+impl benten_renderer_tauri::InProcessSessionBridge
+pub fn benten_renderer_tauri::InProcessSessionBridge::new(session: alloc::sync::Arc<benten_engine::thin_client::DidKeyedSession>) -> Self
+pub fn benten_renderer_tauri::InProcessSessionBridge::resolve(&self, token: &benten_engine::thin_client::SessionToken, presented_origin: &str) -> core::result::Result<alloc::string::String, benten_engine::thin_client::ThinClientSessionError>
+pub fn benten_renderer_tauri::InProcessSessionBridge::session(&self) -> &alloc::sync::Arc<benten_engine::thin_client::DidKeyedSession>
+pub fn benten_renderer_tauri::InProcessSessionBridge::transport(&self) -> benten_engine::thin_client::Transport
+impl core::fmt::Debug for benten_renderer_tauri::InProcessSessionBridge
+pub fn benten_renderer_tauri::InProcessSessionBridge::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_renderer_tauri::InProcessSessionBridge
+impl core::marker::Send for benten_renderer_tauri::InProcessSessionBridge
+impl core::marker::Sync for benten_renderer_tauri::InProcessSessionBridge
+impl core::marker::Unpin for benten_renderer_tauri::InProcessSessionBridge
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::InProcessSessionBridge
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::InProcessSessionBridge
+impl !core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::InProcessSessionBridge
+pub struct benten_renderer_tauri::IpcMethod
+pub benten_renderer_tauri::IpcMethod::cap: benten_renderer_tauri::CapRequirement
+pub benten_renderer_tauri::IpcMethod::name: &'static str
+impl core::clone::Clone for benten_renderer_tauri::IpcMethod
+pub fn benten_renderer_tauri::IpcMethod::clone(&self) -> benten_renderer_tauri::IpcMethod
+impl core::cmp::Eq for benten_renderer_tauri::IpcMethod
+impl core::cmp::PartialEq for benten_renderer_tauri::IpcMethod
+pub fn benten_renderer_tauri::IpcMethod::eq(&self, other: &benten_renderer_tauri::IpcMethod) -> bool
+impl core::fmt::Debug for benten_renderer_tauri::IpcMethod
+pub fn benten_renderer_tauri::IpcMethod::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_renderer_tauri::IpcMethod
+impl core::marker::StructuralPartialEq for benten_renderer_tauri::IpcMethod
+impl core::marker::Freeze for benten_renderer_tauri::IpcMethod
+impl core::marker::Send for benten_renderer_tauri::IpcMethod
+impl core::marker::Sync for benten_renderer_tauri::IpcMethod
+impl core::marker::Unpin for benten_renderer_tauri::IpcMethod
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::IpcMethod
+impl core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::IpcMethod
+impl core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::IpcMethod
+pub struct benten_renderer_tauri::IpcRequest
+pub benten_renderer_tauri::IpcRequest::method: alloc::string::String
+pub benten_renderer_tauri::IpcRequest::payload: serde_json::value::Value
+pub benten_renderer_tauri::IpcRequest::session: core::option::Option<benten_engine::thin_client::SessionToken>
+impl core::clone::Clone for benten_renderer_tauri::IpcRequest
+pub fn benten_renderer_tauri::IpcRequest::clone(&self) -> benten_renderer_tauri::IpcRequest
+impl core::fmt::Debug for benten_renderer_tauri::IpcRequest
+pub fn benten_renderer_tauri::IpcRequest::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_renderer_tauri::IpcRequest
+impl core::marker::Send for benten_renderer_tauri::IpcRequest
+impl core::marker::Sync for benten_renderer_tauri::IpcRequest
+impl core::marker::Unpin for benten_renderer_tauri::IpcRequest
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::IpcRequest
+impl core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::IpcRequest
+impl core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::IpcRequest
+pub struct benten_renderer_tauri::TauriRenderer
+impl benten_renderer_tauri::TauriRenderer
+pub fn benten_renderer_tauri::TauriRenderer::dispatch_ipc(&self, request: benten_renderer_tauri::IpcRequest) -> core::result::Result<(), benten_renderer_tauri::IpcError>
+pub fn benten_renderer_tauri::TauriRenderer::ipc_method_allowlist() -> alloc::vec::Vec<alloc::string::String>
+pub fn benten_renderer_tauri::TauriRenderer::manifest(&self) -> &benten_renderer_tauri::AdminUiManifest
+pub fn benten_renderer_tauri::TauriRenderer::new_with_manifest(manifest: benten_renderer_tauri::AdminUiManifest) -> Self
+pub fn benten_renderer_tauri::TauriRenderer::webview_csp_header(&self) -> &'static str
+pub fn benten_renderer_tauri::TauriRenderer::with_bridge(self, bridge: benten_renderer_tauri::InProcessSessionBridge) -> Self
+impl benten_platform_foundation::materializer::Renderer for benten_renderer_tauri::TauriRenderer
+pub fn benten_renderer_tauri::TauriRenderer::backend_name(&self) -> &'static str
+pub fn benten_renderer_tauri::TauriRenderer::render(&self, _output: &benten_platform_foundation::materializer::MaterializerOutput) -> core::result::Result<(), benten_platform_foundation::materializer::RenderError>
+impl core::fmt::Debug for benten_renderer_tauri::TauriRenderer
+pub fn benten_renderer_tauri::TauriRenderer::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_renderer_tauri::TauriRenderer
+impl core::marker::Send for benten_renderer_tauri::TauriRenderer
+impl core::marker::Sync for benten_renderer_tauri::TauriRenderer
+impl core::marker::Unpin for benten_renderer_tauri::TauriRenderer
+impl core::marker::UnsafeUnpin for benten_renderer_tauri::TauriRenderer
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_renderer_tauri::TauriRenderer
+impl !core::panic::unwind_safe::UnwindSafe for benten_renderer_tauri::TauriRenderer
+pub const benten_renderer_tauri::IPC_METHODS: &[benten_renderer_tauri::IpcMethod]
+pub const benten_renderer_tauri::WEBVIEW_CSP_HEADER: &str
+pub fn benten_renderer_tauri::ipc_method(name: &str) -> core::option::Option<&'static benten_renderer_tauri::IpcMethod>
+pub fn benten_renderer_tauri::ipc_method_names() -> impl core::iter::traits::iterator::Iterator<Item = &'static str>

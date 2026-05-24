@@ -166,43 +166,37 @@ fn external_impl_of_capability_policy_rejected_by_rustc_post_sealing() {
     //   // `AttackerPolicy: benten_caps::sealed::Sealed` is not satisfied"
     //   // (or the equivalent diagnostic for the chosen seal mechanism).
     // -----------------------------------------------------------------
-    // G-CORE-8 §8-E SOFT-SEAL landed (see benten-caps/src/policy.rs
-    // `sealed_marker` module). The HARD-SEAL (rustc-enforced private
-    // supertrait + trybuild compile_fail fixture) is deferred to
-    // G-CORE-8.3 per HARD-RULE-12 BELONGS-NAMED-NOW disposition:
-    // workspace-wide migration of ≥20 external test impl sites is
-    // required to make the rustc-enforced seal land without breaking
-    // the workspace, and that migration is its own focused wave.
+    // G-CORE-9 V1-FROZEN-INTERFACE row 6 HARD-SEAL LANDED. The previous
+    // soft-seal marker `sealed_marker::SealedCapabilityPolicy` was
+    // DELETED (no deprecation alias per HARD RULE 12 + CLAUDE.md #5
+    // no-shims discipline). The hard-seal mechanism is the private
+    // `benten_caps::policy::sealed::Sealed` supertrait — `pub(crate)`
+    // and therefore unreachable from outside `benten-caps`. External
+    // crates that need to implement `CapabilityPolicy` for test-doubles
+    // opt into the `benten-caps/testing` feature which exposes
+    // `benten_caps::__sealed_for_workspace_tests::Sealed`.
     //
-    // What G-CORE-8 §8-E DOES land:
-    //  - `SealedCapabilityPolicy` marker trait at
-    //    `benten_caps::policy::sealed_marker::SealedCapabilityPolicy`.
-    //  - INTERNALS.md §9 narrative documenting the discipline.
-    //  - The audit substrate (the marker is the missing-marker
-    //    introspection signal external impls fail).
-    //
-    // Verify the marker exists at the expected path (compile-time
-    // assertion via type-mention).
-    use benten_caps::policy::sealed_marker::SealedCapabilityPolicy;
-    fn assert_marker_is_trait<T: SealedCapabilityPolicy>() {}
-    // Don't instantiate against any type at this layer — the marker
-    // is intentionally NOT impl'd on the in-crate concrete types at
-    // G-CORE-8 (the impl-add is part of the G-CORE-8.3 hard-seal
-    // migration). The mere presence of the trait at the documented
-    // path is the soft-seal substrate this test asserts.
-    let _: fn() = assert_marker_is_trait::<DummyForCompileCheck>;
+    // The structural assertion below: a workspace-test crate (this
+    // crate; built with `--features benten-engine/test-helpers` which
+    // pulls in `benten-caps/testing`) can use the `__sealed_for_workspace_tests`
+    // re-export to opt into the seal. Production downstream consumers
+    // do NOT enable `benten-caps/testing`, so the seal holds for them.
+    use benten_caps::__sealed_for_workspace_tests::Sealed;
+    fn assert_seal_is_trait<T: Sealed>() {}
+    let _: fn() = assert_seal_is_trait::<DummyForCompileCheck>;
     fn _unused() {
-        // Suppress unused-import warning for SealedCapabilityPolicy.
-        let _: &dyn Fn() = &(|| assert_marker_is_trait::<DummyForCompileCheck>());
+        let _: &dyn Fn() = &(|| assert_seal_is_trait::<DummyForCompileCheck>());
     }
 }
 
-/// Local dummy type that opts INTO the soft-seal marker — proves the
-/// trait is `pub` + impl-able (the soft-seal is a discipline marker,
-/// not rustc-enforced at G-CORE-8). The G-CORE-8.3 hard-seal will
-/// make the marker private + this dummy will need to be in-crate.
+/// Local dummy type that opts INTO the hard-seal marker via the
+/// `benten-caps/testing` feature gate. Compile-time proof that the
+/// workspace-test re-export at
+/// `benten_caps::__sealed_for_workspace_tests::Sealed` works — the
+/// production downstream consumer that does NOT enable the feature
+/// cannot reach this path, and the seal holds for them.
 struct DummyForCompileCheck;
-impl benten_caps::policy::sealed_marker::SealedCapabilityPolicy for DummyForCompileCheck {}
+impl benten_caps::__sealed_for_workspace_tests::Sealed for DummyForCompileCheck {}
 
 // ---------------------------------------------------------------------------
 // POSITIVE arm 2 — the §8-E three new hooks (install-time consent /

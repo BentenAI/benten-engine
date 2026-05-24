@@ -23,6 +23,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use std::sync::{Arc, Mutex};
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
@@ -36,6 +37,8 @@ use benten_engine::Engine;
 struct RecordingDevicePolicy {
     observed: Arc<Mutex<Vec<Option<Cid>>>>,
 }
+
+impl Sealed for RecordingDevicePolicy {}
 
 impl CapabilityPolicy for RecordingDevicePolicy {
     fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
@@ -53,6 +56,8 @@ impl CapabilityPolicy for RecordingDevicePolicy {
 struct RecordingDeviceReadPolicy {
     observed: Arc<Mutex<Vec<Option<Cid>>>>,
 }
+
+impl Sealed for RecordingDeviceReadPolicy {}
 
 impl CapabilityPolicy for RecordingDeviceReadPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

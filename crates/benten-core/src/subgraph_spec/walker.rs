@@ -132,8 +132,8 @@ pub fn walk(spec: &Spec) -> Result<WalkResult, SubgraphSpecError> {
         visited.insert(key);
 
         // Apply Inclusion-dim predicate (Path (a) restricted-spec language).
-        // For v1: RestrictedSpec::Unrestricted always passes;
-        // RestrictedSpec::ByLabel narrows but is evaluated against
+        // For v1: SubgraphSpecRestriction::Unrestricted always passes;
+        // SubgraphSpecRestriction::ByLabel narrows but is evaluated against
         // labels carried by the Spec's structural definition — at the
         // walker substrate level we emit every BFS-reached CID and leave
         // label-based filtering to downstream resolvers that have access

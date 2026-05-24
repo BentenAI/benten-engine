@@ -33,7 +33,7 @@
 use benten_id::keypair::Keypair;
 // RED-PHASE failure points.
 use benten_caps::authorization_grant::AuthorizationGrant;
-use benten_caps::restricted_spec::RestrictedSpec;
+use benten_caps::restricted_spec::RestrictedScope;
 use benten_sync::ucan_blobs_protocol::{UcanBlobsHandler, UcanBlobsHandlerError, UcanBlobsRequest};
 
 // ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ fn tf3e_unauthorized_requester_audience_mismatch_typed() {
     let handler = UcanBlobsHandler::new(&kp_alice);
 
     // Alice grants Bob (audience = Bob's pubkey) a scope.
-    let spec = RestrictedSpec::with_hashes(vec![[5u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[5u8; 32].into()]);
     let grant_to_bob =
         AuthorizationGrant::issue_for_test(&kp_alice, kp_bob.public_key(), spec, u64::MAX);
 
@@ -100,7 +100,7 @@ fn tf3e_audience_substitution_attack_bob_presents_carols_ucan() {
     let handler = UcanBlobsHandler::new(&kp_alice);
 
     // Alice grants Carol a scope.
-    let spec = RestrictedSpec::with_hashes(vec![[7u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[7u8; 32].into()]);
     let grant_to_carol =
         AuthorizationGrant::issue_for_test(&kp_alice, kp_carol.public_key(), spec, u64::MAX);
 
@@ -138,7 +138,7 @@ fn tf3e_unresolvable_peer_did_yields_typed_unresolved_deny() {
 
     // Construct a request whose grant references a peer-DID that
     // cannot be resolved (the sentinel pattern).
-    let spec = RestrictedSpec::with_hashes(vec![[9u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[9u8; 32].into()]);
     let grant_with_unresolved_peer = AuthorizationGrant::issue_with_unresolved_peer_for_test(
         &kp_alice,
         kp_bob.public_key(),

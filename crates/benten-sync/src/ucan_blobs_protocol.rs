@@ -51,8 +51,8 @@
 //!    [`UcanBlobsHandlerError::BindingSigInvalid`] (with the original
 //!    [`AuthorizationGrantError`] embedded for diagnostic clarity).
 //! 6. **Scope check (requested ciphertext_hash in granted
-//!    `RestrictedSpec`).** The handler resolves the requested hash
-//!    against the grant's `RestrictedSpec::roots` allowlist (per
+//!    `RestrictedScope`).** The handler resolves the requested hash
+//!    against the grant's `RestrictedScope::roots` allowlist (per
 //!    the `with_hashes` constructor pattern). Not-in-scope → typed
 //!    [`UcanBlobsHandlerError::NotInScope`].
 //!
@@ -113,7 +113,7 @@ pub struct UcanBlobsRequest {
     /// requests (the wave-3e Flavor B contract).
     pub grant: AuthorizationGrant,
     /// The ciphertext_hash the requester wants. The handler resolves
-    /// this against the grant's [`benten_caps::restricted_spec::RestrictedSpec`]
+    /// this against the grant's [`benten_caps::restricted_spec::RestrictedScope`]
     /// scope; out-of-scope hashes are rejected typed-`NotInScope`.
     pub ciphertext_hash: Cid,
 }
@@ -206,10 +206,10 @@ pub enum UcanBlobsHandlerError {
         grant_cid: String,
     },
     /// The requested ciphertext_hash is NOT in the grant's
-    /// [`benten_caps::restricted_spec::RestrictedSpec`]'s `roots`
+    /// [`benten_caps::restricted_spec::RestrictedScope`]'s `roots`
     /// allowlist. F-2 scope-check arm. Maps to
     /// [`benten_errors::ErrorCode::UcanBlobsRequestNotInScope`].
-    #[error("requested ciphertext_hash {ciphertext_hash} NOT in granted RestrictedSpec scope")]
+    #[error("requested ciphertext_hash {ciphertext_hash} NOT in granted RestrictedScope scope")]
     NotInScope {
         /// The requested hash that was out-of-scope.
         ciphertext_hash: Cid,
@@ -497,7 +497,7 @@ impl UcanBlobsHandler {
             .map_err(|source| UcanBlobsHandlerError::BindingSigInvalid { source })?;
 
         // ARM 6 — scope check. The grant MUST authorise the
-        // requested ciphertext_hash via the carried RestrictedSpec's
+        // requested ciphertext_hash via the carried RestrictedScope's
         // roots allowlist (per `with_hashes` constructor).
         let scope =
             request
@@ -505,7 +505,7 @@ impl UcanBlobsHandler {
                 .scope
                 .as_ref()
                 .ok_or_else(|| UcanBlobsHandlerError::GrantValidation {
-                    reason: "grant has no scope — wave-3e grants must carry a RestrictedSpec"
+                    reason: "grant has no scope — wave-3e grants must carry a RestrictedScope"
                         .to_string(),
                 })?;
         let in_scope = match scope.roots.as_deref() {

@@ -51,11 +51,7 @@ fn inv_13_user_write_content_matches_rejects_with_immutability() {
     let (_dir, backend) = backend();
     let node = node_with_title("row1");
 
-    let ctx_user = WriteContext {
-        label: "Doc".into(),
-        authority: WriteAuthority::User,
-        ..WriteContext::default()
-    };
+    let ctx_user = WriteContext::new("Doc").with_authority(WriteAuthority::User);
 
     // First put establishes the CID.
     let cid = backend
@@ -93,11 +89,7 @@ fn inv_13_user_write_content_differs_vacuous_but_names_correctly() {
     let n1 = node_with_title("alpha");
     let n2 = node_with_title("beta");
 
-    let ctx_user = WriteContext {
-        label: "Doc".into(),
-        authority: WriteAuthority::User,
-        ..WriteContext::default()
-    };
+    let ctx_user = WriteContext::new("Doc").with_authority(WriteAuthority::User);
 
     let cid1 = backend.put_node_with_context(&n1, &ctx_user).unwrap();
     let cid2 = backend.put_node_with_context(&n2, &ctx_user).unwrap();
@@ -126,11 +118,7 @@ fn inv_13_engine_privileged_content_matches_dedups_no_change_event() {
     let node = node_with_title("row3_dedup");
 
     // Seed once under User to establish the CID.
-    let ctx_user = WriteContext {
-        label: "Doc".into(),
-        authority: WriteAuthority::User,
-        ..WriteContext::default()
-    };
+    let ctx_user = WriteContext::new("Doc").with_authority(WriteAuthority::User);
     let cid = backend.put_node_with_context(&node, &ctx_user).unwrap();
 
     // Subscribe before the dedup call so any event would be captured.
@@ -143,11 +131,7 @@ fn inv_13_engine_privileged_content_matches_dedups_no_change_event() {
     );
 
     // Re-put with EnginePrivileged authority — must dedup.
-    let ctx_privileged = WriteContext {
-        label: "Doc".into(),
-        authority: WriteAuthority::EnginePrivileged,
-        ..WriteContext::default()
-    };
+    let ctx_privileged = WriteContext::new("Doc").with_authority(WriteAuthority::EnginePrivileged);
     let cid_dedup = backend
         .put_node_with_context(&node, &ctx_privileged)
         .expect("Row 3 (EnginePrivileged×match) must return Ok(cid_dedup)");

@@ -614,6 +614,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // top of chunk-3's DslBackendRejected which landed first via
     // #1339).
     ErrorCode::AuditNotLandedPurePqRejected,
+    // G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) —
+    // typed reject from the `Engine::walk_share_scope` public consumer
+    // surface for the SubgraphSpec walker. CATALOG_VARIANT_COUNT 191 →
+    // 192. Mirrors the wave's mint of the `Engine::walk_share_scope`
+    // engine wrapper at `crates/benten-engine/src/engine_share_scope.rs`.
+    ErrorCode::SubgraphSpecWalkFailed,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -1003,8 +1009,14 @@ fn variant_count_is_pinned() {
     // CompileError::Io first-class-mirror gap surfaced by PR #1339
     // chunk-3 where `Backend` was added as first-class but `Io` was
     // left mapping to `E_UNKNOWN` at the napi boundary). 190 + 1 = 191.
+    //
+    // **G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h)**:
+    // +1 `SubgraphSpecWalkFailed` — typed reject from the public
+    // `Engine::walk_share_scope` consumer surface for the SubgraphSpec
+    // walker (the wave-time mint of the engine wrapper at
+    // `crates/benten-engine/src/engine_share_scope.rs`). 191 + 1 = 192.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 191,
+        CATALOG_VARIANT_COUNT, 192,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1282,7 +1294,10 @@ fn catalog_variant_count_matches_enum() {
             // `CompileError::Io` (§3.5g item 6 amendment closure).
             | ErrorCode::DslIoError
             // Phase 4-Meta-Core G-CORE-3c terminal swap-matrix wave.
-            | ErrorCode::AuditNotLandedPurePqRejected => true,
+            | ErrorCode::AuditNotLandedPurePqRejected
+            // G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h)
+            // — Engine::walk_share_scope typed reject mapping.
+            | ErrorCode::SubgraphSpecWalkFailed => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

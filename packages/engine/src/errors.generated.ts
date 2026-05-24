@@ -225,6 +225,7 @@ export const CATALOG_CODES = [
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
   "E_DSL_BACKEND_REJECTED",
   "E_DSL_IO_ERROR",
+  "E_SUBGRAPH_SPEC_WALK_FAILED",
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
 ] as const;
 
@@ -2938,9 +2939,9 @@ export class EChainNarrowingViolation extends BentenError {
  */
 export class EUcanBlobsRequestRejected extends BentenError {
   static readonly code = "E_UCAN_BLOBS_REQUEST_REJECTED";
-  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the \"request denied at the handler boundary BEFORE any bytes flow\" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedSpec`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the \"request denied at the handler boundary BEFORE any bytes flow\" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedScope`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_UCAN_BLOBS_REQUEST_REJECTED", "Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the \"request denied at the handler boundary BEFORE any bytes flow\" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedSpec`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.", message, context);
+    super("E_UCAN_BLOBS_REQUEST_REJECTED", "Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the \"request denied at the handler boundary BEFORE any bytes flow\" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedScope`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.", message, context);
     this.name = "EUcanBlobsRequestRejected";
   }
 }
@@ -2949,13 +2950,13 @@ export class EUcanBlobsRequestRejected extends BentenError {
  * E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE
  *
  * Thrown at: `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` (the scope-allowlist check after binding-sig + audience verification).
- * Message template: "requested ciphertext_hash {hash} NOT in granted RestrictedSpec scope"
+ * Message template: "requested ciphertext_hash {hash} NOT in granted RestrictedScope scope"
  */
 export class EUcanBlobsRequestNotInScope extends BentenError {
   static readonly code = "E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE";
-  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedSpec` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.";
+  static readonly fixHint = "Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedScope` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE", "Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedSpec` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.", message, context);
+    super("E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE", "Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedScope` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.", message, context);
     this.name = "EUcanBlobsRequestNotInScope";
   }
 }
@@ -3107,6 +3108,21 @@ export class EDslIoError extends BentenError {
   constructor(message: string, context?: Record<string, unknown>) {
     super("E_DSL_IO_ERROR", "Pre-G-CORE-9-FREEZE 2026-05-24 — first-class catalog mirror of the pre-existing `CompileError::Io` variant (the §3.5g item 6 amendment closure that closes the first-class-mirror gap surfaced by PR #1339 chunk-3 where `Backend` was added as first-class but `Io` was left mapping to `E_UNKNOWN` at the napi boundary). Distinct from `E_DSL_BACKEND_REJECTED` (downstream-consumer rejection at the post-compile registration step, the chunk-3 home for what used to abuse `Io`). Fix at the call site: ensure the source file exists + is readable + is valid UTF-8; for stdin compilation, ensure the stream is non-empty and produces valid UTF-8.", message, context);
     this.name = "EDslIoError";
+  }
+}
+
+/**
+ * E_SUBGRAPH_SPEC_WALK_FAILED
+ *
+ * Thrown at: `crates/benten-engine/src/engine_share_scope.rs::Engine::walk_share_scope` — wraps `benten_core::subgraph_spec::walker::walk` errors. Internal helper `spec_err_to_engine` performs the `SubgraphSpecError` → `EngineError::Other { code: SubgraphSpecWalkFailed, message: e.to_string() }` mapping.
+ * Message template: "SubgraphSpec walker failed: {reason}"
+ */
+export class ESubgraphSpecWalkFailed extends BentenError {
+  static readonly code = "E_SUBGRAPH_SPEC_WALK_FAILED";
+  static readonly fixHint = "G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) — the typed reject from the public `Engine::walk_share_scope` consumer surface around the canonical `benten_core::subgraph_spec::walker::walk` BFS enumerator. The walker fails when the spec is structurally malformed; the engine wrapper preserves the failure type via this stable catalog code so the napi `mapNativeError` boundary surfaces a typed code instead of collapsing to `E_UNKNOWN`. Construct a valid `Spec` (non-empty roots set; edge-allowlist consistent with the walker's reachable set; per-dimension constraints decidable per `RestrictedScope`); the typed reject IS the fail-closed discipline at the engine boundary.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBGRAPH_SPEC_WALK_FAILED", "G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) — the typed reject from the public `Engine::walk_share_scope` consumer surface around the canonical `benten_core::subgraph_spec::walker::walk` BFS enumerator. The walker fails when the spec is structurally malformed; the engine wrapper preserves the failure type via this stable catalog code so the napi `mapNativeError` boundary surfaces a typed code instead of collapsing to `E_UNKNOWN`. Construct a valid `Spec` (non-empty roots set; edge-allowlist consistent with the walker's reachable set; per-dimension constraints decidable per `RestrictedScope`); the typed reject IS the fail-closed discipline at the engine boundary.", message, context);
+    this.name = "ESubgraphSpecWalkFailed";
   }
 }
 
@@ -3326,5 +3342,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED": EThinClientBridgePrincipalUnresolved,
   "E_DSL_BACKEND_REJECTED": EDslBackendRejected,
   "E_DSL_IO_ERROR": EDslIoError,
+  "E_SUBGRAPH_SPEC_WALK_FAILED": ESubgraphSpecWalkFailed,
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED": EAuditNotLandedPurePqRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;
