@@ -1,0 +1,113 @@
+{
+  "lens": "L5 multi-tenant confidentiality substrate",
+  "round": "R6 R1",
+  "phase": "Phase-4-Meta-Core",
+  "base_sha": "4bbc4cac",
+  "branch": "phase-4-meta-core/r6-r1-l5-multi-tenant",
+  "main_head_at_review": "a0b75637",
+  "disposition": "APPROVE-WITH-FIXES",
+  "r6_r1_convergence_disposition": "CONVERGE-PENDING-3-MINOR-FIX",
+  "summary": "Substrate is structurally sound + isolation invariants hold + documentation is largely honest with explicit wave-state limits. Three doc-vs-code drift MINORs (phantom test-family claims in V1-FROZEN-INTERFACE.md item 5 verification-mechanism bullets, and an undocumented edge-body confidentiality scope in SECURITY-POSTURE.md). Two observations recorded around (a) production consumption gap (substrate wired but no production caller consumes scoped/namespaced writes yet at HEAD — expected v1-substrate posture per #1305 + #1301 named destinations) and (b) `pub` `derive_test_seam_key_from_cid_with_namespace` being called from production AEAD seal/unseal paths despite the `_test_seam_` name (Ben-ratified resolution at PR #1336 mr1 — rename skipped to avoid 5-callsite cascade; `_test_seam_` name itself is the load-bearing per-callsite signal). No BLOCKER. No MAJOR. Cross-check with L11 wire-format + L2 adversarial recommended for the two-CID + AEAD storage-layer surfaces.",
+  "findings": [
+    {
+      "id": "L5-MINOR-1",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE.md item 5 Verification mechanism bullet 3 cites a no-regression test that does not exist",
+      "location": "docs/V1-FROZEN-INTERFACE.md:497-498",
+      "evidence": "Bullet reads: 'A new no-regression test that scans `WriteContext` builder code paths for accidental `namespace_did = None` overrides post-write.' Verified absent: `grep -rn 'scans.*WriteContext\\|accidental.*namespace_did\\|None.*override\\|writectx.*builder' crates/benten-graph/` returns no matches. No file under `crates/benten-graph/tests/` implements this contract. The other two bullets (cargo-public-api baseline + tf1_989_cross_did_partition_isolation.rs) are real; only bullet 3 is phantom.",
+      "disposition": "FIX-NOW",
+      "fix_recommendation": "Two valid HARD-RULE-12 options. (a) FIX-NOW path-(a): land the actual test as a tiny `tests/tf1_writectx_builder_namespace_did_no_clobber.rs` (the builder is `with_namespace_did(self, Option<Cid>) -> Self`; the test asserts that after `let ctx = WriteContext::new(l).with_namespace_did(Some(did)).with_authority(...)`, `ctx.namespace_did() == Some(&did)` — i.e. with_authority + future builder methods don't clobber the namespace field). One file, <40 LOC. (b) BELONGS-NAMED-NOW path-(b): re-word bullet 3 in V1-FROZEN-INTERFACE.md to name a Composing-phase destination + remove the phantom claim; record a tracked row in docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md (or phase-4-backlog.md) for the test to land. PIM-18 §3.6f / pim-1 §3.5b: doc-coupling sweep at G-CORE-9 freeze surfaces this bullet shape; recommend FIX-NOW path-(a) since the test cost is trivial."
+    },
+    {
+      "id": "L5-MINOR-2",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE.md item 5 Verification mechanism bullet 2 cites a phantom `tf1_write_context_namespace_did_*.rs` test family path",
+      "location": "docs/V1-FROZEN-INTERFACE.md:494-495",
+      "evidence": "Bullet reads: '`crates/benten-graph/tests/tf1_write_context_namespace_did_*.rs` (G-CORE-1 canary pin family) + existing `tf1_989_cross_did_partition_isolation.rs` pin.' Verified: only `tf1_989_cross_did_partition_isolation.rs` exists in `crates/benten-graph/tests/`. No file matches the `tf1_write_context_namespace_did_*` glob; the doc references a 'pin family' but only the single 989 file is on disk. Adjacent G-CORE-3d test family (`tf3d_*`) is present + complete; the gap is the G-CORE-1 'canary pin family' phantom claim.",
+      "disposition": "FIX-NOW",
+      "fix_recommendation": "Rewrite bullet 2 to cite the real test files: `crates/benten-graph/tests/tf1_989_cross_did_partition_isolation.rs` (G-CORE-1 partition-isolation canary; PIN 1-7) + `crates/benten-graph/tests/tf3d_partition_before_crypto.rs` (G-CORE-1 × G-CORE-3d composition; PIN 1-3) + `crates/benten-graph/tests/tf3d_two_cid_mapping_roundtrip.rs` (G-CORE-3d two-CID roundtrip; PIN 1-3). One-edit fix to V1-FROZEN-INTERFACE.md. Pairs naturally with L5-MINOR-1 fix-up (same paragraph)."
+    },
+    {
+      "id": "L5-MINOR-3",
+      "severity": "MINOR",
+      "title": "Edge-body confidentiality scope not documented (edges remain plaintext under namespaced writes; C2 AEAD applies to Node bodies only)",
+      "location": "docs/SECURITY-POSTURE.md:2297-2363 (Per-Node AEAD wrap layer + Inv-11 strengthening sections); crates/benten-graph/src/redb_backend.rs:1170-1192 (put_edge_with_context namespaced arm)",
+      "evidence": "`put_edge_with_context` namespaced path writes plaintext edge body + indexes under `d:<did>:e:<cid>` / `d:<did>:es:<src><edge>` / `d:<did>:et:<tgt><edge>` (lines 1184-1190). No AEAD wrap, no two-CID mapping. Confirmed: `grep 'AEAD\\|encrypt' redb_backend.rs:1170-1200` returns no matches in the namespaced edge arm. The G-CORE-3d AEAD-wrap layer at lines 1666-1697 is keyed on `if let Some(did) = ctx.namespace_did.as_ref()` BUT only inside `put_node_with_context` — `put_edge_with_context` has no equivalent. SECURITY-POSTURE.md §'Per-Node AEAD wrap layer' (line 2297-) describes the C2 confidentiality contract in terms that a reader could plausibly interpret as 'everything under Some(did) is AEAD-wrapped' — the 'Inv-11 strengthening' subsection at 2339-2363 names 'C2 (confidentiality isolation, G-CORE-3d): per-Node AEAD with K(N) derived from K_principal' without scope-qualifying that edges fall under C1 partition isolation only.",
+      "disposition": "FIX-NOW",
+      "fix_recommendation": "Add a one-sentence scope clarification in SECURITY-POSTURE.md §'Per-Node AEAD wrap layer' (right after the 'three load-bearing AEAD-layer defenses' bullet block at line 2310-2338) naming the edge scope explicitly: 'Scope: per-Node AEAD wrap applies to *Node body bytes* only. Edge bodies under a namespaced write remain plaintext under partition isolation (C1) — the per-DID partition keyspace (`d:<did>:e:<cid>`) is the only confidentiality layer for edges at this wave; cross-DID edge reads structurally miss at the key-prefix layer the same way Node reads do, but a same-DID attacker with raw redb access can inspect edge topology. Edge-body AEAD is named for a future wave if/when graph-topology confidentiality enters scope.' Tracked-row optional (BELONGS-NAMED-NOW): a `docs/future/phase-4-backlog.md` line for 'edge-body AEAD wrap (post-v1-beta if untrusted-host topology confidentiality enters scope)'. Cross-check with L2 (adversarial threat model)."
+    },
+    {
+      "id": "L5-OBS-1",
+      "severity": "OBS",
+      "title": "Multi-tenant substrate is wired structurally but consumed by ZERO production engine call sites at HEAD (expected v1-substrate posture; documented; named)",
+      "location": "Workspace-wide: `grep -rn 'with_namespace_did' crates/benten-engine/src crates/benten-platform-foundation/src crates/benten-sync/src crates/benten-caps/src bindings/ packages/` returns no matches. Engine production sites: handler_versions.rs:204, engine_modules.rs:261/327, engine_views.rs:978, engine_caps.rs:685, manifest_signing.rs:608 all use `WriteContext::privileged_for_engine_api()` which carries `namespace_did = None`.",
+      "evidence": "Audit results (HEAD = 4bbc4cac):\n- `with_namespace_did(Some(_))` call sites: only in `crates/benten-graph/tests/tf1_989_cross_did_partition_isolation.rs` (tests) + `crates/benten-graph/tests/tf3d_partition_before_crypto.rs` (tests) + `crates/benten-graph/tests/tf3d_two_cid_mapping_roundtrip.rs` (tests) + `crates/benten-graph/src/browser_backend.rs:736` (single fail-closed test).\n- `RedbBackend::scoped(did)` call sites in production engine: ZERO across benten-engine/benten-platform-foundation/benten-sync/benten-caps.\n- `transaction()` post-commit fan-out is explicitly un-namespaced today + has a HARD-RULE-12-(b) named-destination at `docs/future/phase-4-backlog.md §3.7` (issue #1305) for transaction-path namespaced writes.\n- The `ScopedView::get_by_property` surface is similarly named at §3.8 (issue #1306).\n- napi/TS bindings expose ZERO partition surface (verified by `grep -rn 'namespace_did' bindings/ packages/`).",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "fix_recommendation": "Not a substantive finding against L5's lens. The lens question 1 ('every WriteContext construction site routes namespace_did through') reads as a production-coverage claim, but at the v1-beta substrate stage the structural seam exists + the consumer wire-up is HARD-RULE-12-(b) named to downstream waves (#1305 transaction-path, #1306 prop-index, #1301 encryption substrate wire-up). The multi-tenant *substrate* claim (per the L5 question 4 'Capability-gating ≠ confidentiality under untrusted-host; the seam exists for the encryption substrate to plug in; multi-tenant claim accurate?') IS accurate: the seam exists, partition isolation is structurally enforced (C1) + AEAD wrap is real (C2), AND the v1-beta production consumer wire-up is explicitly named for Phase-4-Meta-Composing (per CLAUDE.md baked-in #18 + #15 v1-gate scope). Recommendation: record this OBS in R6-R1-TRIAGE.md as 'positive observation' — the substrate-vs-consumer split is the *intended* v1-beta posture; surfacing the gap clearly is what R6's spec-to-code-compliance audit (pim-13 §3.12) is for. Cross-check with L8 (IVM + CanonicalViews seam) which has the parallel substrate-vs-consumer gap for IVM dispatch. NO ACTION at L5; the consumer wire-up is the next-phase scope."
+    },
+    {
+      "id": "L5-OBS-2",
+      "severity": "OBS",
+      "title": "Production AEAD seal/unseal paths call a `pub`-exposed function named `derive_test_seam_key_from_cid_with_namespace`",
+      "location": "crates/benten-graph/src/redb_backend.rs:160 (pub fn); :1675 (production seal path call); :2678 (production unseal path call); docs/public-api/benten-graph.txt:851 (cargo-public-api baseline includes this `pub` fn)",
+      "evidence": "The K(N) source for both the seal-time `put_node_with_context` namespaced arm (line 1675) AND the unseal-time `read_decrypt_inner` (line 2678) is `derive_test_seam_key_from_cid_with_namespace(Some(did), &cid)`. The function is `pub` (not `pub(crate)`) — confirmed by cargo-public-api baseline at line 851. The `_test_seam_` hint in the function name is correct per the wave-state confidentiality limit documented at SECURITY-POSTURE.md:2406-2423 + the function's own doc-comment at lines 149-159, but the *naming* of a production-called function with `test_seam_` is a documented anomaly the function's doc-comment flags explicitly ('The `_test_seam_` hint in the function name is load-bearing on every caller until the K_principal-store backend lands; do NOT rely on the wave-3e confidentiality envelope for any data not also protected by namespace-isolation at the storage backend'). The rename to a non-test-seam name was explicitly considered + DEFERRED at PR #1336 mr1 fix-up: 'rename skipped to avoid 5-callsite cascade; the _test_seam_ name itself remains the load-bearing per-callsite signal'. Ben-ratified disposition; tracked at `docs/future/phase-4-backlog.md §3.10` (K_principal-per-DID secret-material backend; line 171 explicitly names this swap-in).",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "fix_recommendation": "Not a substantive finding. The Ben-ratified resolution at PR #1336 mr1 fix-up explicitly chose to keep the `_test_seam_` name as the load-bearing per-callsite signal until the K_principal-store backend swap-in (named at §3.10). The function is `pub` because `tf3d_*` integration tests live in `crates/benten-graph/tests/` (not `src/`) and the test-seam pattern requires `pub`-reachable derivation for both seal/unseal sides + test corpus. Rename to `derive_k_principal_seam_key_from_cid_with_namespace` (drops `test_` connotation but keeps `seam` load-bearing signal) is a candidate Composing-phase fix-up coupled to the K_principal-store swap-in. Recommendation: record this OBS in R6-R1-TRIAGE.md as 'positive observation — the naming honesty is preserved at the function doc-comment + at SECURITY-POSTURE.md confidentiality-limit callout + at the named-destination row in phase-4-backlog.md §3.10; the rename is coupled to the substantive K_principal-source swap-in, not deferrable in isolation.' Cross-check with L1 (crypto-correctness) verifying the `_test_seam_` derivation path matches the spec; cross-check with L18 (pre-v1-freeze hygiene) verifying the public-API exposure of the test-seam name is ledger'd as a known pre-v1 limitation. NO ACTION at L5; consumer-side naming honesty is intact via the doc-coupling layer."
+    }
+  ],
+  "positive_observations": [
+    "WriteContext shape per V1-FROZEN-INTERFACE.md item 5 is CORRECT at HEAD: `#[non_exhaustive]` attribute is applied; 4 fields (label, is_privileged, authority, namespace_did) all `pub`; `Default` impl carries `namespace_did = None`; builder + accessor names match the doc claim; cargo-public-api baseline matches.",
+    "Cross-DID partition isolation (C1) is structurally enforced at the key-prefix layer per `crates/benten-graph/src/store.rs:107-115`: `PARTITION_PREFIX = b\"d:\"` (sorts before all legacy single-letter prefixes `e`/`n`/`s` per byte ordering; verified comment-true). Every namespaced storage key family (`d:<did>:n:`/`e:`/`es:`/`et:`/`l:`/`c:`/`m:`) is structurally disjoint from un-namespaced (`n:`/`e:`/`es:`/`et:`). The C1 non-leak invariant is enforceable by inspection of `partition_prefix` builders + cannot be bypassed by generic-trait dispatch.",
+    "AEAD-binds-plaintext-CID rebinding-attack defense (Spike G/H + R3 ratification) IS LIVE: `crates/benten-graph/src/aead_wrap.rs:115-130` wraps with `aad_whole_content(plaintext_cid)` / `aad_per_chunk(plaintext_cid, chunk_index)`; tf3d_aad_binds_plaintext_cid_rebinding_attack.rs PIN 1 asserts substantive defeat (would-FAIL-if-AAD-omits-CID per pim-18 §3.6f).",
+    "Production seal/unseal paths route through the SAME `derive_test_seam_key_from_cid_with_namespace(namespace_did, plaintext_cid)` boundary: seal at line 1675, unseal at line 2678. Byte-for-byte agreement is load-bearing; AEAD authenticate-on-decrypt fails closed if K diverges; the structural-KDF chain (BLAKE3-keyed-hash K_principal → derive_root via HKDF-SHA256 → K(root) = K(N) at single-Node walk) matches Spike-E Interpretation-B + SECURITY-POSTURE.md:2374-2382.",
+    "Two-CID mapping table integrity (PIN 4 / tf3d_mapping_table_tamper_yields_typed_integrity_error) is enforced via `encrypted.plaintext_cid() != plaintext_cid` check at `read_decrypt_inner:2667-2672` BEFORE AEAD decrypt — tampered `plaintext_a → ciphertext_b` redirection caught by `TwoCidMapError::IntegrityMismatch`.",
+    "Non-redb backends fail-CLOSED on `Some(namespace_did)`: BrowserBackend at line 576-580 returns `GraphError::NamespacedWriteUnsupported`; SnapshotBlobBackend returns `ReadOnly` (different shape but equivalent failure intent — the read-only contract pre-empts the namespaced-write question). `GraphError::NamespacedWriteUnsupported` is `#[non_exhaustive]` per Fwd-2 #1207 with `backend: &'static str` payload; mapped to `E_NAMESPACED_WRITE_UNSUPPORTED` per crates/benten-errors/src/lib.rs:1672. Solid C1 substrate posture across all GraphBackend impls.",
+    "Confidentiality-limit-at-this-wave callout (mr1 MAJOR closure at PR #1336) is correctly placed at SECURITY-POSTURE.md:2406-2423 — explicit, honest, names the publicly-known-K_principal-from-namespace_did limit, names the production swap-in named destination (`docs/future/phase-4-backlog.md §3.10`).",
+    "CLAUDE.md baked-in #18 framing (Principal primitive: authority half vs confidentiality half) is correctly reflected at SECURITY-POSTURE.md:1872-1888 — the storage-partition substrate doc explicitly identifies '*authority* half of the multi-tenant isolation primitive' + names #1301 as the '*confidentiality* half' that this seam unblocks. No 'capability-gating = multi-tenancy' overreach found in spec docs (CLAUDE.md #18 concern about the prior ENGINE-SPEC.md:312 framing is moot — that line no longer exists in the current docs/ENGINE-SPEC.md).",
+    "Transaction-path namespaced-writes gap (#1305 / §3.7) + ScopedView::get_by_property gap (#1306 / §3.8) are correctly named per HARD RULE 12 clause-(b) with both inline source comments AND tracked GitHub issues AND named backlog rows. The C1 invariant is preserved at HEAD by `snapshot_subscribers_for(None)` filtering in the transaction() path — the gap is 'not expressible inside a transaction closure', not 'leaks'."
+  ],
+  "cross_check_pairs": {
+    "L11_wire_format": "Confirm two-CID mapping key shape `d:<did>:m:<plaintext_cid> → ciphertext_cid` + ENCRYPTED_NODES_TABLE storage key `d:<did>:c:<ciphertext_cid>` + AEAD envelope wire bytes match `tf3d_two_cid_mapping_roundtrip.rs` byte-pins + per-chunk-AEAD chunk_size = IROH_BLOCK_SIZE per tf3d_per_chunk_aead_iroh_block_size pin.",
+    "L2_adversarial": "Confirm: (a) cross-DID read attempt under ctx_y for X's plaintext_cid returns NotFound BEFORE AEAD layer (tf3d PIN 1 partition-before-crypto); (b) cross-DID AEAD attempt with K_principal-Y on K_principal-X ciphertext fails AEAD authentication (tf3d PIN 2 defense-in-depth); (c) DropBundle of Y installed under X is refused (tf3d PIN 3, integration with G-CORE-3f). Also confirm that the L5-OBS-2 `pub`-exposed `derive_test_seam_key_from_cid_with_namespace` doesn't enable an attack the documented K_principal-publicly-known limit doesn't already concede.",
+    "L8_IVM_CanonicalViews": "Verify the parallel substrate-vs-consumer split is honest at L8 — IVM strategy dispatch + ChangeSubscriber registration both have the per-DID seam (RedbBackend::register_namespaced_subscriber + ScopedView::register_subscriber) but production IVM consumers may or may not be wired through it yet.",
+    "L17_§1.A.FROZEN_item_5_verifier": "On the G-CORE-9 FREEZE re-run of L17, confirm L5-MINOR-1 + L5-MINOR-2 fix-ups land in the V1-FROZEN-INTERFACE.md verification-mechanism block BEFORE the freeze contract is locked. Cross-check that cargo-public-api baseline regeneration at G-CORE-9 build-out wave matches the WriteContext shape + the ScopedView surface."
+  },
+  "convergence_notes": {
+    "blockers": 0,
+    "majors": 0,
+    "minors": 3,
+    "obs": 2,
+    "q5_termination_check": "Per Q5 termination (CLAUDE.md rule 9 + feedback_phase_close_final_council_full), 0 BLOCKER + 0 MAJOR = no gate-block from this lens. 3 MINOR + 2 OBS are addressable inline; recommend they land in the R6-FP wave alongside other lenses' MINORs to avoid cycle-thrash. R6-R1 cumulative would need to roll up all 19 lens findings before convergence-disposition can fire phase-wide.",
+    "pim_meta_sweep_candidates": [
+      "PIM candidate (3-recurrence pattern check): doc-vs-code phantom-test-claim drift. L5-MINOR-1 + L5-MINOR-2 are two instances in ONE doc paragraph. R6 across all 19 lenses may surface ≥3 instances of the 'verification-mechanism bullet cites a test that doesn't exist' shape — if so, codify a pim-N at §3.5b / §3.5h pre-push: 'every doc-block listing test files MUST grep-confirm file presence at HEAD before authorship lands; CI workflow could enforce.' Pre-3 threshold so this is RECORD-AS-CANDIDATE, not codify-now."
+    ]
+  },
+  "provenance": {
+    "lens_definition_source": ".addl/phase-4-meta/R6-LENS-CATALOG.md §L5 (lines 75-83)",
+    "primary_surfaces_reviewed": [
+      "crates/benten-graph/src/lib.rs (WriteContext struct + builder + accessor; GraphError::NamespacedWriteUnsupported)",
+      "crates/benten-graph/src/redb_backend.rs (put_node_with_context namespaced arm; put_edge_with_context namespaced arm; ScopedView impl; transaction() path; subscriber fan-out; derive_test_seam_key_from_cid_with_namespace; read_decrypt_inner)",
+      "crates/benten-graph/src/store.rs (partition_prefix + namespaced_*_key family + key disjointness analysis)",
+      "crates/benten-graph/src/browser_backend.rs (NamespacedWriteUnsupported fail-closed)",
+      "crates/benten-graph/src/backends/snapshot_blob.rs (ReadOnly fail-closed)",
+      "crates/benten-graph/tests/tf1_989_cross_did_partition_isolation.rs",
+      "crates/benten-graph/tests/tf3d_partition_before_crypto.rs",
+      "crates/benten-graph/tests/tf3d_two_cid_mapping_roundtrip.rs",
+      "crates/benten-graph/tests/tf3d_aad_binds_plaintext_cid_rebinding_attack.rs"
+    ],
+    "spec_docs_audited": [
+      "docs/V1-FROZEN-INTERFACE.md item 5 (WriteContext shape frozen)",
+      "docs/SECURITY-POSTURE.md (Per-Node AEAD wrap layer; Key-derivation source; Confidentiality limit at this wave; Inv-11 strengthening; storage-partition substrate)",
+      "CLAUDE.md baked-in #18 (Principal primitive — authority + confidentiality halves)",
+      "docs/future/phase-4-backlog.md §3.7 / §3.8 / §3.10 (named destinations for transaction-path / prop-index / K_principal-store)",
+      "docs/public-api/benten-graph.txt (cargo-public-api baseline)"
+    ],
+    "production_consumption_audit": "grep across crates/benten-engine, crates/benten-platform-foundation, crates/benten-sync, crates/benten-caps, bindings/, packages/ for `with_namespace_did`, `namespace_did:`, `RedbBackend::scoped` — ZERO production consumer sites at HEAD 4bbc4cac.",
+    "discipline_anchors": [
+      "feedback_review_finding_ground_truth_verify (orchestrator independently ref-pinned-verifies every finding before action; L5 found by direct grep + Read against HEAD code, not by re-reading prior R4/R4b JSONs)",
+      "pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight (every finding has substantive production-arm citation + would-FAIL-if-no-op'd articulation)",
+      "pim-13 §3.12 spec-to-code-compliance audit (R7-equivalent walk: every spec claim verified against HEAD code)",
+      "HARD RULE 12 (every finding has a fix-now disposition OR explicit DISAGREE-WITH-EXPLANATION — no 'defer-to-next-brief' / phantom destination)"
+    ]
+  }
+}
