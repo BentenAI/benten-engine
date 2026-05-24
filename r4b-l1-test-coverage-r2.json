@@ -1,0 +1,91 @@
+{
+  "lens": "L1",
+  "lens_name": "test-coverage",
+  "agent_id": "r4b-r2-l1-test-coverage",
+  "review_round": "R4b-R2",
+  "review_target": {
+    "branch": "phase-4-meta-core/r4b-r2-l1-test-coverage",
+    "base_branch": "phase-4-meta-core/r4b-r1-fix-pass",
+    "base_head": "4bbc4cac",
+    "scope": "R4b-R2 re-review of edited artifact post R4b-R1-FP (PR #1350). Verify closure of R4b-R1 L1's 3 MAJ + 2 MIN findings + Q5 termination check (any NEW MAJORs introduced by R1-FP edits)."
+  },
+  "disposition": "APPROVE-WITH-1-MINOR",
+  "convergence_disposition": "STRICTLY-CONVERGED",
+  "summary": "R4b-R2 L1 test-coverage re-review ground-truth-verifies the R4b-R1-FP (PR #1350 at 4bbc4cac) edited artifact and confirms: ALL 3 R1 MAJORs (r4b-l1-1 §4-B / r4b-l1-2 §4-C / r4b-l1-3 §4-D phantom-destination) are CLOSED per HARD-RULE-12 clause-(b) BELONGS-NAMED-NOW. ALL 2 R1 MINORs (r4b-l1-4 tf5_424 text-drift / r4b-l1-5 V-1/V-3/V-5/V-12 G-CORE-8.2 naming-drift) are CLOSED. Per Q5 termination check (any NEW MAJORs introduced by R1-FP edits): 0 NEW MAJORs surfaced. 1 NEW MINOR surfaced: incomplete sweep — the file-head test-list banner at g_core_8_sync_attack_fabric_15_of_18.rs:43 still cites the phantom destination 'R3-W5\\'s `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs`' for V-14, even though the V-14 body block at L539-567 was correctly retargeted to Row D-3. The banner-level cite is the same phantom-destination that R1's r4b-l1-3 named; the body fix was applied but the file-head index entry was missed. This is a §3.6j sweep-completeness self-verify miss (pim-N-sweep-completeness-self-verify) — the sweep tool should have grep'd for `cross_wave_3_x_8_*` workspace-wide post-FP and updated all hits. Per strict Q5 reading (only BLOCKER/MAJOR block convergence; pattern-induction additive), this MINOR is NOT convergence-blocking — the §4-D semantic destination IS named at Row D-3 (the V-14 body block is authoritative; the file-head banner is a narrative index). Recommendation: STRICTLY-CONVERGED at R4b-R2; the L1-R2-MIN-1 file-head banner cite-drift folds into the next available cite-drift sweep (orchestrator-direct ~5min sed edit) or rides as a noted-residual into G-COMP-1.",
+  "findings": [
+    {
+      "id": "r4b-r2-l1-min-1",
+      "severity": "MINOR",
+      "title": "Incomplete sweep — V-14 file-head banner still cites phantom destination `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs` even though V-14 body block correctly retargeted to Row D-3",
+      "file": "crates/benten-engine/tests/g_core_8_sync_attack_fabric_15_of_18.rs:43",
+      "body": "The R4b-R1-FP commit 8240a56c correctly retargeted the V-14 DISP-B body block at L539-567 from the phantom destination 'cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs' (file never created at HEAD per r4b-l1-3) to canonical Row D-3 (per V1-FROZEN-INTERFACE-DEFERRED.md). However the file-head module-doc test-list banner at L43 still reads: 'V-14 audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D) DISP-B (BELONGS-NAMED-NOW — R3-W5\\'s `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs` cross-wave §4-D file)'. §3.5n ground-truth-verified via `grep -rn cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy --include='*.rs' --include='*.md' docs/ crates/ .addl/` — returns 2 hits, both in g_core_8_sync_attack_fabric_15_of_18.rs (L43 + L555). L555 is forensic context inside the V-14 body block (the FP's '**R4b L1 fix-pass 2026-05-24:** the previously-named destination ... was a phantom ... Renamed destination to Row D-3' narrative — explicitly documenting the phantom retargeting; this is OK and useful for forensic context). L43 is the file-head test-list banner that serves as a navigation index — it still names the phantom as the live destination. This is a §3.6j sweep-completeness self-verify miss (pim-N-sweep-completeness-self-verify): the sweep should have grep'd workspace-wide post-FP for `cross_wave_3_x_8_*` cites and updated all hits except the explicit forensic-context note. NOT a convergence-blocker per strict Q5 (the §4-D destination IS authoritatively named at Row D-3 in the V-14 body block; the L43 banner is a narrative index that diverges from the body); but counts as a cite-drift hygiene residual.",
+      "disposition_per_hard_rule_12": "FIX-NOW",
+      "proposed_fix_shape": "1-line edit at L43: replace 'BELONGS-NAMED-NOW — R3-W5\\'s `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs` cross-wave §4-D file' with 'BELONGS-NAMED-NOW — `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3 (consumption-deferred to G-COMP-1; previously phantom-cited cross_wave_3_x_8_*.rs retargeted at R4b-FP 8240a56c)'. Orchestrator-direct ~2min. Folds into the next cite-drift sweep OR rides as L1-R2-noted-residual into G-COMP-1."
+    }
+  ],
+  "verification_log": [
+    {
+      "r1_finding": "r4b-l1-1 (§4-B missing test + missing named-deferred destination, MAJOR)",
+      "verification_method": "§3.5n ground-truth: read docs/V1-FROZEN-INTERFACE-DEFERRED.md L673-708",
+      "status": "CLOSED",
+      "evidence": "Row D-23 added at L673-708. Names file path `crates/benten-engine/tests/cross_wave_3_x_4_subgraphspec_live_eval_ivm_canonical_views.rs` (per R2 §4-B), cites RATIFIED-S&C R5 D-4M-R5 live-per-request semantics, names G-COMP-1 destination, couples to existing Row D-10. Includes frozen-surface section + deferred-consumption section + v1-beta posture + anchor — full HARD-RULE-12 clause-(b) shape."
+    },
+    {
+      "r1_finding": "r4b-l1-2 (§4-C missing test + missing named-deferred destination, MAJOR)",
+      "verification_method": "§3.5n ground-truth: read docs/V1-FROZEN-INTERFACE-DEFERRED.md L710-746",
+      "status": "CLOSED",
+      "evidence": "Row D-24 added at L710-746. Names file path `crates/benten-engine/tests/cross_wave_3_x_7_manifest_envelope_intersects_ucan_scope.rs` (per R2 §4-C), cites CLAUDE.md baked-in #18 three-layer consent, names typed error E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE + ChainValidationError surface, names G-COMP-1 destination, couples to Row D-3. Includes frozen-surface section + deferred-consumption section + v1-beta posture + anchor — full HARD-RULE-12 clause-(b) shape."
+    },
+    {
+      "r1_finding": "r4b-l1-3 (§4-D V-14 phantom-destination cite, MAJOR)",
+      "verification_method": "§3.5n ground-truth: read crates/benten-engine/tests/g_core_8_sync_attack_fabric_15_of_18.rs L539-567 + grep cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy workspace-wide",
+      "status": "PARTIALLY-CLOSED",
+      "evidence": "V-14 body block at L539-567 correctly retargeted from phantom to Row D-3 (canonical G-COMP-1 destination per V1-FROZEN-INTERFACE-DEFERRED.md). L555 contains forensic context explicitly documenting the phantom retargeting — OK. HOWEVER L43 file-head test-list banner still cites the phantom — see r4b-r2-l1-min-1 above. Net: the AUTHORITATIVE destination (V-14 body block) is correctly named per HARD-RULE-12 clause-(b); the file-head INDEX entry diverges. The MAJOR is closed (the body block is the load-bearing disposition narrative); the residual is a cite-drift hygiene MINOR not a MAJOR re-recurrence."
+    },
+    {
+      "r1_finding": "r4b-l1-4 (tf5_424 wasm32 companion ignore-message text drift, MINOR)",
+      "verification_method": "§3.5n ground-truth: read crates/benten-platform-foundation/tests/tf5_424_materializer_recursive_walk_into_vocabulary_edges.rs L244-263",
+      "status": "CLOSED",
+      "evidence": "L245-252 ignore message updated from 'RED-PHASE: un-ignore at G-CORE-4' to 'DEFERRED: §4.24 + §4.42 wasm32 companion (Phase-4-Meta carry per docs/future/phase-4-backlog.md §4.24/§4.42). G-CORE-0 verify-pass already re-confirmed the §4.42 4-site count at PR #1310; G-CORE-4 (PR #1311) shipped the recursive-walk seam; the wasm32 companion arm lands at Phase-4-Meta §4.42 wave per the named destination. (R4b L1-MIN-4 cite-drift fix 2026-05-24: ...)' — closes the pim-12 §3.6e text-drift exactly per R1 proposed_fix_shape."
+    },
+    {
+      "r1_finding": "r4b-l1-5 (V-1/V-3/V-5/V-12 'G-CORE-8.2 follow-up wave' cite drift, MINOR)",
+      "verification_method": "§3.5n ground-truth: read each of the 4 #[ignore] reasons (V-1 L116-128 / V-3 L200-227 / V-5 L272-289 / V-12 L484-497)",
+      "status": "CLOSED",
+      "evidence": "All 4 #[ignore] reasons re-cited to canonical D-rows per the FP commit message: V-1 → Row D-4 (ProductionRechecker) + Row D-1 (WriteBoundaryChainValidator) composition. V-3 → Row D-6 (canonical §4.25 sync-hydrate consumption). V-5 → Row D-4 (per-DID device-attestation verification). V-12 → Row D-2 (InstallRecordReplayStore lifecycle-required wiring). Workspace-wide grep for `G-CORE-8.2|g.core.8.2` in this file returns only 1 residual hit at L359 (inside V-6's substantive #[test] body code-comment, NOT an #[ignore] reason). R1 finding r4b-l1-5 specifically named only the 4 ignore reasons (not arbitrary code comments); the 4 named instances are CLOSED. The L359 code comment + the other ~18 workspace-wide G-CORE-8.2 cites in other files (write_boundary_*.rs / install_record_replay.rs / engine.rs / lib.rs / SECURITY-POSTURE.md / etc) are OUT-OF-SCOPE for r4b-l1-5 as defined — they're a separate Phase-4-Meta-Composing naming-drift sweep candidate but not a re-recurrence of the named R1 MINOR."
+    },
+    {
+      "r1_q5_termination_check": "Any NEW MAJORs introduced by R1-FP edits",
+      "verification_method": "Read full diff a0b75637..4bbc4cac (39 files, +711/-189). Spot-check the 3 commits + sample test files + V1-FROZEN-INTERFACE-DEFERRED.md additions for unintended consequences.",
+      "status": "0 NEW MAJORs",
+      "evidence": "Inspected: 8240a56c (3 MAJ closure) is doc-only edits to V1-FROZEN-INTERFACE-DEFERRED.md L673-746 (new D-23/D-24 rows) + 1 test file (g_core_8_sync_attack_fabric V-14 narrative retargeting) — no production surface changes, no test signature changes. 4bbc4cac (10 MIN sweep) covers cite hygiene across 35 files + the new tracked-followups doc + sub-header anchor work + stale RED-PHASE sed (17→33 files) + 1 substantive-match fix. The substantive-match fix in 4bbc4cac was scoped to MINOR closure not signature change. 753d9840 (L6-MAJOR-1 pivot to Row D-22) is doc-only V1-FROZEN-INTERFACE-DEFERRED.md additions. 0 new public-API surfaces introduced; 0 new test-signature changes; 0 invariant-violation introductions. Conclusion: no NEW MAJORs."
+    },
+    {
+      "r1_q5_termination_check": "Any NEW MINORs introduced by R1-FP edits",
+      "verification_method": "§3.6j sweep-completeness self-verify against the workspace post-FP",
+      "status": "1 NEW MINOR (r4b-r2-l1-min-1 above)",
+      "evidence": "The V-14 body block was retargeted but the file-head module-doc test-list banner at g_core_8_sync_attack_fabric_15_of_18.rs:43 was missed — sweep-completeness gap. See r4b-r2-l1-min-1 finding above."
+    }
+  ],
+  "positive_observations": [
+    "All 3 R1 MAJORs closed per HARD-RULE-12 clause-(b) with full BELONGS-NAMED-NOW shape (named destinations at real, reachable documents/rows; not phantom).",
+    "Both new D-23 + D-24 rows in V1-FROZEN-INTERFACE-DEFERRED.md follow the existing row pattern (frozen-surface section + deferred-consumption section + v1-beta posture + anchor) and provide cross-references to coupled rows (D-23 ↔ D-10; D-24 ↔ D-3) — strong forensic-context preservation per pim-13 / §3.12.",
+    "V-14 retargeting in g_core_8_sync_attack_fabric body block at L539-567 explicitly documents the phantom retargeting as 'R4b L1 fix-pass 2026-05-24:' narrative — preserves forensic context per pim-13 / §3.12 + explains the choice between path-(a) write-file-now vs path-(b) deferral-row + cites the existing D-3 deferral pattern as precedent.",
+    "L1-MIN-4 tf5_424 ignore-message retense is exhaustive — names docs/future/phase-4-backlog.md §4.24/§4.42 + cites the PRs that landed the un-ignore-when conditions (G-CORE-0 PR #1310 + G-CORE-4 PR #1311) + explains the DEFERRED-not-RED-PHASE classification per pim-12 §3.6e + adds a forensic '(R4b L1-MIN-4 cite-drift fix 2026-05-24: ...)' annotation.",
+    "L1-MIN-5 4-instance sed is fully exhaustive across V-1/V-3/V-5/V-12 ignore reasons — each is re-cited to the specific canonical D-row that maps to its #[ignore] disposition (V-1 → D-4+D-1 composition; V-3 → D-6; V-5 → D-4; V-12 → D-2). The naming maps cleanly to the V1-FROZEN-INTERFACE-DEFERRED.md taxonomy and would survive workspace-wide grep-based agent searches.",
+    "The new tracked docs/phase-4-meta-core-r4b-followups.md surface (174 lines, 4 follow-ups) is a sound consolidation point for BELONGS-NAMED-NOW items whose canonical destinations would otherwise have been gitignored `.addl/` artifacts (per feedback_no_defer_HARD_RULE strict reading). Strong HARD-RULE-12 adherence — closes the gitignored-destination loophole.",
+    "Q5 termination check: 0 NEW MAJORs introduced by R1-FP edits. The R1-FP scope was conservatively doc-only (Row D-23/D-24 mints + cite retensings + sub-header anchor work) with no production-surface or test-signature changes — minimizing introduction-of-new-issues risk per Strategy-C batch discipline."
+  ],
+  "ground_truth_verification_notes": [
+    "§3.5n: independently grep-verified each R1 finding's closure against HEAD `4bbc4cac` — not relying on FP commit message claims.",
+    "§3.5n: workspace-wide grep for `G-CORE-8.2` returns 18 total residual hits (1 in g_core_8_sync_attack_fabric V-6 substantive body code-comment; 4 in g_core_8_write_boundary_user_root_chain_validator_4_23.rs; 3 in g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs; 6 in src/engine.rs + src/lib.rs + src/install_record_replay.rs; 4 in docs/SECURITY-POSTURE.md + docs/g-core-9-r1-triage.md) — these are OUT-OF-SCOPE for r4b-l1-5 (which named only the 4 sync-attack-fabric ignore reasons) but flag as a broader naming-drift sweep candidate for Phase-4-Meta-Composing.",
+    "§3.5n: workspace-wide grep for `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy` returns 2 hits — both in g_core_8_sync_attack_fabric_15_of_18.rs (L43 file-head banner + L555 forensic narrative). L555 is documented forensic context (OK); L43 is the new MINOR per r4b-r2-l1-min-1.",
+    "§3.6i schema: this JSON follows canonical top-level `disposition` + `findings[]` + per-finding `disposition_per_hard_rule_12` shape per R4b R1 + R4.2 lens precedent."
+  ],
+  "convergence_recommendation": {
+    "decision": "STRICTLY-CONVERGED",
+    "rationale": "Per strict Q5 termination (only BLOCKER/MAJOR block convergence; pattern-induction additive): the R4b-R2 lens returns 0 BLOCKER + 0 MAJOR + 1 MINOR. The R1 → R2 monotonic-convergence trajectory is 3 MAJ + 2 MIN (R1) → 0 MAJ + 1 MIN (R2) — strong convergence. The 1 NEW MINOR (r4b-r2-l1-min-1) is a cite-drift hygiene residual that's resolvable in ~2min orchestrator-direct sed or absorbed into the next cite-drift sweep / G-COMP-1 wave; it is NOT convergence-blocking. The §4-D destination IS authoritatively named at Row D-3 in the V-14 body block (the file-head banner at L43 is a narrative index that diverges from the body but doesn't introduce a new disposition gap). Recommendation: STRICTLY-CONVERGED at R4b-R2 for L1 — advance to R4b-R2 convergence council aggregation; the L1-R2-MIN-1 folds into the same orchestrator-direct sweep window OR rides as a noted-residual into G-COMP-1.",
+    "no_r4b_r3_needed_for_l1": true,
+    "minor_residual_disposition": "Orchestrator-direct ~2min sed at g_core_8_sync_attack_fabric_15_of_18.rs:43 to retarget the V-14 file-head banner cite to Row D-3 (matching the V-14 body block at L539-567); OR fold into next cite-drift sweep OR ride as noted-residual into G-COMP-1."
+  }
+}
