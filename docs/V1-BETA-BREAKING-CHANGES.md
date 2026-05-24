@@ -201,6 +201,22 @@
 - **Why break-OK:** retense of a previously-documented (between-R0.5-plan and the FREEZE wave) wire-format-contract claim to match as-shipped reality. The `total_chunks` defense against cross-chunk-truncation is deferred to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-15a.
 - **Migration path:** none at v1-beta; consumers reading earlier R0.5/R2 drafts that referenced a 3-tuple AAD should update to the as-shipped 2-tuple. G-COMP-1 may augment.
 
+### G-CORE-9 R2 fix-pass additions
+
+Per L18-r3-1 closure (R3 ledger-completeness audit): the R2 fix-pass
+itself shipped 2 break-OK changes that were not enumerated as dedicated
+rows. Added at G-CORE-9 R3 fix-pass:
+
+#### G-CORE-9 R2 Bundle R2.8 — TypedOutputProjection + KernelOutput `#[non_exhaustive]` (wire-bytes-load-bearing)
+- **What changed:** `TypedOutputProjection` + `KernelOutput` at `crates/benten-ivm/src/subgraph_spec.rs::TypedOutputProjection` + `crates/benten-ivm/src/subgraph_spec.rs::KernelOutput` carry `#[non_exhaustive]` at v1-beta per L8-R2-MAJOR-CARRY-2 closure. Wire-bytes-load-bearing per the 1-byte arm-discriminator at `crates/benten-ivm/src/algorithm_b.rs` (view round-trip / shape-pin tests).
+- **Why break-OK:** wire-bytes-load-bearing types must lock the variant-set at v1-beta freeze; adding post-v1-GM would be a SemVer break for any out-of-crate consumer matching exhaustively. The attribute lands NOW (NOT deferred to G-COMP-1 — explicitly distinguished from the Row D-17 deferred set).
+- **Migration path:** within-crate exhaustive matches at `algorithm_b.rs` round-trip + 5 view_2/view_4/view_5 round-trip/shape-pin test sites are unaffected (within-defining-crate). Out-of-crate consumers add a wildcard arm.
+
+#### G-CORE-9 R2 Bundle R2.5 — `SwapMatrixError` cipher-suite resolve-failure variant change
+- **What changed:** `SwapMatrixError::CipherSuite(static)` → `SwapMatrixError::Unsupported(UnsupportedAlgorithm)` for cipher-suite resolve-failure routing. Surfaces typed-reject through the unified `UnsupportedAlgorithm` channel.
+- **Why break-OK:** consumers pattern-matching on `SwapMatrixError::CipherSuite(..)` for cipher-suite resolve-failure no longer match — the new shape is `SwapMatrixError::Unsupported(UnsupportedAlgorithm::Cipher(..))`. Single-call-site change at v1-beta (no production consumers outside the swap-matrix dispatch).
+- **Migration path:** consumers handling cipher-suite resolve-failure update arm `SwapMatrixError::CipherSuite(..)` → `SwapMatrixError::Unsupported(UnsupportedAlgorithm::Cipher(..))`.
+
 ---
 
 ## Cohort 4 — Wire-format DEFERRED (post-v1-beta hardening watch-list)
@@ -224,7 +240,7 @@ These are public-API tightens / additive surfaces named-deferred to a follow-up 
 
 - **Row D-7 — §8-A Engine visibility cluster tighten + napi cascade** (G-COMP-1 destination) — at v1-beta `Engine::get_node` / `Engine::put_node` / `Engine::get_node_label_only` / `Engine::resolve_subgraph_cid_for_test` remain `pub fn` with pre-tighten names; the rename + `pub→pub(crate)` cascade through 75+ workspace call sites + the napi binding migration are the G-COMP-1 follow-up. Per discipline at v1-beta external callers SHOULD route through `Engine::read_node_as(principal, cid)` rather than `Engine::get_node`.
 - **Row D-11 — `walk_share_scope_as` principal-bearing additive overload** (G-COMP-1 destination) — `Engine::walk_share_scope` is principal-unbearing at v1-beta; the principal-bearing variant for recipient-side path-tagged-key derivation is additive Composing-time enhancement per RATIFIED-S&C §R4.
-- **Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items** (G-COMP-1 destination) — Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_FAILED + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND); the obsolete `Strategy::C` naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes.
+- **Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items** (G-COMP-1 destination) — Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_ERROR reusing existing `pub const` + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND); the obsolete `Strategy::C` naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. (Per G-CORE-9 R3-FP L9-r3-MIN-1 closure: the wire string `E_DSL_PARSE_ERROR` is reused — the existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR` already occupies that slot; G-COMP-1 delivers the enum variant `DslParseError` + TS class `EDslParseError` mirror.)
 - **Row D-17 (extended) — `#[non_exhaustive]` cascade for ~12+ lens-scoped pub types** (G-COMP-1 destination) — CapWriteContext / ReadContext / SuspensionOutcome + the extended set from L8-R2-MAJOR-CARRY-2 (UserViewInputPattern / TraceStep / StreamCursor / SubscribeCursor / EngineViewsHandle / AtriumConfig / SyncStatus + the outcome.rs 13-pub-struct set + benten-ivm SubgraphSpec/KernelInput/View* + benten-platform-foundation Vocab*/Scalar/RenderError + Mode). **Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) were CLOSED at G-CORE-9 R2 (Bundle R2.8) and are NOT deferred.**
 - **Row D-20 — L6-r1-3 trybuild compile-fail regression backstop** (G-COMP-1 destination) — the CapabilityPolicy hard-seal MECHANISM IS structurally enforced by rustc at v1-beta; only the explicit negative-arm compile-fail test fixture is deferred.
 

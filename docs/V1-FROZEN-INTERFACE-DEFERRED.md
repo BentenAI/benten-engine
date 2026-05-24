@@ -423,10 +423,21 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   - `benten-ivm`: `SubgraphSpec` (subgraph_spec.rs:107), `KernelInput`
     (subgraph_spec.rs:262), `ViewState` (view.rs:157), `ViewBudget`
     (view.rs:180), `ViewQuery` (view.rs:223), `ViewResult` (view.rs:242),
-    `ViewDefinition` (view.rs:387)
+    `ViewDefinition` (view.rs:387), `LabelPattern` (algorithm_b.rs:375)
+    [L8-r3-MIN-3 closure: IVM kernel pattern-selector surface;
+    within-crate exhaustive matches at algorithm_b.rs:403-404 + :416
+    unaffected]
   - `benten-platform-foundation`: `VocabLabel` (vocab.rs:14), `VocabEdge`
-    (vocab.rs:92), `Scalar` (vocab.rs:157), `RenderError` (materializer.rs:567)
-  - `benten-core`: `Mode` (version_dag.rs:75)
+    (vocab.rs:92), `Scalar` (vocab.rs:157), `RenderError` (materializer.rs:567),
+    `MaterializerError` (materializer.rs:209) [L8-r3-MIN-1 closure:
+    materializer-walk return-type; in-crate exhaustive matches preserved
+    when `#[non_exhaustive]` is added since out-of-crate consumers add
+    wildcard arm]
+  - `benten-core`: `Mode` (version_dag.rs:75), `VersionError`
+    (version.rs:105), `VersionDagError` (version_chain.rs:52) [L8-r3-MIN-2
+    closure: Version DAG error surface; the sibling
+    `version_dag.rs::VersionDagError` at :105 ALREADY carries the
+    attribute, so the within-namespace pattern is established]
 
   **Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred):**
   `TypedOutputProjection` + `KernelOutput` in `benten-ivm/src/subgraph_spec.rs`
@@ -466,7 +477,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   4. ERROR-CATALOG.md:533+727 + cargo-public-api baselines `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` (5 baseline cites) + `crates/benten-errors/tests/stable_shape.rs:112+682+1149` regenerate
 
   AND mint 3 new DSL ErrorCodes per L9-DSL-MAJOR-1 closure:
-  5. `E_DSL_PARSE_FAILED` — mints from existing `CompileError::Parse`
+  5. `E_DSL_PARSE_ERROR` — REUSES existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR` (already in use as the `Diagnostic.error_code` field value at 6+ production construction sites); G-COMP-1 deliverable = `ErrorCode::DslParseError` enum variant + `EDslParseError` TS class mirror (the wire string is unchanged). Per L9-r3-MIN-1 name-collision closure (the prior `E_DSL_PARSE_FAILED` naming would have left the existing pub const orphaned).
   6. `E_DSL_UNKNOWN_PRIMITIVE` — mints from existing `CompileError::Semantic`
   7. `E_DSL_MISSING_RESPOND` — mints from existing `CompileError::Semantic` sub-case
 

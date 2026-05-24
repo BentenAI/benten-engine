@@ -409,9 +409,10 @@ freeze wave SURFACES the decision; Ben makes it.
 - `crates/benten-graph/tests/redb_backend_*.rs` family covers the redb
   on-disk format.
 - **CI inventory-walking lane** — DEFERRED to G-COMP-1 per Row D-9; the
-  drift-detect substrate exists (cite-drift workflow + cargo-public-api
-  workflow) but the inventory-walk-asserts-byte-pin-exists discipline is
-  the G-COMP-1 follow-up. At v1-beta the inventory at
+  drift-detect substrate exists (`.github/workflows/cite-drift.yml` +
+  `.github/workflows/cargo-public-api.yml`) but the
+  inventory-walk-asserts-byte-pin-exists discipline is the G-COMP-1
+  follow-up. At v1-beta the inventory at
   `docs/V1-WIRE-FORMAT-INVENTORY.md` is authored + tracked + the Ben P-III
   decision-point sign-off path is the inventory's own §"P-III Ben
   decision-point" section.
@@ -757,14 +758,13 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 
 ## 9. `cargo-public-api` baselines regenerated + committed as v1 surface
 
-**Frozen surfaces:**
+**Frozen surfaces (all 14 baselines regenerated as real cargo-public-api
+output at G-CORE-9 FREEZE wave build-out commit `8cc4eddd`; per L12-R3-MIN-1
+closure):**
 - `docs/public-api/benten-caps.txt`
 - `docs/public-api/benten-core.txt`
-- `docs/public-api/benten-crypto-suite.txt` (**FREEZE-WAVE FIX-NOW:
-  doesn't exist at HEAD; build-backlog row 1**)
-- `docs/public-api/benten-drop.txt` (**FREEZE-WAVE FIX-NOW: doesn't
-  exist at HEAD; benten-drop is a new Phase-4-Meta-Core crate;
-  build-backlog row 1**)
+- `docs/public-api/benten-crypto-suite.txt`
+- `docs/public-api/benten-drop.txt` (Phase-4-Meta-Core crate)
 - `docs/public-api/benten-dsl-compiler.txt`
 - `docs/public-api/benten-engine.txt`
 - `docs/public-api/benten-errors.txt`
@@ -772,10 +772,7 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 - `docs/public-api/benten-graph.txt`
 - `docs/public-api/benten-id.txt`
 - `docs/public-api/benten-ivm.txt`
-- `docs/public-api/benten-platform-foundation.txt` (**FREEZE-WAVE
-  FIX-NOW: doesn't exist at HEAD;
-  `crates/benten-platform-foundation/` is a public crate post-Phase-4-
-  Foundation; build-backlog row 1**)
+- `docs/public-api/benten-platform-foundation.txt`
 - `docs/public-api/benten-renderer-tauri.txt`
 - `docs/public-api/benten-sync.txt`
 
@@ -788,15 +785,13 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
   review + Ben sign-off (the cargo-public-api gate is the freeze's
   structural backstop).
 
-**FREEZE-WAVE FIX-NOW CRITICAL GAP:** the seeded-stubs at HEAD
-(`benten-caps.txt = 11 LOC`, etc.) are **NOT REAL BASELINES** — they're
-G20-A3 placeholder comments (verified: 11 of the 14 are 11-LOC stubs).
-The G-CORE-9 wave MUST run `cargo public-api -p <crate> --simplified
---omit blanket-impls` for every workspace crate and commit the full
-output as the canonical v1 baseline. Without this, the gate is a
-placebo (the drift test will pass against the placeholder regardless of
-real public-API mutations). This is **the single most load-bearing
-freeze mechanism** — see build-backlog row 1.
+**CLOSED post G-CORE-9 build-out (commit `8cc4eddd`):** all 14 baselines
+regenerated as real `cargo public-api -p <crate> --simplified --omit
+blanket-impls` output and committed as the canonical v1 baseline; the
+prior G20-A3 11-LOC placeholder stubs are gone. Per L12-R3-MIN-1 closure
+the gate is now structurally REAL (cf. item 1 "drift gate is now REAL,
+not a placebo"). Baseline LOC range at HEAD: 110-3509 across the 14
+crates. See build-backlog row 1 for the regeneration procedure.
 
 **What's NOT frozen:**
 - The `cargo-public-api` tool version (carried in `Cargo.toml` dev-deps);
