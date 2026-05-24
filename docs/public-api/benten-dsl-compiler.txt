@@ -1,7 +1,6 @@
- Documenting benten-dsl-compiler v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-dsl-compiler)
 pub mod benten_dsl_compiler
 pub use benten_dsl_compiler::PrimitiveKind
-pub enum benten_dsl_compiler::CompileError
+#[non_exhaustive] pub enum benten_dsl_compiler::CompileError
 pub benten_dsl_compiler::CompileError::Backend(alloc::string::String)
 pub benten_dsl_compiler::CompileError::Build(benten_dsl_compiler::Diagnostic)
 pub benten_dsl_compiler::CompileError::Io(alloc::string::String)
@@ -27,7 +26,7 @@ impl core::marker::Unpin for benten_dsl_compiler::CompileError
 impl core::marker::UnsafeUnpin for benten_dsl_compiler::CompileError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::CompileError
 impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::CompileError
-pub struct benten_dsl_compiler::CompiledPrimitive
+#[non_exhaustive] pub struct benten_dsl_compiler::CompiledPrimitive
 pub benten_dsl_compiler::CompiledPrimitive::kind: benten_core::subgraph::PrimitiveKind
 pub benten_dsl_compiler::CompiledPrimitive::properties: alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
 impl core::clone::Clone for benten_dsl_compiler::CompiledPrimitive
@@ -41,7 +40,7 @@ impl core::marker::Unpin for benten_dsl_compiler::CompiledPrimitive
 impl core::marker::UnsafeUnpin for benten_dsl_compiler::CompiledPrimitive
 impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::CompiledPrimitive
 impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::CompiledPrimitive
-pub struct benten_dsl_compiler::CompiledSubgraph
+#[non_exhaustive] pub struct benten_dsl_compiler::CompiledSubgraph
 pub benten_dsl_compiler::CompiledSubgraph::primitives: alloc::vec::Vec<benten_dsl_compiler::CompiledPrimitive>
 pub benten_dsl_compiler::CompiledSubgraph::subgraph: benten_core::subgraph::Subgraph
 impl core::clone::Clone for benten_dsl_compiler::CompiledSubgraph
@@ -55,7 +54,7 @@ impl core::marker::Unpin for benten_dsl_compiler::CompiledSubgraph
 impl core::marker::UnsafeUnpin for benten_dsl_compiler::CompiledSubgraph
 impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::CompiledSubgraph
 impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::CompiledSubgraph
-pub struct benten_dsl_compiler::Diagnostic
+#[non_exhaustive] pub struct benten_dsl_compiler::Diagnostic
 pub benten_dsl_compiler::Diagnostic::error_code: &'static str
 pub benten_dsl_compiler::Diagnostic::message: alloc::string::String
 pub benten_dsl_compiler::Diagnostic::span: core::option::Option<benten_dsl_compiler::Span>
@@ -75,7 +74,7 @@ impl core::marker::Unpin for benten_dsl_compiler::Diagnostic
 impl core::marker::UnsafeUnpin for benten_dsl_compiler::Diagnostic
 impl core::panic::unwind_safe::RefUnwindSafe for benten_dsl_compiler::Diagnostic
 impl core::panic::unwind_safe::UnwindSafe for benten_dsl_compiler::Diagnostic
-pub struct benten_dsl_compiler::Span
+#[non_exhaustive] pub struct benten_dsl_compiler::Span
 pub benten_dsl_compiler::Span::end_column: u32
 pub benten_dsl_compiler::Span::end_line: u32
 pub benten_dsl_compiler::Span::end_offset: u32

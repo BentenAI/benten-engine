@@ -1,4 +1,3 @@
- Documenting benten-crypto-suite v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-crypto-suite)
 pub mod benten_crypto_suite
 pub mod benten_crypto_suite::aead
 pub enum benten_crypto_suite::aead::AeadError

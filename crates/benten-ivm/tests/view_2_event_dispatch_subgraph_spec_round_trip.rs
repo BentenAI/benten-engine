@@ -110,5 +110,7 @@ fn view_2_subgraph_spec_emits_rows_output_not_typed_projection() {
             "View 2 (event_dispatch) MUST emit Rows; got typed-output \
              projection — mis-routed."
         ),
+        // G-CORE-9 R2: `#[non_exhaustive]` per L8-R2-MAJOR-CARRY-2 closure.
+        _ => panic!("unexpected KernelOutput variant (non_exhaustive guard)"),
     }
 }

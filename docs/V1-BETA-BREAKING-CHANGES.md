@@ -153,7 +153,7 @@
 - **What changed:** `Strategy::C` arm renamed to `Strategy::Reserved` to reflect the post-G-CORE-8 hidden-strategy semantic; locks-out the obsolete C name from v1-beta wire-bytes.
 - **Why break-OK:** wire-format strings + ErrorCode variant name forever-locked at v1-beta freeze.
 - **Migration path:** call-site rename; ErrorCode `ViewStrategyCReserved` → `ViewStrategyReserved`; format strings updated.
-- **STATUS in this PR:** anticipated mention; the Strategy rename + DSL 3 ErrorCode mints (Bundle 4) ESCALATED per the Bundle-3 substantial cascade demonstrating the per-bundle LOC explosion; relocated to a follow-up sub-pass for orchestrator pacing. BELONGS-NAMED-NOW: G-CORE-9 R2 OR G-COMP-1 §<row>. Captured in `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15 watch-list.
+- **STATUS in this PR:** anticipated mention; the Strategy rename + DSL 3 ErrorCode mints (Bundle 4) ESCALATED per the Bundle-3 substantial cascade demonstrating the per-bundle LOC explosion; relocated to a follow-up sub-pass for orchestrator pacing. BELONGS-NAMED-NOW: G-CORE-9 R2 OR G-COMP-1 §<row>. **Captured in `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-19** (the prior cite "Row D-15 watch-list" was the phantom-destination Pattern α the R2 council surfaced; R2 fix-pass authors the actual Row D-19).
 
 ### G-CORE-9 R1 Bundle 9 — V1-FROZEN-INTERFACE-DEFERRED.md authorship
 - **What changed:** new tracked doc enumerating 16 deferred consumption surfaces per Fork 2 doc-tighten ratification.
@@ -175,15 +175,31 @@
 - **Why break-OK:** doc-only; preserves the seam-half live + names G-COMP-1 destinations per HARD RULE 12 clause-(b).
 - **Migration path:** consumers consume the seam-half at v1-beta; substantive per-DID enforcement is G-COMP-1.
 
-### G-CORE-9 R1 Bundle 11 — L2-MAJ-1 empty-peer-DID synthesized fallback structural defense
-- **What changed:** `apply_atrium_merge` short-circuit at engine.rs:1462 now filters out synthesized `node-id:N` fallbacks BEFORE rechecker dispatch.
-- **Why break-OK:** structural hardening; no public-API change. (Compromise #26 narrative captures the new defense layer.)
-- **Migration path:** none (transparent).
+### G-CORE-9 R1 Bundle 11 — L2-MAJ-1 empty-peer-DID synthesized-fallback hardening (DEFERRED to G-COMP-1 Row D-18)
+- **Status:** **DEFERRED — not landed at v1-beta.** An initial always-on filter at engine.rs:1462 was attempted (commit `34053ed4`) then reverted (commit `3d6f4d66 — "defer L2-MAJ-1 synthesized-peer-DID hardening to G-COMP-1 Row D-18"`) because the always-on form over-fires for the default-Noop test fixtures which intentionally do not register peer-DIDs. The R2 lens (`r2-l2-adversarial-threat-model`) raised this stale claim as L2-R2-BLK-1; R2 fix-pass retenses this row to honesty.
+- **What v1-beta ships:** engine.rs:1463-1477 carries an inline comment naming the deferral rationale (the proper closure couples synthesized-fallback rejection to substantive-rechecker-installed detection; gap closes at Row D-4 closure when ProductionManifestEnvelopeRechecker becomes responsible for its own per-DID resolution).
+- **Why break-OK:** doc-honesty retense of an attempted-then-reverted change; no public-API impact.
+- **Migration path:** none — at v1-beta the always-mounted Noop rechecker admits everything per Compromise #26 disclosure; under a substantive ProductionRechecker (G-COMP-1 deliverable per Row D-4), the rechecker is responsible for synthesized-DID rejection. See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-18.
 
 ### G-CORE-9 R1 Bundle 11 — L2-MIN-2 empty-DID-string structural defense at chain-validator
 - **What changed:** `validate_chain_with_manifest_envelope` rejects empty-DID-string root BEFORE consulting `user_registry`.
 - **Why break-OK:** defense-in-depth; no public-API change.
 - **Migration path:** none.
+
+### G-CORE-9 R1 Bundle 3a — napi match-arm forward-compat wildcards on SuspensionOutcome + NextChunkPoll
+- **What changed:** napi binding match-arms in `bindings/napi/src/wait.rs` (SuspensionOutcome) + `bindings/napi/src/stream.rs` (NextChunkPoll) gain a `_ => Err(...)` wildcard arm with `#[allow(unreachable_patterns)]` for forward-compat per the `#[non_exhaustive]` contract.
+- **Why break-OK:** externally-observable behavior change at the napi boundary (previously exhaustive match; now has a documented forward-compat fall-through that can fire if a future Rust-side non_exhaustive variant arrives ahead of the napi binding being rebuilt). The Err string is forward-compat-named.
+- **Migration path:** none for transparent paths; JS consumers calling either surface and pattern-matching on the Err message should treat the new forward-compat Err as a "rebuild required" signal.
+
+### G-CORE-9 R1 Bundle 3b — ManifestEnvelopeRecheckOutcome FULL `#[non_exhaustive]` (Bundle 3 narrative retense)
+- **What changed:** `ManifestEnvelopeRecheckOutcome` at `crates/benten-engine/src/manifest_envelope_recheck.rs:83` carries `#[non_exhaustive]` FULLY at v1-beta (the R1 lens snapshot called it "PARTIAL"; ground-truth at HEAD is FULL).
+- **Why break-OK:** R1-snapshot language clarification; the attribute IS applied at v1-beta per Bundle 3 of the R1 fix-pass.
+- **Migration path:** none (the substantive change rode with Bundle 3).
+
+### G-CORE-9 R1 Bundle 11b — V1-FROZEN-INTERFACE.md AAD layout doc-retract (3-tuple → 2-tuple)
+- **What changed:** the documented AAD layout retensed from a 3-tuple `(chunk_index, total_chunks, plaintext_cid)` to the as-shipped 2-tuple `(plaintext_cid, chunk_index)` per Fork 1 ratification. Cross-doc-mirrored at `docs/V1-WIRE-FORMAT-INVENTORY.md` row 4.
+- **Why break-OK:** retense of a previously-documented (between-R0.5-plan and the FREEZE wave) wire-format-contract claim to match as-shipped reality. The `total_chunks` defense against cross-chunk-truncation is deferred to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-15a.
+- **Migration path:** none at v1-beta; consumers reading earlier R0.5/R2 drafts that referenced a 3-tuple AAD should update to the as-shipped 2-tuple. G-COMP-1 may augment.
 
 ---
 
@@ -199,6 +215,18 @@ These are NOT shipped at v1-beta; named here for downstream-implementer visibili
 - **Row D-15e — `AuthorizationGrant.binding_sig` hardcoded `[u8; 64]` → varsig-tagged** (post-audit)
 
 See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the full per-row enumeration.
+
+---
+
+## Cohort 5 — Public-API DEFERRED (post-v1-beta tighten watch-list)
+
+These are public-API tightens / additive surfaces named-deferred to a follow-up wave; surfaced here so downstream consumers reading the consolidated breaking-changes view see them per L18-r2-2 R2 lens recommendation.
+
+- **Row D-7 — §8-A Engine visibility cluster tighten + napi cascade** (G-COMP-1 destination) — at v1-beta `Engine::get_node` / `Engine::put_node` / `Engine::get_node_label_only` / `Engine::resolve_subgraph_cid_for_test` remain `pub fn` with pre-tighten names; the rename + `pub→pub(crate)` cascade through 75+ workspace call sites + the napi binding migration are the G-COMP-1 follow-up. Per discipline at v1-beta external callers SHOULD route through `Engine::read_node_as(principal, cid)` rather than `Engine::get_node`.
+- **Row D-11 — `walk_share_scope_as` principal-bearing additive overload** (G-COMP-1 destination) — `Engine::walk_share_scope` is principal-unbearing at v1-beta; the principal-bearing variant for recipient-side path-tagged-key derivation is additive Composing-time enhancement per RATIFIED-S&C §R4.
+- **Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items** (G-COMP-1 destination) — Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_FAILED + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND); the obsolete `Strategy::C` naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes.
+- **Row D-17 (extended) — `#[non_exhaustive]` cascade for ~12+ lens-scoped pub types** (G-COMP-1 destination) — CapWriteContext / ReadContext / SuspensionOutcome + the extended set from L8-R2-MAJOR-CARRY-2 (UserViewInputPattern / TraceStep / StreamCursor / SubscribeCursor / EngineViewsHandle / AtriumConfig / SyncStatus + the outcome.rs 13-pub-struct set + benten-ivm SubgraphSpec/KernelInput/View* + benten-platform-foundation Vocab*/Scalar/RenderError + Mode). **Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) were CLOSED at G-CORE-9 R2 (Bundle R2.8) and are NOT deferred.**
+- **Row D-20 — L6-r1-3 trybuild compile-fail regression backstop** (G-COMP-1 destination) — the CapabilityPolicy hard-seal MECHANISM IS structurally enforced by rustc at v1-beta; only the explicit negative-arm compile-fail test fixture is deferred.
 
 ---
 

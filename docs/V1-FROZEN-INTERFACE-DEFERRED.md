@@ -353,6 +353,11 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   - `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
     OR `AuthorizationGrant::issue_production` mandatory-bytes
     constructor (L6-r1-9)
+  - SHA2_512_256 (multihash `0x1015`) + SHA3_256 (multihash `0x16`)
+    pre-blessed agile-hash-fallback codepoint mint per CLAUDE.md baked-in
+    #5 (L11-R2-MINOR-4). At codepoint-mint-time MUST add to
+    `codepoint_table_integer_values_pinned` with hex-pin per the
+    discipline established at G-CORE-9 R1 fix-pass Bundle 5.
 - **v1-beta posture:** all of the above are nice-to-have; each has
   no immediate exploit at v1-beta (the audience CID IS bound via
   binding_sig; ed25519_dalek is the only signature primitive used
@@ -385,7 +390,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** L2-MAJ-1 G-CORE-9 R1 finding + Compromise #26 NOT-live
   v1-beta posture.
 
-### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` `#[non_exhaustive]` application (with ~80+ test-site cascade)
+### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` + lens-scoped pub-type extension `#[non_exhaustive]` application (with cascade)
 
 - **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11
   table row enumerates `CapWriteContext` + `ReadContext` +
@@ -397,19 +402,100 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   direct-struct-literal sites; for `ReadContext` hits ~30+ similar
   sites. Total cascade ~80+ files in the benten-caps + benten-engine
   test families.
+
+  **G-CORE-9 R2 EXTENSION (L8-R2-MAJOR-CARRY-2 closure):** the R1-enumerated
+  remaining pub types not yet covered by any DEFERRED row are added here:
+  - `benten-engine`: `UserViewInputPattern` (outcome.rs), `TraceStep`
+    (outcome.rs), `StreamCursor` (engine_stream.rs),
+    `SubscribeCursor` (engine_subscribe.rs), `EngineViewsHandle`
+    (`benten_engine::engine_views::EngineViewsHandle`), `AtriumConfig`
+    (atrium_api.rs), `SyncStatus`
+    (atrium_api.rs), plus the outcome.rs 13-pub-struct set
+    (`UserViewSpec`, `UserViewSpecBuilder`, `ReadViewOptions`, `Outcome`,
+    `Trace`, `TerminalError`, `BudgetExhaustedView`, `AnchorHandle`,
+    `RegisterReplaceOutcome`, `HandlerPredecessors`, `DiagnosticInfo`,
+    `NestedTx`)
+  - `benten-ivm`: `SubgraphSpec` (subgraph_spec.rs:107), `KernelInput`
+    (subgraph_spec.rs:262), `ViewState` (view.rs:157), `ViewBudget`
+    (view.rs:180), `ViewQuery` (view.rs:223), `ViewResult` (view.rs:242),
+    `ViewDefinition` (view.rs:387)
+  - `benten-platform-foundation`: `VocabLabel` (vocab.rs:14), `VocabEdge`
+    (vocab.rs:92), `Scalar` (vocab.rs:157), `RenderError` (materializer.rs:567)
+  - `benten-core`: `Mode` (version_dag.rs:75)
+
+  **Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred):**
+  `TypedOutputProjection` + `KernelOutput` in `benten-ivm/src/subgraph_spec.rs`
+  carry the attribute at v1-beta — the 1-byte arm-discriminator at
+  `algorithm_b.rs:1507-1523` makes them wire-format-bearing and they were
+  not deferrable; closure landed via Bundle R2.8 with 5-test-site cascade
+  fix (`view_2 / view_4 / view_5 round_trip + view_4 / view_5 shape_pin`).
+
+  Audit-test workspace-walker enhancement: V1-FROZEN-INTERFACE.md:951-957
+  describes the audit test as walking every pub enum/struct workspace-wide;
+  the shipped test enumerates ~10 named types only. Workspace-walker
+  implementation (consume cargo-public-api JSON output OR syn-based AST
+  walker OR rustdoc-json walk) deferred to G-COMP-1 as part of this row.
 - **Deferred consumption (G-COMP-1 destination):** apply
-  `#[non_exhaustive]` to both types + cascade through ~50+ benten-caps
-  test-site direct-struct-literal constructions, migrating each to
-  `Default::default()` + field-mutation pattern. Production code (in
-  `benten-engine`) ALREADY uses the field-mutation pattern per
-  Bundle 3 of this PR — so the migration is benten-caps tests only.
+  `#[non_exhaustive]` to each type + cascade through test-site
+  direct-struct-literal constructions + cross-crate match sites,
+  migrating each to `Default::default()` + field-mutation pattern OR
+  adding the wildcard arm. Production code (in `benten-engine`) ALREADY
+  uses the field-mutation pattern per Bundle 3 of the R1 PR. Also implement
+  the workspace-walker enhancement for the audit-test verification mechanism.
 - **v1-beta posture:** at v1-beta the type shape is locked per the
   freeze contract narrative; the attribute is the documentation gap.
   Field additions are TREATED AS breaking by v1-beta engineering
   discipline per spec item 11 narrative (the structural enforcement
   via `#[non_exhaustive]` is what G-COMP-1 lights).
 - **Anchor:** V1-FROZEN-INTERFACE.md item 11 table rows for
-  `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation.
+  `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation;
+  L8-R2-MAJOR-CARRY-2 + L8-R2-MINOR-CARRY-1 G-CORE-9 R2 extensions.
+
+### Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)
+
+- **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break.
+- **Deferred consumption (G-COMP-1 destination):** atomic 4-surface rename per §3.5g:
+  1. Rust enum `EngineError::ViewStrategyCReserved` → `EngineError::ViewStrategyReserved` (`crates/benten-engine/src/error.rs` + format-string in `benten_engine::engine_views` already returns `Strategy::Reserved`)
+  2. Wire string `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED` (`crates/benten-errors/src/lib.rs` 4 sites: variant + wire string + Display arm + parse arm)
+  3. TS class `EViewStrategyCReserved` → `EViewStrategyReserved` (`packages/engine/src/errors.generated.ts` 3 sites; docstring already says "Strategy::Reserved" — cross-language drift on SAME code path per §3.5g item 1)
+  4. ERROR-CATALOG.md:533+727 + cargo-public-api baselines `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` (5 baseline cites) + `crates/benten-errors/tests/stable_shape.rs:112+682+1149` regenerate
+
+  AND mint 3 new DSL ErrorCodes per L9-DSL-MAJOR-1 closure:
+  5. `E_DSL_PARSE_FAILED` — mints from existing `CompileError::Parse`
+  6. `E_DSL_UNKNOWN_PRIMITIVE` — mints from existing `CompileError::Semantic`
+  7. `E_DSL_MISSING_RESPOND` — mints from existing `CompileError::Semantic` sub-case
+
+  CATALOG_VARIANT_COUNT delta: 192 → 195 (3 new mints; Strategy rename is a rename not a mint).
+
+  Remove the corresponding drift-detect baseline grandfathered lines from `scripts/drift-detect-error-variant-mirror-baseline.txt` for `CompileError::Parse`/`Semantic`/`Build` per the §3.5g item 6 amendment closure.
+- **v1-beta posture:** the obsolete `Strategy::C` naming + the 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. No immediate exploit (the variant works correctly; the names are stale). The rename window IS specifically the G-CORE-9 freeze wave OR G-COMP-1 (any later is a SemVer break post-v1-beta tag).
+- **Anchor:** L8-MAJOR-1 + L9-DSL-MAJOR-1 + V1-BETA-BREAKING-CHANGES.md:152-156 Bundle 4 ESCALATED entry. Resolves the L8-R2-MAJOR-CARRY-1 / L9-r2-MIN-2 / L12-R2-MIN-1 phantom-destination cross-confirmed pattern (R2 council finding).
+
+### Row D-20 — L6-r1-3 trybuild compile-fail regression backstop for the CapabilityPolicy hard-seal
+
+- **Frozen surface (v1-beta):** the hard-seal MECHANISM itself IS structurally
+  enforced by rustc on every workspace build. `pub(crate) mod sealed { pub trait
+  Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + ...` at
+  `crates/benten-caps/src/policy.rs:50-64` means an external
+  `impl CapabilityPolicy for SomeExternalType` cannot reach the private
+  `Sealed` supertrait and fails to compile. Workspace-test opt-in is via
+  the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests`
+  re-export. The seal is real at v1-beta.
+- **Deferred consumption (G-COMP-1 destination):** add `trybuild` dev-dep +
+  ship `crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs`
+  (~30 LOC test fixture + .stderr file) as the explicit negative-arm
+  regression test backstop. Update V1-FROZEN-INTERFACE.md item 8
+  verification-mechanism bullet to cite the actual test path.
+- **v1-beta posture:** the hard-seal MECHANISM is structurally enforced by
+  rustc (verified by the absence of any external `impl CapabilityPolicy`
+  passing the workspace build at HEAD); only the explicit negative-arm
+  regression test fixture is deferred. The freeze contract advertises a
+  trybuild test at V1-FROZEN-INTERFACE.md:717 that does not exist as a
+  separate file; this row plugs the named-destination phantom per HARD
+  RULE 12 clause-(b).
+- **Anchor:** L6-r1-3 G-CORE-9 R1 finding (no triage disposition recorded);
+  L6-r2-1 G-CORE-9 R2 finding ratifying the deferral per Fork 2 doc-tighten
+  precedent.
 
 ### Row D-16 — V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md authorship
 
@@ -417,14 +503,40 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   references `docs/V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md` as the
   Ben-signed P-III decision-point artifact.
 - **Deferred consumption (G-COMP-1 destination OR pre-`v1-beta`
-  tag):** author this doc OR (alternative ratification) rename
-  references to point at `docs/V1-WIRE-FORMAT-INVENTORY.md` (which
-  already serves this role; the inventory IS the P-III decision-point
-  artifact). The latter is the orchestrator's preferred path
-  (consistency with existing tracked-doc); requires a sweep of
-  cite-drift across V1-FROZEN-INTERFACE.md.
-- **v1-beta posture:** the inventory IS authored + tracked.
-- **Anchor:** L17-r1-7.
+  tag):** ratified path (b) at G-CORE-9 R2 per L18-r2-4 disposition —
+  the `docs/V1-WIRE-FORMAT-INVENTORY.md` doc IS the Ben-decision
+  deliverable (rename, or attach a sign-off appendix to the inventory).
+  Path (b) collapses the distinction — Ben signs off on the inventory's
+  P-III sign-off block (already present at `V1-WIRE-FORMAT-INVENTORY.md`
+  §"P-III Ben decision-point") rather than authoring a separate doc.
+- **v1-beta posture:** the inventory IS authored + tracked; the Ben
+  sign-off path is the inventory's own §"P-III Ben decision-point"
+  section. V1-FROZEN-INTERFACE.md item 4 references the inventory + the
+  build-backlog row 8.f acknowledges the inventory IS the Ben-decision
+  deliverable.
+- **Anchor:** L17-r1-7 + L18-r2-4.
+
+### Row D-21 — `crates/benten-crypto-suite/INTERNALS.md` authorship
+
+- **Frozen surface (v1-beta):** the `benten-crypto-suite` crate is
+  item-6-locked at V1-FROZEN-INTERFACE.md (codepoint table + public
+  surface frozen at G-CORE-9). The INTERNALS.md doc has no v1-beta
+  signature impact; it is internal architecture-record only.
+- **Deferred consumption (Phase-4-Meta-Composing OR G-COMP-1
+  destination):** author `crates/benten-crypto-suite/INTERNALS.md`
+  following the structure of `crates/benten-caps/INTERNALS.md` covering
+  codepoint table + typed-reject dispatch pattern + SwapMatrix umbrella
+  + 5 named constructors + C11b safety gate + X-Wing vendored combiner
+  provenance + AeadEnvelope/GrantKeyMaterial/AeadKeyMaterial
+  type-collision-resolution name discipline.
+- **v1-beta posture:** missing-but-deferred-not-blocking-tag; the
+  crate's rustdoc + the V1-FROZEN-INTERFACE.md item 6 + the lib.rs
+  module docstring carry the load-bearing architecture narrative at
+  v1-beta. INTERNALS.md is the post-v1-beta architecture-record
+  augmentation.
+- **Anchor:** spec item 6 + V1-FROZEN-INTERFACE.md item 15.d + the
+  rename pair at #1344 row 7 (GrantKeyMaterial / AeadKeyMaterial) +
+  L18-r1-5 + L18-r2-3.
 
 ---
 

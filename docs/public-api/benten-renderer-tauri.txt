@@ -1,4 +1,3 @@
- Documenting benten-renderer-tauri v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-renderer-tauri)
 pub mod benten_renderer_tauri
 pub enum benten_renderer_tauri::CapRequirement
 pub benten_renderer_tauri::CapRequirement::None

@@ -1,4 +1,3 @@
- Documenting benten-errors v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-errors)
 pub mod benten_errors
 #[non_exhaustive] pub enum benten_errors::ErrorCode
 pub benten_errors::ErrorCode::AeadRebindingAttackDetected

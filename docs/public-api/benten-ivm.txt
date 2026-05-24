@@ -1,4 +1,3 @@
- Documenting benten-ivm v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-ivm)
 pub mod benten_ivm
 pub mod benten_ivm::algorithm_b
 #[non_exhaustive] pub enum benten_ivm::algorithm_b::AlgorithmError
@@ -201,7 +200,7 @@ impl core::marker::UnsafeUnpin for benten_ivm::strategy::Strategy
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::strategy::Strategy
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::strategy::Strategy
 pub mod benten_ivm::subgraph_spec
-pub enum benten_ivm::subgraph_spec::KernelOutput
+#[non_exhaustive] pub enum benten_ivm::subgraph_spec::KernelOutput
 pub benten_ivm::subgraph_spec::KernelOutput::Current(core::option::Option<alloc::vec::Vec<u8>>)
 pub benten_ivm::subgraph_spec::KernelOutput::Rows(alloc::vec::Vec<u8>)
 pub benten_ivm::subgraph_spec::KernelOutput::Rules(alloc::vec::Vec<u8>)
@@ -220,7 +219,7 @@ impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelOutput
 impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelOutput
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelOutput
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelOutput
-pub enum benten_ivm::subgraph_spec::TypedOutputProjection
+#[non_exhaustive] pub enum benten_ivm::subgraph_spec::TypedOutputProjection
 pub benten_ivm::subgraph_spec::TypedOutputProjection::Current
 pub benten_ivm::subgraph_spec::TypedOutputProjection::Rules
 impl core::clone::Clone for benten_ivm::subgraph_spec::TypedOutputProjection
@@ -850,7 +849,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmError
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmError
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmError
-pub enum benten_ivm::KernelOutput
+#[non_exhaustive] pub enum benten_ivm::KernelOutput
 pub benten_ivm::KernelOutput::Current(core::option::Option<alloc::vec::Vec<u8>>)
 pub benten_ivm::KernelOutput::Rows(alloc::vec::Vec<u8>)
 pub benten_ivm::KernelOutput::Rules(alloc::vec::Vec<u8>)
@@ -914,7 +913,7 @@ impl core::marker::Unpin for benten_ivm::strategy::Strategy
 impl core::marker::UnsafeUnpin for benten_ivm::strategy::Strategy
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::strategy::Strategy
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::strategy::Strategy
-pub enum benten_ivm::TypedOutputProjection
+#[non_exhaustive] pub enum benten_ivm::TypedOutputProjection
 pub benten_ivm::TypedOutputProjection::Current
 pub benten_ivm::TypedOutputProjection::Rules
 impl core::clone::Clone for benten_ivm::subgraph_spec::TypedOutputProjection

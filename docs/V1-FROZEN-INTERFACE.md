@@ -358,9 +358,15 @@ freeze wave SURFACES the decision; Ben makes it.
    `crates/benten-drop/src/lib.rs`).
 3. The list of surfaces that **DO NOT YET HAVE** a byte-pin test in CI
    (the wire-format pre-flight gap to close — added before tag).
-4. **A separate Ben-decision document** (proposed
-   `docs/V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md`) that Ben signs after
-   reviewing the inventory + the §8-B-(i) reasoning.
+4. **The Ben sign-off path** — `docs/V1-WIRE-FORMAT-INVENTORY.md` IS the
+   Ben-decision deliverable per G-CORE-9 R2 L18-r2-4 ratification (path b).
+   Ben signs the freeze decision via the inventory's own
+   §"P-III Ben decision-point" section after reviewing the inventory + the
+   §8-B-(i) reasoning. (The earlier framing proposed a separate
+   `V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md` artifact; path b collapses the
+   distinction — the inventory serves the dual role of enumeration + sign-off
+   site. See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-16 for the
+   ratification rationale.)
 
 **What "frozen" means here:**
 - BYTEWISE: a one-bit change to any encoded value (Node, Edge,
@@ -387,18 +393,27 @@ freeze wave SURFACES the decision; Ben makes it.
   HEAD; build-backlog row 5 verifies-or-builds before freeze.
 
 **Verification mechanism:**
-- Byte-pin tests under `tests/canonical_bytes_v1_*.rs` (BUILD-AT-FREEZE-
-  WAVE: add per-shape byte-pin where it doesn't exist — shopping-list:
-  SnapshotBlob v2, MerkleRangeProof v2 (if shipped), per-chunk-AEAD,
-  UCAN-Varsig v1 header, AuthorizationGrant CBOR, Drop bundle CBOR,
-  encryption envelope per codepoint, signature envelope per codepoint).
-  Each test loads a hex-pinned canonical bytes string + asserts
-  encode + decode round-trip + CID stability.
+- Byte-pin tests under `tests/canonical_bytes_v1_*.rs`. **G-CORE-9 R1 Bundle 5
+  PARTIAL outcome (2026-05-24):** 2 of 8 hex-pinned tests landed at v1-beta —
+  (a) `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
+  (hex-pins the 9-codepoint integer table) + (b) the per-chunk AAD layout pin
+  in the same file. The remaining 6 hex-pinned tests (SnapshotBlob v2,
+  per-chunk-AEAD canonical hex, UCAN-Varsig v1 header, AuthorizationGrant CBOR,
+  Drop bundle CBOR, encryption envelope per codepoint, signature envelope per
+  codepoint) are DEFERRED to G-COMP-1 per
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-9. **The 6 deferred surfaces
+  remain byte-stable at v1-beta via roundtrip + constant-position +
+  format-version-discriminator pins per the L11 lens substantively-covers
+  finding** — full hex-pinned-bytes regression-defense is the deferred half.
 - `crates/benten-graph/tests/redb_backend_*.rs` family covers the redb
   on-disk format.
-- A new CI lane (extending the existing cite-drift workflow) walks every
-  surface in the inventory + asserts a byte-pin test exists + asserts the
-  golden fixture is checked-in.
+- **CI inventory-walking lane** — DEFERRED to G-COMP-1 per Row D-9; the
+  drift-detect substrate exists (cite-drift workflow + cargo-public-api
+  workflow) but the inventory-walk-asserts-byte-pin-exists discipline is
+  the G-COMP-1 follow-up. At v1-beta the inventory at
+  `docs/V1-WIRE-FORMAT-INVENTORY.md` is authored + tracked + the Ben P-III
+  decision-point sign-off path is the inventory's own §"P-III Ben
+  decision-point" section.
 
 **Composing-phase escape valve:**
 ANY frozen-byte mutation is a P-III Ben decision-point — HALT-AND-
@@ -677,8 +692,8 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 |---|---|---|
 | #886 `[features]` | DECIDED (already shipped) | Pin `Cargo.toml` `[features]` block exactly as-is; comment-cite. |
 | #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit `5ce8bab6`).** `crates/benten-caps/src/policy.rs` `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old `sealed_marker::SealedCapabilityPolicy` soft-seal DELETED (no shim per HARD RULE 12 + CLAUDE.md #5). Workspace-wide migration applied: 4 internal impls (NoAuthBackend, GrantBackedPolicy, LegacyUcanStubBackend, UcanGroundedPolicy<B>) + ~17 workspace test-double impls received sibling `impl Sealed` blocks via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests` re-export. Feature pass-through: benten-engine `test-helpers` + benten-eval `testing` features enable `benten-caps/testing`. Object-safety preserved (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` exercises `Arc<dyn CapabilityPolicy>`). |
-| 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. |
-| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:167`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
+| 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. **Consumption-deferred to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3** — zero production call sites at v1-beta; the signatures are locked so adding consumers later is non-breaking, but external policy authors overriding any of the three hooks have NO runtime effect at v1-beta until Row D-3 closes. |
+| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:179`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
 | #883b prod-dep-edge | DECIDED | Lock as-shipped. |
 | #887b `check_read` default-impl | DECIDED (defaulted; pulled WITH/BEFORE G-CORE-8) | Lock at `crates/benten-caps/src/policy.rs:388` (`fn check_read(...) -> Result<(), CapError> { ... }` default body; admit-all baseline per Phase-1). |
 | §4.69 organizing principle | RESOLVED (a) `EngineCapsHandle`-canonical — see item 1 | Already frozen at item 1; no-regression invariant pin. |
@@ -687,12 +702,13 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 - `crates/benten-caps/src/policy.rs:341` `pub trait CapabilityPolicy:
   Sealed + Send + Sync` (post-hard-seal).
 - `CapWriteContext` + `ReadContext` + `PendingOp` (`crates/benten-caps/src/
-  policy.rs:103, 154, 247`) — the cap-policy context types.
-- **Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext`** at the
-  freeze (item 11 sweep coupling). They are context structs likely to
-  grow new fields in Composing (e.g. tenant context, request-ID trace);
-  adding fields post-v1 is breaking; the attribute is the cheap, correct
-  affordance.
+  policy.rs:163, 260, 100`) — the cap-policy context types.
+- **Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext`** —
+  **DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17**
+  (~80+ workspace test-site cascade; the production-side migration to
+  `Default::default()` + field-mutation pattern IS already complete at
+  v1-beta per Bundle 3 of the R1 fix-pass; the attribute landing is the
+  test-cascade half).
 
 **What "frozen" means here:**
 - Trait shape (signature, defaulted-vs-required, return types) is locked.
@@ -713,10 +729,22 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-caps.txt`
   (regenerated per build-backlog row 1).
-- Compile-test pin for `Arc<dyn CapabilityPolicy>` object-safety.
-- A compile-fail trybuild test (BUILD-AT-FREEZE-WAVE row 6) asserts an
-  external `impl CapabilityPolicy for SomeExternalType` without
-  `impl Sealed for SomeExternalType` fails to compile.
+- Compile-test pin for `Arc<dyn CapabilityPolicy>` object-safety at
+  `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs`.
+- **Hard-seal mechanism is structurally enforced by rustc on every workspace
+  build** (`pub(crate) mod sealed { pub trait Sealed {} }` private supertrait
+  at `crates/benten-caps/src/policy.rs:50-64`; external `impl CapabilityPolicy`
+  cannot reach the private `Sealed` trait and fails to compile). Workspace-test
+  opt-in is via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod
+  __sealed_for_workspace_tests` re-export. **Explicit negative-arm trybuild
+  regression test fixture DEFERRED to G-COMP-1 per
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-20** — the seal MECHANISM
+  is real at v1-beta; only the explicit compile-fail test fixture is
+  deferred (the mechanism + the cargo-public-api baseline lock are the
+  v1-beta structural defenses).
+- See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the consumption-deferred
+  rows (D-3 §8-E hooks; D-17 `#[non_exhaustive]` cascade for CapWriteContext +
+  ReadContext; D-20 trybuild regression backstop).
 
 **Composing-phase escape valve:**
 - New defaulted trait method = ADDITIVE; fine.
@@ -913,7 +941,7 @@ verification at HEAD):
 |---|---|---|---|
 | `benten-engine` | `EngineError`, `engine_config::*`, `engine_sync::*` | YES | KEEP |
 | `benten-engine` | `UserViewInputPattern` / `TraceStep` / `Transport` (thin_client) / `AtriumMode` / `SuspensionOutcome` / `DelegationResolution` / `NextChunkPoll` / `StreamCursor` / `SubscribeCursor` / `WriteBoundaryChainOutcome` / `ManifestEnvelopeRecheckOutcome` / `ManifestVerifyMode` | **12+ verified MISSING at HEAD** | APPLY |
-| `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES | KEEP |
+| `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES (except `Spec` which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1) | KEEP |
 | `benten-core` | new `RestrictedSpec` enum variants (`subgraph_spec/spec.rs:126`) | TBD | APPLY |
 | `benten-ivm` | `AlgorithmError` | per spec item 11 | AUDIT + APPLY |
 | `benten-sync` | §4.71 5-enum cluster | per spec item 11 | AUDIT + APPLY |
@@ -949,12 +977,21 @@ verification at HEAD):
 - The struct FIELD SET (same — additive future fields).
 
 **Verification mechanism:**
-- A workspace-wide audit test pin (BUILD-AT-FREEZE-WAVE; new file
-  `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs`) walks
-  every `pub enum` + `pub struct` and asserts each carries
-  `#[non_exhaustive]` OR is in the carve-out registry. Fails CI on any
-  new public enum/struct lacking the attribute + the carve-out
-  justification.
+- An enumerated-per-type audit test pin
+  `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` exercises
+  arm-coverage matches + struct construction patterns for a curated set
+  of v1-beta-load-bearing types (~10 named types covering the highest-leverage
+  surfaces: WriteBoundaryChainOutcome / AtriumMode / DelegationResolution /
+  ManifestVerifyMode / NextChunkPoll / Strategy carve-out + AuthorizationGrant
+  constructor pattern + 2 CapWriteContext/ReadContext Default-construction
+  + SuspensionOutcome D-17 deferred-arm coverage). **The workspace-wide
+  walker** (consuming cargo-public-api JSON output OR a syn-based AST walker
+  OR rustdoc-json walk to assert every pub enum/struct carries
+  `#[non_exhaustive]` OR is in the carve-out registry) is **DEFERRED to
+  G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17** (extended
+  at G-CORE-9 R2 L8-R2-MINOR-CARRY-1 closure). At v1-beta the
+  enumerated-per-type audit catches drift against the named-set; the
+  workspace-walker is the regression-defense enhancement.
 - `cargo-public-api` baseline catches the attribute (it's part of the
   declaration shape).
 
@@ -1134,9 +1171,16 @@ planners agreed; locked as-shipped.**
   IPC allowlist pins (asserts `IPC_METHODS` is `const`, not `static mut`,
   not a dynamic registry; methods bind manifest caps; name-stability
   drift-detect runs CI-wired).
-- Compile-test pin for runtime-handle-leak prevention (asserts an
-  `EngineBuilder` signature accepts no `tauri::Runtime` or borrows a
-  `tokio::runtime::Handle`).
+- **Runtime-handle-leak structural pin via cargo-public-api baseline** —
+  the `EngineBuilder` block at `docs/public-api/benten-engine.txt:189-195`
+  (`backend` / `build` / `capability_policy` / etc.) is grep-clean of
+  `tauri::Runtime`, `tokio::runtime::Handle`, and `with_runtime`; any
+  future PR threading one would surface as drift and fail the now-required
+  cargo-public-api workflow (Bundle 10 + Fork 3 flip + Bundle R2.3
+  branch-protection inclusion at `.github/workflows/cargo-public-api.yml:91-93`
+  + GitHub branch-protection required_status_checks). This consolidates with
+  the cargo-public-api baseline defense below; per G-CORE-9 R2 L10-r2-1
+  disposition (path a).
 - `cargo-public-api` baselines for `benten-renderer-tauri` (JSON format)
   and `benten-platform-foundation` (build-backlog row 1: missing
   baseline at HEAD).
@@ -1260,7 +1304,12 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 **Frozen surfaces:**
 - `crates/benten-core/src/subgraph_spec/spec.rs:190` `pub struct Spec` —
   the 4-thing thin core (Roots / Expansion / Inclusion / Termination).
-  `#[non_exhaustive]` already APPLIED — KEEP.
+  **Equivalent SemVer-safety via private fields + builder pattern**
+  (`pub fn builder() -> SpecBuilder` at `spec.rs:216`; all four fields are
+  private). External direct-struct-literal construction is already blocked
+  by field visibility — `#[non_exhaustive]` is NOT required for the
+  SemVer-additive-field-extension property `Spec` needs. Per G-CORE-9 R2
+  L17-r2-1 disposition path (b).
 - `crates/benten-core/src/subgraph_spec/walker.rs:78` `pub fn walk(spec:
   &Spec) -> Result<WalkResult, SubgraphSpecError>` — the canonical
   walker.
@@ -1360,10 +1409,15 @@ narrative-as-cite; existing tests in `crates/benten-caps/tests/tf3b_*.rs`.
   failures + the cite-drift CI lane fires on the `no-opaque-arm`
   sentinel).
 - A third arm CANNOT be added post-freeze without explicit re-open.
-- Wire envelope typed for additive future arms via codepoint-dispatch
-  (same playbook as crypto-agility per CLAUDE.md #5) — i.e. a future
-  arm lands at a NEW codepoint, never repurposing the existing two-arm
-  enum.
+- Wire envelope typed for additive future arms via **serde-tag dispatch**
+  (the two arms `Hashes(Vec<Cid>)` + `RestrictedSelector(RestrictedScope)`
+  carry distinct serde tags; the dispatch is at the serde-tag layer, NOT
+  via a numeric codepoint table parallel to the crypto-agility framing)
+  — a future arm lands as a new serde-tag arm on this carve-out enum,
+  never repurposing the existing two-arm enum. The "codepoint-dispatch"
+  framing in earlier drafts overstated the machinery; the serde-tagged
+  dispatch IS additive-friendly so the freeze contract is not weakened.
+  Per G-CORE-9 R2 L17-r2-2 disposition path (a).
 
 **What "frozen" means here:**
 - EXACTLY two arms — structural pin via exhaustive `match` at every

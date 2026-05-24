@@ -1,4 +1,3 @@
- Documenting benten-caps v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-caps)
 pub mod benten_caps
 pub use benten_caps::WriteAuthority
 pub mod benten_caps::attenuation
@@ -34,7 +33,7 @@ impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGran
 impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrantError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrantError
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrantError
-pub struct benten_caps::authorization_grant::AuthorizationGrant
+#[non_exhaustive] pub struct benten_caps::authorization_grant::AuthorizationGrant
 pub benten_caps::authorization_grant::AuthorizationGrant::audience_binding: benten_core::Cid
 pub benten_caps::authorization_grant::AuthorizationGrant::audience_pubkey: core::option::Option<alloc::vec::Vec<u8>>
 pub benten_caps::authorization_grant::AuthorizationGrant::binding_sig: alloc::vec::Vec<u8>
@@ -68,9 +67,10 @@ impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGran
 impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrant
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
-pub struct benten_caps::authorization_grant::GrantKeyMaterial
+#[non_exhaustive] pub struct benten_caps::authorization_grant::GrantKeyMaterial
 pub benten_caps::authorization_grant::GrantKeyMaterial::bytes: alloc::vec::Vec<u8>
 impl benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::from_bytes_for_test(bytes: alloc::vec::Vec<u8>) -> Self
 pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test() -> Self
 pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test_distinct(discriminator: u8) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::GrantKeyMaterial
@@ -94,7 +94,7 @@ impl core::marker::Unpin for benten_caps::authorization_grant::GrantKeyMaterial
 impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::GrantKeyMaterial
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
-pub struct benten_caps::authorization_grant::UcanEnvelope
+#[non_exhaustive] pub struct benten_caps::authorization_grant::UcanEnvelope
 pub benten_caps::authorization_grant::UcanEnvelope::audience: benten_core::Cid
 pub benten_caps::authorization_grant::UcanEnvelope::discriminator: u32
 pub benten_caps::authorization_grant::UcanEnvelope::exp_secs: u64
@@ -1167,7 +1167,7 @@ impl core::marker::Unpin for benten_caps::typed_cap_mapping::TypedCapGroup
 impl core::marker::UnsafeUnpin for benten_caps::typed_cap_mapping::TypedCapGroup
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::typed_cap_mapping::TypedCapGroup
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::typed_cap_mapping::TypedCapGroup
-pub struct benten_caps::AuthorizationGrant
+#[non_exhaustive] pub struct benten_caps::AuthorizationGrant
 pub benten_caps::AuthorizationGrant::audience_binding: benten_core::Cid
 pub benten_caps::AuthorizationGrant::audience_pubkey: core::option::Option<alloc::vec::Vec<u8>>
 pub benten_caps::AuthorizationGrant::binding_sig: alloc::vec::Vec<u8>
@@ -1300,9 +1300,10 @@ impl core::marker::Unpin for benten_caps::grant_backed::GrantBackedPolicy
 impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantBackedPolicy
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
 impl !core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
-pub struct benten_caps::GrantKeyMaterial
+#[non_exhaustive] pub struct benten_caps::GrantKeyMaterial
 pub benten_caps::GrantKeyMaterial::bytes: alloc::vec::Vec<u8>
 impl benten_caps::authorization_grant::GrantKeyMaterial
+pub fn benten_caps::authorization_grant::GrantKeyMaterial::from_bytes_for_test(bytes: alloc::vec::Vec<u8>) -> Self
 pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test() -> Self
 pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test_distinct(discriminator: u8) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::GrantKeyMaterial
@@ -1584,7 +1585,7 @@ impl<B> core::marker::Unpin for benten_caps::backends::ucan::UCANBackend<B>
 impl<B> core::marker::UnsafeUnpin for benten_caps::backends::ucan::UCANBackend<B>
 impl<B> !core::panic::unwind_safe::RefUnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
 impl<B> !core::panic::unwind_safe::UnwindSafe for benten_caps::backends::ucan::UCANBackend<B>
-pub struct benten_caps::UcanEnvelope
+#[non_exhaustive] pub struct benten_caps::UcanEnvelope
 pub benten_caps::UcanEnvelope::audience: benten_core::Cid
 pub benten_caps::UcanEnvelope::discriminator: u32
 pub benten_caps::UcanEnvelope::exp_secs: u64

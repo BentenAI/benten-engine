@@ -1,4 +1,3 @@
- Documenting benten-drop v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-drop)
 pub mod benten_drop
 pub mod benten_drop::bundle
 #[non_exhaustive] pub enum benten_drop::bundle::DropBundleError

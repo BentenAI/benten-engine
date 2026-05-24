@@ -435,9 +435,12 @@ impl SwapMatrix {
         let sealed = match self.enc_arm {
             EncryptionArm::HybridX25519MlKem768 | EncryptionArm::ClassicalOnlyX25519 => {
                 let cipher_codepoint = self.cipher_suite_codepoint();
-                let cipher_suite = CipherSuite::resolve(cipher_codepoint).map_err(|e| {
-                    SwapMatrixError::CipherSuite(unsupported_codepoint_msg_static(&e))
-                })?;
+                // L1-crypto-r2-1: route the resolve failure through
+                // `SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm)`
+                // (line 793) to preserve full typed-codepoint info end-to-end
+                // (the prior cosmetic-class-string lost the integer codepoint value).
+                let cipher_suite =
+                    CipherSuite::resolve(cipher_codepoint).map_err(SwapMatrixError::Unsupported)?;
                 let recip = recipient
                     .as_cipher()
                     .ok_or(SwapMatrixError::ConfigMismatch {
@@ -536,9 +539,11 @@ impl SwapMatrix {
         let plaintext_with_sig = match self.enc_arm {
             EncryptionArm::HybridX25519MlKem768 | EncryptionArm::ClassicalOnlyX25519 => {
                 let cipher_codepoint = self.cipher_suite_codepoint();
-                let cipher_suite = CipherSuite::resolve(cipher_codepoint).map_err(|e| {
-                    SwapMatrixError::CipherSuite(unsupported_codepoint_msg_static(&e))
-                })?;
+                // L1-crypto-r2-1: route the resolve failure through
+                // `SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm)`
+                // (line 793) to preserve full typed-codepoint info end-to-end.
+                let cipher_suite =
+                    CipherSuite::resolve(cipher_codepoint).map_err(SwapMatrixError::Unsupported)?;
                 let recip_secret =
                     recipient_secret
                         .as_cipher()
@@ -1570,20 +1575,6 @@ fn split_payload_from_plaintext_with_sig(
         return Err(SwapMatrixError::Signature("plaintext_with_sig truncated"));
     }
     Ok(plaintext_with_sig[payload_start..payload_end].to_vec())
-}
-
-/// Returns the canonical typed-unsupported message string per
-/// codepoint class. The codepoint value itself is not interpolated
-/// because the return type is `&'static str` (callers that need the
-/// codepoint integer value should consult the `UnsupportedAlgorithm`
-/// variant directly via pattern matching, not via the message string).
-/// L1-crypto-r1-3: classified by variant rather than swallowed.
-fn unsupported_codepoint_msg_static(e: &UnsupportedAlgorithm) -> &'static str {
-    match e {
-        UnsupportedAlgorithm::Hash { .. } => "hash codepoint typed-unsupported",
-        UnsupportedAlgorithm::Signature { .. } => "signature codepoint typed-unsupported",
-        UnsupportedAlgorithm::CipherSuite { .. } => "cipher-suite codepoint typed-unsupported",
-    }
 }
 
 fn generate_fresh_k_root() -> Vec<u8> {

@@ -1,4 +1,3 @@
- Documenting benten-platform-foundation v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-platform-foundation)
 pub mod benten_platform_foundation
 pub mod benten_platform_foundation::admin_ui_v0
 pub mod benten_platform_foundation::admin_ui_v0::workflow_editor

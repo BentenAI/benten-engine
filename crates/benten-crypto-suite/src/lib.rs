@@ -56,31 +56,37 @@
 //! # Reserved-but-unimplemented codepoints (NF-1 PQ⊕PQ end-state)
 //!
 //! - **Signature PQ⊕PQ = ML-DSA-65 ⊕ SLH-DSA**
-//!   (`SigCodepoint::HYBRID_MLDSA65_SLHDSA = 0x0003`) — reserved-now,
-//!   conformance-built at G-CORE-3c (the full swap matrix). This wave
-//!   typed-rejects it with [`UnsupportedAlgorithm::Signature`].
+//!   (`SigCodepoint::HYBRID_MLDSA65_SLHDSA = 0x0003`) — reserved
+//!   swap-matrix arm — typed-rejected by default at `SigCodepoint::resolve`
+//!   + `SignatureSuite::resolve_codepoint` + `varsig.rs::decode_payload`
+//!   per the C11b safety gate. **G-CORE-3c TERMINAL shipped the full
+//!   swap matrix retaining 0x0003 as dispatcher-typed-rejected**; reachable
+//!   only via the audit-gated `SwapMatrix::try_pure_pq_sole_trust_path`
+//!   constructor which returns `AuditNotLandedPurePqRejected` at v1-beta
+//!   (mirrors 0x647c framing).
 //! - **KEM PQ⊕PQ = ML-KEM-768 ⊕ HQC** — reserved codepoint;
 //!   build-trigger = FIPS 207 (HQC-KEM) published as a *final* standard
 //!   (NIST-projected 2027); FIPS-207 *draft* (~early-2026) is the
 //!   early-warning. Until then HQC is reserved-unimplemented.
 //!
-//! # Cipher-suite (G-CORE-3 / #1301) deferred surface
+//! # Cipher-suite (G-CORE-3 / #1301) — LIVE at v1-beta
 //!
 //! The KEM/AEAD primitive deps (`x25519-dalek`, `ml-kem`,
 //! `chacha20poly1305`, `hkdf`) are declared HERE so G-CORE-3 plugs into
 //! a real typed surface ([`cipher_suite::CipherSuiteCodepoint`]) without
-//! adding a new workspace dep. **G-CORE-3a (CANARY) flips `0x647a`
-//! X25519⊕ML-KEM-768 hybrid KEM (the vendored ~30-LOC X-Wing-style
+//! adding a new workspace dep. **G-CORE-3a CANARY shipped `0x647a`
+//! X25519⊕ML-KEM-768 hybrid KEM LIVE** (the vendored ~30-LOC X-Wing-style
 //! combiner over `ml-kem` + `x25519-dalek` + `sha3` — stable-but-non-WG
-//! IETF Independent Submission draft, Benten-owned) + `0x6400`
-//! classical-only X25519 downgrade arm to LIVE.** The remaining
-//! cipher-suite codepoints (`0x647b` NF-1 ML-KEM-768⊕HQC end-state +
-//! `0x647c` pure-PQ ML-KEM-768-only swap-matrix arm +
-//! `0x0000` no-encryption) stay reserved-typed-reject via
-//! [`UnsupportedAlgorithm`] at the cipher-suite dispatcher level until
-//! G-CORE-3c's full swap-matrix wave (`0x647c` is reachable ONLY via
-//! the named [`swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
-//! constructor which gates on `AUDIT_LANDED_PURE_PQ_FLAG`).
+//! IETF Independent Submission draft, Benten-owned) + **`0x6400`
+//! classical-only X25519 downgrade arm LIVE.** **G-CORE-3c TERMINAL shipped
+//! the full swap matrix** retaining `0x647c` (pure-PQ ML-KEM-768-only swap-matrix
+//! arm) + `0x0003` (NF-1 sig end-state) as dispatcher-typed-rejected per the
+//! C11b safety gate. The remaining reserved cipher-suite codepoints
+//! (`0x647b` NF-1 ML-KEM-768⊕HQC end-state + `0x0000` no-encryption) stay
+//! reserved-typed-reject via [`UnsupportedAlgorithm`] at the cipher-suite
+//! dispatcher level; `0x647c` is reachable ONLY via the named
+//! [`swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`] constructor which
+//! gates on `AUDIT_LANDED_PURE_PQ_FLAG`.
 //!
 //! # Module map
 //!

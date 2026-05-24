@@ -25,7 +25,7 @@
 **Format version:** N/A — Phase-1 canonical-bytes contract is the v1-beta baseline; new fields cannot be added to `Node` / `Edge` post-freeze without a P-III re-decision.
 
 **Byte-pin test coverage:**
-- `crates/benten-core/tests/canonical_test_node_sentinel_cid.rs` (or equivalent in benten-core) — asserts the sentinel CID stays bytewise stable under encode/decode round-trip.
+- `crates/benten-core/tests/canonical_bytes_fastpath_stable.rs` + `crates/benten-core/tests/node_cid.rs` — sentinel-CID + canonical-bytes round-trip pins.
 - `crates/benten-graph/tests/redb_backend_*.rs` family — exercises the redb on-disk format (which embeds the Node/Edge canonical bytes).
 
 **FREEZE-WAVE status:** ✅ COVERED.
@@ -100,10 +100,10 @@
 **Format version:** Codepoint dispatch (item 6).
 
 **Byte-pin test coverage:**
-- `crates/benten-id/tests/ucan_envelope_*.rs` family — envelope encode/decode + sig-codepoint dispatch.
-- `crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance*.rs` — exercises every codepoint arm.
+- `crates/benten-crypto-suite/tests/tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs` + `tf4_gcore3c_swap_matrix_conformance*.rs` — envelope encode/decode + sig-codepoint dispatch.
+- Full hex-pinned-bytes UCAN-Varsig header pin DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-9.
 
-**FREEZE-WAVE status:** ✅ COVERED.
+**FREEZE-WAVE status:** ✅ COVERED (roundtrip + codepoint-dispatch; hex-pin deferred per Row D-9).
 
 ---
 
@@ -136,9 +136,10 @@
 **Format version:** `DropBundleVersion` enum at `crates/benten-drop/src/lib.rs` — explicit-version discriminator.
 
 **Byte-pin test coverage:**
-- `crates/benten-drop/tests/` family — bundle encode/decode + version-mismatch arms.
+- `crates/benten-drop/tests/tf3f_drop_bundle_offline_consume.rs` + `crates/benten-drop/src/bundle.rs` (DropBundleVersion roundtrip + version-mismatch arms).
+- Full hex-pinned-bytes Drop bundle pin DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-9.
 
-**FREEZE-WAVE status:** ✅ COVERED.
+**FREEZE-WAVE status:** ✅ COVERED (roundtrip + version-mismatch; hex-pin deferred per Row D-9).
 
 ---
 
@@ -194,7 +195,7 @@
 **Format version:** N/A — the codepoint table IS the freeze (per CLAUDE.md baked-in #5).
 
 **Byte-pin test coverage:**
-- `crates/benten-crypto-suite/tests/codepoint_table_integer_values_pinned.rs` (or equivalent golden-file test) — asserts every codepoint integer matches the V1-FROZEN-INTERFACE.md item 6.2 table.
+- `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs` (`codepoint_table_integer_values_pinned` + `reserved_codepoints_stay_typed_rejected_at_v1_beta`) — asserts every codepoint integer matches the V1-FROZEN-INTERFACE.md item 6.2 table + pins typed-reject for 0x0003 / 0x647b / 0x647c.
 - `crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance*.rs` — exercises every swap-matrix arm.
 
 **FREEZE-WAVE status:** ✅ COVERED.
@@ -214,7 +215,7 @@
 | 7 | Drop bundle CBOR | `DropBundleVersion` enum | benten-drop/tests/ | ✅ COVERED |
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |
 | 9 | EncryptionClass codepoint (NEW G-CORE-9) | #[non_exhaustive] + codepoint table | encryption_class.rs unit tests | ✅ COVERED |
-| 10 | Crypto-suite codepoint table | V1-FROZEN §6 integers | tf4_gcore3c_swap_matrix_*.rs | ✅ COVERED |
+| 10 | Crypto-suite codepoint table | V1-FROZEN §6 integers | canonical_bytes_v1_codepoints_and_aad.rs + tf4_gcore3c_swap_matrix_*.rs | ✅ COVERED |
 
 **Outcome:** 9 of 10 surfaces have byte-pin coverage at v1-beta. The one DEFERRED surface (MerkleRangeProof) is genuinely-not-built (no phantom freeze).
 

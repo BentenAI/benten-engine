@@ -6,16 +6,19 @@
 //! Component algorithm IDs reference the IANA HPKE/COSE registries
 //! (we never mint Benten algorithm numbers).
 //!
-//! # Wire format note (P-III deferred)
+//! # Wire format note (FROZEN at G-CORE-9 V1-FROZEN-INTERFACE row 6)
 //!
-//! The codepoint VALUES below are the operative constants the canary
-//! brief carries and that the integration crate treats as authoritative.
-//! The **FREEZE ACT** (making these wire-canonical) is the scheduled
-//! G-CORE-9 P-III Ben decision-point — this wave produces the codepoint
-//! dispatch shape; G-CORE-9 locks the values. They are stable for the
-//! span of this crate's life today; G-CORE-9 may re-numerate them in a
-//! single deliberate freeze pass (no consumers outside the integration
-//! crate depend on the literal value — they call the typed enum).
+//! The codepoint VALUES below are FROZEN at v1-beta per
+//! `docs/V1-FROZEN-INTERFACE.md` item 6 (commit `8cc4eddd` + R1 fix-pass
+//! commit `235ad861` ratifying the typed-rejection framing for 0x0003 +
+//! 0x647c). Codepoint table integer values are PERMANENT per the freeze
+//! contract — algorithms behind each codepoint are SWAPPABLE within the
+//! framing; the codepoint values themselves are wire-canonical. Future
+//! additions land additively at unused codepoint values per the
+//! additive-codepoint discipline; existing values are never repurposed.
+//! Pinned by
+//! `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
+//! (G-CORE-9 R1 Bundle 5).
 
 // Re-export so test files that `use benten_crypto_suite::codepoint::UnsupportedAlgorithm`
 // (per TF-2 spec) find it under codepoint where the dispatch happens.

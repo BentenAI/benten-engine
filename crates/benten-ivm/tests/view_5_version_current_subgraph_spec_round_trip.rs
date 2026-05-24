@@ -111,6 +111,8 @@ fn view_5_subgraph_spec_emits_current_not_rows_or_rules() {
             "View 5 MUST emit Current; got Rules — mis-routed through \
              View 4's typed-output path."
         ),
+        // G-CORE-9 R2: `#[non_exhaustive]` per L8-R2-MAJOR-CARRY-2 closure.
+        _ => panic!("unexpected KernelOutput variant (non_exhaustive guard)"),
     }
 }
 

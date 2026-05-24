@@ -68,7 +68,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          DRIFT_DETECTED=0
+          # G-CORE-9 R2 fix-pass (L9-r2-MAJ-1 + L12-R2-MAJ-1 Pattern β closure):
+          # the previous DRIFT_DETECTED=1 assignment sat inside a `{ ... } | tee`
+          # pipeline subshell, so the variable was lost in the parent shell and
+          # `if [ "$DRIFT_DETECTED" -ne 0 ]` always evaluated false (workflow
+          # passed even when drift was detected). The fix routes drift state
+          # through a tempfile the parent shell reads after the pipeline completes.
+          DRIFT_FLAG_FILE="$(mktemp)"
+          trap 'rm -f "$DRIFT_FLAG_FILE"' EXIT
           {
             echo '## cargo-public-api drift report'
             echo
@@ -79,8 +86,13 @@ jobs:
               echo "### $crate"
               echo
               echo '```'
-              if ! cargo +nightly public-api --simplified -p "$crate" 2>&1 | diff -u "docs/public-api/$crate.txt" -; then
-                DRIFT_DETECTED=1
+              # 2>/dev/null drops cargo status lines (Checking/Documenting/Finished)
+              # which include absolute build-path strings that vary per checkout
+              # (e.g. `/home/runner/work/...` vs local-dev `/Users/...`). Without
+              # the suppression, baselines committed from a different environment
+              # would false-positive on every CI run (R2-FP-1 fix-up 2026-05-24).
+              if ! cargo +nightly public-api --simplified -p "$crate" 2>/dev/null | diff -u "docs/public-api/$crate.txt" -; then
+                echo "1" > "$DRIFT_FLAG_FILE"
                 echo
                 echo "**DRIFT DETECTED for ${crate}** — update docs/public-api/${crate}.txt baseline as part of this PR per G-CORE-9 R1 Fork 3 ratification."
               fi
@@ -88,7 +100,7 @@ jobs:
               echo
             done
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ "$DRIFT_DETECTED" -ne 0 ]; then
+          if [ -s "$DRIFT_FLAG_FILE" ]; then
             echo "::error::cargo-public-api drift detected. Update docs/public-api/<crate>.txt baselines per the freeze contract."
             exit 1
           fi

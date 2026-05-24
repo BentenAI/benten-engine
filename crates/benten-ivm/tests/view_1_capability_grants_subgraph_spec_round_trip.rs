@@ -147,5 +147,7 @@ fn view_1_subgraph_spec_emits_rows_output_not_typed_projection() {
              projection — implementer mis-routed View 1 through the \
              Views 4/5 typed-output paths."
         ),
+        // G-CORE-9 R2: `#[non_exhaustive]` per L8-R2-MAJOR-CARRY-2 closure.
+        _ => panic!("unexpected KernelOutput variant (non_exhaustive guard)"),
     }
 }

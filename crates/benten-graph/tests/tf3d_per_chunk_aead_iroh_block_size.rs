@@ -21,10 +21,13 @@
 //!     `IROH_BLOCK_SIZE` (different chunk size = double-chunking overhead).
 //!   - `RATIFIED-sharing-and-confidentiality-2026-05-21.md` §R2: per-Spike
 //!     H+1.2 chunk size = `IROH_BLOCK_SIZE`.
-//!   - §6 CI gate (13) "Per-chunk-AEAD chunk-size = `IROH_BLOCK_SIZE`
-//!     (16 KiB) for Nodes ≥64 KiB; whole-AEAD for <64 KiB."
-//!   - §6 CI gate (14) "AAD-binds-chunk-index for cross-chunk rebinding
-//!     prevention."
+//!   - Per-chunk-AEAD chunk-size = `IROH_BLOCK_SIZE` (16 KiB) for
+//!     Nodes ≥64 KiB; whole-AEAD for <64 KiB — pinned by this file +
+//!     `crates/benten-crypto-suite/src/aead.rs::IROH_BLOCK_SIZE = 16 * 1024`.
+//!   - AAD-binds-chunk-index for cross-chunk rebinding prevention —
+//!     pinned by `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk`
+//!     + V1-FROZEN-INTERFACE.md:337 (2-tuple `(plaintext_cid, chunk_index)`
+//!     per G-CORE-9 R1 triage Fork 1).
 //!
 //! ============================================================================
 //! LANDED at G-CORE-3d (pim-12 / §3.6e closure).
