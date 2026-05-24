@@ -186,7 +186,7 @@ with consumers that don't yet have the principal context.
 
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-engine.txt`
-  (regenerated in this wave per build-backlog row 1) carries the locked
+  (regenerated at the G-CORE-9 build-out wave per build-backlog row 1) carries the locked
   `pub` set. The renamed/tightened symbols MUST NOT appear with `pub`
   visibility. Re-`pub`-ing fails the drift test.
 - **napi cascade migration** (BUILD-AT-FREEZE-WAVE; see build-backlog
@@ -338,7 +338,7 @@ freeze wave SURFACES the decision; Ben makes it.
   AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64)` per
   `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (as-shipped
   v1-beta). The `total_chunks` defense against cross-chunk-truncation
-  is **deferred to G-COMP-1 §<row>** per the G-CORE-9 R1 triage Fork 1
+  is **deferred to G-COMP-1 (see DEFERRED.md Row D-9 + D-15)** per the G-CORE-9 R1 triage Fork 1
   ratification (escalation criterion: adding `total_chunks` would
   break existing per-chunk byte-pin tests; per-chunk truncation
   surfaces as `AeadError::Authentication` on the truncated slice via
@@ -480,7 +480,7 @@ v1-beta-and-forward contract.
 
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-graph.txt`
-  (regenerated per build-backlog row 1).
+  (regenerated at the G-CORE-9 build-out wave per build-backlog row 1).
 - `crates/benten-graph/tests/tf1_write_context_namespace_did_*.rs`
   (G-CORE-1 canary pin family) + existing
   `tf1_989_cross_did_partition_isolation.rs` pin.
@@ -731,7 +731,7 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-caps.txt`
-  (regenerated per build-backlog row 1).
+  (regenerated at the G-CORE-9 build-out wave per build-backlog row 1).
 - Compile-test pin for `Arc<dyn CapabilityPolicy>` object-safety at
   `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs`.
 - **Hard-seal mechanism is structurally enforced by rustc on every workspace
@@ -957,6 +957,7 @@ verification at HEAD):
 | `benten-crypto-suite` | `SwapMatrixError` | TBD | APPLY |
 | `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` | TBD | APPLY each |
 | `benten-renderer-tauri` | `IpcMethod` (per-method allowlist) | TBD | APPLY |
+| `benten-dsl-compiler` | `CompileError`, `CompiledSubgraph`, `CompiledPrimitive`, `Diagnostic`, `Span` | YES (5/5 applied per L9-DSL-MAJOR-2 closure at G-CORE-9 R2; audit test at `crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs` 2/2 PASS) | KEEP |
 | `benten-errors` | `ErrorCode` | YES (per Phase-4-Foundation freeze) | KEEP |
 
 **What "frozen" means here:**
@@ -1179,8 +1180,8 @@ planners agreed; locked as-shipped.**
   the cargo-public-api baseline defense below; per G-CORE-9 R2 L10-r2-1
   disposition (path a).
 - `cargo-public-api` baselines for `benten-renderer-tauri` (JSON format)
-  and `benten-platform-foundation` (build-backlog row 1: missing
-  baseline at HEAD).
+  and `benten-platform-foundation` (baseline regenerated at the G-CORE-9
+  build-out wave per build-backlog row 1; 2556 LOC at HEAD).
 
 **Composing-phase escape valve:**
 - New IPC method = baseline-update PR; manifest-review; passes if in the

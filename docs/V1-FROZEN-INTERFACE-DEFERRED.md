@@ -429,15 +429,26 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
     unaffected]
   - `benten-platform-foundation`: `VocabLabel` (vocab.rs:14), `VocabEdge`
     (vocab.rs:92), `Scalar` (vocab.rs:157), `RenderError` (materializer.rs:567),
-    `MaterializerError` (materializer.rs:209) [L8-r3-MIN-1 closure:
-    materializer-walk return-type; in-crate exhaustive matches preserved
+    `MaterializerError` (materializer.rs:209), `MaterializerDenialFrame`,
+    `MaterializerWalkInputs`, `MaterializerOutput`, `SubscribeAttachToken`
+    [L8-r3-MIN-1 + L8-r4-MIN-2 closure: materializer-walk return-type +
+    materializer-public-struct cluster; in-crate exhaustive matches preserved
     when `#[non_exhaustive]` is added since out-of-crate consumers add
     wildcard arm]
   - `benten-core`: `Mode` (version_dag.rs:75), `VersionError`
-    (version.rs:105), `VersionDagError` (version_chain.rs:52) [L8-r3-MIN-2
-    closure: Version DAG error surface; the sibling
-    `version_dag.rs::VersionDagError` at :105 ALREADY carries the
-    attribute, so the within-namespace pattern is established]
+    (version.rs:105), `VersionDagError` (version_chain.rs:52), `Anchor`,
+    `DagVersionChain`, `VersionDag`, `Subgraph` (wire-bytes-bearing per
+    `canonical_subgraph_bytes`; apply per Path-b R2.8 wire-bytes precedent
+    at the next D-17-targeted fix-pass — pim-N candidate per
+    L8-r4-OBS-1 same-file/same-namespace-sweep recurrence), `SubgraphBuilder`,
+    `NodeHandle` [L8-r3-MIN-2 + L8-r4-MIN-1 + L8-r4-MIN-3 closure: Version
+    DAG container types + Subgraph public surface]
+  - `benten-ivm` view-instance + kernel-internal surface: `Subscriber`,
+    `CanonicalViewEntry`, `AlgorithmBView`, `Projection`, `EffectiveRules`,
+    plus 5 view-instance structs [L8-r4-MIN-4 closure: per-file pub-item
+    sweep of benten-ivm; D-17 enumeration extension only — Path-a per
+    spec; no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api
+    baseline shape]
 
   **Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred):**
   `TypedOutputProjection` + `KernelOutput` in `benten-ivm/src/subgraph_spec.rs`
