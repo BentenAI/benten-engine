@@ -1,0 +1,85 @@
+{
+  "lens": "L12 — cross-language §3.5g mirror + workspace missing-docs + stable+MSRV clippy gates",
+  "round": "R2",
+  "tier": "G-CORE-9 FREEZE iterate-to-convergence",
+  "head_sha_reviewed": "235ad861b2a4013c0ea148efb0789a780cb107d4",
+  "branch": "g-core-9/r2-l12-cross-lang-clippy-docs",
+  "disposition": "APPROVE-WITH-FINDINGS",
+  "r2_convergence_disposition": "NOT-CONVERGED — 1 MAJOR + 1 MINOR remain; partial convergence vs R1 (3 MAJ / 1 MIN / 3 OBS → 1 MAJ / 1 MIN / 1 OBS). MAJOR pertains to Fork 3 second-half (branch-protection update) which the R1 fix-pass implemented at workflow-flip level but NOT at branch-protection level. MINOR is a HARD-RULE-12 clause-(b) drift: deferral destination (D-15 watch-list) does not contain the entry it was named to receive (Bundle 4 Strategy::C→Reserved + 3 DSL ErrorCodes).",
+  "summary": "L12 R1 fix-pass closed 3 of 4 actionable items at HEAD 235ad861: L12-MAJ-1 (ERROR-CATALOG count narrative retensed 170/170/171/172 → 192/192/193/194; trajectory paragraph added), L12-MAJ-2 (.json → .txt baseline cite drift swept in V1-FROZEN-INTERFACE.md item 9 surface lists), L12-MAJ-3 (deny.toml ↔ supply-chain.yml RUSTSEC ignore lists symmetric — both list identical 19 IDs after RUSTSEC-2026-0119/0120 hickory closure; the hickory IDs now sit in COMMENT form symmetrically across both files). Fork 3 cargo-public-api workflow flip from informational-only to required-failing IS LANDED at the workflow level (the `|| true` suffix removed; DRIFT_DETECTED accumulator + `exit 1` on drift; step renamed to '(required-failing)') — but the brief's Fork 3 mandate ('required-checks branch protection updated') is NOT closed: the GitHub branch protection required_status_checks contexts list at HEAD does NOT contain 'API drift detector (required-failing per G-CORE-9 FREEZE)' (or its prior name). Verified by gh api repos/BentenAI/benten-engine/branches/main/protection — 10 contexts listed, none of them cargo-public-api. So the contract gate is half-closed: the workflow exits 1 on drift, but the branch protection layer does not require it to pass, meaning a PR can still merge with drift detected. CATALOG_VARIANT_COUNT verified == 192 at crates/benten-errors/tests/stable_shape.rs:1019 (matches Bundle 4 deferral; NOT 195). TS CATALOG_CODES length verified == 194; TS error-class count (BentenError subclasses) == 194; ERROR-CATALOG.md `### E_` heading count == 194; Rust enum throwable == 192; +2 TS-vs-Rust delta reconciled to E_UNKNOWN (forward-compat Unknown(String) mirror) + E_INV_ITERATE_NEST_DEPTH (Phase-2a-retired retention) per docs/ERROR-CATALOG.md narrative. §3.5g item 6 scanner runs GREEN (60 pub *Error enums across 235 files; 159 baseline-grandfathered; 0 new violations post-fix-pass). Workspace missing-docs test (cargo nextest -p phase-3-workspace-tests --test missing_docs_workspace) PASSES 3/3 tests including the slow full-workspace sweep. MSRV 1.95 clippy --workspace --all-targets with the required feature flags (benten-eval/testing,benten-engine/test-helpers,benten-graph/testing) GREEN. Stable clippy with the same flags GREEN.",
+  "findings": [
+    {
+      "id": "L12-R2-MAJ-1",
+      "severity": "MAJOR",
+      "title": "Fork 3 — cargo-public-api workflow flipped to required-failing at workflow level, but GitHub branch-protection required-status-checks NOT updated to enforce it",
+      "where": ".github/workflows/cargo-public-api.yml (workflow flip LANDED) + GitHub repo settings → branches → main → required_status_checks (NOT updated)",
+      "evidence": "gh api repos/BentenAI/benten-engine/branches/main/protection returns 10 required-status-check contexts: cross-leg byte-equality gate (T9), create-benten-app cold install, release-build (--no-default-features) gate, T9 cross-leg byte-equality gate, Phase 2a exit-gate aggregate, docs ↔ Rust enum ↔ TS types parity, self-test (meta-assertion that the detector actually detects), cargo-deny (licenses / bans / advisories / sources), cargo-audit (belt-and-suspenders), Cargo.lock integrity. The cargo-public-api workflow's job-name post-flip is 'API drift detector (required-failing per G-CORE-9 FREEZE)' — that string is absent from required_status_checks. Net effect: the workflow now exits 1 on drift (good — `|| true` removed; DRIFT_DETECTED accumulator gates `exit 1`), but a PR with drift can still merge because branch protection does not require this check to pass.",
+      "disposition": "FIX-NOW — settings update outside the code repo (gh api PATCH branches/main/protection to append 'API drift detector (required-failing per G-CORE-9 FREEZE)' to required_status_checks.contexts). This is an ORCHESTRATOR-DIRECT or BEN-DIRECT action since it is a GitHub-API settings change not a code edit. Alternative disposition path: DEFER-NAMED-NOW to a follow-up G-CORE-9 R2 wave with explicit named destination = V1-FROZEN-INTERFACE-DEFERRED.md new row 'Row D-19 — cargo-public-api branch-protection-required-checks update', BUT the Fork 3 ratification at R1 explicitly named branch-protection-update as the second half of the Fork 3 disposition, so deferral would be a re-litigation of Ben's R1 ratification.",
+      "anchor": "Fork 3 R1 ratification ('FLIP TO FAILING — spec item 9 mandates this for the freeze to bite; informational-only means the freeze-doc contract has no required-CI-check backstop'). docs/g-core-9-r1-triage.md:Fork-3 table row."
+    },
+    {
+      "id": "L12-R2-MIN-1",
+      "severity": "MINOR",
+      "title": "Bundle 4 (Strategy::C → Strategy::Reserved rename + 3 DSL ErrorCode mints) named-destination drift — V1-BETA-BREAKING-CHANGES.md cites Row D-15 of V1-FROZEN-INTERFACE-DEFERRED.md as the watch-list destination, but Row D-15 does NOT contain a Bundle-4 entry",
+      "where": "docs/V1-BETA-BREAKING-CHANGES.md:156 cites 'Captured in docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 watch-list'. docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 (line 340-362) enumerates 4 OBS-derived items (AeadEnvelope nonce-length panic / AuthorizationGrant.binding_sig varsig promotion / CryptoPolicy::require_hybrid_pq consumer flag / AuthorizationGrant.audience_pubkey Option→non-Option) — NONE are Strategy::C→Reserved rename or DSL parse/unknown-primitive/missing-respond ErrorCode mints.",
+      "evidence": "grep -in 'strategy\\|dsl.*errorcode\\|bundle 4' docs/V1-FROZEN-INTERFACE-DEFERRED.md returns ZERO hits. The Bundle 4 deferral is a HARD-RULE-12 clause-(b) named-destination violation pattern: the destination (D-15) does not actually receive the entry it was named to receive.",
+      "disposition": "FIX-NOW — append Bundle 4 (Strategy::C → Strategy::Reserved wire-bytes rename + 3 DSL ErrorCode mints: E_DSL_PARSE_FAILED / E_DSL_UNKNOWN_PRIMITIVE / E_DSL_MISSING_RESPOND) as a discrete row in V1-FROZEN-INTERFACE-DEFERRED.md (either extending D-15 or as a new Row D-19/D-20). Single-line per item; cites the V1-BETA-BREAKING-CHANGES.md:152 source row. ~20-30 LOC edit.",
+      "anchor": "docs/V1-BETA-BREAKING-CHANGES.md:152-156 + docs/g-core-9-r1-triage.md:68-72 Sub-bundle B + docs/V1-FROZEN-INTERFACE-DEFERRED.md:340-362 Row D-15 (gap)."
+    }
+  ],
+  "observations": [
+    {
+      "id": "L12-R2-OBS-1",
+      "title": "Stable+MSRV clippy gates require explicit feature flags to PASS (otherwise compile-error on integration tests consuming feature-gated `pub mod testing`)",
+      "note": "The R2 verification shows that running `cargo +stable clippy --workspace --all-targets -- -D warnings` (or +1.95 equivalent) WITHOUT the explicit `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing` flag returns 11+ E0432/E0433/E0560/E0599 compile-errors against integration tests that import benten_eval::testing / sample_for_test / sample_for_label / etc. CI ci.yml line 141 correctly passes the feature flags. §3.5j codifies '+stable clippy --workspace --all-targets -- -D warnings' WITHOUT mentioning the required feature flags — this is a §3.5j wording gap that could lead reviewers to a false-RED diagnosis. NOT a code finding; suggested as a §3.5j amendment to mirror CI's feature-flag invocation.",
+      "disposition": "OBSERVATION — orchestrator-direct text amendment to §3.5j in dispatch-conventions.md to reflect CI's `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing` invocation. NOT a R2-blocking finding."
+    }
+  ],
+  "r1_findings_verified_closed": [
+    {
+      "id": "L12-MAJ-1",
+      "title": "ERROR-CATALOG.md count narrative (170/170/171/172 → 192/192/193/194)",
+      "verified_at": "docs/ERROR-CATALOG.md:5-16 — count table updated; 'Why four counts' paragraph updated; new 'Phase-4-Meta-Core mint trajectory' paragraph added. CLOSED at fix-pass commit 0afcea61 (per git log)."
+    },
+    {
+      "id": "L12-MAJ-2",
+      "title": ".json vs .txt baseline cite drift in V1-FROZEN-INTERFACE.md item 9 surface lists",
+      "verified_at": "git diff 8cc4eddd..235ad861 -- docs/V1-FROZEN-INTERFACE.md shows the 3 lines `benten-id.json → benten-id.txt`, `benten-renderer-tauri.json → benten-renderer-tauri.txt`, `benten-sync.json → benten-sync.txt`. CLOSED. (NB: benten-renderer-tauri.json file ALSO exists alongside the .txt baseline — it carries an IPC method-name allowlist for the F2 ipc_method_name_stability_drift_detector.rs test; that .json is intentional + orthogonal to the cargo-public-api baseline.)"
+    },
+    {
+      "id": "L12-MAJ-3",
+      "title": "deny.toml ↔ cargo-audit --ignore asymmetry",
+      "verified_at": "deny.toml lines 39-109 + .github/workflows/supply-chain.yml lines 86-108: both files list identical 19 RUSTSEC IDs in --ignore lists; hickory-dns RUSTSEC-2026-0119 + 0120 removed from ACTIVE ignore in both, preserved as parallel COMMENT documenting the iroh 0.98 → 1.0.0-rc.0 closure. Diff-verified script comparing `grep -oE 'RUSTSEC-[0-9]+-[0-9]+'` from each file returns SYMMETRY (one false-diff fragment `RUSTSEC-2024-04` is a substring-match against `RUSTSEC-2024-04XX` parenthetical commentary; no actual ID drift). CLOSED."
+    },
+    {
+      "id": "L12-OBS-3 → Fork 3 first half",
+      "title": "cargo-public-api workflow informational → required-failing — WORKFLOW HALF CLOSED",
+      "verified_at": ".github/workflows/cargo-public-api.yml header comment retensed 'Status (G-CORE-9 R1 fix-pass 2026-05-24): REQUIRED-FAILING'; job name retensed 'API drift detector (required-failing per G-CORE-9 FREEZE)'; diff shell logic: `|| true` SUFFIX REMOVED; new DRIFT_DETECTED=0 / `if ! cargo ... | diff` / DRIFT_DETECTED=1 / final `if [ \"$DRIFT_DETECTED\" -ne 0 ]; then exit 1`. The workflow exits 1 on baseline drift. **Branch protection update half NOT closed — see L12-R2-MAJ-1.**"
+    }
+  ],
+  "r2_verification_checks_performed": {
+    "cargo_public_api_workflow_flip": "VERIFIED — `|| true` removed; DRIFT_DETECTED accumulator + exit 1 gate present; job name retensed",
+    "branch_protection_required_checks": "VERIFIED MISSING — gh api repos/BentenAI/benten-engine/branches/main/protection lists 10 contexts; cargo-public-api drift detector is NOT among them (L12-R2-MAJ-1)",
+    "drift_detect_error_variant_mirror_scanner": "GREEN — `npx tsx scripts/drift-detect-error-variant-mirror.ts` reports '60 pub *Error enum(s) across 235 production files; 159 baseline-grandfathered; 124 variant(s) mirrored, 210 skipped (160 via baseline), 0 new violation(s)'",
+    "catalog_variant_count_value": "VERIFIED 192 — crates/benten-errors/tests/stable_shape.rs:1019 `assert_eq!(CATALOG_VARIANT_COUNT, 192, ...)` (NOT 195 as Bundle 4 deferred)",
+    "ts_class_count": "VERIFIED 194 — `grep -cE '^export class E[A-Z][a-zA-Z0-9]+ extends BentenError' packages/engine/src/errors.generated.ts` returns 194; +1 base BentenError = 195 total export classes",
+    "ts_catalog_codes_length": "VERIFIED 194 — `awk '/^export const CATALOG_CODES = \\[/,/^\\] as const/' packages/engine/src/errors.generated.ts | grep -cE '^\\s*\"E_[A-Z_0-9]+\"'` returns 194",
+    "error_catalog_md_heading_count": "VERIFIED 194 — `grep -c '^### E_' docs/ERROR-CATALOG.md` returns 194",
+    "ts_vs_rust_delta_reconciliation": "VERIFIED +2 = E_UNKNOWN (forward-compat Rust Unknown(String) mirror at line 81 + class at 916) + E_INV_ITERATE_NEST_DEPTH (Phase-2a-retired retention at line 45 + class at 376)",
+    "workspace_missing_docs_test": "GREEN — `cargo nextest run -p phase-3-workspace-tests --test missing_docs_workspace` returns 3/3 PASS (no_allow_missing_docs_at_phase_3_close + all_phase_2_3_todo_markers_have_named_destinations + full_missing_docs_sweep_no_warnings_workspace_wide; final test 73.5s)",
+    "stable_shape_tests": "GREEN — `cargo nextest run -p benten-errors --test stable_shape` returns 9/9 PASS including catalog_variant_count_matches_enum (exhaustive ErrorCode match) + variant_count_is_pinned (== 192 assertion)",
+    "msrv_1_95_clippy_workspace_all_targets": "GREEN — `cargo +1.95 clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings` exit 0; without the --features flag returns 11+ compile errors against feature-gated `pub mod testing` imports (see L12-R2-OBS-1)",
+    "stable_clippy_workspace_all_targets": "GREEN — `cargo +stable clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings` exit 0"
+  },
+  "tree_state_assertions": {
+    "fetched_origin_main_at_start": true,
+    "head_sha_matches_brief_expected": true,
+    "head_sha": "235ad861b2a4013c0ea148efb0789a780cb107d4",
+    "branch_origin": "origin/main @ 235ad861",
+    "git_status_clean_pre_review": true
+  },
+  "scope_out_of_lens": [
+    "Other R1 lenses' MAJOR/MINOR findings (L1-crypto / L2-/ L6-/ L8-/ L9-/ L10-/ L11-/ L17-/ L18-) are handled by their respective R2 lens dispatches",
+    "Fork 1 (AAD total_chunks) + Fork 2 (substrate-frozen-but-consumer-unwired) verification is L11 + L2 + L6 lens scope, not L12"
+  ]
+}
