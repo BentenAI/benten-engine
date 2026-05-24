@@ -1,0 +1,92 @@
+{
+  "lens": "L9 DSL public-API-shape + ergonomics",
+  "round": "R3",
+  "phase": "G-CORE-9 FREEZE R6 phase-close (DSL slice)",
+  "tree_state": {
+    "branch": "g-core-9/r3-l9-dsl-public-api",
+    "fork_base": "6c21e4f5",
+    "r2_fix_pass_commit": "6c21e4f5",
+    "main_head_at_review": "6c21e4f5",
+    "head_verified_via": "git fetch origin main && git rev-parse HEAD == 6c21e4f5e621289348d8a60d69ba8445624229e1"
+  },
+  "disposition": "APPROVE-WITH-1-MINOR-FINDING",
+  "r3_convergence_disposition": "CONVERGED-FOR-ADVANCE-NOT-STRICTLY-CONVERGED",
+  "convergence_notes": "R1 had 2 MAJ + 2 MIN + 1 OBS. R2 returned 1 MAJ + 3 MIN + 2 OBS (NOT-CONVERGED). R2-FP (commit 6c21e4f5 / cluster d209dfb9 + 02c9d451 + d28126fc + 397115b1) closed all 4 R2 substantive items end-to-end (1 MAJ + 3 MIN). R3 ground-truth-verify confirms each closure at HEAD: (a) DSL baseline at docs/public-api/benten-dsl-compiler.txt now carries `#[non_exhaustive]` (line 3) and is 110 LOC (vs the 11-LOC stub R2 indicted); (b) cargo-public-api workflow refactored to write drift state via tempfile read by parent shell after the `| tee` pipeline (closing the bash subshell bug); (c) packages/engine/src/errors.ts re-exports EDslIoError + EDslBackendRejected in all 3 sites (import list line 36, export list line 117, CODE_TO_CTOR map line 224); (d) Row D-19 in V1-FROZEN-INTERFACE-DEFERRED.md enumerates the L8-MAJOR-1 + L9-DSL-MAJOR-1 deferred items as 4 specific sub-points + 3 ErrorCode mints; (e) crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs added with 2 audit-test functions that BOTH PASS (verified via `cargo nextest run -p benten-dsl-compiler --test g_core_9_non_exhaustive_audit_dsl`). R3 surfaces 1 NEW MINOR (Row D-19 naming inconsistency: deferred mint name `E_DSL_PARSE_FAILED` does NOT match the existing `pub const E_DSL_PARSE_ERROR` at lib.rs:623 that the diagnostic struct already returns — when G-COMP-1 mints these as enum variants, the wire string mismatch will surface as either a redundant code or a real cross-language drift) + 1 OBS (V1-FROZEN-INTERFACE.md item 11 freeze-table at lines 940-963 still does NOT enumerate the 5 DSL types CompileError / CompiledSubgraph / CompiledPrimitive / Span / Diagnostic that L9-DSL-MAJOR-2 names; the audit-test file's docstring carries the citation but the canonical freeze-table inventory omits them — doc-completeness gap; the R2 OBS-1 prediction that this is `adjacent / not strict L9 scope` is technically correct but worth restating as a gentle FIX-NOW for the freeze-completeness story). Per the Q5/CLAUDE.md #9 amendment 2026-05-19 termination rule (full round returns 0 BLOCKER + 0 MAJOR substantive = advance), R3 IS advance-ready. 1 MIN remains as FIX-NOW per HARD RULE 12 (either inline fix in the L9 slice, or named-destination escalation; no DEFER-without-destination valid). If MIN closed inline, lens is strictly CONVERGED.",
+  "findings": [
+    {
+      "id": "L9-r3-MIN-1",
+      "severity": "MINOR",
+      "title": "Row D-19 names the deferred mint as `E_DSL_PARSE_FAILED` but the existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs:623` already occupies that wire-string slot — G-COMP-1 minting `E_DSL_PARSE_FAILED` would either (a) leave the existing `E_DSL_PARSE_ERROR` orphaned (two error codes for the same condition) OR (b) require a 4-surface rename of the existing `pub const` (which is itself a v1-beta cargo-public-api baseline change). The phantom-destination cluster R2 closed at Row D-19 has a name-collision pitfall that should be pre-resolved during the freeze wave, not at G-COMP-1 consumption time.",
+      "evidence": "(a) `docs/V1-FROZEN-INTERFACE-DEFERRED.md:464` reads `5. \\`E_DSL_PARSE_FAILED\\` — mints from existing \\`CompileError::Parse\\``; (b) `crates/benten-dsl-compiler/src/lib.rs:623` reads `pub const E_DSL_PARSE_ERROR: &str = \"E_DSL_PARSE_ERROR\";`; (c) `docs/public-api/benten-dsl-compiler.txt:106` baselines `pub const benten_dsl_compiler::E_DSL_PARSE_ERROR: &str` (frozen at v1-beta); (d) `crates/benten-dsl-compiler/src/lib.rs:226+238+1091+1112+1187+1226` use `error_code: E_DSL_PARSE_ERROR` in 6+ production construction sites — the existing wire string IS already in use as a Diagnostic.error_code field value. Per §3.5g cross-language rule-mirror, the at-HEAD wire string + the deferred-mint wire string should agree; they currently do NOT.",
+      "disposition": "FIX-NOW",
+      "fix": "Two equally-valid options for inline fix during R3 cleanup: (Option-A, preferred) edit `docs/V1-FROZEN-INTERFACE-DEFERRED.md:464` to read `E_DSL_PARSE_ERROR` (reusing the existing pub const wire string + adding the ErrorCode enum variant `DslParseError` + TS class `EDslParseError` as the G-COMP-1 task). Also update `docs/V1-BETA-BREAKING-CHANGES.md:227` parenthetical to match. The existing `pub const` becomes a deprecated-alias-or-removed-during-mint (per CLAUDE.md no-deprecated-aliases rule — REMOVED). (Option-B) accept the rename and document at Row D-19 that G-COMP-1 ALSO deletes the existing `pub const E_DSL_PARSE_ERROR` + updates the 6 construction sites + the baseline. Either way the Row D-19 + the existing pub-const-at-HEAD must reconcile. Option-A is the lower-risk fix (one doc edit; G-COMP-1 work is purely additive enum + TS class). Inline is ~3 minutes.",
+      "cross_lens": "L12 cross-lang §3.5g (the §3.5g amendment 2026-05-24 for pub error variant first-class mirror at MEMORY.md is structurally about this exact pattern — every wire string crossing a public surface MUST have a first-class ErrorCode variant; the catch here is BACKWARDS — the existing wire string already exists as a pub const and the deferred mint must reconcile not introduce a duplicate)."
+    },
+    {
+      "id": "L9-r3-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "V1-FROZEN-INTERFACE.md item 11 freeze-table at lines 940-963 still does NOT enumerate the 5 DSL types (CompileError / CompiledSubgraph / CompiledPrimitive / Span / Diagnostic) that L9-DSL-MAJOR-2 named + that the new audit-test file's docstring cites as the ratification anchor",
+      "evidence": "Read of V1-FROZEN-INTERFACE.md item 11 freeze-table (lines 925-963 + 974-996): the table enumerates types per benten-engine / benten-core / benten-ivm / benten-sync / benten-caps / benten-graph / benten-crypto-suite / benten-drop / benten-renderer-tauri / benten-errors but NOT a single row for benten-dsl-compiler. The 5 DSL types carrying `#[non_exhaustive]` (verified at `crates/benten-dsl-compiler/src/lib.rs:180+193+306+499+548`) live ONLY in the source code + the new audit-test file. The R2 OBS-1 already flagged this as `adjacent` / `out of strict L9 scope`; R3 confirms it remains unfixed. The freeze-completeness story is weakened to the extent that future agents reading item 11's inventory-table miss the 5 DSL types entirely.",
+      "disposition": "OBSERVATION-WITH-RECOMMENDED-INLINE-FIX",
+      "fix": "Add 1 row to the item 11 freeze-table (after the `benten-renderer-tauri` row, before `benten-errors`): `| \\`benten-dsl-compiler\\` | \\`CompileError\\`, \\`CompiledSubgraph\\`, \\`CompiledPrimitive\\`, \\`Span\\`, \\`Diagnostic\\` | YES at HEAD (verified at lib.rs:180/193/306/499/548) | KEEP — L9-DSL-MAJOR-2 closure (G-CORE-9 R1 fix-pass commit f36ccacd); audit pin at \\`crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs\\` |`. 1-line edit; doc-completeness; ~1 minute. Strictly OBSERVATION not MINOR because the substantive freeze-defense (source-code application + dedicated audit-test pin) is fully landed; the freeze-table is a documentation inventory not a structural pin."
+    },
+    {
+      "id": "L9-r3-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "L9-DSL-MAJOR-2 verified FULLY LANDED + STRUCTURALLY DEFENDED at R3 (carried forward from R2 OBS-1; STAYS CONVERGED)",
+      "evidence": "(a) `#[non_exhaustive]` applied at lib.rs:180 CompiledSubgraph + lib.rs:193 CompiledPrimitive + lib.rs:306 CompileError + lib.rs:499 Span + lib.rs:548 Diagnostic — all 5 carry the attribute. (b) Each carries the docstring citation `V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2`. (c) cargo-public-api baseline at docs/public-api/benten-dsl-compiler.txt now also reflects all 5 markers (verified via line 3 + similar marker prefixes on lines for CompiledPrimitive + CompiledSubgraph + Span + Diagnostic). (d) Dedicated audit-test file `crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs` exists with 2 PASSING tests (verified via nextest). The R1 → R2 → R3 closure chain is structurally complete for the MAJOR.",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a"
+    },
+    {
+      "id": "L9-r3-OBS-3",
+      "severity": "OBSERVATION",
+      "title": "L9-DSL-MINOR-2 (compile_file substantive filesystem test) properly named-deferred to G-COMP-1 via V1-FROZEN-INTERFACE-DEFERRED.md Row D-12 — HARD RULE 12 clause-(b) COMPLIANT (carried forward from R2 OBS-2; STAYS CONVERGED at R3)",
+      "evidence": "Row D-12 at V1-FROZEN-INTERFACE-DEFERRED.md:291-303 enumerates the frozen surface (`pub fn compile_file` locked at v1-beta) + the deferred consumption (G-COMP-1 destination for filesystem-exercising test) + v1-beta posture + anchor (L9-DSL-MINOR-2). Row body unchanged across the R2-FP at HEAD; named-destination still exists + still receives the entry.",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a"
+    },
+    {
+      "id": "L9-r3-OBS-4",
+      "severity": "OBSERVATION",
+      "title": "All 4 R2 substantive items (1 MAJ + 3 MIN) verified CLOSED at HEAD; R2 → R3 monotonic convergence confirmed",
+      "evidence": "(a) L9-r2-MAJ-1 part-A (DSL baseline staleness): `grep -i non_exhaustive docs/public-api/benten-dsl-compiler.txt` now returns 5+ matches (vs R2's 0); baseline is 110 LOC vs the 11-LOC R2-indicted stub. (b) L9-r2-MAJ-1 part-B (workflow subshell bug): `.github/workflows/cargo-public-api.yml:73-105` shows the tempfile-based DRIFT_FLAG_FILE pattern reading drift state in the parent shell after `| tee` pipeline completes; commit 02c9d451 explicitly documents the structural fix. (c) L9-r2-MIN-1 (re-export gap): `packages/engine/src/errors.ts` lines 34/36/115/117/222/224 show all 4 EDsl* classes present in import + export + CODE_TO_CTOR map. (d) L9-r2-MIN-2 (phantom destination Row D-15/D-19): commit d209dfb9 added explicit Row D-19 to V1-FROZEN-INTERFACE-DEFERRED.md:454-472 enumerating the L8-MAJOR-1 + L9-DSL-MAJOR-1 items as 4 sub-points + 3 ErrorCode mints + CATALOG delta. (e) L9-r2-MIN-3 (audit-test 5 DSL types): new file `crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs` (55 LOC; 2 tests both PASS via `cargo nextest run --test g_core_9_non_exhaustive_audit_dsl`). All 4 R2 items end-to-end closed with substantive pins (not just `disposition: FIX-NOW` text).",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a"
+    }
+  ],
+  "scope_notes": {
+    "in_scope": "DSL public-API-shape + ergonomics: benten-dsl-compiler crate's public surface (CompileError variants + Compiled* types + Diagnostic/Span + compile_str/compile_file + 6 `pub const` error-code strings + DSL ErrorCode mirror at packages/engine/src/errors.ts + drift-detect baseline state + V1-FROZEN-INTERFACE-DEFERRED.md Row D-19 phantom-destination consistency) at v1-beta freeze posture.",
+    "out_of_scope": "Workflow-bug structural fix verification at CI run-time (orchestrator workflow-trigger required; the bash logic is verified syntactically + the tempfile pattern is the well-known fix); item 11 freeze-table doc-coupling (acknowledged as adjacent in R3 OBS-1 with a recommended 1-line fix but strictly an L17/doc-coupling lens primary scope); benten-dsl-compiler runtime correctness (L6/L8 scope).",
+    "cross_lens_handoffs": "Row D-19 naming reconciliation (L9-r3-MIN-1) couples to L12 cross-lang §3.5g; item 11 freeze-table enumeration (L9-r3-OBS-1) couples to L17 §1.A.FROZEN doc-coupling sweep."
+  },
+  "production_compile_status": "GREEN at HEAD (cargo build -p benten-dsl-compiler --quiet succeeds; cargo nextest run -p benten-dsl-compiler --test g_core_9_non_exhaustive_audit_dsl = 2/2 PASS)",
+  "ground_truth_verification": {
+    "review_findings_orchestrator_verified": "ALL R2-CLOSURES INDEPENDENTLY VERIFIED at HEAD `6c21e4f5e621289348d8a60d69ba8445624229e1` (per memory `feedback_review_finding_ground_truth_verify` + dispatch-conventions §3.5n) — not just trusted from R2-FP commit messages",
+    "verification_commands_run": [
+      "git fetch origin main && git rev-parse HEAD",
+      "grep -n 'EDsl' packages/engine/src/errors.ts",
+      "grep -in 'non_exhaustive|CompileError' docs/public-api/benten-dsl-compiler.txt",
+      "cat .github/workflows/cargo-public-api.yml (verified tempfile-based DRIFT_FLAG_FILE pattern lines 73-105)",
+      "grep -n 'D-19|Strategy.*Reserved|3 DSL ErrorCode' docs/V1-FROZEN-INTERFACE-DEFERRED.md",
+      "cat crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs",
+      "cargo build -p benten-dsl-compiler --quiet",
+      "cargo nextest run -p benten-dsl-compiler --test g_core_9_non_exhaustive_audit_dsl",
+      "grep -n '^pub|^#\\[non_exhaustive' crates/benten-dsl-compiler/src/lib.rs",
+      "grep -rn 'E_DSL_PARSE_FAILED|E_DSL_PARSE_ERROR' docs/ crates/benten-dsl-compiler/src/lib.rs scripts/drift-detect-error-variant-mirror-baseline.txt"
+    ]
+  },
+  "artifacts_referenced": [
+    "docs/V1-FROZEN-INTERFACE.md (item 11 freeze-table lines 925-963)",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md (Row D-12 + Row D-19 lines 291-303 + 454-472)",
+    "docs/V1-BETA-BREAKING-CHANGES.md (Cohort 3 + line 227 Row D-19 parenthetical)",
+    "crates/benten-dsl-compiler/src/lib.rs (5 #[non_exhaustive] applications at 180/193/306/499/548 + 6 pub const error-code strings at 623/625/627/638/647/655)",
+    "crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs (R2-FP-added 55-LOC audit-test file; 2 PASS)",
+    "packages/engine/src/errors.ts (4 EDsl* re-exports at 34-37 + 115-118 + 222-225)",
+    "packages/engine/src/errors.generated.ts (4 EDsl* class definitions at 1065 + 1080 + 3090 + 3105)",
+    "scripts/drift-detect-error-variant-mirror-baseline.txt (CompileError grandfathered lines per Row D-19 sub-point 7)",
+    "docs/public-api/benten-dsl-compiler.txt (110-LOC regenerated baseline with #[non_exhaustive] markers)",
+    ".github/workflows/cargo-public-api.yml (tempfile-based drift-detection fix at lines 73-105)"
+  ],
+  "r3_post_round_recommendation": "Lens L9 is APPROVE-FOR-ADVANCE per Q5 (0 BLOCKER + 0 MAJOR). 1 MINOR (L9-r3-MIN-1 Row D-19 naming reconciliation `E_DSL_PARSE_FAILED` vs existing `E_DSL_PARSE_ERROR`) should land FIX-NOW per HARD RULE 12 — either inline (~3 min orchestrator-direct doc edit on V1-FROZEN-INTERFACE-DEFERRED.md:464 + V1-BETA-BREAKING-CHANGES.md:227) OR with a sharpened named-destination if orchestrator prefers to defer the reconciliation to G-COMP-1 with a more-specific consumption note (HARD RULE 12 clause-(b) shape). 1 OBS (item 11 freeze-table enumeration of 5 DSL types) is recommended-but-not-required-for-advance; couples to L17 doc-coupling sweep if not handled inline. R4 = full lens-set re-run only if other lenses (esp. L12 / L17) find their own residues at their R3 reviews; L9 itself is advance-ready and would expect to see 0 substantive findings in R4 absent new fix-pass introductions."
+}
