@@ -2,7 +2,9 @@
 
 Plain-English deep-dive for the 9th workspace crate. Identity primitives: Ed25519 keypairs, `did:key` DIDs, UCAN delegation chains, Verifiable Credentials, DID rotation attestations, signed device-DID capability envelopes, **plugin-DID mint/store (G24-D)**, and the **sibling `GrantReader` trait with CID-keyed companion (G27-C)**. Read-only audit — no compile / no cargo / no claims about CI state.
 
-State as of HEAD `8141b94` (2026-05-14). Substantive content added since the prior revision: Phase-3-close maturation (RotationLog HLC-monotonic-strict + verbatim-replay defense at G24-D-FP-2) + Phase-4-Foundation G24-D plugin-DID surface + G27-C sibling GrantReader trait.
+Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`); body still reflects HEAD `8141b94` baseline. Substantive content added during Phase-3-close + Phase-4-Foundation: RotationLog HLC-monotonic-strict + verbatim-replay defense at G24-D-FP-2 + G24-D plugin-DID surface + G27-C sibling GrantReader trait.
+
+**Phase-4-Meta-Core delta (additive on this crate):** all signature verify dispatch threads through `benten-crypto-suite` per CLAUDE.md baked-in #5 only-call-site rule (this crate no longer reaches `ed25519-dalek` directly; it routes through `benten_crypto_suite::sig::SignatureSuite`). ~332 LOC diff over the phase from the G-CORE-2 signature-agility integration crate's introduction + the PQ-hybrid default reframe wiring. The body §sections below still hold structurally — read `crates/benten-id/src/{*.rs}` for the verify-call-site refactor.
 
 ---
 

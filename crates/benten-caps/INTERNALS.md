@@ -2,7 +2,9 @@
 
 A plain-English deep-dive on the `benten-caps` crate. Companion to the public `lib.rs` docs; written for fresh agents coming into Phase 4-Foundation / Phase 4-Meta / v1-assessment-window work. Treats *why* and *what's load-bearing* as first-class.
 
-Last refreshed: 2026-05-14 against main HEAD `8141b94` post Phase-4-Foundation R6-FP cluster admin-merge.
+Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`); body still reflects pre-Phase-4-Meta-Core surfaces baseline at `8141b94` post Phase-4-Foundation R6-FP cluster admin-merge.
+
+**Phase-4-Meta-Core delta (additive on this crate):** G-CORE-3b (PR #1324) minted `RestrictedSpec` + `AuthorizationGrant` + `Scope` + chain validator; the rename to `RestrictedScope` + `GrantKeyMaterial` (distinct from `benten-crypto-suite::AeadKeyMaterial`) landed at PR #1344. G-CORE-8 (#993 SEALED + 3 new defaulted CapabilityPolicy hooks: `check_install_consent` / `check_per_delegation` / `check_write_with_audience`) sealed the trait via private `Sealed` supertrait at `policy.rs:50-64` per CLAUDE.md baked-in #7. ~215 LOC INTERNALS-applicable diff this phase; the body §sections below still hold structurally — read `crates/benten-caps/src/{restricted_spec,authorization_grant,scope,policy}.rs` for the Phase-4-Meta-Core types.
 
 ---
 

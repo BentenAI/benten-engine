@@ -5,10 +5,9 @@ contains, what it exposes, and what gaps / architectural questions it leaves
 open. Pair with `CLAUDE.md` item #2 (IVM Algorithm B + per-view strategy + the
 "engine names `Strategy` but not internals" boundary).
 
-State: HEAD `8141b94` (post `phase-4-foundation-close` tag; PR #242–#250
-all merged). Reflects G23-0a IVM kernel generalization +
-G23-0b 5-view re-expression as `SubgraphSpec` consumers + `Strategy::C →
-Strategy::Reserved` rename + `Projection::AllProps` placeholder removal.
+Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`); body still reflects HEAD `8141b94` baseline. Reflects G23-0a IVM kernel generalization + G23-0b 5-view re-expression as `SubgraphSpec` consumers + `Strategy::C → Strategy::Reserved` rename + `Projection::AllProps` placeholder removal.
+
+**Phase-4-Meta-Core delta (additive on this crate):** G-CORE-4 D1 (PR #1311) added the CanonicalViews A2 seam + IVM 5-arm `Strategy` enum extension + materializer walk + §4.6 vocab landed in `benten-core`; this crate's `Strategy` dispatch table extended additively to absorb the 5-arm shape. The `Strategy::C → Strategy::Reserved` rename + 3 DSL ErrorCode mints are deferred to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED Row D-19 (Bundle 4 ESCALATED). ~875 LOC diff over the phase. Read `crates/benten-ivm/src/{*.rs}` for the 5-arm Strategy extension shape.
 
 ---
 
