@@ -109,14 +109,31 @@ fail CI on a frozen-surface mutation:
 
 ---
 
-## 1. §8-A visibility cluster — TIGHTEN applied atomically (aggressive)
+## 1. §8-A visibility cluster — PARTIAL-LANDED at v1-beta; binary-side tighten + napi cascade DEFERRED to G-COMP-1 (per G-CORE-9 R1 triage L2-BLK-1 escalation)
 
-**Orchestrator distinctive-angle decision: Planner-A wins — aggressive
-tighten.** Matches spec item 1 ratification "DECIDED `pub`→`pub(crate)` +
-rename + drop `_for_test`".
+**Orchestrator distinctive-angle decision (RATIFIED 2026-05-18): Planner-A
+wins — aggressive tighten.** Matches spec item 1 ratification "DECIDED
+`pub`→`pub(crate)` + rename + drop `_for_test`".
 
-**Frozen surfaces (post-tighten, per RATIFIED-prework-forks-2026-05-18.md
-§8-A option (a)):**
+**G-CORE-9 R1 triage retense (2026-05-24).** The binary-side tighten
++ napi cascade is **partial-landed at v1-beta** and explicitly named
+to a follow-up G-COMP-1 sub-pass per HARD RULE 12 clause-(b). At
+v1-beta the four methods (`get_node` / `put_node` / `get_node_label_only`
+/ `resolve_subgraph_cid_for_test`) remain `pub fn` with their pre-tighten
+names. The R1 council surfaced that the original framing of this item
+read as as-if-frozen-as-tightened when the bytes were not (Bundle 1
+escalation criterion fired: cascade >50 call sites + breaks napi
+binding). Destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` row D-7
+"§8-A Engine visibility cluster tighten + napi cascade".
+
+**Per discipline at v1-beta** (until G-COMP-1 closes Row D-7),
+external consumers needing principal-bearing read SHOULD route through
+`Engine::read_node_as(principal, cid)` rather than `Engine::get_node`;
+the un-attributed `get_node` remains reachable for backward-compat
+with consumers that don't yet have the principal context.
+
+**Frozen surfaces (post-tighten target, per RATIFIED-prework-forks-2026-05-18.md
+§8-A option (a); applies at G-COMP-1 closure of Row D-7):**
 
 - `crates/benten-engine/src/engine_crud.rs:139` — `Engine::get_node` →
   `pub(crate) fn read_node(&self, cid: &Cid) -> Result<Option<Node>,
@@ -141,10 +158,16 @@ rename + drop `_for_test`".
   cap-mutation method may regress (freeze invariant; orchestrator-
   mechanical no-regression test pin per build-backlog).
 
-**What "frozen" means here:**
-- Type-wise: the four methods MUST be `pub(crate)` after the tighten +
-  rename; external callers MUST go through `read_node_as(principal, cid)`.
-  The `cargo-public-api` baseline catches any post-freeze re-`pub`-ing.
+**What "frozen" means here (at v1-beta, partial-landed):**
+- The TARGET shape is locked at v1-beta (the rename + tighten will land
+  in G-COMP-1 per Row D-7).
+- Adding NEW cap-mutation methods to `Engine` (other than via the
+  `caps()` handle) is a HALT-AND-SURFACE event — `Engine::caps()` is
+  the canonical cap-mutation surface at v1-beta and beyond.
+- At G-COMP-1 closure of Row D-7: the four methods MUST be `pub(crate)`
+  after the tighten + rename; external callers MUST go through
+  `read_node_as(principal, cid)`. The `cargo-public-api` baseline
+  catches any post-G-COMP-1 re-`pub`-ing.
 - Behaviorally: the engine-internal callers (IVM, sync, view
   materialization, audit) keep using the un-attributed pathway with zero
   overhead — the tighten is a visibility-only change, not a behavior
