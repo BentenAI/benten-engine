@@ -1,0 +1,138 @@
+{
+  "lens": "L1-crypto-correctness",
+  "round": "R2",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "branch": "g-core-9/r2-l1-crypto-correctness",
+  "base_sha": "235ad861b2a4013c0ea148efb0789a780cb107d4",
+  "scope_read": [
+    "docs/V1-FROZEN-INTERFACE.md (items 6, 14, 15(d)(e)(f)(g)) post-fix-pass",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md (Rows D-1..D-18)",
+    "docs/g-core-9-r1-triage.md",
+    "crates/benten-crypto-suite/src/codepoint.rs",
+    "crates/benten-crypto-suite/src/cipher_suite.rs",
+    "crates/benten-crypto-suite/src/swap_matrix.rs (lines 432-545 + 774-810 + 1575-1600)",
+    "crates/benten-crypto-suite/src/aead.rs (lines 1-30 + 160-205)",
+    "crates/benten-crypto-suite/src/sig.rs (line 304 resolve_codepoint surface)",
+    "crates/benten-crypto-suite/src/lib.rs (lines 50-117)",
+    "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs (NEW R1-FP)",
+    "crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs (lines 280-302)",
+    "crates/benten-crypto-suite/tests/tf2_codepoint_dispatch_typed_unsupported_classical_downgrade.rs (lines 160-180)",
+    "fix-pass commit 235ad861 (full body)",
+    "R1 lens output at origin/g-core-9/r1-l1-crypto-correctness:r6-crypto-correctness.json"
+  ],
+  "summary": "R1 fix-pass closed the LOAD-BEARING L1-MAJOR-1 (V1-FROZEN row 6 0x0003 framing now mirrors 0x647c's typed-rejected language at line 508) + the dispatcher-typed-reject no-regression sub-pin (a) (SigCodepoint::HYBRID_MLDSA65_SLHDSA.resolve() asserted as Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 }) at canonical_bytes_v1_codepoints_and_aad.rs:152) + L1-MINOR-2 partially (codepoint.rs:30-31 + :52-60 docstrings now correctly reflect G-CORE-3c-shipped-with-0x0003-still-reserved per C11b) + L1-OBS-5 via DEFERRED.md Row D-15 anchor (BELONGS-NAMED-NOW to G-COMP-1). However R2 verification surfaces three residual gaps where the fix-pass landed differently from the R1 fix_now_action: (1) L1-MINOR-3 'swallow fix' was implemented by class-classifying the static message string (variant-name-bearing) but STILL drops the integer codepoint value at both call sites (swap_matrix.rs:438-440 + :539-541) — the recommended .map_err(SwapMatrixError::Unsupported) path (the variant already exists at line 793 as `Unsupported(#[from] UnsupportedAlgorithm)`) preserves the full typed-codepoint info end-to-end and was NOT taken; (2) L1-OBS-4 (codepoint.rs:9-18 module docstring 'P-III deferred / G-CORE-9 may re-numerate them' staleness — the R1 action specifically named the FREEZE wave for this update, and THIS IS the FREEZE wave with V1-FROZEN row 6 ratified) is NOT closed in code AND NOT anchored in DEFERRED.md (the triage at docs/g-core-9-r1-triage.md:137 claims capture but only L1-r1-5 anchor exists at DEFERRED.md:347 — L1-r1-4 is phantom-destination per HARD RULE 12); (3) lib.rs:56-65 retains 'This wave typed-rejects it' phrasing that the R1 fix_now_action named for update (lib.rs section explicitly listed alongside codepoint.rs sites). Findings are surgical (one MAJ phantom-destination + one MAJ diagnostic-info-loss-persists-after-fix + one MIN lib.rs residue + one MIN missing-sub-pins). No BLOCKER. R3 expected if Q5 termination is to fire.",
+  "disposition": "APPROVE_WITH_FIXES",
+  "convergence_signal": "R1=1 MAJ / 2 MIN / 2 OBS → R2=2 MAJ / 2 MIN / 0 OBS. NOT monotonic-strictly (MAJ count rose 1→2) because R2 surfaces (a) a fix-pass implementation that diverged from the R1 stated action (L1-MINOR-3 escalated from MIN→MAJ because the diagnostic-info-loss intent was named for closure but persists in code) and (b) a phantom-destination violation per HARD RULE 12 (L1-OBS-4 claimed DEFERRED.md capture but not actually anchored — this is a stronger failure than the original OBS rating). Both are surgical (~20 LOC + a docs/V1-FROZEN-INTERFACE-DEFERRED.md row insert + a docstring rewrite). Expect R3 zero-substantive after a focused R2 fix-pass targeting these three sites.",
+  "findings": [
+    {
+      "id": "L1-crypto-r2-1",
+      "severity": "MAJOR",
+      "title": "L1-MINOR-3 fix-pass diverged from R1 stated action — diagnostic codepoint value still discarded at both swap_matrix call sites despite the typed-preserving SwapMatrixError::Unsupported variant existing",
+      "sites": [
+        "crates/benten-crypto-suite/src/swap_matrix.rs:438-440 (sign-and-seal call site)",
+        "crates/benten-crypto-suite/src/swap_matrix.rs:539-541 (open-and-verify call site)",
+        "crates/benten-crypto-suite/src/swap_matrix.rs:793 (SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm) variant — exists and unused at these sites)",
+        "crates/benten-crypto-suite/src/swap_matrix.rs:1581-1587 (unsupported_codepoint_msg_static helper — still discards codepoint integer; tag-comment 'L1-crypto-r1-3: classified by variant rather than swallowed' acknowledges only partial closure)"
+      ],
+      "evidence": "R1's L1-crypto-r1-3 fix_now_action stated: 'Replace the two call sites (swap_matrix.rs:438-440 + 539-541) with `.map_err(SwapMatrixError::Unsupported)` (no helper fn needed; the From impl on `Unsupported` variant handles the conversion directly). Delete the now-unused `unsupported_codepoint_msg_static` helper. Preserves typed-error info end-to-end + simplifies the cipher-suite resolve failure path.' The fix-pass instead retained the helper + retained the call sites + only changed the helper body to classify by variant name (e.g. 'cipher-suite codepoint typed-unsupported' static string). The helper's own docstring (line 1576-1580) acknowledges this: 'The codepoint value itself is not interpolated because the return type is `&'static str` (callers that need the codepoint integer value should consult the `UnsupportedAlgorithm` variant directly via pattern matching, not via the message string).' But the call sites at 438-440 + 539-541 wrap as `SwapMatrixError::CipherSuite(static_str)` which produces a SwapMatrixError variant that carries ONLY the static string and DROPS the UnsupportedAlgorithm value altogether — downstream pattern-matching CANNOT recover the codepoint integer. The `Unsupported(#[from] UnsupportedAlgorithm)` variant at line 793 already exists and DOES preserve the typed-codepoint info perfectly. The original finding's intent (preserve diagnostic info end-to-end + simplify via existing From-impl) is unaddressed; the cosmetic helper-body edit makes a surface-only improvement (variant-class-bearing string) without delivering the structured-error preservation.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "(a) Replace `SwapMatrixError::CipherSuite(unsupported_codepoint_msg_static(&e))` at lines 438-440 + 539-541 with `.map_err(SwapMatrixError::Unsupported)` — this uses the existing From impl on the `Unsupported(#[from] UnsupportedAlgorithm)` variant to preserve full typed-codepoint info downstream. (b) Delete the now-unused `unsupported_codepoint_msg_static` helper at lines 1575-1587. (c) Update the surrounding `Result` type annotations only if needed (the variant addition propagates via `#[from]`). (d) Re-run benten-crypto-suite + benten-engine + benten-caps test suites to verify no downstream depends on the dropped string-classification of CipherSuite('cipher-suite codepoint typed-unsupported'). Total edit: ~6 LOC (matches R1 original estimate).",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Per HARD RULE 12: when a fix-pass for a FIX-NOW finding lands a different action than what the action stated, the original action remains unfulfilled. The diagnostic-info-loss class of bug is exactly the kind the freeze-time audit is intended to close — at v1-beta wire-freeze a downstream consumer matching on `SwapMatrixError::Unsupported { codepoint, .. }` to surface a specific bad-codepoint message has no way to recover the integer value from the current `SwapMatrixError::CipherSuite(&'static str)` carrier. Escalated from R1's MIN to R2's MAJOR because the fix-pass acknowledged the finding + landed an implementation + the implementation does NOT close the surfaced concern (the cosmetic helper-body edit is strictly less than the original finding's diagnostic-info-preservation intent)."
+    },
+    {
+      "id": "L1-crypto-r2-2",
+      "severity": "MAJOR",
+      "title": "L1-OBS-4 phantom-destination per HARD RULE 12 — triage claims capture in DEFERRED.md but the row is not actually present; codepoint.rs:9-18 'P-III deferred' docstring is stale at the FREEZE wave",
+      "sites": [
+        "crates/benten-crypto-suite/src/codepoint.rs:9-18 (module docstring 'P-III deferred / G-CORE-9 may re-numerate them')",
+        "docs/g-core-9-r1-triage.md:137 (claims L1-crypto-r1-4 captured in V1-FROZEN-INTERFACE-DEFERRED.md G-COMP-1 row 'post-v1-beta hardening')",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md (grep L1-crypto-r1-4 returns NO matches; only L1-crypto-r1-5 is anchored at line 347)"
+      ],
+      "evidence": "codepoint.rs:9-18 still reads: 'The codepoint VALUES below are the operative constants the canary brief carries and that the integration crate treats as authoritative. The **FREEZE ACT** (making these wire-canonical) is the scheduled G-CORE-9 P-III Ben decision-point — this wave produces the codepoint dispatch shape; G-CORE-9 locks the values. They are stable for the span of this crate's life today; G-CORE-9 may re-numerate them in a single deliberate freeze pass...' But this IS the G-CORE-9 FREEZE wave (commit 8cc4eddd landed V1-FROZEN-INTERFACE.md with row 6 codepoint table ratified; commit 235ad861 R1 fix-pass landed the row-6 retense). The docstring claims the freeze is future + G-CORE-9 may re-numerate — both directly contradicted by the actually-shipped V1-FROZEN doc. R1's L1-crypto-r1-4 fix_now_action explicitly named the FREEZE-tag wave (THIS wave) for this update: 'At the G-CORE-9 FREEZE tag wave (post-R6-convergence), update codepoint.rs:9-18 module docstring from P-III deferred / FREEZE ACT scheduled to FROZEN at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit <SHA>)...'. The g-core-9-r1-triage.md:137 says: 'L1-crypto-r1-4/5 — future P-III items + nonce-length panic risk — captured in V1-FROZEN-INTERFACE-DEFERRED.md G-COMP-1 row \"post-v1-beta hardening\".' But `grep L1-crypto-r1-4 docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns NO MATCHES — only L1-crypto-r1-5 has an anchor at line 347. Per HARD RULE 12 clause-(b): a named destination MUST receive the entry NOW; 'I'll add it later' or claiming capture without the destination actually having received the entry is exactly the phantom-destination failure the rule was written to catch.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "(a) Update codepoint.rs:9-18 to reflect the actually-shipped FREEZE state per the R1-original fix_now_action — replace the 'P-III deferred / FREEZE ACT scheduled' framing with 'FROZEN at G-CORE-9 V1-FROZEN-INTERFACE.md row 6 (commit 8cc4eddd + R1 fix-pass commit 235ad861); codepoint table integer values are PERMANENT per the freeze contract. Algorithms behind each codepoint are SWAPPABLE within the framing; the codepoint values themselves are wire-canonical. Future additions land additively at unused codepoint values per the additive-codepoint discipline; existing values are never repurposed.' (b) Sweep companion module-level docstrings for consistency: lib.rs:50-65 cipher-suite-and-PQ-pivot section (see L1-crypto-r2-3 for the lib.rs:56-65 specifically) + lib.rs:67-83 ('# Cipher-suite (G-CORE-3 / #1301) deferred surface') which similarly treats G-CORE-3 as future though G-CORE-3a CANARY + G-CORE-3c TERMINAL have shipped. Either retense or anchor in DEFERRED.md per HARD RULE 12 clause-(b). (c) If the action is to anchor instead of code-fix any of these, add a real Row to V1-FROZEN-INTERFACE-DEFERRED.md naming L1-crypto-r1-4 — do not leave the triage claim phantom.",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Per HARD RULE 12 clause-(b) — 'BELONGS-NAMED-NOW with destination receiving entry NOW' is the disposition the triage claimed; the destination did NOT receive the entry. This is a textbook phantom-destination violation. Escalated from R1's OBS to R2's MAJOR because (i) the freeze-doc-truth-vs-source-code-truth mismatch is exactly the rustdoc-as-source-of-truth invariant the freeze leans on, (ii) a future contributor reading codepoint.rs to understand the codepoint table would be told 'the freeze is future' which directly contradicts V1-FROZEN row 6, and (iii) the phantom-destination is the kind of HARD RULE 12 violation that the project's most-violated rule (per CLAUDE.md §Non-Negotiable Process Rules #12) explicitly forbids. Once code-fixed (or anchored in DEFERRED.md), the freeze-doc + crate-rustdoc + DEFERRED.md form a consistent triple."
+    },
+    {
+      "id": "L1-crypto-r2-3",
+      "severity": "MINOR",
+      "title": "L1-MINOR-2 residue — lib.rs:56-65 + lib.rs:67-83 NF-1 and cipher-suite section still framed as 'this wave typed-rejects / G-CORE-3 deferred' though both waves shipped",
+      "sites": [
+        "crates/benten-crypto-suite/src/lib.rs:56-65 (NF-1 SigCodepoint section: 'reserved-now, conformance-built at G-CORE-3c. This wave typed-rejects it')",
+        "crates/benten-crypto-suite/src/lib.rs:67-83 (cipher-suite section: 'G-CORE-3a (CANARY) flips ... TO LIVE'; '0x647c stay reserved-typed-reject ... until G-CORE-3c's full swap-matrix wave')"
+      ],
+      "evidence": "R1's L1-crypto-r1-2 fix_now_action explicitly named lib.rs:56-65 alongside codepoint.rs:30-31 + :46-50 for the staleness rewrite. The codepoint.rs sites are updated. lib.rs:56-65 still reads: 'Signature PQ⊕PQ = ML-DSA-65 ⊕ SLH-DSA (SigCodepoint::HYBRID_MLDSA65_SLHDSA = 0x0003) — reserved-now, conformance-built at G-CORE-3c (the full swap matrix). This wave typed-rejects it with UnsupportedAlgorithm::Signature.' But G-CORE-3c shipped at a99edbe9 + the dispatcher continues typed-rejecting 0x0003 per the C11b safety gate (which is the corrected framing landed in codepoint.rs:30-38 + :52-60). The lib.rs residue says 'this wave' + 'conformance-built at G-CORE-3c' (future tense) but THIS wave is G-CORE-9 FREEZE post-G-CORE-3c. Similarly lib.rs:67-83 says 'G-CORE-3a (CANARY) flips 0x647a + 0x6400 TO LIVE' (future tense; G-CORE-3a CANARY shipped) and '0x647c stay reserved-typed-reject ... until G-CORE-3c' (G-CORE-3c shipped; 0x647c IS still typed-rejected at the dispatcher per the C11b gate — the framing implied G-CORE-3c would flip it LIVE, which is wrong). Both sections should be retensed to reflect the actually-shipped state: 'G-CORE-3a CANARY shipped 0x647a + 0x6400 LIVE; G-CORE-3c TERMINAL shipped the full swap matrix retaining 0x647c + 0x0003 as dispatcher-typed-rejected per the C11b safety gate.'",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Rewrite lib.rs:56-65 + lib.rs:67-83 + lib.rs:99-104 to reflect actually-shipped post-G-CORE-3a/3c state per the codepoint.rs:30-38 framing already landed. Use the exact pattern: 'reserved swap-matrix arm — typed-rejected by default at SigCodepoint::resolve + SignatureSuite::resolve_codepoint + varsig.rs::decode_payload per C11b safety gate (mirroring 0x647c)' for 0x0003; 'X-Wing-hybrid + classical-X25519 LIVE since G-CORE-3a CANARY; full swap matrix shipped at G-CORE-3c with 0x647c + 0x0003 retained as dispatcher-typed-reject per C11b' for the cipher-suite section. Total edit: ~15 LOC across the three sub-sections.",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Direct residue from R1's L1-crypto-r1-2 — the original fix_now_action's third named site (lib.rs:56-65) was missed by the fix-pass + the adjacent cipher-suite section (lib.rs:67-83) carries the same stale framing. MINOR not MAJOR because the codepoint.rs primary surface is correct + the lib.rs module-level docstring is the secondary surface; a contributor reading lib.rs first then codepoint.rs gets a less-stale-than-reading-only-lib.rs experience. Trivial 3-section edit closes the residue."
+    },
+    {
+      "id": "L1-crypto-r2-4",
+      "severity": "MINOR",
+      "title": "L1-MAJOR-1 sub-pins (b) SignatureSuite::resolve_codepoint(HYBRID_MLDSA65_SLHDSA) + (c) UcanVarsigV1Header::decode of 0x0003 header not explicitly asserted in the no-regression test",
+      "sites": [
+        "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs:146-182 (reserved_codepoints_stay_typed_rejected_at_v1_beta covers only the SigCodepoint::resolve sub-pin)",
+        "crates/benten-crypto-suite/src/sig.rs:304 (SignatureSuite::resolve_codepoint surface — not directly asserted for 0x0003)",
+        "crates/benten-crypto-suite/src/varsig.rs::UcanVarsigV1Header::decode (header carrying codepoint 0x0003 — not directly asserted)"
+      ],
+      "evidence": "R1's L1-crypto-r1-1 fix_now_action explicitly named THREE sub-pins: '(a) SigCodepoint::HYBRID_MLDSA65_SLHDSA.resolve() returns Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 }), (b) SignatureSuite::resolve_codepoint(SigCodepoint::HYBRID_MLDSA65_SLHDSA) returns Err matching codepoint 0x0003, (c) UcanVarsigV1Header::decode of a header carrying codepoint 0x0003 returns Err(VarsigError::UnsupportedCodepoint { codepoint: 0x0003, .. }).' The fix-pass shipped only sub-pin (a) at canonical_bytes_v1_codepoints_and_aad.rs:152. Sub-pin (b) is partially covered by the upstream SigCodepoint::resolve assertion (because SignatureSuite::resolve_codepoint calls codepoint.resolve() at sig.rs:304-311 per L1-approve-1 evidence), and sub-pin (c) is similarly partially covered (varsig.rs::decode calls codepoint.resolve at varsig.rs:82-89). But the freeze-discipline argument for explicit pins is that 'a regression that silently routes 0x0003 to a real implementation' (per the test docstring at canonical_bytes_v1_codepoints_and_aad.rs:144-145) at any of the three surfaces should fail the pin — a refactor that decouples SignatureSuite::resolve_codepoint or UcanVarsigV1Header::decode from the central SigCodepoint::resolve dispatcher (e.g. introduces a fast-path special-case) would slip past the single sub-pin (a). The R1 explicit-naming-of-three-sub-pins recognized this potential failure mode.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Extend the existing reserved_codepoints_stay_typed_rejected_at_v1_beta test (canonical_bytes_v1_codepoints_and_aad.rs:146-182) with two additional explicit assertion blocks: (b) `SignatureSuite::resolve_codepoint(SigCodepoint::HYBRID_MLDSA65_SLHDSA)` returns `Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 })` + (c) build a synthetic `UcanVarsigV1Header` carrying codepoint 0x0003 (via the test-side from_raw constructor) + assert decode returns `Err(VarsigError::UnsupportedCodepoint { codepoint: 0x0003, .. })`. Total edit: ~25 LOC test additions in the same test function or two new tests. This closes the freeze-discipline 'wording-mutation' guard per §3.5g (cross-surface typed-reject invariant pinned at every dispatcher entry).",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "The R1 fix_now_action enumerated three sub-pins precisely because the freeze relies on the typed-reject invariant holding at EVERY dispatcher entry (the L1-approve-1 evidence enumerates all entry points). The fix-pass shipped one of three. MINOR not MAJOR because the upstream dispatcher pin transitively covers the downstream surfaces today; explicit sub-pins (b)+(c) close the future-refactor risk."
+    }
+  ],
+  "approved_invariants": [
+    {
+      "id": "L1-r2-approve-1",
+      "title": "L1-MAJOR-1 V1-FROZEN row 6 0x0003 framing CLOSED",
+      "evidence": "V1-FROZEN-INTERFACE.md:508 now reads: 'SigCodepoint::HYBRID_MLDSA65_SLHDSA | 0x0003 | reserved swap-matrix arm (NF-1 end-state; typed-rejected by default at SigCodepoint::resolve + SignatureSuite::resolve_codepoint + varsig.rs::decode_payload; reachable only via SwapMatrix::try_pure_pq_sole_trust_path() audit-gated constructor per C11b safety gate; mirrors 0x647c framing)' — exactly the framing R1 prescribed. Companion line 513 (0x647c) carries the parallel 'reserved swap-matrix arm (NOT default ... typed-rejected by default — gated by AUDIT_LANDED_PURE_PQ_FLAG per the C11b safety gate)' framing. The freeze-doc + code dispatcher invariants now agree."
+    },
+    {
+      "id": "L1-r2-approve-2",
+      "title": "L1-MAJOR-1 sub-pin (a) dispatcher-typed-reject no-regression test for 0x0003 LANDED + PASSING",
+      "evidence": "tests/canonical_bytes_v1_codepoints_and_aad.rs:147-182 `reserved_codepoints_stay_typed_rejected_at_v1_beta` asserts (a) SigCodepoint::HYBRID_MLDSA65_SLHDSA.resolve() returns Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 }), and parallel assertions for 0x647b + 0x647c. `cargo test -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad` returns: '3 passed; 0 failed; 0 ignored'. The wire-format hex pins (codepoint_table_integer_values_pinned + aad_per_chunk_canonical_layout_pinned) co-located at the same file form the L11-MAJOR-4 + L11-MINOR-3 freeze-discipline byte-pin substrate."
+    },
+    {
+      "id": "L1-r2-approve-3",
+      "title": "L1-MINOR-2 codepoint.rs:30-31 + :52-60 docstring retense CLOSED",
+      "evidence": "codepoint.rs:30-38 now correctly reads: 'reserved swap-matrix arm — typed-rejected by default at SigCodepoint::resolve and at SignatureSuite::resolve_codepoint; reachable only via SwapMatrix::try_pure_pq_sole_trust_path which is gated by the C11b AUDIT_LANDED_PURE_PQ_FLAG ... The full swap matrix shipped at G-CORE-3c retains 0x0003 as typed-rejected.' codepoint.rs:52-60 (variant docstring) mirrors: 'G-CORE-3c shipped the full swap matrix; 0x0003 stays typed-rejected at the dispatcher per the C11b safety gate.' Both correctly reflect the actually-shipped state. (lib.rs residue tracked separately as L1-crypto-r2-3.)"
+    },
+    {
+      "id": "L1-r2-approve-4",
+      "title": "L1-OBS-5 BELONGS-NAMED-NOW to G-COMP-1 via DEFERRED.md Row D-15",
+      "evidence": "V1-FROZEN-INTERFACE-DEFERRED.md:340-361 Row D-15 'Post-v1-beta hardening watch-list' deferred consumption bullet 1 reads: '`AeadEnvelope::to_wire_bytes` panics via `.expect` on nonce length > 255 — convert to `Result` (L1-crypto-r1-5)'. The L1-r1-5 anchor explicit; the destination (G-COMP-1 OR Phase-4-Meta-Composing v1-assessment-window) named per HARD RULE 12 clause-(b)."
+    },
+    {
+      "id": "L1-r2-approve-5",
+      "title": "R1-APPROVED invariants all still hold post-fix-pass (re-verified)",
+      "evidence": "Re-spot-checked R1's 9 approved invariants (L1-approve-1 through L1-approve-9): codepoint dispatchers fail-closed (codepoint.rs:99-152 + 234-253) UNCHANGED + still typed-reject; reserved codepoints honored per V1-FROZEN row 6 UNCHANGED; PQ-hybrid NF-4 strip-resistance + both-must-verify UNCHANGED (sig.rs:414-510 7-gate flow); X-Wing combiner classical+PQ+pubkey commitment UNCHANGED (cipher_suite.rs:403-437); two-path KDF Spike-E Interpretation-B UNCHANGED (structural_kdf.rs:124-152); derive_root/derive_step API matches RATIFIED §15(f) UNCHANGED; AeadEnvelope wire-format Gate-6 format-version byte UNCHANGED (aead.rs:161-175); EncryptionClass enum orthogonal-by-design UNCHANGED (benten-core/src/encryption_class.rs); 0x647c typed-rejected at v1-beta + reachable only via try_pure_pq_sole_trust_path UNCHANGED (cipher_suite.rs:240-262). No regression of the R1 approved-invariant set. `cargo check -p benten-crypto-suite` clean."
+    }
+  ],
+  "iteration_termination_check": {
+    "criterion": "Per CLAUDE.md rule 9 Q5: full council every round; only BLOCKER/MAJOR block; iterate until 0 substantive findings.",
+    "this_round_blocker_count": 0,
+    "this_round_major_count": 2,
+    "this_round_minor_count": 2,
+    "this_round_obs_count": 0,
+    "prior_round_blocker_count": 0,
+    "prior_round_major_count": 1,
+    "prior_round_minor_count": 2,
+    "prior_round_obs_count": 2,
+    "convergence_status": "NOT CONVERGED at R2 — 2 MAJOR (L1-crypto-r2-1 diagnostic-info-loss persists in fix-pass implementation; L1-crypto-r2-2 phantom-destination per HARD RULE 12) require fix-pass + R3 re-review. The convergence shape is non-monotonic in MAJOR count (1→2) because R2 surfaces fix-pass-as-shipped-vs-fix-pass-as-prescribed divergences that are stronger than the R1 originals (the cosmetic-rather-than-structural fix landed at L1-MINOR-3; the phantom-destination at L1-OBS-4 that the triage claimed-and-didn't-deliver). All findings are surgical (~50 LOC total across 3 files + 1 test extension + optional DEFERRED.md row). Expect R3 zero-substantive after a focused R2 fix-pass.",
+    "iteration_recommendation": "PROCEED to R2 fix-pass (single targeted commit closing L1-crypto-r2-1 through r2-4) → R3 lens dispatch. Other lenses in the council may converge faster; this lens needs one more round to reach Q5 termination."
+  },
+  "load_bearing_citations": [
+    "CLAUDE.md §Non-Negotiable Process Rules #12 (HARD RULE — phantom-destination violation explicitly forbidden + named destination MUST receive entry NOW)",
+    "CLAUDE.md baked-in #5 (crypto-agility framing — multiformats permanent; typed-unsupported NEVER silent fallback; codepoint dispatcher is the canonical entry)",
+    "RATIFIED-pq-default-reframe-2026-05-19.md §1-2 (NF-4 + NF-1 + PQ-default placement)",
+    "V1-FROZEN-INTERFACE.md item 6 (codepoint table — row 508 0x0003 framing post-R1-fix-pass mirrors row 513 0x647c per C11b)",
+    "V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 (L1-OBS-5 anchor; L1-OBS-4 NOT anchored — phantom)",
+    "g-core-9-r1-triage.md:137 (claims L1-r1-4 captured in DEFERRED.md — claim not borne out)",
+    "memory/feedback_no_defer_HARD_RULE.md (phantom-destination + named-not-realized failure mode)",
+    "memory/feedback_review_finding_ground_truth_verify.md (orchestrator + downstream reviewer independently ground-truth-verifies every claimed closure)"
+  ]
+}
