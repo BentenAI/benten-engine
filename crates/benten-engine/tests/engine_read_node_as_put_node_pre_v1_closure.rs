@@ -27,6 +27,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::BTreeMap;
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use std::sync::{Arc, Mutex};
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
@@ -193,6 +194,9 @@ fn read_node_as_collapses_to_none_under_grant_backed_denial() {
 struct RecordingPolicy {
     seen_actor: Arc<Mutex<Option<Cid>>>,
 }
+
+impl Sealed for RecordingPolicy {}
+
 
 impl CapabilityPolicy for RecordingPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

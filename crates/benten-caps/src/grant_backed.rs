@@ -412,6 +412,8 @@ impl std::fmt::Debug for GrantBackedPolicy {
     }
 }
 
+impl crate::policy::sealed::Sealed for GrantBackedPolicy {}
+
 impl CapabilityPolicy for GrantBackedPolicy {
     fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
         // Engine-privileged writes bypass the policy entirely (system-zone

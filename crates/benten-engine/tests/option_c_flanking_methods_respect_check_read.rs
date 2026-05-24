@@ -53,6 +53,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use benten_core::{Node, Value};
 use benten_engine::Engine;
 use benten_eval::host::{PrimitiveHost, ViewQuery};
@@ -62,6 +63,9 @@ use std::collections::BTreeMap;
 /// permits every write. Models a principal holding write-only grants.
 #[derive(Debug)]
 struct DenyAllReads;
+
+impl Sealed for DenyAllReads {}
+
 
 impl CapabilityPolicy for DenyAllReads {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

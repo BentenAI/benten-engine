@@ -17,6 +17,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_core::{Node, Value};
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use benten_engine::Engine;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -93,6 +94,8 @@ fn compromise_2_option_c_symmetric_none_plus_diagnose_read() {
     // diagnose_read still surfaces the distinction.
     #[derive(Debug)]
     struct DenyReadsPermitDebug;
+    impl Sealed for DenyReadsPermitDebug {}
+
     impl benten_caps::CapabilityPolicy for DenyReadsPermitDebug {
         fn check_write(
             &self,
@@ -146,6 +149,8 @@ fn compromise_2_option_c_symmetric_none_plus_diagnose_read() {
     // everything including debug) fires CapDenied at diagnose_read time.
     #[derive(Debug)]
     struct DenyAllIncludingDebug;
+    impl Sealed for DenyAllIncludingDebug {}
+
     impl benten_caps::CapabilityPolicy for DenyAllIncludingDebug {
         fn check_write(
             &self,

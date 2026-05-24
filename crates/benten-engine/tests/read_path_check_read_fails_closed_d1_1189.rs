@@ -53,6 +53,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use benten_core::{Node, Value};
 use benten_engine::{Engine, EngineError};
 use std::collections::BTreeMap;
@@ -62,6 +63,9 @@ use std::collections::BTreeMap;
 /// Err(DeniedRead)` shape silently permitted) and permits every write.
 #[derive(Debug)]
 struct DenyViaRevoked;
+
+impl Sealed for DenyViaRevoked {}
+
 
 impl CapabilityPolicy for DenyViaRevoked {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
@@ -77,6 +81,9 @@ impl CapabilityPolicy for DenyViaRevoked {
 /// the fix (the fix must not turn `DeniedRead` into a hard error).
 #[derive(Debug)]
 struct DenyViaDeniedRead;
+
+impl Sealed for DenyViaDeniedRead {}
+
 
 impl CapabilityPolicy for DenyViaDeniedRead {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

@@ -784,6 +784,7 @@ fn typed_call_cap_denied_via_capability_policy_returns_on_denied_edge() {
     struct DenyTypedCryptoSign {
         denied_count: Arc<AtomicU32>,
     }
+    impl benten_caps::__sealed_for_workspace_tests::Sealed for DenyTypedCryptoSign {}
     impl CapabilityPolicy for DenyTypedCryptoSign {
         fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
             if ctx.label == "cap:typed:crypto-sign" {
@@ -894,6 +895,7 @@ fn dispatch_typed_call_public_napi_entry_gates_on_capability_policy() {
     struct DenyTypedCryptoSign {
         denied_count: Arc<AtomicU32>,
     }
+    impl benten_caps::__sealed_for_workspace_tests::Sealed for DenyTypedCryptoSign {}
     impl CapabilityPolicy for DenyTypedCryptoSign {
         fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
             if ctx.label == "cap:typed:crypto-sign" {

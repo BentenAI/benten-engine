@@ -12,58 +12,55 @@ use crate::DEFAULT_BATCH_BOUNDARY;
 use crate::error::CapError;
 
 // =====================================================================
-// G-CORE-8 §8-E — sealed-discipline marker (soft-seal at v1-beta)
+// G-CORE-9 V1-FROZEN-INTERFACE row 6 — sealed-discipline HARD-SEAL
 // =====================================================================
 //
 // CLAUDE.md baked-in #7 sealed-discipline refinement (Ben-ratified
 // 2026-05-18): `CapabilityPolicy` is **Benten-internal; NOT a
 // documented third-party public extension contract.**
 //
-// **G-CORE-8 §8-E soft-seal scope.** The sealed-discipline at v1-beta
-// is documented via the [`sealed_marker::SealedCapabilityPolicy`]
-// marker pattern PLUS an INTERNALS.md / SECURITY-POSTURE.md narrative
-// — but is NOT enforced by `rustc` via a hard private-supertrait
-// pattern. The reason: the workspace's existing tests + integration
-// code (≥20 sites across `benten-engine/tests/*`, `benten-caps/tests/
-// *`, `benten-platform-foundation/tests/*`, `benten-eval/tests/*`,
-// `benten-engine/src/testing.rs`) implement `CapabilityPolicy` for
-// test-double policies. A hard-seal would require ALL of them to
-// import a sealed-marker trait — a workspace-wide migration that is
-// SCOPED to a HARD-RULE-12 BELONGS-NAMED-NOW G-CORE-8.3 follow-up
-// wave (cited in INTERNALS.md §9). The v1-beta SOFT-SEAL is:
+// **G-CORE-9 HARD-SEAL.** The sealed-discipline is enforced by `rustc`
+// via a private [`sealed::Sealed`] supertrait. External crates CANNOT
+// implement [`CapabilityPolicy`] because [`sealed::Sealed`] is
+// unreachable from outside `benten-caps` (the `sealed` module is
+// `pub(crate)`). At G-CORE-9 V1-FROZEN-INTERFACE wave the previous
+// soft-seal marker `sealed_marker::SealedCapabilityPolicy` was DELETED
+// (no deprecation alias per HARD RULE 12 + CLAUDE.md #5 no-shims
+// discipline); the ~20 workspace test-double impls received
+// `impl ext_seal::Sealed for X {}` siblings as part of the same
+// migration (workspace test crates use the `pub(crate)`-visible
+// [`crate::ext_seal::Sealed`] re-export which the workspace tests reach
+// via the `testing` feature gate — see `crate::ext_seal`).
 //
-//  - The [`SealedCapabilityPolicy`] marker is the *intent* marker —
-//    `impl SealedCapabilityPolicy for X {}` is the explicit opt-in
-//    that production / Benten-internal impls add. The trait is
-//    blanket-implemented for `CapabilityPolicy` impls in this crate
-//    at the trait-impl bodies; external impls do NOT add it and
-//    surface as "unsealed" via a static-analysis pass (the audit
-//    discipline that will fire on workspace introspection).
-//  - The INTERNALS.md §9 narrative documents the v1-beta posture +
-//    the G-CORE-8.3 hard-seal pathway.
+// Object-safety preserved: the [`sealed::Sealed`] supertrait carries
+// NO methods, so `Arc<dyn CapabilityPolicy>` continues to construct
+// unchanged. The compile-test pin at
+// `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs`
+// is the structural backstop.
 //
-// Object-safety preserved: the marker is a separate empty trait, NOT
-// a supertrait of `CapabilityPolicy`. `Arc<dyn CapabilityPolicy>`
-// continues to construct unchanged.
-pub mod sealed_marker {
-    //! Sealed-discipline marker (soft-seal at v1-beta).
-    //!
-    //! See parent module's narrative for the discipline scope. The
-    //! marker exists so internal `CapabilityPolicy` impls can opt-in
-    //! explicitly + the workspace introspection pass can detect
-    //! external impls that DON'T opt-in (the missing-marker signal
-    //! is the audit's would-FAIL).
+// V1-FROZEN-INTERFACE.md item 8 / §1.A.FROZEN item 8 freezes this
+// shape as `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`.
+//
+// Workspace tests in other crates that need to implement
+// `CapabilityPolicy` for test-doubles use the `#[doc(hidden)] pub`
+// re-export at [`crate::__sealed_for_workspace_tests`] which is gated
+// behind the `testing` feature — production downstream consumers do
+// NOT enable the `testing` feature, so the hard-seal contract holds for
+// non-`testing` builds. The `testing` feature is the explicit opt-in.
+pub(crate) mod sealed {
+    //! Private sealing module. The `pub(crate)` visibility means the
+    //! [`Sealed`] trait is unreachable from outside `benten-caps` —
+    //! external crates therefore cannot implement
+    //! [`super::CapabilityPolicy`] (which has `Sealed` as a supertrait
+    //! bound) UNLESS they enable the `testing` feature (workspace test
+    //! crates only).
 
-    /// Marker trait carried by Benten-internal `CapabilityPolicy`
-    /// implementations. The marker is intentionally empty — its
-    /// presence on a type IS the discipline assertion.
-    ///
-    /// External crates MUST NOT implement this marker (no production
-    /// path through Benten relies on a non-sealed impl). A future
-    /// G-CORE-8.3 hard-seal will promote this marker to a private
-    /// supertrait of `CapabilityPolicy` (which requires the workspace-
-    /// wide migration of external test impls — out of scope at v1-beta).
-    pub trait SealedCapabilityPolicy {}
+    /// Marker supertrait sealing [`super::CapabilityPolicy`]. Carries
+    /// no methods (preserves object-safety). Benten-internal
+    /// implementations of [`super::CapabilityPolicy`] MUST also impl
+    /// this trait; the workspace-wide migration is part of G-CORE-9
+    /// V1-FROZEN-INTERFACE row 6.
+    pub trait Sealed {}
 }
 
 /// Re-export of [`benten_core::WriteAuthority`]. Single canonical type
@@ -338,7 +335,7 @@ impl ReadContext {
 /// CapabilityPolicy`. Keep any future extensions to this trait object-safe
 /// (no `where Self: Sized` defaults that take `self` by value, no generic
 /// methods without `where Self: Sized`).
-pub trait CapabilityPolicy: Send + Sync {
+pub trait CapabilityPolicy: sealed::Sealed + Send + Sync {
     /// Permit or deny the pending write batch.
     ///
     /// # Errors

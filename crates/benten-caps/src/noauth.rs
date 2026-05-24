@@ -33,6 +33,8 @@ impl NoAuthBackend {
     }
 }
 
+impl crate::policy::sealed::Sealed for NoAuthBackend {}
+
 impl CapabilityPolicy for NoAuthBackend {
     #[inline]
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

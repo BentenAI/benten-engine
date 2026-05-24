@@ -412,6 +412,8 @@ impl<B: GraphBackend> UcanGroundedPolicy<B> {
     }
 }
 
+impl<B: GraphBackend> crate::policy::sealed::Sealed for UcanGroundedPolicy<B> {}
+
 impl<B: GraphBackend> CapabilityPolicy for UcanGroundedPolicy<B> {
     fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
         // Fast path: the Phase-2b revocation-aware grant-backed surface.

@@ -26,6 +26,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_engine::Engine;
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use benten_errors::ErrorCode;
 use std::sync::Arc;
 
@@ -34,6 +35,9 @@ use std::sync::Arc;
 // populate the backend via `testing_insert_privileged_fixture`.
 #[derive(Debug)]
 struct DenyAllReadsPolicy;
+
+impl Sealed for DenyAllReadsPolicy {}
+
 
 impl benten_caps::CapabilityPolicy for DenyAllReadsPolicy {
     fn check_write(
@@ -106,6 +110,8 @@ fn get_node_on_denied_cid_returns_none_symmetric_with_miss() {
 fn diagnose_read_requires_debug_read_capability() {
     #[derive(Debug)]
     struct DenyEverything;
+    impl Sealed for DenyEverything {}
+
     impl benten_caps::CapabilityPolicy for DenyEverything {
         fn check_write(
             &self,

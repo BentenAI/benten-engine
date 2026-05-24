@@ -65,7 +65,12 @@ tempfile = "3"
 # benten-caps::plugin_delegation surface. dev-only dep keeps
 # dep-direction one-way for production (platform-foundation does NOT
 # depend on caps at lib time).
-benten-caps = { path = "../benten-caps" }
+#
+# G-CORE-9 V1-FROZEN-INTERFACE row 6 — `features = ["testing"]` so the
+# test-double `CapabilityPolicy` impls in `tests/` can opt into the
+# `__sealed_for_workspace_tests::Sealed` re-export (the hard-seal
+# bypass for in-workspace tests).
+benten-caps = { path = "../benten-caps", features = ["testing"] }
 # walkdir for R4-FP-4 substantive grep-walk pin
 # (`plugin_did_is_ucan_audience_handle_not_attested_sub_identity.rs`
 # negative-arm walks `crates/benten-id/src/` for forbidden

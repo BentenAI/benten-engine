@@ -320,3 +320,27 @@ pub mod testing {
         }
     }
 }
+
+// =====================================================================
+// G-CORE-9 V1-FROZEN-INTERFACE row 6 — workspace-test `Sealed` opt-in
+// =====================================================================
+//
+// `policy::sealed::Sealed` is `pub(crate)` so external crates
+// CANNOT implement `CapabilityPolicy` in production builds — the
+// hard-seal contract per CLAUDE.md baked-in #7 + V1-FROZEN-INTERFACE
+// item 8. Workspace test crates that need to implement
+// `CapabilityPolicy` for test-doubles enable the `testing` feature
+// and write `impl benten_caps::__sealed_for_workspace_tests::Sealed
+// for MyTestDouble {}` as a sibling of their `impl CapabilityPolicy
+// for MyTestDouble`.
+//
+// The `#[doc(hidden)]` annotation marks this as not-part-of-the-public-
+// docs surface. Production downstream consumers should NOT enable the
+// `testing` feature; doing so circumvents the seal and is a
+// HALT-AND-SURFACE-TO-BEN event per the V1-FROZEN-INTERFACE row 6
+// escape valve.
+#[cfg(feature = "testing")]
+#[doc(hidden)]
+pub mod __sealed_for_workspace_tests {
+    pub use crate::policy::sealed::Sealed;
+}

@@ -12,6 +12,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, NoAuthBackend};
+use benten_caps::__sealed_for_workspace_tests::Sealed;
 use std::sync::{Arc, Mutex};
 
 /// Capability policy that counts how many times `check_write` is called.
@@ -32,6 +33,9 @@ impl CountingPolicy {
         )
     }
 }
+
+impl Sealed for CountingPolicy {}
+
 
 impl CapabilityPolicy for CountingPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
