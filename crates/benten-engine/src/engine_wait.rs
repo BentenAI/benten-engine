@@ -885,16 +885,17 @@ impl Engine {
             // suspend/resume boundary per D-PHASE-3-25. `None` for legacy
             // / non-attested engines preserves prior behavior.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let mut ctx = CapWriteContext::default();
-            ctx.label = "system:WaitResume".into();
-            ctx.actor_cid = head.map(|f| f.actor_cid);
-            ctx.scope = "wait:resume".into();
-            ctx.is_privileged = false;
-            ctx.actor_hint = None;
-            ctx.pending_ops = Vec::new();
-            ctx.authority = benten_caps::WriteAuthority::User;
-            ctx.device_cid = device_cid;
-            ctx.audience_did = None;
+            let ctx = CapWriteContext {
+                label: "system:WaitResume".into(),
+                actor_cid: head.map(|f| f.actor_cid),
+                scope: "wait:resume".into(),
+                is_privileged: false,
+                actor_hint: None,
+                pending_ops: Vec::new(),
+                authority: benten_caps::WriteAuthority::User,
+                device_cid,
+                audience_did: None,
+            };
             policy.check_write(&ctx).map_err(|e| EngineError::Other {
                 code: ErrorCode::CapRevokedMidEval,
                 message: format!("resume: capability re-check denied: {e}"),
