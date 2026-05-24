@@ -1746,6 +1746,16 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (the public variant; downstream consumers wrap their typed rejections here). Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`. The DSL compiler itself never emits this variant — the compile pipeline emits `Parse` / `Semantic` / `Build` / `Io` only.
 - **Phase:** 4-Meta-Core G-CORE-DSL chunk-3 (#839 closure — CompileError::Io variant-abuse fix)
 
+### E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
+
+- **Message:** "pure-PQ-sole-trust-path rejected (audit not landed): hybrid construction is the audited path until the independent ml-dsa/ml-kem/slh-dsa audit (NF-2 / C-GM-AUDIT) lands"
+- **Context:** `{ requested_sig_codepoint: 0x0003, requested_cipher_codepoint: 0x647b, audit_landed_flag: false }`
+- **Fix:** Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.
+- **Thrown at:** `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
+- **Phase:** 4-Meta-Core G-CORE-3c (full swap-matrix conformance + C11b safety invariant)
+
+<!-- reachability: ignore -->
+
 ## Extending the catalog
 
 When adding a new error:

@@ -142,8 +142,7 @@ fn tf3a_pq_hybrid_wasm32_envelope_round_trip_native() {
 
     // Witness the KeyMaterial type compiles + is reachable from the
     // BrowserBackend wasm32 deployment shape (CLAUDE.md baked-in #17).
-    let _km =
-        KeyMaterial::from_bytes_for_test(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
+    let _km = KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
 }
 
 #[test]
@@ -182,6 +181,5 @@ fn tf3a_pq_hybrid_wasm32_envelope_round_trip_wasm() {
          std API; BrowserBackend ships this binary)"
     );
 
-    let _km =
-        KeyMaterial::from_bytes_for_test(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
+    let _km = KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &k_root);
 }

@@ -55,15 +55,38 @@ ed25519-dalek = { workspace = true }
 # `decode()`) NOT PKCS#8 envelopes.
 ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom"] }
 
-# NF-1 PQ⊕PQ end-state non-default arm (ML-DSA-65 ⊕ SLH-DSA): the
-# codepoint is reserved-but-unimplemented in this wave (the dispatch
-# typed-rejects it; G-CORE-3c will add the dep + light the live arm
-# as part of the full swap matrix). `slh-dsa 0.2.0-rc.5` requires
-# `sha2 ^0.11` which conflicts with the workspace's current `sha2 ^0.10`
-# from `iroh-base`/etc.; resolving that conflict is G-CORE-3c's scope
-# (likely a deliberate workspace sha2 bump alongside the slh-dsa arm).
-# Until then the reserved codepoint surfaces `UnsupportedAlgorithm::Signature`
-# — additive-codepoint discipline preserved (no wire-break on later add).
+# NF-1 PQ⊕PQ end-state non-default arm (ML-DSA-65 ⊕ SLH-DSA): G-CORE-3c
+# wires the live arm. `slh-dsa 0.2.0-rc.5` pulls `sha2 ^0.11` + `sha3
+# ^0.11` transitively. The workspace already has `sha2 0.11` in the
+# lockfile (via `ed25519-dalek 3.0.0-pre.7` → `iroh 1.0.0-rc.0`); a
+# parallel `sha3 0.11` lockfile entry is acceptable (the integration
+# crate continues to depend on `sha3 ^0.10` for the X-Wing combiner +
+# hybrid commitment; the additional `sha3 0.11` from slh-dsa is a
+# transitive dupe NOT a workspace-pin bump — the no-fork-primitives
+# discipline holds because each version is the same vetted upstream
+# crate). The NF-1 arm is **STRUCTURALLY NON-DEFAULT** at workspace
+# baseline per the C11b safety invariant (the audit-landed-flag in
+# `swap_matrix::audit_landed_pure_pq_flag` is `false` until the
+# independent NF-2 / C-GM-AUDIT lands). Parameter-set choice: the
+# `Sha2_128s` parameter (Cat 1; smallest signatures + fastest sign/verify
+# at the conformance-test layer); the NF-1 wire-format-canonical choice
+# of Cat-3-equivalent (Sha2_192s) is a G-CORE-9 P-III freeze decision
+# (additive-codepoint-discipline means the suite-selector codepoint
+# `0x0003` reserves the *suite* not a specific parameter set; the wire
+# format can pin Sha2_192s at G-CORE-9 without re-spending the
+# codepoint).
+slh-dsa = { version = "0.2.0-rc.5" }
+
+# `getrandom 0.4` brings the `SysRng` adapter that adapts the OS entropy
+# source to `rand_core 0.10`'s `TryCryptoRng` trait. `slh-dsa 0.2.0-rc.5`
+# requires `rand_core::CryptoRng` (0.10) for its `SigningKey::new`; the
+# workspace's `rand_core 0.6` (via `crypto_common`) doesn't satisfy that
+# bound. `UnwrapErr(getrandom::SysRng)` is the upstream's documented
+# adaptation pattern (mirrored in `ml_dsa`'s own test suite at
+# `encode.rs:115`). G-CORE-3c's pure-PQ NF-1 arm needs this; the v1-beta
+# default + classical arms use the existing `ml_dsa::Generate::generate()`
+# path (which sidesteps the version-skew per the existing sig.rs note).
+getrandom = { version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 
 # Hash seam (CLAUDE.md baked-in #5; hash is PQ-UNAFFECTED — Grover
 # quadratic-only). v1 default = BLAKE3 (multihash 0x1e); pre-blessed

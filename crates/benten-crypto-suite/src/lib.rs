@@ -122,6 +122,7 @@ pub mod primitives;
 pub mod sig;
 pub mod sizes;
 pub mod structural_kdf;
+pub mod swap_matrix;
 pub mod varsig;
 
 // Convenience re-exports of the most-used typed surface.
@@ -131,4 +132,10 @@ pub use crate::error::{CryptoError, UnsupportedAlgorithm, VerifyError};
 pub use crate::hash::HashSeam;
 pub use crate::sig::{HybridSignature, SignatureSuite, SuiteConfig};
 pub use crate::structural_kdf::{StructuralKdfKey, derive_root, derive_step};
+pub use crate::swap_matrix::{
+    AUDIT_LANDED_PURE_PQ_FLAG, KemKatVector, PureKemDec, PureKemEnc, PureKemKeypair,
+    PurePqNf1SignatureArm, PureSigPubkey, PureSigVec, SignatureKatVector, SwapDecrypted,
+    SwapEnvelope, SwapKeypair, SwapMatrix, SwapMatrixError, SwapPublicKey, SwapRecipientKeypair,
+    SwapRecipientPublic, SwapRecipientSecret, audit_landed_pure_pq_flag,
+};
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};

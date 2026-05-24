@@ -2239,7 +2239,20 @@ build-now stack + framing, superseded-in-part); CLAUDE.md baked-in #5 /
 `.addl/pq-research/landscape-*-2026-05-19.md` corroboration passes;
 `.addl/pq-research/landscape-pq-algorithm-diversity-2026-05-19.md` (the
 NF-1 PQ⊕PQ post-classical-death documented end-state + FIPS-207
-build-trigger).
+build-trigger). **G-CORE-3c runtime gate (Phase-4-Meta-Core terminal
+swap-matrix wave):**
+`crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path`
+fires `SwapMatrixError::AuditNotLandedPurePqRejected` (catalog code
+`E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED`) when a caller attempts to
+construct a pure-PQ-sole-trust-path arm (NF-1 ML-DSA-65⊕SLH-DSA sig +
+ML-KEM-768-only enc, with the classical halves removed) while the
+workspace-baseline `AUDIT_LANDED_PURE_PQ_FLAG` is `false` — the
+runtime enforcement of the C11b safety invariant. The flag is a
+compile-time `pub const`; flipping it to `true` is a v1-GM coupled
+action that REQUIRES the independent audit deliverable on disk + Ben
+sign-off + pinned crate versions matching the audited versions. The
+named typed-arm is what the v1-GM-gating CI lane greps for (a generic
+`Err` would silently regress the C-GM-AUDIT gate).
 
 ## Per-Node AEAD wrap layer — rebinding-attack-prevention (G-CORE-3d / #1301)
 

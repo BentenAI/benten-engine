@@ -330,7 +330,7 @@ pub fn decrypt_chunk(
     plaintext_cid: &Cid,
     key: &[u8],
 ) -> Result<Vec<u8>, AeadError> {
-    let key_material = KeyMaterial::from_bytes_for_test(chunk.cipher_codepoint, key);
+    let key_material = KeyMaterial::from_raw_bytes(chunk.cipher_codepoint, key);
     let chunk_index_u64 = u64::try_from(chunk_index)
         .map_err(|_| AeadError::Authentication("chunk index exceeds u64".to_string()))?;
     let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64);
@@ -491,7 +491,7 @@ fn make_key_material(key: &[u8]) -> Result<KeyMaterial, AeadError> {
             reason: "AEAD key MUST be 32 B for ChaCha20-Poly1305 dispatch".to_string(),
         });
     }
-    Ok(KeyMaterial::from_bytes_for_test(
+    Ok(KeyMaterial::from_raw_bytes(
         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
         key,
     ))
@@ -522,7 +522,7 @@ fn make_key_material_matching(
                 e.cipher_codepoint
             }),
     };
-    Ok(KeyMaterial::from_bytes_for_test(codepoint, key))
+    Ok(KeyMaterial::from_raw_bytes(codepoint, key))
 }
 
 /// Graph-side AEAD error envelope. Maps the cipher-suite's typed errors

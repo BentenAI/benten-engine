@@ -92,15 +92,24 @@ pub struct KeyMaterial {
 
 impl KeyMaterial {
     /// Construct from raw bytes + codepoint. Crate-public for cipher-
-    /// suite internals + the test-only `from_bytes_for_test`.
+    /// suite internals + the public `from_raw_bytes` constructor below.
     pub(crate) fn from_bytes(codepoint: CipherSuiteCodepoint, bytes: Vec<u8>) -> Self {
         Self { codepoint, bytes }
     }
 
-    /// Test-only constructor — accept arbitrary bytes + codepoint for
-    /// per-test K_ROOT vectors.
+    /// Construct from raw bytes + codepoint. No validation of byte length
+    /// against the codepoint's expected AEAD key length (the codepoint's
+    /// AEAD wrap path performs that check at use-time). Production-safe
+    /// constructor for swap-matrix `sign_and_seal` / `open_and_verify`
+    /// hot paths (G-CORE-3c) where `&[u8]` from caller-owned buffers is
+    /// the natural input shape, AND for per-test K_ROOT vector
+    /// injection.
+    ///
+    /// Renamed from `from_bytes_for_test` at G-CORE-3c fix-pass (mr-major-2)
+    /// after the test-named API was identified as called from production
+    /// hot paths — see `.addl/phase-4-meta/r5-g-core-3c-mini-review.json`.
     #[must_use]
-    pub fn from_bytes_for_test(codepoint: CipherSuiteCodepoint, bytes: &[u8]) -> Self {
+    pub fn from_raw_bytes(codepoint: CipherSuiteCodepoint, bytes: &[u8]) -> Self {
         Self {
             codepoint,
             bytes: bytes.to_vec(),
@@ -349,10 +358,8 @@ mod tests {
 
     #[test]
     fn wrap_unwrap_round_trips_at_hybrid_codepoint() {
-        let key = KeyMaterial::from_bytes_for_test(
-            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
-            &[0x42; 32],
-        );
+        let key =
+            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x42; 32]);
         let pt = b"hello, hybrid";
         let cid = b"plaintext-cid-A";
         let aad = aad_whole_content(cid);
@@ -363,8 +370,7 @@ mod tests {
 
     #[test]
     fn wrap_unwrap_round_trips_at_classical_codepoint() {
-        let key =
-            KeyMaterial::from_bytes_for_test(CipherSuiteCodepoint::CLASSICAL_X25519, &[0x77; 32]);
+        let key = KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0x77; 32]);
         let pt = b"hello, classical";
         let aad = aad_whole_content(b"plaintext-cid-B");
         let env = wrap(pt, &key, &aad).expect("wrap MUST succeed");
@@ -374,10 +380,8 @@ mod tests {
 
     #[test]
     fn aad_rebinding_fails_closed() {
-        let key = KeyMaterial::from_bytes_for_test(
-            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
-            &[0x99; 32],
-        );
+        let key =
+            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x99; 32]);
         let pt = b"payload";
         let aad_a = aad_whole_content(b"cid-A");
         let aad_b = aad_whole_content(b"cid-B");
@@ -391,10 +395,8 @@ mod tests {
 
     #[test]
     fn wire_format_carries_explicit_format_version_byte() {
-        let key = KeyMaterial::from_bytes_for_test(
-            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
-            &[0x10; 32],
-        );
+        let key =
+            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x10; 32]);
         let env = wrap(b"pt", &key, &aad_whole_content(b"cid")).expect("wrap MUST succeed");
         let bytes = env.to_wire_bytes();
         assert_eq!(bytes[0], ENVELOPE_MAGIC, "byte 0 = envelope magic");
@@ -412,10 +414,8 @@ mod tests {
 
     #[test]
     fn round_trip_through_wire_bytes() {
-        let key = KeyMaterial::from_bytes_for_test(
-            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
-            &[0x33; 32],
-        );
+        let key =
+            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x33; 32]);
         let pt = b"wire round-trip payload";
         let aad = aad_whole_content(b"cid-roundtrip");
         let env = wrap(pt, &key, &aad).expect("wrap MUST succeed");

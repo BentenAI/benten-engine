@@ -1320,6 +1320,22 @@ pub enum ErrorCode {
     /// downstream concern; no primitive-edge routing nuance applies at
     /// the DSL-compile boundary. Maps to `E_DSL_BACKEND_REJECTED`.
     DslBackendRejected,
+    /// Phase-4-Meta-Core G-CORE-3c (full swap-matrix conformance, the
+    /// C11b safety invariant per the PQ-default reframe): a caller
+    /// attempted to construct a pure-PQ-sole-trust-path crypto
+    /// configuration (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc)
+    /// while the workspace-baseline `AUDIT_LANDED_PURE_PQ_FLAG` is
+    /// `false` — the independent `ml-dsa`/`ml-kem`/`slh-dsa` third-party
+    /// audit (NF-2 / C-GM-AUDIT) has not landed yet, so the hybrid
+    /// construction must remain the SOLE trust path until the audit
+    /// witnesses correctness. The
+    /// `benten_crypto_suite::swap_matrix::SwapMatrixError::AuditNotLandedPurePqRejected`
+    /// variant + the runtime gate in
+    /// `SwapMatrix::try_pure_pq_sole_trust_path` surface here as
+    /// `E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED`. The named arm is what
+    /// the v1-GM-gating CI lane greps for — a generic `Err` would
+    /// silently regress the C-GM-AUDIT exit criterion.
+    AuditNotLandedPurePqRejected,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1652,6 +1668,7 @@ impl ErrorCode {
             // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer rejection
             // at the DSL-compile boundary; closes the Io-variant abuse.
             ErrorCode::DslBackendRejected => "E_DSL_BACKEND_REJECTED",
+            ErrorCode::AuditNotLandedPurePqRejected => "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2142,10 +2159,14 @@ impl ErrorCode {
             //   only routing.
             // - ThinClientBridgePrincipalUnresolved fires at the bridge
             //   entry — not a primitive-edge dispatch surface.
+            // - AuditNotLandedPurePqRejected fires at the
+            //   `SwapMatrix::try_pure_pq_sole_trust_path` constructor
+            //   gate (configuration-time, not primitive-edge dispatch).
             ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => Some("ON_DENIED"),
             ErrorCode::WriteBoundaryChainNotUserRooted => Some("ON_DENIED"),
             ErrorCode::PluginInstallRecordAlreadyApplied => None,
             ErrorCode::ThinClientBridgePrincipalUnresolved => None,
+            ErrorCode::AuditNotLandedPurePqRejected => None,
 
             // G-CORE-DSL chunk-3 (closes #839) — downstream-consumer
             // rejection at the DSL-compile boundary is a downstream
@@ -2464,6 +2485,8 @@ impl core::str::FromStr for ErrorCode {
                 ErrorCode::ThinClientBridgePrincipalUnresolved
             }
             "E_DSL_BACKEND_REJECTED" => ErrorCode::DslBackendRejected,
+            // Phase 4-Meta-Core G-CORE-3c full swap-matrix conformance.
+            "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED" => ErrorCode::AuditNotLandedPurePqRejected,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)
