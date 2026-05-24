@@ -1,0 +1,167 @@
+{
+  "lens": "L1-crypto-correctness",
+  "round": "R1",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "branch": "g-core-9/r1-l1-crypto-correctness",
+  "base_sha": "8cc4eddd",
+  "scope_read": [
+    "docs/V1-FROZEN-INTERFACE.md (items 6, 14, 15(d)(e)(f)(g))",
+    "crates/benten-crypto-suite/src/codepoint.rs",
+    "crates/benten-crypto-suite/src/cipher_suite.rs",
+    "crates/benten-crypto-suite/src/swap_matrix.rs",
+    "crates/benten-crypto-suite/src/aead.rs",
+    "crates/benten-crypto-suite/src/sig.rs",
+    "crates/benten-crypto-suite/src/structural_kdf.rs",
+    "crates/benten-crypto-suite/src/varsig.rs",
+    "crates/benten-crypto-suite/src/error.rs",
+    "crates/benten-crypto-suite/src/lib.rs",
+    "crates/benten-core/src/encryption_class.rs",
+    "crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs",
+    "crates/benten-crypto-suite/tests/tf4_pure_pq_gated_audit_landed.rs",
+    ".addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md (cited)",
+    ".addl/phase-4-meta/RATIFIED-crypto-agility-2026-05-18.md (cited)",
+    "CLAUDE.md baked-in #5 (in-context)"
+  ],
+  "summary": "Crypto-suite is structurally sound: codepoint dispatchers fail-closed across hash/sig/cipher surfaces; X-Wing combiner binds both KEM halves + both encapsulated keys + both public keys for strip-resistance; hybrid Ed25519+ML-DSA-65 NF-4 commitment binds both pubkeys + both sigs + msg; HKDF info-tags 'root'/'step' provide cross-role domain separation; AeadEnvelope wire format carries explicit format-version byte (Gate-6); AAD-binds-plaintext-CID rebinding-attack defense holds; pure-PQ sole-trust-path is structurally gated by AUDIT_LANDED_PURE_PQ_FLAG (compile-time false) with named typed-error AuditNotLandedPurePqRejected. The 0x647c pre-FREEZE bundle mint + force_pure_pq_for_test_bypassing_audit_gate side-door correctly preserve the C11b invariant in production while enabling end-to-end test exercise. EncryptionClass enum (benten-core) is orthogonal to the cipher-suite dispatcher (outer Public/Confidential class layer; inner cipher-suite codepoint dispatches the suite). One MAJOR finding: V1-FROZEN row 6 codepoint table mislabels 0x0003 (HYBRID_MLDSA65_SLHDSA) as 'LIVE swap-matrix arm' — the actual SigCodepoint::resolve / SignatureSuite::resolve_codepoint / varsig.rs decode_payload all typed-reject 0x0003. The framing should mirror 0x647c's row ('reserved swap-matrix arm; typed-rejected by default; reachable only via SwapMatrix audit-gated constructor'). Two MINOR findings around diagnostic-information loss (unsupported_codepoint_msg_static swallows codepoint value) and stale docstring in codepoint.rs:30-31 (claims G-CORE-3c will flip 0x0003 LIVE; G-CORE-3c has shipped and 0x0003 stays typed-rejected at dispatcher per C11b gate). Two OBS items around future P-III freeze decisions.",
+  "disposition": "APPROVE_WITH_FIXES",
+  "convergence_signal": "Substrate is cryptographically sound; the one MAJOR is a doc-truth-vs-code-truth mismatch (the code is correct per C11b; the freeze-table needs to be amended to reflect it). All MINOR + OBS are surgical. No BLOCKER findings.",
+  "findings": [
+    {
+      "id": "L1-crypto-r1-1",
+      "severity": "MAJOR",
+      "title": "V1-FROZEN-INTERFACE row 6 codepoint table mislabels 0x0003 (HYBRID_MLDSA65_SLHDSA) as 'LIVE swap-matrix arm' — actual dispatchers typed-reject it",
+      "sites": [
+        "docs/V1-FROZEN-INTERFACE.md:477 (codepoint table row)",
+        "crates/benten-crypto-suite/src/codepoint.rs:104 (SigCodepoint::resolve typed-rejects 0x0003)",
+        "crates/benten-crypto-suite/src/sig.rs:308 (SignatureSuite::resolve_codepoint typed-rejects 0x0003)",
+        "crates/benten-crypto-suite/src/varsig.rs:114 (decode_payload only handles 0x0001 + 0x0002; 0x0003 unreachable per resolve gate at boundary)",
+        "crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs:286 (test docstring confirms 0x0003 stays reserved)"
+      ],
+      "evidence": "V1-FROZEN-INTERFACE.md:477 states `SigCodepoint::HYBRID_MLDSA65_SLHDSA | 0x0003 | LIVE swap-matrix arm (NF-1 end-state per G-CORE-3c)`. But codepoint.rs:104 `0x0003 => Err(UnsupportedAlgorithm::Signature { codepoint: self.0 })` typed-rejects every dispatch through the canonical SigCodepoint::resolve gate. sig.rs:308 SignatureSuite::resolve_codepoint also returns Err for 0x0003. varsig.rs::decode_payload only matches 0x0001 + 0x0002 (0x0003 caught at earlier resolve()). The swap_matrix.rs pure-PQ arm CAN sign+verify under 0x0003 via the in-module dispatch but the produced signature_bytes can never round-trip through the UCAN-Varsig wire surface, and any external consumer reaching the codepoint dispatcher first sees typed-reject. This is the EXACT mirror of how 0x647c is handled (typed-reject at cipher-suite dispatcher; reachable ONLY via SwapMatrix::try_pure_pq_sole_trust_path audit-gated constructor) — but the V1-FROZEN row 6 table treats 0x647c as 'reserved swap-matrix arm; typed-rejected by default — gated by AUDIT_LANDED_PURE_PQ_FLAG per the C11b safety gate' (line 482) and 0x0003 inconsistently as 'LIVE swap-matrix arm'. The behavior is consistent (both are C11b-gated); the freeze-table wording is not.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Amend V1-FROZEN-INTERFACE.md:477 to mirror line 482's framing: `SigCodepoint::HYBRID_MLDSA65_SLHDSA | 0x0003 | reserved swap-matrix arm (NOT default; typed-rejected at SigCodepoint::resolve / SignatureSuite::resolve_codepoint / UCAN-Varsig decode; reachable ONLY via SwapMatrix::try_pure_pq_sole_trust_path audit-gated constructor per the C11b safety gate; NF-1 end-state arm)`. Add a no-regression test pin to crates/benten-crypto-suite/tests/ asserting (a) SigCodepoint::HYBRID_MLDSA65_SLHDSA.resolve() returns Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 }), (b) SignatureSuite::resolve_codepoint(SigCodepoint::HYBRID_MLDSA65_SLHDSA) returns Err matching codepoint 0x0003, (c) UcanVarsigV1Header::decode of a header carrying codepoint 0x0003 returns Err(VarsigError::UnsupportedCodepoint { codepoint: 0x0003, .. }). The pin is the freeze-load-bearing 'wording-mutation' guard per §3.5g.",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Per the freeze discipline: the codepoint table is BYTEWISE PERMANENT and the V1-FROZEN doc is the single source of truth a future agent reads to understand the surface. A 'LIVE swap-matrix arm' label on 0x0003 is wrong (the dispatcher typed-rejects), would lead a future contributor to incorrectly assume cross-peer interop works under 0x0003, and undermines the C11b mental model. The fix is documentary (matching the actually-shipped behavior to the freeze-doc claim) + adds the no-regression dispatcher-typed-reject pin (per pim-cite-drift-fp1-recurrence freeze-time tightening)."
+    },
+    {
+      "id": "L1-crypto-r1-2",
+      "severity": "MINOR",
+      "title": "Stale docstring in codepoint.rs claims G-CORE-3c will flip 0x0003 LIVE; G-CORE-3c has shipped and 0x0003 stays typed-rejected",
+      "sites": [
+        "crates/benten-crypto-suite/src/codepoint.rs:30-31",
+        "crates/benten-crypto-suite/src/codepoint.rs:46-50",
+        "crates/benten-crypto-suite/src/codepoint.rs:103-104",
+        "crates/benten-crypto-suite/src/lib.rs:56-65 (companion module-level doc)"
+      ],
+      "evidence": "codepoint.rs:30-31 says 'The NF-1 end-state arm [`SigCodepoint::HYBRID_MLDSA65_SLHDSA`] is a reserved-but-unimplemented codepoint (live impl lands at G-CORE-3c)'. codepoint.rs:46-50 says 'Reserved-but-unimplemented at this wave; live impl + conformance-test at G-CORE-3c (the full swap matrix). Dispatching this codepoint at G-CORE-2 surfaces [`UnsupportedAlgorithm::Signature`]'. G-CORE-3c shipped at commit a99edbe9 ('feat(g-core-3c): TERMINAL full swap-matrix conformance + NF-1 pure-PQ arm + C11b safety gate') — the arm IS now built end-to-end but the SigCodepoint dispatcher continues to typed-reject 0x0003 (correctly, per the C11b gate matching 0x647c's pattern). The docstrings predict a transition that did NOT happen (the C11b gate kept 0x0003 reserved at the dispatcher even after G-CORE-3c). Same applies to lib.rs:56-65's 'reserved-now, conformance-built at G-CORE-3c (the full swap matrix). This wave typed-rejects it'.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Update codepoint.rs:30-31 + :46-50 + lib.rs:56-65 to reflect actual shipped behavior — 'Reserved at the SigCodepoint dispatcher per the C11b safety gate (mirroring CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY = 0x647c). The NF-1 PQ⊕PQ arm IS built end-to-end at G-CORE-3c (sign/verify via the SwapMatrix pure-PQ-sole-trust-path constructor + force_pure_pq_for_test_bypassing_audit_gate test-side-door); the dispatcher typed-rejects 0x0003 to enforce the AUDIT_LANDED_PURE_PQ_FLAG gate. Production reachability arrives via SwapMatrix::try_pure_pq_sole_trust_path which surfaces SwapMatrixError::AuditNotLandedPurePqRejected pre-audit.'",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Docstring drift surfaced by the freeze-time audit; the surface is correct, the rustdoc is stale. Trivial 3-site edit; preserves rustdoc-as-source-of-truth invariant the freeze leans on."
+    },
+    {
+      "id": "L1-crypto-r1-3",
+      "severity": "MINOR",
+      "title": "SwapMatrix::unsupported_codepoint_msg_static discards the codepoint value carried by UnsupportedAlgorithm",
+      "sites": [
+        "crates/benten-crypto-suite/src/swap_matrix.rs:438-440",
+        "crates/benten-crypto-suite/src/swap_matrix.rs:539-541",
+        "crates/benten-crypto-suite/src/swap_matrix.rs:1575-1577"
+      ],
+      "evidence": "swap_matrix.rs:1575 `fn unsupported_codepoint_msg_static(_e: &UnsupportedAlgorithm) -> &'static str { \"cipher-suite codepoint typed-unsupported\" }` ignores the typed error envelope's actual codepoint value, returning a static string. Callers at lines 438-440 + 539-541 wrap the typed error as `SwapMatrixError::CipherSuite(unsupported_codepoint_msg_static(&e))` which loses the diagnostic information (the actual unrecognized codepoint value). The SwapMatrixError enum already has a `Unsupported(#[from] UnsupportedAlgorithm)` variant (line 793) that preserves the typed-codepoint info perfectly.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Replace the two call sites (swap_matrix.rs:438-440 + 539-541) with `.map_err(SwapMatrixError::Unsupported)` (no helper fn needed; the From impl on `Unsupported` variant handles the conversion directly). Delete the now-unused `unsupported_codepoint_msg_static` helper. Preserves typed-error info end-to-end + simplifies the cipher-suite resolve failure path.",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Diagnostic-information loss + a redundant helper. Both the codepoint value (for debuggability) and the structured typed-error variant (for downstream matching) are erased; the simpler-and-better From-impl path exists already. ~6 LOC edit total."
+    },
+    {
+      "id": "L1-crypto-r1-4",
+      "severity": "OBS",
+      "title": "P-III deferred freeze items in codepoint.rs module docstring may need re-checking at the actual freeze",
+      "sites": [
+        "crates/benten-crypto-suite/src/codepoint.rs:9-18 (module docstring 'P-III deferred')"
+      ],
+      "evidence": "codepoint.rs:9-18 says 'The codepoint VALUES below are the operative constants the canary brief carries... The FREEZE ACT (making these wire-canonical) is the scheduled G-CORE-9 P-III Ben decision-point — this wave produces the codepoint dispatch shape; G-CORE-9 locks the values.' This wave IS G-CORE-9, and V1-FROZEN-INTERFACE row 6 codepoint table fully enumerates the LIVE + reserved set — implying the freeze has been ratified. The docstring still treats it as future ('P-III deferred'); after the freeze tag the docstring will be stale.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "At the G-CORE-9 FREEZE tag wave (post-R6-convergence), update codepoint.rs:9-18 module docstring from 'P-III deferred / FREEZE ACT scheduled' to 'FROZEN at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit <SHA>); codepoint table integer values are PERMANENT per the freeze contract. Algorithms behind each codepoint are SWAPPABLE within the framing; the codepoint values themselves are wire-canonical. Future additions land additively at unused values; existing values are never repurposed.'",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Aligns the rustdoc-as-source-of-truth with the freeze-tag reality. The freeze HAS happened (commit 8cc4eddd lands the V1-FROZEN-INTERFACE.md doc with row 6 ratified); the source-code docstring should reflect that. Per pim-1 §3.5b doc-coupling discipline. Trivial 10-line edit at the freeze-tag wave."
+    },
+    {
+      "id": "L1-crypto-r1-5",
+      "severity": "OBS",
+      "title": "AeadEnvelope wire-format `to_wire_bytes` panics via `.expect` on nonce length > 255 (unreachable today; future-proofing risk)",
+      "sites": [
+        "crates/benten-crypto-suite/src/aead.rs:166-171"
+      ],
+      "evidence": "aead.rs:168-171 `out.push(u8::try_from(self.nonce.len()).expect(\"AEAD nonce length fits in u8 (ChaCha20-Poly1305 = 12)\"));`. The `.expect` is correct today (all v1-beta cipher-suite arms produce 12-B nonces; the AeadEnvelope constructor `wrap` always builds 12-B nonces). But the future-AEAD-codepoint additive-discipline (e.g. XChaCha20-Poly1305 with 24-B nonces) is fine; an algorithm with >255-B nonces (cryptographically implausible; XChaCha20 is the max in practice at 24 B) would panic. Not a freeze break — additive-codepoint discipline lets a future AEAD swap in without affecting the v1 surface — but the panic-on-overflow contract is implicit.",
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Either (a) widen the nonce-length prefix to u16 LE at the freeze (would break v1-beta wire format — NOT recommended), OR (b) document the invariant explicitly + extend the additive-codepoint discipline narrative: 'All Benten-blessed AEAD codepoints commit to nonces ≤ 255 B; any future codepoint with a longer nonce REQUIRES a new envelope-format-version arm.' Add this to crates/benten-crypto-suite/src/aead.rs module docstring + reference from V1-FROZEN-INTERFACE.md item 6 (codepoint additive-discipline) escape-valve section. ~10 LOC docs edit.",
+      "hard_rule_clause": "(a) fix-now",
+      "rationale": "Trivial doc-clarification + freeze-time hardening. Preserves the actually-correct invariant (12-B today; all RustCrypto-blessed AEAD candidates ≤ 24 B) while making explicit the additive-codepoint contract the freeze relies on."
+    }
+  ],
+  "approved_invariants": [
+    {
+      "id": "L1-approve-1",
+      "title": "Codepoint dispatchers fail-closed across all surfaces — typed-reject reachable on every entry",
+      "evidence": "codepoint.rs::SigCodepoint::resolve (line 99-108: 0x0001/0x0002 Ok; 0x0003 + other typed-Err); CipherSuiteCodepoint::resolve (line 240-253: 0x647a/0x6400 Ok; 0x647b/0x647c/0x0000/other typed-Err); HashCodepoint::resolve (line 147-152: 0x1e/0x1015/0x16 Ok; other typed-Err). sig.rs::SignatureSuite::resolve_codepoint (line 304-311). cipher_suite.rs::CipherSuite::resolve (line 97-100). aead.rs::wrap (line 246-275) + ::unwrap (line 286-329) both surface typed Unsupported on codepoint dispatch failure. varsig.rs::UcanVarsigV1Header::decode (line 82-89) runs codepoint.resolve before payload decode. Every dispatcher entry I could find runs through codepoint.resolve OR explicitly matches LIVE codepoints. NEVER a silent fallback. P2P-mainstream per Veilid/MLS/NIP-44; age's silent-ignore is correctly rejected."
+    },
+    {
+      "id": "L1-approve-2",
+      "title": "Reserved codepoints (0x647a LIVE + 0x6400 LIVE + 0x647b reserved + 0x647c reserved-audit-gated + 0x0000 reserved) all honored per V1-FROZEN row 6 table",
+      "evidence": "cipher_suite.rs:240-253 explicitly matches each reserved codepoint with a typed-reject arm + the pure-PQ 0x647c reachable only via SwapMatrix::try_pure_pq_sole_trust_path (gated on AUDIT_LANDED_PURE_PQ_FLAG = false). Test pins at tests/tf4_codepoint_0x647c_pure_pq_mlkem_only.rs + tests/tf4_pure_pq_gated_audit_landed.rs + tests/tf4_gcore3c_swap_matrix_conformance_additional.rs cover the reserved-typed-reject + audit-gated-constructor invariants. The 0x647b future-end-state stays reserved as designed."
+    },
+    {
+      "id": "L1-approve-3",
+      "title": "PQ-hybrid v1-beta NF-4 strip-resistance + both-must-verify: structurally enforced",
+      "evidence": "sig.rs::SignatureSuite::verify (line 414-510) hybrid arm REQUIRES (a) classical not empty (HybridHalfMissing typed), (b) PQ not empty (HybridHalfMissing typed), (c) commitment not empty (StripResistanceViolated typed), (d) pq_vk present (HybridHalfMissing typed), (e) recomputed commitment equals carried commitment (StripResistanceViolated typed), (f) Ed25519 cryptographic verify succeeds (ClassicalVerifyFailed typed), (g) ML-DSA-65 cryptographic verify succeeds (PqVerifyFailed typed). All seven gates must pass for Ok(()). The commitment = SHA3-256(domain_sep || pub_classical || pub_pq || classical_sig || pq_sig || msg) binds both pubkeys + both sigs + msg per NF-4 lamps-pq-composite-sigs-18. Classical floor present (Ed25519 audited; X25519). Test pins at tests/tf2_hybrid_both_must_verify_strip_resistant.rs + tests/tf2_strip_resistance_negative.rs cover the strip-attempt + cross-message-splice + half-truncate adversarial inputs."
+    },
+    {
+      "id": "L1-approve-4",
+      "title": "X-Wing combiner: classical+PQ+pubkey commitment per Spike I",
+      "evidence": "cipher_suite.rs::x_wing_combine (line 403-437) feeds HKDF-SHA256 with IKM = ss_x || ss_mlkem || ek_x || ek_mlkem || pub_x || pub_mlkem + codepoint-bound info-tag 'x-wing-v1-benten-0x647a' + salt = SHA3-256(info-tag). Stripping either half (ek_mlkem zeroed OR ek_x zeroed) mutates the IKM → derives a different combined key → ChaCha20-Poly1305 decrypt fails closed (AeadAuthFailed). Test pins at cipher_suite.rs::pq_strip_resistance_fails_closed (line 646) + classical_strip_resistance_fails_closed (line 657) + recipient_lacks_pq_half_typed_error (line 668) + unknown_codepoint_at_decrypt_typed_unsupported (line 684). F-2 strip-resistance contract holds."
+    },
+    {
+      "id": "L1-approve-5",
+      "title": "Two-path key derivation Spike-E Interpretation-B + 'step'/'root' info-tag domain separation",
+      "evidence": "structural_kdf.rs::derive_root (line 124-130) info = 'root' || root_cid; ::derive_step (line 141-152) info = 'step' || edge_label || node_cid. HKDF-SHA256 via vetted upstream hkdf crate (no fork). StructuralKdfKey zeroize-on-drop (line 110). Test pins at structural_kdf.rs:174-212 cover deterministic round-trip + role-separation (derive_root vs derive_step with edge='' for same cid → different keys) + step-info-tag-load-bearing (derive_step_without_info_tag_for_test gives different key). Path-tagged property: same Node reached by different predecessors yields different keys (Spike-E Interpretation-B; structure-independent formula DISPROVED). Matches V1-FROZEN-INTERFACE item 15(f) frozen surface."
+    },
+    {
+      "id": "L1-approve-6",
+      "title": "derive_root + derive_step API matches RATIFIED §15(f)",
+      "evidence": "structural_kdf.rs:124-152 + lib.rs:140 (`pub use crate::structural_kdf::{StructuralKdfKey, derive_root, derive_step}`). V1-FROZEN row 15(f) at docs/V1-FROZEN-INTERFACE.md:1424-1430 says derive_root at line 124 + derive_step at line 141 — line numbers exactly match. The 'step'/'root' info-tags are wire-permanent per the freeze. derive_step_without_info_tag_for_test (line 96) is test-only (cfg-test gating implicit via _for_test naming + docstring NOT a production API)."
+    },
+    {
+      "id": "L1-approve-7",
+      "title": "AeadKeyMaterial + AeadEnvelope encode/decode roundtrip stable; codepoints serialized at envelope head",
+      "evidence": "aead.rs::AeadEnvelope::to_wire_bytes (line 161-175) carries [magic 0xae, format_version, cp_LE_u16, nonce_len, nonce, ciphertext_with_tag] per the explicit wire-format in the module header (line 18-26). AeadEnvelope::from_wire_bytes (line 180-204) parses + validates magic + extracts codepoint. Test pin at aead.rs::round_trip_through_wire_bytes (line 426). Format-version byte at position 1 (Gate-6 R4-FP-1 m-7 closure) makes future v2 envelopes distinguishable without pre-coordination. AeadKeyMaterial zeroize-on-drop (line 132). Test pin at wire_format_carries_explicit_format_version_byte (line 405). Matches V1-FROZEN item 6 'wire envelope structure' freeze. Rename from KeyMaterial → AeadKeyMaterial landed at G-CORE-9 commit dd12f394 (per V1-FROZEN row 15(d) — name-collision resolution)."
+    },
+    {
+      "id": "L1-approve-8",
+      "title": "EncryptionClass enum integration is orthogonal to cipher-suite dispatcher (Public/Confidential outer layer; cipher-suite codepoint inner suite-selector)",
+      "evidence": "benten-core/src/encryption_class.rs ships `pub enum EncryptionClass { Public, Confidential }` with #[non_exhaustive] + wire codepoints (Public=0x00, Confidential=0x01) + from_codepoint typed-dispatch (EncryptionClassError::UnsupportedClass typed-reject). Placed in benten-core as vocabulary type (matches WriteAuthority + ChangeEvent placement). Per V1-FROZEN row 3 / item 15(e) frozen at commit a9d2753c. The cipher-suite dispatcher does NOT consume EncryptionClass — they live at different abstraction layers: EncryptionClass = 'is this Node's content public or encrypted?' (outer classifier; benten-core vocabulary); CipherSuiteCodepoint = 'IF Confidential, with which X-Wing/classical/pure-PQ suite?' (inner suite-selector; benten-crypto-suite agility surface). Same fail-closed typed-reject discipline applies (EncryptionClassError::UnsupportedClass mirrors UnsupportedAlgorithm::CipherSuite). Orthogonal-by-design — correct architectural separation."
+    },
+    {
+      "id": "L1-approve-9",
+      "title": "0x647c minted in pre-FREEZE bundle — typed-rejected at v1-beta default CipherSuite::resolve per C11b safety gate",
+      "evidence": "cipher_suite.rs::CipherSuite::resolve (line 97-100) calls codepoint.resolve() which typed-rejects 0x647c (codepoint.rs:249 `0x647c => Err(UnsupportedAlgorithm::CipherSuite { codepoint: self.0 })`). Test pin at cipher_suite.rs::reserved_codepoint_0x647c_typed_rejects (line 723-738) — explicit pin asserting the dispatcher refuses 0x647c. Pure-PQ reachable ONLY via SwapMatrix::try_pure_pq_sole_trust_path (line 250-262) which surfaces SwapMatrixError::AuditNotLandedPurePqRejected when AUDIT_LANDED_PURE_PQ_FLAG = false (line 140 const). force_pure_pq_for_test_bypassing_audit_gate (line 282-287) is #[cfg(test)] gated. Distinct from 0x647b (HYBRID_MLKEM768_HQC reserved-named for future PQ⊕PQ end-state). Test pin pure_pq_arm_routes_to_codepoint_0x647c (swap_matrix.rs:1833-1848) verifies the routing is to 0x647c NOT 0x647b (no collision with future end-state). All correct per the C11b safety gate."
+    }
+  ],
+  "iteration_termination_check": {
+    "criterion": "Per CLAUDE.md rule 9 Q5: full council every round; only BLOCKER/MAJOR block; iterate until 0 substantive findings.",
+    "this_round_blocker_count": 0,
+    "this_round_major_count": 1,
+    "this_round_minor_count": 2,
+    "this_round_obs_count": 2,
+    "convergence_status": "NOT CONVERGED at R1 — 1 MAJOR (L1-crypto-r1-1) requires fix + re-review at R2. All MINORs + OBSs are FIX-NOW per HARD RULE 12. Expect 1-2 more rounds before zero-substantive convergence (typical monotonic shape: R1 substantive → R2 partial close → R3 zero)."
+  },
+  "load_bearing_citations": [
+    "CLAUDE.md baked-in #5 (crypto-agility framing — multiformats permanent; algorithms swappable behind codepoints; PQ-hybrid v1-beta default; classical floor as audited security; typed-unsupported NEVER silent fallback)",
+    "RATIFIED-pq-default-reframe-2026-05-19.md §1-2 (NF-4 + NF-1 + PQ-default placement)",
+    "RATIFIED-crypto-agility-2026-05-18.md (the seven additive-codepoint clauses)",
+    "V1-FROZEN-INTERFACE.md item 6 (codepoint table + freeze contract)",
+    "V1-FROZEN-INTERFACE.md item 14 (P2P-interop conformance invariant)",
+    "V1-FROZEN-INTERFACE.md item 15(d)(e)(f)(g) (S&C public surface; EncryptionClass; structural-KDF; two-CID + IROH_BLOCK_SIZE)"
+  ]
+}
