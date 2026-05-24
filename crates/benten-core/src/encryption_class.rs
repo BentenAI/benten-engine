@@ -102,8 +102,15 @@ pub enum EncryptionClassError {
     /// envelope MUST fail-closed (typed reject; never silent fallback)
     /// per CLAUDE.md baked-in #5 + V1-FROZEN-INTERFACE item 14
     /// typed-reject discipline.
+    ///
+    /// `// drift-detect: internal-only` — `EncryptionClass` is minted
+    /// at G-CORE-9 V1-FROZEN-INTERFACE row 3 reserved for v1-Composing
+    /// §8-CC consumers; there is NO production wire-up at HEAD that
+    /// surfaces this variant through the engine boundary. When the
+    /// first §8-CC consumer wires up, this annotation MUST be removed
+    /// + an ErrorCode mirror minted.
     #[error("unsupported encryption class codepoint: 0x{raw:02x}")]
-    UnsupportedClass {
+    UnsupportedClass { // drift-detect: internal-only — reserved for v1-Composing §8-CC consumer wire-up
         /// The raw codepoint byte that did not resolve.
         raw: u8,
     },

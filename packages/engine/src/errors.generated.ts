@@ -225,6 +225,7 @@ export const CATALOG_CODES = [
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED",
   "E_DSL_BACKEND_REJECTED",
   "E_DSL_IO_ERROR",
+  "E_SUBGRAPH_SPEC_WALK_FAILED",
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
 ] as const;
 
@@ -3111,6 +3112,21 @@ export class EDslIoError extends BentenError {
 }
 
 /**
+ * E_SUBGRAPH_SPEC_WALK_FAILED
+ *
+ * Thrown at: `crates/benten-engine/src/engine_share_scope.rs::Engine::walk_share_scope` — wraps `benten_core::subgraph_spec::walker::walk` errors. Internal helper `spec_err_to_engine` performs the `SubgraphSpecError` → `EngineError::Other { code: SubgraphSpecWalkFailed, message: e.to_string() }` mapping.
+ * Message template: "SubgraphSpec walker failed: {reason}"
+ */
+export class ESubgraphSpecWalkFailed extends BentenError {
+  static readonly code = "E_SUBGRAPH_SPEC_WALK_FAILED";
+  static readonly fixHint = "G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) — the typed reject from the public `Engine::walk_share_scope` consumer surface around the canonical `benten_core::subgraph_spec::walker::walk` BFS enumerator. The walker fails when the spec is structurally malformed; the engine wrapper preserves the failure type via this stable catalog code so the napi `mapNativeError` boundary surfaces a typed code instead of collapsing to `E_UNKNOWN`. Construct a valid `Spec` (non-empty roots set; edge-allowlist consistent with the walker's reachable set; per-dimension constraints decidable per `RestrictedScope`); the typed reject IS the fail-closed discipline at the engine boundary.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_SUBGRAPH_SPEC_WALK_FAILED", "G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) — the typed reject from the public `Engine::walk_share_scope` consumer surface around the canonical `benten_core::subgraph_spec::walker::walk` BFS enumerator. The walker fails when the spec is structurally malformed; the engine wrapper preserves the failure type via this stable catalog code so the napi `mapNativeError` boundary surfaces a typed code instead of collapsing to `E_UNKNOWN`. Construct a valid `Spec` (non-empty roots set; edge-allowlist consistent with the walker's reachable set; per-dimension constraints decidable per `RestrictedScope`); the typed reject IS the fail-closed discipline at the engine boundary.", message, context);
+    this.name = "ESubgraphSpecWalkFailed";
+  }
+}
+
+/**
  * E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
  *
  * Thrown at: `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
@@ -3326,5 +3342,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED": EThinClientBridgePrincipalUnresolved,
   "E_DSL_BACKEND_REJECTED": EDslBackendRejected,
   "E_DSL_IO_ERROR": EDslIoError,
+  "E_SUBGRAPH_SPEC_WALK_FAILED": ESubgraphSpecWalkFailed,
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED": EAuditNotLandedPurePqRejected,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

@@ -245,6 +245,13 @@ pub mod engine_sandbox;
 // pre-existing not-wasm32 gate from Phase-2b G10-A-wasip1).
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "browser-backend")))]
 pub mod engine_snapshot;
+// G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h):
+// `Engine::walk_share_scope` engine wrapper around the
+// `benten_core::subgraph_spec::walker::walk` canonical BFS enumerator.
+// Available across all targets (no target-conditional gating; the
+// walker is pure-Rust + the engine method is the public consumer
+// surface for the SubgraphSpec walker).
+pub mod engine_share_scope;
 // G13-C BLOCKER-2 fix-pass: engine_stream consumes `engine_wait::HandlerRef`
 // (handler-driven STREAM primitive). Browser thin clients receive STREAM
 // chunks over the thin-client subscription protocol from the full peer;

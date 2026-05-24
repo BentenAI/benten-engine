@@ -1754,6 +1754,14 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::CompileError::Io(_)` (the public variant; `compile_file` constructs it directly from `std::io::Error` failures). The `CompileError::code()` method routes the variant through `benten_errors::ErrorCode::DslIoError` so the napi `mapNativeError` boundary surfaces the typed catalog code instead of collapsing to `E_UNKNOWN`.
 - **Phase:** 4-Meta-Core pre-G-CORE-9-FREEZE bundle (§3.5g item 6 amendment closure)
 
+### E_SUBGRAPH_SPEC_WALK_FAILED
+
+- **Message:** "SubgraphSpec walker failed: {reason}"
+- **Context:** Free-form string carrying the inner `benten_core::subgraph_spec::SubgraphSpecError` Display — the typed reason describing what made the spec malformed (root CID absent, edge-allowlist contradicts the walker's reachable set, etc.).
+- **Fix:** G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) — the typed reject from the public `Engine::walk_share_scope` consumer surface around the canonical `benten_core::subgraph_spec::walker::walk` BFS enumerator. The walker fails when the spec is structurally malformed; the engine wrapper preserves the failure type via this stable catalog code so the napi `mapNativeError` boundary surfaces a typed code instead of collapsing to `E_UNKNOWN`. Construct a valid `Spec` (non-empty roots set; edge-allowlist consistent with the walker's reachable set; per-dimension constraints decidable per `RestrictedScope`); the typed reject IS the fail-closed discipline at the engine boundary.
+- **Thrown at:** `crates/benten-engine/src/engine_share_scope.rs::Engine::walk_share_scope` — wraps `benten_core::subgraph_spec::walker::walk` errors. Internal helper `spec_err_to_engine` performs the `SubgraphSpecError` → `EngineError::Other { code: SubgraphSpecWalkFailed, message: e.to_string() }` mapping.
+- **Phase:** 4-Meta-Core G-CORE-9 V1-FROZEN-INTERFACE row 4 (SubgraphSpec walker public consumer surface mint)
+
 ### E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
 
 - **Message:** "pure-PQ-sole-trust-path rejected (audit not landed): hybrid construction is the audited path until the independent ml-dsa/ml-kem/slh-dsa audit (NF-2 / C-GM-AUDIT) lands"
