@@ -1,0 +1,205 @@
+{
+  "lens": "L8 IVM + CanonicalViews + materializer + Version DAG + code-as-graph — R2",
+  "disposition": "APPROVE-WITH-1-MAJOR-AND-1-MINOR",
+  "round": "G-CORE-9 FREEZE iterate-to-convergence R2",
+  "branch": "g-core-9/r2-l8-ivm-canonicalviews-materializer-versiondag",
+  "main_head": "235ad861",
+  "r1_branch": "g-core-9/r1-l8-ivm-canonicalviews-materializer-versiondag",
+  "r1_starting_head": "8cc4eddd",
+  "r1_findings_count_baseline": {
+    "blocker": 0,
+    "major": 3,
+    "minor": 3,
+    "obs": 0
+  },
+  "r2_findings_count_post_fix_pass": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1,
+    "obs": 0
+  },
+  "r2_convergence_disposition": "NOT-CONVERGED — 1 MAJOR carry plus 1 MINOR carry; one additional R-round required (the carry is closure of the R1 MAJORs' deferral discipline + completion of the named-set non_exhaustive sweep). Zero NEW substantive findings beyond R1 carries.",
+  "scope_unchanged_from_r1": [
+    "crates/benten-ivm/ (Strategy + CanonicalViews + AlgorithmBView + materialize_inner_kernel_read + SubgraphSpec + KernelOutput + TypedOutputProjection)",
+    "crates/benten-platform-foundation/src/materializer.rs + schema_compiler/vocab.rs",
+    "crates/benten-core/src/{version*.rs, subgraph_spec/}",
+    "crates/benten-engine/src/engine_views.rs + engine_share_scope.rs + outcome.rs + engine_stream.rs + engine_subscribe.rs + engine_wait.rs + atrium_api.rs + shares_policy_resolver.rs + write_boundary_chain_validator.rs",
+    "CLAUDE.md baked-in #1 (12-primitive irreducibility) + #2 (arch-1 boundary)"
+  ],
+  "r1_finding_status_post_fix_pass": [
+    {
+      "id": "L8-MAJOR-1",
+      "r1_severity": "MAJOR",
+      "r1_title": "Stale Strategy::C terminology locked into public ErrorCode + EngineError variant name + observable error message string across 3 cross-language surfaces",
+      "fix_pass_disposition": "DEFERRED to G-CORE-9 R2 OR G-COMP-1",
+      "evidence_of_deferral": [
+        "docs/V1-BETA-BREAKING-CHANGES.md:152-156 Bundle 4 entry: 'ESCALATED per the Bundle-3 substantial cascade demonstrating the per-bundle LOC explosion; relocated to a follow-up sub-pass for orchestrator pacing. BELONGS-NAMED-NOW: G-CORE-9 R2 OR G-COMP-1 §<row>. Captured in docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 watch-list.'",
+        "docs/g-core-9-r1-triage.md:68-74 Bundle 4 was originally tagged FIX-NOW (Strategy rename is wire-locking obsolete terminology forever post-v1-beta if not closed); CATALOG_VARIANT_COUNT delta 192 → 195 indicated for the DSL ErrorCode half; Strategy rename is a rename not a mint (no CATALOG delta)",
+        "CATALOG_VARIANT_COUNT at HEAD = 192 (crates/benten-errors/tests/stable_shape.rs:1019) — brief is correct that CATALOG stays 192",
+        "Production code unchanged: ViewStrategyCReserved variant still at crates/benten-engine/src/error.rs (R1 finding cite) + benten-errors/src/lib.rs (4 sites) + packages/engine/src/errors.generated.ts (3 sites) + docs/ERROR-CATALOG.md:533+727 + docs/public-api/benten-{errors,engine}.txt (5 cites)"
+      ],
+      "r2_carry_severity": "MAJOR",
+      "r2_carry_finding_id": "L8-R2-MAJOR-CARRY-1",
+      "verdict": "NOT-CLOSED-PROPERLY"
+    },
+    {
+      "id": "L8-MAJOR-2",
+      "r1_severity": "MAJOR",
+      "r1_title": "item 11 #[non_exhaustive] sweep INCOMPLETE for benten-ivm + benten-platform-foundation + benten-engine lens-scoped surface",
+      "fix_pass_disposition": "PARTIAL APPLIED + audit test created + remainder DEFERRED",
+      "evidence_applied": [
+        "crates/benten-engine/src/engine_stream.rs:130-131 #[non_exhaustive] on NextChunkPoll ✓",
+        "crates/benten-engine/src/atrium_api.rs:108-109 #[non_exhaustive] on AtriumMode ✓",
+        "crates/benten-engine/src/shares_policy_resolver.rs:56-57 #[non_exhaustive] on DelegationResolution ✓",
+        "crates/benten-engine/src/write_boundary_chain_validator.rs:68-69 #[non_exhaustive] on WriteBoundaryChainOutcome ✓",
+        "crates/benten-engine/src/manifest_signing.rs:92-93+228-229+282-283 #[non_exhaustive] on ManifestVerifyMode + ManifestVerifyError + PublisherRegistryError ✓",
+        "crates/benten-engine/src/engine_wait.rs:172-173 #[non_exhaustive] on ResumePayload ✓",
+        "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs SHIPPED — 163 LOC, 8 tests passing (verified by `cargo test -p benten-engine --test g_core_9_non_exhaustive_audit` 2026-05-24)",
+        "Audit test includes Strategy carve-out 3-arm exhaustive pin per L8-MAJOR-3 ratification",
+        "docs/V1-FROZEN-INTERFACE.md:914-915 spec table updated retensing the 12+-verified-MISSING enumeration"
+      ],
+      "evidence_still_missing": [
+        "benten-ivm pub types: TypedOutputProjection (subgraph_spec.rs:86) + KernelOutput (subgraph_spec.rs:296) — BOTH wire-bytes-load-bearing per R1 finding's 1-byte arm-discriminator at algorithm_b.rs:1507-1523 — STILL MISSING #[non_exhaustive]",
+        "benten-ivm pub types: SubgraphSpec (subgraph_spec.rs:107) + KernelInput (subgraph_spec.rs:262) + ViewState (view.rs:157) + ViewBudget (view.rs:180) + ViewQuery (view.rs:223) + ViewResult (view.rs:242) + ViewDefinition (view.rs:387) — STILL MISSING #[non_exhaustive]; only ViewError carries it",
+        "benten-engine pub types item-11-enumerated MISSING: UserViewInputPattern (outcome.rs:39) + TraceStep (outcome.rs:362) + StreamCursor (engine_stream.rs:150) + SubscribeCursor (engine_subscribe.rs:72) + SuspensionOutcome (engine_wait.rs:191) — 5 of the 12+ enumerated in item 11 table row 2 still missing the attribute",
+        "benten-engine pub types lens-scoped MISSING: EngineViewsHandle (engine_views.rs:1129) + AtriumConfig (atrium_api.rs:64) + SyncStatus (atrium_api.rs:128) + UserViewSpec / UserViewSpecBuilder / ReadViewOptions / Outcome / Trace / TerminalError / BudgetExhaustedView / AnchorHandle / RegisterReplaceOutcome / HandlerPredecessors / DiagnosticInfo / NestedTx (outcome.rs — 13 pub structs total from one file with zero #[non_exhaustive])",
+        "benten-platform-foundation pub types MISSING: VocabLabel (vocab.rs:14) + VocabEdge (vocab.rs:92) + Scalar (vocab.rs:157) + RenderError (materializer.rs:567) — STILL MISSING (the D-4F-NEW-TYPED-FIELD-NODE-VOCAB 8/5/8 typed vocabulary set + Renderer-trait error type)",
+        "benten-core::Mode (version_dag.rs:75) — STILL MISSING (the Strict/Dag selector named in R1 finding)",
+        "DEFERRED coverage gap: docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (the explicit non_exhaustive deferral row) covers ONLY CapWriteContext + ReadContext + SuspensionOutcome. Of the R1-enumerated remaining missing types, only SuspensionOutcome is covered. UserViewInputPattern + TraceStep + StreamCursor + SubscribeCursor + the benten-ivm wire-bytes-load-bearing pair (TypedOutputProjection + KernelOutput) + the platform-foundation 4-type set (VocabLabel/VocabEdge/Scalar/RenderError) + Mode are NOT named in any DEFERRED row → HARD RULE 12 clause-(b) gap (named-destination missing for the apply-deferral)."
+      ],
+      "r2_carry_severity": "MAJOR",
+      "r2_carry_finding_id": "L8-R2-MAJOR-CARRY-2",
+      "verdict": "PARTIAL-CLOSED — audit test landed + ~8 types APPLIED + Strategy carve-out registry closed; ~12+ R1-enumerated types still missing AND uncovered by any DEFERRED.md row"
+    },
+    {
+      "id": "L8-MAJOR-3",
+      "r1_severity": "MAJOR",
+      "r1_title": "Item 11 carve-out registry MISSING Strategy",
+      "fix_pass_disposition": "CLOSED",
+      "evidence_of_closure": [
+        "docs/V1-FROZEN-INTERFACE.md:924 NEW carve-out row: 'benten-ivm | Strategy | NO (deliberate) | DO NOT APPLY — explicit carve-out per G-CORE-9 R1 L8-MAJOR-3 ratification; the 3-arm {A, B, Reserved} set IS load-bearing per the spec's audit-pin (item 11 documented carve-out); adding a 4th strategy is a Composing-time architectural decision, NOT a SemVer non-breaking field addition' — exactly the 2-line spec edit the R1 disposition prescribed",
+        "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs:139-163 strategy_carve_out_3_arms_exhaustive_pin test — exhaustive match on Strategy::{A, B, Reserved}; adding a 4th arm without carve-out registry update = compile-fail at this test",
+        "Test passes at HEAD 235ad861 (verified 2026-05-24)"
+      ],
+      "verdict": "FULLY-CLOSED"
+    },
+    {
+      "id": "L8-MINOR-1",
+      "r1_severity": "MINOR",
+      "r1_title": "V1-FROZEN-INTERFACE item 15(a) cites nonexistent crates/benten-core/tests/g_core_9_no_thirteenth_primitive.rs",
+      "fix_pass_disposition": "CLOSED",
+      "evidence_of_closure": [
+        "docs/V1-FROZEN-INTERFACE.md:1304 cite now reads `crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs` — matches the actually-shipped file; assertion property unchanged"
+      ],
+      "verdict": "FULLY-CLOSED"
+    },
+    {
+      "id": "L8-MINOR-2",
+      "r1_severity": "MINOR",
+      "r1_title": "Lens brief required-reads cited nonexistent paths (canonical_views/ + version/)",
+      "fix_pass_disposition": "ABSORBED-BY-ORCHESTRATOR",
+      "evidence": [
+        "R1 disposition was 'FIX-NOW at next R-round brief template'; the brief is template-drift, not artifact-drift; R2 lens brief acknowledges actual file layout"
+      ],
+      "verdict": "CLOSED-AS-DISPOSITIONED"
+    },
+    {
+      "id": "L8-MINOR-3",
+      "r1_severity": "MINOR",
+      "r1_title": "walk_share_scope is principal-unbearing at v1-beta; walk_share_scope_as Composing-time additive",
+      "fix_pass_disposition": "DEFERRED-NAMED to Row D-11",
+      "evidence_of_closure": [
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:276+278+280+283 Row D-11 — walk_share_scope_as principal-bearing additive overload; signature `pub(crate) fn walk_share_scope_as(&self, principal: &Cid, ...)` named; clearly identified as ADDITIVE Composing-time enhancement (no v1-beta wire-break)",
+        "R1 lens disposition was DISAGREE-WITH-EXPLANATION recommending only spec-body clarification; the DEFERRED row codifies the additive enhancement target which is stricter than the R1 disposition"
+      ],
+      "verdict": "OVER-CLOSED-PROPERLY (better than R1 dispositioned for)"
+    }
+  ],
+  "r2_new_findings": [
+    {
+      "id": "L8-R2-MAJOR-CARRY-1",
+      "severity": "MAJOR",
+      "title": "L8-MAJOR-1 (Strategy::C → Reserved rename) DEFERRED via V1-BETA-BREAKING-CHANGES.md Bundle-4 entry that names V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 as destination — but Row D-15 does NOT actually carry the Strategy-rename entry. HARD RULE 12 clause-(b) violation (named destination phantom) + the original R1 wire-lock consequence (obsolete `Strategy::C` terminology freezing into v1-beta wire-bytes forever) re-fires at R2 since the deferral discipline is unfulfilled at HEAD `235ad861`.",
+      "category": "FREEZE-CORRECTNESS + HARD-RULE-12-CLAUSE-B",
+      "description": "The R1 fix-pass triaged L8-MAJOR-1 to a Bundle 4 deferral but the deferral discipline is broken at HEAD. docs/V1-BETA-BREAKING-CHANGES.md:152-156 explicitly writes 'BELONGS-NAMED-NOW: G-CORE-9 R2 OR G-COMP-1 §<row>. Captured in docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 watch-list.' But Row D-15 in V1-FROZEN-INTERFACE-DEFERRED.md (lines 340-361) is the 'Post-v1-beta hardening watch-list' covering AeadEnvelope::to_wire_bytes panic + AuthorizationGrant.binding_sig hardcoded shape + CryptoPolicy::require_hybrid_pq + AuthorizationGrant.audience_pubkey promotion — ALL crypto/grant-shape items. The Strategy::C → Reserved rename is NOT named in Row D-15 OR in any other DEFERRED row (`grep -n 'Strategy\\|ViewStrategyC\\|StrategyC' docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns empty). The deferral therefore creates a phantom-destination per HARD RULE 12 (the same class of failure that §3.6h pim-N rule-ratification-must-close-origin was codified to catch). Additionally: the R1 finding's substantive consequence — 'the wire code E_VIEW_STRATEGY_C_RESERVED is bytewise-frozen forever (item 4 P-III); renaming post-v1-GM would be a SemVer break + a Phase-3+ wire-format break' — is true regardless of the deferral. The 8 surfaces still locked to the obsolete name at HEAD: (a) crates/benten-engine/src/error.rs ViewStrategyCReserved variant + Display string referencing Strategy::C; (b) crates/benten-engine/src/engine_views.rs:695-699 internal-inconsistency hazard (matches Strategy::Reserved, returns ViewStrategyCReserved); (c) crates/benten-errors/src/lib.rs 4 sites (variant + wire string E_VIEW_STRATEGY_C_RESERVED + Display arm + parse arm); (d) packages/engine/src/errors.generated.ts 3 sites (TS class EViewStrategyCReserved + wire code + docstring saying 'declared Strategy::Reserved' — cross-language message drift on SAME code path per §3.5g first-class mirror violation); (e) docs/ERROR-CATALOG.md:533 + :727; (f) docs/public-api/benten-errors.txt:188 + benten-engine.txt:976,977,2329,2330 (5 cites in the cargo-public-api baselines — these BAKE into the diff-protected freeze gate); (g) crates/benten-errors/tests/stable_shape.rs:112 + :682 + :1149 (R1 finding cite). The cargo-public-api workflow was flipped to required-failing per Bundle 10 Fork 3 — so the cargo-public-api baseline locks the obsolete name as a wire-protected freeze surface at v1-beta tag. This means the Strategy::C rename window IS specifically the G-CORE-9 freeze wave; missing it makes the rename a SemVer break post-v1-beta.",
+      "evidence": [
+        "docs/V1-BETA-BREAKING-CHANGES.md:152-156 Bundle 4 entry naming Row D-15 destination",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:340-361 Row D-15 body — covers 4 crypto items, zero mention of Strategy",
+        "Bash: `grep -n 'Strategy\\|ViewStrategyC\\|StrategyC' docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns empty",
+        "CATALOG_VARIANT_COUNT at HEAD = 192 (stable_shape.rs:1019) — rename is wire-bytes-preserving (no CATALOG delta) but variant-name + Display-string + wire-string-`E_VIEW_STRATEGY_C_RESERVED` ARE the obsolete cite",
+        "docs/public-api/benten-errors.txt:188 + benten-engine.txt:976+977+2329+2330 — 5 cargo-public-api baseline cites of `ViewStrategyCReserved` (BAKED into the now-required-failing public-api gate per Bundle 10 Fork 3)",
+        "§3.6h pim-N rule-ratification-must-close-origin captures this class of failure (named-destination phantom)",
+        "§3.5g cross-language rule-mirror — the TS docstring at packages/engine/src/errors.generated.ts:1318 already references 'Strategy::Reserved' while the Rust format-string at error.rs emits 'Strategy::C' — cross-language drift on the SAME code path"
+      ],
+      "impact": "FREEZE-BLOCKER. The cargo-public-api workflow's required-failing flip at Bundle 10 means baseline-tracked symbols are now wire-frozen at v1-beta. The Strategy::C-named variants + wire code lock into v1-beta forever; renaming post-v1-beta becomes a SemVer break. Plus the named-destination phantom is exactly the HARD RULE 12 clause-(b) failure mode + the §3.6h pattern that prior rule-ratifications were written to catch. Plus the cross-language message-drift between Rust + TS docstring is live on the same code path right now (the TS docstring is correct; the Rust format-string emits the wrong name).",
+      "disposition_for_r3_or_next_pass": "FIX-NOW. Two acts atomic in one PR: (a) author the actual Row D-15 entry (or new Row D-19) in V1-FROZEN-INTERFACE-DEFERRED.md naming the Strategy rename + cargo-public-api baseline update + §3.5g 4-surface mirror sweep, then declare the deferral discipline restored; OR (b) the spec text + the §3.5g 4-surface mirror sweep (rename across the 8 surfaces above) lands in R2 itself. Path (b) is the orthodox closure per the R1 disposition (`atomic rename across 4 surfaces BEFORE v1-beta tag`); Path (a) accepts the deferral but plugs the named-destination phantom. Either path is HARD RULE 12 compliant; the current state at HEAD `235ad861` is neither — it claims a destination that doesn't carry the entry."
+    },
+    {
+      "id": "L8-R2-MAJOR-CARRY-2",
+      "severity": "MAJOR",
+      "title": "L8-MAJOR-2 (#[non_exhaustive] sweep) PARTIAL — ~8 types applied + audit test landed, but ~12+ R1-enumerated types still missing AND not covered by any DEFERRED row (Row D-17 covers only SuspensionOutcome from the R1-enumerated remaining set). HARD RULE 12 clause-(b) gap: named-destination missing for the apply-deferral.",
+      "category": "FREEZE-COMPLETENESS + HARD-RULE-12-CLAUSE-B",
+      "description": "The R1 fix-pass applied #[non_exhaustive] to 8 types (NextChunkPoll, AtriumMode, DelegationResolution, WriteBoundaryChainOutcome, ManifestVerifyMode, ManifestVerifyError, PublisherRegistryError, ResumePayload) + landed the audit test (crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs, 8 tests passing) + closed the Strategy carve-out registry per L8-MAJOR-3. But the V1-FROZEN-INTERFACE.md item 11 table row 2 enumerated `UserViewInputPattern / TraceStep / Transport / AtriumMode / SuspensionOutcome / DelegationResolution / NextChunkPoll / StreamCursor / SubscribeCursor / WriteBoundaryChainOutcome / ManifestEnvelopeRecheckOutcome / ManifestVerifyMode` as '12+ verified MISSING at HEAD | APPLY'. Of those 12: AtriumMode ✓ + DelegationResolution ✓ + NextChunkPoll ✓ + WriteBoundaryChainOutcome ✓ + ManifestEnvelopeRecheckOutcome ✓ + ManifestVerifyMode ✓ (6 applied). UserViewInputPattern + TraceStep + StreamCursor + SubscribeCursor + SuspensionOutcome (5 still missing). Transport (thin_client) status TBD. Of the 5 still missing, only SuspensionOutcome is named in V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (the explicit non_exhaustive deferral row, which also covers CapWriteContext + ReadContext); UserViewInputPattern + TraceStep + StreamCursor + SubscribeCursor are not named in any DEFERRED row → phantom-deferral per HARD RULE 12 clause-(b). Additionally: the R1 finding enumerated several lens-scoped types BEYOND the item-11 table — benten-ivm TypedOutputProjection + KernelOutput (both wire-bytes-load-bearing per the 1-byte arm-discriminator at algorithm_b.rs:1507-1523), ViewState + ViewBudget + ViewQuery + ViewResult + ViewDefinition + SubgraphSpec + KernelInput; benten-platform-foundation VocabLabel + VocabEdge + Scalar (the 8-typed-field-Node + 5-labeled-edge + 8-scalar vocabulary per D-4F-NEW-TYPED-FIELD-NODE-VOCAB) + RenderError; benten-core::Mode (the Strict/Dag VersionDag selector). NONE of these are applied at HEAD AND NONE are named in any DEFERRED row. The wire-bytes-load-bearing pair (TypedOutputProjection + KernelOutput) is especially load-bearing — adding variants post-v1-GM is a wire-format break because the 1-byte arm-discriminator is baked into materialize_inner_kernel_read's output. The audit test pin landed, but it only catches the types it explicitly enumerates — it does NOT walk every pub enum/struct workspace-wide as the spec verification mechanism describes ('walks every pub enum + pub struct and asserts each carries #[non_exhaustive] OR is in the carve-out registry'). So future drift will silently re-open the gap without CI catching it.",
+      "evidence": [
+        "Bash `grep -nE '^(pub (enum|struct))' crates/benten-ivm/src/{subgraph_spec.rs,view.rs}` returns 10 pub types; only ViewError carries #[non_exhaustive]",
+        "Bash `grep -B1 -nE '^pub enum (UserViewInputPattern|TraceStep|StreamCursor|SubscribeCursor|SuspensionOutcome)'` on engine sources confirms 5 enums lack the attribute (each prefixed only by `#[derive(...)]`)",
+        "Bash `grep -B1 -n '^pub enum (VocabLabel|VocabEdge|Scalar|RenderError)'` on platform-foundation sources confirms 4 enums lack the attribute",
+        "crates/benten-core/src/version_dag.rs:74-75 Mode enum lacks #[non_exhaustive] (only `#[derive(...)]`)",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:388-412 Row D-17 — ONLY names CapWriteContext + ReadContext + SuspensionOutcome (3 of the ~12+ still-missing R1-enumerated types)",
+        "Bash `grep -n 'UserViewInputPattern\\|TraceStep\\|StreamCursor\\|SubscribeCursor\\|TypedOutputProjection\\|KernelOutput\\|VocabLabel\\|VocabEdge\\|RenderError\\|version_dag.*Mode' docs/V1-FROZEN-INTERFACE-DEFERRED.md` confirms zero hits beyond the SuspensionOutcome row",
+        "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs covers only 7 enumerated types (WriteBoundaryChainOutcome + AtriumMode + DelegationResolution + ManifestVerifyMode + Strategy carve-out + AuthorizationGrant types + 2 struct-Default tests) — does NOT walk the workspace per the spec's described verification-mechanism",
+        "Spec mismatch: V1-FROZEN-INTERFACE.md:951-957 describes verification mechanism as 'walks every pub enum + pub struct and asserts each carries #[non_exhaustive] OR is in the carve-out registry. Fails CI on any new public enum/struct lacking the attribute + the carve-out justification.' The shipped audit test does not implement this walk — it implements explicit per-type arm-coverage tests for ~7 named types only."
+      ],
+      "impact": "FREEZE-COMPLETENESS gap. Each missing R1-enumerated type that's NOT covered by a DEFERRED row ships a SemVer-locked exhaustive shape into v1-beta; the wire-bytes-load-bearing pair (TypedOutputProjection + KernelOutput) becomes a wire-format-break for any 5th canonical view added post-v1-GM. The audit test pin landing without the workspace-walk implementation means the gap won't surface at PR time — future Composing-wave additions will re-open the same gap silently. Phantom-deferral (R1-named types neither applied nor named in DEFERRED) violates HARD RULE 12 clause-(b) discipline.",
+      "disposition_for_r3_or_next_pass": "FIX-NOW (two paths, either acceptable): (a) APPLY #[non_exhaustive] to the ~12+ still-missing types (UserViewInputPattern + TraceStep + StreamCursor + SubscribeCursor + SuspensionOutcome + TypedOutputProjection + KernelOutput + ViewState + ViewBudget + ViewQuery + ViewResult + ViewDefinition + SubgraphSpec + KernelInput + VocabLabel + VocabEdge + Scalar + RenderError + Mode) — single ~20-attribute commit, no test cascade since most are exhaustive-by-design at consumer sites OR have only orchestrator-internal matches; (b) extend V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (or add new Rows D-19/D-20/...) naming each still-missing type with G-COMP-1 destination + per-type cascade estimate. PLUS: extend the audit test to walk the workspace per the spec's described verification mechanism (build-time use of cargo-public-api JSON output OR a rustdoc-json walk OR a syn-based crate-walker — alternative implementations exist) — without this, the gap silently re-opens in Composing."
+    },
+    {
+      "id": "L8-R2-MINOR-CARRY-1",
+      "severity": "MINOR",
+      "title": "Audit test verification-mechanism implementation does NOT match spec narrative — spec describes workspace-wide walker; shipped test enumerates ~7 named types only",
+      "category": "FREEZE-DOC-DRIFT (spec vs implementation)",
+      "description": "V1-FROZEN-INTERFACE.md:951-957 describes the audit test as 'A workspace-wide audit test pin (BUILD-AT-FREEZE-WAVE; new file crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs) walks every pub enum + pub struct and asserts each carries #[non_exhaustive] OR is in the carve-out registry. Fails CI on any new public enum/struct lacking the attribute + the carve-out justification.' The shipped test (8 tests, 163 LOC) implements arm-coverage matches for ~7 named types (WriteBoundaryChainOutcome + AtriumMode + DelegationResolution + ManifestVerifyMode + Strategy carve-out + AuthorizationGrant constructor + 2 CapWriteContext/ReadContext Default-construction tests) — it does NOT walk the workspace. So when L8-MAJOR-CARRY-2's remaining types are eventually added in Composing, the audit test won't surface them. The spec narrative + implementation drift IS the class of failure §3.6j pim-N sweep-completeness-self-verify was codified to catch.",
+      "evidence": [
+        "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs has 8 tests, all enumerated-per-type — no workspace walker",
+        "docs/V1-FROZEN-INTERFACE.md:951-957 spec narrative describes workspace-wide walker"
+      ],
+      "impact": "Doc-drift; CI silently misses future drift. Pattern-induction relevant to §3.6j.",
+      "disposition_for_r3_or_next_pass": "FIX-NOW (1 of 2 paths): (a) implement the workspace walker per spec narrative (e.g. consume the cargo-public-api JSON output the public-api workflow already builds + assert #[non_exhaustive] presence; OR a syn-based AST walker; OR rustdoc-json walk); (b) retense V1-FROZEN-INTERFACE.md:951-957 to describe the actual enumerated-per-type shape + acknowledge the workspace-walk discipline is deferred. Path (a) preferred per cost-asymmetry per spec narrative; Path (b) acceptable IF the deferral lands a DEFERRED row naming the workspace-walker upgrade with explicit G-COMP-1 destination."
+    }
+  ],
+  "verified_passing_unchanged_from_r1": [
+    "L8-PASS-1 through L8-PASS-9 ALL remain verified at HEAD `235ad861` — fix-pass changed no scope-relevant production code beyond the additions captured above",
+    "Strategy carve-out 3-arm exhaustive pin in audit test (NEW at fix-pass): closes the L8-MAJOR-3 verification-mechanism gap"
+  ],
+  "summary": {
+    "verified_passing_count": 9,
+    "blocker_count": 0,
+    "major_count": 1,
+    "minor_count": 1,
+    "obs_count": 0,
+    "r2_convergence": "NOT-CONVERGED",
+    "monotonic_progression": "R1 3 MAJOR + 3 MINOR → R2 1 MAJOR + 1 MINOR (closures: L8-MAJOR-3 fully + L8-MINOR-1 fully + L8-MINOR-3 over-closed; partial: L8-MAJOR-2 ~50% applied + audit test landed; phantom-deferral: L8-MAJOR-1)",
+    "notes": "R2 carries are NOT new findings — they are the same R1 substantive concerns RE-RAISED because the R1 fix-pass's deferral discipline created phantom-destinations (HARD RULE 12 clause-(b) failures). L8-R2-MAJOR-CARRY-1 = the Strategy rename deferral names Row D-15 but Row D-15 doesn't carry the entry. L8-R2-MAJOR-CARRY-2 = the non_exhaustive sweep partial-application leaves ~12+ R1-enumerated types neither applied nor named in any DEFERRED row. L8-R2-MINOR-CARRY-1 = the audit test verification-mechanism spec-vs-impl drift. All three are surgical to close — either the orthodox apply (rename + non_exhaustive sweep + workspace walker) or the disciplined deferral (DEFERRED row authorship per-type). A third R-round is required since the carries are MAJOR; expected R3 disposition is APPROVE-FOR-FREEZE-WAVE if the fix-pass closes either path on each carry. ZERO new substantive findings beyond R1 carries — no new code regressions, no new lens-scope issues, no new arch-1 boundary concerns, no new CLAUDE.md #1 12-primitive concerns, no new wire-bytes correctness issues."
+  },
+  "session_provenance": {
+    "branch": "g-core-9/r2-l8-ivm-canonicalviews-materializer-versiondag",
+    "starting_head": "235ad861",
+    "r1_branch_consulted": "origin/g-core-9/r1-l8-ivm-canonicalviews-materializer-versiondag",
+    "r1_output_consulted": "git show origin/g-core-9/r1-l8-ivm-canonicalviews-materializer-versiondag:r6-ivm-canonicalviews-materializer-versiondag.json",
+    "fix_pass_commit": "235ad861 (PR #1346 — 74 findings triaged across 12 bundles)",
+    "docs_consulted": [
+      "docs/V1-FROZEN-INTERFACE.md (item 11 carve-out registry + item 15(a) cite + verification mechanism narrative)",
+      "docs/V1-FROZEN-INTERFACE-DEFERRED.md (Row D-11 + Row D-15 + Row D-17 + Row D-18)",
+      "docs/V1-BETA-BREAKING-CHANGES.md Bundle 4 entry",
+      "docs/g-core-9-r1-triage.md Bundle 4 disposition",
+      "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs (8 tests passing verified)",
+      "Per-type attribute audit grep across benten-ivm + benten-engine + benten-platform-foundation + benten-core lens-scoped files"
+    ],
+    "test_runs": [
+      "`cargo test -p benten-engine --test g_core_9_non_exhaustive_audit` — 8 passed; 0 failed (2026-05-24 background task bkwtihr04)"
+    ],
+    "claude_md_baked_ins_consulted": ["#1 (12 primitives)", "#2 (IVM Algorithm B + arch-1 boundary)"],
+    "v1_frozen_items_consulted": ["item 4 (D2 canonical bytes)", "item 10 (TS/JS public API)", "item 11 (non_exhaustive sweep + carve-out registry)", "item 15(a)-(j) (S&C public surface)"],
+    "process_disciplines_invoked": ["HARD RULE 12 clause-(b) named-destination realness", "§3.6h pim-N rule-ratification-must-close-origin", "§3.5g cross-language rule-mirror (4-surface ErrorCode discipline)", "§3.6j pim-N sweep-completeness-self-verify"]
+  }
+}
