@@ -1,0 +1,161 @@
+{
+  "lens": "L11-wire-format-byte-pinning-verifier",
+  "round": "R3",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "branch": "g-core-9/r3-l11-wire-format",
+  "merge_base": "6c21e4f5",
+  "head_sha_at_review": "6c21e4f5e621289348d8a60d69ba8445624229e1",
+  "disposition": "FIX-NOW",
+  "r3_convergence_disposition": "NOT-CONVERGED",
+  "summary": "R2 fix-pass merged at 6c21e4f5 closed L11-R2-MAJOR-1 (§4 verification-mechanism narrative substantively re-written; lines :395-416 now explicitly acknowledge Bundle 5 PARTIAL: 2 of 8 hex-pinned tests landed, 6 of 8 deferred to D-9 with G-COMP-1 destination; the CI inventory-walking lane also re-framed as DEFERRED to G-COMP-1 instead of asserted-as-existing). The 4 R2 MINORs also CLOSED: L11-R2-MINOR-1 inventory body-row phantom-cites (rows 1/5/10) all replaced with real-file cites at :28/:103/:198; L11-R2-MINOR-3 tf3d test-comment '§6 CI gate (14)' replaced with V1-FROZEN-INTERFACE.md:337 cite; L11-R2-MINOR-4 D-15 row landed at V1-FROZEN-INTERFACE-DEFERRED.md:356-360 naming SHA2_512_256/SHA3_256 codepoint-mint pin. R1 closures L11-MAJOR-1/2/3/4 + L11-MINOR-1/2/3/5 all stay verified-CLOSED (re-ran cargo nextest -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad → 4/4 PASS at HEAD). BUT 2 NEW R3 findings + 1 R3 residual surfaced — (1) L11-R3-MAJOR-1: V1-WIRE-FORMAT-INVENTORY.md Summary table rows 1+5 (lines :209 + :213) STILL carry the phantom file cites the R2 fix-pass replaced in the body sections — Summary table reads `canonical_test_node_sentinel_cid.rs + redb backends` (row 1) and `ucan_envelope_*.rs + tf4_gcore3c_*.rs` (row 5), both referencing non-existent files. The body-vs-summary inconsistency is itself a freeze-discipline violation (the Summary table is the at-a-glance enumeration most readers will consult first; phantom cites at the freeze-load-bearing doc defeat ground-truth-trace) AND a R2 fix-pass incompleteness (the diff shows only Summary row 10 was updated). (2) L11-R3-MAJOR-2: SHA2_512_256 (0x1015) + SHA3_256 (0x16) HashCodepoint variants ALREADY EXIST at crates/benten-crypto-suite/src/codepoint.rs:137+140 (minted at G-CORE-2 ae69c339 well before this FREEZE wave) AND are listed in V1-FROZEN-INTERFACE.md:519-520 as PERMANENT codepoint-table entries — but the byte-pin test canonical_bytes_v1_codepoints_and_aad.rs:48-53 pins ONLY BLAKE3 (0x1e). The L11-R2-MINOR-4 BELONGS-NAMED-NOW disposition deferred this to D-15 'at codepoint-mint-time' — but codepoint-mint-time HAS ALREADY HAPPENED (ae69c339, months ago); the freeze contract at V1-FROZEN-INTERFACE.md item 6.2 marks these values PERMANENT NOW. So the deferral is mistimed: the named-destination text (D-15:358-360) reads 'At codepoint-mint-time MUST add to codepoint_table_integer_values_pinned' which would only fire on a future mint. The pin should land at this FREEZE wave per the same discipline that pinned the other 9 codepoints. (3) L11-R3-MINOR-1 (residual): the §3.5b HARDENED point-3 doc-coupling discipline (line-cite vs path::symbol form on high-churn surfaces) was applied at the R2 self-introduced cite-drift sweep but V1-FROZEN-INTERFACE.md:395-416 (the new §4 verification-mechanism narrative just landed) embeds 2 line-form cites that are likely to drift: ':337' for aad_per_chunk in the doc-and-D-15 cluster + ':198 codepoint_table_integer_values_pinned' — the path::symbol form would be drift-resistant. MINOR; aesthetic vs substantive. Disposition FIX-NOW; R3 NOT-CONVERGED. R4 needs 2 MAJ doc + 1 MIN trivial fix-pass. Pattern: the R1→R2 closures keep surfacing partial-sweep gaps (the §3.6j sweep-completeness-self-verify discipline — at-author-time grep + at-self-verify-time grep against the wave's own output — repeatedly fires).",
+  "verified_R1_closures": [
+    {
+      "finding_id": "L11-MAJOR-1",
+      "claim": "AAD doc-retract via Fork 1 — V1-FROZEN-INTERFACE.md + V1-WIRE-FORMAT-INVENTORY.md updated to 2-tuple matching as-shipped aead_per_chunk.",
+      "verification": "STILL-VERIFIED. V1-FROZEN-INTERFACE.md:337 reads 2-tuple language; V1-WIRE-FORMAT-INVENTORY.md:74 mirrors. Code at crates/benten-crypto-suite/src/aead.rs::aad_per_chunk continues to bind (plaintext_cid, chunk_index). aad_per_chunk_canonical_layout_pinned test passes at HEAD. DOC↔CODE consistent.",
+      "verdict": "VERIFIED-CLOSED"
+    },
+    {
+      "finding_id": "L11-MAJOR-2",
+      "claim": "Shopping-list of 8 named hex-pinned byte-pin tests — Bundle 5 PARTIAL ratification, 2 pinned + 6 deferred to D-9.",
+      "verification": "STILL-VERIFIED. canonical_bytes_v1_codepoints_and_aad.rs ships 4 tests (codepoint integer pin + AAD-layout pin + reserved-typed-reject pin + L1-crypto-r2-4 typed-reject sub-pin); 4/4 PASS. D-9 names the remaining 6 deferred byte-pins with G-COMP-1 destination. The §4 narrative — which at R2 was the un-tightened part — is now also tightened (see L11-R2-MAJOR-1 closure below).",
+      "verdict": "VERIFIED-CLOSED (PARTIAL per Bundle 5 disposition; full deferral honored per HARD RULE 12 clause-b)"
+    },
+    {
+      "finding_id": "L11-MAJOR-3",
+      "claim": "Phantom '§6 CI gate (13)' citation removed from V1-FROZEN-INTERFACE.md.",
+      "verification": "STILL-VERIFIED. grep 'gate (13)' on V1-FROZEN-INTERFACE.md returns 0. The R2-residual gate-14 cite at tf3d (logged as L11-R2-MINOR-3) is now ALSO closed (see below).",
+      "verdict": "VERIFIED-CLOSED (both doc-side and test-side now closed; R2 residual discharged)"
+    },
+    {
+      "finding_id": "L11-MAJOR-4",
+      "claim": "Crypto-suite codepoint table integer values pinned via new test file.",
+      "verification": "STILL-VERIFIED. codepoint_table_integer_values_pinned passes; pins 9 codepoints (HYBRID_ED25519_MLDSA65=0x0001 + CLASSICAL_ED25519=0x0002 + HYBRID_MLDSA65_SLHDSA=0x0003 + BLAKE3=0x1e + HYBRID_X25519_MLKEM768=0x647a + CLASSICAL_X25519=0x6400 + NONE_PLAINTEXT=0x0000 + HYBRID_MLKEM768_HQC=0x647b + PURE_PQ_MLKEM768_ONLY=0x647c). NEW R3 finding: SHA2_512_256/SHA3_256 STILL not pinned despite already-being-minted; see L11-R3-MAJOR-2 below.",
+      "verdict": "VERIFIED-CLOSED (9 core codepoints pinned; 2 hash agile-fallback codepoints surface as L11-R3-MAJOR-2 because they're already-minted not future-mint)"
+    },
+    {
+      "finding_id": "L11-MINOR-1",
+      "claim": "Phantom citation residuals — assigned to Bundle 7 cite-drift sweep; R2 found 4 V1-WIRE-FORMAT-INVENTORY body-row phantoms remained.",
+      "verification": "BODY-ROWS CLOSED (R2 fix-pass diff confirms): row 1 line :28 → canonical_bytes_fastpath_stable.rs + node_cid.rs; row 5 line :103 → tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs; row 7 line :138 → tf3f_drop_bundle_offline_consume.rs + bundle.rs; row 10 line :198 → canonical_bytes_v1_codepoints_and_aad.rs (with explicit test-function citation). 'or equivalent' softener dropped per §3.6j discipline. SUMMARY-TABLE-ROWS PARTIAL: row 10 line :218 updated; rows 1+5 lines :209+:213 NOT updated — body-vs-summary inconsistency. See L11-R3-MAJOR-1.",
+      "verdict": "VERIFIED-CLOSED-BODY / INCOMPLETE-SUMMARY (R3 surfaces residual at L11-R3-MAJOR-1)"
+    },
+    {
+      "finding_id": "L11-MINOR-2",
+      "claim": "AuthorizationGrant CBOR format-version field BELONGS-NAMED-NOW.",
+      "verification": "STILL-VERIFIED. D-9 names AuthorizationGrant CBOR; #[non_exhaustive] applied via Bundle 3 provides forward-compat. No regression.",
+      "verdict": "VERIFIED-CLOSED"
+    },
+    {
+      "finding_id": "L11-MINOR-3",
+      "claim": "Old-codepoints-supported-forever regression-guard via reserved_codepoints_stay_typed_rejected_at_v1_beta.",
+      "verification": "STILL-VERIFIED. reserved_codepoints_stay_typed_rejected_at_v1_beta PASSES at HEAD; pins typed-reject for 0x0003 + 0x647b + 0x647c at the dispatcher boundary. L1-crypto-r2-4 sub-pin test reserved_signature_codepoint_typed_rejected_at_every_dispatcher_entry adds sub-pin (b) + (c) at downstream dispatcher entries. Regression-guard scope substantively strengthened.",
+      "verdict": "VERIFIED-CLOSED"
+    },
+    {
+      "finding_id": "L11-MINOR-4",
+      "claim": "Brief-drift only; DISAGREE-WITH-EXPLANATION at R1.",
+      "verification": "R3 brief now correctly cites docs/V1-WIRE-FORMAT-INVENTORY.md in 'Required reads' (no V1- prefix drift). Brief-drift discipline observed.",
+      "verdict": "DISAGREE-WITH-EXPLANATION (logged; not a finding)"
+    },
+    {
+      "finding_id": "L11-MINOR-5",
+      "claim": "EncryptedNode CBOR wire-format-coupling — BELONGS-NAMED-NOW to extend inventory.",
+      "verification": "STILL-VERIFIED. Inventory remains 10 rows; row 4 (per-chunk AEAD) + row 9 (EncryptionClass codepoint) implicitly cover the EncryptedNode enum wrap-envelope. Atomic-freeze at bundle.rs honored.",
+      "verdict": "VERIFIED-CLOSED"
+    }
+  ],
+  "verified_R2_closures": [
+    {
+      "finding_id": "L11-R2-MAJOR-1",
+      "claim": "§4 verification-mechanism narrative un-updated for Bundle 5 PARTIAL — internal-contradiction with D-9 6-of-8 deferred + dangling CI-lane claim.",
+      "verification": "CLOSED. V1-FROZEN-INTERFACE.md:395-416 (the new §4 verification-mechanism block) now explicitly reads: '**G-CORE-9 R1 Bundle 5 PARTIAL outcome (2026-05-24):** 2 of 8 hex-pinned tests landed at v1-beta — (a) canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned + (b) the per-chunk AAD layout pin in the same file. The remaining 6 hex-pinned tests ... are DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-9. The 6 deferred surfaces remain byte-stable at v1-beta via roundtrip + constant-position + format-version-discriminator pins per the L11 lens substantively-covers finding — full hex-pinned-bytes regression-defense is the deferred half.' The CI inventory-walking lane is also re-framed: 'CI inventory-walking lane — DEFERRED to G-COMP-1 per Row D-9; the drift-detect substrate exists (cite-drift workflow + cargo-public-api workflow) but the inventory-walk-asserts-byte-pin-exists discipline is the G-COMP-1 follow-up. At v1-beta the inventory at docs/V1-WIRE-FORMAT-INVENTORY.md is authored + tracked + the Ben P-III decision-point sign-off path is the inventory's own §P-III Ben decision-point section.' The 'cannot legitimately freeze' clause at :389-391 is preserved unchanged; combined with the new explicit Bundle-5-PARTIAL acknowledgement above it + the explicit deferred-half framing, the doc's internal logic now reads coherently (the surfaces with hex-pin-deferred-to-G-COMP-1 ARE acknowledged as having only partial wire-format-freeze defense at v1-beta).",
+      "verdict": "VERIFIED-CLOSED"
+    },
+    {
+      "finding_id": "L11-R2-MINOR-1",
+      "claim": "WIRE-FORMAT-INVENTORY phantom citations from L11-MINOR-1 (R1) NOT closed by Bundle 7.",
+      "verification": "PARTIAL-CLOSED. R2 fix-pass diff against docs/V1-WIRE-FORMAT-INVENTORY.md closed BODY rows 1+5+7+10 (lines :28/:103/:138/:198) with real-file cites + dropped the 'or equivalent' softener per §3.6j. BUT the Summary table at lines :209 + :213 (rows 1+5) were not touched — still cite the phantom file paths. R2 fix-pass diff confirms only Summary row 10 line :218 was updated. New R3 MAJOR for the residual: L11-R3-MAJOR-1.",
+      "verdict": "INCOMPLETE — body closed, summary table rows 1+5 still phantom-cited (R3 escalates to MAJOR because Summary is the at-a-glance freeze-load-bearing enumeration)"
+    },
+    {
+      "finding_id": "L11-R2-MINOR-2",
+      "claim": "WIRE-FORMAT-INVENTORY Summary table row 10 cites tf4_gcore3c_swap_matrix_*.rs for codepoint integer pin — stale per Bundle 5 landing.",
+      "verification": "CLOSED. V1-WIRE-FORMAT-INVENTORY.md:218 Summary table row 10 Byte-pin column now reads 'canonical_bytes_v1_codepoints_and_aad.rs + tf4_gcore3c_swap_matrix_*.rs' (load-bearing pin first; swap-matrix exercise second).",
+      "verdict": "VERIFIED-CLOSED"
+    },
+    {
+      "finding_id": "L11-R2-MINOR-3",
+      "claim": "Phantom '§6 CI gate (14)' citation in tf3d test comment NOT closed by Bundle 7.",
+      "verification": "CLOSED. crates/benten-graph/tests/tf3d_per_chunk_aead_iroh_block_size.rs:26-32 now reads 'AAD-binds-chunk-index for cross-chunk rebinding prevention — pinned by crates/benten-crypto-suite/src/aead.rs::aad_per_chunk + V1-FROZEN-INTERFACE.md:337 (2-tuple `(plaintext_cid, chunk_index)` per G-CORE-9 R1 triage Fork 1).' grep 'CI gate' returns 0 matches in this file.",
+      "verdict": "VERIFIED-CLOSED"
+    },
+    {
+      "finding_id": "L11-R2-MINOR-4",
+      "claim": "Agile-hash codepoints SHA2_512_256/SHA3_256 NOT pinned; BELONGS-NAMED-NOW to D-15.",
+      "verification": "DESTINATION-LANDED-MISTIMED. V1-FROZEN-INTERFACE-DEFERRED.md:356-360 Row D-15 now reads 'SHA2_512_256 (multihash 0x1015) + SHA3_256 (multihash 0x16) pre-blessed agile-hash-fallback codepoint mint per CLAUDE.md baked-in #5 (L11-R2-MINOR-4). At codepoint-mint-time MUST add to codepoint_table_integer_values_pinned with hex-pin per the discipline established at G-CORE-9 R1 fix-pass Bundle 5.' This is a valid HARD RULE 12 clause-b BELONGS-NAMED-NOW closure. HOWEVER the named-destination text predicates on a future 'codepoint-mint-time' that ALREADY HAPPENED at G-CORE-2 commit ae69c339 (constants live at crates/benten-crypto-suite/src/codepoint.rs:137+140 today). So the deferral is mistimed: the pin should land NOW per the same FREEZE-wave discipline that pinned the other 9 codepoints, since V1-FROZEN-INTERFACE.md:519-520 already calls these constants PERMANENT. See L11-R3-MAJOR-2.",
+      "verdict": "DESTINATION-LANDED-BUT-MISTIMED (R3 escalates because the constants already exist and are already declared PERMANENT at v1-beta — the pin gap is a v1-beta-wave gap not a future-mint-wave gap)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "L11-R3-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "WIRE-FORMAT-INVENTORY Summary table rows 1+5 STILL carry phantom file cites — body-vs-summary inconsistency at the freeze-load-bearing doc",
+      "evidence": {
+        "summary_table_row_1_phantom": "V1-WIRE-FORMAT-INVENTORY.md:209 reads: '| 1 | Node/Edge canonical CBOR + sentinel CID | N/A (Phase-1 baseline) | canonical_test_node_sentinel_cid.rs + redb backends | ✅ COVERED |'. The cited file `canonical_test_node_sentinel_cid.rs` does NOT exist (find . -name 'canonical_test_node_sentinel_cid*' returns 0 matches). The actually-load-bearing pins live at crates/benten-core/tests/canonical_bytes_fastpath_stable.rs + crates/benten-core/tests/node_cid.rs (as cited in the body at line :28 after the R2 fix-pass).",
+        "summary_table_row_5_phantom": "V1-WIRE-FORMAT-INVENTORY.md:213 reads: '| 5 | UCAN-Varsig v1 header | Sig codepoint | ucan_envelope_*.rs + tf4_gcore3c_*.rs | ✅ COVERED |'. No `ucan_envelope_*.rs` family exists in any crate (find . -name 'ucan_envelope_*' returns 0; benten-id has `ucan.rs` and `prop_ucan_attenuation.rs`; the body at line :103 cites `tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs` after the R2 fix-pass).",
+        "r2_diff_witness": "git show 6c21e4f5 -- docs/V1-WIRE-FORMAT-INVENTORY.md shows the R2 fix-pass updated only body lines (:28/:103/:138/:198) + Summary table row 10 (line :218). Summary rows 1+5 were not touched. The R2 fix-pass commit ('docs(g-core-9): L11 wire-format doc retenses') self-described closing 'L11-R2-MAJ-1 + 4 MINORs' but the sweep was Body-only; Summary-table coverage is partial.",
+        "body_vs_summary_drift": "The body at lines :28+:103 now cites real files; the Summary at lines :209+:213 still cites phantoms. A reader cross-checking the Summary against the body finds them disagree at exactly the freeze-load-bearing inventory whose authority comes from naming real test files."
+      },
+      "impact": "FREEZE-INTEGRITY phantom-cite at the doc whose Summary table is the at-a-glance enumeration most readers consult first. Same pim-N anti-pattern §3.6j sweep-completeness-self-verify discipline forbids: the R2 fix-pass author updated body rows + Summary row 10 but did not grep across Summary rows 1+5 for the same phantom strings. The body-vs-summary inconsistency is itself a freeze-discipline violation: V1-WIRE-FORMAT-INVENTORY is the canonical inventory the Ben P-III decision-point sign-off path depends on (per the doc's own '§P-III Ben decision-point' section at line :224); phantom Summary cites defeat the ground-truth-trace at the very doc where ground-truth-trace is load-bearing. Severity-class MAJOR because the residual sits on a freeze-prerequisite doc + the broken-row-count (2 of 10 Summary rows phantom-cited) is non-trivial. This is exactly the pattern §3.6j (sweep-completeness-self-verify) is designed to catch: at sweep-author-time the author should have run `grep -n 'canonical_test_node_sentinel_cid\\|ucan_envelope_' docs/V1-WIRE-FORMAT-INVENTORY.md` after edits to confirm 0 remaining phantoms.",
+      "disposition": "FIX-NOW",
+      "fix": "Edit V1-WIRE-FORMAT-INVENTORY.md Summary table to remove phantom cites: (1) line :209 row 1 Byte-pin column → `canonical_bytes_fastpath_stable.rs + node_cid.rs + redb backends` (matches body line :28); (2) line :213 row 5 Byte-pin column → `tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_*.rs` (matches body line :103). Trivial orchestrator-direct 2-line edit. Then run `grep -n 'canonical_test_node_sentinel_cid\\|ucan_envelope_' docs/V1-WIRE-FORMAT-INVENTORY.md` to self-verify per §3.6j discipline — expect 0 matches.",
+      "destination": "docs/V1-WIRE-FORMAT-INVENTORY.md:209+:213 (orchestrator-direct edit; 2 mechanical lines)."
+    },
+    {
+      "id": "L11-R3-MAJOR-2",
+      "severity": "MAJOR",
+      "title": "SHA2_512_256 + SHA3_256 HashCodepoint variants ALREADY EXIST at HEAD + already declared PERMANENT in V1-FROZEN-INTERFACE.md item 6.2 — the L11-R2-MINOR-4 D-15 deferral is mistimed (codepoint-mint-time already happened)",
+      "evidence": {
+        "constants_exist_at_head": "crates/benten-crypto-suite/src/codepoint.rs:137 reads `pub const SHA2_512_256: Self = Self(0x1015);` + line :140 reads `pub const SHA3_256: Self = Self(0x16);`. git log -S 'SHA2_512_256' --oneline shows the addition at commit ae69c339 (G-CORE-2 signature-agility integration crate canary, well before this FREEZE wave).",
+        "v1_frozen_marks_them_permanent": "V1-FROZEN-INTERFACE.md:519-520 Row 6.2 codepoint table reads:\n  | Hash | `HashCodepoint::SHA2_512_256` | `0x1015` | reserved fallback |\n  | Hash | `HashCodepoint::SHA3_256` | `0x16` | reserved fallback |\nAnd line :512 reads '2. Codepoint table integer values — PERMANENT (never reuse a value for a different algorithm; the #1341 0x647b drift incident established this discipline in writing)'. So these 2 codepoint values are EXPLICITLY DECLARED v1-beta-PERMANENT at HEAD.",
+        "pin_test_omits_them": "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned at lines 48-53 pins ONLY BLAKE3=0x1e. Lines 31-46 pin the 3 sig codepoints; lines 55-80 pin the 5 cipher codepoints. The 2 hash agile-fallback codepoints SHA2_512_256/SHA3_256 are SKIPPED — even though they are mint-LIVE today and table-listed-as-PERMANENT today.",
+        "d15_destination_mistimed": "V1-FROZEN-INTERFACE-DEFERRED.md:356-360 Row D-15 reads: 'SHA2_512_256 (multihash 0x1015) + SHA3_256 (multihash 0x16) pre-blessed agile-hash-fallback codepoint mint per CLAUDE.md baked-in #5 (L11-R2-MINOR-4). At codepoint-mint-time MUST add to codepoint_table_integer_values_pinned with hex-pin per the discipline established at G-CORE-9 R1 fix-pass Bundle 5.' This text predicates the pin landing on a future 'codepoint-mint-time' — but codepoint-mint-time already happened at ae69c339. The L11-R2-MINOR-4 evidence (R2 lens) claimed 'constants don't yet exist; pin is moot until they do' but that claim was incorrect at the time R2 was authored — the constants existed then too.",
+        "discipline_inconsistency": "The same FREEZE-wave discipline that pinned 9 of the 11 'in-table' codepoints (3 sig + 1 hash BLAKE3 + 5 cipher) at canonical_bytes_v1_codepoints_and_aad.rs should pin all 11. Skipping 2 of 11 = the codepoint-pin sweep is partial. The freeze contract says these values are PERMANENT; the regression-defense (test) should mirror the contract."
+      },
+      "impact": "FREEZE-INTEGRITY codepoint-pin coverage gap: 2 of the 11 codepoints declared PERMANENT in the V1-FROZEN-INTERFACE.md item 6.2 table have no hex-pin regression-defense at v1-beta. A future refactor that silently re-purposes 0x1015 or 0x16 to a different algorithm would slip past the byte-pin test the §4 verification-mechanism cites as load-bearing. The L11-R2-MINOR-4 BELONGS-NAMED-NOW disposition was procedurally valid (D-15 row landed) but the destination is mistimed because the predicated future-event already happened — so under HARD RULE 12 the proper disposition is FIX-NOW. The fix is 2 extra assert_eq! lines in an already-shipped test file.",
+      "disposition": "FIX-NOW",
+      "fix": "Edit crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned to add 2 hex-pin assertions after the BLAKE3 line:\n```rust\nassert_eq!(\n    HashCodepoint::SHA2_512_256.raw(),\n    0x1015,\n    \"SHA2_512_256 wire-locked at 0x1015 (multihash sha2-512/256; pre-blessed agile fallback per CLAUDE.md baked-in #5)\"\n);\nassert_eq!(\n    HashCodepoint::SHA3_256.raw(),\n    0x16,\n    \"SHA3_256 wire-locked at 0x16 (multihash sha3-256; pre-blessed agile fallback per CLAUDE.md baked-in #5)\"\n);\n```\nThen mark V1-FROZEN-INTERFACE-DEFERRED.md:356-360 Row D-15 SHA2_512_256/SHA3_256 entry as CLOSED-AT-G-CORE-9-R3 (or strike the row, since the destination is now satisfied by the FREEZE-wave pin landing). 4-line code edit + 1-line deferred-doc retract.",
+      "destination": "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs (new assertions in codepoint_table_integer_values_pinned) + docs/V1-FROZEN-INTERFACE-DEFERRED.md:356-360 (D-15 entry retract/CLOSE-mark)."
+    },
+    {
+      "id": "L11-R3-MINOR-1",
+      "severity": "MINOR",
+      "title": "R2 fix-pass §4 verification-mechanism narrative embeds 2 line-form cites on high-churn surface — §3.5b HARDENED point-3 path::symbol form would be drift-resistant",
+      "evidence": {
+        "line_cite_at_doc_335_area": "V1-FROZEN-INTERFACE.md:337 carries 'V1-FROZEN-INTERFACE.md:337' as a self-referential line cite (visible in the body of the §4 verification-mechanism re-write at line :395-407 referencing back to :337 via 'aad_per_chunk per V1-FROZEN-INTERFACE.md:337'). Self-referential line cites are a known instability vector: if V1-FROZEN-INTERFACE.md gains/loses content above line 337 (which is moderately high-churn during freeze convergence rounds), :337 will drift.",
+        "line_cite_at_198": "V1-FROZEN-INTERFACE.md:398 reads 'crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned' which IS the path::symbol form (good); but the body context at :410-413 carries 'CI inventory-walking lane — DEFERRED to G-COMP-1 per Row D-9; the drift-detect substrate exists (cite-drift workflow + cargo-public-api workflow)' without naming the specific workflow files — a future refactor renaming the workflow files would silently invalidate this narrative.",
+        "section_3_5b_discipline": "§3.5b HARDENED point-3 says 'on high-churn surfaces (≥3 commits in last N days), prefer path::symbol cites over file:line cites'. V1-FROZEN-INTERFACE.md saw 3+ commits in the last 2 days (R1 fix-pass + R2 fix-pass + the R5 wave landing); qualifies as high-churn."
+      },
+      "impact": "Aesthetic / drift-resilience hardening. Not a substantive freeze gap. Logged at MINOR for the §3.5b HARDENED hygiene self-verify discipline.",
+      "disposition": "BELONGS-NAMED-NOW",
+      "named_destination": "Add to docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 post-v1-beta hardening watch-list a new entry: 'V1-FROZEN-INTERFACE.md §4 verification-mechanism narrative (lines :395-416) carries 2 line-form / non-path::symbol cite shapes (self-reference to :337 + workflow-file-by-narrative-name) — at next high-churn pass through this section, rework to path::symbol form per §3.5b HARDENED point-3. Detected at G-CORE-9 R3 L11-R3-MINOR-1.' Lands the named-destination per HARD RULE 12 clause-b. The drift-resilience improvement is not severity-MAJOR + does not gate the FREEZE wave."
+    }
+  ],
+  "lens_questions_addressed": {
+    "q1_R1_R2_closures_re_verified": "ALL VERIFIED at HEAD 6c21e4f5. R1 8/8 stay-CLOSED (4 MAJ + 4 MIN: AAD doc-retract + shopping-list partial + phantom CI gate cite both halves + codepoint integer pin + 4 MINORs); R2 5/5 verified-CLOSED-OR-PARTIAL (L11-R2-MAJOR-1 fully closed; L11-R2-MINOR-1 body-CLOSED-summary-INCOMPLETE → L11-R3-MAJOR-1; L11-R2-MINOR-2/3 fully closed; L11-R2-MINOR-4 destination-LANDED-but-MISTIMED → L11-R3-MAJOR-2). Re-ran cargo nextest -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad → 4/4 PASS.",
+    "q2_R2_MAJOR_1_substantive_close_verified": "VERIFIED. V1-FROZEN-INTERFACE.md:395-416 substantively re-written: explicit Bundle-5-PARTIAL acknowledgement + explicit hex-pin-test-list (2 landed + 6 deferred to G-COMP-1 per D-9) + the 6-deferred-half explicitly framed as 'byte-stable at v1-beta via roundtrip + constant-position + format-version-discriminator pins, full hex-pinned-bytes regression-defense deferred' + the CI inventory-walking lane re-framed as DEFERRED to G-COMP-1 instead of asserted-as-existing. The 'cannot legitimately freeze' clause at :389-391 stays unchanged but now reads coherently with the explicit deferred-half framing.",
+    "q3_Q5_termination_new_wire_format_gap": "2 NEW MAJOR + 1 NEW MINOR. L11-R3-MAJOR-1 = WIRE-FORMAT-INVENTORY Summary table rows 1+5 still phantom-cited (body-vs-summary inconsistency at the freeze-load-bearing doc; R2 fix-pass diff confirms the sweep was body-only + Summary row 10 only). L11-R3-MAJOR-2 = SHA2_512_256/SHA3_256 codepoints exist + are declared PERMANENT at HEAD but NOT pinned in codepoint_table_integer_values_pinned; the L11-R2-MINOR-4 D-15 destination text is mistimed (predicates on future codepoint-mint that already happened at ae69c339). L11-R3-MINOR-1 = §3.5b HARDENED point-3 line-cite vs path::symbol form hygiene at V1-FROZEN-INTERFACE.md:395-416 — aesthetic. R3 NOT-CONVERGED → R4 needs surgical fix-pass (Summary-table phantom sweep + 2 extra assert_eq! lines + D-15 retract).",
+    "q4_freeze_integrity_substantive_summary": "Substantively the freeze is CLOSE-TO-READY at HEAD: the §4 verification-mechanism narrative is now honest about Bundle-5-PARTIAL; the byte-pin tests for the 9 cardinal codepoints pass; the typed-reject regression-guard fires across multiple dispatcher entries (the L1-crypto-r2-4 sub-pin work added depth); the body-rows of V1-WIRE-FORMAT-INVENTORY cite real files; the Drop bundle + AuthorizationGrant + UCAN-Varsig hex-pin-deferred surfaces have multi-shape byte-stability defenses + the deferral destination (D-9) is named explicitly with G-COMP-1 destination. The 2 R3 MAJORs are both surgical (Summary table 2-line edit + test file 2-line extension) and do NOT change the freeze-architecture conclusions. With the L11-R3 fix-pass these can plausibly converge at R4. Pattern: each round closes more drift than it surfaces (R1 4MAJ+4MIN+1DISAGREE → R2 1MAJ+4MIN → R3 2MAJ+1MIN); monotonic shrinkage toward zero."
+  },
+  "process_disciplines_applied": {
+    "section_3_6i_schema": "JSON authored per §3.6i: canonical top-level `disposition`, top-level `r3_convergence_disposition`, `findings` array for NEW R3 findings, `verified_R1_closures` + `verified_R2_closures` arrays with per-claim verdict, per-finding `disposition` matching HARD RULE 12 valid shapes. Well-formed JSON validated with `jq .` per §3.5h pre-push amendment.",
+    "section_3_5n_ground_truth_verify": "Every verification + every new finding ref-pinned by grep + file-read at the cited line — no review-pass cargo-cult'd. Ran `cargo nextest run -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad` (4/4 PASS) before signing the MAJOR-4 closure. Verified R1 + R2 closures by reading the post-R2-fix-pass file state at HEAD + cross-checking against the R2 lens JSON evidence. The L11-R3-MAJOR-1 phantom-cite claim verified by `find . -name 'canonical_test_node_sentinel_cid*'` + `find . -name 'ucan_envelope_*'` both returning 0; L11-R3-MAJOR-2 constant-exists claim verified by `grep -n 'SHA2_512_256\\|SHA3_256' crates/benten-crypto-suite/src/codepoint.rs` showing lines 137+140 + `git log -S 'SHA2_512_256' --oneline` showing ae69c339 origin.",
+    "hard_rule_12_dispositions": "All findings use the 3 valid shapes: FIX-NOW (L11-R3-MAJOR-1, L11-R3-MAJOR-2), BELONGS-NAMED-NOW (L11-R3-MINOR-1). Zero 'defer' / 'carry to next brief' / phantom destinations. L11-R3-MAJOR-2 explicitly calls out that the L11-R2-MINOR-4 BELONGS-NAMED-NOW destination was procedurally valid but mistimed (predicated future-event already happened) — escalating to FIX-NOW under the HARD RULE.",
+    "iterate_to_convergence": "R3 returns FIX-NOW + NOT-CONVERGED → R4 dispatch (or fix-pass + re-review) per the §3.6b iterate-critical-reviews-to-convergence discipline. Expected R4 disposition: 0-1 MAJ + 0-2 MIN per the monotonic-shrinkage trajectory (R1 4MAJ+4MIN → R2 1MAJ+4MIN → R3 2MAJ+1MIN; the R3 2MAJ is a slight bump from R2 1MAJ but both R3 MAJORs are surgical 2-line edits — front-loaded-convergence shape holds).",
+    "section_3_6j_sweep_completeness_self_verify": "Self-verified the L11-R3-MAJOR-1 claim by running `grep -n 'canonical_test_node_sentinel_cid\\|ucan_envelope_' docs/V1-WIRE-FORMAT-INVENTORY.md` against the post-R2-fix-pass file state — confirmed 2 phantom-cite hits at Summary lines :209 + :213. This is exactly the §3.6j self-verify the R2 fix-pass author should have run before signing the L11-R2-MINOR-1 closure.",
+    "commit_before_return": "Branch + JSON file committed before final message per dispatch contract + the new `feedback_agent_output_must_commit_before_return` memory ratification (2026-05-22).",
+    "isolation_contract": "All file reads + edits inside ${WORKTREE_ROOT}; no absolute-path operations outside the worktree per `feedback_agent_isolation_escape_absolute_paths` discipline.",
+    "section_3_5l_pre_push": "JSON-only edit; no Rust touched (the cargo nextest run was closure-verification not implementation); no workspace-wide pre-push gate required."
+  }
+}
