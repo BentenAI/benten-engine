@@ -1,0 +1,71 @@
+{
+  "lens": "r4b-l4-named-destinations",
+  "round": "R4b",
+  "phase": "Phase-4-Meta-Core G-CORE-9 FREEZE",
+  "branch": "phase-4-meta-core/r4b-l4-named-destinations",
+  "merge_base_sha": "a0b75637",
+  "tree_state": "clean at branch creation",
+  "disposition": "APPROVE-WITH-MINOR",
+  "r4b_convergence_disposition": "CONVERGED_WITH_RESIDUAL_MINORS",
+  "summary": "HARD RULE 12 disposition discipline is broadly intact across the G-CORE-9 FREEZE artifact cluster: DEFERRED.md exists, enumerates 21 rows (D-1 through D-21 with non-monotonic ordering D-15→D-18→D-17→D-19→D-20→D-16→D-21), most rows carry real file:line anchors that map to existing destinations, and the V1-BETA-BREAKING-CHANGES.md ledger cross-references DEFERRED rows. 5 random Phase-4-Meta-Core commit-message spot-checks (43365b96, c9c11c56, 3b993b1c, ac745e62, 9b0f327f) are all HARD-RULE-12 compliant (explicit Closes refs + named STAY-OPEN destinations + no 'defer to next wave' / 'TODO later' language). The L8-R3-MAJ-1 / L9-R3-MIN-2 / L11-R3-MIN-4 phantom-destination class invoked by the brief is materially closed via R3-FP (L11-R3-MAJOR-1+2 + L9-r3-MIN-1 Row D-19 name-collision fix) + R4-FP (L11-R4-MINOR-1 `<row>` template-placeholder → literal Row D-9 + D-15 cite). However, ONE LIVE PHANTOM survived into HEAD (M-1 below); two line-drift residues (m-2, m-3) are minor doc cite hygiene.",
+  "findings": [
+    {
+      "id": "L4-R4b-MIN-1",
+      "severity": "MINOR",
+      "class": "phantom-destination (NEW class instance; HARD RULE 12 clause-b)",
+      "where": "docs/V1-BETA-BREAKING-CHANGES.md:201 (`Row D-15a`) + :226 (`Row D-15a — AAD total_chunks augmentation`)",
+      "evidence": "Both cites reference `Row D-15a` as a G-COMP-1 destination row in DEFERRED.md. Verified via `grep -n 'D-15a' docs/V1-FROZEN-INTERFACE-DEFERRED.md` → ZERO matches. The row HEADER does not exist; additionally the AAD total_chunks bullet does not appear inside Row D-15's bullet-list either. Row D-15 enumerates 4 LIVE sub-bullets (AeadEnvelope nonce-panic, AuthorizationGrant.binding_sig varsig, CryptoPolicy::require_hybrid_pq, AuthorizationGrant.audience_pubkey) + 1 RETRACTED bullet (SHA hashcodepoints, retracted at R3-FP per L11-R3-MAJOR-2). The AAD total_chunks deferral promised by R1 triage Fork 1 + Bundle 11b (BREAKING-CHANGES.md:168-172 + :199-203) was never authored as a real destination row.",
+      "disposition": "FIX-NOW (lowest-cost orchestrator-direct closure): EITHER (a) author a new `### Row D-15a — AAD per-chunk `total_chunks` augmentation` row in DEFERRED.md with G-COMP-1 destination + Fork 1 rebuttal-window narrative, OR (b) add a 5th sub-bullet inside Row D-15 enumerating `aad_per_chunk(plaintext_cid, chunk_index)` → `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)` augmentation + Compromise #5 anchor + change BREAKING-CHANGES.md:201+226 cites from `Row D-15a` to `Row D-15` to match the existing letter-less structure. Per HARD RULE 12 clause-(b): the destination must be REAL.",
+      "verify_pin": "Re-run `grep -n 'D-15a' docs/V1-FROZEN-INTERFACE-DEFERRED.md` post-fix; expect a header match if path (a) OR change BREAKING-CHANGES cites for path (b).",
+      "anchor": "BREAKING-CHANGES.md Cohort 3 Bundle 11b cite + Cohort 4 enumeration + R1 triage Fork 1 (line 154 g-core-9-r1-triage.md)"
+    },
+    {
+      "id": "L4-R4b-MIN-2",
+      "severity": "MINOR",
+      "class": "letter-suffix-sub-row implicit-mapping documentation-clarity",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 (lines 340-371) vs docs/V1-BETA-BREAKING-CHANGES.md Cohort 4 (lines 228-231)",
+      "evidence": "BREAKING-CHANGES.md Cohort 4 cites `Row D-15b` / `Row D-15c` / `Row D-15d` / `Row D-15e` as destinations for 4 distinct watch-list items (require_hybrid_pq / audience_pubkey / to_wire_bytes nonce-panic / binding_sig varsig). DEFERRED.md Row D-15 enumerates those 4 items as bullet-list entries but uses no letter-suffix sub-headers. A consumer arriving from BREAKING-CHANGES via `Row D-15d` has no in-document anchor to navigate to. Not a true HARD RULE 12 violation (content IS present at the destination) but is a navigation/disposition-clarity gap relative to the explicit letter-suffix structure BREAKING-CHANGES assumes.",
+      "disposition": "FIX-NOW (orchestrator-direct, ~10 LOC edit): convert Row D-15's 4 live bullets to mini-headers `#### Row D-15b — require_hybrid_pq`, `#### Row D-15c — audience_pubkey`, `#### Row D-15d — to_wire_bytes nonce-panic`, `#### Row D-15e — binding_sig varsig` so the BREAKING-CHANGES letter-suffix cites resolve to actual anchors. This also pre-closes L4-R4b-MIN-1's path-(a) variant by establishing the sub-row precedent for D-15a creation.",
+      "anchor": "DEFERRED.md Row D-15 structure vs BREAKING-CHANGES.md Cohort 4"
+    },
+    {
+      "id": "L4-R4b-MIN-3",
+      "severity": "MINOR",
+      "class": "line-cite drift (within-file destination integrity)",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-3 cite `crates/benten-caps/src/policy.rs:492-557` + Row D-4 cite `crates/benten-engine/src/manifest_envelope_recheck.rs:144` + Row D-20 cite `docs/V1-FROZEN-INTERFACE.md:717` + Row D-19 baseline cites (off-by-one)",
+      "evidence": "Row D-3 cites lines 492-557 for the 3 §8-E hooks; actual locations: check_install_consent at policy.rs:508, check_per_delegation at :532, check_write_with_audience at :571 — range understates by ~14 lines. Row D-4 cites `manifest_envelope_recheck.rs:144` for `pub trait ManifestEnvelopeRechecker` port; actual line 152 (8-line drift). Row D-20 cites `V1-FROZEN-INTERFACE.md:717 advertises a trybuild test`; actual trybuild advertisement at line 742 (25-line drift; still within item 8's 'What \"frozen\" means here' subsection so substance is recognizable). Row D-19 baseline cites `benten-errors.txt:188 + benten-engine.txt:976,977,2329,2330`; actual baseline lines 187, 975, 976, 2328, 2329 (uniform off-by-one — likely baseline regeneration since cite was authored). Functional content present at each destination — these are cite-drift hygiene, not true phantoms.",
+      "disposition": "FIX-NOW per pim-1 / §3.5b HARDENED point 3 (path::symbol conversion preferred over numeric line cites which drift on every file edit): convert Row D-3 cite to `crates/benten-caps/src/policy.rs::CapabilityPolicy::{check_install_consent, check_per_delegation, check_write_with_audience}`; Row D-4 cite to `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`; Row D-20 cite to `docs/V1-FROZEN-INTERFACE.md` §8 'What \"frozen\" means here' subsection bullet on trybuild; Row D-19 baselines refresh to current line numbers (or convert to symbol-form `pub benten_errors::ErrorCode::ViewStrategyCReserved`).",
+      "anchor": "pim-1 / §3.5b HARDENED point 3"
+    }
+  ],
+  "positive_evidence": [
+    "All 21 enumerated Row D-N headers in DEFERRED.md (D-1 through D-21) are present + reachable via grep.",
+    "Cohort 1-5 Section headers in BREAKING-CHANGES.md all present + well-organized (no orphan PRs).",
+    "All Cohort 5 (Public-API DEFERRED) cross-cites (Row D-7, D-11, D-17, D-19, D-20) resolve to real DEFERRED.md headers.",
+    "All cited V1-FROZEN-INTERFACE.md `item N` references (items 1-15) resolve to actual section headers verified via `grep -nE '^## [0-9]+\\.'`.",
+    "Build-backlog sub-tasks Row 1.a/1.b/1.c (cited by DEFERRED Row D-7) exist as Sub-task 1.a/1.b/1.c (verified at V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:47-79).",
+    "5 spot-checked Phase-4-Meta-Core commits (43365b96, c9c11c56, 3b993b1c, ac745e62, 9b0f327f) all HARD-RULE-12 compliant — explicit Closes refs, real named STAY-OPEN destinations (e.g. phase-4-backlog §4.59-64/§4.43), no 'defer to next wave' / 'TODO later' / phantom-destination language. ac745e62 in particular models clause-(b) cleanly: 'Refs #836... closure-pins — named-deferred to phase-4-backlog §4.59-64/§4.43; STAY OPEN by design'.",
+    "L8-R3-MAJ-1 / L9-R3-MIN-2 / L11-R3-MIN-4 phantom-destination class materially closed: R3-FP commit 25576cb1 closes L11-R3-MAJOR-1 (WIRE-FORMAT-INVENTORY Summary table phantoms) + L11-R3-MAJOR-2 (SHA hashcodepoint pin + Row D-15 SHA-fallback retraction) + L9-r3-MIN-1 (Row D-19 deferred mint name-collision E_DSL_PARSE_FAILED → E_DSL_PARSE_ERROR); R4-FP commit a0b75637 closes L11-R4-MINOR-1 (V1-FROZEN-INTERFACE.md:341 unresolved `<row>` template-placeholder → literal Row D-9 + D-15 cite).",
+    "Row D-5's previously-phantom `accept_atrium_share` cite was honestly DELETED from V1-FROZEN-INTERFACE.md item 12 at G-CORE-9 R1 fix-pass (Bundle 2 retense) per the BLOCKER L2-BLK-3 disposition — exemplary clause-(b) closure pattern (delete the phantom + name the destination).",
+    "Spec-anchor cites to file:line for Rows D-1 (write_boundary_chain_validator.rs file-only), D-2 (install_record_replay.rs:33 module-doc), D-5 test files at admin_ui_v0_*.rs:42-107 + :24, D-6 test file g_core_8_*.rs:300-314, D-8 chain_authority.rs:404-421, D-13 aead_wrap.rs:500-506, D-18 engine.rs:1462-1476 (same cite as D-4), D-19 stable_shape.rs:112+682+1149 all resolve cleanly to existing file content (line numbers stable for many; some drift surfaced in MIN-3)."
+  ],
+  "questions_answered": {
+    "q1_BELONGS_NAMED_NOW_destinations_real": "MOSTLY YES — 1 phantom found (L4-R4b-MIN-1: Row D-15a in BREAKING-CHANGES.md Cohort 3 Bundle 11b + Cohort 4); 4 letter-suffix sub-rows (D-15b/c/d/e) have implicit-mapping documentation-clarity gap (L4-R4b-MIN-2); 4 line-drift hygiene residues (L4-R4b-MIN-3); all other ~30+ destinations verified real.",
+    "q2_commits_HARD_RULE_12_compliant": "YES — 5 random commits spot-checked all compliant (43365b96, c9c11c56, 3b993b1c, ac745e62, 9b0f327f).",
+    "q3_cross_cite_integrity": "MOSTLY YES — 1 phantom row-cite (Row D-15a), letter-suffix navigation gap, line-drift hygiene; all other Row D-N + Cohort N + item-N + Bundle-N cross-cites resolve cleanly.",
+    "q4_R3_phantom_class_closed": "YES — R3-FP + R4-FP substantively close the phantom-destination class for the named L8/L9/L11-R3 lens findings."
+  },
+  "convergence_termination": {
+    "verdict": "STRICT_Q5_TERMINATES_AS_CONVERGED",
+    "rationale": "Per CLAUDE.md rule 9 / Q5: 0 BLOCKER + 0 MAJOR = convergence criterion. This R4b L4 round returns 0 BLK + 0 MAJ + 3 MIN. The 3 MINORs are non-gating per strict-Q5 (MINOR ≠ substantive). R4b-FP path: orchestrator-direct close MIN-1 + MIN-2 + MIN-3 inline (~30 LOC total across 3 doc files: DEFERRED.md Row D-15a authorship OR sub-header restructure + cite refresh) since all 3 are surgical doc-only edits at named file:line targets. NO additional R4b convergence round needed unless Ben prefers Q1 termination (≥0 substantive) instead of strict-Q5 (≥0 BLK+MAJ)."
+  },
+  "scope_audit": {
+    "destinations_walked": 21,
+    "destinations_real": 20,
+    "phantom_destinations": 1,
+    "letter_suffix_gaps": 4,
+    "line_drift_residues": 4,
+    "commits_sampled": 5,
+    "commits_compliant": 5
+  }
+}
