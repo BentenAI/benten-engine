@@ -22,7 +22,7 @@
 //! `benten-crypto-suite` is a STUB at R3-A; the intended G-CORE-2 boundary
 //! API + the post-discharge `Did` API do not exist yet → compile-but-fail
 //! at the `use` line. All `#[ignore]`-staged
-//! `RED-PHASE: un-ignore at G-CORE-2`.
+//! `LANDED at G-CORE-2 (pim-12 / §3.6e closure)`.
 //!
 //! # pim-18 SHAPE-not-SUBSTANCE note for pin (d)
 //!

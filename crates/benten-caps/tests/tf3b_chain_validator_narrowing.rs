@@ -61,7 +61,7 @@ fn scope_with_labels(labels: &[&str]) -> Scope {
 // Arm P-2.1 — Monotonic-narrowing chain accepted.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a chain `Root → Step1 → Step2` where each step's
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a chain `Root → Step1 → Step2` where each step's
 /// `RestrictedSelector` is contained by its predecessor's is admitted by
 /// `validate_chain_narrowing` (`Ok(Admitted)`). The narrowing is along
 /// the max_depth dimension (10 → 6 → 3) — covered by P-1.3.
@@ -84,7 +84,7 @@ fn narrowing_chain_admitted() {
 // Arm P-2.2 — Widening step rejected with typed `ChainNotNarrowing`.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a chain whose middle step WIDENS the spec
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a chain whose middle step WIDENS the spec
 /// (max_depth 4 → 6) is rejected with typed `ChainNotNarrowing`,
 /// carrying `step_index` of the offending edge. WOULD-FAIL if validator
 /// returns `Ok` (the load-bearing chain non-widening invariant).
@@ -113,7 +113,7 @@ fn widening_step_rejected_with_typed_chain_not_narrowing() {
 // ANY single dimension breaks the chain.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a chain step that narrows depth but WIDENS the
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a chain step that narrows depth but WIDENS the
 /// label allowlist is rejected. WOULD-FAIL if validator only checks one
 /// dimension (a partial-check bug class that R2 §2 P-2 specifically pins).
 #[test]
@@ -141,7 +141,7 @@ fn mixed_dim_one_widening_rejects() {
 // Arm P-2.4 — Hashes-scope chain non-widening (Scope::Hashes arm).
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a `Scope::Hashes` chain where each step's hash
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a `Scope::Hashes` chain where each step's hash
 /// set is a SUBSET of its predecessor narrows; ADDING a hash widens.
 #[test]
 fn hashes_scope_chain_widening_rejects() {
@@ -173,7 +173,7 @@ fn hashes_scope_chain_widening_rejects() {
 // accepted (no edge to widen).
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: empty chain ⇒ typed `EmptyChain`. Single-step
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): empty chain ⇒ typed `EmptyChain`. Single-step
 /// chain ⇒ `Admitted` (no edges, no widening possible).
 #[test]
 fn empty_chain_rejected_single_step_admitted() {

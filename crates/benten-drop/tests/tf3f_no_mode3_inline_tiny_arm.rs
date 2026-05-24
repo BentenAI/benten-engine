@@ -19,7 +19,7 @@
 //!     sendme→Drop ships; mode 3 inline-tiny defers to post-v1".
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-3f (pim-12 / §3.6e).
+//! LANDED at G-CORE-3f (pim-12 / §3.6e closure) (pim-12 / §3.6e).
 //! ============================================================================
 //! This is a STRUCTURAL pin (compile-time): the `DropBundle` enum (or
 //! struct field) MUST NOT carry an `InlineContent` arm. The pin uses a

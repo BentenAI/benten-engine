@@ -31,12 +31,22 @@
 //! `tf3b_restricted_spec_contains_decidable.rs` head comment; all 19
 //! rules apply.
 //!
-//! Special pin shape: arms (P-2.1) + (P-2.2) test for the ABSENCE of a
-//! 13th `PrimitiveKind` variant. This is a structural-against-drift
-//! pin — if a future G-CORE-3w implementer (or any later phase) adds
-//! e.g. `PrimitiveKind::SubgraphSpecWalk`, the exhaustive match below
-//! catches it via `non_exhaustive_omitted_patterns` (the same shape as
-//! the `Scope` no-opaque-arm pin in `tf3b_no_opaque_selector_arm_*.rs`).
+//! Special pin shape: arm (P-2.1) round-trips canonical-tags for the
+//! 12 known `PrimitiveKind` variants (rename / typo / dispatch-bug
+//! defense per pim-2 §3.6b end-to-end-arm coverage). The structural
+//! "no 13th variant" guard CANNOT be expressed via exhaustive match
+//! at this surface because `PrimitiveKind` is `#[non_exhaustive]`
+//! at `crates/benten-core/src/subgraph.rs:68` (an exhaustive match
+//! fails to compile at every call site by design — `non_exhaustive`
+//! is the PRODUCTION signal that surfaces additions to reviewer
+//! attention at every consumer's `match`). The structural backstop
+//! against silent primitive growth lives in cross-cutting defenses:
+//! cite-drift sentinel against CLAUDE.md baked-in #1 narrative;
+//! `tf5_46_schema_compiler_8_labeltype_vocab_fixture.rs` allowlist +
+//! `Subgraph::nodes()` walker assertions; the §3.6g pim-N pre-flight
+//! 12-primitive-irreducibility line in every R5 brief. (R4b L5-MIN-2
+//! docstring honesty retense 2026-05-24.) Arm (P-2.2) covers the
+//! walker-as-Subgraph composition's no-Sandbox property.
 //!
 //! SHAPE-flag-don't-fake: `benten_core::subgraph_spec` does not exist
 //! at HEAD; RED-PHASE.
@@ -66,18 +76,42 @@ fn cid_for(label: &str) -> Cid {
 // same protection shape as `tf3b_no_opaque_selector_arm_structural.rs`).
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: an exhaustive match over `PrimitiveKind` covers
-/// EXACTLY 12 arms (the CLAUDE.md baked-in #1 12-primitive set). If
-/// G-CORE-3w mints a 13th variant, this test compile-fails on the
-/// missing pattern — the load-bearing structural guard against silent
-/// primitive growth.
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): the 12 known
+/// `PrimitiveKind` variants from CLAUDE.md baked-in #1 round-trip
+/// their canonical-tags cleanly + the `PrimitiveKind::canonical_tag`
+/// dispatch returns one of the 12 expected tags for each of them.
+///
+/// **R4b L5-MIN-2 docstring/test-name retense 2026-05-24:** the
+/// previous docstring + test-name promised a compile-fail
+/// (`non_exhaustive_omitted_patterns`) signal on a future 13th
+/// variant. That promise CANNOT be delivered at this surface because
+/// `PrimitiveKind` is intentionally `#[non_exhaustive]`
+/// (`crates/benten-core/src/subgraph.rs:68`) — an exhaustive match
+/// fails to compile at every call site by design (the trade-off for
+/// future-extensibility per the 12-primitive irreducibility
+/// commitment; CLAUDE.md baked-in #1's stability is enforced by
+/// PROCESS not by `match`-exhaustiveness). The structural backstop
+/// against silent primitive growth actually lives in cross-cutting
+/// defenses:
+///   - cite-drift sentinel against CLAUDE.md baked-in #1 narrative
+///     (CI lane; `cargo run -p cite-drift-detector`)
+///   - `tf5_46_schema_compiler_8_labeltype_vocab_fixture.rs` per-label
+///     allowlist + `Subgraph::nodes()` walker assertions that
+///     allowlist `PrimitiveKind`
+///   - reviewer pim-N-prior-phase-pim-explicit-preflight (§3.6g)
+///     enumerating 12-primitive irreducibility as a literal pre-flight
+///     line in every R5 brief
+///   - `non_exhaustive` is the PRODUCTION signal — every consumer's
+///     `match` needs a wildcard arm, surfacing any addition to
+///     reviewer attention naturally
+///
+/// What THIS test delivers: a runtime round-trip pin that the 12
+/// known canonical tags ARE produced by `PrimitiveKind::canonical_tag`
+/// for the 12 baseline variants (catches a rename/typo/dispatch-bug
+/// on any of the 12; pim-2 §3.6b end-to-end-arm coverage).
 #[test]
-fn primitive_kind_remains_exactly_twelve_variants() {
-    // The 12 known PrimitiveKind variants, enumerated by name. Each name
-    // is a known-good canonical-tag from CLAUDE.md baked-in #1. If a
-    // future G-CORE-3w (or any later phase) mints a 13th variant, that
-    // variant's `canonical_tag` will not match any of these 12 — the
-    // runtime sentinel below catches it.
+fn twelve_known_variants_canonical_tags_round_trip() {
+    // The 12 known canonical tags from CLAUDE.md baked-in #1.
     let known: &[&str] = &[
         "READ",
         "WRITE",
@@ -94,13 +128,7 @@ fn primitive_kind_remains_exactly_twelve_variants() {
     ];
     assert_eq!(known.len(), 12, "12 baseline kinds enumerated (P-2.1)");
 
-    // For each of the 12 enumerated kinds, the canonical-tag round-trip
-    // succeeds + matches one of the known tags. This is the
-    // structural pin: the implementer cannot silently add a 13th
-    // PrimitiveKind without minting + documenting its canonical_tag,
-    // and that new tag will not match any of the 12 above — surfacing
-    // the addition at this test site (the closure pin per pim-2
-    // §3.6b sub-rule-4).
+    // The 12 known PrimitiveKind variants, constructed.
     let twelve = [
         PrimitiveKind::Read,
         PrimitiveKind::Write,
@@ -131,11 +159,7 @@ fn primitive_kind_remains_exactly_twelve_variants() {
     }
 
     // Tag-set pin: the set of canonical-tags emitted across all 12
-    // known variants is EXACTLY the `known` set. Adding a 13th
-    // PrimitiveKind would either (a) add a tag not in `known` (caught
-    // by the loop above) OR (b) hide behind an unmatched-kind which
-    // `canonical_tag` would still emit somewhere — caught at the
-    // implementer's source-edit by `cargo doc` + cite-drift sentinel.
+    // known variants is EXACTLY the `known` set.
     let emitted: alloc::vec::Vec<&'static str> = twelve.iter().map(|k| k.canonical_tag()).collect();
     assert_eq!(emitted.len(), 12, "12 tag emissions (P-2.1)");
     for tag in known {
@@ -154,7 +178,7 @@ fn primitive_kind_remains_exactly_twelve_variants() {
 // existing primitives.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: `walker::walker_as_subgraph()` returns a
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): `walker::walker_as_subgraph()` returns a
 /// `Subgraph` whose every `OperationNode.kind` is in the existing
 /// 12-primitive set, with NO `Sandbox` (the walker is not WASM-hosted)
 /// and NO new variant. WOULD-FAIL if the implementer takes a shortcut
@@ -210,7 +234,7 @@ fn walker_is_a_subgraph_composed_of_existing_primitives() {
 // stable + content-addressed.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: two invocations of `walker_as_subgraph()` yield
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): two invocations of `walker_as_subgraph()` yield
 /// byte-equal canonical Subgraph bytes (deterministic content) — the
 /// walker is shipped ONCE; re-derivation is byte-stable. WOULD-FAIL if
 /// the walker's OperationNode IDs are RNG'd or non-deterministic.
@@ -239,7 +263,7 @@ fn walker_subgraph_canonical_bytes_stable_across_invocations() {
 // requiring any new PrimitiveKind tag in the canonical encoding.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: walking a Spec produces enumerated results
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): walking a Spec produces enumerated results
 /// without introducing a non-12-primitive op anywhere in the trace.
 /// (This is the running-the-walker side of P-2.2's static composition
 /// pin.)

@@ -98,7 +98,7 @@ proptest! {
     // BOTH a and b. (Standard intersection invariant.)
     // -------------------------------------------------------------------
 
-    /// RED until G-CORE-3w: `intersect(a, b)` satisfies `a.contains_spec(
+    /// LANDED at G-CORE-3w (pim-12 / §3.6e closure): `intersect(a, b)` satisfies `a.contains_spec(
     /// &intersect(a, b)) && b.contains_spec(&intersect(a, b))`.
     /// WOULD-FAIL if `intersect` was implemented as union by mistake.
     #[test]
@@ -118,7 +118,7 @@ proptest! {
     // Arm P-3.2 — union WIDENS: BOTH a and b are contained by `union(a, b)`.
     // -------------------------------------------------------------------
 
-    /// RED until G-CORE-3w: `union(a, b)` satisfies `union.contains_spec(&a)
+    /// LANDED at G-CORE-3w (pim-12 / §3.6e closure): `union(a, b)` satisfies `union.contains_spec(&a)
     /// && union.contains_spec(&b)`. WOULD-FAIL if `union` was implemented
     /// as intersect by mistake.
     #[test]
@@ -137,7 +137,7 @@ proptest! {
     // Arm P-3.3 — filter NARROWS: `filter(a, predicate)` is contained by a.
     // -------------------------------------------------------------------
 
-    /// RED until G-CORE-3w: `filter(a, p)` is always contained by a; the
+    /// LANDED at G-CORE-3w (pim-12 / §3.6e closure): `filter(a, p)` is always contained by a; the
     /// predicate can only narrow. WOULD-FAIL if filter loosened constraints.
     #[test]
     fn filter_narrows_proptest(a in arb_spec()) {
@@ -156,7 +156,7 @@ proptest! {
     // Arm P-3.4 — `intersect` is commutative.
     // -------------------------------------------------------------------
 
-    /// RED until G-CORE-3w: `intersect(a, b)` canonical bytes ==
+    /// LANDED at G-CORE-3w (pim-12 / §3.6e closure): `intersect(a, b)` canonical bytes ==
     /// `intersect(b, a)` canonical bytes. (Commutativity holds at the
     /// content-addressed shape level.)
     #[test]
@@ -187,7 +187,7 @@ proptest! {
     // Arm P-3.5 — `intersect` is associative on byte-equality.
     // -------------------------------------------------------------------
 
-    /// RED until G-CORE-3w: `intersect(intersect(a, b), c)` ==
+    /// LANDED at G-CORE-3w (pim-12 / §3.6e closure): `intersect(intersect(a, b), c)` ==
     /// `intersect(a, intersect(b, c))` on canonical bytes.
     #[test]
     fn intersect_associative_proptest(a in arb_spec(), b in arb_spec(), c in arb_spec()) {
@@ -213,7 +213,7 @@ proptest! {
 // as the raw struct-literal. (Not a proptest — a single positive pin.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: the `query!` / `walk!` macros produce a Spec
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): the `query!` / `walk!` macros produce a Spec
 /// whose canonical bytes equal the raw `Spec::builder()` chain. (Spike F
 /// flagged raw struct-literal as painful; the macros must be a pure
 /// syntactic affordance, not a semantic divergence.)

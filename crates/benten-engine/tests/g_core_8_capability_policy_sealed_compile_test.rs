@@ -3,7 +3,7 @@
 //! item 8 — benten-caps v1-API forks; sealed-discipline carrier per
 //! CLAUDE.md baked-in #7 sealed-discipline refinement).
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-8
+//! ## LANDED at G-CORE-8 (pim-12 / §3.6e closure)
 //!
 //! CLAUDE.md baked-in #7 sealed-discipline refinement (Ben-ratified
 //! 2026-05-18): `CapabilityPolicy` is a **sealed** trait for v1 —

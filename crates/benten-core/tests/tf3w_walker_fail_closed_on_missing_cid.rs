@@ -59,7 +59,7 @@ fn cid_for(label: &str) -> Cid {
 // `CidMissing` error; NEVER silent skip.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: passing a Spec with a root referencing a CID
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): passing a Spec with a root referencing a CID
 /// not present in the graph store produces typed
 /// `SubgraphSpecError::CidMissing(cid)`; the walker MUST NOT silently
 /// elide the missing root. WOULD-FAIL if the implementer "tolerantly"
@@ -94,7 +94,7 @@ fn walker_fail_closed_on_missing_root_cid() {
 // Spec's own CID → typed `SelfReferentialCycle` error.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: a Spec that references its OWN CID as a root
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): a Spec that references its OWN CID as a root
 /// (self-referential spec — would unbounded-recurse if walked naively)
 /// is rejected at construction OR at walk-time with typed
 /// `SelfReferentialCycle`. WOULD-FAIL if walker stack-overflows or hangs.
@@ -148,7 +148,7 @@ fn walker_self_referential_spec_cycle_rejected() {
 // Arm F-3 — max_depth bound enforced (preventing unbounded walk).
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: a Spec with a long chain (root → A → B → C → D
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): a Spec with a long chain (root → A → B → C → D
 /// → E) and max_depth=3 stops at depth 3 + reports MaxDepthExceeded
 /// for nodes beyond. WOULD-FAIL if max_depth is silently ignored
 /// (a key DoS-prevention bug class — Spike F's failure mode).
@@ -207,7 +207,7 @@ fn walker_max_depth_bound_enforced() {
 // `Spec::builder().build()` per the decidable-non-emptiness contract.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: a Spec whose Inclusion predicate REQUIRES
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): a Spec whose Inclusion predicate REQUIRES
 /// label "X" AND simultaneously DENIES label "X" is structurally
 /// unsatisfiable; `Spec::builder().build()` returns typed
 /// `ConflictingLabelPredicates`. WOULD-FAIL if a no-op spec is silently

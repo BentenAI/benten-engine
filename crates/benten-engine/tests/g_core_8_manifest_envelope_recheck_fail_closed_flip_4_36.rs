@@ -2,7 +2,7 @@
 //! (the flagship security-r1-1 BLOCKER closure + security-r1-2
 //! post-rename enum invariant).
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-8
+//! ## LANDED at G-CORE-8 (pim-12 / §3.6e closure)
 //!
 //! This file pins the STILL-UNDELIVERED §4.36 fail-CLOSED flip. At
 //! SYNCED HEAD `ed03729a`, #1294 landed the Layer-3 `SharesPolicyResolver`

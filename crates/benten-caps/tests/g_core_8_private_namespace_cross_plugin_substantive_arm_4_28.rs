@@ -2,7 +2,7 @@
 //! private-namespace cross-plugin delegation policy SUBSTANTIVE arm
 //! + §3.6e stranded-pin retarget.
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-8
+//! ## LANDED at G-CORE-8 (pim-12 / §3.6e closure)
 //!
 //! §4.28: the stranded pins
 //! `private_namespace_cross_plugin_delegation_denied.rs` +

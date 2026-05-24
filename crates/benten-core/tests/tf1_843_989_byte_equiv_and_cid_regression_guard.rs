@@ -30,7 +30,7 @@
 //!       public-SHAPE change, never a canonical-byte change).
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-1 (pim-12 / §3.6e).
+//! LANDED at G-CORE-1 (pim-12 / §3.6e closure) (pim-12 / §3.6e).
 //! ============================================================================
 //! Both `#[test]`s carry the literal marker `RED-PHASE: un-ignore at
 //! G-CORE-1`. Rationale they are RED (not already-green): the byte-equiv

@@ -24,7 +24,7 @@
 //!
 //! `benten-crypto-suite` is a STUB at R3-A; the intended G-CORE-2 surface
 //! does not exist, so these compile-but-fail at the `use` line. All
-//! `#[ignore]`-staged `RED-PHASE: un-ignore at G-CORE-2`.
+//! `#[ignore]`-staged `LANDED at G-CORE-2 (pim-12 / §3.6e closure)`.
 //!
 //! # §3.5g cross-language rule-mirror note (carried into the G-CORE-2 brief)
 //!

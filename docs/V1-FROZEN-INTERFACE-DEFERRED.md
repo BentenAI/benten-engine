@@ -110,11 +110,13 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 ### Row D-3 — 3 §8-E CapabilityPolicy hooks consumption
 
-- **Frozen surface (v1-beta):** `crates/benten-caps/src/policy.rs:492-557` —
-  `check_install_consent` + `check_per_delegation` +
-  `check_write_with_audience` — defaulted trait methods with
-  signatures locked + object-safety preserved + workspace-test
-  `__sealed_for_workspace_tests` re-export covers test doubles.
+- **Frozen surface (v1-beta):**
+  `crates/benten-caps/src/policy.rs::CapabilityPolicy::{check_install_consent, check_per_delegation, check_write_with_audience}`
+  — defaulted trait methods with signatures locked + object-safety
+  preserved + workspace-test `__sealed_for_workspace_tests` re-export
+  covers test doubles. (Path-symbol cite per pim-1 / §3.5b HARDENED
+  point 3; the previous file:line cite at policy.rs:492-557 understated
+  by ~14 lines as the file grew through G-CORE-9 fix-pass cycles.)
 - **Deferred consumption (G-COMP-1 destination):** wire at the three
   semantically-canonical call sites:
   - `check_install_consent` → at the install-pipeline admission
@@ -135,11 +137,13 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 ### Row D-4 — ProductionManifestEnvelopeRechecker production impl + default-builder wiring
 
 - **Frozen surface (v1-beta):**
-  `crates/benten-engine/src/manifest_envelope_recheck.rs:144` —
-  `pub trait ManifestEnvelopeRechecker` port interface + the
+  `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`
+  — `pub trait ManifestEnvelopeRechecker` port interface + the
   four-arm `ManifestEnvelopeRecheckOutcome` enum + the structural
-  empty-peer-DID fail-CLOSED at `engine.rs:1462-1476` (Layer-A
-  defense fires structurally before rechecker dispatch).
+  empty-peer-DID fail-CLOSED at
+  `crates/benten-engine/src/engine.rs::Engine::apply_atrium_merge`
+  (Layer-A defense fires structurally before rechecker dispatch).
+  (Path-symbol cite per pim-1 / §3.5b HARDENED point 3.)
 - **Deferred consumption (G-COMP-1 destination):** ship
   `ProductionManifestEnvelopeRechecker` consuming `PluginLibrary` +
   `UserDidRegistry` + invoking
@@ -340,35 +344,132 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 ### Row D-15 — Post-v1-beta hardening watch-list
 
 - **Frozen surface (v1-beta):** various nice-to-have hardenings
-  surfaced in R1 OBS items.
-- **Deferred consumption (G-COMP-1 OR Phase-4-Meta-Composing
-  v1-assessment-window):**
-  - `AeadEnvelope::to_wire_bytes` panics via `.expect` on nonce
-    length > 255 — convert to `Result` (L1-crypto-r1-5)
-  - `AuthorizationGrant.binding_sig` hardcoded `[u8; 64]` (Ed25519)
-    — promote to varsig-tagged variable-length for crypto-agility
-    parity with the rest of #5 framing (L17-r1-6)
-  - `CryptoPolicy::require_hybrid_pq` consumer-side policy flag for
-    rejecting 0x6400 classical-only envelopes (L2-MAJ-3)
-  - `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
-    OR `AuthorizationGrant::issue_production` mandatory-bytes
-    constructor (L6-r1-9)
-  - ~~SHA2_512_256 (multihash `0x1015`) + SHA3_256 (multihash `0x16`)
-    pre-blessed agile-hash-fallback codepoint mint~~ — **RETRACTED at
-    G-CORE-9 R3 fix-pass (L11-R3-MAJOR-2 closure)**: both `HashCodepoint`
-    variants ALREADY EXIST at HEAD (minted at commit `ae69c339` G-CORE-2,
-    well before this FREEZE wave) AND are declared PERMANENT at
-    V1-FROZEN-INTERFACE.md item 6.2 codepoint table. The hex-pin landed
-    at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
-    at G-CORE-9 R3 fix-pass (per HARD RULE 12 — pin must land NOW, not
-    predicated on a future codepoint-mint that already happened). The
-    original L11-R2-MINOR-4 closure-evidence was mis-stated.
-- **v1-beta posture:** all of the above are nice-to-have; each has
-  no immediate exploit at v1-beta (the audience CID IS bound via
-  binding_sig; ed25519_dalek is the only signature primitive used
-  for binding_sig at v1-beta so the hardcoded shape is consistent;
-  classical-only construction IS cryptographically sound).
-- **Anchor:** Various R1 OBS items.
+  surfaced in R1 OBS items. Each named sub-row below has its own
+  destination (G-COMP-1 vs Phase-4-Meta-Composing vs post-audit) and
+  its own anchor.
+- **Cross-cutting v1-beta posture:** all of the named sub-rows below
+  are nice-to-have; each has no immediate exploit at v1-beta (the
+  audience CID IS bound via binding_sig; ed25519_dalek is the only
+  signature primitive used for binding_sig at v1-beta so the
+  hardcoded shape is consistent; classical-only construction IS
+  cryptographically sound; the per-chunk AEAD layout IS canonical-bytes
+  pinned via the existing AAD layout test).
+- **Anchor (overall row):** Various R1 OBS items + R4b L4 R1 fix-pass
+  letter-suffix anchor promotion (L4-R4b-MIN-2 + L4-R4b-MIN-1
+  closure 2026-05-24).
+
+#### Row D-15a — AAD per-chunk `total_chunks` augmentation
+
+- **Frozen surface (v1-beta):** the as-shipped per-chunk AAD layout
+  is the 2-tuple `aad_per_chunk(plaintext_cid, chunk_index)` per
+  Fork 1 ratification at G-CORE-9 R1 fix-pass Bundle 11b
+  (V1-WIRE-FORMAT-INVENTORY.md row 4 + V1-BETA-BREAKING-CHANGES.md
+  Bundle 11b).
+- **Deferred consumption (G-COMP-1 destination):** augment the AAD
+  layout to a 3-tuple
+  `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)` to
+  close the cross-chunk-truncation attack surface (chunk_index
+  alone does not bind the chunk count; an attacker truncating the
+  ciphertext stream after N chunks gives a valid-looking decryption
+  for chunks 0..N-1 with no detection that chunks N..total_chunks-1
+  are missing).
+- **v1-beta posture:** the canonical-bytes pin at
+  `crates/benten-graph/tests/canonical_bytes_v1_per_chunk_aead_aad.rs`
+  locks the 2-tuple shape; cross-chunk-truncation is a documented
+  Compromise #5 sub-case (the per-Node-CID rebinding-attack defense
+  fires on tamper-AFTER-decrypt; truncation-BEFORE-decrypt is the
+  uncovered arm).
+- **Anchor:** Compromise #5 + V1-WIRE-FORMAT-INVENTORY.md row 4 +
+  V1-BETA-BREAKING-CHANGES.md Bundle 11b Fork 1 rebuttal-window
+  narrative.
+
+#### Row D-15b — `CryptoPolicy::require_hybrid_pq` consumer-side flag
+
+- **Frozen surface (v1-beta):** the consumer-side `CryptoPolicy`
+  trait does not carry a `require_hybrid_pq` arm at v1-beta;
+  classical-only `0x6400` envelopes are admitted by the SwapMatrix
+  dispatch even when a deployment posture requires hybrid-PQ.
+- **Deferred consumption (Phase-4-Meta-Composing v1-assessment-window):**
+  add `CryptoPolicy::require_hybrid_pq -> bool` (defaulted false
+  for v1-beta backward-compat); the SwapMatrix dispatch checks the
+  flag pre-resolve + rejects classical-only codepoints with the
+  existing `SwapMatrixError::Unsupported(UnsupportedAlgorithm::...)`
+  typed-reject.
+- **v1-beta posture:** classical-only is the deliberately-non-default
+  swappable arm per the crypto-agility contract (#5); a deployment
+  posture requiring hybrid-PQ has no policy-flag surface at v1-beta
+  but can be enforced by config (disable the classical SwapMatrix
+  arm registration).
+- **Anchor:** L2-MAJ-3 G-CORE-9 R1 finding.
+
+#### Row D-15c — `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
+
+- **Frozen surface (v1-beta):**
+  `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant`
+  carries `audience_pubkey: Option<ed25519_dalek::VerifyingKey>` —
+  the Option lets the legacy synthetic-fixtures path mint a grant
+  WITHOUT the audience pubkey bytes (binding_sig still covers the
+  audience CID via grant.audience).
+- **Deferred consumption (Phase-4-Meta-Composing):** EITHER promote
+  to non-Option (every production constructor populates the
+  audience_pubkey + binding_sig binds it) OR add
+  `AuthorizationGrant::issue_production` mandatory-bytes constructor
+  + retire `synthetic_for_test` fixtures for production paths.
+- **v1-beta posture:** the audience CID IS bound via binding_sig
+  (the typed seal); the missing audience_pubkey gap is a
+  defense-in-depth promotion, not a v1-beta security gap (a
+  cooperating attacker who forges audience_pubkey still cannot
+  pass binding_sig verification).
+- **Anchor:** L6-r1-9 G-CORE-9 R1 finding.
+
+#### Row D-15d — `AeadEnvelope::to_wire_bytes` nonce-panic → Result
+
+- **Frozen surface (v1-beta):**
+  `crates/benten-crypto-suite/src/aead.rs::AeadEnvelope::to_wire_bytes`
+  panics via `.expect` on nonce length > 255 — the format-version
+  byte budgets nonce length to u8.
+- **Deferred consumption (G-COMP-1 destination):** convert to
+  `Result<Vec<u8>, AeadEnvelopeError>` with a typed
+  `AeadEnvelopeError::NonceTooLarge(usize)` arm; the call sites
+  bubble the typed error through the existing `?` chain.
+- **v1-beta posture:** the panic IS reachable only with attacker-
+  controlled nonce-length input + the SwapMatrix dispatch enforces
+  per-cipher-suite max nonce (≤16 bytes for the v1-beta default
+  ChaCha20-Poly1305 + ≤12 for AES-256-GCM swap-arm) — the panic
+  arm is structurally unreachable at v1-beta default config.
+- **Anchor:** L1-crypto-r1-5 G-CORE-9 R1 finding.
+
+#### Row D-15e — `AuthorizationGrant.binding_sig` hardcoded `[u8; 64]` → varsig-tagged
+
+- **Frozen surface (v1-beta):** binding_sig at
+  `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant`
+  is hardcoded `[u8; 64]` (Ed25519 fixed-size); the rest of #5
+  framing carries multiformats codepoint-dispatch via varsig.
+- **Deferred consumption (post-audit + Phase-4-Meta-Composing):**
+  promote to varsig-tagged variable-length to admit ML-DSA-65 (3293
+  bytes) + future hybrid signatures (Ed25519⊕ML-DSA-65 = 3357 bytes
+  concatenated) under the same binding_sig shape. The classical
+  half is preserved via the codepoint-dispatch fall-through.
+- **v1-beta posture:** ed25519_dalek is the only signature primitive
+  used for binding_sig at v1-beta so the hardcoded shape is
+  consistent. The audit (NF-2 / C-GM-AUDIT) lands BEFORE v1-GM;
+  the varsig promotion couples to the audit-result decision on
+  whether to ship binding_sig as hybrid-by-default at v1-GM.
+- **Anchor:** L17-r1-6 G-CORE-9 R1 finding + #5 crypto-agility
+  contract + NF-2 / C-GM-AUDIT v1-GM gate.
+
+#### Row D-15-RETRACTED — SHA hashcodepoint pre-blessed agile-hash mint
+
+- ~~SHA2_512_256 (multihash `0x1015`) + SHA3_256 (multihash `0x16`)
+  pre-blessed agile-hash-fallback codepoint mint~~ — **RETRACTED at
+  G-CORE-9 R3 fix-pass (L11-R3-MAJOR-2 closure)**: both `HashCodepoint`
+  variants ALREADY EXIST at HEAD (minted at commit `ae69c339` G-CORE-2,
+  well before this FREEZE wave) AND are declared PERMANENT at
+  V1-FROZEN-INTERFACE.md item 6.2 codepoint table. The hex-pin landed
+  at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
+  at G-CORE-9 R3 fix-pass (per HARD RULE 12 — pin must land NOW, not
+  predicated on a future codepoint-mint that already happened). The
+  original L11-R2-MINOR-4 closure-evidence was mis-stated.
 
 ### Row D-18 — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
 
@@ -480,12 +581,12 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 ### Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)
 
-- **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break.
+- **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt` (`pub benten_errors::ErrorCode::ViewStrategyCReserved`) + `docs/public-api/benten-engine.txt` (`pub benten_engine::error::EngineError::ViewStrategyCReserved` + `pub benten_engine::EngineError::ViewStrategyCReserved` re-export) lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break. (Path-symbol cites per pim-1 / §3.5b HARDENED point 3; previous numeric line cites at benten-errors.txt:188 + benten-engine.txt:976,977,2329,2330 had drifted uniformly off-by-one to 187 / 975,976,2328,2329 post baseline regeneration.)
 - **Deferred consumption (G-COMP-1 destination):** atomic 4-surface rename per §3.5g:
   1. Rust enum `EngineError::ViewStrategyCReserved` → `EngineError::ViewStrategyReserved` (`crates/benten-engine/src/error.rs` + format-string in `benten_engine::engine_views` already returns `Strategy::Reserved`)
   2. Wire string `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED` (`crates/benten-errors/src/lib.rs` 4 sites: variant + wire string + Display arm + parse arm)
   3. TS class `EViewStrategyCReserved` → `EViewStrategyReserved` (`packages/engine/src/errors.generated.ts` 3 sites; docstring already says "Strategy::Reserved" — cross-language drift on SAME code path per §3.5g item 1)
-  4. ERROR-CATALOG.md:533+727 + cargo-public-api baselines `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` (5 baseline cites) + `crates/benten-errors/tests/stable_shape.rs:112+682+1149` regenerate
+  4. `docs/ERROR-CATALOG.md` (E_VIEW_STRATEGY_C_RESERVED entry + table) + cargo-public-api baselines `docs/public-api/benten-errors.txt` (`pub benten_errors::ErrorCode::ViewStrategyCReserved`) + `docs/public-api/benten-engine.txt` (`pub benten_engine::error::EngineError::ViewStrategyCReserved` + `pub benten_engine::EngineError::ViewStrategyCReserved` re-export) + `crates/benten-errors/tests/stable_shape.rs::{variant_count_is_pinned, all_throwable_codes_round_trip, ...}` regenerate. (Path-symbol cites per pim-1 / §3.5b HARDENED point 3.)
 
   AND mint 3 new DSL ErrorCodes per L9-DSL-MAJOR-1 closure:
   5. `E_DSL_PARSE_ERROR` — REUSES existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR` (already in use as the `Diagnostic.error_code` field value at 6+ production construction sites); G-COMP-1 deliverable = `ErrorCode::DslParseError` enum variant + `EDslParseError` TS class mirror (the wire string is unchanged). Per L9-r3-MIN-1 name-collision closure (the prior `E_DSL_PARSE_FAILED` naming would have left the existing pub const orphaned).
@@ -517,9 +618,13 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   rustc (verified by the absence of any external `impl CapabilityPolicy`
   passing the workspace build at HEAD); only the explicit negative-arm
   regression test fixture is deferred. The freeze contract advertises a
-  trybuild test at V1-FROZEN-INTERFACE.md:717 that does not exist as a
-  separate file; this row plugs the named-destination phantom per HARD
-  RULE 12 clause-(b).
+  trybuild test at V1-FROZEN-INTERFACE.md §8 "What 'frozen' means here"
+  subsection ('Explicit negative-arm trybuild' bullet) that does not
+  exist as a separate file; this row plugs the named-destination
+  phantom per HARD RULE 12 clause-(b). (Path-anchor cite per pim-1 /
+  §3.5b HARDENED point 3; the previous V1-FROZEN-INTERFACE.md:717 cite
+  has drifted to line 742 as the doc grew through G-CORE-9 fix-pass
+  cycles — the subsection-anchor reference is line-stable.)
 - **Anchor:** L6-r1-3 G-CORE-9 R1 finding (no triage disposition recorded);
   L6-r2-1 G-CORE-9 R2 finding ratifying the deferral per Fork 2 doc-tighten
   precedent.
@@ -663,8 +768,8 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
      precedent at `crates/benten-core/src/lib.rs::Cid::sample_for_test`
      (`#[cfg(any(test, feature = "testing"))]`-gated per its own
      docstring; G-CORE-2 substrate cascade ratified pattern).
-  2. Add `testing = []` feature to the 3 crates currently missing
-     it: `benten-crypto-suite`, `benten-drop`, `benten-sync`.
+  2. Add `testing = []` feature to those crates currently missing
+     it (`benten-crypto-suite` + `benten-drop` + `benten-sync`).
      (`benten-caps`, `benten-core`, `benten-graph` already carry
      `testing = []` (`benten-graph` chains `["benten-core/testing"]`);
      the new features chain the cross-crate fixture deps:

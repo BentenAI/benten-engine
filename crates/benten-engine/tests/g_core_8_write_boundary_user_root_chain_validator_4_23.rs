@@ -1,7 +1,7 @@
 //! ADDL Phase-4-Meta-Core R3-B5 / TF-8 — §4.23 user-DID root-chain
 //! write-boundary validator (structurally-always-on).
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-8
+//! ## LANDED at G-CORE-8 (pim-12 / §3.6e closure)
 //!
 //! CLAUDE.md baked-in #18 Layer-1 user-as-root invariant
 //! (runtime-enforced): EVERY WRITE must trace back to a user-DID root

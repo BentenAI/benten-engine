@@ -2,7 +2,7 @@
 //! InstallRecord replay-defense + atomic record-and-check around admission
 //! + TOCTOU defense.
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-8
+//! ## LANDED at G-CORE-8 (pim-12 / §3.6e closure)
 //!
 //! §4.37 + R2 §5 "Replay attack (UCAN expiry + install-record)" + R2 §5
 //! "TOCTOU at replay-defense / fail-closed flip": once an InstallRecord
