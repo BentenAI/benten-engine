@@ -175,10 +175,11 @@
 - **Why break-OK:** doc-only; preserves the seam-half live + names G-COMP-1 destinations per HARD RULE 12 clause-(b).
 - **Migration path:** consumers consume the seam-half at v1-beta; substantive per-DID enforcement is G-COMP-1.
 
-### G-CORE-9 R1 Bundle 11 — L2-MAJ-1 empty-peer-DID synthesized fallback structural defense
-- **What changed:** `apply_atrium_merge` short-circuit at engine.rs:1462 now filters out synthesized `node-id:N` fallbacks BEFORE rechecker dispatch.
-- **Why break-OK:** structural hardening; no public-API change. (Compromise #26 narrative captures the new defense layer.)
-- **Migration path:** none (transparent).
+### G-CORE-9 R1 Bundle 11 — L2-MAJ-1 empty-peer-DID synthesized-fallback hardening (DEFERRED to G-COMP-1 Row D-18)
+- **Status:** **DEFERRED — not landed at v1-beta.** An initial always-on filter at engine.rs:1462 was attempted (commit `34053ed4`) then reverted (commit `3d6f4d66 — "defer L2-MAJ-1 synthesized-peer-DID hardening to G-COMP-1 Row D-18"`) because the always-on form over-fires for the default-Noop test fixtures which intentionally do not register peer-DIDs. The R2 lens (`r2-l2-adversarial-threat-model`) raised this stale claim as L2-R2-BLK-1; R2 fix-pass retenses this row to honesty.
+- **What v1-beta ships:** engine.rs:1463-1477 carries an inline comment naming the deferral rationale (the proper closure couples synthesized-fallback rejection to substantive-rechecker-installed detection; gap closes at Row D-4 closure when ProductionManifestEnvelopeRechecker becomes responsible for its own per-DID resolution).
+- **Why break-OK:** doc-honesty retense of an attempted-then-reverted change; no public-API impact.
+- **Migration path:** none — at v1-beta the always-mounted Noop rechecker admits everything per Compromise #26 disclosure; under a substantive ProductionRechecker (G-COMP-1 deliverable per Row D-4), the rechecker is responsible for synthesized-DID rejection. See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-18.
 
 ### G-CORE-9 R1 Bundle 11 — L2-MIN-2 empty-DID-string structural defense at chain-validator
 - **What changed:** `validate_chain_with_manifest_envelope` rejects empty-DID-string root BEFORE consulting `user_registry`.
