@@ -1,0 +1,62 @@
+{
+  "lens": "L6 — pim-2 §3.6b sub-rule 4 per-finding granularity discipline",
+  "tier": "R4b R2 (re-review of edited artifact post R4b R1 fix-pass; Q5 strict termination check)",
+  "phase": "phase-4-meta-core",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "branch": "phase-4-meta-core/r4b-r2-l6-per-finding-granularity",
+  "review_date": "2026-05-24",
+  "r4b_r1_inputs_verified": {
+    "r4b_r1_lens_disposition": "APPROVE-WITH-FIXES — 1 MAJOR + 2 MINOR + 1 OBS",
+    "r4b_r1_fp_pivot": "L6-MAJOR-1 PIVOTED from path-(a) FIX-NOW (orchestrator-direct sweep) → path-(b) DEFER-NAMED-NOW Row D-22 per brief hard-escalation trigger (≈205 consumer files; cascade exceeds 30-callsite limit). PIVOT commit 753d9840; final MINOR sweep commit 4bbc4cac.",
+    "r4b_r1_fp_commits_inspected": [
+      "753d9840 — L6-MAJOR-1 PIVOT path-(a)→path-(b) Row D-22 (104+/-2 V1-FROZEN-INTERFACE-DEFERRED.md, 14+/-2 V1-FROZEN-INTERFACE.md, 1+/-0 V1-BETA-BREAKING-CHANGES.md)",
+      "8240a56c — L1 3 MAJORs closure (cross-wave §4-B + §4-C DEFERRED rows; V-14 phantom-destination cite update; not L6 but verified non-degrading)",
+      "4bbc4cac — R4b 10 MINORs sweep including L6-MIN-1 + L6-MIN-2 closure via docs/phase-4-meta-core-r4b-followups.md (NEW 174-line tracked artifact)"
+    ]
+  },
+  "scope_questions_r4b_r2": {
+    "Q_L6_MAJOR_1_path_b_honest": "PASS — Row D-22 enumerates 4-field shape (frozen surface + deferred consumption + v1-beta posture + anchor); per-crate count 37+52+14+8+3+1=115 matches baselines exactly; 7 sub-tasks named with G-COMP-1 destination; no-regression pin at sub-task 5 carries forward-protection; brief-template lift at sub-task 6 prevents recurrence; pivot rationale recorded with night-shift-stance rebuttable-at-morning clause.",
+    "Q_V1_FROZEN_154_retense_honest": "PASS — V1-FROZEN-INTERFACE.md:154 retensed at lines 154-165 with v1-beta carve-out explicitly naming (a) 115 surfaces, (b) 6 affected crates by name, (c) Row D-22 destination link, (d) `#[cfg(any(test, feature = \"testing\"))]` gating discipline for new declarations, (e) no-regression pin reference. The v1-GM target rule (no `_for_test` on public surface) is preserved; the v1-beta posture is acknowledged-not-elided.",
+    "Q_V1_BETA_BREAKING_CHANGES_cohort_5_entry": "PASS — Row D-22 entry exists at docs/V1-BETA-BREAKING-CHANGES.md:246 within Cohort 5 (Public-API DEFERRED tighten watch-list). Citation includes per-crate count breakdown + G-COMP-1 destination + visibility-only gating shape + ≈205 consumer dev-dep cascade scale + no-regression pin path. Consistent with Row D-7's sibling entry pattern (Engine visibility cluster).",
+    "Q_L6_MINOR_1_closure": "PASS — closed via docs/phase-4-meta-core-r4b-followups.md L6-MINOR-1 section (lines 84-110) tracking the orchestrator-local `.addl/phase-4-meta/R5-WAVE-STATE.md` follow-up acknowledging G-CORE-3 sub-wave briefs were dispatched orchestrator-inline (not as persisted .md). Future-self / next-phase R0 reviewer recovery path enumerated: plan-doc §3 lines 332-337 + PR descriptions #1319/#1323/#1324/#1325/#1340 + per-sub-wave test cluster head comments.",
+    "Q_L6_MINOR_2_closure": "PASS — closed via docs/phase-4-meta-core-r4b-followups.md L6-MINOR-2 section (lines 112-145) tracking the orchestrator-local R5-BRIEF-common.md brief-template lift naming the literal pre-flight checklist line per §3.6g. Coupled to Row D-22 sub-task 6 explicitly (same edit named from two angles — workspace-pattern-bug perspective vs brief-template-completeness perspective).",
+    "Q_Q5_termination_no_new_MAJORs": "PASS — re-review of edited artifact surfaces ZERO new MAJORs. All FP edits are scope-bounded to the R4b R1 closure surfaces (V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 add + V1-FROZEN-INTERFACE.md:154 retense + V1-BETA-BREAKING-CHANGES.md Cohort 5 entry + tracked follow-ups doc). No new `pub fn _for_test` surfaces introduced; no per-finding granularity discipline violations introduced; no umbrella-named-with-finding-level-closure patterns introduced.",
+    "Q_OBS_1_positive_evidence_holds": "PASS — re-verified all 7 OBS-1 positive-evidence signals continue to hold post-FP: (a) per-sub-wave test cluster decomposition unchanged (4 files per sub-wave); (b) per-arm pin naming unchanged; (c) Row count incremented 21→22 (Row D-22 added) without degrading per-row 4-field shape; (d) self-caught phantom α pattern unchanged; (e) DSL chunk per-issue granularity unchanged; (f) live #[ignore] count against G-CORE-3 sub-waves = 0 (re-verified post-FP via `grep -rn '^#\\[ignore' crates/{benten-caps,benten-crypto-suite,benten-core,benten-graph,benten-sync,benten-drop}/tests/tf3*.rs` = 0 hits); (g) plan-doc self-correction G-CORE-3c→3w rename unchanged."
+  },
+  "disposition": "APPROVE — CONVERGED",
+  "r4b_r2_convergence_disposition": "CONVERGED at this round per Q5 strict termination (0 BLOCKER + 0 MAJOR + 0 MINOR + 0 OBS substantive findings introduced; all R4b R1 findings closed with honest dispositions per HARD RULE 12). L6-MAJOR-1 path-(b) DEFER-NAMED-NOW closure shape satisfies §3.6b sub-rule 4 sub-clause 2 (per-row citation for workspace-pattern bug). L6-MINOR-1 + L6-MINOR-2 closures via tracked follow-ups doc satisfy BELONGS-NAMED-NOW. L6 feeds R6 phase-close with CONVERGED status; no R4b R3 needed for this lens.",
+  "summary": {
+    "headline": "R4b R1 fix-pass cleanly closed L6's 1 MAJOR + 2 MINOR + 1 OBS findings. L6-MAJOR-1 PIVOT to path-(b) DEFER-NAMED-NOW Row D-22 is HONEST: the 115 `pub fn _for_test` surfaces remain in v1-beta public-API (verified by grep + baseline count match 37+52+14+8+3+1=115); Row D-22 enumerates the full 4-field deferral shape with 7 named sub-tasks for G-COMP-1 closure; V1-FROZEN-INTERFACE.md:154 retensed with explicit v1-beta carve-out + named-destination link; V1-BETA-BREAKING-CHANGES.md Cohort 5 carries the entry; pivot rationale carries night-shift-stance rebuttable-at-morning clause. L6-MIN-1 + L6-MIN-2 closed via NEW docs/phase-4-meta-core-r4b-followups.md tracked artifact with explicit sub-task 6 coupling to Row D-22.",
+    "monotonic_convergence_signal": "R4b R1 → R4b R2 finding count delta: 1 MAJ + 2 MIN + 1 OBS → 0 MAJ + 0 MIN + 0 OBS substantive (strict-monotonic; Q5 termination satisfied). The per-finding granularity discipline now operates at the per-row level (Row D-22 is the workspace-pattern-bug archetype) — strictly stronger evidence than the R4b R1 signal of internalization at the structural level.",
+    "verified_artifacts": [
+      "/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-a123d543fc7e92551/docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 lines 747-849",
+      "/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-a123d543fc7e92551/docs/V1-FROZEN-INTERFACE.md lines 154-165 (v1-beta carve-out)",
+      "/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-a123d543fc7e92551/docs/V1-BETA-BREAKING-CHANGES.md line 246 (Cohort 5 Row D-22 entry)",
+      "/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-a123d543fc7e92551/docs/phase-4-meta-core-r4b-followups.md lines 80-145 (L6 MINORs tracked)",
+      "crates/benten-caps/src/authorization_grant.rs:138 `pub fn synthetic_for_test` (NOT cfg-gated — confirms path-(b) honesty)",
+      "6 cargo-public-api baselines: per-crate _for_test counts 37/52/14/8/3/1 = 115 (matches Row D-22)",
+      "12 G-CORE-3 sub-wave tf3*.rs test files: 0 live #[ignore] attributes (OBS-1 holds post-FP)"
+    ]
+  },
+  "findings": [],
+  "ground_truth_verification_per_3_5n": {
+    "row_d22_count_breakdown_verified": "Per-crate baseline grep `grep -c '_for_test\\|_for_testing' docs/public-api/benten-{caps,crypto-suite,drop,core,sync,graph}.txt` returns 37+52+14+8+3+1=115 — matches Row D-22 count claim exactly.",
+    "row_d22_source_count_verified": "Source grep `grep -rn '^\\s*pub fn .*_for_test\\b\\|^\\s*pub fn .*_for_testing\\b\\|^\\s*pub const fn .*_for_test\\b' crates/{benten-caps,benten-crypto-suite,benten-core,benten-sync,benten-drop,benten-graph}/src` returns 81 hits — consistent with Row D-22's '≈84 distinct pub fn declarations in source' claim (small variance due to multi-line signatures + re-exports). Baseline > source count delta (115 > 81) consistent with Row D-22 explanation 'baseline > source count reflects re-export + trait-impl duplication'.",
+    "path_b_surface_in_v1_beta_public_api_confirmed": "Spot-check `pub fn synthetic_for_test` at crates/benten-caps/src/authorization_grant.rs:138 has NO #[cfg] attribute — confirms path-(b) disposition is honest (surface IS in v1-beta public ABI; deferral row's frozen-surface claim is true).",
+    "v1_frozen_154_retense_text_verified": "Re-read V1-FROZEN-INTERFACE.md lines 154-165 verbatim; v1-beta carve-out explicitly names 115 surfaces, 6 crates by name, Row D-22 link, and the forward-protection discipline. The v1-GM target rule preserved.",
+    "v1_beta_breaking_changes_cohort_5_entry_verified": "Re-read docs/V1-BETA-BREAKING-CHANGES.md:246 — Row D-22 entry sibling to Row D-7 (Engine visibility cluster); both cite G-COMP-1 destination; both enumerate baseline-locked surface count + cascade scale.",
+    "minor_followups_doc_verified": "Re-read docs/phase-4-meta-core-r4b-followups.md L6 sections (lines 80-145); both MINORs have surface + gap + named destination + wave + anchor fields; L6-MIN-2 explicitly cross-references Row D-22 sub-task 6 (consistent with the brief-template lift being one edit named from two angles).",
+    "no_new_for_test_surfaces_introduced_by_fp": "Diff of `753d9840..4bbc4cac` shows ZERO new `pub fn _for_test` source surfaces added — all FP edits are doc-only + ignore-message-text refactors. The 115-surface freeze is preserved exactly.",
+    "g_core_3_red_phase_pin_status_post_fp": "grep -rn '^#\\[ignore' crates/{benten-caps,benten-crypto-suite,benten-core,benten-graph,benten-sync,benten-drop}/tests/tf3*.rs returns 0 — OBS-1 evidence (live #[ignore] count = 0) holds post-FP."
+  },
+  "pim_n_pattern_induction_signal_r2": {
+    "watch_list_pattern_unchanged": "R4b R1 named pim-N candidate 'workspace-pattern bug discovery at FREEZE-time triage needs explicit grep-sweep step' at 1-instance evidence (below 3-recurrence threshold for codification). R2 evidence does not increment instance count (R2 verifies closure of R1's instance; does not surface new instances). Watch-list status: PRESERVED at 1/3+ for next-cycle re-evaluation.",
+    "secondary_signal_r4b_r1_fp_pivot_discipline": "R4b R1 FP demonstrated path-(a)→path-(b) PIVOT under hard-escalation trigger with explicit night-shift-stance rebuttable-at-morning clause; pivot recorded in commit message + Row D-22 narrative. This is the 'surface arch decisions under broad auth' memory in action — orchestrator did not unilaterally absorb a ≈205-callsite cascade under night-shift; surfaced the disposition with rebuttable clause for morning ratification. PROCESS-EVIDENCE-POSITIVE; not a new pim-N candidate."
+  },
+  "process_notes": {
+    "isolation_compliance": "Stayed inside ${WORKTREE_ROOT}=/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-a123d543fc7e92551 for all writes. Used absolute paths only for read operations on the main repo at /Users/benwork/Documents/benten-engine/ (READ-ONLY; no commits to main).",
+    "commit_before_return_compliance_pending": "JSON authored; pending commit + push.",
+    "ground_truth_verify_per_3_5n_applied": "Independently re-verified each R1-claim and each FP-closure via grep + Read + git show; did not trust commit-message claims without artifact verification. Spot-checked path-(b) honesty via source-side `pub fn` inspection rather than relying on Row D-22's claim alone.",
+    "tree_state_freshness_verified": "git fetch origin && checked out fresh branch off origin/phase-4-meta-core/r4b-r1-fix-pass at 4bbc4cac (verified matches expected base SHA); git status clean; merge-base with origin/main is current."
+  }
+}
