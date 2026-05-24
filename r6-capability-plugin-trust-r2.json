@@ -1,0 +1,147 @@
+{
+  "lens": "L6 capability-system implementation + plugin-trust 3-layer",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "round": "R2",
+  "branch": "g-core-9/r2-l6-capability-plugin-trust",
+  "head_sha": "235ad861b2a4013c0ea148efb0789a780cb107d4",
+  "main_baseline_sha": "235ad861",
+  "scope_inputs": [
+    "docs/V1-FROZEN-INTERFACE.md items 8 + 12 post-fix-pass",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md (Rows D-1..D-18)",
+    "crates/benten-caps/src/policy.rs (hard-sealed CapabilityPolicy + §8-E hooks + CapWriteContext.audience_did)",
+    "crates/benten-caps/src/lib.rs (__sealed_for_workspace_tests re-export)",
+    "crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs (object-safety pin)",
+    "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs (workspace audit test)",
+    "crates/benten-engine/src/{write_boundary_chain_validator,install_record_replay,engine,manifest_envelope_recheck,engine_wait,engine_stream,atrium_api,shares_policy_resolver,manifest_signing}.rs",
+    "crates/benten-platform-foundation/src/plugin_lifecycle.rs (Option<InstallRecordReplayCheckFn> port)",
+    "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 6 (CapabilityPolicy hard-seal)",
+    "docs/g-core-9-r1-triage.md (Sub-bundle F Fork 2 disposition + per-finding dispositions)",
+    "R1 lens output (g-core-9/r1-l6-capability-plugin-trust:r6-capability-plugin-trust.json)"
+  ],
+  "disposition": "REQUEST_CHANGES",
+  "summary_one_line": "Fork 2 DOC-TIGHTEN strategy LANDED HONESTLY for L6-r1-4/5/6 (WriteBoundaryChainValidator + InstallRecordReplayStore + 3 §8-E hooks all captured at DEFERRED.md Rows D-1/D-2/D-3 with correct v1-beta-posture framing); 5 of 6 R1 non_exhaustive enums applied (D-17 deferral honest for SuspensionOutcome cascade); object-safety preserved + hard-seal substrate sound + cross-doc Row references in section 12 are healthy; but 4 honest-framing gaps remain: (1) L6-r1-3 trybuild compile-fail test has NO disposition recorded anywhere (not landed, not deferred to D-row, not closed at triage) yet V1-FROZEN-INTERFACE.md L717 still cites it as a live verification mechanism — a freeze-contract gap; (2) section 8 §8-E hooks table cell + §8-A actor_hint cite (still says ':167' — line corrected R1 partial but no consumption-deferred qualifier) doesn't cross-reference DEFERRED Rows D-1/D-2/D-3 (section 12 does cross-ref correctly; section 8 doesn't); (3) the workspace audit test g_core_9_non_exhaustive_audit.rs imports SuspensionOutcome + NextChunkPoll but only NextChunkPoll has no arm-coverage test — audit-test self-completeness gap; (4) Row D-17 names ~80+ test cascade but the production-side migration is claimed already done — verify-pass found that 7 of 8 of the originally enumerated benten-engine enums DID receive #[non_exhaustive] (substrate side honest); the remaining enum is SuspensionOutcome correctly deferred to D-17."
+,
+  "findings": [
+    {
+      "id": "L6-r2-1",
+      "severity": "MAJOR",
+      "title": "L6-r1-3 trybuild compile-fail test has NO disposition recorded anywhere — V1-FROZEN-INTERFACE.md L717 still advertises it as live verification mechanism",
+      "where": "docs/V1-FROZEN-INTERFACE.md:717 (cite) + docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:425 (BUILD-AT-FREEZE-WAVE row 6 verification clause) + docs/V1-FROZEN-INTERFACE-DEFERRED.md (NO row covers this) + docs/g-core-9-r1-triage.md (no L6-r1-3 entry in any Bundle disposition)",
+      "evidence": "Section 8 Verification mechanism: 'A compile-fail trybuild test (BUILD-AT-FREEZE-WAVE row 6) asserts an external `impl CapabilityPolicy for SomeExternalType` without `impl Sealed for SomeExternalType` fails to compile.' Ground-truth: (a) `find crates/benten-caps -name 'compile_fail*' -o -name 'trybuild*'` returns empty — no compile-fail test exists; (b) `grep trybuild` returns no trybuild dep in any Cargo.toml; (c) the triage doc enumerates L6-r1-1/2/4/5/6/7/8/9 dispositions but NOT L6-r1-3 (missing from every Sub-bundle); (d) DEFERRED.md has no row for it (Row D-1 covers L6-r1-4, Row D-2 covers L6-r1-5, Row D-3 covers L6-r1-6 — L6-r1-3 is the missing third leg). The substrate object-safety pin at g_core_8_capability_policy_sealed_compile_test.rs is a run-time pin (positive arm + a documented-but-not-real negative arm at L155-167 in pseudo-code). The hard-seal MECHANISM works (pub(crate) supertrait + workspace-test re-export) — confirmed by manual verification. But the FREEZE CONTRACT advertises a regression backstop (trybuild) that has zero implementation + zero deferral row. Per Fork 2 doc-tighten methodology + HARD RULE 12 clause-(b), this either lands at v1-beta OR gets a named DEFERRED.md row.",
+      "claude_md_anchor": "CLAUDE.md baked-in #7 sealed-discipline; HARD RULE 12 clause-(b) NAMED-NOW destination requirement.",
+      "disposition": "FIX-NOW",
+      "fix": "Either (a) add `trybuild` dep + ship `crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs` at this fix-pass (smallest possible fixture — ~30 LOC + the .stderr file) — the substrate to verify is already shipped, only the test fixture is missing; OR (b) author a new DEFERRED.md Row D-19 'L6-r1-3 trybuild compile-fail regression backstop' naming the BUILD-AT-FREEZE-WAVE row 6 verification mechanism + deferring it to G-COMP-1 with explicit v1-beta-posture note that the seal-MECHANISM IS structurally enforced by rustc on every workspace build (the hard-seal is real; only the explicit negative-arm regression test is deferred) + cross-reference from V1-FROZEN-INTERFACE.md:717 to the new Row. Per Fork 2 the disposition is the latter (the regression-defense test is the strictly-OBS gap given the seal IS enforced by rustc structurally) — this is the convergence-shaped path."
+    },
+    {
+      "id": "L6-r2-2",
+      "severity": "MAJOR",
+      "title": "V1-FROZEN-INTERFACE.md section 8 §8-E hooks table cell + 'Additional surface freezes' bullet do NOT cross-reference DEFERRED.md Row D-3 — the signature-frozen-and-consumed-vs-consumption-deferred distinction is documented in section 12 narrative but NOT in section 8",
+      "where": "docs/V1-FROZEN-INTERFACE.md:680 (the '3 new Phase-4-Meta G-CORE-8 hooks' table row) + L687-695 'Additional surface freezes' + L697-705 'What \"frozen\" means here' bullets",
+      "evidence": "Section 12 (G-CORE-8 security-surface) explicitly carries the distinction at L1037-1046 ('What's NOT frozen (consumption deferred to G-COMP-1)') + L1048 ('See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the explicit G-COMP-1 destination rows'). Section 8 (benten-caps v1-API forks) does NOT. The §8-E hooks table cell at L680 says only 'Lock the new method signatures + the new field. Object-safety preserved' — no 'consumption-deferred to DEFERRED.md Row D-3' qualifier. The 'Additional surface freezes' bullet at L691-695 says CapWriteContext + ReadContext '`#[non_exhaustive]` will land at the freeze (item 11 sweep coupling)' — but the attribute did NOT land per Row D-17 (deferred); the section 8 text reads as if it did. The 'What \"frozen\" means here' bullet at L704-705 'All three new G-CORE-8 hooks freeze at their CURRENT defaulted signature' is true but doesn't surface the consumption-gap (zero production consumers at HEAD per Row D-3). For a downstream reader who reads section 8 standalone without traversing to DEFERRED.md, the freeze contract LOOKS more enforced than it is. Per Fork 2 doc-tighten methodology, the signature-frozen-vs-consumption-deferred distinction MUST be applied symmetrically in BOTH section 8 + section 12.",
+      "claude_md_anchor": "CLAUDE.md #18 trust model (the 3 hooks ARE the Layer-2 + Layer-3 customization surface external policy authors are pointed at); HARD RULE 12 clause-(b) reading-direction integrity.",
+      "disposition": "FIX-NOW",
+      "fix": "Three edits to V1-FROZEN-INTERFACE.md section 8: (a) update the 3 §8-E hooks table cell at L680 to read 'Lock the new method signatures + the new field. Object-safety preserved. **Consumption-deferred to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3** — zero production call sites at v1-beta; the signatures are locked so adding consumers later is non-breaking, but external policy authors overriding any of the three hooks have NO runtime effect at v1-beta until Row D-3 closes'; (b) update L691-695 'Apply `#[non_exhaustive]`' bullet to read 'Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext` **is DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17** (~80+ workspace test-site cascade; the production-side migration to `Default::default()` + field-mutation pattern IS already complete at v1-beta per Bundle 3 of the R1 fix-pass; the attribute landing is the test-cascade half)'; (c) add an L719-equivalent 'See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the consumption-deferred rows (D-3 §8-E hooks; D-17 `#[non_exhaustive]` cascade)' line under 'Verification mechanism'."
+    },
+    {
+      "id": "L6-r2-3",
+      "severity": "MINOR",
+      "title": "Workspace audit test g_core_9_non_exhaustive_audit.rs imports SuspensionOutcome + NextChunkPoll but only NextChunkPoll has no arm-coverage test — audit-self-completeness gap",
+      "where": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs:25-27 (imports) vs L66-163 (test bodies covering WriteBoundaryChainOutcome + AtriumMode + DelegationResolution + ManifestVerifyMode + Strategy + AuthorizationGrant types — but NOT SuspensionOutcome or NextChunkPoll)",
+      "evidence": "The audit-test imports `engine_wait::SuspensionOutcome` + `engine_stream::NextChunkPoll` at the use-statement (L26-27) but provides arm-coverage match tests for only 4 of the 6 R1-cited enums (WriteBoundaryChainOutcome L66 + AtriumMode L83 + DelegationResolution L96 + ManifestVerifyMode L114; plus Strategy carve-out at L150 + AuthorizationGrant types at L131). NextChunkPoll has `#[non_exhaustive]` at engine_stream.rs but no audit-test arm; SuspensionOutcome lacks the attribute (correctly deferred to D-17 per the comment at L184-189) AND no audit-test arm. The test header at L8-10 advertises 'Workspace audit verifying every lens-scoped pub type named in `docs/V1-FROZEN-INTERFACE.md` item 11 maximalist apply-set carries the `#[non_exhaustive]` attribute' — the audit IS incomplete relative to its own claim. Per pim-N-sweep-completeness-self-verify (§3.6j): when claiming a sweep is COMPLETE, run the validation tool against the wave's own outputs.",
+      "claude_md_anchor": "pim-N-sweep-completeness-self-verify (§3.6j); pim-13 (§3.12) R7-equivalent spec-to-code compliance.",
+      "disposition": "FIX-NOW",
+      "fix": "Add two audit-arm tests at g_core_9_non_exhaustive_audit.rs: (a) `next_chunk_poll_audit_arm_coverage` matching all NextChunkPoll variants + the `_ => 'Unknown'` non_exhaustive guard; (b) `suspension_outcome_d17_deferred_arm_coverage` matching SuspensionOutcome variants WITHOUT a `_` arm + a doc-comment explicitly noting 'D-17 deferral: the absence of `#[non_exhaustive]` means this match is exhaustive at v1-beta; the attribute lands at G-COMP-1 closure of Row D-17 + this test gets updated to add the wildcard arm at that time' — the test serves as a freeze-discipline pin for the D-17 deferral itself."
+    },
+    {
+      "id": "L6-r2-4",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE.md item 8 'actor_hint' shape cite at L681 reads 'crates/benten-caps/src/policy.rs:167' — verify-pass shows policy.rs:179 is the actual line + the L7 cite-drift correction was a Bundle 7 doc-coupling closure but the line number drifted again under the Bundle 3 type retenses",
+      "where": "docs/V1-FROZEN-INTERFACE.md:681 cite vs crates/benten-caps/src/policy.rs:179 (current ground-truth line for `pub actor_hint: Option<String>`)",
+      "evidence": "L6-r1-7 in R1 surfaced ':81' as the wrong line (actual was :167). The Bundle 7 doc-coupling closure (per triage doc L119 'L6-r1-7/8 → Bundle 7 doc-coupling') updated the cite to ':167' — verified at V1-FROZEN-INTERFACE.md:681 ('the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:167`'). However, the R1 fix-pass's Bundle 3 retense of CapWriteContext (adding the audience_did field + extensive doc-comment about D-17 deferral at L151-161) shifted the line numbers downstream — `pub actor_hint: Option<String>` is now at line 179, not 167. Cite-drift recurrence on the SAME line within ONE fix-pass cycle — a §3.5b post-fix doc-coupling pre-flight slip. This is a small, mechanical edit.",
+      "claude_md_anchor": "pim-1 / §3.5b post-fix doc-coupling pre-flight; pim-N-cite-drift-fp1-recurrence (§3.5h MANDATORY-PRE-MERGE-AFTER-MINI-REVIEW-APPROVE).",
+      "disposition": "FIX-NOW",
+      "fix": "Update V1-FROZEN-INTERFACE.md:681 cite from ':167' to ':179'. Also audit other ':NNN' line cites in section 8 + section 12 against current ground-truth — Bundle 3 retenses likely shifted multiple. Specifically: L689-690 ('`CapWriteContext` + `ReadContext` + `PendingOp` (`crates/benten-caps/src/policy.rs:103, 154, 247`)') — verify these three line numbers vs current ground-truth (PendingOp at 100, CapWriteContext at 163, ReadContext at 260)."
+    },
+    {
+      "id": "L6-r2-5",
+      "severity": "OBS",
+      "title": "Fork 2 DOC-TIGHTEN strategy LANDED HONESTLY for L6-r1-4 + L6-r1-5 + L6-r1-6 — DEFERRED.md Rows D-1, D-2, D-3 each correctly enumerate frozen-surface + deferred-consumption + v1-beta-posture + Compromise/spec anchor; verify-stays",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Rows D-1 (L62-84) + D-2 (L86-109) + D-3 (L111-133)",
+      "evidence": "Each row has the 4-field shape per the document's own §'Each row' template: (i) frozen surface — Row D-1 names the trait + outcome enum + #[non_exhaustive] application + Noop default; (ii) deferred consumption — Row D-1 names 'wire validate_chain consultation at every Engine::commit / Engine::put_node_with_context admission call site' with explicit ~10-15 WRITE entry points + LOC estimate + precedent (Phase-3 G16-B-F); (iii) v1-beta posture — Row D-1 explicitly says 'Layer-1 user-as-root enforcement at the WRITE admission boundary is NOT live at v1-beta binary' + names the existing live alternative ('runtime enforcement is the Layer-1 `CapabilityPolicy::pre_write` check (already live via Compromise #2)'); (iv) anchor — CLAUDE.md #18 Layer-1 + spec item 8. Row D-2 has the same shape for InstallRecordReplayStore + names the production code site at plugin_lifecycle.rs:901 + the 'zero production callers supply Some(closure) at HEAD' ground-truth. Row D-3 has the same shape for §8-E hooks + names the 3 semantically-canonical call sites + explicit 'A future custom CapabilityPolicy author overriding any of the three will be silently ignored' v1-beta-posture acknowledgment. Substrate ground-truth-verify confirms: (a) WriteBoundaryChainValidator has only the Noop default install at engine.rs (no validate_chain call sites outside the test file); (b) install_record_replay_check port is `Option<>` at plugin_lifecycle.rs:713 with only the gated single call site at L901 + no callers supply Some; (c) zero production call sites for the 3 §8-E hooks (verified via grep). DEFERRED.md is HONEST.",
+      "claude_md_anchor": "CLAUDE.md #18 Layer-1/2/3 trust model + HARD RULE 12 clause-(b) named-NOW destination discipline.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; Fork 2 doc-tighten landed correctly for the 3 substrate-frozen-but-consumer-unwired surfaces."
+    },
+    {
+      "id": "L6-r2-6",
+      "severity": "OBS",
+      "title": "Row D-17 (CapWriteContext + ReadContext + SuspensionOutcome #[non_exhaustive] deferral) honestly enumerates the ~80+ test-cascade rationale; production code MIGRATION already complete per Bundle 3",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:388-412 (Row D-17) + policy.rs:151-161 (CapWriteContext) + policy.rs:256-258 (ReadContext) + engine_wait.rs:184-189 (SuspensionOutcome)",
+      "evidence": "Row D-17 explicitly names the 3 deferred types + names the cascade scale ('SuspensionOutcome hits ~32 workspace match-site arms; for CapWriteContext hits ~50+ test direct-struct-literal sites; for ReadContext hits ~30+ similar sites. Total cascade ~80+ files in the benten-caps + benten-engine test families') + notes the production-side migration is already complete ('Production code (in `benten-engine`) ALREADY uses the field-mutation pattern per Bundle 3 of this PR — so the migration is benten-caps tests only'). Type-site doc-comments at policy.rs:151-161 + 256-258 + engine_wait.rs:184-189 each carry the matching D-17 deferral note inline + the v1-beta-engineering-discipline framing ('the freeze contract treats new variants as breaking at v1-beta engineering discipline'). The non_exhaustive cascade IS empirically large + the test-only cost IS legitimately deferrable per HARD RULE 12 clause-(b) given the production-side migration shape is already settled.",
+      "claude_md_anchor": "CLAUDE.md #5 no-shims discipline + HARD RULE 12 clause-(b); pim-N-cite-drift §3.5b post-fix doc-coupling pre-flight.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; Row D-17 deferral is structurally sound + named correctly."
+    },
+    {
+      "id": "L6-r2-7",
+      "severity": "OBS",
+      "title": "SUBSTRATE: Arc<dyn CapabilityPolicy> boxing post-hard-seal promotion structurally preserved; object-safety pin live at HEAD + workspace tests opt-in via __sealed_for_workspace_tests re-export under testing feature",
+      "where": "crates/benten-caps/src/lib.rs:342-346 (workspace-test re-export) + crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs:98-115 (object-safety pin) + L142-144 (dyn-dispatch through SHIPPED NoAuthBackend) + L210-232 (3-new-hooks dyn-dispatch pin)",
+      "evidence": "The sealed::Sealed supertrait is pub(crate) (verified at policy.rs:50-64) — external crates cannot reach it; the workspace-test `#[cfg(feature = \"testing\")] #[doc(hidden)] pub mod __sealed_for_workspace_tests { pub use crate::policy::sealed::Sealed; }` opt-in shape works (used by g_core_8_capability_policy_sealed_compile_test.rs:184-199 + the DummyForCompileCheck dummy proves the workspace-test re-export is the structural escape valve). Object-safety pin at capability_policy_arc_dyn_boxing_compiles_object_safe_at_head_and_post_seal (L98-115) exercises `Arc<dyn CapabilityPolicy> = Arc::new(NoAuthBackend)` + the helper-fn-accepts-dyn pattern. The 3-new-hooks dyn-dispatch pin at L210-232 confirms the 3 §8-E hook signatures compose object-safe (the sealed::Sealed carries NO methods → object-safety preserved). The hard-seal MECHANISM is structurally sound + the seal contract IS enforced by rustc on every workspace build (only the explicit negative-arm regression test is missing per L6-r2-1).",
+      "claude_md_anchor": "CLAUDE.md baked-in #7 sealed-discipline; #19 engine-extensions-compile-time-linked.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; substrate object-safety preserved + workspace-test opt-in works."
+    },
+    {
+      "id": "L6-r2-8",
+      "severity": "OBS",
+      "title": "V1-FROZEN-INTERFACE.md section 12 (G-CORE-8 security-surface) does carry the signature-frozen-vs-consumption-deferred distinction honestly + cross-references DEFERRED.md correctly; verify-stays",
+      "where": "docs/V1-FROZEN-INTERFACE.md:973-1067 (section 12); especially L994-1006 (Noop default + consumption-deferred destination) + L1037-1046 ('What's NOT frozen (consumption deferred to G-COMP-1)') + L1048 (cross-ref to DEFERRED.md)",
+      "evidence": "Section 12 reads honestly: 'NoopManifestEnvelopeRechecker is the v1-beta **shipped default** ... the substantive Layer-3 defense ... is **consumption-deferred** — destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` G-COMP-1 row \"ProductionManifestEnvelopeRechecker production impl + default-builder wiring\".' Plus L998-1015 explicitly distinguishes the structurally-enforced empty-peer-DID fail-CLOSED (live at v1-beta at engine.rs:1462-1476) from the consumption-deferred per-resolvable-DID substantive recheck. Plus L1007-1015 honestly retenses the §4.25 sync-hydrate half (the L6-r1-8 R1 finding closure — half-true claim was sharpened to 'recheck half frozen structurally; §4.25 sync-hydrate half is named-to-G-CORE-8.2/G-COMP-1 with the SHARED primitive ready for consumption'). Plus L1037-1046 enumerates all four NOT-frozen items deferred to G-COMP-1 (ProductionManifestEnvelopeRechecker + default-builder wiring + accept_atrium_share + §4.25 sync-hydrate). Plus L1048 cross-references DEFERRED.md explicitly. Section 12 is the model for what section 8 SHOULD say per L6-r2-2 — convergence-shaping recommendation.",
+      "claude_md_anchor": "CLAUDE.md #18 Layer-3 envelope semantics; HARD RULE 12 clause-(b) reading-direction integrity.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; section 12 retense landed correctly per Fork 2 doc-tighten."
+    },
+    {
+      "id": "L6-r2-9",
+      "severity": "OBS",
+      "title": "5 of 6 R1-cited #[non_exhaustive]-MISSING enums in benten-engine surface area received the attribute (WriteBoundaryChainOutcome + AtriumMode + DelegationResolution + NextChunkPoll + ManifestVerifyMode); SuspensionOutcome correctly deferred to D-17; workspace audit test in place",
+      "where": "crates/benten-engine/src/{write_boundary_chain_validator.rs, atrium_api.rs, shares_policy_resolver.rs, engine_stream.rs, manifest_signing.rs, engine_wait.rs} + crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs",
+      "evidence": "Grep for `#[non_exhaustive]` immediately above each `pub enum` declaration confirms: WriteBoundaryChainOutcome (write_boundary_chain_validator.rs) + AtriumMode (atrium_api.rs) + DelegationResolution (shares_policy_resolver.rs) + NextChunkPoll (engine_stream.rs) + ManifestVerifyMode (manifest_signing.rs) — all carry `#[non_exhaustive]` at HEAD. SuspensionOutcome (engine_wait.rs:190) does NOT carry it; the type-site doc-block at L184-189 explicitly names the D-17 deferral + the ~32-arm cascade rationale. Workspace audit test g_core_9_non_exhaustive_audit.rs:18 carries the header narrative + cites V1-FROZEN-INTERFACE.md lines 911-926 carve-out registry. R1 5-of-6 closure rate is high + the deferred item has a real cascade-cost rationale.",
+      "claude_md_anchor": "pim-N-codification §3.5g cross-language rule-mirror + CLAUDE.md HARD RULE 12 clause-(b).",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; 5/6 substrate closures honest + 1 honest deferral to D-17 with cascade rationale."
+    },
+    {
+      "id": "L6-r2-10",
+      "severity": "OBS",
+      "title": "AuthorizationGrant + GrantKeyMaterial + UcanEnvelope #[non_exhaustive] application landed; constructor-helper-only construction enforced per L17-r1-2 R1 disposition",
+      "where": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs:131-137 (authorization_grant_types_constructs_via_constructor) verifies GrantKeyMaterial::synthetic_for_test() + from_bytes_for_test() entry points",
+      "evidence": "The audit test at L131-137 exercises the constructor entry points (synthetic_for_test + from_bytes_for_test for GrantKeyMaterial); the structural property is that direct struct-literal construction from outside benten-caps is blocked by the #[non_exhaustive] attribute. This closes L17-r1-2 R1 finding cleanly.",
+      "claude_md_anchor": "CLAUDE.md #5 crypto-agility refinement; HARD RULE 12.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L17-r1-2 closure verified via the audit-test entry-point exercise."
+    }
+  ],
+  "metrics": {
+    "BLOCKER_count": 0,
+    "MAJOR_count": 2,
+    "MINOR_count": 2,
+    "OBS_count": 6,
+    "total_findings": 10,
+    "files_reviewed": 14,
+    "v1_frozen_items_in_scope": ["item 8", "item 11 (coupled via D-17)", "item 12", "DEFERRED Rows D-1, D-2, D-3, D-17, D-18 (Row D-19 RECOMMENDED for L6-r1-3)"]
+  },
+  "r1_findings_closed_at_r2": [
+    "L6-r1-1 — PARTIALLY closed (production-side migration to Default::default()+field-mutation already done per Bundle 3; the attribute itself is deferred to D-17 honestly per Row D-17 with ~80+ test-cascade rationale)",
+    "L6-r1-2 — 5-of-6 enums received #[non_exhaustive] (WriteBoundaryChainOutcome + AtriumMode + DelegationResolution + NextChunkPoll + ManifestVerifyMode); workspace audit test landed; SuspensionOutcome deferred to D-17 honestly",
+    "L6-r1-3 — NOT closed; NO disposition recorded anywhere — see L6-r2-1 above",
+    "L6-r1-4 — closed via Fork 2 DOC-TIGHTEN at DEFERRED.md Row D-1 honestly",
+    "L6-r1-5 — closed via Fork 2 DOC-TIGHTEN at DEFERRED.md Row D-2 honestly",
+    "L6-r1-6 — closed via Fork 2 DOC-TIGHTEN at DEFERRED.md Row D-3 honestly",
+    "L6-r1-7 — closed at Bundle 7 but Bundle 3 line-shift re-introduced — see L6-r2-4 above",
+    "L6-r1-8 — closed via section 12 retense at L1007-1015 (verified)",
+    "L6-r1-9 — closed via DEFERRED.md Row D-15 (post-v1-beta hardening watch-list) + advisory note at v1-FROZEN-INTERFACE.md item 8 per triage Bundle 9 (verified)"
+  ],
+  "convergence_status": "REQUEST_CHANGES — 2 MAJOR + 2 MINOR + 6 OBS verify-stays. R1 substantive 6 MAJOR closed: 5 via Fork 2 DOC-TIGHTEN landing honestly in DEFERRED.md (Rows D-1/D-2/D-3 carry honest v1-beta-posture; D-17 honest cascade-rationale for hot-types deferral) + 1 PARTIAL (L6-r1-2 5-of-6 closures + 1 honest D-17 deferral). The 2 R2 MAJORs are residual freeze-contract integrity gaps: (1) L6-r1-3 trybuild test has no disposition anywhere yet V1-FROZEN-INTERFACE.md L717 advertises it — the freeze MUST either ship it OR carry it to DEFERRED.md (the hard-seal MECHANISM IS enforced by rustc structurally; only the regression-defense test is missing — Fork 2 DOC-TIGHTEN path is the natural disposition); (2) section 8 §8-E hooks table + 'Additional surface freezes' bullet read as if frozen-and-consumed but section 12 carries the honest distinction — section 8 needs symmetric retense to cross-reference DEFERRED.md Rows D-3 + D-17. Both are doc-coupling sharpening edits (~3-5 small markdown edits + 1 new Row D-19 OR a small trybuild fixture). One more R3 round should converge cleanly (0 substantive expected if these 2 MAJORs land + the 2 MINORs absorb). Substrate ground-truth (object-safety, hard-seal MECHANISM, §4.36 fail-CLOSED, audit test plumbing) is structurally sound + verify-stays at R2."
+}
