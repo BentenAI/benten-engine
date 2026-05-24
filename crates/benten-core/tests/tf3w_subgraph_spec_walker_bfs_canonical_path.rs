@@ -99,7 +99,7 @@ fn node_with_label(label: &str) -> Node {
 // The walker produces paths in that order.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: for the simple A/B/C/D diamond above, the
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): for the simple A/B/C/D diamond above, the
 /// walker enumerates Nodes in BFS-first-reachable order (R, then A
 /// before B if `EDGE_AB` lex-precedes `EDGE_AC`, then breadth-second).
 /// WOULD-FAIL on DFS, or alpha-ordered, or anchor-ordered walk.
@@ -148,7 +148,7 @@ fn walker_enumerates_in_bfs_first_reachable_order() {
 //              X   (multi-path-reachable Node)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: a Node `X` reachable from `R` via TWO distinct
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): a Node `X` reachable from `R` via TWO distinct
 /// edge-label paths (R→A→X via edge_AX vs R→B→X via edge_BX) appears in
 /// the walker's enumerated output TWICE — once per canonical-arrival-
 /// path. The StructuralPaths differ in edge-label sequence; this is
@@ -202,7 +202,7 @@ fn walker_emits_distinct_paths_for_multi_path_reachable_node() {
 // from the walker's internal algorithm.")
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: two independent walker invocations on the same
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): two independent walker invocations on the same
 /// Spec produce byte-equal `(Cid, StructuralPath)` enumerations.
 /// Deterministic + reproducible BFS — the recipient does NOT need to
 /// re-derive the order; the path is data carried in the grant.
@@ -234,7 +234,7 @@ fn walker_output_is_deterministic_path_is_data() {
 // derive K(N) per item 15(f) — the path encoding is verifiable.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3w: each StructuralPath in the walker's enumeration
+/// LANDED at G-CORE-3w (pim-12 / §3.6e closure): each StructuralPath in the walker's enumeration
 /// carries an ordered sequence of edge-labels matching the BFS arrival
 /// path. The recipient consumes this directly (no re-walk needed).
 /// WOULD-FAIL if the implementer encoded paths as opaque indices that

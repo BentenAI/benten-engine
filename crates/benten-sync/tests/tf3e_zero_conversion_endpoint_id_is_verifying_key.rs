@@ -15,7 +15,7 @@
 //!     `ed25519_dalek::VerifyingKey`; no parsing/conversion required.
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-3e (pim-12 / §3.6e).
+//! LANDED at G-CORE-3e (pim-12 / §3.6e closure) (pim-12 / §3.6e).
 //! ============================================================================
 
 #![allow(clippy::unwrap_used)]

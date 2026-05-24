@@ -242,12 +242,14 @@ fn tf5_424_materializer_recursive_walk_iterates_list_map_and_dispatches_variant(
 }
 
 #[test]
-#[ignore = "RED-PHASE: un-ignore at G-CORE-4 — §4.24 + §4.42 wasm32 companion. \
-SEQUENCING PRE-FLIGHT (R2 §4-C C9 callout): G-CORE-0 verify-pass MUST first \
-re-confirm the §4.42 4-site count \
-(crates/benten-graph/src/backends/blob_backend.rs:63/135/164/248) post-COLLAPSE \
-BEFORE this wasm32 recursive-walk companion arm is written/un-ignored. Not a \
-test gap — a sequencing pre-flight. C9. Destination: phase-4-backlog §4.24/§4.42."]
+#[ignore = "DEFERRED: §4.24 + §4.42 wasm32 companion (Phase-4-Meta carry per \
+docs/future/phase-4-backlog.md §4.24/§4.42). G-CORE-0 verify-pass already \
+re-confirmed the §4.42 4-site count at PR #1310; G-CORE-4 (PR #1311) shipped \
+the recursive-walk seam; the wasm32 companion arm lands at Phase-4-Meta \
+§4.42 wave per the named destination. (R4b L1-MIN-4 cite-drift fix 2026-05-24: \
+the previous 'un-ignore at G-CORE-4' framing was pim-12 §3.6e text-drift — \
+G-CORE-4 merged without un-ignore because the wasm32 companion sequencing \
+intentionally rides into the Phase-4-Meta §4.42 carry.)"]
 fn tf5_424_materializer_recursive_walk_wasm32_companion_after_g_core_0_site_count_verify() {
     // Body intentionally NOT written: the wasm32 companion arm is
     // authored at G-CORE-4 ONLY after G-CORE-0's verify-pass re-confirms

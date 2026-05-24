@@ -57,7 +57,7 @@ use benten_caps::scope::Scope;
 // arm — the structural backstop against silent Path-(b) reintroduction.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: an exhaustive match over `Scope` compiles with
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): an exhaustive match over `Scope` compiles with
 /// EXACTLY two arms (`Hashes` + `RestrictedSelector`). The `#[deny(
 /// non_exhaustive_omitted_patterns)]` attribute + the explicit arm-count
 /// assertion catches any silent third-arm addition.
@@ -118,7 +118,7 @@ fn scope_enum_has_exactly_two_arms_no_opaque_selector() {
 // rationale here.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: the `Scope` enum's doc-comment names the
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): the `Scope` enum's doc-comment names the
 /// no-opaque-arm decision so future agents see the rationale at
 /// declaration site. We pin presence via a sentinel substring on the
 /// crate-documentation page; the implementer carries the literal

@@ -115,13 +115,17 @@ const PLUGIN_DID_BOB: &str = "did:key:zPluginBob";
 #[test]
 #[ignore = "G-CORE-8 partial-close: V-1 cross-DID-leak depends on the \
             ProductionManifestEnvelopeRechecker glue + G-CORE-1 partition \
-            seam composition (HARD-RULE-12 BELONGS-NAMED-NOW to G-CORE-8.2 \
-            follow-up: `crates/benten-platform-foundation/src/` glue that \
-            wires PluginLibrary into the rechecker port + the WRITE-admission \
-            chain validator). The G-CORE-8 wave lands the substrate (typed \
-            UnresolvedDeny arm + recheck primitive contract + the per-DID \
-            partition seam from G-CORE-1 substrate); the full composition \
-            test fires when the production glue is wired."]
+            seam composition (HARD-RULE-12 BELONGS-NAMED-NOW to \
+            G-COMP-1 per docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-4 \
+            (ProductionManifestEnvelopeRechecker production impl + \
+            default-builder wiring): the platform-foundation glue \
+            that wires PluginLibrary into the rechecker port + the \
+            WRITE-admission chain validator (Row D-1) compose to fire \
+            the full per-DID partition-isolation contract). The \
+            G-CORE-8 wave lands the substrate (typed UnresolvedDeny \
+            arm + recheck primitive contract + the per-DID partition \
+            seam from G-CORE-1 substrate); the full composition test \
+            fires when the production glue is wired at G-COMP-1."]
 fn v1_cross_did_leak_via_merge_partition_isolation_enforced() {
     // SHIPPED-SURFACE EXERCISE: the SHIPPED Noop returns NotApplicable
     // for every input — exercise it directly to anchor the substrate.
@@ -193,16 +197,18 @@ fn v2_unresolvable_peer_did_at_recheck_returns_unresolved_deny_never_admit() {
 // V-3 — unresolvable-peer-DID-at-sync-hydrate (§4.25 fail-closed)
 // ===========================================================================
 #[test]
-#[ignore = "G-CORE-8 V-3 partial-close (HARD-RULE-12 BELONGS-NAMED-NOW): \
+#[ignore = "G-CORE-8 V-3 partial-close (HARD-RULE-12 BELONGS-NAMED-NOW \
+            to docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-6 — §4.25 \
+            sync-hydrate consumption of UnresolvedDeny at handshake.rs): \
             the sync-hydrate boundary in `crates/benten-sync/src/handshake.rs` \
-            is the §4.25 wire-up site for the G-CORE-8.2 follow-up wave \
+            is the §4.25 wire-up site for the G-COMP-1 destination \
             (the wire-up touches the iroh sendme handshake — a sync-crate \
             concern pulled out to keep this wave's blast radius bounded). \
             The shared primitive contract (UnresolvedDeny + outcome_to_row_reject) \
             IS landed at G-CORE-8 + exercised in the parallel §4.25/§4.36 \
             test in `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs`. \
-            Un-ignore-when: G-CORE-8.2 wires the §4.25 sync-hydrate call \
-            site to consult the same rechecker."]
+            Un-ignore-when: G-COMP-1 closes Row D-6 by wiring the §4.25 \
+            sync-hydrate call site to consult the same rechecker."]
 fn v3_unresolvable_peer_did_at_sync_hydrate_fail_closed() {
     // SHIPPED-SURFACE EXERCISE: the recheck enum's OutsideEnvelope arm
     // IS reject-shaped at HEAD (verify-stays). Exercise to anchor the
@@ -263,17 +269,24 @@ fn v4_outside_envelope_plugin_write_via_merge_rejected_by_default_builder() {
 // V-5 — manifest-envelope-bypass-via-spoofed-peer-DID
 // ===========================================================================
 #[test]
-#[ignore = "G-CORE-8 V-5 partial-close (HARD-RULE-12 BELONGS-NAMED-NOW): \
-            the peer-DID-against-device-attestation-envelope anchor is the \
-            G-CORE-8.2 follow-up wave's wire-up at \
-            `crates/benten-engine/src/engine.rs::apply_atrium_merge` \
+#[ignore = "G-CORE-8 V-5 partial-close (HARD-RULE-12 BELONGS-NAMED-NOW \
+            to docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-4 — \
+            ProductionManifestEnvelopeRechecker production impl + \
+            default-builder wiring): the peer-DID-against-device- \
+            attestation-envelope anchor is the G-COMP-1 destination's \
+            wire-up at \
+            `crates/benten-engine/src/engine.rs::Engine::apply_atrium_merge` \
             per-row loop where it composes the existing \
             `last_received_remote_envelope` substrate (Phase-3 G16-D) \
-            with the rechecker's peer-DID parameter. The G-CORE-8 wave \
-            lands the typed-reject substrate (V-2 + V-4 above); the \
-            peer-DID-anchor cross-reference is the named follow-up. \
-            Un-ignore-when: G-CORE-8.2 wires the envelope→peer-DID \
-            anchor verification at the recheck call site."]
+            with the rechecker's peer-DID parameter (the \
+            ProductionManifestEnvelopeRechecker shipped at Row D-4 \
+            performs the per-DID device-attestation verification). \
+            The G-CORE-8 wave lands the typed-reject substrate (V-2 \
+            + V-4 above); the peer-DID-anchor cross-reference is the \
+            G-COMP-1 follow-up at Row D-4 closure. \
+            Un-ignore-when: G-COMP-1 closes Row D-4 by wiring the \
+            envelope→peer-DID anchor verification at the recheck \
+            call site."]
 fn v5_spoofed_peer_did_at_merge_recheck_rejected_by_device_attestation_anchor() {
     // SHIPPED-SURFACE EXERCISE: an attacker-controlled peer-DID can be
     // presented as the rechecker input today (no anchor verification).
@@ -468,15 +481,20 @@ fn v9_envelope_ceiling_admits_row_helper_structurally_always_on_via_merge() {
 // V-12 — unsigned-or-tampered-install-record-via-merge
 // ===========================================================================
 #[test]
-#[ignore = "G-CORE-8 V-12 partial-close (HARD-RULE-12 BELONGS-NAMED-NOW): \
-            the merge-admission re-verify of InstallRecord signatures is \
-            the G-CORE-8.2 follow-up wave's wire-up at the engine's \
+#[ignore = "G-CORE-8 V-12 partial-close (HARD-RULE-12 BELONGS-NAMED-NOW \
+            to docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-2 — \
+            InstallRecordReplayStore lifecycle-required wiring): the \
+            merge-admission re-verify of InstallRecord signatures is the \
+            G-COMP-1 destination's wire-up at the engine's \
             apply_atrium_merge per-row loop, calling \
             `module_ecosystem::verify_install_record` against the \
             inbound row's install-record reference (the typed substrate \
             `PluginInstallRecordUserSignatureInvalid` already exists; \
-            the load + per-row re-verify wire-up is the named follow-up). \
-            Un-ignore-when: G-CORE-8.2 wires the merge-side re-verify call."]
+            the load + per-row re-verify wire-up rides with Row D-2 \
+            consumption closure). \
+            Un-ignore-when: G-COMP-1 closes Row D-2 (or a sibling Row \
+            that explicitly names the merge-side re-verify wire-up) by \
+            wiring the merge-side verify_install_record call."]
 fn v12_unsigned_or_tampered_install_record_via_merge_rejected() {
     // SHIPPED-SURFACE EXERCISE: the typed signature-invalid error
     // already exists (`PluginInstallRecordUserSignatureInvalid`).
@@ -523,18 +541,28 @@ fn v12_unsigned_or_tampered_install_record_via_merge_rejected() {
 //
 // **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
 //
-// Named destination: R3-W5's
-// `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs`
-// (the cross-wave §4-D file in the R3-W5 partition). The §4-D
-// composition (AuthorizationGrant audience must match CapabilityPolicy
-// check_write audience) is owned by the cross-wave file; this anchor
-// was a cross-wave-touchpoint annotation that unconditionally panicked
-// on the cross-wave composition — demoted to DISP-B per R4.1 L3 M-2 /
-// orchestrator triage 2026-05-22.
+// Named destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3
+// (3 §8-E CapabilityPolicy hooks consumption — the audience-aware
+// `check_write_with_audience` hook is the v1-beta-frozen signature
+// for the §4-D composition; production wire-up at
+// `apply_atrium_merge`'s per-row `check_write` call is G-COMP-1
+// destination). The §4-D composition (AuthorizationGrant audience
+// must match CapabilityPolicy check_write audience) lands as the
+// integration test pin at G-COMP-1 when Row D-3 closure ships the
+// `check_write_with_audience` consumer wire-up at engine.rs:1413.
 //
-// Un-ignore-when: G-CORE-3b (AuthorizationGrant validator mints) +
-// G-CORE-8 §8-E audience-aware hook both land; the cross-wave file is
-// un-ignored at the later of those two waves.
+// **R4b L1 fix-pass 2026-05-24:** the previously-named destination
+// `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs`
+// was a phantom (file never created at HEAD even though G-CORE-3b
+// (PR #1324) + G-CORE-8 §8-E (PR #1340 batch) both shipped the
+// un-ignore-when conditions). Renamed destination to Row D-3 per
+// the existing G-COMP-1 deferral pattern for the §8-E hook
+// consumption — the audience-mismatch composition rides with Row D-3
+// closure as the audience-aware hook's negative-arm integration pin.
+//
+// Un-ignore-when: G-COMP-1 wave lands Row D-3
+// (`check_write_with_audience` production wire-up); the §4-D
+// composition pin lands as part of that wave's test corpus.
 //
 // No `#[test]` body — DISP-B vectors enumerate inline only.
 

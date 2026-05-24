@@ -146,7 +146,7 @@ fn versioned_node(seq: i64) -> Node {
 // (RATIFIED D3: "ONE `VersionDag` + strict/linear mode".)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-5: a SINGLE `VersionDag` type is constructible in either
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): a SINGLE `VersionDag` type is constructible in either
 /// `Mode::Strict` (linear, fork-rejecting — the old `version::Anchor`
 /// contract) or `Mode::Dag` (branch/merge — the old `DagVersionChain`
 /// contract). Today these are TWO disjoint types; the unified one does not
@@ -176,7 +176,7 @@ fn one_version_dag_type_constructible_in_either_mode() {
 // `VersionDag` returns the equivalent of the old `VersionError::Branched`".)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-5: in `Mode::Strict`, a second append against an
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): in `Mode::Strict`, a second append against an
 /// already-extended prior head returns the equivalent of the old
 /// `version::VersionError::Branched` (carrying `seen` = the re-used prior
 /// head). This is the EXACT contract `version_branched.rs` pinned on the
@@ -218,7 +218,7 @@ fn strict_mode_fork_rejection_equivalent_to_old_version_branched() {
     }
 }
 
-/// RED until G-CORE-5: strict-mode unknown-prior is also preserved (the old
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): strict-mode unknown-prior is also preserved (the old
 /// `VersionError::UnknownPrior` half — the unified error enum MUST carry
 /// BOTH old linear variants, not just `Branched`). WOULD-FAIL if the
 /// unification drops the unknown-prior variant.
@@ -247,7 +247,7 @@ fn strict_mode_unknown_prior_preserved() {
 // CLAUDE.md #18: Anchor → v1 → {v2-mainline, v1.5-fork}.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-5: `Mode::Dag` accepts a fork (two children off one
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): `Mode::Dag` accepts a fork (two children off one
 /// parent) WITHOUT erroring — exactly the old `DagVersionChain` branch
 /// semantics, now reachable on the ONE unified type. The fork that strict
 /// mode REJECTS, dag mode ACCEPTS (mode-divergent behaviour on one type).
@@ -280,7 +280,7 @@ fn dag_mode_branch_then_two_tips() {
     );
 }
 
-/// RED until G-CORE-5: DAG-mode merge (multi-parent child) round-trips —
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): DAG-mode merge (multi-parent child) round-trips —
 /// the old `DagVersionChain::merge_node_has_two_parents` contract preserved
 /// on the unified type. WOULD-FAIL if the unification drops merge support.
 #[test]
@@ -308,7 +308,7 @@ fn dag_mode_merge_node_has_two_parents() {
     );
 }
 
-/// RED until G-CORE-5: DAG-mode cycle is still rejected (the old
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): DAG-mode cycle is still rejected (the old
 /// `VersionDagError::Cycle` contract preserved on the unified enum).
 /// WOULD-FAIL if the unification loses cycle detection.
 #[test]
@@ -338,7 +338,7 @@ fn dag_mode_cycle_rejected() {
 // named exactly "three different 'CURRENT' semantics".)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-5: a single shared `VersionChain` trait abstracts BOTH
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): a single shared `VersionChain` trait abstracts BOTH
 /// modes, and CURRENT has ONE semantic across modes (`current()` /
 /// `set_current()` available regardless of mode; strict mode's CURRENT is
 /// its linear head, dag mode's CURRENT is any chosen tip — ONE accessor
@@ -404,7 +404,7 @@ fn one_shared_trait_and_one_current_semantic_across_modes() {
     );
 }
 
-/// RED until G-CORE-5: the shared trait carries the common walk surface so
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): the shared trait carries the common walk surface so
 /// callers can iterate either mode uniformly (the "no canonical
 /// composability surface" gap #849 named — the unification closes it).
 /// WOULD-FAIL if walk is not on the shared trait.
@@ -439,7 +439,7 @@ fn shared_trait_exposes_uniform_walk_surface() {
 // walk reorders or rewraps node bytes — P-III hazard.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-5: a Version Node's `.cid()` is IDENTICAL whether it is
+/// LANDED at G-CORE-5 (pim-12 / §3.6e closure): a Version Node's `.cid()` is IDENTICAL whether it is
 /// minted standalone or appended through the unified `VersionDag` — the
 /// unification touches NO node-encoding path. WOULD-FAIL if G-CORE-5
 /// perturbs canonical bytes (P-III: wire/CID changes are Ben-scheduled,

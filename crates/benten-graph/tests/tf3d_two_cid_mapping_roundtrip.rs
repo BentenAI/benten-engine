@@ -28,7 +28,7 @@
 //! returns nothing; the mapping table is unimplemented). So this file
 //! **compiles-but-fails at the `use`/symbol-resolution line** until
 //! G-CORE-3d lands. Each `#[test]` is `#[ignore]`-staged with the
-//! literal marker `RED-PHASE: un-ignore at G-CORE-3d`. The G-CORE-3d
+//! literal marker `LANDED at G-CORE-3d (pim-12 / §3.6e closure)`. The G-CORE-3d
 //! closing-wave reviewer MUST verify these pins are *un-ignored*
 //! (landing-status, not just spec-pin presence) per §3.6e.
 //!

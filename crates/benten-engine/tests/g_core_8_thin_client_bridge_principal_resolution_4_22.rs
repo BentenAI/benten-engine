@@ -2,7 +2,7 @@
 //! principal-resolution + the sealed-`CapabilityPolicy`-trait
 //! object-safety compile pin (§1.A.FROZEN item 8).
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-8
+//! ## LANDED at G-CORE-8 (pim-12 / §3.6e closure)
 //!
 //! CLAUDE.md baked-in #17/#18: a thin-client (shape b/c — browser tab
 //! or embedded webview) is a VIEW into a full peer via the

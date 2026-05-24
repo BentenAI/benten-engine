@@ -3,7 +3,7 @@
 //! migration to `plugin_lifecycle::install_plugin` — G-CORE-0 verify-
 //! pass factual state-check pin (§1.A.FROZEN item 7 deliverable).
 //!
-//! ## RED-PHASE — un-ignore at G-CORE-0
+//! ## LANDED at G-CORE-0 (pim-12 / §3.6e closure)
 //!
 //! This file is the R4.1-FP-1 closure of L1 MAJOR finding
 //! `coverage-completeness-r4.1-2` (§4.33 legacy install-path DELETION

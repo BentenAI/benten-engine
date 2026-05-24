@@ -80,7 +80,7 @@ fn synthetic_key_material() -> GrantKeyMaterial {
 // happy path).
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a freshly issued `AuthorizationGrant` encodes via
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a freshly issued `AuthorizationGrant` encodes via
 /// canonical-bytes / DAG-CBOR, decodes back, and `verify_binding()`
 /// returns Ok. The grant carries `{ucan, key_material, binding_sig}` and
 /// the binding signature is the issuer's signature over the CBOR-encoded
@@ -111,7 +111,7 @@ fn one_signed_artifact_round_trips_encode_decode_verify() {
 // property of D-4M-R3 — ONE signed artifact prevents the ambiguity.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: an attacker who lifts the UCAN half but presents
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): an attacker who lifts the UCAN half but presents
 /// a DIFFERENT (fresh-attacker-chosen) `key_material` cannot reconstruct
 /// the issuer's `binding_sig` — `verify_binding()` returns the typed
 /// `BindingMismatch`. WOULD-FAIL if the implementer signs only the UCAN
@@ -142,7 +142,7 @@ fn stolen_ucan_without_keys_binding_sig_rejects() {
 // matching UCAN ⇒ grant validator rejects.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: an attacker who lifts `GrantKeyMaterial` but presents
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): an attacker who lifts `GrantKeyMaterial` but presents
 /// a DIFFERENT UCAN (e.g. one with different `aud`/`exp`/`nbf`) cannot
 /// satisfy `binding_sig` ⇒ typed `BindingMismatch`.
 #[test]
@@ -171,7 +171,7 @@ fn stolen_keys_without_ucan_binding_sig_rejects() {
 // ⇒ binding_sig invalid.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a grant bound to audience X presented for
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a grant bound to audience X presented for
 /// verification under audience Y fails the binding check — typed
 /// `AudienceMismatch`. WOULD-FAIL if `binding_sig` covers `(ucan,
 /// key_material)` but NOT the audience (the audience binding is the
@@ -201,7 +201,7 @@ fn wrong_audience_swap_binding_sig_rejects() {
 // handler in G-CORE-3e) + offline (Drop bundle in G-CORE-3f) paths.")
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: the CBOR-encoded canonical bytes of an
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): the CBOR-encoded canonical bytes of an
 /// `AuthorizationGrant` are STABLE — the same logical grant encodes to
 /// the same bytes whether destined for an online ALPN handler or an
 /// offline Drop bundle. WOULD-FAIL if the implementer split the shape

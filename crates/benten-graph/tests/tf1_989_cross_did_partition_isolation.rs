@@ -7,10 +7,10 @@
 //! r1-triage row 34 / §6-C1-edit; §3.6b sub-rule-4).
 //!
 //! ============================================================================
-//! RED-PHASE — un-ignore at G-CORE-1 (pim-12 / §3.6e).
+//! LANDED at G-CORE-1 (pim-12 / §3.6e closure) (pim-12 / §3.6e).
 //! ============================================================================
 //! Every `#[test]` here is `#[ignore]`-staged with the literal marker
-//! `RED-PHASE: un-ignore at G-CORE-1`. They are written against the REAL
+//! `LANDED at G-CORE-1 (pim-12 / §3.6e closure)`. They are written against the REAL
 //! production `RedbBackend` per-DID-scoped surface (`WriteContext::namespace_did`
 //! + `RedbBackend::scoped(namespace_did)` per-DID view), NOT a test double.
 //! At origin/main `ed03729a` `WriteContext` has NO `namespace_did` field and

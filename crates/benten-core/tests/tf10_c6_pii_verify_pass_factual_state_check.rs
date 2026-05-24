@@ -186,7 +186,7 @@ fn c6_scope_fence_506_is_g_core_6_not_r3() {
 // G-CORE-6 wave producing the deliverable, not an R3 attempt to do
 // the work.
 //
-// §3.6e pim-12 RED-PHASE: un-ignore at G-CORE-6 verify-pass wave
+// §3.6e pim-12 LANDED at G-CORE-6 (pim-12 / §3.6e closure) verify-pass wave
 // (the §3 G-CORE-6 group def: "SOLE residual P-II mechanical item =
 // #506 builder `.build()` single-fallible-point — that is the only
 // sweep work in this group"). The closure observable is: a

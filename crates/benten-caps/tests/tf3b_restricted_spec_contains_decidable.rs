@@ -93,7 +93,7 @@ fn sample_root(label: &str) -> Cid {
 // roots ⊆ producer's; contains() == true.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a `RestrictedScope` whose roots are a STRICT SUBSET
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a `RestrictedScope` whose roots are a STRICT SUBSET
 /// of `parent`'s roots is contained by `parent`. WOULD-FAIL if the roots
 /// dimension is omitted from `contains` (umbrella-sentinel masking).
 #[test]
@@ -122,7 +122,7 @@ fn contains_roots_subset_narrows() {
 // Arm P-1.2 — edge-allowlist dimension: subset narrows.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: edge_allowlist subset ⇒ contains; superset ⇒ NOT
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): edge_allowlist subset ⇒ contains; superset ⇒ NOT
 /// contains. WOULD-FAIL if the edge-allowlist dim is collapsed into
 /// label-allowlist.
 #[test]
@@ -150,7 +150,7 @@ fn contains_edge_allowlist_subset_narrows() {
 // Arm P-1.3 — max_depth dimension: lower depth narrows.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: max_depth(child) <= max_depth(parent) ⇒ contains;
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): max_depth(child) <= max_depth(parent) ⇒ contains;
 /// max_depth(child) > max_depth(parent) ⇒ NOT contains.
 #[test]
 fn contains_max_depth_subset_narrows() {
@@ -169,7 +169,7 @@ fn contains_max_depth_subset_narrows() {
 // Arm P-1.4 — label-allowlist dimension.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: label_allowlist subset narrows.
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): label_allowlist subset narrows.
 #[test]
 fn contains_label_allowlist_subset_narrows() {
     let parent = RestrictedScope::new()
@@ -197,7 +197,7 @@ fn contains_label_allowlist_subset_narrows() {
 // allowlist. Critical to test the inverse-direction reasoning is correct.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: label_denylist SUPERSET narrows (more denied =
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): label_denylist SUPERSET narrows (more denied =
 /// narrower). label_denylist SUBSET widens (fewer denied = wider).
 /// WOULD-FAIL if the implementer applied subset-semantics to denylist
 /// (a critical inverse-direction bug class).
@@ -225,7 +225,7 @@ fn contains_label_denylist_superset_narrows() {
 // narrows; equalities must MATCH exactly on overlapping keys.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: property_equalities SUPERSET (more required-equal
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): property_equalities SUPERSET (more required-equal
 /// properties) narrows. Conflicting values on an overlapping key ⇒ NOT
 /// contained.
 #[test]
@@ -256,7 +256,7 @@ fn contains_property_equalities_superset_narrows_and_conflicts_reject() {
 // composability claim).
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: a multi-dimensional child (narrowed on >=2 dims)
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): a multi-dimensional child (narrowed on >=2 dims)
 /// is contained by the corresponding multi-dimensional parent IFF each
 /// per-dim contains-check passes. WOULD-FAIL if `contains` short-circuits
 /// any one dim or uses `||` instead of `&&`.
@@ -293,7 +293,7 @@ fn contains_composes_per_dimension_with_and() {
 // Arm P-1.8 — reflexivity: a spec contains itself.
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: `s.contains(&s) == true` for every constructable
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): `s.contains(&s) == true` for every constructable
 /// RestrictedScope (reflexivity is required for chain validation's
 /// no-op-step admission).
 #[test]
@@ -315,7 +315,7 @@ fn contains_is_reflexive() {
 // contains C. (Chain validator depends on this for >2-step chains.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: contains is transitive across the 6-dim product.
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): contains is transitive across the 6-dim product.
 /// WOULD-FAIL if any dimension's check breaks ordering (e.g. an unsigned-
 /// vs-signed depth comparison off-by-one).
 #[test]
@@ -351,7 +351,7 @@ fn contains_is_transitive() {
 // the spike doc; this pin asserts the named outcomes survive contains.)
 // ---------------------------------------------------------------------------
 
-/// RED until G-CORE-3b: Spike H+1.1 documented use-case A (roots
+/// LANDED at G-CORE-3b (pim-12 / §3.6e closure): Spike H+1.1 documented use-case A (roots
 /// narrowing) survives contains. Companion arms B-G live above; this
 /// pin is the "spike cases round-trip" marker per R2 §2 G-CORE-3b (P-1).
 #[test]

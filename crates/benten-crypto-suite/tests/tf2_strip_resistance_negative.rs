@@ -259,7 +259,7 @@ fn tf2_gate6_pq_hybrid_envelope_carries_explicit_format_version_discriminator() 
     // up front.
     //
     // At R4-FP-1 author-time the AeadEnvelope serialization surface
-    // does not yet exist; this pin stays RED until G-CORE-3a flips
+    // does not yet exist; this pin stays LANDED at G-CORE-3a (pim-12 / §3.6e closure) flips
     // 0x647a to live AND ships AeadEnvelope::to_wire_bytes with a
     // format-version byte.
     //

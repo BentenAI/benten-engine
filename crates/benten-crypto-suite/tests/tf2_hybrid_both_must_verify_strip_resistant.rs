@@ -17,7 +17,7 @@
 //! that does NOT yet exist — so every test here **compiles-but-fails at the
 //! `use`/symbol line** until G-CORE-2 lands the real integration crate.
 //! Each test is `#[ignore]`-staged with the canonical
-//! `RED-PHASE: un-ignore at G-CORE-2` marker. The G-CORE-2 closing-wave
+//! `LANDED at G-CORE-2 (pim-12 / §3.6e closure)` marker. The G-CORE-2 closing-wave
 //! reviewer MUST verify these pins are *un-ignored* (landing-status, not
 //! just spec-pin presence) per §3.6e.
 //!

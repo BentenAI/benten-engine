@@ -151,8 +151,18 @@ with consumers that don't yet have the principal context.
   surface entirely**. Test-only use sites move into `pub(crate)` helpers
   inside `crates/benten-engine/src/testing.rs` (Test-API module already
   exists; that's the canonical location for test-only surfaces). Public
-  surface MUST NOT carry `_for_test` suffixes (a `_for_test` `pub fn` is
-  a red-flag — either real public API or belongs in `testing` module).
+  surface MUST NOT carry `_for_test` suffixes at v1-GM (a `_for_test`
+  `pub fn` is a red-flag — either real public API or belongs in
+  `testing` module). **v1-beta carve-out:** the cargo-public-api
+  baselines at HEAD carry 115 such surfaces across
+  `benten-caps` / `benten-crypto-suite` / `benten-drop` /
+  `benten-core` / `benten-sync` / `benten-graph` — these are
+  ENUMERATED + named-deferred at
+  [`docs/V1-FROZEN-INTERFACE-DEFERRED.md`](V1-FROZEN-INTERFACE-DEFERRED.md)
+  Row D-22 (visibility-only `#[cfg(any(test, feature = "testing"))]`
+  gating sweep + 6 baseline regens at G-COMP-1). New `_for_test` /
+  `_for_testing` declarations MUST carry `#[cfg]` gating per the
+  no-regression pin at Row D-22 sub-task 5.
 - `crates/benten-engine/src/engine.rs::Engine::caps` (`fn caps(&self) ->
   &EngineCapsHandle`) stays `pub`; this is the canonical cap-mutation
   surface per the §4.69-ALREADY-SHIPPED ground-truth. No `Engine`-direct
