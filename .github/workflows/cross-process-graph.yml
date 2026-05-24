@@ -61,7 +61,7 @@ jobs:
         timeout-minutes: 5
         run: |
           cargo nextest run \
-            --features benten-eval/testing,benten-engine/test-helpers \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
             -p benten-engine \
             --test integration \
             'integration::cross_process_graph::'
