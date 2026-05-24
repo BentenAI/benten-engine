@@ -111,7 +111,7 @@ fn recheck_outcome_enum_carries_unresolved_deny_not_not_applicable() {
 // it actually exercises — the SHIPPED Noop's admit-everything baseline
 // as the security-r1-1 would-FAIL signal. The substantive
 // default-builder-installs-Production-rechecker arm is the
-// G-CORE-8.2-deferred wire-up (see `INTERNALS.md` §9 item 11 — the
+// G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4)-deferred wire-up (see `INTERNALS.md` §9 item 11 — the
 // `Engine::default()` Production-rechecker glue path BELONGS-NAMED-NOW
 // destination); when that ships, a new test `default_builder_installs_substantive_production_rechecker_at_G_CORE_8_2`
 // asserts the post-wire-up shape directly.
@@ -124,7 +124,7 @@ fn noop_rechecker_admit_everything_is_security_r1_1_would_fail_baseline() {
     // security-r1-1 BLOCKER's load-bearing would-FAIL — every hostile
     // row would-be-admitted under the default-wired Noop unless the
     // engine builder gets re-wired to install the substantive
-    // Production rechecker at G-CORE-8.2.
+    // Production rechecker at G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4).
     //
     // -----------------------------------------------------------------
     // SHIPPED-SURFACE EXERCISE (R4.1 fix-pass per pim-18 §3.6f — L3
@@ -304,7 +304,7 @@ fn sync_hydrate_unresolvable_peer_did_fails_closed_parallel_to_merge_recheck() {
     // the §4.36 merge per-row loop fires. The HARD-RULE-12 named-now
     // destination for the §4.25 *handshake-time* hydrate consultation
     // (distinct from the §4.36 per-row merge consultation) is
-    // `crates/benten-sync/src/handshake.rs` (G-CORE-8.2 follow-up
+    // `crates/benten-sync/src/handshake.rs` (G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4) follow-up
     // wave; the handshake-time wire-up is a sync-crate concern that
     // touches the iroh sendme handshake — pulled out per HARD-RULE-12
     // clause (b) to a named follow-up wave to keep this wave's blast

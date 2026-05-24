@@ -90,6 +90,8 @@
 
 **Surface:** UCAN envelope signature header (used by `benten_caps::authorization_grant` + the UCAN proof chain).
 
+**Scope clarification (L11-MIN-1 close at R6-FP-D 2026-05-24):** this row scopes the **header bytes** (Varsig codepoint + signature bytes + multibase prefix). The **UCAN BODY bytes that the header signs over** (the UCAN claim CBOR envelope) are covered structurally by §6 (AuthorizationGrant CBOR) for the AuthorizationGrant-borne UCAN and behaviorally by the chain-validation surface (which exercises the body bytes end-to-end via verify-and-walk pinned tests at `crates/benten-caps/tests/`). An explicit body-bytes byte-pin row is intentionally NOT in this v1-beta inventory — the body's canonical-bytes contract follows DAG-CBOR canonicalization (covered by §1 Phase-1 baseline) + the freeze contract is that the UCAN body shape stays additive (`#[non_exhaustive]` per item 11). A future G-COMP-1 row may add explicit body byte-pins; the current behavioral coverage is per Row D-9 wire-format-deferred posture.
+
 **Wire format:**
 - Multiformats Varsig v1 — signature suite codepoint + signature bytes prefixed with the multibase header.
 - Sig codepoint table (V1-FROZEN-INTERFACE item 6.2):
@@ -100,7 +102,7 @@
 **Format version:** Codepoint dispatch (item 6).
 
 **Byte-pin test coverage:**
-- `crates/benten-crypto-suite/tests/tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs` + `tf4_gcore3c_swap_matrix_conformance*.rs` — envelope encode/decode + sig-codepoint dispatch.
+- `crates/benten-crypto-suite/tests/tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs` + `crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs` — envelope encode/decode + sig-codepoint dispatch.
 - Full hex-pinned-bytes UCAN-Varsig header pin DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-9.
 
 **FREEZE-WAVE status:** ✅ COVERED (roundtrip + codepoint-dispatch; hex-pin deferred per Row D-9).
@@ -209,15 +211,17 @@
 | 1 | Node/Edge canonical CBOR + sentinel CID | N/A (Phase-1 baseline) | canonical_bytes_fastpath_stable.rs + node_cid.rs (benten-core) | ✅ COVERED |
 | 2 | SnapshotBlob v2 | `SNAPSHOT_BLOB_SCHEMA_VERSION = 2` | snapshot_blob_backend.rs + tf11_*.rs | ✅ COVERED |
 | 3 | MerkleRangeProof v2 | TBD per Option (b) | — | ⚠️ DEFERRED to G-COMP-1 |
-| 4 | Per-chunk AEAD | Cipher codepoint | tf3a_*.rs + tf4_*.rs + tf3a_pq_hybrid_wasm32 | ✅ COVERED |
-| 5 | UCAN-Varsig v1 header | Sig codepoint | tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs | ✅ COVERED |
-| 6 | AuthorizationGrant CBOR | #[non_exhaustive] | tf3b_authorization_grant_*.rs | ✅ COVERED |
+| 4 | Per-chunk AEAD | Cipher codepoint | tf3a_*.rs + tf4_*.rs + tf3a_pq_hybrid_wasm32 (glob-form¹) | ✅ COVERED |
+| 5 | UCAN-Varsig v1 header | Sig codepoint | tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance_additional.rs | ✅ COVERED |
+| 6 | AuthorizationGrant CBOR | #[non_exhaustive] | tf3b_authorization_grant_*.rs (glob-form¹) | ✅ COVERED |
 | 7 | Drop bundle CBOR | `DropBundleVersion` enum | benten-drop/tests/ | ✅ COVERED |
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |
 | 9 | EncryptionClass codepoint (NEW G-CORE-9) | #[non_exhaustive] + codepoint table | encryption_class.rs unit tests | ✅ COVERED |
 | 10 | Crypto-suite codepoint table | V1-FROZEN §6 integers | canonical_bytes_v1_codepoints_and_aad.rs + tf4_gcore3c_swap_matrix_*.rs | ✅ COVERED |
 
 **Outcome:** 9 of 10 surfaces have byte-pin coverage at v1-beta. The one DEFERRED surface (MerkleRangeProof) is genuinely-not-built (no phantom freeze).
+
+¹ **Format note (L11-MIN-2 close at R6-FP-D 2026-05-24):** the glob-form `tf3a_*.rs` / `tf3b_authorization_grant_*.rs` / `tf4_*.rs` cites resolve at wave-time to multiple discrete test files under `crates/benten-crypto-suite/tests/` + `crates/benten-caps/tests/`. The glob-form is intentional for items where the byte-pin coverage spans a test-file family (multiple swap-matrix arms × wire directions); items 1, 2, 7, 8, 9, 10 reference single test files because their byte-pin coverage IS in one file. A future CI inventory-walk lane that resolves these cites should expand the glob via `git ls-files` rather than treating it as a literal path.
 
 ---
 

@@ -64,7 +64,7 @@ fail CI on a frozen-surface mutation:
    `docs/public-api/benten-*.{txt,json}`.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 1 (commit `fb7c212d`).**
    All 14 lib crate baselines regenerated with `cargo +nightly public-api
-   --simplified -p <crate>`; total **20,571 LOC** of real public-API
+   --simplified -p <crate>`; total **20,559 LOC** of real public-API
    surface committed (replaces the 11-LOC G20-A3 seed stubs). The 3
    missing baselines (`benten-crypto-suite` 1609 LOC, `benten-drop` 320
    LOC, `benten-platform-foundation` 2557 LOC) ALL minted. CI workflow
@@ -1204,12 +1204,15 @@ with four structural properties:
 
 **(a) Mandatory baseline conformance suite.** Every claimed-Benten peer
 MUST pass the suite. The suite lives at
-`crates/benten-crypto-suite/tests/p2p_interop_conformance_*.rs` +
-`crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance*.rs`
-+ a new `crates/benten-crypto-suite/tests/conformance_baseline.rs` that
-pins the v1-beta baseline as the lower bound (Veilid `common_crypto_kinds`-
-intersection model). **FREEZE-WAVE VERIFY:** validate this file family
-exists and covers all 7 swap-matrix arms × both wire directions.
+`crates/benten-crypto-suite/tests/tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs`
++ `crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs`
++ `crates/benten-crypto-suite/tests/tf4_codepoint_0x647c_pure_pq_mlkem_only.rs`
++ `crates/benten-crypto-suite/tests/tf4_pure_pq_gated_audit_landed.rs`. These
+files cover all 7 swap-matrix arms × both wire directions at v1-beta.
+(The earlier-cited `p2p_interop_conformance_*.rs` family + the standalone
+`conformance_baseline.rs` did not land under those names; the `tf4_gcore3c_*`
+named files ARE the substantive conformance suite per L14-MIN-2 close at
+R6-FP-D 2026-05-24. Naming-drift fixed; substance intact.)
 
 **(b) Typed-unsupported-error, NEVER silent fallback.** Unknown crypto
 codepoint surfaces typed `UnsupportedAlgorithm::{Signature, CipherSuite,
@@ -1439,7 +1442,7 @@ H+1.1; explicit re-open justification required).
 ### 15.d — `AuthorizationGrant` envelope = ONE signed artifact
 
 **Frozen surfaces:**
-- `crates/benten-caps/src/authorization_grant.rs:205` `pub struct
+- `crates/benten-caps/src/authorization_grant.rs:233` `pub struct
   AuthorizationGrant`:
   - `ucan: UcanEnvelope` (the UCAN half)
   - `key_material: GrantKeyMaterial` (the key-material half; **renamed**
