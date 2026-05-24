@@ -1,0 +1,219 @@
+{
+  "lens": "L12 cross-language §3.5g mirror + workspace missing-docs + stable+MSRV clippy gates",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "round": "R1",
+  "branch": "g-core-9/r1-l12-cross-lang-clippy-docs",
+  "base_sha": "8cc4edddac6f8008984ebc381a10ff6e786c7ec4",
+  "review_date": "2026-05-24",
+  "disposition": "APPROVE-WITH-FINDINGS",
+  "summary": "L12 surface is OPERATIONAL: §3.5g cross-language Rust↔TS error mirror is intact (192/192/194/194 across 4 surfaces with 8-surface per-variant mirror verified on 3 random samples); §3.5g item 6 first-class-mirror scanner is shipped + CI-wired (drift-detect.yml:90; baseline 160 grandfathered + 0 new violations); workspace missing-docs gate is wired via tests/phase_3_workspace/missing_docs_workspace.rs (both #[allow(missing_docs)] escape-hatch scanner + cargo doc --workspace --no-deps RUSTDOCFLAGS=-D missing_docs invocation); stable clippy gate is wired (ci.yml:141 --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings); cargo-public-api workflow iterates the full 14-crate v1-beta surface (cargo-public-api.yml:79) against committed baselines (all 14 .txt baselines present + real content avg ~130KB, NOT G20-A3 stubs); TS-side #1204 parity gate workflow + 403-LOC packages/engine/etc/public-api.txt baseline both present per V1-FROZEN-INTERFACE row 2; post-rename names (RestrictedScope/SubgraphSpecRestriction/GrantKeyMaterial/AeadKeyMaterial) do NOT cross napi (no TS mirror obligation). The drift-detect scanner self-test passes. 3 MAJORs + 1 MINOR are doc-coupling/cross-tool-mirror drifts the FREEZE wave should close before tag; 1 OBS records a deliberate design choice (MSRV clippy intentionally off).",
+  "findings": [
+    {
+      "id": "L12-MAJ-1",
+      "severity": "MAJOR",
+      "title": "ERROR-CATALOG.md catalog-count narrative table is STALE — cites 170/170/171/172, actual at HEAD is 192/192/193/194",
+      "evidence": {
+        "stale_doc": "docs/ERROR-CATALOG.md:5-22 narrative table + 'Why four counts' paragraph + 'Single canonical headline number' assertion all cite 170/170/171/172 with the 'post Phase-4-Meta-Core G-CORE-1 fix-pass, 2026-05-19' provenance line",
+        "actual_at_head": {
+          "Rust ErrorCode variants (throwable, minus Unknown(String) fallback)": 192,
+          "Rust enum total (incl Unknown(String))": 193,
+          "ALL_CATALOG_VARIANTS list length": 192,
+          "CATALOG_VARIANT_COUNT pinned value": 192,
+          "ERROR-CATALOG.md ### E_ headings count": 194,
+          "TS errors.generated.ts class count": 194,
+          "TS CATALOG_CODES array length": 194,
+          "TS CODE_TO_CTOR_GENERATED map size": 194
+        },
+        "authoritative_alternative_doc": "docs/V1-FROZEN-INTERFACE.md:768 and :791 BOTH correctly state '192 Rust ErrorCode variants ... = 194 catalog/TS entries'",
+        "drift_magnitude": "22 codes between stale 170 and actual 192 (Phase-4-Foundation R5 canary mints + R6-FP + refinement-audit + Phase-4-Meta-Core + G-CORE-9 build-out + pre-FREEZE bundle all unaccounted)"
+      },
+      "rule": "§3.5g cross-language rule-mirror atomic-update discipline (Rust enum + TS catalog + this doc updated atomically); ERROR-CATALOG.md line 28 explicitly cites the §3.5g discipline as the binding contract",
+      "disposition": "FIX-NOW",
+      "fix": "Replace the ERROR-CATALOG.md count-narrative table (lines 5-22) with current numbers (192/192/194/194) + a new cohort row for G-CORE-9 build-out mints (DslIoError + SubgraphSpecWalkFailed + the Phase-4-Meta-Core wave codes); regenerate the 'Why four counts' paragraph; update 'Single canonical headline number'. Pair the doc edit with the existing CATALOG_VARIANT_COUNT regression-list test as proof-by-CI. The V1-FROZEN-INTERFACE row 8a investigation outcome (commit 75a1d33a) already named ERROR-CATALOG.md 'Catalog count narrative' table as the canonical home; this is just closing the doc-write gap.",
+      "named_destination": "docs/ERROR-CATALOG.md lines 5-22 (inline edit at this PR)"
+    },
+    {
+      "id": "L12-MAJ-2",
+      "severity": "MAJOR",
+      "title": "V1-FROZEN-INTERFACE item 9 frozen-surfaces list cites 3 baseline files as .json that are actually .txt on disk (silent drift between frozen contract and CI workflow)",
+      "evidence": {
+        "frozen_doc_claims": [
+          "docs/V1-FROZEN-INTERFACE.md:712 — `docs/public-api/benten-id.json`",
+          "docs/V1-FROZEN-INTERFACE.md:718 — `docs/public-api/benten-renderer-tauri.json`",
+          "docs/V1-FROZEN-INTERFACE.md:719 — `docs/public-api/benten-sync.json`"
+        ],
+        "actual_files_on_disk": [
+          "docs/public-api/benten-id.txt (94406 bytes)",
+          "docs/public-api/benten-renderer-tauri.txt (11702 bytes)",
+          "docs/public-api/benten-renderer-tauri.json (3221 bytes — orphan; not referenced by CI workflow)",
+          "docs/public-api/benten-sync.txt (102730 bytes)"
+        ],
+        "ci_workflow_truth": ".github/workflows/cargo-public-api.yml:79 iterates 14 crates appending `.txt` (not `.json`): `for crate in benten-core benten-errors ... benten-renderer-tauri; do ... diff -u docs/public-api/$crate.txt ... ; done`",
+        "doc_claims_format_lock_per_crate": "V1-FROZEN-INTERFACE.md:725 explicitly says 'The baseline format (.txt vs .json) per crate is locked.' — so per the freeze contract, the format mismatch is a freeze-contract violation"
+      },
+      "rule": "§3.5g cross-tool config mirror discipline (§3.5g item 4): frozen-doc claims + CI workflow iteration + on-disk files MUST all agree; freeze contract item 9 explicitly locks the extension per crate",
+      "disposition": "FIX-NOW",
+      "fix": "Two atomic moves in same PR: (1) update V1-FROZEN-INTERFACE.md:712/718/719 to `.txt` (the format CI + on-disk actually use); (2) delete the orphan `docs/public-api/benten-renderer-tauri.json` file (the workflow only diffs the `.txt` so the `.json` is dead doc-drift). Verify by re-running the cargo-public-api workflow against the corrected list. ALTERNATIVE if the freeze intent was really `.json` for these crates: regenerate them as JSON + update the workflow loop to honor per-crate extension — but the workflow loop's hardcoded `.txt` suffix strongly indicates the doc is the drift-side.",
+      "named_destination": "V1-FROZEN-INTERFACE.md:712/718/719 + delete docs/public-api/benten-renderer-tauri.json (inline at this PR)"
+    },
+    {
+      "id": "L12-MAJ-3",
+      "severity": "MAJOR",
+      "title": "deny.toml ↔ cargo-audit --ignore asymmetry — RUSTSEC-2026-0119 + RUSTSEC-2026-0120 ignored in CI but deny.toml comment claims they were CLOSED 2026-05-19 (cross-tool config mirror drift, §3.5g item 4 origin pattern)",
+      "evidence": {
+        "ci_still_ignores": ".github/workflows/supply-chain.yml:99-100 `--ignore RUSTSEC-2026-0119 \\` `--ignore RUSTSEC-2026-0120`",
+        "deny_toml_says_closed": "deny.toml lines preceding the ignore list explicitly state 'RUSTSEC-2026-0119 + RUSTSEC-2026-0120 (hickory-dns CPU-exhaustion + NSEC3 unbounded-loop) CLOSED 2026-05-19 at G-CORE-2-FP-1 via iroh 0.98 → 1.0.0-rc.0 bump; transitive hickory-resolver 0.26.0-beta.4 → 0.26.1 picks up the upstream fix. Ignore entries removed (cargo-deny warns on advisory-not-detected for stale ignores).'",
+        "asymmetric_count": "deny.toml ignore list: 17 unique RUSTSEC-IDs; supply-chain.yml --ignore list: 19 unique IDs; delta = {RUSTSEC-2026-0119, RUSTSEC-2026-0120}",
+        "rule_origin": "This is EXACTLY the dual-config drift pattern §3.5g item 4 was codified to catch (added at R6 R2 methodology-critic 2026-05-13 after the original cargo-audit ↔ deny.toml mirror split surfaced)"
+      },
+      "rule": "§3.5g item 4 cross-tool config mirror — same-language dual-config rule-mirrors (deny.toml advisory ignore-list ↔ CI cargo-audit --ignore flags) MUST atomically update against same source-of-truth",
+      "disposition": "FIX-NOW",
+      "fix": "Remove the two `--ignore RUSTSEC-2026-0119` + `--ignore RUSTSEC-2026-0120` lines from .github/workflows/supply-chain.yml:99-100. cargo-audit will then either pass (if the iroh-bump fully cleared the transitive) or fail with an actionable finding (which is what we want — silent ignores against a closed advisory hide regressions). The deny.toml comment 'cargo-deny warns on advisory-not-detected for stale ignores' confirms the workflow gate should self-correct.",
+      "named_destination": ".github/workflows/supply-chain.yml:99-100 (inline at this PR)"
+    },
+    {
+      "id": "L12-MIN-1",
+      "severity": "MINOR",
+      "title": "tests/phase_3_workspace/missing_docs_workspace.rs `full_missing_docs_sweep_no_warnings_workspace_wide` spawns `cargo doc --workspace --no-deps` from within a `cargo nextest` test runner — recursive cargo invocation has known reliability footguns",
+      "evidence": {
+        "test_body": "tests/phase_3_workspace/missing_docs_workspace.rs lines ~165-189 — `std::process::Command::new(\"cargo\").arg(\"doc\").arg(\"--workspace\").arg(\"--no-deps\").env(\"RUSTDOCFLAGS\", \"-D missing_docs\").current_dir(&workspace_root).output()`",
+        "concern": "When invoked from `cargo nextest run --workspace`, the spawned `cargo doc` inherits a `CARGO_TARGET_DIR` + lockfile + may contend with the outer cargo's build graph. Empirically this pattern works when the outer cargo has already settled (the test is the LAST thing in the nextest run), but it's an implicit dependency on test-ordering that ci.yml does not enforce. Per the orchestrator-direct workspace pre-push verification memory (feedback_orchestrator_workspace_pre_push.md), this is exactly the kind of recursive-build hazard worth flagging."
+      },
+      "rule": "L12 missing-docs verification mechanism robustness — the gate must be reliable not just present",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "fix": "No change required. CI is the authoritative invocation (ci.yml:222-226 runs `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS: -D warnings` as a top-level step, NOT via the recursive nextest path). The phase_3_workspace test is a belt-and-suspenders local gate that happens to invoke the same command; if recursive cargo is unreliable the top-level CI step still catches drift. The redundancy is intentional per pim-2 §3.6b end-to-end pin discipline.",
+      "named_destination": "no action — documented design"
+    },
+    {
+      "id": "L12-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "MSRV (1.95) clippy gate is intentionally NOT enforced — only stable runs clippy per ci.yml:140",
+      "evidence": {
+        "ci_design": ".github/workflows/ci.yml:134-141 — `# fmt + clippy only on stable to avoid MSRV-chasing lint churn; the # MSRV legs still build+test to catch accidental post-1.95 features.`",
+        "msrv_workflow_scope": ".github/workflows/msrv.yml only runs `cargo build --workspace --locked` at 1.95 + the canonical fixture CID check; no clippy invocation",
+        "documented_rationale": "Comment block at ci.yml:134-135 makes the design choice explicit + names the failure mode (lint churn) the choice avoids"
+      },
+      "rule": "L12 lens question asks about MSRV clippy; answer is 'NOT enforced by design'",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "fix": "No change. Adding MSRV clippy would require pinning a stable clippy lint set against the 1.95 toolchain, which both cargo and clippy actively churn — net effect would be CI breakage on every clippy bump unrelated to project code. The MSRV `cargo build --workspace` step in msrv.yml + the test suite running at MSRV in ci.yml's matrix legs (rust: 1.95.0) collectively catch the actual MSRV regression class (accidental new-language-feature usage). Linting at MSRV would add no signal that stable clippy doesn't already cover.",
+      "named_destination": "no action — Ben-ratified intentional design"
+    },
+    {
+      "id": "L12-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "Workspace clippy in ci.yml hardcodes 3 feature flags (benten-eval/testing,benten-engine/test-helpers,benten-graph/testing) but the L12 lens question mentions just `--features testing`",
+      "evidence": {
+        "actual_invocation": "ci.yml:141 `cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings`",
+        "rationale_inline": "ci.yml:144-159 comment block explains why each of the 3 feature flags is required for the workspace to build with --all-targets",
+        "lens_question_form": "The lens prompt's `cargo +stable clippy --workspace --all-targets --features testing` is the abbreviated lens shorthand; the actual CI form is the longer correct invocation"
+      },
+      "rule": "L12 verification mechanism — lens-question-vs-actual-invocation reconciliation",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "fix": "No change. The CI form is intentional + works (clippy clean across stable matrix legs at HEAD). The lens prompt's shorthand was imprecise; ci.yml carries the canonical form. Recording as OBS so a future reader doesn't try to 'simplify' the feature-flag list (which would re-break the --all-targets surface, per the inline rationale).",
+      "named_destination": "no action — recording for forensic clarity"
+    },
+    {
+      "id": "L12-OBS-3",
+      "severity": "OBSERVATION",
+      "title": "cargo-public-api workflow is INFORMATIONAL-ONLY (always exits 0); freeze-gate strength comes from the drift surfacing in PR summary not a required-check fail",
+      "evidence": {
+        "workflow_status": ".github/workflows/cargo-public-api.yml:14 `# Status (per ci-decisions-2026-04-22.md §4): INFORMATIONAL ONLY — not # a member of the required-check set.`",
+        "exit_code_logic": ".github/workflows/cargo-public-api.yml:83 `cargo +nightly public-api --simplified -p \"$crate\" 2>&1 | diff -u \"docs/public-api/$crate.txt\" - || true` — the `|| true` swallows non-zero diff exit",
+        "promotion_named": "ci.yml comment says 'Promotion to required is a Phase-9+ OSS-launch-era decision'",
+        "freeze_implication": "V1-FROZEN-INTERFACE.md:723 says 'Any post-freeze delta = CI failure on the drift test.' — this is in tension with the workflow being informational-only. The freeze contract relies on cargo-public-api as the 'load-bearing freeze mechanism' (line 737) but the workflow doesn't actually FAIL CI on drift."
+      },
+      "rule": "L12 verification mechanism strength — informational vs required-check distinction is load-bearing for what counts as 'frozen'",
+      "disposition": "BELONGS-NAMED-NOW",
+      "fix": "Either (a) flip cargo-public-api.yml to fail CI on drift (remove `|| true`, set exit code from diff) for the duration of v1-beta + Composing — the freeze posture requires that drift NOT silently land; OR (b) document the deliberate informational-only posture in V1-FROZEN-INTERFACE.md item 9 by adding a 'Verification posture' subsection that explains drift surfaces in PR summary + reviewer responsibility to gate. Carry the choice to the post-FREEZE Composing-phase escape valve discussion at V1-FROZEN-INTERFACE.md item 9 'Composing-phase escape valve' (lines 753-756). The freeze-strength tension is real but the resolution is a design call beyond this lens's scope.",
+      "named_destination": "carry to G-CORE-9 R1 orchestrator-triage agenda; surface to Ben as a freeze-posture question"
+    }
+  ],
+  "counts": {
+    "BLOCKER": 0,
+    "MAJOR": 3,
+    "MINOR": 1,
+    "OBSERVATION": 3,
+    "total": 7
+  },
+  "samples_verified": {
+    "8_surface_mirror_random_samples": [
+      {
+        "code": "E_SUBGRAPH_SPEC_WALK_FAILED",
+        "rust_enum": "OK (crates/benten-errors/src/lib.rs:1354)",
+        "as_static_str": "OK (lib.rs:1706)",
+        "from_str": "OK (lib.rs:2541)",
+        "routed_edge_label": "OK Some(\"ON_ERROR\") (lib.rs:2224)",
+        "ALL_CATALOG_VARIANTS": "OK (stable_shape.rs:622)",
+        "TS_class": "OK ESubgraphSpecWalkFailed (errors.generated.ts:3120)",
+        "TS_CATALOG_CODES": "OK (errors.generated.ts:228)",
+        "TS_CODE_TO_CTOR": "OK (errors.generated.ts:3345)",
+        "ERROR_CATALOG_md": "OK (### E_SUBGRAPH_SPEC_WALK_FAILED at line 1757)"
+      },
+      {
+        "code": "E_CAP_DENIED",
+        "all_8_surfaces": "OK"
+      },
+      {
+        "code": "E_VALUE_FLOAT_NAN",
+        "all_8_surfaces": "OK"
+      }
+    ],
+    "new_g_core_9_row_4_variant": {
+      "name": "SubgraphSpecWalkFailed",
+      "mirror_status": "FULL 8-surface mirror landed (verified above)"
+    },
+    "new_pre_freeze_bundle_variant": {
+      "name": "DslIoError",
+      "mirror_status": "FULL 8-surface mirror landed (verified via grep — lib.rs:1344, stable_shape.rs:601, errors.generated.ts:3105, ERROR-CATALOG.md:1749)"
+    },
+    "post_rename_types_napi_check": {
+      "RestrictedScope": "internal-only (no bindings/napi hit; TS mirror not required)",
+      "SubgraphSpecRestriction": "internal-only",
+      "GrantKeyMaterial": "internal-only",
+      "AeadKeyMaterial": "internal-only"
+    },
+    "drift_scanner_self_test": {
+      "drift_detect_ts_run": "OK — catalog, Rust enum, and TS classes agree; 163 variants reachable, 0 unreachable",
+      "drift_detect_error_variant_mirror_ts_run": "OK — 124 mirrored, 160 baseline-grandfathered, 0 new violations",
+      "scanner_wired_to_ci": "YES at .github/workflows/drift-detect.yml:90 with explanatory comment block citing §3.5g item 6"
+    },
+    "cargo_public_api_baselines": {
+      "expected_14_crates": "all 14 present at docs/public-api/*.txt with real content (avg ~130KB/file; NOT G20-A3 11-LOC stubs)",
+      "size_check": "benten-engine.txt = 355KB, benten-eval.txt = 330KB, benten-platform-foundation.txt = 295KB, benten-graph.txt = 183KB, etc.",
+      "workflow_iteration": ".github/workflows/cargo-public-api.yml:79 iterates the full 14-crate list against docs/public-api/$crate.txt"
+    },
+    "ts_public_api_1204_gate": {
+      "workflow": ".github/workflows/ts-public-api.yml — present",
+      "baseline": "packages/engine/etc/public-api.txt — 403 LOC, generated at G-CORE-9 V1-FROZEN-INTERFACE row 2 (2026-05-23)"
+    },
+    "scoped_local_clippy_sanity": {
+      "benten_errors": "cargo +stable clippy -p benten-errors --all-targets -- -D warnings PASS",
+      "benten_caps_missing_docs": "RUSTDOCFLAGS=-D missing_docs cargo doc -p benten-caps --no-deps PASS"
+    },
+    "workspace_clippy_invocation": {
+      "actual_form": "cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings",
+      "wired_at": ".github/workflows/ci.yml:139-141 (stable only — see OBS-1 for MSRV note)"
+    },
+    "missing_docs_workspace_gate": {
+      "test": "tests/phase_3_workspace/missing_docs_workspace.rs — `full_missing_docs_sweep_no_warnings_workspace_wide` invokes `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS=-D missing_docs`",
+      "ci_invocation": ".github/workflows/ci.yml runs `cargo nextest run --profile ci --workspace --locked` which executes this test; also a top-level `cargo doc --workspace --no-deps` step at ci.yml:222-226 with `RUSTDOCFLAGS: -D warnings` (belt-and-suspenders)"
+    }
+  },
+  "convergence_signal": {
+    "approve_for_freeze_tag": false,
+    "blockers_to_freeze": [],
+    "majors_to_close_before_tag": [
+      "L12-MAJ-1 — ERROR-CATALOG.md narrative table stale (170→192 count refresh)",
+      "L12-MAJ-2 — V1-FROZEN-INTERFACE.md item 9 .json/.txt drift (3 frozen-surface entries + 1 orphan file)",
+      "L12-MAJ-3 — deny.toml ↔ supply-chain.yml RUSTSEC-2026-0119/0120 mirror"
+    ],
+    "next_round_seed": "If MAJ-1/2/3 land as inline fixes in the R1 fix-pass + the OBS-3 freeze-posture question is surfaced to Ben + ratified, the L12 surface is APPROVE-FOR-TAG. All three MAJORs are surgical doc/CI-config edits ≤ 50 LOC total."
+  },
+  "provenance": {
+    "lens_brief_received": "G-CORE-9 R1 L12 cross-language §3.5g mirror + workspace missing-docs + stable+MSRV clippy gates",
+    "executed": "2026-05-24",
+    "branch_base": "origin/main at 8cc4eddd",
+    "scope_compliance": "all reads inside ${WORKTREE_ROOT}; no absolute-path escapes (per feedback_agent_isolation_escape_absolute_paths)",
+    "schema": "§3.6i Review/lens/mini-review JSON schema discipline — canonical top-level `disposition` + `findings[]` array + per-finding `disposition` matching HARD RULE 12 (FIX-NOW / BELONGS-NAMED-NOW / DISAGREE-WITH-EXPLANATION)"
+  }
+}
