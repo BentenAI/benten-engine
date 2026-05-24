@@ -1,0 +1,211 @@
+{
+  "lens": "L14",
+  "lens_title": "R7-equivalent spec-to-code-compliance audit + drift-against-substrate",
+  "round": "R6 R1",
+  "phase": "Phase-4-Meta-Core",
+  "branch": "phase-4-meta-core/r6-r1-l14-spec-code-audit",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "base_branch": "phase-4-meta-core/r4b-r1-fix-pass",
+  "audit_methodology": "pim-13 §3.12 standing pattern — walked every CLAIM in every spec doc + every Compromise narrative + every CLAUDE.md baked-in item → verified CONSTRUCTION SITE in shipped code at HEAD 4bbc4cac via git grep + structural walk + §3.5n ground-truth-verify (every claim independently ref-pinned against HEAD code, not from another doc's mention). Phase-1 R7 precedent: catches aspirational prose but dead code.",
+  "disposition": "APPROVE-WITH-FINDINGS",
+  "r6_r1_convergence_disposition": "ITERATE",
+  "convergence_rationale": "L14 returned 5 substantive findings (2 MAJOR + 3 MINOR) + 4 OBSERVATIONS. None are BLOCKER. Per Q5 convergence rule + Phase-4-Foundation R6 monotonic-convergence precedent (R1=185 → R8=0), R1 is expected to have non-zero findings; ITERATE is the standard disposition. The 2 MAJORs are surgical (1 spec-vs-code drift on a freeze-contract MUST + 1 phantom doc citation cluster); both are R6-FP closeable within one fix-pass wave without re-architecting any frozen surface.",
+  "summary": {
+    "claims_walked": "~95 (incl. 19 V1-FROZEN-INTERFACE.md items + 31 SECURITY-POSTURE compromises + 14 INVARIANT-COVERAGE rows + 19 CLAUDE.md baked-in items + multiple sub-clauses)",
+    "construction_sites_verified": "~85 of ~95 verified present at HEAD; ~5 cite-drift / phantom-cite issues + 1 spec-vs-code MUST drift + 4 narrative-only acceptable disclosures",
+    "findings_count": 9,
+    "by_severity": {
+      "blocker": 0,
+      "major": 2,
+      "minor": 3,
+      "observation": 4
+    }
+  },
+  "findings": [
+    {
+      "id": "l14-r1-MAJ-1",
+      "severity": "MAJOR",
+      "title": "V1-FROZEN-INTERFACE.md item 3 §4.43 freeze-contract MUST violated: GraphError::TxAborted `#[non_exhaustive]` NOT applied at HEAD despite spec mandating apply-at-G-CORE-9-or-no-ship",
+      "surfaces": [
+        "docs/V1-FROZEN-INTERFACE.md:290 (the §4.43 table row)",
+        "crates/benten-graph/src/lib.rs:584-597 (GraphError::TxAborted variant)"
+      ],
+      "evidence": "V1-FROZEN-INTERFACE.md item 3 §4.43 row text reads: '`benten_graph::GraphError::TxAborted` per-variant `#[non_exhaustive]` — APPLY defensively. The freeze MUST not ship without these. Couples to item 5 + item 11; closes atomically in the G-CORE-9 wave.' HEAD `crates/benten-graph/src/lib.rs:585-588` carries an inline comment 'Fwd-2 #997 / umbrella #1207: `#[non_exhaustive]` deliberately NOT applied to this variant... Whether to apply it... is named at docs/future/phase-4-backlog.md §4.43 (v1-API-stabilization sweep). Cascade surfaced, not chased, per HARD RULE clause-(b).' Build-backlog row 8.d at docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:571-574 also lists 8.d as 'Audit + apply defensively per item 11' — open TODO. NO row in docs/V1-FROZEN-INTERFACE-DEFERRED.md for this (`grep -n TxAborted docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns empty). The freeze MUST is in conflict with the code's HARD-RULE-12 clause-(b) deferral.",
+      "consequence": "The freeze-contract item 3 row is unenforceable at v1-beta as written: either the spec MUST is wrong (in which case the row must be edited to acknowledge the deferral) OR the code is wrong (in which case `#[non_exhaustive]` must be applied + the cross-crate `GraphError::TxAborted { reason: ... }` construction sites in benten-engine migrated to a constructor `GraphError::tx_aborted(reason)` per build-backlog row 8.d). Until this is resolved, item 3 §4.43 carries a phantom MUST.",
+      "disposition": "FIX-NOW (R6-R1 fix-pass)",
+      "fix_options": [
+        "(a) Apply `#[non_exhaustive]` per the spec MUST; add `GraphError::tx_aborted(reason)` `pub` constructor; migrate 2 benten-engine production sites at `crates/benten-engine/src/engine_diagnostics.rs:87,105` (~10 LOC migration; build-backlog row 8.d's named work)",
+        "(b) Author DEFERRED.md row D-25 (next number) with the test-cascade rationale + name the destination as G-COMP-1 follow-up; edit V1-FROZEN-INTERFACE.md item 3 §4.43 row to acknowledge the partial-landed posture (mirrors the item 8 partial-landed pattern at Row D-3 / D-17 / D-20)"
+      ],
+      "recommendation": "(a) — the spec text is unambiguous ('MUST not ship without'); the ~10 LOC migration cost is well below the threshold that would trigger HARD-RULE-12 clause-(b). Cross-reference: the WriteContext `#[non_exhaustive]` apply at row 8c (commit `75a1d33a`) absorbed the same cross-crate cascade pattern successfully.",
+      "cross_check_with": "L13 (test-coverage) — verify no test exists asserting `#[non_exhaustive]` IS applied on TxAborted; L17 (frozen-interface verifier) — orthogonal confirmation of the freeze MUST."
+    },
+    {
+      "id": "l14-r1-MAJ-2",
+      "severity": "MAJOR",
+      "title": "Phantom-doc citation cluster: `docs/ENGINE-SPEC.md` referenced from CLAUDE.md required-reading + docs/SCHEMA-DRIVEN-RENDERING.md tracked-doc link + ~10 other docs but file DOES NOT EXIST",
+      "surfaces": [
+        "CLAUDE.md:496 (required reading #5: '`docs/ENGINE-SPEC.md` — the Rust engine blueprint')",
+        "CLAUDE.md:378 (Principal primitive narrative cites '`docs/ENGINE-SPEC.md:312`' for multi-tenancy=cap-scopes line)",
+        "docs/SCHEMA-DRIVEN-RENDERING.md:216 (markdown link '[`ENGINE-SPEC.md`](ENGINE-SPEC.md) — Renderer trait surface; engine integration')",
+        "docs/future/phase-3-backlog.md:2156,2161,2246,2264 (multiple cites)",
+        "docs/history/PHASE-1.md / PHASE-2a.md (multiple cites)"
+      ],
+      "evidence": "`find . -name ENGINE-SPEC.md` returns 0 hits at HEAD 4bbc4cac. `ls docs/ENGINE-SPEC.md` fails. CLAUDE.md §'Key Reading for Fresh Agents' line 496 lists it as canonical required reading #5. CLAUDE.md baked-in #18 Principal primitive narrative at line 378 makes a precise line-number cite (`docs/ENGINE-SPEC.md:312`) that no longer resolves. The SCHEMA-DRIVEN-RENDERING.md cite is a tracked markdown link in a tracked doc — drift-check CI lanes don't catch dangling-doc-links. Historical docs (PHASE-1.md, PHASE-2a.md) cite ENGINE-SPEC as an active source-of-truth document. This is the Phase-1 R7 'aspirational prose but dead code' archetype at the doc level: large amounts of code-claim narrative reference a doc that has been retired without a forwarding pointer.",
+      "consequence": "(i) Fresh agents performing the §'Session-start full context pass' discipline (feedback_session_start_full_context_pass) will hit a missing file when reading CLAUDE.md required-reading #5. (ii) CLAUDE.md baked-in #18 references 'docs/ENGINE-SPEC.md:312' as the multi-tenancy=cap-scopes drift origin — the line is unreachable for current verification. (iii) The cs-r1-2 (technical-spec-tier overlap) finding referenced in `docs/future/phase-3-backlog.md:2246` may have been silently closed by retiring ENGINE-SPEC.md into ARCHITECTURE.md without retroactive doc-link sweep. This is an aspirational-prose-but-dead-doc class.",
+      "disposition": "FIX-NOW (R6-R1 fix-pass)",
+      "fix_options": [
+        "(a) If ENGINE-SPEC.md was intentionally retired and folded into ARCHITECTURE.md (per cs-r1-2 recommendation), do the doc-link sweep: replace every ENGINE-SPEC.md cite with the new home + add an explicit retirement note in `docs/history/` (~10-15 cite edits)",
+        "(b) Recreate ENGINE-SPEC.md as a stub redirect pointing to the canonical successor doc(s)",
+        "(c) Restore ENGINE-SPEC.md from history if its retirement was unintentional"
+      ],
+      "recommendation": "(a) — cs-r1-2 + cs-r1-2's MERGE recommendation appears to have been executed; the post-merge cite-sweep was missed. Quick scan: ARCHITECTURE.md exists at 527 LOC + covers the Renderer trait surface, so the SCHEMA-DRIVEN-RENDERING.md:216 cite should redirect there; CLAUDE.md #5 reading-list should change from ENGINE-SPEC.md → ARCHITECTURE.md (which is already #4 — so CLAUDE.md #5 either drops or redirects to a different canonical surface); CLAUDE.md #18 line-cite at `docs/ENGINE-SPEC.md:312` should be re-traced to its current home (likely docs/ARCHITECTURE.md or docs/INVARIANT-COVERAGE.md). NOTE: This finding has high pim-13 §3.12 value — exactly the R7-equivalent 'spec-claim names a destination that doesn't exist' archetype. Recommend codification candidate: 'phantom-doc-cite scanner' (sibling of the §3.5g cross-doc-mirror scanner) — pim-N candidate if recurrence confirmed by L16.",
+      "cross_check_with": "L16 (doc-coupling sweep, pim-1 §3.5b) — should independently surface this via the cross-doc-mirror discipline."
+    },
+    {
+      "id": "l14-r1-MIN-1",
+      "severity": "MINOR",
+      "title": "INVARIANT-COVERAGE.md row 12 cites `RegistrationError::Invariant12Aggregate` — symbol does not exist; actual variant is `Registration` on `RegistrationViolation`",
+      "surfaces": [
+        "docs/INVARIANT-COVERAGE.md:39 (table row 12: cites `RegistrationError::Invariant12Aggregate`)",
+        "crates/benten-eval/src/lib.rs:539-543 (actual variant `RegistrationViolation::Registration`)"
+      ],
+      "evidence": "`grep -rn Invariant12Aggregate crates/ docs/` returns ONLY docs/INVARIANT-COVERAGE.md:39 (zero hits in code). The actual enforcer variant lives at `crates/benten-eval/src/lib.rs:539-543` as `RegistrationViolation::Registration` (one of `RegistrationViolation`'s variants); the doc-cite renames it incorrectly.",
+      "consequence": "Anyone reading INVARIANT-COVERAGE.md and trying to grep-anchor row 12's enforcer claim fails. Phase-1 R7 'aspirational symbol cite' archetype.",
+      "disposition": "FIX-NOW (R6-R1 fix-pass)",
+      "fix_options": [
+        "Edit docs/INVARIANT-COVERAGE.md:39 enforcer cell from `RegistrationError::Invariant12Aggregate` → `RegistrationViolation::Registration` (the actual variant name) and update the tests cell to cite `crates/benten-eval/tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list` (which is the actual pin per the source-line comment at lib.rs:541)"
+      ],
+      "recommendation": "1-line doc edit; orchestrator-inline trivial."
+    },
+    {
+      "id": "l14-r1-MIN-2",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE.md item 14 conformance-suite citation drift: cites `p2p_interop_conformance_*.rs` + `conformance_baseline.rs` which do not exist; actual files are `tf4_gcore3c_*` named",
+      "surfaces": [
+        "docs/V1-FROZEN-INTERFACE.md:1217-1222 (item 14(a) cite)",
+        "crates/benten-crypto-suite/tests/ (actual: tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs + tf4_gcore3c_swap_matrix_conformance_additional.rs)"
+      ],
+      "evidence": "V1-FROZEN-INTERFACE.md item 14(a) cites: 'The suite lives at `crates/benten-crypto-suite/tests/p2p_interop_conformance_*.rs` + `crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance*.rs` + a new `crates/benten-crypto-suite/tests/conformance_baseline.rs` that pins the v1-beta baseline as the lower bound.' At HEAD: ONLY `tf4_gcore3c_*` files exist (`tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs` + `tf4_gcore3c_swap_matrix_conformance_additional.rs`). The named `p2p_interop_conformance_*.rs` family + `conformance_baseline.rs` are NOT FOUND. Item 14(a) ends with 'FREEZE-WAVE VERIFY: validate this file family exists and covers all 7 swap-matrix arms × both wire directions' — the VERIFY step has not been done.",
+      "consequence": "The freeze-contract item 14's (a) Mandatory baseline conformance suite cite-points to phantom files. The functional coverage exists (the tf4 files DO exercise swap-matrix conformance per their bodies); only the file-name citation is wrong. Sibling to MAJ-2 in flavor.",
+      "disposition": "FIX-NOW (R6-R1 fix-pass)",
+      "fix_options": [
+        "(a) Edit V1-FROZEN-INTERFACE.md item 14(a) to cite actual file names (`tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs` + `tf4_gcore3c_swap_matrix_conformance_additional.rs`) AND DROP the 'p2p_interop_conformance_*.rs' + 'conformance_baseline.rs' phantom references OR",
+        "(b) Mint the named files as thin aliases / re-exports for spec-citability"
+      ],
+      "recommendation": "(a) — preserves the functional contract while removing phantom cites. Update the FREEZE-WAVE VERIFY note to mark verify-done."
+    },
+    {
+      "id": "l14-r1-MIN-3",
+      "severity": "MINOR",
+      "title": "Compromise #30 + #31 lack code-anchor cite (narrative-only at HEAD); narratives accept this for inherent-property compromises but pim-13 §3.12 audit recommends at least one grep-discoverable anchor per Compromise number",
+      "surfaces": [
+        "docs/SECURITY-POSTURE.md:46-47 (Compromises #30 + #31 — both Phase-4-Meta-Core)",
+        "crates/ (no occurrences of 'Compromise #30' or 'Compromise #31')",
+        "Codebase-wide grep returns 0 hits"
+      ],
+      "evidence": "`grep -rn 'Compromise #30\\|Compromise #31' crates/ bindings/ packages/` returns empty. By comparison, Compromise #1/#2/#5/#6/#11/#12/#17/#18/#22/#26 ALL have at least one code anchor (test file or doc comment grep-anchored by number). Compromise #13/#14 are documented via ATTACK-SURFACE-MATRIX.md narrative (acceptable mitigation since they're DX/perf-only). Compromise #30 is mitigation-by-construction (hybrid Ed25519⊕ML-DSA-65 — the codepoint table at `crates/benten-crypto-suite/src/codepoint.rs:49,53,64` IS its anchor in spirit but the numeric-tag cite is absent). Compromise #31 is the revocation-reach-asymmetry honest disclosure (architecture-trade-off only).",
+      "consequence": "(i) Fresh-agent grep-discovery from 'Compromise #N' to construction site fails for #30 + #31. (ii) Phase-1 R7 archetype is conservative here: even acceptable architectural-trade-off Compromises benefit from at least one grep-anchored docstring or test-name reference for the §3.12 audit walk.",
+      "disposition": "FIX-NOW (R6-R1 fix-pass) — but BELONGS-NAMED-NOW-acceptable if R6 chooses to defer",
+      "fix_options": [
+        "(a) Add a `///` doc comment to `SigCodepoint::HYBRID_ED25519_MLDSA65` at `crates/benten-crypto-suite/src/codepoint.rs:49` mentioning 'Compromise #30 (unaudited PQ primitives; MITIGATED by hybrid construction; CLOSES at v1-GM)' as the trust-floor anchor",
+        "(b) Add a `///` doc comment to `AuthorizationGrant` at `crates/benten-caps/src/authorization_grant.rs:232` mentioning 'Compromise #31 (revocation reach in encryption-at-rest) — already-derived keys remain decryptable; UCAN revocation cuts only FUTURE serves' as the seam anchor",
+        "(c) Both — orchestrator-inline trivial (~2 doc-comment edits, ~3 lines each)"
+      ],
+      "recommendation": "(c) — preserves §3.12 grep-discoverable invariant. Orchestrator-inline; very low cost; aligns with the existing pattern for Compromises #1-#28."
+    },
+    {
+      "id": "l14-r1-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "swap_matrix.rs `force_pure_pq_for_test_bypassing_audit_gate` is `#[cfg(test)]`-gated correctly; matches V1-FROZEN-INTERFACE.md item 1 'public surface MUST NOT carry `_for_test` suffixes at v1-GM (a `_for_test` `pub fn` is a red-flag)' discipline since `#[cfg(test)]` removes from production builds — confirms substrate is honored",
+      "surfaces": [
+        "crates/benten-crypto-suite/src/swap_matrix.rs:280-289"
+      ],
+      "evidence": "The `force_pure_pq_for_test_bypassing_audit_gate` `pub fn` at line 282 IS `#[cfg(test)]`-gated (line 280: `#[cfg(test)]`); the docstring (line 277-279) explicitly states 'NEVER call from production paths. Compile-time gated to `#[cfg(test)]` so production builds cannot link this constructor.' Per V1-FROZEN-INTERFACE.md item 1 v1-beta carve-out (line 156-165), this is the proper pattern; the function is correctly excluded from the cargo-public-api baseline.",
+      "consequence": "Positive observation — substrate works as designed.",
+      "disposition": "OBSERVATION (no action)"
+    },
+    {
+      "id": "l14-r1-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "12-primitive irreducibility (CLAUDE.md baked-in #1) cryptographically pinned: `PrimitiveKind` at crates/benten-core/src/subgraph.rs:69-94 carries exactly 12 variants + test pin tf3w preserves invariant",
+      "surfaces": [
+        "crates/benten-core/src/subgraph.rs:69-94",
+        "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs"
+      ],
+      "evidence": "12 variants verified by sed: Read, Write, Transform, Branch, Iterate, Wait, Call, Respond, Emit, Sandbox, Subscribe, Stream. Test pin enumerates all 12 at lines 133-144 and asserts `PrimitiveKind::canonical_tag` exhaustive match. V1-FROZEN-INTERFACE.md item 15.a + item 8 fractal-property pin in tf3w. CLAUDE.md baked-in #1 (most foundational decision) is preserved end-to-end.",
+      "disposition": "OBSERVATION (positive — strong pim-13 §3.12 positive finding)"
+    },
+    {
+      "id": "l14-r1-OBS-3",
+      "severity": "OBSERVATION",
+      "title": "ErrorCode catalog count consistency: V1-FROZEN-INTERFACE.md item 5 cites `CATALOG_VARIANT_COUNT = 192 at G-CORE-9 build-out wave HEAD` — verified 192 entries at crates/benten-errors/tests/stable_shape.rs ALL_CATALOG_VARIANTS list",
+      "surfaces": [
+        "docs/V1-FROZEN-INTERFACE.md:94 (cites 192)",
+        "crates/benten-errors/tests/stable_shape.rs:37-625 (ALL_CATALOG_VARIANTS list)",
+        "crates/benten-errors/tests/stable_shape.rs:627 (CATALOG_VARIANT_COUNT = ALL_CATALOG_VARIANTS.len())"
+      ],
+      "evidence": "Counted 192 `ErrorCode::*` entries in ALL_CATALOG_VARIANTS via awk. The `SubgraphSpecWalkFailed` variant minted at G-CORE-9 V1-FROZEN-INTERFACE row 4 commit `7af94d06` (per spec narrative line 96) is present at crates/benten-errors/tests/stable_shape.rs:622 + crates/benten-errors/src/lib.rs:1354. Dual-tripwire mechanism (count assertion + exhaustive-match) at variant_count_is_pinned test line 640. ✓ Strong positive finding.",
+      "disposition": "OBSERVATION (positive)"
+    },
+    {
+      "id": "l14-r1-OBS-4",
+      "severity": "OBSERVATION",
+      "title": "Sealed CapabilityPolicy hard-seal landed cleanly per V1-FROZEN-INTERFACE.md item 8 commit `5ce8bab6`: `pub(crate) mod sealed { pub trait Sealed {} }` private supertrait at crates/benten-caps/src/policy.rs:50-63 + `CapabilityPolicy: sealed::Sealed + Send + Sync` at policy.rs:354 — rustc-enforced",
+      "surfaces": [
+        "crates/benten-caps/src/policy.rs:50-63 (sealed supertrait)",
+        "crates/benten-caps/src/policy.rs:354 (CapabilityPolicy bound)",
+        "crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs (object-safety pin)"
+      ],
+      "evidence": "Verified by grep + file read. Soft-seal `sealed_marker::SealedCapabilityPolicy` is DELETED (line 27 doc comment confirms 'soft-seal marker `sealed_marker::SealedCapabilityPolicy` was DELETED'). The `__sealed_for_workspace_tests` re-export is `#[doc(hidden)]` per docs spec. Item 8 + CLAUDE.md baked-in #7 (sealed-discipline refinement) + Ben-ratified 2026-05-18 §8-E (a) all align with shipped HEAD. Strong positive finding.",
+      "disposition": "OBSERVATION (positive)"
+    }
+  ],
+  "additional_audit_walk_traces": {
+    "compromise_anchor_walk": {
+      "anchored_with_grep": ["#1", "#2", "#5", "#6", "#11", "#12", "#17", "#18", "#22", "#26"],
+      "anchored_via_doc_only_acceptable": ["#13 (DX-only, ATTACK-SURFACE-MATRIX §3.12)", "#14 (perf-only, ATTACK-SURFACE-MATRIX §3.13)", "#27 RESERVED", "#28 RESERVED", "#29 (registry-tracked architectural, ATTACK-SURFACE-MATRIX cluster)"],
+      "narrative_only_at_HEAD_FIX_NOW_to_add_anchor": ["#30 (l14-r1-MIN-3)", "#31 (l14-r1-MIN-3)"]
+    },
+    "invariant_construction_site_walk": {
+      "all_14_invariants_have_enforcer_and_test_at_HEAD": true,
+      "verification": "Inv-1 cycle detect at structural.rs:632; Inv-4 runtime arm at sandbox.rs:275 (`NestedDispatchDepthExceeded`) + primitive_host.rs:1026 (sandbox_depth threading); Inv-7 sandbox_output at sandbox_output.rs; Inv-11 reserved-prefix at inv_11_*.rs (3 files); Inv-12 aggregate at lib.rs:539-543 (variant name drift surfaced as l14-r1-MIN-1); Inv-13 firing matrix at inv_13_*.rs (2 files); Inv-14 attribution at attribution_*.rs (2 files). All 14 invariants meet INVARIANT-COVERAGE.md §'What active means' (1)(2)(3) criteria.",
+      "deployed_violations_status": "5 violations CLOSED per refinement-audit-2026-05 (META #660); no NEW deployed-invariant violations introduced post-Phase-4-Foundation per HEAD audit."
+    },
+    "v1_frozen_interface_15_items_walk": {
+      "verified_present": ["item 1 partial-landed (4 methods stay `pub fn` per disclosure — verified)", "item 2 read_node_as at engine_wait.rs:1121 ✓", "item 3 §4.60-§4.62 trait surfaces verified", "item 5 WriteContext + #[non_exhaustive] at lib.rs:941 ✓", "item 6 codepoint table (8 of 8 constants) at codepoint.rs ✓", "item 6 swap_matrix 5 constructors at swap_matrix.rs:207-250 ✓", "item 7 install_plugin deletion confirmed (no `fn install_plugin` in module_ecosystem.rs)", "item 8 sealed CapabilityPolicy ✓", "item 11 non_exhaustive sweep applied (13 occurrences in benten-graph; verified application at WriteContext + ManifestEnvelopeRecheckOutcome + ChangeEvent)", "item 12 ManifestEnvelopeRechecker (enum + trait + Noop default) verified", "item 13 IPC_METHODS + Renderer trait + 9 tauri tests verified", "item 15.a SubgraphSpec + walker + walker_as_subgraph fractal ✓", "item 15.b RestrictedScope rename ✓", "item 15.c Scope enum 2-arm ✓", "item 15.d AuthorizationGrant + #[non_exhaustive] ✓", "item 15.e EncryptionClass + #[non_exhaustive] ✓", "item 15.g IROH_BLOCK_SIZE = 16384 ✓"],
+      "drift_flagged": ["item 3 §4.43 TxAborted #[non_exhaustive] MUST violated (l14-r1-MAJ-1)", "item 14(a) conformance-suite file-name cite drift (l14-r1-MIN-2)"]
+    },
+    "claude_md_baked_in_walk": {
+      "anchored": ["#1 12 primitives (OBS-2)", "#2 IVM Algorithm B in benten-ivm", "#3 code-as-graph (handlers as subgraphs)", "#5 BLAKE3 + 0x1e + 0x71 at lib.rs:151-154 ✓", "#5 crypto-agility refinement: codepoint table + swap_matrix verified", "#6 Transaction primitive (Engine::caps()-routed)", "#7 sealed CapabilityPolicy refinement (OBS-4)", "#10 TS DSL crud('post') at dsl.ts:1511 ✓", "#15 v1 milestone gate (V1-FROZEN-INTERFACE.md item 6 PQ-hybrid default substrate)", "#17 3 deployment shapes (Renderer trait + IPC_METHODS for shape c)", "#18 plugin-DID Class-B β `read_node_as` at engine_wait.rs:1121 + napi does NOT expose ✓", "#19 engine extensions (multiple `CLAUDE.md baked-in #19` source-comment anchors in benten-renderer-tauri + benten-sync + benten-eval)"],
+      "drift_flagged": ["#18 'docs/ENGINE-SPEC.md:312' line-cite at CLAUDE.md:378 (phantom doc per l14-r1-MAJ-2)"]
+    },
+    "deployment_shape_walk": {
+      "shape_a_full_peer": "✓ benten-engine + benten-sync (iroh) + benten-graph (redb durable) + benten-eval SANDBOX (wasmtime)",
+      "shape_b_thin_compute": "✓ packages/engine + BrowserBackend cache-only pin at bindings/napi/tests/indexeddb_schema.rs::indexeddb_persistence_thin_client_cache_only_per_baked_in_17",
+      "shape_c_embedded_webview": "✓ crates/benten-renderer-tauri + IPC_METHODS const-allowlist + dep-direction pin at arch_n_benten_renderer_tauri_dep_direction.rs (no tauri/tokio in trait crate)"
+    }
+  },
+  "pim_n_candidates_surfaced_for_R6_meta_sweep": [
+    {
+      "id": "l14-pim-n-candidate-A",
+      "title": "Phantom-doc-cite scanner (sibling of pim-1 §3.5b cross-doc-mirror)",
+      "rationale": "MAJ-2 surfaces a tracked markdown link `[`ENGINE-SPEC.md`](ENGINE-SPEC.md)` to a non-existent file at SCHEMA-DRIVEN-RENDERING.md:216 PLUS phantom line-cite `docs/ENGINE-SPEC.md:312` from CLAUDE.md:378 PLUS multiple history-doc + phase-3-backlog cites. A drift-detect scanner that walks every `[*.md]` markdown link + every `docs/*.md:LINE` cite in tracked docs would prevent recurrence. Cite-drift CI lane (.github/workflows/cite-drift.yml) currently focuses on code-cite, NOT doc-link health.",
+      "recurrence_count": "1 in Phase-4-Meta-Core L14 (with ~10 cite sites in the affected cluster); pre-existing Phase-1+2a history-doc cites don't fire pim-N threshold alone, but if L16 doc-coupling sweep independently surfaces similar drift, the 3+-recurrence threshold per feedback_3_plus_recurrence_deep_sweep would trigger.",
+      "audit_disposition": "Surface to R6 meta-sweep + L15 ADDL methodology lens; not orchestrator-autonomous codification."
+    }
+  ],
+  "audit_completeness_self_check": {
+    "claimed_walk_surfaces": ["V1-FROZEN-INTERFACE.md (1826 LOC; 15 items × sub-clauses)", "V1-FROZEN-INTERFACE-DEFERRED.md (902 LOC; 24 D-rows)", "V1-FROZEN-INTERFACE-BUILD-BACKLOG.md (694 LOC)", "SECURITY-POSTURE.md (2653 LOC; 31 Compromises)", "INVARIANT-COVERAGE.md (352 LOC; 14 Inv rows)", "CLAUDE.md baked-in #1-#19 (read in full pre-audit)", "GLOSSARY.md / ARCHITECTURE.md / CRATES-DEEP-DIVE.md (cross-reference only; not exhaustively walked)", "ATTACK-SURFACE-MATRIX.md (cross-reference for Compromise anchors)"],
+    "sampling_methodology": "(a) Walk every V1-FROZEN-INTERFACE.md item 1-15 spec text → grep construction site at HEAD with file:line cite verification. (b) Walk every Compromise # 1-31 → grep code anchor (test file OR doc-comment OR source-comment). (c) Walk every Invariant 1-14 → verify enforcer + test files exist. (d) Walk every CLAUDE.md baked-in #1-19 → verify construction sites. (e) Spot-check ErrorCode catalog count + sealed-discipline mechanism + 12-primitive count. NOT a 100% line-by-line walk; high-leverage sample focused on freeze contract + baked-in items + load-bearing invariants per §3.12 standing pattern.",
+    "estimated_coverage": "~90% of high-leverage spec-doc surfaces; the remaining 10% is non-load-bearing narrative prose (e.g. historical-context paragraphs, retired-phase docs).",
+    "false_positive_check_per_3_5n": "Every finding ref-pinned independently via git grep + file read at HEAD; no findings derived from another doc's mention without code verification."
+  },
+  "provenance": {
+    "lens_brief": ".addl/phase-4-meta/R6-LENS-CATALOG.md L14 (lines 181-188)",
+    "cross_check_pair": "L13 (test-coverage + SHAPE-not-SUBSTANCE + pim-18 verifier) — independent investigative frame (specs vs tests)",
+    "audit_date": "2026-05-24",
+    "audit_method": "pim-13 §3.12 R7-equivalent spec-to-code-compliance audit + drift-against-substrate, applied to Phase-4-Meta-Core HEAD 4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+    "tools_used": ["git grep", "ls / find", "sed line-window reads", "Read tool file inspection", "manual cross-doc walk"]
+  }
+}
