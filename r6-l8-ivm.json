@@ -1,0 +1,135 @@
+{
+  "lens": "L8 — IVM + CanonicalViews + materializer + Version DAG + code-as-graph (PHASE-WIDE)",
+  "round": "R6 R1",
+  "phase": "Phase-4-Meta-Core",
+  "base_branch": "phase-4-meta-core/r4b-r1-fix-pass",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "branch": "phase-4-meta-core/r6-r1-l8-ivm-phase-wide",
+  "disposition": "APPROVE-WITH-MINOR-FINDINGS",
+  "convergence_disposition": "CONVERGED-pending-MINOR-disposition (0 BLOCKER + 0 MAJOR; 2 MINOR + 3 OBS for triage)",
+  "summary": "Phase-wide L8 verification CONFIRMS substrate integrity at the FREEZE boundary. CLAUDE.md #1 12-primitive irreducibility is structurally preserved (PrimitiveKind enumerates exactly Read/Write/Transform/Branch/Iterate/Wait/Call/Respond/Emit/Sandbox/Subscribe/Stream; the #[non_exhaustive] attribute is the deliberate 13th-decision cushion per the type's docstring, not a back-door to expand within v1-beta). arch-1 IVM↔graph boundary preserved (benten-ivm depends on benten-graph; benten-graph does NOT depend on benten-ivm; ChangeSubscriber trait lives in benten-graph + Subscriber impl in benten-ivm is the one-way seam). Strategy enum is the deliberately-closed 3-arm {A, B, Reserved} surface (NOT #[non_exhaustive] — explicit at strategy.rs:54-58 per D8 ratification + arch-r1-14); G-CORE-9 FREEZE finding R1-Bundle-4-ESCALATED already renamed C→Reserved. CanonicalViews registry surface (algorithm_b.rs:193 + :260) collapses the 4 pre-G-CORE-4 leaked helpers into ONE published query type; the engine names exactly Strategy + CanonicalViews from benten-ivm (CLAUDE.md baked-in #2 thinness). 5 canonical view ids (capability_grants / event_dispatch / content_listing / governance_inheritance / version_current) all enumerated in CANONICAL_REGISTRY (lines 91-126) + reachable from production via register_user_view classification gate + dispatch_for routing. §4.6 vocab (VocabLabel + VocabEdge + Scalar at schema_compiler/vocab.rs) consumed by materializer walk (materializer.rs:759-840). VersionDag D3 unification verified (version_dag.rs:75 Mode + :247 VersionDag + :186 VersionChain trait); Anchor + Version Nodes + CURRENT pointer pattern unified across linear/DAG via single Mode-selected nominal type; Mode::Dag supports branching per CLAUDE.md #18 plugin-library DAG-shape forks. IVM-cache-invalidation seam via ChangeBroadcast (engine/src/change.rs:113-264) registers as graph subscriber; sync layer does not reach into IVM kernel. Wire-format-bearing IVM types (TypedOutputProjection + KernelOutput in subgraph_spec.rs:92,308) carry #[non_exhaustive] per V1-FROZEN-INTERFACE.md item 11 + R2 wire-bytes-load-bearing closure. Two MINOR findings: (1) Row D-22 _for_test/_for_testing cfg-gating sweep enumeration narrative LISTS the crates benten-caps + benten-crypto-suite + benten-drop + benten-core + benten-sync + benten-graph but OMITS benten-ivm — yet benten-ivm.txt cargo-public-api baseline lines 1-5 hold 5 ungated `pub fn with_budget_for_testing(budget: u64) -> Self` constructors (one per view: capability_grants / content_listing / event_handler_dispatch / governance_inheritance / version_current); since the row's freeze-surface narrative claims 'shape (the names + the signatures)' is locked across the 6 listed crates only, the benten-ivm 5 are presently NEITHER cfg-gated NOR baseline-frozen-as-locked-shape under D-22's enumeration. (2) R6-LENS-CATALOG.md §L8 names `benten-platform-foundation/src/canonical_views/` as a surface path but no such directory exists — CanonicalViews registry lives in benten-ivm/src/algorithm_b.rs (the canonical-view *vocabulary* lives in benten-platform-foundation/src/schema_compiler/vocab.rs); catalog surface-name is stale. Three OBSERVATIONS: (O1) Strategy enum's intentionally-closed posture (NOT #[non_exhaustive]) is correctly defended at strategy.rs:54-58 with the rationale 'a future maintenance algorithm would land as a NEW enum (e.g. StrategyV2)' — this is the right call for the FREEZE and structurally enforces v1-beta breakage discipline for downstream matchers. (O2) D-17 broader-enumeration cascade narrative is THOROUGH — every Version DAG container type (Anchor, DagVersionChain, VersionDag, Subgraph, SubgraphBuilder, NodeHandle), every IVM view-instance + kernel-internal surface (Subscriber, CanonicalViewEntry, AlgorithmBView, Projection, EffectiveRules + 5 view-instance structs), every materializer struct (RenderError, MaterializerError, MaterializerDenialFrame, MaterializerWalkInputs, MaterializerOutput, SubscribeAttachToken), every §4.6 vocab enum (VocabLabel, VocabEdge, Scalar) is explicitly named in Row D-17 with the deferred-to-G-COMP-1 destination + per-row anchor; the v1-beta posture (type-shape locked, attribute deferred) is the right placement per the freeze contract. (O3) Materializer is correctly DECOUPLED from IVM Strategy enum — the materializer walks SubgraphSpec via MaterializerEngine trait + does NOT consume Strategy dispatch (which is internal to IVM kernel routing); this preserves the CLAUDE.md #2 IVM thinness boundary at the materializer layer too. No additional pub types in L8-surface lack non_exhaustive that are not already enumerated in D-17 + D-22 cascade.",
+  "findings": [
+    {
+      "id": "L8-r1-MIN-1",
+      "severity": "MINOR",
+      "category": "phase-wide-enumeration-gap",
+      "title": "Row D-22 _for_test/_for_testing crate enumeration omits benten-ivm despite 5 baselined ungated `with_budget_for_testing` constructors",
+      "evidence": [
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 lists crates: benten-caps (37) + benten-crypto-suite (52) + benten-drop (14) + benten-core (8) + benten-sync (3) + benten-graph (1); enumerated source ≈84 pub fn declarations across the same 6 crates",
+        "docs/public-api/benten-ivm.txt holds 5 baselined entries: CapabilityGrantsView::with_budget_for_testing + ContentListingView::with_budget_for_testing + EventDispatchView::with_budget_for_testing + GovernanceInheritanceView::with_budget_for_testing + VersionCurrentView::with_budget_for_testing",
+        "Source-side: crates/benten-ivm/src/views/{capability_grants,content_listing,event_handler_dispatch,governance_inheritance,version_current}.rs each carries one `pub fn with_budget_for_testing(budget: u64) -> Self` WITHOUT #[cfg(any(test, feature = \"testing\"))] gate",
+        "The 5 IVM `with_budget_for_testing` constructors mint a view with a low-budget tag for proptest exhaustion paths; they pose the same test-only-helper-leak-into-prod-surface risk D-22 addresses for the 6 enumerated crates"
+      ],
+      "disposition": "FIX-NOW (orchestrator-direct doc-tighten — extend Row D-22 narrative crate enumeration to add `benten-ivm` as 7th crate with 5 source-side pub fns / 5 baseline entries; the consumption-sweep step 1 + step 4 cargo-public-api regeneration already cover ALL crates if the enumeration is comprehensive)",
+      "fix_destination": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 — extend the 'Frozen surface (v1-beta)' bullet's crate enumeration to: `benten-caps.txt` 37 + `benten-crypto-suite.txt` 52 + `benten-drop.txt` 14 + `benten-core.txt` 8 + `benten-sync.txt` 3 + `benten-graph.txt` 1 + `benten-ivm.txt` 5 = 120 baseline; source ≈89 pub fn (84 prior + 5 IVM); add 'benten-ivm/testing' feature chain to the Cargo.toml cascade in step 2 if benten-ivm currently lacks `testing = []`. Pure doc-tighten + Cargo.toml line; no source-side test surface changes at v1-beta (consumption is G-COMP-1 per the row)."
+    },
+    {
+      "id": "L8-r1-MIN-2",
+      "severity": "MINOR",
+      "category": "catalog-surface-name-drift",
+      "title": "R6-LENS-CATALOG.md §L8 Surfaces names non-existent path `benten-platform-foundation/src/canonical_views/`",
+      "evidence": [
+        ".addl/phase-4-meta/R6-LENS-CATALOG.md:110 'Surfaces: `benten-ivm/` + `benten-platform-foundation/src/canonical_views/` + `benten-core/src/version/` + `benten-core/src/version_dag.rs`'",
+        "Filesystem: `find crates/benten-platform-foundation/src -name canonical_views*` returns nothing; `find crates -name canonical_views*` returns nothing",
+        "The actual CanonicalViews registry type lives at `crates/benten-ivm/src/algorithm_b.rs:193` (`pub struct CanonicalViews`); the canonical-view *vocabulary* (§4.6) lives at `crates/benten-platform-foundation/src/schema_compiler/vocab.rs:14` (VocabLabel + VocabEdge + Scalar)",
+        "Other §L8 paths are accurate (`crates/benten-ivm/`, `crates/benten-core/src/version_dag.rs`); only the platform-foundation path is stale"
+      ],
+      "disposition": "FIX-NOW (orchestrator-direct doc-tighten — replace the non-existent path with `crates/benten-platform-foundation/src/schema_compiler/vocab.rs` per §4.6 vocab seam OR drop the platform-foundation path entirely since CanonicalViews registry lives in benten-ivm)",
+      "fix_destination": ".addl/phase-4-meta/R6-LENS-CATALOG.md §L8 'Surfaces' line — replace `benten-platform-foundation/src/canonical_views/` with `crates/benten-platform-foundation/src/schema_compiler/vocab.rs` (or `…/materializer.rs` if the catalog meant the materializer layer's vocab consumption). One-line doc fix."
+    }
+  ],
+  "observations": [
+    {
+      "id": "L8-r1-OBS-1",
+      "category": "positive-defensive-design",
+      "title": "Strategy enum's intentionally-closed posture (NOT #[non_exhaustive]) is correctly defended at v1-beta freeze",
+      "evidence": [
+        "crates/benten-ivm/src/strategy.rs:54-58 docstring: '`#[non_exhaustive]` is **deliberately omitted** — D8 pins the closed `{ A, B, Reserved }` set. A future maintenance algorithm would land as a NEW enum (e.g. `StrategyV2`) so the runtime contract here stays stable.'",
+        "G-CORE-9 R1 Bundle 4 ESCALATED already landed the Strategy::C → Strategy::Reserved rename (post-PR #1346 ratification) closing the prior third-variant misnaming",
+        "Engine consumes Strategy via 3-arm exhaustive match at engine_views.rs:689-701 (A => refuse; Reserved => refuse; B => accept); the compiler-enforced exhaustiveness IS the v1-beta breakage signal for any future 4th variant"
+      ],
+      "disposition": "OBSERVE (correct posture; supports L18 breaking-change-ledger discipline)"
+    },
+    {
+      "id": "L8-r1-OBS-2",
+      "category": "deferred-row-coverage-thoroughness",
+      "title": "Row D-17 enumeration cascade IS comprehensive across the L8 phase-wide pub-type surface",
+      "evidence": [
+        "Row D-17 (V1-FROZEN-INTERFACE-DEFERRED.md:499-580) explicitly names: benten-engine 13-pub-struct outcome.rs set + AtriumConfig/SyncStatus/UserViewInputPattern/TraceStep/StreamCursor/SubscribeCursor/EngineViewsHandle; benten-ivm SubgraphSpec/KernelInput/ViewState/ViewBudget/ViewQuery/ViewResult/ViewDefinition/LabelPattern + Subscriber/CanonicalViewEntry/AlgorithmBView/Projection/EffectiveRules + 5 view-instance structs; benten-platform-foundation VocabLabel/VocabEdge/Scalar + RenderError/MaterializerError/MaterializerDenialFrame/MaterializerWalkInputs/MaterializerOutput/SubscribeAttachToken; benten-core Mode/VersionError/VersionDagError/Anchor/DagVersionChain/VersionDag/Subgraph/SubgraphBuilder/NodeHandle",
+        "Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) were correctly NOT deferred — closed at G-CORE-9 R2 Bundle R2.8 with 5-test-site cascade",
+        "Spot-check: confirmed Mode at version_dag.rs:75 lacks non_exhaustive (deferred per D-17); VersionError at version.rs:105 lacks it (deferred); MaterializerError at materializer.rs:209 lacks it (deferred); VocabLabel/VocabEdge/Scalar lack it (deferred). All consistent with D-17 v1-beta posture ('type shape locked; attribute deferred')"
+      ],
+      "disposition": "OBSERVE (deferred-row coverage is correct; G-COMP-1 destination accepts the cascade)"
+    },
+    {
+      "id": "L8-r1-OBS-3",
+      "category": "boundary-preservation",
+      "title": "Materializer is correctly DECOUPLED from IVM Strategy enum — preserves CLAUDE.md #2 IVM thinness at the materializer layer",
+      "evidence": [
+        "crates/benten-platform-foundation/src/materializer.rs public surface includes MaterializerEngine trait + Materializer trait + walk inputs/outputs but does NOT import or consume `benten_ivm::Strategy`",
+        "Materializer reads via the MaterializerEngine seam (engine-side wrapper around benten_engine::Engine); does NOT reach into IVM kernel dispatch",
+        "Materializer walks a SubgraphSpec independently of IVM view registration (the CanonicalViews subscription seam is for view-cache-invalidation per CLAUDE.md baked-in #2; materializer uses a different read path through Engine::read_node_as)",
+        "This preserves the engine-boundary thinness ('the engine names exactly ONE type from benten-ivm — Strategy — and ONE registry-query type — CanonicalViews') at the materializer layer too"
+      ],
+      "disposition": "OBSERVE (positive arch-thinness signal; reinforces L8 12-primitive-irreducibility verdict)"
+    }
+  ],
+  "phase_wide_checks": {
+    "claude_md_1_12_primitive_irreducibility": {
+      "status": "PRESERVED",
+      "evidence": "crates/benten-core/src/subgraph.rs PrimitiveKind enumerates exactly Read/Write/Transform/Branch/Iterate/Wait/Call/Respond/Emit/Sandbox/Subscribe/Stream (12 variants); #[non_exhaustive] at line 68 is the deliberate 13th-decision cushion per the type's docstring (lines 54-67) — Phase-2+ may EVENTUALLY decide to add a 13th, but v1-beta locks the 12. No new PrimitiveKind variant minted in Phase-4-Meta-Core."
+    },
+    "arch_1_boundary": {
+      "status": "PRESERVED",
+      "evidence": "benten-ivm Cargo.toml depends on benten-core + benten-graph + benten-errors; benten-graph Cargo.toml depends on benten-core + benten-errors + blake3 (NOT benten-ivm). ChangeSubscriber trait lives at benten-graph::store::ChangeSubscriber (re-exported from benten_graph crate root); Subscriber impl at benten-ivm/src/subscriber.rs:363 implements ChangeSubscriber for Subscriber — one-way push from graph to IVM. Engine names exactly Strategy + CanonicalViews from benten-ivm (CLAUDE.md baked-in #2 thinness)."
+    },
+    "strategy_carve_out_registry": {
+      "status": "HOLDS",
+      "evidence": "Strategy enum at strategy.rs:59-77 has exactly 3 variants A + B + Reserved; #[non_exhaustive] DELIBERATELY OMITTED. dispatch_for at algorithm_b.rs:358 maps 5 canonical view ids → Strategy::A and everything else → Strategy::B. Strategy::Reserved is named-but-unimplemented (constructor returns ViewError::StrategyNotImplemented). Engine consumes via 3-arm exhaustive match at engine_views.rs:689 (Strategy::A refuse, Strategy::Reserved refuse, Strategy::B accept). G-CORE-9 R1 Bundle 4 ESCALATED already landed the C→Reserved rename + 3 DSL ErrorCode mints per Row D-19."
+    },
+    "non_exhaustive_enumeration_d17_coverage": {
+      "status": "COVERS-L8-PHASE-WIDE-WITH-1-CASCADE-GAP",
+      "evidence": "D-17 enumeration covers: IVM view-instance + kernel-internal (Subscriber, CanonicalViewEntry, AlgorithmBView, Projection, EffectiveRules, 5 view-instance structs, SubgraphSpec, KernelInput, ViewState, ViewBudget, ViewQuery, ViewResult, ViewDefinition, LabelPattern) ✓; benten-core Version DAG (Mode, VersionError, VersionDagError, Anchor, DagVersionChain, VersionDag, Subgraph, SubgraphBuilder, NodeHandle) ✓; platform-foundation §4.6 vocab + materializer (VocabLabel, VocabEdge, Scalar, RenderError, MaterializerError, MaterializerDenialFrame, MaterializerWalkInputs, MaterializerOutput, SubscribeAttachToken) ✓; benten-engine outcome.rs 13-pub-struct set + EngineViewsHandle + AtriumConfig + SyncStatus + UserViewInputPattern + TraceStep + StreamCursor + SubscribeCursor ✓. Wire-bytes-bearing types correctly NOT deferred (TypedOutputProjection + KernelOutput already #[non_exhaustive] per R2 closure). Cascade gap: 1 MINOR — Row D-22 _for_test/_for_testing crate enumeration omits benten-ivm despite 5 baselined ungated constructors (see L8-r1-MIN-1)."
+    }
+  },
+  "ground_truth_verification": {
+    "method": "Direct code inspection at base SHA 4bbc4cac (specified) — no agent stale-view risk",
+    "files_inspected": [
+      "crates/benten-core/src/subgraph.rs (PrimitiveKind 12 variants confirmed; non_exhaustive attribute confirmed)",
+      "crates/benten-core/src/version_dag.rs (Mode + VersionDag + VersionDagError; D3 unification narrative + non_exhaustive on error type only)",
+      "crates/benten-core/src/version.rs + version_chain.rs (Anchor, DagVersionChain, VersionError, VersionDagError)",
+      "crates/benten-ivm/Cargo.toml (deps: benten-core + benten-graph + benten-errors)",
+      "crates/benten-graph/Cargo.toml (deps: benten-core + benten-errors + blake3 + serde — NOT benten-ivm)",
+      "crates/benten-ivm/src/strategy.rs (Strategy 3-arm enum; deliberately-closed posture documented)",
+      "crates/benten-ivm/src/algorithm_b.rs (CanonicalViews registry; 5-canonical-view CANONICAL_REGISTRY; dispatch_for routing; AlgorithmBView pub surface)",
+      "crates/benten-ivm/src/subgraph_spec.rs (TypedOutputProjection + KernelOutput #[non_exhaustive]; SubgraphSpec + KernelInput not)",
+      "crates/benten-ivm/src/view.rs (ViewError #[non_exhaustive]; ViewState/ViewBudget/ViewQuery/ViewResult/ViewDefinition not)",
+      "crates/benten-ivm/src/subscriber.rs (ChangeSubscriber impl — arch-1 one-way seam)",
+      "crates/benten-ivm/src/views/{capability_grants,content_listing,event_handler_dispatch,governance_inheritance,version_current}.rs (5 pub fn with_budget_for_testing — D-22 enumeration gap)",
+      "crates/benten-platform-foundation/src/materializer.rs (MaterializerEngine + Materializer + Renderer; pub surface enumeration; non_exhaustive absent — deferred per D-17)",
+      "crates/benten-platform-foundation/src/schema_compiler/vocab.rs (VocabLabel + VocabEdge + Scalar — §4.6 vocab)",
+      "crates/benten-engine/src/engine_views.rs (Strategy 3-arm match at register_user_view + CanonicalViews registry consumption)",
+      "crates/benten-engine/src/change.rs (ChangeBroadcast — IVM-cache-invalidation seam via ChangeSubscriber registration)",
+      "docs/V1-FROZEN-INTERFACE-DEFERRED.md (Row D-17 + Row D-22 cross-checked against actual code)",
+      "docs/public-api/benten-ivm.txt + benten-core.txt (cargo-public-api baselines)"
+    ],
+    "compilation_status": "cargo check -p benten-ivm -p benten-core CLEAN at base SHA",
+    "no_disagreement_with_prior_findings": "No prior R4/R6 L8 phase-wide artifact existed (R4 used 6 different lenses per R4-BRIEF-common.md); this is the first phase-wide L8 sweep"
+  },
+  "process_disciplines_applied": [
+    "feedback_review_finding_ground_truth_verify — every claim above ref-pinned to file:line at base SHA 4bbc4cac",
+    "feedback_no_defer_HARD_RULE — both MINOR findings carry FIX-NOW disposition + named destinations (no phantom deferral; doc-tighten is orchestrator-direct trivial)",
+    "feedback_pim_2_amendment_per_finding_granularity — each finding cites SPECIFIC arm (D-22 narrative crate enumeration; R6-LENS-CATALOG §L8 Surfaces line) not umbrella section",
+    "feedback_pim_18_shape_not_substance_pre_flight — 5 benten-ivm with_budget_for_testing constructors are SUBSTANTIVELY present (5 source files + 5 baseline entries), not aspirational; verified via grep + cargo-public-api baseline cross-check",
+    "feedback_agent_output_must_commit_before_return — this JSON committed before return per §3.6i + agent-output-discipline",
+    "feedback_pim_n_sweep_completeness_self_verify — D-17 enumeration cross-checked against actual code surfaces (PASS; one cascade gap surfaced as L8-r1-MIN-1)"
+  ],
+  "q5_convergence_assessment": {
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 2,
+    "observation_count": 3,
+    "termination_signal": "BLOCKER + MAJOR both zero — Q5 stopping condition satisfied for L8 lens. R6.1 round-level convergence depends on cross-lens aggregate (other lenses may have BLK/MAJ). MINOR findings addressable inline per §3.6i (non-gating per CLAUDE.md rule 9 Q5).",
+    "iterate_to_convergence_disposition": "L8 phase-wide CONVERGED at R1; no L8-specific R2 round needed. If R6 R2 fires (e.g. due to other-lens fix-pass invalidating L8 ground-truth), the 2 MINOR fixes (D-22 doc-tighten + R6-LENS-CATALOG §L8 Surfaces line correction) ship inline."
+  }
+}
