@@ -1,0 +1,248 @@
+{
+  "lens": "L18 pre-v1-freeze hygiene + breaking-change ledger — PHASE-WIDE",
+  "round": "R6 R1 phase-close",
+  "council": "Phase-4-Meta-Core R6 phase-close convergence (19-lens full per Ben 2026-05-24)",
+  "branch": "phase-4-meta-core/r6-r1-l18-breaking-change-phase-wide",
+  "base_branch": "phase-4-meta-core/r4b-r1-fix-pass",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "main_head_at_review": "12b42130 (post-R4b-R2 latest)",
+  "prior_round_recap": {
+    "r4_l18_disposition": "APPROVE-CONVERGED (FREEZE-council scope only — verified 13+ R1-brief-charter PRs enumerated; closed l18-r1-2/r2-1/r2-2/r2-3/r2-4/r3-1; same-shape recurrence chain broken at R3-FP)",
+    "r4_l18_convergence": "Q5 termination satisfied (0 BLK + 0 MAJ + 0 MIN + 4 OBS) at FREEZE-council scope",
+    "r4_open_forward_looking": "l18-r4-4 OBS forward-looking — '~15 additional PRs in 8141b94..HEAD range that carry real break-OK content but were not enumerated in the R1 lens brief or the ledger remain not catalog'd at R4 ... RECOMMENDATION carries forward at orchestrator discretion or close at tag-time if Ben deems the 15-PR catalog sufficient for the v1-beta release notes.'",
+    "r6_brief_charter": "Re-run L18 BROADER than FREEZE-council — verify EVERY break-OK change shipped this phase is enumerated in BREAKING-CHANGES.md ledger. L18 R2/R3/R4 noted ~15 substrate canary break-OK changes not enumerated; verify that gap is closed OR named-deferred at R6. Check Cohort 5 _for_test deferral (Row D-22) accurate."
+  },
+  "disposition": "APPROVE-WITH-FIXES",
+  "r6_r1_convergence_disposition": "NOT-CONVERGED (1 MAJOR + 2 MINOR + 3 OBS). Strict Q5 termination NOT satisfied at lens level (1 MAJOR open). The R6 phase-wide scope expansion (per Ben-ratified 2026-05-24 brief) surfaces the previously-OBS-forward-looking gap as a genuine FIX-NOW per HARD RULE 12 + per the explicit brief mandate 'verify that gap is closed OR named-deferred at R6'. Path-(b) named-deferral via NEW Row D-25 is the lowest-LOC closure; Path-(a) full enumeration of the 13 substrate-canary PRs as Cohort rows is the audit-trail-strongest closure. Either closes the lens; the R6 FP authoring agent picks per orchestrator/Ben preference.",
+  "summary": "R6 R1 L18 phase-wide re-run confirms the FREEZE-council R4 closure is intact AND surfaces the previously-forward-looking ~15-PR enumeration gap as a genuine FIX-NOW per the R6 brief charter. Phase-wide audit: 42 merged PRs in 8141b94..4bbc4cac walk; 15 enumerated as own ledger rows in docs/V1-BETA-BREAKING-CHANGES.md (PR #1238 + #1271 + #1276 + #1294 + #1295 + #1299 + #1304 + #1310 + #1331 + #1338 + #1339 + #1340 + #1341 + #1342 + #1344); 27 NOT enumerated. Of the 27 unenumerated PRs, classification: (a) 13 carry SUBSTANTIAL break-OK content (substrate canaries + Strategy-C consolidations) — these are the genuine gap; (b) 6 are R-FP / G-CORE-9 fix-pass PRs (#1346/#1347/#1348/#1349 already accounted-for in Cohort 3 bundle rows; one #1346 not as its own row but covered via Cohort-3 'R1 fix-pass additions' sub-heading); (c) 8 are CI-infra / dep-bump / docs-only (#236 + #1254 + #1263 + #1313 + #1314 + ~3 R-FP) which legitimately do NOT need ledger rows. The R6 R4b L1 fix-pass already added cross-wave §4-B + §4-C as Row D-23/D-24 (per commit 8240a56c); the same pattern (named-deferral via NEW Row D-25 'V1-BETA-BREAKING-CHANGES.md ledger completion sweep' or per-PR Cohort 3 sub-rows) closes the lens. Cohort 5 Row D-22 cite verified honest at docs/V1-FROZEN-INTERFACE-DEFERRED.md:747-846 with full 7-sub-task breakdown + no-regression-pin (sub-task 5) + brief-template mandate (sub-task 6) preserving forward-protection.",
+  "phase_wide_audit_method": {
+    "commit_range": "8141b94..4bbc4cac (Phase-4-Meta-Core full open-to-current-base)",
+    "merged_pr_count": 42,
+    "enumeration_method": "git log --grep='(#' + grep '\\(#[0-9]+\\)$' against final-commit-of-merge-squash",
+    "enumerated_pr_count_in_ledger": 15,
+    "non_enumerated_pr_count": 27,
+    "audit_command_set": [
+      "git log --oneline 8141b94..4bbc4cac | wc -l = 46 commits (42 distinct PR-squashes per (#NNNN) extraction)",
+      "grep -oE 'PR #[0-9]+' docs/V1-BETA-BREAKING-CHANGES.md | sort -u | wc -l = 15 distinct PR-cites",
+      "python3 set-diff: 28 PRs merged but not in ledger (corrected: 27 after subtracting PR #1338 which IS in ledger but cited via inner-PR-of-batch-#1340)",
+      "per-PR pub-surface delta: git show $sha -- 'crates/**/*.rs' 'bindings/**/*.rs' | grep -cE '^\\+pub |^\\+\\s+pub fn |^\\+#\\[non_exhaustive\\]'"
+    ]
+  },
+  "unenumerated_pr_classification": {
+    "category_a_substantial_break_ok_unenumerated_13_PRs": [
+      {
+        "pr": "#1319",
+        "title": "G-CORE-3a CANARY — KeyMaterial + AeadEnvelope + structural_kdf + X-Wing-hybrid wrap (R5)",
+        "pub_delta": "+47 / -1",
+        "content": "mints KeyMaterial + AeadEnvelope + structural_kdf module + X-Wing-hybrid wrap; PQ-hybrid-default-encryption substrate per RATIFIED-pq-default-reframe-2026-05-19",
+        "ledger_coverage": "INDIRECT only — #1344 row cites 'AeadKeyMaterial is the crypto-suite distinct type' rename; Cohort 4 D-13 (structural_kdf info-tag codepoint-binding) + D-15d (AeadEnvelope::to_wire_bytes nonce-panic→Result) reference the types but no own-row enumerates the mint",
+        "should_have_row_in": "Cohort 1 (wire-format) + Cohort 2 (public-API)"
+      },
+      {
+        "pr": "#1323",
+        "title": "G-CORE-3d — per-Node AEAD + two-CID map + per-chunk AEAD ≥64KiB (R5)",
+        "pub_delta": "+33 / 0",
+        "content": "per-Node AEAD + two-CID map at benten-graph; per-chunk AEAD ≥64KiB; wire-format-bearing",
+        "ledger_coverage": "NONE — wire-format claims in Cohort 1 only reference #1331 (SnapshotBlob v1→v2); the per-Node AEAD format-shape is undocumented at the ledger",
+        "should_have_row_in": "Cohort 1 (wire-format)"
+      },
+      {
+        "pr": "#1324",
+        "title": "G-CORE-3b — RestrictedSpec + AuthorizationGrant + Scope + chain validator (R5)",
+        "pub_delta": "+40 / 0",
+        "content": "mints RestrictedSpec + AuthorizationGrant + Scope + chain validator (original mint; later renamed at #1344)",
+        "ledger_coverage": "PARTIAL — #1344 row enumerates the RENAME but the original MINT (the API-shape introduction at v1-beta) is not enumerated as its own row; downstream-consumer reading the ledger sees 'RestrictedSpec→RestrictedScope rename' without context that the type was minted in the same phase",
+        "should_have_row_in": "Cohort 2 (public-API shape)"
+      },
+      {
+        "pr": "#1307",
+        "title": "G-CORE-2 — #1300 signature-agility integration crate (canary)",
+        "pub_delta": "+101 / -3",
+        "content": "signature-agility integration crate (NEW crate); codepoint-dispatched signature primitives per #5 crypto-agility refinement",
+        "ledger_coverage": "NONE — the new crate's pub surface (largest single-PR pub-add this phase) is undocumented at the ledger",
+        "should_have_row_in": "Cohort 2 (public-API shape) — new crate is the biggest possible additive surface change"
+      },
+      {
+        "pr": "#1309",
+        "title": "G-CORE-5 — D3 VersionDag unification (one type + opt-in Mode + shared trait + one CURRENT)",
+        "pub_delta": "+15 / 0",
+        "content": "VersionDag substrate unification per D3 — replaces two prior version-chain types with one shared shape",
+        "ledger_coverage": "NONE",
+        "should_have_row_in": "Cohort 2 (public-API shape; substrate consolidation)"
+      },
+      {
+        "pr": "#1311",
+        "title": "G-CORE-4 — D1 CanonicalViews A2 seam + IVM 5-arm + materializer walk + §4.6 vocab",
+        "pub_delta": "+20 / -4",
+        "content": "CanonicalViews A2 seam + IVM 5-arm strategy enum extension + materializer walk + §4.6 vocab (8 typed-field-Node labels + 5 labeled edges + 8 scalars)",
+        "ledger_coverage": "NONE — the IVM Strategy enum's 5-arm extension is the precursor to Row D-19 (Strategy::C→Reserved rename) but the original 5-arm landing is not enumerated",
+        "should_have_row_in": "Cohort 2 (public-API shape; IVM-strategy enum extension)"
+      },
+      {
+        "pr": "#1312",
+        "title": "G-CORE-7 — install/lifecycle hardening (§4.21 + §4.35 + §4.41 + §4.20 + §4.19(b)/§4.32 + §6.4)",
+        "pub_delta": "+9 / 0",
+        "content": "install/lifecycle hardening — Engine surface extensions across 6 §4.x backlog rows",
+        "ledger_coverage": "NONE — the Engine install-lifecycle additions land alongside #1310 (legacy-path deletion which IS enumerated); the additive half is undocumented",
+        "should_have_row_in": "Cohort 2 (public-API shape; Engine surface extension)"
+      },
+      {
+        "pr": "#1325",
+        "title": "Strategy-C wave-1 consolidation — G-CORE-DSL chunk-1 + G-CORE-3w walker + G-CORE-10 Option-C + G-CORE-6a verify-pass",
+        "pub_delta": "+56 / 0",
+        "content": "largest unenumerated additive batch — DSL chunk-1 (5 of 13 DSL issues closed; ~pub-surface mints in dsl-compiler) + G-CORE-3w walker (SubgraphSpec module + walker_as_subgraph fractal) + G-CORE-10 Option-C Mutex-split (closes #652 hazard) + G-CORE-6a verify-pass (SubgraphBuilder.build() single-fallible-point)",
+        "ledger_coverage": "PARTIAL — #1340 row cites G-CORE-10 Option-C as 'Mutex-split cancellation-stopgap (closes #652)' but the cite is on #1340 not #1325; the WALKER mint + DSL chunk-1 + G-CORE-6a SubgraphBuilder.build() are NOT in the ledger",
+        "should_have_row_in": "Cohort 2 (public-API shape; multi-subsystem additive batch)"
+      },
+      {
+        "pr": "#1326",
+        "title": "G-CORE-DSL chunk-2 — close #663 #760 #929 #931 #934 (R5)",
+        "pub_delta": "0 / 0",
+        "content": "5 DSL issues closed; pub-surface impact appears 0 at grep but per-issue narrative likely has rename or behavior changes",
+        "ledger_coverage": "NONE — but DSL chunk-3 (#1339) IS enumerated; chunk-2 left out asymmetrically",
+        "should_have_row_in": "Cohort 2 (public-API shape; DSL chunk-2 closures companion to chunk-3 row)"
+      },
+      {
+        "pr": "#1235 + #1237",
+        "title": "Wave-1/2 Strategy-C batches — renderer Pattern-F + Transport + quick-wins + benten-core TIER-1 perf + benten-graph trait shape",
+        "pub_delta": "+12/-12 (#1235) + +8/-1 (#1237)",
+        "content": "benten-graph trait shape change (= 'trait shape' is verbatim break-OK signal) + renderer Pattern-F additions + transport surface",
+        "ledger_coverage": "NONE",
+        "should_have_row_in": "Cohort 2 (public-API shape; benten-graph trait shape = break-OK)"
+      },
+      {
+        "pr": "#1251",
+        "title": "#707-trust-subset — collapse device-revocation/recheck parallel pipes into single chain-validation seam",
+        "pub_delta": "+0 / +0",
+        "content": "trust-subset collapse — precursor to #1271 chain-validation seam consolidation; PR-body indicates substrate prep",
+        "ledger_coverage": "INDIRECT — #1271 enumeration cites the CONSOLIDATION but #1251 is the device-recheck collapse precursor",
+        "should_have_row_in": "Cohort 2 (public-API shape; substrate collapse companion to #1271)"
+      },
+      {
+        "pr": "#1261 + #1262 + #1269 + #1277 + #1282 + #1290",
+        "title": "Strategy-C consolidation batches (refinement-audit drain)",
+        "pub_delta": "+8/-22 (#1261) + +9/-17 (#1262) + +11/-5 (#1269) + +22/-19 (#1277) + +5/-2 (#1282) + +6/-10 (#1290)",
+        "content": "consolidations across all crate-spines — net pub-surface DECREASES (#1261 -14 net pub, #1262 -8 net, #1290 -4 net) indicate deletions of pub surfaces; deletions ARE break-OK changes",
+        "ledger_coverage": "NONE — 6 Strategy-C batches with cumulative -27 pub-surface delta (deletions) are entirely undocumented",
+        "should_have_row_in": "Cohort 2 (public-API shape; Strategy-C drain deletions)"
+      }
+    ],
+    "category_b_r_fp_already_accounted_for_5_PRs": [
+      "#1346 — G-CORE-9 FREEZE R1 fix-pass (74 findings; Cohort 3 'G-CORE-9 R1 fix-pass additions (this PR)' captures contents via Bundles 3+4+9+10+11+2+11-L2-MAJ-1+11-L2-MIN-2+3a+3b+11b)",
+      "#1347 — G-CORE-9 FREEZE R2 fix-pass (47 findings; Cohort 3 'G-CORE-9 R2 fix-pass additions' captures via Bundles R2.8+R2.5 added at R3-FP per L18-r3-1 closure)",
+      "#1348 — G-CORE-9 R3 fix-pass (verified by R4 L18 evidence — git diff filtered for pub-surface returns 0 lines; intrinsically not-break-OK)",
+      "#1349 — G-CORE-9 R4 fix-pass (6 MINORs orchestrator-direct; doc-only/test-only sweep)",
+      "#1344 — G-CORE-9 FREEZE TERMINAL R5 wave (already heavily enumerated via 6 own rows + 'this PR' Cohort 3 anchor)"
+    ],
+    "category_c_legitimately_no_ledger_row_needed_8_PRs": [
+      "#236 — dependabot dev-deps minor-and-patch group bump",
+      "#1254 — CI build+test timeout 25→50 + cancel-in-progress (CI-infra-only, no source-pub changes)",
+      "#1263 — dependabot deps minor-and-patch group bump (5 updates)",
+      "#1303 — phase-4-meta-core R0→R4 pre-work substrate (R3 RED-phase test corpus + G-CORE-2 canary stub + Compromise #30 doc; pub-surface delta = 0; test-fixture + doc only)",
+      "#1313 — infra(ci) CARGO_INCREMENTAL=0 + line-tables-only debug + Free disk space (CI-infra-only)",
+      "#1314 — docs(phase-4-backlog) §3.10 S&C row TENTATIVE→RATIFIED (orchestrator-local docs only)"
+    ]
+  },
+  "cohort_5_for_test_deferral_audit": {
+    "row_D_22_cite_in_ledger": "docs/V1-BETA-BREAKING-CHANGES.md:246",
+    "row_D_22_authoritative_destination": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:747-846 (100-line authoritative row per R4b L6-MAJOR-1 pivot from path-(a) FIX-NOW to path-(b) DEFER-NAMED-NOW)",
+    "verification": "CITE ACCURATE — Row D-22 enumerates the 115-surface count + 6-baseline breakdown per crate (benten-caps 37 / benten-crypto-suite 52 / benten-drop 14 / benten-core 8 / benten-sync 3 / benten-graph 1) matching the ledger cite exactly. The 7-sub-task closure plan + the no-regression pin at sub-task 5 + the brief-template mandate at sub-task 6 are all present and forward-protective. The v1-beta posture clause 'No security property degrades' is honest.",
+    "deferral_legitimacy": "VALID per HARD RULE 12 clause-(b) BELONGS-NAMED-NOW — the named destination receives the entry NOW (verified — 100-line row exists at docs/V1-FROZEN-INTERFACE-DEFERRED.md:747); the row carries the full closure plan + no-regression pin name + rationale per R4b L6-MAJOR-1 pivot orchestrator decision rebuttable at next morning review",
+    "no_regression_pin_status": "PIN_NAMED_NOT_VERIFIED — sub-task 5 names `crates/phase-3-workspace-tests/tests/g_core_9_for_test_cfg_gating_audit.rs` as the pin destination but the file may not yet exist at HEAD (lands at G-COMP-1 Row D-22 sub-task 5 per the deferral). Brief-template mandate (sub-task 6) lives in `.addl/phase-4-meta/R5-BRIEF-common.md` (gitignored orchestrator-local). Both are forward-protective even before the file lands — the deferral row itself is the load-bearing artifact at v1-beta. NO R6 FIX-NOW; carries to G-COMP-1 per spec.",
+    "finding_id": "l18-r6-3 (OBS positive-confirm)"
+  },
+  "findings": [
+    {
+      "id": "l18-r6-1",
+      "severity": "MAJOR",
+      "summary": "PHASE-WIDE ENUMERATION GAP — 13 substrate-canary + Strategy-C-consolidation PRs carry SUBSTANTIAL break-OK content (cumulative ~+316 pub surface added + ~-75 pub surface deleted across 13 PRs) but are not enumerated as own ledger rows in docs/V1-BETA-BREAKING-CHANGES.md. R6 brief charter explicitly requires this gap closed OR named-deferred at R6 (not OBS-forward-looking as R4 disposed). Per HARD RULE 12 only 3 valid non-fix-now dispositions; 'OBS forward-looking carry to orchestrator discretion' is NOT one of them. The R4 OBS disposition is appropriate at the FREEZE-council scope (which was bounded to '13+ R1-brief-charter PRs'); at the R6 PHASE-WIDE scope the SAME finding becomes a genuine FIX-NOW MAJOR.",
+      "evidence": "(a) python3 set-diff: 42 merged PRs in 8141b94..4bbc4cac vs 15 enumerated in ledger = 27 unenumerated. (b) Per-PR pub-delta sampling via `git show $sha -- 'crates/**/*.rs' 'bindings/**/*.rs' | grep -cE '^\\+pub |^\\+\\s+pub fn |^\\+#\\[non_exhaustive\\]'`: #1319 +47, #1323 +33, #1324 +40, #1307 +101, #1309 +15, #1311 +20, #1312 +9, #1325 +56 = 8 substrate canaries totaling +321 pub. (c) 6 Strategy-C drain batches (#1261/#1262/#1269/#1277/#1282/#1290) cumulative net pub delta = +61/-75 = -14 net (DELETIONS of pub surfaces are break-OK changes). (d) #1235/#1237 Wave-1/2 includes 'benten-graph trait shape' which is verbatim break-OK signal. (e) `grep 'PR #1319' docs/V1-BETA-BREAKING-CHANGES.md` returns 0 hits — the largest substrate canary is entirely unenumerated. (f) R4 L18 lens output explicitly names this gap as forward-looking carry: `cat .addl/phase-4-meta/r6-breaking-change-ledger-r4.json | jq '.findings[3]'` returns l18-r4-4 OBS with RECOMMENDATION 'name V1-BETA-BREAKING-CHANGES.md ledger completion sweep follow-up row in V1-FROZEN-INTERFACE-DEFERRED.md'.",
+      "disposition": "FIX-NOW — two valid closure paths per HARD RULE 12 + R6 brief mandate; orchestrator picks at R6 fix-pass authoring time",
+      "fix": "PATH (a) PREFERRED if cycle-budget permits (audit-trail-strongest per pim-13 §3.12) — append 13 Cohort 2 rows (one per substrate canary + 6 Strategy-C drains; the Strategy-C drains may roll up into 1 row 'Strategy-C refinement-audit drain — net -14 pub-surface across 6 batches' with per-batch PR-cite list). PATH (b) ACCEPTABLE if cycle-budget tight (named-deferral per HARD RULE 12 clause-(b)) — author NEW Row D-25 'V1-BETA-BREAKING-CHANGES.md ledger completion sweep' in docs/V1-FROZEN-INTERFACE-DEFERRED.md (precedent: R4b-FP already added Row D-23 + D-24 at commit 8240a56c for the §4-B + §4-C cross-wave deferrals; same pattern). NEW Row D-25 must enumerate the 13 PR list + per-PR pub-delta + closure-plan + G-COMP-1 destination + cross-cite to L18-r6-1. UPDATE Cohort 5 in docs/V1-BETA-BREAKING-CHANGES.md to surface Row D-25 per the R2 L18 r2-2 precedent. Per pim-13 audit-trail-discipline the orchestrator preference is path-(a); if path-(b) chosen the brief-template mandate (mirror of Row D-22 sub-task 6) must require future fix-pass PRs to enumerate their own break-OK additions in the ledger as part of the §3.5b post-fix-doc-coupling pre-flight."
+    },
+    {
+      "id": "l18-r6-2",
+      "severity": "MINOR",
+      "summary": "ASYMMETRY in DSL chunk enumeration — DSL chunk-1 (in #1325) + DSL chunk-2 (#1326) NOT enumerated; DSL chunk-3 (#1339) IS enumerated as own Cohort 2 row. Same conceptual surface, asymmetric ledger coverage. Reader-confusing: downstream consumer scanning DSL surface changes sees 'Diagnostic field→method + Emit→Build arm + CompileError::Backend arm' (chunk-3) without context that chunks 1+2 also shipped public-API changes (chunk-1 closes 5 of 13 DSL issues per the §1.A.FROZEN narrative; chunk-2 closes #663 + #760 + #929 + #931 + #934).",
+      "evidence": "`grep -n 'chunk-1\\|chunk-2\\|chunk-3\\|DSL' docs/V1-BETA-BREAKING-CHANGES.md` returns: chunk-3 enumerated at line 138 (PR #1339); chunks 1+2 ABSENT. `git show 86b82de2 --stat | head -10` shows #1326 closes 5 DSL issues. `git show 132dde91 --stat | head -20` shows #1325 includes DSL chunk-1.",
+      "disposition": "FIX-NOW — closure via Path (a) of l18-r6-1 (Cohort 2 rows) covers this; if Path (b) chosen for l18-r6-1, then Row D-25 must enumerate chunks 1+2 alongside the substrate canaries (the asymmetric coverage is a sub-finding of the broader gap)",
+      "fix": "Companion to l18-r6-1 FIX-NOW. If Path (a) chosen: append 1-2 Cohort 2 rows for DSL chunk-1 + chunk-2. If Path (b) chosen: enumerate in Row D-25."
+    },
+    {
+      "id": "l18-r6-3",
+      "severity": "OBS",
+      "summary": "POSITIVE CONFIRMATION — Cohort 5 Row D-22 _for_test deferral cite is HONEST + ACCURATE. The cite at ledger:246 ('Row D-22 — workspace `pub fn .*_for_test` `#[cfg]` gating sweep') aligns with the authoritative destination at docs/V1-FROZEN-INTERFACE-DEFERRED.md:747-846 (100-line row). All 6 named per-crate baseline counts match (benten-caps 37 + benten-crypto-suite 52 + benten-drop 14 + benten-core 8 + benten-sync 3 + benten-graph 1 = 115). The 7-sub-task closure plan + no-regression pin name at sub-task 5 + brief-template mandate at sub-task 6 + v1-beta posture clause 'No security property degrades' are all present and forward-protective. The R4b L6-MAJOR-1 pivot from path-(a) FIX-NOW to path-(b) DEFER-NAMED-NOW (per commit 753d9840) is rationally documented in the Pivot rationale clause.",
+      "evidence": "(a) `grep -n 'Row D-22' docs/V1-BETA-BREAKING-CHANGES.md` returns line 246. (b) `grep -n 'Row D-22' docs/V1-FROZEN-INTERFACE-DEFERRED.md` returns line 747 + 810 + 832. (c) `sed -n '747,846p' docs/V1-FROZEN-INTERFACE-DEFERRED.md` reveals 100-line authoritative row. (d) Per-crate-baseline counts cross-checked against the ledger cite (115 total / per-crate breakdown matches). (e) Path-(b) pivot decision rationally documented + anchor cite at `.addl/phase-4-meta/r4b-l6-per-finding-granularity.json` + commit cite 753d9840 verified.",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix; positive confirmation of Cohort 5 Row D-22 cite accuracy + forward-protection."
+    },
+    {
+      "id": "l18-r6-4",
+      "severity": "MINOR",
+      "summary": "PR #1338 is enumerated as own Cohort 2 row at line 83 ('ManifestEnvelopeRecheckOutcome NotApplicable → UnresolvedDeny rename') but #1338 does NOT appear in the 8141b94..4bbc4cac merged-commit log as its own merge. Investigation reveals #1338 was a sub-PR landing inside the Strategy-C batch #1340 (commit bf4f87e2 is the source pre-batch; batch lands as #1340 squash at commit 05707357). The own-row enumeration of #1338 is HONEST + CORRECT (it represents a real break-OK that landed in this phase), but the cite-shape may confuse future archaeology readers who try to find a literal '#1338 merge' in the phase log. Minor cosmetic — does not affect the substantive enumeration discipline.",
+      "evidence": "`git log --all --oneline --grep='#1338'` returns 2 commits: bf4f87e2 (the pre-batch source for #1338) + 8bc15e78 (mini-rev fix-up). `git log --oneline 8141b94..4bbc4cac --grep='(#1340)'` returns 05707357 — the Strategy-C wave-2 batch that consumed #1338. The ledger row at line 83 correctly enumerates the break-OK content regardless of the cite-shape ambiguity.",
+      "disposition": "FIX-NOW — closure is a single-line clarification at the existing #1338 row",
+      "fix": "At docs/V1-BETA-BREAKING-CHANGES.md:83 'PR #1338' heading, append parenthetical '(landed in Strategy-C batch PR #1340)' for archaeology-reader clarity. 1-line doc-edit; no break-OK introduced."
+    },
+    {
+      "id": "l18-r6-5",
+      "severity": "OBS",
+      "summary": "POSITIVE CONFIRMATION — R4 L18 lens closure of l18-r1-2/r2-1/r2-2/r2-3/r2-4/r3-1 STILL HOLDS at the R6 phase-wide re-review. The FREEZE-council R4 verdict (APPROVE-CONVERGED at 0 BLK + 0 MAJ + 0 MIN + 4 OBS) is intact and the same-shape recurrence chain (R1-FP → R2-FP → R3-FP) is BROKEN — R3-FP introduced 0 pub-surface changes per `git diff 6c21e4f5..25576cb1 -- 'crates/**/*.rs' | grep -cE '^\\+pub'`. The R6 phase-wide scope expansion does NOT regress any R4-closed finding; it only surfaces the previously-OBS-forward-looking gap as a genuine FIX-NOW per the explicit R6 brief charter mandate. The R4 + R6 dispositions are COMPLEMENTARY not contradictory.",
+      "evidence": "(a) R4 L18 lens output at .addl/phase-4-meta/r6-breaking-change-ledger-r4.json verified — 4 OBS findings (l18-r4-1/2/3/4) all carry-confirmed at HEAD. (b) `git diff 6c21e4f5..25576cb1 -- 'crates/**/*.rs' 'bindings/**/*.rs' | grep -cE '^\\+pub '` returns 0 lines = R3-FP recurrence chain still broken. (c) All 15 PRs enumerated at R4 still present at R6 review HEAD; no row drift via the 2 latest R4b commits (753d9840 + 8240a56c + 4bbc4cac are doc-only fix-pass).",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix; positive confirmation that R4 + R6 dispositions are complementary (R4 closed the FREEZE-council scope; R6 expands the scope per brief mandate)."
+    },
+    {
+      "id": "l18-r6-6",
+      "severity": "OBS",
+      "summary": "POSITIVE CONFIRMATION — the R4b-FP precedent established at commit 8240a56c (close R4b L1 3 MAJORs via NEW Row D-23 + D-24 cross-wave §4-B + §4-C DEFERRED rows + V-14 phantom-destination cite update) is the EXACT pattern for closing l18-r6-1 via Path (b). The R4b-FP authoring proves the path-(b) machinery works: NEW Row D-NN authored in V1-FROZEN-INTERFACE-DEFERRED.md + cite added to V1-FROZEN-INTERFACE.md or V1-BETA-BREAKING-CHANGES.md. l18-r6-1 Path (b) closure follows the same template.",
+      "evidence": "`git show 8240a56c --stat` shows 3 files changed: docs/V1-FROZEN-INTERFACE-DEFERRED.md (+92 lines = Row D-23 + D-24 authorship) + docs/V1-FROZEN-INTERFACE.md (+8 lines = §4-B + §4-C cites) + an R4b L1 brief artifact. The pattern: precedent-established Row D-22 (747-846) + this PR Row D-23 (673-709) + Row D-24 (710-746) = 3 R4b/R6-time DEFERRED rows successfully authored. l18-r6-1 Path (b) would author the 4th (Row D-25).",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix; positive confirmation of Path (b) machinery + precedent for l18-r6-1 closure."
+    }
+  ],
+  "verification_per_brief_charter": {
+    "verify_every_break_ok_change_enumerated": {
+      "result": "FAIL",
+      "evidence": "15/42 PRs enumerated = 36% coverage; 13 substrate-canary + Strategy-C-consolidation PRs with substantial pub-surface delta NOT enumerated. See l18-r6-1 evidence."
+    },
+    "verify_15_substrate_canary_gap_closed_OR_named_deferred": {
+      "result": "FAIL",
+      "evidence": "Neither closed (no Cohort row additions) nor named-deferred (no Row D-25 'ledger completion sweep' row in V1-FROZEN-INTERFACE-DEFERRED.md). The R4 OBS-forward-looking disposition was sub-charter to FREEZE-council; R6 brief charter explicitly elevates this to FIX-NOW. See l18-r6-1 disposition."
+    },
+    "verify_cohort_5_for_test_deferral_row_D_22_accurate": {
+      "result": "PASS",
+      "evidence": "Cite at ledger:246 honest + authoritative destination at V1-FROZEN-INTERFACE-DEFERRED.md:747-846 verified end-to-end. See l18-r6-3 evidence."
+    },
+    "q5_termination_check_no_new_blocker_or_major_open": {
+      "result": "FAIL (1 MAJOR open: l18-r6-1)",
+      "evidence": "l18-r6-1 MAJOR disposition is FIX-NOW per R6 brief charter + HARD RULE 12. R6 R2 follow-up required to verify R6-FP closure."
+    }
+  },
+  "ground_truth_verifications": {
+    "commit_range_freshness": "git rev-parse origin/phase-4-meta-core/r4b-r1-fix-pass = 4bbc4cac80316acb571fedeac193f35fbaf0ec37 (matches brief base SHA)",
+    "ledger_at_HEAD": "docs/V1-BETA-BREAKING-CHANGES.md exists at 261 lines; 15 PR-cites verified via grep",
+    "deferred_doc_at_HEAD": "docs/V1-FROZEN-INTERFACE-DEFERRED.md exists; Row D-22 at lines 747-846 verified; Rows D-23 + D-24 at lines 673-746 verified (R4b-FP precedent)",
+    "non_enumerated_PR_pub_deltas": "Per-PR `git show $sha | grep -cE '^\\+pub '` sampled for 13 substrate-canary + Strategy-C PRs; all carry non-zero pub-surface delta per l18-r6-1 evidence",
+    "cargo_build_state": "Not re-run for L18 (lens is doc-ledger audit; no source-code build required). Base SHA 4bbc4cac is post-G-CORE-9 R4b-FP green state per R4b-R2 council convergence (commits 12b42130 + 50b801a6 + f0a5b5bd + 1fb181cc + 7bc5f1a5 + 1d9c1953 reviewed APPROVE-CONVERGED)."
+  },
+  "ledger_completeness_audit": {
+    "expected_per_R6_brief_charter": "EVERY break-OK change shipped 8141b94..HEAD enumerated in ledger OR named-deferred",
+    "actual_at_HEAD": "15 PRs enumerated in Cohorts 1+2; 13 Bundle rows in Cohort 3; 6 watch-list rows in Cohort 4; 5 watch-list rows in Cohort 5; ZERO rows for the 13 substrate-canary + Strategy-C-consolidation PRs identified at l18-r6-1",
+    "gap_unclosed": "13 PRs (cumulative ~+321 pub surface mints + ~-75 pub deletions) need either Cohort 2 own-rows (Path a) OR NEW Row D-25 named-deferral (Path b). R6 brief charter elevates this from R4 OBS-forward-looking to R6 FIX-NOW MAJOR.",
+    "cohort_5_row_D_22_status": "VERIFIED HONEST + ACCURATE per l18-r6-3"
+  },
+  "convergence_shape_R1_to_R6": {
+    "FREEZE_council_R1_to_R4_arc": "4 MAJ → 1 MAJ → 0 MAJ+1 MIN → 0 MAJ+0 MIN (CONVERGED at FREEZE-council scope per R4 verdict)",
+    "R6_phase_wide_re_run": "1 MAJ + 2 MIN + 3 OBS — NOT CONVERGED at R6 lens-level; the R6 brief charter scope-expansion surfaces the previously-deferred OBS-forward-looking gap as a genuine FIX-NOW",
+    "expected_R6_R2_after_FP": "0 MAJ + 0 MIN + N OBS = CONVERGED (per the R4b-FP precedent at commit 8240a56c demonstrating Path-(b) closure machinery works for cross-wave DEFERRED row authoring)",
+    "shape": "FREEZE-council CONVERGED at R4; PHASE-WIDE adds 1 MAJ + 1 MIN at R6 R1; R6 R2 expected CONVERGED after Path-(a) or Path-(b) closure of l18-r6-1 + l18-r6-2 + l18-r6-4."
+  },
+  "recommended_R6_FP_authoring_path": {
+    "preferred_path_a_full_enumeration": "Append ~10-13 Cohort 2 rows in docs/V1-BETA-BREAKING-CHANGES.md (one row per substrate canary; the 6 Strategy-C drain batches roll up into 1 row 'Strategy-C refinement-audit drain — net -14 pub-surface across 6 batches'). Per-row What/Why/Migration narrative per existing Cohort 2 template; cross-cite L18-r6-1 closure. Per pim-13 §3.12 audit-trail discipline this is the strongest closure.",
+    "acceptable_path_b_named_deferral": "Author NEW Row D-25 'V1-BETA-BREAKING-CHANGES.md ledger completion sweep' in docs/V1-FROZEN-INTERFACE-DEFERRED.md per R4b-FP precedent (commit 8240a56c). Row enumerates the 13 PRs + per-PR pub-delta + closure-plan + G-COMP-1 destination + cross-cite to L18-r6-1. Add cite line to docs/V1-BETA-BREAKING-CHANGES.md Cohort 5 surfacing Row D-25 per the R2 L18 r2-2 precedent. Brief-template mandate (mirror of Row D-22 sub-task 6) required to forward-protect against recurrence in future fix-pass PRs.",
+    "ben_orchestrator_input_needed": "Path-(a) is +200-400 LOC doc-edit (audit-trail-strongest); path-(b) is +50-100 LOC doc-edit (HARD RULE 12 clause-(b) compliant + R4b-FP precedent-proven). Either closes l18-r6-1 + l18-r6-2 + (after additional 1-line edit per l18-r6-4) all R6 lens findings. Orchestrator picks per cycle-budget; both are HARD RULE 12 compliant.",
+    "additional_closures_required_regardless": "l18-r6-4 1-line parenthetical at #1338 ledger row (50 chars; orchestrator-direct edit)"
+  },
+  "lens_outcome": "R6 R1 L18 phase-wide re-run: APPROVE-WITH-FIXES; NOT-CONVERGED at lens level (1 MAJOR open: l18-r6-1 phase-wide enumeration gap + 1 MINOR: l18-r6-2 DSL-chunk asymmetry + 1 MINOR: l18-r6-4 #1338 batch-cite ambiguity + 3 OBS positive-confirms). The R4 FREEZE-council CONVERGED verdict is COMPLEMENTARY not contradictory — R6 brief charter explicitly expands scope from '13+ R1-brief-charter PRs' to 'EVERY break-OK change shipped this phase'. Per HARD RULE 12 + the explicit R6 mandate 'verify that gap is closed OR named-deferred at R6', the previously-OBS-forward-looking gap becomes a genuine FIX-NOW MAJOR. Two valid closure paths (full enumeration OR Row D-25 named-deferral per R4b-FP precedent); R6 FP authoring agent picks. Cohort 5 Row D-22 _for_test deferral cite verified HONEST + ACCURATE — no R6 finding on that surface."
+}
