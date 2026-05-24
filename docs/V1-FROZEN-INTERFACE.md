@@ -334,8 +334,16 @@ freeze wave SURFACES the decision; Ben makes it.
   per build-backlog row 5; otherwise wire shape is named-but-deferred).
 - The per-chunk AEAD wire layout — chunk_size = `IROH_BLOCK_SIZE = 16384`
   (item 15(g)) — locked at `crates/benten-crypto-suite/src/aead.rs:52`.
-  AAD layout binds `(chunk_index: u64, total_chunks: u64,
-  plaintext_cid: Cid)` per §6 CI gate (13).
+  AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64)` per
+  `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (as-shipped
+  v1-beta). The `total_chunks` defense against cross-chunk-truncation
+  is **deferred to G-COMP-1 §<row>** per the G-CORE-9 R1 triage Fork 1
+  ratification (escalation criterion: adding `total_chunks` would
+  break existing per-chunk byte-pin tests; per-chunk truncation
+  surfaces as `AeadError::Authentication` on the truncated slice via
+  the outer SnapshotBlob CID + signature binding). See
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-9 + the post-v1-beta
+  hardening watch-list (Row D-15) for the augmentation path.
 - Sentinel CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
   remains the canonical Phase-1 golden fixture and MUST round-trip
   identically under v1 canonical bytes.
@@ -670,7 +678,7 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 | #886 `[features]` | DECIDED (already shipped) | Pin `Cargo.toml` `[features]` block exactly as-is; comment-cite. |
 | #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit `5ce8bab6`).** `crates/benten-caps/src/policy.rs` `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old `sealed_marker::SealedCapabilityPolicy` soft-seal DELETED (no shim per HARD RULE 12 + CLAUDE.md #5). Workspace-wide migration applied: 4 internal impls (NoAuthBackend, GrantBackedPolicy, LegacyUcanStubBackend, UcanGroundedPolicy<B>) + ~17 workspace test-double impls received sibling `impl Sealed` blocks via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests` re-export. Feature pass-through: benten-engine `test-helpers` + benten-eval `testing` features enable `benten-caps/testing`. Object-safety preserved (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` exercises `Arc<dyn CapabilityPolicy>`). |
 | 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. |
-| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: String` placeholder per `policy.rs:81`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
+| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:167`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
 | #883b prod-dep-edge | DECIDED | Lock as-shipped. |
 | #887b `check_read` default-impl | DECIDED (defaulted; pulled WITH/BEFORE G-CORE-8) | Lock at `crates/benten-caps/src/policy.rs:388` (`fn check_read(...) -> Result<(), CapError> { ... }` default body; admit-all baseline per Phase-1). |
 | §4.69 organizing principle | RESOLVED (a) `EngineCapsHandle`-canonical — see item 1 | Already frozen at item 1; no-regression invariant pin. |
@@ -732,14 +740,14 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 - `docs/public-api/benten-errors.txt`
 - `docs/public-api/benten-eval.txt`
 - `docs/public-api/benten-graph.txt`
-- `docs/public-api/benten-id.json`
+- `docs/public-api/benten-id.txt`
 - `docs/public-api/benten-ivm.txt`
 - `docs/public-api/benten-platform-foundation.txt` (**FREEZE-WAVE
   FIX-NOW: doesn't exist at HEAD;
   `crates/benten-platform-foundation/` is a public crate post-Phase-4-
   Foundation; build-backlog row 1**)
-- `docs/public-api/benten-renderer-tauri.json`
-- `docs/public-api/benten-sync.json`
+- `docs/public-api/benten-renderer-tauri.txt`
+- `docs/public-api/benten-sync.txt`
 
 **What "frozen" means here:**
 - Each baseline is the AUTHORITATIVE list of every `pub` symbol the
@@ -1117,11 +1125,15 @@ planners agreed; locked as-shipped.**
   per the rustdoc narrative; permitted in Composing.
 
 **Verification mechanism:**
-- `crates/benten-renderer-tauri/tests/compile_test_no_tauri_dep.rs`
-  compile-test pin.
-- `crates/benten-renderer-tauri/tests/ipc_methods_allowlist_*.rs` IPC
-  allowlist pins (asserts `IPC_METHODS` is `const`, not `static mut`,
-  not a dynamic registry).
+- `crates/benten-renderer-tauri/tests/arch_n_benten_renderer_tauri_dep_direction.rs`
+  no-tauri / no-tokio dep posture pin (sweeps Cargo.toml + use-statements
+  across src/).
+- `crates/benten-renderer-tauri/tests/ipc_allowlist_rejects_unknown_method.rs`
+  + `crates/benten-renderer-tauri/tests/ipc_method_invocation_requires_manifest_cap.rs`
+  + `crates/benten-renderer-tauri/tests/ipc_method_name_stability_drift_detector.rs`
+  IPC allowlist pins (asserts `IPC_METHODS` is `const`, not `static mut`,
+  not a dynamic registry; methods bind manifest caps; name-stability
+  drift-detect runs CI-wired).
 - Compile-test pin for runtime-handle-leak prevention (asserts an
   `EngineBuilder` signature accepts no `tauri::Runtime` or borrows a
   `tokio::runtime::Handle`).
@@ -1246,7 +1258,7 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 ### 15.a — SubgraphSpec primitive
 
 **Frozen surfaces:**
-- `crates/benten-core/src/subgraph_spec/spec.rs:188` `pub struct Spec` —
+- `crates/benten-core/src/subgraph_spec/spec.rs:190` `pub struct Spec` —
   the 4-thing thin core (Roots / Expansion / Inclusion / Termination).
   `#[non_exhaustive]` already APPLIED — KEEP.
 - `crates/benten-core/src/subgraph_spec/walker.rs:78` `pub fn walk(spec:
@@ -1289,7 +1301,7 @@ v1-Composing instead).
 
 **Verification mechanism:**
 - A no-13th-primitive test pin
-  (`crates/benten-core/tests/g_core_9_no_thirteenth_primitive.rs`)
+  (`crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs`)
   asserts `PrimitiveKind::*` discriminant count remains 12.
 - `cargo-public-api` (item 9).
 
@@ -1582,7 +1594,7 @@ content-incompatibility).
   case for SubgraphSpec; preserves CLAUDE.md baked-in #1.
 
 **Engine wrapper LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 4 (commit
-`7af94d06`)** at `crates/benten-engine/src/engine_share_scope.rs:46`:
+`7af94d06`)** at `crates/benten-engine/src/engine_share_scope.rs:59`:
 `pub fn Engine::walk_share_scope(&self, spec: &Spec) -> Result<WalkResult, EngineError>`.
 Wrapper delegates to the canonical `benten_core::subgraph_spec::walker::walk`
 BFS enumerator (no engine-side reimplementation; preserves producer/

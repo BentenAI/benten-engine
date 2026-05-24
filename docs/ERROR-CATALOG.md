@@ -2,16 +2,18 @@
 
 **Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
 
-**Catalog count narrative (post Phase-4-Meta-Core G-CORE-1 fix-pass, 2026-05-19):** four distinct counts coexist by design — each measures a different surface:
+**Catalog count narrative (post Phase-4-Meta-Core G-CORE-9 R1 fix-pass, 2026-05-24):** four distinct counts coexist by design — each measures a different surface:
 
-| Count | Source | Value (at HEAD post G-CORE-1 fix-pass) | Meaning |
+| Count | Source | Value (at HEAD post G-CORE-9 R1 fix-pass) | Meaning |
 |---|---|---|---|
-| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **170** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **170** | The round-trip-pinned list. Matches the throwable enum 1:1 (was 14 short pre-R6-FP-C). The `catalog_variant_count_matches_enum` test asserts exact equality (closes ec-r6r1-2). |
-| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **172** | = 170 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). CI drift-detect's "catalog codes: 172 \| rust codes: 171 \| ts codes: 172" line reflects this intentional retention. |
-| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **171** | = 170 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **192** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **192** | The round-trip-pinned list. Matches the throwable enum 1:1. The `catalog_variant_count_matches_enum` test asserts exact equality. |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **194** | = 192 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **193** | = 192 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
-**Why four counts (170 / 170 / 171 / 172):** the Rust enum is the source of throwable variants (170); plus a forward-compat `Unknown(String)` fallback (= 171 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 172 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (170). Single canonical headline number: **170 production-throwable codes** at the Phase-4-Meta-Core G-CORE-1 fix-pass close (+1 `E_NAMESPACED_WRITE_UNSUPPORTED` over the refinement-audit-2026-05 baseline of 169).
+**Why four counts (192 / 192 / 193 / 194):** the Rust enum is the source of throwable variants (192); plus a forward-compat `Unknown(String)` fallback (= 193 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 194 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (192). Single canonical headline number: **192 production-throwable codes** at the Phase-4-Meta-Core G-CORE-9 R1 fix-pass close.
+
+**Phase-4-Meta-Core mint trajectory:** 170 (Phase-4-Foundation close) → 171 (#989 storage-partition seam `E_NAMESPACED_WRITE_UNSUPPORTED`) → ... → 192 (HEAD) via the G-CORE-1/2/3/4/5/6/7/8/10/DSL ErrorCode mints across the Phase-4-Meta-Core campaign. Per-mint cohort detail in commit messages PR #1304..#1344.
 
 **Cohort math (Phase-4-Foundation):**
 - **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.

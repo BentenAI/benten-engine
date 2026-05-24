@@ -95,9 +95,15 @@ jobs:
             --ignore RUSTSEC-2025-0080 \
             --ignore RUSTSEC-2025-0081 \
             --ignore RUSTSEC-2025-0098 \
-            --ignore RUSTSEC-2025-0100 \
-            --ignore RUSTSEC-2026-0119 \
-            --ignore RUSTSEC-2026-0120
+            --ignore RUSTSEC-2025-0100
+            # RUSTSEC-2026-0119 + RUSTSEC-2026-0120 (hickory-dns
+            # CPU-exhaustion + NSEC3 unbounded-loop) CLOSED 2026-05-19 at
+            # G-CORE-2-FP-1 via iroh 0.98 → 1.0.0-rc.0 bump (transitive
+            # hickory-resolver 0.26.0-beta.4 → 0.26.1 picks up the upstream
+            # fix). Ignore lines removed per L12-MAJ-3 (G-CORE-9 R1
+            # fix-pass): cargo-audit will warn on advisory-not-detected
+            # for stale ignores; this restores the dual-config mirror
+            # discipline per §3.5g item 4.
 
   lockfile-verify:
     name: Cargo.lock integrity
