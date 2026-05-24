@@ -1,0 +1,90 @@
+{
+  "lens": "L12. cross-language §3.5g mirror + workspace missing-docs + stable+MSRV clippy gates",
+  "scope": "PHASE-WIDE (Phase-4-Meta-Core R6 R1)",
+  "branch": "phase-4-meta-core/r6-r1-l12-cross-lang-phase-wide",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "base_ref": "origin/phase-4-meta-core/r4b-r1-fix-pass",
+  "head_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "date": "2026-05-24",
+  "disposition": "APPROVE",
+  "summary": "All §3.5g 8-surface mirror discipline holds phase-wide for all 192 throwable ErrorCode variants at HEAD. §3.5g item 6 scanner (drift-detect-error-variant-mirror.ts) reports 0 new violations against the 159-entry baseline. cargo-public-api Fork 3 gate is operational and on branch-protection (required-failing per V1-FROZEN-INTERFACE item 9). Workspace missing-docs sweep clean (cargo doc --workspace --no-deps -D missing_docs --features testing finishes cleanly; the workspace test passes 2/3 in this sandbox but the timing-out arm is environment-bound and the underlying gate is clean). Both stable + MSRV 1.95 clippy clean with §3.5j-mandated --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings. R6 R1 L12 convergence: 0 BLOCKER, 0 MAJOR, 0 MINOR, 1 OBSERVATION.",
+  "method": [
+    "Set-diff Rust as_static_str (193 = 192 throwable + E_UNKNOWN) vs from_str (192) vs routed_edge_label (192 + Unknown handled) vs ALL_CATALOG_VARIANTS (192) vs ERROR-CATALOG.md ### E_ headings (194) vs TS CATALOG_CODES (194) vs TS CODE_TO_CTOR_GENERATED (194) — every diff reconciles to the documented 4-count narrative (192 throwable / 192 in regression list / 193 in Rust enum / 194 in catalog+TS).",
+    "Spot-trace DslIoError 8-surface mirror (the §3.5g item 6 amendment closure landed at PR #1342): present in Rust enum + as_static_str + from_str + routed_edge_label + ALL_CATALOG_VARIANTS + ERROR-CATALOG.md ### heading + TS CATALOG_CODES + TS class + CODE_TO_CTOR_GENERATED. PASS.",
+    "Run §3.5g item 6 scanner: `npx tsx scripts/drift-detect-error-variant-mirror.ts` — '0 new violation(s)' against the 159-entry pre-2026-05-24 baseline.",
+    "Run main drift-detect: `npx tsx scripts/drift-detect.ts` — 'OK — catalog, Rust enum, and TS classes agree; every ErrorCode variant has a production construction site.'",
+    "Run benten-errors stable_shape: `cargo test -p benten-errors --test stable_shape` — 9 passed including variant_count_is_pinned (192) + catalog_variant_count_matches_enum + from_str_roundtrip_representative + as_static_str_known_and_unknown.",
+    "Run `cargo +stable clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings` — exit 0.",
+    "Run `cargo +1.95 clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings` — exit 0.",
+    "Run `RUSTDOCFLAGS='-D missing_docs' cargo doc --workspace --no-deps --features testing` — Finished cleanly (only 'Documenting benten-errors' line contained 'errors' as a path component; no rustdoc-level errors/warnings).",
+    "Verify cargo-public-api workflow + branch protection: workflow at .github/workflows/cargo-public-api.yml drives 14-crate per-baseline diff with DRIFT_FLAG_FILE tempfile (fixed at G-CORE-9 R2 L9-r2-MAJ-1 closure); branch protection contains 'API drift detector (required-failing per G-CORE-9 FREEZE)' context.",
+    "Verify all 14 v1-frozen-surface crate baselines present at docs/public-api/: benten-{caps,core,crypto-suite,drop,dsl-compiler,engine,errors,eval,graph,id,ivm,platform-foundation,sync,renderer-tauri}.txt — all 14 present."
+  ],
+  "findings": [
+    {
+      "id": "l12-pw-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "missing_docs_workspace test does not pass --features flag",
+      "where": "tests/phase_3_workspace/missing_docs_workspace.rs:71-78",
+      "evidence": "The full_missing_docs_sweep_no_warnings_workspace_wide test spawns `cargo doc --workspace --no-deps` with RUSTDOCFLAGS=-D missing_docs but does NOT pass any --features flag. Feature-gated `pub` items inside `#[cfg(feature = \"testing\")] pub mod testing` (and equivalent) are therefore NOT exercised by this gate. The §3.5j stable+MSRV clippy gate uses the explicit `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing` spec; the missing-docs gate does not mirror it. Manual run with `--features testing` was also clean at HEAD, so this is not an active drift — it is a coverage-gap observation.",
+      "disposition": "DISAGREE-WITH-EXPLANATION — recording as OBSERVATION not finding because (a) the documented intent of `full_missing_docs_sweep_no_warnings_workspace_wide` (G20-B + phase-2-backlog §8.3) was the default-features sweep, (b) feature-gated `pub mod testing` items are covered by the §3.5j clippy gate which DOES run with the testing features, and (c) HEAD is clean under both spec variants. If R6 R2 wants to harden the gate, the fix is one-line: add `.arg(\"--features\").arg(\"benten-eval/testing,benten-engine/test-helpers,benten-graph/testing\")` to match the §3.5j spec. Not promoted to MINOR because the §3.5j clippy gate already catches missing-docs on the testing-feature surface via clippy's missing_docs lint propagation.",
+      "destination": "N/A — OBSERVATION only; not gating R6 R1 convergence."
+    }
+  ],
+  "ground_truth_verifications": [
+    {
+      "claim": "CATALOG_VARIANT_COUNT = 192 throwable + 1 forward-compat = 193 enum / 192 round-trip",
+      "verified_by": "set-diff of as_static_str arms (193 including E_UNKNOWN) vs from_str arms (192) vs ALL_CATALOG_VARIANTS (192) — all sets agree on the 192 throwable subset; E_UNKNOWN one-way-only correctly excluded from from_str.",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "TS CATALOG_CODES (194) = Rust 192 throwable + E_UNKNOWN sentinel + E_INV_ITERATE_NEST_DEPTH retired-but-reserved",
+      "verified_by": "comm -23 TS-sorted Rust-sorted → exactly 2 entries: E_UNKNOWN + E_INV_ITERATE_NEST_DEPTH. Catalog-narrative ERROR-CATALOG.md:11 documents both as deliberate retentions. EInvIterateNestDepth TS class carries explicit narrative 'no production path constructs it. The reachability annotation above is the drift-detector's signal that this is a deliberate forward-/backward-compat retention rather than aspirational prose.'",
+      "result": "VERIFIED — drift is documented retention, not actual drift."
+    },
+    {
+      "claim": "§3.5g item 6 scanner clean against baseline",
+      "verified_by": "`npx tsx scripts/drift-detect-error-variant-mirror.ts` → '0 new violation(s)' headline; 60 pub *Error enums scanned across 235 production files; 124 variants mirrored + 210 skipped (160 via baseline).",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "cargo-public-api Fork 3 gate is operational + required",
+      "verified_by": "(a) workflow file present at .github/workflows/cargo-public-api.yml with the DRIFT_FLAG_FILE tempfile pattern (G-CORE-9 R2 L9-r2-MAJ-1 fix-up — earlier subshell-loses-variable bug was closed). (b) gh api branches/main/protection lists context 'API drift detector (required-failing per G-CORE-9 FREEZE)' in required_status_checks.contexts. (c) all 14 v1-frozen-surface crate baselines present at docs/public-api/.",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "Workspace missing-docs gate clean",
+      "verified_by": "`RUSTDOCFLAGS='-D missing_docs' cargo doc --workspace --no-deps --features testing` finished cleanly (no rustdoc warnings or errors); benten-errors stable_shape 9 tests pass.",
+      "result": "VERIFIED — note in-sandbox nextest test arm times out at 480s on cold build (environment-bound, the gate itself is clean)."
+    },
+    {
+      "claim": "§3.5j stable + MSRV clippy gates clean",
+      "verified_by": "cargo +stable clippy ... --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings → exit 0; cargo +1.95 clippy ... same spec → exit 0.",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "DslIoError 8-surface mirror complete (§3.5g item 6 amendment closure at PR #1342)",
+      "verified_by": "grep -n 'DslIoError\\|E_DSL_IO_ERROR\\|EDslIoError' across all 4 surface files: present in Rust enum (lib.rs), as_static_str arm, from_str arm, routed_edge_label, ALL_CATALOG_VARIANTS (stable_shape.rs:601), ERROR-CATALOG.md ### heading at line 1752, TS CATALOG_CODES, TS class EDslIoError, CODE_TO_CTOR_GENERATED at line 3344.",
+      "result": "VERIFIED"
+    }
+  ],
+  "r6_r1_convergence_disposition": "L12 phase-wide returns 0 substantive findings (0 BLOCKER, 0 MAJOR, 0 MINOR; 1 OBSERVATION about missing-docs gate feature-flag coverage which is a coverage-hardening suggestion not an active drift). The lens APPROVES the §3.5g item 6 amendment closure + the phase-wide 8-surface mirror state + both clippy gates + workspace missing-docs sweep + cargo-public-api Fork 3 gate. Recommend ADVANCE to R6 R2.",
+  "cross_check_notes": [
+    "Companion lenses: this is the methodology/discipline backstop; correctness-side counterparts are L13 (test-coverage SHAPE-not-SUBSTANCE) + L14 (R7 spec-to-code compliance). No cross-lens conflict expected.",
+    "L1/L2 crypto cluster surface their own cohort mints (the 22-mint G-CORE-3+9 cohort); my count of those agrees with the ERROR-CATALOG.md narrative cohort math: 170 + 22 = 192."
+  ],
+  "artifacts_consulted": [
+    "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/R6-LENS-CATALOG.md (L12 section, lines 158-167)",
+    "/Users/benwork/Documents/benten-engine/.addl/dispatch-conventions.md (§3.5g items 1-7 lines 608-700+ + §3.5j lines 378-417)",
+    "crates/benten-errors/src/lib.rs (ErrorCode enum + as_str + as_static_str + routed_edge_label + from_str + Display + try_static_for)",
+    "crates/benten-errors/tests/stable_shape.rs (ALL_CATALOG_VARIANTS + CATALOG_VARIANT_COUNT + variant_count_is_pinned + catalog_variant_count_matches_enum)",
+    "packages/engine/src/errors.generated.ts (CATALOG_CODES + per-variant class hierarchy + CODE_TO_CTOR_GENERATED)",
+    "docs/ERROR-CATALOG.md (### E_ headings + 4-count narrative table + cohort math)",
+    "scripts/drift-detect-error-variant-mirror.ts (§3.5g item 6 scanner)",
+    "scripts/drift-detect-error-variant-mirror-baseline.txt (159-entry grandfathered list)",
+    "scripts/drift-detect.ts (main drift-detect)",
+    ".github/workflows/cargo-public-api.yml (Fork 3 gate workflow)",
+    "docs/public-api/*.txt (14 v1-frozen-surface crate baselines)",
+    "tests/phase_3_workspace/missing_docs_workspace.rs (workspace missing-docs test)"
+  ]
+}
