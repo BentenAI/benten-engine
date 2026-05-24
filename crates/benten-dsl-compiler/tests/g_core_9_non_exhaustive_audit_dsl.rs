@@ -5,7 +5,7 @@
 //! V1-FROZEN-INTERFACE.md item 11 (CompileError + CompiledSubgraph +
 //! CompiledPrimitive + Span + Diagnostic). The `#[non_exhaustive]`
 //! attribute is applied per L9-DSL-MAJOR-2 closure at
-//! `crates/benten-dsl-compiler/src/lib.rs:180/193/306/499/548`.
+//! `benten_dsl_compiler::{CompiledSubgraph, CompiledPrimitive, CompileError, Span, Diagnostic}`.
 //!
 //! This file lives in `crates/benten-dsl-compiler/tests/` because the
 //! `g_core_9_non_exhaustive_audit.rs` audit-test in `crates/benten-engine/tests/`

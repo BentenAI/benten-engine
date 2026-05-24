@@ -405,11 +405,12 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
   **G-CORE-9 R2 EXTENSION (L8-R2-MAJOR-CARRY-2 closure):** the R1-enumerated
   remaining pub types not yet covered by any DEFERRED row are added here:
-  - `benten-engine`: `UserViewInputPattern` (outcome.rs:39), `TraceStep`
-    (outcome.rs:362), `StreamCursor` (engine_stream.rs:150),
-    `SubscribeCursor` (engine_subscribe.rs:72), `EngineViewsHandle`
-    (engine_views.rs:1129), `AtriumConfig` (atrium_api.rs:64), `SyncStatus`
-    (atrium_api.rs:128), plus the outcome.rs 13-pub-struct set
+  - `benten-engine`: `UserViewInputPattern` (outcome.rs), `TraceStep`
+    (outcome.rs), `StreamCursor` (engine_stream.rs),
+    `SubscribeCursor` (engine_subscribe.rs), `EngineViewsHandle`
+    (`benten_engine::engine_views::EngineViewsHandle`), `AtriumConfig`
+    (atrium_api.rs), `SyncStatus`
+    (atrium_api.rs), plus the outcome.rs 13-pub-struct set
     (`UserViewSpec`, `UserViewSpecBuilder`, `ReadViewOptions`, `Outcome`,
     `Trace`, `TerminalError`, `BudgetExhaustedView`, `AnchorHandle`,
     `RegisterReplaceOutcome`, `HandlerPredecessors`, `DiagnosticInfo`,
@@ -454,7 +455,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 - **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break.
 - **Deferred consumption (G-COMP-1 destination):** atomic 4-surface rename per §3.5g:
-  1. Rust enum `EngineError::ViewStrategyCReserved` → `EngineError::ViewStrategyReserved` (`crates/benten-engine/src/error.rs` + format-string at `engine_views.rs:695-699` already returns `Strategy::Reserved`)
+  1. Rust enum `EngineError::ViewStrategyCReserved` → `EngineError::ViewStrategyReserved` (`crates/benten-engine/src/error.rs` + format-string in `benten_engine::engine_views` already returns `Strategy::Reserved`)
   2. Wire string `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED` (`crates/benten-errors/src/lib.rs` 4 sites: variant + wire string + Display arm + parse arm)
   3. TS class `EViewStrategyCReserved` → `EViewStrategyReserved` (`packages/engine/src/errors.generated.ts` 3 sites; docstring already says "Strategy::Reserved" — cross-language drift on SAME code path per §3.5g item 1)
   4. ERROR-CATALOG.md:533+727 + cargo-public-api baselines `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` (5 baseline cites) + `crates/benten-errors/tests/stable_shape.rs:112+682+1149` regenerate

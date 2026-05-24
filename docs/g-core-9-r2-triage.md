@@ -72,7 +72,7 @@ The R1 fix-pass closed the LOAD-BEARING work substantively: 12 of 12 bundles exe
 | Lens | ID | Disposition | Bundle |
 |---|---|---|---|
 | L1 | L1-crypto-r2-1 (diagnostic-info loss persists) | FIX-NOW — route through `SwapMatrixError::Unsupported` (path a per R2 lens) | R2.5 |
-| L1 | L1-crypto-r2-2 (codepoint.rs phantom-destination) | FIX-NOW — code-fix retense codepoint.rs:9-18 + lib.rs:67-83 to FROZEN state | R2.5 |
+| L1 | L1-crypto-r2-2 (codepoint.rs phantom-destination) | FIX-NOW — code-fix retense `benten_crypto_suite::codepoint` module-docstring + `benten_crypto_suite` lib.rs cipher-suite section to FROZEN state | R2.5 |
 | L6 | L6-r2-1 (L6-r1-3 trybuild test no disposition) | FIX-NOW — add Row D-19 (or extension) deferring trybuild compile-fail test to G-COMP-1 (path b per Fork 2 — hard-seal IS enforced by rustc, only explicit negative-arm test deferred) | R2.7 |
 | L6 | L6-r2-2 (§8 §8-E hooks table missing DEFERRED cross-ref) | FIX-NOW — symmetric retense to mirror §12's signature-frozen-vs-consumption-deferred distinction | R2.7 |
 | L8 | L8-R2-MAJOR-CARRY-1 (Strategy rename phantom-destination) | FIX-NOW — Pattern α closure; new Row D-19 | R2.2 |
@@ -88,7 +88,7 @@ The R1 fix-pass closed the LOAD-BEARING work substantively: 12 of 12 bundles exe
 
 | Lens | ID | Disposition | Bundle |
 |---|---|---|---|
-| L1 | L1-crypto-r2-3 (lib.rs:56-65 + :67-83 stale framing) | FIX-NOW — retense ~15 LOC across the 3 sub-sections | R2.5 |
+| L1 | L1-crypto-r2-3 (`benten_crypto_suite` lib.rs Reserved-codepoints + cipher-suite sections stale framing) | FIX-NOW — retense ~15 LOC across the 3 sub-sections | R2.5 |
 | L1 | L1-crypto-r2-4 (sub-pins b + c for resolve_codepoint + UcanVarsigV1Header::decode) | FIX-NOW — extend canonical_bytes_v1 test with 2 more assertion blocks (~25 LOC) | R2.5 |
 | L6 | L6-r2-3 (audit-test SuspensionOutcome + NextChunkPoll arm coverage) | FIX-NOW — add 2 audit-arm tests | R2.7 |
 | L6 | L6-r2-4 (V1-FROZEN cite drift to policy.rs:179 + companion cites) | FIX-NOW — refresh cites: actor_hint 167→179; PendingOp 247→100; CapWriteContext 103→163; ReadContext 154→260 | R2.7 |
@@ -134,7 +134,7 @@ The R1 fix-pass closed the LOAD-BEARING work substantively: 12 of 12 bundles exe
 | R2.2 | Phantom Row D-15 cluster — Pattern α | V1-FROZEN-INTERFACE-DEFERRED.md (new Row D-19) + V1-BETA-BREAKING-CHANGES.md:152-156 cite | FIX-NOW |
 | R2.3 | Fork 3 second half — Pattern β | gh api PATCH (DONE during triage) + .github/workflows/cargo-public-api.yml subshell bugfix | FIX-NOW |
 | R2.4 | L11 wire-format doc retenses | V1-FROZEN-INTERFACE.md:389-401 + WIRE-FORMAT-INVENTORY 4 rows + tf3d test-comment + Row D-15 SHA-fallback addition | FIX-NOW |
-| R2.5 | L1 crypto-correctness residues | swap_matrix.rs:438-440+539-541+1575-1587 + codepoint.rs:9-18 + lib.rs:56-83 + test extension | FIX-NOW |
+| R2.5 | L1 crypto-correctness residues | `benten_crypto_suite::swap_matrix` 2 resolve-failure call sites + `unsupported_codepoint_msg_static` helper delete + `benten_crypto_suite::codepoint` module-docstring + `benten_crypto_suite` lib.rs cipher-suite section + canonical_bytes_v1 test extension | FIX-NOW |
 | R2.6 | L17 §1.A.FROZEN item 15 residues | V1-FROZEN-INTERFACE.md:1263 + :916 + :1363-1366 | FIX-NOW |
 | R2.7 | L6 capability + plugin-trust residues | V1-FROZEN-INTERFACE.md §8 + DEFERRED.md Row D-19 (trybuild defer) + audit-test extension + cite refresh | FIX-NOW |
 | R2.8 | L8 IVM #[non_exhaustive] sweep extension | subgraph_spec.rs:86+296 (TypedOutputProjection + KernelOutput) + audit-test arm + DEFERRED.md Row D-17 extension + V1-FROZEN.md:951-957 retense | FIX-NOW |
