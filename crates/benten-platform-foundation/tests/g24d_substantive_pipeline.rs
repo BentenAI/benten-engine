@@ -127,10 +127,11 @@ fn drive_install(
     record.user_signature = user_kp.sign(&payload).to_bytes().to_vec();
 
     let user_did = user_kp.public_key().to_did();
+    let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
     let mut ports = InstallPorts {
         cap_minter: cascade,
         private_ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_1,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,

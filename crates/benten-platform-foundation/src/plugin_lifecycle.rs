@@ -703,14 +703,22 @@ where
     /// Private-namespace provisioner port.
     pub private_ns: &'a mut P,
     /// **Phase-4-Meta-Core G-CORE-8 §4.37** — install-record replay
-    /// check port. Defaults to `None` (no replay check; backward-
-    /// compat). When `Some(F)`, called BEFORE the cap-cascade with
-    /// the canonical signing-payload hash of the install record. If
-    /// `F` returns `Err(_)`, install rejects pre-mint (zero
-    /// duplicate-mint window per §4.37 TOCTOU contract). Production
-    /// engines wire this to a closure over the engine's
+    /// check port. **R6 R1 FP-F4 §S2 (Row D-2 closure):** the prior
+    /// `Option<>` wrapper is dropped (the `None` arm silently
+    /// disabled the §4.37 TOCTOU defense in shipped binaries). Every
+    /// caller MUST supply a substantive closure. Production callers
+    /// wire `make_engine_replay_check_closure(engine.install_record_replay_store())`;
+    /// test fixtures wire [`crate::testing::noop_replay_check()`]
+    /// (admit-all, intentional non-defense; documents the test that
+    /// is NOT exercising the replay-defense surface).
+    ///
+    /// Called BEFORE the cap-cascade with the canonical signing-
+    /// payload hash of the install record. If the closure returns
+    /// `Err(_)`, install rejects pre-mint (zero duplicate-mint
+    /// window per §4.37 TOCTOU contract). Production engines wire
+    /// this to a closure over the engine's
     /// `Engine::install_record_replay_store().record_and_check`.
-    pub install_record_replay_check: Option<&'a mut InstallRecordReplayCheckFn>,
+    pub install_record_replay_check: &'a mut InstallRecordReplayCheckFn,
 }
 
 /// Closure type for the [`InstallPorts::install_record_replay_check`]
@@ -898,10 +906,10 @@ where
     //      `signing_payload_hash` helper in benten-engine; the
     //      two-step composition stays free of platform-foundation
     //      deps on benten-engine — the caller computes the hash).
-    if let Some(replay_check) = ports.install_record_replay_check.as_mut() {
+    {
         let payload = install_record.signing_payload();
         let payload_hash: [u8; 32] = *blake3::hash(&payload).as_bytes();
-        replay_check(&payload_hash)?;
+        (ports.install_record_replay_check)(&payload_hash)?;
     }
 
     // 4. Seam 2 — clock-injected validation (delegates to validate +

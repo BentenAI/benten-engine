@@ -87,15 +87,33 @@ impl ManifestStore {
         Self::default()
     }
 
-    /// Persist a verified install record. Caller MUST have already
-    /// verified the user-DID signature; this method only stores the
-    /// canonical bytes.
+    /// **R6 R1 FP-F4 §S2 (Δv3-9)** — Persist a verified install
+    /// record DIRECTLY into the store, BYPASSING the full
+    /// `plugin_lifecycle::install_plugin` pipeline (which threads
+    /// `InstallRecordReplayStore`, capability cascade, and the
+    /// install-time consent hook).
+    ///
+    /// **CALLER SHAPE WARNING:** this is the canonical low-level
+    /// side-door for tests / synthetic fixtures that need to
+    /// pre-populate the manifest store without the full install
+    /// pipeline. Production callers MUST go through
+    /// `plugin_lifecycle::install_plugin` which owns the §4.37
+    /// replay defense + §8-E consent hooks.
+    ///
+    /// Caller MUST have already verified the user-DID signature;
+    /// this method only stores the canonical bytes (re-verifies on
+    /// store as defense-in-depth — first-of-three verify points
+    /// install / load / merge).
     ///
     /// # Errors
     ///
     /// `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` if the record
     /// fails self-verification at install time (defense in depth).
-    pub fn install_plugin(
+    #[deprecated(
+        note = "use `plugin_lifecycle::install_plugin` which threads InstallRecordReplayStore + §8-E hooks; this side-door bypasses §4.37 replay defense"
+    )]
+    #[doc(hidden)]
+    pub fn install_verified_record_unchecked(
         &mut self,
         plugin_did: Did,
         record: InstallRecord,
@@ -281,7 +299,11 @@ mod redb_store {
         /// - `E_PLUGIN_MANIFEST_INVALID` on canonical-bytes encode
         ///   failure.
         /// - `E_INTERNAL` on redb transaction failure.
-        pub fn install_plugin(
+        #[deprecated(
+            note = "use `plugin_lifecycle::install_plugin` which threads InstallRecordReplayStore + §8-E hooks; this side-door bypasses §4.37 replay defense"
+        )]
+        #[doc(hidden)]
+        pub fn install_verified_record_unchecked(
             &mut self,
             plugin_did: Did,
             record: InstallRecord,
@@ -380,6 +402,10 @@ mod redb_store {
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // R6 R1 FP-F4 §S2 — these tests intentionally exercise
+// the deprecated side-door `install_verified_record_unchecked`
+// for the post-install-byte-mutation drift-detection arms;
+// production callers go through plugin_lifecycle::install_plugin.
 mod tests {
     use super::*;
     use crate::plugin_manifest::InstallRecord;
@@ -418,7 +444,7 @@ mod tests {
         );
         let mut store = ManifestStore::new();
         store
-            .install_plugin(plugin_did.clone(), record.clone())
+            .install_verified_record_unchecked(plugin_did.clone(), record.clone())
             .unwrap();
         let loaded = store.load_verified(&plugin_did).unwrap();
         assert_eq!(loaded.consenting_user_did, user.public_key().to_did());
@@ -437,7 +463,7 @@ mod tests {
         );
         let mut store = ManifestStore::new();
         store
-            .install_plugin(plugin_did.clone(), original.clone())
+            .install_verified_record_unchecked(plugin_did.clone(), original.clone())
             .unwrap();
         // Attacker mutates the install-record bytes: same user-DID,
         // but a different nonce → user_signature no longer verifies

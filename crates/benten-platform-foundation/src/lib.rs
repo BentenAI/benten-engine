@@ -86,6 +86,8 @@ pub mod plugin_lifecycle;
 pub mod plugin_manifest;
 pub mod registry;
 pub mod schema_compiler;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 pub mod workflow_to_plugin;
 
 // G23-B materializer canary public surface — re-exported through the
