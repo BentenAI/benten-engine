@@ -341,7 +341,7 @@ impl SwapMatrix {
             EncryptionArm::HybridX25519MlKem768 => CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
             EncryptionArm::ClassicalOnlyX25519 => CipherSuiteCodepoint::CLASSICAL_X25519,
             EncryptionArm::None => CipherSuiteCodepoint::NONE_PLAINTEXT,
-            EncryptionArm::PurePqMlKem768Only => CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
+            EncryptionArm::PurePqMlKem768Only => CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
         }
     }
 
@@ -471,7 +471,7 @@ impl SwapMatrix {
                         })?;
                 let (ct, ss) = pure_pq_mlkem_encapsulate(&recip_kem.public_bytes)?;
                 let key =
-                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_MLKEM768_HQC, &ss);
+                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY, &ss);
                 let aad = compose_aad(
                     self.signature_codepoint(),
                     self.cipher_suite_codepoint(),
@@ -565,7 +565,7 @@ impl SwapMatrix {
                 let ct_bytes = sealed.wrapped.ek_mlkem.clone();
                 let ss = pure_pq_mlkem_decapsulate(&recip_kem.secret_bytes, &ct_bytes)?;
                 let key =
-                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_MLKEM768_HQC, &ss);
+                    KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY, &ss);
                 let aad = compose_aad(
                     envelope.sig_codepoint,
                     envelope.cipher_codepoint,
@@ -1627,12 +1627,12 @@ fn decode_hybrid_sig_from_bytes(
 
 fn pure_pq_wrap_ct(ct: Vec<u8>) -> crate::cipher_suite::WrappedKey {
     crate::cipher_suite::WrappedKey {
-        codepoint: CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
+        codepoint: CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
         ek_x: Vec::new(),
         ek_mlkem: ct,
         aead_envelope: AeadEnvelope {
             format_version: 0x01,
-            cipher_codepoint: CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
+            cipher_codepoint: CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
             nonce: vec![0u8; 12],
             ciphertext: Vec::new(),
         },
@@ -1691,7 +1691,7 @@ fn aead_wrap_pure_pq(
         .map_err(|_| SwapMatrixError::AeadAuthFailed)?;
     Ok(AeadEnvelope {
         format_version: 0x01,
-        cipher_codepoint: CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
+        cipher_codepoint: CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
         nonce: nonce_bytes.to_vec(),
         ciphertext: ct,
     })
@@ -1816,6 +1816,31 @@ mod tests {
             outcome,
             Err(SwapMatrixError::AuditNotLandedPurePqRejected { .. })
         ));
+    }
+
+    /// **Pre-G-CORE-9-FREEZE 2026-05-24 codepoint routing pin.** The
+    /// pure-PQ ML-KEM-768-only swap-matrix arm MUST route to codepoint
+    /// `0x647c` (`PURE_PQ_MLKEM768_ONLY`), NOT the previously-conflated
+    /// `0x647b` (`HYBRID_MLKEM768_HQC` — strictly reserved for the
+    /// future ML-KEM⊕HQC PQ⊕PQ end-state). Uses the cfg-test-only bypass
+    /// constructor [`SwapMatrix::force_pure_pq_for_test_bypassing_audit_gate`]
+    /// — production code paths cannot reach this construction (gated by
+    /// the C11b `AuditNotLandedPurePqRejected` arm).
+    #[test]
+    fn pure_pq_arm_routes_to_codepoint_0x647c() {
+        let matrix = SwapMatrix::force_pure_pq_for_test_bypassing_audit_gate();
+        assert_eq!(
+            matrix.cipher_suite_codepoint().raw(),
+            0x647c,
+            "SwapMatrix pure-PQ arm cipher_suite_codepoint() MUST route \
+             to 0x647c (the post-2026-05-24 ratification destination) — \
+             routing to 0x647b would re-introduce the wire-format \
+             collision with the ML-KEM⊕HQC future end-state"
+        );
+        // Sanity: the constant itself stays at 0x647b (reserved for the
+        // future ML-KEM⊕HQC arm; MUST NOT alias `0x647c`).
+        assert_eq!(CipherSuiteCodepoint::HYBRID_MLKEM768_HQC.raw(), 0x647b);
+        assert_eq!(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY.raw(), 0x647c);
     }
 
     #[test]
