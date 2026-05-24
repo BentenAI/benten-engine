@@ -922,7 +922,7 @@ verification at HEAD):
 |---|---|---|---|
 | `benten-engine` | `EngineError`, `engine_config::*`, `engine_sync::*` | YES | KEEP |
 | `benten-engine` | `UserViewInputPattern` / `TraceStep` / `Transport` (thin_client) / `AtriumMode` / `SuspensionOutcome` / `DelegationResolution` / `NextChunkPoll` / `StreamCursor` / `SubscribeCursor` / `WriteBoundaryChainOutcome` / `ManifestEnvelopeRecheckOutcome` / `ManifestVerifyMode` | **12+ verified MISSING at HEAD** | APPLY |
-| `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES | KEEP |
+| `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES (except `Spec` which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1) | KEEP |
 | `benten-core` | new `RestrictedSpec` enum variants (`subgraph_spec/spec.rs:126`) | TBD | APPLY |
 | `benten-ivm` | `AlgorithmError` | per spec item 11 | AUDIT + APPLY |
 | `benten-sync` | §4.71 5-enum cluster | per spec item 11 | AUDIT + APPLY |
@@ -1269,7 +1269,12 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 **Frozen surfaces:**
 - `crates/benten-core/src/subgraph_spec/spec.rs:190` `pub struct Spec` —
   the 4-thing thin core (Roots / Expansion / Inclusion / Termination).
-  `#[non_exhaustive]` already APPLIED — KEEP.
+  **Equivalent SemVer-safety via private fields + builder pattern**
+  (`pub fn builder() -> SpecBuilder` at `spec.rs:216`; all four fields are
+  private). External direct-struct-literal construction is already blocked
+  by field visibility — `#[non_exhaustive]` is NOT required for the
+  SemVer-additive-field-extension property `Spec` needs. Per G-CORE-9 R2
+  L17-r2-1 disposition path (b).
 - `crates/benten-core/src/subgraph_spec/walker.rs:78` `pub fn walk(spec:
   &Spec) -> Result<WalkResult, SubgraphSpecError>` — the canonical
   walker.
@@ -1369,10 +1374,15 @@ narrative-as-cite; existing tests in `crates/benten-caps/tests/tf3b_*.rs`.
   failures + the cite-drift CI lane fires on the `no-opaque-arm`
   sentinel).
 - A third arm CANNOT be added post-freeze without explicit re-open.
-- Wire envelope typed for additive future arms via codepoint-dispatch
-  (same playbook as crypto-agility per CLAUDE.md #5) — i.e. a future
-  arm lands at a NEW codepoint, never repurposing the existing two-arm
-  enum.
+- Wire envelope typed for additive future arms via **serde-tag dispatch**
+  (the two arms `Hashes(Vec<Cid>)` + `RestrictedSelector(RestrictedScope)`
+  carry distinct serde tags; the dispatch is at the serde-tag layer, NOT
+  via a numeric codepoint table parallel to the crypto-agility framing)
+  — a future arm lands as a new serde-tag arm on this carve-out enum,
+  never repurposing the existing two-arm enum. The "codepoint-dispatch"
+  framing in earlier drafts overstated the machinery; the serde-tagged
+  dispatch IS additive-friendly so the freeze contract is not weakened.
+  Per G-CORE-9 R2 L17-r2-2 disposition path (a).
 
 **What "frozen" means here:**
 - EXACTLY two arms — structural pin via exhaustive `match` at every
