@@ -1,0 +1,90 @@
+{
+  "lens": "R4b L5 SHAPE-not-SUBSTANCE",
+  "phase": "Phase-4-Meta-Core",
+  "tier": "R4b",
+  "branch": "phase-4-meta-core/r4b-l5-shape-not-substance",
+  "base_main_sha": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+  "review_date": "2026-05-24",
+  "scope": "pim-18 §3.6f SHAPE-not-SUBSTANCE pre-flight discipline applied across Phase-4-Meta-Core R5 test corpus (~47 tf-prefixed test files across 9 crates: benten-core / benten-caps / benten-crypto-suite / benten-drop / benten-dsl-compiler / benten-engine / benten-graph / benten-ivm / benten-platform-foundation / benten-sync). Sampled 10 files randomly + 3 targeted (chunk-3 historical bug site + suspicious test names + ignored-test inventory).",
+  "disposition": "APPROVE-WITH-MINOR",
+  "convergence_disposition": "R4b-CONVERGED-CONDITIONAL-ON-MINOR-DOC-DRIFT-CLOSURE",
+  "summary": "Phase-4-Meta-Core continues the 8-consecutive-zero-incident-wave streak after G16-C precedent in the SUBSTANTIVE sense: every sampled closure pin exercises a real production call site, asserts an observable behavioral consequence, and would-FAIL if the production code path were no-op'd. The historical chunk-3 SHAPE-not-SUBSTANCE bug (test asserting OPPOSITE of name: `default_builder_installs_substantive_production_rechecker_not_noop`) has been honestly renamed at R4.1 fix-pass to `noop_rechecker_admit_everything_is_security_r1_1_would_fail_baseline` with an explicit comment block documenting the rename rationale and the post-G-CORE-8.2 future-target test name. Only ONE test across the 47-file tf-corpus carries a real `#[ignore]` attribute (tf5_424_materializer_recursive_walk_into_vocabulary_edges.rs::tf5_424_materializer_recursive_walk_wasm32_companion_after_g_core_0_site_count_verify) and it is properly staged per §3.6e RED-PHASE staged-pin discipline with a HARD RULE 12 clause-(b) named destination (G-CORE-4 §4.42 wasm32 sweep, gated on G-CORE-0 verify-pass site-count re-confirm). Findings are 2 MINOR aspirational-prose / cosmetic-name drifts that don't undermine the substantive SHAPE-not-SUBSTANCE discipline.",
+  "questions_addressed": {
+    "Q1_production_call_site_enumeration": "PASS — every sampled test exercises a real production entry point (compile_str / RedbBackend::put_node_with_context / read_via_two_cid_scoped / two_cid_lookup / aead_wrap::{encrypt,decrypt} / Materializer::materialize_with_gate / DropBundle::parse_cbor_bytes / version::Anchor / DagVersionChain / walker::walker_as_subgraph / etc.). No #[cfg(test)]-only paths conflated with production assertions.",
+    "Q2_body_of_test_substantive": "PASS — 10/10 randomly-sampled closure pins have test bodies that exercise an observable consequence (typed error variants, byte-round-trips, edge-marker presence in HTML output, deterministic canonical-bytes, defense-in-depth tamper detection). Each test would FAIL if the production code path were no-op'd; comments explicitly enumerate the would-FAIL property.",
+    "Q3_aspirational_prose_gap": "MOSTLY-PASS with 1 MINOR — most tests carry honest pim-18-aware docstrings naming would-FAIL properties + explicit SHAPE-flag disclosures (e.g. tf3f_envelope_plus_per_node_sig_defense_in_depth's PIN 3 honestly admits per-Node-sigs are SIZED PLACEHOLDERS at G-CORE-3f, not real Ed25519 sigs, with an anti-stub size-overhead assertion forcing the placeholder to be non-empty). Finding L5-MIN-1 catches stale RED-PHASE docstrings on already-GREEN tests.",
+    "Q4_test_name_honesty": "PASS-WITH-EXEMPLAR — the historical chunk-3 SHAPE-not-SUBSTANCE bug (test asserting OPPOSITE of name) is documented in tf5_424's MR-2 rename comment + the new tests are honestly named. Finding L5-MIN-2 flags one residual minor name/body mismatch.",
+    "Q5_streak_continuation": "PASS — Phase-4-Meta-Core continues the 8-consecutive-zero-incident-wave streak after G16-C precedent at the SUBSTANTIVE level. The R4.1 fix-pass already caught + closed the one historical SHAPE-not-SUBSTANCE bug (chunk-3 renamer); 0 substantive SHAPE-not-SUBSTANCE BLOCKER or MAJOR remain at HEAD."
+  },
+  "findings": [
+    {
+      "id": "L5-MIN-1",
+      "severity": "MINOR",
+      "title": "Stale RED-PHASE docstrings on already-GREEN tests (aspirational-prose gap, Q3)",
+      "site_count": "~17 tf-files carry 'RED until G-CORE-X' / 'RED-PHASE — un-ignore at G-CORE-X' in docstrings but have 0 actual #[ignore] attributes at HEAD",
+      "examples": [
+        "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs — every test docstring says 'RED until G-CORE-3w' but G-CORE-3w has SHIPPED (walker_as_subgraph is real production code) and tests are not #[ignore]'d",
+        "crates/benten-graph/tests/tf3d_two_cid_mapping_roundtrip.rs — header banner says 'LANDED at G-CORE-3d (pim-12 / §3.6e closure)' BUT individual `#[test]` docstrings still say 'RED-PHASE — un-ignore at G-CORE-3d' (a cite-drift between banner + per-test docs)",
+        "crates/benten-caps/tests/tf3b_no_opaque_selector_arm_structural.rs — every test docstring says 'RED until G-CORE-3b' but G-CORE-3b has SHIPPED (Scope enum is real production code in crates/benten-caps/src/scope.rs)"
+      ],
+      "pim_18_classification": "Q3 aspirational-prose gap (cosmetic-only — tests are SUBSTANTIVELY correct, code paths exercise production, observable consequences asserted). The drift is in the HUMAN-READABLE docstring, not the test body. A future reader skimming the file would be misled into believing the test is still RED-PHASE / ignored when in fact it is GREEN and passing.",
+      "disposition": "BELONGS-NAMED-NOW — a 30-min orchestrator-direct sed sweep across the ~17 affected tf-files would replace 'RED until G-CORE-X' / 'RED-PHASE — un-ignore at G-CORE-X' with 'LANDED at G-CORE-X (pim-12 / §3.6e closure)' on the per-test docstrings. Named destination: orchestrator-direct fix-pass commit immediately after R4b convergence. Alternatively (cheaper), a single banner block at file-top supersedes per-test prose (the tf3d_two_cid_mapping pattern). Pim-N candidate (not yet 3-recurrence): post-wave-land docstring un-RED-ification sweep — would compose with §3.6e RED-PHASE staged-pin discipline as the close-out half.",
+      "would_FAIL_property": "If §3.6e RED-PHASE discipline is to mean anything, the close-out (un-ignore at named wave) MUST also close the docstring narrative claim. Otherwise a future reader treats a passing-GREEN-but-prose-says-RED test as a 'still-deferred / not-yet-substantive' artifact and may inadvertently re-skip it during a refactor sweep.",
+      "blocks_R4b_convergence": false
+    },
+    {
+      "id": "L5-MIN-2",
+      "severity": "MINOR",
+      "title": "Test name/body promise-mismatch in tf3w_walker_is_a_subgraph_no_new_primitive_kind::primitive_kind_remains_exactly_twelve_variants (Q4)",
+      "site": "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs:74-148",
+      "details": "The test name + docstring promise: 'an exhaustive match over PrimitiveKind covers EXACTLY 12 arms ... non_exhaustive_omitted_patterns ... compile fail on the missing pattern — the load-bearing structural guard against silent primitive growth'. The test BODY does NOT use an exhaustive `match` statement — it iterates a hardcoded 12-element array (`twelve = [PrimitiveKind::Read, ..., PrimitiveKind::Stream]`) and a hardcoded `known: &[&str]` string array. If a future commit added a 13th PrimitiveKind variant (e.g. `PrimitiveKind::SubgraphSpecWalk`), the test would still PASS because the hardcoded `twelve` array would not include the new variant — there is no exhaustive match to fire `non_exhaustive_omitted_patterns`.",
+      "pim_18_classification": "Q4 test-name honesty + Q3 aspirational-prose gap (the docstring claim is FALSE — the test does NOT deliver the compile-time exhaustive-match guard it promises). NOTE: the structural backstop for the 12-primitive irreducibility ACTUALLY lives elsewhere (e.g. tf5_46's per-label allowlist + Subgraph::nodes() walker assertions that allowlist PrimitiveKind; the production cite-drift sentinel against CLAUDE.md baked-in #1; the §6.32 cite-drift CI lane). So the SUBSTANTIVE guarantee holds via cross-cutting defenses — but THIS test's individual promise is broken.",
+      "disposition": "BELONGS-NAMED-NOW — orchestrator-direct fix-pass to replace the hardcoded `twelve` array with a real exhaustive `match k { PrimitiveKind::Read => ..., PrimitiveKind::Write => ..., ... PrimitiveKind::Stream => ... }` over a sample variant. Or alternatively weaken the docstring + test name to match what the body actually delivers ('twelve_known_variants_round_trip_canonical_tag'). 5-minute fix; either form closes the promise-body mismatch. Named destination: orchestrator-direct fix-pass commit immediately after R4b convergence. ~10 LOC.",
+      "would_FAIL_property": "Per the docstring's own claim: 'If G-CORE-3w mints a 13th variant, this test compile-fails on the missing pattern' — but no actual match statement exists in the body to trigger that compile-fail. The structural promise is undelivered by THIS specific test (other tests in tf3w + tf5_46 carry overlapping but not identical guards).",
+      "blocks_R4b_convergence": false
+    }
+  ],
+  "verified_substantive_examples": [
+    "crates/benten-platform-foundation/tests/tf5_46_schema_compiler_8_labeltype_vocab_fixture.rs — exercises real benten_platform_foundation::schema_compiler::compile() over 8 per-label fixtures, asserts per-label emit-side vocab edges (FieldMap → KEY_TYPE+VALUE_TYPE; FieldEnum → VARIANT; etc.) + 12-primitive irreducibility allowlist + sibling proptest un-ignore-obligation discharge check. Substantive.",
+    "crates/benten-graph/tests/tf3d_partition_before_crypto.rs — exercises real RedbBackend::put_node_with_context + read_via_two_cid_scoped + aead_wrap::decrypt + import_encrypted_node_into_scope; asserts TwoCidMapError::NotFound (partition isolation) vs AeadAuthenticationFailed (crypto layer) variant distinction; defense-in-depth pin. Substantive.",
+    "crates/benten-dsl-compiler/tests/tf10_dsl_chunk1_closures.rs + tf_dsl_chunk3_closures.rs — exercise real compile_str() with observable error_code + Span byte-offset + variant-name + canonical-bytes-stability assertions; each test names its would-FAIL property in the docstring. Substantive + honestly named.",
+    "crates/benten-graph/tests/tf3d_two_cid_mapping_roundtrip.rs — exercises real put_node_with_context + two_cid_lookup + get_encrypted_node + aead_wrap::decrypt round-trip + durable-across-reopen + tamper detection. Substantive.",
+    "crates/benten-graph/tests/tf3d_aad_binds_plaintext_cid_rebinding_attack.rs — exercises real EncryptedNode::encrypt + with_aad_plaintext_cid_for_test (rebinding the AAD) + decrypt; asserts AeadError::Authentication on rebinding attempt + control case succeeds at correct CID. Substantive.",
+    "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs (arms P-2.2 + P-2.3 + P-2.4) — exercise real walker::walker_as_subgraph + walker::walk + to_canonical_bytes; assert allowed PrimitiveKind subset {Read, Transform, Branch, Iterate} + byte-stable invocation + Spec-walk enumeration. Substantive (arm P-2.1 is the L5-MIN-2 finding).",
+    "crates/benten-drop/tests/tf3f_no_mode3_inline_tiny_arm.rs — local closure describe_mode IS exhaustive over DropContentMode (only 2 arms); adding InlineTiny variant would compile-fail (the lint mechanism the test promises). Substantive + truly structural.",
+    "crates/benten-drop/tests/tf3f_envelope_plus_per_node_sig_defense_in_depth.rs — exercises real DropBundle::build_5_recipe_bundle_for_recipient + flip_byte_in_content_for_test + tamper_envelope_signature_for_test + consume_offline; asserts envelope-sig vs per-Node-AEAD layer separation + tamper detection ordering. Substantive (with honest SIZED-PLACEHOLDER disclosure for the per-Node-sig overhead bound).",
+    "crates/benten-core/tests/tf6_d3_dead_anchor_1003_and_995_verify_stays_regression.rs — exercises real version::Anchor + DagVersionChain + Cid API; asserts VersionError::Branched + cycle rejection + Cid::Copy + base32 round-trip + ord stability. Substantive verify-stays guards (#1003 + #995 + #849 invariants).",
+    "crates/benten-caps/tests/tf3b_no_opaque_selector_arm_structural.rs (arm A-4.1) — exercises real Scope enum + RestrictedScope; the literal match arms ARE exhaustive over a non-#[non_exhaustive] enum (verified at crates/benten-caps/src/scope.rs:34-52); adding a third arm would compile-fail at every match site. Substantive (arm A-4.2 is doc-coupling-pin-only without assertion; minor narrow shape per its own admission).",
+    "crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs::noop_rechecker_admit_everything_is_security_r1_1_would_fail_baseline — the R4.1-renamed test (was OPPOSITE-named pre-fix); honestly exercises NoopManifestEnvelopeRechecker.recheck_row returning NotApplicable + outcome_to_row_reject mapping NotApplicable → Ok(()) → admit; the SHIPPED admit-everything default IS the security-r1-1 would-FAIL signal. Honest + substantive."
+  ],
+  "ignored_test_inventory": {
+    "actual_ignore_attribute_count": 1,
+    "ignored_tests": [
+      {
+        "file": "crates/benten-platform-foundation/tests/tf5_424_materializer_recursive_walk_into_vocabulary_edges.rs",
+        "line": 245,
+        "test": "tf5_424_materializer_recursive_walk_wasm32_companion_after_g_core_0_site_count_verify",
+        "ignore_reason": "RED-PHASE: un-ignore at G-CORE-4 — §4.24 + §4.42 wasm32 companion. SEQUENCING PRE-FLIGHT (R2 §4-C C9 callout): G-CORE-0 verify-pass MUST first re-confirm the §4.42 4-site count BEFORE this wasm32 recursive-walk companion arm is written/un-ignored.",
+        "disposition": "PROPERLY-STAGED per §3.6e RED-PHASE staged-pin discipline + HARD RULE 12 clause-(b) named destination (G-CORE-4 §4.42 wasm32 sweep wave; carry in docs/future/phase-4-backlog.md §4.42 with a 2026-05-21 G-CORE-0 verify-pass note documenting the consolidated mod-level wasm32 cfg-gating shape — site-count re-survey is what the un-ignore awaits). Not a finding."
+      }
+    ],
+    "docstring_RED_PHASE_claims_with_no_actual_ignore": "~17 tf-files (L5-MIN-1 finding) carry 'RED until G-CORE-X' / 'RED-PHASE — un-ignore at G-CORE-X' in docstrings but no #[ignore] attribute at HEAD. These are GREEN-and-passing tests with stale RED-PHASE narrative. Cosmetic; flagged as L5-MIN-1."
+  },
+  "convergence_assessment": {
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 2,
+    "obs_count": 0,
+    "strict_Q5_termination_status": "0 BLOCKER + 0 MAJOR — qualifies as R4b convergence per strict-Q5 (CLAUDE.md non-negotiable process rule 9 generalized via feedback_iterate_critical_reviews_to_convergence). MINOR-only findings do not block convergence; they are BELONGS-NAMED-NOW orchestrator-direct fix-pass close-outs after R4b ratification.",
+    "phase_4_meta_core_streak_continuation": "PASS — 8-consecutive-zero-incident-wave streak from G16-C continues at the SUBSTANTIVE level. The R4.1 fix-pass already closed the one historical SHAPE-not-SUBSTANCE bug (chunk-3 OPPOSITE-named renamer). Phase-4-Meta-Core test corpus is substantively pim-18-compliant.",
+    "recommendation": "R4b L5 = APPROVE-WITH-MINOR / CONVERGED. The 2 MINOR findings (L5-MIN-1 stale RED-PHASE docstring sweep + L5-MIN-2 tf3w_walker test name/body promise-mismatch fix) compose into ~30 min of orchestrator-direct fix-pass work; neither blocks R4b convergence or the downstream R5→R6 sequence. Recommend folding both into an immediate post-R4b-convergence fix-pass commit (either an R4b-FP commit or absorbed into the next sweep wave's pre-flight)."
+  },
+  "method": {
+    "files_enumerated": 47,
+    "files_deeply_read": 10,
+    "files_spot_checked": 3,
+    "sampling_strategy": "Random sample of 10 tf-files via `find ... | sort -R | head -10` per pim-18 Q2 mandate; targeted reads of (a) the historical chunk-3 SHAPE-not-SUBSTANCE bug site (g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs) per lens scope question 4 + (b) tf_dsl_chunk3_closures.rs for the Diagnostic Span + Backend variant closure pins + (c) tf2_only_crypto_primitive_call_site_and_835_discharge.rs for the 'actually_discharged' test-name honesty check.",
+    "ignored_test_inventory_method": "find + awk filter on `^\\s*#\\[ignore` line-start pattern (excludes doc-comment matches that grep -c would false-positive); cross-checked against docstring 'RED-PHASE' / 'RED until' prose to surface the L5-MIN-1 stale-narrative cluster.",
+    "production_call_site_verification": "Each sampled test's `use ...` block enumerated production paths; cross-checked against `grep -rn 'pub fn <symbol>' crates/<crate>/src` for non-test-only path confirmation (e.g. RedbBackend::put_node_with_context, walker::walker_as_subgraph, compile_str, etc. all resolve to production code at HEAD a0b75637)."
+  }
+}
