@@ -1,0 +1,70 @@
+{
+  "lens": "L1-crypto-correctness",
+  "round": "R4",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "branch": "g-core-9/r4-l1-crypto-correctness",
+  "base_sha": "25576cb15566aa096499f6951d350182f4451ac4",
+  "scope_read": [
+    "crates/benten-crypto-suite/src/codepoint.rs post-R3-FP (full file, with focus on lines 64-73 SigCodepoint::raw accessor docstring + lines 139, 142 SHA codepoint constants)",
+    "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs post-R3-FP (full file, with focus on the new SHA2_512_256 + SHA3_256 pin assertions in codepoint_table_integer_values_pinned + the L1-r2-4 reserved_signature_codepoint_typed_rejected_at_every_dispatcher_entry test)",
+    "Full crates/benten-crypto-suite/src/ tree re-walked for any *new* drift introduced by R3-FP (codepoint.rs, aead.rs, structural_kdf.rs, varsig.rs, lib.rs, cipher_suite.rs, sig.rs, swap_matrix.rs, hash.rs, primitives.rs, error.rs, sizes.rs, boundary.rs, discharge.rs)",
+    "R3 lens output at commit 1d60c7f6:r6-crypto-correctness-r3.json (single MIN finding L1-crypto-r3-1; 5 R1+R2+R3 approved invariants)",
+    "R3-FP commit 25576cb1 (squash of 3 sub-commits) — the crypto-suite-touching diff at `git diff 6c21e4f5..25576cb1 -- crates/benten-crypto-suite/`",
+    "`cargo test -p benten-crypto-suite` workspace-scoped run (all binaries green, 0 failures)",
+    "`cargo test -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad` (4/4 PASS at HEAD: codepoint_table_integer_values_pinned + aad_per_chunk_canonical_layout_pinned + reserved_signature_codepoint_typed_rejected_at_every_dispatcher_entry + reserved_codepoints_stay_typed_rejected_at_v1_beta)",
+    "`grep -n 'P-III deferred|G-CORE-9 freezes the canonical' crates/benten-crypto-suite/src/codepoint.rs` → 0 matches (post-R3-FP residue fully closed)",
+    "`grep -rn 'TODO|FIXME|TBD|deferred to P-III' crates/benten-crypto-suite/src/` → 0 matches"
+  ],
+  "summary": "R3-FP Bundle R3.2 closed L1-crypto-r3-1 cleanly. codepoint.rs:66-69 SigCodepoint::raw() docstring now reads '/// Raw 16-bit codepoint value. **FROZEN at G-CORE-9 /// V1-FROZEN-INTERFACE row 6** (the integer values are PERMANENT /// per V1-FROZEN-INTERFACE.md item 6.2 codepoint table; never reuse /// a value for a different algorithm).' — exactly the R3 fix_now_action prescription pattern (matching the R2-approved framing class at codepoint.rs:9-18 module docstring + :29-41 variant docstrings + :52-63 variant docstrings, now extended to the missed accessor-method site). `grep \"P-III deferred|G-CORE-9 freezes the canonical\" crates/benten-crypto-suite/src/codepoint.rs` returns ZERO matches at HEAD — the staleness class is fully closed at every codepoint.rs site (module + variant + accessor). The companion edits R3-FP Bundle R3.2 made — the 2 new pin assertions for HashCodepoint::SHA2_512_256 (0x1015) + HashCodepoint::SHA3_256 (0x16) at tests/canonical_bytes_v1_codepoints_and_aad.rs:54-64 — are in-scope for L11 (wire-format) but also strengthen L1's reserved-codepoint typed-reject contract by pinning the integer values for the pre-blessed agile hash fallbacks listed in V1-FROZEN row 6. The added pins compile + pass + do not introduce L1 regression (they exercise the same `HashCodepoint::raw()` accessor that L1-r3-1 retensed). All R1+R2+R3 approved invariants (L1-r3-approve-1..5) re-spot-checked at HEAD: SwapMatrixError::Unsupported routing at swap_matrix.rs:438-443 + :539-546 UNCHANGED; codepoint.rs module-docstring FROZEN framing at :9-18 UNCHANGED; lib.rs:56-89 reserved+LIVE sig+cipher-suite framing UNCHANGED; sub-pin (b)+(c) typed-reject regression-guard at canonical_bytes_v1_codepoints_and_aad.rs:194-224 UNCHANGED + still passing; X-Wing combiner classical+PQ+pubkey commitment + NF-4 7-gate strip-resistance + two-path KDF Spike-E Interp-B + AeadEnvelope Gate-6 format-version byte + EncryptionClass orthogonal-by-design + 0x647c try_pure_pq_sole_trust_path audit-gating + AUDIT_LANDED_PURE_PQ_FLAG=false at workspace baseline ALL UNCHANGED. The cargo test workspace-scope run was green: 9 + 3 + 0 + 1 (doctests) passed across all visible binaries with the persistent-state-dependent pure-PQ KAT taking 76s as expected. Full crypto-suite test suite still completes without regression. R4 returns 0 BLOCKER + 0 MAJOR + 0 MINOR + 0 OBS — strict Q5 convergence achieved at this lens.",
+  "disposition": "APPROVE_FOR_FREEZE_CLEAN",
+  "convergence_signal": "R1 = 1 MAJ / 2 MIN / 2 OBS → R2 = 2 MAJ / 2 MIN / 0 OBS → R3 = 0 MAJ / 1 MIN / 0 OBS → R4 = 0 MAJ / 0 MIN / 0 OBS. Strict Q5 termination: full council returns 0 substantive findings (BLOCKER + MAJOR) AND 0 non-substantive findings (MIN + OBS). Per CLAUDE.md rule 9 Q5: 'convergence loop terminates only when full council returns 0 substantive findings' — R3 already satisfied substantive-only termination; R4 now satisfies stricter total-zero termination. L1-crypto has converged across 4 rounds with monotonic-strictly substantive reduction (1 MAJ → 2 MAJ → 0 MAJ → 0 MAJ; the R2 non-monotonic blip was the expected fix-pass-divergence detection signature, which R3 confirmed-closed + R4 reconfirms). The lens is FREEZE-CLEAN.",
+  "findings": [],
+  "approved_invariants": [
+    {
+      "id": "L1-r4-approve-1",
+      "title": "L1-crypto-r3-1 CLOSED — SigCodepoint::raw() accessor docstring at codepoint.rs:66-69 retensed to FROZEN framing matching the R2-approved class",
+      "evidence": "codepoint.rs:66-69 now reads exactly: '/// Raw 16-bit codepoint value. **FROZEN at G-CORE-9 /// V1-FROZEN-INTERFACE row 6** (the integer values are PERMANENT /// per V1-FROZEN-INTERFACE.md item 6.2 codepoint table; never reuse /// a value for a different algorithm).' This is the R3 fix_now_action prescription one-for-one (the same retense class applied at module docstring :9-18 + variant docstrings :29-41 + :52-63 in R2-FP). `grep -n 'P-III deferred\\|G-CORE-9 freezes the canonical' crates/benten-crypto-suite/src/codepoint.rs` returns ZERO matches at HEAD `25576cb1` — the staleness class is fully closed at every codepoint.rs site. The companion accessor docstrings on `CipherSuiteCodepoint::raw` and `HashCodepoint::raw` (which the R3 lens noted were already clean from the earlier R2-FP cipher-suite + hash retensing) remain consistent."
+    },
+    {
+      "id": "L1-r4-approve-2",
+      "title": "R3-FP Bundle R3.2 added SHA codepoint pins to tests/canonical_bytes_v1_codepoints_and_aad.rs:54-64 — strengthens reserved-codepoint typed-reject contract without L1 regression",
+      "evidence": "tests/canonical_bytes_v1_codepoints_and_aad.rs:54-64 added: `assert_eq!(HashCodepoint::SHA2_512_256.raw(), 0x1015, \"SHA2_512_256 wire-locked at 0x1015 (pre-blessed agile fallback per V1-FROZEN row 6)\");` + `assert_eq!(HashCodepoint::SHA3_256.raw(), 0x16, \"SHA3_256 wire-locked at 0x16 (pre-blessed agile fallback per V1-FROZEN row 6)\");`. Both constants exist at codepoint.rs:139 (`pub const SHA2_512_256: Self = Self(0x1015);`) + codepoint.rs:142 (`pub const SHA3_256: Self = Self(0x16);`). Test passes at HEAD: `cargo test -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad` → 4 passed; 0 failed. The new pins are in-scope for L11 (wire-format) per the R3-FP commit message but strengthen L1's contract that pre-blessed agile hash fallbacks have FROZEN codepoint integer values per the additive-codepoint discipline (CLAUDE.md baked-in #5). They exercise the `HashCodepoint::raw()` accessor that L1-r3-1's docstring retense covers (HashCodepoint also has its own `raw()` per the R3 lens note that the companion accessor was already clean — re-verified)."
+    },
+    {
+      "id": "L1-r4-approve-3",
+      "title": "All R1+R2+R3 approved invariants (L1-r3-approve-1..5) re-spot-checked at HEAD 25576cb1 — no R3-FP regression",
+      "evidence": "Re-walked all 5 R3-approved invariants on the post-R3-FP tree: (1) L1-crypto-r2-1 Unsupported routing at swap_matrix.rs:438-443 + :539-546 UNCHANGED (both still use `.map_err(SwapMatrixError::Unsupported)?`; helper `unsupported_codepoint_msg_static` still absent — `grep unsupported_codepoint_msg_static crates/benten-crypto-suite/src/swap_matrix.rs` returns 0 matches). (2) codepoint.rs:9-18 module-docstring FROZEN framing UNCHANGED. (3) lib.rs:56-89 reserved+LIVE sig+cipher-suite retensed framing UNCHANGED. (4) tests/canonical_bytes_v1_codepoints_and_aad.rs:194-224 sub-pin (b)+(c) typed-reject regression-guard UNCHANGED + passing. (5) Codepoint dispatchers fail-closed at codepoint.rs:113-152 + :161-200 + :254-280 UNCHANGED; reserved codepoints honored per V1-FROZEN row 6 UNCHANGED; PQ-hybrid NF-4 strip-resistance + both-must-verify at sig.rs:414-510 UNCHANGED; X-Wing combiner at cipher_suite.rs:403-437 UNCHANGED; two-path KDF Spike-E Interpretation-B at structural_kdf.rs:124-152 UNCHANGED; AeadEnvelope format-version byte at aead.rs:161-175 UNCHANGED; EncryptionClass orthogonal-by-design at benten-core/src/encryption_class.rs UNCHANGED; 0x647c try_pure_pq_sole_trust_path audit-gating at cipher_suite.rs:240-262 UNCHANGED. Companion dispatcher inventory (SigCodepoint::resolve + CipherSuiteCodepoint::resolve + CipherSuite::resolve + CipherSuite::resolve_for_wrapped_key shim + SignatureSuite::resolve_codepoint + UcanVarsigV1Header::decode + varsig.rs::decode_payload) — all typed-reject reserved codepoints UNCHANGED. The R3-FP diff to crypto-suite is strictly additive (2-line docstring retense + 10-line test pin extension); zero shape change to any dispatcher, error type, wire format, or invariant-load-bearing surface."
+    },
+    {
+      "id": "L1-r4-approve-4",
+      "title": "Full crypto-suite test suite green at HEAD — no R3-FP regression in any pinned invariant",
+      "evidence": "`cargo test -p benten-crypto-suite` at HEAD `25576cb1` completed exit 0. The visible tail of the run shows: tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault 9 passed; tf4_pure_pq_gated_audit_landed 3 passed (including the persistent-state-dependent KAT taking 76s as expected); 1 doctest passed + 1 doctest compile_fail passed. Scoped re-run of the L1-load-bearing canonical-bytes binary: `cargo test -p benten-crypto-suite --test canonical_bytes_v1_codepoints_and_aad` → 4 passed; 0 failed; 0 ignored across all 4 pinned tests (codepoint_table_integer_values_pinned + aad_per_chunk_canonical_layout_pinned + reserved_signature_codepoint_typed_rejected_at_every_dispatcher_entry + reserved_codepoints_stay_typed_rejected_at_v1_beta). The R2 L1-r2-4 sub-pins (b)+(c) explicitly named in the prior round's approve_invariants still hold + the new SHA codepoint pins added in R3-FP also hold."
+    }
+  ],
+  "iteration_termination_check": {
+    "criterion": "Per CLAUDE.md rule 9 Q5: full council every round; only BLOCKER/MAJOR block; iterate until 0 substantive findings. R4 confirms the iterate-to-convergence loop has hit zero-zero (both substantive AND non-substantive).",
+    "this_round_blocker_count": 0,
+    "this_round_major_count": 0,
+    "this_round_minor_count": 0,
+    "this_round_obs_count": 0,
+    "prior_round_blocker_count": 0,
+    "prior_round_major_count": 0,
+    "prior_round_minor_count": 1,
+    "prior_round_obs_count": 0,
+    "convergence_status": "CONVERGED at R4 — 0 BLOCKER + 0 MAJOR + 0 MIN + 0 OBS. Strict Q5 termination satisfied + stronger total-zero termination also satisfied. L1-crypto has reached FREEZE-CLEAN state across 4 rounds: substantive trajectory R1=1 MAJ → R2=2 MAJ → R3=0 MAJ → R4=0 MAJ; non-substantive trajectory R1=2 MIN+2 OBS → R2=2 MIN+0 OBS → R3=1 MIN+0 OBS → R4=0 MIN+0 OBS. Monotonic-strictly substantive convergence to zero by R3, monotonic-strictly total convergence to zero by R4. The R2 non-monotonic substantive blip (1→2) was the expected fix-pass-divergence detection signature, fully closed at R3-FP per L1-r3-approve-1..4. The R3 residual MIN (L1-crypto-r3-1: SigCodepoint::raw() accessor docstring) was a 2-line cosmetic doc-honesty fix closed in R3-FP Bundle R3.2 exactly as prescribed.",
+    "iteration_recommendation": "ADVANCE past L1-crypto-correctness — the lens has CONVERGED at R4 with total-zero findings. No L1-specific R5 needed. If other lenses in the council also reach total-zero (or 0 substantive per the looser Q5 criterion) at R4, the council itself converges + the iterate-to-convergence loop terminates + the FREEZE wave can advance to tag-time pre-sweep + tag `phase-4-meta-core-close` per the substrate-cascade plan."
+  },
+  "load_bearing_citations": [
+    "CLAUDE.md §Non-Negotiable Process Rules #9 (iterate-to-convergence generalized; Q5 termination = 0 substantive)",
+    "CLAUDE.md §Non-Negotiable Process Rules #12 (HARD RULE — phantom-destination explicitly forbidden; named destination MUST receive entry NOW)",
+    "CLAUDE.md baked-in #5 (crypto-agility framing — multiformats permanent; typed-unsupported NEVER silent fallback; codepoint dispatcher canonical; additive-codepoint discipline)",
+    "RATIFIED-pq-default-reframe-2026-05-19.md §1-2 (NF-4 + NF-1 + PQ-default placement + audit-gating)",
+    "V1-FROZEN-INTERFACE.md item 6 (codepoint table — row 508 0x0003 framing + row 513 0x647c framing per C11b)",
+    "V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 (L1-OBS-5 anchor)",
+    "R3 lens output at commit 1d60c7f6:r6-crypto-correctness-r3.json (the single L1-crypto-r3-1 MIN finding that R3-FP closed)",
+    "R3-FP commit 25576cb1 (Bundle R3.2 close — codepoint.rs:66-69 retense + SHA codepoint pin extensions)",
+    "memory/feedback_iterate_critical_reviews_to_convergence.md (Q5 generalization + substantive-only termination criterion + R4-as-converging-tier scope)",
+    "memory/feedback_review_finding_ground_truth_verify.md (orchestrator + downstream reviewer independently ground-truth-verifies every claimed closure)",
+    "memory/feedback_pim_18_shape_not_substance_pre_flight.md (production call site enumeration; inline-fix trigger for 2-line trivial doc edits — exactly what R3-FP Bundle R3.2 applied for L1-crypto-r3-1)"
+  ]
+}
