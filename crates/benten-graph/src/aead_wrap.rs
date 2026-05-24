@@ -225,11 +225,21 @@ impl ChunkedCiphertext {
     /// Same arms as [`EncryptedNode::encrypt`].
     pub fn encrypt(plaintext: &[u8], plaintext_cid: &Cid, key: &[u8]) -> Result<Self, AeadError> {
         let key_material = make_key_material(key)?;
-        let mut chunks = Vec::with_capacity(plaintext.len().div_ceil(IROH_BLOCK_SIZE));
+        let total_chunks_usize = plaintext.len().div_ceil(IROH_BLOCK_SIZE).max(1);
+        let total_chunks = u32::try_from(total_chunks_usize).map_err(|_| AeadError::KeyMismatch {
+            reason: "chunk count exceeds u32".to_string(),
+        })?;
+        let mut chunks = Vec::with_capacity(total_chunks_usize);
         for (chunk_index, slice) in plaintext.chunks(IROH_BLOCK_SIZE).enumerate() {
             let chunk_index_u64 = u64::try_from(chunk_index)
                 .map_err(|_| AeadError::Authentication("chunk index exceeds u64".to_string()))?;
-            let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64);
+            // F3 (R6 R1 fix-pass): AAD binds total_chunks for
+            // cross-chunk-truncation defense. Per-chunk authentication
+            // fails if an attacker presents a shorter slice of chunks
+            // (the per-chunk AAD committed at seal time names the
+            // original total_chunks count).
+            let aad =
+                suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
             let envelope = suite_wrap(slice, &key_material, &aad).map_err(AeadError::from)?;
             chunks.push(envelope);
         }
@@ -283,12 +293,24 @@ pub fn decrypt(envelope: &EncryptedNode, key: &[u8]) -> Result<Vec<u8>, AeadErro
             // Decrypt every chunk in order + reassemble. The
             // independent-decrypt property is exercised by
             // `decrypt_chunk` directly; this is the whole-Node read path.
+            //
+            // F3 (R6 R1 fix-pass): AAD binds total_chunks (= chunks.len()
+            // observed at decrypt time). If an attacker truncates the
+            // chunk list to N' < N, the per-chunk AAD reconstructed here
+            // commits to total_chunks=N' but the seal-time AAD committed
+            // to total_chunks=N — per-chunk authentication fails at
+            // every boundary, surfacing the truncation cryptographically.
+            let total_chunks =
+                u32::try_from(chunked.chunks.len()).map_err(|_| AeadError::KeyMismatch {
+                    reason: "chunk count exceeds u32".to_string(),
+                })?;
             let mut out = Vec::new();
             for (chunk_index, chunk) in chunked.chunks.iter().enumerate() {
                 let chunk_index_u64 = u64::try_from(chunk_index).map_err(|_| {
                     AeadError::Authentication("chunk index exceeds u64".to_string())
                 })?;
-                let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64);
+                let aad =
+                    suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
                 let plaintext =
                     suite_unwrap(chunk, &key_material, &aad).map_err(AeadError::from)?;
                 out.extend_from_slice(&plaintext);
@@ -314,33 +336,49 @@ pub fn encrypt(
     EncryptedNode::encrypt(plaintext, plaintext_cid, key)
 }
 
-/// Decrypt a single chunk INDEPENDENTLY at `chunk_index` — the
+/// Decrypt a single chunk INDEPENDENTLY at `chunk_index` of a chunked
+/// ciphertext whose total chunk count is `total_chunks` — the
 /// range-fetch preservation property per Spike H+1.2.
+///
+/// F3 (R6 R1 fix-pass): `total_chunks` is now an AAD-bound input. The
+/// caller (range-fetch consumer) MUST present the same `total_chunks`
+/// the producer sealed under; presenting a different value
+/// (the cross-chunk-truncation attack — claim a 10-chunk ciphertext is
+/// really 5-chunk) surfaces `AeadError::Authentication`.
 ///
 /// # Errors
 ///
 /// - [`AeadError::Authentication`] on tag mismatch — including the
 ///   cross-chunk-rebinding attack (chunk-N's ciphertext presented at
 ///   index M ≠ N fails because the AAD-bound `chunk_index` doesn't
-///   match).
+///   match) AND the cross-chunk-truncation attack (presenting a chunk
+///   under a different `total_chunks` value fails because the AAD-bound
+///   `total_chunks` doesn't match).
 /// - [`AeadError::Unsupported`] on codepoint mismatch.
 pub fn decrypt_chunk(
     chunk: &AeadEnvelope,
     chunk_index: usize,
+    total_chunks: u32,
     plaintext_cid: &Cid,
     key: &[u8],
 ) -> Result<Vec<u8>, AeadError> {
     let key_material = AeadKeyMaterial::from_raw_bytes(chunk.cipher_codepoint, key);
     let chunk_index_u64 = u64::try_from(chunk_index)
         .map_err(|_| AeadError::Authentication("chunk index exceeds u64".to_string()))?;
-    let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64);
+    let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
     suite_unwrap(chunk, &key_material, &aad).map_err(AeadError::from)
 }
 
-/// Seal one chunk's bytes at `chunk_index` — the producer-side
-/// counterpart to [`decrypt_chunk`]. Used by sync-side bytes-as-they-
-/// arrive ingest paths that need to seal incrementally rather than
-/// materializing the whole Node first.
+/// Seal one chunk's bytes at `chunk_index` of a chunked ciphertext whose
+/// total chunk count is `total_chunks` — the producer-side counterpart
+/// to [`decrypt_chunk`]. Used by sync-side bytes-as-they-arrive ingest
+/// paths that need to seal incrementally rather than materializing the
+/// whole Node first.
+///
+/// F3 (R6 R1 fix-pass): the caller MUST know `total_chunks` at seal
+/// time so the AAD commits the cross-chunk-truncation defense field.
+/// Sync-side incremental sealers compute this from the plaintext-length
+/// hint they received with the ingest stream.
 ///
 /// # Errors
 ///
@@ -348,13 +386,14 @@ pub fn decrypt_chunk(
 pub fn encrypt_chunk(
     chunk_plaintext: &[u8],
     chunk_index: usize,
+    total_chunks: u32,
     plaintext_cid: &Cid,
     key: &[u8],
 ) -> Result<AeadEnvelope, AeadError> {
     let key_material = make_key_material(key)?;
     let chunk_index_u64 = u64::try_from(chunk_index)
         .map_err(|_| AeadError::Authentication("chunk index exceeds u64".to_string()))?;
-    let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64);
+    let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
     suite_wrap(chunk_plaintext, &key_material, &aad).map_err(AeadError::from)
 }
 
@@ -631,8 +670,8 @@ mod tests {
         let plaintext = vec![0xA5u8; 4 * IROH_BLOCK_SIZE];
         let chunked = ChunkedCiphertext::encrypt(&plaintext, &cid, &key).unwrap();
         assert_eq!(chunked.chunks().len(), 4);
-        // Independent decrypt of chunk 2
-        let chunk_2 = decrypt_chunk(&chunked.chunks()[2], 2, &cid, &key).unwrap();
+        // Independent decrypt of chunk 2 (F3: total_chunks=4 must match)
+        let chunk_2 = decrypt_chunk(&chunked.chunks()[2], 2, 4, &cid, &key).unwrap();
         let start = 2 * IROH_BLOCK_SIZE;
         let end = start + IROH_BLOCK_SIZE;
         assert_eq!(chunk_2, &plaintext[start..end]);
@@ -645,8 +684,60 @@ mod tests {
         let plaintext = vec![0x5Au8; 4 * IROH_BLOCK_SIZE];
         let chunked = ChunkedCiphertext::encrypt(&plaintext, &cid, &key).unwrap();
         // Present chunk-1 at index-3 (wrong index → AAD mismatch)
-        let result = decrypt_chunk(&chunked.chunks()[1], 3, &cid, &key);
+        let result = decrypt_chunk(&chunked.chunks()[1], 3, 4, &cid, &key);
         assert!(matches!(result, Err(AeadError::Authentication { .. })));
+    }
+
+    /// F3 (R6 R1 fix-pass): cross-chunk-truncation defense pin —
+    /// presenting a chunk under a different `total_chunks` value than
+    /// the seal-time value MUST fail AEAD authentication. This is the
+    /// load-bearing per-chunk truncation-binding test per the
+    /// retraction of G-CORE-9 R1 triage Fork 1.
+    #[test]
+    fn cross_chunk_truncation_fails() {
+        let cid = fixed_cid(0xee);
+        let key = [0x42u8; 32];
+        // Encrypt under 10 chunks (total_chunks = 10 sealed into every chunk's AAD)
+        let plaintext = vec![0x5Au8; 10 * IROH_BLOCK_SIZE];
+        let chunked = ChunkedCiphertext::encrypt(&plaintext, &cid, &key).unwrap();
+        assert_eq!(chunked.chunks().len(), 10);
+        // Attacker truncates the chunk list to 5 chunks and re-presents.
+        // Per-chunk authentication MUST fail at every boundary because
+        // every chunk's AAD committed to total_chunks=10, not 5.
+        // Try decrypting chunk 0 with the truncated total_chunks=5:
+        let result = decrypt_chunk(&chunked.chunks()[0], 0, 5, &cid, &key);
+        assert!(
+            matches!(result, Err(AeadError::Authentication { .. })),
+            "truncated total_chunks=5 (real=10) MUST fail AEAD auth, got {result:?}"
+        );
+        // Try decrypting chunk 4 (the truncation boundary) with the
+        // truncated total_chunks=5: still fails because seal-time was 10.
+        let result = decrypt_chunk(&chunked.chunks()[4], 4, 5, &cid, &key);
+        assert!(
+            matches!(result, Err(AeadError::Authentication { .. })),
+            "truncation-boundary chunk MUST fail AEAD auth, got {result:?}"
+        );
+        // Positive control: presenting with the correct total_chunks=10
+        // succeeds for the same chunk.
+        let plaintext_chunk_0 = decrypt_chunk(&chunked.chunks()[0], 0, 10, &cid, &key).unwrap();
+        assert_eq!(plaintext_chunk_0, &plaintext[0..IROH_BLOCK_SIZE]);
+    }
+
+    /// F3 negative-test pin: tampering total_chunks in the AAD-reconstruction
+    /// path flips the bound bytes — decryption MUST fail. (Adjacent to
+    /// the cross_chunk_truncation_fails pin; this tests the symmetric
+    /// inflation case — claiming total_chunks=20 when seal-time was 10.)
+    #[test]
+    fn cross_chunk_inflation_fails() {
+        let cid = fixed_cid(0x77);
+        let key = [0x99u8; 32];
+        let plaintext = vec![0xA5u8; 10 * IROH_BLOCK_SIZE];
+        let chunked = ChunkedCiphertext::encrypt(&plaintext, &cid, &key).unwrap();
+        let result = decrypt_chunk(&chunked.chunks()[0], 0, 20, &cid, &key);
+        assert!(
+            matches!(result, Err(AeadError::Authentication { .. })),
+            "inflated total_chunks=20 (real=10) MUST fail AEAD auth, got {result:?}"
+        );
     }
 
     #[test]

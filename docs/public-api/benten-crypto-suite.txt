@@ -60,7 +60,7 @@ pub const benten_crypto_suite::aead::ENVELOPE_FORMAT_VERSION_V1: u8
 pub const benten_crypto_suite::aead::ENVELOPE_MAGIC: u8
 pub const benten_crypto_suite::aead::IROH_BLOCK_SIZE: usize
 pub const benten_crypto_suite::aead::WHOLE_CONTENT_AEAD_THRESHOLD: usize
-pub fn benten_crypto_suite::aead::aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::aead::aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::aead::aad_whole_content(plaintext_cid: &[u8]) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::aead::unwrap(envelope: &benten_crypto_suite::aead::AeadEnvelope, key: &benten_crypto_suite::aead::AeadKeyMaterial, aad: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::aead::wrap(plaintext: &[u8], key: &benten_crypto_suite::aead::AeadKeyMaterial, aad: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>

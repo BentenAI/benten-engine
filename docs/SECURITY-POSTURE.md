@@ -2320,14 +2320,25 @@ Three load-bearing AEAD-layer defenses ride on the per-Node AEAD wrap
    different plaintext identity), the AEAD authenticator fails because
    the reconstructed AAD (binding *Q*) does not match the AAD bound at
    seal time (binding *P*).
-2. **AAD-binds-(plaintext-CID, chunk-index) (per-chunk arm for Nodes ≥
-   64 KiB).** Per `§1.A.FROZEN item 15(g)` the per-chunk AEAD uses
-   `aad_per_chunk(plaintext_cid, chunk_index) =
-   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le`.
-   Shuffling chunk-N's ciphertext to index-M (the **cross-chunk
-   rebinding attack** — silently reordering content within a Node)
-   fails because the reconstructed AAD (binding `chunk_index=M`)
-   doesn't match the seal-time AAD (binding `chunk_index=N`).
+2. **AAD-binds-(plaintext-CID, chunk-index, total_chunks) (per-chunk
+   arm for Nodes ≥ 64 KiB).** Per `§1.A.FROZEN item 15(g)` the
+   per-chunk AEAD uses
+   `aad_per_chunk(plaintext_cid, chunk_index, total_chunks) =
+   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le
+   || total_chunks_u32_le`. Shuffling chunk-N's ciphertext to
+   index-M (the **cross-chunk rebinding attack** — silently
+   reordering content within a Node) fails because the reconstructed
+   AAD (binding `chunk_index=M`) doesn't match the seal-time AAD
+   (binding `chunk_index=N`). Truncating an N-chunk ciphertext to N'
+   chunks (the **cross-chunk truncation attack** — silently dropping
+   content from a Node) ALSO fails because the seal-time AAD
+   committed to `total_chunks=N` but the truncated-presentation
+   recipient reconstructs the AAD with `total_chunks=N'`, and
+   per-chunk AEAD authentication fails at every chunk boundary.
+   **R6 R1 fix-pass (2026-05-24):** the `total_chunks` segment was
+   added at R6 R1, retracting the prior G-CORE-9 R1 triage Fork-1
+   disposition that had deferred this defense to G-COMP-1; see
+   V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 revision-history.
 3. **Two-CID mapping integrity (defense-in-depth at the storage layer).**
    The mapping table row `d:<did>:m:<plaintext_cid> → ciphertext_cid`
    is validated structurally: the envelope's `plaintext_cid` field

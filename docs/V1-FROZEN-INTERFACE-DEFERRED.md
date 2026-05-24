@@ -339,6 +339,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 ### Row D-15 — Post-v1-beta hardening watch-list
 
+- **R6 R1 fix-pass revision-history (R6 R1 Bundle F3):** the prior
+  G-CORE-9 R1 triage Fork 1 disposition ("retract doc claim from
+  3-tuple AAD to 2-tuple as-shipped + defer `total_chunks` defense
+  to G-COMP-1") was **RETRACTED** at R6 R1 fix-pass. The CODE was
+  revised to bind `total_chunks` per the spec text (3-tuple AAD
+  layout: `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`
+  becomes 4-segment AAD: domain-tag || plaintext_cid ||
+  chunk_index LE || total_chunks LE), closing the
+  cross-chunk-truncation attack at v1-beta. Wire-format pin updated
+  at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs`;
+  behavioral truncation/inflation pins added at
+  `crates/benten-graph/src/aead_wrap.rs::tests`. See V1-FROZEN-INTERFACE.md
+  per-chunk-AEAD wire layout entry for the post-retraction freeze contract.
 - **Frozen surface (v1-beta):** various nice-to-have hardenings
   surfaced in R1 OBS items.
 - **Deferred consumption (G-COMP-1 OR Phase-4-Meta-Composing

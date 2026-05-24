@@ -71,7 +71,7 @@
 
 **Wire format:**
 - Per-chunk AEAD with chunk size = `IROH_BLOCK_SIZE = 16384` (`crates/benten-crypto-suite/src/aead.rs:52`).
-- AAD binds `(plaintext_cid: &[u8], chunk_index: u64)` per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (2-tuple as-shipped at v1-beta per G-CORE-9 R1 triage Fork 1; the `total_chunks` defense against cross-chunk-truncation is deferred to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-15).
+- AAD binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)` per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment layout: `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_le_bytes() || total_chunks.to_le_bytes()`). The `total_chunks` segment closes the cross-chunk-truncation attack (an attacker truncating a 10-chunk ciphertext to 5 chunks cannot fabricate per-chunk AAD-matching tags). **R6 R1 fix-pass:** the prior G-CORE-9 R1 Fork-1 2-tuple disposition was RETRACTED; code revised to match the spec text. Pinned at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::aad_per_chunk_canonical_layout_pinned` + behavioral pins at `crates/benten-graph/src/aead_wrap.rs::tests::{cross_chunk_truncation_fails, cross_chunk_inflation_fails}`.
 - 64 KiB threshold for chunked-vs-whole-AEAD heuristic.
 - Codepoint-dispatched: `HYBRID_X25519_MLKEM768 = 0x647a` (default), `CLASSICAL_X25519 = 0x6400` (downgrade), `NONE_PLAINTEXT = 0x0000`, `HYBRID_MLKEM768_HQC = 0x647b` (reserved), `PURE_PQ_MLKEM768_ONLY = 0x647c` (reserved, audit-gated).
 

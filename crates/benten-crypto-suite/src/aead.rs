@@ -214,15 +214,35 @@ pub fn aad_whole_content(plaintext_cid: &[u8]) -> Vec<u8> {
     aad
 }
 
-/// Build the canonical AAD for per-chunk AEAD: binds (plaintext-CID,
-/// chunk-index) per item 15(g) cross-chunk-rebinding-attack defense.
-/// G-CORE-3d's graph-AEAD layer calls this.
+/// Build the canonical AAD for per-chunk AEAD: binds
+/// `(plaintext-CID, chunk_index, total_chunks)` per item 15(g)
+/// cross-chunk-rebinding-attack defense + cross-chunk-truncation defense
+/// (Bundle F3, R6 R1 fix-pass — supersedes the 2-tuple as-shipped layout
+/// per the retraction of G-CORE-9 R1 triage Fork 1).
+///
+/// The `total_chunks` binding closes the truncation attack: an attacker
+/// who slices the chunk list (e.g. mounts the first 5 chunks of a
+/// 10-chunk ciphertext as a freshly-encoded 5-chunk ciphertext) cannot
+/// fabricate per-chunk AAD-matching tags because every chunk's AAD
+/// committed to the seal-time `total_chunks=10` value; the producer at
+/// the smaller list builds AAD over `total_chunks=5` and per-chunk AEAD
+/// authentication fails at every chunk boundary.
+///
+/// **Wire-format note:** this is the v1-beta canonical layout per the
+/// R6 R1 retraction of Fork 1. The 2-tuple layout
+/// `(plaintext_cid, chunk_index)` shipped earlier is REPLACED. The
+/// `total_chunks: u32` field is appended little-endian. Encoders MUST
+/// fail-CLOSED if `total_chunks` exceeds `u32::MAX`.
+///
+/// G-CORE-3d's graph-AEAD layer threads this through every per-chunk
+/// seal + unwrap call site.
 #[must_use]
-pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(b"benten-aead:chunk:".len() + plaintext_cid.len() + 8);
+pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> Vec<u8> {
+    let mut aad = Vec::with_capacity(b"benten-aead:chunk:".len() + plaintext_cid.len() + 8 + 4);
     aad.extend_from_slice(b"benten-aead:chunk:");
     aad.extend_from_slice(plaintext_cid);
     aad.extend_from_slice(&chunk_index.to_le_bytes());
+    aad.extend_from_slice(&total_chunks.to_le_bytes());
     aad
 }
 
