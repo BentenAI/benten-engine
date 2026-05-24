@@ -331,6 +331,7 @@ impl Subgraph {
     /// Phase 2a G3-B test helper: empty Subgraph with the given handler id.
     /// Alias for [`Subgraph::new`].
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn empty_for_test(handler_id: impl Into<String>) -> Self {
         Self::new(handler_id)
     }
@@ -1257,6 +1258,7 @@ impl SubgraphBuilder {
     /// Test-only escape hatch: forcibly insert N additional cross-edges into
     /// the subgraph so the edge-count invariant trips. Used by
     /// `invariants_5_6_counts.rs`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn force_add_cross_edges_for_testing(&mut self, n: usize) -> &mut Self {
         self.extra_edges = self.extra_edges.saturating_add(n);
         self

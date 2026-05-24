@@ -285,6 +285,7 @@ impl DevServer {
     /// # Errors
     /// Returns `Err(ErrorCode::CapabilityDenied)` when no matching grant
     /// is present.
+    #[cfg(any(test, feature = "testing"))]
     pub fn check_attenuation_for_test(&self, actor: &Cid, scope: &str) -> Result<(), ErrorCode> {
         if self.grant_exists(actor, scope) {
             Ok(())
@@ -311,6 +312,7 @@ impl DevServer {
     /// holder panicked mid-critical-section, and the dev-server's
     /// invariants are defensive enough that "keep going" is correct.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn grant_table_audit_sequence_for_test(&self) -> u64 {
         let g = self.grants.lock().unwrap_or_else(|e| e.into_inner());
         g.audit_sequence
@@ -326,6 +328,7 @@ impl DevServer {
     /// in the same process. Wave-2a mini-review M2 asked whether this
     /// was global state; the `ReloadCoordinator` field on `DevServer`
     /// makes the scope per-instance and that's the intended contract.
+    #[cfg(any(test, feature = "testing"))]
     pub fn slow_transform_release_for_test(&self) {
         self.reload_coordinator.slow_transform_release();
     }
@@ -622,6 +625,7 @@ impl DevServer {
     /// Currently infallible — returns `Ok(())` unconditionally. The
     /// `Result` return shape is preserved for future back-compat when a
     /// drain-on-reload semantic lands in Phase-2b.
+    #[cfg(any(test, feature = "testing"))]
     pub fn reload_for_test(&self) -> Result<(), ErrorCode> {
         self.registration_seq.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -674,6 +678,7 @@ impl DevServer {
     ///
     /// # Errors
     /// Returns `Err(ErrorCode::NotFound)` when the handler isn't registered.
+    #[cfg(any(test, feature = "testing"))]
     pub fn call_for_test(
         &self,
         handler_id: &str,
@@ -717,6 +722,7 @@ impl DevServer {
     /// Returns `Err(ErrorCode::NotFound)` when the handler isn't
     /// registered; `Err(ErrorCode::Unknown(...))` when the handler does
     /// not contain a WAIT.
+    #[cfg(any(test, feature = "testing"))]
     pub fn call_with_suspension_for_test(
         &self,
         handler_id: &str,
@@ -756,6 +762,7 @@ impl DevServer {
     /// # Errors
     /// Returns `Err(ErrorCode::InvalidSuspensionEnvelope)` on malformed
     /// bytes.
+    #[cfg(any(test, feature = "testing"))]
     pub fn resume_for_test(
         &self,
         bytes: &[u8],
@@ -864,6 +871,7 @@ impl DevCallOutcome {
     /// Testing shim — the version tag of the subgraph this outcome was
     /// produced from.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn handler_version_tag_for_test(&self) -> &str {
         &self.version_tag
     }

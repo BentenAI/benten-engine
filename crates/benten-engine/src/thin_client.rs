@@ -529,6 +529,7 @@ impl DidKeyedSession {
     /// `thin_client_session_*` pins to assert mint/expire bookkeeping.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn active_session_count_for_test(&self) -> usize {
         let state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         state.sessions.len()
@@ -537,6 +538,7 @@ impl DidKeyedSession {
     /// Test-only: count of consumed nonces tracked for replay defense.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn consumed_nonce_count_for_test(&self) -> usize {
         let state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         state.consumed_nonces.len()

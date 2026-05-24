@@ -346,6 +346,7 @@ impl UcanBlobsHandler {
     /// per §R6 reach (cuts FUTURE serves; already-derived plaintext
     /// remains decryptable — that's the documented cryptographic
     /// limit at the recipient side).
+    #[cfg(any(test, feature = "testing"))]
     pub fn record_revocation_for_test(&self, grant_cid: &Cid) {
         self.revocations
             .lock()
@@ -356,6 +357,7 @@ impl UcanBlobsHandler {
     /// G-CORE-3e test seam — read the dispatch counter.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn dispatch_count_for_test(&self) -> usize {
         *self
             .dispatch_count
@@ -544,6 +546,7 @@ impl UcanBlobsHandler {
     /// Returns the validation error if any arm of the pipeline
     /// rejects; otherwise increments the dispatch counter +
     /// returns a synthetic [`UcanBlobsResponse`].
+    #[cfg(any(test, feature = "testing"))]
     pub fn serve_request_for_test(
         &self,
         request: UcanBlobsRequest,
@@ -593,6 +596,7 @@ impl EndpointIdBytes {
     /// byte-identity comparison.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub const fn to_bytes_for_test(&self) -> [u8; 32] {
         self.0
     }

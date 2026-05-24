@@ -195,6 +195,7 @@ impl HybridSignature {
 
     /// Test-helper: remove the PQ half. Used by adversarial strip pins.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn without_pq_half_for_test(&self) -> Self {
         Self {
             codepoint: self.codepoint,
@@ -206,6 +207,7 @@ impl HybridSignature {
 
     /// Test-helper: remove the classical half.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn without_classical_half_for_test(&self) -> Self {
         Self {
             codepoint: self.codepoint,
@@ -229,6 +231,7 @@ impl HybridSignature {
 
     /// Test-helper: splice arbitrary halves into a new signature.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn splice_for_test(classical: Vec<u8>, pq: Vec<u8>) -> Self {
         Self {
             codepoint: SigCodepoint::HYBRID_ED25519_MLDSA65,
@@ -257,6 +260,7 @@ impl HybridSignature {
     }
 
     /// Mutate a byte of the PQ half (CID-derivation pin).
+    #[cfg(any(test, feature = "testing"))]
     pub fn flip_pq_byte_for_test(&mut self, offset: usize) {
         if offset < self.pq.len() {
             self.pq[offset] ^= 0xff;

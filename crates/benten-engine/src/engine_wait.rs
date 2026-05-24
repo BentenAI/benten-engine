@@ -407,6 +407,7 @@ impl Engine {
     ///
     /// # Errors
     /// Returns [`EngineError::SubsystemDisabled`] on thin configs.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn call_with_suspension_on_thin_config_for_test(
         &self,
         _handler_id: &str,
@@ -1353,6 +1354,7 @@ impl Engine {
     ///
     /// # Errors
     /// Returns [`EngineError`] on failure.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn call_for_test(
         &self,
         handler_id: &str,

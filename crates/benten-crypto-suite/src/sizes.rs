@@ -162,6 +162,7 @@ impl SizeTouchingSurfaces {
     /// Surface 3 — redb persistence handle. Backed by a redb in-memory
     /// store with a `Vec<u8>` value column (NOT a fixed-width column).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn redb_store_for_test() -> RedbSigHandle {
         RedbSigHandle::new()
     }

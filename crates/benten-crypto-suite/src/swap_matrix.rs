@@ -352,6 +352,7 @@ impl SwapMatrix {
     /// Generate a sender keypair appropriate to this matrix's signature
     /// arm.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn generate_keypair_for_test(&self) -> SwapKeypair {
         match self.sig_arm {
             SignatureArm::HybridEd25519MlDsa65 => {
@@ -373,6 +374,7 @@ impl SwapMatrix {
     /// Generate a recipient keypair appropriate to this matrix's
     /// encryption arm.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn generate_recipient_keypair_for_test(&self) -> SwapRecipientKeypair {
         match self.enc_arm {
             EncryptionArm::HybridX25519MlKem768 => {
@@ -1242,6 +1244,7 @@ impl SwapMatrix {
     /// return the byte-identical cached vector, satisfying the KAT
     /// reproducibility property.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn load_fips_204_kat_vector_for_test(name: &str) -> SignatureKatVector {
         let cache = ml_dsa_kat_cache();
         let mut guard = cache.lock().expect("KAT cache mutex");
@@ -1284,6 +1287,7 @@ impl SwapMatrix {
     /// Load a deterministic FIPS-203 ML-KEM-768 KAT vector named `name`.
     /// Cached per-name; second call returns byte-identical bytes.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn load_fips_203_kat_vector_for_test(name: &str) -> KemKatVector {
         let cache = ml_kem_kat_cache();
         let mut guard = cache.lock().expect("KAT cache mutex");
@@ -1353,6 +1357,7 @@ impl SwapMatrix {
     /// Docstring sharpened at G-CORE-3c fix-pass (mr-minor-3) — earlier
     /// docstring overpromised cross-process determinism.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn ml_dsa_65_keygen_from_seed_for_test(seed: &[u8]) -> PureSigPubkey {
         // Lookup the cached entry by seed. If the cache hasn't seen
         // this seed yet (first call), we synthesize + store. The seed
@@ -1385,6 +1390,7 @@ impl SwapMatrix {
     /// Deterministic ML-DSA-65 sign — looks up the SigningKey stored
     /// at KAT-load-time keyed by the (collapsed) signing_key bytes.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn ml_dsa_65_sign_deterministic_for_test(signing_key: &[u8], msg: &[u8]) -> PureSigVec {
         // The signing_key is actually the encoded pubkey (per KAT
         // vector collapse). Look up the stored SigningKey by matching
@@ -1412,6 +1418,7 @@ impl SwapMatrix {
 
     /// Deterministic ML-KEM-768 keygen from a NAMED seed cache lookup.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn ml_kem_768_keygen_from_seed_for_test(seed: &[u8]) -> PureKemKeypair {
         let cache = ml_kem_kat_cache();
         let mut guard = cache.lock().expect("KAT cache mutex");
@@ -1443,6 +1450,7 @@ impl SwapMatrix {
     /// Returns the byte-identical ciphertext for the same (pubkey,
     /// randomness) inputs across calls within a process (cached).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn ml_kem_768_encapsulate_deterministic_for_test(
         pubkey: &[u8],
         randomness: &[u8],
@@ -1482,6 +1490,7 @@ impl SwapMatrix {
     /// Deterministic ML-KEM-768 decapsulation against a secret-key +
     /// ciphertext.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn ml_kem_768_decapsulate_for_test(secret_key: &[u8], ciphertext: &[u8]) -> PureKemDec {
         // For the KAT pin: look up the cached shared-secret keyed by
         // (the pubkey that produced this ciphertext, ciphertext bytes).

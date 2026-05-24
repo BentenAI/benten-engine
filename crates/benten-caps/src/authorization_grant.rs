@@ -135,6 +135,7 @@ const fn default_exp_secs() -> u64 {
 impl UcanEnvelope {
     /// Construct a synthetic envelope for the named audience.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test(audience: Cid) -> Self {
         Self {
             audience,
@@ -148,6 +149,7 @@ impl UcanEnvelope {
     /// Construct a synthetic envelope distinct from `synthetic_for_test`
     /// — used by adversarial pins.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test_distinct(audience: Cid, discriminator: u32) -> Self {
         Self {
             audience,
@@ -188,12 +190,14 @@ impl GrantKeyMaterial {
     /// the direct struct-literal construction blocked by the new
     /// `#[non_exhaustive]` attribute (G-CORE-9 R1 Bundle 3).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn from_bytes_for_test(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
 
     /// Construct synthetic key material for tests.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test() -> Self {
         Self {
             bytes: vec![0xAA; 32],
@@ -203,6 +207,7 @@ impl GrantKeyMaterial {
     /// Construct synthetic key material distinct from `synthetic_for_test`
     /// — used by adversarial pins to swap halves.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test_distinct(discriminator: u8) -> Self {
         let mut bytes = vec![0u8; 32];
         for (i, b) in bytes.iter_mut().enumerate() {
@@ -392,6 +397,7 @@ impl AuthorizationGrant {
     /// Returns [`AuthorizationGrantError::Serialization`] if CBOR
     /// encoding of either half fails (synthetic test fixtures should
     /// not, but the path is fallible by construction).
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_envelopes_for_test(
         ucan: UcanEnvelope,
         key_material: GrantKeyMaterial,
@@ -428,6 +434,7 @@ impl AuthorizationGrant {
     ///
     /// `nbf_secs` defaults to `0` (no not-before restriction).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
@@ -442,6 +449,7 @@ impl AuthorizationGrant {
     /// `tf3e_ucan_nbf_in_future_typed_not_yet_valid` to exercise the
     /// not-before defense-in-depth check.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_with_nbf_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
@@ -493,6 +501,7 @@ impl AuthorizationGrant {
     /// NEVER use this in production fixtures — the sentinel exists
     /// to assert the handler NEVER admits an unresolvable peer.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_with_unresolved_peer_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
@@ -526,6 +535,7 @@ impl AuthorizationGrant {
     /// The handler MUST reject this grant via `BindingSigInvalid` (or
     /// `GrantValidation`) WITHOUT dispatching to iroh-blobs.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn malformed_for_test(audience_kp: &benten_id::keypair::Keypair) -> Self {
         let audience_pubkey = audience_kp.public_key();
         let audience_bytes = audience_pubkey.to_bytes();
@@ -652,6 +662,7 @@ impl AuthorizationGrant {
     /// the A-1 stolen-UCAN-without-keys adversarial pin to
     /// demonstrate the binding-sig detects the tamper.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_swapped_key_material_for_test(&self, km: GrantKeyMaterial) -> Self {
         Self {
             ucan: self.ucan.clone(),
@@ -668,6 +679,7 @@ impl AuthorizationGrant {
     /// A-2 stolen-keys-without-UCAN adversarial pin to demonstrate
     /// the binding-sig detects the tamper.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_swapped_ucan_for_test(&self, ucan: UcanEnvelope) -> Self {
         Self {
             ucan,

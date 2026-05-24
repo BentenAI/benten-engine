@@ -182,6 +182,7 @@ impl CapabilityGrant {
     /// constructor with real attenuation flow. Carried from Phase-2a
     /// G9-A; pairs with §2.1 Durable UCAN backend.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn attenuated_for_test(actor: &Cid, scope: &str, i: usize) -> Self {
         Self {
             grantee: *actor,
