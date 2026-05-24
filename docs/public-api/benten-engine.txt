@@ -418,13 +418,8 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_reregister_and_miss(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_warm(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_as_with_suspension(&self, handler_id: &str, op: &str, input: benten_core::Node, principal: &benten_core::Cid) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_for_test(&self, handler_id: &str, op: &str, input: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension<H: benten_engine::engine_wait::HandlerRef>(&self, handler_id: H, op: &str, input: benten_core::Node) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension_on_thin_config_for_test(&self, _handler_id: &str, _op: &str, _input: benten_core::value::Value) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_node_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resolve_subgraph_cid_for_test(&self, handler_id: &str, _op: &str) -> core::result::Result<alloc::string::String, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_as(&self, bytes: &[u8], signal: benten_core::value::Value, principal: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_unauthenticated(&self, bytes: &[u8], signal: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_with_meta(&self, envelope: &[u8], payload: benten_engine::engine_wait::ResumePayload) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
@@ -458,7 +453,6 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::update_node(&self, old_cid: &benten_core::Cid, new_node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 impl benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_view(&self, view_id: &str, _opts: benten_engine::outcome::ViewCreateOptions) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -1091,6 +1085,8 @@ impl core::marker::UnsafeUnpin for benten_engine::install_record_replay::Install
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::install_record_replay::InstallRecordReplayStore
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::install_record_replay::InstallRecordReplayStore
 pub fn benten_engine::install_record_replay::signing_payload_hash(payload: &[u8]) -> [u8; 32]
+pub mod benten_engine::internal_principal
+pub static benten_engine::internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID: std::sync::lazy_lock::LazyLock<benten_core::Cid>
 pub mod benten_engine::ivm_view_read_gate
 pub struct benten_engine::ivm_view_read_gate::IvmViewReadGate
 impl benten_engine::ivm_view_read_gate::IvmViewReadGate
@@ -2797,13 +2793,8 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_reregister_and_miss(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_warm(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_as_with_suspension(&self, handler_id: &str, op: &str, input: benten_core::Node, principal: &benten_core::Cid) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_for_test(&self, handler_id: &str, op: &str, input: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension<H: benten_engine::engine_wait::HandlerRef>(&self, handler_id: H, op: &str, input: benten_core::Node) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension_on_thin_config_for_test(&self, _handler_id: &str, _op: &str, _input: benten_core::value::Value) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_node_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resolve_subgraph_cid_for_test(&self, handler_id: &str, _op: &str) -> core::result::Result<alloc::string::String, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_as(&self, bytes: &[u8], signal: benten_core::value::Value, principal: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_unauthenticated(&self, bytes: &[u8], signal: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_with_meta(&self, envelope: &[u8], payload: benten_engine::engine_wait::ResumePayload) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
@@ -2837,7 +2828,6 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::update_node(&self, old_cid: &benten_core::Cid, new_node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 impl benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_view(&self, view_id: &str, _opts: benten_engine::outcome::ViewCreateOptions) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -3454,6 +3444,7 @@ pub const benten_engine::SANDBOX_UNAVAILABLE_ON_WASM_TEXT: &str
 pub const benten_engine::STREAM_GRANT_CEILING_CHUNK_COUNT: u64
 pub const benten_engine::STREAM_GRANT_CEILING_WALLCLOCK_MS: u64
 pub const benten_engine::SYSTEM_ZONE_PREFIXES: &[&str]
+pub static benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID: std::sync::lazy_lock::LazyLock<benten_core::Cid>
 pub trait benten_engine::GrantSubject
 pub fn benten_engine::GrantSubject::as_value(&self) -> benten_core::value::Value
 impl benten_engine::subgraph_spec::GrantSubject for &alloc::string::String

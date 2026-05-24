@@ -705,7 +705,6 @@ pub mod benten_graph::immutability
 pub struct benten_graph::immutability::CidExistenceCache
 impl benten_graph::immutability::CidExistenceCache
 pub fn benten_graph::immutability::CidExistenceCache::force_collision_next(&mut self)
-pub fn benten_graph::immutability::CidExistenceCache::force_positive_for_test(&mut self, cid: &benten_core::Cid)
 pub fn benten_graph::immutability::CidExistenceCache::insert(&mut self, cid: &benten_core::Cid)
 pub fn benten_graph::immutability::CidExistenceCache::may_contain(&mut self, cid: &benten_core::Cid) -> bool
 pub fn benten_graph::immutability::CidExistenceCache::may_contain_peek(&self, cid: &benten_core::Cid) -> bool
