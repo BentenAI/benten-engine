@@ -88,6 +88,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod change_stream;
 pub mod edge;
+pub mod encryption_class;
 pub mod hlc;
 pub mod subgraph;
 pub mod subgraph_spec;
@@ -98,6 +99,7 @@ pub mod version_dag;
 
 pub use change_stream::{ChangeEvent, ChangeKind, ChangeStream, SubscriberId};
 pub use edge::Edge;
+pub use encryption_class::{EncryptionClass, EncryptionClassError};
 pub use hlc::{BentenHlc, Hlc, PhysicalClockFn};
 pub use subgraph::{
     ATTRIBUTION_PROPERTY_KEY, NodeHandle, OperationNode, PrimitiveKind, Subgraph, SubgraphBuilder,
