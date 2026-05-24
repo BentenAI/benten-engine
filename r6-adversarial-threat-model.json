@@ -1,0 +1,189 @@
+{
+  "lens": "L2-crypto-adversarial-and-threat-model",
+  "round": "R1",
+  "wave": "G-CORE-9-FREEZE",
+  "branch": "g-core-9/r1-l2-adversarial-threat-model",
+  "base_commit": "8cc4eddd",
+  "disposition": "REJECT — multiple BLOCKER doc-vs-code drifts: V1-FROZEN-INTERFACE.md items 1 + 12 freeze surfaces that are NOT-LANDED at HEAD; SECURITY-POSTURE.md Compromise #26 confirms the substantive Layer-3 manifest-envelope defense is NOT live in shipped binaries. The freeze must NOT ship while items 1 + 12 are paper-only.",
+  "findings_summary": {
+    "blocker": 3,
+    "major": 4,
+    "minor": 2,
+    "obs": 3
+  },
+  "findings": [
+    {
+      "id": "L2-BLK-1",
+      "severity": "BLOCKER",
+      "title": "§8-A visibility cluster (V1-FROZEN-INTERFACE.md item 1) — pub→pub(crate) TIGHTEN + renames DECLARED-FROZEN but NOT-LANDED",
+      "evidence": {
+        "freeze_doc": "docs/V1-FROZEN-INTERFACE.md:121-137 declares Engine::get_node → pub(crate) fn read_node, Engine::put_node → pub(crate), Engine::get_node_label_only → pub(crate) fn read_node_label_only, Engine::resolve_subgraph_cid_for_test DELETED from public surface",
+        "code_at_head": "crates/benten-engine/src/engine_crud.rs:139 still 'pub fn get_node(&self, cid: &Cid)' — neither renamed nor tightened",
+        "baseline": "docs/public-api/benten-engine.txt still contains: 'pub fn EngineGeneric<RedbBackend>::get_node', 'pub fn ::put_node', 'pub fn ::get_node_label_only', 'pub fn ::resolve_subgraph_cid_for_test'",
+        "no_regression_test_absent": "crates/benten-engine/tests/g_core_9_engine_no_direct_cap_mutation.rs does NOT exist (only g_core_9_walk_share_scope_e2e.rs is present)"
+      },
+      "attack_surface": "External callers (and the napi binding) can call Engine::get_node(cid) directly, bypassing the principal-bearing read_node_as(principal, cid) capability gate. This defeats CLAUDE.md baked-in #18 plugin-trust model: plugin authors are supposed to flow only through the evaluator's read_node_as, but the un-attributed pub get_node remains reachable from any consumer crate or napi binding. Also: resolve_subgraph_cid_for_test is publicly exposed with the _for_test suffix that item 1 explicitly forbids ('a _for_test pub fn is a red-flag').",
+      "disposition": "FIX-NOW — execute the §8-A tighten + rename atomically before tagging the freeze; rebuild docs/public-api/benten-engine.txt baseline; add the g_core_9_engine_no_direct_cap_mutation.rs no-regression test pin; sweep napi + integration-test call-sites per item 1 verification mechanism. The freeze CANNOT ship while item 1 is paper-only — the doc claims a security-load-bearing tightening that the binary does not enforce."
+    },
+    {
+      "id": "L2-BLK-2",
+      "severity": "BLOCKER",
+      "title": "V1-FROZEN-INTERFACE.md item 12 freezes ProductionManifestEnvelopeRechecker as auto-wired default — but the type DOES NOT EXIST and the wired default is the admit-everything Noop",
+      "evidence": {
+        "freeze_doc": "docs/V1-FROZEN-INTERFACE.md:962-966 — 'NoopManifestEnvelopeRechecker semantics — returns UnresolvedDeny for every input (per the §4.36 fail-CLOSED flip)' AND 'The DEFAULT engine-builder behavior — ProductionManifestEnvelopeRechecker is auto-wired (NOT opt-in) per security-r1-1 BLOCKER closure'",
+        "code_at_head_1": "crates/benten-engine/src/manifest_envelope_recheck.rs:203-222 — NoopManifestEnvelopeRechecker::recheck_row returns ManifestEnvelopeRecheckOutcome::NotApplicable (NOT UnresolvedDeny) for every input",
+        "code_at_head_2": "crates/benten-engine/src/engine.rs:1908-1910 — Engine::default wires Some(Arc::new(NoopManifestEnvelopeRechecker)) — NOT a ProductionManifestEnvelopeRechecker",
+        "type_does_not_exist": "grep 'pub struct ProductionManifestEnvelopeRechecker' across crates/ returns zero matches — the type freeze-doc says is auto-wired DOES NOT EXIST",
+        "test_admits_drift": "crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:108-117 + 138-142 explicitly document that the Production wire-up is 'G-CORE-8.2-deferred' AND that the SHIPPED Noop returns NotApplicable → admit-everything",
+        "security_posture_corroboration": "docs/SECURITY-POSTURE.md:2047-2050 (Compromise #26) — 'Substantive adapter (a ProductionManifestEnvelopeRechecker that consults PluginLibrary + UserDidRegistry + invokes manifest_envelope_chain_validation::validate_chain_with_manifest_envelope) is DEFERRED to Phase-4-Meta'; AND lines 2086-2089 — 'the substantive defense at the merge boundary is NOT live in shipped binaries'"
+      },
+      "attack_surface": "T8 — chain-leaked-past-sender attack class. A peer can publish a write whose UCAN chain technically validates at the sender (per-grant attenuation passes) but whose plugin-source manifest envelope no longer authorises the row. The freeze doc claims this defense is live; the binary admits the row via outcome_to_row_reject(NotApplicable → Ok(())). At the v1-beta tag the platform will be ADVERTISING a security property (Layer-3 manifest-envelope refinement at sync ingress) that it DOES NOT HAVE.",
+      "disposition": "FIX-NOW — either (a) ship the ProductionManifestEnvelopeRechecker + default-builder wire-up before tagging the freeze (matching the freeze-doc claim), OR (b) retract item 12's claims about (i) Noop returning UnresolvedDeny, (ii) ProductionManifestEnvelopeRechecker being auto-wired, (iii) empty/sentinel peer-DID structural-deny — and update SECURITY-POSTURE.md Compromise #26 to label this an OPEN-AT-V1-BETA limitation. Per HARD RULE 12: this is a doc-vs-code drift that violates 'no deferred fix without specific destination'. The current state is the worst of both: doc says CLOSED, code is DEFERRED, security posture says NOT LIVE — three contradictory authoritative sources at the freeze boundary."
+    },
+    {
+      "id": "L2-BLK-3",
+      "severity": "BLOCKER",
+      "title": "V1-FROZEN-INTERFACE.md item 12 freezes accept_atrium_share signature — but the function DOES NOT EXIST at HEAD",
+      "evidence": {
+        "freeze_doc": "docs/V1-FROZEN-INTERFACE.md:969-972 — 'accept_atrium_share (crates/benten-platform-foundation::plugin_lifecycle::accept_atrium_share) — the cross-peer install seam; signature frozen at v1-beta (re-verifies bytes_cid == announced_cid AND peer_did_signature_valid_for_bytes)'",
+        "code_at_head": "grep 'pub fn accept_atrium_share' across crates/ returns zero matches",
+        "test_admits_drift_1": "crates/benten-platform-foundation/tests/admin_ui_v0_atrium_share_unattested_peer_rejected.rs:42-107 — entire test body commented out with 'Atrium-share boundary requires plugin_lifecycle::accept_atrium_share … (plugin_lifecycle accept_atrium_share cross-peer install seam — Phase-4-Meta)'",
+        "test_admits_drift_2": "crates/benten-platform-foundation/tests/admin_ui_v0_install_as_signed_plugin_across_two_atrium_peers.rs:24 — 'panic!(\"G24-D-FP-1 wires accept_atrium_share end-to-end cross-peer install path\")' (G24-D-FP-1 has NOT shipped)"
+      },
+      "attack_surface": "The cross-peer plugin-install seam (CLAUDE.md #18 layer-2 manifest-envelope-at-install + bytes-CID re-verification) does not exist as a public surface. Any installer that needs to validate a plugin received from a peer must reimplement the verification ad-hoc, OR the engine accepts ingested plugin bytes without the bytes_cid == announced_cid + peer-DID-signature verification the freeze-doc claims is structurally frozen. Phantom-surface freeze is structurally indistinguishable from 'no verification' for consumers reading the spec.",
+      "disposition": "FIX-NOW — either ship pub fn accept_atrium_share (closing G24-D-FP-1) before the freeze tag, OR remove item 12's accept_atrium_share clause + DEFER-NAMED-NOW to phase-4-backlog.md with explicit destination + reopen Compromise #26 to acknowledge cross-peer-install verification is NOT live. Freezing a phantom is a HARD RULE 12 clause-(b) violation (BELONGS-NAMED-NOW destination is required at freeze time, not 'will name later')."
+    },
+    {
+      "id": "L2-MAJ-1",
+      "severity": "MAJOR",
+      "title": "Empty-peer-DID Layer-A fail-CLOSED is BYPASSED by resolve_peer_dids' synthetic 'node-id:N' fallback",
+      "evidence": {
+        "engine_code": "crates/benten-engine/src/engine.rs:1448-1483 — short-circuits with ManifestEnvelopeRecheckUnresolvedDeny ONLY when 'resolved_dids.into_iter().next()' is None (the empty-set sentinel)",
+        "resolve_synthesis": "crates/benten-engine/src/engine_sync.rs:1352-1359 — resolve_peer_dids maps each unknown peer_node_id to format!(\"node-id:{nid}\") via 'reg.get(nid).cloned().unwrap_or_else(|| format!(\"node-id:{nid}\"))'. The synthesis means the empty-set arm NEVER fires when peer_node_ids is non-empty AND the registry has no entry — instead the call passes through with a synthesized DID string.",
+        "rechecker_default": "the default rechecker (NoopManifestEnvelopeRechecker per BLK-2) accepts any peer_did_str input and returns NotApplicable → admit"
+      },
+      "attack_surface": "An adversarial peer whose node_id is not in the local trust registry presents itself with a synthetic 'node-id:N' DID at the apply_atrium_merge boundary. The freeze-doc item 12 claim 'Empty/sentinel <unresolved-peer> peer-DID MUST deny (never admit) at recheck' (line 967-968) is not structurally enforced — only the literal-empty-set arm denies; the synthesized-DID path admits. Combined with BLK-2, the merge admits the row.",
+      "disposition": "FIX-NOW — either (a) make resolve_peer_dids return an Option/explicit-unresolved sentinel (NOT a synthesized DID-string) so the apply_atrium_merge short-circuit catches the unresolvable case unambiguously, OR (b) extend the apply_atrium_merge short-circuit to also fail-CLOSED on the 'node-id:N' synthesized-prefix sentinel pattern (string-prefix check matching the synthesis pattern), AND add a substantive unit test that injects a peer_node_id whose registry has no entry and asserts the call returns ManifestEnvelopeRecheckUnresolvedDeny."
+    },
+    {
+      "id": "L2-MAJ-2",
+      "severity": "MAJOR",
+      "title": "FrameReplayMarker::mark_and_check_frame has a TOCTOU race between get + put (separate redb transactions)",
+      "evidence": {
+        "caps_code": "crates/benten-caps/src/chain_authority.rs:404-421 — mark_and_check_frame calls self.backend.get(&key) then conditionally self.backend.put(&key, &[]). Two separate calls.",
+        "backend_code": "crates/benten-graph/src/redb_backend.rs:2956-2970 — KVBackend::get opens a read_txn; KVBackend::put opens a SEPARATE write_txn. There is no compare-and-set / atomic-mark operation on the KVBackend trait.",
+        "engine_caller": "crates/benten-engine/src/engine.rs:1524-1547 — apply_atrium_merge invokes the marker without any per-zone or per-engine serializing lock around the marker call",
+        "attack_class": "two concurrent apply_atrium_merge invocations presenting the SAME inbound session_nonce both observe already=false and both pass the F3 replay defense"
+      },
+      "attack_surface": "F3 anti-replay seam is racy. An adversary who can drive two concurrent inbound frames carrying the same session_nonce (e.g. two parallel iroh connections delivering replayed frames at the same time, OR a single inbound frame ingested via two distinct apply_atrium_merge tasks) can defeat the durable replay marker. Compromise #23 promises 'anti-replay re-homed, not dropped' — at HEAD it IS re-homed but racy. The ephemeral verify step-(3) freshness gate also cannot catch concurrent presentations; F3 IS the load-bearing defense for in-window replay and currently has no atomicity.",
+      "disposition": "FIX-NOW — either (a) extend KVBackend trait with a typed compare_and_insert(key, value) -> Result<bool, _> method (returning whether the insert created the entry) AND change mark_and_check_frame to use it, OR (b) route the marker call through GraphBackend::transaction(|tx| ...) so both the get + put run inside one txn (the existing transaction API supports this), OR (c) document a serializing per-engine lock around the apply_atrium_merge marker call. Option (b) is lowest-cost (existing surface; ~10 LOC change inside mark_and_check_frame to wrap the get+put in a transaction)."
+    },
+    {
+      "id": "L2-MAJ-3",
+      "severity": "MAJOR",
+      "title": "No peer/principal policy gate exists to REQUIRE PQ-hybrid (reject classical-only-downgrade arm) at envelope verification — silent acceptance of 0x6400 by policy",
+      "evidence": {
+        "dispatcher_code": "crates/benten-crypto-suite/src/codepoint.rs:240-253 — CipherSuiteCodepoint::resolve() returns Ok(()) for BOTH 0x647a (hybrid default) AND 0x6400 (classical-only downgrade). Both are 'live' arms.",
+        "absence_of_policy": "grep across all crates for 'require.*hybrid|enforce.*hybrid|policy.*pq|disallow.*classical' yields ZERO production sites — there is no peer-side / engine-config / capability-policy mechanism to express 'reject any envelope sealed under 0x6400 / 0x6400-derived keys' as a policy",
+        "freeze_doc_claim": "V1-FROZEN-INTERFACE.md item 6 line 478 frames 0x6400 as 'LIVE, non-default classical-only downgrade' but offers NO surface for a consumer to reject it",
+        "scope": "CLAUDE.md baked-in #5 PQ-hybrid-default reframe: hybrid IS the v1-beta default + the swap matrix supports classical-only as a non-default downgrade. The downgrade defense via swap-matrix construction (typed try_pure_pq_sole_trust_path / explicit constructor) covers the producer side; there is NO consumer-side policy to enforce 'I won't accept content sealed under the classical-only arm'"
+      },
+      "attack_surface": "A coerced or hostile peer can produce all content under 0x6400 (classical-only); recipients have NO policy mechanism to reject it on hybrid-required grounds. The classical-only construction is still cryptographically sound BY ITSELF (Ed25519 + X25519 + ChaCha20-Poly1305) — so this isn't an immediate compromise — but it does mean the platform cannot enforce 'PQ-hybrid is mandatory' at the verify-side, which contradicts the marketing posture of CLAUDE.md baked-in #5 'PQ-hybrid IS the v1-beta DEFAULT' for consumers who think 'default = enforced'. The harvest-now-decrypt-later property (baked-in #5 + #18) is silently lost on any 0x6400-sealed content.",
+      "disposition": "FIX-NOW lite — add a per-engine config flag CryptoPolicy::require_hybrid_pq: bool (default true at v1-beta per the reframe ratification) consulted at unwrap / verify entry points; rejecting 0x6400 envelopes when set with typed ErrorCode::DowngradeArmRejectedByPolicy. Tracked at SECURITY-POSTURE.md as a clarification that the swap-matrix downgrade arms are PRODUCER-side; consumer-side policy is needed for the 'hybrid mandatory' marketing posture. If the orchestrator deems this scope-bleed past G-CORE-9 FREEZE, DEFER-NAMED-NOW into Phase-4-Meta-Composing v1-assessment-window with the explicit destination + an SECURITY-POSTURE.md row acknowledging 0x6400 is silently accepted at recipient at v1-beta."
+    },
+    {
+      "id": "L2-MAJ-4",
+      "severity": "MAJOR",
+      "title": "graph-AEAD seam (make_key_material_matching) trusts attacker-controlled envelope cipher_codepoint when constructing the AeadKeyMaterial",
+      "evidence": {
+        "graph_code": "crates/benten-graph/src/aead_wrap.rs:507-526 — make_key_material_matching reads codepoint from envelope (attacker-controlled bytes via from_wire_bytes) and labels the caller's raw 32-B key with that codepoint via AeadKeyMaterial::from_raw_bytes. The downstream cipher-suite unwrap (aead.rs:288) typed-rejects on key.codepoint != envelope.cipher_codepoint — but they are now equal BY CONSTRUCTION because the helper threaded the envelope's codepoint into the key.",
+        "docstring_acknowledges": "Line 500-506 — 'this helper threads the envelope's codepoint into the key newtype so a caller that presents the *correct* key for an envelope sealed under a non-default codepoint (e.g. 0x6400 classical-only X25519 downgrade arm) gets through' — explicit acknowledgement that the codepoint-mismatch defense is bypassed at this seam",
+        "natural_defense_dependency": "the practical defense reduces to: if the attacker swaps the cipher_codepoint byte, K_root derivation under 0x647a-vs-0x6400 yields different bytes (different upstream encapsulation paths) → ChaCha20-Poly1305 auth fails. This works at v1-beta because both arms feed into ChaCha20-Poly1305 with codepoint-distinct K_root values. The defense is INCIDENTAL to the construction, not structurally explicit."
+      },
+      "attack_surface": "An attacker who mutates the envelope's cipher_codepoint byte (e.g. 0x647a → 0x6400) at any in-transit byte does NOT trip the cipher-suite layer's codepoint-mismatch defense — the graph-AEAD layer re-labels the key to match. The natural backstop is that K_root differs between the two wrap paths; but this is brittle: any future swap-matrix arm whose K_root happens to collide with another arm's K_root (e.g. two arms that derive K_root via the same X-Wing-combiner with slightly different inputs) would re-open the silent-downgrade vector. The codepoint should be derivation-bound to the K_root via the structural_kdf info-tags (currently info-tag is 'root'/'step' only — does NOT include the cipher-suite codepoint).",
+      "disposition": "FIX-NOW lite — either (a) extend structural_kdf::derive_root info-tag to include the cipher-suite codepoint binding (e.g. info = 'root:codepoint:<le_bytes>' || root_cid) — wire-format coupling but cheap (~5 LOC + golden test for backward-compat); OR (b) at make_key_material_matching, reject envelopes whose codepoint does not match an expected codepoint passed in by the caller (additive API; existing callers that don't care can pass None). Option (a) is structurally cleaner and provides defense in depth at the KDF level. If neither lands at G-CORE-9 freeze, register an explicit OBS in SECURITY-POSTURE.md acknowledging the codepoint-binding gap relies on K_root accidental codepoint-uniqueness."
+    },
+    {
+      "id": "L2-MIN-1",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE.md §15.j live-per-request resolver-evaluation: NO test pin at HEAD",
+      "evidence": {
+        "freeze_doc": "docs/V1-FROZEN-INTERFACE.md:1617-1619 — 'Verification: test pin demonstrating live-per-request evaluation (write new in-scope content after UCAN issued → recipient sees it on next request); doc-coverage CI lane'",
+        "code_at_head": "grep for 'live_per_request' / 'live-per-request' across crates/ returns ZERO matches — no test exists, the model is paper-only"
+      },
+      "attack_surface": "An implementer-side regression to frozen-snapshot semantics would not be caught by any structural test. A producer who freezes Alice's writes-since-issuance state at UCAN-issue time would silently violate the §15.j contract; recipients would not see Alice's writes that landed after the UCAN-issue moment, contradicting the §15.j commitment.",
+      "disposition": "FIX-NOW — add the verification-mechanism test pin per V1-FROZEN-INTERFACE.md:1617-1619 BEFORE the freeze tag. Pin shape per the freeze doc: write a Node into scope, issue a UCAN, write a second Node into scope, call walk_share_scope as recipient, assert BOTH Nodes are enumerated. ~50 LOC at crates/benten-engine/tests/g_core_9_share_scope_live_per_request.rs."
+    },
+    {
+      "id": "L2-MIN-2",
+      "severity": "MINOR",
+      "title": "Chain-validator EmptyChain rejection is correct BUT no structural defense against empty-string DID at chain[0].issuer_did",
+      "evidence": {
+        "validator_code": "crates/benten-caps/src/manifest_envelope_chain_validation.rs:270-291 — validates chain.is_empty() rejection + chain.len() > MAX_CHAIN_DEPTH rejection + chain[0].issuer_did being user-DID. The check is 'user_registry.is_user_did(root_issuer)' — passes only if the registry's set contains the exact DID string.",
+        "attack_vector": "an attacker who controls peer-side chain construction could put '' (empty string) as both issuer_did + audience_did. If user_registry was loaded with an entry for '' (unlikely but possible config bug), the chain would pass. The check 'is_user_did' relies entirely on the registry contents."
+      },
+      "attack_surface": "Defense-in-depth gap. A registry config-mistake that admits '' as a user-DID would silently pass any chain claiming '' as the root issuer. Currently this is purely a config-hardening item — no known attack path absent that config bug. But the validator could fail-CLOSED structurally with negligible cost.",
+      "disposition": "FIX-NOW lite — add a structural empty-DID-string reject at validate_chain_with_manifest_envelope, BEFORE the registry consult: 'if root_issuer.as_str().is_empty() { return ChainValidationOutcome::RootNotUserDid; }'. Same defense at every chain step's audience_did. ~5 LOC. Also: add a test 'empty_string_did_at_root_rejected_independent_of_registry'."
+    },
+    {
+      "id": "L2-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "C11b safety gate (force_pure_pq_for_test_bypassing_audit_gate) is properly #[cfg(test)] gated — verified clean",
+      "evidence": {
+        "code": "crates/benten-crypto-suite/src/swap_matrix.rs:280-287 — the test-only side-door carries #[cfg(test)] (NOT a feature-flag; truly absent in non-test builds)",
+        "production_reachability": "grep across crates/ for 'force_pure_pq_for_test' OR 'PurePqMlDsa65Slhdsa' OR 'PurePqMlKem768Only' outside src/swap_matrix.rs and tests/ yields ZERO production sites; only a codepoint.rs:198 docstring reference (not a constructor call)",
+        "audit_flag_const": "AUDIT_LANDED_PURE_PQ_FLAG = false at swap_matrix.rs:140; try_pure_pq_sole_trust_path correctly returns AuditNotLandedPurePqRejected when false"
+      },
+      "attack_surface": "None — adversarial cross-check confirms the C11b gate is structurally enforced.",
+      "disposition": "OBSERVATION — clean. Worth recording explicitly as positive-evidence per the orthogonal-lens cross-confirmation discipline."
+    },
+    {
+      "id": "L2-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "Hybrid signature both-must-verify + commitment-recompute defenses are structurally complete (strip-resistance F-1)",
+      "evidence": {
+        "code": "crates/benten-crypto-suite/src/sig.rs:414-510 — SignatureSuite::verify enforces: (a) codepoint-mismatch reject (line 424-426: classical-only suite handed a hybrid-coded sig → CodepointMismatch); (b) HybridHalfMissing reject for empty classical or empty PQ half (449-454); (c) StripResistanceViolated reject for missing commitment (455-459); (d) commitment recomputation over (domain_sep || pub_classical || pub_pq || classical_sig || pq_sig || msg) — mismatch surfaces typed StripResistanceViolated (467-473); (e) cryptographic verify of BOTH halves (479-507).",
+        "tests": "crates/benten-crypto-suite/tests/tf2_hybrid_both_must_verify_strip_resistant.rs + tf2_strip_resistance_negative.rs exercise the strip-half + cross-message-splice + commitment-mismatch arms",
+        "compromise_30": "docs/SECURITY-POSTURE.md Compromise #30 (unaudited PQ primitives in v1-beta hybrid default) explicitly notes the classical-floor invariant: hybrid construction ensures PQC is never the SOLE trust path; this verify path enforces that invariant cryptographically"
+      },
+      "attack_surface": "Strip / substitute / cross-message-splice / half-missing / commitment-mismatch attacks all properly surface typed errors. Adversarial cross-check confirms the F-1 strip-resistance property holds end-to-end.",
+      "disposition": "OBSERVATION — clean. Strengthens the v1-beta classical-floor safety invariant."
+    },
+    {
+      "id": "L2-OBS-3",
+      "severity": "OBSERVATION",
+      "title": "AAD-rebinding defense + AEAD-codepoint-mismatch typed-reject (cipher-suite layer) properly enforced",
+      "evidence": {
+        "rebind_code": "crates/benten-crypto-suite/src/aead.rs:282-299 — unwrap typed-rejects on cipher_codepoint mismatch BETWEEN envelope and key (290-294 — silent-downgrade defense)",
+        "aad_binds": "crates/benten-crypto-suite/src/aead.rs:210-226 — aad_whole_content / aad_per_chunk bind plaintext_cid + chunk_index; reconstruct at decrypt time — rebinding attempts surface AeadAuthFailed via Poly1305 tag mismatch",
+        "test_pin": "crates/benten-graph/src/aead_wrap.rs:619-621 — adversarial rebinding test ('with_aad_plaintext_cid_for_test') exercises the AAD-binding-plaintext-CID defense — decrypt fails AeadError::Authentication on mutated plaintext_cid",
+        "freeze_doc_coverage": "V1-FROZEN-INTERFACE.md §15.g 'AAD-binds-chunk-index semantic (preserves per-chunk decryptability for range-fetched slices)' — covered structurally"
+      },
+      "attack_surface": "AAD rebinding + cross-chunk shuffling + cipher-codepoint silent-downgrade (at the cipher-suite layer, not the graph-AEAD layer per MAJ-4 above) are all properly defended.",
+      "disposition": "OBSERVATION — clean at the cipher-suite layer; the graph-AEAD layer concern is captured under MAJ-4."
+    }
+  ],
+  "doc_vs_code_drift_summary": {
+    "frozen_doc_claims_not_in_code": [
+      "Item 1 §8-A visibility tighten (pub→pub(crate) + renames + _for_test removal) — declared frozen, but the public-api baseline still contains all four pub methods unchanged",
+      "Item 12 NoopManifestEnvelopeRechecker semantics (claims 'returns UnresolvedDeny for every input' — actually returns NotApplicable)",
+      "Item 12 ProductionManifestEnvelopeRechecker auto-wired default (the type does not exist; the wired default is Noop)",
+      "Item 12 accept_atrium_share frozen signature (the function does not exist)",
+      "Item 12 'Empty/sentinel <unresolved-peer> peer-DID MUST deny' — synthesized 'node-id:N' bypasses the defense",
+      "Item 15.j live-per-request resolver-evaluation test pin — no test exists"
+    ],
+    "drift_severity_assessment": "Items 1 + 12 are BLOCKERs because they claim security-load-bearing properties that are NOT enforced in shipped binaries. The freeze must NOT ship while these contradictions stand — SECURITY-POSTURE.md Compromise #26 already says 'the substantive defense at the merge boundary is NOT live in shipped binaries', which directly contradicts V1-FROZEN-INTERFACE.md item 12's claim that the Production rechecker is auto-wired. Three authoritative sources (V1-FROZEN-INTERFACE.md, code at HEAD, SECURITY-POSTURE.md) disagree at the freeze boundary — this is the canonical pim-1 §3.5b doc-coupling violation."
+  },
+  "positive_controls_passed": [
+    "Hybrid sig strip-resistance: both-must-verify + commitment recomputation + typed VerifyError arms (OBS-2)",
+    "Cipher-suite layer AEAD codepoint-mismatch typed-reject (cipher-suite::aead::unwrap; OBS-3)",
+    "AAD-rebinding defense at AEAD layer (plaintext-CID + chunk-index binding; OBS-3)",
+    "C11b safety gate (force_pure_pq_for_test_bypassing_audit_gate properly #[cfg(test)] gated; OBS-1)",
+    "Chain validator narrowing + MAX_CHAIN_DEPTH DoS bound (chain_validator.rs + manifest_envelope_chain_validation.rs)",
+    "AUDIT_LANDED_PURE_PQ_FLAG = false correctly rejects try_pure_pq_sole_trust_path with named AuditNotLandedPurePqRejected error variant",
+    "FrameReplayMarker presence + apply_atrium_merge wire-up (F3 anti-replay re-home per Compromise #23)",
+    "envelope_ceiling_admits_row #669 Layer-2/3 plugin-trust seam wired at apply_atrium_merge:1502-1508",
+    "SubgraphSpec walker is data-not-evaluator-extension; CLAUDE.md #1 12-primitive irreducibility preserved"
+  ],
+  "cross_ref_l1": "L1 positive-control lens should verify: (a) the §8-A tighten landing if it ships, (b) the public-api baseline regen, (c) the no-regression test pin g_core_9_engine_no_direct_cap_mutation.rs creation, (d) the §15.j live-per-request test pin. Adversarial cross-confirmation: L1 may flag the same Item 12 ProductionManifestEnvelopeRechecker absence; verify whether L1 found the same drift independently."
+}
