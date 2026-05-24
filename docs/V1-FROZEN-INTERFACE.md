@@ -959,32 +959,62 @@ SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
 - `pub trait ManifestEnvelopeRechecker` (`crates/benten-engine/src/
   manifest_envelope_recheck.rs:144`-ish) — the port interface; method
   signatures frozen.
-- `NoopManifestEnvelopeRechecker` semantics — returns `UnresolvedDeny`
-  for every input (per the §4.36 fail-CLOSED flip; the rename is NOT
-  cosmetic).
-- The DEFAULT engine-builder behavior — `ProductionManifestEnvelopeRechecker`
-  is auto-wired (NOT opt-in) per security-r1-1 BLOCKER closure.
+- `NoopManifestEnvelopeRechecker` is the v1-beta **shipped default**
+  (`crates/benten-engine/src/engine.rs:1908-1910` always installs
+  `Some(Arc::new(NoopManifestEnvelopeRechecker))`). At HEAD its
+  `recheck_row` returns `NotApplicable` for every input
+  (`manifest_envelope_recheck.rs:203-222`); the substantive Layer-3
+  defense (per-DID `PluginLibrary` + `UserDidRegistry` consult) is
+  **consumption-deferred** — destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+  G-COMP-1 row "ProductionManifestEnvelopeRechecker production impl
+  + default-builder wiring". The structural fail-CLOSED on empty/sentinel
+  peer-DID at `apply_atrium_merge` IS live at v1-beta (see below);
+  the per-DID substantive-recheck is the G-COMP-1 deliverable.
+  Compromise #26 in SECURITY-POSTURE.md documents this v1-beta posture
+  end-to-end.
 - Empty/sentinel `<unresolved-peer>` peer-DID MUST deny (never admit) at
-  recheck AND §4.25 sync-hydrate (security-r1-2).
-- `accept_atrium_share`
-  (`crates/benten-platform-foundation::plugin_lifecycle::accept_atrium_share`)
-  — the cross-peer install seam; signature frozen at v1-beta (re-verifies
-  `bytes_cid == announced_cid` AND `peer_did_signature_valid_for_bytes`).
+  recheck — **structurally enforced at v1-beta** at
+  `crates/benten-engine/src/engine.rs:1462-1476` (the `resolve_peer_dids`
+  empty-arm short-circuit returns typed
+  `ManifestEnvelopeRecheckUnresolvedDeny` BEFORE rechecker dispatch). The
+  §4.25 sync-hydrate path shares the SAME primitive (`UnresolvedDeny` +
+  `outcome_to_row_reject`); the handshake.rs wire-up is named to
+  G-COMP-1 per
+  `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`.
+- `accept_atrium_share` — **deferred to G-COMP-1 (G24-D-FP-1 follow-up
+  wave)**; destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` row
+  "accept_atrium_share cross-peer install seam". At v1-beta the
+  cross-peer plugin-install verification is NOT live; Compromise #26
+  documents this. The platform-foundation install pipeline at v1-beta
+  consumes plugins through user-DID-signed install records ONLY (no
+  cross-peer ingest).
 - Any §4.40 key-at-rest public type AUDIT + freeze whatever shipped at
   G-CORE-7 install-hardening; if absent, defer to the C1+C2 substrate
   completion (§989→§1301).
 
 **What "frozen" means here:**
-- The four variants + their semantics are bytewise + behaviorally locked.
-- The fail-CLOSED `UnresolvedDeny` arm IS the load-bearing security
-  property — re-introducing admit-on-unresolved is a HALT-AND-SURFACE
-  event.
-- The DEFAULT-builder wiring is part of the freeze; an opt-in posture
-  would be a v1 BLOCKER regression.
+- The four `ManifestEnvelopeRecheckOutcome` variants + their semantics
+  are bytewise + behaviorally locked.
+- The `pub trait ManifestEnvelopeRechecker` port-interface signatures
+  are locked (G-COMP-1's ProductionManifestEnvelopeRechecker will be
+  an additional `impl ManifestEnvelopeRechecker` honoring this trait).
+- The structural empty-peer-DID fail-CLOSED at the §4.36 merge boundary
+  IS the load-bearing v1-beta security property — re-introducing
+  admit-on-unresolved is a HALT-AND-SURFACE event.
 
-**What's NOT frozen:**
-- The internal logic inside `ProductionManifestEnvelopeRechecker` (how
-  it consults `PluginLibrary` + `UserDidRegistry`) may evolve.
+**What's NOT frozen (consumption deferred to G-COMP-1):**
+- The substantive `ProductionManifestEnvelopeRechecker` implementation
+  (per-DID `PluginLibrary` + `UserDidRegistry` consult) — deferred per
+  Compromise #26 v1-beta posture.
+- The DEFAULT-builder wiring of `ProductionManifestEnvelopeRechecker`
+  in place of `NoopManifestEnvelopeRechecker` — deferred to G-COMP-1.
+- The `accept_atrium_share` cross-peer install seam — deferred to
+  G-COMP-1 (G24-D-FP-1 wave).
+- The §4.25 sync-hydrate consumption of `UnresolvedDeny` at
+  `crates/benten-sync/src/handshake.rs` — deferred to G-COMP-1.
+
+See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the explicit G-COMP-1
+destination rows + per-surface deferral rationale.
 
 **Verification mechanism:**
 - `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_*.rs`
