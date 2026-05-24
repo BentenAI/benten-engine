@@ -123,7 +123,11 @@ static ACTIVE_STREAMS: AtomicUsize = AtomicUsize::new(0);
 /// "still waiting" into the same `Ok(None)`-or-block surface; this
 /// variant separates `Timeout` from `EndOfStream` so the napi layer
 /// can detect a cancel request between polls.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2
+/// (G-CORE-9 R1 fix-pass): adding a new poll arm post-v1 is breaking.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum NextChunkPoll {
     /// A chunk arrived within the timeout window.
     Chunk(Chunk),

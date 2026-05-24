@@ -49,7 +49,11 @@ use benten_errors::ErrorCode;
 
 /// Outcome of resolving a single runtime delegation step against the
 /// source principal's manifest `shares` policy.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2
+/// (G-CORE-9 R1 fix-pass): adding a new arm post-v1 is breaking.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DelegationResolution {
     /// The source principal is the user-root (or otherwise not a
     /// plugin-DID with a manifest envelope). Layer 1 already anchors

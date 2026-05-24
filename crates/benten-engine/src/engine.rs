@@ -1399,17 +1399,16 @@ impl Engine {
             // mirror.
             if let Some(policy) = self.policy.as_ref() {
                 let scope = format!("{zone}:write");
-                let ctx = benten_caps::CapWriteContext {
-                    label: zone.to_string(),
-                    actor_cid: peer_actor_cid,
-                    scope: scope.clone(),
-                    is_privileged: false,
-                    actor_hint: None,
-                    pending_ops: Vec::new(),
-                    authority: benten_caps::WriteAuthority::User,
-                    device_cid: None,
-                    audience_did: None,
-                };
+                let mut ctx = benten_caps::CapWriteContext::default();
+                ctx.label = zone.to_string();
+                ctx.actor_cid = peer_actor_cid;
+                ctx.scope = scope.clone();
+                ctx.is_privileged = false;
+                ctx.actor_hint = None;
+                ctx.pending_ops = Vec::new();
+                ctx.authority = benten_caps::WriteAuthority::User;
+                ctx.device_cid = None;
+                ctx.audience_did = None;
                 if let Err(cap_err) = policy.check_write(&ctx) {
                     use benten_caps::CapError;
                     if matches!(cap_err, CapError::Revoked | CapError::Denied { .. }) {

@@ -913,6 +913,7 @@ verification at HEAD):
 | `benten-caps` | `TypedCapGroup` | per spec item 11 | AUDIT + APPLY |
 | `benten-caps` | `CapWriteContext` + `ReadContext` (structs) | TBD | **APPLY** (item 8 coupling) |
 | `benten-caps` | **`Scope`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per item 15(c); the EXACTLY-two-arms-by-the-type-system property IS the structural pin |
+| `benten-ivm` | **`Strategy`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per G-CORE-9 R1 L8-MAJOR-3 ratification; the 3-arm `{A, B, Reserved}` set IS load-bearing per the spec's audit-pin (item 11 documented carve-out); adding a 4th strategy is a Composing-time architectural decision, NOT a SemVer non-breaking field addition |
 | `benten-graph` | `WriteContext` (struct) | NO at HEAD | **APPLY** (item 5 coupling) |
 | `benten-graph` | `ChangeEvent` (re-export) | YES | KEEP |
 | `benten-graph` | `GraphError` | YES | KEEP |

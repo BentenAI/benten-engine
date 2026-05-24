@@ -60,7 +60,12 @@ use benten_errors::ErrorCode;
 use crate::EngineError;
 
 /// Outcome of a write-boundary chain validation call.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2
+/// (G-CORE-9 R1 fix-pass): adding a new variant post-v1 is breaking;
+/// the attribute makes the variant-set additively extensible.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WriteBoundaryChainOutcome {
     /// No UCAN delegation chain is in scope for this write (e.g. a
     /// direct user-DID-signed write with no plugin-delegation chain),

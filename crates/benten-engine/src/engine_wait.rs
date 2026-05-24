@@ -181,7 +181,11 @@ pub enum ResumePayload {
 
 /// Phase-2a G3-B return shape for `call_with_suspension`. A handler may
 /// complete inline or suspend awaiting an external signal.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2
+/// (G-CORE-9 R1 fix-pass): adding a new arm post-v1 is breaking.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum SuspensionOutcome {
     /// The handler ran to completion.
     Complete(Outcome),
@@ -879,17 +883,16 @@ impl Engine {
             // suspend/resume boundary per D-PHASE-3-25. `None` for legacy
             // / non-attested engines preserves prior behavior.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = CapWriteContext {
-                label: "system:WaitResume".into(),
-                actor_cid: head.map(|f| f.actor_cid),
-                scope: "wait:resume".into(),
-                is_privileged: false,
-                actor_hint: None,
-                pending_ops: Vec::new(),
-                authority: benten_caps::WriteAuthority::User,
-                device_cid,
-                audience_did: None,
-            };
+            let mut ctx = CapWriteContext::default();
+            ctx.label = "system:WaitResume".into();
+            ctx.actor_cid = head.map(|f| f.actor_cid);
+            ctx.scope = "wait:resume".into();
+            ctx.is_privileged = false;
+            ctx.actor_hint = None;
+            ctx.pending_ops = Vec::new();
+            ctx.authority = benten_caps::WriteAuthority::User;
+            ctx.device_cid = device_cid;
+            ctx.audience_did = None;
             policy.check_write(&ctx).map_err(|e| EngineError::Other {
                 code: ErrorCode::CapRevokedMidEval,
                 message: format!("resume: capability re-check denied: {e}"),

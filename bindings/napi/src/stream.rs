@@ -179,6 +179,12 @@ pub(crate) fn next_chunk_poll_adapter(
         Ok(NextChunkPoll::Chunk(c)) => Ok(NextChunkPollNapi::Chunk(c.bytes)),
         Ok(NextChunkPoll::EndOfStream) => Ok(NextChunkPollNapi::EndOfStream),
         Ok(NextChunkPoll::Timeout) => Ok(NextChunkPollNapi::Timeout),
+        // NextChunkPoll is #[non_exhaustive] post-G-CORE-9 Bundle 3;
+        // forward-compat wildcard surfaces a typed-not-supported error.
+        #[allow(unreachable_patterns)]
+        Ok(_) => Err(napi::Error::from_reason(
+            "unsupported NextChunkPoll variant — napi binding needs update",
+        )),
         Err(e) => Err(engine_err(e)),
     }
 }

@@ -65,7 +65,12 @@ use serde::{Deserialize, Serialize};
 /// UCAN parse/validate pipeline at the cap-policy layer. The
 /// production wire-up at G-CORE-3e will introduce a `From<Ucan>`
 /// conversion + threaded canonical-bytes parity test.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + §15.d +
+/// L17-r1-2 (G-CORE-9 R1 fix-pass): adding a new field post-v1 is
+/// breaking for external direct-struct-literal construction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct UcanEnvelope {
     /// The audience DID-CID this UCAN is bound to.
     pub audience: Cid,
@@ -162,7 +167,12 @@ impl UcanEnvelope {
 /// without coupling the wave-3b pin closure to the cipher-suite
 /// internals. The production wire-up at G-CORE-3e/3f introduces the
 /// real-type bridge.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + §15.d +
+/// L17-r1-2 (G-CORE-9 R1 fix-pass): adding a new field post-v1 is
+/// breaking.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct GrantKeyMaterial {
     /// Opaque material bytes. Synthetic test fixtures carry
     /// deterministic content; real key material is a wrapped AEAD key
@@ -171,6 +181,17 @@ pub struct GrantKeyMaterial {
 }
 
 impl GrantKeyMaterial {
+    /// Construct from explicit bytes — used by tests that need to bind
+    /// the GrantKeyMaterial to a specific AEAD key (e.g.
+    /// benten-drop's consume_offline path which requires the
+    /// key_material.bytes to match the wrapping AEAD key). Replaces
+    /// the direct struct-literal construction blocked by the new
+    /// `#[non_exhaustive]` attribute (G-CORE-9 R1 Bundle 3).
+    #[must_use]
+    pub fn from_bytes_for_test(bytes: Vec<u8>) -> Self {
+        Self { bytes }
+    }
+
     /// Construct synthetic key material for tests.
     #[must_use]
     pub fn synthetic_for_test() -> Self {
@@ -201,7 +222,14 @@ impl GrantKeyMaterial {
 /// > or the key material — the binding is the foundation."
 ///
 /// [`Self::verify_binding`] enforces that ordering.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + §15.d +
+/// L17-r1-2 (G-CORE-9 R1 fix-pass): adding a new field post-v1 is
+/// breaking for external direct-struct-literal construction; use the
+/// existing `AuthorizationGrant::issue_for_test` /
+/// production constructor entry points.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct AuthorizationGrant {
     /// The UCAN half (audience + delegation chain seam).
     pub ucan: UcanEnvelope,

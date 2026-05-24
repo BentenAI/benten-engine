@@ -325,13 +325,11 @@ impl Engine {
         // engine's configured device-DID-attestation CID (D-PHASE-3-25
         // heterogeneous-policy per-device dispatch) and, for the
         // attributed-read path, the caller's principal CID.
-        let ctx = benten_caps::ReadContext {
-            label,
-            target_cid: Some(*cid),
-            actor_cid: principal,
-            device_cid: self.device_cid(),
-            ..Default::default()
-        };
+        let mut ctx = benten_caps::ReadContext::default();
+        ctx.label = label;
+        ctx.target_cid = Some(*cid);
+        ctx.actor_cid = principal;
+        ctx.device_cid = self.device_cid();
         match self.check_read_gate(&ctx)? {
             ReadGate::Permitted => Ok(Some(node)),
             ReadGate::DeniedReadCollapse => Ok(None),

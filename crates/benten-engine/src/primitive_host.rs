@@ -528,12 +528,11 @@ impl PrimitiveHost for Engine {
             (_, None) => benten_caps::ReadContext::by_label_only(label),
             (false, Some(cid)) => {
                 let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                benten_caps::ReadContext {
-                    label: label.to_string(),
-                    target_cid: Some(*cid),
-                    device_cid,
-                    ..Default::default()
-                }
+                let mut ctx = benten_caps::ReadContext::default();
+                ctx.label = label.to_string();
+                ctx.target_cid = Some(*cid);
+                ctx.device_cid = device_cid;
+                ctx
             }
         };
         self.check_read_ctx(&ctx)
@@ -605,11 +604,9 @@ impl PrimitiveHost for Engine {
             // policies can dispatch per-device per D-PHASE-3-25.
             // `None` for legacy / non-attested engines.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::CapWriteContext {
-                label: required.to_string(),
-                device_cid,
-                ..Default::default()
-            };
+            let mut ctx = benten_caps::CapWriteContext::default();
+            ctx.label = required.to_string();
+            ctx.device_cid = device_cid;
             if let Err(c) = policy.check_write(&ctx) {
                 return Err(benten_eval::EvalError::Capability(c));
             }

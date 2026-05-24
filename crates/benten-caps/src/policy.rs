@@ -147,7 +147,13 @@ pub enum PendingOp {
 /// Carries the pending-ops batch, the actor identity (Phase-3), and a
 /// privileged-flag for engine-internal writes. Backends inspect these to
 /// decide whether to authorize the transaction.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-1
+/// (G-CORE-9 R1 fix-pass): adding new fields post-v1 is breaking for
+/// external direct-struct-literal construction; use
+/// `Default::default()` + field-mutation pattern to construct.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct CapWriteContext {
     /// Label of the Node about to be written. For multi-op batches this
     /// carries the primary label of the first op (convenience field;
@@ -240,7 +246,13 @@ impl CapWriteContext {
 /// enforcement.
 ///
 /// See `docs/ERROR-CATALOG.md` for [`crate::CapError::DeniedRead`].
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-1
+/// (G-CORE-9 R1 fix-pass): adding new fields post-v1 is breaking for
+/// external direct-struct-literal construction; use
+/// `Default::default()` + field-mutation pattern to construct.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct ReadContext {
     /// Label of the Node (or view / anchor) the caller is trying to read.
     pub label: String,

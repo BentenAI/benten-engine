@@ -320,12 +320,10 @@ impl Engine {
             // explicit `self.policy.as_deref()` presence guard is now
             // subsumed — behaviour is identical for the no-policy case.)
             let device_cid = self.device_cid();
-            let ctx = benten_caps::ReadContext {
-                label: label_hint.clone(),
-                target_cid: None,
-                device_cid,
-                ..Default::default()
-            };
+            let mut ctx = benten_caps::ReadContext::default();
+            ctx.label = label_hint.clone();
+            ctx.target_cid = None;
+            ctx.device_cid = device_cid;
             // Refinement-audit-2026-05 D1 #1189 (Safe-1 #534 / META #593):
             // route the IVM view-read gate through the canonical
             // fail-CLOSED `check_read_gate`. The pre-fix `if let

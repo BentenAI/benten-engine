@@ -75,12 +75,10 @@ impl Engine {
                         // per device per D-PHASE-3-25.
                         let device_cid =
                             *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                        let ctx = benten_caps::CapWriteContext {
-                            label: primary_label,
-                            pending_ops: ops,
-                            device_cid,
-                            ..Default::default()
-                        };
+                        let mut ctx = benten_caps::CapWriteContext::default();
+                        ctx.label = primary_label;
+                        ctx.pending_ops = ops;
+                        ctx.device_cid = device_cid;
                         if let Err(cap_err) = p.check_write(&ctx) {
                             self.inner.record_cap_write_denied(&scopes);
                             *user_result.lock_recover() = Some(Err(EngineError::Cap(cap_err)));
@@ -392,12 +390,10 @@ impl Engine {
             // attestation CID into the debug:read gate ReadContext so
             // heterogeneous policies dispatch per-device per D-PHASE-3-25.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::ReadContext {
-                label: "debug".into(),
-                target_cid: Some(*cid),
-                device_cid,
-                ..Default::default()
-            };
+            let mut ctx = benten_caps::ReadContext::default();
+            ctx.label = "debug".into();
+            ctx.target_cid = Some(*cid);
+            ctx.device_cid = device_cid;
             if let Err(e) = policy.check_read(&ctx) {
                 // Normalise to CapError::Denied on the diagnostic path —
                 // a DeniedRead on this gate is itself the denial signal.
@@ -430,12 +426,10 @@ impl Engine {
                 // / cap-g16bp-3): thread device-DID-attestation CID for
                 // diagnostic-replay symmetry with the gate path above.
                 let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                let ctx = benten_caps::ReadContext {
-                    label: label.clone(),
-                    target_cid: Some(*cid),
-                    device_cid,
-                    ..Default::default()
-                };
+                let mut ctx = benten_caps::ReadContext::default();
+                ctx.label = label.clone();
+                ctx.target_cid = Some(*cid);
+                ctx.device_cid = device_cid;
                 match policy.check_read(&ctx) {
                     Err(CapError::DeniedRead { required, .. }) => Some(required),
                     _ => None,
