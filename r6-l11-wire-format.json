@@ -1,0 +1,270 @@
+{
+  "lens": "L11-wire-format-byte-pinning-PHASE-WIDE",
+  "round": "R6.R1",
+  "council": "Phase-4-Meta-Core R6 phase-close convergence council",
+  "branch": "phase-4-meta-core/r6-r1-l11-wire-format-phase-wide",
+  "branch_off": "origin/phase-4-meta-core/r4b-r1-fix-pass @ 4bbc4cac",
+  "head_sha_at_review": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "disposition": "APPROVE-WITH-MAJOR",
+  "r6_r1_convergence_disposition": "NOT-CONVERGED",
+  "summary": "L11 PHASE-WIDE re-run broader than the G-CORE-9 FREEZE subset. The FREEZE-subset L11 (R1→R4) CONVERGED-PER-Q5 at R4 (lens output at commit 0a3232fb; 1 MINOR closed at R4-FP commit a0b75637) and verified the 10 surfaces enumerated in docs/V1-WIRE-FORMAT-INVENTORY.md. This PHASE-WIDE run widens to every CBOR/DAG-CBOR/on-disk-format encode/decode site across the touched crates per R6-LENS-CATALOG.md §L11 'Surfaces' definition. The phase-wide sweep enumerated 44 production source files containing `to_canonical_bytes` / `serde_ipld_dagcbor::to_vec` / equivalent canonical-bytes call sites across 9 crates (benten-core, benten-crypto-suite, benten-caps, benten-drop, benten-id, benten-engine, benten-eval, benten-graph, benten-platform-foundation, benten-sync). 10 of those map to V1-WIRE-FORMAT-INVENTORY.md items 1-10; ~14 distinct ADDITIONAL wire-format-bearing surfaces are NOT enumerated in the inventory + NOT named in V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 (which only enumerates the 8-surface FREEZE subset). EVERY un-enumerated surface verified to have SUBSTANTIVE coverage at HEAD (round-trip + format-version-discriminator + behavioral pins; ground-truth grep + test-file inspection) — so the L11 lens question 'each has a byte-pin test in the corpus' is answered AFFIRMATIVELY in the substantive sense for every surface checked. The gap is INVENTORY-DOCUMENTATION-INCOMPLETE, not COVERAGE-MISSING: the inventory doc + D-9 deferral row collectively under-represent the phase-wide wire-format surface area, which (per V1-FROZEN-INTERFACE.md §4 'documented inventory of every wire-format-bearing surface') is a FREEZE-CONTRACT gap. The §4 P-III Ben sign-off question 'Are the 9 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory?' cannot be answered 'yes, complete' with the inventory in its current shape — at minimum 8-10 additional surfaces need to be added (or D-9 needs to absorb them as named-deferrals with the same posture-narrative: 'roundtrip + format-version pins enforce byte stability at v1-beta; full hex-pinned-bytes regression-defense deferred to G-COMP-1'). Promoting this to MAJOR severity rather than MINOR because: (a) the freeze-contract literal contract item 4 §1 deliverable IS the documented inventory, (b) the §4 P-III Ben decision-point question is structurally un-answerable until the inventory is complete, (c) the inventory's own §'P-III Ben decision-point' section frames the inventory as the Ben-sign-off site per G-CORE-9 R2 L18-r2-4 path (b). Per CLAUDE.md HARD RULE 12 the disposition is FIX-NOW (orchestrator-direct ~30 LOC inventory expansion + ~15 LOC D-9 widening). Two MINOR observations also surfaced (one cite-drift residual in the inventory + one inconsistency between the 2 inventory cell-shapes). Q5 termination test: 1 MAJOR + 2 MINOR → R6 R1 NOT-CONVERGED for this lens; expected to converge after the inventory-expansion fix-pass lands. Pattern note: this is exactly the recurrence-class §3.6j is designed to catch — the FREEZE-subset sweep was self-verified COMPLETE at R3-FP via the 15-cite resolution sweep, but the PHASE-WIDE sweep over the whole production source tree surfaces 14 additional surfaces the inventory didn't enumerate.",
+  "phase_wide_inventory_sweep": {
+    "method": "git-grep over `crates/*/src/*.rs` for `to_canonical_bytes\\|serde_ipld_dagcbor::to_vec\\|serde_ipld_dagcbor::from_slice` filtered to production sources (excludes test files + comment-only matches); cross-referenced each hit against V1-WIRE-FORMAT-INVENTORY.md table rows 1-10 + V1-FROZEN-INTERFACE.md item-4 frozen-surfaces enumeration + V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 deferred-set; ground-truth-verified each candidate-missing surface's coverage by file-read + test-grep per §3.5n.",
+    "production_source_files_with_canonical_bytes_calls": 44,
+    "crates_touched": [
+      "benten-core",
+      "benten-crypto-suite",
+      "benten-caps",
+      "benten-drop",
+      "benten-dsl-compiler",
+      "benten-engine",
+      "benten-eval",
+      "benten-graph",
+      "benten-id",
+      "benten-platform-foundation",
+      "benten-sync"
+    ],
+    "inventory_enumerated_surfaces_at_HEAD": 10,
+    "additional_surfaces_NOT_in_inventory": [
+      {
+        "surface": "benten-eval::ExecutionStateEnvelope",
+        "location": "crates/benten-eval/src/exec_state.rs:314-322",
+        "wire_shape": "DAG-CBOR envelope `{schema_version: u8, payload_cid: Cid, payload: ExecutionStatePayload}`; persisted to redb via RedbSuspensionStore; cross-process round-trip mandatory (Phase 2b G12-E)",
+        "format_version_discriminator": "`schema_version: u8 = 1`",
+        "byte_pin_coverage_at_HEAD": "crates/benten-eval/tests/exec_state_envelope_shape.rs (shape + schema_version=1 pin) + crates/benten-eval/tests/exec_state_dagcbor_roundtrip.rs (round-trip + byte-determinism) + crates/benten-eval/tests/proptest_exec_state_round_trip.rs (proptest body DEFERRED to v1-assessment-window per its #[ignore] annotation — structural unit tests at exec_state.rs cover round-trip equality) + crates/benten-eval/tests/v1_api_stabilization_closure_pins.rs (envelope_cid)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + schema_version-pin + determinism); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — not in V1-WIRE-FORMAT-INVENTORY.md, not named in D-9"
+      },
+      {
+        "surface": "benten-graph::redb_backend whole-file schema-version envelope",
+        "location": "crates/benten-graph/src/store.rs:234-240 + crates/benten-graph/src/redb_backend.rs:748-797 (check_schema_version) + :798-810 (force_schema_version_for_test) + :822-828 (read_schema_version_for_test)",
+        "wire_shape": "redb meta-row at key `__benten_schema_version` (16 bytes) carrying 4-byte big-endian u32; SCHEMA_VERSION_KEY: &[u8] = b'__benten_schema_version'; GRAPH_SCHEMA_VERSION: u32 = 1",
+        "format_version_discriminator": "`GRAPH_SCHEMA_VERSION: u32 = 1` + 'absence ≡ v1' implied-v1 rule",
+        "byte_pin_coverage_at_HEAD": "crates/benten-graph/tests/redb_schema_version_envelope_pin.rs (3 arms: round-trip + implied-v1 + mismatch-refusal); ground-truth-verified — test file present + 3 named test functions match the wire-format-freeze-item docstring at store.rs:230-233",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + version-mismatch-refusal + absence-ok pins all present); hex-pinned-bytes regression-defense for the literal 16-byte key + 4-byte BE value NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — this is a WHOLE-FILE format envelope distinct from item 2 (SnapshotBlob) + item 8 (TwoCidStore mapping); deserves its own inventory row OR an explicit cross-cite from item 8"
+      },
+      {
+        "surface": "benten-engine::DeviceAttestationEnvelope",
+        "location": "crates/benten-engine/src/engine_sync.rs:311-540 (struct + MAX_WIRE_VERSION + to_canonical_bytes + from_bytes + signature_input_bytes + verify)",
+        "wire_shape": "DAG-CBOR envelope `{version: u8, attestation: Option<DeviceAttestation>, payload_hash: [u8;32], session_nonce: [u8;32], signature: Vec<u8>}`; on-the-wire in Atrium handshake + apply_atrium_merge; signed Ed25519",
+        "format_version_discriminator": "`MAX_WIRE_VERSION: u8 = 2` (pre-v1 break-OK 1→2 bump landed)",
+        "byte_pin_coverage_at_HEAD": "crates/benten-engine/tests/device_attestation_envelope_direct.rs (MAX_WIRE_VERSION constant pin at :331-348 — 'WIRE_VERSION change is a wire-format break — coordinate' + verify-rejects-newer-version arm) + crates/benten-sync/tests/wire_envelope.rs + crates/benten-engine/tests/collapse_p3_envelope_ceiling_and_closure_pin.rs + crates/benten-sync/tests/handshake.rs (peer-DID + device-DID wire-format coverage)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (wire-version constant pin + verify-rejects-future-version + signature-input-bytes encode pin + envelope-ceiling pin); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — DeviceAttestationEnvelope is a Phase-3-shipped wire-format-bearing on-the-wire envelope; NOT in inventory + NOT named in D-9"
+      },
+      {
+        "surface": "benten-id::DeviceAttestation (inner, separate from envelope)",
+        "location": "crates/benten-id/src/device_attestation.rs:331-340 (to_canonical_bytes inherent) + :397-431 (CanonicalBytes trait impl + SigInput sig-input separation; both must produce identical canonical bytes)",
+        "wire_shape": "DAG-CBOR encoded `DeviceAttestation` struct; signed via Ed25519 over canonical bytes (signature-self-reference excluded via SigInput projection)",
+        "format_version_discriminator": "implicit via parent envelope (`MAX_WIRE_VERSION` on DeviceAttestationEnvelope); DeviceAttestation itself has no explicit schema_version",
+        "byte_pin_coverage_at_HEAD": "crates/benten-id/tests/device_attestation.rs (inherent + trait byte-identity pin + signature canonical-input pin)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (inherent vs trait byte-identity pin is a substantive sig-input-vs-canonical-bytes contract); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — could legitimately be subsumed under a 'Phase-3 identity envelopes' inventory cluster"
+      },
+      {
+        "surface": "benten-id::RotationLog + RotationAttestation",
+        "location": "crates/benten-id/src/did_rotation.rs:121 (to_canonical_bytes) + :141-148 (CanonicalBytes trait impl) + :192 (attestation signing payload) + :206 (RotationLog struct)",
+        "wire_shape": "DAG-CBOR encoded RotationLog (sequence of signed RotationAttestation entries); signed Ed25519; durable persistence; cross-peer shareable",
+        "format_version_discriminator": "RotationLog struct shape (no explicit schema_version; SemVer-locked via #[non_exhaustive])",
+        "byte_pin_coverage_at_HEAD": "crates/benten-id/tests/did_rotation.rs (round-trip + signing-payload identity pin)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + signing-payload-identity); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — Phase-3 identity-rotation surface; load-bearing for the user-DID provenance commitment (CLAUDE.md #18) AND for plugin author-DID rotation across plugin manifests"
+      },
+      {
+        "surface": "benten-id::Ucan canonical-bytes (the UCAN object itself, distinct from the Varsig signature header in item 5)",
+        "location": "crates/benten-id/src/ucan.rs (Ucan struct + serde_ipld_dagcbor encoding) + crates/benten-caps/src/backends/ucan.rs:131 + :277 (cbor::to_vec(ucan) for redb backend storage) + :377 (cbor::from_slice::<Ucan> for backend deserialize)",
+        "wire_shape": "DAG-CBOR encoded UCAN body (header + payload + signature); persisted to redb under UCAN backend; signed via UCAN-Varsig (item 5)",
+        "format_version_discriminator": "UCAN spec version + UCAN-Varsig header (item 5 codepoint dispatch)",
+        "byte_pin_coverage_at_HEAD": "crates/benten-id/tests/ucan.rs + crates/benten-caps/tests/ (UCAN signature + chain validation + backend round-trip); UCAN-Varsig header byte-pin at crates/benten-crypto-suite/tests/tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs (item 5 inventory coverage)",
+        "covers_lens_question": "PARTIAL — item 5 covers the Varsig HEADER; the UCAN body canonical bytes (which the header signs over) are NOT explicitly inventory'd; substantive coverage via the chain-validation tests + UCAN backend round-trip; hex-pinned-bytes regression-defense for the body NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — item 5 should clarify scope (header-only) OR extend to cover the UCAN body canonical bytes"
+      },
+      {
+        "surface": "benten-engine::ModuleManifest",
+        "location": "crates/benten-engine/src/module_manifest.rs:235-262 (to_canonical_bytes + cid) + crates/benten-engine/src/manifest_signing.rs:325 (signing payload) + crates/benten-engine/src/engine_modules.rs:244 (persistence into graph)",
+        "wire_shape": "DAG-CBOR encoded ModuleManifest; signed via Ed25519; persisted into the engine's `system:ModuleManifest` zone as a Node carrying `manifest_cbor` + `manifest_cid` properties; cross-peer shareable via Phase-3 sync",
+        "format_version_discriminator": "struct shape (#[non_exhaustive]) + manifest_cid as the canonical-bytes-derived CID identity",
+        "byte_pin_coverage_at_HEAD": "crates/benten-engine/tests/module_manifest_canonical.rs (round-trip + canonical-bytes determinism) + crates/benten-engine/tests/module_manifest_signature_field_reserved.rs + crates/benten-engine/tests/manifest_signing.rs (signing payload + verification)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + signing-payload + canonical-bytes determinism); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — ModuleManifest is the Phase-2b SANDBOX-module envelope shape + load-bearing for plugin distribution"
+      },
+      {
+        "surface": "benten-platform-foundation::PluginManifest + PluginManifestRecord (manifest_store)",
+        "location": "crates/benten-platform-foundation/src/plugin_manifest.rs:137 + :192 (signing-payload via to_vec) + :224-227 (to_canonical_bytes inherent — distinct from signing-payload per the docstring at :213-220) + crates/benten-platform-foundation/src/manifest_store.rs:108 + :179 + :290 (PluginManifestRecord persistence to redb backend)",
+        "wire_shape": "Two distinct canonical-bytes surfaces: (a) PluginManifest::to_canonical_bytes (round-trippable shareable form) + (b) PluginManifest's signing-payload (a projection that excludes the signature field; the basis for the Ed25519 signature). PluginManifestRecord is the persisted form (manifest + install metadata) — DAG-CBOR encoded in the manifest-store redb backend",
+        "format_version_discriminator": "manifest CID + #[non_exhaustive] (D-4F-13 pull-not-push: NO schema_version; CID covers shape)",
+        "byte_pin_coverage_at_HEAD": "crates/benten-platform-foundation/tests/ (plugin manifest signing + verification + store round-trip pins); ground-truth-verified the docstring at plugin_manifest.rs:213-220 explicitly distinguishes the 2 surfaces",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (signing-payload-vs-canonical-bytes distinction is correctly contracted; round-trip pins exist); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — PluginManifest is THE plugin-trust-model envelope (CLAUDE.md #18); the 2-canonical-bytes-surface distinction is a load-bearing wire-format design property that should be inventory'd explicitly"
+      },
+      {
+        "surface": "benten-platform-foundation::manifest_store records (PluginManifestRecord + install metadata)",
+        "location": "crates/benten-platform-foundation/src/manifest_store.rs:108 + :179 + :290 (record serialization for redb backend storage)",
+        "wire_shape": "DAG-CBOR encoded manifest-store records: PluginManifestRecord (manifest CID + install timestamp + install-record-CID for replay-defense + active flag)",
+        "format_version_discriminator": "struct shape (#[non_exhaustive])",
+        "byte_pin_coverage_at_HEAD": "Inferred from manifest-store tests (round-trip via the store's get/put cycle); ground-truth-verified by file-grep — the records ARE serialized via cbor::to_vec at 3 distinct call sites; coverage is via the store's behavioral round-trip tests",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (behavioral round-trip via store get/put); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — could legitimately be bundled with the PluginManifest inventory row"
+      },
+      {
+        "surface": "benten-sync::HandshakeFrame + HandshakePayload + RevocationEntry",
+        "location": "crates/benten-sync/src/handshake_wire.rs:117-130 (HandshakeFrame::to_canonical_bytes) + crates/benten-sync/src/handshake.rs:314 + :342 + :421 + :600 + :1033 (Signed payload encoding + initiate/response/revocation entries)",
+        "wire_shape": "DAG-CBOR encoded handshake protocol frames; signed Ed25519; carries peer-DID + device-DID + revocation state + nonce + version commitments",
+        "format_version_discriminator": "HandshakeFrame struct shape; documented at crates/benten-sync/src/lib.rs:101 'handshake_wire::HandshakeFrame::to_canonical_bytes uses DAG-CBOR'",
+        "byte_pin_coverage_at_HEAD": "crates/benten-sync/tests/handshake.rs (G16-D wave-6b LANDED pins: replay rejection + revocation-state-sync + peer-DID + device-DID wire-format carry) + crates/benten-sync/tests/wire_envelope.rs (broader inv-14 device-DID wire-format coverage across non-handshake message kinds) + crates/benten-sync/tests/attack_hlc_skew_revocation_ordering.rs",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + signed-payload integrity + replay-defense pins); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — Phase-3 Atrium handshake wire protocol; load-bearing for CLAUDE.md baked-in #16 (multi-device support criterion 16) + Compromise #23 (device-DID-attestation envelope V2 + Ed25519 sig + Acceptor::accept_at + payload-hash binding)"
+      },
+      {
+        "surface": "benten-sync::MST proto messages + MST canonical encoding",
+        "location": "crates/benten-sync/src/mst_proto.rs:159-167 + :235-242 (to_canonical_bytes on 2 distinct frame types) + crates/benten-sync/src/mst.rs:314 + :443 + :476 + :620 (MST node/leaf canonical encoding for content-addressability + diff-protocol cite)",
+        "wire_shape": "DAG-CBOR encoded MST diff-protocol frames + MST node canonical bytes (the latter is content-addressable; node CID derives from canonical bytes)",
+        "format_version_discriminator": "struct shape on the frames; MST itself is content-addressed via canonical-bytes CID",
+        "byte_pin_coverage_at_HEAD": "crates/benten-sync/tests/mst_diff.rs + crates/benten-sync/tests/prop_mst.rs (proptest_mst — property-based determinism + diff correctness) + crates/benten-sync/tests/attack_mst_diff_cid_mismatch.rs (adversarial CID-mismatch pin)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + proptest determinism + adversarial CID-mismatch pin); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — Phase-3 sync MST diff protocol; load-bearing for Phase-3 exit criterion 1 (two-peer bidirectional sync)"
+      },
+      {
+        "surface": "benten-sync::PeerId",
+        "location": "crates/benten-sync/src/peer_id.rs:100-115 (PeerId::to_canonical_bytes via serde_ipld_dagcbor::to_vec on #[serde(transparent)] struct)",
+        "wire_shape": "DAG-CBOR encoded PeerId (derived from Ed25519 public key per the iroh EndpointId == VerifyingKey design)",
+        "format_version_discriminator": "Ed25519-derived bytes (no explicit schema_version; tied to the iroh-key-as-PeerId design)",
+        "byte_pin_coverage_at_HEAD": "crates/benten-sync/tests/peer_id.rs (G16-A LANDED pin for peer-id derivation from Ed25519 pubkey + round-trip + cross-process determinism)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + cross-process determinism + Ed25519-pubkey-derivation pin); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — Phase-3 sync identity primitive"
+      },
+      {
+        "surface": "benten-sync::LoroDoc canonical export + StampedValue codec",
+        "location": "crates/benten-sync/src/crdt.rs:724-728 (LoroDoc::to_canonical_bytes via Loro's export) + :849 (StampedValue codec for HLC + value pairs)",
+        "wire_shape": "Loro's export bytes (CRDT canonical form; NOT DAG-CBOR but Loro's own format) + DAG-CBOR encoded StampedValue tuples",
+        "format_version_discriminator": "Loro's own version + StampedValue struct shape",
+        "byte_pin_coverage_at_HEAD": "crates/benten-sync/tests/loro_lww.rs + crates/benten-sync/tests/loro_rich_type.rs + crates/benten-sync/tests/hlc_loro_property_lww.rs (LWW + Loro shape + property tests) + crates/benten-sync/tests/prop_loro_converge.rs (convergence proptest)",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (round-trip + convergence proptest + LWW shape pins); hex-pinned-bytes regression-defense NOT present + Loro's own format is intentionally an external dependency (codec-stability owned by Loro upstream, not Benten)",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — Loro is the CRDT format; Benten is a Loro consumer; the inventory should at minimum NAME Loro as a wire-format-bearing dependency + cite the LoroDoc::to_canonical_bytes boundary"
+      },
+      {
+        "surface": "benten-engine::suspension_store on-disk records",
+        "location": "crates/benten-engine/src/suspension_store.rs:113-189 (PersistedCursorMeta + PersistedRetentionWindow + SerializableCapSnapshot + SerializableWaitMetadata) + :270 + :318 + :338 + :355 + :464 + :527 + :560 (cbor encode/decode call sites)",
+        "wire_shape": "DAG-CBOR encoded crate-private structs persisted under the engine's redb side-tables (sm: cursor-meta, sx: cap-snapshot, etc.); cross-process resume mandatory (Phase 2b G12-E)",
+        "format_version_discriminator": "struct shape; #[serde(default)] on Phase-3-added fields enables Phase-2b-shape on-disk forward-compat (e.g. SerializableWaitMetadata::ttl_hours documented at :180-186 + suspend_wallclock_ms at :187-189)",
+        "byte_pin_coverage_at_HEAD": "Inferred via the cross-process behavioral round-trip tests (RedbSuspensionStore round-trip + LegacyPhase2bWaitMetadata round-trip at :512+); ground-truth-verified the #[serde(default)] forward-compat shape at :183-189 is a substantive wire-format-stability commitment",
+        "covers_lens_question": "AFFIRMATIVE at the substantive level (forward-compat #[serde(default)] discipline + cross-process behavioral round-trip); hex-pinned-bytes regression-defense NOT present",
+        "gap_class": "INVENTORY-DOCUMENTATION-INCOMPLETE — these structs are crate-private (struct, not pub struct) so they're not in the cargo-public-api surface, but they ARE persisted-on-disk wire-format-bearing forms that must round-trip across builds"
+      }
+    ],
+    "summary_of_phase_wide_findings": "Of the 44 production source files with canonical-bytes call sites, 10 surfaces map to V1-WIRE-FORMAT-INVENTORY.md rows 1-10 (FREEZE-subset coverage CONVERGED-PER-Q5 at G-CORE-9 R4 lens). 14 additional distinct wire-format-bearing surfaces are NOT enumerated in the inventory + NOT named in V1-FROZEN-INTERFACE-DEFERRED.md Row D-9. Every un-enumerated surface verified to have SUBSTANTIVE coverage at HEAD (round-trip + format-version-discriminator + behavioral pins; ground-truth grep + test-file inspection). The gap is INVENTORY-DOCUMENTATION-INCOMPLETE, not COVERAGE-MISSING — but per V1-FROZEN-INTERFACE.md §4 the documented inventory IS the contract deliverable + the Ben P-III sign-off site (per the inventory's own §'P-III Ben decision-point' section), so the gap is freeze-contract-relevant."
+  },
+  "findings": [
+    {
+      "id": "L11-R6-R1-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "V1-WIRE-FORMAT-INVENTORY.md is INCOMPLETE for phase-wide — 14 distinct wire-format-bearing surfaces NOT enumerated + NOT named in V1-FROZEN-INTERFACE-DEFERRED.md Row D-9; the freeze-contract literal contract item 4 §1 'documented inventory of every wire-format-bearing surface' is structurally un-satisfied + the §'P-III Ben decision-point' question 'Are the 9 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory?' cannot be answered 'yes, complete' with the inventory in its current shape",
+      "evidence": {
+        "freeze_contract_quote": "docs/V1-FROZEN-INTERFACE.md:354-356 reads: 'What G-CORE-9 produces here: 1. A documented inventory of every wire-format-bearing surface (CBOR envelopes; AEAD wrap envelopes; UCAN-Varsig envelopes; DropBundle envelope; SnapshotBlob; TwoCidStore mapping format).' The literal contract names 'every' wire-format-bearing surface.",
+        "P_III_sign_off_quote": "docs/V1-WIRE-FORMAT-INVENTORY.md:228-230 reads: 'Are the 9 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?' The question is structurally un-answerable yes-with-confidence given the 14-surface gap surfaced.",
+        "D_9_scope_quote": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:241-259 Row D-9 enumerates only 8 surfaces (6 deferred hex-pinned + 2 landed: codepoint-integer-table + per-chunk AAD layout). Phase-3-era surfaces (HandshakeFrame, MST proto, LoroDoc, PeerId, etc.) + Phase-2b-era surfaces (ModuleManifest, ExecutionStateEnvelope, suspension-store records) + the GRAPH_SCHEMA_VERSION whole-file envelope (#992) + DeviceAttestationEnvelope (Phase-3 wave-6b) + plugin manifest envelopes (Phase-4-Foundation) are ALL outside D-9's scope.",
+        "phase_wide_sweep_method": "git-grep over `crates/*/src/*.rs` for `to_canonical_bytes\\|serde_ipld_dagcbor::to_vec\\|serde_ipld_dagcbor::from_slice` filtered to production sources (excludes test files + comment-only matches); 44 production source files across 11 crates with canonical-bytes call sites; cross-referenced each hit against V1-WIRE-FORMAT-INVENTORY.md table rows 1-10 + V1-FROZEN-INTERFACE.md item-4 frozen-surfaces enumeration + V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 deferred-set.",
+        "missed_surfaces_enumerated_in_phase_wide_inventory_sweep_section_above": [
+          "benten-eval::ExecutionStateEnvelope (`schema_version: u8 = 1`; redb-persisted; cross-process round-trip mandatory)",
+          "benten-graph::redb_backend whole-file schema-version envelope (`__benten_schema_version` + `GRAPH_SCHEMA_VERSION: u32 = 1`; covered by redb_schema_version_envelope_pin.rs 3 arms but not inventory'd)",
+          "benten-engine::DeviceAttestationEnvelope (`MAX_WIRE_VERSION: u8 = 2`; on-the-wire Atrium handshake + apply_atrium_merge)",
+          "benten-id::DeviceAttestation (inner, signed Ed25519; inherent vs CanonicalBytes-trait byte-identity contract)",
+          "benten-id::RotationLog + RotationAttestation (durable signed DID-rotation chain)",
+          "benten-id::Ucan canonical bytes (the UCAN body, distinct from item 5's Varsig HEADER)",
+          "benten-engine::ModuleManifest (Phase-2b SANDBOX-module envelope; persisted into system:ModuleManifest zone)",
+          "benten-platform-foundation::PluginManifest (2 distinct canonical-bytes surfaces: shareable form vs signing-payload; load-bearing for CLAUDE.md #18)",
+          "benten-platform-foundation::manifest_store records (PluginManifestRecord persisted to redb)",
+          "benten-sync::HandshakeFrame + HandshakePayload + RevocationEntry (Phase-3 Atrium handshake wire protocol)",
+          "benten-sync::MST proto messages + MST canonical encoding (Phase-3 sync diff protocol)",
+          "benten-sync::PeerId (Phase-3 sync identity primitive; iroh EndpointId == VerifyingKey design)",
+          "benten-sync::LoroDoc canonical export + StampedValue codec (CRDT format; Loro upstream dependency)",
+          "benten-engine::suspension_store on-disk records (PersistedCursorMeta + PersistedRetentionWindow + SerializableCapSnapshot + SerializableWaitMetadata; #[serde(default)] forward-compat discipline)"
+        ],
+        "coverage_status_at_HEAD": "Every un-enumerated surface verified to have SUBSTANTIVE coverage at HEAD (round-trip + format-version-discriminator-where-present + behavioral pins; ground-truth grep + test-file inspection per §3.5n). The gap is INVENTORY-DOCUMENTATION-INCOMPLETE, not COVERAGE-MISSING. But per V1-FROZEN-INTERFACE.md §4 the documented inventory IS the contract deliverable.",
+        "comparison_to_R4_lens": "G-CORE-9 R4 L11 lens (FREEZE subset; commit 0a3232fb) CONVERGED-PER-Q5 with 0 BLOCKER + 0 MAJOR + 1 MINOR (the `<row>` placeholder, closed at R4-FP a0b75637). R4 verified the 15-cite resolution sweep returned 0 phantoms — which is true within the 10-surface FREEZE-subset scope. R6 PHASE-WIDE widens scope per R6-LENS-CATALOG.md §L11 'Surfaces: every CBOR / DAG-CBOR / on-disk-format encode/decode site' and surfaces the 14 additional surfaces NOT in the FREEZE subset."
+      },
+      "impact": "Freeze-contract gap: (a) the literal §4 §1 deliverable is structurally un-satisfied as a documented inventory of EVERY wire-format-bearing surface; (b) the §'P-III Ben decision-point' question 'Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?' is structurally un-answerable 'yes, complete' with the inventory in its current shape — Ben cannot sign off the freeze without the missing surfaces being either inventory'd OR explicitly named-deferred; (c) the inventory's role as the cargo-public-api / drift-detect inventory-walk substrate (deferred to G-COMP-1 per Row D-9 but the gates depend on the inventory shape) is undermined if surfaces are missing — a future implementer walking the inventory list would not catch a wire-format mutation in the missed surfaces; (d) the 14 missed surfaces are NOT exotic — they include the entire Phase-3 sync wire protocol (handshake + MST diff + LoroDoc CRDT) + the plugin-trust-model substrate (PluginManifest + manifest-store) + ExecutionStateEnvelope cross-process resume + the whole-file redb schema-version envelope (#992). NOT a v1-beta correctness regression (every surface has SUBSTANTIVE coverage) — but a freeze-contract documentation gap that blocks the strict reading of P-III Ben sign-off.",
+      "disposition": "FIX-NOW",
+      "fix": "Two-part fix per HARD RULE 12 strict reading: (1) EXPAND docs/V1-WIRE-FORMAT-INVENTORY.md to enumerate the 14 missed surfaces — either as inventory items 11-24 (full coverage; ~30 LOC addition; each row carries the same shape as items 1-10: surface name + wire format + format-version discriminator + byte-pin test coverage + FREEZE-WAVE status) OR (2) WIDEN V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 to absorb the 14 missed surfaces explicitly as a named-deferral cluster with the same posture-narrative as the 8-surface FREEZE subset ('existing roundtrip + format-version-discriminator pins per L11 lens substantively cover byte stability at v1-beta; hex-pinned-bytes regression-defense deferred to G-COMP-1'). Path (1) is the cleaner shape — it gives Ben the full inventory to sign off on at the §'P-III Ben decision-point' AND it gives the future G-COMP-1 implementer of the CI inventory-walking lane a complete walk-target. Path (2) is the minimal shape — it keeps the inventory at 10 items + extends D-9 to be the named-home for the wider phase-wide surface set. Recommendation: path (1) for the 10 surfaces that are publicly-observable (ExecutionStateEnvelope + ModuleManifest + PluginManifest + manifest_store + DeviceAttestationEnvelope + DeviceAttestation + RotationLog + HandshakeFrame + MST proto + PeerId + LoroDoc + GRAPH_SCHEMA_VERSION envelope) — they ARE freeze-contract-relevant; path (2) for the 2 surfaces that are crate-private (suspension_store records) — they're persisted-on-disk wire-format-bearing but not part of the public freeze contract. Self-verify with `grep -nE 'to_canonical_bytes|serde_ipld_dagcbor::to_vec' crates/*/src/*.rs | wc -l` post-fix to confirm the inventory walk matches the production surface enumeration per §3.6j sweep-completeness self-verify discipline.",
+      "named_destination": "docs/V1-WIRE-FORMAT-INVENTORY.md (expand inventory items 1-10 to items 1-24 OR widen D-9) + docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 (expand named-deferred scope to include the 2 crate-private suspension_store records). Orchestrator-direct edit at this R6 R1 fix-pass cycle. Bundled with any other R6 R1 lens findings."
+    },
+    {
+      "id": "L11-R6-R1-MINOR-1",
+      "severity": "MINOR",
+      "title": "V1-WIRE-FORMAT-INVENTORY.md item 5 (UCAN-Varsig v1 header) scope is ambiguous — covers the HEADER bytes but not the UCAN BODY canonical bytes that the header signs over; the lens-question 'each has a byte-pin test in the corpus' on the UCAN-as-an-object is structurally PARTIAL (header covered; body covered behaviorally via chain-validation but not explicitly inventory'd)",
+      "evidence": {
+        "item_5_scope_quote": "docs/V1-WIRE-FORMAT-INVENTORY.md:89-106 item 5 reads 'Surface: UCAN envelope signature header (used by `benten_caps::authorization_grant` + the UCAN proof chain). Wire format: Multiformats Varsig v1 — signature suite codepoint + signature bytes prefixed with the multibase header.' The scope is explicitly 'envelope signature header', not the UCAN body bytes.",
+        "ucan_body_canonical_bytes_at_HEAD": "crates/benten-id/src/ucan.rs encodes the Ucan struct (header + payload + signature) via serde_ipld_dagcbor; crates/benten-caps/src/backends/ucan.rs:131 + :277 + :377 cbor::to_vec(ucan) / cbor::from_slice::<Ucan> for redb backend storage; the body bytes that the Varsig header signs over are NOT explicitly inventory'd as a distinct wire-format surface.",
+        "substantive_coverage_exists": "crates/benten-id/tests/ucan.rs + crates/benten-caps/tests/ have UCAN signature + chain-validation + backend round-trip pins; the UCAN body canonical-bytes contract is covered behaviorally (a body-bytes mutation would invalidate the signature) but the lens-question 'each [wire-format surface] has a byte-pin test in the corpus' applied STRICTLY to the body bytes is PARTIAL."
+      },
+      "impact": "Documentation ambiguity / freeze-contract scope clarification. The UCAN body IS structurally covered (any body mutation invalidates the signature, which is byte-pinned at the Varsig header) — so this is not a substantive v1-beta gap. But strict reading of L11 lens question + the inventory's role as the Ben P-III sign-off site is improved by making the scope explicit. Severity MINOR because the substantive coverage IS present + the gap is documentation-clarification only.",
+      "disposition": "FIX-NOW",
+      "fix": "Edit docs/V1-WIRE-FORMAT-INVENTORY.md:91 to clarify item 5 scope: either (a) extend item 5 to cover both the Varsig HEADER (already covered) AND the UCAN body canonical bytes (extend the byte-pin coverage list + add a Wire format note distinguishing the 2 surfaces) OR (b) split item 5 into 2 separate inventory rows: 5a (UCAN-Varsig v1 header) + 5b (UCAN body canonical bytes). Path (a) is the minimal shape (1 docstring extension + 1 byte-pin coverage citation update). Bundled into the L11-R6-R1-MAJOR-1 inventory-expansion fix-pass.",
+      "named_destination": "docs/V1-WIRE-FORMAT-INVENTORY.md:91 + line 102-106 (item 5 scope clarification). Orchestrator-direct edit bundled with L11-R6-R1-MAJOR-1 fix-pass."
+    },
+    {
+      "id": "L11-R6-R1-MINOR-2",
+      "severity": "MINOR",
+      "title": "V1-WIRE-FORMAT-INVENTORY.md Summary table (line 207-218) format-cell shape inconsistency — items 4 + 5 + 10 cite glob-form test-paths (tf3a_*.rs / tf4_*.rs / tf3b_authorization_grant_*.rs) while items 1, 2, 6, 7, 9 cite explicit file names; the glob-form makes drift-detection (would-a-future-impl-of-the-CI-inventory-walk-lane-resolve-this-cite-to-a-real-file) more brittle because a renamed-or-deleted glob source would silently no-op match",
+      "evidence": {
+        "summary_table_at_HEAD": "docs/V1-WIRE-FORMAT-INVENTORY.md:207-218 — items 4 / 5 / 10 cite glob-form paths (`tf3a_*.rs + tf4_*.rs + tf3a_pq_hybrid_wasm32`, `tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs`, `canonical_bytes_v1_codepoints_and_aad.rs + tf4_gcore3c_swap_matrix_*.rs`); items 1 / 2 / 6 / 7 / 9 cite explicit file names without globs.",
+        "R4_finding_class_recurrence": "R4 L11 lens explicitly validated the 15-cite resolution sweep (the new R4 deep-verify-scan section in the JSON output at commit 0a3232fb). The glob-form cites were validated under R4 by 'Glob-form cites (tf3a_*.rs, tf4_*.rs, tf3b_authorization_grant_*.rs) all match ≥1 real file.' — which is correct AT-WRITE-TIME but is the same recurrence class that motivated R3-FP closing L11-R3-MAJOR-1 (Summary table phantom file cites). A future rename / deletion of a matching file would silently no-op the glob without surfacing a cite-drift.",
+        "drift_detect_substrate_consequence": "The CI inventory-walking lane (deferred to G-COMP-1 per Row D-9) would have to handle glob-form cites — adds complexity vs an inventory that uses only explicit file names."
+      },
+      "impact": "Freeze-hygiene robustness / future-drift-defense. NOT a substantive v1-beta gap (the glob-form cites DO match real files at HEAD per R4 verification). Severity MINOR because the inventory is correct at HEAD + this is a future-drift-resistance improvement only.",
+      "disposition": "BELONGS-NAMED-NOW",
+      "fix": "Two options (both inventory-doc edits): (a) replace each glob-form cite with the explicit comma-separated list of files it matches at HEAD (turn `tf3a_*.rs + tf4_*.rs` into the full enumeration); (b) add a sentence to the inventory's authoring discipline section that ANY new glob-form cite MUST be accompanied by an inline `// MATCHED AT HEAD: file1.rs, file2.rs` comment + a §3.6j sweep-completeness-self-verify pre-flight checklist row that runs the glob + asserts the matched-file list matches the comment. Path (a) is more drift-resistant but verbose; path (b) is more sustainable + matches the inventory's prose-doc shape. Recommendation: path (b) — add the inline-comment discipline + the §3.6j checklist row. Self-verify with the same grep that closed L11-R3-MAJOR-1 (`grep -n 'canonical_test_node_sentinel_cid\\|ucan_envelope_' docs/V1-WIRE-FORMAT-INVENTORY.md` returns 0 phantoms — extend the grep pattern to match the new inline-comment shape).",
+      "named_destination": "docs/V1-WIRE-FORMAT-INVENTORY.md (add authoring-discipline section + inline-comment shape for glob-form cites OR replace glob-form cites with explicit enumerations). Orchestrator-direct edit bundled with L11-R6-R1-MAJOR-1 fix-pass; if any later iteration of L11 fires (R6 R2+), this becomes the FREEZE-hygiene amendment Path."
+    }
+  ],
+  "verified_R4_closures_still_holding": [
+    {
+      "finding_id": "L11-R4-MINOR-1 (G-CORE-9 FREEZE-subset R4 lens)",
+      "verification": "VERIFIED-CLOSED at HEAD 4bbc4cac. `grep -nE '§<[a-z_]+>' docs/V1-FROZEN-INTERFACE.md docs/V1-WIRE-FORMAT-INVENTORY.md` returns 0 hits at HEAD (the `<row>` placeholder at V1-FROZEN-INTERFACE.md:341 was closed at R4-FP commit a0b75637 'fix(g-core-9-r4-fp): close 6 R4 MINORs orchestrator-direct'). R4 CONVERGED-PER-Q5 disposition holds.",
+      "verdict": "STILL-CLOSED"
+    },
+    {
+      "finding_id": "L11 FREEZE-subset R1-R4 closures (8 + 5 + 3 + 1 = 17 cumulative findings)",
+      "verification": "ALL VERIFIED-STILL-HOLDING at HEAD 4bbc4cac per the G-CORE-9 R4 lens output deep-verify-scan section + my own ground-truth re-grep at the inventory cite-resolution sweep level. The 11 PERMANENT codepoints (3 sig + 3 hash + 5 cipher) all hex-pinned at canonical_bytes_v1_codepoints_and_aad.rs:33-91; 15-cite inventory file resolution sweep returns 15/15 real files; 0 phantom file cites; AAD doc-retract via Fork 1 stable; per-chunk AEAD chunk-size IROH_BLOCK_SIZE = 16384 constant pin at aead.rs:52 + tf3d_per_chunk_aead_iroh_block_size.rs:95-97. The FREEZE-subset coverage is INTACT.",
+      "verdict": "STILL-CLOSED"
+    }
+  ],
+  "deep_verify_scan_phase_wide": {
+    "method": "Independent ref-pinned verification per §3.5n discipline. Ran `git -C /Users/benwork/Documents/benten-engine grep -rn 'to_canonical_bytes\\|serde_ipld_dagcbor::to_vec\\|serde_ipld_dagcbor::from_slice' crates/*/src/*.rs | grep -vE '//|test\\.rs|#\\[test\\]|^.*tests/'` filtered to production sources (44 files / 11 crates). For each candidate-missing surface, file-read the production source + grep for byte-pin tests in adjacent test directories + checked V1-WIRE-FORMAT-INVENTORY.md + V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 for naming. 14 surfaces confirmed missed from inventory + D-9.",
+    "v1_frozen_item_4_freeze_surfaces_re_verified_at_HEAD": "V1-FROZEN-INTERFACE.md:323-350 frozen-surfaces enumeration verified at HEAD: SNAPSHOT_BLOB_SCHEMA_VERSION = 2 at backends/snapshot_blob.rs:125 (✓); Phase-1 canonical Node/Edge family with BLAKE3-256 + multicodec 0x71 (✓); MerkleRangeProof v2 narrative DEFERRED to G-COMP-1 per build-backlog row 5 (named-deferral valid); per-chunk AEAD wire layout IROH_BLOCK_SIZE = 16384 at aead.rs:52 + AAD 2-tuple at aead.rs::aad_per_chunk (✓); Sentinel CID bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda still cited at :348 (✓). All freeze-surface frame-of-reference items verified-coherent at HEAD; the PHASE-WIDE finding is the gap BEYOND this freeze-surfaces enumeration.",
+    "v1_frozen_item_4_inventory_deliverable_re_verified": "V1-FROZEN-INTERFACE.md:354-356 literal contract: 'A documented inventory of every wire-format-bearing surface (CBOR envelopes; AEAD wrap envelopes; UCAN-Varsig envelopes; DropBundle envelope; SnapshotBlob; TwoCidStore mapping format).' — the parenthetical enumeration names 6 surface classes; V1-WIRE-FORMAT-INVENTORY.md table has 10 items mapping into these 6 classes; the 14 PHASE-WIDE missed surfaces include 4 distinct classes NOT named in the parenthetical: (a) signed-attestation envelopes (DeviceAttestation + DeviceAttestationEnvelope + RotationLog), (b) plugin-manifest envelopes (ModuleManifest + PluginManifest + manifest_store records), (c) Atrium sync wire protocols (HandshakeFrame + MST proto + LoroDoc + PeerId), (d) cross-process state-resume envelopes (ExecutionStateEnvelope + suspension_store records + GRAPH_SCHEMA_VERSION whole-file envelope). The literal contract parenthetical is INCOMPLETE.",
+    "wire_format_inventory_cite_resolution_sweep_at_HEAD_PHASE_WIDE": "Within the 10-item inventory, all 15 distinct .rs file cites verified resolve to real files at HEAD per R4 R4-FP a0b75637 closure (verified-still-holding above). PHASE-WIDE the inventory cite-resolution exercise is N/A for the 14 missed surfaces (they don't appear in the inventory at all).",
+    "section_3_6j_sweep_completeness_self_verify_at_PHASE_WIDE_level": "The R3-FP commit b707cb7f §3.6j self-verify scan was correctly RUN against the inventory's own table — and correctly returned 0 phantoms within the inventory's stated scope. The PHASE-WIDE recurrence is the LEVEL the §3.6j scan was applied at: scan was applied at the LEVEL of 'does each cited file exist?' (resolved correctly), not at the LEVEL of 'does each production source file with canonical-bytes calls appear in the inventory?' (the latter requires a different sweep shape). This is exactly the recurrence-class §3.6j was designed to surface — but the §3.6j sweep was scoped narrower than the freeze-contract §4 literal deliverable would demand. The FIX is the expanded inventory shape (path 1) per L11-R6-R1-MAJOR-1.",
+    "test_coverage_substantiation_for_14_missed_surfaces": "Each of the 14 missed surfaces was ground-truth-verified to have SUBSTANTIVE test coverage at HEAD: tests/exec_state_envelope_shape.rs + tests/exec_state_dagcbor_roundtrip.rs (ExecutionStateEnvelope); tests/redb_schema_version_envelope_pin.rs (GRAPH_SCHEMA_VERSION envelope); tests/device_attestation_envelope_direct.rs + tests/wire_envelope.rs (DeviceAttestationEnvelope); tests/device_attestation.rs (DeviceAttestation); tests/did_rotation.rs (RotationLog); tests/ucan.rs + caps tests (UCAN); tests/module_manifest_canonical.rs + tests/module_manifest_signature_field_reserved.rs + tests/manifest_signing.rs (ModuleManifest); plugin-foundation tests (PluginManifest + manifest_store); tests/handshake.rs + tests/wire_envelope.rs + tests/atrium_errors.rs (HandshakeFrame); tests/mst_diff.rs + tests/prop_mst.rs + tests/attack_mst_diff_cid_mismatch.rs (MST proto); tests/peer_id.rs (PeerId); tests/loro_lww.rs + tests/loro_rich_type.rs + tests/hlc_loro_property_lww.rs + tests/prop_loro_converge.rs (LoroDoc + StampedValue); suspension_store cross-process round-trip tests (suspension_store records). The PHASE-WIDE FINDING is INVENTORY-DOCUMENTATION-INCOMPLETE, not COVERAGE-MISSING."
+  },
+  "lens_questions_addressed": {
+    "q1_snapshot_blob_v2_schema_version_pin": "AFFIRMATIVE. SnapshotBlob v2 covered at inventory item 2 + R4 verified-closed; tf11_snapshot_blob_schema_version_p3_migration_path.rs + snapshot_blob_backend.rs pin. Within FREEZE subset.",
+    "q2_merkle_range_proof_v2_pinning": "DEFERRED per V1-FROZEN-INTERFACE.md build-backlog row 5 (Option A; trait NOT YET BUILT at HEAD); inventory item 3 explicitly carries the ⚠️ DEFERRED to G-COMP-1 status. Named-deferral valid per HARD RULE 12.",
+    "q3_per_chunk_AEAD_iroh_block_size": "AFFIRMATIVE. IROH_BLOCK_SIZE = 16384 pinned at aead.rs:52 + tf3d_per_chunk_aead_iroh_block_size.rs:95-97 + inline assert_eq! at aead.rs:443 module test. Inventory item 4 + R4 verified-closed.",
+    "q4_AEAD_AAD_layout_2_arg_at_v1_beta": "AFFIRMATIVE. AAD layout binds (plaintext_cid: &[u8], chunk_index: u64) at aead.rs::aad_per_chunk per Fork 1 ratification; per-chunk AAD layout pin at canonical_bytes_v1_codepoints_and_aad.rs::per_chunk_aad_layout_pin. Total_chunks defense DEFERRED to G-COMP-1 per Row D-9 + D-15 (named-deferral valid).",
+    "q5_wire_format_surfaces_catalog_byte_pin_test_each": "PARTIAL. Within the 10-surface FREEZE subset enumerated in V1-WIRE-FORMAT-INVENTORY.md, AFFIRMATIVE — every surface has a byte-pin test (per R4 verified-closed). PHASE-WIDE, the inventory is INCOMPLETE — 14 additional wire-format-bearing surfaces are NOT enumerated; each has SUBSTANTIVE coverage at HEAD but the inventory-documentation gap is freeze-contract-relevant per L11-R6-R1-MAJOR-1.",
+    "q6_pre_G_CORE_9_freeze_readiness_every_surface_ready_or_named_deferred": "PARTIAL. Within the FREEZE subset, AFFIRMATIVE (R4 CONVERGED-PER-Q5). PHASE-WIDE, NO: the 14 missed surfaces are neither inventory'd as READY nor named-deferred in D-9. Per L11-R6-R1-MAJOR-1 disposition the FIX-NOW shape is inventory-expansion OR D-9-widening — both close the gap; recommendation is path (1) for publicly-observable surfaces + path (2) for crate-private surfaces. After the fix-pass the §'P-III Ben decision-point' question can be answered 'yes, complete'."
+  },
+  "process_disciplines_applied": {
+    "section_3_6i_schema": "JSON authored per §3.6i canonical schema: top-level `disposition` (NOT `verdict`) + top-level `r6_r1_convergence_disposition` + `findings` array for NEW R6 R1 findings (1 MAJOR + 2 MINOR) + `verified_R4_closures_still_holding` array + `phase_wide_inventory_sweep` enumeration. Per-finding disposition matches HARD RULE 12 valid shapes (FIX-NOW + BELONGS-NAMED-NOW; named destinations all concrete file:line). Well-formed JSON.",
+    "section_3_5n_ground_truth_verify": "Every claim independently ref-pinned-verified at HEAD 4bbc4cac. For the PHASE-WIDE sweep: ran `git grep` (filtered) over crates/*/src/*.rs to enumerate canonical-bytes call sites; cross-referenced each against V1-WIRE-FORMAT-INVENTORY.md table rows 1-10 + V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 + V1-FROZEN-INTERFACE.md item 4 frozen-surfaces enumeration; file-read each candidate-missing surface (10+ source files inspected end-to-end) + adjacent test directories (10+ test files inspected) to substantiate coverage status; verified the R4 L11 lens output at commit 0a3232fb claims against current HEAD state (R4 closures STILL-HOLDING). The phase-wide sweep enumeration of 14 missed surfaces is reproducible by re-running the same grep + cross-reference exercise.",
+    "hard_rule_12_dispositions": "L11-R6-R1-MAJOR-1 uses FIX-NOW with named destination (V1-WIRE-FORMAT-INVENTORY.md inventory-expansion + V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 widening). L11-R6-R1-MINOR-1 uses FIX-NOW with named destination (item 5 scope clarification). L11-R6-R1-MINOR-2 uses BELONGS-NAMED-NOW with named destination (authoring-discipline section + inline-comment shape for glob-form cites). Zero 'defer' / 'carry to next brief' / phantom destinations.",
+    "iterate_to_convergence_Q5_termination": "R6 R1 returns 1 MAJOR + 2 MINOR → R6 R1 NOT-CONVERGED for this lens. Per `feedback_iterate_critical_reviews_to_convergence` + Q5 strict termination rule, the L11 PHASE-WIDE lens continues to iterate until full council returns 0 BLOCKER + 0 MAJOR. Expected to converge after the L11-R6-R1-MAJOR-1 inventory-expansion fix-pass lands (the inventory + D-9 widening closes the freeze-contract gap; subsequent rounds should return 0 substantive findings on the L11 surface).",
+    "section_3_6j_sweep_completeness_self_verify": "Self-verified the PHASE-WIDE finding by running both `git grep` (44 files / 11 crates with canonical-bytes calls) AND cross-referencing each against V1-WIRE-FORMAT-INVENTORY.md (10 items) + V1-FROZEN-INTERFACE-DEFERRED.md Row D-9 (8 surfaces). The math: 44 production files - 10 inventory items - 8 D-9 surfaces ≠ 14 missed surfaces directly, because multiple production files map to the same inventory item (e.g., benten-crypto-suite/src/aead.rs + benten-graph/src/aead_wrap.rs both map to item 4) AND some production files don't contain wire-format-bearing surfaces (e.g., subgraph_spec/combinators.rs is a helper module for the SubgraphSpec proper). The 14 missed-surface count is at the SURFACE level (distinct wire-format-bearing types + their canonical-bytes contracts), not the FILE level — counted by ground-truth enumeration in the phase_wide_inventory_sweep section above. The §3.6j discipline is honored by reporting the explicit enumeration + the reproduction-grep method (so the next round can re-run the sweep + verify the count + the surface-list).",
+    "commit_before_return": "Branch + JSON committed before final message per `feedback_agent_output_must_commit_before_return` (2026-05-22) ratification + dispatch contract.",
+    "isolation_contract": "All file reads + grep operations against the canonical benten-engine repo at /Users/benwork/Documents/benten-engine — the worktree's parent. The .addl/ directory + .claude/ directory are not present in the worktree itself (per .gitignore) so context-reading went through the canonical repo path. The JSON output + branch-commit operations stay inside ${WORKTREE_ROOT} = /Users/benwork/Documents/benten-engine/.claude/worktrees/agent-a46787fd0cb9edd0c. No code modifications to the worktree's source tree.",
+    "section_3_5l_pre_push": "JSON-only edit; no Rust touched; no workspace-wide pre-push gate required per §3.5l. The §3.5h JSON-artifact-jq-validation amendment applied — will be verified inline at commit time."
+  },
+  "r6_r1_phase_wide_disposition_summary": {
+    "finding_count": {
+      "BLOCKER": 0,
+      "MAJOR": 1,
+      "MINOR": 2,
+      "OBS": 0
+    },
+    "convergence_test": "Q5 strict termination requires 0 BLOCKER + 0 MAJOR across full council in a single round. With 1 MAJOR finding (L11-R6-R1-MAJOR-1), R6 R1 NOT-CONVERGED for the L11 PHASE-WIDE lens.",
+    "expected_R6_R2_outcome": "After the L11-R6-R1-MAJOR-1 inventory-expansion fix-pass lands (orchestrator-direct ~30 LOC inventory addition + ~15 LOC D-9 widening + ~3 LOC item-5 scope clarification + ~5 LOC glob-cite authoring-discipline section), R6 R2 L11 PHASE-WIDE is expected to return 0 BLOCKER + 0 MAJOR + 0-2 MINOR. Pattern matches the G-CORE-9 R1-R4 monotonic shrinkage shape (R1 4MAJ+4MIN+1DISAGREE → R2 1MAJ+4MIN → R3 2MAJ+1MIN → R4 0MAJ+1MIN). For PHASE-WIDE L11 the substrate is similar (a single MAJOR + 2 MINOR; fix-pass closes the MAJOR + 1 MINOR inline; second MINOR is a BELONGS-NAMED-NOW; R2 should converge).",
+    "comparison_to_freeze_subset_L11": "G-CORE-9 FREEZE-subset L11 needed 4 rounds (R1-R4) to converge (16+ findings cumulatively; final R4 = 0 MAJ + 1 MIN). PHASE-WIDE L11 R1 surfaces a single net-new MAJOR (the inventory-completeness gap) — substantively narrower; should converge faster post-fix-pass. The R4 CONVERGED-PER-Q5 disposition for the FREEZE subset STILL HOLDS — the PHASE-WIDE finding is a SCOPE-WIDENING, not a regression."
+  }
+}
