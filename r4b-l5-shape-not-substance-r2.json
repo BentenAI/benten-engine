@@ -1,0 +1,91 @@
+{
+  "lens": "R4b L5 SHAPE-not-SUBSTANCE (R2)",
+  "phase": "Phase-4-Meta-Core",
+  "tier": "R4b",
+  "round": "R2",
+  "branch": "phase-4-meta-core/r4b-r2-l5-shape-not-substance",
+  "base_r1_fp_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "base_main_sha": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+  "review_date": "2026-05-24",
+  "predecessor_round_summary": {
+    "r1_disposition": "APPROVE-WITH-MINOR",
+    "r1_convergence_disposition": "R4b-CONVERGED-CONDITIONAL-ON-MINOR-DOC-DRIFT-CLOSURE",
+    "r1_findings": "0 BLOCKER / 0 MAJOR / 2 MINOR / 0 OBS (L5-MIN-1 stale RED-PHASE docstring sweep across ~17 tf-files + L5-MIN-2 tf3w_walker name/body promise-mismatch in primitive_kind_remains_exactly_twelve_variants)",
+    "r1_fp_commits_inspected": [
+      "4bbc4cac chore(g-core-9-r4b-fp): close R4b 10 MINORs sweep (cite hygiene + sub-header anchors + stale-RED sed + tracked follow-ups doc + substantive-match fix)",
+      "8240a56c docs(g-core-9-r4b-fp): close R4b L1 3 MAJORs",
+      "753d9840 docs(g-core-9-r4b-fp): R4b L6-MAJOR-1 PIVOT path-(a) FIX-NOW → path-(b) DEFER-NAMED-NOW Row D-22"
+    ]
+  },
+  "scope": "Re-review the L5-MIN-1 sed sweep + L5-MIN-2 test-name/docstring retense for closure correctness + verify no false-RED-LANDED inversions were introduced by the sweep + Q5 termination check at the SHAPE-not-SUBSTANCE lens.",
+  "disposition": "APPROVE-CLEAN",
+  "convergence_disposition": "R4b-CONVERGED-STRICT-Q5",
+  "summary": "R4b R1 L5 fix-pass closed both MINORs cleanly. L5-MIN-1 sed sweep replaced 'RED-PHASE — un-ignore at G-CORE-X' / 'RED until G-CORE-X' per-test docstrings with 'LANDED at G-CORE-X (pim-12 / §3.6e closure)' across the 30 tf-files where the named wave had shipped on main (G-CORE-0/1/2/3a/3b/3d/3e/3f/3w/5/6 all merged); the sweep did NOT touch the genuinely-still-ignored tf5_424 wasm32 companion (L1-MIN-4 closed that one separately with 'DEFERRED: §4.24 + §4.42 wasm32 companion (Phase-4-Meta carry per docs/future/phase-4-backlog.md §4.24/§4.42)'). L5-MIN-2 chose path-(b) per the R1 brief's named alternatives — the test was renamed from `primitive_kind_remains_exactly_twelve_variants` to `twelve_known_variants_canonical_tags_round_trip` with a substantive docstring retense documenting WHY exhaustive-match cannot be the structural backstop (`PrimitiveKind` is `#[non_exhaustive]` at `crates/benten-core/src/subgraph.rs:68` by design; the structural guard lives in cross-cutting defenses: cite-drift sentinel against CLAUDE.md baked-in #1 + `tf5_46_schema_compiler_8_labeltype_vocab_fixture.rs` per-label allowlist + Subgraph::nodes() walker assertions + reviewer pim-N-prior-phase-pim-explicit-preflight §3.6g enumerating 12-primitive irreducibility as a literal pre-flight line). Zero new findings at R2. Phase-4-Meta-Core SHAPE-not-SUBSTANCE streak continues post-G16-C (now 9 consecutive zero-incident waves at the SUBSTANTIVE level).",
+  "questions_addressed": {
+    "Q1_production_call_site_enumeration": "PASS (unchanged from R1; the sed sweep + rename did NOT touch test bodies that exercise production call sites; sampled re-verification of `walker::walker_as_subgraph` at crates/benten-core/src/subgraph_spec/walker.rs:183 + `put_node_with_context` at crates/benten-graph/src/redb_backend.rs:1402 + Scope enum at crates/benten-caps/src/scope.rs:34-52 all resolve to production code at HEAD a0b75637/4bbc4cac).",
+    "Q2_body_of_test_substantive": "PASS (unchanged from R1; FP commit touched docstrings + test-name + ignore-message strings only; zero test-body substantive logic was modified per the diff inspection of `4bbc4cac` — the ~500 insertions / ~178 deletions across 35 test files are all in comment/doc-comment/ignore-reason regions, except the one test rename in tf3w which preserves the array-iteration body intact).",
+    "Q3_aspirational_prose_gap": "PASS-CLEAN — the stale-RED-PHASE narrative cluster (L5-MIN-1's ~17-file estimate; FP swept all 30 LANDED-claiming files) is closed. Spot-checked 3 examples per L5-MIN-1: tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs has 4 per-test docstrings stamped 'LANDED at G-CORE-3w (pim-12 / §3.6e closure)'; tf3d_two_cid_mapping_roundtrip.rs banner + per-test prose harmonized (no banner-vs-prose drift remaining); tf3b_no_opaque_selector_arm_structural.rs LANDED on both arms. ONE narrow residual: the file-top `//! SHAPE-flag-don't-fake: benten_core::subgraph_spec does not exist at HEAD; RED-PHASE.` banner at tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs:51-52 was NOT swept (the sed targeted per-test `///` docstrings + ignore-messages, not file-top `//!` `SHAPE-flag-don't-fake` framing lines). Borderline OBS not MIN: the file-top framing is a meta-narrative about the AUTHORING-TIME shape (R3 authored when the surface was RED), not a per-test claim a future reader would mistake for a still-RED status — the per-test `LANDED` docstrings are the authoritative status surface. No new finding.",
+    "Q4_test_name_honesty": "PASS-CLEAN — L5-MIN-2 closed honestly via rename + comprehensive docstring retense. The new test name `twelve_known_variants_canonical_tags_round_trip` accurately describes the array-iteration body (round-trip canonical-tags for the 12 baseline variants). The new docstring explicitly disclaims the prior compile-fail promise + enumerates the 4 cross-cutting defenses that actually deliver the structural backstop. The historical chunk-3 SHAPE-not-SUBSTANCE bug (g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs::noop_rechecker_admit_everything_is_security_r1_1_would_fail_baseline) remains honestly renamed from R4.1; not re-touched by R4b FP. Both honesty closures hold.",
+    "Q5_streak_continuation": "PASS — 9-consecutive-zero-incident-wave streak continues at the SUBSTANTIVE level (8 from G16-C + R4b R1 + R4b R2). Both R1 MINORs are closed; 0 new SHAPE-not-SUBSTANCE findings at R2. Strict-Q5 termination criteria met (0 BLOCKER + 0 MAJOR + 0 MINOR at the SHAPE-not-SUBSTANCE lens)."
+  },
+  "findings": [],
+  "verification_of_r1_minor_closures": [
+    {
+      "finding_id": "L5-MIN-1",
+      "r1_severity": "MINOR",
+      "r1_disposition": "BELONGS-NAMED-NOW orchestrator-direct sed sweep",
+      "r1_estimate": "~17 tf-files stale RED-PHASE docstrings",
+      "r2_verification": "VERIFIED-CLOSED. FP commit 4bbc4cac swept 30 tf-files (broader scope than R1's ~17-file estimate). After sweep: 30 files carry 'LANDED at G-CORE-X' prose; only 1 actual `#[ignore]` attribute remains in the tf-corpus (tf5_424_materializer_recursive_walk_into_vocabulary_edges.rs:245, properly DEFERRED per L1-MIN-4 closure with HARD RULE 12 clause-(b) named destination to docs/future/phase-4-backlog.md §4.24/§4.42). Wave-shipping cross-check: every LANDED-claiming wave (G-CORE-0/1/2/3a/3b/3d/3e/3f/3w/5/6) has merged on origin/main — NO false-RED-LANDED inversions detected. Spot-checked 3 R1 examples: tf3w_walker_is_a_subgraph (closed), tf3d_two_cid_mapping_roundtrip (closed; banner-prose harmony restored), tf3b_no_opaque_selector_arm_structural (closed).",
+      "false_red_landed_inversion_check": "PASS — 0 false-LANDED claims. Cross-referenced LANDED wave-cite vs origin/main merge log for G-CORE-0 (PR #1310 48ba69b2), G-CORE-1 (#1304 ec9f0e8e), G-CORE-2 (#1307 ae69c339), G-CORE-3a (#1319 340391ab), G-CORE-3b (#1324 e89a1919), G-CORE-3d (#1323 5ccdd0da), G-CORE-3e/3f (#1340 05707357), G-CORE-3w (#1325 132dde91), G-CORE-5 (#1309 a9472ccd), G-CORE-6/6a/6b (#1325 + #1331 ecc5111e). All shipped. The renamed-from-R3 wave for tf6_d3_version_dag_unification_red.rs cites G-CORE-5 (its actual merge wave per PR #1309); not an inversion."
+    },
+    {
+      "finding_id": "L5-MIN-2",
+      "r1_severity": "MINOR",
+      "r1_disposition": "BELONGS-NAMED-NOW orchestrator-direct fix (either path-(a) exhaustive match OR path-(b) weakened name+doc; ~10 LOC)",
+      "r1_path_chosen": "path-(b) WEAKENED (with substantive technical rationale)",
+      "r2_verification": "VERIFIED-CLOSED. Test renamed from `primitive_kind_remains_exactly_twelve_variants` → `twelve_known_variants_canonical_tags_round_trip` (line 113 of crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs). Docstring expanded to ~25 lines with explicit R4b L5-MIN-2 retense banner explaining WHY exhaustive-match cannot deliver the compile-fail guard (`PrimitiveKind` is `#[non_exhaustive]` at crates/benten-core/src/subgraph.rs:68 — exhaustive match fails to compile at every consumer call site BY DESIGN as the production signal for additions; the structural backstop against silent primitive growth lives in 4 cross-cutting defenses: (1) cite-drift sentinel against CLAUDE.md baked-in #1 narrative + cargo run -p cite-drift-detector CI lane; (2) tf5_46_schema_compiler_8_labeltype_vocab_fixture per-label allowlist + Subgraph::nodes() walker assertions; (3) reviewer pim-N-prior-phase-pim-explicit-preflight §3.6g enumerating 12-primitive irreducibility as a literal pre-flight line in every R5 brief; (4) non_exhaustive is the PRODUCTION signal — every consumer's `match` needs a wildcard arm). The path-(b) choice is technically more correct than path-(a) because path-(a)'s exhaustive match would itself fail to compile against `#[non_exhaustive]`. Honest closure."
+    }
+  ],
+  "false_red_landed_inversion_scan": {
+    "method": "Enumerated all 30 tf-files carrying `LANDED at G-CORE-X` prose; extracted wave label from each; cross-checked each wave label against `git log --oneline origin/main` for the merging PR. Verified production-surface existence at HEAD for sampled symbols (Scope enum / walker_as_subgraph / put_node_with_context).",
+    "files_scanned": 30,
+    "false_landed_count": 0,
+    "false_red_count": 0,
+    "wave_to_pr_map": {
+      "G-CORE-0": "PR #1310 (48ba69b2) merged",
+      "G-CORE-1": "PR #1304 (ec9f0e8e) merged",
+      "G-CORE-2": "PR #1307 (ae69c339) merged",
+      "G-CORE-3a": "PR #1319 (340391ab) merged",
+      "G-CORE-3b": "PR #1324 (e89a1919) merged",
+      "G-CORE-3d": "PR #1323 (5ccdd0da) merged",
+      "G-CORE-3e": "PR #1340 (05707357) merged",
+      "G-CORE-3f": "PR #1340 (05707357) merged",
+      "G-CORE-3w": "PR #1325 (132dde91) merged",
+      "G-CORE-5": "PR #1309 (a9472ccd) merged (D3 VersionDag; tf6_d3_version_dag_unification_red rides here)",
+      "G-CORE-6": "PR #1325 + #1331 (132dde91 + ecc5111e) merged"
+    }
+  },
+  "sweep_quality_check": {
+    "double_stamp_count": 0,
+    "broken_comment_syntax_count": 0,
+    "broken_ignore_reason_strings": 0,
+    "compilation_verified": "cargo check -p benten-core --tests — PASS (24.33s; 0 errors / 0 warnings on the swept tf3w file). Spot-check confirms FP commit did not break test compilability."
+  },
+  "convergence_assessment": {
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 0,
+    "obs_count": 0,
+    "strict_Q5_termination_status": "MET. 0 BLOCKER + 0 MAJOR + 0 MINOR + 0 OBS at the SHAPE-not-SUBSTANCE lens. R4b L5 is CONVERGED per CLAUDE.md non-negotiable process rule 9 generalized via feedback_iterate_critical_reviews_to_convergence: R4b qualifies for the iterate-to-convergence discipline (tier gates an artifact + R4b R1 triage mutated the artifact via FP); R2 full lens re-run returns 0 substantive findings on the edited artifact, terminating the convergence loop at L5.",
+    "phase_4_meta_core_streak_continuation": "PASS — 9-consecutive-zero-incident-wave streak at the SUBSTANTIVE level (G16-C precedent + 8 Phase-4-Meta-Core waves + R4b R1 + R4b R2). Phase-4-Meta-Core test corpus is substantively pim-18-compliant and the R4b R1 FP closed the only outstanding cosmetic doc-drift cluster.",
+    "recommendation": "R4b L5 R2 = APPROVE-CLEAN / R4b-CONVERGED-STRICT-Q5. No further L5 iteration needed. The 2 R1 MINORs are closed; the sed sweep was correct + did NOT introduce false-RED-LANDED inversions; the test-rename was technically the more-correct path-(b) choice given `#[non_exhaustive]`; the file-top banner residual at tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs:51-52 is borderline-OBS at most (the per-test LANDED docstrings are the authoritative status surface; the meta-narrative banner is authoring-time framing). Recommend R4b advances to R5/R6 sequence at orchestrator's discretion once all 6 lenses (L1-L6) report R2 convergence."
+  },
+  "method": {
+    "files_enumerated": 30,
+    "files_deeply_read": 3,
+    "files_spot_checked": 5,
+    "fp_commit_diff_inspected": "4bbc4cac (37 files; 501 insertions / 178 deletions); diff shape verified to touch docstrings + test-names + ignore-message strings only (with the one substantive rename in tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs::primitive_kind_remains_exactly_twelve_variants → twelve_known_variants_canonical_tags_round_trip).",
+    "sampling_strategy": "Targeted: (a) the 3 R1 L5-MIN-1 named examples + (b) the L5-MIN-2 rename site + (c) the file-top `SHAPE-flag-don't-fake` banner residual + (d) wave-vs-PR cross-check across all 30 LANDED-claiming files + (e) compilation verification on the most-modified swept crate (benten-core).",
+    "ignore_attribute_inventory_method": "find + grep '^\\s*#\\[ignore' across crates/*/tests/tf*.rs (line-start anchored to exclude doc-comment matches that would false-positive). Result: 1 actual `#[ignore]` attribute (tf5_424:245 wasm32 companion, properly DEFERRED per L1-MIN-4)."
+  }
+}
