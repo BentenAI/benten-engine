@@ -565,6 +565,110 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   rename pair at #1344 row 7 (GrantKeyMaterial / AeadKeyMaterial) +
   L18-r1-5 + L18-r2-3.
 
+### Row D-22 — workspace `pub fn .*_for_test` / `_for_testing` `#[cfg]` gating sweep
+
+- **Frozen surface (v1-beta):** 115 baseline entries across 6
+  cargo-public-api baselines (`docs/public-api/benten-caps.txt` 37 +
+  `docs/public-api/benten-crypto-suite.txt` 52 +
+  `docs/public-api/benten-drop.txt` 14 + `docs/public-api/benten-core.txt`
+  8 + `docs/public-api/benten-sync.txt` 3 +
+  `docs/public-api/benten-graph.txt` 1) lock the as-shipped public
+  surface that carries `_for_test` / `_for_testing` constructors,
+  helpers, and impls (≈84 distinct `pub fn` declarations in source
+  across `benten-caps` 20 + `benten-crypto-suite` 30 +
+  `benten-core` 7 + `benten-sync` 5 + `benten-drop` 7 +
+  `benten-graph` 15; baseline > source count reflects re-export +
+  trait-impl duplication). This freezes the *shape* (the names + the
+  signatures) so a downstream `#[cfg(any(test, feature = "testing"))]`
+  gating sweep is a visibility-only change, not a signature break.
+- **Deferred consumption (G-COMP-1 destination):**
+  1. Per-site sweep: wrap each `pub fn` / `pub const fn` declaration
+     ending in `_for_test` / `_for_testing` (and the surrounding
+     `impl` block where the helper is associated) in
+     `#[cfg(any(test, feature = "testing"))]` — following the
+     precedent at `crates/benten-core/src/lib.rs::Cid::sample_for_test`
+     (`#[cfg(any(test, feature = "testing"))]`-gated per its own
+     docstring; G-CORE-2 substrate cascade ratified pattern).
+  2. Add `testing = []` feature to the 3 crates currently missing
+     it: `benten-crypto-suite`, `benten-drop`, `benten-sync`.
+     (`benten-caps`, `benten-core`, `benten-graph` already carry
+     `testing = []` (`benten-graph` chains `["benten-core/testing"]`);
+     the new features chain the cross-crate fixture deps:
+     `benten-drop/testing = ["benten-crypto-suite/testing",
+     "benten-caps/testing", "benten-core/testing"]` etc.)
+  3. Dev-deps cascade: every `[dev-dependencies]` entry of every
+     consumer crate that USES a `_for_test` symbol from a sibling
+     crate adds `<sibling>/testing` to its feature list. Workspace
+     grep `grep -rl '_for_test\|_for_testing' crates/*/tests crates/*/benches`
+     enumerates ≈205 consumer files across ~14 crates as of HEAD —
+     each consumer's Cargo.toml updates the feature spec on the
+     sibling dev-dep entry (the body of the test changes ZERO).
+  4. Regenerate the 6 affected cargo-public-api baselines under
+     `cargo +nightly public-api --simplified -p <crate> 2>/dev/null
+     > docs/public-api/<crate>.txt`; the diff strips the 115
+     `_for_test` / `_for_testing` lines that the production target
+     no longer exposes.
+  5. Add a no-regression test pin at
+     `crates/phase-3-workspace-tests/tests/g_core_9_for_test_cfg_gating_audit.rs`
+     that AST-walks (or grep-walks) the 6 baseline files, asserts
+     ZERO occurrences of `for_test` / `for_testing` in their pub
+     surface, and asserts every new `_for_test` / `_for_testing`
+     declaration in any `crates/<X>/src/` carries a `#[cfg]` attribute
+     matching the canonical pattern. The pin fires on the next
+     baseline diff that re-introduces the suffix.
+  6. Update R5-BRIEF-common.md (in `.addl/phase-4-meta/`, gitignored
+     orchestrator-local) to enumerate the `_for_test` cfg-gating
+     discipline as a literal pre-flight checklist line per §3.6g —
+     pin "Any new `pub fn` ending in `_for_test` / `_for_testing`
+     MUST carry `#[cfg(any(test, feature = "testing"))]` gating per
+     V1-FROZEN-INTERFACE.md:154 + precedent
+     `Cid::sample_for_test`; new declarations without the cfg
+     attribute FAIL the no-regression pin from sub-task 5."
+  7. Update V1-FROZEN-INTERFACE.md:154 narrative from "Public
+     surface MUST NOT carry `_for_test` suffixes" to add the
+     v1-beta carve-out: "Public surface MUST NOT carry `_for_test`
+     suffixes at v1-GM; the v1-beta cargo-public-api baselines
+     carry 115 such surfaces as a Row D-22 deferred-consumption
+     debt; new declarations MUST be `#[cfg]`-gated per the
+     no-regression pin at
+     `crates/phase-3-workspace-tests/tests/g_core_9_for_test_cfg_gating_audit.rs`."
+- **v1-beta posture:** the 115 surfaces are PRODUCTION-ABI-EXPOSED at
+  v1-beta — a downstream consumer compiling against the v1-beta
+  baselines CAN reach `Cid::sample_for_test`, `Scope::synthetic_for_test`,
+  `KeyMaterial::generate_recipient_keypair_for_test`,
+  `AuthorizationGrant::synthetic_for_test`, etc. and they all return
+  semantically-valid fixtures. This is a HARD RULE 12 clause-(b)
+  acknowledgement of the discipline gap surfaced at G-CORE-9 R4b L6:
+  the FREEZE-time triage caught the 1-site `Engine::resolve_subgraph_cid_for_test`
+  cluster (Row D-7) but missed the workspace-pattern bug; the only
+  forward-protection at v1-beta is the no-regression pin (sub-task 5).
+  No security property degrades — the helpers all construct valid
+  fixtures with random/deterministic data; the gap is brand discipline
+  / API-cleanliness, not runtime-safety.
+- **Pivot rationale (R4b L6-MAJOR-1 / R4b-FP-1 pivot 2026-05-24,
+  orchestrator decision under night-shift stance, rebuttable at next
+  morning review):** R4b L6-MAJOR-1 named two paths: (a)
+  FIX-NOW orchestrator-direct sweep (close all 115 sites + 6 baseline
+  regens + ~205 consumer dev-dep updates in this PR), (b)
+  DEFER-NAMED-NOW to NEW Row D-22 (this row). Path (a) hit the brief's
+  hard-escalation trigger ("Bundle R4b.1 cfg-gating cascade breaks
+  >30 callsites without clean fix") — the cascade touches ≈205
+  consumer files. Path (b) preserves all forward-protection (the
+  no-regression pin at sub-task 5 + brief-template line at sub-task 6
+  block recurrence) while sequencing the per-site sweep into G-COMP-1
+  alongside the existing baseline-regeneration cadence at Row D-7
+  (the §8-A Engine visibility cluster). The visibility-only nature
+  of the gating means the sweep is mechanical at G-COMP-1; no
+  signature breaks, no API additions, no behavioral change. Path (b)
+  also satisfies the L6 finding's per-finding granularity discipline
+  by enumerating the count + crate breakdown + named no-regression
+  pin (the pattern §3.6b sub-rule 4 sub-clause 2 prescribes for
+  workspace-pattern bugs).
+- **Anchor:** R4b L6-MAJOR-1 (`.addl/phase-4-meta/r4b-l6-per-finding-granularity.json`)
+  + V1-FROZEN-INTERFACE.md:154 + precedent
+  `crates/benten-core/src/lib.rs::Cid::sample_for_test`
+  `#[cfg(any(test, feature = "testing"))]` gating pattern.
+
 ---
 
 ## Cross-cutting v1-beta posture
