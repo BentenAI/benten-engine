@@ -1,0 +1,158 @@
+{
+  "lens": "L11-wire-format-byte-pinning-verifier",
+  "round": "R1",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "branch": "g-core-9/r1-l11-wire-format",
+  "merge_base": "8cc4eddd",
+  "disposition": "FIX-NOW",
+  "summary": "Ground-truth-verified every wire-format surface named in docs/V1-WIRE-FORMAT-INVENTORY.md against actual code + tests. Inventory exists at docs/V1-WIRE-FORMAT-INVENTORY.md (the lens brief named it /docs/WIRE-FORMAT-INVENTORY.md — minor brief drift, the file IS there under the V1- prefix). Inventory format-version-discriminators + codepoint dispatch are LIVE + typed-reject works. BUT: 4 MAJOR findings + 5 MINOR. The dominant gap: the V1-FROZEN-INTERFACE.md §4 explicitly calls for hex-pinned canonical-bytes golden-string tests under tests/canonical_bytes_v1_*.rs for 8 named surfaces, and only ONE such test exists (DSL subgraph CID-pin). Existing 'coverage' is roundtrip + constant-value + format-version-byte-position pins — strong but NOT the hex-pinned golden-bytes the freeze contract names. Also: a real DOC↔CODE drift on AAD layout (doc claims AAD binds (chunk_index, total_chunks, plaintext_cid); code binds only (plaintext_cid, chunk_index)) — freezing the doc would commit to bytes the code doesn't produce. Also: phantom citations (4 cited test files don't exist; named coverage is in differently-named files). Disposition: FIX-NOW (per HARD RULE 12). The freeze cannot legitimately land without (a) resolving the AAD doc-vs-code drift, (b) minting the named-but-missing hex-pinned byte-pin tests OR explicitly down-scoping the §4 'shopping list' to the actually-shipped roundtrip+constant pin shape, (c) fixing phantom citations in the inventory, (d) the phantom '§6 CI gate (13)' reference in V1-FROZEN-INTERFACE.md:315.",
+  "findings": [
+    {
+      "id": "L11-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "DOC↔CODE DRIFT — AAD layout for per-chunk AEAD: doc claims tuple of 3, code binds tuple of 2",
+      "evidence": {
+        "doc_claim": "docs/V1-FROZEN-INTERFACE.md:314-315: 'AAD layout binds (chunk_index: u64, total_chunks: u64, plaintext_cid: Cid)' + docs/V1-WIRE-FORMAT-INVENTORY.md:74: 'AAD binds (chunk_index: u64, total_chunks: u64, plaintext_cid: Cid)'.",
+        "code_reality": "crates/benten-crypto-suite/src/aead.rs:221 — `pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64) -> Vec<u8>` — only 2 components: plaintext_cid + chunk_index. NO total_chunks field. AAD body: `b'benten-aead:chunk:' || plaintext_cid || chunk_index.to_le_bytes()`. Confirmed via grep: zero occurrences of `total_chunks` in `crates/benten-crypto-suite/src/aead.rs` or `crates/benten-graph/src/aead_wrap.rs`.",
+        "callsite_evidence": "crates/benten-graph/src/aead_wrap.rs:232 + :291 + :336 + :357 all call `suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64)` — 2 args.",
+        "phantom_citation": "Both doc sources cite '§6 CI gate (13)' as authority, but V1-FROZEN-INTERFACE.md has no §6 with numbered CI gates (grep confirms zero matches for 'gate (13)' / 'gate 13' / 'Gate 13' outside the citation itself)."
+      },
+      "impact": "FREEZE-INTEGRITY. Locking V1-FROZEN-INTERFACE.md as-written commits the v1-beta wire format to a stronger AAD binding than the code produces. A future implementer reading the doc would believe `total_chunks` is part of the bytes and could (a) add it (breaking decode of pre-freeze ciphertext) OR (b) write a verifier that requires it (failing on real ciphertext). Either way the freeze contract becomes self-contradicting at the byte level. Cross-chunk-truncation-attack defense (which `total_chunks` would actually provide; chunk_index alone does NOT defend against truncating the trailing chunks) is the security property the doc implies but code doesn't deliver.",
+      "disposition": "FIX-NOW",
+      "fix_options": [
+        "Option A — doc-corrects-to-match-code: edit V1-FROZEN-INTERFACE.md:314 + V1-WIRE-FORMAT-INVENTORY.md:74 to say `AAD binds (plaintext_cid, chunk_index)` matching the code. Accept the truncation-attack residual + document it explicitly in SECURITY-POSTURE.md (Compromise # candidate). Also delete the phantom '§6 CI gate (13)' citation.",
+        "Option B — code-adds-total-chunks-to-match-doc: extend `aad_per_chunk` to `(plaintext_cid, chunk_index, total_chunks)`; every encrypted blob in existence must re-encrypt under the new AAD (P-III change). Given no users yet (per the no-users-yet rationale used at G-CORE-6b SchemaVersion bump), this is the stronger choice if the truncation-attack defense is desired."
+      ],
+      "recommendation": "Surface to Ben as the wire-format-byte-binding decision-point baked into G-CORE-9 freeze. The freeze cannot land with the drift unresolved — locking the doc fixates the v1-beta bytes to one thing or the other.",
+      "destination_if_fixed_now": "V1-FROZEN-INTERFACE.md item 15(g) + V1-WIRE-FORMAT-INVENTORY.md row 4 + crates/benten-crypto-suite/src/aead.rs:221 (if Option B) + new SECURITY-POSTURE.md Compromise entry (if Option A)."
+    },
+    {
+      "id": "L11-MAJOR-2",
+      "severity": "MAJOR",
+      "title": "Shopping-list of 8 named hex-pinned byte-pin tests is essentially un-built — only 1 of 8 exists",
+      "evidence": {
+        "spec_claim": "docs/V1-FROZEN-INTERFACE.md:359-365 explicitly names the verification mechanism: 'Byte-pin tests under tests/canonical_bytes_v1_*.rs (BUILD-AT-FREEZE-WAVE: add per-shape byte-pin where it doesn't exist — shopping-list: SnapshotBlob v2, MerkleRangeProof v2 (if shipped), per-chunk-AEAD, UCAN-Varsig v1 header, AuthorizationGrant CBOR, Drop bundle CBOR, encryption envelope per codepoint, signature envelope per codepoint). Each test loads a hex-pinned canonical bytes string + asserts encode + decode round-trip + CID stability.'",
+        "ground_truth": "find . -name 'canonical_bytes_v1*' returns ONLY `crates/benten-dsl-compiler/tests/canonical_bytes_v1_scheme_pin.rs` (the DSL subgraph CID-pin from #604; uses the strongest shape — pins a literal CID string). NO other `canonical_bytes_v1_*.rs` file exists. grep for `hex_literal::hex!` or `hex!(` across all test files returns ZERO matches outside per-byte tamper tests. NO hex-pinned canonical-bytes literal test exists for: SnapshotBlob v2, per-chunk-AEAD, UCAN-Varsig v1 header, AuthorizationGrant, Drop bundle, encryption-envelope-per-codepoint, signature-envelope-per-codepoint.",
+        "what_DOES_exist": "Each surface has a different KIND of pin: SnapshotBlob v2 has roundtrip+strict-version-reject (tf11_*.rs + snapshot_blob_backend.rs); per-chunk-AEAD has the IROH_BLOCK_SIZE constant pin + format-version-byte-position pin (aead.rs unit tests + tf3d_*.rs); UCAN-Varsig has byte-0/byte-1/bytes-2-3-codepoint position pins (tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs); AuthorizationGrant has binding-sig + roundtrip (tf3b_authorization_grant_*.rs — NO hex pin); Drop bundle has roundtrip + version-mismatch (tf3f_drop_bundle_offline_consume.rs — NO hex pin); swap-matrix has every-arm-roundtrip (tf4_gcore3c_full_swap_matrix_*.rs — NO hex pin). These are STRONG pins but they are NOT the hex-pinned-golden-bytes-string the §4 spec names."
+      },
+      "impact": "If the freeze contract's §4 verification mechanism is read literally, the freeze CANNOT legitimately land (the doc itself says 'The wire format for any surface that does not yet have a byte-pin test cannot legitimately freeze; even an inventory entry without a fixture is just narrative' — V1-FROZEN-INTERFACE.md:352-354). If the freeze contract is read pragmatically (roundtrip + structural-position pins ARE byte-pins for purposes of detecting regressions), then the §4 'shopping list' language needs to down-scope to the shipped shape. Either way the doc + code don't agree on what was built.",
+      "disposition": "FIX-NOW",
+      "fix_options": [
+        "Option A — build the shopping list: dispatch a fix-pass wave authoring `crates/benten-graph/tests/canonical_bytes_v1_snapshot_blob.rs` + `crates/benten-crypto-suite/tests/canonical_bytes_v1_aead_envelope_per_codepoint.rs` + `crates/benten-crypto-suite/tests/canonical_bytes_v1_varsig_per_codepoint.rs` + `crates/benten-caps/tests/canonical_bytes_v1_authorization_grant.rs` + `crates/benten-drop/tests/canonical_bytes_v1_drop_bundle.rs` — each builds a fixture, encodes to canonical bytes, asserts the hex-encoded bytes match a checked-in golden hex string + round-trips. ~5 files × ~100 LOC = ~500 LOC. The CID-pin shape from `canonical_bytes_v1_scheme_pin.rs:137` is the model.",
+        "Option B — down-scope the §4 spec: rewrite V1-FROZEN-INTERFACE.md:352-365 to acknowledge that 'byte-pin' covers (a) hex-pinned canonical bytes (strongest), (b) BLAKE3-pin of canonical bytes (per DSL precedent), (c) structural-position byte assertion (per Varsig precedent), (d) roundtrip + format-version-strict-reject (per SnapshotBlob precedent), with a per-surface declaration in V1-WIRE-FORMAT-INVENTORY.md of WHICH shape it uses."
+      ],
+      "recommendation": "Option A is the higher-conviction fix (the freeze contract IS the v1-beta bytewise lock; spending ~500 LOC to make it concrete is cheap insurance). Option B is the pragmatic-but-weaker fix. Either resolves the contradiction; surfacing to Ben as the freeze-readiness decision.",
+      "destination_if_fixed_now": "5 new canonical_bytes_v1_*.rs test files (Option A) OR V1-FROZEN-INTERFACE.md §4 + V1-WIRE-FORMAT-INVENTORY.md per-surface byte-pin-shape declaration (Option B)."
+    },
+    {
+      "id": "L11-MAJOR-3",
+      "severity": "MAJOR",
+      "title": "Phantom CI-gate citation in V1-FROZEN-INTERFACE.md — '§6 CI gate (13)' does not exist",
+      "evidence": {
+        "citation": "V1-FROZEN-INTERFACE.md:315 — `AAD layout binds (chunk_index: u64, total_chunks: u64, plaintext_cid: Cid)` per §6 CI gate (13).`",
+        "ground_truth": "grep -nE '^### |^#### |gate.*\\(1[0-9]\\)' docs/V1-FROZEN-INTERFACE.md returns ONLY section 15.a-15.j (no §6 with numbered CI gates). grep 'gate (13)' / 'gate 13' / 'Gate 13' across the doc returns ONLY this one citation referencing it — no defining section. The cite-drift scanner should catch this (§3.5g).",
+        "secondary_evidence": "Citation also appears in `crates/benten-graph/tests/tf3d_per_chunk_aead_iroh_block_size.rs:26` referencing '§6 CI gate (14) AAD-binds-chunk-index' — both gate-13 and gate-14 numbers are dangling references."
+      },
+      "impact": "Phantom citation at a freeze-time doc. A reader trying to ground-truth the AAD claim follows the cite-trail to a non-existent destination. Couples to MAJOR-1 (the AAD claim itself is wrong; the phantom cite would have been the place to ground-truth the discrepancy if it existed).",
+      "disposition": "FIX-NOW",
+      "fix": "Either (a) author §6 'CI gates' subsection enumerating the load-bearing CI checks (the existing per-chunk-AEAD chunk-size check + AAD-binds-chunk-index check + format-version-byte-position check ARE real CI gates worth enumerating) — couples to closing MAJOR-1's Option-A doc-correction; OR (b) delete the phantom citation + replace with the direct file:line cite (`crates/benten-crypto-suite/src/aead.rs:221`).",
+      "destination": "V1-FROZEN-INTERFACE.md:315 (orchestrator-direct edit; trivial)."
+    },
+    {
+      "id": "L11-MAJOR-4",
+      "severity": "MAJOR",
+      "title": "Crypto-suite codepoint table integer values are NOT pinned in tests (despite being inventory item #10 'COVERED')",
+      "evidence": {
+        "inventory_claim": "docs/V1-WIRE-FORMAT-INVENTORY.md:196-200 row 10: 'Crypto-suite codepoint table integers — byte-pin test coverage: crates/benten-crypto-suite/tests/codepoint_table_integer_values_pinned.rs (or equivalent golden-file test) — asserts every codepoint integer matches the V1-FROZEN-INTERFACE.md item 6.2 table.'",
+        "ground_truth": "find returns ZERO matches for `codepoint_table_integer_values_pinned*`. grep across the entire crates/ tree for `assert.*0x0001` / `assert.*0x0002` / `assert.*0x0003` (the SigCodepoint table integers) returns ZERO matches. grep for `assert.*0x647a` / `assert.*0x6400` (cipher-suite v1-LIVE integers) also returns ZERO matches. The ONLY codepoint integer value pinned anywhere in a test-style assertion is `0x647b` (crates/benten-crypto-suite/src/swap_matrix.rs:1846 `assert_eq!(CipherSuiteCodepoint::HYBRID_MLKEM768_HQC.raw(), 0x647b);`) and `0x647c` (crates/benten-crypto-suite/tests/tf4_codepoint_0x647c_pure_pq_mlkem_only.rs:43-46).",
+        "indirect_coverage": "tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs:122 asserts the codepoint bytes parsed from wire equal `SigCodepoint::HYBRID_ED25519_MLDSA65.raw()` — this catches PARSER drift but NOT a silent renumbering of the constant itself. If someone changed `pub const HYBRID_ED25519_MLDSA65: Self = Self(0x0001);` to `Self(0x0007);` the wire-test would still pass (both sides use the constant)."
+      },
+      "impact": "The codepoint table IS the freeze contract (per CLAUDE.md baked-in #5: the multiformats framing IS the permanent commitment). A silent integer renumbering would change the wire bytes invisibly — wire-format-incompatible peers (anyone running the old build) cannot decode the new bytes. This is exactly the regression-class the freeze contract is meant to catch.",
+      "disposition": "FIX-NOW",
+      "fix": "Mint `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoint_table_integer_pinned.rs` asserting each named constant against its V1-FROZEN-INTERFACE.md §item-6.2 integer value: `HYBRID_ED25519_MLDSA65 == 0x0001`, `CLASSICAL_ED25519 == 0x0002`, `HYBRID_MLDSA65_SLHDSA == 0x0003`, `HYBRID_X25519_MLKEM768 == 0x647a`, `CLASSICAL_X25519 == 0x6400`, `NONE_PLAINTEXT == 0x0000`, `HYBRID_MLKEM768_HQC == 0x647b`, `PURE_PQ_MLKEM768_ONLY == 0x647c`, `HashCodepoint::BLAKE3 == 0x1e`, `SHA2_512_256 == 0x1015`, `SHA3_256 == 0x16`. ~40 LOC, mechanical. This IS the wire-format byte-pin the inventory's row #10 falsely claims is covered.",
+      "destination": "crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoint_table_integer_pinned.rs (NEW file)."
+    },
+    {
+      "id": "L11-MINOR-1",
+      "severity": "MINOR",
+      "title": "Inventory cites 4 byte-pin test files that don't exist at the named paths",
+      "evidence": [
+        "V1-WIRE-FORMAT-INVENTORY.md:28 cites `crates/benten-core/tests/canonical_test_node_sentinel_cid.rs` — does NOT exist. Real sentinel-CID pins live at `crates/benten-core/tests/node_cid.rs:16` (`const CANONICAL_CID = 'bafyr4iflzld...'`) + `crates/benten-core/tests/canonical_bytes_fastpath_stable.rs:19`.",
+        "V1-WIRE-FORMAT-INVENTORY.md:103 cites `crates/benten-id/tests/ucan_envelope_*.rs family` — does NOT exist. Only `crates/benten-id/tests/ucan.rs` exists; UCAN-Varsig byte-pin lives at `crates/benten-crypto-suite/tests/tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs` (in a DIFFERENT crate).",
+        "V1-WIRE-FORMAT-INVENTORY.md:197 cites `crates/benten-crypto-suite/tests/codepoint_table_integer_values_pinned.rs` — does NOT exist (the substantive gap is MAJOR-4; this is the citation-shape MINOR).",
+        "V1-WIRE-FORMAT-INVENTORY.md:139 cites `crates/benten-drop/tests/ family` for Drop bundle byte-pin — the family exists but it has NO hex-pinned canonical-bytes pin; only roundtrip + version-reject."
+      ],
+      "impact": "Inventory at a freeze-time doc is the load-bearing enumeration; phantom citations defeat its purpose (a reader tracing 'is this surface really byte-pinned' arrives at non-existent files). The §3.6j sweep-completeness-self-verify discipline applies here (pim-N candidate): the inventory author should have grepped each cited path before signing.",
+      "disposition": "FIX-NOW",
+      "fix": "Replace each phantom citation with the real existing file:line. Couples to MAJOR-2 fix (if Option A — build the shopping list — the new canonical_bytes_v1_*.rs files become the canonical citations; if Option B — down-scope the spec — each row's per-surface byte-pin-shape declaration cites the real file).",
+      "destination": "docs/V1-WIRE-FORMAT-INVENTORY.md rows 1, 5, 7, 10 (orchestrator-direct edit)."
+    },
+    {
+      "id": "L11-MINOR-2",
+      "severity": "MINOR",
+      "title": "AuthorizationGrant CBOR has no explicit format_version field (relies on #[non_exhaustive] for forward-compat)",
+      "evidence": {
+        "code": "crates/benten-caps/src/authorization_grant.rs:204-246 — `pub struct AuthorizationGrant { ucan, key_material, binding_sig, audience_binding, issuer_verifying_key, audience_pubkey: Option, scope: Option }` — NO `schema_version: u32` discriminator. The two Option fields are #[serde(default)]-tail-appended for back-compat.",
+        "inventory_claim": "docs/V1-WIRE-FORMAT-INVENTORY.md:119: 'Format version: #[non_exhaustive] per V1-FROZEN-INTERFACE row 8.d — future additive fields land at the tail.'",
+        "asymmetry": "SnapshotBlob uses `schema_version: u32` + typed-strict-reject (the MIGRATION mechanism the freeze contract names). Drop bundle uses `DropBundleVersion` enum + `UnsupportedDropVersion` typed-reject. AuthorizationGrant uses tail-append-with-#[serde(default)] — a WEAKER mechanism that fails OPEN on future-version blobs (a v2 grant with a new required field will be DECODED by a v1 reader as a missing-default rather than typed-rejected)."
+      },
+      "impact": "AuthorizationGrant is the load-bearing cap-binding artifact (every Drop bundle carries one; every UCAN-blobs request validates against one). A future additive field that semantically MUST be present (e.g. a v2 'rotation_witness' field) would be silently absent in v1-readers, weakening the binding guarantee. Doesn't matter for v1-beta but matters for any post-freeze additive field.",
+      "disposition": "BELONGS-NAMED-NOW",
+      "named_destination": "docs/future/phase-4-backlog.md — add §X 'AuthorizationGrant explicit format_version discriminator (post-v1-beta)' row. The asymmetry with SnapshotBlob / Drop bundle is INTENTIONAL at v1-beta (additive-tail discipline) but should be documented as a known posture so a future required-field doesn't surprise the freeze. (Per HARD RULE 12: this is a legitimate BELONGS-NAMED-NOW because the destination — phase-4-backlog.md — exists and the entry lands NOW.)"
+    },
+    {
+      "id": "L11-MINOR-3",
+      "severity": "MINOR",
+      "title": "Old-codepoints-supported-forever invariant has no test asserting the typed-reject arm STAYS rejecting (post-freeze regression-guard gap)",
+      "evidence": {
+        "spec_claim": "docs/V1-FROZEN-INTERFACE.md:342-343: 'Old codepoints / old format versions are decode-supported FOREVER per item 14 (never-strand-content).' V1-WIRE-FORMAT-INVENTORY.md item 14 lens-question echoes this.",
+        "current_coverage": "tf2_codepoint_dispatch_typed_unsupported_classical_downgrade.rs:80-86 asserts unknown sig codepoint 0xFFFF surfaces typed UnsupportedAlgorithm. tf2 same file lines 116-122 asserts unknown hash 0x9999 surfaces typed-reject. These cover UNKNOWN codepoints. NO test asserts the CURRENTLY-LIVE codepoints (0x0001/0x0002/0x0003 sig + 0x647a/0x6400 cipher) STAY decodable across builds (the 'never-strand-content' direction).",
+        "implementation_evidence": "crates/benten-crypto-suite/src/codepoint.rs:240-253 `CipherSuiteCodepoint::resolve()` typed-rejects 0x647b + 0x647c + 0x0000 + unknown — but a future build that re-purposed 0x647a to a different cipher could SILENTLY break old ciphertext decode (no test catches it; the codepoint dispatch would happily route to the new cipher)."
+      },
+      "impact": "Asymmetric to MAJOR-4: the integer-value pin (MAJOR-4) catches silent renumbering of the CONSTANT NAME ↔ INTEGER mapping; this MINOR catches silent re-purposing of the INTEGER ↔ ALGORITHM mapping. Both are the 'never-strand-content' direction. Less urgent than MAJOR-4 because re-purposing a live codepoint is a more deliberate action than renumbering a constant.",
+      "disposition": "BELONGS-NAMED-NOW",
+      "named_destination": "Couples to MAJOR-4 fix: when minting canonical_bytes_v1_codepoint_table_integer_pinned.rs, add a sibling test (or a section in the same file) asserting `0x647a` decodes/encodes ChaCha20-Poly1305-with-X25519-ML-KEM-768 specifically (a forward-canary that re-purposing the integer breaks the test). Equivalent for `0x0001` sig: assert the Varsig header at codepoint 0x0001 ALWAYS produces / verifies an Ed25519⊕ML-DSA-65 hybrid signature (any change re-routing it breaks the test). ~50 additional LOC."
+    },
+    {
+      "id": "L11-MINOR-4",
+      "severity": "MINOR",
+      "title": "WIRE-FORMAT-INVENTORY filename is /docs/V1-WIRE-FORMAT-INVENTORY.md not /docs/WIRE-FORMAT-INVENTORY.md (lens brief drift)",
+      "evidence": "L11 brief required-read #2 names `docs/WIRE-FORMAT-INVENTORY.md`. Actual file is `docs/V1-WIRE-FORMAT-INVENTORY.md` (per BUILD-BACKLOG row 8d outcome row, commit 75a1d33a). Both branding-prefix variants are reasonable; the V1- prefix matches V1-FROZEN-INTERFACE.md sibling.",
+      "impact": "Brief-drift only; the doc IS authored + referenced from V1-FROZEN-INTERFACE.md. Future lens-author-time briefs should cite the actual filename.",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "explanation": "Not a wire-format / freeze-readiness finding; logged for lens-brief-drift hygiene only. The V1- prefix is the right name (matches V1-FROZEN-INTERFACE.md sibling); the lens brief should be updated for round R2+ dispatches if this lens iterates."
+    },
+    {
+      "id": "L11-MINOR-5",
+      "severity": "MINOR",
+      "title": "DropBundle wire-format-coupling self-warning (bundle.rs:198-206) says 'frozen atomically at G-CORE-9' — verify the inner EncryptedNode CBOR layout IS frozen this wave",
+      "evidence": {
+        "code_comment": "crates/benten-drop/src/bundle.rs:198-206: '⚠️ Wire-format coupling — frozen atomically at G-CORE-9. The Drop bundle's on-disk layout is content-addressed via the inner encode_encrypted_node CBOR format, which the storage-layer (benten_graph::aead_wrap) explicitly marks NOT-frozen pre-v1. Both layers are atomically frozen at the G-CORE-9 v1-interface freeze wave; before that, the Drop wire-format is provisional.'",
+        "verification_gap": "L11 ground-truth: the V1-FROZEN-INTERFACE.md inventory rows 4 (per-chunk AEAD) + 7 (Drop bundle) DO assert freeze of the wrap envelope + the bundle. The encode_encrypted_node CBOR shape lives at crates/benten-graph/src/aead_wrap.rs (EncryptedNode::Whole + EncryptedNode::Chunked variants). The variants have implicit serde-derived CBOR shape but NO explicit format_version + NO inventory row of its own.",
+        "byte_pin_status": "No explicit byte-pin for EncryptedNode CBOR (the wrap envelope's format_version byte at position 1 IS pinned via aead.rs unit test; but EncryptedNode's outer enum-tag CBOR layout is NOT pinned)."
+      },
+      "impact": "The Drop bundle freeze is only as strong as the inner EncryptedNode freeze. If EncryptedNode's enum-tag layout silently shifts (e.g. someone adds a new variant or reorders the existing two), the Drop bundle bytes silently shift even though the outer DropBundle struct is unchanged.",
+      "disposition": "BELONGS-NAMED-NOW",
+      "named_destination": "Extend V1-WIRE-FORMAT-INVENTORY.md with row 11 'EncryptedNode CBOR shape (per-chunk-AEAD wrap envelope's outer enum-tag layout)' — cites crates/benten-graph/src/aead_wrap.rs + crates/benten-graph/tests/tf3d_*.rs for round-trip coverage. Per V1-WIRE-FORMAT-INVENTORY.md P-III decision-point sub-question 'Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?' this surface IS one such omission."
+    }
+  ],
+  "lens_questions_addressed": {
+    "q1_snapshotblob_v2_byte_pin_match_tf11": "PARTIAL — tf11_snapshot_blob_schema_version_p3_migration_path.rs pins SCHEMA_VERSION == 2 + strict-reject on mismatch + post-bump forward-compat + typed-error-code identity. These cover SHAPE + MIGRATION semantics. NOT covered: hex-pinned canonical bytes literal (MAJOR-2). Pin name `tf11_snapshot_blob_v2_*` (cited in lens questions) does not match actual filename `tf11_snapshot_blob_schema_version_p3_migration_path.rs` — minor brief drift.",
+    "q2_merklerangeproof_v2_stable_byte_pinned": "DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE row 5 + V1-WIRE-FORMAT-INVENTORY row 3 + docs/future/phase-4-backlog.md §4.64. Verified trait does NOT exist at HEAD (find . -name 'merkle_range_proof*' returns zero). Legitimately not-built-not-pinned per Option A defer.",
+    "q3_per_chunk_aead_chunk_size_at_envelope_encode_site": "VERIFIED LIVE — crates/benten-graph/src/aead_wrap.rs:228-229 `plaintext.chunks(IROH_BLOCK_SIZE)` IS the actual encode site (not just configured); IROH_BLOCK_SIZE constant pin at crates/benten-graph/tests/tf3d_per_chunk_aead_iroh_block_size.rs:90-96 + aead.rs:442-444 + the constant is re-exported from benten-crypto-suite so the storage layer pins against it.",
+    "q4_aad_layout_per_node_and_per_chunk": "REAL DRIFT — see MAJOR-1. Per-Node AEAD AAD (`aad_whole_content`) binds plaintext_cid only — matches doc. Per-chunk AEAD AAD (`aad_per_chunk`) binds (plaintext_cid, chunk_index) only — doc claims 3-tuple including total_chunks; code is 2-tuple. AAD-rebinding-attack defense IS tested at tf3d_aad_binds_plaintext_cid_rebinding_attack.rs. AAD-chunk-rebinding defense IS tested at tf3d_per_chunk_aead_iroh_block_size.rs lines 208-238. Both REAL coverage; the missing total_chunks would have been the cross-chunk-truncation defense.",
+    "q5_catalog_of_wire_format_surfaces_each_has_byte_pin": "9 of 10 inventory surfaces have SOME pin shape; 1 (MerkleRangeProof) DEFERRED. NONE of the 10 have hex-pinned canonical-bytes literal of the shape V1-FROZEN-INTERFACE.md §4 shopping-list names (DSL has the closest analog — pinned CID-string). See MAJOR-2 + MAJOR-4.",
+    "q6_pre_g_core_9_freeze_readiness_every_surface_ready": "NOT-READY. The 4 MAJOR findings (especially MAJOR-1's doc↔code AAD drift) prevent legitimate freeze. After resolution, freeze can land for the 9 covered surfaces; MerkleRangeProof legitimately stays deferred (named at phase-4-backlog.md §4.64).",
+    "q7_additive_codepoint_discipline_reserved_arms_typed_rejected": "VERIFIED LIVE — crates/benten-crypto-suite/src/codepoint.rs:240-253 (CipherSuiteCodepoint::resolve typed-rejects 0x647b + 0x647c + 0x0000); tf4_codepoint_0x647c_pure_pq_mlkem_only.rs pins 0x647c reservation + typed-reject; tf2_codepoint_dispatch_typed_unsupported_classical_downgrade.rs covers unknown-sig + unknown-hash typed-reject; tf4_gcore3c_swap_matrix_conformance_additional.rs:262-266 covers unknown-cipher typed-reject. All four code-points families exercise additive discipline.",
+    "q8_old_codepoints_supported_forever_invariant": "PARTIAL — unknown codepoints surface typed-reject (the un-known-stays-rejected direction is covered). The LIVE-CODEPOINT-STAYS-DECODABLE direction (the never-strand-content invariant in V1-FROZEN-INTERFACE.md:342-343) has no direct test — MINOR-3."
+  },
+  "process_disciplines_applied": {
+    "section_3_6i_schema": "JSON authored per §3.6i: canonical top-level `disposition`, `findings` array, per-finding `disposition` matching HARD RULE 12 valid shapes.",
+    "section_3_5n_ground_truth_verify": "Every finding ref-pinned-verified by grep + file-read at the cited line — no review-pass cargo-cult'd.",
+    "hard_rule_12_dispositions": "Findings use only the 3 valid shapes: FIX-NOW (MAJOR-1, MAJOR-2, MAJOR-3, MAJOR-4, MINOR-1), BELONGS-NAMED-NOW (MINOR-2, MINOR-3, MINOR-5), DISAGREE-WITH-EXPLANATION (MINOR-4). Zero 'defer' / 'carry to next brief' / phantom destinations.",
+    "section_3_5g_cross_language_mirror": "MAJOR-4's codepoint-integer-pin would be a §3.5g extension (the integer value MUST mirror across the Rust constant + the V1-FROZEN-INTERFACE.md §6.2 doc table). Both surfaces affected.",
+    "commit_before_return": "Branch + JSON file committed before final message per dispatch contract.",
+    "isolation_contract": "All file reads + edits inside ${WORKTREE_ROOT}; one cd-out attempt was correctly blocked by the harness.",
+    "section_3_5l_pre_push": "JSON-only edit; no Rust touched; no cargo run needed."
+  }
+}
