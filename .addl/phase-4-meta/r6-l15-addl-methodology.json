@@ -1,0 +1,279 @@
+{
+  "lens": "L15-ADDL-methodology-discipline-and-pattern-induction-meta-sweep",
+  "round": "R6.R1",
+  "phase": "Phase-4-Meta-Core",
+  "agent_role": "R6 R1 L15 ADDL methodology discipline + pattern-induction meta-sweep",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "base_branch": "phase-4-meta-core/r4b-r1-fix-pass",
+  "main_head_at_review": "a0b75637",
+  "review_date": "2026-05-24",
+  "disposition": "APPROVE-WITH-FIXES",
+  "summary": "Phase-4-Meta-Core ADDL discipline is overall STRONG: HARD RULE 12 discipline holds across R4.1/R4.2/R4b triage docs + G-CORE-9 R4b L1 phantom-V-14 destination caught + closed cleanly + R4b L6 path-(b) PIVOT to Row D-22 textbook clause-(b). 11 net memory codifications + 1 inline §3.5o codification + the §3.5g item-6 amendment all show active codification discipline. But six methodology gaps remain: (1) two R5 mini-rev JSONs use non-canonical top-level disposition strings violating §3.6i schema; (2) pim-N reference coverage in R5 briefs is INCONSISTENT (3 of 9 mention pim-2/12/18; G-CORE-5 has zero pim references; §3.6g 'prior-phase pim-N as explicit pre-flight checklist' not honored); (3) HARD RULE 12 reminder coverage in R5 briefs is sparse (3 of 9 reproduce it explicitly); (4) two r5-g-core-3e findings use 'future-wave carry' language that LOOKS phantom but actually landed at phase-4-backlog §3.10 — language hygiene not violation, but the language drift trains the wrong reflex; (5) CI §3.5o disk-OOM env vars are applied to only 3 of 27+ Rust-compiling workflows — the original L19 / R6-LENS-CATALOG concern materialized; (6) ≥5-recurrence §3.5g cross-language mirror finding pattern across r5-g-core-3a/3b/3c/6b/dsl-3 — already met by 2026-05-24 §3.5g item-6 amendment + drift-detect-error-variant-mirror scanner, but the 159 pre-existing baseline still drain-to-zero with no specific schedule. No BLOCKER. 4 MAJOR + 4 MINOR + 6 OBS. Pattern-induction meta-sweep candidates: 3 emerging patterns documented (1 already addressed by §3.5g item-6 + 2 fresh ones surface — see findings PI-1 and PI-2). Phase-4-Meta-Core ADDL methodology is converging-strong and merits APPROVE-WITH-FIXES; the gaps are all surgical fixes against named destinations.",
+  "convergence_disposition": "NOT-YET-CONVERGED",
+  "convergence_reason": "4 MAJOR findings present; per Q5 termination 'only BLOCKER/MAJOR block convergence'. Surgical R6-FP closures expected to converge in 1-2 fix-pass rounds.",
+  "findings": [
+    {
+      "id": "L15-MAJOR-1",
+      "severity": "MAJOR",
+      "category": "1-cross-lens-patterns",
+      "title": "§3.6i Review/lens/mini-review JSON schema discipline violated by 2 R5 mini-reviews — non-canonical top-level `disposition` strings",
+      "evidence": [
+        "`.addl/phase-4-meta/r5-g-core-3c-mini-review.json` top-level `disposition` = 'APPROVE-WITH-FIX-NOW-FINDINGS' (non-canonical — should be 'APPROVE-WITH-FIXES' per §3.6i schema; the variant 'WITH-FIX-NOW-FINDINGS' is invented).",
+        "`.addl/phase-4-meta/r5-g-core-dsl-chunk-3-mini-review.json` top-level `disposition` = 'APPROVE-WITH-AUTHOR-SURFACED-ITEMS-FOR-BEN' (non-canonical — invented label not in §3.6i canonical schema).",
+        "All 19 other R5 + R4.1 + R4.2 mini-rev JSONs use canonical 'APPROVE' / 'APPROVE-WITH-FIXES' shapes consistently.",
+        "§3.6i origin: Phase-4-Foundation R6 R3 + 32-JSON schema-drift sweep — the canonical top-level `disposition` was the FIX. Re-recurrence in Phase-4-Meta-Core triggers §3.7 (3+-recurrence sweep) consideration."
+      ],
+      "rule_basis": "§3.6i Review/lens/mini-review JSON schema discipline (added 2026-05-13 Phase-4-Foundation R6 R3 ratification) + §3.6h Rule-ratification-against-drift mandatory-close clause",
+      "disposition": "FIX-NOW per HARD RULE 12 clause-(a) — orchestrator-direct 2-line edit in both files normalizing the top-level `disposition` to 'APPROVE-WITH-FIXES' (per-finding shape stays unchanged; the inner findings already use HARD-RULE-12-compliant per-finding dispositions). Land at R6-FP-1 alongside other surgical fixes. Single PR. The fix is mechanical and doesn't change the substantive review-outcome — both PRs already MERGED so this is doc-state-correction only.",
+      "remediation": "Edit `r5-g-core-3c-mini-review.json` top-level `disposition` from 'APPROVE-WITH-FIX-NOW-FINDINGS' → 'APPROVE-WITH-FIXES'. Edit `r5-g-core-dsl-chunk-3-mini-review.json` top-level `disposition` from 'APPROVE-WITH-AUTHOR-SURFACED-ITEMS-FOR-BEN' → 'APPROVE-WITH-FIXES'. Both files are post-merge; this is historical schema-conformance correction. Also consider extending §3.6i with an explicit enum of valid top-level values to close the room for future invention."
+    },
+    {
+      "id": "L15-MAJOR-2",
+      "severity": "MAJOR",
+      "category": "2-wave-completion-gap-recurrences",
+      "title": "§3.6g 'prior-phase pim-N as explicit pre-flight checklist' violated — R5 brief pim-N coverage is INCONSISTENT across waves",
+      "evidence": [
+        "Of 9 R5 G-CORE briefs surveyed (R5-G-CORE-{0,1,2,4,5,7}-BRIEF.md + R5-G-CORE-DSL chunks): only G-CORE-1 + G-CORE-2 + G-CORE-7 explicitly reproduce pim-2 §3.6b / pim-12 §3.6e / pim-18 §3.6f as pre-flight checklist items.",
+        "G-CORE-5 brief: ZERO occurrences of 'pim-' or '§3.6b/e/f' or 'HARD RULE' in the entire brief (verified via `grep -cE 'pim-2|pim-12|pim-18|§3.6b|§3.6e|§3.6f|HARD RULE' = 0`).",
+        "G-CORE-0 brief: 2 occurrences only, mostly in HARD-RULE-12 reference (no pim-N checklist).",
+        "G-CORE-4 brief: 1 occurrence (§3.6e cite in passing, not checklist).",
+        "§3.6g origin (Phase-4-Foundation R6 R1 pim-N meta-sweep Candidate A ratification 2026-05-13): 'prior-phase pim-N rules MUST be reproduced as explicit pre-flight checklist lines in next-phase R3/R5 implementer briefs (NOT memory-references or §-cross-references alone)'. 5-instance recurrence threshold met in Phase-4-Foundation.",
+        "Phase-4-Meta-Core is the NEXT phase after Phase-4-Foundation ratification — exactly the scope §3.6g targets."
+      ],
+      "rule_basis": "§3.6g Prior-phase pim-N codifications as explicit pre-flight checklist in next-phase R3/R5 briefs (Phase-4-Foundation R6 R1 ratification 2026-05-13)",
+      "disposition": "FIX-NOW per HARD RULE 12 clause-(a) — but the R5 waves already shipped; the FIX-NOW operates on PROCESS rather than retrofitting briefs. Concrete actions: (1) author a canonical R5-BRIEF-pim-checklist.md fragment that names pim-2 §3.6b sub-rule-4 + pim-12 §3.6e + pim-18 §3.6f + HARD RULE 12 disposition shapes + §3.5g cross-lang mirror + §3.6i schema discipline as the mandatory pre-flight; (2) update R5-BRIEF-common.md to include the fragment by reference + mandate every per-wave brief either inlines it or references it; (3) backfill the omission as a §3.6h-style ratification-against-drift note — the Phase-4-Meta-Core R5 cycle confirmed the gap; the fix lands forward (G-CORE-9 FREEZE wave brief; R6-FP work; any future phase). HARD RULE 12 clause-(b): NAMED-NOW destination is `R5-BRIEF-common.md` + new fragment `R5-BRIEF-pim-checklist.md`. Land at R6-FP-1.",
+      "remediation": "Author `.addl/phase-4-meta/R5-BRIEF-pim-checklist.md` (or equivalent under `.addl/` root) carrying the standing pim-N + §3.5g + §3.6i pre-flight checklist. Update `.addl/phase-4-meta/R5-BRIEF-common.md` and any future R5 brief template to inline-reference it. Add a §3.6g-style enforcement note to `dispatch-conventions.md` §3.6g: 'evidence of compliance: per-wave brief MUST either inline the checklist or reference R5-BRIEF-pim-checklist.md'. Note that Phase-4-Meta-Core G-CORE-9 FREEZE brief authoring is upcoming and is the immediate forward-fire opportunity."
+    },
+    {
+      "id": "L15-MAJOR-3",
+      "severity": "MAJOR",
+      "category": "4-CI-infrastructure-flake-classes",
+      "title": "§3.5o disk-OOM env vars applied to only 3 of 27+ Rust-compiling workflows — original L19 / R6-LENS-CATALOG concern materialized",
+      "evidence": [
+        "Workflows WITH `CARGO_INCREMENTAL` env: 3 — `ci.yml` + `coverage.yml` + `wasm-conformance.yml`.",
+        "Rust-compiling workflows WITHOUT the env vars: 24+ including `phase-2a-exit-criteria.yml` + `multi-arch-cargo-check.yml` + `msrv.yml` + `mutants.yml` + `fuzz.yml` + `determinism.yml` + `cross-process-graph.yml` + `wasm-checks.yml` + `wasm-runtime.yml` + `drift-detect.yml` + `supply-chain.yml` + `cargo-public-api.yml` + others.",
+        "R6-LENS-CATALOG L19 explicitly anticipated this: '§3.5o disk-OOM env vars... applied to EVERY Rust-compiling workflow? Per the #1333 mini-rev finding, phase-2a-exit-criteria.yml was missing them.'",
+        "§3.5o codification (2026-05-22) named PR #1313 as the validation point but did NOT include a sweep of all sibling workflows — single-workflow fix; sibling-workflows-defer is exactly the §3.6h-violation pattern Phase-4-Foundation R6 R3 ratified against."
+      ],
+      "rule_basis": "§3.5o CI disk-OOM is its own discipline class (added 2026-05-22) + §3.6h Rule-ratification-against-drift mandatory-close clause (Phase-4-Foundation R6 R3 — 'already-closed-before-ratification is strictly stronger than same-PR-closure'; here the inverse: the rule was ratified, but the same-PR closure did NOT sweep the obvious siblings)",
+      "disposition": "FIX-NOW per HARD RULE 12 clause-(a) — but the work is workflow-mechanical sweep. Concrete: (1) audit every `.github/workflows/*.yml` for `dtolnay/rust-toolchain` OR `cargo (check|build|test|clippy|nextest|doc|llvm-cov)` invocation; (2) add the §3.5o triplet (`CARGO_INCREMENTAL=0` + `CARGO_PROFILE_DEV_DEBUG=line-tables-only` + Free-disk-space step at workflow-env scope where applicable on x86_64 legs); (3) land as orchestrator-direct sweep PR at R6-FP-1 OR delegate to a small dispatch agent. Scope: ~24 workflow files; ~3-5 LOC per file in workflow-env block. Single PR atomic. The fix is mechanical + no semver/test-coverage implications. **OR** if any of these workflows are macOS-only / not subject to disk-OOM (e.g., wasm-only that don't link big binaries), name those as explicit DISP-(c) DISAGREE-WITH-EXPLANATION exemptions in a §3.5o sub-clause amendment.",
+      "remediation": "Dispatch a sweep agent OR orchestrator-direct: for each Rust-compiling workflow lacking the env vars, add at workflow-env block scope: `CARGO_INCREMENTAL: '0'` + `CARGO_PROFILE_DEV_DEBUG: line-tables-only` (and on x86_64 ubuntu legs, a 'Free disk space' step). For macOS legs the env vars are no-ops (~40 GB free). Verify CI green on a test PR before main merge. Update §3.5o with an explicit 'apply to ALL workflows of class X' clause and an exemption list."
+    },
+    {
+      "id": "L15-MAJOR-4",
+      "severity": "MAJOR",
+      "category": "1-cross-lens-patterns",
+      "title": "HARD RULE 12 reminder coverage in R5 briefs is sparse — 3 of 9 G-CORE briefs explicitly reproduce the disposition shapes",
+      "evidence": [
+        "Survey of `.addl/phase-4-meta/R5-G-CORE-*-BRIEF.md`: HARD RULE 12 explicit reproduction only in G-CORE-0 (1 mention, weak), G-CORE-1 (1 mention, full), G-CORE-2 (1 mention, full).",
+        "G-CORE-4 + G-CORE-5 + G-CORE-7 briefs: HARD RULE 12 NOT explicitly enumerated in the form 'three valid non-fix-now dispositions: OUT-OF-SCOPE / BELONGS-NAMED-NOW / DISAGREE-WITH-EVIDENCE'.",
+        "R5-G-CORE-DSL chunk briefs (1, 2, 3): all rely on R5-BRIEF-common.md, which mentions HARD RULE 12 once.",
+        "Recurrence with L15-MAJOR-2 (pim-N coverage): same root cause — R5-BRIEF-common.md fragment isn't comprehensive enough; per-wave brief authors don't backfill.",
+        "Foundational memory: `feedback_no_defer_HARD_RULE.md` (loud-CAPS title) — Ben's most-violated principle; the discipline calls for OVER-reproduction not UNDER-reproduction."
+      ],
+      "rule_basis": "CLAUDE.md §'Non-Negotiable Process Rules' #12 (HARD RULE — no later disposition) + foundational memory `feedback_no_defer_HARD_RULE` (loud-CAPS title intentional)",
+      "disposition": "FIX-NOW per HARD RULE 12 clause-(a) — same destination as L15-MAJOR-2 (R5-BRIEF-pim-checklist.md / R5-BRIEF-common.md update). Bundle the two MAJORs into one R6-FP-1 PR. The HARD RULE 12 three-disposition enumeration should be CLAUSE 1 of the pim-checklist fragment. Forward-fire onto G-CORE-9 FREEZE brief authoring + any post-Phase-4-Meta-Core R5 work.",
+      "remediation": "In R5-BRIEF-pim-checklist.md, the FIRST section is 'HARD RULE 12 — disposition shape': enumerate the three valid non-fix-now disposition shapes (OUT-OF-SCOPE / BELONGS-NAMED-NOW with specific destination / DISAGREE-WITH-EVIDENCE) + the prohibited shapes ('carry to next brief' / 'Phase-N follow-up' / 'defer-with-doc' without specific destination / 'minor enough to defer'). The form 'every TODO / FIX-LATER you'd write is invalid' from G-CORE-1 brief is the canonical phrasing — extract it."
+    },
+    {
+      "id": "L15-MINOR-1",
+      "severity": "MINOR",
+      "category": "1-cross-lens-patterns",
+      "title": "'future-wave carry' phantom-language drift in r5-g-core-3e mini-rev — language not violation but trains wrong reflex",
+      "evidence": [
+        "`.addl/phase-4-meta/r5-g-core-3e-mini-review.json` MR4 disposition reads: 'FIX-NOW (add 1 composition pin) OR BELONGS-NAMED-NOW (carry to a future end-to-end wave-3e composition pin)' — the phrase 'carry to a future end-to-end wave-3e composition pin' names a *type of work* not a *specific destination row*.",
+        "`.addl/phase-4-meta/r5-g-core-3e-mini-review.json` MR7 disposition reads: 'BELONGS-NAMED-NOW (a future-wave carry to harden the fixture)' — phantom phrasing.",
+        "Cross-check: `docs/future/phase-4-backlog.md` was updated at G-CORE-3e merge time to include explicit named rows for both items (§3.10 lines 174-176 verified: 'G-CORE-3e end-to-end composition pin' + 'AuthorizationGrant::issue_with_unresolved_peer_for_test re-sign discipline'). The actual landing was clause-(b)-compliant.",
+        "So the substantive discipline held; only the mini-rev JSON language was loose. This is language hygiene, not phantom-disposition violation."
+      ],
+      "rule_basis": "foundational memory `feedback_no_defer_HARD_RULE` — even ABSENT a substantive violation, the language 'future-wave carry' / 'future end-to-end ... pin' trains the wrong author reflex.",
+      "disposition": "FIX-NOW per HARD RULE 12 clause-(a) — orchestrator-direct in-file annotation in `r5-g-core-3e-mini-review.json` updating the two dispositions to cite the actual landed phase-4-backlog §3.10 rows. ~4-LOC edit. AND: add a sub-bullet to the new R5-BRIEF-pim-checklist.md fragment under HARD RULE 12 section: 'language hygiene: phantom-sounding phrases like \"future-wave carry\" / \"future-wave pin\" without a *specific* destination row are PROHIBITED — pre-land the named-row in the destination doc + cite by file+line in the disposition'.",
+      "remediation": "Edit `r5-g-core-3e-mini-review.json` MR4 disposition to read: '... OR BELONGS-NAMED-NOW (named to docs/future/phase-4-backlog.md §3.10 line 174 — G-CORE-3e end-to-end composition pin row)'. Edit MR7 disposition to read: 'BELONGS-NAMED-NOW (named to docs/future/phase-4-backlog.md §3.10 line 176 — AuthorizationGrant re-sign discipline row)'. Add the language-hygiene sub-bullet to R5-BRIEF-pim-checklist.md."
+    },
+    {
+      "id": "L15-MINOR-2",
+      "severity": "MINOR",
+      "category": "5-doc-coupling-missed-cases",
+      "title": "§3.5b INTERNALS.md last-refresh SHA pointers — not consistently maintained across touched crates this phase",
+      "evidence": [
+        "L16 (R6-LENS-CATALOG) carries the explicit question: 'INTERNALS.md last-refresh SHA pointers updated for every touched crate?'",
+        "Spot check `crates/benten-dsl-compiler/INTERNALS.md` line 48 was found INCORRECT (claimed 1660 lines; actual 1722) in r5-g-core-dsl-chunk-3 mini-rev F-2 — this is the pattern surfacing within a single wave's mini-rev, suggesting cross-wave occurrence likely.",
+        "Phase-4-Meta-Core touched: benten-crypto-suite + benten-core + benten-caps + benten-graph + benten-sync + benten-ivm + benten-platform-foundation + benten-engine + benten-drop (NEW) + benten-dsl-compiler — 10 crates with code changes.",
+        "Without a systematic per-wave INTERNALS.md last-refresh-SHA-pointer sweep, the L16 lens will surface this as a finding."
+      ],
+      "rule_basis": "§3.5b HARDENED post-fix doc-coupling pre-flight (added 2026-05-02 R6 R3 ratification of pim-1) + L16 R6-LENS-CATALOG explicit question",
+      "disposition": "BELONGS-NAMED-NOW per HARD RULE 12 clause-(b) — named destination is L16 doc-coupling sweep lens in the R6 R1 council (the L16 agent will catch any specific drift). The L15 lens (ADDL methodology) flags the pattern; L16 specifically owns the actual per-crate verification. To avoid double-work, this finding RECORDS the pattern + named-destinations the substantive verification to L16's per-crate sweep. If L16 surfaces concrete instances, those land at R6-FP-1 as their own findings.",
+      "remediation": "L15 records the META-pattern; L16 owns the substantive per-crate INTERNALS.md verification. No L15-side fix-up beyond this recording. L16 lens output will populate the actual per-crate findings."
+    },
+    {
+      "id": "L15-MINOR-3",
+      "severity": "MINOR",
+      "category": "3-cross-PR-API-conflicts",
+      "title": "CATALOG_VARIANT_COUNT integer-collision pattern across Strategy-C cascade — 3-recurrence in single-phase",
+      "evidence": [
+        "Phase-4-Meta-Core CATALOG conflicts: (1) PR #1324 G-CORE-3b 'REBASED past #1323' (2) PR #1339 commit `aa5d151f` 'merge: main into #1339 — resolve CATALOG conflict to 189' (3) PR #1341 commit `cf0894c5` 'merge: main into #1341 — resolve CATALOG conflict to 190'.",
+        "Each conflict required a manual merge commit + a CATALOG re-count + a CI re-run. ~3 sequential cycles (~35 min each) on those 3 PRs.",
+        "Each was caught + resolved correctly per HARD RULE 12 — but the recurrence pattern is real.",
+        "Root cause: `crates/benten-errors/tests/stable_shape.rs:CATALOG_VARIANT_COUNT` is a single literal integer that 2+ PRs touching ErrorCode in parallel collide on.",
+        "Mitigation candidate: extend §3.5g item 1 (ErrorCode catalog 4-surface) with a sub-rule mandating Strategy-C batching whenever ≥2 ErrorCode-touching PRs are open — the conflict is mechanically guaranteed; sequential merge is wasted CI."
+      ],
+      "rule_basis": "§3.5g item 1 ErrorCode catalog 4-surface + §3.14 Strategy-C batch-merge + foundational memory `feedback_strategy_c_batch_mandatory_not_optional`",
+      "disposition": "BELONGS-NAMED-NOW per HARD RULE 12 clause-(b) — named destination is a §3.5g item 1 sub-clause amendment: 'when ≥2 PRs touching ErrorCode are open simultaneously, Strategy-C batching is MANDATORY not optional (a corollary of `feedback_strategy_c_batch_mandatory_not_optional` extended to the ErrorCode collision class). Sequential merge of N ErrorCode-touching PRs costs N CATALOG-conflict-resolution cycles; batching collapses to 1.' Land at R6-FP-1 alongside the other §3.5g amendments.",
+      "remediation": "Add sub-clause to §3.5g item 1: 'CATALOG-collision Strategy-C trigger: when ≥2 PRs each touching CATALOG_VARIANT_COUNT are open, batch them via §3.14 Strategy-C before either merges. Sequential merge wastes one CI cycle per PR past the first.'"
+    },
+    {
+      "id": "L15-MINOR-4",
+      "severity": "MINOR",
+      "category": "2-wave-completion-gap-recurrences",
+      "title": "§3.5g item-6 amendment baseline drain-to-zero contract has no specific deadline",
+      "evidence": [
+        "PR #1342 commit `add82b09` shipped `scripts/drift-detect-error-variant-mirror.ts` (~620 LOC TS) enforcing §3.5g item 6 (pub error variant first-class mirror).",
+        "Scanner surfaced 159 pre-existing pub-error-variant first-class-mirror gaps; named to `scripts/drift-detect-error-variant-mirror-baseline.txt` per HARD RULE 12 clause-(b).",
+        "BUT: the baseline file is a drain-to-zero contract WITHOUT a specific schedule. The PR body says 'drain-to-zero contract documented' but no specific phase / wave / sprint target.",
+        "HARD RULE 12 clause-(b) requires 'BELONGS-NAMED-NOW-with-specific-destination + the destination receives the entry NOW'. The baseline file does receive the entries NOW; what's missing is the SCHEDULE for drain.",
+        "Without a schedule, the baseline becomes a permanent debt floor — exactly what §3.6h 'rule-ratification-against-drift mandatory-close' rules out."
+      ],
+      "rule_basis": "§3.5g item 6 + §3.6h Rule-ratification-against-drift mandatory-close clause + HARD RULE 12 clause-(b)",
+      "disposition": "FIX-NOW per HARD RULE 12 clause-(a) — orchestrator-direct edit to `scripts/drift-detect-error-variant-mirror-baseline.txt` header adding a per-batch drain schedule: bind the 159-baseline drain to Phase-4-Meta-Composing OR explicit Phase-N-X waves; carry a row in `docs/future/phase-4-backlog.md` with line-itemized 159 mirror obligations bucketed by crate + named destination wave. The 159 mirrors don't need to all close at Phase-4-Meta-Core close (no schedule that aggressive is realistic; that would have been path-(a) for L15-MAJOR-1's PIVOT-precedent class); they DO need a specific named-wave bucket and a 'X by Phase-4-Meta-Composing' commitment that the drain is done before v1-beta tag.",
+      "remediation": "Edit `scripts/drift-detect-error-variant-mirror-baseline.txt` header to include: 'DRAIN SCHEDULE: this 159-baseline must reach zero before tag `v1-beta`. Sub-buckets: (1) crates/benten-core: <N> mirrors due Phase-4-Meta-Composing wave-X; (2) crates/benten-graph: <M> mirrors due Phase-4-Meta-Composing wave-Y; etc. Each bucket land as a named row in docs/future/phase-4-backlog.md.' Add `docs/future/phase-4-backlog.md` row 'Drain §3.5g item-6 baseline of 159 pub-error-variant first-class mirrors before tag v1-beta'."
+    },
+    {
+      "id": "L15-OBS-1",
+      "severity": "OBS",
+      "category": "1-cross-lens-patterns",
+      "title": "POSITIVE: HARD RULE 12 discipline at R4.1 + R4.2 + R4b triage tier — exemplary",
+      "evidence": [
+        "R4.1-TRIAGE.md: 5 MAJOR + 10 MINOR + 16 OBS — every one has explicit named disposition (FIX-NOW × N, BELONGS-NAMED-NOW × N with specific destinations, OUT-OF-SCOPE × 2, DISAGREE × 0). Triage doc explicitly states: 'HARD RULE 12: every finding has a real, named-destination disposition. No phantom carries.'",
+        "R4.2-TRIAGE.md: 0 MAJ + 1 MIN + 2 OBS — same discipline; R4 CONVERGED per Q5 termination.",
+        "R4b L1 3 MAJORs caught (cross-wave §4-B + §4-C + V-14 phantom): all closed via HARD RULE 12 clause-(b) with explicit new Rows D-23 + D-24 in V1-FROZEN-INTERFACE-DEFERRED.md.",
+        "R4b L6 MAJOR-1 (115 _for_test surfaces): PIVOT from path-(a) FIX-NOW → path-(b) DEFER-NAMED-NOW Row D-22 — exemplary hard-escalation trigger handling per HARD RULE 12 clause-(b).",
+        "G-CORE-9 R1 → R2 → R3 → R4 → R4b iteration with monotonic finding closure (3 BLK + 30 MAJ + 24 MIN → 2 BLK + 10 MAJ + 18 MIN → 3 MAJ + 9 MIN → 0/0/6 MIN → 0/0/0 across 4b R2) — classic Q5 monotonic convergence."
+      ],
+      "disposition": "OBS (no action) — positive pattern observation supporting overall APPROVE-WITH-FIXES disposition. The triage tier is the discipline strong-point; the gaps are at the per-wave-brief authoring tier (L15-MAJOR-2 + L15-MAJOR-4)."
+    },
+    {
+      "id": "L15-OBS-2",
+      "severity": "OBS",
+      "category": "1-cross-lens-patterns",
+      "title": "POSITIVE: commit-before-return discipline (codified 2026-05-22 from R4.1 evaporation gap) WORKED end-to-end",
+      "evidence": [
+        "R4.1 lost 6 JSON output files to worktree auto-clean (only agent return summaries survived).",
+        "R4.2 mandated commit-before-return: ALL 6 R4.2 JSON outputs committed in worktrees + harvested cleanly to canonical `.addl/phase-4-meta/r4.2-*.json` (verified all 9 r4.2-*.json files present on disk).",
+        "R6 R1 dispatch brief (this very lens's mandate): 'commit-before-return mandate per feedback_agent_output_must_commit_before_return (born from R4.1 JSON-evaporation gap; codified at R4.2).'",
+        "The codification + same-phase forward-fire is exemplary §3.6h 'forward-fire-only-when-origin-already-closed' shape."
+      ],
+      "disposition": "OBS (no action) — positive pattern observation. The §3.6h amendment Phase-4-Foundation R6 R4 ratification ('already-closed-before-ratification is strictly stronger') validated again."
+    },
+    {
+      "id": "L15-OBS-3",
+      "severity": "OBS",
+      "category": "2-wave-completion-gap-recurrences",
+      "title": "POSITIVE: 11 net memory codifications + 1 inline §3.5o + 1 §3.5g item-6 amendment in single phase — exemplary pim-N velocity",
+      "evidence": [
+        "R5-WAVE-STATE.md §'Pim-N codifications surfaced this phase': feedback_dispatch_agents_in_background + feedback_arm_schedulewakeup_on_ci_wait + feedback_strategy_c_batch_mandatory_not_optional + feedback_ci_disk_oom_proper_fix_not_mold + feedback_agent_isolation_escape_absolute_paths + feedback_sequential_cascade_merge_upstream_first + feedback_agent_output_must_commit_before_return + dispatch-conventions §3.5o + feedback_gh_actions_checkout_auth_flake_recurrence + feedback_agent_worktree_double_force_cleanup + feedback_workspace_missing_docs_test_invocation + feedback_pub_error_variant_first_class_mirror + §3.5g item 6 amendment.",
+        "Per `feedback_pattern_induction_meta_sweep`: this is the densest codification cycle on record. Phase-4-Foundation R6 R1 produced ~7 pim-N candidates; Phase-4-Meta-Core has ~13 (~85% increase).",
+        "Per `feedback_3_plus_recurrence_deep_sweep`: most codifications met or exceeded the 3-recurrence threshold (ScheduleWakeup-CI-wait: ≥3 instances per memory file; absolute-paths-escape: 2 instances + leans on Phase-4-Foundation precedent; disk-OOM: 2 occurrences PR #1312 + PR #1313 + earlier substrate cascade)."
+      ],
+      "disposition": "OBS (no action) — positive pattern observation. Codification discipline is at peak velocity; the gaps are NOT in codification but in downstream forward-fire-to-per-wave-brief-authoring (L15-MAJOR-2 + L15-MAJOR-4)."
+    },
+    {
+      "id": "L15-PI-1",
+      "severity": "OBS",
+      "category": "pattern-induction-meta-sweep",
+      "title": "PATTERN-INDUCTION CANDIDATE: 'codification-without-forward-fire-to-brief-authoring' — Phase-4-Meta-Core has dense codification but per-wave-brief authoring lags",
+      "evidence": [
+        "Phase-4-Meta-Core codified 11+ memory files (per L15-OBS-3) AND identifies 6 §3.5g active mirrors (item 1-6).",
+        "Yet per L15-MAJOR-2 + L15-MAJOR-4, only 3 of 9 per-wave briefs reproduce the pim-N + HARD RULE 12 checklist explicitly.",
+        "§3.6g already exists ('prior-phase pim-N as explicit pre-flight checklist'). The rule fired in Phase-4-Foundation, was honored mid-phase via Phase-4-Foundation R5 brief authoring discipline, but DRIFTED across the Phase boundary into Phase-4-Meta-Core.",
+        "Pattern is: rule ratifies → memory file lands → next-phase R5 brief authors don't reproduce it → mid-phase mini-reviews catch it → no upstream brief-template update closes the loop → next-phase repeats.",
+        "Recurrence threshold: 2 instances visible (Phase-4-Foundation R5 → Phase-4-Meta-Core R5). Not yet 3 — pim-N candidate, not yet ratification-grade.",
+        "If 3rd recurrence shows in Phase-4-Meta-Composing R5 (with rule still uncodified), this becomes a pim-N: 'rule-codification MUST land paired R5/R3-brief-template-update commit'."
+      ],
+      "rule_basis": "`feedback_pattern_induction_meta_sweep` 5-category meta-sweep + 3+-recurrence threshold + §3.7 deep retrospective sweep",
+      "disposition": "OBS (pim-N candidate, additive) per HARD RULE 12 — not a finding-grade fix-now; record as pattern-induction watch-list candidate. Forward-fire: the L15-MAJOR-2 fix (R5-BRIEF-pim-checklist.md fragment + R5-BRIEF-common.md update) is the partial preemption — completing it now closes the recurrence path. If 3rd recurrence still surfaces post-preemption, escalate to formal pim-N codification."
+    },
+    {
+      "id": "L15-PI-2",
+      "severity": "OBS",
+      "category": "pattern-induction-meta-sweep",
+      "title": "PATTERN-INDUCTION CANDIDATE: 'rule-ratification-without-workflow-sibling-sweep' — §3.5o ratified at one workflow without sweeping ~24 sibling workflows",
+      "evidence": [
+        "§3.5o ratification PR (`8fec3cbc` infra(ci): reduce target/ disk footprint) touched 3 workflows: `ci.yml` + `coverage.yml` + `wasm-conformance.yml`.",
+        "24+ Rust-compiling sibling workflows were left without the env vars (per L15-MAJOR-3 evidence).",
+        "§3.6h ratification (R6 R3) ruled against this exact pattern: 'rule-ratification-against-drift mandatory-close — when a new pim-N or §-codification names specific drift instance(s) as origin, the SAME PR/wave landing the rule MUST close (or DEFER-NAMED-NOW per HARD RULE clause-b) the origin instance(s).'",
+        "§3.5o ratification arguably violated §3.6h by ratifying the rule at 3 instances without sweeping the obvious 24-sibling-workflow set.",
+        "Recurrence pattern: similar §3.5g item 3 type-name-cross-doc-mirror ratification (Phase-4-Foundation R6-FP-2) also had 7 cite sites unfixed at original ratification (closed retroactively at R6-FP-2).",
+        "Pattern: rule ratification PR closes the named instances but not the obvious sibling-class. This is 2 instances (§3.5g item 3 in Phase-4-Foundation; §3.5o in Phase-4-Meta-Core). One more instance triggers pim-N codification."
+      ],
+      "rule_basis": "§3.6h Rule-ratification-against-drift mandatory-close clause + `feedback_pattern_induction_meta_sweep` + 3+-recurrence threshold",
+      "disposition": "OBS (pim-N candidate, additive) per HARD RULE 12 — record as pattern-induction watch-list candidate. Forward-fire: the L15-MAJOR-3 fix (sweep ~24 sibling workflows with the §3.5o env vars) is the substantive close; ALSO add a §3.6h-amendment sub-clause: 'when the rule has an OBVIOUS sibling-class scope (all Rust-compiling workflows; all docs citing type X; all configs encoding rule Y), the ratification PR MUST sweep the sibling-class OR explicitly name each sibling's named-deferral row per HARD RULE 12 clause-(b).' This makes the pim-N pre-emptive."
+    },
+    {
+      "id": "L15-PI-3",
+      "severity": "OBS",
+      "category": "pattern-induction-meta-sweep",
+      "title": "PATTERN-INDUCTION CANDIDATE: 'mini-rev schema-drift recurrence across phases' — §3.6i ratified Phase-4-Foundation; 2 fresh violations Phase-4-Meta-Core",
+      "evidence": [
+        "§3.6i (Phase-4-Foundation R6 R3 ratification) explicitly mandates canonical top-level `disposition` field.",
+        "Phase-4-Meta-Core: 2 R5 mini-rev JSONs (r5-g-core-3c + r5-g-core-dsl-chunk-3) use non-canonical top-level values (L15-MAJOR-1 evidence).",
+        "Phase-4-Foundation context: 32-JSON sweep was the sweeping-fix that closed the rule's origin instances; Phase-4-Meta-Core re-drift suggests mini-rev brief authoring isn't reproducing the schema constraint.",
+        "Recurrence count: Phase-4-Foundation 32-instance bulk sweep + Phase-4-Meta-Core 2-instance fresh drift = 2 phase-boundaries crossed.",
+        "Same root cause as L15-PI-1 (codification-without-forward-fire-to-brief-authoring) applied to the mini-rev-brief authoring tier."
+      ],
+      "rule_basis": "§3.6i + §3.6h + `feedback_review_lens_json_schema_discipline`",
+      "disposition": "OBS (pim-N candidate, additive) per HARD RULE 12 — record as pattern-induction watch-list candidate. The fix for L15-MAJOR-1 + the forward-fire via R5-BRIEF-pim-checklist.md fragment closes this preemptively. If 3rd recurrence shows in Phase-4-Meta-Composing R5 mini-revs, escalate to formal pim-N: 'rule-ratification-MUST-update-mini-rev-brief-template-as-companion'."
+    }
+  ],
+  "category_summary": {
+    "1_cross_lens_patterns": "3 active findings: schema-drift (MAJ-1), HARD RULE 12 brief coverage (MAJ-4), language hygiene (MIN-1) + 1 POSITIVE (OBS-1)",
+    "2_wave_completion_gap_recurrences": "2 active findings: pim-N brief coverage (MAJ-2), §3.5g item-6 drain schedule (MIN-4) + 1 POSITIVE (OBS-3)",
+    "3_cross_PR_API_conflicts": "1 finding: CATALOG conflict pattern (MIN-3) — caught + resolved + ratification candidate filed",
+    "4_CI_infrastructure_flake_classes": "1 active finding: §3.5o workflow non-coverage (MAJ-3)",
+    "5_doc_coupling_missed_cases": "1 active finding: INTERNALS.md last-refresh-SHA delegation to L16 (MIN-2)",
+    "pattern_induction_meta_sweep": "3 pim-N candidates: codification-without-forward-fire-to-brief-authoring (PI-1), rule-ratification-without-workflow-sibling-sweep (PI-2), mini-rev schema-drift recurrence across phases (PI-3) — none yet at 3-recurrence threshold but all on watch-list"
+  },
+  "fix_pass_routing": {
+    "R6-FP-1_orchestrator_direct": [
+      "L15-MAJOR-1: normalize 2 mini-rev JSON top-level dispositions",
+      "L15-MAJOR-2 + L15-MAJOR-4 (paired): author R5-BRIEF-pim-checklist.md + update R5-BRIEF-common.md",
+      "L15-MAJOR-3: sweep ~24 Rust-compiling workflows with §3.5o env vars",
+      "L15-MINOR-1: update 2 r5-g-core-3e dispositions with specific phase-4-backlog row cites",
+      "L15-MINOR-3: §3.5g item 1 sub-clause amendment for CATALOG Strategy-C mandatory trigger",
+      "L15-MINOR-4: update §3.5g item 6 baseline.txt header with drain schedule + phase-4-backlog row"
+    ],
+    "delegated_to_other_lens": [
+      "L15-MINOR-2 (INTERNALS.md last-refresh-SHA pattern): named-destination L16 doc-coupling lens for substantive per-crate verification"
+    ],
+    "pattern_induction_watch_list": [
+      "L15-PI-1 (codification-without-forward-fire-to-brief-authoring): preemptively closed by L15-MAJOR-2 fix; rewatch in Phase-4-Meta-Composing R5",
+      "L15-PI-2 (rule-ratification-without-workflow-sibling-sweep): §3.6h sub-clause amendment proposed; substantively closed by L15-MAJOR-3 fix",
+      "L15-PI-3 (mini-rev schema-drift recurrence across phases): preemptively closed by L15-MAJOR-1 + L15-MAJOR-2 fix; rewatch in Phase-4-Meta-Composing R5"
+    ]
+  },
+  "standing_law_compliance": {
+    "HARD_RULE_12": "all 14 findings carry a HARD-RULE-12-shape disposition (FIX-NOW × 6, BELONGS-NAMED-NOW × 2, OBS-pim-N-candidate × 6); zero phantom carries; L15-PI-{1,2,3} are explicitly framed as pim-N watch-list candidates (additive, not blocking).",
+    "section_3.5n_orchestrator_ground_truth_verify": "every finding ref-pinned-verified: JSON disposition strings literally inspected via jq; workflow file count + missing env vars literally grep-verified; phase-4-backlog §3.10 rows literally read at lines 174-176; G-CORE-9 R4b commit `8240a56c` literally inspected for HARD-RULE-12 closure pattern.",
+    "section_3.6i_schema": "this lens JSON output follows canonical schema (top-level `disposition` = 'APPROVE-WITH-FIXES'; `findings[]` array with per-finding HARD-RULE-12-shape).",
+    "commit_before_return": "this lens commits the JSON output to branch `phase-4-meta-core/r6-r1-l15-addl-methodology` BEFORE returning to orchestrator (per `feedback_agent_output_must_commit_before_return`).",
+    "no_force_push": "this branch is fresh + first push; no force operations.",
+    "no_admin_bypass": "review-only lens; no merge operations involved."
+  },
+  "provenance": {
+    "required_reads": [
+      ".addl/phase-4-meta/R6-LENS-CATALOG.md §L15 (verbatim)",
+      ".addl/dispatch-conventions.md §3.5 + §3.6 + §3.7 + §3.14 (all pim-N codifications)",
+      "~/.claude/projects/-Users-benwork-Documents-benten-engine/memory/MEMORY.md (full index + foundational rules)",
+      ".addl/phase-4-meta/R4.1-TRIAGE.md + R4.2-TRIAGE.md (R4 council triage)",
+      ".addl/phase-4-meta/R5-WAVE-STATE.md (R5 cascade state + codifications log)",
+      ".addl/phase-4-meta/r5-g-core-{0,1,2,3a-canary,3b,3c,3d,3e,3f,3w-walker,4,5,6a,6b,7,8,10-option-c,10-pr-b,dsl-chunk-1,dsl-chunk-2,dsl-chunk-3}-mini-review.json (all 21 R5 mini-reviews)",
+      ".addl/phase-4-meta/r4.1-*.json + r4.2-*.json (all 15 R4 lens JSONs)",
+      "git log --since=2026-05-15 across phase-4-meta-core commits + the G-CORE-9 R1→R2→R3→R4→R4b iteration commits",
+      ".github/workflows/*.yml (all 36 workflows scanned for §3.5o env var coverage)",
+      "docs/future/phase-4-backlog.md §3.10 lines 174-176 (verifying r5-g-core-3e mini-rev carry-rows landed)"
+    ],
+    "review_methodology": "5-category meta-sweep per L15 brief: (1) cross-lens patterns; (2) wave-completion gap recurrences; (3) cross-PR API conflicts; (4) CI infrastructure flake classes; (5) doc-coupling missed cases; plus the pattern-induction overlay for ≥3-recurrence pim-N candidates per `feedback_pattern_induction_meta_sweep`.",
+    "review_date": "2026-05-24",
+    "review_base": "phase-4-meta-core/r4b-r1-fix-pass @ 4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+    "main_head_at_review": "a0b75637"
+  }
+}
