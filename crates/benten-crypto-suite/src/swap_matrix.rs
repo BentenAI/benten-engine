@@ -439,8 +439,8 @@ impl SwapMatrix {
                 // `SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm)`
                 // (line 793) to preserve full typed-codepoint info end-to-end
                 // (the prior cosmetic-class-string lost the integer codepoint value).
-                let cipher_suite = CipherSuite::resolve(cipher_codepoint)
-                    .map_err(SwapMatrixError::Unsupported)?;
+                let cipher_suite =
+                    CipherSuite::resolve(cipher_codepoint).map_err(SwapMatrixError::Unsupported)?;
                 let recip = recipient
                     .as_cipher()
                     .ok_or(SwapMatrixError::ConfigMismatch {
@@ -542,8 +542,8 @@ impl SwapMatrix {
                 // L1-crypto-r2-1: route the resolve failure through
                 // `SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm)`
                 // (line 793) to preserve full typed-codepoint info end-to-end.
-                let cipher_suite = CipherSuite::resolve(cipher_codepoint)
-                    .map_err(SwapMatrixError::Unsupported)?;
+                let cipher_suite =
+                    CipherSuite::resolve(cipher_codepoint).map_err(SwapMatrixError::Unsupported)?;
                 let recip_secret =
                     recipient_secret
                         .as_cipher()

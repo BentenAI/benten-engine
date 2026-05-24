@@ -214,7 +214,10 @@ fn reserved_signature_codepoint_typed_rejected_at_every_dispatcher_entry() {
     assert!(
         matches!(
             outcome,
-            Err(VarsigError::UnsupportedCodepoint { codepoint: 0x0003, .. })
+            Err(VarsigError::UnsupportedCodepoint {
+                codepoint: 0x0003,
+                ..
+            })
         ),
         "UcanVarsigV1Header::decode of a 0x0003-bearing header must typed-reject at v1-beta (C11b safety gate); got {outcome:?}"
     );
