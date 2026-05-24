@@ -226,9 +226,10 @@ impl ChunkedCiphertext {
     pub fn encrypt(plaintext: &[u8], plaintext_cid: &Cid, key: &[u8]) -> Result<Self, AeadError> {
         let key_material = make_key_material(key)?;
         let total_chunks_usize = plaintext.len().div_ceil(IROH_BLOCK_SIZE).max(1);
-        let total_chunks = u32::try_from(total_chunks_usize).map_err(|_| AeadError::KeyMismatch {
-            reason: "chunk count exceeds u32".to_string(),
-        })?;
+        let total_chunks =
+            u32::try_from(total_chunks_usize).map_err(|_| AeadError::KeyMismatch {
+                reason: "chunk count exceeds u32".to_string(),
+            })?;
         let mut chunks = Vec::with_capacity(total_chunks_usize);
         for (chunk_index, slice) in plaintext.chunks(IROH_BLOCK_SIZE).enumerate() {
             let chunk_index_u64 = u64::try_from(chunk_index)
@@ -238,8 +239,7 @@ impl ChunkedCiphertext {
             // fails if an attacker presents a shorter slice of chunks
             // (the per-chunk AAD committed at seal time names the
             // original total_chunks count).
-            let aad =
-                suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
+            let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
             let envelope = suite_wrap(slice, &key_material, &aad).map_err(AeadError::from)?;
             chunks.push(envelope);
         }

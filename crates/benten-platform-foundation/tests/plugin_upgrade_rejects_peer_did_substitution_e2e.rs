@@ -168,9 +168,8 @@ fn install_plugin_rejects_peer_did_substitution_on_upgrade_path() {
         2,
         &resolver,
     );
-    let err = upgrade_attempt.expect_err(
-        "T10-upgrade (a): peer-DID substitution MUST be REJECTED at install_plugin",
-    );
+    let err = upgrade_attempt
+        .expect_err("T10-upgrade (a): peer-DID substitution MUST be REJECTED at install_plugin");
     assert_eq!(
         err,
         ErrorCode::PluginAuthorNotTrusted,

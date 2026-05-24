@@ -397,10 +397,11 @@ impl AuthorizationGrant {
                 .map_err(|e| AuthorizationGrantError::Serialization(e.to_string()))?,
             None => Vec::new(),
         };
-        let scope_len: u32 =
-            u32::try_from(scope_bytes.len()).map_err(|_| AuthorizationGrantError::Serialization(
+        let scope_len: u32 = u32::try_from(scope_bytes.len()).map_err(|_| {
+            AuthorizationGrantError::Serialization(
                 "scope CBOR bytes exceed u32 length prefix".to_string(),
-            ))?;
+            )
+        })?;
         let mut msg = Vec::with_capacity(
             BINDING_SIG_DOMAIN.len()
                 + ucan_bytes.len()

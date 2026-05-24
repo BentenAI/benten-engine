@@ -48,7 +48,8 @@ fn scope_substitution_post_sign_rejected_by_binding_sig() {
     let scope_a = RestrictedScope::new();
 
     let exp_secs = 9_999_999_999;
-    let grant = AuthorizationGrant::issue_for_test(&issuer_kp, &audience_pub, scope_a.clone(), exp_secs);
+    let grant =
+        AuthorizationGrant::issue_for_test(&issuer_kp, &audience_pub, scope_a.clone(), exp_secs);
 
     // Positive control: the grant at issue time MUST verify cleanly.
     grant
@@ -71,7 +72,10 @@ fn scope_substitution_post_sign_rejected_by_binding_sig() {
     let tampered = grant.with_swapped_scope_for_test(Some(scope_b));
     let outcome = tampered.verify_binding(tampered.audience_binding);
     assert!(
-        matches!(outcome, Err(AuthorizationGrantError::BindingMismatch { .. })),
+        matches!(
+            outcome,
+            Err(AuthorizationGrantError::BindingMismatch { .. })
+        ),
         "post-sign scope-substitution MUST be rejected by binding-sig \
          re-verification (R6 R1 L3-r1-1 closure). Got: {outcome:?}"
     );
@@ -84,8 +88,7 @@ fn scope_removal_post_sign_rejected_by_binding_sig() {
     let audience_kp = rng_keypair(0xCAFE);
     let audience_pub = audience_kp.public_key();
     let scope = RestrictedScope::new();
-    let grant =
-        AuthorizationGrant::issue_for_test(&issuer_kp, &audience_pub, scope, 9_999_999_999);
+    let grant = AuthorizationGrant::issue_for_test(&issuer_kp, &audience_pub, scope, 9_999_999_999);
 
     grant
         .verify_binding(grant.audience_binding)
@@ -95,7 +98,10 @@ fn scope_removal_post_sign_rejected_by_binding_sig() {
     let tampered = grant.with_swapped_scope_for_test(None);
     let outcome = tampered.verify_binding(tampered.audience_binding);
     assert!(
-        matches!(outcome, Err(AuthorizationGrantError::BindingMismatch { .. })),
+        matches!(
+            outcome,
+            Err(AuthorizationGrantError::BindingMismatch { .. })
+        ),
         "post-sign scope-removal (Some→None) MUST be rejected by binding-sig \
          re-verification. Got: {outcome:?}"
     );
