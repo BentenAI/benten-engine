@@ -358,9 +358,15 @@ freeze wave SURFACES the decision; Ben makes it.
    `crates/benten-drop/src/lib.rs`).
 3. The list of surfaces that **DO NOT YET HAVE** a byte-pin test in CI
    (the wire-format pre-flight gap to close — added before tag).
-4. **A separate Ben-decision document** (proposed
-   `docs/V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md`) that Ben signs after
-   reviewing the inventory + the §8-B-(i) reasoning.
+4. **The Ben sign-off path** — `docs/V1-WIRE-FORMAT-INVENTORY.md` IS the
+   Ben-decision deliverable per G-CORE-9 R2 L18-r2-4 ratification (path b).
+   Ben signs the freeze decision via the inventory's own
+   §"P-III Ben decision-point" section after reviewing the inventory + the
+   §8-B-(i) reasoning. (The earlier framing proposed a separate
+   `V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md` artifact; path b collapses the
+   distinction — the inventory serves the dual role of enumeration + sign-off
+   site. See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-16 for the
+   ratification rationale.)
 
 **What "frozen" means here:**
 - BYTEWISE: a one-bit change to any encoded value (Node, Edge,
@@ -1165,9 +1171,16 @@ planners agreed; locked as-shipped.**
   IPC allowlist pins (asserts `IPC_METHODS` is `const`, not `static mut`,
   not a dynamic registry; methods bind manifest caps; name-stability
   drift-detect runs CI-wired).
-- Compile-test pin for runtime-handle-leak prevention (asserts an
-  `EngineBuilder` signature accepts no `tauri::Runtime` or borrows a
-  `tokio::runtime::Handle`).
+- **Runtime-handle-leak structural pin via cargo-public-api baseline** —
+  the `EngineBuilder` block at `docs/public-api/benten-engine.txt:189-195`
+  (`backend` / `build` / `capability_policy` / etc.) is grep-clean of
+  `tauri::Runtime`, `tokio::runtime::Handle`, and `with_runtime`; any
+  future PR threading one would surface as drift and fail the now-required
+  cargo-public-api workflow (Bundle 10 + Fork 3 flip + Bundle R2.3
+  branch-protection inclusion at `.github/workflows/cargo-public-api.yml:91-93`
+  + GitHub branch-protection required_status_checks). This consolidates with
+  the cargo-public-api baseline defense below; per G-CORE-9 R2 L10-r2-1
+  disposition (path a).
 - `cargo-public-api` baselines for `benten-renderer-tauri` (JSON format)
   and `benten-platform-foundation` (build-backlog row 1: missing
   baseline at HEAD).

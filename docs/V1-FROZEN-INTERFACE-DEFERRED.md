@@ -502,14 +502,40 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   references `docs/V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md` as the
   Ben-signed P-III decision-point artifact.
 - **Deferred consumption (G-COMP-1 destination OR pre-`v1-beta`
-  tag):** author this doc OR (alternative ratification) rename
-  references to point at `docs/V1-WIRE-FORMAT-INVENTORY.md` (which
-  already serves this role; the inventory IS the P-III decision-point
-  artifact). The latter is the orchestrator's preferred path
-  (consistency with existing tracked-doc); requires a sweep of
-  cite-drift across V1-FROZEN-INTERFACE.md.
-- **v1-beta posture:** the inventory IS authored + tracked.
-- **Anchor:** L17-r1-7.
+  tag):** ratified path (b) at G-CORE-9 R2 per L18-r2-4 disposition —
+  the `docs/V1-WIRE-FORMAT-INVENTORY.md` doc IS the Ben-decision
+  deliverable (rename, or attach a sign-off appendix to the inventory).
+  Path (b) collapses the distinction — Ben signs off on the inventory's
+  P-III sign-off block (already present at `V1-WIRE-FORMAT-INVENTORY.md`
+  §"P-III Ben decision-point") rather than authoring a separate doc.
+- **v1-beta posture:** the inventory IS authored + tracked; the Ben
+  sign-off path is the inventory's own §"P-III Ben decision-point"
+  section. V1-FROZEN-INTERFACE.md item 4 references the inventory + the
+  build-backlog row 8.f acknowledges the inventory IS the Ben-decision
+  deliverable.
+- **Anchor:** L17-r1-7 + L18-r2-4.
+
+### Row D-21 — `crates/benten-crypto-suite/INTERNALS.md` authorship
+
+- **Frozen surface (v1-beta):** the `benten-crypto-suite` crate is
+  item-6-locked at V1-FROZEN-INTERFACE.md (codepoint table + public
+  surface frozen at G-CORE-9). The INTERNALS.md doc has no v1-beta
+  signature impact; it is internal architecture-record only.
+- **Deferred consumption (Phase-4-Meta-Composing OR G-COMP-1
+  destination):** author `crates/benten-crypto-suite/INTERNALS.md`
+  following the structure of `crates/benten-caps/INTERNALS.md` covering
+  codepoint table + typed-reject dispatch pattern + SwapMatrix umbrella
+  + 5 named constructors + C11b safety gate + X-Wing vendored combiner
+  provenance + AeadEnvelope/GrantKeyMaterial/AeadKeyMaterial
+  type-collision-resolution name discipline.
+- **v1-beta posture:** missing-but-deferred-not-blocking-tag; the
+  crate's rustdoc + the V1-FROZEN-INTERFACE.md item 6 + the lib.rs
+  module docstring carry the load-bearing architecture narrative at
+  v1-beta. INTERNALS.md is the post-v1-beta architecture-record
+  augmentation.
+- **Anchor:** spec item 6 + V1-FROZEN-INTERFACE.md item 15.d + the
+  rename pair at #1344 row 7 (GrantKeyMaterial / AeadKeyMaterial) +
+  L18-r1-5 + L18-r2-3.
 
 ---
 
