@@ -53,7 +53,7 @@
 ### PR #1344 — Rename `RestrictedSpec` → `RestrictedScope` (caps side) + `RestrictedSpec` → `SubgraphSpecRestriction` (core side)
 - **What changed:** type rename per RATIFIED-S&C 2026-05-21 §R3 (clearer semantic — "Scope" mirrors UCAN nomenclature; "SubgraphSpecRestriction" disambiguates from the cap-side Scope).
 - **Why break-OK:** pre-v1-API-shape ratification per night-shift orchestrator-surface-arch-decision (Ben-ratified post-spike-sequence reflect-together 2026-05-21).
-- **Migration path:** call-site rename via the post-rename re-exports at `benten_caps::lib.rs:163, 169-171`.
+- **Migration path:** call-site rename via the post-rename re-exports at `benten_caps::{RestrictedScope, SubgraphSpecRestriction, GrantKeyMaterial}`.
 
 ### PR #1344 — Rename `KeyMaterial` → `GrantKeyMaterial` (caps side); `AeadKeyMaterial` is the crypto-suite distinct type
 - **What changed:** disambiguating rename — `GrantKeyMaterial` is the cap-layer envelope shape; `AeadKeyMaterial` is the crypto-suite-internal AEAD key newtype.

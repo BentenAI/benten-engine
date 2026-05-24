@@ -192,7 +192,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   G-CORE-9 R1 triage L2-BLK-1 escalation, the §8-A tighten cascades
   through 75+ call sites across the workspace AND breaks the napi
   binding's public `get_node` / `put_node` methods at
-  `bindings/napi/src/lib.rs:337-394`. Per HARD RULE 12 clause-(b)
+  `bindings/napi/src/lib.rs::Engine::{get_node, put_node}`. Per HARD RULE 12 clause-(b)
   the disposition is BELONGS-NAMED-NOW here.
 - **Deferred consumption (G-COMP-1 destination):**
   - Rename `Engine::get_node` → `Engine::read_node` (pub→pub(crate))
@@ -293,7 +293,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Frozen surface (v1-beta):** `pub fn compile_file` is locked at
   v1-beta but has no substantive filesystem-exercising test (only
   `compile_str` is directly tested; the documented metadata-size
-  short-circuit at `lib.rs:256` is dead-letter-tested).
+  short-circuit at `benten_dsl_compiler::lib` is dead-letter-tested).
 - **Deferred consumption (G-COMP-1 destination):** ship a
   filesystem-exercising test that creates temp files, calls
   `compile_file`, asserts the Io error class fires on missing/oversized
