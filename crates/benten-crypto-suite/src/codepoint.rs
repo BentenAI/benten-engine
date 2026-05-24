@@ -195,7 +195,8 @@ impl CipherSuiteCodepoint {
     pub const HYBRID_MLKEM768_HQC: Self = Self(0x647b);
 
     /// Pure-PQ ML-KEM-768-only swap-matrix arm (the
-    /// [`crate::swap_matrix::EncryptionArm::PurePqMlKem768Only`] destination —
+    /// `EncryptionArm::PurePqMlKem768Only` destination — module-private
+    /// internal variant; not an intra-doc link —
     /// classical X25519 dropped). **Reserved-named** at the cipher-suite
     /// dispatcher level — the v1-beta default [`crate::cipher_suite::CipherSuite::resolve`]
     /// arm typed-rejects `0x647c` per the C11b safety gate (pure-PQ is

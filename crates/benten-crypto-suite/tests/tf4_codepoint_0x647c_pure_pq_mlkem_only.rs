@@ -4,7 +4,10 @@
 //! **Pre-G-CORE-9-FREEZE 2026-05-24 ratification.** The pre-existing
 //! G-CORE-3c (#1341) implementation reused codepoint `0x647b` for the
 //! pure-PQ ML-KEM-768-only arm of the swap matrix
-//! ([`benten_crypto_suite::swap_matrix::EncryptionArm::PurePqMlKem768Only`]),
+//! (the module-private `EncryptionArm::PurePqMlKem768Only` variant
+//! inside `benten_crypto_suite::swap_matrix`; cite plain because the
+//! enum is not `pub` so an intra-doc-link bracket form fails
+//! `RUSTDOCFLAGS=-D warnings`),
 //! conflating it with the future ML-KEM⊕HQC PQ⊕PQ end-state (also
 //! `0x647b`). When the `AUDIT_LANDED_PURE_PQ_FLAG` flips at v1-GM,
 //! deployments would silently disagree across this codepoint reuse —
