@@ -1,0 +1,55 @@
+{
+  "lens": "R4b L3 cross-lang-mirror",
+  "branch": "phase-4-meta-core/r4b-l3-cross-lang-mirror",
+  "base_sha": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+  "disposition": "APPROVE-CONVERGED",
+  "r4b_convergence_disposition": "CONVERGED — 0 BLOCKER + 0 MAJOR; 2 MINOR observations (both pre-existing documented asymmetries that pass via explicit retention/wire-stability discipline); the §3.5g cross-language rule-mirror surface is in shape for v1-FREEZE.",
+  "summary": {
+    "questions_answered": [
+      {
+        "question": "Q1 — §3.5g 8-surface ErrorCode mirror discipline",
+        "answer": "PASS. 192 throwable Rust ErrorCode variants + 1 Unknown(String) fallback round-trip cleanly through all surfaces: Rust enum (192 named in lib.rs:63-1373) + as_static_str match (lines 1455-1743; 192 named arms + 1 Unknown arm returning E_UNKNOWN sentinel) + from_str (2286-2547; 192 named arms; Unknown synthesised via fallback) + routed_edge_label (1744-2231; exhaustive Option<&str> match — compile-time enforced) + TS class (errors.generated.ts; 194 classes including E_UNKNOWN forward-compat + E_INV_ITERATE_NEST_DEPTH Phase-2a-retired-stub retention) + CATALOG_CODES (errors.generated.ts:35-230; 194 entries) + CODE_TO_CTOR_GENERATED (errors.generated.ts:3152-3347; 194 entries) + ERROR-CATALOG.md narrative (194 `### E_*` headings). All 28 benten-errors crate tests PASS including catalog_variant_count_matches_enum + variant_count_is_pinned (== 192) + from_str_roundtrip_representative + as_static_str_known_and_unknown."
+      },
+      {
+        "question": "Q2 — §3.5g item 6 amendment scanner GREEN (drift:error-variant-mirror)",
+        "answer": "PASS. `npm run drift:error-variant-mirror` reports `0 new violation(s)`; 60 pub *Error enums scanned across 235 production files; 124 variants mirrored; 210 skipped (160 via baseline of 159 pre-2026-05-24 grandfathered entries); 0 STALE BASELINE warnings (every baseline entry was encountered). The baseline drain plan is named at `.addl/phase-4-meta/PRE-FREEZE-BACKLOG.md` row 'DEFERRED: §3.5g item 6 baseline drain (159 pre-existing pub-error-variant catalog-mirror gaps)' — post-FREEZE work. The recent §3.5g item 6 origin closure DslIoError is fully mirrored across all 8 surfaces (Rust enum + as_static_str + from_str + routed_edge_label = ON_ERROR + TS EDslIoError class + CATALOG_CODES + CODE_TO_CTOR_GENERATED + ERROR-CATALOG.md narrative)."
+      },
+      {
+        "question": "Q3 — TS public-API parity (#1204 gate)",
+        "answer": "PASS. The #1204 TS-side public-API parity gate LANDED at commit 13322df4; workflow at `.github/workflows/ts-public-api.yml` (informational at v1-beta, runs on every PR vs `packages/engine/etc/public-api.txt` 403-LOC baseline); the cargo-public-api workflow is the Rust analog. Hand-spot-check of load-bearing napi-pub types confirms TS mirrors are present for AtriumConfig (atrium.ts:48) + CapabilityClaim (types.ts:337) + DeviceAttestation (types.ts:379) + Strategy (types.ts:1017) + PolicyKind (re-export from engine.ts) etc. Hand-authored TS facade at packages/engine/src/types.ts mirrors the napi `#[napi(object)]` surface; the codegen-emitted `errors.generated.ts` mirrors the catalog. `packages/engine/src/index.d.ts` named in the brief does NOT exist + has never existed in the repo (phantom destination in brief; the real surface entry is `index.ts` which re-exports from the typed sub-modules)."
+      },
+      {
+        "question": "Q4 — Drift-detect end-to-end",
+        "answer": "PASS. `npm run drift:errors` GREEN: `163 variant(s) reachable, 0 unreachable; catalog, Rust enum, and TS classes agree; every ErrorCode variant has a production construction site`. `cargo nextest run -p phase-3-workspace-tests --test missing_docs_workspace` 3/3 PASS (no_allow_missing_docs_at_phase_3_close + all_phase_2_3_todo_markers_have_named_destinations + full_missing_docs_sweep_no_warnings_workspace_wide). `npm run codegen:errors` regenerates errors.generated.ts identically (zero diff vs committed) — codegen artifact + catalog source-of-truth fully in sync."
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "r4b-l3-mo-1",
+      "severity": "MINOR-OBS",
+      "title": "Strategy enum: Rust renamed C → Reserved at G23-0a but TS union still spells \"C\"",
+      "evidence": "crates/benten-ivm/src/strategy.rs:59-84 = `Strategy { A, B, Reserved }`; packages/engine/src/types.ts:1017 = `export type Strategy = \"A\" | \"B\" | \"C\";`; bindings/napi/src/view.rs:139 accepts both `\"C\"` and `\"RESERVED\"`.",
+      "disposition": "DISAGREE-WITH-EXPLANATION (HARD RULE 12(c)) — pre-existing documented wire-stable asymmetry, not drift. The Rust comment at strategy.rs:80-91 explicitly states 'The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability', and the TS docstring at types.ts:1010-1016 documents the C-as-canonical-wire-name. The napi parser accepts both spellings as backward compat. The asymmetry is by design + documented + tested; flagging would re-litigate a settled wire-stability decision. The TS docstring could be tightened to mention `\"C\"` is the wire-stable name for what Rust now spells `Reserved` (currently buried in an ErrorCode fixHint), but this is doc-polish, not a §3.5g mirror violation."
+    },
+    {
+      "id": "r4b-l3-mo-2",
+      "severity": "MINOR-OBS",
+      "title": "DeviceAttestation TS interface mirrors Rust DeviceAttestationDeclaration; same JS name overloads JsDeviceAttestation crypto-class",
+      "evidence": "bindings/napi/src/atrium.rs:139 = `pub struct DeviceAttestationDeclaration`; bindings/napi/src/identity.rs:269 = `#[napi(js_name = \"DeviceAttestation\")] pub struct JsDeviceAttestation`; packages/engine/src/types.ts:379 = `export interface DeviceAttestation { ... }` (structurally mirrors DeviceAttestationDeclaration, NOT JsDeviceAttestation). The signing-class JsDeviceAttestation surfaces in JS via the same name 'DeviceAttestation' as the envelope type via different export paths (root vs identity.ts).",
+      "disposition": "BELONGS-NAMED-NOW into docs/ERROR-CATALOG.md / V1-FROZEN-INTERFACE.md (HARD RULE 12(b)) — the asymmetry is intentional + tested (packages/engine/test/device_attestation_ts_interface_present.test.ts pins it explicitly) + load-bearing (the TS surface uses the clean name `DeviceAttestation`; Rust uses `*Declaration` suffix to disambiguate from the signing class), but a one-line note in V1-FROZEN-INTERFACE.md item 10 or types.ts:379 docstring naming the dual-shape behind the single JS name would close the surprise factor for v1-Composing consumers reading the TS API. The current types.ts:379 docstring mentions ts_surface_parity_meta_test but doesn't call out the name collision. Suggested polish: append 'NB: the same JS name `DeviceAttestation` is also exported from `./identity` for the signing class (`JsDeviceAttestation`); the envelope-shape interface here is distinct.' Not blocking R4b convergence."
+    }
+  ],
+  "process_observations": [
+    "Brief named `packages/engine/src/index.d.ts` as a required read; that file does NOT exist + never has (git log all-branches confirms only deleted `node_modules/**/index.d.ts` artifacts ever lived in the tree). Real entry surface is `packages/engine/src/index.ts`. Phantom destination — not a finding against the code, but a brief-template polish: replace with `index.ts`.",
+    "drift-detect-mirror reports 160 baseline-hits vs 159 baseline-listed: one TypeName::Variant in the baseline file matched 2 production construction sites + double-incremented baselineHits++. Cosmetic counter quirk, not a correctness issue. Could be tightened to per-baseline-entry deduplication in the scanner.",
+    "ERROR-CATALOG.md §11 table-of-counts is the definitive reconciliation of the 192-vs-193-vs-194 asymmetry (192 throwable + 1 Unknown(String) Rust forward-compat + 1 E_UNKNOWN TS forward-compat + 1 E_INV_ITERATE_NEST_DEPTH retired-stub TS-only). This documented discipline made cross-language reconciliation tractable for this lens."
+  ],
+  "ground_truth_verifications": [
+    "All 8 §3.5g surfaces hand-verified end-to-end for one chosen variant (DslIoError) — every surface present + content-aligned.",
+    "Catalog code-set parity verified via comm(1) diff on sorted token lists extracted by orthogonal regex sweeps (TS CATALOG_CODES = Rust as_static_str output + 1 retained retired stub = ERROR-CATALOG.md `### E_*` headings); zero unexpected diffs.",
+    "Codegen reproducibility verified via `npm run codegen:errors` producing zero `git diff` vs committed `errors.generated.ts`.",
+    "All 28 benten-errors crate tests PASS at HEAD; missing_docs workspace sweep 3/3 PASS; drift:errors GREEN; drift:error-variant-mirror GREEN with 0 new violations."
+  ],
+  "convergence_metric": "R4b L3 = APPROVE-CONVERGED; 0 BLOCKER / 0 MAJOR / 2 MINOR-OBS (both pre-existing documented asymmetries with proper closure). The §3.5g cross-language rule-mirror surface is structurally sound at HEAD a0b75637 + ready for v1-beta FREEZE under the existing baseline-drain plan."
+}
