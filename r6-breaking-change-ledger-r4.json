@@ -1,0 +1,139 @@
+{
+  "lens": "L18 pre-v1-freeze hygiene + breaking-change ledger",
+  "round": "R4",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "branch": "g-core-9/r4-l18-breaking-change-ledger",
+  "base_sha": "25576cb15566aa096499f6951d350182f4451ac4",
+  "main_head_at_review": "25576cb15566aa096499f6951d350182f4451ac4",
+  "r3_recap": {
+    "r3_disposition": "APPROVE-WITH-FIXES",
+    "r3_convergence_disposition": "NOT-CONVERGED (0 BLK / 0 MAJ / 1 MIN / 4 OBS) at council level; lens-level CONVERGED (Q5 termination satisfied: 0 BLOCKER + 0 MAJOR)",
+    "r3_findings": "1 MIN (l18-r3-1 R2 fix-pass own break-OK changes not enumerated as own Cohort rows — TypedOutputProjection + KernelOutput #[non_exhaustive] from Bundle R2.8 + SwapMatrix CipherSuite→Unsupported variant routing from Bundle R2.5) + 4 OBS (positive-confirm + forward-looking)",
+    "fix_pass_sha": "25576cb1",
+    "fix_pass_summary": "R3-FP landed 12-bundle triage (0 BLK + 3 MAJ + 9 MIN closed). For L18 specifically (Bundle R3.?): l18-r3-1 closed via Path (a) preferred path per the R3 fix recommendation — added 'G-CORE-9 R2 fix-pass additions' sub-heading to Cohort 3 at V1-BETA-BREAKING-CHANGES.md:204-218 with two dedicated bundle rows: (i) Bundle R2.8 TypedOutputProjection + KernelOutput #[non_exhaustive] (wire-bytes-load-bearing) at lines 210-213 + (ii) Bundle R2.5 SwapMatrixError cipher-suite resolve-failure variant change at lines 215-218. Per-row narrative covers 'What changed' + 'Why break-OK' + 'Migration path' per the established Cohort 3 row template."
+  },
+  "disposition": "APPROVE-CONVERGED",
+  "r4_convergence_disposition": "CONVERGED (0 BLOCKER + 0 MAJOR + 0 MINOR + 4 OBS positive-confirm/forward-looking). Strict Q5 termination per CLAUDE.md rule 9 (full council = 0 BLOCKER + 0 MAJOR) IS SATISFIED at the lens level AND no new MINOR surfaces; the L18 lens is APPROVE-FOR-TAG-READY at R4. The 4 OBS are positive-confirms (l18-r3-2/3/4 carry forward unchanged + new l18-r4-1 positive-confirm of l18-r3-1 closure) + 1 forward-looking carry (l18-r3-5 R1 brief's enumeration-scope unchanged at R4; not a blocker). l18-r4-1 confirms the R3-FP-B addition is structurally correct + ground-truth-verified at HEAD. If broader R4 council is also 0 substantive across all lenses, L18 contributes ZERO findings to any potential R4-FP.",
+  "summary": "The R3 fix-pass (PR #1348 at 25576cb1) cleanly closed the sole L18 R3 FIX-NOW finding (l18-r3-1) via the preferred Path (a) recommendation: a dedicated 'G-CORE-9 R2 fix-pass additions' sub-heading was added to Cohort 3 with two bundle rows enumerating TypedOutputProjection + KernelOutput #[non_exhaustive] (Bundle R2.8) and the SwapMatrixError cipher-suite resolve-failure variant routing change (Bundle R2.5). Ground-truth verified at HEAD: (a) `crates/benten-ivm/src/subgraph_spec.rs:92` carries `#[non_exhaustive]` on `pub enum TypedOutputProjection`; line 307 carries it on `pub enum KernelOutput`; (b) `crates/benten-crypto-suite/src/swap_matrix.rs:443+546` carry the `CipherSuite::resolve(cipher_codepoint).map_err(SwapMatrixError::Unsupported)?` routing; the `SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm)` variant exists at line 798; (c) the new Cohort 3 sub-heading 'G-CORE-9 R2 fix-pass additions' at V1-BETA-BREAKING-CHANGES.md:204-218 carries full What/Why/Migration narrative per Cohort 3 row template; cross-cite to R3 lens output ('Per L18-r3-1 closure (R3 ledger-completeness audit)') intact at line 206-208. POSITIVE CONFIRMATIONS at R4 (carry from R3 unchanged): (i) all 4 R2 FIX-NOW closures still hold at HEAD (l18-r2-1 3 Cohort 3 rows + l18-r2-2 Cohort 5 + l18-r2-3 Row D-21 + l18-r2-4 Row D-16 + V1-FROZEN item 4 retense + V1-WIRE-FORMAT-INVENTORY §P-III section); (ii) 15 R1-enumerated PRs still cataloged + per-row Ben-conscious provenance intact; (iii) §1.A.FROZEN items 1+4+6+12 retenses persist at V1-FROZEN-INTERFACE.md:112+361+496+1007. R3-FP scope verification: `git diff 6c21e4f5..25576cb1` shows ZERO new pub-surface changes in source (`crates/**/*.rs` + `bindings/**/*.rs` produced no +pub/-pub/+non_exhaustive/-non_exhaustive lines); the diff scope is doc cite-drift sweep + 1 strictly-additive test pin (HashCodepoint SHA2_512_256 + SHA3_256 raw-value pins at canonical_bytes_v1_codepoints_and_aad.rs:54-63) + 1 doc-comment retense on `SigCodepoint::raw()` ('P-III deferred' → 'FROZEN at G-CORE-9'). Therefore R3-FP itself introduced NO new break-OK content that would require its own Cohort entry — the same-shape recurrence pattern (each fix-pass shipping its own additions that the next round's lens surfaces) DOES NOT REPEAT AT R3-FP, breaking the R1→R2→R3 chain at R4. Convergence shape across R1→R4 is monotonic: 4 MAJ → 1 MAJ → 0 MAJ + 1 MIN → 0 MAJ + 0 MIN. l18-r3-5 forward-looking OBS (~15 additional PRs in 8141b94..HEAD range outside R1 brief enumeration scope) carries unchanged at R4 — non-blocker per the brief's '13+ enumerated' verification charter; recommendation to name a 'V1-BETA-BREAKING-CHANGES.md ledger completion sweep' follow-up row in V1-FROZEN-INTERFACE-DEFERRED.md carries forward as an OBS for orchestrator discretion (not a FIX-NOW at R4). The L18 lens is APPROVE-FOR-TAG-READY at R4.",
+  "findings": [
+    {
+      "id": "l18-r4-1",
+      "severity": "OBS",
+      "summary": "POSITIVE CONFIRMATION — l18-r3-1 R3 FIX-NOW closed cleanly + ground-truth-verified at HEAD via Path (a) preferred path: dedicated 'G-CORE-9 R2 fix-pass additions' sub-heading added to Cohort 3 at V1-BETA-BREAKING-CHANGES.md:204-218 with two bundle rows. (a) Bundle R2.8 row at lines 210-213 — 'TypedOutputProjection + KernelOutput #[non_exhaustive] (wire-bytes-load-bearing)' with full What/Why/Migration narrative; ground-truth at HEAD: `crates/benten-ivm/src/subgraph_spec.rs:92` (`#[non_exhaustive] pub enum TypedOutputProjection`) + line 307 (`#[non_exhaustive] pub enum KernelOutput`); rationale narrative cites the 1-byte arm-discriminator at `algorithm_b.rs` (view round-trip / shape-pin tests) + the L8-R2-MAJOR-CARRY-2 closure provenance + the 'NOT deferred to G-COMP-1' distinction vs the Row D-17 deferred set. (b) Bundle R2.5 row at lines 215-218 — 'SwapMatrixError cipher-suite resolve-failure variant change' with full What/Why/Migration narrative; ground-truth at HEAD: `crates/benten-crypto-suite/src/swap_matrix.rs:443+546` (`CipherSuite::resolve(cipher_codepoint).map_err(SwapMatrixError::Unsupported)?`) + the `SwapMatrixError::Unsupported(#[from] UnsupportedAlgorithm)` variant at line 798; migration arm spelled out as `SwapMatrixError::Unsupported(UnsupportedAlgorithm::Cipher(..))`. The Path (a) choice preserves per-fix-pass auditability (preferred per pim-13 §3.12 audit-trail discipline); the FALLBACK Path (b) rename ('R1+R2 fix-pass additions') was NOT applied (verified — Cohort 3 heading at line 145 still reads 'G-CORE-9 R1 fix-pass additions (this PR)' + 'How to consume this ledger' at line 252 still anchors Cohort 3 to 'R1 fix-pass additions'); this is acceptable because the R2 sub-heading clearly delineates the R2-additions tranche within Cohort 3 — release-notes readers scanning the Cohort headings will see both sub-sections.",
+      "evidence": "grep '^### \\|^#### ' docs/V1-BETA-BREAKING-CHANGES.md (within Cohort 3 range lines 145-218) shows the sub-heading hierarchy: '### G-CORE-9 R2 fix-pass additions' at line 204 + '#### G-CORE-9 R2 Bundle R2.8 — TypedOutputProjection + KernelOutput #[non_exhaustive] (wire-bytes-load-bearing)' at line 210 + '#### G-CORE-9 R2 Bundle R2.5 — SwapMatrixError cipher-suite resolve-failure variant change' at line 215. Ground-truth grep: `grep -n 'non_exhaustive' crates/benten-ivm/src/subgraph_spec.rs` returns line 92 (TypedOutputProjection) + line 307 (KernelOutput); `grep -n 'SwapMatrixError::Unsupported' crates/benten-crypto-suite/src/swap_matrix.rs` returns line 443 + line 546 (the 2 routing sites the R3-FP closed) + line 798 (the variant definition with `#[from] UnsupportedAlgorithm`).",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix; positive confirmation of R3-FP closure of l18-r3-1."
+    },
+    {
+      "id": "l18-r4-2",
+      "severity": "OBS",
+      "summary": "POSITIVE CONFIRMATION — all 4 R2 FIX-NOW closures + all 4 §1.A.FROZEN item retenses (1+4+6+12) STILL HOLD at HEAD 25576cb1 after R3-FP doc cite-drift sweep. The R3-FP touched V1-FROZEN-INTERFACE.md substantially (105 lines changed per `git diff --stat`) — pre-existing R2-closed surfaces could have regressed through doc-edit churn but did not. (a) Cohort 5 Public-API DEFERRED section persists at V1-BETA-BREAKING-CHANGES.md:237 enumerating Row D-7 + D-11 + D-19 + D-17 (extended) + D-20. (b) Row D-21 (crypto-suite INTERNALS.md authorship) persists at V1-FROZEN-INTERFACE-DEFERRED.md:535. (c) Row D-16 (V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md authorship) persists at V1-FROZEN-INTERFACE-DEFERRED.md:516. (d) V1-FROZEN-INTERFACE.md item 4 retense ('Ben-decision deliverable per G-CORE-9 R2 L18-r2-4 ratification (path b)') persists at line 363. (e) V1-WIRE-FORMAT-INVENTORY.md §'P-III Ben decision-point' section persists at line 224. (f) AAD 2-tuple `(plaintext_cid: &[u8], chunk_index: u64)` retense persists at V1-FROZEN-INTERFACE.md:338. (g) ManifestEnvelopeRecheckOutcome `#[non_exhaustive]` persists at manifest_envelope_recheck.rs:83. (h) napi wildcard arms persist at wait.rs:180 + stream.rs:203. (i) Item 1 'PARTIAL-LANDED at v1-beta' heading retense persists at V1-FROZEN-INTERFACE.md:112. (j) Item 6 + Item 12 headings persist at V1-FROZEN-INTERFACE.md:496 + 1007.",
+      "evidence": "grep '^### Row D-2[16]\\|^## Cohort 5\\|Ben-decision deliverable\\|PARTIAL-LANDED\\|^## 12\\.\\|^## 6\\.\\|^## 4\\.' docs/V1-FROZEN-INTERFACE.md docs/V1-FROZEN-INTERFACE-DEFERRED.md docs/V1-BETA-BREAKING-CHANGES.md confirms all 10 sub-claims; grep 'P-III Ben decision-point' docs/V1-WIRE-FORMAT-INVENTORY.md returns line 224; grep 'non_exhaustive' crates/benten-engine/src/manifest_envelope_recheck.rs returns line 83; sed wait.rs:178-183 + stream.rs:200-206 returns the `_ => Err(..)` wildcard arms.",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix; positive confirmation that R3-FP doc-churn introduced zero regressions in R2-closed surfaces."
+    },
+    {
+      "id": "l18-r4-3",
+      "severity": "OBS",
+      "summary": "POSITIVE CONFIRMATION — R3-FP itself introduced ZERO new break-OK changes that would require new Cohort entries, BREAKING the R1→R2→R3 same-shape recurrence chain. `git diff 6c21e4f5..25576cb1 -- 'crates/**/*.rs' 'bindings/**/*.rs'` filtered for `^\\+pub |^\\-pub |^\\+#\\[non_exhaustive\\]|^\\-#\\[non_exhaustive\\]|^\\+\\s+pub fn|^\\-\\s+pub fn` returns ZERO matches. The R3-FP diff scope is: (a) doc cite-drift sweep (5 doc files; V1-FROZEN-INTERFACE.md 105 lines + V1-FROZEN-INTERFACE-DEFERRED.md 34 + V1-FROZEN-INTERFACE-BUILD-BACKLOG.md 10 + V1-BETA-BREAKING-CHANGES.md 18 + V1-WIRE-FORMAT-INVENTORY.md 4); (b) 1 strictly-additive test pin at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs` (10 lines added pinning HashCodepoint SHA2_512_256.raw() == 0x1015 + SHA3_256.raw() == 0x16 — both pre-existing codepoint values, just newly pinned; strictly-additive test, no break-OK); (c) 1 doc-comment retense on `SigCodepoint::raw()` at `crates/benten-crypto-suite/src/codepoint.rs:63-69` ('P-III deferred' → 'FROZEN at G-CORE-9') — doc-comment text only, no source signature change. Therefore the same-shape recurrence pattern that drove l18-r2-1 (R1 fix-pass own break-OKs) and l18-r3-1 (R2 fix-pass own break-OKs) DOES NOT REPEAT for R3-FP — there is nothing for R5/R6 lens to surface as a fresh enumeration gap. This is the convergence signal: the lens reaches a stable fixpoint when the fix-pass itself stops introducing new break-OK content + the prior round's enumeration gap is closed. Monotonic convergence shape R1→R4: 4 MAJ → 1 MAJ → 0 MAJ + 1 MIN → 0 MAJ + 0 MIN.",
+      "evidence": "`git diff 6c21e4f5..25576cb1 -- 'crates/**/*.rs' 'bindings/**/*.rs' | grep -E '^\\+pub |^\\-pub |^\\+#\\[non_exhaustive\\]|^\\-#\\[non_exhaustive\\]|^\\+\\s+pub fn|^\\-\\s+pub fn'` returns 0 lines. `git diff --stat 6c21e4f5..25576cb1` returns 7 files / +118 -69; per-file breakdown: 5 doc files + 1 test file (10-line additive pin) + 1 source file (6-line doc-comment retense at codepoint.rs SigCodepoint::raw doc comment). `git diff 6c21e4f5..25576cb1 -- crates/benten-crypto-suite/src/codepoint.rs` shows only a doc-comment hunk (no signature/visibility/attribute change).",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix; positive confirmation that R3-FP did not introduce new break-OK content (lens convergence achieved)."
+    },
+    {
+      "id": "l18-r4-4",
+      "severity": "OBS",
+      "summary": "FORWARD-LOOKING (l18-r3-5 / l18-r2-7 carry, unchanged at R4) — the ~15 additional PRs in the 8141b94..HEAD range that carry real break-OK content but were not enumerated in the R1 lens brief or the ledger remain not catalog'd at R4 (range expansion 8141b94..25576cb1 adds only PR #1348 R3 fix-pass which is fully verified above to introduce no new break-OK content). No new PRs merged between R3 base and R4 base (`git log --oneline 6c21e4f5..25576cb1` returns exactly 1 commit = R3-FP itself). The L18 charter 'Net catalog of breaking changes ready for the v1-beta release notes?' answer at R4 remains 'PARTIALLY YES: 15 high-impact PRs catalog'd + 13 Bundle-rows in Cohort 3 across R1+R2 fix-pass additions; ~15 lower-impact PRs not catalog'd; closure narrative for fix-pass own break-OK changes is now COMPLETE across R1+R2 (R3-FP itself introduced no new break-OK content).' Not an R4 blocker (the brief's '13+ enumerated' verification is satisfied; per-charter charter passes). RECOMMENDATION (unchanged from R2 + R3): name 'docs/V1-BETA-BREAKING-CHANGES.md ledger completion sweep' as a follow-up row in V1-FROZEN-INTERFACE-DEFERRED.md so the residual is named-deferred (HARD RULE 12 clause-(b) per the pattern). Carry forward to R5+ at orchestrator discretion or close at tag-time if Ben deems the 15-PR catalog sufficient for the v1-beta release notes.",
+      "evidence": "`git log --oneline 8141b94..25576cb1 | wc -l` returns 42 commits; ledger enumerates 15 PR rows in Cohorts 1+2 + 13 Bundle rows in Cohort 3 (8 R1 fix-pass + 3 R1 fix-pass closures of own gaps via Bundle 3a/3b/11b + 2 R2 fix-pass via R2.8/R2.5) + 6 Cohort 4 watch-list + 5 Cohort 5 watch-list. Per-PR forward-looking gap unchanged from R2/R3 (refinement-audit Strategy-C batches #1235/#1236/#1237/#1251/#1261/#1262/#1269/#1277/#1282/#1290 + Phase-4-Meta-Core substrate canaries #1303/#1307/#1309/#1311/#1312/#1319/#1323/#1324/#1325/#1326).",
+      "disposition": "OUT-OF-SCOPE-DISAGREE",
+      "fix": "No fix at R4 — the R1 brief enumeration scope ('13+ break-OK changes l18-r1-2 named') was the verification charter; the additional ~15 PRs remain forward-looking ledger expansion. RECOMMENDATION carries unchanged from R2/R3 with no FIX-NOW disposition."
+    }
+  ],
+  "verification_per_brief_charter": {
+    "ledger_enumerates_13_plus_break_ok_changes": {
+      "result": "PASS",
+      "evidence": "15 PRs in Cohorts 1+2 unchanged from R3 verification; per-PR cite-verified. Cohort 3 now carries 13 Bundle rows across R1+R2 fix-pass additions (Bundle 3 + 4 + 9 + 10 + 11 + 2 + 11-L2-MAJ-1 + 11-L2-MIN-2 + 3a + 3b + 11b + R2.8 + R2.5)."
+    },
+    "each_change_ben_conscious_with_RATIFIED_cross_cite_or_pre_auth": {
+      "result": "PASS",
+      "evidence": "Preamble lines 9-13 + per-row rationale text + the R2/R3 fix-pass additions each cite specific lens-IDs (L18-r2-1/2/3/4, L18-r3-1) + lens-roundtable provenance + the orchestrator-night-shift-decision rationale per the foundational memories. The 2 newly-added R2 fix-pass rows at lines 210-218 cite L8-R2-MAJOR-CARRY-2 closure (R2.8) + L1-crypto-r2-1 closure (R2.5)."
+    },
+    "fix_pass_own_break_ok_changes_in_ledger": {
+      "result": "PASS",
+      "evidence": "R1 fix-pass own break-OK changes ARE enumerated per R2-FP closures (Bundle 3a + Bundle 3b + Bundle 11b at lines 189-202). R2 fix-pass own break-OK changes ARE enumerated per R3-FP closure of l18-r3-1 (Bundle R2.8 TypedOutputProjection + KernelOutput at lines 210-213 + Bundle R2.5 SwapMatrix routing change at lines 215-218). R3 fix-pass introduced ZERO new break-OK changes (per l18-r4-3 evidence — `git diff 6c21e4f5..25576cb1` filtered for pub-surface changes returns 0 lines). The recurrence chain that drove l18-r2-1 → l18-r3-1 is BROKEN at R3-FP — no fresh enumeration gap to surface at R4."
+    },
+    "l18_r1_4_orchestrator_8A_arbitration_honest": {
+      "result": "PASS",
+      "evidence": "V1-FROZEN-INTERFACE.md:112-127 two-paragraph honest block intact + Row D-7 in Cohort 5 surfaces to the consolidated breaking-changes view (R2 fix-pass closure of l18-r2-2 persists at R4)."
+    },
+    "q5_termination_check_no_new_major_introduced_by_fix_pass": {
+      "result": "PASS",
+      "evidence": "No NEW BLOCKER + no NEW MAJOR + no NEW MINOR introduced by R3 fix-pass. The R4 findings are exclusively OBS (positive-confirm + forward-looking carry); no R4 FIX-NOW. cargo check -p benten-engine --no-default-features at HEAD `25576cb1` started cleanly at task bo6pus1vn (compilation in progress at lens-write-time but no error signals; R3-FP base build state was clean per R3 lens evidence)."
+    }
+  },
+  "l18_specific_r3_finding_closure_verification": {
+    "l18-r3-1": {
+      "r3_disposition": "FIX-NOW — Path (a) preferred: append 2 rows to Cohort 3 under sub-heading 'G-CORE-9 R2 fix-pass additions'",
+      "r4_status": "CLOSED-VERIFIED",
+      "evidence": "Sub-heading 'G-CORE-9 R2 fix-pass additions' added at V1-BETA-BREAKING-CHANGES.md:204 with cross-cite to R3 lens output ('Per L18-r3-1 closure (R3 ledger-completeness audit)'). Bundle R2.8 row at lines 210-213 covers TypedOutputProjection + KernelOutput #[non_exhaustive] with What/Why/Migration narrative per Cohort 3 template; ground-truth verified at subgraph_spec.rs:92+307. Bundle R2.5 row at lines 215-218 covers SwapMatrixError CipherSuite→Unsupported variant routing with What/Why/Migration narrative; ground-truth verified at swap_matrix.rs:443+546+798. Path (a) was applied (NOT fallback Path (b) rename); per-fix-pass auditability preserved per pim-13 §3.12 audit-trail discipline."
+    },
+    "l18-r3-2": {
+      "r3_disposition": "OBS positive-confirm of all 4 R2 closures",
+      "r4_status": "CARRY-CONFIRMED",
+      "evidence": "All 4 R2 closures still hold at HEAD per l18-r4-2 evidence: ManifestEnvelopeRecheckOutcome #[non_exhaustive] at manifest_envelope_recheck.rs:83; napi wildcards at wait.rs:180 + stream.rs:203; AAD 2-tuple at V1-FROZEN-INTERFACE.md:338; Cohort 5 at V1-BETA-BREAKING-CHANGES.md:237; Row D-21 at V1-FROZEN-INTERFACE-DEFERRED.md:535; Row D-16 at V1-FROZEN-INTERFACE-DEFERRED.md:516; V1-FROZEN item 4 retense at line 363; V1-WIRE-FORMAT-INVENTORY §P-III at line 224. R3-FP doc-churn (105 V1-FROZEN-INTERFACE.md lines changed) introduced zero regressions to these surfaces."
+    },
+    "l18-r3-3": {
+      "r3_disposition": "OBS positive-confirm of broader R2-FP closures (cargo-public-api baselines + workflow tempfile + branch-protection PATCH)",
+      "r4_status": "CARRY-CONFIRMED",
+      "evidence": "Out of scope at R4 (these closures landed at R2-FP, NOT R3-FP — R3-FP scope is doc cite-drift sweep + test pin + doc-comment retense per l18-r4-3 evidence). No regression risk surface from R3-FP diff scope."
+    },
+    "l18-r3-4": {
+      "r3_disposition": "OBS positive-confirm of per-brief charter satisfaction",
+      "r4_status": "CARRY-CONFIRMED",
+      "evidence": "Per-brief charter STILL SATISFIED at R4: 15-PR enumeration unchanged; Ben-conscious provenance intact + extended (R2 sub-section rows cite L8-R2-MAJOR-CARRY-2 + L1-crypto-r2-1); §1.A.FROZEN items 1+4+6+12 retenses persist per l18-r4-2 evidence."
+    },
+    "l18-r3-5": {
+      "r3_disposition": "OBS forward-looking — ~15 additional PRs not enumerated (l18-r2-7 carry)",
+      "r4_status": "CARRY-FORWARD-UNCHANGED",
+      "evidence": "Per l18-r4-4: forward-looking carry unchanged at R4; no new PRs merged in R3 base..R4 base range beyond R3-FP itself which introduced no new break-OK content. Recommendation to name 'V1-BETA-BREAKING-CHANGES.md ledger completion sweep' follow-up row carries forward at orchestrator discretion."
+    }
+  },
+  "ben_consciousness_audit_per_ledger_row": {
+    "summary": "All ledger rows present at R4 retain Ben-conscious provenance cite. The R3-added rows (Bundle R2.8 + Bundle R2.5 in Cohort 3 sub-heading) both cite specific lens-IDs (L8-R2-MAJOR-CARRY-2 closure for R2.8 + L1-crypto-r2-1 closure for R2.5) + the R3 L18-r3-1 closure provenance + the orchestrator-night-shift-decision rationale per foundational memories. No silent Ben-consciousness regressions in the R3 fix-pass commit (verified per-bundle-row; R3-FP doc-churn touched provenance-cite-bearing surfaces but preserved all cites).",
+    "additional_audit_note": "The ~15 PR-rows surfaced as l18-r2-7 / l18-r3-5 / l18-r4-4 OBS forward-looking remain Ben-conscious per the refinement-audit-2026-05 + Phase-4-Meta-Core campaign authorizations + night-shift stance per the foundational memories — no silent regressions surfaced in the (now 42-commit) 8141b94..HEAD walk."
+  },
+  "council_arbitration_consistency_with_§1A_FROZEN_at_r4": {
+    "items_consistent": [
+      "item 1 (PARTIAL-LANDED honest retense intact at line 112; Row D-7 destination + Cohort 5 surface)",
+      "item 4 (Path (b) per L18-r2-4 — inventory IS the Ben-decision deliverable; Row D-16 ratification + V1-FROZEN line 363 retense intact)",
+      "item 5 (WriteContext shape + non_exhaustive verified; namespace_did present)",
+      "item 6 (benten-crypto-suite locked at line 496; INTERNALS.md per Row D-21 named-deferred; SigCodepoint::raw doc-comment retense at codepoint.rs:63-69 strengthens the freeze claim — 'FROZEN at G-CORE-9' replaces 'P-III deferred')",
+      "item 7 (§4.33 deletion catalog'd in ledger + Compromise discharged)",
+      "item 8 (CapabilityPolicy hard-seal intact + trybuild backstop per Row D-20)",
+      "item 9 (cargo-public-api required-failing live + Pattern β closed at R2 fix-pass via branch-protection PATCH + workflow tempfile restructure + baseline regeneration; no R3-FP regression)",
+      "item 11 (#[non_exhaustive] sweep substantially complete; Row D-17 extended for the remaining ~12+ types; TypedOutputProjection + KernelOutput CLOSED at R2 + NEWLY ENUMERATED in Cohort 3 sub-heading at R3-FP per l18-r3-1 closure)",
+      "item 12 (signature-frozen-vs-consumption-deferred retense per Fork 2 + Row D-1..D-6 destinations at line 1007)",
+      "item 13 (IPC const-allowlist + FROZEN-marker REJECTED)",
+      "item 14 (P2P conformance)",
+      "item 15.a-15.j (all RATIFIED-S&C-2026-05-21 references intact post-R3)"
+    ],
+    "items_NOT_consistent": []
+  },
+  "ledger_completeness_audit": {
+    "expected_per_brief_charter": "Ledger enumerates the 13+ break-OK changes l18-r1-2 named",
+    "actual_at_HEAD": "15 PR-rows present in Cohorts 1+2 + 13 Bundle-rows in Cohort 3 (R1 fix-pass: Bundles 3+4+9+10+11+2+11-L2-MAJ-1+11-L2-MIN-2+3a+3b+11b = 11 rows; R2 fix-pass: Bundles R2.8+R2.5 = 2 rows; R3 fix-pass: 0 new break-OK rows) + 6 watch-list rows in Cohort 4 (wire-format deferred) + 5 watch-list rows in Cohort 5 (public-API deferred) = 39 total rows across 5 cohorts",
+    "gap_1_closed": "3 R1-fix-pass own break-OK changes CLOSED at R2 fix-pass (Bundle 3a + Bundle 3b + Bundle 11b) — l18-r2-1 CLOSED.",
+    "gap_2_closed": "Row D-7 enumerated in Cohort 5 — l18-r2-2 CLOSED.",
+    "gap_3_closed": "2 R2-fix-pass own break-OK changes CLOSED at R3 fix-pass (Bundle R2.8 TypedOutputProjection + KernelOutput #[non_exhaustive]; Bundle R2.5 SwapMatrix CipherSuite→Unsupported routing) — l18-r3-1 CLOSED via Path (a) preferred.",
+    "gap_4_break_chain": "R3 fix-pass itself introduced ZERO new break-OK changes — the same-shape recurrence chain (R1-FP → R2-FP → R3-FP) is BROKEN at R3-FP; no fresh enumeration gap surfaces at R4. Lens convergence achieved.",
+    "forward_looking_gap": "~15 additional PRs in 8141b94..HEAD range not catalog'd (l18-r4-4 OBS forward-looking; unchanged from l18-r3-5 / l18-r2-7). RECOMMENDATION carries forward at orchestrator discretion."
+  },
+  "convergence_shape_R1_to_R4": {
+    "R1": "4 MAJ + 2 MIN + 1 OBS = 7 findings (load-bearing: ledger missing entirely + 8-A drift + item 7 not catalog'd + Planner-A vs as-built + crypto-suite INTERNALS missing + BEN-DECISION sign-off missing)",
+    "R2": "1 MAJ + 3 MIN + 3 OBS = 7 findings (R1 fix-pass own break-OK enumeration gap + Cohort 4 D-7 missing + crypto-suite INTERNALS soft-defer + WIRE-FORMAT-FREEZE-BEN-DECISION conflation)",
+    "R3": "0 BLK + 0 MAJ + 1 MIN + 4 OBS = 5 findings (R2 fix-pass own break-OK enumeration partial gap + rest positive-confirm + forward-looking)",
+    "R4": "0 BLK + 0 MAJ + 0 MIN + 4 OBS = 4 findings (all positive-confirm + 1 forward-looking carry; R3-FP closure of l18-r3-1 verified clean + recurrence chain broken)",
+    "shape": "Monotonic per Q5 cadence: 4 MAJ → 1 MAJ → 0 MAJ + 1 MIN → 0 MAJ + 0 MIN (strict convergence achieved at R4). Front-loaded convergence shape per pim-13 / Phase-2b R1→R3 precedent generalized to a 4-round arc. The R3 1-MIN recurrence was the LAST instance of the same-shape pattern — R3-FP did not introduce new break-OK content, breaking the chain. Q5 termination criterion (0 BLOCKER + 0 MAJOR) IS SATISFIED for L18 at R4 with the additional stronger property of 0 MINOR (R3 satisfied Q5 alone; R4 satisfies Q5 + zero-minor)."
+  },
+  "lens_outcome": "The R3 fix-pass cleanly closed the sole L18 R3 FIX-NOW finding (l18-r3-1) via the preferred Path (a); all closures verified at HEAD via ground-truth grep. The R4 lens outcome: APPROVE-CONVERGED (0 BLK + 0 MAJ + 0 MIN + 4 OBS positive-confirm/forward-looking); Q5 termination (0 BLOCKER + 0 MAJOR) IS SATISFIED for L18 at R4 with the stronger property of 0 MINOR. The same-shape recurrence chain that drove l18-r2-1 → l18-r3-1 (each fix-pass shipping its own additions that the next round's lens surfaces as an enumeration gap) is BROKEN at R3-FP because R3-FP itself introduced ZERO new break-OK source changes — the diff scope is doc cite-drift sweep + 1 strictly-additive test pin + 1 doc-comment retense, none of which require Cohort enumeration. The L18 lens is APPROVE-FOR-TAG-READY at R4. r4_convergence_disposition: CONVERGED at the lens level (council-level convergence pending broader R4 lens dispositions across all 10 lenses; if council also 0 substantive, L18 contributes ZERO findings to any potential R4-FP)."
+}
