@@ -19,7 +19,7 @@
 //! - [`CipherSuite::wrap_key_material`] / [`CipherSuite::unwrap_key_material`] —
 //!   the X-Wing-hybrid wrap/unwrap production API.
 //! - [`CipherSuite::seal_aead`] / [`CipherSuite::open_aead`] — the
-//!   ChaCha20-Poly1305 production API over a [`crate::aead::KeyMaterial`].
+//!   ChaCha20-Poly1305 production API over a [`crate::aead::AeadKeyMaterial`].
 //!
 //! # X-Wing-style combiner (per Spike I)
 //!
@@ -66,7 +66,7 @@ use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
 
 use crate::aead::{
-    AeadEnvelope, AeadError, KeyMaterial, aad_whole_content, unwrap as aead_unwrap,
+    AeadEnvelope, AeadError, AeadKeyMaterial, aad_whole_content, unwrap as aead_unwrap,
     wrap as aead_wrap,
 };
 pub use crate::codepoint::CipherSuiteCodepoint;
@@ -219,7 +219,7 @@ impl CipherSuite {
                 );
 
                 // AEAD-encrypt k_root under the combined key.
-                let combined_key = KeyMaterial::from_bytes(self.codepoint, combined.to_vec());
+                let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x-wing-wrap:k_root");
                 let env = aead_wrap(k_root, &combined_key, &aad)?;
 
@@ -244,7 +244,7 @@ impl CipherSuite {
                 // shape as the hybrid but with the classical-only inputs.
                 let combined =
                     classical_combine(ss_x.as_bytes(), ek_x.as_bytes(), x_recipient.as_bytes());
-                let combined_key = KeyMaterial::from_bytes(self.codepoint, combined.to_vec());
+                let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x25519-classical-wrap:k_root");
                 let env = aead_wrap(k_root, &combined_key, &aad)?;
 
@@ -330,7 +330,7 @@ impl CipherSuite {
                     mlkem_ek_bytes.as_slice(),
                 );
 
-                let combined_key = KeyMaterial::from_bytes(self.codepoint, combined.to_vec());
+                let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x-wing-wrap:k_root");
                 let plaintext = aead_unwrap(&wrapped.aead_envelope, &combined_key, &aad)?;
                 Ok(UnwrappedKey { bytes: plaintext })
@@ -349,7 +349,7 @@ impl CipherSuite {
                 let ss_x = x_sec.diffie_hellman(&ek_x_pub);
                 let x_pub = X25519PublicKey::from(x_sec);
                 let combined = classical_combine(ss_x.as_bytes(), &ek_x_bytes, x_pub.as_bytes());
-                let combined_key = KeyMaterial::from_bytes(self.codepoint, combined.to_vec());
+                let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x25519-classical-wrap:k_root");
                 let plaintext = aead_unwrap(&wrapped.aead_envelope, &combined_key, &aad)?;
                 Ok(UnwrappedKey { bytes: plaintext })
@@ -369,7 +369,7 @@ impl CipherSuite {
         plaintext: &[u8],
         plaintext_cid: &[u8],
     ) -> Result<AeadEnvelope, AeadError> {
-        let key = KeyMaterial::from_bytes(self.codepoint, k_root.to_vec());
+        let key = AeadKeyMaterial::from_bytes(self.codepoint, k_root.to_vec());
         let aad = aad_whole_content(plaintext_cid);
         aead_wrap(plaintext, &key, &aad)
     }
@@ -383,7 +383,7 @@ impl CipherSuite {
         envelope: &AeadEnvelope,
         plaintext_cid: &[u8],
     ) -> Result<DecryptedPlaintext, AeadError> {
-        let key = KeyMaterial::from_bytes(self.codepoint, k_root.to_vec());
+        let key = AeadKeyMaterial::from_bytes(self.codepoint, k_root.to_vec());
         let aad = aad_whole_content(plaintext_cid);
         let bytes = aead_unwrap(envelope, &key, &aad)?;
         Ok(DecryptedPlaintext { bytes })

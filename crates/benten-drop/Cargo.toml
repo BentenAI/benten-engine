@@ -18,10 +18,10 @@ workspace = true
 bench = false
 
 # G-CORE-3f Drop-bundle deps — leans on the substrate cascade:
-#   - benten-crypto-suite (3a CANARY) — KeyMaterial + AeadEnvelope + cipher dispatch
+#   - benten-crypto-suite (3a CANARY) — AeadKeyMaterial + AeadEnvelope + cipher dispatch
 #   - benten-graph (3d) — EncryptedNode + per-Node AEAD wrap (the storage-layer
 #     content cells the Drop bundle ships as `Vec<EncryptedNode>`)
-#   - benten-caps (3b) — RestrictedSpec (the SubgraphSpec selector) + AuthorizationGrant
+#   - benten-caps (3b) — RestrictedScope (the SubgraphSpec selector) + AuthorizationGrant
 #     (the ONE signed artifact `{ucan, key_material, binding_sig}` carried in the bundle)
 #   - benten-core — Cid + canonical-bytes seam (spec_cid + per-Node plaintext_cids)
 #   - benten-id — Keypair (test fixtures + Ed25519 envelope signing)

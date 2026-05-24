@@ -16,7 +16,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::errors::SubgraphSpecError;
-use super::spec::{RestrictedSpec, Spec, SpecBuilder};
+use super::spec::{SubgraphSpecRestriction, Spec, SpecBuilder};
 use crate::Cid;
 
 /// `intersect(a, b)` — produce a [`Spec`] contained by both `a` and `b`.
@@ -152,8 +152,8 @@ where
     }
     // Re-apply the input's inclusion predicate.
     match spec.inclusion() {
-        RestrictedSpec::Unrestricted => {}
-        RestrictedSpec::ByLabel { allow, deny } => {
+        SubgraphSpecRestriction::Unrestricted => {}
+        SubgraphSpecRestriction::ByLabel { allow, deny } => {
             if !allow.is_empty() {
                 let v: Vec<String> = allow.iter().cloned().collect();
                 builder = builder.with_label_allowlist(v);
@@ -195,23 +195,23 @@ where
 /// empty — semantically "no labels are allowed by both sides at once",
 /// which collapses to the empty Spec.
 fn intersect_inclusions(
-    a: &RestrictedSpec,
-    b: &RestrictedSpec,
+    a: &SubgraphSpecRestriction,
+    b: &SubgraphSpecRestriction,
 ) -> Result<(BTreeSet<String>, BTreeSet<String>), SubgraphSpecError> {
     match (a, b) {
-        (RestrictedSpec::Unrestricted, RestrictedSpec::Unrestricted) => {
+        (SubgraphSpecRestriction::Unrestricted, SubgraphSpecRestriction::Unrestricted) => {
             Ok((BTreeSet::new(), BTreeSet::new()))
         }
-        (RestrictedSpec::Unrestricted, RestrictedSpec::ByLabel { allow, deny })
-        | (RestrictedSpec::ByLabel { allow, deny }, RestrictedSpec::Unrestricted) => {
+        (SubgraphSpecRestriction::Unrestricted, SubgraphSpecRestriction::ByLabel { allow, deny })
+        | (SubgraphSpecRestriction::ByLabel { allow, deny }, SubgraphSpecRestriction::Unrestricted) => {
             Ok((allow.clone(), deny.clone()))
         }
         (
-            RestrictedSpec::ByLabel {
+            SubgraphSpecRestriction::ByLabel {
                 allow: a_allow,
                 deny: a_deny,
             },
-            RestrictedSpec::ByLabel {
+            SubgraphSpecRestriction::ByLabel {
                 allow: b_allow,
                 deny: b_deny,
             },
@@ -244,20 +244,20 @@ fn intersect_inclusions(
 }
 
 fn union_inclusions(
-    a: &RestrictedSpec,
-    b: &RestrictedSpec,
+    a: &SubgraphSpecRestriction,
+    b: &SubgraphSpecRestriction,
 ) -> (BTreeSet<String>, BTreeSet<String>) {
     match (a, b) {
         // Either side unrestricted widens to unrestricted.
-        (RestrictedSpec::Unrestricted, _) | (_, RestrictedSpec::Unrestricted) => {
+        (SubgraphSpecRestriction::Unrestricted, _) | (_, SubgraphSpecRestriction::Unrestricted) => {
             (BTreeSet::new(), BTreeSet::new())
         }
         (
-            RestrictedSpec::ByLabel {
+            SubgraphSpecRestriction::ByLabel {
                 allow: a_allow,
                 deny: a_deny,
             },
-            RestrictedSpec::ByLabel {
+            SubgraphSpecRestriction::ByLabel {
                 allow: b_allow,
                 deny: b_deny,
             },
@@ -359,7 +359,7 @@ mod tests {
         let ab = intersect(&a, &b).expect("intersect");
         // ab.inclusion should have only "Y" in allowlist.
         match ab.inclusion() {
-            RestrictedSpec::ByLabel { allow, .. } => {
+            SubgraphSpecRestriction::ByLabel { allow, .. } => {
                 assert_eq!(allow.len(), 1);
                 assert!(allow.contains("Y"));
             }
@@ -383,7 +383,7 @@ mod tests {
         let ab = union(&a, &b).expect("union");
         // ab.inclusion has both X + Y in allowlist.
         match ab.inclusion() {
-            RestrictedSpec::ByLabel { allow, .. } => {
+            SubgraphSpecRestriction::ByLabel { allow, .. } => {
                 assert!(allow.contains("X"));
                 assert!(allow.contains("Y"));
             }

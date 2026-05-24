@@ -10,7 +10,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use benten_caps::authorization_grant::{AuthorizationGrant, UcanEnvelope};
-use benten_caps::restricted_spec::RestrictedSpec;
+use benten_caps::restricted_spec::RestrictedScope;
 use benten_core::Cid;
 use benten_graph::aead_wrap::{EncryptedNode, decode_encrypted_node, encode_encrypted_node};
 use benten_id::keypair::Keypair;
@@ -249,7 +249,7 @@ impl EncryptedContent {
 /// - `version`: [`DropBundleVersion`] — fail-typed on unknown.
 /// - `mode`: [`DropContentMode`] — no `InlineTiny` arm.
 /// - `spec_cid`: [`Cid`] — the canonical CID of the
-///   [`RestrictedSpec`] this bundle authorizes a snapshot of.
+///   [`RestrictedScope`] this bundle authorizes a snapshot of.
 /// - `audience`: [`Cid`] — the recipient DID this bundle is bound to
 ///   (matches the `auth_grant.audience_binding`).
 /// - `auth_grant`: [`AuthorizationGrant`] — the ONE signed artifact
@@ -257,7 +257,7 @@ impl EncryptedContent {
 /// - `content`: `Vec<EncryptedContent>` — the per-Recipe AEAD
 ///   ciphertexts (each is a serialized `EncryptedNode` via
 ///   `encode_encrypted_node`).
-/// - `restricted_spec`: [`RestrictedSpec`] — the selector shape
+/// - `restricted_spec`: [`RestrictedScope`] — the selector shape
 ///   (chain-validator anchor; the spec_cid above identifies which
 ///   spec this bundle is for; the body is carried for offline
 ///   consume so the recipient does not need a network lookup).
@@ -284,7 +284,7 @@ pub struct DropBundle {
     /// Delivery mode — `OnlinePull` or `OfflineDrop` (never
     /// `InlineTiny` — Mode 3 deferred to post-v1).
     pub mode: DropContentMode,
-    /// CID of the `RestrictedSpec` this bundle delivers.
+    /// CID of the `RestrictedScope` this bundle delivers.
     pub spec_cid: Cid,
     /// Audience this bundle is bound to (matches grant audience).
     pub audience: Cid,
@@ -295,7 +295,7 @@ pub struct DropBundle {
     pub content: Vec<EncryptedContent>,
     /// The selector shape (chain-validator anchor + offline
     /// material).
-    pub restricted_spec: RestrictedSpec,
+    pub restricted_spec: RestrictedScope,
     /// Per-Node attestation blob — non-empty when the bundle is
     /// built with per-Node-sig defense-in-depth ON; empty (or
     /// shortened) for the envelope-only-for-test variant. The
@@ -703,18 +703,18 @@ fn build_5_recipe_bundle_impl(
     }
 
     // SubgraphSpec selector + canonical CID over its canonical bytes.
-    let restricted_spec = RestrictedSpec::default();
+    let restricted_spec = RestrictedScope::default();
     let spec_cid_bytes = serde_ipld_dagcbor::to_vec(&restricted_spec)
-        .expect("RestrictedSpec encodes for spec_cid derivation");
+        .expect("RestrictedScope encodes for spec_cid derivation");
     let spec_cid_digest = blake3_digest_of(&spec_cid_bytes);
     let spec_cid = Cid::from_blake3_digest(spec_cid_digest);
 
     // AuthorizationGrant — the ONE signed artifact per §R3.
-    // Synthetic UCAN + matching synthetic KeyMaterial. The
+    // Synthetic UCAN + matching synthetic GrantKeyMaterial. The
     // `key_material.bytes` MUST equal the AEAD key bytes above so
     // the recipient's `consume_offline` can decrypt.
     let ucan = UcanEnvelope::synthetic_for_test(audience);
-    let key_material = benten_caps::authorization_grant::KeyMaterial {
+    let key_material = benten_caps::authorization_grant::GrantKeyMaterial {
         bytes: key_bytes.clone(),
     };
     // Note: PR #1336 (G-CORE-3e wave) reshaped `AuthorizationGrant::

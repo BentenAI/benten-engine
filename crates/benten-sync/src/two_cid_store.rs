@@ -7,7 +7,7 @@
 //! Per `RATIFIED-sharing-and-confidentiality-2026-05-21.md` §R2 +
 //! Spike A2 finding: the UCAN-gated iroh-blobs protocol works by
 //! (a) the recipient presents an `AuthorizationGrant` referencing a
-//! plaintext_cid in the granted `RestrictedSpec` scope; (b) the
+//! plaintext_cid in the granted `RestrictedScope` scope; (b) the
 //! handler validates the grant; (c) the handler resolves the
 //! plaintext_cid → ciphertext_cid through the two-CID mapping; (d) the
 //! handler hands the connection to `iroh_blobs::provider::handle_connection`

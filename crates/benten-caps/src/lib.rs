@@ -77,7 +77,7 @@ pub mod manifest_scope;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod manifest_envelope_chain_validation;
 
-// G-CORE-3b — structured `RestrictedSpec` sub-graph restriction
+// G-CORE-3b — structured `RestrictedScope` sub-graph restriction
 // language (Path (a) of RATIFIED-S&C 2026-05-21 §R1; Path (b)
 // refinement-witness over opaque specs structurally unsound per Spike
 // H+1.1). Six dimensions: roots + edge-allowlist + max_depth +
@@ -113,7 +113,7 @@ pub mod authorization_grant;
 // G-CORE-3b — structured `Scope` chain validator with monotonic-
 // narrowing semantics. Distinct from the existing `chain_authority`
 // envelope-ceiling seam: this validator enforces non-widening over
-// the structured `RestrictedSpec` 6-dim language. Returns typed
+// the structured `RestrictedScope` 6-dim language. Returns typed
 // `ChainNotNarrowing { step_index }` for the first widening edge.
 pub mod chain_validator;
 
@@ -157,17 +157,17 @@ pub use ucan_grounded::UcanGroundedPolicy;
 pub use ucan_stub::LegacyUcanStubBackend;
 
 // G-CORE-3b — structured sharing-and-confidentiality public surface
-// (the v1-frozen `RestrictedSpec` + `Scope` + chain validator types;
+// (the v1-frozen `RestrictedScope` + `Scope` + chain validator types;
 // `AuthorizationGrant` is native-only and re-exports below).
 pub use chain_validator::{ChainValidationError, ChainValidatorOutcome, validate_chain_narrowing};
-pub use restricted_spec::{PropertyValue, RestrictedSpec};
+pub use restricted_spec::{PropertyValue, RestrictedScope};
 pub use scope::Scope;
 
 // G-CORE-3b — `AuthorizationGrant` re-export native-only (matches the
 // existing `UCANBackend` re-export discipline above).
 #[cfg(not(target_arch = "wasm32"))]
 pub use authorization_grant::{
-    AuthorizationGrant, AuthorizationGrantError, KeyMaterial, UcanEnvelope,
+    AuthorizationGrant, AuthorizationGrantError, GrantKeyMaterial, UcanEnvelope,
 };
 
 // Surf-1 #884 (v1-API-stabilization): the three plugin-trust modules

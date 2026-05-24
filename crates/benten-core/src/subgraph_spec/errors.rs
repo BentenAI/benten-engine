@@ -44,7 +44,7 @@ pub enum SubgraphSpecError {
         cid: Cid,
     },
 
-    /// Construction-time: a `RestrictedSpec` declares both
+    /// Construction-time: a `SubgraphSpecRestriction` declares both
     /// allowlist and denylist over the SAME label, making the predicate
     /// structurally unsatisfiable (the decidable-non-emptiness contract:
     /// a Spec that admits no Nodes is a silently-no-op share-grant and

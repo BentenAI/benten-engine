@@ -2,7 +2,7 @@
 //!
 //! # Surface
 //!
-//! - [`KeyMaterial`] — the symmetric key newtype carried into / out of
+//! - [`AeadKeyMaterial`] — the symmetric key newtype carried into / out of
 //!   the X-Wing-hybrid wrap (the `K_root` / `K(N)` material). Codepoint-
 //!   tagged so downstream consumers know which suite produced it.
 //! - [`AeadEnvelope`] — the serializable AEAD ciphertext envelope
@@ -11,7 +11,7 @@
 //!   AAD-binds-plaintext-CID + (for per-chunk AEAD) chunk-index for
 //!   rebinding-attack defense.
 //! - [`wrap`] / [`unwrap`] — production seal/open API over
-//!   ChaCha20-Poly1305 with a key dispatched through [`KeyMaterial`].
+//!   ChaCha20-Poly1305 with a key dispatched through [`AeadKeyMaterial`].
 //! - [`AeadError`] — typed error envelope: `AeadAuthFailed` +
 //!   `MalformedEnvelope` + `Unsupported` (codepoint-mismatch).
 //!
@@ -82,7 +82,7 @@ const CHACHA20POLY1305_NONCE_LEN: usize = 12;
 ///
 /// Zeroizes on drop.
 #[derive(Clone)]
-pub struct KeyMaterial {
+pub struct AeadKeyMaterial {
     /// The cipher-suite codepoint that produced this key material.
     pub codepoint: CipherSuiteCodepoint,
     /// The raw key bytes (32 B for the X-Wing-hybrid + ChaCha20-Poly1305
@@ -90,7 +90,7 @@ pub struct KeyMaterial {
     bytes: Vec<u8>,
 }
 
-impl KeyMaterial {
+impl AeadKeyMaterial {
     /// Construct from raw bytes + codepoint. Crate-public for cipher-
     /// suite internals + the public `from_raw_bytes` constructor below.
     pub(crate) fn from_bytes(codepoint: CipherSuiteCodepoint, bytes: Vec<u8>) -> Self {
@@ -129,7 +129,7 @@ impl KeyMaterial {
     }
 }
 
-impl Drop for KeyMaterial {
+impl Drop for AeadKeyMaterial {
     fn drop(&mut self) {
         self.bytes.zeroize();
     }
@@ -233,7 +233,7 @@ pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64) -> Vec<u8> {
 ///
 /// Per CLAUDE.md baked-in #5: typed-unsupported (NEVER silent-fallback)
 /// on a key whose codepoint doesn't match an AEAD dispatch arm.
-pub fn wrap(plaintext: &[u8], key: &KeyMaterial, aad: &[u8]) -> Result<AeadEnvelope, AeadError> {
+pub fn wrap(plaintext: &[u8], key: &AeadKeyMaterial, aad: &[u8]) -> Result<AeadEnvelope, AeadError> {
     // Dispatch on the key's codepoint. At G-CORE-3a only the X25519⊕
     // ML-KEM-768 hybrid codepoint is live (its derived K_root feeds
     // ChaCha20-Poly1305); the classical-only X25519 downgrade arm also
@@ -277,7 +277,7 @@ pub fn wrap(plaintext: &[u8], key: &KeyMaterial, aad: &[u8]) -> Result<AeadEnvel
 /// attacks where `aad` doesn't match the seal-time AAD).
 pub fn unwrap(
     envelope: &AeadEnvelope,
-    key: &KeyMaterial,
+    key: &AeadKeyMaterial,
     aad: &[u8],
 ) -> Result<Vec<u8>, AeadError> {
     // Codepoint-mismatch is a silent-downgrade vector — typed-reject.
@@ -359,7 +359,7 @@ mod tests {
     #[test]
     fn wrap_unwrap_round_trips_at_hybrid_codepoint() {
         let key =
-            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x42; 32]);
+            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x42; 32]);
         let pt = b"hello, hybrid";
         let cid = b"plaintext-cid-A";
         let aad = aad_whole_content(cid);
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn wrap_unwrap_round_trips_at_classical_codepoint() {
-        let key = KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0x77; 32]);
+        let key = AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0x77; 32]);
         let pt = b"hello, classical";
         let aad = aad_whole_content(b"plaintext-cid-B");
         let env = wrap(pt, &key, &aad).expect("wrap MUST succeed");
@@ -381,7 +381,7 @@ mod tests {
     #[test]
     fn aad_rebinding_fails_closed() {
         let key =
-            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x99; 32]);
+            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x99; 32]);
         let pt = b"payload";
         let aad_a = aad_whole_content(b"cid-A");
         let aad_b = aad_whole_content(b"cid-B");
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn wire_format_carries_explicit_format_version_byte() {
         let key =
-            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x10; 32]);
+            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x10; 32]);
         let env = wrap(b"pt", &key, &aad_whole_content(b"cid")).expect("wrap MUST succeed");
         let bytes = env.to_wire_bytes();
         assert_eq!(bytes[0], ENVELOPE_MAGIC, "byte 0 = envelope magic");
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn round_trip_through_wire_bytes() {
         let key =
-            KeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x33; 32]);
+            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x33; 32]);
         let pt = b"wire round-trip payload";
         let aad = aad_whole_content(b"cid-roundtrip");
         let env = wrap(pt, &key, &aad).expect("wrap MUST succeed");

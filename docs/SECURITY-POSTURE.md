@@ -2400,7 +2400,7 @@ regression pin.
 The AEAD primitive is **ChaCha20-Poly1305** (RFC 8439) per CLAUDE.md
 baked-in #5 crypto-agility refinement. Dispatched via
 `benten_crypto_suite::aead::wrap` / `::unwrap` over the
-codepoint-tagged `KeyMaterial` (X-Wing-hybrid `0x647a` v1-beta default;
+codepoint-tagged `AeadKeyMaterial` (X-Wing-hybrid `0x647a` v1-beta default;
 classical-only X25519 `0x6400` downgrade arm; both feed the same
 ChaCha20-Poly1305 bulk layer). The integration crate is the ONLY
 crypto-primitive call site (crypto-agility-contract:6). Never
@@ -2466,7 +2466,7 @@ audience-binding:
    without-keys, A-2 stolen-keys-without-UCAN, A-3 wrong-audience-
    swap uniformly).
 6. **Scope check** (F-2 arm). The requested `ciphertext_hash` MUST
-   be in the granted `RestrictedSpec`'s `roots` allowlist (per
+   be in the granted `RestrictedScope`'s `roots` allowlist (per
    `with_hashes` constructor). Out-of-scope → typed `NotInScope`.
 
 ONLY after all six arms pass does the handler dispatch to

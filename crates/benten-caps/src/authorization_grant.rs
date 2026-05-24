@@ -157,20 +157,20 @@ impl UcanEnvelope {
 /// Synthetic key-material handle for the wave-3b RED-PHASE pins.
 ///
 /// The production key-material type is `benten_crypto_suite::aead::
-/// KeyMaterial` (G-CORE-3a CANARY). The cap-layer surface mints its
+/// GrantKeyMaterial` (G-CORE-3a CANARY). The cap-layer surface mints its
 /// own envelope shape so the binding-sig contract can be exercised
 /// without coupling the wave-3b pin closure to the cipher-suite
 /// internals. The production wire-up at G-CORE-3e/3f introduces the
 /// real-type bridge.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct KeyMaterial {
+pub struct GrantKeyMaterial {
     /// Opaque material bytes. Synthetic test fixtures carry
     /// deterministic content; real key material is a wrapped AEAD key
     /// at the production wire-up.
     pub bytes: Vec<u8>,
 }
 
-impl KeyMaterial {
+impl GrantKeyMaterial {
     /// Construct synthetic key material for tests.
     #[must_use]
     pub fn synthetic_for_test() -> Self {
@@ -207,7 +207,7 @@ pub struct AuthorizationGrant {
     pub ucan: UcanEnvelope,
     /// The key-material half (per-DID wrapped key or grant-derived
     /// material at the production wire-up).
-    pub key_material: KeyMaterial,
+    pub key_material: GrantKeyMaterial,
     /// The issuer's binding signature over `(ucan, key_material,
     /// audience)` canonical bytes. Verified before either the UCAN or
     /// the key material is consulted.
@@ -232,7 +232,7 @@ pub struct AuthorizationGrant {
     /// audience and doesn't carry the raw pubkey bytes.
     #[serde(default, with = "serde_bytes_opt")]
     pub audience_pubkey: Option<Vec<u8>>,
-    /// G-CORE-3e: the structured `RestrictedSpec` scope this grant
+    /// G-CORE-3e: the structured `RestrictedScope` scope this grant
     /// authorises. The wave-3e per-request handler resolves the
     /// requested `ciphertext_hash` against this spec's `roots`
     /// allowlist (per the `with_hashes` constructor pattern); requests
@@ -242,7 +242,7 @@ pub struct AuthorizationGrant {
     /// carry a scope (binding-sig validation is the wave-3b concern,
     /// scope-check is the wave-3e concern).
     #[serde(default)]
-    pub scope: Option<crate::restricted_spec::RestrictedSpec>,
+    pub scope: Option<crate::restricted_spec::RestrictedScope>,
 }
 
 /// Helper module for `#[serde(with = "serde_bytes_opt")]` — folds
@@ -330,7 +330,7 @@ impl AuthorizationGrant {
     /// to verify.
     fn binding_message(
         ucan: &UcanEnvelope,
-        key_material: &KeyMaterial,
+        key_material: &GrantKeyMaterial,
         audience: &Cid,
     ) -> Result<Vec<u8>, AuthorizationGrantError> {
         let ucan_bytes = serde_ipld_dagcbor::to_vec(ucan)
@@ -366,7 +366,7 @@ impl AuthorizationGrant {
     /// not, but the path is fallible by construction).
     pub fn issue_envelopes_for_test(
         ucan: UcanEnvelope,
-        key_material: KeyMaterial,
+        key_material: GrantKeyMaterial,
         audience: Cid,
     ) -> Result<Self, AuthorizationGrantError> {
         let signing_key = SigningKey::generate(&mut OsRng);
@@ -389,7 +389,7 @@ impl AuthorizationGrant {
     /// G-CORE-3e test constructor (wave-3e production-shaped) —
     /// builds a verifiable grant from the issuer's full
     /// `benten_id::keypair::Keypair`, the audience's `PublicKey`, a
-    /// `RestrictedSpec` scope, and an absolute `exp_secs` expiry.
+    /// `RestrictedScope` scope, and an absolute `exp_secs` expiry.
     /// Signs the binding-message with the issuer's actual signing
     /// key (per the production wire-up at G-CORE-3e where the issuer
     /// has a real Atrium identity).
@@ -403,7 +403,7 @@ impl AuthorizationGrant {
     pub fn issue_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
-        scope: crate::restricted_spec::RestrictedSpec,
+        scope: crate::restricted_spec::RestrictedScope,
         exp_secs: u64,
     ) -> Self {
         Self::issue_with_nbf_for_test(issuer_kp, audience_pubkey, scope, 0, exp_secs)
@@ -417,7 +417,7 @@ impl AuthorizationGrant {
     pub fn issue_with_nbf_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
-        scope: crate::restricted_spec::RestrictedSpec,
+        scope: crate::restricted_spec::RestrictedScope,
         nbf_secs: u64,
         exp_secs: u64,
     ) -> Self {
@@ -437,12 +437,12 @@ impl AuthorizationGrant {
             nbf_secs,
             unresolved_peer: false,
         };
-        let key_material = KeyMaterial::synthetic_for_test();
+        let key_material = GrantKeyMaterial::synthetic_for_test();
 
         let signing_key = SigningKey::from_bytes(&issuer_kp.secret_bytes_unprotected());
         let verifying_key = signing_key.verifying_key();
         let msg = Self::binding_message(&ucan, &key_material, &audience_cid)
-            .expect("synthetic UcanEnvelope + KeyMaterial CBOR-encode infallibly in test fixtures");
+            .expect("synthetic UcanEnvelope + GrantKeyMaterial CBOR-encode infallibly in test fixtures");
         let sig: Signature = signing_key.sign(&msg);
 
         Self {
@@ -467,7 +467,7 @@ impl AuthorizationGrant {
     pub fn issue_with_unresolved_peer_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
-        scope: crate::restricted_spec::RestrictedSpec,
+        scope: crate::restricted_spec::RestrictedScope,
         exp_secs: u64,
     ) -> Self {
         let mut grant = Self::issue_for_test(issuer_kp, audience_pubkey, scope, exp_secs);
@@ -508,7 +508,7 @@ impl AuthorizationGrant {
         // exercises.
         Self {
             ucan: UcanEnvelope::synthetic_for_test(audience_cid),
-            key_material: KeyMaterial::synthetic_for_test(),
+            key_material: GrantKeyMaterial::synthetic_for_test(),
             binding_sig: vec![0u8; 64],
             audience_binding: audience_cid,
             // Random verifying-key bytes — the verify call will
@@ -519,7 +519,7 @@ impl AuthorizationGrant {
                 .to_bytes()
                 .to_vec(),
             audience_pubkey: Some(audience_bytes.to_vec()),
-            scope: Some(crate::restricted_spec::RestrictedSpec::new()),
+            scope: Some(crate::restricted_spec::RestrictedScope::new()),
         }
     }
 
@@ -623,7 +623,7 @@ impl AuthorizationGrant {
     /// the A-1 stolen-UCAN-without-keys adversarial pin to
     /// demonstrate the binding-sig detects the tamper.
     #[must_use]
-    pub fn with_swapped_key_material_for_test(&self, km: KeyMaterial) -> Self {
+    pub fn with_swapped_key_material_for_test(&self, km: GrantKeyMaterial) -> Self {
         Self {
             ucan: self.ucan.clone(),
             key_material: km,

@@ -132,7 +132,7 @@ pub mod swap_matrix;
 pub mod varsig;
 
 // Convenience re-exports of the most-used typed surface.
-pub use crate::aead::{AeadEnvelope, AeadError, KeyMaterial};
+pub use crate::aead::{AeadEnvelope, AeadError, AeadKeyMaterial};
 pub use crate::codepoint::{CipherSuiteCodepoint, HashCodepoint, SigCodepoint};
 pub use crate::error::{CryptoError, UnsupportedAlgorithm, VerifyError};
 pub use crate::hash::HashSeam;

@@ -6,7 +6,7 @@
 //! Benten's Sharing & Confidentiality stack. A `DropBundle` is a single
 //! CBOR-on-disk artifact that:
 //!
-//! 1. Carries an authorized snapshot of a `RestrictedSpec`-shaped
+//! 1. Carries an authorized snapshot of a `RestrictedScope`-shaped
 //!    SubgraphSpec (the **what-can-be-shared** half).
 //! 2. Carries the per-Node AEAD ciphertexts for the subgraph's content
 //!    (the **payload** half — `Vec<EncryptedNode>` produced by

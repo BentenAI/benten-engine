@@ -21,7 +21,7 @@
 //!
 //! Named destination (HARD RULE 12 clause-(b)): the post-G-CORE-3b
 //! production surface = `benten_caps::scope::Scope` enum with EXACTLY
-//! TWO arms: `Hashes(Vec<Hash>)` + `RestrictedSelector(RestrictedSpec)`.
+//! TWO arms: `Hashes(Vec<Hash>)` + `RestrictedSelector(RestrictedScope)`.
 //! `#[non_exhaustive]` is APPLIED (per §1.A.FROZEN item 11 META #907
 //! sweep) but `OpaqueSelector` is structurally REFUSED — adding it would
 //! be a §1.A.FROZEN item 15(c) freeze-surface re-open requiring HALT-AND-
@@ -48,7 +48,7 @@
 use benten_core::Cid;
 // RED: `benten_caps::scope` does NOT exist at HEAD. G-CORE-3b mints it
 // with EXACTLY two arms per §1.A.FROZEN item 15(c).
-use benten_caps::restricted_spec::RestrictedSpec;
+use benten_caps::restricted_spec::RestrictedScope;
 use benten_caps::scope::Scope;
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ fn scope_enum_has_exactly_two_arms_no_opaque_selector() {
     let digest = blake3::hash(b"no-opaque-arm-test");
     let h = Cid::from_blake3_digest(*digest.as_bytes());
     let scope_hashes: Scope = Scope::Hashes(vec![h]);
-    let scope_restricted: Scope = Scope::RestrictedSelector(RestrictedSpec::new());
+    let scope_restricted: Scope = Scope::RestrictedSelector(RestrictedScope::new());
 
     // The exhaustive match is the STRUCTURAL pin. Adding a third arm to
     // Scope WITHOUT updating this test triggers a compile-fail on
@@ -146,7 +146,7 @@ fn no_opaque_arm_decision_documented_at_declaration_site() {
 
     // Both PUBLIC constructors exist + work:
     let _h_arm: Scope = Scope::Hashes(vec![h]);
-    let _r_arm: Scope = Scope::RestrictedSelector(RestrictedSpec::new());
+    let _r_arm: Scope = Scope::RestrictedSelector(RestrictedScope::new());
 
     // A third public constructor MUST NOT exist. If a future implementer
     // adds e.g. `Scope::opaque(spec_cid, witness)`, that public API

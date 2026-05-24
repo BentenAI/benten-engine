@@ -1152,7 +1152,7 @@ pub enum ErrorCode {
     /// chain-narrowing contract): a structured-`Scope` delegation
     /// chain widens its predecessor at some step — the chain validator
     /// surfaces this typed code with the offending `step_index`.
-    /// Covers Path (a) `RestrictedSpec`-language widening + `Scope::
+    /// Covers Path (a) `RestrictedScope`-language widening + `Scope::
     /// Hashes` subset-violation widening + cross-arm transitions.
     /// Path (b) refinement-witness over opaque specs is structurally
     /// unsound (Spike H+1.1) so no opaque-arm closure path exists; the
@@ -1170,7 +1170,7 @@ pub enum ErrorCode {
     /// rejection). Distinct from
     /// [`Self::UcanBlobsRequestNotInScope`] (scope-specific reject
     /// when the requested ciphertext_hash is NOT in the granted
-    /// `RestrictedSpec` roots allowlist) and from
+    /// `RestrictedScope` roots allowlist) and from
     /// [`Self::UnresolvedPeerDeny`] (sentinel arm for the unresolvable
     /// peer-DID adversarial pattern). Per the "binding is the
     /// foundation" §R3 contract, the handler validates the request's
@@ -1181,7 +1181,7 @@ pub enum ErrorCode {
     UcanBlobsRequestRejected,
     /// G-CORE-3e (Phase 4-Meta-Core, RATIFIED-S&C 2026-05-21 §R2
     /// online-share contract; F-2 scope-check arm): the requested
-    /// ciphertext_hash is NOT in the granted `RestrictedSpec`'s
+    /// ciphertext_hash is NOT in the granted `RestrictedScope`'s
     /// `roots` allowlist. The handler returns this typed code +
     /// serves zero bytes. Distinct from
     /// [`Self::UcanBlobsRequestRejected`] (umbrella per-request

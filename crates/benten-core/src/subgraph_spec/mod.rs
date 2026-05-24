@@ -36,7 +36,7 @@
 //! 1. **Roots** — the entry CIDs the walker starts BFS from.
 //! 2. **Expansion** — which outgoing edges are followed at each step.
 //!    Today: the Spec itself declares its edges (Spike F: data-not-contract).
-//! 3. **Inclusion** — a `RestrictedSpec` predicate that narrows / filters
+//! 3. **Inclusion** — a `SubgraphSpecRestriction` predicate that narrows / filters
 //!    which Nodes are emitted (Path (a) per R1 ratification: restricted-
 //!    spec language only; Path (b) structurally unsound per Spike H+1.1).
 //! 4. **Termination** — `max_depth` + structural cycle detection.
@@ -63,7 +63,7 @@
 //!
 //! # Restricted-spec extension slots
 //!
-//! [`RestrictedSpec`] uses **named-arm carriers**, not opaque payloads
+//! [`SubgraphSpecRestriction`] uses **named-arm carriers**, not opaque payloads
 //! (refinement #5). Future extensions are added as additional named
 //! variants on the `non_exhaustive` enum; downstream matchers carry a
 //! `_ =>` arm. **Opaque specs must materialize before sharing**
@@ -82,7 +82,7 @@ pub mod macros;
 
 pub use combinators::{filter, intersect, union};
 pub use errors::SubgraphSpecError;
-pub use spec::{RestrictedSpec, Spec, SpecBuilder, StructuralPath};
+pub use spec::{SubgraphSpecRestriction, Spec, SpecBuilder, StructuralPath};
 pub use walker::{WalkResult, walk, walker_as_subgraph};
 
 // Re-export the `query!` macro under this module path so call sites can

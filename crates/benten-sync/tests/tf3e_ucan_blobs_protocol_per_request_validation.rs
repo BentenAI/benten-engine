@@ -5,7 +5,7 @@
 //!   - `.addl/phase-4-meta/r2-test-landscape.md` §2 G-CORE-3e (P-1):
 //!     "Custom-ALPN handler: requester opens connection → presents
 //!     `AuthorizationGrant` → handler validates UCAN against
-//!     `RestrictedSpec` (via G-CORE-3b chain validator) → handler
+//!     `RestrictedScope` (via G-CORE-3b chain validator) → handler
 //!     dispatches to `iroh_blobs::provider::handle_connection` for the
 //!     ciphertext_hash. Spike A2 + Spike H+1.2 validated the reuse
 //!     pattern over real iroh QUIC; this is the substantive proof."
@@ -46,7 +46,7 @@ use benten_sync::ucan_blobs_protocol::{
 };
 // RED-PHASE failure point — G-CORE-3b surface that 3e consumes.
 use benten_caps::authorization_grant::AuthorizationGrant;
-use benten_caps::restricted_spec::RestrictedSpec;
+use benten_caps::restricted_spec::RestrictedScope;
 
 // ---------------------------------------------------------------------------
 // PIN 1 — Per-request UCAN validation on the custom-ALPN handler.
@@ -91,7 +91,7 @@ fn tf3e_per_request_ucan_validation_rejects_malformed_grant() {
 // PIN 2 — Request out-of-scope ciphertext returns typed NotInScope; no
 // bytes served.
 // ---------------------------------------------------------------------------
-// Production-arm F-2. The handler validates the UCAN-bound RestrictedSpec
+// Production-arm F-2. The handler validates the UCAN-bound RestrictedScope
 // against the requested ciphertext_hash. If the hash is NOT in the
 // granted scope, the handler returns `NotInScope` and serves zero bytes.
 //
@@ -106,7 +106,7 @@ fn tf3e_request_out_of_scope_ciphertext_typed_not_in_scope() {
     let handler = UcanBlobsHandler::new(&kp_alice);
 
     // Grant Bob a scope covering {hash_a, hash_b}.
-    let spec = RestrictedSpec::with_hashes(vec![[1u8; 32].into(), [2u8; 32].into()]);
+    let spec = RestrictedScope::with_hashes(vec![[1u8; 32].into(), [2u8; 32].into()]);
     let grant = AuthorizationGrant::issue_for_test(
         &kp_alice,
         kp_bob.public_key(),
@@ -123,7 +123,7 @@ fn tf3e_request_out_of_scope_ciphertext_typed_not_in_scope() {
     let result = handler.validate_request(&req);
     assert!(
         matches!(result, Err(UcanBlobsHandlerError::NotInScope { .. })),
-        "Request for ciphertext NOT in granted RestrictedSpec scope MUST \
+        "Request for ciphertext NOT in granted RestrictedScope scope MUST \
          return typed NotInScope; the handler MUST NOT dispatch to \
          iroh-blobs for the out-of-scope hash. got: {:?}",
         result.as_ref().map(|_| "Ok(_)").unwrap_or("Err(_)")
@@ -161,7 +161,7 @@ fn tf3e_dispatch_to_iroh_blobs_only_after_positive_validation() {
 
     // Positive path: well-formed grant in-scope.
     let hash = [42u8; 32].into();
-    let spec = RestrictedSpec::with_hashes(vec![hash]);
+    let spec = RestrictedScope::with_hashes(vec![hash]);
     let grant = AuthorizationGrant::issue_for_test(
         &kp_alice,
         kp_bob.public_key(),

@@ -1,4 +1,4 @@
-//! `RestrictedSpec` — the structured 6-dimensional sub-graph restriction
+//! `RestrictedScope` — the structured 6-dimensional sub-graph restriction
 //! language for G-CORE-3b (Path (a) of the RATIFIED-S&C 2026-05-21 §R1
 //! decision; Path (b) refinement-witness over opaque specs was rejected
 //! as structurally unsound per Spike H+1.1).
@@ -22,7 +22,7 @@
 //!
 //! ## Composition discipline
 //!
-//! [`RestrictedSpec::contains`] is `&&`-composed across all 6 dimensions
+//! [`RestrictedScope::contains`] is `&&`-composed across all 6 dimensions
 //! (per-dim narrowing checks AND-ed together). Any dimension that widens
 //! breaks the whole contains. Reflexive (`s.contains(&s) == true`) and
 //! transitive (`a.contains(&b) && b.contains(&c) ⇒ a.contains(&c)`).
@@ -100,7 +100,7 @@ impl PropertyValue {
 /// §R1). Future dimensions are NAMED fields added per `#[non_exhaustive]`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct RestrictedSpec {
+pub struct RestrictedScope {
     /// Root Node CIDs the walker may enter from. `None` ⇒ no roots
     /// constraint (every root admissible); `Some(empty)` ⇒ no roots
     /// admissible (the empty-roots-set is the most-restrictive root
@@ -123,14 +123,14 @@ pub struct RestrictedSpec {
     pub property_equalities: BTreeMap<String, PropertyValue>,
 }
 
-impl Default for RestrictedSpec {
+impl Default for RestrictedScope {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RestrictedSpec {
-    /// Construct an empty `RestrictedSpec` — every dimension unconstrained.
+impl RestrictedScope {
+    /// Construct an empty `RestrictedScope` — every dimension unconstrained.
     /// Use the `.with_*` builder methods to add per-dimension restrictions.
     #[must_use]
     pub const fn new() -> Self {
@@ -151,7 +151,7 @@ impl RestrictedSpec {
         self
     }
 
-    /// G-CORE-3e convenience constructor — build a [`RestrictedSpec`]
+    /// G-CORE-3e convenience constructor — build a [`RestrictedScope`]
     /// whose `roots` set is the supplied list of CIDs (the ciphertext-
     /// hashes the recipient is allowed to request). Equivalent to
     /// `Self::new().with_roots(hashes)` but the `with_hashes` name
