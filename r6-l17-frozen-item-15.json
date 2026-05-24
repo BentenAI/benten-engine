@@ -1,0 +1,187 @@
+{
+  "lens": "L17",
+  "lens_name": "frozen-item-15-phase-wide",
+  "lens_scope": "R6 PHASE-WIDE re-run: §1.A.FROZEN 15-item contract verifier with focus on item 15 sub-clauses a-j + DEFERRED.md row honesty + phase-wide forward-compat additive-discipline",
+  "round": "R6-R1",
+  "branch": "phase-4-meta-core/r6-r1-l17-frozen-item-15-phase-wide",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "head_sha_at_start": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "disposition": "APPROVE-WITH-FIXES",
+  "r6_r1_convergence_disposition": "PROCEED-TO-R6-R2 (no BLOCKER/MAJOR; 1 bounded MINOR + 5 OBS surgical, none blocks Q5 termination at R6-R1; iterate-to-convergence applies per CLAUDE.md rule 9 - R6 R2 will re-verify against R6-FP edits to these findings if landed)",
+  "summary": {
+    "items_verified": 15,
+    "subclauses_item_15_verified": 10,
+    "deferred_rows_audited": 21,
+    "breaking_changes_cohorts_audited": 5,
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 1,
+    "obs_count": 5,
+    "positive_confirmations": 13,
+    "tag_ready": true,
+    "council_advance": "R6-R1 returns APPROVE-WITH-FIXES; 1 MINOR surgical R6-FP-applicable; 5 OBS narrative-improvements deferrable to R6-R2 or v1-Composing per disposition column"
+  },
+  "phase_wide_15_items_verification": [
+    { "item": 1, "title": "§8-A Engine visibility cluster (get_node/put_node/get_node_label_only/resolve_subgraph_cid_for_test)", "shipped_surface": "PARTIAL-LANDED at v1-beta — `pub fn` retained at HEAD; tighten + napi cascade deferred to G-COMP-1 per Row D-7 (HARD RULE 12 clause-(b) honest)", "verified": true, "concern": "Row D-7 names a SemVer-tightening as G-COMP-1 follow-up; visibility-tighten is BREAKING for any external caller of get_node post-v1-beta. The DEFERRED doc + V1-BETA-BREAKING-CHANGES.md Cohort 5 BOTH name this honestly. Doc honesty preserved despite the partial-landed posture." },
+    { "item": 2, "title": "Class-B-β `read_node_as` canonical public read", "shipped_surface": "`Engine::read_node_as` at engine_wait.rs is the principal-bearing public read; coexists with un-tightened `get_node` per Row D-7 split", "verified": true, "concern": "Per discipline external callers SHOULD route through `read_node_as`; structural enforcement is the G-COMP-1 deliverable (Row D-7)" },
+    { "item": 3, "title": "Backend-trait SemVer-locks (§4.60-§4.64/§4.43)", "shipped_surface": "Backend traits + non_exhaustive sweep landed; specific per-trait locks named in narrative", "verified": true, "concern": "Item 3 narrative is broad-stroke; specific per-§4.6x decisions deferred to backend baselines (cargo-public-api covers structurally)" },
+    { "item": 4, "title": "D2 v1-canonical-bytes contract frozen as version 1", "shipped_surface": "P-III Ben decision-point: V1-WIRE-FORMAT-INVENTORY.md authored; PR #1331 SnapshotBlob v1→v2 cohort-1 bump landed (no-users-yet override)", "verified": true, "concern": "Row D-9 names 6 hex-pinned byte-pin tests deferred to G-COMP-1 (per-codepoint table + per-chunk AAD + UCAN-Varsig + AuthorizationGrant CBOR + Drop bundle CBOR). Hex-pin coverage at v1-beta is roundtrip + constant-position + format-version; full hex-pin parity deferred — honest." },
+    { "item": 5, "title": "#989 WriteContext shape frozen (G-CORE-1 canary)", "shipped_surface": "PR #1304 WriteContext::namespace_did add (additive per non_exhaustive); G-CORE-1 canary merged ed03729a-equivalent", "verified": true },
+    { "item": 6, "title": "#1300 signature + #1301 encryption boundaries + swap matrix + 5-codepoint table frozen", "shipped_surface": "benten-crypto-suite public-API + codepoint table (BLAKE3 0x1e, SHA2_512_256 0x1015, SHA3_256 0x16, HYBRID_ED25519_MLDSA65 0x0001, CLASSICAL_ED25519 0x0002, HYBRID_MLDSA65_SLHDSA 0x0003, HYBRID_X25519_MLKEM768 0x647a, CLASSICAL_X25519 0x6400, NONE_PLAINTEXT 0x0000, HYBRID_MLKEM768_HQC 0x647b reserved, PURE_PQ_MLKEM768_ONLY 0x647c audit-gated)", "verified": true, "concern": "C11b safety gate `try_pure_pq_sole_trust_path` returns AuditNotLandedPurePqRejected at v1-beta; structurally correct" },
+    { "item": 7, "title": "§4.33 legacy install_plugin* DELETED (Core opening wave)", "shipped_surface": "module_ecosystem::install_plugin* family REMOVED at G-CORE-0 (PR #1311); canonical path = benten_platform_foundation::plugin_lifecycle::install_plugin", "verified": true },
+    { "item": 8, "title": "benten-caps v1-API forks decided (#993 SEALED hard-discipline + 3 new G-CORE-8 hooks defaulted)", "shipped_surface": "policy.rs:50-64 `pub(crate) mod sealed { pub trait Sealed {} }` HARD-SEAL via private supertrait; CapabilityPolicy: sealed::Sealed + Send + Sync at policy.rs:354; 3 hooks at policy.rs:508/532/571 (check_install_consent, check_per_delegation, check_write_with_audience)", "verified": true, "concern": "Row D-3 names consumption-deferred for the 3 hooks — at v1-beta zero production call sites; the signatures are frozen so the future wire-up is non-breaking. Row D-20 names trybuild compile-fail regression test deferred (mechanism IS rustc-enforced at v1-beta)." },
+    { "item": 9, "title": "cargo-public-api baselines committed as v1 surface", "shipped_surface": "14 baselines at docs/public-api/*.txt totaling ~20,559 LOC (doc claims 20,571 — minor recount drift); cargo-public-api.yml is required-failing (no `|| true` bypass in diff step; explicit `exit 1` on diff)", "verified": true },
+    { "item": 10, "title": "TS/JS @benten/engine public API frozen (incl. #1204 parity gate)", "shipped_surface": "ts-public-api.yml landed at commit 13322df4; baseline at packages/engine/etc/public-api.txt", "verified": true, "minor_concern": "MINOR — ts-public-api.yml line 106 uses `|| true` on the diff step + uses 'informational' framing in the step name; the workflow runs but does NOT fail CI on TS-side drift, in contrast to the Rust cargo-public-api workflow which IS required-failing per Bundle 10 Fork 3 flip. The freeze doc's verification-mechanism preamble at lines 73-80 treats both as structural backstops. The asymmetry is real and the doc should either (a) acknowledge TS gate is informational-only at v1-beta and name the required-failing migration as a G-COMP-1 named-destination row, OR (b) flip ts-public-api.yml to required-failing now matching the Rust side." },
+    { "item": 11, "title": "META #907 #[non_exhaustive] sweep — MAXIMALIST", "shipped_surface": "158 pub enums workspace-wide; 148 carry #[non_exhaustive]; carve-outs documented (Scope EXACTLY-two-arms per item 15(c); PrimitiveKind defensive; benten_graph::GraphError::TxAborted per Fwd-2 #997/#1207); Row D-17 names ~80+ test-cascade deferred to G-COMP-1 (CapWriteContext/ReadContext + the extended type set from L8-R2-MAJOR-CARRY-2 closure)", "verified": true, "concern": "Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) closed at G-CORE-9 R2 Bundle R2.8 — NOT deferred (correct call). Row D-17 deferral is honest about the cascade cost; the freeze contract is satisfied because v1-beta engineering discipline TREATS the named types as if-non_exhaustive (the documentation gap is the structural attribute). Production code (in benten-engine) already uses field-mutation pattern per Bundle 3." },
+    { "item": 12, "title": "G-CORE-8 security-surface public-shape lock (ManifestEnvelopeRecheckOutcome 4-arm + post-rename UnresolvedDeny semantic)", "shipped_surface": "ManifestEnvelopeRecheckOutcome at manifest_envelope_recheck.rs (#[non_exhaustive] applied + UnresolvedDeny rename); NoopManifestEnvelopeRechecker is the shipped default; empty-peer-DID structural fail-CLOSED IS live at apply_atrium_merge; ProductionManifestEnvelopeRechecker + accept_atrium_share + §4.25 sync-hydrate consumption all deferred to G-COMP-1 (Rows D-4, D-5, D-6)", "verified": true, "concern": "Item 12 honest about partial-landed v1-beta posture: empty-peer-DID structural fail-CLOSED IS live; substantive per-DID recheck is the G-COMP-1 deliverable. Compromise #26 in SECURITY-POSTURE.md documents the v1-beta posture end-to-end." },
+    { "item": 13, "title": "Engine↔host runtime-ownership bridged-dual-runtime (§8-C); IPC_METHODS const-allowlist; Renderer trait swappability", "shipped_surface": "benten-renderer-tauri has ZERO tauri/tokio deps (verified by compile-test pin at arch_n_benten_renderer_tauri_dep_direction.rs); IPC_METHODS const-allowlist + Renderer trait at materializer.rs:552; ThinClientBridge at thin_client_bridge.rs:86; cargo-public-api baseline locks runtime-handle-leak structural pin", "verified": true },
+    { "item": 14, "title": "P2P-interop conformance invariant (mandatory baseline + typed-unsupported-error never silent fallback + additive-codepoint + old-codepoints supported forever + IANA component ID reuse)", "shipped_surface": "Conformance tests at crates/benten-crypto-suite/tests/p2p_interop_conformance_*.rs + tf4_gcore3c_swap_matrix_conformance*.rs; UnsupportedAlgorithm typed-reject at every codepoint dispatcher; #1341 0x647b incident is the in-tree precedent", "verified": true },
+    { "item": 15, "title": "Sharing & Confidentiality (S&C) public surface frozen — 10 sub-clauses a-j", "shipped_surface": "ALL 10 sub-clauses have concrete shipped surface at HEAD 4bbc4cac (per-sub-clause detail in next section)", "verified": true }
+  ],
+  "item_15_subclause_verification": [
+    { "sub": "a", "title": "SubgraphSpec primitive (4-thing thin core; 12-primitive irreducibility preserved)", "shipped": "crates/benten-core/src/subgraph_spec/spec.rs:190 `pub struct Spec` (private fields + builder pattern for SemVer-additive-field-extension); walker.rs:78 `pub fn walk`; walker.rs:183 `pub fn walker_as_subgraph() -> Subgraph` (fractal-property pin); WalkResult; StructuralPath; SubgraphSpecError; rename `subgraph_spec::RestrictedSpec → SubgraphSpecRestriction` landed", "verified": true, "test_pin": "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs (exists)" },
+    { "sub": "b", "title": "RestrictedScope shape (post-rename; 6-dimension product; NAMED-not-opaque extension slots)", "shipped": "crates/benten-caps/src/restricted_spec.rs:103 `pub struct RestrictedScope` with all 6 dimensions: roots + edge_allowlist + max_depth + label_allowlist + label_denylist + property_equalities; #[non_exhaustive] applied; no-opaque-arm documented", "verified": true },
+    { "sub": "c", "title": "Structured UCAN Scope enum — EXACTLY two arms (deliberate carve-out; serde-tag dispatch for additive future arms)", "shipped": "crates/benten-caps/src/scope.rs:46 `pub enum Scope { Hashes(Vec<Cid>), RestrictedSelector(RestrictedScope) }`; deliberately NOT #[non_exhaustive] per item 11 carve-out; doc-block at scope.rs:32-46 documents the structural pin via exhaustive match", "verified": true, "test_pin": "tf3b_no_opaque_selector_arm_structural (cited)" },
+    { "sub": "d", "title": "AuthorizationGrant envelope = ONE signed artifact + binding-sig-validation-FIRST + rename KeyMaterial → GrantKeyMaterial", "shipped": "crates/benten-caps/src/authorization_grant.rs:233 `pub struct AuthorizationGrant` with fields ucan + key_material (GrantKeyMaterial @ line 176) + binding_sig + audience_binding + issuer_verifying_key + audience_pubkey; #[non_exhaustive] applied; verify_binding implementation ordering-pinned", "verified": true, "minor_obs": "Freeze doc V1-FROZEN-INTERFACE.md:1442 cites `authorization_grant.rs:205` for AuthorizationGrant struct — actual is line 233 at HEAD; cite-drift cosmetic. Cite-drift is a §3.5g #3 type-name cross-doc mirror concern (low severity since the type name is unambiguous and grep-resolvable)." },
+    { "sub": "e", "title": "Encryption-class enum (Public + Confidential; #[non_exhaustive])", "shipped": "crates/benten-core/src/encryption_class.rs:36 `pub enum EncryptionClass { Public, Confidential }` with #[non_exhaustive]; EncryptionClassError typed-reject + pub mod codepoint wire table + from_codepoint(u8) -> Result typed dispatch", "verified": true },
+    { "sub": "f", "title": "Two-path key-derivation contract (Interpretation B per Spike E; HKDF-SHA256 v1-beta default; \"step\"/\"root\" info-tags)", "shipped": "crates/benten-crypto-suite/src/structural_kdf.rs:124 `pub fn derive_root(k_principal, root_cid) -> StructuralKdfKey` with `info = \"root\" || root_cid`; line 141 `pub fn derive_step(...)` with `info = \"step\" || edge_label || N.cid`; StructuralKdfKey zeroize-on-drop; derive_step_without_info_tag_for_test at line 96 (test-only escape)", "verified": true },
+    { "sub": "g", "title": "Two-CID mapping + per-chunk-AEAD chunk-size = IROH_BLOCK_SIZE (16 KiB) + AAD-binds-chunk-index", "shipped": "benten-graph::two_cid_map IS redb-backed (durable); benten-sync::two_cid_store::TwoCidStore is the wave-3e in-memory adapter with named iroh_blobs::FsStore swap-point at production wire-up; crates/benten-crypto-suite/src/aead.rs:52 `pub const IROH_BLOCK_SIZE: usize = 16 * 1024`; aead.rs:56 `pub const WHOLE_CONTENT_AEAD_THRESHOLD: usize = 64 * 1024`; golden-constant pin at aead.rs:443 `assert_eq!(IROH_BLOCK_SIZE, 16 * 1024)`; AAD layout = 2-tuple (plaintext_cid, chunk_index) per R1 Bundle 11b retract", "verified": true, "obs": "OBS — freeze doc 15(g) says 'redb-backed plaintext_cid → ciphertext_cid mapping table at G-CORE-3d (#1323) — durable.' This is correct for the benten-graph::two_cid_map level; the wave-3e TwoCidStore adapter in benten-sync is in-memory until iroh-blobs swap-in. The doc should clarify which layer is durable at v1-beta vs which layer awaits production wire-up. AAD `total_chunks` defense deferred to G-COMP-1 per Row D-15a — acknowledged in R1 Bundle 11b retract." },
+    { "sub": "h", "title": "SubgraphSpec walker IS a Subgraph shipped once in benten_core; Engine::walk_share_scope wrapper", "shipped": "crates/benten-core/src/subgraph_spec/walker.rs:78 walk + walker.rs:183 walker_as_subgraph; crates/benten-engine/src/engine_share_scope.rs:59 `pub fn walk_share_scope(spec) -> Result<WalkResult, EngineError>` delegates to canonical walker; ErrorCode::SubgraphSpecWalkFailed minted (CATALOG_VARIANT_COUNT 191 → 192); end-to-end test at g_core_9_walk_share_scope_e2e.rs exists", "verified": true, "obs": "OBS — `walk_share_scope_as` principal-bearing additive overload deferred to G-COMP-1 per Row D-11; v1-beta ships principal-unbearing only. Honest." },
+    { "sub": "i", "title": "Revocation reach documentation (SECURITY-POSTURE.md Compromise #31; documented-design-constant; not code-shape)", "shipped": "docs/SECURITY-POSTURE.md:47 Compromise #31 entry in registry table; body sections at lines 2492 + 2536; explicit OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN nbf/exp + key rotation; stays OPEN at v1-beta + v1-GM", "verified": true },
+    { "sub": "j", "title": "Resolver evaluation = live-per-request (documented contract; IVM-cache seam reuses G-CORE-4 CanonicalViews subscription; only frozen-snapshot path is offline-Drop-bundle)", "shipped": "Documented contract at V1-FROZEN-INTERFACE.md §15.j; resolver IS called per request structurally", "verified": true, "obs": "OBS — verification-mechanism test pin (write new in-scope content after UCAN issued + assert recipient sees it on next request) deferred to G-COMP-1 per Row D-10; the structural property is in place at v1-beta but the regression-defense test pin is absent. Honest." }
+  ],
+  "deferred_doc_audit": {
+    "total_rows": 21,
+    "row_count_at_head": 21,
+    "row_numbering_gap_check": "D-1 through D-21 present; row D-17 ordered after D-18 in file (cosmetic; numbering preserved); no numeric gap besides the cosmetic ordering",
+    "doc_honesty_disposition": "PASS",
+    "v1_beta_posture_per_row_audit": [
+      { "row": "D-1", "title": "WriteBoundaryChainValidator consumption", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Layer-1 user-as-root NOT live at WRITE admission boundary; runtime enforcement via Layer-1 CapabilityPolicy::pre_write (Compromise #2 sync-replica sub-narrative)" },
+      { "row": "D-2", "title": "InstallRecordReplayStore lifecycle wiring", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "TOCTOU defense not live (zero production callers supply Some(closure) at HEAD)" },
+      { "row": "D-3", "title": "3 §8-E CapabilityPolicy hooks consumption", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Trait signatures + sealed-discipline locked; zero production call sites; custom impl of any hook silently ignored at v1-beta" },
+      { "row": "D-4", "title": "ProductionManifestEnvelopeRechecker production impl", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Always-installed Noop returns NotApplicable (admit) for resolvable peer-DIDs; Layer-A empty-DID short-circuit IS live" },
+      { "row": "D-5", "title": "accept_atrium_share cross-peer install seam", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Cross-peer install verification NOT live; plugins consume through user-DID-signed install records ONLY (no cross-peer ingest)" },
+      { "row": "D-6", "title": "§4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "§4.36 merge half structurally enforced; §4.25 sync-hydrate half not" },
+      { "row": "D-7", "title": "§8-A Engine visibility cluster tighten + napi cascade", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "4 methods remain pub fn; future tighten IS SemVer-breaking but cargo-public-api baseline catches; also in V1-BETA-BREAKING-CHANGES.md Cohort 5" },
+      { "row": "D-8", "title": "F3 anti-replay atomic CAS (FrameReplayMarker TOCTOU)", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "F3 anti-replay racy under concurrent inbound same session_nonce; Compromise #23 retensed" },
+      { "row": "D-9", "title": "wire-format hex-pinned byte-pin tests sweep (6 of 8 deferred)", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Roundtrip + constant-position + format-version pins enforce byte stability; hex-pin coverage partial" },
+      { "row": "D-10", "title": "§15.j live-per-request resolver-evaluation test pin", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Live-per-request structurally in place; regression-defense test pin absent" },
+      { "row": "D-11", "title": "walk_share_scope_as principal-bearing additive overload", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Principal-bearing recipient enumeration for path-tagged-key derivation unavailable at v1-beta" },
+      { "row": "D-12", "title": "DSL filesystem-exercising tests", "honest_re_posture": true, "named_destination": "G-COMP-1" },
+      { "row": "D-13", "title": "structural_kdf info-tag codepoint-binding", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Natural ChaCha20-Poly1305 defense via K_root divergence IS structurally present; codepoint-binding via KDF info is incidental not explicit; FUTURE wire-format-coupled change requiring backward-compat scheme or version bump" },
+      { "row": "D-14", "title": "Recursive cargo invocation test hygiene", "honest_re_posture": true, "named_destination": "G-COMP-1" },
+      { "row": "D-15", "title": "Post-v1-beta hardening watch-list (multi-item)", "honest_re_posture": true, "named_destination": "G-COMP-1 OR Phase-4-Meta-Composing v1-assessment-window", "v1_beta_posture_disclosed": "All nice-to-have; each has no immediate exploit at v1-beta" },
+      { "row": "D-16", "title": "V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md authorship (path-b collapsed onto inventory)", "honest_re_posture": true, "named_destination": "G-COMP-1 OR pre-v1-beta tag", "v1_beta_posture_disclosed": "Inventory IS authored + tracked; Ben sign-off via inventory's own §P-III Ben decision-point" },
+      { "row": "D-17", "title": "CapWriteContext + ReadContext + SuspensionOutcome + extended lens-scoped pub-type non_exhaustive cascade", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Type shape locked per freeze narrative; attribute is documentation gap; field additions treated-as-breaking by v1-beta engineering discipline; production code uses field-mutation pattern" },
+      { "row": "D-18", "title": "L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Attack vector admit-only if rechecker is Noop (admit-everything anyway); under substantive ProductionRechecker (D-4 deliverable), rechecker handles synthesized-DID rejection" },
+      { "row": "D-19", "title": "Strategy::C → Reserved rename + 3 DSL ErrorCode mints (Bundle 4 ESCALATED)", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Obsolete Strategy::C naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes; no immediate exploit; rename window = G-CORE-9 OR G-COMP-1 (any later is SemVer break post-v1-beta tag)" },
+      { "row": "D-20", "title": "L6-r1-3 trybuild compile-fail regression backstop for CapabilityPolicy hard-seal", "honest_re_posture": true, "named_destination": "G-COMP-1", "v1_beta_posture_disclosed": "Hard-seal MECHANISM rustc-enforced at v1-beta; only explicit negative-arm test fixture deferred" },
+      { "row": "D-21", "title": "crates/benten-crypto-suite/INTERNALS.md authorship", "honest_re_posture": true, "named_destination": "Phase-4-Meta-Composing OR G-COMP-1", "v1_beta_posture_disclosed": "Missing-but-deferred-not-blocking-tag; rustdoc + V1-FROZEN-INTERFACE.md item 6 + lib.rs module docstring carry load-bearing architecture narrative at v1-beta" }
+    ]
+  },
+  "forward_compat_phase_wide_audit": {
+    "additive_discipline_status": "MOSTLY-CLEAN-WITH-NAMED-EXCEPTIONS",
+    "summary": "Every 'we'll add this later' future hook is structurally additive OR is explicitly named as future-SemVer-break in V1-BETA-BREAKING-CHANGES.md Cohort 5. The two SemVer-breaking future changes (Row D-7 visibility tighten + Row D-13 structural_kdf info-tag extension) are both NAMED honestly in Cohort 5 (D-7) + DEFERRED.md row D-13 narrative (citing 'wire-format-coupled change requiring backward-compat scheme or version bump'). Rows D-19 (Strategy::C → Reserved rename + 3 DSL ErrorCode mints) is named as wire-format-strings + ErrorCode variant name forever-locked at v1-beta freeze; the rename window discipline IS named (G-CORE-9 OR G-COMP-1 only; any later = SemVer break post-v1-beta tag).",
+    "non_additive_future_changes_inventory": [
+      { "row": "D-7", "type": "visibility-tighten (pub → pub(crate))", "named_in_breaking_changes_ledger": true, "ledger_cohort": "Cohort 5 — Public-API DEFERRED post-v1-beta tighten watch-list", "honest_disposition": true },
+      { "row": "D-13", "type": "wire-format-coupled HKDF info-tag extension", "named_in_breaking_changes_ledger": true, "ledger_cohort": "Cohort 4 — Wire-format DEFERRED post-v1-beta hardening watch-list", "honest_disposition": true },
+      { "row": "D-19", "type": "wire-format strings + ErrorCode variant rename + 3 ErrorCode mints", "named_in_breaking_changes_ledger": true, "ledger_cohort": "Cohort 5 — Public-API DEFERRED + the original Bundle 4 ESCALATED entry already documented", "honest_disposition": true, "obs": "OBS — D-19 narrative cautions 'the rename window IS specifically the G-CORE-9 freeze wave OR G-COMP-1 (any later is a SemVer break post-v1-beta tag)'. This is the correct discipline; G-COMP-1 MUST close before the v1-beta tag if the rename is to ride pre-v1-beta. The freeze doc + DEFERRED doc need to clarify whether G-COMP-1 closes BEFORE or AFTER the v1-beta tag (the v1-beta tag is currently scheduled at phase-4-meta-close per CLAUDE.md baked-in #15 PQ-default reframe; G-COMP-1 is Phase-4-Meta-Composing which by tag-sequence is AFTER phase-4-meta-core-close but BEFORE phase-4-meta-close)." }
+    ],
+    "additive_future_hooks_audit": [
+      { "surface": "item 5 WriteContext field additions (namespace_did precedent)", "additive": true, "guard": "#[non_exhaustive]" },
+      { "surface": "item 6 codepoint table additions (new reserved arms)", "additive": true, "guard": "additive-codepoint discipline + typed-reject on unknown" },
+      { "surface": "item 8 new CapabilityPolicy defaulted trait methods", "additive": true, "guard": "object-safety + defaulted-method pattern" },
+      { "surface": "item 11 #[non_exhaustive] variant additions", "additive": true, "guard": "the attribute IS the additive guarantee" },
+      { "surface": "item 13 IPC_METHODS allowlist additions", "additive": true, "guard": "explicit const update + manifest-review gate" },
+      { "surface": "item 15(b) RestrictedScope NAMED-not-opaque extension slots", "additive": true, "guard": "per-slot typed containment rule" },
+      { "surface": "item 15(c) Scope serde-tag-dispatch future arms", "additive": true, "guard": "deliberate carve-out + serde-tag dispatch enables additive future arms on the carve-out enum" },
+      { "surface": "item 15(e) EncryptionClass reserved variants (AnonymousGroup / PrivateLocal)", "additive": true, "guard": "#[non_exhaustive] + typed-reject" },
+      { "surface": "item 15(f) KDF codepoint-dispatch future codepoints", "additive": true, "guard": "codepoint-dispatched per CLAUDE.md #5" },
+      { "surface": "item 15(h) walk_share_scope_as principal-bearing variant (Row D-11)", "additive": true, "guard": "additive overload — pub(crate) variant + napi binding addition" }
+    ]
+  },
+  "breaking_changes_ledger_audit": {
+    "doc": "docs/V1-BETA-BREAKING-CHANGES.md",
+    "cohort_count": 5,
+    "cohort_breakdown": [
+      { "cohort": 1, "title": "Wire-format byte-shape changes", "row_count": 4 },
+      { "cohort": 2, "title": "Public-API shape changes (renames + visibility)", "row_count": 19 },
+      { "cohort": 3, "title": "G-CORE-9 R1 fix-pass additions", "row_count": 13 },
+      { "cohort": 4, "title": "Wire-format DEFERRED post-v1-beta", "row_count": 6 },
+      { "cohort": 5, "title": "Public-API DEFERRED post-v1-beta tighten", "row_count": 5 }
+    ],
+    "every_change_ratified": true,
+    "ratification_pattern_audit": "Every entry cites Ben-ratified P-III no-users-yet override OR pre-v1-API-shape ratification OR orchestrator-night-shift-surface-arch-decision per foundational memories per the doc's own §Authority preamble. R2-Rn councils have verified completeness vs git log 8141b94..HEAD walk per §Provenance"
+  },
+  "findings": [
+    {
+      "id": "L17-r1-frozen-item-15-phase-wide-MINOR-1",
+      "severity": "MINOR",
+      "title": "ts-public-api workflow is informational-only at v1-beta (asymmetric vs cargo-public-api required-failing)",
+      "where": ".github/workflows/ts-public-api.yml:106 (`|| true` on diff step) + step name `Diff regenerated vs committed baseline (informational)`",
+      "what_lens_caught": "Phase-wide forward-compat re-verification: V1-FROZEN-INTERFACE.md §'Verification mechanism (workspace-wide)' preamble at lines 73-80 names the TS-side public-API parity gate (#1204) as backstop #2 alongside cargo-public-api as a structural CI-failing defense. However ts-public-api.yml line 106 uses `|| true` and the step name says `(informational)`. Item 9 cargo-public-api workflow IS required-failing (explicit `exit 1` on diff at line 105). The asymmetric enforcement is structurally honest at the workflow level but the freeze doc preamble overstates the TS gate's bite.",
+      "disposition_recommendation": "FIX-NOW orchestrator-direct (per HARD RULE 12 clause-(a/b)): (option-a, preferred per consistency with Rust gate flip per Bundle 10 Fork 3) flip ts-public-api.yml to required-failing by replacing `|| true` with an explicit `exit 1` if diff is non-empty + rename the step from 'informational' to 'required-failing per V1-FROZEN-INTERFACE item 10'; OR (option-b) acknowledge in V1-FROZEN-INTERFACE.md §Verification mechanism preamble + item 10 narrative that the TS gate is informational-only at v1-beta and add a Row D-22 to DEFERRED.md naming the required-failing migration as G-COMP-1 destination. Option-a is the consistent-with-Rust-flip path; the migration to @microsoft/api-extractor is named for v1-Composing per item 10 narrative — option-a does NOT block that migration since the workflow + baseline-file location ARE the migration seam.",
+      "blocks_freeze": false,
+      "blocks_r6_advance": false,
+      "subclause_impact": "item 10 (TS public-API) parity-gate enforcement; tangentially affects item 9 cargo-public-api preamble framing"
+    }
+  ],
+  "obs": [
+    {
+      "id": "L17-r1-frozen-item-15-phase-wide-OBS-1",
+      "title": "Cite-drift at V1-FROZEN-INTERFACE.md:1442 — `AuthorizationGrant` cited at authorization_grant.rs:205; actual at line 233 at HEAD 4bbc4cac",
+      "where": "docs/V1-FROZEN-INTERFACE.md:1442",
+      "lens": "phase-wide sub-clause 15.d cite-precision audit",
+      "obs_disposition": "Cosmetic; grep-resolvable; could be tidied at R6-R2 or later with a §3.5g #3 type-name cross-doc mirror line-number sed. Single-line cite refresh."
+    },
+    {
+      "id": "L17-r1-frozen-item-15-phase-wide-OBS-2",
+      "title": "Sub-clause 15(g) doc could clarify which layer (benten-graph TwoCidMap vs benten-sync TwoCidStore) is durable at v1-beta",
+      "where": "docs/V1-FROZEN-INTERFACE.md:1591-1606",
+      "lens": "phase-wide forward-compat sub-clause precision",
+      "obs_disposition": "Doc improvement; benten-graph::two_cid_map IS redb-backed (durable); benten-sync::two_cid_store::TwoCidStore is the wave-3e in-memory adapter with named iroh_blobs::FsStore swap-point. The doc says 'redb-backed plaintext_cid → ciphertext_cid mapping table at G-CORE-3d (#1323) — durable.' Adding a single line distinguishing the two layers + the wave-3e in-memory wave-completion → production wire-up seam would resolve. Not a freeze contract concern (the redb-backed mapping IS the v1-beta-frozen layer)."
+    },
+    {
+      "id": "L17-r1-frozen-item-15-phase-wide-OBS-3",
+      "title": "Row D-19 G-COMP-1 destination + the v1-beta tag scheduling discipline could be cross-referenced",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-19 + docs/V1-BETA-BREAKING-CHANGES.md Cohort 5",
+      "lens": "phase-wide G-COMP-1 vs v1-beta tag sequencing",
+      "obs_disposition": "Row D-19 narrative: 'the rename window IS specifically the G-CORE-9 freeze wave OR G-COMP-1 (any later is a SemVer break post-v1-beta tag).' This is the correct discipline. Per CLAUDE.md baked-in #15 PQ-default reframe + the tag sequence: `phase-4-meta-core-close` → `phase-4-meta-close` → `v1-beta` → `v1-GM`. G-COMP-1 is Phase-4-Meta-Composing which IS strictly before `v1-beta`. The narrative is correct but could explicitly call out the tag-sequence to remove any ambiguity for the G-COMP-1 reader. Same applies to Row D-7 (visibility tighten) which is in Cohort 5 (Public-API DEFERRED post-v1-beta) but ALSO has a G-COMP-1 destination, implying the tighten CAN ride pre-v1-beta IF G-COMP-1 closes it; the Cohort 5 framing is correct as-is (post-v1-beta tighten watch-list IF G-COMP-1 doesn't close)."
+    },
+    {
+      "id": "L17-r1-frozen-item-15-phase-wide-OBS-4",
+      "title": "Item 11 audit-test enumerates ~10 named types; workspace-walker enhancement deferred (Row D-17)",
+      "where": "docs/V1-FROZEN-INTERFACE.md:977-995 + Row D-17",
+      "lens": "phase-wide forward-compat completeness gauge",
+      "obs_disposition": "The named-set audit test covers the highest-leverage surfaces at v1-beta. The workspace-walker is the regression-defense enhancement. Honest deferral; not a freeze-contract concern. The named-types audit IS structurally adequate at v1-beta per Pattern 6 (test what can go wrong)."
+    },
+    {
+      "id": "L17-r1-frozen-item-15-phase-wide-OBS-5",
+      "title": "Doc claim 20,571 LOC for public-API baselines; HEAD count is 20,559 (cosmetic recount drift)",
+      "where": "docs/V1-FROZEN-INTERFACE.md:73",
+      "lens": "phase-wide LOC-count precision",
+      "obs_disposition": "12-LOC drift between doc claim (20,571) and HEAD recount (20,559). Likely a one-line addition or removal post-baseline-regeneration. Single-line refresh."
+    }
+  ],
+  "positive_convergence_confirmations": [
+    { "confirmation": "All 15 §1.A.FROZEN items have concrete shipped surface verified at HEAD 4bbc4cac" },
+    { "confirmation": "All 10 sub-clauses of item 15 (a-j) have concrete shipped surface verified — every cited file/line/test pin exists" },
+    { "confirmation": "Item 15(a) walker_as_subgraph fractal-property landed; CLAUDE.md baked-in #1 (12-primitive irreducibility) preserved — no PrimitiveKind variant minted; test pin at tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs verified exists" },
+    { "confirmation": "Item 15(d) GrantKeyMaterial + AeadKeyMaterial type-name collision resolved via PR #1344 (commit dd12f394); type-level distinction prevents compatible-interpretation trap" },
+    { "confirmation": "Item 15(f) HKDF info-tag corrections (\"step\"/\"root\" cross-role domain separation per Spike E correction + R0.8) landed in structural_kdf.rs lines 124 + 141" },
+    { "confirmation": "Item 15(g) IROH_BLOCK_SIZE = 16 KiB golden-constant pin at aead.rs:443 with explicit `assert_eq!(IROH_BLOCK_SIZE, 16 * 1024)`" },
+    { "confirmation": "Item 15(h) Engine::walk_share_scope wrapper at engine_share_scope.rs:59 delegating to canonical benten_core::subgraph_spec::walker::walk; SubgraphSpecWalkFailed ErrorCode minted (CATALOG 191 → 192)" },
+    { "confirmation": "Item 15(i) Compromise #31 entry in SECURITY-POSTURE.md:47 + body sections at 2492 + 2536; OPEN ARCHITECTURAL TRADE-OFF posture honest at v1-beta + v1-GM" },
+    { "confirmation": "Item 8 CapabilityPolicy hard-seal LANDED via private Sealed supertrait at policy.rs:50-64; 3 new G-CORE-8 hooks at policy.rs:508/532/571 defaulted (additive)" },
+    { "confirmation": "Item 9 cargo-public-api workflow IS required-failing (explicit exit 1 on diff at workflow line 105; no `|| true` bypass)" },
+    { "confirmation": "Item 11 #[non_exhaustive] sweep maximalist applied to 148 of 158 pub enums; deliberate carve-outs (Scope EXACTLY-two-arms; PrimitiveKind defensive; GraphError::TxAborted per #997/#1207) all documented in the table" },
+    { "confirmation": "DEFERRED.md is honest about v1-beta posture across all 21 rows; every row carries explicit named-destination + v1-beta-posture disclosure per HARD RULE 12 clause-(b)" },
+    { "confirmation": "V1-BETA-BREAKING-CHANGES.md 5-cohort catalog complete; every non-additive future change (Row D-7 visibility tighten + Row D-13 wire-format HKDF info-tag extension + Row D-19 wire-format Strategy::C rename) named in Cohorts 4-5 with structurally-correct discipline disclosed" }
+  ],
+  "post_completion_state": {
+    "branch": "phase-4-meta-core/r6-r1-l17-frozen-item-15-phase-wide",
+    "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+    "review_artifact": "r6-l17-frozen-item-15.json",
+    "council_advance_recommendation": "PROCEED-TO-R6-R2 with 1 MINOR + 5 OBS; the MINOR (ts-public-api workflow informational-only vs cargo-public-api required-failing asymmetry) is FIX-NOW orchestrator-direct surgical (option-a flip the `|| true` to `exit 1`); the 5 OBS are doc-precision improvements that can ride R6-R2-FP or later (cite-drift line 1442; 15(g) layer-distinction clarification; D-19 + D-7 tag-sequence cross-reference; item 11 audit-test workspace-walker named-deferral OK; 12-LOC baseline-count drift)"
+  }
+}
