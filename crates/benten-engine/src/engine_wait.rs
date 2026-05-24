@@ -1090,6 +1090,10 @@ impl Engine {
                     .to_string(),
             });
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         Ok(self.backend().transaction(|tx| tx.put_node(node))?)
     }
 

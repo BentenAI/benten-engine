@@ -973,6 +973,10 @@ impl Engine {
     /// intentionally identical in body — keeping this one private to
     /// `engine_views` avoids bumping `engine_caps`'s public surface.
     fn privileged_put_node_for_user_view(&self, node: &Node) -> Result<Cid, EngineError> {
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         Ok(self.backend.put_node_with_context(
             node,
             &benten_graph::WriteContext::privileged_for_engine_api(),

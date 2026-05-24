@@ -529,6 +529,10 @@ impl Engine {
     ///   field is `pub(crate)`); the catch-all keeps future cross-
     ///   engine handle leaks honest.
     pub fn append_version(&self, anchor: &AnchorHandle, node: &Node) -> Result<Cid, EngineError> {
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         // G16-B-E Sub-item D: route through `backend.transaction` so
         // registered ChangeBroadcast subscribers fan out (ChangeEvents
         // for IVM-view materialization + engine-side `subscribe_change_events`

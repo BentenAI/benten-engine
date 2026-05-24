@@ -2014,6 +2014,56 @@ impl<B: GraphBackend> EngineGeneric<B> {
         self.write_boundary_chain_validator = Some(validator);
     }
 
+    /// **R6 R1 FP-F4 §S1 — structural-always-on WRITE-admission
+    /// consultation** of the configured
+    /// [`crate::write_boundary_chain_validator::WriteBoundaryChainValidator`].
+    ///
+    /// Every WRITE entry point (engine_crud's 5 CRUD APIs;
+    /// delegate_capability's final put; the privileged-put surface;
+    /// the IVM/view materializer put; the install put;
+    /// engine_diagnostics' put; engine_wait's resume put; the
+    /// apply_atrium_merge per-row put; handler_versions put) calls
+    /// THIS helper before the underlying backend write lands. The
+    /// helper is the load-bearing seam Row D-1 closes.
+    ///
+    /// Layer-1 user-as-root narrative (CLAUDE.md baked-in #18): a
+    /// configured `ProductionWriteBoundaryChainValidator` walks the
+    /// presented chain backward to the root + rejects with typed
+    /// [`benten_errors::ErrorCode::WriteBoundaryChainNotUserRooted`]
+    /// when the root is not a registered user-DID. The always-mounted
+    /// `NoopWriteBoundaryChainValidator` default returns
+    /// `NotApplicable` for every frame — Layer-1 enforcement at
+    /// `CapabilityPolicy::check_write` remains the only defense for
+    /// engines without a production validator installed.
+    ///
+    /// Engine-internal callers pass
+    /// [`crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal`];
+    /// chain-bearing callers (delegate_capability,
+    /// apply_atrium_merge) pass `WriteAdmissionFrame::with_chain`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the typed `EngineError::Other` per
+    /// [`crate::write_boundary_chain_validator::outcome_to_admission_reject`]
+    /// when the validator returns `ChainNotUserRooted`.
+    pub(crate) fn admit_write_chain(
+        &self,
+        frame: &crate::write_boundary_chain_validator::WriteAdmissionFrame<'_>,
+    ) -> Result<(), EngineError> {
+        let Some(validator) = self.write_boundary_chain_validator.as_ref() else {
+            return Ok(());
+        };
+        let (Some(chain_anchor_cid), Some(actor_did)) =
+            (frame.chain_anchor_cid(), frame.actor_did())
+        else {
+            // Engine-internal frame: nothing to walk; admit (the
+            // Noop's NotApplicable arm is the canonical shape).
+            return Ok(());
+        };
+        let outcome = validator.validate_chain(chain_anchor_cid, actor_did);
+        crate::write_boundary_chain_validator::outcome_to_admission_reject(outcome)
+    }
+
     /// **Phase-4-Meta-Core G-CORE-8 §4.37** — read-only access to the
     /// install-record replay store (test observable + install-pipeline
     /// consume).

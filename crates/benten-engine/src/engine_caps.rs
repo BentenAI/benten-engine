@@ -587,6 +587,19 @@ impl<'eng> EngineCapsHandle<'eng> {
             props.insert("attenuation".into(), Value::Text(attenuation_json));
         }
         let new_grant = Node::new(vec!["system:CapabilityGrant".into()], props);
+        // R6 R1 FP-F4 §S1 — chain-bearing admission: delegate_capability
+        // IS the cap-chain entry point — the `source_grant_cid` IS the
+        // anchor the user-root chain walks backward from, and
+        // `plugin_did` is the actor. (privileged_put_node consults
+        // again with an engine-internal frame; the NotApplicable arm
+        // collapses there — only this chain-bearing call ahead of it
+        // can fail-CLOSED.)
+        self.engine.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::with_chain(
+                source_grant_cid,
+                plugin_did,
+            ),
+        )?;
         self.engine.privileged_put_node(&new_grant)
     }
 }
@@ -680,6 +693,13 @@ impl Engine {
 
     /// Internal: write a system-zone Node via the privileged context.
     pub(crate) fn privileged_put_node(&self, node: &Node) -> Result<Cid, EngineError> {
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation. Engine-
+        // internal frame: the privileged put is the create_view +
+        // delegate_capability terminal write path; the user-DID is
+        // the authoritative principal for engine-internal writes.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         Ok(self.backend.put_node_with_context(
             node,
             &benten_graph::WriteContext::privileged_for_engine_api(),
