@@ -1,0 +1,109 @@
+{
+  "lens": "r4b-l4-named-destinations",
+  "round": "R4b-R2",
+  "phase": "Phase-4-Meta-Core G-CORE-9 FREEZE",
+  "branch": "phase-4-meta-core/r4b-r2-l4-named-destinations",
+  "merge_base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "merge_base_branch": "origin/phase-4-meta-core/r4b-r1-fix-pass",
+  "tree_state": "clean at branch creation",
+  "disposition": "APPROVE",
+  "r4b_r2_convergence_disposition": "STRICT_Q5_CONVERGED",
+  "summary": "R4b R2 L4 re-review of edited artifact post R4b R1 fix-pass: ALL 3 R4b R1 MINORs verified closed end-to-end + ZERO new findings introduced by the fix-pass + the 3 new rows (D-22, D-23, D-24) added during R4b R1 FP are honest + accessible + cross-cite integrity is intact across the V1-doc cluster. STRICT_Q5 termination: 0 BLOCKER + 0 MAJOR + 0 MINOR. Convergence achieved.",
+  "findings": [],
+  "r4b_r1_minor_closures_verified": [
+    {
+      "id": "L4-R4b-MIN-1",
+      "original_class": "phantom-destination (Row D-15a cited from BREAKING-CHANGES.md Cohort 3 Bundle 11b + Cohort 4)",
+      "closure_path_chosen": "path-(a) — author Row D-15a as a real sub-row in DEFERRED.md (per the precedent set by R4b R1 FP's letter-suffix promotion of D-15b/c/d/e)",
+      "verification": "grep -nE '^#### Row D-15a' docs/V1-FROZEN-INTERFACE-DEFERRED.md → line 361 — `#### Row D-15a — AAD per-chunk \\`total_chunks\\` augmentation`. Sub-row carries 4 well-formed bullets (Frozen surface / Deferred consumption / v1-beta posture / Anchor) + cross-references Compromise #5 + V1-WIRE-FORMAT-INVENTORY.md row 4 + V1-BETA-BREAKING-CHANGES.md Bundle 11b Fork 1 rebuttal-window narrative. BREAKING-CHANGES.md:201 + :226 cites of `Row D-15a` now resolve to a real header. HARD RULE 12 clause-(b) honored: the destination IS real + the entry landed NOW.",
+      "disposition": "CLOSED"
+    },
+    {
+      "id": "L4-R4b-MIN-2",
+      "original_class": "letter-suffix-sub-row implicit-mapping documentation-clarity gap",
+      "closure_path_chosen": "promote 4 bullets to `#### Row D-15{b,c,d,e}` mini-headers",
+      "verification": "grep -c '^#### Row D-15[a-e]' docs/V1-FROZEN-INTERFACE-DEFERRED.md → 5 (matches D-15a + D-15b + D-15c + D-15d + D-15e). Each carries `#### Row D-15{letter}` header at lines 361/386/405/425/442 with structured bullets. BREAKING-CHANGES.md Cohort 4 letter-suffix cites (`Row D-15a/b/c/d/e`) all resolve to real anchors. Navigation gap closed.",
+      "disposition": "CLOSED"
+    },
+    {
+      "id": "L4-R4b-MIN-3",
+      "original_class": "line-cite drift (within-file destination integrity for D-3 / D-4 / D-19 / D-20)",
+      "closure_path_chosen": "convert numeric line cites to path::Symbol form per pim-1 / §3.5b HARDENED point 3 (with explicit drift narration in each row)",
+      "verification": "Row D-3 (DEFERRED.md:114) now cites `crates/benten-caps/src/policy.rs::CapabilityPolicy::{check_install_consent, check_per_delegation, check_write_with_audience}` + parenthetical drift narration (`policy.rs:492-557 understated by ~14 lines as the file grew`). Verified the 3 hooks at policy.rs:508/532/571. Row D-4 (DEFERRED.md:140) now cites `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`; verified `pub trait ManifestEnvelopeRechecker: Send + Sync` at line 152. Row D-19 (DEFERRED.md:584) now cites `pub benten_errors::ErrorCode::ViewStrategyCReserved` + `pub benten_engine::error::EngineError::ViewStrategyCReserved` symbol-form + retains parenthetical drift narration (`benten-errors.txt:188 + benten-engine.txt:976,977,2329,2330 had drifted uniformly off-by-one to 187 / 975,976,2328,2329 post baseline regeneration`). Row D-20 (DEFERRED.md:621) now cites `V1-FROZEN-INTERFACE.md §8 \"What 'frozen' means here\" subsection ('Explicit negative-arm trybuild' bullet)` + parenthetical drift narration (`previous :717 cite has drifted to line 742`). All 4 cite-drift residues converted to drift-stable symbol/section anchors.",
+      "disposition": "CLOSED"
+    }
+  ],
+  "new_rows_audit": {
+    "D-22": {
+      "header_present": true,
+      "header_line": 747,
+      "destination_real": true,
+      "structure_complete": "Frozen surface + 7-step Deferred consumption + v1-beta posture + Pivot rationale (R4b L6-MAJOR-1 / R4b-FP-1 pivot 2026-05-24) + Anchor",
+      "baseline_count_verification": "Claimed 115 total (37 + 52 + 14 + 8 + 3 + 1); grep -cE '_for_test|_for_testing' on each baseline confirms exactly 37+52+14+8+3+1 = 115. HONEST.",
+      "cited_precedent_verified": "Cid::sample_for_test at crates/benten-core/src/lib.rs:521 confirmed; no-regression pin path crates/phase-3-workspace-tests/tests/g_core_9_for_test_cfg_gating_audit.rs is a future-pin destination (correctly named per Path (b) DEFER-NAMED-NOW pattern). BREAKING-CHANGES.md Cohort 5 cite at :246 cleanly references Row D-22.",
+      "disposition": "REAL"
+    },
+    "D-23": {
+      "header_present": true,
+      "header_line": 673,
+      "destination_real": true,
+      "structure_complete": "Frozen surface + Deferred consumption + v1-beta posture + Anchor",
+      "test_path_destination": "crates/benten-engine/tests/cross_wave_3_x_4_subgraphspec_live_eval_ivm_canonical_views.rs — future test-pin path (correctly named per DEFER-NAMED-NOW pattern; substrate from G-CORE-3w + G-CORE-4 is shipped at HEAD so the test is constructible at G-COMP-1).",
+      "anchor_cites_verified": "RATIFIED-S&C R5 D-4M-R5 + R2-test-landscape.md §4-B + r4b-l1-test-coverage.json — the .addl/phase-4-meta/ artifacts are gitignored orchestrator-local per the anchor narrative; honest disclosure.",
+      "disposition": "REAL"
+    },
+    "D-24": {
+      "header_present": true,
+      "header_line": 710,
+      "destination_real": true,
+      "structure_complete": "Frozen surface + Deferred consumption + v1-beta posture + Anchor",
+      "test_path_destination": "crates/benten-engine/tests/cross_wave_3_x_7_manifest_envelope_intersects_ucan_scope.rs — future test-pin path (DEFER-NAMED-NOW pattern; G-CORE-3b chain_validator + G-CORE-7 install path both merged so composition test substrate is fully available at HEAD).",
+      "anchor_cites_verified": "R2-test-landscape.md §4-C + CLAUDE.md baked-in #18 trust model + R4b L1 finding r4b-l1-2; couples to Row D-3 (3 §8-E CapabilityPolicy hooks consumption) per the row body. Coupling cite intact.",
+      "disposition": "REAL"
+    }
+  },
+  "cross_cite_integrity_audit": {
+    "method": "enumerated all `Row D-N[a-z]?` cites in V1-BETA-BREAKING-CHANGES.md + V1-FROZEN-INTERFACE.md + V1-WIRE-FORMAT-INVENTORY.md + V1-FROZEN-INTERFACE-BUILD-BACKLOG.md; cross-checked against `### Row D-N` + `#### Row D-N[a-z]` headers in V1-FROZEN-INTERFACE-DEFERRED.md",
+    "cites_external": ["Row D-3", "Row D-4", "Row D-7", "Row D-9", "Row D-11", "Row D-13", "Row D-15", "Row D-15a", "Row D-15b", "Row D-15c", "Row D-15d", "Row D-15e", "Row D-16", "Row D-17", "Row D-18", "Row D-19", "Row D-20", "Row D-22"],
+    "headers_available": ["Row D-1 through Row D-24 (incl. letter-suffixes D-15a/b/c/d/e); 24 ### + 5 ####"],
+    "phantom_destinations_found": 0,
+    "all_cites_resolve": true,
+    "disposition": "CLEAN — zero phantoms; full integrity"
+  },
+  "questions_answered": {
+    "q1_BELONGS_NAMED_NOW_destinations_real": "YES — 0 phantoms; the R4b R1 fix-pass closed the L4-R4b-MIN-1 Row D-15a phantom via path-(a) + the L4-R4b-MIN-2 letter-suffix navigation gap via the `#### Row D-15{b,c,d,e}` promotion + the L4-R4b-MIN-3 line-cite drifts via path::Symbol conversion with explicit drift narration. The 3 new rows added during fix-pass (D-22 / D-23 / D-24) all carry real headers + real destination shapes + verifiable substrate citations.",
+    "q2_commits_HARD_RULE_12_compliant": "YES — the 3 R4b R1 fix-pass commits (4bbc4cac chore + 8240a56c docs + 753d9840 docs) are HARD-RULE-12-compliant: 4bbc4cac closes 10 R4b MINORs via cite hygiene + sub-header anchors + stale-RED sed + tracked follow-ups doc + substantive-match fix; 8240a56c closes R4b L1 3 MAJORs via cross-wave §4-B/§4-C DEFERRED rows + V-14 phantom-destination cite update (HARD RULE 12 clause-b explicitly named); 753d9840 ratifies R4b L6-MAJOR-1 PIVOT path-(a) FIX-NOW → path-(b) DEFER-NAMED-NOW Row D-22 with explicit hard-escalation-trigger justification + the destination (Row D-22) authored in the SAME PR.",
+    "q3_cross_cite_integrity": "YES — 100% of external Row D-N cites resolve to real headers in DEFERRED.md; sample of 5 commits from the underlying campaign (43365b96, c9c11c56, 3b993b1c, ac745e62, 9b0f327f) re-verified clean (R4b R1 baseline carries forward).",
+    "q4_R3_phantom_class_closed": "YES — R3-FP + R4-FP substantively closed the named L8/L9/L11-R3 lens findings (R4b R1 confirmation carries forward); R4b R1 additionally closed the freshly-discovered L4-R4b-MIN-1 phantom (Row D-15a)."
+  },
+  "convergence_termination": {
+    "verdict": "STRICT_Q5_CONVERGED",
+    "rationale": "Per CLAUDE.md rule 9 / Q5: 0 BLOCKER + 0 MAJOR (+ 0 MINOR) = full convergence criterion. R4b R1 returned 0 BLK / 0 MAJ / 3 MIN (strict-Q5-convergence; ADDITIONALLY 3 MIN dispatched orchestrator-direct in R4b R1 fix-pass). R4b R2 returns 0 BLK / 0 MAJ / 0 MIN. Two-round monotonic decrease (3 MIN → 0 MIN). Full convergence achieved at R4b R2 for L4 named-destinations lens. No further R4b round required for this lens; the broader R4b convergence council disposition coordinates across all R4b lenses.",
+    "round_history": "R4b R1: 0 BLK / 0 MAJ / 3 MIN (APPROVE-WITH-MINOR, STRICT_Q5_TERMINATES_AS_CONVERGED with residual non-gating MINORs). R4b R1 FP: orchestrator-direct closure of all 3 MINORs + 3 new DEFERRED rows (D-22 / D-23 / D-24) added. R4b R2: 0 BLK / 0 MAJ / 0 MIN (APPROVE, STRICT_Q5_CONVERGED)."
+  },
+  "scope_audit": {
+    "destinations_walked": 24,
+    "destinations_real": 24,
+    "letter_suffix_subrows_walked": 5,
+    "letter_suffix_subrows_real": 5,
+    "phantom_destinations": 0,
+    "line_drift_residues": 0,
+    "new_rows_audited": 3,
+    "new_rows_real": 3,
+    "external_cites_resolved": 18,
+    "external_cites_phantom": 0
+  },
+  "positive_evidence_carried_forward_from_r4b_r1": [
+    "All 24 enumerated Row D-N headers in DEFERRED.md (D-1 through D-24, incl. D-15a/b/c/d/e letter-suffix sub-headers) present + reachable via grep.",
+    "Cohort 1-5 Section headers in BREAKING-CHANGES.md all present + well-organized.",
+    "All Cohort 4 (Wire-format DEFERRED) cross-cites (D-15a/b/c/d/e + D-13) resolve to real headers.",
+    "All Cohort 5 (Public-API DEFERRED) cross-cites (D-7, D-11, D-17, D-19, D-20, D-22) resolve to real headers.",
+    "All cited V1-FROZEN-INTERFACE.md `item N` references (items 1-15) resolve to actual section headers.",
+    "Build-backlog sub-tasks Row 1.a/1.b/1.c (cited by DEFERRED Row D-7) exist as Sub-task 1.a/1.b/1.c at V1-FROZEN-INTERFACE-BUILD-BACKLOG.md.",
+    "Row D-22 baseline counts (37 + 52 + 14 + 8 + 3 + 1 = 115) cross-verify against `grep -cE '_for_test|_for_testing'` on each cargo-public-api baseline file.",
+    "Row D-3 path::Symbol cite resolves: 3 CapabilityPolicy hooks at policy.rs:508/532/571.",
+    "Row D-4 path::Symbol cite resolves: `pub trait ManifestEnvelopeRechecker: Send + Sync` at manifest_envelope_recheck.rs:152.",
+    "Row D-20 section-anchor cite resolves: V1-FROZEN-INTERFACE.md:172 has `**What \"frozen\" means here (at v1-beta, partial-landed):**` (item 8 subsection).",
+    "Cid::sample_for_test precedent cited by D-22 resolves at crates/benten-core/src/lib.rs:521."
+  ]
+}
