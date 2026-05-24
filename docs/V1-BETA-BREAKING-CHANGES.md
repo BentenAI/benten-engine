@@ -153,7 +153,7 @@
 - **What changed:** `Strategy::C` arm renamed to `Strategy::Reserved` to reflect the post-G-CORE-8 hidden-strategy semantic; locks-out the obsolete C name from v1-beta wire-bytes.
 - **Why break-OK:** wire-format strings + ErrorCode variant name forever-locked at v1-beta freeze.
 - **Migration path:** call-site rename; ErrorCode `ViewStrategyCReserved` → `ViewStrategyReserved`; format strings updated.
-- **STATUS in this PR:** anticipated mention; the Strategy rename + DSL 3 ErrorCode mints (Bundle 4) ESCALATED per the Bundle-3 substantial cascade demonstrating the per-bundle LOC explosion; relocated to a follow-up sub-pass for orchestrator pacing. BELONGS-NAMED-NOW: G-CORE-9 R2 OR G-COMP-1 §<row>. Captured in `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15 watch-list.
+- **STATUS in this PR:** anticipated mention; the Strategy rename + DSL 3 ErrorCode mints (Bundle 4) ESCALATED per the Bundle-3 substantial cascade demonstrating the per-bundle LOC explosion; relocated to a follow-up sub-pass for orchestrator pacing. BELONGS-NAMED-NOW: G-CORE-9 R2 OR G-COMP-1 §<row>. **Captured in `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-19** (the prior cite "Row D-15 watch-list" was the phantom-destination Pattern α the R2 council surfaced; R2 fix-pass authors the actual Row D-19).
 
 ### G-CORE-9 R1 Bundle 9 — V1-FROZEN-INTERFACE-DEFERRED.md authorship
 - **What changed:** new tracked doc enumerating 16 deferred consumption surfaces per Fork 2 doc-tighten ratification.

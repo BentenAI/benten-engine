@@ -411,6 +411,26 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** V1-FROZEN-INTERFACE.md item 11 table rows for
   `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation.
 
+### Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)
+
+- **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break.
+- **Deferred consumption (G-COMP-1 destination):** atomic 4-surface rename per §3.5g:
+  1. Rust enum `EngineError::ViewStrategyCReserved` → `EngineError::ViewStrategyReserved` (`crates/benten-engine/src/error.rs` + format-string at `engine_views.rs:695-699` already returns `Strategy::Reserved`)
+  2. Wire string `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED` (`crates/benten-errors/src/lib.rs` 4 sites: variant + wire string + Display arm + parse arm)
+  3. TS class `EViewStrategyCReserved` → `EViewStrategyReserved` (`packages/engine/src/errors.generated.ts` 3 sites; docstring already says "Strategy::Reserved" — cross-language drift on SAME code path per §3.5g item 1)
+  4. ERROR-CATALOG.md:533+727 + cargo-public-api baselines `docs/public-api/benten-errors.txt:188` + `docs/public-api/benten-engine.txt:976,977,2329,2330` (5 baseline cites) + `crates/benten-errors/tests/stable_shape.rs:112+682+1149` regenerate
+
+  AND mint 3 new DSL ErrorCodes per L9-DSL-MAJOR-1 closure:
+  5. `E_DSL_PARSE_FAILED` — mints from existing `CompileError::Parse`
+  6. `E_DSL_UNKNOWN_PRIMITIVE` — mints from existing `CompileError::Semantic`
+  7. `E_DSL_MISSING_RESPOND` — mints from existing `CompileError::Semantic` sub-case
+
+  CATALOG_VARIANT_COUNT delta: 192 → 195 (3 new mints; Strategy rename is a rename not a mint).
+
+  Remove the corresponding drift-detect baseline grandfathered lines from `scripts/drift-detect-error-variant-mirror-baseline.txt` for `CompileError::Parse`/`Semantic`/`Build` per the §3.5g item 6 amendment closure.
+- **v1-beta posture:** the obsolete `Strategy::C` naming + the 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. No immediate exploit (the variant works correctly; the names are stale). The rename window IS specifically the G-CORE-9 freeze wave OR G-COMP-1 (any later is a SemVer break post-v1-beta tag).
+- **Anchor:** L8-MAJOR-1 + L9-DSL-MAJOR-1 + V1-BETA-BREAKING-CHANGES.md:152-156 Bundle 4 ESCALATED entry. Resolves the L8-R2-MAJOR-CARRY-1 / L9-r2-MIN-2 / L12-R2-MIN-1 phantom-destination cross-confirmed pattern (R2 council finding).
+
 ### Row D-16 — V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md authorship
 
 - **Frozen surface (v1-beta):** V1-FROZEN-INTERFACE.md item 4
