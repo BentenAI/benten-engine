@@ -1,0 +1,113 @@
+{
+  "lens": "L9 DSL public-API-shape + ergonomics — PHASE-WIDE",
+  "round": "R6 R1 (Phase-4-Meta-Core phase-close, full 19-lens R6)",
+  "phase": "Phase-4-Meta-Core R6 phase-close convergence council (Ben-ratified full 19-lens 2026-05-24)",
+  "tree_state": {
+    "branch": "phase-4-meta-core/r6-r1-l9-dsl-phase-wide",
+    "fork_base": "origin/phase-4-meta-core/r4b-r1-fix-pass",
+    "fork_base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+    "origin_main_at_review": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+    "head_verified_via": "git fetch origin main + r4b-r1-fix-pass; rev-parse confirms 4bbc4cac branched from a0b75637 (main HEAD) + carries 3 R4b-FP commits (753d9840 + 8240a56c + 4bbc4cac); all DSL surfaces below verified at the worktree HEAD"
+  },
+  "disposition": "APPROVE-FOR-R6-R1-ADVANCE",
+  "r6_r1_convergence_disposition": "STRICTLY-CONVERGED (0 BLOCKER + 0 MAJOR + 0 MINOR + 3 OBSERVATION-PASS verifying prior closures hold + 1 OBSERVATION-CARRY noting baseline drain is named-deferred per its own row)",
+  "scope_widening_vs_freeze_subset": "FREEZE-subset L9 (R1→R4 trajectory documented in r6-dsl-public-api-r4.json at commit e556f03c) verified the FREEZE-window DSL public surface. PHASE-WIDE re-run extends to: (a) DSL chunks 1/2/3 work-product (PRs #1317/#1326/#1339) holds at HEAD; (b) Backend/Io ErrorCode symmetry post pre-FREEZE bundle (#1342 ErrorCode::DslIoError mint) intact; (c) Row D-19 deferred DSL ErrorCode mints (G-COMP-1 destination) honest at HEAD. All three verifications PASS — the FREEZE-window strict convergence holds end-to-end across the phase's earlier DSL waves AND the post-FREEZE pre-FREEZE-bundle symmetry restoration.",
+  "convergence_notes": "G-CORE-9 L9 R1→R2→R3→R4 monotonic: 2MAJ+2MIN+1OBS (R1) → 1MAJ+3MIN+2OBS (R2, NOT-CONVERGED) → 0MAJ+1MIN+4OBS (R3) → 0MAJ+0MIN+5OBS (R4, STRICTLY-CONVERGED). R4-FP (a0b75637) promoted L9-r4-OBS-2 (item 11 freeze-table DSL-types enumeration row) inline closure — verified landed at docs/V1-FROZEN-INTERFACE.md:960. PHASE-WIDE R6 R1 re-run finds 0 new substantive findings; all earlier DSL work-product + FREEZE-window structural pins + pre-FREEZE-bundle symmetry restoration intact. Per Q5 / CLAUDE.md #9 amendment 2026-05-19 (full council returns 0 BLOCKER + 0 MAJOR substantive = advance / convergence-ready; this round also returns 0 MINOR = strictly converged), L9 PHASE-WIDE is STRICTLY CONVERGED at R6 R1 and ready to advance.",
+  "findings": [
+    {
+      "id": "L9-r6r1-OBS-1-pw",
+      "severity": "OBSERVATION-PASS",
+      "title": "DSL chunks 1/2/3 work-product (PRs #1317/#1326/#1339) holds intact at HEAD a0b75637",
+      "evidence": "(a) chunk-1 (PR #1317) closures #545/#608/#671/#841/#848 verified — `crates/benten-dsl-compiler/tests/tf10_dsl_chunk1_closures.rs` exists; `MAX_SOURCE_LEN: usize = 1_048_576` at lib.rs:211 (#545 defense-in-depth source cap); `E_DSL_INVALID_SHAPE` const at lib.rs:638 (#608 cross-language rule-mirror reusing existing wire string; CATALOG_VARIANT_COUNT not bumped per chunk-1's atomic mirror discipline). (b) chunk-2 (PR #1326) refactor work — `parse_err_at(start_line, start_col, ...)` span-anchored helper at lib.rs is the canonical entry point (the dead `parse_err` helper called out at chunk-2 MINOR-1 was deleted per FIX-NOW). (c) chunk-3 (PR #1339) closures #1000 (Diagnostic Span half-open `[start_offset, end_offset)` at lib.rs:500) + #839 (CompileError::Backend(String) variant + error_code() boundary helper at lib.rs:377) + #790 (Emit→Build rename; `pub fn build` at lib.rs:1169; PrimitiveKind::Emit UNCHANGED per CLAUDE.md #1 — confirmed via grep returning only the DSL `emit` keyword + the unmodified Phase-1 primitive). All chunk-3 author-surfaced items (breaking pattern flip per #1339 chunk-3 mini-review F-1/F-2/F-3) resolved at HEAD: F-3 Backend-vs-Io asymmetry CLOSED by pre-FREEZE bundle #1342 (see L9-r6r1-OBS-2-pw). 69/69 benten-dsl-compiler nextest run PASS at fork_base; 9/9 benten-errors stable_shape PASS; CATALOG_VARIANT_COUNT pinned at 192.",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a (verified holds at HEAD)"
+    },
+    {
+      "id": "L9-r6r1-OBS-2-pw",
+      "severity": "OBSERVATION-PASS",
+      "title": "Backend/Io ErrorCode symmetry post pre-FREEZE bundle (PR #1342 ErrorCode::DslIoError mint) intact + structurally enforced",
+      "evidence": "(a) `ErrorCode::DslIoError` minted at `crates/benten-errors/src/lib.rs:1344` (wire string E_DSL_IO_ERROR at lib.rs:1706; from_str roundtrip at lib.rs:2538; routed_edge_label = Some(\"ON_ERROR\") at lib.rs:2219). (b) `ErrorCode::DslBackendRejected` at lib.rs:1322 (wire string E_DSL_BACKEND_REJECTED at lib.rs:1702; routed_edge_label = Some(\"ON_ERROR\") at lib.rs:2213). Both variants symmetric in catalog placement + ON_ERROR edge routing + chunk-3 doc-comment cross-references. (c) TS-side mirrors intact: `packages/engine/src/errors.generated.ts:3090` (EDslBackendRejected class) + `:3105` (EDslIoError class) + `:3343-3344` (CODE_TO_CTOR_GENERATED mapping); `packages/engine/src/errors.ts` re-exports both at lines 34+36 + 115+117 + 222+224. (d) drift-detect-error-variant-mirror baseline at `scripts/drift-detect-error-variant-mirror-baseline.txt:66-68` grandfathers only `CompileError::Build/Parse/Semantic` (3 lines; `CompileError::Io` NOT in baseline because it now has the first-class DslIoError mirror — symmetry RESTORED). (e) §3.5g item 6 amendment (Ben-ratified 2026-05-24 generalizing the F-3 finding) codified at `.addl/dispatch-conventions.md:617` with scanner enforcement + baseline-drain narrative. CATALOG_VARIANT_COUNT bump 190→191 (DslIoError) + 191→192 (one further G-CORE-9 mint) pinned at `crates/benten-errors/tests/stable_shape.rs:1019` (variant_count_is_pinned 9/9 PASS).",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a (verified intact + structurally enforced)"
+    },
+    {
+      "id": "L9-r6r1-OBS-3-pw",
+      "severity": "OBSERVATION-PASS",
+      "title": "Row D-19 deferred DSL ErrorCode mints (G-COMP-1 destination) honest at HEAD — proper Option-A reconciliation preserved + no orphaning",
+      "evidence": "(a) Row D-19 sub-points 5/6/7 at `docs/V1-FROZEN-INTERFACE-DEFERRED.md:490-497` correctly enumerate the 3 deferred-mint targets: sub-point 5 `E_DSL_PARSE_ERROR` REUSES the existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs:623` (verified present + UNCHANGED); sub-point 6 `E_DSL_UNKNOWN_PRIMITIVE` (mints from existing CompileError::Semantic) at lib.rs:625 (verified present); sub-point 7 `E_DSL_MISSING_RESPOND` (mints from existing CompileError::Semantic sub-case) at lib.rs:627 (verified present). (b) `grep -n 'DslParseError\\|DslUnknownPrimitive\\|DslMissingRespond' crates/benten-errors/src/lib.rs` returns ZERO hits at HEAD — confirms the 3 catalog ENUM VARIANTS + TS CLASS MIRRORS are correctly DEFERRED to G-COMP-1 (not silently landed pre-G-COMP-1). (c) `pub const E_DSL_PARSE_ERROR` at lib.rs:623 unchanged + 6+ production construction sites at lib.rs:226/238/1091/1112/1187/1226 unchanged — no orphaning of the existing wire string. (d) Row D-19 CATALOG_VARIANT_COUNT delta projection: 192 → 195 (3 new mints) at G-COMP-1 destination; with the same line removing 3 drift-detect baseline grandfather lines (`CompileError::Build/Parse/Semantic`) per §3.5g item 6 amendment closure narrative. (e) `docs/V1-BETA-BREAKING-CHANGES.md:243` parenthetical reads `E_DSL_PARSE_ERROR reusing existing pub const + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND` (verified) — Option-A reconciliation visible in v1-beta breaking-changes narrative. (f) L9-r4-OBS-2 promoted+closed at R4-FP commit a0b75637 — `docs/V1-FROZEN-INTERFACE.md:960` item 11 freeze-table now carries the `benten-dsl-compiler` row enumerating 5 #[non_exhaustive] types + audit-test cite + 2/2 PASS (verified locally).",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a (Row D-19 honesty intact end-to-end; structural pin via 5 #[non_exhaustive] + audit-test + cargo-public-api baseline; documentation inventory complete at item 11 freeze-table)"
+    },
+    {
+      "id": "L9-r6r1-OBS-4-pw",
+      "severity": "OBSERVATION-CARRY",
+      "title": "drift-detect-error-variant-mirror baseline holds 159 grandfathered entries (NAMED-DEFERRED per its own header); baseline drain is post-G-CORE-9-FREEZE follow-up wave per `.addl/phase-4-meta/PRE-FREEZE-BACKLOG.md` row",
+      "evidence": "`scripts/drift-detect-error-variant-mirror-baseline.txt` carries 159 `TypeName::Variant` lines at HEAD (verified via `grep -cE '^[A-Z][a-zA-Z]+Error::' = 159`). Baseline header explicitly NAMED-DEFERS the drain: lines 11-21 cite `.addl/phase-4-meta/PRE-FREEZE-BACKLOG.md` row 'DEFERRED: §3.5g item 6 baseline drain (159 pre-existing pub-error-variant catalog-mirror gaps)' as the per-crate / per-error-type chunkable follow-up. HARD RULE 12 clause-(b) BELONGS-NAMED-NOW compliance preserved — the destination doc receives the entry NOW (baseline file itself); the work is named not phantom-deferred. CompileError::Io is NOT in the baseline (the F-3 fix restored symmetry); only CompileError::Build/Parse/Semantic remain grandfathered, matching Row D-19's G-COMP-1 deferred-mint contract exactly. NO carry-forward action for L9 lens — this is named-deferred work in another row's scope (Phase-4-Meta-Core post-FREEZE follow-up; not L9 phase-close scope).",
+      "disposition": "OBSERVATION-CARRY (no action required; named-deferred per its own row; carried to phase-wide visibility for cross-lens completeness)",
+      "fix": "n/a (named-deferred per its own row; outside L9 phase-close scope)"
+    }
+  ],
+  "questions_dispositions": {
+    "q1_diagnostic_span_shape": "PASS — Span half-open `[start_offset, end_offset)` at `crates/benten-dsl-compiler/src/lib.rs:500`; `Span::point` degenerate constructor at lib.rs:524; accessor methods `.line()` / `.column()` at lib.rs:565/572 return Option<u32> from start_line / start_column (not end_*). Audit-test `dsl_5_pub_types_exist_at_v1_beta` confirms presence; canonical-bytes stability pin `dsl_chunk3_canonical_bytes_stable_under_diagnostic_shape_change` PASS.",
+    "q2_compile_error_variant_rename_emit_to_build": "PASS — `pub fn build` at lib.rs:1169 + match arms `Self::Parse | Self::Semantic | Self::Build`; `grep -n 'CompileError::Emit' crates/benten-dsl-compiler/src/lib.rs` returns only doc-comments referencing the historical rename. PrimitiveKind::Emit UNCHANGED per CLAUDE.md #1 commit (grep confirms only DSL `emit` keyword preservation at lib.rs:1694; the Phase-1 primitive variant untouched).",
+    "q3_compile_error_error_code_routing": "PASS — `CompileError::error_code()` boundary helper at lib.rs:377 dispatches: Parse/Semantic/Build → d.error_code (Diagnostic field); Io → E_DSL_IO_ERROR (lib.rs:647); Backend → E_DSL_BACKEND_REJECTED (lib.rs:655). All 5 variants map to stable string. `dsl_839_error_code_mirror_matches_typescript_constant_literal` chunk-3 closure pin PASS.",
+    "q4_backend_io_errorcode_symmetry_post_ben_f3_decision": "PASS — Ben's F-3 decision was to MIRROR Io (not downgrade/name-carry) per the §3.5g amendment 2026-05-24 sibling rationale. Implemented by pre-FREEZE bundle PR #1342 (commit e08b06fc minting ErrorCode::DslIoError + TS class mirror; CATALOG_VARIANT_COUNT 190→191). Backend/Io symmetry verified end-to-end across Rust catalog + TS class + drift-detect baseline (Io REMOVED from baseline; Build/Parse/Semantic remain per Row D-19's G-COMP-1 deferred-mint contract). The structurally-strongest path Ben could have picked is in place.",
+    "q5_dsl_ergonomics_crud_post_zero_config_and_canonical_bytes": "PASS — `crud('post')` zero-config shorthand at `packages/engine/src/dsl.ts:1511` (export function crud); CrudHandler shape + convenience methods intact at dsl.ts:1495. Canonical-bytes wire-stable pin `dsl_chunk3_canonical_bytes_stable_under_diagnostic_shape_change` PASS at HEAD (chunk-3 diagnostic-shape changes proved orthogonal to AST + property-key + BTreeMap iteration order). 69/69 benten-dsl-compiler nextest PASS confirms the ergonomic surface holds.",
+    "q6_pim_2_sub_rule_4_closure_pins_specific_arm": "PASS — each chunk closure pin exercises the SPECIFIC arm (per chunk-1/2/3 mini-reviews): #545 cap pin tests at-cap source not just >cap; #608 invalid-shape pin tests empty handlerIds specifically not just any-invalid; #839 Backend/Io variant pins test typed error_code routing for SPECIFIC variants (Backend vs Io vs Parse); #790 Build-rename pin tests shape-validation through the Build variant specifically (not Emit). pim-2 §3.6b sub-rule-4 discipline honored across all chunks.",
+    "q7_pim_18_shape_not_substance_pre_flight": "PASS — chunk-1/2/3 mini-reviews each verified pim-18 §3.6f SHAPE-not-SUBSTANCE: closure pins are would-FAIL-if-no-op'd (not aspirational-prose / sentinel-presence); production call sites enumerated + verified substantive (devserver Io→Backend migration at tools/benten-dev/src/lib.rs:447 confirmed; 6+ E_DSL_PARSE_ERROR production sites at lib.rs:226/238/1091/1112/1187/1226 confirmed). 110-LOC cargo-public-api baseline + 5 #[non_exhaustive] applications + dedicated audit-test 2/2 PASS = structural defense; the freeze-table inventory row added at R4-FP a0b75637."
+  },
+  "scope_notes": {
+    "in_scope": "PHASE-WIDE DSL public-API-shape + ergonomics: benten-dsl-compiler crate's public surface (CompileError + 5 #[non_exhaustive] types + Span + Diagnostic + compile_str/compile_file + 7 pub const error-code strings + error_code() boundary helper) + DSL ErrorCode mirror chain (Rust ErrorCode catalog + TS class + CODE_TO_CTOR_GENERATED + drift-detect baseline + ERROR-CATALOG.md narrative) + DSL ergonomics surface (`crud('post')` zero-config at packages/engine/src/dsl.ts + canonical-bytes stability across parser refactors) + Row D-19 deferred-mint honesty at HEAD + DSL chunks 1/2/3 work-product holds across the phase + pre-FREEZE-bundle DslIoError mint Backend/Io symmetry restoration + item 11 freeze-table DSL row landed at R4-FP.",
+    "out_of_scope": "DSL runtime correctness end-to-end execution (L6/L8 scope); the broader §3.5g item 6 baseline drain (named-deferred per its own row to Phase-4-Meta-Core post-FREEZE follow-up wave; outside L9 phase-close scope per OBS-4-pw); cargo-public-api workflow CI orchestration (R2-FP tempfile fix verified syntactic; runtime cycle is workflow-trigger scope).",
+    "cross_lens_handoffs": "None outstanding for L9 phase-close. Earlier L9-r4-OBS-2 (item 11 freeze-table DSL enumeration) was promoted + closed inline at R4-FP a0b75637 (verified at docs/V1-FROZEN-INTERFACE.md:960). Earlier L17 §1.A.FROZEN doc-coupling handoff (proposed at R4) absorbed by the same R4-FP inline closure. L9 lens has NO open handoffs to other lenses at R6 R1."
+  },
+  "production_compile_status": "GREEN at fork_base 4bbc4cac (worktree HEAD). `cargo nextest run -p benten-dsl-compiler` = 69/69 PASS (0.409s); `cargo nextest run -p benten-dsl-compiler --test g_core_9_non_exhaustive_audit_dsl` = 2/2 PASS (dsl_5_pub_types_exist_at_v1_beta + dsl_compile_error_non_exhaustive_match_requires_wildcard); `cargo nextest run -p benten-errors --test stable_shape` = 9/9 PASS (variant_count_is_pinned at 192). DSL public-API surface + ergonomics + canonical-bytes stability + cross-language ErrorCode mirror chain + drift-detect-baseline grandfather contract all intact at HEAD.",
+  "ground_truth_verification": {
+    "review_findings_orchestrator_verified": "ALL chunks 1/2/3 work-product claims + pre-FREEZE-bundle DslIoError mint + Row D-19 deferred-mint honesty + item 11 freeze-table row landing INDEPENDENTLY VERIFIED at fork_base `4bbc4cac80316acb571fedeac193f35fbaf0ec37` (per memory `feedback_review_finding_ground_truth_verify` + dispatch-conventions §3.5n) — not just trusted from chunk mini-review JSONs or R3-FP/R4-FP commit messages.",
+    "verification_commands_run": [
+      "git fetch origin main && git rev-parse origin/main",
+      "git fetch origin phase-4-meta-core/r4b-r1-fix-pass && git rev-parse origin/phase-4-meta-core/r4b-r1-fix-pass",
+      "git log --oneline a0b75637..4bbc4cac",
+      "git log --oneline --all | grep -iE 'DslIo|E_DSL_IO|f-?3'",
+      "grep -n 'DslIoError\\|E_DSL_IO_ERROR\\|DslBackendRejected\\|E_DSL_BACKEND_REJECTED' crates/benten-errors/src/lib.rs",
+      "grep -n 'EDslIoError\\|EDslBackendRejected\\|E_DSL_IO_ERROR\\|E_DSL_BACKEND_REJECTED' packages/engine/src/errors.generated.ts packages/engine/src/errors.ts",
+      "grep -nE '^CompileError::' scripts/drift-detect-error-variant-mirror-baseline.txt",
+      "grep -c '^[A-Z][a-zA-Z]+Error::' scripts/drift-detect-error-variant-mirror-baseline.txt",
+      "grep -n 'pub fn\\|pub struct\\|pub enum\\|pub const' crates/benten-dsl-compiler/src/lib.rs",
+      "grep -n 'crud\\b' packages/engine/src/dsl.ts crates/benten-dsl-compiler/src/lib.rs",
+      "grep -n 'Diagnostic\\|Span\\|CompileError\\|CompiledSubgraph\\|CompiledPrimitive' crates/benten-dsl-compiler/src/lib.rs",
+      "grep -n 'benten-dsl-compiler\\|CompiledSubgraph\\|CompiledPrimitive\\|CompileError' docs/V1-FROZEN-INTERFACE.md",
+      "wc -l docs/public-api/benten-dsl-compiler.txt",
+      "grep -c 'non_exhaustive' docs/public-api/benten-dsl-compiler.txt",
+      "sed -n '468,520p' docs/V1-FROZEN-INTERFACE-DEFERRED.md",
+      "grep -n 'DslParseError\\|DslUnknownPrimitive\\|DslMissingRespond' crates/benten-errors/src/lib.rs",
+      "grep -n 'CATALOG_VARIANT_COUNT' crates/benten-errors/tests/stable_shape.rs",
+      "grep -nA 2 'item 6\\|2026-05-24' .addl/dispatch-conventions.md",
+      "cargo nextest run -p benten-dsl-compiler",
+      "cargo nextest run -p benten-dsl-compiler --test g_core_9_non_exhaustive_audit_dsl",
+      "cargo nextest run -p benten-errors --test stable_shape"
+    ]
+  },
+  "artifacts_referenced": [
+    "crates/benten-dsl-compiler/src/lib.rs (9 pub items + 7 pub const error strings; 5 #[non_exhaustive] applications at 181/194/307/500/549; pub fn build at 1169; pub fn error_code at 377; pub fn backend at 401; pub fn io at 461)",
+    "crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs (55-LOC; 2/2 PASS at HEAD)",
+    "crates/benten-dsl-compiler/tests/tf10_dsl_chunk1_closures.rs (chunk-1 closure pins for #545/#608/#671/#841/#848)",
+    "crates/benten-dsl-compiler/tests/tf_dsl_chunk3_closures.rs (chunk-3 closure pins for #1000/#839/#790 + dsl_io_variant_routes_through_first_class_dsl_io_error_typed_code post-#1342 symmetry pin)",
+    "crates/benten-errors/src/lib.rs (DslInvalidShape at 892; DslBackendRejected at 1322; DslIoError at 1344; full atomic mirror including as_static_str + from_str + routed_edge_label)",
+    "crates/benten-errors/tests/stable_shape.rs (CATALOG_VARIANT_COUNT pinned at 192; 9/9 PASS)",
+    "packages/engine/src/errors.ts (4 EDsl* re-exports at lines 34-37 + 115-118 + 222-225 + CATALOG mapping)",
+    "packages/engine/src/errors.generated.ts (EDslBackendRejected class at 3090; EDslIoError class at 3105; CODE_TO_CTOR_GENERATED mappings at 3343-3344)",
+    "packages/engine/src/dsl.ts (crud('post') zero-config at line 1511; CrudHandler interface at 1495)",
+    "scripts/drift-detect-error-variant-mirror-baseline.txt (159 grandfather lines; CompileError::Build/Parse/Semantic at 66-68; CompileError::Io NOT present — symmetry restored)",
+    "scripts/drift-detect-error-variant-mirror.ts (§3.5g item 6 scanner enforcer)",
+    "docs/V1-FROZEN-INTERFACE.md:960 (item 11 freeze-table benten-dsl-compiler row landed at R4-FP a0b75637)",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md:468-497 (Row D-19 with Option-A reconciliation; sub-points 5/6/7 = 3 deferred mints to G-COMP-1)",
+    "docs/V1-BETA-BREAKING-CHANGES.md:243 (parenthetical updated at R3-FP matching L9-r3-MIN-1 closure narrative)",
+    "docs/public-api/benten-dsl-compiler.txt (110 LOC baseline; 5 #[non_exhaustive] markers)",
+    ".addl/dispatch-conventions.md:617 (§3.5g item 6 amendment Ben-ratified 2026-05-24 with scanner + baseline drain narrative)",
+    ".addl/phase-4-meta/R6-LENS-CATALOG.md §L9 (L9 surfaces + questions catalog)",
+    ".addl/phase-4-meta/r5-g-core-dsl-chunk-{1,2,3}-mini-review.json (chunk mini-reviews verified consistent with HEAD)",
+    "r6-dsl-public-api-r4.json (G-CORE-9 R4 L9 output at commit e556f03c; APPROVE-CONVERGED-STRICTLY; verified consumed at R6 R1 PHASE-WIDE)"
+  ],
+  "r6_r1_post_round_recommendation": "Lens L9 PHASE-WIDE is APPROVE-FOR-R6-R1-ADVANCE per Q5 (0 BLOCKER + 0 MAJOR + 0 MINOR; 3 OBSERVATION-PASS + 1 OBSERVATION-CARRY). The phase-wide widening verifies: (1) DSL chunks 1/2/3 work-product holds at HEAD; (2) Backend/Io ErrorCode symmetry restored end-to-end by pre-FREEZE bundle #1342's DslIoError mint; (3) Row D-19 deferred-mint honesty intact at HEAD (3 mints correctly deferred to G-COMP-1; baseline grandfathers Build/Parse/Semantic matching the contract; no orphaning of existing E_DSL_PARSE_ERROR pub const; Option-A reconciliation preserved). The §3.5g item 6 amendment's scanner + 159-entry named-deferred baseline is structural defense going forward. No R6 R2 iteration needed for L9 unless other lenses' R6 R1 fix-passes introduce regressions to the DSL public-API surface."
+}
