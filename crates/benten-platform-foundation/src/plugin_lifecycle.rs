@@ -49,7 +49,9 @@
 //! - PR #199 `Engine::revoke_capability_by_grant_cid` — engine-side
 //!   adapter routes through that typed surface.
 
-use crate::module_ecosystem::{UpgradeConsentDecision, decide_upgrade_consent};
+use crate::module_ecosystem::{
+    UpgradeConsentDecision, decide_upgrade_consent, verify_upgrade_author_continuity,
+};
 use crate::plugin_library::{LibraryEntry, PluginLibrary};
 use crate::plugin_manifest::{
     InstallRecord, MANIFEST_CLOCK_NOT_INJECTED_SENTINEL, PluginManifest, ValidationOutcome,
@@ -932,6 +934,38 @@ where
         if prior_cid != *expected_cid && !chain.is_ancestor_of(&prior_cid, expected_cid) {
             return Err(ErrorCode::PluginManifestInvalid);
         }
+    }
+
+    // 7a. **T10-upgrade (a) — same-author DID continuity (R6 R1 Bundle
+    //     L2-R6-MAJOR-1 closure).**
+    //
+    //     Per `docs/PLUGIN-MANIFEST.md` §4.3 + admin-ui-v0-threat-model.md
+    //     §T10: an upgrade from peer-DID `alice` to peer-DID `attacker`
+    //     within the same version-DAG (T10-upgrade (a) — transitive
+    //     substitution) MUST be REJECTED. The standalone helper
+    //     `verify_upgrade_author_continuity` (LANDED earlier; test pin
+    //     at `plugin_upgrade_requires_same_author_did.rs`) was unwired
+    //     at HEAD; step 7 above only enforced the DAG-descendant half
+    //     (T10-upgrade (b)). META #707 asymmetric-at-parallel-entry-
+    //     points: T10-(a) + T10-(b) are co-defensive per the threat
+    //     model; this fix wires (a).
+    //
+    //     The check fires when prior_manifest is resolvable. Initial
+    //     installs (no prior_cid) skip — first-install peer-DID review
+    //     happens at the user-trust-list / install-record-consent
+    //     surfaces above. The check returns
+    //     `ErrorCode::PluginAuthorNotTrusted` (the typed code the
+    //     helper already emits — semantically identical to
+    //     "upgrade-author-broken": the new peer_did is NOT in the
+    //     trust chain established at prior_cid; no new ErrorCode
+    //     minted per orchestrator DISAGREE-WITH-EXPLANATION on the
+    //     L2-R6-MAJOR-1 brief's mint suggestion — avoids cross-language
+    //     mirror churn for zero security gain).
+    if let Some(prior_cid) = params.prior_installed_cid
+        && prior_cid != *expected_cid
+        && let Some(prior_manifest) = resolver(&prior_cid)
+    {
+        verify_upgrade_author_continuity(&prior_manifest, &manifest)?;
     }
 
     // 7b. **G-CORE-7 §4.41 — caps-grew fresh-consent (e2e wiring).**
