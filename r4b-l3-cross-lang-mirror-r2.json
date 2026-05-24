@@ -1,0 +1,74 @@
+{
+  "lens": "R4b R2 L3 cross-lang-mirror",
+  "branch": "phase-4-meta-core/r4b-r2-l3-cross-lang-mirror",
+  "base_sha": "4bbc4cac80316acb571fedeac193f35fbaf0ec37",
+  "r1_base_sha": "a0b75637101cbcfec9ba8d1d382b5de2e1011dd1",
+  "r1_fix_pass_commits": [
+    "753d9840 R4b L6-MAJOR-1 PIVOT path-(a) FIX-NOW → path-(b) DEFER-NAMED-NOW Row D-22",
+    "8240a56c close R4b L1 3 MAJORs — cross-wave §4-B + §4-C DEFERRED rows + V-14 phantom-destination cite update",
+    "4bbc4cac close R4b 10 MINORs sweep (cite hygiene + sub-header anchors + stale-RED sed + tracked follow-ups doc + substantive-match fix)"
+  ],
+  "disposition": "APPROVE-CONVERGED",
+  "r4b_r2_convergence_disposition": "CONVERGED — R1 returned 2 MIN-OBS with VALID HARD RULE 12 dispositions (DISAGREE-WITH-EXPLANATION + BELONGS-NAMED-NOW noted as 'Not blocking R4b convergence'); R1 fix-pass did NOT touch the §3.5g cross-language rule-mirror surface (zero edits to errors.generated.ts / errors enum / Strategy / DeviceAttestation / ERROR-CATALOG.md / catalog narrative); both MIN-OBS dispositions remain structurally proper at HEAD 4bbc4cac; ground-truth re-verification of all 4 §3.5g lens questions PASSES identically to R1; strict Q5 termination satisfied (0 BLOCKER + 0 MAJOR + 0 NEW findings; pre-existing MIN-OBS retained as documented non-blocking observations).",
+  "summary": {
+    "approach": "Strict Q5 re-review of R1 lens questions Q1-Q4 at the R1 fix-pass HEAD 4bbc4cac. R1 fix-pass touched 0 of the 8 §3.5g cross-language rule-mirror surfaces (Rust enum / as_static_str / from_str / routed_edge_label / TS class catalog / CATALOG_CODES / CODE_TO_CTOR_GENERATED / ERROR-CATALOG.md narrative) AND 0 of the 2 R1-MIN-OBS-implicated symbol pairs (Strategy enum / DeviceAttestation type pair). Per the iterate-to-convergence Q5 rule (`feedback_iterate_critical_reviews_to_convergence`: 'only BLOCKER/MAJOR block; full-council-every-round'), the 2 MIN-OBS findings with valid HARD RULE 12 (c) DISAGREE + (b) BELONGS-NAMED-NOW dispositions do NOT block convergence and are explicitly carried as 'pre-existing documented asymmetries' for the v1-beta FREEZE.",
+    "questions_answered": [
+      {
+        "question": "Q1 — §3.5g 8-surface ErrorCode mirror discipline (R1 PASS retained at R2?)",
+        "answer": "PASS — R2 verified zero R1-fix-pass edits to any of the 8 surfaces (`git diff a0b75637..4bbc4cac --stat | grep -E 'errors|Strategy|strategy|DeviceAttestation|types.ts|errors.generated'` returned 0 hits). The 192 throwable Rust ErrorCode variants + 1 Unknown(String) fallback continue to round-trip through enum / as_static_str / from_str / routed_edge_label / TS catalog / CATALOG_CODES / CODE_TO_CTOR_GENERATED / ERROR-CATALOG.md narrative; all 28 `cargo nextest run -p benten-errors` tests PASS at HEAD 4bbc4cac including the variant-count pin (== 192) + from_str_roundtrip_representative + as_static_str_known_and_unknown."
+      },
+      {
+        "question": "Q2 — §3.5g item 6 amendment scanner GREEN (drift:error-variant-mirror) at R2?",
+        "answer": "PASS — `npm run drift:error-variant-mirror` at HEAD 4bbc4cac reports `0 new violation(s)` (60 pub *Error enums; 124 mirrored; 210 skipped of which 160 via baseline of 159 grandfathered; 0 STALE BASELINE). Identical reading to R1; the post-FREEZE baseline-drain plan at `.addl/phase-4-meta/PRE-FREEZE-BACKLOG.md` remains the named destination. R1 fix-pass did NOT add or remove any pub error variant + did NOT touch the baseline file."
+      },
+      {
+        "question": "Q3 — TS public-API parity (#1204 gate) at R2?",
+        "answer": "PASS — `.github/workflows/ts-public-api.yml` + `packages/engine/etc/public-api.txt` 403-LOC baseline both untouched by R1 fix-pass; commit 13322df4 #1204 landing referenced by R1 still present in `git log`; load-bearing napi-pub type mirrors (AtriumConfig, CapabilityClaim, DeviceAttestation, Strategy, PolicyKind) all retained. The phantom `packages/engine/src/index.d.ts` brief-template polish observed by R1 (file never existed; real entry is `index.ts`) is unchanged in R2 — orchestrator brief-template hygiene only, not a code finding."
+      },
+      {
+        "question": "Q4 — Drift-detect end-to-end at R2?",
+        "answer": "PASS — re-ran at HEAD 4bbc4cac: `npm run drift:errors` GREEN (163 variant(s) reachable, 0 unreachable; catalog/Rust/TS agree; every variant has production construction site); `cargo nextest run -p phase-3-workspace-tests --test missing_docs_workspace` 3/3 PASS (no_allow_missing_docs_at_phase_3_close + all_phase_2_3_todo_markers_have_named_destinations + full_missing_docs_sweep_no_warnings_workspace_wide); `npm run codegen:errors` regenerates errors.generated.ts identically (`git status packages/engine/src/errors.generated.ts` = clean after regen)."
+      },
+      {
+        "question": "Q5 — R1 MIN-OBS dispositions remain proper at R2?",
+        "answer": "PASS — r4b-l3-mo-1 (Strategy Rust=Reserved / TS=`C`): the Rust comment at `crates/benten-ivm/src/strategy.rs:75-85` still documents `Reserved` rename from `C` for wire stability + the TS docstring at `packages/engine/src/types.ts:1010-1017` still documents `'C'` as the wire-stable name; HARD RULE 12 (c) DISAGREE-WITH-EXPLANATION stands (documented intentional asymmetry; not a §3.5g mirror violation). r4b-l3-mo-2 (DeviceAttestation TS interface vs JsDeviceAttestation signing-class JS-name overload): the dual-export shape persists at `packages/engine/src/types.ts:379` (envelope interface) + `bindings/napi/src/identity.rs:269` (signing class with `js_name=\"DeviceAttestation\"`); V1-FROZEN-INTERFACE.md L840 lists `DeviceAttestation` in types.ts as LOCKED + L841 lists the identity.ts wrapper as LOCKED (both names land in item 10 freeze table) but does not yet carry the one-line name-collision callout R1 recommended — disposition was 'BELONGS-NAMED-NOW polish, Not blocking R4b convergence'; this remains true at R2. The polish edit is a Composing-window opportunity; it was correctly NOT included in R4b R1 fix-pass closure scope (HARD RULE clause-b dispositions for non-blocking polish carry into the named destination's natural touch wave, not the immediately-following fix-pass)."
+      }
+    ]
+  },
+  "findings": [],
+  "carried_observations": [
+    {
+      "id": "r4b-l3-mo-1 (carried from R1)",
+      "severity": "MINOR-OBS",
+      "title": "Strategy enum: Rust=Reserved / TS=\"C\" wire-stable asymmetry",
+      "r1_disposition": "DISAGREE-WITH-EXPLANATION (HARD RULE 12 c)",
+      "r2_verification": "Rust comment at crates/benten-ivm/src/strategy.rs:75-85 unchanged; TS docstring at packages/engine/src/types.ts:1010-1017 unchanged. Disposition remains structurally valid. Re-litigating would re-open the G23-0a wire-stability decision."
+    },
+    {
+      "id": "r4b-l3-mo-2 (carried from R1)",
+      "severity": "MINOR-OBS",
+      "title": "DeviceAttestation envelope-interface (types.ts) vs JsDeviceAttestation signing-class (identity.rs) share the same JS name `DeviceAttestation`",
+      "r1_disposition": "BELONGS-NAMED-NOW into V1-FROZEN-INTERFACE.md item 10 or types.ts:379 docstring (HARD RULE 12 b); 'Not blocking R4b convergence'",
+      "r2_verification": "V1-FROZEN-INTERFACE.md item 10 (L826-906) carries both `DeviceAttestation` references (L840 envelope + L841 identity.ts wrapper) as LOCKED but without the explicit name-collision callout. The polish edit is correctly deferred to the next Composing-window types.ts or V1-FROZEN-INTERFACE.md touch; pinning it as a FIX-NOW in R4b R1 fix-pass would have violated the per-finding-granularity disposition rule (§3.6b sub-rule 4) since the R1 fix-pass scope was explicitly 'close R4b 10 MINORs' from L1/L2/L4/L5/L6, not L3 cosmetic polish."
+    }
+  ],
+  "process_observations": [
+    "R4b R1 fix-pass commit pattern reflects clean disposition hygiene: L1 + L2 + L4 + L5 + L6 fix-now items closed in 3 commits (753d9840 + 8240a56c + 4bbc4cac); L3 carried 0 fix-now items (both R1 MIN-OBS had valid non-fix-now dispositions per HARD RULE 12). The R4b R1 fix-pass scope correctly excluded L3 — confirming the lens-disposition triage shape held end-to-end.",
+    "Strict Q5 reading: 0 BLOCKER + 0 MAJOR = CONVERGED. R1 returned 0 BLOCKER + 0 MAJOR; R2 returns 0 BLOCKER + 0 MAJOR. Per `feedback_iterate_critical_reviews_to_convergence` ('only BLOCKER/MAJOR block; full-council-every-round'), Q5 termination is met for L3.",
+    "If the R6 phase-close council (downstream of R4b) re-surfaces the same Strategy or DeviceAttestation asymmetries as BLOCKER/MAJOR, the disposition can be revisited; at R4b boundaries both remain pre-existing documented non-violations of the §3.5g surface."
+  ],
+  "ground_truth_verifications": [
+    "git diff a0b75637..4bbc4cac --stat | grep -E 'errors|Strategy|strategy|DeviceAttestation|types.ts|errors.generated' → 0 matches (no §3.5g surface edits in R1 fix-pass)",
+    "git rev-parse HEAD → 4bbc4cac80316acb571fedeac193f35fbaf0ec37 (matches expected base for R4b R2 dispatch)",
+    "cargo nextest run -p benten-errors → 28/28 PASS (variant-count pin + from_str roundtrip + as_static_str + ERROR-CATALOG cross-checks)",
+    "cargo nextest run -p phase-3-workspace-tests --test missing_docs_workspace → 3/3 PASS",
+    "npm run drift:errors → GREEN (163 reachable, 0 unreachable)",
+    "npm run drift:error-variant-mirror → GREEN (0 new violations; 0 STALE BASELINE)",
+    "npm run codegen:errors → regenerates byte-identical errors.generated.ts (working tree clean post-regen)",
+    "Strategy enum at crates/benten-ivm/src/strategy.rs:75-85 unchanged from R1 baseline (still Reserved + wire-stability comment)",
+    "TS Strategy union at packages/engine/src/types.ts:1010-1017 unchanged from R1 baseline (still 'A'|'B'|'C' + docstring)",
+    "DeviceAttestation interface at packages/engine/src/types.ts:379 unchanged from R1 baseline",
+    "V1-FROZEN-INTERFACE.md item 10 (L826-906) carries both DeviceAttestation references at L840+L841 as LOCKED (no name-collision callout yet — Composing-window polish opportunity)"
+  ],
+  "convergence_metric": "R4b R2 L3 = APPROVE-CONVERGED; 0 BLOCKER / 0 MAJOR / 0 NEW MINOR; 2 R1 MIN-OBS carried with stable structurally-valid HARD RULE 12 dispositions (c + b). The §3.5g cross-language rule-mirror surface remains in shape for v1-beta FREEZE under the existing baseline-drain plan. Strict Q5 termination satisfied."
+}
