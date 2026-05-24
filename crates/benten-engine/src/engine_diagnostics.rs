@@ -81,7 +81,8 @@ impl Engine {
                             device_cid,
                             ..Default::default()
                         };
-                        if let Err(cap_err) = p.check_write(&ctx) {
+                        // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
+                        if let Err(cap_err) = p.check_write_with_audience(&ctx) {
                             self.inner.record_cap_write_denied(&scopes);
                             *user_result.lock_recover() = Some(Err(EngineError::Cap(cap_err)));
                             return Err(GraphError::TxAborted {

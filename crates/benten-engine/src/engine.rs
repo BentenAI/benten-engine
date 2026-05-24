@@ -1410,7 +1410,15 @@ impl Engine {
                     device_cid: None,
                     audience_did: None,
                 };
-                if let Err(cap_err) = policy.check_write(&ctx) {
+                // R6 R1 FP-F4 §S3c (Row D-3-c partial close per Δv3-2):
+                // route through `check_write_with_audience` (the §8-E
+                // hook #3 enrichment surface). Default impl delegates
+                // to `check_write` so existing policies are unaffected;
+                // audience-aware impls observe the inbound-sync per-
+                // row context. `ctx.audience_did` stays None here per
+                // Δv3-2 — inbound sync is audience-absent semantically
+                // (peer_did is transport-principal NOT cap-target).
+                if let Err(cap_err) = policy.check_write_with_audience(&ctx) {
                     use benten_caps::CapError;
                     if matches!(cap_err, CapError::Revoked | CapError::Denied { .. }) {
                         let peer_did = atrium
