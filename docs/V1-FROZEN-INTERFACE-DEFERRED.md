@@ -353,6 +353,11 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   - `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
     OR `AuthorizationGrant::issue_production` mandatory-bytes
     constructor (L6-r1-9)
+  - SHA2_512_256 (multihash `0x1015`) + SHA3_256 (multihash `0x16`)
+    pre-blessed agile-hash-fallback codepoint mint per CLAUDE.md baked-in
+    #5 (L11-R2-MINOR-4). At codepoint-mint-time MUST add to
+    `codepoint_table_integer_values_pinned` with hex-pin per the
+    discipline established at G-CORE-9 R1 fix-pass Bundle 5.
 - **v1-beta posture:** all of the above are nice-to-have; each has
   no immediate exploit at v1-beta (the audience CID IS bound via
   binding_sig; ed25519_dalek is the only signature primitive used

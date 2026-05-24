@@ -387,18 +387,27 @@ freeze wave SURFACES the decision; Ben makes it.
   HEAD; build-backlog row 5 verifies-or-builds before freeze.
 
 **Verification mechanism:**
-- Byte-pin tests under `tests/canonical_bytes_v1_*.rs` (BUILD-AT-FREEZE-
-  WAVE: add per-shape byte-pin where it doesn't exist — shopping-list:
-  SnapshotBlob v2, MerkleRangeProof v2 (if shipped), per-chunk-AEAD,
-  UCAN-Varsig v1 header, AuthorizationGrant CBOR, Drop bundle CBOR,
-  encryption envelope per codepoint, signature envelope per codepoint).
-  Each test loads a hex-pinned canonical bytes string + asserts
-  encode + decode round-trip + CID stability.
+- Byte-pin tests under `tests/canonical_bytes_v1_*.rs`. **G-CORE-9 R1 Bundle 5
+  PARTIAL outcome (2026-05-24):** 2 of 8 hex-pinned tests landed at v1-beta —
+  (a) `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
+  (hex-pins the 9-codepoint integer table) + (b) the per-chunk AAD layout pin
+  in the same file. The remaining 6 hex-pinned tests (SnapshotBlob v2,
+  per-chunk-AEAD canonical hex, UCAN-Varsig v1 header, AuthorizationGrant CBOR,
+  Drop bundle CBOR, encryption envelope per codepoint, signature envelope per
+  codepoint) are DEFERRED to G-COMP-1 per
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-9. **The 6 deferred surfaces
+  remain byte-stable at v1-beta via roundtrip + constant-position +
+  format-version-discriminator pins per the L11 lens substantively-covers
+  finding** — full hex-pinned-bytes regression-defense is the deferred half.
 - `crates/benten-graph/tests/redb_backend_*.rs` family covers the redb
   on-disk format.
-- A new CI lane (extending the existing cite-drift workflow) walks every
-  surface in the inventory + asserts a byte-pin test exists + asserts the
-  golden fixture is checked-in.
+- **CI inventory-walking lane** — DEFERRED to G-COMP-1 per Row D-9; the
+  drift-detect substrate exists (cite-drift workflow + cargo-public-api
+  workflow) but the inventory-walk-asserts-byte-pin-exists discipline is
+  the G-COMP-1 follow-up. At v1-beta the inventory at
+  `docs/V1-WIRE-FORMAT-INVENTORY.md` is authored + tracked + the Ben P-III
+  decision-point sign-off path is the inventory's own §"P-III Ben
+  decision-point" section.
 
 **Composing-phase escape valve:**
 ANY frozen-byte mutation is a P-III Ben decision-point — HALT-AND-
