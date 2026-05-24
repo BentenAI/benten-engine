@@ -1,0 +1,121 @@
+{
+  "lens": "L6 capability-system implementation + plugin-trust 3-layer",
+  "council": "G-CORE-9 FREEZE iterate-to-convergence",
+  "round": "R3",
+  "branch": "g-core-9/r3-l6-capability-plugin-trust",
+  "head_sha": "6c21e4f5e621289348d8a60d69ba8445624229e1",
+  "main_baseline_sha": "6c21e4f5",
+  "scope_inputs": [
+    "docs/V1-FROZEN-INTERFACE.md items 8 + 12 post-R2-fix-pass (commit 7b990b15 + cite-drift sweep 0407af03)",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md Rows D-1, D-2, D-3, D-17, D-20 (new D-20 trybuild deferral)",
+    "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 6 (CapabilityPolicy hard-seal substeps + verification clause)",
+    "crates/benten-caps/src/policy.rs (sealed module + CapabilityPolicy trait + 3 §8-E hooks + actor_hint + check_read default + CapWriteContext/ReadContext/PendingOp)",
+    "crates/benten-caps/src/lib.rs (__sealed_for_workspace_tests re-export under testing feature)",
+    "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs (workspace audit test with NextChunkPoll + SuspensionOutcome arm-coverage tests added per L6-r2-3)",
+    "crates/benten-engine/src/{engine,manifest_envelope_recheck}.rs (section 12 ground-truth verification)",
+    "R2 lens output (commit 2601ee16; r6-capability-plugin-trust-r2.json)",
+    "R2 fix-pass commit 7b990b15 'docs(g-core-9): L6 capability/plugin-trust R2 residues (closes 2 MAJ + 2 MIN)'"
+  ],
+  "disposition": "REQUEST_CHANGES",
+  "summary_one_line": "R2 fix-pass closed both R2 MAJORs cleanly (L6-r2-1 trybuild deferral landed as DEFERRED.md Row D-20 with frozen-surface + deferred-consumption + v1-beta-posture + anchor 4-field shape; L6-r2-2 §8 symmetric retense added consumption-deferred qualifiers + cross-references to D-3 + D-17 on the §8-E hooks table cell + 'Additional surface freezes' bullet + 'See DEFERRED.md' verification-mechanism line) + closed L6-r2-3 (NextChunkPoll + SuspensionOutcome arm-coverage tests added to audit test). L6-r2-4 cite-drift PARTIALLY closed — actor_hint :179 + CapWriteContext :163 + ReadContext :260 + PendingOp :100 all corrected in §8 'Additional surface freezes' bullet; but 6 other in-scope (item 8 + item 12) cites still stale: §8 L698 policy.rs:388 (check_read default-impl, actual :401), §8 L702 policy.rs:341 (pub trait CapabilityPolicy def, actual :354), §12 L1015 manifest_envelope_recheck.rs:80 (pub enum ManifestEnvelopeRecheckOutcome, actual :85), §12 L1020 manifest_envelope_recheck.rs:79 (the #[non_exhaustive] attr, actual :84), §12 L1025-1026 manifest_envelope_recheck.rs:124-144 (outcome_to_row_reject, actual :234+), §12 L1029 manifest_envelope_recheck.rs:144 (pub trait ManifestEnvelopeRechecker, actual :152), §12 L1032 engine.rs:1908-1910 (Some(Arc::new(Noop...))) actual ~:1924, §12 L1035 manifest_envelope_recheck.rs:203-222 (recheck_row Noop impl, actual :204+). Cite-drift sweep commit 0407af03 was scoped to DEFERRED.md + triage doc + dsl audit test only — V1-FROZEN-INTERFACE.md §8 + §12 cites were not in scope. Plus 1 new MINOR: BUILD-BACKLOG row 6 substep 3 (compile-fail trybuild test) + verification clause bullet still describe the trybuild test as part of the row's scope without a cross-reference to DEFERRED.md Row D-20 — the build-backlog row 6 says 'shipped at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit 5ce8bab6)' but substep 3 + verification's 'compile-fail trybuild test fails-to-compile as expected' bullet still imply the trybuild is shipped at the row's landing, when D-20 deferred it. Substrate (object-safety, hard-seal MECHANISM, 5/6 #[non_exhaustive] applications + D-17 deferral, §4.36 fail-CLOSED at engine.rs:1462+) all verify-stays. Net: 1 MAJOR (residual cite-drift cluster on high-churn item 8 + item 12 surfaces per §3.5b HARDENED point 3 + pim-N-cite-drift-fp1-recurrence) + 1 MINOR (BUILD-BACKLOG row 6 ↔ DEFERRED.md Row D-20 cross-ref gap) + 6 verify-stays."
+,
+  "findings": [
+    {
+      "id": "L6-r3-1",
+      "severity": "MAJOR",
+      "title": "Cite-drift cluster in V1-FROZEN-INTERFACE.md sections 8 + 12 — 6 stale `path:line` cites NOT covered by the R2 cite-drift sweep (commit 0407af03 scoped to DEFERRED.md + triage doc + dsl audit test only)",
+      "where": "docs/V1-FROZEN-INTERFACE.md L698 (policy.rs:388 → :401), L702 (policy.rs:341 → :354), L1015 (manifest_envelope_recheck.rs:80 → :85), L1020 (manifest_envelope_recheck.rs:79 → :84), L1025-1026 (manifest_envelope_recheck.rs:124-144 → :234+), L1029 (manifest_envelope_recheck.rs:144 → :152), L1032 (engine.rs:1908-1910 → ~:1924), L1035 (manifest_envelope_recheck.rs:203-222 → :204+)",
+      "evidence": "Ground-truth per `grep -n` at HEAD 6c21e4f5: (a) `fn check_read` at policy.rs:401 (doc cites :388); (b) `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync` at policy.rs:354 (doc cites :341); (c) `pub enum ManifestEnvelopeRecheckOutcome` at manifest_envelope_recheck.rs:85 (doc cites :80; doc's separate :79 cite for the #[non_exhaustive] attribute is actually at :84); (d) `pub trait ManifestEnvelopeRechecker: Send + Sync` at manifest_envelope_recheck.rs:152 (doc cites :144); (e) `pub fn outcome_to_row_reject` at manifest_envelope_recheck.rs:234 (doc cites :124-144 — off by ~110 lines, likely from an early-life cite); (f) NoopManifestEnvelopeRechecker installation at engine.rs:1924 (doc cites :1908-1910). The R2 cite-drift sweep commit 0407af03 message claims '6 LineCiteOnHighChurnSurface findings' but its diff only touched docs/V1-FROZEN-INTERFACE-DEFERRED.md + docs/g-core-9-r2-triage.md + crates/benten-engine/tests/g_core_9_non_exhaustive_audit_dsl.rs — V1-FROZEN-INTERFACE.md was not in the sweep. L6-r2-4 was specifically the actor_hint :179 cite plus the audit-recommendation in the fix-suggestion to verify the L689-690 PendingOp/CapWriteContext/ReadContext triple; the fix-pass closed those 4 cites but did NOT walk the rest of section 8 + section 12. Per §3.5b HARDENED point 3 (high-churn surfaces should use `path::symbol` form not `path:line`), and per pim-N-cite-drift-fp1-recurrence (recurring even after closure pim), and per pim-N-sweep-completeness-self-verify (§3.6j — when claiming a sweep is COMPLETE, run validation against own outputs), this cluster is a freeze-contract integrity gap. None of these are wrong about which file/symbol — only the line numbers drifted under Bundle 3 + other R1/R2 retenses.",
+      "claude_md_anchor": "§3.5b HARDENED point 3 (path::symbol on high-churn surfaces); pim-N-cite-drift-fp1-recurrence (§3.5h MANDATORY-PRE-MERGE-AFTER-MINI-REVIEW-APPROVE); §3.6j sweep-completeness self-verify; HARD RULE 12 clause-(b) freeze-doc integrity.",
+      "disposition": "FIX-NOW",
+      "fix": "Two convergent options (small markdown edit either way): (a) UPDATE the 6+ stale cites with current line numbers — mechanical sed-style edit at L698 (388→401), L702 (341→354), L1015 (80→85), L1020 (79→84), L1025-1026 (124-144→234+ with the actual end-line), L1029 (144→152), L1032 (1908-1910→ground-truth 1924-ish span), L1035 (203-222→204+ with actual end-line); OR (b) STRUCTURALLY CONVERT all in-scope cites to `path::symbol` form (`crates/benten-caps/src/policy.rs::CapabilityPolicy` instead of `crates/benten-caps/src/policy.rs:341`) per §3.5b HARDENED point 3 — eliminates the line-cite drift class entirely. Option (b) is the convergence-shaped path (closes the recurring cite-drift class for these specific call sites). Either way: add the explicit V1-FROZEN-INTERFACE.md section 8 + section 12 to the §3.5h MANDATORY-PRE-MERGE cite-drift sweep checklist for any future fix-pass touching these sections."
+    },
+    {
+      "id": "L6-r3-2",
+      "severity": "MINOR",
+      "title": "BUILD-BACKLOG row 6 substep 3 (compile-fail trybuild test) + Verification clause bullet 3 ('compile-fail trybuild test fails-to-compile as expected') do NOT cross-reference DEFERRED.md Row D-20 — same signature-frozen-vs-consumption-deferred asymmetry L6-r2-2 closed for V1-FROZEN-INTERFACE.md §8 but not for BUILD-BACKLOG row 6",
+      "where": "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md:424-428 (substep 3 'Compile-fail trybuild test:' bullet) + L446-447 (Verification clause bullet 'The compile-fail trybuild test fails-to-compile as expected (smoke-tests the seal)')",
+      "evidence": "BUILD-BACKLOG row 6's substep 3 reads as if the trybuild test ships at row 6's landing (the row's overall framing at INTERNALS.md update L438-440 says 'shipped at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit 5ce8bab6)'). However DEFERRED.md Row D-20 was added at the R2 fix-pass (commit 7b990b15) explicitly deferring the trybuild test fixture to G-COMP-1 — the hard-seal MECHANISM landed at row 6 but the trybuild test fixture is the regression-defense backstop deferred. A downstream reader walking BUILD-BACKLOG row 6 alone (without traversing to DEFERRED.md) would see substep 3 + verification bullet and assume the trybuild test is shipped — the same reading-direction integrity gap L6-r2-2 closed for V1-FROZEN-INTERFACE.md §8 needs to also close for BUILD-BACKLOG row 6. Per Fork 2 DOC-TIGHTEN methodology symmetric-application.",
+      "claude_md_anchor": "HARD RULE 12 clause-(b) reading-direction integrity (same as L6-r2-2); Fork 2 DOC-TIGHTEN symmetric application across all freeze-related docs.",
+      "disposition": "FIX-NOW",
+      "fix": "Two edits to V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 6: (a) update substep 3 'Compile-fail trybuild test:' bullet at L424-428 to read 'Compile-fail trybuild test: **DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-20** — the hard-seal MECHANISM is structurally enforced by rustc on every workspace build (verified at HEAD by the absence of any external `impl CapabilityPolicy` passing the workspace build); the explicit negative-arm regression test fixture (~30 LOC + .stderr) is the deferred backstop. To be added: `crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs` at G-COMP-1 closure of Row D-20.'; (b) update Verification clause bullet at L446-447 to read 'The compile-fail trybuild test fails-to-compile as expected — **DEFERRED to G-COMP-1 per Row D-20**; at v1-beta the seal MECHANISM is structurally enforced by rustc + the `cargo-public-api` baseline lock (row 1).' This brings BUILD-BACKLOG row 6 into honesty alignment with DEFERRED.md Row D-20 + V1-FROZEN-INTERFACE.md §8 verification-mechanism bullet that L6-r2-1 closed."
+    },
+    {
+      "id": "L6-r3-3",
+      "severity": "OBS",
+      "title": "L6-r2-1 (trybuild deferral) closed HONESTLY at DEFERRED.md Row D-20 with full 4-field shape (frozen surface + deferred consumption + v1-beta posture + anchor); cross-reference from V1-FROZEN-INTERFACE.md §8 verification-mechanism bullet to Row D-20 IS in place at L739-744 + L747 'See DEFERRED.md' line",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:474-498 (Row D-20) + docs/V1-FROZEN-INTERFACE.md:739-744 (§8 trybuild-deferral note) + L747 ('See DEFERRED.md' cross-ref)",
+      "evidence": "Row D-20 has the 4-field shape: (i) Frozen surface — names the hard-seal MECHANISM as structurally enforced by rustc on every workspace build + cites policy.rs:50-64 sealed module + names the __sealed_for_workspace_tests workspace-test opt-in re-export pattern; (ii) Deferred consumption — names the G-COMP-1 destination + the exact deliverable (`crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs` ~30 LOC + .stderr file) + the V1-FROZEN-INTERFACE.md §8 verification-mechanism update; (iii) v1-beta posture — explicit acknowledgment that the freeze-doc advertised a trybuild test that does not exist + names this row as the named-destination per HARD RULE 12 clause-(b); (iv) Anchor — L6-r1-3 origin + L6-r2-1 ratifying-finding. V1-FROZEN-INTERFACE.md §8 'Hard-seal mechanism is structurally enforced by rustc' bullet at L734-744 explicitly distinguishes the live structural defense from the deferred regression test + cross-references DEFERRED.md Row D-20 at L740-741. L6-r2-1 disposition LANDED CORRECTLY per Fork 2 DOC-TIGHTEN.",
+      "claude_md_anchor": "HARD RULE 12 clause-(b) named-NOW destination; CLAUDE.md baked-in #7 sealed-discipline.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L6-r2-1 Fork 2 DOC-TIGHTEN landed correctly."
+    },
+    {
+      "id": "L6-r3-4",
+      "severity": "OBS",
+      "title": "L6-r2-2 (§8 §8-E hooks consumption-deferred symmetric retense) closed HONESTLY — §8-E hooks table cell + 'Additional surface freezes' bullet + 'Verification mechanism' line all carry consumption-deferred cross-references to DEFERRED.md Rows D-3 + D-17",
+      "where": "docs/V1-FROZEN-INTERFACE.md:695 (3 §8-E hooks table cell with D-3 cross-ref) + L706-711 ('Additional surface freezes' Apply #[non_exhaustive] bullet with D-17 cross-ref) + L745-747 (Verification-mechanism 'See DEFERRED.md' with D-3/D-17/D-20 enumeration)",
+      "evidence": "Section 8 §8-E hooks table cell at L695 now reads 'Consumption-deferred to G-COMP-1 per docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-3 — zero production call sites at v1-beta; the signatures are locked so adding consumers later is non-breaking, but external policy authors overriding any of the three hooks have NO runtime effect at v1-beta until Row D-3 closes' — matches the L6-r2-2 fix-suggestion verbatim. The Apply #[non_exhaustive] bullet at L706-711 now reads 'DEFERRED to G-COMP-1 per docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (~80+ workspace test-site cascade; the production-side migration ... IS already complete at v1-beta per Bundle 3 of the R1 fix-pass; the attribute landing is the test-cascade half)' — matches L6-r2-2 fix verbatim. Verification mechanism at L745-747 enumerates D-3 + D-17 + D-20 in one cross-reference line. Section 12 narrative (L1037-1046) carries the same distinction; sections 8 + 12 are now symmetrically honest per Fork 2 DOC-TIGHTEN.",
+      "claude_md_anchor": "CLAUDE.md #18 trust model Layer-2 + Layer-3 customization surface; HARD RULE 12 clause-(b) reading-direction integrity.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L6-r2-2 section 8 ↔ section 12 symmetric retense landed correctly."
+    },
+    {
+      "id": "L6-r3-5",
+      "severity": "OBS",
+      "title": "L6-r2-3 (audit-test self-completeness) closed cleanly — NextChunkPoll + SuspensionOutcome arm-coverage tests added to g_core_9_non_exhaustive_audit.rs at L170 + L194; SuspensionOutcome test serves as D-17 deferral discipline pin",
+      "where": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs:170-192 (next_chunk_poll_audit_arm_coverage) + L194-220 (suspension_outcome_d17_deferred_arm_coverage)",
+      "evidence": "next_chunk_poll_audit_arm_coverage at L170 exercises all NextChunkPoll variants. suspension_outcome_d17_deferred_arm_coverage at L194 exhaustively matches SuspensionOutcome variants WITHOUT a wildcard arm (since #[non_exhaustive] is deferred to D-17, exhaustive matching from sibling crate IS allowed at v1-beta); the test serves as the freeze-discipline pin for the D-17 deferral — when D-17 closes and #[non_exhaustive] lands, this test will start failing-to-compile and force the wildcard arm addition (precisely the cascade Row D-17 enumerates). This is a structurally-sound deferral discipline pin per pim-N-sweep-completeness-self-verify (§3.6j).",
+      "claude_md_anchor": "pim-N-sweep-completeness-self-verify (§3.6j); pim-13 (§3.12) R7-equivalent spec-to-code compliance.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; L6-r2-3 audit-arm gap closed + serves as D-17 deferral discipline pin."
+    },
+    {
+      "id": "L6-r3-6",
+      "severity": "OBS",
+      "title": "L6-r2-4 (cite-drift in §8) PARTIALLY closed — actor_hint :179 + CapWriteContext :163 + ReadContext :260 + PendingOp :100 all corrected; but 2 other §8 cites + 4-5 §12 cites still stale (re-surfaced as L6-r3-1 MAJOR)",
+      "where": "docs/V1-FROZEN-INTERFACE.md L696 (actor_hint :179 CORRECTED), L704-705 (CapWriteContext :163 + ReadContext :260 + PendingOp :100 CORRECTED) + L698 + L702 + section 12 cluster STILL STALE — see L6-r3-1",
+      "evidence": "The R2 fix-pass commit 7b990b15 cite-corrections walked the 4 cites L6-r2-4 explicitly named in its fix-suggestion (actor_hint at L696 + PendingOp/CapWriteContext/ReadContext triple at L689-690 → moved to L704-705 with correct line numbers). However the L6-r2-4 fix-suggestion's tail 'Also audit other :NNN line cites in section 8 + section 12 against current ground-truth — Bundle 3 retenses likely shifted multiple' was NOT fully discharged. Verified §8 still-stale: L698 check_read :388 (actual :401) + L702 pub trait CapabilityPolicy :341 (actual :354). §12 cluster of 4-5 stale cites (L1015 + L1020 + L1025 + L1029 + L1032 + L1035) was never in scope of the cite-drift sweep commit 0407af03 (its diff was confined to DEFERRED.md + triage doc + DSL audit test). The L6-r2-4 fix-suggestion's audit-other-cites tail is the residue that surfaces as L6-r3-1 MAJOR.",
+      "claude_md_anchor": "pim-N-cite-drift-fp1-recurrence (§3.5h MANDATORY-PRE-MERGE-AFTER-MINI-REVIEW-APPROVE); pim-N-sweep-completeness-self-verify (§3.6j).",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op for this verify-stays; the residue is captured in L6-r3-1 MAJOR + L6-r3-1 fix discharges the full §8 + §12 cite-drift surface (option-b path::symbol conversion is the convergence-shaped path)."
+    },
+    {
+      "id": "L6-r3-7",
+      "severity": "OBS",
+      "title": "Substrate ground-truth verify-stays — hard-seal MECHANISM structurally enforced by rustc; sealed::Sealed pub(crate) supertrait at policy.rs:50-64; __sealed_for_workspace_tests workspace-test opt-in re-export under testing feature; CapabilityPolicy: sealed::Sealed bound at policy.rs:354; object-safety pin compiles + runs at HEAD",
+      "where": "crates/benten-caps/src/policy.rs:50-64 (sealed module) + :354 (CapabilityPolicy bound) + crates/benten-caps/src/lib.rs (__sealed_for_workspace_tests re-export) + crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs (object-safety pin)",
+      "evidence": "`grep -n 'pub trait CapabilityPolicy\\|mod sealed\\|pub trait Sealed' crates/benten-caps/src/policy.rs` returns L50 `pub(crate) mod sealed`, L63 `pub trait Sealed {}`, L354 `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. The hard-seal mechanism is intact: pub(crate) visibility on sealed mod means external crates cannot reach `Sealed` and therefore cannot impl `CapabilityPolicy`. `cargo check -p benten-caps` at HEAD completes successfully (29s wall-clock) — no regression. Object-safety pin tests g_core_8_capability_policy_sealed_compile_test.rs:98-115 (Arc<dyn CapabilityPolicy>) + L210-232 (3-new-hooks dyn-dispatch) compile + run-test at HEAD.",
+      "claude_md_anchor": "CLAUDE.md baked-in #7 sealed-discipline + #19 engine-extensions-compile-time-linked.",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; substrate object-safety + hard-seal mechanism + workspace-test opt-in all sound."
+    },
+    {
+      "id": "L6-r3-8",
+      "severity": "OBS",
+      "title": "DEFERRED.md Rows D-1 + D-2 + D-3 + D-17 + D-20 all verify-stays HONEST — each carries the 4-field shape (frozen surface + deferred consumption + v1-beta posture + anchor); cross-references from V1-FROZEN-INTERFACE.md §8 + §12 are wired",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Rows D-1, D-2, D-3, D-17, D-20",
+      "evidence": "Row D-1 (WriteBoundaryChainValidator) — 4-field shape verified at R2 (verify-stays unchanged at R3). Row D-2 (InstallRecordReplayStore) — 4-field shape verified at R2 (verify-stays unchanged). Row D-3 (3 §8-E hooks) — 4-field shape verified at R2 (verify-stays unchanged; §8 cross-ref now wired per L6-r2-2 closure). Row D-17 (CapWriteContext + ReadContext + SuspensionOutcome #[non_exhaustive] cascade) — 4-field shape verified at R2 (verify-stays unchanged; SuspensionOutcome arm-coverage test added per L6-r2-3 serves as deferral discipline pin). Row D-20 (trybuild compile-fail regression backstop, NEW at R2 fix-pass) — 4-field shape verified per L6-r3-3 (verify-stays). All 5 rows are HONEST per HARD RULE 12 clause-(b) named-NOW destination discipline + Fork 2 DOC-TIGHTEN methodology.",
+      "claude_md_anchor": "CLAUDE.md #18 Layer-1/2/3 trust model + HARD RULE 12 clause-(b).",
+      "disposition": "VERIFY-STAYS",
+      "fix": "no-op; DEFERRED rows D-1/D-2/D-3/D-17/D-20 all 4-field-shape honest."
+    }
+  ],
+  "metrics": {
+    "BLOCKER_count": 0,
+    "MAJOR_count": 1,
+    "MINOR_count": 1,
+    "OBS_count": 6,
+    "total_findings": 8,
+    "files_reviewed": 8,
+    "v1_frozen_items_in_scope": ["item 8", "item 12", "DEFERRED Rows D-1, D-2, D-3, D-17, D-20", "BUILD-BACKLOG row 6"]
+  },
+  "r2_findings_closed_at_r3": [
+    "L6-r2-1 (MAJOR trybuild no-disposition) — CLOSED via DEFERRED.md Row D-20 (4-field shape) + V1-FROZEN-INTERFACE.md §8 verification-mechanism cross-reference at L739-744 + L747 ('See DEFERRED.md') per Fork 2 DOC-TIGHTEN; convergence-shaped path landed",
+    "L6-r2-2 (MAJOR §8 §8-E hooks consumption-deferred symmetric retense) — CLOSED via §8 §8-E hooks table cell (L695) + Apply #[non_exhaustive] bullet (L706-711) + Verification-mechanism 'See DEFERRED.md' line (L745-747); sections 8 + 12 now symmetrically honest",
+    "L6-r2-3 (MINOR audit-test arm-coverage gap) — CLOSED via NextChunkPoll arm-coverage test (g_core_9_non_exhaustive_audit.rs:170) + SuspensionOutcome arm-coverage test (L194) which serves as D-17 deferral discipline pin",
+    "L6-r2-4 (MINOR cite-drift §8) — PARTIALLY CLOSED (4 of ~10 cites corrected: actor_hint :179 + CapWriteContext :163 + ReadContext :260 + PendingOp :100); the rest re-surfaces as L6-r3-1 MAJOR",
+    "L6-r2-5..L6-r2-10 (6 OBS verify-stays) — unchanged; substrate ground-truth still sound + DEFERRED rows still honest"
+  ],
+  "convergence_status": "REQUEST_CHANGES — 1 MAJOR + 1 MINOR + 6 OBS verify-stays. R2 substantive 2 MAJOR closed cleanly + 2 MINOR (1 fully closed, 1 partially closed). The 1 R3 MAJOR (L6-r3-1) is the residual cite-drift cluster on V1-FROZEN-INTERFACE.md §8 + §12 that the L6-r2-4 fix-suggestion's audit-other-cites tail did not cover + the R2 cite-drift sweep commit 0407af03 was not scoped to this doc. The 1 R3 MINOR (L6-r3-2) is the BUILD-BACKLOG row 6 ↔ DEFERRED.md Row D-20 cross-ref gap — same Fork 2 DOC-TIGHTEN reading-direction integrity shape as L6-r2-2. Both are small markdown edits (~6-8 line-cite corrections OR a path::symbol bulk conversion + 2 BUILD-BACKLOG row 6 bullet edits). One more R4 round should converge cleanly (0 substantive expected). Substrate ground-truth (object-safety, hard-seal MECHANISM verified by `cargo check -p benten-caps` green at HEAD, #[non_exhaustive] 5/6 closures + 1 honest D-17 deferral, §4.36 fail-CLOSED at engine.rs:1462+, audit-test arm-coverage including D-17 deferral discipline pin) all verify-stays. Trend: R1 6 MAJ + 3 MIN + 5 OBS → R2 2 MAJ + 2 MIN + 6 OBS → R3 1 MAJ + 1 MIN + 6 OBS — monotonic convergence shape per Q5 cadence."
+}
