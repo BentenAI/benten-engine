@@ -1,0 +1,175 @@
+{
+  "_meta": {
+    "lens": "L10 napi + browser + embedded webview + UX + sandbox — PHASE-WIDE",
+    "tier": "R6 R1",
+    "phase": "phase-4-meta-core",
+    "scope": "PHASE-WIDE (re-run L10 questions broader than FREEZE — confirm napi PR-B AsyncTask + #652 close()-cancel + browser thin-client bundle + embedded webview + bridged-dual-runtime + SANDBOX hold across the whole phase work-product)",
+    "base_sha": "4bbc4cac",
+    "base_branch": "phase-4-meta-core/r4b-r1-fix-pass",
+    "review_branch": "phase-4-meta-core/r6-r1-l10-client-surfaces-phase-wide",
+    "r3_precedent": "L10 R3 total-zero clean-sweep",
+    "r4_precedent": "L10 R4 total-zero clean-sweep",
+    "r6_expectation": "confirmation — should remain clean-sweep modulo phase-wide cross-checks the FREEZE-narrow tiers did not run"
+  },
+  "disposition": "APPROVE-WITH-1-MINOR",
+  "r6_r1_convergence_disposition": "NEEDS-R6-FP (single MINOR; well-defined ~6-LOC orchestrator-direct close path; will converge in R6-FP-1)",
+  "summary": "L10 R6 PHASE-WIDE re-review confirms the L10 R3 + R4 zero-clean-sweep against the phase-4-meta-core work-product. The five surface families that L10 owns — napi PR-B AsyncTask migration / #652 close()-cancel race-closure / browser wasm32-unknown-unknown thin-client bundle / Tauri embedded-webview shape (c) / bridged-dual-runtime / SANDBOX — are all production-runtime correct, well-pinned, and consistent with CLAUDE.md baked-in #17 (three deployment shapes), #18 (Class B β + plugin-trust), #19 (engine-extension trust model), #5 crypto-agility (typed-reject on unknown variants), and §8-C bridged-dual-runtime ratification. One MINOR finding surfaces from the phase-wide cross-check that FREEZE-narrow L10 R3/R4 didn't run: V1-FROZEN-INTERFACE.md row 969 mandates `#[non_exhaustive]` APPLY on `benten_renderer_tauri::IpcMethod`, but the attribute is NOT applied at HEAD AND the workspace-wide `g_core_9_non_exhaustive_audit.rs` is per-type cherry-picked (not workspace-walking as Row 8.e mandates) so it does not catch the gap. This is a real freeze-mandate-vs-HEAD drift; FIX-NOW is ~6 LOC across one file + an audit test addition.",
+  "findings": [
+    {
+      "id": "l10-r6r1-min-1",
+      "severity": "MINOR",
+      "title": "V1-FROZEN-INTERFACE row 969 mandates `#[non_exhaustive]` on `IpcMethod` (and the maximalist doctrine implies CapRequirement / IpcRequest / AdminUiManifest) but the attribute is NOT applied at HEAD; the workspace `non_exhaustive` audit test does not cover `benten-renderer-tauri`",
+      "evidence": {
+        "freeze_mandate": {
+          "file": "docs/V1-FROZEN-INTERFACE.md",
+          "line": 969,
+          "row": "| `benten-renderer-tauri` | `IpcMethod` (per-method allowlist) | TBD | APPLY |",
+          "freeze_section": "## 11. META #907 `#[non_exhaustive]` sweep — MAXIMALIST application"
+        },
+        "head_state": [
+          {
+            "file": "crates/benten-renderer-tauri/src/lib.rs",
+            "line": 104,
+            "decl": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\\npub struct IpcMethod { pub name: &'static str, pub cap: CapRequirement }",
+            "missing": "#[non_exhaustive]"
+          },
+          {
+            "file": "crates/benten-renderer-tauri/src/lib.rs",
+            "line": 82,
+            "decl": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\\npub enum CapRequirement { None, Required(&'static str) }",
+            "missing": "#[non_exhaustive] (per maximalist doctrine — pub enum with both arms today; future Optional/Conditional/Delegated arms are reasonable additive extensions)"
+          },
+          {
+            "file": "crates/benten-renderer-tauri/src/lib.rs",
+            "line": 222,
+            "decl": "#[derive(Debug, Clone)]\\npub struct IpcRequest { pub method, pub payload, pub session }",
+            "missing": "#[non_exhaustive] (per maximalist doctrine — pub struct that will plausibly need additive fields, e.g. correlation_id, trace_span)"
+          },
+          {
+            "file": "crates/benten-renderer-tauri/src/lib.rs",
+            "line": 305,
+            "decl": "#[derive(Debug, Clone, Default)]\\npub struct AdminUiManifest { pub granted_caps: BTreeSet<String> }",
+            "missing": "#[non_exhaustive] (per maximalist doctrine — pub struct that will widen as the admin-UI-v0 manifest evolves)"
+          }
+        ],
+        "audit_test_gap": {
+          "file": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs",
+          "lines": 213,
+          "test_count": 10,
+          "scope": "per-type cherry-picked — `CapWriteContext`, `ReadContext`, `WriteBoundaryChainOutcome`, `AtriumMode`, `DelegationResolution`, `ManifestVerifyMode`, AuthorizationGrant types, `Strategy` (carve-out), `NextChunkPoll`, `SuspensionOutcome`",
+          "row_8_e_mandate": "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 8.e: '`crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` — new test file that walks EVERY `pub enum` + `pub struct` workspace-wide and asserts each carries `#[non_exhaustive]` OR appears in a documented carve-out registry. Per V1-FROZEN-INTERFACE item 11.'",
+          "drift": "test does NOT walk workspace-wide; it does NOT reference any `benten-renderer-tauri` type; the `IpcMethod` row 969 mandate is consequently un-enforced"
+        },
+        "baseline_status": {
+          "file": "docs/public-api/benten-renderer-tauri.json",
+          "surfaces_listed": [
+            "pub enum CapRequirement { None, Required(&'static str) }",
+            "pub struct IpcMethod { pub name: &'static str, pub cap: CapRequirement }",
+            "pub struct IpcRequest { pub method, pub payload, pub session }",
+            "pub struct AdminUiManifest { pub granted_caps: BTreeSet<String> }"
+          ],
+          "note": "baseline records the structural shape; does NOT pin presence of `#[non_exhaustive]`. Applying the attribute is a SemVer-compatible additive change today; post-`v1-GM` it becomes a non-recoverable SemVer break per the freeze doc's own 'lean DEFENSIVE here' guidance"
+        },
+        "carve_out_status": {
+          "file": "docs/V1-FROZEN-INTERFACE-DEFERRED.md",
+          "tauri_mentions": "1 (an unrelated `RenderError` doc-cite at line 532; NO carve-out for `IpcMethod` / `CapRequirement` / `IpcRequest` / `AdminUiManifest`)",
+          "note": "row 969 is unambiguous APPLY (not DEFER); the absence at HEAD is real drift"
+        }
+      },
+      "disposition": "FIX-NOW (orchestrator-direct in R6-FP-1) — HARD RULE 12 default applies; not OUT-OF-SCOPE (it IS the lens scope); not BELONGS-NAMED-NOW (the destination IS the freeze wave which is converging now); not DISAGREE (the freeze doc is the source of truth and the maximalist doctrine is ratified by Ben as the §11 architectural position).",
+      "proposed_fix": "(a) add `#[non_exhaustive]` to `IpcMethod` (struct), `CapRequirement` (enum), `IpcRequest` (struct), `AdminUiManifest` (struct) — 4 attribute additions, ~6 LOC including any consumer match-arm updates the lint surfaces. (b) extend `g_core_9_non_exhaustive_audit.rs` with one new `#[test] fn benten_renderer_tauri_audit_arm_coverage()` that exercises the now-non_exhaustive types via a `match`-with-`_` arm + a presence pin — ~30 LOC. The carve-out registry mention in Row 8.e (audit-walks-workspace-wide) can stay deferred to the post-freeze G-COMP-1 wave per the named-NOW pattern (the per-type pin closes THIS row 969 gap defensively without requiring the full workspace walker now).",
+      "fix_loc_estimate": "~6 LOC src + ~30 LOC test = ~36 LOC total",
+      "risk_if_skipped": "Future-Composing addition of (e.g.) a `CapRequirement::Conditional(predicate)` arm becomes a non-recoverable SemVer break of `benten-renderer-tauri` v1.x consumers — they hit the `non_exhaustive_omitted_patterns` lint as a hard error and the crate cannot ship a minor-version bump. The freeze doc's lean-DEFENSIVE guidance exists precisely to forestall this class of bug; missing the row 969 APPLY at v1-beta is exactly the failure mode item 11 was written to prevent.",
+      "convergence_note": "single-author orchestrator-direct fix; no cross-crate cascade; the lint-surfaced consumer updates (if any) are mechanical match-arm `_ =>` additions inside this same crate's tests. No new BLOCKER risk; clean R6-FP-1 close candidate."
+    }
+  ],
+  "phase_wide_cross_checks_passed": [
+    {
+      "check": "napi PR-B (#1203) AsyncTask migration end-to-end",
+      "evidence": [
+        "bindings/napi/src/lib.rs::NextChunkTask: `Task::compute()` polls `state.close_requested` between bounded `next_chunk_with_timeout` waits; runs on libuv worker pool, NOT JS main thread (lines 2120-2183)",
+        "bindings/napi/src/lib.rs::StreamHandleJs::next returns `AsyncTask<NextChunkTask>` (line 2208-2213) — Promise-returning shape per #1203",
+        "packages/engine/src/stream.ts NativeStreamHandle.next signature `Promise<Buffer | null>` (line 59) — TS consumer awaits the Promise inside Symbol.asyncIterator",
+        "test pins present: bindings/napi/__tests__/streamhandle_next_asynctask_roundtrip.spec.ts + streamhandle_libuv_non_starvation.spec.ts + streamhandle_close_concurrent_with_blocked_next.spec.ts"
+      ],
+      "verdict": "production-runtime LIVE; TS shape locked at V1-FROZEN-INTERFACE row 838"
+    },
+    {
+      "check": "#652 close()-cancel-of-stuck-next() race-closure (G-CORE-10 Option-C Mutex-split)",
+      "evidence": [
+        "bindings/napi/src/lib.rs::StreamHandleJs::close (line 2234-2254): non-blocking sync close — sets `close_requested` + `is_drained_cached` SYNCHRONOUSLY without waiting on handle lock; opportunistic try_lock for immediate drop; either way bounded-constant-time return",
+        "STREAM_NEXT_POLL_INTERVAL=50ms (line 2104) — close() observed within ~50ms of being set",
+        "NextChunkTask::compute (line 2128) checks `state.close_requested` at top of each loop iteration AND uses `try_lock` for the fast-path close-before-acquire branch (line 2132)",
+        "Mutex-split: `state.handle: Arc<Mutex<Option<StreamHandle>>>` is the lock the AsyncTask holds; `close_requested: AtomicBool` is the cancellation signal observable WITHOUT that lock — closing the original #652 race"
+      ],
+      "verdict": "production-runtime LIVE; pre-v1 small hardening landed (CLAUDE.md baked-in #15)"
+    },
+    {
+      "check": "browser thin-client bundle (wasm32-unknown-unknown shape (b))",
+      "evidence": [
+        "bindings/napi/src/wasm_browser.rs: BrowserManifestStore in-RAM with HONEST `is_persistent() -> false` until G18-A-followup wires IDB (Compromise #19 PARTIALLY CLOSED narrative; the dishonest-flag-flip drift hazard is structurally prevented)",
+        "browser_runtime_available() cfg-split (lines 274-296): symbol present on every target; answer target-honest — TS callers always see `typeof === 'function'`",
+        "FORBIDDEN_PREFIXES sweep at crates/benten-renderer-tauri/tests/three_rung_baked_in_17_defense_extension_pin.rs (forbids loro/iroh/wasmtime/multi-thread-tokio/redb in wasm32 bundle) — 3-rung defense per CLAUDE.md baked-in #17",
+        "named RED-PHASE deferral at bindings/napi/tests/wasm_bundle_size.rs:100 → phase-3-backlog §4.3 G18-A-followup (HARD RULE 12 clause (b) compliant)"
+      ],
+      "verdict": "honest-disclosure discipline preserved; partial-close narrative landed; deferred work is named-NOW"
+    },
+    {
+      "check": "embedded webview shape (c) — Tauri 2.x renderer (CLAUDE.md baked-in #19)",
+      "evidence": [
+        "T3 three-rung defense (crates/benten-renderer-tauri/src/lib.rs): rung 1 IPC_METHODS allowlist (typed slice — bijection-by-construction; the former parallel-array shape with `unwrap_or(\"\")` fail-OPEN drift hazard is structurally eliminated by the typed CapRequirement::None vs Required(scope) sum), rung 2 per-method cap binding (AdminUiManifest::grants), rung 3 WEBVIEW_CSP_HEADER (default-src 'none'; forbids 'unsafe-eval' + 'unsafe-inline'; 'wasm-unsafe-eval' is the wasm-only relaxation)",
+        "tauri-runtime-verso swap-readiness: Renderer trait at crates/benten-platform-foundation/src/materializer.rs:552-562 carries NO Tauri-specific types in render() signature; `_assert_renderer_object_safety()` compile-test pin (crates/benten-renderer-tauri/src/lib.rs:602)",
+        "br-r1-14 cross-protocol contract: InProcessSessionBridge re-uses benten_engine::thin_client::DidKeyedSession + SessionToken (same cryptographic state machine as shape (b); transport=Transport::Ipc)",
+        "test coverage: ipc_allowlist_rejects_unknown_method.rs + ipc_method_invocation_requires_manifest_cap.rs + webview_csp_locked_no_unsafe_eval.rs + ipc_method_name_stability_drift_detector.rs (baseline-byte-for-byte against docs/public-api/benten-renderer-tauri.json) + compromised_webview_cannot_escalate_to_native_filesystem.rs + arch_n_benten_renderer_tauri_dep_direction.rs + tauri_runtime_verso_swap_readiness_compile_test.rs + in_process_ipc_session_token_contract_matches_thin_client.rs"
+      ],
+      "verdict": "production-runtime LIVE; engine-extension trust model (CLAUDE.md #19) preserved; verso swap-readiness intact"
+    },
+    {
+      "check": "bridged-dual-runtime ratification (CLAUDE.md baked-in #17 §8-C)",
+      "evidence": [
+        "bindings/napi/src/atrium.rs::js_atrium_runtime() (line 85-94): process-singleton `tokio::runtime::Builder::new_multi_thread().enable_all()` runtime — ENGINE-OWNED, not host-shell-borrowed",
+        "No `tauri::Builder::with_runtime` references anywhere; `crates/benten-renderer-tauri/Cargo.toml` has ZERO tauri/tokio production deps (rung-2 forbidden-dep assertion at three_rung_baked_in_17_defense_extension_pin.rs:53-60)",
+        "JsAtrium uses napi::bindgen_prelude::Task (NOT tokio_rt feature) — block_on runs on `js_atrium_runtime()` from AsyncTask::compute, off the JS thread (bindings/napi/INTERNALS.md:98)"
+      ],
+      "verdict": "bridged-dual-runtime contract held; no shell-runtime-handle threading"
+    },
+    {
+      "check": "SANDBOX wasm32 typed-reject + cfg-split discipline",
+      "evidence": [
+        "bindings/napi/src/sandbox.rs: sandbox_target_supported cfg-split (lines 71-92) — `true` native / `false` wasm32; symbol present on every target so TS sees `typeof === 'function'` (defense-in-depth against symbol-presence-vs-symbol-behaviour confusion)",
+        "E_SANDBOX_UNAVAILABLE_ON_WASM typed error mirrors crypto-agility #5 typed-reject pattern (never silent fallback) — surfaced wasm32-side per docs/SANDBOX-LIMITS.md §5",
+        "describe_sandbox_node_for_handler returns `null` (not `\"unknown\"` sentinel) for no-invocation case — §7.1 closure dropped the legacy string sentinel per cross-language rule-mirror discipline §3.5g",
+        "_for_test surfaces are cfg-gated under `feature = test-helpers` with a `Err(E_PRIMITIVE_NOT_IMPLEMENTED)` body in the production build path (defense-in-depth — production cdylib still surfaces a typed error if called)"
+      ],
+      "verdict": "production-runtime LIVE; typed-reject + cfg-split + sentinel-drop all consistent"
+    },
+    {
+      "check": "115 _for_test surfaces — R4b L6-MAJOR-1 PIVOT path-(b) DEFER-NAMED-NOW (Row D-22)",
+      "evidence": [
+        "git log shows parent branch commit 753d9840 'R4b L6-MAJOR-1 PIVOT path-(a) FIX-NOW → path-(b) DEFER-NAMED-NOW Row D-22 (115 _for_test surfaces; hard-escalation cascade exceeds 30-callsite trigger)'",
+        "napi-side _for_test surfaces (testing_open_stream_for_test / testing_open_subscription_for_test / testing_deliver_synthetic_event_for_test) are cfg-gated AND surface E_PRIMITIVE_NOT_IMPLEMENTED in the non-test-helpers build — production cdylib does not expose live test bodies (sec-r6r2-02 discipline)"
+      ],
+      "verdict": "HARD RULE 12 clause-(b) compliant — named to Row D-22; not an L10 finding"
+    },
+    {
+      "check": "wasm32-wasip1 sister target + canonical-fixture-CID dual-target invariant",
+      "evidence": [
+        "bindings/napi/src/wasm_target.rs: wasi_target_kind / wasi_runtime_supports_redb_native / wasi_canonical_fixture_cid all cfg-split; wasi_canonical_fixture_cid recomputes the Phase-1 canonical CID via benten_core::testing::canonical_test_node() — unconditional surface (intentionally not cfg-gated; per source 'tiny + costs nothing at runtime')",
+        "wasm-runtime.yml workflow compares wasm32-wasip1 answer against native answer for cross-target CID stability"
+      ],
+      "verdict": "wasm-r1-1 dual-target invariant preserved"
+    }
+  ],
+  "absent_findings_explicit": {
+    "no_blocker": true,
+    "no_major": true,
+    "no_obs": true,
+    "rationale": "L10 R3 + R4 returned total-zero clean-sweep. The PHASE-WIDE re-review is structurally a confirmation pass — the only finding worth surfacing is the freeze-mandate-vs-HEAD drift that FREEZE-narrow tiers (which focus on the call sites mutating during the wave) didn't include in scope. The five production-runtime surface families (napi/browser/webview/sandbox/dual-runtime) are all correct, well-pinned, and well-disclosed."
+  },
+  "convergence_recommendation": {
+    "for_R6_R1": "1 MINOR — well-scoped orchestrator-direct close",
+    "fix_plan": "R6-FP-1 (or first batch): add `#[non_exhaustive]` to `IpcMethod` + `CapRequirement` + `IpcRequest` + `AdminUiManifest`; extend g_core_9_non_exhaustive_audit.rs with `benten_renderer_tauri_audit_arm_coverage` test",
+    "expected_R6_R2": "L10 PHASE-WIDE re-review = CLEAN (0 BLOCKER / 0 MAJOR / 0 MINOR); STRICT-Q5-CONVERGED",
+    "no_pattern_induction": "single-instance drift; not pim-N material (the §3.6h ratify-must-close-origin discipline does apply mechanically — close in same batch as any new ratification, which is the standard FIX-NOW posture)"
+  }
+}
