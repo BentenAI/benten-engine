@@ -27,9 +27,15 @@ pub use crate::error::UnsupportedAlgorithm;
 /// (the DEFAULT — NF-4 concatenated/committing/strip-resistant Ed25519⊕
 /// ML-DSA-65) and [`SigCodepoint::CLASSICAL_ED25519`] (the non-default
 /// downgrade). The NF-1 end-state arm
-/// [`SigCodepoint::HYBRID_MLDSA65_SLHDSA`] is a reserved-but-unimplemented
-/// codepoint (live impl lands at G-CORE-3c). Any other codepoint surfaces
-/// as [`UnsupportedAlgorithm::Signature`] — NEVER a silent fallback.
+/// [`SigCodepoint::HYBRID_MLDSA65_SLHDSA`] is a **reserved swap-matrix arm
+/// — typed-rejected by default** at [`SigCodepoint::resolve`] and at
+/// `SignatureSuite::resolve_codepoint`; reachable only via
+/// [`SwapMatrix::try_pure_pq_sole_trust_path`] which is gated by the C11b
+/// `AUDIT_LANDED_PURE_PQ_FLAG` (compile-time `false` at v1-beta per
+/// [`SwapMatrixError::AuditNotLandedPurePqRejected`]). The full swap
+/// matrix shipped at G-CORE-3c retains 0x0003 as typed-rejected (the
+/// 0x647c cipher-side mirror is the canonical mate). Any other codepoint
+/// surfaces as [`UnsupportedAlgorithm::Signature`] — NEVER a silent fallback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SigCodepoint(pub(crate) u16);
 
@@ -43,10 +49,15 @@ impl SigCodepoint {
     /// conformance-testable; NOT the default).
     pub const CLASSICAL_ED25519: Self = Self(0x0002);
 
-    /// NF-1 PQ⊕PQ end-state: ML-DSA-65 ⊕ SLH-DSA. **Reserved-but-
-    /// unimplemented** at this wave; live impl + conformance-test at
-    /// G-CORE-3c (the full swap matrix). Dispatching this codepoint at
-    /// G-CORE-2 surfaces [`UnsupportedAlgorithm::Signature`].
+    /// NF-1 PQ⊕PQ end-state: ML-DSA-65 ⊕ SLH-DSA. **Reserved swap-matrix
+    /// arm — typed-rejected by default** at [`Self::resolve`] +
+    /// `SignatureSuite::resolve_codepoint` + `varsig.rs::decode_payload`.
+    /// G-CORE-3c shipped the full swap matrix; 0x0003 stays typed-rejected
+    /// at the dispatcher per the C11b safety gate (reachable only via the
+    /// audit-gated [`SwapMatrix::try_pure_pq_sole_trust_path`] constructor
+    /// which itself returns [`SwapMatrixError::AuditNotLandedPurePqRejected`]
+    /// at v1-beta). Dispatching this codepoint at the v1-beta default
+    /// surfaces [`UnsupportedAlgorithm::Signature`].
     pub const HYBRID_MLDSA65_SLHDSA: Self = Self(0x0003);
 
     /// Raw 16-bit codepoint value (P-III deferred; G-CORE-9 freezes the

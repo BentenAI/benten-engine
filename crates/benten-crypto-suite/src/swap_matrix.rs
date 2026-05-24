@@ -1572,8 +1572,18 @@ fn split_payload_from_plaintext_with_sig(
     Ok(plaintext_with_sig[payload_start..payload_end].to_vec())
 }
 
-fn unsupported_codepoint_msg_static(_e: &UnsupportedAlgorithm) -> &'static str {
-    "cipher-suite codepoint typed-unsupported"
+/// Returns the canonical typed-unsupported message string per
+/// codepoint class. The codepoint value itself is not interpolated
+/// because the return type is `&'static str` (callers that need the
+/// codepoint integer value should consult the `UnsupportedAlgorithm`
+/// variant directly via pattern matching, not via the message string).
+/// L1-crypto-r1-3: classified by variant rather than swallowed.
+fn unsupported_codepoint_msg_static(e: &UnsupportedAlgorithm) -> &'static str {
+    match e {
+        UnsupportedAlgorithm::Hash { .. } => "hash codepoint typed-unsupported",
+        UnsupportedAlgorithm::Signature { .. } => "signature codepoint typed-unsupported",
+        UnsupportedAlgorithm::CipherSuite { .. } => "cipher-suite codepoint typed-unsupported",
+    }
 }
 
 fn generate_fresh_k_root() -> Vec<u8> {
