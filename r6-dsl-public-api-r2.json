@@ -1,0 +1,84 @@
+{
+  "lens": "L9 DSL public-API-shape + ergonomics",
+  "round": "R2",
+  "phase": "G-CORE-9 FREEZE R6 phase-close (DSL slice)",
+  "tree_state": {
+    "branch": "g-core-9/r2-l9-dsl-public-api",
+    "fork_base": "235ad861",
+    "fix_pass_commit": "235ad861",
+    "main_head_at_review": "235ad861"
+  },
+  "disposition": "APPROVE-WITH-FINDINGS",
+  "r2_convergence_disposition": "NOT-CONVERGED",
+  "convergence_notes": "R1 had 2 MAJ + 2 MIN + 1 OBS. R2 finds 1 MAJ + 3 MIN + 1 OBS (none is BLOCKER). The R1 MAJORs are resolved (MAJOR-2 fully landed; MAJOR-1 escalated with valid HARD RULE 12 clause-(b) named destination V1-BETA-BREAKING-CHANGES.md Cohort 3 + Row D-15 — though see new MAJOR-1 below for incomplete naming). 1 MIN escalated MAJ (R2-MAJ-1: cargo-public-api baseline staleness which Fork 3 said should bite). 1 R1 MIN (L9-DSL-MINOR-1 re-export gap) NOT closed — Bundle 4 carried it and Bundle 4 was escalated; the MIN slipped silently. Per HARD RULE 12 + the iterate-to-convergence rule (CLAUDE.md #9 amendment 2026-05-19) — R3 IS warranted to close the residuals before this lens is TAG-READY.",
+  "findings": [
+    {
+      "id": "L9-r2-MAJ-1",
+      "severity": "MAJOR",
+      "title": "cargo-public-api baseline at docs/public-api/benten-dsl-compiler.txt does NOT reflect the new 5 #[non_exhaustive] attributes; Fork 3's required-failing workflow promise is structurally broken (drift detected for all 14 crates but workflow concludes success)",
+      "evidence": "grep -i non_exhaustive docs/public-api/benten-dsl-compiler.txt returns 0; same file at line 4 reads `pub enum benten_dsl_compiler::CompileError` with NO `#[non_exhaustive]` prefix, while peer crates (benten-drop.txt:4, benten-caps.txt:17, etc.) DO carry the prefix. cargo-public-api workflow run 26357811778 logs show 'DRIFT DETECTED for benten-dsl-compiler' (and 13 other crates) yet job conclusion = 'success'. Root cause: the workflow's `DRIFT_DETECTED=1` assignment sits inside a `{ ... } | tee` pipeline subshell, so the variable is lost in the parent shell — `if [ \"$DRIFT_DETECTED\" -ne 0 ]` always evaluates false. Per the G-CORE-9 R1 Fork 3 ratification (workflow flipped to required-failing per V1-FROZEN-INTERFACE item 9 literal), this gate is supposed to bite at v1-beta freeze. At the L9 lens specifically: the DSL crate's baseline omits the 5 new attribute markers, which means the freeze-contract structural drift-defense isn't actually defending the DSL public-API-shape change.",
+      "disposition": "FIX-NOW",
+      "fix": "Two-part: (a) regenerate `docs/public-api/benten-dsl-compiler.txt` (and the 13 other drifted baselines) via `cargo +nightly public-api --simplified -p benten-dsl-compiler > docs/public-api/benten-dsl-compiler.txt` (the regen command is documented in the workflow header); (b) restructure the workflow to NOT lose `DRIFT_DETECTED` across the `| tee` pipeline — either move the `tee` inside an explicit FIFO/process-sub or write the drift state to a tempfile and read it in the parent shell. (b) is L12 cross-lens scope but is the load-bearing fix; (a) alone is masked by (b)'s bug.",
+      "cross_lens": "L12 (CI/lint/build process-quality) — the workflow-bug half is L12's primary scope; surfaced here because L9 evidence (DSL baseline staleness) is the load-bearing leakage."
+    },
+    {
+      "id": "L9-r2-MIN-1",
+      "severity": "MINOR",
+      "title": "R1's L9-DSL-MINOR-1 (EDslIoError + EDslBackendRejected re-export from `packages/engine/src/errors.ts`) NOT closed — triage said Bundle 4 (folded into ErrorCode mirror commit), but Bundle 4 was escalated and this MINOR slipped silently with it",
+      "evidence": "grep EDsl packages/engine/src/errors.ts shows only EDslInvalidShape + EDslUnregisteredHandler in the re-export list (line 34-35) and CODE_TO_CTOR map (218-219). EDslIoError + EDslBackendRejected exist in errors.generated.ts (lines 3090 + 3105) per the §3.5g item 6 amendment closure (PR #1342) and the chunk-3 mint (PR #1339) respectively, but are NOT re-exported from the hand-curated `errors.ts` surface that JS consumers import via `@benten/engine/errors`. Currently 149 of 194 generated classes are re-exported — the two DSL classes are absent from the curated subset. This was supposed to close as part of Bundle 4 per g-core-9-r1-triage.md:122; Bundle 4 was ESCALATED per V1-BETA-BREAKING-CHANGES.md:156 — the MINOR-1 slipped with it without an explicit named destination.",
+      "disposition": "FIX-NOW",
+      "fix": "Add `EDslIoError,` + `EDslBackendRejected,` to both the import list (around lines 34-35) and the export list (around lines 113-114) of `packages/engine/src/errors.ts`; add the CODE_TO_CTOR map entries (around lines 218-219). 4-line edit; trivial. Alternative: explicitly BELONGS-NAMED-NOW to G-COMP-1 OR Row D-15 watch-list IF orchestrator stance is that the re-export should ride with the deferred 3-mint Bundle 4."
+    },
+    {
+      "id": "L9-r2-MIN-2",
+      "severity": "MINOR",
+      "title": "L9-DSL-MAJOR-1 (3 new DSL ErrorCodes for parse/unknown-primitive/missing-respond) — the escalation destination is documented in V1-BETA-BREAKING-CHANGES.md Cohort 3 + named as 'Row D-15 watch-list' but the actual Row D-15 body in V1-FROZEN-INTERFACE-DEFERRED.md does NOT enumerate this item (it lists 4 unrelated R1-OBS items only)",
+      "evidence": "V1-BETA-BREAKING-CHANGES.md:156 says 'Captured in `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15 watch-list.' Reading the actual Row D-15 (V1-FROZEN-INTERFACE-DEFERRED.md:340-362), the deferred-consumption list enumerates only: AeadEnvelope::to_wire_bytes panic, AuthorizationGrant.binding_sig hardcoded Ed25519, CryptoPolicy::require_hybrid_pq, and AuthorizationGrant.audience_pubkey Option→non-Option. There is NO row entry for 'Strategy::C → Strategy::Reserved rename + 3 DSL ErrorCode mints' even though that's what V1-BETA-BREAKING-CHANGES.md says is 'captured here'. Per HARD RULE 12 clause-(b), the named destination must actually exist + receive the entry NOW. The current state is a half-pointer: the breaking-changes cohort doc names D-15 + D-15 doesn't actually list the item.",
+      "disposition": "FIX-NOW",
+      "fix": "Add a sub-bullet to V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 deferred-consumption list (or author a fresh Row D-19): 'Strategy::C → Strategy::Reserved rename (L8-MAJOR-1) + 3 new DSL ErrorCodes for parse/unknown-primitive/missing-respond (L9-DSL-MAJOR-1) + remove the corresponding drift-detect baseline grandfathered lines for `CompileError::Parse`/`Semantic`/`Build` + bump CATALOG_VARIANT_COUNT 192 → 195.' Anchor: L8-MAJOR-1 + L9-DSL-MAJOR-1; destination G-CORE-9 R2 OR G-COMP-1 per the Bundle 4 escalation."
+    },
+    {
+      "id": "L9-r2-MIN-3",
+      "severity": "MINOR",
+      "title": "g_core_9_non_exhaustive_audit.rs does NOT include the 5 DSL types (CompileError, CompiledSubgraph, CompiledPrimitive, Span, Diagnostic) even though the file's module docstring explicitly cites L9-DSL-MAJOR-2 as one of its dispositions",
+      "evidence": "`crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` line 14 reads 'Per L6-r1-2 + L8-MAJOR-2 + L9-DSL-MAJOR-2 + L17-r1-2 disposition (G-CORE-9 R1 Bundle 3).' The file imports types from benten_caps + benten_engine but NOT from benten_dsl_compiler. No test fn covers any of the 5 DSL types. The audit's promise (test-system verification of #[non_exhaustive] application) is not extended to the L9-scoped types even though they ARE the ones that ratified the test's existence per the citation. Strictly the attribute is APPLIED in source (verified at lib.rs:180/193/306/499/548 — see L9-r2-OBS-1 below) so this is a verification-coverage gap not a substrate gap. Couples to V1-FROZEN-INTERFACE.md item 11 freeze-table omission (the 5 DSL types are not enumerated in the table that runs from line 873 onward; only the test file's docstring + the source-code application carries the v1-beta proof).",
+      "disposition": "FIX-NOW",
+      "fix": "Add 5 test fns to `g_core_9_non_exhaustive_audit.rs` mirroring the existing pattern — e.g.: `#[test] fn dsl_compile_error_is_non_exhaustive() { let _: benten_dsl_compiler::CompileError = benten_dsl_compiler::compile_str(\"\").unwrap_err(); }` (Empty source → CompileError::Build per the existing semantics). Or for the structs: a doc-comment-only assertion that direct struct-literal construction would not compile cross-crate. Optionally, also enumerate the 5 types as their own row in V1-FROZEN-INTERFACE.md item 11 freeze-table for doc-completeness."
+    },
+    {
+      "id": "L9-r2-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "L9-DSL-MAJOR-2 (5 DSL public types non_exhaustive) FULLY LANDED in source — CompileError + CompiledSubgraph + CompiledPrimitive + Span + Diagnostic all carry `#[non_exhaustive]`",
+      "evidence": "lib.rs:180 CompiledSubgraph, lib.rs:193 CompiledPrimitive, lib.rs:306 CompileError, lib.rs:499 Span, lib.rs:548 Diagnostic — all 5 carry the attribute + a docstring citing 'V1-FROZEN-INTERFACE.md item 11 + L9-DSL-MAJOR-2 (G-CORE-9 R1 fix-pass)'. R1 MAJOR-2 is structurally closed at v1-beta source level (the type-shape lock applies forever). The deferred residuals are: (a) the audit-test pin extension (R2-MIN-3 above) + (b) the V1-FROZEN-INTERFACE.md item 11 freeze-table enumeration (doc-completeness; out of strict L9 scope but adjacent).",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a"
+    },
+    {
+      "id": "L9-r2-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "L9-DSL-MINOR-2 (compile_file substantive filesystem test) properly named-deferred to G-COMP-1 via V1-FROZEN-INTERFACE-DEFERRED.md Row D-12 — HARD RULE 12 clause-(b) COMPLIANT",
+      "evidence": "Row D-12 at V1-FROZEN-INTERFACE-DEFERRED.md:291-303 enumerates the frozen surface (`pub fn compile_file` locked at v1-beta) + deferred consumption (G-COMP-1 destination for filesystem-exercising test) + v1-beta posture (shape locked, test coverage sparse) + anchor (L9-DSL-MINOR-2). This is the canonical HARD RULE 12 clause-(b) BELONGS-NAMED-NOW shape; named destination exists + receives the entry now. CONVERGED.",
+      "disposition": "OBSERVATION-PASS",
+      "fix": "n/a"
+    }
+  ],
+  "scope_notes": {
+    "in_scope": "DSL public-API-shape + ergonomics: benten-dsl-compiler crate's public surface (CompileError variants + Compiled* types + Diagnostic/Span + compile_str/compile_file functions + DSL ErrorCode mirror at packages/engine/src/errors.ts + drift-detect baseline state) at v1-beta freeze posture.",
+    "out_of_scope": "Workflow-bug structural fix (L12 primary); item 11 freeze-table doc enumeration (doc-coupling adjacent); benten-dsl-compiler runtime correctness (L6/L8 scope)."
+  },
+  "production_compile_status": "GREEN at HEAD (cargo build -p benten-dsl-compiler --quiet succeeds)",
+  "artifacts_referenced": [
+    "docs/V1-FROZEN-INTERFACE.md (item 11 freeze-table)",
+    "docs/V1-FROZEN-INTERFACE-DEFERRED.md (rows D-12 + D-15)",
+    "docs/V1-BETA-BREAKING-CHANGES.md (Cohort 3)",
+    "docs/g-core-9-r1-triage.md (triage doc)",
+    "crates/benten-dsl-compiler/src/lib.rs (5 types' attribute application)",
+    "packages/engine/src/errors.ts (re-export gap)",
+    "packages/engine/src/errors.generated.ts (EDslIoError + EDslBackendRejected presence)",
+    "scripts/drift-detect-error-variant-mirror-baseline.txt (CompileError::Parse/Semantic/Build grandfathered lines)",
+    "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs (L9 verification gap)",
+    "docs/public-api/benten-dsl-compiler.txt (baseline staleness)",
+    ".github/workflows/cargo-public-api.yml (Fork 3 required-failing workflow)",
+    "gh run 26357811778 logs (workflow-bug evidence)"
+  ]
+}
