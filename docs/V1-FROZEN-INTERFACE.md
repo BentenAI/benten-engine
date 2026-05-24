@@ -686,8 +686,8 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 |---|---|---|
 | #886 `[features]` | DECIDED (already shipped) | Pin `Cargo.toml` `[features]` block exactly as-is; comment-cite. |
 | #993 `CapabilityPolicy` sealed-discipline shape | DECIDED (a) SEALED per RATIFIED-PREWORK §8-E | **HARD-SEAL LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 6 (commit `5ce8bab6`).** `crates/benten-caps/src/policy.rs` `pub(crate) mod sealed { pub trait Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`. Old `sealed_marker::SealedCapabilityPolicy` soft-seal DELETED (no shim per HARD RULE 12 + CLAUDE.md #5). Workspace-wide migration applied: 4 internal impls (NoAuthBackend, GrantBackedPolicy, LegacyUcanStubBackend, UcanGroundedPolicy<B>) + ~17 workspace test-double impls received sibling `impl Sealed` blocks via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests` re-export. Feature pass-through: benten-engine `test-helpers` + benten-eval `testing` features enable `benten-caps/testing`. Object-safety preserved (compile-test pin at `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` exercises `Arc<dyn CapabilityPolicy>`). |
-| 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. |
-| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:167`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
+| 3 new Phase-4-Meta G-CORE-8 hooks (`check_install_consent` / `check_per_delegation` / `check_write_with_audience`) | DECIDED additive (defaulted trait methods + `CapWriteContext`/`ReadContext` audience field) | **Lock the new method signatures + the new field**. Object-safety preserved. **Consumption-deferred to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3** — zero production call sites at v1-beta; the signatures are locked so adding consumers later is non-breaking, but external policy authors overriding any of the three hooks have NO runtime effect at v1-beta until Row D-3 closes. |
+| #1005 `actor_hint` shape | DECIDED | Lock as-shipped (the `actor_hint: Option<String>` placeholder per `crates/benten-caps/src/policy.rs:179`). Tightening to a typed principal is a v1-assessment-window v1-Composing item (named in §1.B). |
 | #883b prod-dep-edge | DECIDED | Lock as-shipped. |
 | #887b `check_read` default-impl | DECIDED (defaulted; pulled WITH/BEFORE G-CORE-8) | Lock at `crates/benten-caps/src/policy.rs:388` (`fn check_read(...) -> Result<(), CapError> { ... }` default body; admit-all baseline per Phase-1). |
 | §4.69 organizing principle | RESOLVED (a) `EngineCapsHandle`-canonical — see item 1 | Already frozen at item 1; no-regression invariant pin. |
@@ -696,12 +696,13 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 - `crates/benten-caps/src/policy.rs:341` `pub trait CapabilityPolicy:
   Sealed + Send + Sync` (post-hard-seal).
 - `CapWriteContext` + `ReadContext` + `PendingOp` (`crates/benten-caps/src/
-  policy.rs:103, 154, 247`) — the cap-policy context types.
-- **Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext`** at the
-  freeze (item 11 sweep coupling). They are context structs likely to
-  grow new fields in Composing (e.g. tenant context, request-ID trace);
-  adding fields post-v1 is breaking; the attribute is the cheap, correct
-  affordance.
+  policy.rs:163, 260, 100`) — the cap-policy context types.
+- **Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext`** —
+  **DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17**
+  (~80+ workspace test-site cascade; the production-side migration to
+  `Default::default()` + field-mutation pattern IS already complete at
+  v1-beta per Bundle 3 of the R1 fix-pass; the attribute landing is the
+  test-cascade half).
 
 **What "frozen" means here:**
 - Trait shape (signature, defaulted-vs-required, return types) is locked.
@@ -722,10 +723,22 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-caps.txt`
   (regenerated per build-backlog row 1).
-- Compile-test pin for `Arc<dyn CapabilityPolicy>` object-safety.
-- A compile-fail trybuild test (BUILD-AT-FREEZE-WAVE row 6) asserts an
-  external `impl CapabilityPolicy for SomeExternalType` without
-  `impl Sealed for SomeExternalType` fails to compile.
+- Compile-test pin for `Arc<dyn CapabilityPolicy>` object-safety at
+  `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs`.
+- **Hard-seal mechanism is structurally enforced by rustc on every workspace
+  build** (`pub(crate) mod sealed { pub trait Sealed {} }` private supertrait
+  at `crates/benten-caps/src/policy.rs:50-64`; external `impl CapabilityPolicy`
+  cannot reach the private `Sealed` trait and fails to compile). Workspace-test
+  opt-in is via the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod
+  __sealed_for_workspace_tests` re-export. **Explicit negative-arm trybuild
+  regression test fixture DEFERRED to G-COMP-1 per
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-20** — the seal MECHANISM
+  is real at v1-beta; only the explicit compile-fail test fixture is
+  deferred (the mechanism + the cargo-public-api baseline lock are the
+  v1-beta structural defenses).
+- See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the consumption-deferred
+  rows (D-3 §8-E hooks; D-17 `#[non_exhaustive]` cascade for CapWriteContext +
+  ReadContext; D-20 trybuild regression backstop).
 
 **Composing-phase escape valve:**
 - New defaulted trait method = ADDITIVE; fine.

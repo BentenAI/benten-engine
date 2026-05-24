@@ -436,6 +436,32 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **v1-beta posture:** the obsolete `Strategy::C` naming + the 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. No immediate exploit (the variant works correctly; the names are stale). The rename window IS specifically the G-CORE-9 freeze wave OR G-COMP-1 (any later is a SemVer break post-v1-beta tag).
 - **Anchor:** L8-MAJOR-1 + L9-DSL-MAJOR-1 + V1-BETA-BREAKING-CHANGES.md:152-156 Bundle 4 ESCALATED entry. Resolves the L8-R2-MAJOR-CARRY-1 / L9-r2-MIN-2 / L12-R2-MIN-1 phantom-destination cross-confirmed pattern (R2 council finding).
 
+### Row D-20 — L6-r1-3 trybuild compile-fail regression backstop for the CapabilityPolicy hard-seal
+
+- **Frozen surface (v1-beta):** the hard-seal MECHANISM itself IS structurally
+  enforced by rustc on every workspace build. `pub(crate) mod sealed { pub trait
+  Sealed {} }` + `pub trait CapabilityPolicy: sealed::Sealed + ...` at
+  `crates/benten-caps/src/policy.rs:50-64` means an external
+  `impl CapabilityPolicy for SomeExternalType` cannot reach the private
+  `Sealed` supertrait and fails to compile. Workspace-test opt-in is via
+  the `#[cfg(feature = "testing")] #[doc(hidden)] pub mod __sealed_for_workspace_tests`
+  re-export. The seal is real at v1-beta.
+- **Deferred consumption (G-COMP-1 destination):** add `trybuild` dev-dep +
+  ship `crates/benten-caps/tests/compile_fail/external_cap_policy_impl.rs`
+  (~30 LOC test fixture + .stderr file) as the explicit negative-arm
+  regression test backstop. Update V1-FROZEN-INTERFACE.md item 8
+  verification-mechanism bullet to cite the actual test path.
+- **v1-beta posture:** the hard-seal MECHANISM is structurally enforced by
+  rustc (verified by the absence of any external `impl CapabilityPolicy`
+  passing the workspace build at HEAD); only the explicit negative-arm
+  regression test fixture is deferred. The freeze contract advertises a
+  trybuild test at V1-FROZEN-INTERFACE.md:717 that does not exist as a
+  separate file; this row plugs the named-destination phantom per HARD
+  RULE 12 clause-(b).
+- **Anchor:** L6-r1-3 G-CORE-9 R1 finding (no triage disposition recorded);
+  L6-r2-1 G-CORE-9 R2 finding ratifying the deferral per Fork 2 doc-tighten
+  precedent.
+
 ### Row D-16 — V1-WIRE-FORMAT-FREEZE-BEN-DECISION.md authorship
 
 - **Frozen surface (v1-beta):** V1-FROZEN-INTERFACE.md item 4
