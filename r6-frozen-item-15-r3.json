@@ -1,0 +1,65 @@
+{
+  "lens": "L17-frozen-item-15-verifier",
+  "round": "R3",
+  "post_fix_pass_head": "6c21e4f5",
+  "r1_branch": "origin/g-core-9/r1-l17-frozen-item-15",
+  "r2_branch": "origin/g-core-9/r2-l17-frozen-item-15",
+  "r3_branch": "g-core-9/r3-l17-frozen-item-15",
+  "disposition": "APPROVE",
+  "convergence": "CONVERGED",
+  "summary": "R2 fix-pass commit 6c21e4f5 (PR #1347) cleanly closed BOTH R2 substantive findings on this lens via the Bundle R2.6 sub-bundle. (1) L17-r2-1 MAJOR (Spec #[non_exhaustive] doc-vs-code drift) CLOSED via path (b) doc-retense: V1-FROZEN-INTERFACE.md item 15.a at lines 1305-1312 now reads 'Equivalent SemVer-safety via private fields + builder pattern (pub fn builder() -> SpecBuilder at spec.rs:216; all four fields are private). External direct-struct-literal construction is already blocked by field visibility — #[non_exhaustive] is NOT required for the SemVer-additive-field-extension property Spec needs. Per G-CORE-9 R2 L17-r2-1 disposition path (b).'; §11 sweep table row 944 also updated to read 'YES (except Spec which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1)'; ground-truth at HEAD spec.rs:189-190 = `#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] pub struct Spec` with all 4 fields private (roots/edges/inclusion/max_depth) + `pub fn builder() -> SpecBuilder` at spec.rs:216 matches the doc claim exactly; `docs/public-api/benten-core.txt` baseline confirms `pub struct benten_core::subgraph_spec::Spec` (no #[non_exhaustive] prefix), the cargo-public-api ground-truth aligns with the retensed doc; SemVer-additive-field-extension property holds because all fields are private + the builder is the only construction path. (2) L17-r2-2 MINOR (codepoint-dispatch overstatement at 15.c) CLOSED via path (a) doc-tighten: V1-FROZEN-INTERFACE.md item 15.c at lines 1412-1420 now reads 'Wire envelope typed for additive future arms via **serde-tag dispatch** (the two arms Hashes(Vec<Cid>) + RestrictedSelector(RestrictedScope) carry distinct serde tags; the dispatch is at the serde-tag layer, NOT via a numeric codepoint table parallel to the crypto-agility framing) — a future arm lands as a new serde-tag arm on this carve-out enum, never repurposing the existing two-arm enum. The \"codepoint-dispatch\" framing in earlier drafts overstated the machinery; the serde-tagged dispatch IS additive-friendly so the freeze contract is not weakened. Per G-CORE-9 R2 L17-r2-2 disposition path (a).'; ground-truth at HEAD scope.rs:25-52 = `#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)] pub enum Scope` with the two arms Hashes(Vec<Cid>) + RestrictedSelector(RestrictedScope), NOT #[non_exhaustive] (deliberate carve-out per the cited doc-block) — the serde-tagged-enum dispatch IS the actual machinery, doc claim now aligns with code; `docs/public-api/benten-caps.txt` baseline confirms `pub enum benten_caps::scope::Scope` (no #[non_exhaustive] prefix). R3 DEEP-VERIFY ground-truth pass on the full 15.a-j sub-clause surface re-confirms every cited file:line locator still resolves at HEAD: WalkResult:50 + walk:78 + walker_as_subgraph:183 + StructuralPath:38 + SubgraphSpecError:20 + combinators.rs:37/99/140 + walk_share_scope:59 + AuthorizationGrant:232 #[non_exhaustive] + GrantKeyMaterial:175 #[non_exhaustive] + UcanEnvelope:73 #[non_exhaustive] + RestrictedScope:103 #[non_exhaustive] + EncryptionClass at benten-core/src/encryption_class.rs:36 #[non_exhaustive] + structural_kdf::derive_root:124 + derive_step:141 + derive_step_without_info_tag_for_test:96 + IROH_BLOCK_SIZE:52 + verify_binding:591. All 10 sub-clauses 15.a-j present and structurally correct; no new findings introduced by the R2 fix-pass on this lens surface; no new doc-coupling drift surfaced (the R2 fix-pass touched ONLY 15.a + 15.c + §11-row Spec carve-out per `git show 6c21e4f5 -- docs/V1-FROZEN-INTERFACE.md`; no other §15 surface was touched). Q5 termination: 0 BLOCKER + 0 MAJOR = APPROVE-FOR-TAG, CONVERGED. R3 finding count: 0 BLOCKER + 0 MAJOR + 0 MINOR + 1 OBS (positive-control evidence preserve). Monotonic convergence shape: R1 = 0 BLK + 2 MAJ + 3 MIN + 2 OBS = 7 findings → R2 = 0 BLK + 1 MAJ + 1 MIN + 2 OBS = 4 findings → R3 = 0 BLK + 0 MAJ + 0 MIN + 1 OBS = 1 finding. Lens disposition: APPROVE / CONVERGED.",
+  "findings": [
+    {
+      "id": "L17-r3-1",
+      "severity": "OBS",
+      "description": "R3 deep-verify ground-truth pass — POSITIVE CONFIRMATION of the post-R2-fix-pass state on the §1.A.FROZEN item 15 lens surface: (a) Both R2 findings CLOSED at fix-pass commit 6c21e4f5 via Bundle R2.6 (L17-r2-1 MAJOR via doc-retense path (b); L17-r2-2 MINOR via doc-tighten path (a)); doc claims at V1-FROZEN-INTERFACE.md 15.a:1305-1312 + §11-table-row 944 + 15.c:1412-1420 + the rationale-pointer to L17-r2-1/r2-2 disposition all match ground-truth at HEAD. (b) `pub struct Spec` at spec.rs:189-190 confirmed has NO #[non_exhaustive] + all 4 fields private (roots:191 / edges:197 / inclusion:202 / max_depth:204) + `pub fn builder() -> SpecBuilder` at spec.rs:216; the SemVer-additive-field-extension property holds via field visibility — the doc's 'equivalent SemVer-safety' framing is accurate. (c) `pub enum Scope` at scope.rs:25-52 confirmed has NO #[non_exhaustive] (deliberate carve-out per the in-code doc-block at scope.rs:32-46 explicitly cross-referencing item 15(c) freeze + the `tf3b_no_opaque_selector_arm_structural` test); serde-tagged dispatch via #[derive(Serialize, Deserialize)] is the actual machinery, matching the now-corrected doc framing. (d) `docs/public-api/benten-core.txt` baseline lists `pub struct benten_core::subgraph_spec::Spec` (NO #[non_exhaustive] prefix); `docs/public-api/benten-caps.txt` baseline lists `pub enum benten_caps::scope::Scope` (NO #[non_exhaustive] prefix) — cargo-public-api ground-truth aligns with the retensed doc claims. (e) All §15 sub-clauses a-j still present + structurally correct + every file:line locator verifies at HEAD: WalkResult:50 / walk:78 / walker_as_subgraph:183 / StructuralPath:38 / SubgraphSpecError:20 / combinators.rs intersect:37, union:99, filter:140 / engine_share_scope.rs walk_share_scope:59 / AuthorizationGrant:232 #[non_exhaustive] / GrantKeyMaterial:175 #[non_exhaustive] / UcanEnvelope:73 #[non_exhaustive] / RestrictedScope:103 #[non_exhaustive] / EncryptionClass at benten-core/src/encryption_class.rs:36 #[non_exhaustive] / structural_kdf derive_root:124 / derive_step:141 / derive_step_without_info_tag_for_test:96 / aead.rs IROH_BLOCK_SIZE:52 / authorization_grant.rs verify_binding:591. (f) The R2 fix-pass touched ONLY the surfaces it claimed to touch on this lens (15.a + §11 table row + 15.c); no collateral drift introduced in 15.b / 15.d / 15.e / 15.f / 15.g / 15.h / 15.i / 15.j. (g) Two test pins verify item 15's central architectural invariants: `crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs` (12-primitive irreducibility per CLAUDE.md #1) + `crates/benten-caps/tests/tf3b_no_opaque_selector_arm_structural.rs` (Scope's EXACTLY-two-arms carve-out). (h) Row D-7 (§8-A visibility cluster deferral) + Row D-11 (walk_share_scope_as principal-bearing additive overload) + Row D-15 watch-list (binding_sig varsig promotion + agile-hash codepoints + require_hybrid_pq) + Row D-17 (CapWriteContext / ReadContext / SuspensionOutcome cascade) all remain present + honest at DEFERRED.md — no phantom destinations on this lens surface. CLAUDE.md baked-in #1 (12-primitive irreducibility) + #5 (crypto-agility self-describing framing) + #7 (sealed-policy refinement) + #18 (plugin-trust trajectory) all PRESERVED by item 15's frozen surfaces. The L17 lens is materially TAG-READY — no further iteration required on this lens for phase-4-meta-core-close.",
+      "location": "docs/V1-FROZEN-INTERFACE.md §15 + §11 + public-api baselines + R2 fix-pass commit 6c21e4f5; cross-cited per finding body",
+      "disposition": "OUT-OF-SCOPE: positive-control pass-through evidence; no action required"
+    }
+  ],
+  "r2_findings_reverify": [
+    {
+      "id": "L17-r2-1",
+      "r2_severity": "MAJOR",
+      "r3_status": "CLOSED-AT-FIX-PASS",
+      "evidence": "V1-FROZEN-INTERFACE.md item 15.a at lines 1305-1312 retensed to acknowledge 'private-fields-plus-builder pattern provides equivalent SemVer-safety' with rationale-cite to G-CORE-9 R2 L17-r2-1 disposition path (b); §11 sweep table row 944 updated to read 'YES (except Spec which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1)'; ground-truth at spec.rs:189-190 confirms `pub struct Spec` with all 4 private fields + `pub fn builder() -> SpecBuilder` at spec.rs:216; docs/public-api/benten-core.txt baseline lists `pub struct benten_core::subgraph_spec::Spec` (no #[non_exhaustive] prefix). Doc claim and code ground-truth now aligned."
+    },
+    {
+      "id": "L17-r2-2",
+      "r2_severity": "MINOR",
+      "r3_status": "CLOSED-AT-FIX-PASS",
+      "evidence": "V1-FROZEN-INTERFACE.md item 15.c at lines 1412-1420 retensed to replace 'codepoint-dispatch' with 'serde-tag dispatch' framing + explicit acknowledgment that the earlier 'codepoint-dispatch' phrasing 'overstated the machinery' + rationale-cite to G-CORE-9 R2 L17-r2-2 disposition path (a); ground-truth at scope.rs:25-52 confirms `pub enum Scope` with #[derive(Serialize, Deserialize)] serde-tagged dispatch + two arms Hashes(Vec<Cid>) + RestrictedSelector(RestrictedScope); the deliberate NO-#[non_exhaustive] carve-out is documented at scope.rs:32-46 with explicit cross-reference to item 15(c) freeze. Doc claim and code ground-truth now aligned."
+    },
+    {
+      "id": "L17-r2-3",
+      "r2_severity": "OBS",
+      "r3_status": "OUT-OF-SCOPE",
+      "evidence": "R2 OBS was a triage-narrative accuracy issue (L17-r1-2 vs L6-r1-1 conflation in commit message). Not a freeze-surface contract violation; recorded for orchestrator handoff. No R3 action required."
+    },
+    {
+      "id": "L17-r2-4",
+      "r2_severity": "OBS",
+      "r3_status": "OUT-OF-SCOPE",
+      "evidence": "R2 OBS was pass-through positive evidence on the Fork 2 doc-tighten outcome + 15.a-j sub-clause cite verification. Re-verified at R3 (see L17-r3-1 finding). No action required."
+    }
+  ],
+  "r3_new_findings_audit": {
+    "status": "NONE",
+    "audit_summary": "R3 audit specifically looked for NEW findings introduced by the R2 fix-pass on the L17 lens surface. The R2 fix-pass diff (`git show 6c21e4f5 -- docs/V1-FROZEN-INTERFACE.md`) shows ONLY 3 §15-territory edits: (1) 15.a Spec attribute retense at lines 1305-1312 (Bundle R2.6 L17-r2-1 closure); (2) 15.c codepoint→serde-tag retense at lines 1412-1420 (Bundle R2.6 L17-r2-2 closure); (3) §11 sweep table row 944 Spec carve-out parenthetical (Bundle R2.6 L17-r2-1 closure). No other §15 surface (15.b / 15.d / 15.e / 15.f / 15.g / 15.h / 15.i / 15.j) was touched. The post-fix-pass state on the L17 lens introduces zero new doc-vs-code drift, zero phantom destinations, zero new MAJOR/MINOR. The collateral edits in the broader R2 fix-pass (Bundle R2.1 BREAKING-CHANGES retense + Bundle R2.2 Row D-19 mint + Bundle R2.5 crypto-suite retenses + etc) are on OTHER lens surfaces (L2/L8/L9/L1/L10/L11/L12/L18); they do not touch §1.A.FROZEN item 15 frozen surfaces."
+  },
+  "q5_termination": {
+    "blocker_count": 0,
+    "major_count": 0,
+    "minor_count": 0,
+    "obs_count": 1,
+    "disposition": "APPROVE",
+    "convergence": "CONVERGED",
+    "rationale": "Per CLAUDE.md rule 9 Q5 termination + the iterate-to-convergence amendment (`feedback_iterate_critical_reviews_to_convergence`): a full lens round returning 0 BLOCKER + 0 MAJOR is the convergence criterion. R3 returns 0 BLK + 0 MAJ + 0 MIN + 1 OBS (positive-control). Lens disposition = APPROVE / CONVERGED. R4 NOT required for this lens."
+  },
+  "monotonic_convergence_shape": {
+    "R1": {"BLK": 0, "MAJ": 2, "MIN": 3, "OBS": 2, "total": 7},
+    "R2": {"BLK": 0, "MAJ": 1, "MIN": 1, "OBS": 2, "total": 4},
+    "R3": {"BLK": 0, "MAJ": 0, "MIN": 0, "OBS": 1, "total": 1},
+    "trajectory": "monotonic R1→R2→R3 (7 → 4 → 1); BLK floor stable at 0 across all 3 rounds; substantive findings (BLK+MAJ+MIN) trajectory 5 → 2 → 0; CONVERGED per Q5"
+  }
+}
