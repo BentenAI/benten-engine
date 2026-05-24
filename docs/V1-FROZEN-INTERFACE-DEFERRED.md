@@ -565,6 +565,80 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   rename pair at #1344 row 7 (GrantKeyMaterial / AeadKeyMaterial) +
   L18-r1-5 + L18-r2-3.
 
+### Row D-23 — §4-B G-CORE-3 × G-CORE-4 SubgraphSpec live-eval + IVM CanonicalViews subscription invalidation test pin
+
+- **Frozen surface (v1-beta):** the SubgraphSpec primitive (G-CORE-3w
+  walker_as_subgraph + RestrictedScope/SubgraphSpecError mints) +
+  the IVM CanonicalViews 5-arm seam (G-CORE-4) + the live-per-request
+  resolver-evaluation commitment from RATIFIED-S&C R5 D-4M-R5
+  ("sub-graph SHAPES that evolve, not frozen snapshots; resolver
+  reuses CanonicalViews subscription") all carry frozen signatures
+  at v1-beta. The composition seam — the resolver-consumer
+  subscribing through IVM CanonicalViews on a SubgraphSpec scope —
+  has no public-API delta beyond the already-frozen pieces.
+- **Deferred consumption (G-COMP-1 destination):** ship the
+  cross-wave integration test pin at
+  `crates/benten-engine/tests/cross_wave_3_x_4_subgraphspec_live_eval_ivm_canonical_views.rs`
+  per R2-test-landscape.md §4-B. Test shape: Alice grants Bob a UCAN
+  scoped to a SubgraphSpec; Alice writes a new Recipe matching the
+  spec; the IVM CanonicalViews subscription correctly emits a
+  ChangeEvent that the resolver consumer hears; Bob's next request
+  returns the new Recipe (live-per-request semantics, NOT frozen
+  snapshot). ~150-250 LOC; the R5 G-CORE-3w + G-CORE-4 substrates
+  are merged so the test substrate is fully available at HEAD.
+  Couples to Row D-10 (§15.j live-per-request resolver-evaluation
+  test pin) — both pins exercise the same RATIFIED-S&C R5 semantic
+  from different angles (Row D-10 = walk_share_scope enumeration;
+  Row D-23 = SubgraphSpec×CanonicalViews ChangeEvent propagation).
+- **v1-beta posture:** the composition IS structurally available at
+  v1-beta (every substrate is shipped); only the integration test
+  pin is deferred. Per L1 R4b finding: tf5_431_ivm_inner_kernel_read_5arm_byte_equivalence.rs
+  exercises 5-arm byte-equivalence between SubgraphSpec-routed walk
+  + legacy walk (a DIFFERENT property; not the live-eval invalidation
+  semantic).
+- **Anchor:** R2-test-landscape.md §4-B + RATIFIED-S&C R5 D-4M-R5
+  (`.addl/phase-4-meta/RATIFIED-sharing-and-confidentiality-2026-05-21.md`,
+  orchestrator-local) + R4b L1 finding r4b-l1-1
+  (`.addl/phase-4-meta/r4b-l1-test-coverage.json` lens JSON on
+  origin/phase-4-meta-core/r4b-l1-test-coverage).
+
+### Row D-24 — §4-C G-CORE-3 × G-CORE-7 manifest-envelope ∩ UCAN-gated SubgraphSpec scope intersection test pin
+
+- **Frozen surface (v1-beta):** G-CORE-3b chain_validator (RestrictedScope
+  + ChainValidationError mints + AuthorizationGrant typed seal) +
+  G-CORE-7 install-lifecycle hardening (ProductionManifestEnvelopeRechecker
+  port + install-time consent) + the manifest-envelope ∩
+  UCAN-SubgraphSpec scope-intersection semantic (CLAUDE.md #18
+  three-layer consent: install-time envelope AND runtime UCAN AND
+  chain-traces-to-user-root all must admit). All sub-pieces carry
+  frozen signatures at v1-beta; no new public-API surface for the
+  composition.
+- **Deferred consumption (G-COMP-1 destination):** ship the
+  cross-wave integration test pin at
+  `crates/benten-engine/tests/cross_wave_3_x_7_manifest_envelope_intersects_ucan_scope.rs`
+  per R2-test-landscape.md §4-C. Test shape (adversarial): install
+  plugin P with manifest scope {A,B}; grant P a UCAN scoping {B,C};
+  P's effective scope = {B} (intersection); requests for A or C
+  return typed OutOfScope (E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
+  + the existing ChainValidationError surface). ~150-250 LOC; both
+  G-CORE-3b chain_validator + G-CORE-7 install path are merged so
+  the composition test substrate is fully available at HEAD.
+  Couples to Row D-3 (3 §8-E CapabilityPolicy hooks consumption) —
+  the per_delegation hook is the runtime arm of the intersection
+  semantic.
+- **v1-beta posture:** the substrates IS structurally available at
+  v1-beta. tf3b_chain_validator_narrowing.rs covers chain-validator
+  narrowing in isolation; tf7_g_core_7_install_lifecycle_hardening.rs
+  covers install-time manifest semantics in isolation; the
+  COMPOSITION pin (both must admit; intersection semantics) is the
+  §4-C gap that Row D-24 names. Per the existing 3-layer admission
+  (Layer-1 user-root + Layer-2 install-envelope + Layer-3 runtime
+  UCAN) the composition semantic IS already structurally enforced
+  at the chain_validator level; the integration test pin is the
+  forward-protection / regression-defense surface that's deferred.
+- **Anchor:** R2-test-landscape.md §4-C + CLAUDE.md baked-in #18
+  trust model + R4b L1 finding r4b-l1-2.
+
 ### Row D-22 — workspace `pub fn .*_for_test` / `_for_testing` `#[cfg]` gating sweep
 
 - **Frozen surface (v1-beta):** 115 baseline entries across 6

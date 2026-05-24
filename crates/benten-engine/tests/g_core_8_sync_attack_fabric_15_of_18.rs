@@ -523,18 +523,28 @@ fn v12_unsigned_or_tampered_install_record_via_merge_rejected() {
 //
 // **Disposition: BELONGS-NAMED-NOW per HARD RULE 12 clause (b).**
 //
-// Named destination: R3-W5's
-// `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs`
-// (the cross-wave §4-D file in the R3-W5 partition). The §4-D
-// composition (AuthorizationGrant audience must match CapabilityPolicy
-// check_write audience) is owned by the cross-wave file; this anchor
-// was a cross-wave-touchpoint annotation that unconditionally panicked
-// on the cross-wave composition — demoted to DISP-B per R4.1 L3 M-2 /
-// orchestrator triage 2026-05-22.
+// Named destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3
+// (3 §8-E CapabilityPolicy hooks consumption — the audience-aware
+// `check_write_with_audience` hook is the v1-beta-frozen signature
+// for the §4-D composition; production wire-up at
+// `apply_atrium_merge`'s per-row `check_write` call is G-COMP-1
+// destination). The §4-D composition (AuthorizationGrant audience
+// must match CapabilityPolicy check_write audience) lands as the
+// integration test pin at G-COMP-1 when Row D-3 closure ships the
+// `check_write_with_audience` consumer wire-up at engine.rs:1413.
 //
-// Un-ignore-when: G-CORE-3b (AuthorizationGrant validator mints) +
-// G-CORE-8 §8-E audience-aware hook both land; the cross-wave file is
-// un-ignored at the later of those two waves.
+// **R4b L1 fix-pass 2026-05-24:** the previously-named destination
+// `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs`
+// was a phantom (file never created at HEAD even though G-CORE-3b
+// (PR #1324) + G-CORE-8 §8-E (PR #1340 batch) both shipped the
+// un-ignore-when conditions). Renamed destination to Row D-3 per
+// the existing G-COMP-1 deferral pattern for the §8-E hook
+// consumption — the audience-mismatch composition rides with Row D-3
+// closure as the audience-aware hook's negative-arm integration pin.
+//
+// Un-ignore-when: G-COMP-1 wave lands Row D-3
+// (`check_write_with_audience` production wire-up); the §4-D
+// composition pin lands as part of that wave's test corpus.
 //
 // No `#[test]` body — DISP-B vectors enumerate inline only.
 
