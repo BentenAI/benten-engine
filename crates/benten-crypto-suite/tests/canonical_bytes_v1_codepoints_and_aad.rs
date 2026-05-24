@@ -151,14 +151,20 @@ fn reserved_codepoints_stay_typed_rejected_at_v1_beta() {
     // by default at v1-beta per C11b safety gate.
     let outcome = SigCodepoint::HYBRID_MLDSA65_SLHDSA.resolve();
     assert!(
-        matches!(outcome, Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 })),
+        matches!(
+            outcome,
+            Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 })
+        ),
         "0x0003 must stay typed-rejected at v1-beta default dispatcher (C11b safety gate); got {outcome:?}"
     );
 
     // Cipher 0x647b (HYBRID_MLKEM768_HQC reserved) — typed-rejected.
     let outcome = CipherSuiteCodepoint::HYBRID_MLKEM768_HQC.resolve();
     assert!(
-        matches!(outcome, Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647b })),
+        matches!(
+            outcome,
+            Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647b })
+        ),
         "0x647b must stay typed-rejected at v1-beta default dispatcher; got {outcome:?}"
     );
 
@@ -167,7 +173,10 @@ fn reserved_codepoints_stay_typed_rejected_at_v1_beta() {
     // try_pure_pq_sole_trust_path constructor.
     let outcome = CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY.resolve();
     assert!(
-        matches!(outcome, Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647c })),
+        matches!(
+            outcome,
+            Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647c })
+        ),
         "0x647c must stay typed-rejected at v1-beta default dispatcher; got {outcome:?}"
     );
 }

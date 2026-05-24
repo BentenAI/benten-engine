@@ -71,7 +71,10 @@ fn write_boundary_chain_outcome_audit_arm_coverage() {
             _ => "Unknown",
         }
     }
-    assert_eq!(audit(WriteBoundaryChainOutcome::NotApplicable), "NotApplicable");
+    assert_eq!(
+        audit(WriteBoundaryChainOutcome::NotApplicable),
+        "NotApplicable"
+    );
     assert_eq!(audit(WriteBoundaryChainOutcome::Admitted), "Admitted");
 }
 
@@ -99,7 +102,10 @@ fn delegation_resolution_audit_arm_coverage() {
             _ => "Unknown",
         }
     }
-    assert_eq!(audit(DelegationResolution::NotPluginPrincipal), "NotPluginPrincipal");
+    assert_eq!(
+        audit(DelegationResolution::NotPluginPrincipal),
+        "NotPluginPrincipal"
+    );
     assert_eq!(audit(DelegationResolution::Admitted), "Admitted");
 }
 
