@@ -253,7 +253,7 @@ re-open).
 | §4.62 | `crates/benten-graph/src/backends/blob_backend_trait.rs:120` `BlobBackend` | **DECIDED additive-default** (NOT a split). The trait carries `put_blob`/`get_blob`/`has_blob` with `Send + Sync + 'static`; future additive methods land as defaulted methods. |
 | §4.63 | `crates/benten-graph/src/backend.rs:306` `KVBackend: Send + Sync` | **DECIDED sync** (NOT RPITIT). RPITIT adds 2024-edition feature-gate complexity v1-beta cannot absorb; future-Composing-async migration is an additive `AsyncKVBackend` trait. |
 | §4.64 | `crates/benten-sync/src/transport_trait.rs:85` `Transport` + `TransportEndpoint` + `TransportConnection` family | `Transport` family stays in `benten-sync` per §8-B (b). The trait surface is `pub` + `Send + Sync + 'static`. **`MerkleRangeProofBackend` trait DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE row 5 outcome (commit `d2616800`)** — Option A per Planner-B; verified not-built at HEAD; freezing a phantom shape is overcommit. Tracked at `docs/future/phase-4-backlog.md §4.64` (the named-NOW destination per HARD RULE 12 clause-(b)). The §4.64 row received an explicit verify-or-defer outcome paragraph at the G-CORE-9 row 5 commit. |
-| §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | **APPLY `#[non_exhaustive]` to all three.** `WriteContext` at `crates/benten-graph/src/lib.rs:935` is currently MISSING the attribute (verified HEAD). `ChangeEvent` ALREADY has it at `crates/benten-core/src/change_stream.rs:123` — KEEP. `GraphError::TxAborted` per-variant `#[non_exhaustive]` — APPLY defensively. The freeze MUST not ship without these. Couples to item 5 + item 11; closes atomically in the G-CORE-9 wave. |
+| §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | **APPLY `#[non_exhaustive]` to all three.** `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`) is currently MISSING the attribute (verified HEAD). `benten_core::change_stream::ChangeEvent` ALREADY has it — KEEP. `benten_graph::GraphError::TxAborted` per-variant `#[non_exhaustive]` — APPLY defensively. The freeze MUST not ship without these. Couples to item 5 + item 11; closes atomically in the G-CORE-9 wave. |
 
 **What "frozen" means here:**
 - Trait method signatures + `Send + Sync + 'static` bounds + the
@@ -381,7 +381,7 @@ breaks are non-recoverable post-`v1-GM`.
 
 ## 5. `WriteContext` shape frozen (#989 / G-CORE-1 canary output)
 
-**Frozen surfaces (the full struct at `crates/benten-graph/src/lib.rs:935`):**
+**Frozen surfaces (the full struct `benten_graph::WriteContext` in `crates/benten-graph/src/lib.rs`):**
 
 ```rust
 #[non_exhaustive]  // ← LANDED at G-CORE-9 row 8c (commit 75a1d33a; couples item 11)
@@ -397,13 +397,12 @@ pub struct WriteContext {
   (the legacy un-namespaced keyspace; byte-identical to pre-#989).
 - `WriteContext::with_namespace_did(self, did: Cid) -> Self` builder.
 - `WriteContext::namespace_did(&self) -> Option<&Cid>` accessor.
-- The C1 cross-DID non-leak invariant (`crates/benten-graph/src/lib.rs:925`
-  doc-block) — structural: keys under per-DID prefix derived from
+- The C1 cross-DID non-leak invariant (doc-block on `benten_graph::WriteContext` in `crates/benten-graph/src/lib.rs`) — structural: keys under per-DID prefix derived from
   `Cid::as_bytes()`; never collide with legacy `n:`/`e:`/`es:`/`et:`
   prefixes.
 
 **`#[non_exhaustive]` LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 8c
-(commit `75a1d33a`).** Applied at `crates/benten-graph/src/lib.rs:934`.
+(commit `75a1d33a`).** Applied on `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`).
 7 test-construction sites migrated to the existing builder pattern
 (`WriteContext::new(label)` + `.with_authority(...)` +
 `.with_namespace_did(did)`; `WriteContext::privileged_for_engine_api()`
@@ -429,7 +428,7 @@ v1-beta-and-forward contract.
   surface, not part of the trait. Covered by item 3.
 - Whether other backends (BrowserBackend, SnapshotBlobBackend) implement
   scoped-views — those backends fail-closed on `Some(namespace_did)` per
-  `lib.rs:649`; the v1-beta lock is on the failure-mode shape.
+  `benten_graph::GraphError::NamespacedWriteUnsupported`; the v1-beta lock is on the failure-mode shape.
 
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-graph.txt`
@@ -455,8 +454,13 @@ CLAUDE.md baked-in #5 (the multiformats-permanent framing).
 each codepoint = SWAPPABLE within the framing):**
 
 1. **`benten-crypto-suite` integration-crate boundary** — the crate IS the
-   seam; the public-API of `benten_crypto_suite` (re-exports at
-   `crates/benten-crypto-suite/src/lib.rs:131..144`) is frozen.
+   seam; the public-API of `benten_crypto_suite` (the `pub use` re-export
+   block in `crates/benten-crypto-suite/src/lib.rs` — `AeadEnvelope` /
+   `AeadError` / `AeadKeyMaterial` / `CipherSuiteCodepoint` / `HashCodepoint`
+   / `SigCodepoint` / `CryptoError` / `UnsupportedAlgorithm` / `VerifyError`
+   / `HashSeam` / `HybridSignature` / `SignatureSuite` / `SuiteConfig` /
+   `StructuralKdfKey` / `derive_root` / `derive_step` / the `swap_matrix`
+   exports) is frozen.
    `cargo-public-api` enforces.
 
 2. **Codepoint table integer values** — PERMANENT (never reuse a value
@@ -868,7 +872,7 @@ WRONG):
   DEFENSIVE guard against future-13th-primitive proposals that
   CLAUDE.md #1 rejects (the carve-out IS the application here — the
   attribute presence is the freeze defense).
-- Per `crates/benten-graph/src/lib.rs:585` Fwd-2 #997 / #1207 explicit
+- Per `benten_graph::GraphError::TxAborted` (in `crates/benten-graph/src/lib.rs`) Fwd-2 #997 / #1207 explicit
   decision NOT to apply — preserve the explicit reason at the cite.
 
 **The enumerated must-apply set** (from §1.A.FROZEN item 11 + workspace
@@ -891,7 +895,7 @@ verification at HEAD):
 | `benten-graph` | `GraphError` | YES | KEEP |
 | `benten-graph` | `GraphError::TxAborted` (per-variant) | Unclear at HEAD | **APPLY** defensively |
 | `benten-graph` | `WriteAuthority` (re-export from core) | YES | KEEP |
-| `benten-graph` | per `lib.rs:585` Fwd-2 #997/#1207 explicit no-apply | NO (explicit reason) | DO NOT APPLY |
+| `benten-graph` | per `benten_graph::GraphError::TxAborted` Fwd-2 #997/#1207 explicit no-apply | NO (explicit reason) | DO NOT APPLY |
 | `benten-crypto-suite` | `UnsupportedAlgorithm` | TBD | APPLY |
 | `benten-crypto-suite` | `SwapMatrixError` | TBD | APPLY |
 | `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` | TBD | APPLY each |
@@ -1014,7 +1018,7 @@ planners agreed; locked as-shipped.**
 - `crates/benten-renderer-tauri/src/lib.rs` — the renderer crate has
   ZERO `tauri`/`tokio` deps (per the swappability thesis; verified by
   compile-test pin).
-- `crates/benten-renderer-tauri/src/lib.rs:127` `pub const IPC_METHODS:
+- `benten_renderer_tauri::IPC_METHODS` (in `crates/benten-renderer-tauri/src/lib.rs`) `pub const IPC_METHODS:
   &[IpcMethod]` — the **explicit method-name const-allowlist.
   IPC_METHODS IS THE IPC SURFACE** — webview cannot invoke a method not
   in the const-allowlist. **Registration affordance REJECTED** per

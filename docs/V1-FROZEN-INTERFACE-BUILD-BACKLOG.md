@@ -557,11 +557,11 @@ unchanged).
 - Apply the attribute; couples to V1-FROZEN-INTERFACE items 11 + 12.
 
 8.c — **`WriteContext` `#[non_exhaustive]` apply:**
-- `crates/benten-graph/src/lib.rs:935` — verified MISSING at HEAD.
+- `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`) — verified MISSING at HEAD.
 - Apply the attribute; couples to V1-FROZEN-INTERFACE items 5 + 11.
 
 8.d — **`GraphError::TxAborted` per-variant `#[non_exhaustive]` audit + apply:**
-- `crates/benten-graph/src/lib.rs:463`-ish — `GraphError` already has
+- `benten_graph::GraphError` (in `crates/benten-graph/src/lib.rs`) — `GraphError` already has
   it at the enum level; per-variant on `TxAborted` may be missing.
 - Audit + apply defensively per item 11.
 
