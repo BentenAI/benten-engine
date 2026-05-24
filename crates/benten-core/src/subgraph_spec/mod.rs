@@ -82,7 +82,7 @@ pub mod macros;
 
 pub use combinators::{filter, intersect, union};
 pub use errors::SubgraphSpecError;
-pub use spec::{SubgraphSpecRestriction, Spec, SpecBuilder, StructuralPath};
+pub use spec::{Spec, SpecBuilder, StructuralPath, SubgraphSpecRestriction};
 pub use walker::{WalkResult, walk, walker_as_subgraph};
 
 // Re-export the `query!` macro under this module path so call sites can

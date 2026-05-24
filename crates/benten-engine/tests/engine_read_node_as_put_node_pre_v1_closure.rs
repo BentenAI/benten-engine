@@ -26,8 +26,8 @@
 #![cfg(any(test, feature = "test-helpers"))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::collections::BTreeMap;
 use benten_caps::__sealed_for_workspace_tests::Sealed;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
@@ -196,7 +196,6 @@ struct RecordingPolicy {
 }
 
 impl Sealed for RecordingPolicy {}
-
 
 impl CapabilityPolicy for RecordingPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {

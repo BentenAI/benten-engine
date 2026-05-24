@@ -25,8 +25,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_engine::Engine;
 use benten_caps::__sealed_for_workspace_tests::Sealed;
+use benten_engine::Engine;
 use benten_errors::ErrorCode;
 use std::sync::Arc;
 
@@ -37,7 +37,6 @@ use std::sync::Arc;
 struct DenyAllReadsPolicy;
 
 impl Sealed for DenyAllReadsPolicy {}
-
 
 impl benten_caps::CapabilityPolicy for DenyAllReadsPolicy {
     fn check_write(

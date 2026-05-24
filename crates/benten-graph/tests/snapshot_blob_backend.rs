@@ -164,15 +164,10 @@ fn snapshot_blob_backend_write_path_returns_read_only_error() {
     // does NOT bypass the read-only contract. The snapshot blob is
     // content-addressed; the Inv-13 5-row matrix has no live dispatch
     // surface to thread through.
-    let ctx = WriteContext {
-        label: String::new(),
-        is_privileged: true,
-        authority: WriteAuthority::EnginePrivileged,
-        // G-CORE-1 #989: snapshot-blob backend exercises the legacy
-        // un-namespaced path; the per-DID storage-partition seam is the
-        // redb path's concern.
-        namespace_did: None,
-    };
+    // G-CORE-1 #989: snapshot-blob backend exercises the legacy
+    // un-namespaced path; the per-DID storage-partition seam is the
+    // redb path's concern.
+    let ctx = WriteContext::privileged_for_engine_api();
     let priv_err = <SnapshotBlobBackend as GraphBackend>::put_node_with_context(
         &backend,
         &canonical_test_node(),

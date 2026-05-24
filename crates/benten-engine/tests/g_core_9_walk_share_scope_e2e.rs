@@ -59,8 +59,7 @@ fn walk_share_scope_returns_walker_bfs_order() {
     // bytewise — the wrapper does NOT reimplement the BFS.
     let underlying = walker::walk(&spec).expect("underlying walker");
     let engine_cids: Vec<Cid> = result.enumerated.iter().map(|(c, _)| *c).collect();
-    let underlying_cids: Vec<Cid> =
-        underlying.enumerated.iter().map(|(c, _)| *c).collect();
+    let underlying_cids: Vec<Cid> = underlying.enumerated.iter().map(|(c, _)| *c).collect();
     assert_eq!(
         engine_cids, underlying_cids,
         "Engine::walk_share_scope MUST equal benten_core walker output \
@@ -97,8 +96,6 @@ fn walk_share_scope_typed_reject_routes_through_error_code() {
                  §3.5g item 6 violation"
             );
         }
-        other => panic!(
-            "expected EngineError::Other(SubgraphSpecWalkFailed), got: {other:?}"
-        ),
+        other => panic!("expected EngineError::Other(SubgraphSpecWalkFailed), got: {other:?}"),
     }
 }

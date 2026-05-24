@@ -16,7 +16,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::errors::SubgraphSpecError;
-use super::spec::{SubgraphSpecRestriction, Spec, SpecBuilder};
+use super::spec::{Spec, SpecBuilder, SubgraphSpecRestriction};
 use crate::Cid;
 
 /// `intersect(a, b)` — produce a [`Spec`] contained by both `a` and `b`.
@@ -202,10 +202,14 @@ fn intersect_inclusions(
         (SubgraphSpecRestriction::Unrestricted, SubgraphSpecRestriction::Unrestricted) => {
             Ok((BTreeSet::new(), BTreeSet::new()))
         }
-        (SubgraphSpecRestriction::Unrestricted, SubgraphSpecRestriction::ByLabel { allow, deny })
-        | (SubgraphSpecRestriction::ByLabel { allow, deny }, SubgraphSpecRestriction::Unrestricted) => {
-            Ok((allow.clone(), deny.clone()))
-        }
+        (
+            SubgraphSpecRestriction::Unrestricted,
+            SubgraphSpecRestriction::ByLabel { allow, deny },
+        )
+        | (
+            SubgraphSpecRestriction::ByLabel { allow, deny },
+            SubgraphSpecRestriction::Unrestricted,
+        ) => Ok((allow.clone(), deny.clone())),
         (
             SubgraphSpecRestriction::ByLabel {
                 allow: a_allow,

@@ -41,14 +41,9 @@ fn inv_13_concurrent_user_writes_race_still_rejects() {
     let backend = Arc::new(RedbBackend::open_or_create(dir.path().join("db.redb")).unwrap());
 
     let node = target_node();
-    let ctx = WriteContext {
-        label: "race-target".to_string(),
-        is_privileged: false,
-        authority: WriteAuthority::User,
-        // G-CORE-1 #989: legacy un-namespaced path — Inv-13 5-row matrix
-        // semantics are unchanged for `namespace_did = None`.
-        namespace_did: None,
-    };
+    // G-CORE-1 #989: legacy un-namespaced path — Inv-13 5-row matrix
+    // semantics are unchanged for `namespace_did = None`.
+    let ctx = WriteContext::new("race-target").with_authority(WriteAuthority::User);
 
     const N: usize = 8;
     let success_count = Arc::new(AtomicUsize::new(0));
@@ -105,14 +100,12 @@ fn inv_13_concurrent_privileged_dedup_no_audit_advance() {
     let backend = Arc::new(RedbBackend::open_or_create(dir.path().join("db.redb")).unwrap());
 
     let node = target_node();
-    let ctx = WriteContext {
-        label: "race-target".to_string(),
-        is_privileged: true,
-        authority: WriteAuthority::EnginePrivileged,
-        // G-CORE-1 #989: legacy un-namespaced path — Inv-13 5-row matrix
-        // semantics are unchanged for `namespace_did = None`.
-        namespace_did: None,
-    };
+    // G-CORE-1 #989: legacy un-namespaced path — Inv-13 5-row matrix
+    // semantics are unchanged for `namespace_did = None`.
+    // Privileged-engine-API path; `with_authority(EnginePrivileged)`
+    // also flips `is_privileged = true` per the
+    // EnginePrivileged-authority/is_privileged coherence builder.
+    let ctx = WriteContext::new("race-target").with_authority(WriteAuthority::EnginePrivileged);
 
     const N: usize = 8;
     let success_count = Arc::new(AtomicUsize::new(0));

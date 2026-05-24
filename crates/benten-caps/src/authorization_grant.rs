@@ -441,8 +441,9 @@ impl AuthorizationGrant {
 
         let signing_key = SigningKey::from_bytes(&issuer_kp.secret_bytes_unprotected());
         let verifying_key = signing_key.verifying_key();
-        let msg = Self::binding_message(&ucan, &key_material, &audience_cid)
-            .expect("synthetic UcanEnvelope + GrantKeyMaterial CBOR-encode infallibly in test fixtures");
+        let msg = Self::binding_message(&ucan, &key_material, &audience_cid).expect(
+            "synthetic UcanEnvelope + GrantKeyMaterial CBOR-encode infallibly in test fixtures",
+        );
         let sig: Signature = signing_key.sign(&msg);
 
         Self {

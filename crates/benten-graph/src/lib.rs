@@ -931,6 +931,14 @@ impl SnapshotHandle {
 /// prefix derived from `Cid::as_bytes()`, so an unscoped path cannot
 /// observe a scoped key by accident (the legacy `n:`/`e:`/`es:`/`et:`
 /// prefixes never collide with the per-DID prefix family).
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 5 + item 11 —
+/// future additive fields (e.g. defaulted `tenant_id: Option<TenantId>`
+/// post-v1; defaulted `audience_did: Option<Cid>` enrichment) MUST
+/// land at the `#[non_exhaustive]` tail. Construction via struct
+/// literal is unsupported from external crates; use the builder
+/// pattern (`WriteContext::default()` + `.with_namespace_did(did)`).
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct WriteContext {
     /// The Node's primary label — used for the system-zone prefix check.

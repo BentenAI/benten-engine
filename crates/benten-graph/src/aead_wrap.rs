@@ -44,7 +44,7 @@ use benten_crypto_suite::aead::{
     unwrap as suite_unwrap, wrap as suite_wrap,
 };
 use benten_crypto_suite::{
-    AeadEnvelope, AeadError as SuiteAeadError, CipherSuiteCodepoint, AeadKeyMaterial,
+    AeadEnvelope, AeadError as SuiteAeadError, AeadKeyMaterial, CipherSuiteCodepoint,
 };
 use thiserror::Error;
 

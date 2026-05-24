@@ -146,7 +146,9 @@ impl SubgraphSpecRestriction {
     pub fn contains(&self, other: &SubgraphSpecRestriction) -> bool {
         match (self, other) {
             (SubgraphSpecRestriction::Unrestricted, _) => true,
-            (SubgraphSpecRestriction::ByLabel { .. }, SubgraphSpecRestriction::Unrestricted) => false,
+            (SubgraphSpecRestriction::ByLabel { .. }, SubgraphSpecRestriction::Unrestricted) => {
+                false
+            }
             (
                 SubgraphSpecRestriction::ByLabel {
                     allow: self_allow,

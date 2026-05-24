@@ -233,7 +233,11 @@ pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64) -> Vec<u8> {
 ///
 /// Per CLAUDE.md baked-in #5: typed-unsupported (NEVER silent-fallback)
 /// on a key whose codepoint doesn't match an AEAD dispatch arm.
-pub fn wrap(plaintext: &[u8], key: &AeadKeyMaterial, aad: &[u8]) -> Result<AeadEnvelope, AeadError> {
+pub fn wrap(
+    plaintext: &[u8],
+    key: &AeadKeyMaterial,
+    aad: &[u8],
+) -> Result<AeadEnvelope, AeadError> {
     // Dispatch on the key's codepoint. At G-CORE-3a only the X25519⊕
     // ML-KEM-768 hybrid codepoint is live (its derived K_root feeds
     // ChaCha20-Poly1305); the classical-only X25519 downgrade arm also
@@ -358,8 +362,10 @@ mod tests {
 
     #[test]
     fn wrap_unwrap_round_trips_at_hybrid_codepoint() {
-        let key =
-            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x42; 32]);
+        let key = AeadKeyMaterial::from_raw_bytes(
+            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            &[0x42; 32],
+        );
         let pt = b"hello, hybrid";
         let cid = b"plaintext-cid-A";
         let aad = aad_whole_content(cid);
@@ -370,7 +376,8 @@ mod tests {
 
     #[test]
     fn wrap_unwrap_round_trips_at_classical_codepoint() {
-        let key = AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0x77; 32]);
+        let key =
+            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0x77; 32]);
         let pt = b"hello, classical";
         let aad = aad_whole_content(b"plaintext-cid-B");
         let env = wrap(pt, &key, &aad).expect("wrap MUST succeed");
@@ -380,8 +387,10 @@ mod tests {
 
     #[test]
     fn aad_rebinding_fails_closed() {
-        let key =
-            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x99; 32]);
+        let key = AeadKeyMaterial::from_raw_bytes(
+            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            &[0x99; 32],
+        );
         let pt = b"payload";
         let aad_a = aad_whole_content(b"cid-A");
         let aad_b = aad_whole_content(b"cid-B");
@@ -395,8 +404,10 @@ mod tests {
 
     #[test]
     fn wire_format_carries_explicit_format_version_byte() {
-        let key =
-            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x10; 32]);
+        let key = AeadKeyMaterial::from_raw_bytes(
+            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            &[0x10; 32],
+        );
         let env = wrap(b"pt", &key, &aad_whole_content(b"cid")).expect("wrap MUST succeed");
         let bytes = env.to_wire_bytes();
         assert_eq!(bytes[0], ENVELOPE_MAGIC, "byte 0 = envelope magic");
@@ -414,8 +425,10 @@ mod tests {
 
     #[test]
     fn round_trip_through_wire_bytes() {
-        let key =
-            AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x33; 32]);
+        let key = AeadKeyMaterial::from_raw_bytes(
+            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            &[0x33; 32],
+        );
         let pt = b"wire round-trip payload";
         let aad = aad_whole_content(b"cid-roundtrip");
         let env = wrap(pt, &key, &aad).expect("wrap MUST succeed");

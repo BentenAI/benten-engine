@@ -34,11 +34,7 @@ fn node(tag: &str) -> Node {
 }
 
 fn user_ctx() -> WriteContext {
-    WriteContext {
-        label: "Doc".into(),
-        authority: WriteAuthority::User,
-        ..WriteContext::default()
-    }
+    WriteContext::new("Doc").with_authority(WriteAuthority::User)
 }
 
 #[test]

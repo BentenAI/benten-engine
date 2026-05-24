@@ -31,8 +31,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use benten_caps::policy::{CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_caps::__sealed_for_workspace_tests::Sealed;
+use benten_caps::policy::{CapWriteContext, CapabilityPolicy, ReadContext};
 use benten_caps::{CapError, NoAuthBackend};
 use benten_core::Cid;
 

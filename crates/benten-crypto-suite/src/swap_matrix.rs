@@ -470,8 +470,10 @@ impl SwapMatrix {
                             detail: "pure-PQ encryption requires a pure-PQ ML-KEM recipient",
                         })?;
                 let (ct, ss) = pure_pq_mlkem_encapsulate(&recip_kem.public_bytes)?;
-                let key =
-                    AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY, &ss);
+                let key = AeadKeyMaterial::from_raw_bytes(
+                    CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
+                    &ss,
+                );
                 let aad = compose_aad(
                     self.signature_codepoint(),
                     self.cipher_suite_codepoint(),
@@ -564,8 +566,10 @@ impl SwapMatrix {
                         })?;
                 let ct_bytes = sealed.wrapped.ek_mlkem.clone();
                 let ss = pure_pq_mlkem_decapsulate(&recip_kem.secret_bytes, &ct_bytes)?;
-                let key =
-                    AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY, &ss);
+                let key = AeadKeyMaterial::from_raw_bytes(
+                    CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
+                    &ss,
+                );
                 let aad = compose_aad(
                     envelope.sig_codepoint,
                     envelope.cipher_codepoint,

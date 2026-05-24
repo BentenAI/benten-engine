@@ -16,8 +16,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_core::{Node, Value};
 use benten_caps::__sealed_for_workspace_tests::Sealed;
+use benten_core::{Node, Value};
 use benten_engine::Engine;
 use std::collections::BTreeMap;
 use std::str::FromStr;

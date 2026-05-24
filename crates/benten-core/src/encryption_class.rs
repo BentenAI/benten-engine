@@ -97,6 +97,7 @@ impl EncryptionClass {
 /// `#[non_exhaustive]` per V1-FROZEN-INTERFACE item 11.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
+// drift-detect-mirror: ignore — internal-only at v1-beta; reserved for v1-Composing §8-CC consumer wire-up (G-CORE-9 V1-FROZEN-INTERFACE row 3)
 pub enum EncryptionClassError {
     /// Codepoint does not map to any LIVE encryption class. The wire
     /// envelope MUST fail-closed (typed reject; never silent fallback)
@@ -110,7 +111,7 @@ pub enum EncryptionClassError {
     /// first §8-CC consumer wires up, this annotation MUST be removed
     /// + an ErrorCode mirror minted.
     #[error("unsupported encryption class codepoint: 0x{raw:02x}")]
-    UnsupportedClass { // drift-detect: internal-only — reserved for v1-Composing §8-CC consumer wire-up
+    UnsupportedClass {
         /// The raw codepoint byte that did not resolve.
         raw: u8,
     },
