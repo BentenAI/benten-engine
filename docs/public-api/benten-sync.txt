@@ -1,4 +1,3 @@
- Documenting benten-sync v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-sync)
 pub mod benten_sync
 pub mod benten_sync::crdt
 #[non_exhaustive] pub enum benten_sync::crdt::CrdtError

@@ -1,4 +1,3 @@
- Documenting benten-core v0.1.0 (/Users/benwork/Documents/benten-engine/.claude/worktrees/agent-aeb4241ec6384092f/crates/benten-core)
 pub mod benten_core
 pub mod benten_core::change_stream
 #[non_exhaustive] pub enum benten_core::change_stream::ChangeKind
