@@ -208,10 +208,12 @@ fn meta_plugin_recursive_walk_uses_engine_evaluator_no_new_primitive() {
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
     let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade_minter,
         private_ns: &mut private_ns,
         install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,

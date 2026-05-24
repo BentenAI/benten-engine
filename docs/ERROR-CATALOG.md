@@ -7,7 +7,7 @@
 | Count | Source | Value (at HEAD post G-CORE-9 R1 fix-pass) | Meaning |
 |---|---|---|---|
 | **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **192** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **192** | The round-trip-pinned list. Matches the throwable enum 1:1. The `catalog_variant_count_matches_enum` test asserts exact equality. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **194** | The round-trip-pinned list. Matches the throwable enum 1:1. The `catalog_variant_count_matches_enum` test asserts exact equality. |
 | **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **194** | = 192 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). |
 | **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **193** | = 192 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
@@ -1772,6 +1772,22 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.
 - **Thrown at:** `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
 - **Phase:** 4-Meta-Core G-CORE-3c (full swap-matrix conformance + C11b safety invariant)
+
+### E_PLUGIN_INSTALL_CONSENT_DENIED
+
+- **Message:** "install rejected by InstallConsentPolicy::check_install_consent"
+- **Context:** Free-form string; carries the plugin-DID + a brief reason when emitted.
+- **Fix:** CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial. Distinct from `E_PLUGIN_INSTALL_CONSENT_REQUIRED` (which fires for caps-grew fresh-consent gap at upgrade time): this is the per-install policy-routed gate. Resolution: either supply user consent via the install pipeline's policy hook OR adjust the configured `CapabilityPolicy` to admit the plugin-DID at install time.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` step 3c — the configured `InstallConsentPolicy::check_install_consent` hook rejected the pending install.
+- **Phase:** 4-Meta-Core R6 R1 FP-F4 §S3a (Row D-3-a closure; CATALOG_VARIANT_COUNT 192 → 193).
+
+### E_PLUGIN_PER_DELEGATION_DENIED
+
+- **Message:** "delegation rejected by CapabilityPolicy::check_per_delegation"
+- **Context:** Free-form string carrying the source plugin-DID + target plugin-DID + cap scope.
+- **Fix:** CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial. Forensic-discrimination symmetry with `E_PLUGIN_INSTALL_CONSENT_DENIED` per CRITIC-1 FIX-5. Resolution: adjust the configured `CapabilityPolicy::check_per_delegation` to admit the source→target plugin delegation, or scope the delegated capability to fit within the source plugin's policy.
+- **Thrown at:** `crates/benten-engine/src/engine_caps.rs::EngineCapsHandle::delegate_capability` — between Step 2b (shares-policy resolver) and Step 3 (effective scope).
+- **Phase:** 4-Meta-Core R6 R1 FP-F4 §S3b (Row D-3-b closure; CATALOG_VARIANT_COUNT 193 → 194).
 
 <!-- reachability: ignore -->
 

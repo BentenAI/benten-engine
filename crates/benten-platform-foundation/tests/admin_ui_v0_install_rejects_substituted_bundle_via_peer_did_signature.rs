@@ -64,10 +64,12 @@ fn substituted_bundle_with_different_peer_did_signature_rejected_at_install() {
     // User's trust-list contains alice only (NOT attacker).
     let trust_list = vec![alice.public_key().to_did()];
     let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
         install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,

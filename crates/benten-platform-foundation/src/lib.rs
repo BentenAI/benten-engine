@@ -78,6 +78,7 @@
 #![allow(dead_code, clippy::needless_pass_by_value, missing_docs)]
 
 pub mod admin_ui_v0;
+pub mod install_consent;
 pub mod manifest_store;
 pub mod materializer;
 pub mod module_ecosystem;

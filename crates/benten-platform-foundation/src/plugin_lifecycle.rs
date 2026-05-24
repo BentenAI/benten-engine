@@ -719,6 +719,31 @@ where
     /// this to a closure over the engine's
     /// `Engine::install_record_replay_store().record_and_check`.
     pub install_record_replay_check: &'a mut InstallRecordReplayCheckFn,
+    /// **R6 R1 FP-F4 §S3a (Row D-3-a closure)** — CLAUDE.md baked-in #18
+    /// §8-E hook #1 install-time consent policy port.
+    ///
+    /// Called at install-pipeline step 3c (BEFORE the cap-cascade
+    /// runs). The configured `CapabilityPolicy::check_install_consent`
+    /// hook is invoked with the install record's canonical signing-
+    /// payload hash + the plugin-DID string. If the hook returns
+    /// `Err(_)`, the install rejects with typed
+    /// `ErrorCode::PluginInstallConsentDenied` (forensic-discrimination
+    /// vs `PluginInstallConsentRequired` which is the caps-grew
+    /// fresh-consent gap at upgrade time).
+    ///
+    /// Threaded via this port (NOT via an `Engine::capability_policy()`
+    /// accessor) per CRITIC-2 F-1.2 + Class B β + §8-E sealed-discipline:
+    /// the policy is engine-internal; install pipelines that need it
+    /// receive it as an explicit input port.
+    ///
+    /// Production callers wire the engine glue that delegates to
+    /// `CapabilityPolicy::check_install_consent` (the engine-side
+    /// blanket adapter; lives at engine-side because `benten-caps`
+    /// already depends on this crate, so the trait + adapter can't
+    /// both live here); tests can use
+    /// [`crate::install_consent::AdmitAllInstallConsent`] which
+    /// admits every install.
+    pub policy: &'a dyn crate::install_consent::InstallConsentPolicy,
 }
 
 /// Closure type for the [`InstallPorts::install_record_replay_check`]
@@ -906,10 +931,34 @@ where
     //      `signing_payload_hash` helper in benten-engine; the
     //      two-step composition stays free of platform-foundation
     //      deps on benten-engine — the caller computes the hash).
+    let payload_hash: [u8; 32];
     {
         let payload = install_record.signing_payload();
-        let payload_hash: [u8; 32] = *blake3::hash(&payload).as_bytes();
+        payload_hash = *blake3::hash(&payload).as_bytes();
         (ports.install_record_replay_check)(&payload_hash)?;
+    }
+
+    // **3c. R6 R1 FP-F4 §S3a (Row D-3-a closure)** — CLAUDE.md baked-in
+    //      #18 §8-E hook #1 install-time consent. Consult the configured
+    //      `CapabilityPolicy::check_install_consent` BEFORE the cap-
+    //      cascade runs (mirrors the §4.37 replay-check ordering — both
+    //      pre-mint gates fire before any Step-9 grant lands, preserving
+    //      §4.35 zero partial-mint atomicity).
+    //
+    //      Mapped to typed `PluginInstallConsentDenied` for forensic
+    //      discrimination from `PluginInstallConsentRequired` (which is
+    //      caps-grew upgrade-time at Step 7b above).
+    //
+    //      Default policy impl returns `Ok(())` (admit-all-installs); a
+    //      custom CapabilityPolicy that wants to apply install-time
+    //      policy (trust-list, curated-DIDs, etc.) overrides.
+    let plugin_did_str = install_record.plugin_did.as_str();
+    if ports
+        .policy
+        .check_install_consent(&payload_hash, plugin_did_str)
+        .is_err()
+    {
+        return Err(ErrorCode::PluginInstallConsentDenied);
     }
 
     // 4. Seam 2 — clock-injected validation (delegates to validate +

@@ -133,10 +133,12 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list: Vec<benten_id::did::Did> = vec![];
     let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
         install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -203,10 +205,12 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let mut noop_replay_check_2 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_2 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx2 = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
         install_record_replay_check: &mut noop_replay_check_2,
+        policy: &noauth_policy_2,
     };
     let ctx2_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -261,10 +265,12 @@ fn install_plugin_without_install_record_surfaces_e_plugin_install_consent_requi
     let mut cascade3 = InMemoryInstallCascade::new();
     let mut private_ns3 = InMemoryInstallCascade::new();
     let mut noop_replay_check_3 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_3 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx3 = InstallPorts {
         cap_minter: &mut cascade3,
         private_ns: &mut private_ns3,
         install_record_replay_check: &mut noop_replay_check_3,
+        policy: &noauth_policy_3,
     };
     let ctx3_params = InstallParams {
         now_secs: 1_700_000_000,

@@ -77,10 +77,12 @@ fn install_on_thin_compute_surface_with_sandbox_exec_require_fails_with_heteroge
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
         install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -140,10 +142,12 @@ fn full_peer_does_not_trigger_heterogeneity_gate() {
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let mut noop_replay_check_2 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_2 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
         install_record_replay_check: &mut noop_replay_check_2,
+        policy: &noauth_policy_2,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,

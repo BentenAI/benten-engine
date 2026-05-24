@@ -128,10 +128,12 @@ fn drive_install(
 
     let user_did = user_kp.public_key().to_did();
     let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ports = InstallPorts {
         cap_minter: cascade,
         private_ns,
         install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,

@@ -117,10 +117,12 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
     let trust_list: Vec<benten_id::did::Did> = vec![];
     {
         let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+        let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
         let mut ctx = InstallPorts {
             cap_minter: &mut cascade,
             private_ns: &mut private_ns,
             install_record_replay_check: &mut noop_replay_check_1,
+            policy: &noauth_policy_1,
         };
         let ctx_params = InstallParams {
             now_secs: 1_700_000_000,
@@ -158,10 +160,12 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let mut noop_replay_check_2 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_2 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx_downgrade = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
         install_record_replay_check: &mut noop_replay_check_2,
+        policy: &noauth_policy_2,
     };
     let ctx_downgrade_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -217,10 +221,12 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
     let mut cascade3 = InMemoryInstallCascade::new();
     let mut private_ns3 = InMemoryInstallCascade::new();
     let mut noop_replay_check_3 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_3 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx_fork = InstallPorts {
         cap_minter: &mut cascade3,
         private_ns: &mut private_ns3,
         install_record_replay_check: &mut noop_replay_check_3,
+        policy: &noauth_policy_3,
     };
     let ctx_fork_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -260,10 +266,12 @@ fn plugin_upgrade_rejects_cid_not_a_dag_descendant_of_installed_version() {
         6,
     );
     let mut noop_replay_check_4 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_4 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx_same = InstallPorts {
         cap_minter: &mut cascade4,
         private_ns: &mut private_ns4,
         install_record_replay_check: &mut noop_replay_check_4,
+        policy: &noauth_policy_4,
     };
     let ctx_same_params = InstallParams {
         now_secs: 1_700_000_000,
