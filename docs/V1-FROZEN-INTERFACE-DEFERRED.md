@@ -360,6 +360,31 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   classical-only construction IS cryptographically sound).
 - **Anchor:** Various R1 OBS items.
 
+### Row D-18 — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
+
+- **Frozen surface (v1-beta):** the structural empty-peer-DID
+  fail-CLOSED at `engine.rs:1462-1476` IS live for the literal-empty
+  peer_node_ids case. The synthesized-fallback (`resolve_peer_dids`
+  emits `node-id:N` string for unregistered peer_node_ids) ADMITS
+  at v1-beta via the always-mounted Noop rechecker (NotApplicable).
+- **Deferred consumption (G-COMP-1 destination):** add a hardening
+  layer that rejects `node-id:`-prefixed synthesized DIDs as
+  unresolvable WHEN a substantive (non-Noop) rechecker is installed.
+  The naïve always-on filter (initial L2-MAJ-1 fix attempted in this
+  PR but reverted) over-fires for the default-Noop test fixtures
+  which intentionally don't register peer-DIDs. The proper closure
+  couples synthesized-fallback rejection to substantive-rechecker
+  detection.
+- **v1-beta posture:** L2-MAJ-1 attack vector (adversarial peer
+  presenting an unmapped `node-id:N` DID) is admit-only if the
+  rechecker is Noop (admit-everything anyway); under a substantive
+  ProductionRechecker (G-COMP-1 deliverable per Row D-4), the
+  rechecker is responsible for its own per-DID resolution including
+  rejecting synthesized DIDs. So the gap closes at Row D-4 closure;
+  Row D-18 is the substrate-level defense-in-depth follow-up.
+- **Anchor:** L2-MAJ-1 G-CORE-9 R1 finding + Compromise #26 NOT-live
+  v1-beta posture.
+
 ### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` `#[non_exhaustive]` application (with ~80+ test-site cascade)
 
 - **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11

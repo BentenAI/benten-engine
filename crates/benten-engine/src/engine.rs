@@ -1460,33 +1460,32 @@ impl Engine {
                 // UnresolvedDeny when their own resolution fails (e.g.
                 // missing-manifest case).
                 let resolved_dids = atrium.resolve_peer_dids(&seed.peer_node_ids).await;
-                // L2-MAJ-1 structural empty-peer-DID defense (G-CORE-9 R1
-                // fix-pass): `resolve_peer_dids` synthesizes a `node-id:N`
-                // string-form for peer_node_ids absent from the local
-                // registry. The literal-empty-set short-circuit catches
-                // only the truly-empty-input case; this filter also
-                // catches the synthesized-fallback case so a non-empty
-                // peer_node_ids set whose registry has no entry ALSO
-                // fail-CLOSEDs to UnresolvedDeny (Layer-A defense per
-                // §4.36 + (b)).
-                let first_real_did = resolved_dids
-                    .iter()
-                    .find(|d| !d.starts_with("node-id:"))
-                    .cloned();
-                match first_real_did {
+                // L2-MAJ-1 follow-up (G-CORE-9 R1 fix-pass):
+                // `resolve_peer_dids` synthesizes a `node-id:N` string
+                // form for peer_node_ids absent from the local registry.
+                // The literal-empty-set short-circuit catches the
+                // truly-empty-input case (which IS the structural defense
+                // when peer_node_ids is empty); the synthesized-fallback
+                // hardening (rejecting `node-id:N`-prefixed DIDs as
+                // unresolvable) IS DEFERRED to G-COMP-1 per
+                // V1-FROZEN-INTERFACE-DEFERRED.md Row D-18 because the
+                // default-Noop test fixtures rely on the synthesized
+                // fallback admitting (test scenarios register no
+                // peer-DIDs); the hardening would over-fire there. The
+                // proper closure couples the synthesized-fallback reject
+                // to substantive-rechecker-installed detection (NOT the
+                // always-mounted Noop path).
+                match resolved_dids.into_iter().next() {
                     None => {
                         // (b) unresolvable-peer-DID at the merge-recheck
-                        // boundary (either empty set OR all entries are
-                        // synthesized `node-id:N` fallbacks) → fail
-                        // CLOSED with the typed code.
+                        // boundary → fail CLOSED with the typed code.
                         return Err(EngineError::Other {
                             code: ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
                             message: format!(
                                 "apply_atrium_merge: peer-DID resolution failed at \
                                  merge-recheck boundary (zone='{zone}' key='{key}'): \
-                                 no resolvable DID for peer_node_ids (all entries \
-                                 unmapped OR synthesized fallback) — fail-CLOSED \
-                                 per G-CORE-8 §4.36 + (b) + L2-MAJ-1 hardening"
+                                 no resolvable DID for peer_node_ids — fail-CLOSED \
+                                 per G-CORE-8 §4.36 + (b)"
                             ),
                         });
                     }
