@@ -18,6 +18,8 @@
 
 use benten_crypto_suite::aead::aad_per_chunk;
 use benten_crypto_suite::codepoint::{CipherSuiteCodepoint, HashCodepoint, SigCodepoint};
+use benten_crypto_suite::sig::SignatureSuite;
+use benten_crypto_suite::varsig::{UcanVarsigV1Header, VarsigError};
 
 /// L11-MAJOR-4 closure — codepoint table integer values frozen.
 ///
@@ -178,5 +180,42 @@ fn reserved_codepoints_stay_typed_rejected_at_v1_beta() {
             Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647c })
         ),
         "0x647c must stay typed-rejected at v1-beta default dispatcher; got {outcome:?}"
+    );
+}
+
+/// L1-crypto-r2-4 closure — sub-pins (b) `SignatureSuite::resolve_codepoint`
+/// + (c) `UcanVarsigV1Header::decode` for 0x0003. The L1-MAJOR-1 fix-pass
+/// shipped sub-pin (a) (`SigCodepoint::resolve`) at the upstream dispatcher;
+/// these two sub-pins explicitly assert typed-reject at EVERY downstream
+/// dispatcher entry per the freeze-discipline wording-mutation guard
+/// (§3.5g). A future-refactor that decouples either surface from the
+/// central SigCodepoint::resolve dispatcher (e.g. introduces a fast-path
+/// special-case) would slip past sub-pin (a) but fail one of these.
+#[test]
+fn reserved_signature_codepoint_typed_rejected_at_every_dispatcher_entry() {
+    use benten_crypto_suite::error::UnsupportedAlgorithm;
+
+    // Sub-pin (b): SignatureSuite::resolve_codepoint(0x0003) → typed-reject.
+    // (SignatureSuite is not Debug; assert via match arm rather than {:?}).
+    match SignatureSuite::resolve_codepoint(SigCodepoint::HYBRID_MLDSA65_SLHDSA) {
+        Err(UnsupportedAlgorithm::Signature { codepoint: 0x0003 }) => {}
+        Err(other) => panic!(
+            "SignatureSuite::resolve_codepoint(0x0003) must typed-reject as UnsupportedAlgorithm::Signature {{ codepoint: 0x0003 }} at v1-beta (C11b safety gate); got Err({other:?})"
+        ),
+        Ok(_) => panic!(
+            "SignatureSuite::resolve_codepoint(0x0003) must typed-reject at v1-beta (C11b safety gate); got Ok(_)"
+        ),
+    }
+
+    // Sub-pin (c): UcanVarsigV1Header::decode of a header carrying 0x0003
+    // → typed-reject.
+    let header = UcanVarsigV1Header::with_raw_codepoint_for_test(0x0003);
+    let outcome = UcanVarsigV1Header::decode(header.as_bytes());
+    assert!(
+        matches!(
+            outcome,
+            Err(VarsigError::UnsupportedCodepoint { codepoint: 0x0003, .. })
+        ),
+        "UcanVarsigV1Header::decode of a 0x0003-bearing header must typed-reject at v1-beta (C11b safety gate); got {outcome:?}"
     );
 }
