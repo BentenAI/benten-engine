@@ -2,7 +2,7 @@ pub mod benten_graph
 pub use benten_graph::ErrorCode
 pub use benten_graph::WriteAuthority
 pub mod benten_graph::aead_wrap
-pub enum benten_graph::aead_wrap::AeadError
+#[non_exhaustive] pub enum benten_graph::aead_wrap::AeadError
 pub benten_graph::aead_wrap::AeadError::Authentication(alloc::string::String)
 pub benten_graph::aead_wrap::AeadError::CiphertextTooShort
 pub benten_graph::aead_wrap::AeadError::CiphertextTooShort::got: usize
@@ -988,7 +988,7 @@ impl<'a> core::marker::UnsafeUnpin for benten_graph::transaction::Transaction<'a
 impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_graph::transaction::Transaction<'a>
 impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_graph::transaction::Transaction<'a>
 pub mod benten_graph::two_cid_map
-pub enum benten_graph::two_cid_map::TwoCidMapError
+#[non_exhaustive] pub enum benten_graph::two_cid_map::TwoCidMapError
 pub benten_graph::two_cid_map::TwoCidMapError::AeadAuthenticationFailed
 pub benten_graph::two_cid_map::TwoCidMapError::AeadAuthenticationFailed::reason: alloc::string::String
 pub benten_graph::two_cid_map::TwoCidMapError::IntegrityMismatch

@@ -79,9 +79,13 @@ jobs:
         # workflow name + R2 anchor) and cargo failed with "no test target
         # named `host_error_wire_safety`". The actual file stem is the test
         # name itself.
+        # NOTE: `-p benten-engine` package-scoped — feature paths must be
+        # reachable from benten-engine's direct deps. benten-drop/testing +
+        # benten-dev/testing stripped at PR #1351 fix-up #5 (A's F1.c brief
+        # was workspace-shaped; -p package needs the narrower list).
         run: |
           cargo nextest run --profile ci --locked \
-            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing \
             -p benten-engine \
             --test host_error_wire_format_excludes_cids
 

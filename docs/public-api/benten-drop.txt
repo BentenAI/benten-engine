@@ -32,7 +32,7 @@ impl core::marker::Unpin for benten_drop::bundle::DropBundleError
 impl core::marker::UnsafeUnpin for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundleError
-pub enum benten_drop::bundle::DropBundleVersion
+#[non_exhaustive] pub enum benten_drop::bundle::DropBundleVersion
 pub benten_drop::bundle::DropBundleVersion::Synthetic(u16)
 pub benten_drop::bundle::DropBundleVersion::V1
 impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
@@ -148,7 +148,7 @@ impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::RevocationRec
 pub const benten_drop::bundle::DROP_BUNDLE_MAX_SIZE_BYTES: usize
 pub const benten_drop::bundle::DROP_BUNDLE_VERSION_V1: u16
 pub mod benten_drop::envelope_sig
-pub enum benten_drop::envelope_sig::EnvelopeSigError
+#[non_exhaustive] pub enum benten_drop::envelope_sig::EnvelopeSigError
 pub benten_drop::envelope_sig::EnvelopeSigError::SignatureMalformed(alloc::string::String)
 pub benten_drop::envelope_sig::EnvelopeSigError::VerifyFailed(alloc::string::String)
 pub benten_drop::envelope_sig::EnvelopeSigError::VerifyingKeyMalformed(alloc::string::String)
@@ -201,7 +201,7 @@ impl core::marker::Unpin for benten_drop::bundle::DropBundleError
 impl core::marker::UnsafeUnpin for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundleError
-pub enum benten_drop::DropBundleVersion
+#[non_exhaustive] pub enum benten_drop::DropBundleVersion
 pub benten_drop::DropBundleVersion::Synthetic(u16)
 pub benten_drop::DropBundleVersion::V1
 impl core::clone::Clone for benten_drop::bundle::DropBundleVersion

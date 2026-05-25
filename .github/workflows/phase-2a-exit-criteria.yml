@@ -86,7 +86,10 @@ jobs:
           # R3 consolidation scheme. Using an expression filter over the
           # actual binary names keeps the gate aligned with where the tests
           # currently live.
-          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
+          # NOTE: `-p benten-engine` package-scoped — feature paths must be
+          # reachable from benten-engine's direct deps. benten-drop/testing +
+          # benten-dev/testing stripped at PR #1351 fix-up #5.
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing \
             -p benten-engine \
             --test engine_wait_api_shape \
             --test resume_decode_failure_not_panic \

@@ -1,6 +1,6 @@
 pub mod benten_crypto_suite
 pub mod benten_crypto_suite::aead
-pub enum benten_crypto_suite::aead::AeadError
+#[non_exhaustive] pub enum benten_crypto_suite::aead::AeadError
 pub benten_crypto_suite::aead::AeadError::AeadAuthFailed
 pub benten_crypto_suite::aead::AeadError::MalformedEnvelope(&'static str)
 pub benten_crypto_suite::aead::AeadError::RecipientLacksKeysForSuite
@@ -213,7 +213,7 @@ impl core::marker::UnsafeUnpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 pub mod benten_crypto_suite::codepoint
-pub enum benten_crypto_suite::codepoint::UnsupportedAlgorithm
+#[non_exhaustive] pub enum benten_crypto_suite::codepoint::UnsupportedAlgorithm
 pub benten_crypto_suite::codepoint::UnsupportedAlgorithm::CipherSuite
 pub benten_crypto_suite::codepoint::UnsupportedAlgorithm::CipherSuite::codepoint: u16
 pub benten_crypto_suite::codepoint::UnsupportedAlgorithm::Hash
@@ -363,7 +363,7 @@ impl core::marker::UnsafeUnpin for benten_crypto_suite::discharge::Issue835Disch
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
 pub mod benten_crypto_suite::error
-pub enum benten_crypto_suite::error::CryptoError
+#[non_exhaustive] pub enum benten_crypto_suite::error::CryptoError
 pub benten_crypto_suite::error::CryptoError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 pub benten_crypto_suite::error::CryptoError::Verify(benten_crypto_suite::error::VerifyError)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
@@ -383,7 +383,7 @@ impl core::marker::Unpin for benten_crypto_suite::error::CryptoError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::error::CryptoError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::error::CryptoError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::error::CryptoError
-pub enum benten_crypto_suite::error::UnsupportedAlgorithm
+#[non_exhaustive] pub enum benten_crypto_suite::error::UnsupportedAlgorithm
 pub benten_crypto_suite::error::UnsupportedAlgorithm::CipherSuite
 pub benten_crypto_suite::error::UnsupportedAlgorithm::CipherSuite::codepoint: u16
 pub benten_crypto_suite::error::UnsupportedAlgorithm::Hash
@@ -416,7 +416,7 @@ impl core::marker::Unpin for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::UnsafeUnpin for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::error::UnsupportedAlgorithm
-pub enum benten_crypto_suite::error::VerifyError
+#[non_exhaustive] pub enum benten_crypto_suite::error::VerifyError
 pub benten_crypto_suite::error::VerifyError::ClassicalVerifyFailed
 pub benten_crypto_suite::error::VerifyError::CodepointMismatch
 pub benten_crypto_suite::error::VerifyError::HybridHalfMissing(&'static str)
@@ -468,7 +468,7 @@ pub use benten_crypto_suite::primitives::ml_dsa
 pub use benten_crypto_suite::primitives::sha2
 pub use benten_crypto_suite::primitives::sha3
 pub mod benten_crypto_suite::sig
-pub enum benten_crypto_suite::sig::VerifyError
+#[non_exhaustive] pub enum benten_crypto_suite::sig::VerifyError
 pub benten_crypto_suite::sig::VerifyError::ClassicalVerifyFailed
 pub benten_crypto_suite::sig::VerifyError::CodepointMismatch
 pub benten_crypto_suite::sig::VerifyError::HybridHalfMissing(&'static str)
@@ -658,7 +658,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapKeypair
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapKeypair
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapKeypair
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapKeypair
-pub enum benten_crypto_suite::swap_matrix::SwapMatrixError
+#[non_exhaustive] pub enum benten_crypto_suite::swap_matrix::SwapMatrixError
 pub benten_crypto_suite::swap_matrix::SwapMatrixError::AeadAuthFailed
 pub benten_crypto_suite::swap_matrix::SwapMatrixError::AuditNotLandedPurePqRejected
 pub benten_crypto_suite::swap_matrix::SwapMatrixError::AuditNotLandedPurePqRejected::detail: &'static str
@@ -928,7 +928,7 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::
 pub const benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG: bool
 pub const fn benten_crypto_suite::swap_matrix::audit_landed_pure_pq_flag() -> bool
 pub mod benten_crypto_suite::varsig
-pub enum benten_crypto_suite::varsig::VarsigError
+#[non_exhaustive] pub enum benten_crypto_suite::varsig::VarsigError
 pub benten_crypto_suite::varsig::VarsigError::BadMagic
 pub benten_crypto_suite::varsig::VarsigError::BadMagic::got: u8
 pub benten_crypto_suite::varsig::VarsigError::Truncated
@@ -979,7 +979,7 @@ impl core::marker::Unpin for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::UnsafeUnpin for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
-pub enum benten_crypto_suite::AeadError
+#[non_exhaustive] pub enum benten_crypto_suite::AeadError
 pub benten_crypto_suite::AeadError::AeadAuthFailed
 pub benten_crypto_suite::AeadError::MalformedEnvelope(&'static str)
 pub benten_crypto_suite::AeadError::RecipientLacksKeysForSuite
@@ -999,7 +999,7 @@ impl core::marker::Unpin for benten_crypto_suite::aead::AeadError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::aead::AeadError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::aead::AeadError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::aead::AeadError
-pub enum benten_crypto_suite::CryptoError
+#[non_exhaustive] pub enum benten_crypto_suite::CryptoError
 pub benten_crypto_suite::CryptoError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 pub benten_crypto_suite::CryptoError::Verify(benten_crypto_suite::error::VerifyError)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
@@ -1031,7 +1031,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapKeypair
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapKeypair
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapKeypair
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapKeypair
-pub enum benten_crypto_suite::SwapMatrixError
+#[non_exhaustive] pub enum benten_crypto_suite::SwapMatrixError
 pub benten_crypto_suite::SwapMatrixError::AeadAuthFailed
 pub benten_crypto_suite::SwapMatrixError::AuditNotLandedPurePqRejected
 pub benten_crypto_suite::SwapMatrixError::AuditNotLandedPurePqRejected::detail: &'static str
@@ -1101,7 +1101,7 @@ impl<'a> core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapRecipient
 impl<'a> core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapRecipientSecret<'a>
 impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientSecret<'a>
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientSecret<'a>
-pub enum benten_crypto_suite::UnsupportedAlgorithm
+#[non_exhaustive] pub enum benten_crypto_suite::UnsupportedAlgorithm
 pub benten_crypto_suite::UnsupportedAlgorithm::CipherSuite
 pub benten_crypto_suite::UnsupportedAlgorithm::CipherSuite::codepoint: u16
 pub benten_crypto_suite::UnsupportedAlgorithm::Hash
@@ -1134,7 +1134,7 @@ impl core::marker::Unpin for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::UnsafeUnpin for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::error::UnsupportedAlgorithm
-pub enum benten_crypto_suite::VarsigError
+#[non_exhaustive] pub enum benten_crypto_suite::VarsigError
 pub benten_crypto_suite::VarsigError::BadMagic
 pub benten_crypto_suite::VarsigError::BadMagic::got: u8
 pub benten_crypto_suite::VarsigError::Truncated
@@ -1159,7 +1159,7 @@ impl core::marker::Unpin for benten_crypto_suite::varsig::VarsigError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::varsig::VarsigError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::VarsigError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::VarsigError
-pub enum benten_crypto_suite::VerifyError
+#[non_exhaustive] pub enum benten_crypto_suite::VerifyError
 pub benten_crypto_suite::VerifyError::ClassicalVerifyFailed
 pub benten_crypto_suite::VerifyError::CodepointMismatch
 pub benten_crypto_suite::VerifyError::HybridHalfMissing(&'static str)

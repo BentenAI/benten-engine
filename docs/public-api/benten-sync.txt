@@ -320,6 +320,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::Session
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::Session
 pub const benten_sync::handshake::DEFAULT_REPLAY_WINDOW_MS: u64
 pub fn benten_sync::handshake::initiate_nonce(frame: &benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<[u8; 32]>
+pub fn benten_sync::handshake::sync_hydrate_consume_recheck_outcome(outcome: benten_errors::ErrorCode, zone: &str, key: &str) -> benten_sync::handshake::HandshakeResult<()>
 pub type benten_sync::handshake::HandshakeResult<T> = core::result::Result<T, benten_sync::handshake::HandshakeError>
 pub mod benten_sync::handshake_wire
 pub struct benten_sync::handshake_wire::HandshakeFrame
