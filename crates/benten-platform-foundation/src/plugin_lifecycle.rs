@@ -862,6 +862,15 @@ pub struct InstallOutcome {
 ///
 /// See `docs/PLUGIN-MANIFEST.md` §4.1 for the full failure-mode list.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "install_plugin is the single linear v1-beta install pipeline; \
+              R6-R1-FP-F4 §S3a (check_install_consent) + §S3c (T10-upgrade) \
+              wires brought it to 103/100. Helper-extraction refactor named at \
+              V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 follow-up cluster (post \
+              phase-4-meta-core-close); inlining keeps the named-pipeline \
+              ordering audit-able as a single page until then."
+)]
 pub fn install_plugin<F, M, P>(
     library: &mut PluginLibrary,
     plugin_did_store: &mut PluginDidStore,
