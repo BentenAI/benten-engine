@@ -43,6 +43,12 @@ env:
   # variance under contention. The multiplier is applied to the THRESHOLD_NS
   # comment in each bench source file.
   BENTEN_BENCH_GATE_MULTIPLIER: "3"
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -80,7 +86,10 @@ jobs:
           # R3 consolidation scheme. Using an expression filter over the
           # actual binary names keeps the gate aligned with where the tests
           # currently live.
-          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
+          # NOTE: `-p benten-engine` package-scoped — feature paths must be
+          # reachable from benten-engine's direct deps. benten-drop/testing +
+          # benten-dev/testing stripped at PR #1351 fix-up #5.
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing \
             -p benten-engine \
             --test engine_wait_api_shape \
             --test resume_decode_failure_not_panic \
@@ -120,7 +129,7 @@ jobs:
           # for the Inv-8 integration tests (G4-A mini-review C1 soundness
           # gate — MUTATION surface is `cfg(any(test, feature = "testing"))`
           # so non-test builds cannot seed the registry).
-          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
             -E 'test(/invariant_(8|11|13|14)_/)'
 
   # ---------------------------------------------------------------------------
@@ -155,7 +164,7 @@ jobs:
           # turn it on here. Re-enable the end-to-end test once the
           # `.wait()` SubgraphSpecBuilder method + related red-phase
           # APIs land (plan §G3-B DSL continuation).
-          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
             -E 'test(/transform_via_get_by_label_respects_check_read/) + test(/transform_via_get_by_property_respects_check_read/) + test(/transform_via_read_view_respects_check_read/)'
 
   # ---------------------------------------------------------------------------
@@ -184,18 +193,29 @@ jobs:
         with:
           key: phase-2a-perf
       - name: Compile benches
+        # NOTE: --features benten-engine/test-helpers needed for
+        # get_node_label_only_sub_1us — R6 R1 FP-A's F2 visibility tighten
+        # (2026-05-24) renamed `Engine::get_node_label_only` to
+        # `pub(crate) fn read_node_label_only` + relocated the public
+        # spelling to the test-helpers re-export module
+        # (crates/benten-engine/src/testing.rs). Bench calls the public
+        # historical spelling so MUST enable test-helpers feature.
+        # Caught at PR #1351 fix-up #13.
         run: |
           cargo bench --locked --no-run \
+            --features benten-engine/test-helpers \
             -p benten-eval --bench multiplicative_budget_overhead \
             -p benten-engine --bench get_node_label_only_sub_1us
       - name: Run multiplicative_budget_overhead
         run: |
           cargo bench --locked \
+            --features benten-engine/test-helpers \
             -p benten-eval --bench multiplicative_budget_overhead \
             -- --measurement-time 3
       - name: Run get_node_label_only_sub_1us
         run: |
           cargo bench --locked \
+            --features benten-engine/test-helpers \
             -p benten-engine --bench get_node_label_only_sub_1us \
             -- --measurement-time 3
       - name: Enforce CI-gated thresholds

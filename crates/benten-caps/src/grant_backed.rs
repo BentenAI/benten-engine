@@ -210,6 +210,7 @@ impl GrantReaderChain {
     /// Construct a chain-backed test harness with the default
     /// [`GrantReaderConfig`] (max depth 64).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_chain_for_test(chain: Vec<crate::grant::CapabilityGrant>) -> Self {
         Self {
             chain,
@@ -219,6 +220,7 @@ impl GrantReaderChain {
 
     /// Combined constructor: chain + config in one call.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_chain_and_config_for_test(
         chain: Vec<crate::grant::CapabilityGrant>,
         config: GrantReaderConfig,
@@ -231,6 +233,7 @@ impl GrantReaderChain {
     ///
     /// # Errors
     /// Fires [`CapError::ChainTooDeep`] on depth > `max_chain_depth`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn check_attenuation_for_test(&self, _scope: &str) -> Result<(), CapError> {
         if self.chain.len() > self.config.max_chain_depth {
             return Err(CapError::ChainTooDeep {

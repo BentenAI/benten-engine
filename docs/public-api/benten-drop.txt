@@ -32,7 +32,7 @@ impl core::marker::Unpin for benten_drop::bundle::DropBundleError
 impl core::marker::UnsafeUnpin for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundleError
-pub enum benten_drop::bundle::DropBundleVersion
+#[non_exhaustive] pub enum benten_drop::bundle::DropBundleVersion
 pub benten_drop::bundle::DropBundleVersion::Synthetic(u16)
 pub benten_drop::bundle::DropBundleVersion::V1
 impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
@@ -90,18 +90,10 @@ pub benten_drop::bundle::DropBundle::restricted_spec: benten_caps::restricted_sp
 pub benten_drop::bundle::DropBundle::spec_cid: benten_core::Cid
 pub benten_drop::bundle::DropBundle::version: benten_drop::bundle::DropBundleVersion
 impl benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::build_5_recipe_bundle_for_recipient(issuer_kp: &benten_id::keypair::Keypair, recipient_kp: &benten_id::keypair::Keypair) -> Self
-pub fn benten_drop::bundle::DropBundle::build_5_recipe_bundle_for_recipient_envelope_only_for_test(issuer_kp: &benten_id::keypair::Keypair, recipient_kp: &benten_id::keypair::Keypair) -> Self
-pub fn benten_drop::bundle::DropBundle::build_5_recipe_bundle_for_test(issuer_kp: &benten_id::keypair::Keypair) -> Self
 pub fn benten_drop::bundle::DropBundle::consume_offline(&self, recipient_kp: &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::consume_offline_with_dec_counter_for_test(&self, recipient_kp: &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, (benten_drop::bundle::DropBundleError, usize)>
 pub fn benten_drop::bundle::DropBundle::content_count(&self) -> usize
-pub fn benten_drop::bundle::DropBundle::flip_byte_in_content_for_test(&self, index: usize, offset: usize) -> Self
 pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::synthesize_future_version_for_test(version: benten_drop::bundle::DropBundleVersion) -> Self
-pub fn benten_drop::bundle::DropBundle::synthesize_inline_tiny_cbor_for_test() -> alloc::vec::Vec<u8>
 pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(_bundle: &Self, _issuer_kp: &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
-pub fn benten_drop::bundle::DropBundle::tamper_envelope_signature_for_test(&self) -> Self
 pub fn benten_drop::bundle::DropBundle::to_cbor_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::verify_envelope_signature(&self) -> core::result::Result<(), benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::DropBundle
@@ -156,7 +148,7 @@ impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::RevocationRec
 pub const benten_drop::bundle::DROP_BUNDLE_MAX_SIZE_BYTES: usize
 pub const benten_drop::bundle::DROP_BUNDLE_VERSION_V1: u16
 pub mod benten_drop::envelope_sig
-pub enum benten_drop::envelope_sig::EnvelopeSigError
+#[non_exhaustive] pub enum benten_drop::envelope_sig::EnvelopeSigError
 pub benten_drop::envelope_sig::EnvelopeSigError::SignatureMalformed(alloc::string::String)
 pub benten_drop::envelope_sig::EnvelopeSigError::VerifyFailed(alloc::string::String)
 pub benten_drop::envelope_sig::EnvelopeSigError::VerifyingKeyMalformed(alloc::string::String)
@@ -209,7 +201,7 @@ impl core::marker::Unpin for benten_drop::bundle::DropBundleError
 impl core::marker::UnsafeUnpin for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundleError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundleError
-pub enum benten_drop::DropBundleVersion
+#[non_exhaustive] pub enum benten_drop::DropBundleVersion
 pub benten_drop::DropBundleVersion::Synthetic(u16)
 pub benten_drop::DropBundleVersion::V1
 impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
@@ -267,18 +259,10 @@ pub benten_drop::DropBundle::restricted_spec: benten_caps::restricted_spec::Rest
 pub benten_drop::DropBundle::spec_cid: benten_core::Cid
 pub benten_drop::DropBundle::version: benten_drop::bundle::DropBundleVersion
 impl benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::build_5_recipe_bundle_for_recipient(issuer_kp: &benten_id::keypair::Keypair, recipient_kp: &benten_id::keypair::Keypair) -> Self
-pub fn benten_drop::bundle::DropBundle::build_5_recipe_bundle_for_recipient_envelope_only_for_test(issuer_kp: &benten_id::keypair::Keypair, recipient_kp: &benten_id::keypair::Keypair) -> Self
-pub fn benten_drop::bundle::DropBundle::build_5_recipe_bundle_for_test(issuer_kp: &benten_id::keypair::Keypair) -> Self
 pub fn benten_drop::bundle::DropBundle::consume_offline(&self, recipient_kp: &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::consume_offline_with_dec_counter_for_test(&self, recipient_kp: &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, (benten_drop::bundle::DropBundleError, usize)>
 pub fn benten_drop::bundle::DropBundle::content_count(&self) -> usize
-pub fn benten_drop::bundle::DropBundle::flip_byte_in_content_for_test(&self, index: usize, offset: usize) -> Self
 pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::synthesize_future_version_for_test(version: benten_drop::bundle::DropBundleVersion) -> Self
-pub fn benten_drop::bundle::DropBundle::synthesize_inline_tiny_cbor_for_test() -> alloc::vec::Vec<u8>
 pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(_bundle: &Self, _issuer_kp: &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
-pub fn benten_drop::bundle::DropBundle::tamper_envelope_signature_for_test(&self) -> Self
 pub fn benten_drop::bundle::DropBundle::to_cbor_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::verify_envelope_signature(&self) -> core::result::Result<(), benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::DropBundle

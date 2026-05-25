@@ -1,3 +1,8 @@
+// R6 R1 FP-F4 §S2 — this redb-roundtrip test arm uses the
+// `install_verified_record_unchecked` side-door deliberately (it's
+// exercising the at-rest store roundtrip, not the install pipeline).
+#![allow(deprecated)]
+
 //! Phase-4-Meta-Core — ADDL R3 (TDD red-phase) — TF-7 install / lifecycle
 //! hardening. Agent **R3-B4**. RED-PHASE; un-ignore at **G-CORE-7**.
 //!
@@ -245,10 +250,13 @@ fn install_step10_provision_failure_rolls_back_step9_minted_grants_zero_residual
     let mut minter = FailAfterNGrants::new(usize::MAX); // grants succeed
     let mut bad_ns = ProvisionAlwaysFails; // Step-10 fails
     let trust_list: Vec<Did> = vec![];
+    let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut bad_ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let params = install_params(&trust_list, &user_did, &plugin_did);
 
@@ -324,10 +332,13 @@ fn install_step9_cap_cascade_is_atomic_midloop_failure_unwinds_prior_grants() {
     let mut minter = FailAfterNGrants::new(2); // 1st+2nd succeed, 3rd fails
     let mut ns = InMemoryInstallCascade::new();
     let trust_list: Vec<Did> = vec![];
+    let mut noop_replay_check_2 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_2 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_2,
+        policy: &noauth_policy_2,
     };
     let params = install_params(&trust_list, &user_did, &plugin_did);
 
@@ -434,10 +445,13 @@ fn upgrade_with_grown_requires_must_block_install_until_fresh_consent_e2e() {
     let mut ns = InMemoryInstallCascade::new();
     let trust_list: Vec<Did> = vec![];
     {
+        let mut noop_replay_check_3 = benten_platform_foundation::testing::noop_replay_check();
+        let noauth_policy_3 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
         let mut ctx = InstallPorts {
             cap_minter: &mut minter,
             private_ns: &mut ns,
-            install_record_replay_check: None,
+            install_record_replay_check: &mut noop_replay_check_3,
+            policy: &noauth_policy_3,
         };
         let params = install_params(&trust_list, &user_did, &plugin_did);
         install_plugin(
@@ -468,10 +482,13 @@ fn upgrade_with_grown_requires_must_block_install_until_fresh_consent_e2e() {
     let stale_record =
         common::manifest_fixtures::signed_install_record(&user_kp, v2_cid, plugin_did.clone(), 2);
 
+    let mut noop_replay_check_4 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_4 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_4,
+        policy: &noauth_policy_4,
     };
     let mut params = install_params(&trust_list, &user_did, &plugin_did);
     params.prior_installed_cid = Some(v1_cid);
@@ -555,10 +572,13 @@ fn install_with_time_bounded_manifest_under_clock_sentinel_rejected_e2e() {
     let mut minter = InMemoryInstallCascade::new();
     let mut ns = InMemoryInstallCascade::new();
     let trust_list: Vec<Did> = vec![];
+    let mut noop_replay_check_5 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_5 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut minter,
         private_ns: &mut ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_5,
+        policy: &noauth_policy_5,
     };
     // CLOCK-NOT-INJECTED sentinel: now_secs == 0.
     let params = InstallParams {
@@ -738,7 +758,7 @@ fn redb_manifest_store_install_record_survives_store_reopen() {
     {
         let mut store1 = RedbManifestStore::open_or_create(&path).expect("open_or_create");
         store1
-            .install_plugin(plugin_did.clone(), record.clone())
+            .install_verified_record_unchecked(plugin_did.clone(), record.clone())
             .expect("install_plugin persists the verified record");
         assert!(
             store1.contains(&plugin_did).expect("contains read"),

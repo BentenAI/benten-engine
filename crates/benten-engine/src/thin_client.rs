@@ -525,8 +525,16 @@ impl DidKeyedSession {
         Ok(record.principal_did.clone())
     }
 
-    /// Test-only: count of active session records. Used by the
-    /// `thin_client_session_*` pins to assert mint/expire bookkeeping.
+    /// Test-only-named but production-consumed: count of active session
+    /// records. Originally a `thin_client_session_*` pin helper but
+    /// `tools/benten-admin-shell/src/main.rs:62` calls it from the boot
+    /// banner (active sessions count). EXEMPT from the `_for_test`
+    /// cfg-gating discipline at A's F1.a sweep (R6 R1 FP integration
+    /// PR #1351 fix-up #6): admin-shell is production code without the
+    /// test-helpers feature; cfg-gating broke its build. Documented at
+    /// `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs::EXEMPT_PUB_ITEMS`.
+    /// v1-GM rename target: drop the `_for_test` suffix to honestly
+    /// reflect the production-helper shape.
     #[doc(hidden)]
     #[must_use]
     pub fn active_session_count_for_test(&self) -> usize {
@@ -537,6 +545,7 @@ impl DidKeyedSession {
     /// Test-only: count of consumed nonces tracked for replay defense.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn consumed_nonce_count_for_test(&self) -> usize {
         let state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         state.consumed_nonces.len()

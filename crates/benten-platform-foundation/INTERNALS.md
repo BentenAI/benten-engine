@@ -1,6 +1,15 @@
 # benten-platform-foundation — Internals
 
-A plain-English, code-grounded tour of the `benten-platform-foundation` crate — the 11th workspace crate per Ben D-4F-2 ratification, and the substantive home of the **v1 platform-shippable surface** per CLAUDE.md baked-in #15. Read-only audit. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Snapshot: post `phase-4-foundation-close` tag (main HEAD `8141b94`; PR #242–#250 all merged).
+A plain-English, code-grounded tour of the `benten-platform-foundation` crate — the 11th workspace crate per Ben D-4F-2 ratification, and the substantive home of the **v1 platform-shippable surface** per CLAUDE.md baked-in #15. Read-only audit. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Last refreshed: 2026-05-24 (R6 R1 FP wave consolidation) against post-#1350 main `5ca364e7` + the R6 R1 FP-A cfg-gating/visibility + FP-D doc-coupling refresh + FP-F4 substrate-frozen-but-consumer-unwired wave (Rows D-1/D-2/D-3/D-4/D-6/D-18 close). Body still reflects HEAD `8141b94` post `phase-4-foundation-close` tag baseline (PR #242–#250 all merged); Phase-4-Meta-Core delta noted below.
+
+**Phase-4-Meta-Core delta (additive on this crate):** G-CORE-0 (PR #1310) deleted the legacy `module_ecosystem::install_plugin*` family per V1-FROZEN-INTERFACE item 7 (`plugin_lifecycle::install_plugin` is now the canonical-and-only public install entry-point). G-CORE-7 install-lifecycle hardening (#1312) extended the cap-policy + manifest-envelope + private-namespace cascade across §4.21 + §4.35 + §4.41 + §4.20 + §4.19(b)/§4.32 + §6.4 backlog rows. ~307 LOC INTERNALS-applicable diff this phase. The body §sections below still hold structurally — read `crates/benten-platform-foundation/src/{plugin_lifecycle,module_ecosystem,plugin_library,manifest_store}.rs` for the Phase-4-Meta-Core touch surface.
+
+## R6 R1 FP-F4 §S2 + §S3a additions (2026-05-24)
+
+- **`testing` module** (`src/testing.rs`, feature-gated under `testing`) — minimal test-only helpers; currently exposes `noop_replay_check()` for use as the `InstallPorts.install_record_replay_check` field's no-op closure shape (post-§S2 the field dropped its `Option<>` wrapper so every fixture wires SOMETHING). Production callers MUST NOT use these helpers.
+- **`install_consent` module** (`src/install_consent.rs`) — the `InstallConsentPolicy` trait + `AdmitAllInstallConsent` / `DenyAllInstallConsent` helpers. Local-to-platform-foundation per the dep-cycle constraint (benten-caps already depends on this crate so the engine-side blanket adapter over `CapabilityPolicy::check_install_consent` lives at engine-side, not here).
+- **`manifest_store::install_plugin` rename** — renamed to `install_verified_record_unchecked` with `#[deprecated]` + `#[doc(hidden)]` per Δv3-9. Production callers MUST route through `plugin_lifecycle::install_plugin`.
+- **`InstallPorts` shape change** — `install_record_replay_check` field dropped `Option<>`; new `policy: &'a dyn InstallConsentPolicy` field added per CRITIC-2 F-1.2 (via port, NOT via `Engine::capability_policy()` accessor per Class B β sealed-discipline).
 
 ---
 

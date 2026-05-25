@@ -557,6 +557,38 @@ impl<'eng> EngineCapsHandle<'eng> {
             }
         }
 
+        // **R6 R1 FP-F4 §S3b (Row D-3-b closure)** — CLAUDE.md baked-in
+        // #18 §8-E hook #2 per-delegation runtime check. Consult the
+        // configured `CapabilityPolicy::check_per_delegation` AFTER
+        // Step 2b's Layer-3 manifest-`shares` envelope enforcement +
+        // BEFORE Step 3's effective-scope pick + the Step 4 grant
+        // write. Forensic-discrimination symmetry with §S3a's install-
+        // time hook (per CRITIC-1 FIX-5 + Δv3-3).
+        //
+        // Default policy impl returns `Ok(())` (admit-all-delegations);
+        // a custom CapabilityPolicy that wants rate-limiting / audit-
+        // trail / time-bounded policy on per-request delegations
+        // overrides.
+        if let Some(policy) = self.engine.policy.as_ref()
+            && policy
+                .check_per_delegation(
+                    source_principal_did.as_str(),
+                    plugin_did,
+                    resolved_scope.as_str(),
+                )
+                .is_err()
+        {
+            return Err(EngineError::Other {
+                code: benten_errors::ErrorCode::PluginPerDelegationDenied,
+                message: format!(
+                    "delegate_capability: delegation of `{resolved_scope}` from \
+                     `{source_principal_did}` to `{plugin_did}` denied by \
+                     CapabilityPolicy::check_per_delegation (Layer-3 §8-E hook #2 \
+                     enforcement)",
+                ),
+            });
+        }
+
         // Step 3 — pick effective scope for the new delegation grant.
         // Attenuation here is the simplest "narrowed-or-identical
         // scope" form per the G24-D-FP-3 brief; full attenuation
@@ -587,6 +619,19 @@ impl<'eng> EngineCapsHandle<'eng> {
             props.insert("attenuation".into(), Value::Text(attenuation_json));
         }
         let new_grant = Node::new(vec!["system:CapabilityGrant".into()], props);
+        // R6 R1 FP-F4 §S1 — chain-bearing admission: delegate_capability
+        // IS the cap-chain entry point — the `source_grant_cid` IS the
+        // anchor the user-root chain walks backward from, and
+        // `plugin_did` is the actor. (privileged_put_node consults
+        // again with an engine-internal frame; the NotApplicable arm
+        // collapses there — only this chain-bearing call ahead of it
+        // can fail-CLOSED.)
+        self.engine.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::with_chain(
+                source_grant_cid,
+                plugin_did,
+            ),
+        )?;
         self.engine.privileged_put_node(&new_grant)
     }
 }
@@ -680,6 +725,13 @@ impl Engine {
 
     /// Internal: write a system-zone Node via the privileged context.
     pub(crate) fn privileged_put_node(&self, node: &Node) -> Result<Cid, EngineError> {
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation. Engine-
+        // internal frame: the privileged put is the create_view +
+        // delegate_capability terminal write path; the user-DID is
+        // the authoritative principal for engine-internal writes.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         Ok(self.backend.put_node_with_context(
             node,
             &benten_graph::WriteContext::privileged_for_engine_api(),

@@ -49,7 +49,9 @@
 //! - PR #199 `Engine::revoke_capability_by_grant_cid` — engine-side
 //!   adapter routes through that typed surface.
 
-use crate::module_ecosystem::{UpgradeConsentDecision, decide_upgrade_consent};
+use crate::module_ecosystem::{
+    UpgradeConsentDecision, decide_upgrade_consent, verify_upgrade_author_continuity,
+};
 use crate::plugin_library::{LibraryEntry, PluginLibrary};
 use crate::plugin_manifest::{
     InstallRecord, MANIFEST_CLOCK_NOT_INJECTED_SENTINEL, PluginManifest, ValidationOutcome,
@@ -703,14 +705,47 @@ where
     /// Private-namespace provisioner port.
     pub private_ns: &'a mut P,
     /// **Phase-4-Meta-Core G-CORE-8 §4.37** — install-record replay
-    /// check port. Defaults to `None` (no replay check; backward-
-    /// compat). When `Some(F)`, called BEFORE the cap-cascade with
-    /// the canonical signing-payload hash of the install record. If
-    /// `F` returns `Err(_)`, install rejects pre-mint (zero
-    /// duplicate-mint window per §4.37 TOCTOU contract). Production
-    /// engines wire this to a closure over the engine's
+    /// check port. **R6 R1 FP-F4 §S2 (Row D-2 closure):** the prior
+    /// `Option<>` wrapper is dropped (the `None` arm silently
+    /// disabled the §4.37 TOCTOU defense in shipped binaries). Every
+    /// caller MUST supply a substantive closure. Production callers
+    /// wire `make_engine_replay_check_closure(engine.install_record_replay_store())`;
+    /// test fixtures wire `crate::testing::noop_replay_check()` (cfg-gated under `testing` feature; plain-backtick cite to avoid rustdoc intra-doc-link resolution against private modules in default build)
+    /// (admit-all, intentional non-defense; documents the test that
+    /// is NOT exercising the replay-defense surface).
+    ///
+    /// Called BEFORE the cap-cascade with the canonical signing-
+    /// payload hash of the install record. If the closure returns
+    /// `Err(_)`, install rejects pre-mint (zero duplicate-mint
+    /// window per §4.37 TOCTOU contract). Production engines wire
+    /// this to a closure over the engine's
     /// `Engine::install_record_replay_store().record_and_check`.
-    pub install_record_replay_check: Option<&'a mut InstallRecordReplayCheckFn>,
+    pub install_record_replay_check: &'a mut InstallRecordReplayCheckFn,
+    /// **R6 R1 FP-F4 §S3a (Row D-3-a closure)** — CLAUDE.md baked-in #18
+    /// §8-E hook #1 install-time consent policy port.
+    ///
+    /// Called at install-pipeline step 3c (BEFORE the cap-cascade
+    /// runs). The configured `CapabilityPolicy::check_install_consent`
+    /// hook is invoked with the install record's canonical signing-
+    /// payload hash + the plugin-DID string. If the hook returns
+    /// `Err(_)`, the install rejects with typed
+    /// `ErrorCode::PluginInstallConsentDenied` (forensic-discrimination
+    /// vs `PluginInstallConsentRequired` which is the caps-grew
+    /// fresh-consent gap at upgrade time).
+    ///
+    /// Threaded via this port (NOT via an `Engine::capability_policy()`
+    /// accessor) per CRITIC-2 F-1.2 + Class B β + §8-E sealed-discipline:
+    /// the policy is engine-internal; install pipelines that need it
+    /// receive it as an explicit input port.
+    ///
+    /// Production callers wire the engine glue that delegates to
+    /// `CapabilityPolicy::check_install_consent` (the engine-side
+    /// blanket adapter; lives at engine-side because `benten-caps`
+    /// already depends on this crate, so the trait + adapter can't
+    /// both live here); tests can use
+    /// [`crate::install_consent::AdmitAllInstallConsent`] which
+    /// admits every install.
+    pub policy: &'a dyn crate::install_consent::InstallConsentPolicy,
 }
 
 /// Closure type for the [`InstallPorts::install_record_replay_check`]
@@ -827,6 +862,15 @@ pub struct InstallOutcome {
 ///
 /// See `docs/PLUGIN-MANIFEST.md` §4.1 for the full failure-mode list.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "install_plugin is the single linear v1-beta install pipeline; \
+              R6-R1-FP-F4 §S3a (check_install_consent) + §S3c (T10-upgrade) \
+              wires brought it to 103/100. Helper-extraction refactor named at \
+              V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 follow-up cluster (post \
+              phase-4-meta-core-close); inlining keeps the named-pipeline \
+              ordering audit-able as a single page until then."
+)]
 pub fn install_plugin<F, M, P>(
     library: &mut PluginLibrary,
     plugin_did_store: &mut PluginDidStore,
@@ -898,10 +942,34 @@ where
     //      `signing_payload_hash` helper in benten-engine; the
     //      two-step composition stays free of platform-foundation
     //      deps on benten-engine — the caller computes the hash).
-    if let Some(replay_check) = ports.install_record_replay_check.as_mut() {
+    let payload_hash: [u8; 32];
+    {
         let payload = install_record.signing_payload();
-        let payload_hash: [u8; 32] = *blake3::hash(&payload).as_bytes();
-        replay_check(&payload_hash)?;
+        payload_hash = *blake3::hash(&payload).as_bytes();
+        (ports.install_record_replay_check)(&payload_hash)?;
+    }
+
+    // **3c. R6 R1 FP-F4 §S3a (Row D-3-a closure)** — CLAUDE.md baked-in
+    //      #18 §8-E hook #1 install-time consent. Consult the configured
+    //      `CapabilityPolicy::check_install_consent` BEFORE the cap-
+    //      cascade runs (mirrors the §4.37 replay-check ordering — both
+    //      pre-mint gates fire before any Step-9 grant lands, preserving
+    //      §4.35 zero partial-mint atomicity).
+    //
+    //      Mapped to typed `PluginInstallConsentDenied` for forensic
+    //      discrimination from `PluginInstallConsentRequired` (which is
+    //      caps-grew upgrade-time at Step 7b above).
+    //
+    //      Default policy impl returns `Ok(())` (admit-all-installs); a
+    //      custom CapabilityPolicy that wants to apply install-time
+    //      policy (trust-list, curated-DIDs, etc.) overrides.
+    let plugin_did_str = install_record.plugin_did.as_str();
+    if ports
+        .policy
+        .check_install_consent(&payload_hash, plugin_did_str)
+        .is_err()
+    {
+        return Err(ErrorCode::PluginInstallConsentDenied);
     }
 
     // 4. Seam 2 — clock-injected validation (delegates to validate +
@@ -932,6 +1000,38 @@ where
         if prior_cid != *expected_cid && !chain.is_ancestor_of(&prior_cid, expected_cid) {
             return Err(ErrorCode::PluginManifestInvalid);
         }
+    }
+
+    // 7a. **T10-upgrade (a) — same-author DID continuity (R6 R1 Bundle
+    //     L2-R6-MAJOR-1 closure).**
+    //
+    //     Per `docs/PLUGIN-MANIFEST.md` §4.3 + admin-ui-v0-threat-model.md
+    //     §T10: an upgrade from peer-DID `alice` to peer-DID `attacker`
+    //     within the same version-DAG (T10-upgrade (a) — transitive
+    //     substitution) MUST be REJECTED. The standalone helper
+    //     `verify_upgrade_author_continuity` (LANDED earlier; test pin
+    //     at `plugin_upgrade_requires_same_author_did.rs`) was unwired
+    //     at HEAD; step 7 above only enforced the DAG-descendant half
+    //     (T10-upgrade (b)). META #707 asymmetric-at-parallel-entry-
+    //     points: T10-(a) + T10-(b) are co-defensive per the threat
+    //     model; this fix wires (a).
+    //
+    //     The check fires when prior_manifest is resolvable. Initial
+    //     installs (no prior_cid) skip — first-install peer-DID review
+    //     happens at the user-trust-list / install-record-consent
+    //     surfaces above. The check returns
+    //     `ErrorCode::PluginAuthorNotTrusted` (the typed code the
+    //     helper already emits — semantically identical to
+    //     "upgrade-author-broken": the new peer_did is NOT in the
+    //     trust chain established at prior_cid; no new ErrorCode
+    //     minted per orchestrator DISAGREE-WITH-EXPLANATION on the
+    //     L2-R6-MAJOR-1 brief's mint suggestion — avoids cross-language
+    //     mirror churn for zero security gain).
+    if let Some(prior_cid) = params.prior_installed_cid
+        && prior_cid != *expected_cid
+        && let Some(prior_manifest) = resolver(&prior_cid)
+    {
+        verify_upgrade_author_continuity(&prior_manifest, &manifest)?;
     }
 
     // 7b. **G-CORE-7 §4.41 — caps-grew fresh-consent (e2e wiring).**

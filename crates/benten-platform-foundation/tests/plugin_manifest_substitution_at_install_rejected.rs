@@ -110,10 +110,13 @@ fn plugin_install_with_content_substituted_by_attacker_peer_did_rejected() {
 
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
+    let mut noop_replay_check_1 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_1 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_1,
+        policy: &noauth_policy_1,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -197,10 +200,13 @@ fn plugin_install_admits_bytes_when_peer_did_matches_signing_key() {
 
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
+    let mut noop_replay_check_2 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_2 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ports = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_2,
+        policy: &noauth_policy_2,
     };
     let params = InstallParams {
         now_secs: 1_700_000_000,
@@ -278,10 +284,13 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let mut cascade = InMemoryInstallCascade::new();
     let mut private_ns = InMemoryInstallCascade::new();
     let trust_list = vec![trusted_author.public_key().to_did()];
+    let mut noop_replay_check_3 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_3 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx = InstallPorts {
         cap_minter: &mut cascade,
         private_ns: &mut private_ns,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_3,
+        policy: &noauth_policy_3,
     };
     let ctx_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -328,10 +337,13 @@ fn unknown_author_install_surfaces_e_plugin_author_not_trusted_for_user_prompt()
     let mut cascade2 = InMemoryInstallCascade::new();
     let mut private_ns2 = InMemoryInstallCascade::new();
     let trust_list_with_alice = vec![alice.public_key().to_did()];
+    let mut noop_replay_check_4 = benten_platform_foundation::testing::noop_replay_check();
+    let noauth_policy_4 = benten_platform_foundation::install_consent::AdmitAllInstallConsent;
     let mut ctx2 = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check_4,
+        policy: &noauth_policy_4,
     };
     let ctx2_params = InstallParams {
         now_secs: 1_700_000_000,

@@ -618,6 +618,7 @@ pub(crate) fn validate_snapshot(sn: &SubgraphSnapshot<'_>) -> Result<(), Registr
 /// Caller must call `register_test_callee(name, call_factor)` before
 /// validating the subgraph.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_chained_call_iterate_iterate_for_test(m1: u64, call_factor: u64, m3: u64) -> Subgraph {
     use crate::{OperationNode, PrimitiveKind, Subgraph};
     let mut sg = Subgraph::new("chained_call_iterate");
@@ -656,6 +657,7 @@ pub fn callee_name_for_factor(factor: u64) -> String {
 
 /// Test harness: ITERATE(inner_max) nested inside ITERATE(outer_max).
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_nested_iterate_for_test(outer_max: u64, inner_max: u64) -> Subgraph {
     use crate::{OperationNode, PrimitiveKind, Subgraph};
     let mut sg = Subgraph::new("nested_iterate");
@@ -677,6 +679,7 @@ pub fn build_nested_iterate_for_test(outer_max: u64, inner_max: u64) -> Subgraph
 /// declared bound is `callee_bound`. The caller's iteration count does not
 /// multiply in (the isolated CALL resets to the callee bound).
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_call_with_callee_budget_for_test(callee_bound: u64) -> Subgraph {
     use crate::{OperationNode, PrimitiveKind, Subgraph};
     let mut sg = Subgraph::new("call_with_callee_budget");
@@ -702,6 +705,7 @@ pub fn build_call_with_callee_budget_for_test(callee_bound: u64) -> Subgraph {
 /// terminal RESPOND. Cumulative for the subgraph is `max(product(path_a),
 /// product(path_b))`.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_two_path_dag_for_test(path_a: &[u64], path_b: &[u64]) -> Subgraph {
     use crate::{OperationNode, PrimitiveKind, Subgraph};
     let mut sg = Subgraph::new("two_path_dag");

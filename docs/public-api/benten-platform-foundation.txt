@@ -279,6 +279,47 @@ pub fn benten_platform_foundation::admin_ui_v0::render_category_content_allow_al
 pub fn benten_platform_foundation::admin_ui_v0::validate_subgraph_within_manifest_envelope(sg: &benten_core::subgraph::Subgraph, manifest: &benten_platform_foundation::plugin_manifest::PluginManifest) -> core::result::Result<(), benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowEditorError>
 pub fn benten_platform_foundation::admin_ui_v0::workflow_content_hash(sg: &benten_core::subgraph::Subgraph) -> core::result::Result<[u8; 32], benten_core::CoreError>
 pub type benten_platform_foundation::admin_ui_v0::WorkflowEdge = (alloc::string::String, alloc::string::String, alloc::string::String)
+pub mod benten_platform_foundation::install_consent
+pub struct benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl benten_platform_foundation::install_consent::InstallConsentPolicy for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+pub fn benten_platform_foundation::install_consent::AdmitAllInstallConsent::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did_str: &str) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::clone::Clone for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+pub fn benten_platform_foundation::install_consent::AdmitAllInstallConsent::clone(&self) -> benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::default::Default for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+pub fn benten_platform_foundation::install_consent::AdmitAllInstallConsent::default() -> benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::fmt::Debug for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+pub fn benten_platform_foundation::install_consent::AdmitAllInstallConsent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::marker::Freeze for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::marker::Send for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::marker::Sync for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::marker::Unpin for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::marker::UnsafeUnpin for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+pub struct benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl benten_platform_foundation::install_consent::InstallConsentPolicy for benten_platform_foundation::install_consent::DenyAllInstallConsent
+pub fn benten_platform_foundation::install_consent::DenyAllInstallConsent::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did_str: &str) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::clone::Clone for benten_platform_foundation::install_consent::DenyAllInstallConsent
+pub fn benten_platform_foundation::install_consent::DenyAllInstallConsent::clone(&self) -> benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::default::Default for benten_platform_foundation::install_consent::DenyAllInstallConsent
+pub fn benten_platform_foundation::install_consent::DenyAllInstallConsent::default() -> benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::fmt::Debug for benten_platform_foundation::install_consent::DenyAllInstallConsent
+pub fn benten_platform_foundation::install_consent::DenyAllInstallConsent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::marker::Freeze for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::marker::Send for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::marker::Sync for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::marker::Unpin for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::marker::UnsafeUnpin for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::install_consent::DenyAllInstallConsent
+impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::install_consent::DenyAllInstallConsent
+pub trait benten_platform_foundation::install_consent::InstallConsentPolicy
+pub fn benten_platform_foundation::install_consent::InstallConsentPolicy::check_install_consent(&self, install_record_signing_payload_hash: &[u8; 32], plugin_did_str: &str) -> core::result::Result<(), benten_errors::ErrorCode>
+impl benten_platform_foundation::install_consent::InstallConsentPolicy for benten_platform_foundation::install_consent::AdmitAllInstallConsent
+pub fn benten_platform_foundation::install_consent::AdmitAllInstallConsent::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did_str: &str) -> core::result::Result<(), benten_errors::ErrorCode>
+impl benten_platform_foundation::install_consent::InstallConsentPolicy for benten_platform_foundation::install_consent::DenyAllInstallConsent
+pub fn benten_platform_foundation::install_consent::DenyAllInstallConsent::check_install_consent(&self, _install_record_signing_payload_hash: &[u8; 32], _plugin_did_str: &str) -> core::result::Result<(), benten_errors::ErrorCode>
 pub mod benten_platform_foundation::manifest_store
 pub struct benten_platform_foundation::manifest_store::DriftNotification
 pub benten_platform_foundation::manifest_store::DriftNotification::plugin_did: benten_id::did::Did
@@ -304,7 +345,6 @@ pub struct benten_platform_foundation::manifest_store::ManifestStore
 impl benten_platform_foundation::manifest_store::ManifestStore
 pub fn benten_platform_foundation::manifest_store::ManifestStore::captured_user_notifications(&self) -> &[benten_platform_foundation::manifest_store::DriftNotification]
 pub fn benten_platform_foundation::manifest_store::ManifestStore::contains(&self, plugin_did: &benten_id::did::Did) -> bool
-pub fn benten_platform_foundation::manifest_store::ManifestStore::install_plugin(&mut self, plugin_did: benten_id::did::Did, record: benten_platform_foundation::plugin_manifest::InstallRecord) -> core::result::Result<(), benten_errors::ErrorCode>
 pub fn benten_platform_foundation::manifest_store::ManifestStore::load_verified(&mut self, plugin_did: &benten_id::did::Did) -> core::result::Result<benten_platform_foundation::plugin_manifest::InstallRecord, benten_errors::ErrorCode>
 pub fn benten_platform_foundation::manifest_store::ManifestStore::new() -> Self
 pub fn benten_platform_foundation::manifest_store::ManifestStore::simulate_byte_mutation_attack(&mut self, plugin_did: benten_id::did::Did, mutated_record: benten_platform_foundation::plugin_manifest::InstallRecord) -> core::result::Result<(), benten_errors::ErrorCode>
@@ -323,7 +363,6 @@ pub struct benten_platform_foundation::manifest_store::RedbManifestStore
 impl benten_platform_foundation::manifest_store::RedbManifestStore
 pub fn benten_platform_foundation::manifest_store::RedbManifestStore::captured_user_notifications(&self) -> alloc::vec::Vec<benten_platform_foundation::manifest_store::DriftNotification>
 pub fn benten_platform_foundation::manifest_store::RedbManifestStore::contains(&self, plugin_did: &benten_id::did::Did) -> core::result::Result<bool, benten_errors::ErrorCode>
-pub fn benten_platform_foundation::manifest_store::RedbManifestStore::install_plugin(&mut self, plugin_did: benten_id::did::Did, record: benten_platform_foundation::plugin_manifest::InstallRecord) -> core::result::Result<(), benten_errors::ErrorCode>
 pub fn benten_platform_foundation::manifest_store::RedbManifestStore::load_verified(&mut self, plugin_did: &benten_id::did::Did) -> core::result::Result<benten_platform_foundation::plugin_manifest::InstallRecord, benten_errors::ErrorCode>
 pub fn benten_platform_foundation::manifest_store::RedbManifestStore::open_or_create(path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<Self, benten_errors::ErrorCode>
 impl core::fmt::Debug for benten_platform_foundation::manifest_store::RedbManifestStore
@@ -774,7 +813,8 @@ impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation:
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_lifecycle::InstallParams<'a>
 pub struct benten_platform_foundation::plugin_lifecycle::InstallPorts<'a, M, P> where M: benten_platform_foundation::plugin_lifecycle::CapMinter, P: benten_platform_foundation::plugin_lifecycle::PrivateNamespaceProvisioner
 pub benten_platform_foundation::plugin_lifecycle::InstallPorts::cap_minter: &'a mut M
-pub benten_platform_foundation::plugin_lifecycle::InstallPorts::install_record_replay_check: core::option::Option<&'a mut benten_platform_foundation::plugin_lifecycle::InstallRecordReplayCheckFn>
+pub benten_platform_foundation::plugin_lifecycle::InstallPorts::install_record_replay_check: &'a mut benten_platform_foundation::plugin_lifecycle::InstallRecordReplayCheckFn
+pub benten_platform_foundation::plugin_lifecycle::InstallPorts::policy: &'a dyn benten_platform_foundation::install_consent::InstallConsentPolicy
 pub benten_platform_foundation::plugin_lifecycle::InstallPorts::private_ns: &'a mut P
 impl<'a, M, P> core::marker::Freeze for benten_platform_foundation::plugin_lifecycle::InstallPorts<'a, M, P>
 impl<'a, M, P> !core::marker::Send for benten_platform_foundation::plugin_lifecycle::InstallPorts<'a, M, P>

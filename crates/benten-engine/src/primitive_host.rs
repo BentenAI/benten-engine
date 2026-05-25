@@ -610,7 +610,12 @@ impl PrimitiveHost for Engine {
                 device_cid,
                 ..Default::default()
             };
-            if let Err(c) = policy.check_write(&ctx) {
+            // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
+            // Default delegates to `check_write`; audience-aware impls
+            // observe `ctx.audience_did` (left as None at evaluator-
+            // primitive-host write sites — the audience-aware contract
+            // applies when a delegate-time audience is in scope).
+            if let Err(c) = policy.check_write_with_audience(&ctx) {
                 return Err(benten_eval::EvalError::Capability(c));
             }
         }

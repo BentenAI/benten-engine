@@ -1,0 +1,14 @@
+# pnpm workspace declaration — pnpm doesn't read the npm `workspaces`
+# field in package.json (warned about every `pnpm install`); needs its
+# own pnpm-workspace.yaml.
+#
+# Mirrors package.json's `workspaces` field. Added at R6 R1 FP
+# integration PR #1351 fix-up #9 (the ts-public-api workflow surfaced
+# the gap when --no-frozen-lockfile install succeeded at root but
+# packages/engine's @types/node devDep wasn't reachable for tsc).
+packages:
+  - "bindings/napi"
+  - "packages/engine"
+  - "packages/engine-devserver"
+  - "packages/admin-ui-v0"
+  - "tools/create-benten-app"

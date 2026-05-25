@@ -43,6 +43,14 @@ concurrency:
   group: multi-arch-cargo-check-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   cargo-check-multi-arch:
     name: cargo check (${{ matrix.leg }})
@@ -75,14 +83,14 @@ jobs:
           key: multi-arch-${{ matrix.leg }}
 
       - name: cargo check --workspace
-        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing`
+        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing`
         # mirrors the canonical feature-set used by the build+test
         # workflow's `cargo nextest run` invocation. Without these
         # features the integration tests under `crates/*/tests/` reference
         # cfg-gated test helpers (e.g. `register_test_callee`) that are
         # not compiled into the lib's "no testing feature" build, so
         # `--all-targets` would otherwise fail E0425 on every leg.
-        run: cargo check --workspace --target ${{ matrix.target }} --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing
+        run: cargo check --workspace --target ${{ matrix.target }} --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing
 
   aarch64-sandbox-runtime:
     name: AArch64 SANDBOX runtime (macos-14 / Apple M1)

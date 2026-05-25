@@ -5,12 +5,15 @@
 //! [`SuspendedHandle`]. The engine-side surface (`engine_wait.rs`,
 //! `Engine::suspend_to_bytes`, `Engine::resume_from_bytes`) lives in G3-B.
 //!
-//! This module ships the unit-level helpers R3 tests drive:
+//! This module ships the unit-level helpers R3 tests drive (all
+//! `#[cfg(any(test, feature = "testing"))]`-gated post R6 R1 FP-A
+//! Bundle F1.d, so cited in plain backticks to avoid intra-doc-link
+//! resolution against private symbols in the default build):
 //!
-//! - [`execute_for_test_signal`] — minimal "suspend on signal" shim.
-//! - [`execute_for_test_signal_with_trace`] — same but emits a
+//! - `execute_for_test_signal` — minimal "suspend on signal" shim.
+//! - `execute_for_test_signal_with_trace` — same but emits a
 //!   [`TraceStep::SuspendBoundary`] row.
-//! - [`execute_and_capture_zone_writes`] — records the one pending-signal
+//! - `execute_and_capture_zone_writes` — records the one pending-signal
 //!   entry WAIT writes into the `system:WaitPending` zone.
 //!
 //! `evaluate`/`resume` as module-level entry points are G3-B surface; we
@@ -214,6 +217,7 @@ fn placeholder_payload_for_signal(signal: &str) -> ExecutionStatePayload {
 /// # Errors
 /// Returns [`EvalError::Core`] if DAG-CBOR encoding of the placeholder
 /// payload fails (should not happen in practice).
+#[cfg(any(test, feature = "testing"))]
 pub fn execute_for_test_signal(signal: &str) -> Result<WaitOutcome, EvalError> {
     let payload = placeholder_payload_for_signal(signal);
     let envelope = ExecutionStateEnvelope::new(payload)?;
@@ -229,6 +233,7 @@ pub fn execute_for_test_signal(signal: &str) -> Result<WaitOutcome, EvalError> {
 ///
 /// # Errors
 /// Returns [`EvalError`] if the WAIT executor rejects.
+#[cfg(any(test, feature = "testing"))]
 pub fn execute_for_test_signal_with_trace(
     signal: &str,
 ) -> Result<(WaitOutcome, Vec<TraceStep>), EvalError> {
@@ -245,6 +250,13 @@ pub fn execute_for_test_signal_with_trace(
 ///
 /// # Errors
 /// Returns [`EvalError`] if the WAIT executor rejects.
+///
+/// **R6 R1 FP-A Bundle F1.d:** cfg-gated under
+/// `cfg(any(test, feature = "testing"))` because the body composes the
+/// cfg-gated `execute_for_test_signal`. Sole consumer is the
+/// `wait_primitive_happy_path` integration test. Transitive
+/// `_for_test`-consumer per Row D-22 sub-task 5.
+#[cfg(any(test, feature = "testing"))]
 pub fn execute_and_capture_zone_writes(signal: &str) -> Result<ZoneWriteCapture, EvalError> {
     let outcome = execute_for_test_signal(signal)?;
     let state_cid = outcome.state_cid();

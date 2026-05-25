@@ -634,9 +634,6 @@ impl !core::panic::unwind_safe::UnwindSafe for benten_eval::host_error::HostErro
 pub mod benten_eval::invariants
 pub mod benten_eval::invariants::attribution
 pub use benten_eval::invariants::attribution::ATTRIBUTION_PROPERTY_KEY
-pub fn benten_eval::invariants::attribution::build_five_step_handler_for_test() -> benten_core::subgraph::Subgraph
-pub fn benten_eval::invariants::attribution::build_subgraph_with_undeclared_attribution_for_test() -> benten_core::subgraph::Subgraph
-pub fn benten_eval::invariants::attribution::run_with_attribution_for_test(subgraph: &benten_core::subgraph::Subgraph, host: &benten_eval::host::NullHost) -> core::result::Result<alloc::vec::Vec<benten_eval::TraceStep>, benten_eval::EvalError>
 pub fn benten_eval::invariants::attribution::validate_registration(subgraph: &benten_core::subgraph::Subgraph) -> core::result::Result<(), benten_eval::EvalError>
 pub mod benten_eval::invariants::budget
 pub struct benten_eval::invariants::budget::BudgetError
@@ -674,10 +671,6 @@ impl core::marker::UnsafeUnpin for benten_eval::invariants::budget::Multiplicati
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::invariants::budget::MultiplicativeBudget
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::invariants::budget::MultiplicativeBudget
 pub const benten_eval::invariants::budget::DEFAULT_INV_8_BUDGET: u64
-pub fn benten_eval::invariants::budget::build_call_with_callee_budget_for_test(callee_bound: u64) -> benten_core::subgraph::Subgraph
-pub fn benten_eval::invariants::budget::build_chained_call_iterate_iterate_for_test(m1: u64, call_factor: u64, m3: u64) -> benten_core::subgraph::Subgraph
-pub fn benten_eval::invariants::budget::build_nested_iterate_for_test(outer_max: u64, inner_max: u64) -> benten_core::subgraph::Subgraph
-pub fn benten_eval::invariants::budget::build_two_path_dag_for_test(path_a: &[u64], path_b: &[u64]) -> benten_core::subgraph::Subgraph
 pub fn benten_eval::invariants::budget::callee_name_for_factor(factor: u64) -> alloc::string::String
 pub fn benten_eval::invariants::budget::compute_cumulative(subgraph: &benten_core::subgraph::Subgraph) -> u64
 pub fn benten_eval::invariants::budget::cumulative_at_handle(subgraph: &benten_core::subgraph::Subgraph, handle: benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
@@ -685,7 +678,6 @@ pub fn benten_eval::invariants::budget::validate(subgraph: &benten_core::subgrap
 pub fn benten_eval::invariants::budget::validate_multiplicative(subgraph: &benten_core::subgraph::Subgraph, bound: benten_eval::invariants::budget::MultiplicativeBudget) -> core::result::Result<(), benten_eval::invariants::budget::BudgetError>
 pub mod benten_eval::invariants::immutability
 pub const benten_eval::invariants::immutability::WRITE_TARGET_CID_PROPERTY: &str
-pub fn benten_eval::invariants::immutability::build_subgraph_writing_to_literal_cid_for_test(handler_id: &str, target_cid: &benten_core::Cid) -> benten_core::subgraph::Subgraph
 pub fn benten_eval::invariants::immutability::validate_registration(subgraph: &benten_core::subgraph::Subgraph) -> core::result::Result<(), benten_eval::EvalError>
 pub fn benten_eval::invariants::immutability::validate_registration_against(subgraph: &benten_core::subgraph::Subgraph, registered_cids: &alloc::collections::btree::set::BTreeSet<benten_core::Cid>) -> core::result::Result<(), benten_eval::EvalError>
 pub mod benten_eval::invariants::sandbox_depth
@@ -744,7 +736,6 @@ pub fn benten_eval::invariants::structural::validate_subgraph(sg: &benten_core::
 pub fn benten_eval::invariants::structural::validate_transform_expressions(sg: &benten_core::subgraph::Subgraph) -> core::result::Result<(), benten_eval::EvalError>
 pub mod benten_eval::invariants::system_zone
 pub const benten_eval::invariants::system_zone::SYSTEM_ZONE_REJECTION_MESSAGE: &str
-pub fn benten_eval::invariants::system_zone::build_subgraph_reading_literal_system_cid_for_test(label: &str) -> benten_core::subgraph::Subgraph
 pub fn benten_eval::invariants::system_zone::is_system_zone_label(label: &str) -> bool
 pub fn benten_eval::invariants::system_zone::validate_registration(sg: &benten_core::subgraph::Subgraph) -> core::result::Result<(), benten_eval::EvalError>
 pub fn benten_eval::invariants::validate_subgraph(sg: &benten_core::subgraph::Subgraph, config: &benten_eval::InvariantConfig, aggregate: bool) -> core::result::Result<(), benten_eval::RegistrationError>
@@ -1304,9 +1295,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::wait::
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::wait::ZoneWriteCapture
 pub fn benten_eval::primitives::wait::evaluate(sg: &benten_core::subgraph::Subgraph, ctx: &mut benten_eval::context::EvalContext, _input: benten_core::value::Value) -> core::result::Result<benten_eval::primitives::wait::WaitOutcome, benten_eval::EvalError>
 pub fn benten_eval::primitives::wait::evaluate_op(op: &benten_core::subgraph::OperationNode, store: alloc::sync::Arc<dyn benten_eval::suspension_store::SuspensionStore>, elapsed_ms: core::option::Option<u64>, principal: core::option::Option<&benten_core::Cid>) -> core::result::Result<benten_eval::primitives::wait::WaitOutcome, benten_eval::EvalError>
-pub fn benten_eval::primitives::wait::execute_and_capture_zone_writes(signal: &str) -> core::result::Result<benten_eval::primitives::wait::ZoneWriteCapture, benten_eval::EvalError>
-pub fn benten_eval::primitives::wait::execute_for_test_signal(signal: &str) -> core::result::Result<benten_eval::primitives::wait::WaitOutcome, benten_eval::EvalError>
-pub fn benten_eval::primitives::wait::execute_for_test_signal_with_trace(signal: &str) -> core::result::Result<(benten_eval::primitives::wait::WaitOutcome, alloc::vec::Vec<benten_eval::TraceStep>), benten_eval::EvalError>
 pub fn benten_eval::primitives::wait::resume(envelope: &benten_eval::exec_state::ExecutionStateEnvelope, signal: benten_eval::primitives::wait::WaitResumeSignal, ctx: &benten_eval::context::EvalContext) -> core::result::Result<benten_eval::primitives::wait::WaitOutcome, benten_eval::EvalError>
 pub fn benten_eval::primitives::wait::resume_with_meta(meta: core::option::Option<benten_eval::suspension_store::WaitMetadata>, signal: benten_eval::primitives::wait::WaitResumeSignal, current_elapsed_ms_override: core::option::Option<u64>) -> core::result::Result<benten_eval::primitives::wait::WaitOutcome, benten_eval::EvalError>
 pub mod benten_eval::primitives::write

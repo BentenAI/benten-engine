@@ -92,6 +92,7 @@ pub benten_errors::ErrorCode::PluginDeviceAttestationForged
 pub benten_errors::ErrorCode::PluginDidHandleDuplicate
 pub benten_errors::ErrorCode::PluginDidHandleNotPreInserted
 pub benten_errors::ErrorCode::PluginHeterogeneityIncompatible
+pub benten_errors::ErrorCode::PluginInstallConsentDenied
 pub benten_errors::ErrorCode::PluginInstallConsentRequired
 pub benten_errors::ErrorCode::PluginInstallRecordAlreadyApplied
 pub benten_errors::ErrorCode::PluginInstallRecordConsentingUserMismatch
@@ -102,6 +103,7 @@ pub benten_errors::ErrorCode::PluginLibraryIndexTamper
 pub benten_errors::ErrorCode::PluginManifestInvalid
 pub benten_errors::ErrorCode::PluginMetaCompositionCycleRejected
 pub benten_errors::ErrorCode::PluginNewVersionAvailable
+pub benten_errors::ErrorCode::PluginPerDelegationDenied
 pub benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden
 pub benten_errors::ErrorCode::PrimitiveNotImplemented
 pub benten_errors::ErrorCode::ProductionRequiresCaps

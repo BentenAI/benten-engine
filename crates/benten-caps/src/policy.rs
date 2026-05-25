@@ -229,6 +229,7 @@ impl CapWriteContext {
     /// stable-but-synthetic placeholders so the unit-test surface does not
     /// depend on the evaluator being wired in.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test() -> Self {
         Self {
             label: "synthetic".into(),
@@ -286,6 +287,7 @@ pub struct ReadContext {
 impl ReadContext {
     /// Construct a lightweight synthetic context for unit tests.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test() -> Self {
         Self {
             label: "synthetic".into(),

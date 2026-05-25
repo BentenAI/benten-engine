@@ -98,9 +98,13 @@ fn apply_atrium_merge_per_row_recheck_extends_to_manifest_envelope_check() {
     );
 
     // Substance C — ordering: envelope recheck AFTER cap-recheck.
+    // R6 R1 FP-F4 §S3c (Δv3-2) renamed `policy.check_write(&ctx)` to
+    // `policy.check_write_with_audience(&ctx)` at engine.rs:1413 per the
+    // ratified workspace sweep (Row D-3-c partial close). The cap-recheck
+    // site MUST remain — just under the renamed call shape.
     let cap_idx = engine_src
-        .find("policy.check_write(&ctx)")
-        .expect("Phase-3 G16-B-F cap-recheck site MUST remain");
+        .find("policy.check_write_with_audience(&ctx)")
+        .expect("Phase-3 G16-B-F cap-recheck site MUST remain (now `check_write_with_audience` per R6 R1 FP-F4 §S3c sweep)");
     let env_idx = engine_src
         .find("manifest_envelope_recheck::outcome_to_row_reject")
         .expect("Seam 3 envelope-recheck call MUST be wired");

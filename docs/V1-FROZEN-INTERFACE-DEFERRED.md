@@ -19,6 +19,22 @@
 > consumption-deferred surfaces; updates land via PR + cite-drift
 > sweep.
 
+## Revision history (selected)
+
+- **2026-05-24** — R6 R1 FP-A: **Row D-7 + Row D-22 RETRACTED / CLOSED**
+  per Ben PM ratification of HARD RULE 12 over the prior path-(b)
+  defers ("do the full ~13-site cascade now"). F2 closes Row D-7
+  (§8-A Engine visibility cluster tighten + napi cascade) by
+  renaming + tightening the 4 methods and migrating napi to
+  `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)`. F1.a-e
+  closes Row D-22 (workspace `_for_test` cfg-gating sweep) with
+  70+ declarations gated + 14-item EXEMPT_PUB_ITEMS allow-list +
+  no-regression test pin at
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
+  + 8 cargo-public-api baseline regens. Both rows retained for
+  forensic context per pim-13 / §3.12; closure annotations
+  inline in each row body.
+
 ---
 
 ## Why this document exists
@@ -59,7 +75,21 @@ Each row: (i) frozen surface (where the signature locks at v1-beta),
 (iii) v1-beta posture (what the binary actually enforces / does not
 enforce at v1-beta), (iv) Compromise / spec anchor.
 
-### Row D-1 — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context)
+### ~~Row D-1~~ — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context) — **CLOSED at R6 R1 FP-F4 §S1** (2026-05-24)
+
+> **STATUS: CLOSED.** Per Ben PM-ratified F1 path-(a) full ~13-site
+> cascade ("if we're going to want to do them all eventually, then I
+> say do the full ~13-site cascade now"), the `WriteBoundaryChainValidator`
+> consumption is now structurally-always-on at all 13 WRITE entry
+> points (engine_crud × 5 + engine_caps × 2 + engine_views × 1 +
+> engine_modules × 2 + engine_diagnostics × 1 + engine_wait × 1 +
+> handler_versions × 1) via the new `Engine::admit_write_chain` helper
+> + sealed `WriteAdmissionFrame`. Layer-1 user-as-root invariant is
+> structurally enforced at every WRITE admission when a production
+> validator is installed. Row retained for forensic context per
+> pim-13 / §3.12.
+
+### Row D-1 (FORENSIC) — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context)
 
 - **Frozen surface (v1-beta):**
   `crates/benten-engine/src/write_boundary_chain_validator.rs` —
@@ -83,7 +113,20 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** CLAUDE.md baked-in #18 Layer-1 user-as-root invariant;
   spec V1-FROZEN-INTERFACE.md item 8.
 
-### Row D-2 — InstallRecordReplayStore lifecycle-required wiring
+### ~~Row D-2~~ — InstallRecordReplayStore lifecycle-required wiring — **CLOSED at R6 R1 FP-F4 §S2** (2026-05-24)
+
+> **STATUS: CLOSED.** `InstallPorts.install_record_replay_check`
+> drops `Option<&mut Fn>` for `&mut Fn` — every install caller MUST
+> supply a substantive closure now. Test fixtures wire
+> `benten_platform_foundation::testing::noop_replay_check()`;
+> production callers wire
+> `engine.install_record_replay_store().record_and_check`.
+> `manifest_store::install_plugin` renamed to
+> `install_verified_record_unchecked` with `#[deprecated]` +
+> `#[doc(hidden)]` to steer callers to the full
+> `plugin_lifecycle::install_plugin` path.
+
+### Row D-2 (FORENSIC) — InstallRecordReplayStore lifecycle-required wiring
 
 - **Frozen surface (v1-beta):**
   `crates/benten-engine/src/install_record_replay.rs` —
@@ -108,7 +151,30 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   `crates/benten-engine/src/install_record_replay.rs:33` module-doc
   per-process invariant.
 
-### Row D-3 — 3 §8-E CapabilityPolicy hooks consumption
+### ~~Row D-3~~ — 3 §8-E CapabilityPolicy hooks consumption — **PARTIAL CLOSED at R6 R1 FP-F4 §S3a / §S3b / §S3c** (2026-05-24)
+
+> **STATUS: PARTIAL CLOSED.**
+> - **Row D-3-a CLOSED** at §S3a: `InstallConsentPolicy` trait in
+>   `benten_platform_foundation::install_consent` + threaded through
+>   `InstallPorts.policy` + consumed at `plugin_lifecycle::install_plugin`
+>   step 3c with typed `ErrorCode::PluginInstallConsentDenied` reject.
+>   CATALOG_VARIANT_COUNT 192→193.
+> - **Row D-3-b CLOSED** at §S3b: `EngineCapsHandle::delegate_capability`
+>   consults `CapabilityPolicy::check_per_delegation` between Step 2b
+>   (shares-policy resolver) and Step 3 (effective scope) with typed
+>   `ErrorCode::PluginPerDelegationDenied` reject.
+>   CATALOG_VARIANT_COUNT 193→194.
+> - **Row D-3-c PARTIAL CLOSED** at §S3c per Δv3-2: the 4 production
+>   `policy.check_write(&ctx)` sites all switched to
+>   `policy.check_write_with_audience(&ctx)`. The audience-aware
+>   enrichment seam IS wired (default delegates to `check_write`);
+>   `audience_did` stays `None` at sweep sites per Δv3-2 (peer_did
+>   at apply_atrium_merge is transport-principal NOT cap-target).
+>   The populate-side at delegate_capability defers to G-COMP-1 +
+>   the existing Layer-3 `check_per_delegation` wiring covers
+>   delegate-runtime audience-discrimination needs.
+
+### Row D-3 (FORENSIC) — 3 §8-E CapabilityPolicy hooks consumption
 
 - **Frozen surface (v1-beta):**
   `crates/benten-caps/src/policy.rs::CapabilityPolicy::{check_install_consent, check_per_delegation, check_write_with_audience}`
@@ -134,7 +200,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   silently ignored.
 - **Anchor:** CLAUDE.md #18 trust model Layer-2 + Layer-3; spec item 8.
 
-### Row D-4 — ProductionManifestEnvelopeRechecker production impl + default-builder wiring
+### ~~Row D-4~~ — ProductionManifestEnvelopeRechecker production impl + default-builder wiring — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+
+> **STATUS: CLOSED.** `ProductionManifestEnvelopeRechecker` substantive
+> impl shipped at `crates/benten-engine/src/production_manifest_envelope_rechecker.rs`
+> + `ProductionEngineBuilder` (per CRITIC-2 F-2.2 rename) shipped at
+> `crates/benten-engine/src/production_engine_builder.rs` as the
+> canonical production constructor that wires the substantive
+> rechecker post-build. At v1-beta the load-bearing addition is the
+> synthesized-fallback hardening (Row D-18 coupling); full
+> PluginLibrary-driven chain walk is the G-COMP-1 deliverable per
+> the substantive-rechecker-installed-detection-couple narrative.
+
+### Row D-4 (FORENSIC) — ProductionManifestEnvelopeRechecker production impl + default-builder wiring
 
 - **Frozen surface (v1-beta):**
   `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`
@@ -176,7 +254,16 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   ingest).
 - **Anchor:** Compromise #26 retense; CLAUDE.md #18 Layer-2.
 
-### Row D-6 — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs
+### ~~Row D-6~~ — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+
+> **STATUS: CLOSED.** `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome`
+> minted as the §4.25 sync-hydrate handshake-time consumption surface
+> for `ManifestEnvelopeRecheckUnresolvedDeny` + `PluginDelegationOutsideManifestEnvelope`
+> ErrorCode arms. The `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`
+> named-pin destination is now wired (the §4.36 merge-time +
+> §4.25 hydrate-time both consume the shared primitive).
+
+### Row D-6 (FORENSIC) — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs
 
 - **Frozen surface (v1-beta):** the SHARED primitive
   (`ManifestEnvelopeRecheckOutcome::UnresolvedDeny` +
@@ -190,7 +277,18 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   primitive is available + the consumer wire-up is the deferred half).
 - **Anchor:** spec item 12 (retensed in Bundle 2).
 
-### Row D-7 — §8-A Engine visibility cluster tighten + napi cascade
+### ~~Row D-7~~ — §8-A Engine visibility cluster tighten + napi cascade — **CLOSED at R6 R1 FP-A Bundle F2** (2026-05-24)
+
+> **STATUS: RETRACTED / CLOSED.** Per Ben 2026-05-24 PM ratification of
+> HARD RULE 12 over the prior path-(b) defer ("if we're going to want
+> to do them all eventually, then I say do the full ~13-site cascade
+> now"), the §8-A visibility tighten + napi cascade LANDED at R6 R1
+> FP-A Bundle F2 — the four methods are now `pub(crate)` with their
+> v1-GM target names + napi migrated to
+> `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)` +
+> test-helper re-exports at `crate::testing` preserve sibling-crate
+> integration tests. Row retained for forensic context per
+> pim-13 / §3.12.
 
 - **Frozen surface (v1-beta):** NONE TIGHTENED at v1-beta — per the
   G-CORE-9 R1 triage L2-BLK-1 escalation, the §8-A tighten cascades
@@ -343,6 +441,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 ### Row D-15 — Post-v1-beta hardening watch-list
 
+- **R6 R1 fix-pass revision-history (R6 R1 Bundle F3):** the prior
+  G-CORE-9 R1 triage Fork 1 disposition ("retract doc claim from
+  3-tuple AAD to 2-tuple as-shipped + defer `total_chunks` defense
+  to G-COMP-1") was **RETRACTED** at R6 R1 fix-pass. The CODE was
+  revised to bind `total_chunks` per the spec text (3-tuple AAD
+  layout: `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`
+  becomes 4-segment AAD: domain-tag || plaintext_cid ||
+  chunk_index LE || total_chunks LE), closing the
+  cross-chunk-truncation attack at v1-beta. Wire-format pin updated
+  at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs`;
+  behavioral truncation/inflation pins added at
+  `crates/benten-graph/src/aead_wrap.rs::tests`. See V1-FROZEN-INTERFACE.md
+  per-chunk-AEAD wire layout entry for the post-retraction freeze contract.
 - **Frozen surface (v1-beta):** various nice-to-have hardenings
   surfaced in R1 OBS items. Each named sub-row below has its own
   destination (G-COMP-1 vs Phase-4-Meta-Composing vs post-audit) and
@@ -445,18 +556,24 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant`
   is hardcoded `[u8; 64]` (Ed25519 fixed-size); the rest of #5
   framing carries multiformats codepoint-dispatch via varsig.
-- **Deferred consumption (post-audit + Phase-4-Meta-Composing):**
+- **Deferred consumption (G-CORE-PQ-WIRE wave — see Row D-26):**
   promote to varsig-tagged variable-length to admit ML-DSA-65 (3293
   bytes) + future hybrid signatures (Ed25519⊕ML-DSA-65 = 3357 bytes
   concatenated) under the same binding_sig shape. The classical
   half is preserved via the codepoint-dispatch fall-through.
+  Re-homed from "post-audit + Phase-4-Meta-Composing" to the
+  G-CORE-PQ-WIRE wave per Ben 2026-05-24 PM "do everything now"
+  ratification (the structural sub-fork on HOW to carry hybrid
+  pubkeys is the same for binding_sig as for the 3 sites in Row D-26;
+  bundling them in one wave is the do-it-all-properly path).
 - **v1-beta posture:** ed25519_dalek is the only signature primitive
   used for binding_sig at v1-beta so the hardcoded shape is
   consistent. The audit (NF-2 / C-GM-AUDIT) lands BEFORE v1-GM;
   the varsig promotion couples to the audit-result decision on
   whether to ship binding_sig as hybrid-by-default at v1-GM.
 - **Anchor:** L17-r1-6 G-CORE-9 R1 finding + #5 crypto-agility
-  contract + NF-2 / C-GM-AUDIT v1-GM gate.
+  contract + NF-2 / C-GM-AUDIT v1-GM gate + Row D-26 wave-bundling
+  ratification 2026-05-24 PM.
 
 #### Row D-15-RETRACTED — SHA hashcodepoint pre-blessed agile-hash mint
 
@@ -471,7 +588,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   predicated on a future codepoint-mint that already happened). The
   original L11-R2-MINOR-4 closure-evidence was mis-stated.
 
-### Row D-18 — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
+### ~~Row D-18~~ — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+
+> **STATUS: CLOSED.** `is_synthesized_node_id(did_str: &str) -> bool`
+> helper minted at `crates/benten-engine/src/manifest_envelope_recheck.rs`
+> per Δv3-10. The `ProductionManifestEnvelopeRechecker` consults
+> this helper + returns `UnresolvedDeny` when the peer-DID is
+> the `node-id:N` synthesized-fallback shape. The
+> substantive-rechecker-installed-detection-couple narrative is
+> preserved: the Noop default continues to admit (NotApplicable)
+> so default-Noop test fixtures don't over-fire; only the
+> substantive rechecker hardens.
+
+### Row D-18 (FORENSIC) — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
 
 - **Frozen surface (v1-beta):** the structural empty-peer-DID
   fail-CLOSED at `engine.rs:1462-1476` IS live for the literal-empty
@@ -650,25 +779,84 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 ### Row D-21 — `crates/benten-crypto-suite/INTERNALS.md` authorship
 
+- **CLOSED 2026-05-24 at R6-FP-D L16-MAJOR-1 close.** The
+  `crates/benten-crypto-suite/INTERNALS.md` file was authored at
+  R6-FP-D (this PR) following the
+  `crates/benten-platform-foundation/INTERNALS.md` structural template;
+  the row remains here in the DEFERRED ledger for archaeology
+  (commit history grep-able). The companion `crates/benten-drop/INTERNALS.md`
+  was also authored at the same time (closes the implicit follow-up
+  for the Drop crate).
 - **Frozen surface (v1-beta):** the `benten-crypto-suite` crate is
   item-6-locked at V1-FROZEN-INTERFACE.md (codepoint table + public
   surface frozen at G-CORE-9). The INTERNALS.md doc has no v1-beta
-  signature impact; it is internal architecture-record only.
-- **Deferred consumption (Phase-4-Meta-Composing OR G-COMP-1
-  destination):** author `crates/benten-crypto-suite/INTERNALS.md`
-  following the structure of `crates/benten-caps/INTERNALS.md` covering
-  codepoint table + typed-reject dispatch pattern + SwapMatrix umbrella
-  + 5 named constructors + C11b safety gate + X-Wing vendored combiner
-  provenance + AeadEnvelope/GrantKeyMaterial/AeadKeyMaterial
-  type-collision-resolution name discipline.
-- **v1-beta posture:** missing-but-deferred-not-blocking-tag; the
-  crate's rustdoc + the V1-FROZEN-INTERFACE.md item 6 + the lib.rs
-  module docstring carry the load-bearing architecture narrative at
-  v1-beta. INTERNALS.md is the post-v1-beta architecture-record
-  augmentation.
+  signature impact; it is internal architecture-record only — the
+  authorship at R6-FP-D is doc-coupling completeness, not a freeze
+  contract change.
 - **Anchor:** spec item 6 + V1-FROZEN-INTERFACE.md item 15.d + the
   rename pair at #1344 row 7 (GrantKeyMaterial / AeadKeyMaterial) +
-  L18-r1-5 + L18-r2-3.
+  L18-r1-5 + L18-r2-3 + R6-FP-D L16-MAJOR-1.
+
+---
+
+### Row D-25 — V1-BETA-BREAKING-CHANGES.md ledger completion sweep
+
+- **Frozen surface (v1-beta):** none — this row is a doc-completion
+  obligation, not a code-surface change. The v1-beta wire bytes + the
+  v1-beta public API are wholly set; what is deferred is the
+  *enumeration audit-trail* in the breaking-changes ledger.
+- **Deferred consumption (G-COMP-1 destination):** author per-PR
+  Cohort 2 rows in `docs/V1-BETA-BREAKING-CHANGES.md` for the ~13
+  substrate-canary + Strategy-C-consolidation PRs identified at the
+  R6 R1 L18 phase-wide lens:
+  - **Substrate canaries (8 PRs, ~+321 pub surface):** #1319 G-CORE-3a
+    CANARY (KeyMaterial + AeadEnvelope + structural_kdf + X-Wing wrap);
+    #1323 G-CORE-3d (per-Node AEAD + two-CID map + per-chunk AEAD
+    ≥64 KiB); #1324 G-CORE-3b (RestrictedSpec + AuthorizationGrant +
+    Scope + chain validator — the original mint; rename row already
+    enumerated at #1344); #1307 G-CORE-2 (signature-agility integration
+    crate mint, +101 pub); #1309 G-CORE-5 (D3 VersionDag unification);
+    #1311 G-CORE-4 (D1 CanonicalViews + IVM 5-arm + materializer walk
+    + §4.6 vocab); #1312 G-CORE-7 (install-lifecycle hardening across
+    6 §4.x backlog rows); #1325 Strategy-C wave-1 batch (DSL chunk-1 +
+    G-CORE-3w walker + G-CORE-10 Option-C + G-CORE-6a verify-pass).
+  - **DSL chunk asymmetry (1 PR):** #1326 DSL chunk-2 (closes #663 +
+    #760 + #929 + #931 + #934); the chunk-3 #1339 row is already
+    enumerated at Cohort 2 line 138 — chunks 1+2 are the asymmetric gap.
+  - **Wave-1/2 Strategy-C (2 PRs):** #1235 + #1237 (incl. benten-graph
+    trait shape change — verbatim break-OK signal).
+  - **#707-trust-subset (1 PR):** #1251 (device-revocation/recheck
+    parallel pipes collapse; precursor to the #1271 chain-validation
+    seam consolidation row already enumerated).
+  - **Strategy-C drain batches (6 PRs, net -14 pub surface from
+    deletions):** #1261 + #1262 + #1269 + #1277 + #1282 + #1290 —
+    can roll up into 1 row "Strategy-C refinement-audit drain — net
+    -14 pub-surface across 6 batches" with per-batch PR-cite list.
+- **v1-beta posture:** the v1-beta-tag artifact is whole; the ledger
+  is incomplete-but-not-misleading (the existing 15 PRs ARE
+  ratified-honestly enumerated; the gap is enumeration coverage, not
+  factual error). Downstream consumers reading the ledger see the
+  Cohort 5 cross-reference + can consult `git log
+  phase-4-foundation-close..HEAD` + the per-PR PR-body for the
+  uncovered set. The L18 lens's positive-confirmation findings
+  (l18-r6-3/5/6) verify the existing entries' honesty.
+- **Forward-protection (brief-template mandate, mirror of Row D-22
+  sub-task 6):** every future fix-pass PR authoring brief MUST
+  include as a §3.5b post-fix-doc-coupling pre-flight item:
+  "If the PR introduces a public-API surface change OR a wire-format
+  byte-shape change, enumerate the change in
+  `docs/V1-BETA-BREAKING-CHANGES.md` as a new Cohort row (or extend
+  an existing row) in the SAME PR. Failure to enumerate creates a
+  same-shape recurrence vs L18 R6 R1 phase-wide enumeration gap." This
+  mandate lands at R5-BRIEF-pim-checklist.md authorship (per L15-MAJOR-2
+  pim-checklist consolidation) so the rule fires forward at G-COMP-1
+  wave authoring time.
+- **Anchor:** R6-FP-D L18-r6-1 + l18-r6-2 path-(b) closure (Ben/
+  orchestrator preferred path-(b) over path-(a) full enumeration for
+  cycle-budget; both are HARD RULE 12 compliant; R4b-FP commit
+  8240a56c machinery proven for path-(b)). Cross-cite from
+  `docs/V1-BETA-BREAKING-CHANGES.md` Cohort 5 (the cite line landed in
+  this same commit).
 
 ### Row D-23 — §4-B G-CORE-3 × G-CORE-4 SubgraphSpec live-eval + IVM CanonicalViews subscription invalidation test pin
 
@@ -744,7 +932,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** R2-test-landscape.md §4-C + CLAUDE.md baked-in #18
   trust model + R4b L1 finding r4b-l1-2.
 
-### Row D-22 — workspace `pub fn .*_for_test` / `_for_testing` `#[cfg]` gating sweep
+### ~~Row D-22~~ — workspace `pub fn .*_for_test` / `_for_testing` `#[cfg]` gating sweep — **CLOSED at R6 R1 FP-A Bundle F1** (2026-05-24)
+
+> **STATUS: RETRACTED / CLOSED.** Per Ben 2026-05-24 PM ratification of
+> HARD RULE 12 over the R4b L6-MAJOR-1 path-(b) defer ("do the full
+> ~13-site cascade now"), the workspace cfg-gating sweep LANDED at
+> R6 R1 FP-A Bundle F1.a (cfg attributes) + F1.b (testing feature
+> additions) + F1.c (CI workflow updates) + F1.d (no-regression test
+> pin at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
+> with EXEMPT_PUB_ITEMS table) + F1.e (8 cargo-public-api baseline
+> regens). 70+ `pub fn .*_for_test*` declarations cfg-gated; 14
+> production-shaped items added to the EXEMPT_PUB_ITEMS allow-list.
+> Row retained for forensic context per pim-13 / §3.12. The original
+> deferred-consumption body below is preserved verbatim.
 
 - **Frozen surface (v1-beta):** 115 baseline entries across 6
   cargo-public-api baselines (`docs/public-api/benten-caps.txt` 37 +
@@ -887,6 +1087,73 @@ The v1-beta-shipped binary does NOT structurally enforce:
 The v1-GM tag is gated on the independent ml-dsa + ml-kem audit
 (NF-2 / C-GM-AUDIT) per Compromise #30. The audit-landing closes
 Row D-15's audit-readiness concern.
+
+---
+
+### Row D-26 — G-CORE-PQ-WIRE wave: PQ-hybrid app-layer wire-in for all identity-bearing surfaces
+
+- **Frozen surface (v1-beta):** 4 production sites currently
+  classical-only Ed25519 (32-byte verifying-key bytes + 64-byte
+  signature) at the app layer:
+  - `crates/benten-drop/src/envelope_sig.rs::sign_envelope` +
+    `verify_envelope` (DropBundle envelope signature)
+  - `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_peer_signature`
+  - `crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature`
+  - `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant::binding_sig`
+    (already named at Row D-15e; re-homed to this wave per
+    same-structural-sub-fork analysis)
+
+  Plus the `benten_id::Keypair` classical-only structure (~25-30
+  workspace call sites; structurally couples to whichever sub-fork
+  HOW choice is adopted).
+
+- **Deferred consumption (G-CORE-PQ-WIRE wave; Ben 2026-05-24 PM
+  ratification):** wire `benten_crypto_suite::SignatureSuite`
+  hybrid signing + verifying at ALL identity-bearing surfaces in a
+  dedicated multi-wave initiative. Sub-fork HOW choice between:
+  - **(α)** additive sibling pubkey field per site (smallest
+    structural delta; preserves classical-only downgrade arm)
+  - **(β)** envelope v1→v2 version bump per site (cleaner per-site
+    but breaks v1 readers)
+  - **(γ)** DID-extension carries hybrid pubkey bytes (cleanest
+    structurally; cascades through `benten_id::Keypair`)
+
+  The wave's R0 design pre-work selects between α/β/γ based on
+  cross-site cascade analysis (see R6-R1-FP-E-HARD-ESCALATION.md
+  path-analysis doc on E's branch for the LOC budgets + HEAD-verified
+  cascade depths).
+
+- **Wave naming:** `G-CORE-PQ-WIRE` — sequence with Phase-4-Meta-Core
+  R6 R1 FP cycle completion → R6 iteration to strict-Q5 → then
+  G-CORE-PQ-WIRE wave dispatch (pre-tag wire-format window absorbs
+  the wire change; same window that absorbed Agent B's F3 AAD
+  total_chunks fix at R6 R1 FP-B).
+
+- **v1-beta posture:** the v1-beta-tag artifact ships PQ-hybrid at
+  the crypto-suite SUBSTRATE layer (per CLAUDE.md #5 + RATIFIED-pq-
+  default-reframe-2026-05-19); the app-layer SHIPPED state at
+  v1-beta is classical-only Ed25519 for the 4 sites above. This is
+  the SAME classical-floor-under-audited-security posture per CLAUDE.md
+  v1-GATE addition (PQ-hybrid is non-sole-trust at app layer; the
+  classical Ed25519 layer is itself the audited security floor; the
+  hybrid layer is defense-in-depth + post-quantum future-proofing).
+  Compromise #30 narrative honestly discloses this gap with NAMED
+  destination = this G-CORE-PQ-WIRE wave (NOT G-COMP-1 as Compromise
+  #30's pre-2026-05-24-PM narrative suggested).
+
+- **Forward-protection:** per `feedback_orchestrator_defer_prediction_bias`,
+  the wave dispatch MUST be sequenced + sized (not perpetually
+  deferred). Wave R0 brief deadline = post R6 R1 FP consolidation +
+  R6 R2 dispatch (the natural window after the current FP cycle
+  settles). Per Ben 2026-05-24 PM "do everything now is really my
+  default stance" — the wave is queued ACTIVE, not exploratory.
+
+- **Anchor:** L2-R6-MAJOR-2 G-CORE-9 R1 finding (the 3 sites) +
+  Row D-15e (binding_sig sub-fork) + Agent E's R6-R1-FP-E HARD-ESCALATION
+  fork-analysis doc on branch `phase-4-meta-core/r6-r1-fp-e-pq-hybrid-app-layer-wire`
+  at SHA `83096e39` + Ben 2026-05-24 PM "do everything now" ratification
+  (`.addl/phase-4-meta/MORNING-QUEUE-2026-05-24-PM.md` + this session's
+  defer-bias memo codification at `feedback_orchestrator_defer_prediction_bias.md`).
 
 ---
 

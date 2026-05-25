@@ -80,7 +80,7 @@
 - **Why break-OK:** pre-v1-API-shape ratification.
 - **Migration path:** none (additive); the principal-bearing variant is the post-v1-beta hardening (Row D-11).
 
-### PR #1338 — `ManifestEnvelopeRecheckOutcome` `NotApplicable` → `UnresolvedDeny` rename (per §4.36 fail-CLOSED flip)
+### PR #1338 — `ManifestEnvelopeRecheckOutcome` `NotApplicable` → `UnresolvedDeny` rename (per §4.36 fail-CLOSED flip) (landed in Strategy-C batch PR #1340)
 - **What changed:** the rename is NOT cosmetic — it changes the semantic from "rechecker has no context, admit" to "rechecker could not resolve, fail-CLOSED". Adds 3 new `CapabilityPolicy` hooks (`check_install_consent` + `check_per_delegation` + `check_write_with_audience`) as defaulted-impl methods (object-safety preserved).
 - **Why break-OK:** security-r1-2 BLOCKER closure per Phase-4-Meta-Core G-CORE-8.
 - **Migration path:** custom rechecker impls must emit `UnresolvedDeny` rather than `NotApplicable` when their own internal resolution fails; custom `CapabilityPolicy` impls inherit the 3 new hooks via default-impl delegation to `check_write`.
@@ -238,12 +238,92 @@ See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` for the full per-row enumeration.
 
 These are public-API tightens / additive surfaces named-deferred to a follow-up wave; surfaced here so downstream consumers reading the consolidated breaking-changes view see them per L18-r2-2 R2 lens recommendation.
 
-- **Row D-7 — §8-A Engine visibility cluster tighten + napi cascade** (G-COMP-1 destination) — at v1-beta `Engine::get_node` / `Engine::put_node` / `Engine::get_node_label_only` / `Engine::resolve_subgraph_cid_for_test` remain `pub fn` with pre-tighten names; the rename + `pub→pub(crate)` cascade through 75+ workspace call sites + the napi binding migration are the G-COMP-1 follow-up. Per discipline at v1-beta external callers SHOULD route through `Engine::read_node_as(principal, cid)` rather than `Engine::get_node`.
+- ~~**Row D-7 — §8-A Engine visibility cluster tighten + napi cascade**~~ **CLOSED at R6 R1 FP-A Bundle F2 (2026-05-24)** — the four methods (`Engine::get_node` → `pub(crate) fn read_node`, `Engine::put_node` → `pub(crate) fn put_node_inner`, `Engine::get_node_label_only` → `pub(crate) fn read_node_label_only`, `Engine::resolve_subgraph_cid_for_test` → `pub(crate) fn resolve_subgraph_cid_inner`) all tightened at v1-beta. Napi `Engine::get_node` migrated to `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)`. ~80 sibling-crate integration tests preserved via cfg-gated test-helper re-exports in `crates/benten-engine/src/testing.rs` (no per-test migration). External callers needing un-attributed reads use `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)` (the always-on sentinel constant minted at `crates/benten-engine/src/internal_principal.rs` + re-exported at the crate root). See V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-7~~ for forensic context.
 - **Row D-11 — `walk_share_scope_as` principal-bearing additive overload** (G-COMP-1 destination) — `Engine::walk_share_scope` is principal-unbearing at v1-beta; the principal-bearing variant for recipient-side path-tagged-key derivation is additive Composing-time enhancement per RATIFIED-S&C §R4.
 - **Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items** (G-COMP-1 destination) — Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_ERROR reusing existing `pub const` + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND); the obsolete `Strategy::C` naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. (Per G-CORE-9 R3-FP L9-r3-MIN-1 closure: the wire string `E_DSL_PARSE_ERROR` is reused — the existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR` already occupies that slot; G-COMP-1 delivers the enum variant `DslParseError` + TS class `EDslParseError` mirror.)
 - **Row D-17 (extended) — `#[non_exhaustive]` cascade for ~12+ lens-scoped pub types** (G-COMP-1 destination) — CapWriteContext / ReadContext / SuspensionOutcome + the extended set from L8-R2-MAJOR-CARRY-2 (UserViewInputPattern / TraceStep / StreamCursor / SubscribeCursor / EngineViewsHandle / AtriumConfig / SyncStatus + the outcome.rs 13-pub-struct set + benten-ivm SubgraphSpec/KernelInput/View* + benten-platform-foundation Vocab*/Scalar/RenderError + Mode). **Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) were CLOSED at G-CORE-9 R2 (Bundle R2.8) and are NOT deferred.**
 - **Row D-20 — L6-r1-3 trybuild compile-fail regression backstop** (G-COMP-1 destination) — the CapabilityPolicy hard-seal MECHANISM IS structurally enforced by rustc at v1-beta; only the explicit negative-arm compile-fail test fixture is deferred.
-- **Row D-22 — workspace `pub fn .*_for_test` `#[cfg]` gating sweep** (G-COMP-1 destination) — the v1-beta cargo-public-api baselines lock 115 `_for_test` / `_for_testing` surfaces across `benten-caps` (37) / `benten-crypto-suite` (52) / `benten-drop` (14) / `benten-core` (8) / `benten-sync` (3) / `benten-graph` (1). At v1-beta these are PRODUCTION-ABI-EXPOSED (downstream consumers can reach them). Visibility-only `#[cfg(any(test, feature = "testing"))]` gating + 6 baseline regens + ≈205 consumer dev-dep cascade is sequenced into G-COMP-1 alongside the Row D-7 §8-A baseline regeneration. New `_for_test` / `_for_testing` declarations MUST carry `#[cfg]` gating per the no-regression pin at `crates/phase-3-workspace-tests/tests/g_core_9_for_test_cfg_gating_audit.rs` (the pin lands at Row D-22 sub-task 5).
+- ~~**Row D-22 — workspace `pub fn .*_for_test` `#[cfg]` gating sweep**~~ **CLOSED at R6 R1 FP-A Bundle F1.a-e (2026-05-24)** — workspace cfg-gating sweep COMPLETE. 70+ `pub fn .*_for_test*` declarations across 11 crates gated under `#[cfg(any(test, feature = "testing"))]` (or `feature = "test-helpers"` for benten-engine). 14 production-shaped items remain `pub` per the EXEMPT_PUB_ITEMS allow-list at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` + V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ EXEMPT section. 8 affected cargo-public-api baselines regenerated; 7 CI workflows extended `--features` lists with the 6 new `testing` chains. No-regression test pin lives at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` (`no_ungated_pub_for_test_symbols_in_production_source` + `exempt_list_entries_all_exist`). See V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ for forensic context.
+- **Row D-25 — V1-BETA-BREAKING-CHANGES.md ledger completion sweep** (G-COMP-1 destination per R6-FP-D path-(b) close of L18-r6-1 + L18-r6-2) — at v1-beta this ledger enumerates 15 of ~42 PRs in the phase-4-meta-core window with substantive break-OK content (36% coverage); the remaining ~13 substrate-canary + Strategy-C-consolidation PRs (#1319 G-CORE-3a + #1323 G-CORE-3d + #1324 G-CORE-3b + #1307 G-CORE-2 + #1309 G-CORE-5 + #1311 G-CORE-4 + #1312 G-CORE-7 + #1325 Strategy-C wave-1 incl DSL chunk-1 + #1326 DSL chunk-2 + #1235/#1237 Wave-1/2 incl benten-graph trait shape + #1251 #707-trust-subset + the 6 Strategy-C drain batches #1261/#1262/#1269/#1277/#1282/#1290) carry cumulative ~+321 pub-surface additions + ~-75 pub-surface deletions left as a named-deferred completion sweep per HARD RULE 12 clause-(b). Closure: a G-COMP-1 wave authors per-PR Cohort 2 rows for the substrate canaries + 1 roll-up row for the Strategy-C drains. Forward-protection: brief-template mandate (mirror of Row D-22 sub-task 6) requires future fix-pass PRs to enumerate their own break-OK additions in the ledger as part of the §3.5b post-fix-doc-coupling pre-flight. Cross-cite: full per-PR enumeration + per-PR pub-delta evidence at `.addl/phase-4-meta/r6-l18-breaking-change.json` l18-r6-1 finding (the lens's path-(b) recommendation). The R4b-FP precedent (commit 8240a56c authoring Rows D-23 + D-24) validates the path-(b) machinery.
+
+---
+
+## Cohort 6 — R6 R1 FP-F4 substrate-frozen-but-consumer-unwired wiring (this PR)
+
+This cohort lands at PR<F4> (R6 R1 FP-F4) per the F4 design pipeline's
+synthesis v3 + Ben PM-ratified F1 path-(a) full ~13-site cascade. The
+substrate types frozen at G-CORE-8 are now wired through their
+production consumers; Rows D-1, D-2, D-3 (all three sub-rows), D-4,
+D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
+
+### Public-API shape changes
+
+- **`InstallPorts.install_record_replay_check`** — drops the
+  `Option<&mut Fn>` wrapper for `&mut InstallRecordReplayCheckFn`. The
+  `None` arm silently disabled the §4.37 TOCTOU replay defense in
+  shipped binaries; the drop forces every caller to make an explicit
+  choice between substantive defense (production) and explicit no-op
+  (tests). Migration: production callers wire
+  `engine.install_record_replay_store().record_and_check` closure; test
+  fixtures wire `benten_platform_foundation::testing::noop_replay_check()`.
+
+- **`InstallPorts.policy: &dyn InstallConsentPolicy`** — NEW field
+  threading the install-time consent policy (CRITIC-2 F-1.2 — via
+  port, NOT via `Engine::capability_policy()` accessor per Class B β
+  sealed-discipline). The new trait lives at
+  `benten_platform_foundation::install_consent::InstallConsentPolicy`
+  with admit-all (`AdmitAllInstallConsent`) + deny-all
+  (`DenyAllInstallConsent`) default helpers. The dep-direction
+  preserves `benten-caps → benten-platform-foundation` (the existing
+  arrow); engine glue blanket-adapter for
+  `CapabilityPolicy::check_install_consent` is a Phase-4-Meta-
+  Composing addition.
+
+- **`manifest_store::install_plugin` rename + deprecation** — renamed
+  to `install_verified_record_unchecked` with `#[deprecated]` +
+  `#[doc(hidden)]`. The 4 internal callers (drift-detection tests +
+  redb roundtrip tests) are annotated `#[allow(deprecated)]` per
+  intentional side-door use; production callers MUST route through
+  `plugin_lifecycle::install_plugin`.
+
+### New ErrorCode mints
+
+- **`PluginInstallConsentDenied`** (E_PLUGIN_INSTALL_CONSENT_DENIED) —
+  CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial.
+  CATALOG_VARIANT_COUNT 192 → 193.
+- **`PluginPerDelegationDenied`** (E_PLUGIN_PER_DELEGATION_DENIED) —
+  CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial.
+  CATALOG_VARIANT_COUNT 193 → 194.
+
+### New `pub` types
+
+- **`benten_engine::write_boundary_chain_validator::WriteAdmissionFrame`**
+  — sealed frame with `engine_internal()` + `with_chain(cid, did)`
+  builders (private fields preserve §1.A.FROZEN item 8 strict-
+  additivity).
+- **`benten_engine::production_engine_builder::ProductionEngineBuilder`**
+  — canonical production constructor (per CRITIC-2 F-2.2 rename; NOT
+  shadowing `EngineBuilder`).
+- **`benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker`**
+  — substantive rechecker substrate impl (Row D-4 + Row D-18 closure).
+- **`benten_engine::manifest_envelope_recheck::is_synthesized_node_id`**
+  — `pub fn` helper (per Δv3-10).
+- **`benten_sync::handshake::sync_hydrate_consume_recheck_outcome`**
+  — `pub fn` Row D-6 consumption surface.
+
+### Migration for downstream consumers
+
+- `InstallPorts {...}`: add `policy: &impl InstallConsentPolicy,` field
+  (e.g. `policy: &benten_platform_foundation::install_consent::AdmitAllInstallConsent,`
+  for non-production paths).
+- `InstallPorts {...}`: replace `install_record_replay_check: None,`
+  with `install_record_replay_check: &mut benten_platform_foundation::testing::noop_replay_check(),`
+  (test fixtures) or a real `engine.install_record_replay_store().record_and_check`
+  closure (production).
+- Engine construction: production callers SHOULD migrate
+  `EngineBuilder::new().open(path)` to
+  `ProductionEngineBuilder::new().open(path)` to install the
+  substantive rechecker automatically.
 
 ---
 

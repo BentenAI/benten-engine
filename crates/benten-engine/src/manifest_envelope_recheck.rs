@@ -34,6 +34,26 @@
 use crate::EngineError;
 use benten_errors::ErrorCode;
 
+/// **R6 R1 FP-F4 §S4 (Row D-18 closure)** — whether `did_str` is the
+/// synthesized-fallback DID shape `node-id:NNN` produced by
+/// `Engine::resolve_peer_dids` when a peer_node_id is absent from
+/// the local trust-store registry.
+///
+/// Defense narrative: per L2-MAJ-1, an adversarial peer that
+/// presents an unmapped peer_node_id surfaces as a synthesized DID
+/// (`node-id:N`); a substantive rechecker has no manifest registered
+/// under that synthetic key + would admit-by-default if not hardened.
+/// This helper is the substrate-level forensic anchor; production
+/// rechecker impls (e.g. `ProductionManifestEnvelopeRechecker`)
+/// SHOULD consult this to map synthesized DIDs to
+/// `UnresolvedDeny` arm (substantive-rechecker-installed detection +
+/// over-fire-protection per Row D-18's
+/// substantive-rechecker-detection-couple-not-naive-blanket clause).
+#[must_use]
+pub fn is_synthesized_node_id(did_str: &str) -> bool {
+    did_str.starts_with("node-id:")
+}
+
 /// Outcome of a manifest-envelope recheck call.
 ///
 /// # G-CORE-8 §4.36 fail-CLOSED flip + (a-sub) typed-arm split

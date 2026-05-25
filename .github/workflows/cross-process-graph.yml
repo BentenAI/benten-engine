@@ -27,6 +27,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   graph-cross-process:
@@ -60,8 +66,13 @@ jobs:
         # by the module path so only that scenario runs here.
         timeout-minutes: 5
         run: |
+          # NOTE: `-p benten-engine` scope — feature paths must be reachable
+          # from benten-engine's direct deps. benten-drop/testing + benten-dev/testing
+          # were stripped at PR #1351 R6 R1 FP consolidation (A's F1.c brief
+          # extended workflows blindly; this workflow is package-scoped so
+          # the workspace-wide feature list doesn't apply).
           cargo nextest run \
-            --features benten-eval/testing,benten-engine/test-helpers \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing \
             -p benten-engine \
             --test integration \
             'integration::cross_process_graph::'

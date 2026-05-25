@@ -211,3 +211,109 @@ fn suspension_outcome_d17_deferred_arm_coverage() {
     // in the same wave as the variant addition).
     let _: fn(&SuspensionOutcome) -> &'static str = classify;
 }
+
+// =========================================================================
+// L1 R6 R1 fix-pass — crypto-suite + benten-drop + graph
+// `#[non_exhaustive]` audit arm-coverage pins.
+// =========================================================================
+//
+// Closes L1-r6r1-MAJ-1 + L1-r6r1-MAJ-2 + L1-r6r1-MIN-1 (R6 R1 fix-pass).
+// Each enum below has `#[non_exhaustive]` applied at HEAD; the
+// `_ => "Unknown"` arm catches forward-compat variant additions.
+
+#[test]
+fn crypto_suite_unsupported_algorithm_audit_arm_coverage() {
+    use benten_crypto_suite::error::UnsupportedAlgorithm;
+    fn audit(u: UnsupportedAlgorithm) -> &'static str {
+        match u {
+            UnsupportedAlgorithm::Signature { .. } => "Signature",
+            UnsupportedAlgorithm::Hash { .. } => "Hash",
+            UnsupportedAlgorithm::CipherSuite { .. } => "CipherSuite",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(UnsupportedAlgorithm::Signature { codepoint: 0 }),
+        "Signature"
+    );
+}
+
+#[test]
+fn crypto_suite_swap_matrix_error_audit_arm_coverage() {
+    use benten_crypto_suite::swap_matrix::SwapMatrixError;
+    fn audit(e: &SwapMatrixError) -> &'static str {
+        match e {
+            SwapMatrixError::ConfigMismatch { .. } => "ConfigMismatch",
+            _ => "Unknown",
+        }
+    }
+    let e = SwapMatrixError::ConfigMismatch { detail: "test" };
+    assert_eq!(audit(&e), "ConfigMismatch");
+}
+
+#[test]
+fn crypto_suite_aead_error_audit_arm_coverage() {
+    use benten_crypto_suite::aead::AeadError;
+    fn audit(e: &AeadError) -> &'static str {
+        match e {
+            AeadError::AeadAuthFailed => "AeadAuthFailed",
+            AeadError::MalformedEnvelope(_) => "MalformedEnvelope",
+            AeadError::RecipientLacksKeysForSuite => "RecipientLacksKeysForSuite",
+            AeadError::Unsupported(_) => "Unsupported",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&AeadError::AeadAuthFailed), "AeadAuthFailed");
+}
+
+#[test]
+fn crypto_suite_varsig_error_audit_arm_coverage() {
+    use benten_crypto_suite::varsig::VarsigError;
+    fn audit(e: &VarsigError) -> &'static str {
+        match e {
+            VarsigError::Truncated => "Truncated",
+            VarsigError::BadMagic { .. } => "BadMagic",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&VarsigError::Truncated), "Truncated");
+}
+
+// (drop_drop_bundle_version_audit_arm_coverage + drop_envelope_sig_error_audit_arm_coverage
+// live in crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs — benten-engine
+// does NOT depend on benten-drop, so the drop-side audit lives in the drop crate's own
+// integration-test directory per the L1-r6r1-MAJ-2 closure.)
+
+#[test]
+fn graph_two_cid_map_error_audit_arm_coverage() {
+    use benten_graph::two_cid_map::TwoCidMapError;
+    // Distinct typed-arm match — we only exercise the variant labels
+    // here; full construction paths live in the graph crate's own
+    // integration tests.
+    fn audit(e: &TwoCidMapError) -> &'static str {
+        match e {
+            TwoCidMapError::NotFound { .. } => "NotFound",
+            TwoCidMapError::IntegrityMismatch { .. } => "IntegrityMismatch",
+            TwoCidMapError::AeadAuthenticationFailed { .. } => "AeadAuthenticationFailed",
+            TwoCidMapError::Storage { .. } => "Storage",
+            _ => "Unknown",
+        }
+    }
+    let _: fn(&TwoCidMapError) -> &'static str = audit;
+}
+
+#[test]
+fn graph_aead_wrap_error_audit_arm_coverage() {
+    use benten_graph::aead_wrap::AeadError;
+    fn audit(e: &AeadError) -> &'static str {
+        match e {
+            AeadError::Authentication(_) => "Authentication",
+            AeadError::TagMismatch { .. } => "TagMismatch",
+            AeadError::CiphertextTooShort { .. } => "CiphertextTooShort",
+            AeadError::KeyMismatch { .. } => "KeyMismatch",
+            AeadError::Unsupported { .. } => "Unsupported",
+            _ => "Unknown",
+        }
+    }
+    let _: fn(&AeadError) -> &'static str = audit;
+}

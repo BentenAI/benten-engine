@@ -11,6 +11,15 @@ description = "The ONE thin Benten-owned signature/hash/cipher-suite-agility int
 [lints]
 workspace = true
 
+# R6 R1 FP-A Bundle F1.b — `testing` feature gates the
+# `pub fn .*_for_test*` constructors / helpers / fixtures per
+# V1-FROZEN-INTERFACE.md §1 (item 15 + Row D-22 closure). Workspace
+# convention pattern matching `benten-core` / `benten-caps` /
+# `benten-graph` / `benten-eval`.
+[features]
+default = []
+testing = []
+
 # G-CORE-2 (#1300) — the integration crate is the ONE crypto-primitive
 # call site. We wrap vetted upstream RustCrypto crates; we NEVER fork or
 # reimplement primitives. The deps here are the workspace's only direct

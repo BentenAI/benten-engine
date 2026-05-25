@@ -719,6 +719,60 @@ impl Handshake {
     }
 }
 
+/// **R6 R1 FP-F4 §S4 (Row D-6 closure)** — sync-hydrate consumption of
+/// `ManifestEnvelopeRecheckOutcome::UnresolvedDeny` at the handshake
+/// boundary.
+///
+/// Per `crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`:
+/// the §4.25 sync-hydrate path is the handshake-time analog of §4.36's
+/// per-row merge consultation. Both surfaces consume the SHARED
+/// `outcome_to_row_reject` primitive + the typed
+/// `ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny` reject. This
+/// helper lives at the sync-crate edge so the handshake protocol body
+/// can short-circuit on UnresolvedDeny without re-implementing the
+/// engine-side helper.
+///
+/// Returns an `HandshakeError::PayloadMalformed`-shaped sync-hydrate
+/// rejection that carries the typed code through `HandshakeError::code`.
+///
+/// # Errors
+///
+/// Always returns `Err(_)` when the outcome IS `UnresolvedDeny` —
+/// returns `Ok(())` on `Admitted` / `NotApplicable` and the typed
+/// `OutsideEnvelope` rejection otherwise (mirrors the engine-side
+/// `outcome_to_row_reject` decision matrix).
+pub fn sync_hydrate_consume_recheck_outcome(
+    outcome: benten_errors::ErrorCode,
+    zone: &str,
+    key: &str,
+) -> HandshakeResult<()> {
+    // The simplified shape: the engine maps OutsideEnvelope +
+    // UnresolvedDeny into ErrorCode variants; this helper accepts
+    // the typed code already + maps to a HandshakeError if it's a
+    // reject. Callers that get OutsideEnvelope or UnresolvedDeny
+    // from the rechecker map to the typed code first then call here.
+    match outcome {
+        benten_errors::ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => {
+            Err(HandshakeError::PayloadMalformed {
+                reason: format!(
+                    "sync-hydrate manifest-envelope recheck cannot positively place \
+                     state (zone='{zone}' key='{key}'): unresolvable peer-DID or \
+                     missing manifest — fail-CLOSED per G-CORE-8 §4.25 + Row D-6"
+                ),
+            })
+        }
+        benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope => {
+            Err(HandshakeError::PayloadMalformed {
+                reason: format!(
+                    "sync-hydrate manifest-envelope rejected state (zone='{zone}' \
+                     key='{key}'): chain step outside source plugin's `shares` policy"
+                ),
+            })
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Convenience: extract the [`HandshakePayload::Initiate`] nonce from
 /// an outbound initiate frame so the initiator can pass it to
 /// [`Handshake::finalise`] without re-decoding the frame.

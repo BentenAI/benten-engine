@@ -27,11 +27,11 @@ name: Admin-Shell WebDriver E2E (Tauri 2.x)
 #
 # ## Platform matrix
 #
-# - **ubuntu-latest:** SUBSTANTIVE WebDriver session via WebKit2GTK
+# - **ubuntu-24.04:** SUBSTANTIVE WebDriver session via WebKit2GTK
 #   (`libwebkit2gtk-4.1-dev`) + the `WebKitWebDriver` binary that
 #   ships with it; `tauri-driver` proxies WebDriver requests to it.
 #
-# - **macos-latest:** BUILD-ONLY smoke (asserts the binary compiles
+# - **macos-14:** BUILD-ONLY smoke (asserts the binary compiles
 #   with `--features tauri` + boots without panic). Tauri's own
 #   tauri-driver project documents that macOS WKWebView does NOT
 #   expose a WebDriver binding for embedded webviews. See
@@ -48,7 +48,7 @@ name: Admin-Shell WebDriver E2E (Tauri 2.x)
 # ## Required vs. non-required
 #
 # Marked NON-required in this initial PR (the workflow ships green
-# locally on macOS; first ubuntu-latest run via this PR is the
+# locally on macOS; first ubuntu-24.04 run via this PR is the
 # substantive green check). Promotes to REQUIRED via
 # `branch-protection-spec-check.yml` cadence after 30 days of
 # informational green per the workspace promotion convention.
@@ -76,7 +76,7 @@ on:
   # signals against PR #240/#242/#243/#244/#245/#246/#247/#248 + every
   # post-tag main commit. The §4.49 EXPLICITLY-ACCEPT-AT-TAG decision
   # ratified at PR #245 means the known macOS-WKWebView-WebDriver-absent
-  # limitation is accepted; ubuntu-latest WebKit2GTK substantive coverage
+  # limitation is accepted; ubuntu-24.04 WebKit2GTK substantive coverage
   # still fires loudly when admin-shell code changes. This is the durable
   # path-filter fix carried from Phase-3 pre-v1 cleanup window.
   workflow_dispatch:
@@ -85,19 +85,27 @@ concurrency:
   group: admin-shell-e2e-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   build-only-macos:
-    name: build-smoke / macos-latest
-    runs-on: macos-latest
+    name: build-smoke / macos-14
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: 1.95
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
         with:
           path: |
             ~/.cargo/registry
@@ -110,11 +118,11 @@ jobs:
         run: cargo test --release -p benten-admin-shell --features tauri
 
   webdriver-linux:
-    name: webview-e2e / ubuntu-latest
-    runs-on: ubuntu-latest
+    name: webview-e2e / ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install WebKit2GTK + WebKitWebDriver
         run: |
@@ -131,12 +139,12 @@ jobs:
             xvfb
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: 1.95
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
         with:
           path: |
             ~/.cargo/registry

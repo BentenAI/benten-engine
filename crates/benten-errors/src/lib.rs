@@ -1368,6 +1368,31 @@ pub enum ErrorCode {
     /// the v1-GM-gating CI lane greps for — a generic `Err` would
     /// silently regress the C-GM-AUDIT exit criterion.
     AuditNotLandedPurePqRejected,
+    /// **R6 R1 FP-F4 §S3a (Row D-3-a closure)** — CLAUDE.md baked-in #18
+    /// §8-E hook #1 install-time consent denial. The configured
+    /// `CapabilityPolicy::check_install_consent` hook rejected the
+    /// pending install at step 3c of the install pipeline (BEFORE the
+    /// cap-cascade runs + BEFORE any Step-9 grant is minted; zero
+    /// partial-mint residue per §4.35). Distinct from
+    /// `PluginInstallConsentRequired` (which fires for caps-grew
+    /// fresh-consent gap at upgrade time): this is the
+    /// PER-INSTALL policy-routed gate. Construction site:
+    /// `benten_platform_foundation::plugin_lifecycle::install_plugin`
+    /// step 3c calling `policy.check_install_consent(&payload_hash, plugin_did)`.
+    /// Maps to `E_PLUGIN_INSTALL_CONSENT_DENIED`.
+    PluginInstallConsentDenied,
+    /// **R6 R1 FP-F4 §S3b (Row D-3-b closure)** — CLAUDE.md baked-in #18
+    /// §8-E hook #2 per-delegation runtime denial. The configured
+    /// `CapabilityPolicy::check_per_delegation` hook rejected a
+    /// cross-plugin delegation request at the runtime boundary
+    /// (rate-limiting, time-bounded delegation, audit-trail policy,
+    /// etc.). Fires INSIDE `EngineCapsHandle::delegate_capability`
+    /// between Step 2b (shares-policy resolver) and Step 3 (effective
+    /// scope), with forensic-discrimination symmetry to S3a's
+    /// install-time hook. Construction site:
+    /// `benten_engine::engine_caps::EngineCapsHandle::delegate_capability`.
+    /// Maps to `E_PLUGIN_PER_DELEGATION_DENIED`.
+    PluginPerDelegationDenied,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1706,6 +1731,9 @@ impl ErrorCode {
             ErrorCode::DslIoError => "E_DSL_IO_ERROR",
             ErrorCode::SubgraphSpecWalkFailed => "E_SUBGRAPH_SPEC_WALK_FAILED",
             ErrorCode::AuditNotLandedPurePqRejected => "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
+            // R6 R1 FP-F4 §S3a + §S3b — §8-E hook denial codes.
+            ErrorCode::PluginInstallConsentDenied => "E_PLUGIN_INSTALL_CONSENT_DENIED",
+            ErrorCode::PluginPerDelegationDenied => "E_PLUGIN_PER_DELEGATION_DENIED",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2223,6 +2251,16 @@ impl ErrorCode {
             // routing nuance applies.
             ErrorCode::SubgraphSpecWalkFailed => Some("ON_ERROR"),
 
+            // R6 R1 FP-F4 §S3a + §S3b — §8-E hook denials:
+            // - PluginInstallConsentDenied fires at install admission
+            //   (pre-cap-cascade) — install path is not a primitive-
+            //   edge dispatch surface; the typed code is the only routing.
+            // - PluginPerDelegationDenied fires at delegate_capability
+            //   runtime boundary — a cap-bearing denial (Layer-3
+            //   policy enforcement) → ON_DENIED.
+            ErrorCode::PluginInstallConsentDenied => None,
+            ErrorCode::PluginPerDelegationDenied => Some("ON_DENIED"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2541,6 +2579,9 @@ impl core::str::FromStr for ErrorCode {
             "E_SUBGRAPH_SPEC_WALK_FAILED" => ErrorCode::SubgraphSpecWalkFailed,
             // Phase 4-Meta-Core G-CORE-3c full swap-matrix conformance.
             "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED" => ErrorCode::AuditNotLandedPurePqRejected,
+            // R6 R1 FP-F4 §S3a + §S3b — §8-E hook denial codes.
+            "E_PLUGIN_INSTALL_CONSENT_DENIED" => ErrorCode::PluginInstallConsentDenied,
+            "E_PLUGIN_PER_DELEGATION_DENIED" => ErrorCode::PluginPerDelegationDenied,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)
