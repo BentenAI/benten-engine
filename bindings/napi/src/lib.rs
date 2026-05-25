@@ -333,10 +333,25 @@ mod napi_surface {
         }
 
         /// Retrieve a Node by CID. Returns `null` on miss.
+        ///
+        /// **R6 R1 FP-A Bundle F2 (§8-A visibility tighten):** the
+        /// underlying engine surface was tightened from
+        /// `pub fn get_node` → `pub(crate) fn read_node`. The napi
+        /// binding migrates to the principal-bearing
+        /// `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)`
+        /// pathway per CLAUDE.md baked-in #18 + V1-FROZEN-INTERFACE.md
+        /// §1. Behaviour is unchanged: the sentinel principal still
+        /// flows the read through the canonical `read_node_inner` seam
+        /// with `actor_cid: Some(*principal)`, and Inv-11 + Option-C
+        /// `DeniedRead` collapse semantics fire identically.
         #[napi]
         pub fn get_node(&self, cid: String) -> napi::Result<Option<serde_json::Value>> {
             let parsed = parse_cid(&cid)?;
-            match self.inner.get_node(&parsed).map_err(engine_err)? {
+            match self
+                .inner
+                .read_node_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)
+                .map_err(engine_err)?
+            {
                 Some(node) => Ok(Some(node_to_json(&node))),
                 None => Ok(None),
             }

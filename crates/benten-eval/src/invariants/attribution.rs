@@ -82,6 +82,7 @@ fn node_declares_attribution(node: &OperationNode) -> bool {
 /// # Errors
 /// Returns [`EvalError::Invariant`] when the subgraph fails
 /// [`validate_registration`].
+#[cfg(any(test, feature = "testing"))]
 pub fn run_with_attribution_for_test(
     subgraph: &Subgraph,
     host: &NullHost,
@@ -95,6 +96,7 @@ pub fn run_with_attribution_for_test(
 /// attribution source. Used by
 /// `invariant_14_attribution_every_trace_step`.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_five_step_handler_for_test() -> Subgraph {
     let mut sg = Subgraph::new("inv14:five_step");
     for (idx, kind) in [
@@ -120,6 +122,7 @@ pub fn build_five_step_handler_for_test() -> Subgraph {
 /// [`crate::ErrorCode::InvAttribution`]. Used by
 /// `invariant_14_missing_attribution_is_registration_error`.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_subgraph_with_undeclared_attribution_for_test() -> Subgraph {
     // First node deliberately omits the attribution property.
     let bad = OperationNode::new("n0_no_attr", PrimitiveKind::Read);

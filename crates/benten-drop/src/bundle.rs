@@ -438,6 +438,7 @@ impl DropBundle {
     /// `decrypt_attempt_count` reached BEFORE failure (0 if failure
     /// at envelope-sig layer; ≥1 if the envelope-sig passed and
     /// failure occurred inside the per-Node loop).
+    #[cfg(any(test, feature = "testing"))]
     pub fn consume_offline_with_dec_counter_for_test(
         &self,
         recipient_kp: &Keypair,
@@ -487,6 +488,7 @@ impl DropBundle {
     /// Build a 5-Recipe DropBundle for testing — uses
     /// `build_5_recipe_bundle_for_recipient` against a fresh
     /// recipient keypair so the round-trip pins have a known fixture.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn build_5_recipe_bundle_for_test(issuer_kp: &Keypair) -> Self {
         let recipient_kp = Keypair::generate();
@@ -495,6 +497,15 @@ impl DropBundle {
 
     /// Build a 5-Recipe DropBundle for a specific recipient. Used by
     /// the offline-consume + tamper pins.
+    ///
+    /// **R6 R1 FP-A Bundle F1.d:** cfg-gated under
+    /// `cfg(any(test, feature = "testing"))` because the body composes
+    /// `UcanEnvelope::synthetic_for_test` + `GrantKeyMaterial::synthetic_for_test`
+    /// + `AuthorizationGrant::issue_envelopes_for_test`, all of which
+    /// became cfg-gated in F1.a. Gating the caller is cleaner than
+    /// per-call cascading and matches V1-FROZEN-INTERFACE-DEFERRED.md
+    /// Row D-22 sub-task 5's "transitive `_for_test`-consumer" rule.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn build_5_recipe_bundle_for_recipient(
         issuer_kp: &Keypair,
@@ -513,6 +524,7 @@ impl DropBundle {
     /// The envelope-sig is still emitted; per-Node integrity reduces
     /// to the AEAD tag layer only.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn build_5_recipe_bundle_for_recipient_envelope_only_for_test(
         issuer_kp: &Keypair,
         recipient_kp: &Keypair,
@@ -533,6 +545,7 @@ impl DropBundle {
     /// Used by
     /// `tf3f_per_node_ciphertext_tamper_detected_envelope_sig_still_valid`.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn flip_byte_in_content_for_test(&self, index: usize, offset: usize) -> Self {
         let mut clone = self.clone();
         if let Some(cell) = clone.content.get_mut(index) {
@@ -559,6 +572,7 @@ impl DropBundle {
     /// envelope-layer tamper. Used by
     /// `tf3f_tampered_envelope_sig_fails_before_per_node_decrypt`.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn tamper_envelope_signature_for_test(&self) -> Self {
         let mut clone = self.clone();
         if let Some(b) = clone.envelope_sig.first_mut() {
@@ -575,6 +589,7 @@ impl DropBundle {
     /// Test-only: synthesize a bundle carrying an arbitrary version
     /// discriminator (used by the future-version reject pin).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthesize_future_version_for_test(version: DropBundleVersion) -> Self {
         let issuer_kp = Keypair::generate();
         let recipient_kp = Keypair::generate();
@@ -600,6 +615,7 @@ impl DropBundle {
     /// defer-to-post-v1 contract is the load-bearing property; the
     /// specific typed code is not.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthesize_inline_tiny_cbor_for_test() -> Vec<u8> {
         let issuer_kp = Keypair::generate();
         let recipient_kp = Keypair::generate();
@@ -664,6 +680,17 @@ impl RevocationRecord {
 /// plaintext Recipe Node bodies, AEAD-wraps each, builds the
 /// `AuthorizationGrant` bound to the recipient's audience, signs
 /// the envelope with the issuer's Keypair.
+///
+/// **R6 R1 FP-A Bundle F1.d:** cfg-gated under
+/// `cfg(any(test, feature = "testing"))` because the body composes
+/// `UcanEnvelope::synthetic_for_test` + `GrantKeyMaterial::from_bytes_for_test`
+/// + `AuthorizationGrant::issue_envelopes_for_test`, all of which became
+/// cfg-gated in F1.a. Sole callers
+/// (`build_5_recipe_bundle_for_recipient` +
+/// `build_5_recipe_bundle_for_recipient_envelope_only_for_test`) are
+/// themselves cfg-gated, so this private helper following them is the
+/// minimal-blast-radius gate.
+#[cfg(any(test, feature = "testing"))]
 fn build_5_recipe_bundle_impl(
     issuer_kp: &Keypair,
     recipient_kp: &Keypair,

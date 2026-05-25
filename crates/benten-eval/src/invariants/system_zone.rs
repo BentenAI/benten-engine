@@ -153,6 +153,7 @@ pub(crate) fn validate_registration_with_diagnostics(
 /// drift the fixture CID and require a cross-file pin update. Tests
 /// that care about different handler naming build their own subgraph.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_subgraph_reading_literal_system_cid_for_test(label: &str) -> Subgraph {
     let mut props: BTreeMap<String, Value> = BTreeMap::new();
     props.insert("label".to_string(), Value::text(label.to_string()));

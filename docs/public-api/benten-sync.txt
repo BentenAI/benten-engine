@@ -667,7 +667,6 @@ pub benten_sync::mst::MstEntry::key: alloc::string::String
 pub benten_sync::mst::MstEntry::payload: alloc::vec::Vec<u8>
 impl benten_sync::mst::MstEntry
 pub fn benten_sync::mst::MstEntry::from_payload(key: impl core::convert::Into<alloc::string::String>, payload: alloc::vec::Vec<u8>) -> Self
-pub fn benten_sync::mst::MstEntry::new_with_explicit_cid_for_testing(declared: benten_sync::mst::MstCid, payload: alloc::vec::Vec<u8>) -> Self
 impl core::clone::Clone for benten_sync::mst::MstEntry
 pub fn benten_sync::mst::MstEntry::clone(&self) -> benten_sync::mst::MstEntry
 impl core::cmp::Eq for benten_sync::mst::MstEntry
@@ -1123,8 +1122,6 @@ impl benten_sync::ucan_blobs_protocol::UcanBlobsHandler
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::endpoint_id_from_public_key_no_parsing(public_key: &benten_id::keypair::PublicKey) -> benten_sync::ucan_blobs_protocol::EndpointIdBytes
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::new(handler_keypair: &benten_id::keypair::Keypair) -> Self
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::new_with_clock(handler_keypair: &benten_id::keypair::Keypair, now_secs: u64) -> Self
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::record_revocation_for_test(&self, grant_cid: &benten_core::Cid)
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::serve_request_for_test(&self, request: benten_sync::ucan_blobs_protocol::UcanBlobsRequest) -> core::result::Result<benten_sync::ucan_blobs_protocol::UcanBlobsResponse, benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request(&self, request: &benten_sync::ucan_blobs_protocol::UcanBlobsRequest) -> core::result::Result<(), benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request_for_connection(&self, request: &benten_sync::ucan_blobs_protocol::UcanBlobsRequest, connection_endpoint_id: &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
 impl core::fmt::Debug for benten_sync::ucan_blobs_protocol::UcanBlobsHandler

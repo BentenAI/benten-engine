@@ -101,7 +101,6 @@ pub mod benten_crypto_suite::cipher_suite
 pub struct benten_crypto_suite::cipher_suite::CipherSuite
 impl benten_crypto_suite::cipher_suite::CipherSuite
 pub const fn benten_crypto_suite::cipher_suite::CipherSuite::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair_for_test(suite: &Self) -> benten_crypto_suite::cipher_suite::RecipientKeypair
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::is_hybrid_default(&self) -> bool
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::open_aead(&self, k_root: &[u8], envelope: &benten_crypto_suite::aead::AeadEnvelope, plaintext_cid: &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::DecryptedPlaintext, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::resolve(codepoint: benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
@@ -125,7 +124,6 @@ pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_ML
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::NONE_PLAINTEXT: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY: Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(raw: u16) -> Self
-pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw_for_test(raw: u16) -> Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::raw(self) -> u16
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::CipherSuiteCodepoint
@@ -161,7 +159,6 @@ impl benten_crypto_suite::cipher_suite::RecipientKeypair
 pub const fn benten_crypto_suite::cipher_suite::RecipientKeypair::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub fn benten_crypto_suite::cipher_suite::RecipientKeypair::public(&self) -> &benten_crypto_suite::cipher_suite::RecipientPublic
 pub fn benten_crypto_suite::cipher_suite::RecipientKeypair::secret(&self) -> &benten_crypto_suite::cipher_suite::RecipientSecret
-pub fn benten_crypto_suite::cipher_suite::RecipientKeypair::with_only_classical_half_for_test(full: &benten_crypto_suite::cipher_suite::RecipientKeypair) -> Self
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::RecipientKeypair
 impl core::marker::Send for benten_crypto_suite::cipher_suite::RecipientKeypair
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::RecipientKeypair
@@ -206,10 +203,6 @@ pub benten_crypto_suite::cipher_suite::WrappedKey::aead_envelope: benten_crypto_
 pub benten_crypto_suite::cipher_suite::WrappedKey::codepoint: benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub benten_crypto_suite::cipher_suite::WrappedKey::ek_mlkem: alloc::vec::Vec<u8>
 pub benten_crypto_suite::cipher_suite::WrappedKey::ek_x: alloc::vec::Vec<u8>
-impl benten_crypto_suite::cipher_suite::WrappedKey
-pub fn benten_crypto_suite::cipher_suite::WrappedKey::with_codepoint_for_test(&self, codepoint: u16) -> Self
-pub fn benten_crypto_suite::cipher_suite::WrappedKey::without_classical_half_for_test(&self) -> Self
-pub fn benten_crypto_suite::cipher_suite::WrappedKey::without_pq_half_for_test(&self) -> Self
 impl core::clone::Clone for benten_crypto_suite::cipher_suite::WrappedKey
 pub fn benten_crypto_suite::cipher_suite::WrappedKey::clone(&self) -> benten_crypto_suite::cipher_suite::WrappedKey
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::WrappedKey
@@ -261,7 +254,6 @@ pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_ML
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::NONE_PLAINTEXT: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY: Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(raw: u16) -> Self
-pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw_for_test(raw: u16) -> Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::raw(self) -> u16
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::CipherSuiteCodepoint
@@ -288,7 +280,6 @@ pub const benten_crypto_suite::codepoint::HashCodepoint::BLAKE3: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA2_512_256: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA3_256: Self
 pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw(raw: u64) -> Self
-pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw_for_test(raw: u64) -> Self
 pub const fn benten_crypto_suite::codepoint::HashCodepoint::raw(self) -> u64
 pub fn benten_crypto_suite::codepoint::HashCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::HashCodepoint
@@ -315,11 +306,9 @@ pub const benten_crypto_suite::codepoint::SigCodepoint::CLASSICAL_ED25519: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_MLDSA65_SLHDSA: Self
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw(raw: u16) -> Self
-pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw_for_test(raw: u16) -> Self
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_classical_only(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_hybrid_default(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::raw(self) -> u16
-pub const fn benten_crypto_suite::codepoint::SigCodepoint::reserved_unimplemented_for_test() -> Self
 pub fn benten_crypto_suite::codepoint::SigCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::SigCodepoint
 pub fn benten_crypto_suite::codepoint::SigCodepoint::clone(&self) -> benten_crypto_suite::codepoint::SigCodepoint
@@ -511,12 +500,8 @@ pub struct benten_crypto_suite::sig::HybridSignature
 impl benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::classical_half_for_test(&self) -> alloc::vec::Vec<u8>
 pub const fn benten_crypto_suite::sig::HybridSignature::codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::sig::HybridSignature::flip_pq_byte_for_test(&mut self, offset: usize)
 pub fn benten_crypto_suite::sig::HybridSignature::pq_half_for_test(&self) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sig::HybridSignature::splice_for_test(classical: alloc::vec::Vec<u8>, pq: alloc::vec::Vec<u8>) -> Self
 pub fn benten_crypto_suite::sig::HybridSignature::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sig::HybridSignature::without_classical_half_for_test(&self) -> Self
-pub fn benten_crypto_suite::sig::HybridSignature::without_pq_half_for_test(&self) -> Self
 impl core::clone::Clone for benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::clone(&self) -> benten_crypto_suite::sig::HybridSignature
 impl core::cmp::Eq for benten_crypto_suite::sig::HybridSignature
@@ -619,7 +604,6 @@ pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::dag_cbor_encode(sig: &b
 pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::load_signature_fixture(name: &str) -> benten_crypto_suite::sizes::SyntheticVector
 pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::napi_marshal(sig: &benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::napi_unmarshal(bytes: &[u8]) -> benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::redb_store_for_test() -> benten_crypto_suite::sizes::RedbSigHandle
 impl core::marker::Freeze for benten_crypto_suite::sizes::SizeTouchingSurfaces
 impl core::marker::Send for benten_crypto_suite::sizes::SizeTouchingSurfaces
 impl core::marker::Sync for benten_crypto_suite::sizes::SizeTouchingSurfaces
@@ -647,7 +631,6 @@ pub mod benten_crypto_suite::structural_kdf
 pub struct benten_crypto_suite::structural_kdf::StructuralKdfKey(_)
 impl benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::as_bytes(&self) -> [u8; 32]
-pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::derive_step_without_info_tag_for_test(predecessor: &benten_crypto_suite::structural_kdf::StructuralKdfKey, edge_label: &[u8], node_cid: &[u8]) -> Self
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(bytes: &[u8]) -> Self
 impl core::clone::Clone for benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::clone(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
@@ -920,8 +903,6 @@ pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::cipher_suite_codepoin
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::classical_only() -> Self
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::encryption_active(&self) -> bool
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::encryption_is_pq_hybrid(&self) -> bool
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::generate_keypair_for_test(&self) -> benten_crypto_suite::swap_matrix::SwapKeypair
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::generate_recipient_keypair_for_test(&self) -> benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::is_pure_pq_sole_trust_path(&self) -> bool
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::no_encryption_public_class() -> Self
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::non_pq_encryption() -> Self
@@ -934,13 +915,6 @@ pub fn benten_crypto_suite::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::v1_beta_default() -> Self
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::verify_only(&self, sender_pub: &benten_crypto_suite::swap_matrix::SwapPublicKey, envelope: &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
 impl benten_crypto_suite::swap_matrix::SwapMatrix
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::load_fips_203_kat_vector_for_test(name: &str) -> benten_crypto_suite::swap_matrix::KemKatVector
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::load_fips_204_kat_vector_for_test(name: &str) -> benten_crypto_suite::swap_matrix::SignatureKatVector
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_dsa_65_keygen_from_seed_for_test(seed: &[u8]) -> benten_crypto_suite::swap_matrix::PureSigPubkey
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_dsa_65_sign_deterministic_for_test(signing_key: &[u8], msg: &[u8]) -> benten_crypto_suite::swap_matrix::PureSigVec
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_kem_768_decapsulate_for_test(secret_key: &[u8], ciphertext: &[u8]) -> benten_crypto_suite::swap_matrix::PureKemDec
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_kem_768_encapsulate_deterministic_for_test(pubkey: &[u8], randomness: &[u8]) -> benten_crypto_suite::swap_matrix::PureKemEnc
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_kem_768_keygen_from_seed_for_test(seed: &[u8]) -> benten_crypto_suite::swap_matrix::PureKemKeypair
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::pure_pq_nf1_signature_arm() -> benten_crypto_suite::swap_matrix::PurePqNf1SignatureArm
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapMatrix
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -998,7 +972,6 @@ pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::advertises_hybrid(&self)
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::as_bytes(&self) -> &[u8]
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::decode(bytes: &[u8]) -> core::result::Result<benten_crypto_suite::varsig::DecodedVarsig, benten_crypto_suite::varsig::VarsigError>
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::encode_hybrid(sig: &benten_crypto_suite::sig::HybridSignature) -> Self
-pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::with_raw_codepoint_for_test(codepoint: u16) -> Self
 impl core::marker::Freeze for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Send for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Sync for benten_crypto_suite::varsig::UcanVarsigV1Header
@@ -1258,7 +1231,6 @@ pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_ML
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::NONE_PLAINTEXT: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY: Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(raw: u16) -> Self
-pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw_for_test(raw: u16) -> Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::raw(self) -> u16
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::CipherSuiteCodepoint
@@ -1285,7 +1257,6 @@ pub const benten_crypto_suite::codepoint::HashCodepoint::BLAKE3: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA2_512_256: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA3_256: Self
 pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw(raw: u64) -> Self
-pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw_for_test(raw: u64) -> Self
 pub const fn benten_crypto_suite::codepoint::HashCodepoint::raw(self) -> u64
 pub fn benten_crypto_suite::codepoint::HashCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::HashCodepoint
@@ -1326,12 +1297,8 @@ pub struct benten_crypto_suite::HybridSignature
 impl benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::classical_half_for_test(&self) -> alloc::vec::Vec<u8>
 pub const fn benten_crypto_suite::sig::HybridSignature::codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::sig::HybridSignature::flip_pq_byte_for_test(&mut self, offset: usize)
 pub fn benten_crypto_suite::sig::HybridSignature::pq_half_for_test(&self) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sig::HybridSignature::splice_for_test(classical: alloc::vec::Vec<u8>, pq: alloc::vec::Vec<u8>) -> Self
 pub fn benten_crypto_suite::sig::HybridSignature::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sig::HybridSignature::without_classical_half_for_test(&self) -> Self
-pub fn benten_crypto_suite::sig::HybridSignature::without_pq_half_for_test(&self) -> Self
 impl core::clone::Clone for benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::clone(&self) -> benten_crypto_suite::sig::HybridSignature
 impl core::cmp::Eq for benten_crypto_suite::sig::HybridSignature
@@ -1429,11 +1396,9 @@ pub const benten_crypto_suite::codepoint::SigCodepoint::CLASSICAL_ED25519: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_MLDSA65_SLHDSA: Self
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw(raw: u16) -> Self
-pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw_for_test(raw: u16) -> Self
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_classical_only(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_hybrid_default(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::raw(self) -> u16
-pub const fn benten_crypto_suite::codepoint::SigCodepoint::reserved_unimplemented_for_test() -> Self
 pub fn benten_crypto_suite::codepoint::SigCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::SigCodepoint
 pub fn benten_crypto_suite::codepoint::SigCodepoint::clone(&self) -> benten_crypto_suite::codepoint::SigCodepoint
@@ -1488,7 +1453,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::Signatur
 pub struct benten_crypto_suite::StructuralKdfKey(_)
 impl benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::as_bytes(&self) -> [u8; 32]
-pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::derive_step_without_info_tag_for_test(predecessor: &benten_crypto_suite::structural_kdf::StructuralKdfKey, edge_label: &[u8], node_cid: &[u8]) -> Self
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(bytes: &[u8]) -> Self
 impl core::clone::Clone for benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::clone(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
@@ -1557,8 +1521,6 @@ pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::cipher_suite_codepoin
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::classical_only() -> Self
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::encryption_active(&self) -> bool
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::encryption_is_pq_hybrid(&self) -> bool
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::generate_keypair_for_test(&self) -> benten_crypto_suite::swap_matrix::SwapKeypair
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::generate_recipient_keypair_for_test(&self) -> benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::is_pure_pq_sole_trust_path(&self) -> bool
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::no_encryption_public_class() -> Self
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::non_pq_encryption() -> Self
@@ -1571,13 +1533,6 @@ pub fn benten_crypto_suite::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::v1_beta_default() -> Self
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::verify_only(&self, sender_pub: &benten_crypto_suite::swap_matrix::SwapPublicKey, envelope: &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
 impl benten_crypto_suite::swap_matrix::SwapMatrix
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::load_fips_203_kat_vector_for_test(name: &str) -> benten_crypto_suite::swap_matrix::KemKatVector
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::load_fips_204_kat_vector_for_test(name: &str) -> benten_crypto_suite::swap_matrix::SignatureKatVector
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_dsa_65_keygen_from_seed_for_test(seed: &[u8]) -> benten_crypto_suite::swap_matrix::PureSigPubkey
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_dsa_65_sign_deterministic_for_test(signing_key: &[u8], msg: &[u8]) -> benten_crypto_suite::swap_matrix::PureSigVec
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_kem_768_decapsulate_for_test(secret_key: &[u8], ciphertext: &[u8]) -> benten_crypto_suite::swap_matrix::PureKemDec
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_kem_768_encapsulate_deterministic_for_test(pubkey: &[u8], randomness: &[u8]) -> benten_crypto_suite::swap_matrix::PureKemEnc
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::ml_kem_768_keygen_from_seed_for_test(seed: &[u8]) -> benten_crypto_suite::swap_matrix::PureKemKeypair
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::pure_pq_nf1_signature_arm() -> benten_crypto_suite::swap_matrix::PurePqNf1SignatureArm
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapMatrix
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1594,7 +1549,6 @@ pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::advertises_hybrid(&self)
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::as_bytes(&self) -> &[u8]
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::decode(bytes: &[u8]) -> core::result::Result<benten_crypto_suite::varsig::DecodedVarsig, benten_crypto_suite::varsig::VarsigError>
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::encode_hybrid(sig: &benten_crypto_suite::sig::HybridSignature) -> Self
-pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::with_raw_codepoint_for_test(codepoint: u16) -> Self
 impl core::marker::Freeze for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Send for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Sync for benten_crypto_suite::varsig::UcanVarsigV1Header

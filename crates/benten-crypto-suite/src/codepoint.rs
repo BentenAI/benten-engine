@@ -84,6 +84,7 @@ impl SigCodepoint {
     /// pins to drive arbitrary codepoints into the dispatch and assert
     /// the typed-unsupported arm fires.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub const fn from_raw_for_test(raw: u16) -> Self {
         Self::from_raw(raw)
     }
@@ -92,6 +93,7 @@ impl SigCodepoint {
     /// testing the additive-codepoint discipline (NF-1 end-state /
     /// future signature codepoints).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub const fn reserved_unimplemented_for_test() -> Self {
         // 0x00FE is in the reserved-but-unimplemented range.
         Self(0x00FE)
@@ -155,6 +157,7 @@ impl HashCodepoint {
 
     /// Test-only alias for [`Self::from_raw`].
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub const fn from_raw_for_test(raw: u64) -> Self {
         Self::from_raw(raw)
     }
@@ -238,6 +241,7 @@ impl CipherSuiteCodepoint {
 
     /// Test-only alias for [`Self::from_raw`].
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub const fn from_raw_for_test(raw: u16) -> Self {
         Self::from_raw(raw)
     }

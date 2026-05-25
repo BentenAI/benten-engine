@@ -19,6 +19,15 @@ bench = false
 
 [features]
 default = []
+# R6 R1 FP-A Bundle F1.b — `testing` feature gates any future
+# `pub fn .*_for_test*` constructors / helpers. Currently no in-crate
+# `_for_test*` symbol is cfg-gated (the 5 `with_budget_for_testing`
+# methods are production-shaped exempts per
+# V1-FROZEN-INTERFACE-DEFERRED.md Row D-22's EXEMPT_PUB_ITEMS table)
+# so the feature has no impact today; it's declared for workspace
+# parity + future-extensibility (any new `_for_test*` MUST land
+# behind this gate per the F1.d no-regression pin).
+testing = []
 
 [dependencies]
 benten-core = { path = "../benten-core" }

@@ -169,6 +169,10 @@ pub mod typed_call_dispatch;
 // `benten-caps/Cargo.toml:40`), so the test path is unaffected.
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod testing;
+// R6 R1 FP-A Bundle F2: always-on sentinel principal for napi un-attributed
+// reads post §8-A visibility tighten. NOT cfg-gated — napi cdylib production
+// build needs the constant.
+pub mod internal_principal;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — preserve every call-site path that existed before the
@@ -177,6 +181,11 @@ pub mod testing;
 
 pub use benten_errors::ErrorCode;
 pub use benten_eval::PrimitiveKind;
+// R6 R1 FP-A Bundle F2: re-export the engine-internal principal CID
+// sentinel for napi + Benten-owned boundary callers that need an
+// un-attributed read pathway post §8-A visibility tighten. See
+// `crates/benten-engine/src/internal_principal.rs` for rationale.
+pub use crate::internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID;
 // Phase-3 G21-T2: typed-CALL surface re-exports so napi binding +
 // downstream consumers can name `TypedCallOp` / `TYPED_CALL_PREFIX`
 // without depending on `benten-eval` directly. Mirrors the existing
@@ -345,7 +354,7 @@ mod tests {
         let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
         let node = canonical_test_node();
         let cid = engine.create_node(&node).unwrap();
-        let fetched = engine.get_node(&cid).unwrap().expect("node exists");
+        let fetched = engine.read_node(&cid).unwrap().expect("node exists");
         assert_eq!(fetched, node);
         assert_eq!(fetched.cid().unwrap(), cid);
     }
@@ -355,6 +364,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
         let cid = canonical_test_node().cid().unwrap();
-        assert!(engine.get_node(&cid).unwrap().is_none());
+        assert!(engine.read_node(&cid).unwrap().is_none());
     }
 }

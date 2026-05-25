@@ -93,6 +93,7 @@ impl StructuralKdfKey {
     ///
     /// **NOT a production API.** Never call this outside tests.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn derive_step_without_info_tag_for_test(
         predecessor: &StructuralKdfKey,
         edge_label: &[u8],

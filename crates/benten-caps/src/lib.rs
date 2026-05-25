@@ -247,6 +247,7 @@ pub struct HlcStampedRefreshEvent {
 /// evaluator refresh-event emission. Carried from Phase-2a G9-A;
 /// pairs with §2.1 Durable UCAN backend.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn emit_refresh_event_for_test() -> HlcStampedRefreshEvent {
     HlcStampedRefreshEvent {
         hlc_stamp: Some(0),

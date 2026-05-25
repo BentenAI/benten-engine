@@ -136,7 +136,26 @@ impl Engine {
     /// `NoAuthBackend` default. Engine-privileged code paths that need
     /// to inspect system-zone Nodes reach through
     /// `self.backend.get_node(cid)` directly.
-    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
+    ///
+    /// # R6 R1 FP-A Bundle F2 — visibility tighten + rename
+    ///
+    /// **Renamed** `get_node` → `read_node` and **tightened** `pub` →
+    /// `pub(crate)` per V1-FROZEN-INTERFACE.md §1 (§8-A Engine visibility
+    /// cluster; Row D-7 closure). The un-attributed semantic was
+    /// previously named `get_node`; the new name `read_node` removes the
+    /// "get" connotation and makes the principal-bearing
+    /// [`Engine::read_node_as`] the canonical public-surface counterpart.
+    /// External callers needing un-attributed reads at a Benten-owned
+    /// boundary use
+    /// `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)`
+    /// per CLAUDE.md baked-in #18.
+    ///
+    /// Test-helper re-exports preserving the old `get_node` spelling are
+    /// available behind `cfg(any(test, feature = "test-helpers"))` at
+    /// [`crate::testing`] — integration tests in sibling crates that
+    /// previously called `engine.get_node(cid)` continue to compile via
+    /// those re-exports without per-test migration.
+    pub(crate) fn read_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
         // Refinement-audit-2026-05 D1 #1189 (Qual-1 #695 + Safe-1 #534 /
         // META #593): the user-facing default read = the canonical
         // `read_node_inner` seam with no attributed principal. Inv-11
