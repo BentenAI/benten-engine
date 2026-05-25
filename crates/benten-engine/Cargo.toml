@@ -92,19 +92,6 @@ benten-errors = { workspace = true }
 benten-eval = { path = "../benten-eval", features = ["diag"] }
 benten-graph = { path = "../benten-graph" }
 benten-ivm = { path = "../benten-ivm" }
-# R6 R2 FP-B (L6-r6r2-l6-1 closure): benten-engine takes a NARROW
-# production dep on benten-platform-foundation so the engine-side
-# `capability_policy_install_consent` adapter can `impl
-# InstallConsentPolicy` (trait lives in platform-foundation per the
-# install-pipeline boundary). Cycle-safe: benten-platform-foundation
-# does NOT depend on benten-engine in production (only dev), and does
-# NOT depend on benten-caps in production (the original install_consent
-# module-doc warned of a cycle but the actual link graph permits this
-# placement; benten-caps → platform-foundation prod-dep already exists,
-# benten-platform-foundation → benten-caps would close the cycle,
-# benten-engine → benten-platform-foundation + benten-caps stays
-# strictly downstream of both).
-benten-platform-foundation = { path = "../benten-platform-foundation" }
 blake3 = { workspace = true }
 # Phase-3 R5 wave-9 W9-T5 (§6.11) — workspace-level base64 codec for
 # `manifest_signing.rs`. Replaces the previous ~80 LOC inline base64
@@ -149,6 +136,31 @@ serde_json = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 toml = { workspace = true }
 serde = { workspace = true }
+# R6 R2 FP-B (L6-r6r2-l6-1 closure): benten-engine takes a NARROW
+# production dep on benten-platform-foundation so the engine-side
+# `capability_policy_install_consent` adapter can `impl
+# InstallConsentPolicy` (trait lives in platform-foundation per the
+# install-pipeline boundary). Cycle-safe: benten-platform-foundation
+# does NOT depend on benten-engine in production (only dev), and does
+# NOT depend on benten-caps in production (the original install_consent
+# module-doc warned of a cycle but the actual link graph permits this
+# placement; benten-caps → platform-foundation prod-dep already exists,
+# benten-platform-foundation → benten-caps would close the cycle,
+# benten-engine → benten-platform-foundation + benten-caps stays
+# strictly downstream of both).
+#
+# **wasm32 cfg-gate (R6 R2 wasm32 fixup, integration PR #1356):** the
+# dep is native-only per CLAUDE.md baked-in #17 (deployment-shape gate
+# — plugin install/consent is full-peer-only; thin compute surfaces do
+# NOT host the install pipeline). Matches `benten-caps`'s identical
+# placement of its own `benten-platform-foundation` prod dep (see
+# `crates/benten-caps/Cargo.toml` line 104) + the consuming module
+# `src/capability_policy_install_consent` is itself cfg-gated in
+# `src/lib.rs` mirroring this gate. DO NOT move this back into the
+# unconditional `[dependencies]` table — doing so re-introduces the
+# `getrandom` js-feature transitive failure on
+# `wasm32-unknown-unknown` (per `feedback_cfg_gate_cascade_hygiene`).
+benten-platform-foundation = { path = "../benten-platform-foundation" }
 # wsa-g7a-mr-4 fix-pass: emit a startup-warning when engine.toml relaxes
 # the D24 built-in wallclock ceiling.
 tracing = { workspace = true }

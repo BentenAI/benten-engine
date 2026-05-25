@@ -90,6 +90,15 @@ pub mod production_manifest_envelope_rechecker;
 // `CapabilityPolicy` so it can serve as the install-pipeline's
 // `InstallConsentPolicy` port (cycle-safe placement here vs in
 // benten-platform-foundation per its module-doc rationale).
+//
+// **wasm32 cfg-gate (R6 R2 wasm32 fixup, integration PR #1356):** the
+// module uses `benten_platform_foundation::install_consent::InstallConsentPolicy`,
+// and `benten-platform-foundation` is itself cfg-gated to non-wasm32 in
+// our Cargo.toml per CLAUDE.md baked-in #17 (deployment-shape gate —
+// plugin install/consent is full-peer only). Mirror the gate here so
+// the wasm32-unknown-unknown bundle compiles. See
+// `feedback_cfg_gate_cascade_hygiene` memory.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod capability_policy_install_consent;
 // R6 R1 FP-F4 §S4 (Row D-4 closure, CRITIC-2 F-2.2) — the canonical
 // production engine constructor that wires the substantive rechecker
