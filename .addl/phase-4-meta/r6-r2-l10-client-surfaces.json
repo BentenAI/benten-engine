@@ -3,106 +3,225 @@
     "lens": "L10 client-surfaces, phase-wide (napi + browser thin-client + Tauri embedded webview + TS public surface + admin-shell)",
     "tier": "R6 R2",
     "phase": "phase-4-meta-core",
-    "scope": "Post-R6 R1 FP integration branch — re-verify napi public surface routes through engine-internal sentinel + Tauri renderer #[non_exhaustive] gaps + admin-shell production caller of _for_test surface + TS public-api drift detector status. Confirm R6 R1 L10 MINOR closure status at integration HEAD.",
+    "scope": "Post-R6 R1 FP integration branch — re-verify napi public surface routes through engine-internal sentinel + Tauri renderer #[non_exhaustive] gaps + admin-shell production caller of _for_test surface + TS public-api drift detector status. Confirm R6 R1 L10 MINOR closure status at integration HEAD. AUGMENTED with depth disciplines: same-attack-class siblings, cross-lens cross-confirmation, ground-truth-verify §3.5n.",
     "base_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
     "base_branch": "phase-4-meta-core/r6-r1-fp-integration",
     "review_branch": "phase-4-meta-core/r6-r2-l10-client-surfaces",
     "main_head_at_review": "5ca364e7af1e18f20d7c814f4951b9e6ddf34d55 (PR #1350 R4b-FP merged; integration branch 43 commits ahead of main)",
+    "augmentation": "EXPANDED-DEPTH per orchestrator follow-up: same-attack-class sibling audit (L3 precedent) + ground-truth-verify per §3.5n + §3.6j sweep-completeness self-verify + cross-lens cross-confirmation with L6/L11/L17 + HARD RULE 12 NAMED-destination specificity rigor.",
+    "sibling_lens_context": {
+      "L3_audience_pubkey_pattern": "same-attack-class as scope — augmented L10 to audit every napi public read surface for principal-attribution discipline, not just the one Row-D-7-named get_node",
+      "L11_phantom_cite_strings": "augmented L10 to ground-truth-verify Row D-7 closure narrative cites against actual code state — surfaced 1 stale cite (napi `put_node` was never exposed)"
+    },
     "r6_r1_l10_precedent": {
       "disposition": "APPROVE-WITH-1-MINOR",
       "finding": "l10-r6r1-min-1 — V1-FROZEN-INTERFACE row 969 mandates #[non_exhaustive] APPLY on benten_renderer_tauri::IpcMethod (and the maximalist §11 doctrine extends to CapRequirement / IpcRequest / AdminUiManifest), but the attribute is NOT applied at HEAD AND the workspace g_core_9_non_exhaustive_audit.rs is per-type cherry-picked (not workspace-walking per Row 8.e mandate) so it does not catch the gap",
       "proposed_fix": "~6 LOC src + ~30 LOC test = ~36 LOC total; orchestrator-direct in R6-FP-1"
-    },
-    "r6_expectation": "verify R6 R1 L10 MINOR closure status against integration HEAD; surface any new findings the phase-wide integration introduced; confirm CRITIC-1 FIX-3 napi+ProductionEngineBuilder pin + ENGINE_INTERNAL_PRINCIPAL_CID migration + Row D-22 admin-shell carve-out are coherent"
+    }
   },
-  "disposition": "APPROVE-WITH-2-MINORS",
-  "r6_r2_convergence_disposition": "NEEDS-R6-FP — both MINORs are well-scoped orchestrator-direct closes (one inherited from R6 R1 L10 unclosed; one new from integration-branch scope expansion). Total ~50 LOC; clean R6-FP candidates. No BLOCKER; no MAJOR.",
-  "summary": "R6 R2 PHASE-WIDE re-review of L10 client-surfaces at integration HEAD 3c80546f confirms the production-runtime correctness across the five families L10 owns (napi PR-B AsyncTask / #652 close()-cancel / browser thin-client bundle / Tauri embedded-webview / bridged-dual-runtime / SANDBOX) — all phase-wide cross-checks PASS. The R6 R1 FP integration successfully landed (a) the §8-A visibility tighten + napi cascade to read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...) (Row D-7 CLOSED at FP-A Bundle F2), (b) the ProductionEngineBuilder + ProductionManifestEnvelopeRechecker substrate (Row D-4 CLOSED at FP-F4 §S4), (c) the active_session_count_for_test carve-out registry entry (R4b-FP-D-22 closure), and (d) the napi compile-test pin verifying ProductionEngineBuilder surface availability. TWO MINORs surface: (1) the R6 R1 L10 MINOR l10-r6r1-min-1 is still UNCLOSED at integration HEAD — IpcMethod / CapRequirement / IpcRequest / AdminUiManifest still lack #[non_exhaustive] and the workspace audit test still does not walk benten-renderer-tauri; (2) a NEW finding from the integration scope: napi binding's Engine::new / Engine::open_with_policy still constructs via raw EngineBuilder::new() rather than ProductionEngineBuilder, but this informal v1-beta deferral is documented only in source-code comments (production_engine_builder.rs:20-22 'SHOULD route through here' + the test-file forensic-anchor narrative) — NOT in V1-FROZEN-INTERFACE-DEFERRED.md as a Row D-N entry; per HARD RULE 12 clause-(b) this is an unnamed informal deferral that must either close-NOW or be formally named in DEFERRED.md.",
+  "disposition": "APPROVE-WITH-2-MAJORS-AND-3-MINORS",
+  "r6_r2_convergence_disposition": "NEEDS-R6-FP — 2 MAJOR + 3 MINOR; NOT Q5-terminal. The augmented depth-discipline pass surfaced 2 same-attack-class sibling MAJORs that the original FREEZE-narrow R3/R4/R6-R1 lens passes missed because they were scoped only to the explicit Row-D-7 cited method (get_node), not to the architectural class of un-attributed reads. Both MAJORs are well-scoped orchestrator-direct or 1-agent closes. No BLOCKER.",
+  "summary": "R6 R2 PHASE-WIDE re-review of L10 client-surfaces at integration HEAD 3c80546f. The five production-runtime surface families L10 owns (napi PR-B AsyncTask / #652 close()-cancel / browser thin-client bundle / Tauri embedded-webview / bridged-dual-runtime / SANDBOX + admin-shell) are all production-runtime correct. The R6 R1 FP integration landed Row D-7 (§8-A visibility tighten + napi cascade through ENGINE_INTERNAL_PRINCIPAL_CID for ONE method: get_node) + Row D-4 (ProductionEngineBuilder substrate) + Row D-6 (sync-hydrate UnresolvedDeny) + R4b-FP-D-22 admin-shell carve-out. THE AUGMENTED DEPTH PASS surfaced TWO MAJORs from same-attack-class sibling expansion: (l10-r6r2-MAJ-1) napi binding has FIVE un-attributed-read surfaces (get_node migrated; diagnose_read + get_edge + edges_from + edges_to + read_view NOT migrated — they still call engine-side pub fn surfaces that bypass principal-attribution); per L3 same-attack-class precedent this is a load-bearing inconsistency at the CLAUDE.md baked-in #18 boundary. (l10-r6r2-MAJ-2) V1-FROZEN-INTERFACE row 978 lists 12 freeze-mandated `benten-engine` types as 'verified MISSING at HEAD' + 'APPLY' but 7 of those 12 STILL lack #[non_exhaustive] at integration HEAD, including 4 directly consumed by napi surface families L10 owns (SuspensionOutcome / StreamCursor / SubscribeCursor / Transport). PLUS 3 MINORs: (l10-r6r2-MIN-1) the R6 R1 L10 IpcMethod/CapRequirement/IpcRequest/AdminUiManifest non_exhaustive MINOR carried forward unclosed (~36 LOC); (l10-r6r2-MIN-2) napi Engine constructors don't route through ProductionEngineBuilder + the deferral is informal (source comments only, not Row D-N in DEFERRED.md); (l10-r6r2-MIN-3) NEW Row D-7 closure narrative carries a phantom cite to napi `put_node` which was never exposed — cite-drift per L11 precedent.",
   "findings": [
     {
-      "id": "l10-r6r2-min-1",
+      "id": "l10-r6r2-MAJ-1",
+      "severity": "MAJOR",
+      "title": "Same-attack-class sibling cluster: napi binding has 5 un-attributed-read surfaces; only 1 (get_node) migrated to read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...) at R6 R1 FP-A Bundle F2. The other 4 (diagnose_read / get_edge / edges_from / edges_to / read_view) still call engine-side `pub fn` surfaces that bypass principal-attribution — same architectural inconsistency as L3's audience_pubkey-vs-scope finding",
+      "evidence": {
+        "discipline_applied": "L3 same-attack-class sibling expansion (orchestrator depth-discipline #1) + ground-truth-verify per §3.5n + cross-lens cross-confirmation",
+        "production_surface_audit": {
+          "audit_method": "grep `self.inner.` in `bindings/napi/src/lib.rs` + verify engine-side visibility of each callee + check for `_as` sibling existence",
+          "audit_command_reproducer": "grep -n 'self.inner.' bindings/napi/src/lib.rs; grep -n 'pub fn diagnose_read\\|pub fn read_view\\|pub fn get_edge\\|pub fn edges_from\\|pub fn edges_to\\|pub fn read_view_as\\|pub fn diagnose_read_as' crates/benten-engine/src/*.rs",
+          "napi_read_surfaces": [
+            {
+              "napi_call_site": "bindings/napi/src/lib.rs:348-358",
+              "method": "Engine::get_node",
+              "engine_callee": "self.inner.read_node_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)",
+              "engine_callee_visibility": "pub fn read_node_as at crates/benten-engine/src/engine_wait.rs:1155",
+              "principal_attribution": "ENGINE_INTERNAL_PRINCIPAL_CID sentinel APPLIED",
+              "status": "MIGRATED at R6 R1 FP-A Bundle F2 commit 92b5b0a3"
+            },
+            {
+              "napi_call_site": "bindings/napi/src/lib.rs:366-384",
+              "method": "Engine::diagnose_read",
+              "engine_callee": "self.inner.diagnose_read(&parsed)",
+              "engine_callee_visibility": "pub fn diagnose_read at crates/benten-engine/src/engine_diagnostics.rs:383 (no _as sibling)",
+              "principal_attribution": "NONE — bypasses read_node_as / read_node_inner principal-attribution seam entirely",
+              "consequence": "Option-C diagnostic surface (deniedByPolicy / notFound / existsInBackend) reads engine state without attributing to any principal; the `debug:read` cap is the only gate, but the underlying read is un-attributed at the storage layer"
+            },
+            {
+              "napi_call_site": "bindings/napi/src/lib.rs:431-437",
+              "method": "Engine::get_edge",
+              "engine_callee": "self.inner.get_edge(&parsed)",
+              "engine_callee_visibility": "pub fn get_edge at crates/benten-engine/src/engine_crud.rs:225 (no _as sibling)",
+              "principal_attribution": "NONE — same architectural class as the un-attributed `pub fn get_node` the §8-A tighten just closed",
+              "consequence": "Edge reads bypass the principal-attribution discipline that CLAUDE.md baked-in #18 ratified for Node reads; same auth-bypass hazard class as the Class B β surface was minted to close"
+            },
+            {
+              "napi_call_site": "bindings/napi/src/lib.rs:448-451",
+              "method": "Engine::edges_from",
+              "engine_callee": "self.inner.edges_from(&parsed)",
+              "engine_callee_visibility": "pub fn edges_from at crates/benten-engine/src/engine_crud.rs:248 (no _as sibling)",
+              "principal_attribution": "NONE",
+              "consequence": "Edge-enumeration reads bypass principal-attribution; expose full edge topology around a Node to any napi caller regardless of caps"
+            },
+            {
+              "napi_call_site": "bindings/napi/src/lib.rs:456-459",
+              "method": "Engine::edges_to",
+              "engine_callee": "self.inner.edges_to(&parsed)",
+              "engine_callee_visibility": "pub fn edges_to at crates/benten-engine/src/engine_crud.rs:258 (no _as sibling)",
+              "principal_attribution": "NONE",
+              "consequence": "Same as edges_from — reverse-direction edge enumeration"
+            },
+            {
+              "napi_call_site": "bindings/napi/src/lib.rs:860",
+              "method": "Engine::read_view",
+              "engine_callee": "self.inner.read_view(&view_id)",
+              "engine_callee_visibility": "pub fn read_view at crates/benten-engine/src/engine_views.rs:218 (no _as sibling)",
+              "principal_attribution": "NONE",
+              "consequence": "View reads bypass principal-attribution; views are derived/materialized from underlying Node + Edge state, so an un-attributed view-read leaks the same data as un-attributed Node + Edge reads"
+            }
+          ],
+          "migration_ratio": "1 of 5 napi public read surfaces migrated through ENGINE_INTERNAL_PRINCIPAL_CID; 4 of 5 still bypass the Class B β boundary"
+        },
+        "freeze_doc_status": {
+          "file": "docs/V1-FROZEN-INTERFACE.md",
+          "search": "grep -n 'diagnose_read\\|read_view\\|get_edge\\|edges_from\\|edges_to' docs/V1-FROZEN-INTERFACE.md",
+          "result": "ZERO occurrences — none of the 4 un-migrated read siblings are named in the freeze doc",
+          "deferred_doc_status": "ZERO occurrences in docs/V1-FROZEN-INTERFACE-DEFERRED.md either — the un-migrated state is silently un-named at v1-beta",
+          "verdict": "HARD RULE 12 clause-(b) violation cluster — 4 un-attributed-read sibling surfaces are deferred-by-silence rather than named-deferred"
+        },
+        "row_d7_scope_narrative": {
+          "file": "docs/V1-FROZEN-INTERFACE-DEFERRED.md",
+          "lines": "280-298",
+          "text_excerpt": "the §8-A tighten cascades through 75+ call sites across the workspace AND breaks the napi binding's public `get_node` / `put_node` methods",
+          "scope_critique": "Row D-7 narrative scoped only to `get_node` (+ phantom `put_node` per l10-r6r2-MIN-3). Did not enumerate the same-attack-class siblings (diagnose_read / read_view / get_edge / edges_from / edges_to). The FP-A Bundle F2 migration consequently closed only the named surface, leaving the architectural-class gap open."
+        },
+        "cross_lens_cross_confirmation": {
+          "L3_audience_pubkey_pattern": "L3 surfaced audience_pubkey-vs-scope same-attack-class — orchestrator named the discipline. This L10 finding is the same-shape application to napi-vs-engine read surfaces.",
+          "L11_phantom_cites": "L11 surfaced 7 phantom cite-strings — this finding includes 1 phantom cite (l10-r6r2-MIN-3: Row D-7 cites napi `put_node` which was never exposed). Same cite-drift discipline.",
+          "L17_freeze_completeness": "L17 (architectural-frozen-surface completeness) would surface the same gap — the 4 un-migrated read surfaces SHOULD be in V1-FROZEN-INTERFACE.md as either frozen-as-un-attributed (deliberate) OR named-NOW for migration. L10 calls this out from the consumer-surface side; L17 should catch it from the structural-completeness side."
+        }
+      },
+      "disposition": "FIX-NOW (per HARD RULE 12 default + L3 same-attack-class sibling precedent). Path-(a) substantive migration: mint engine-side `read_view_as` / `get_edge_as` / `edges_from_as` / `edges_to_as` / `diagnose_read_as` sibling pub fns that route through the same principal-attribution seam as `read_node_as`; migrate napi binding's 4 un-attributed call sites to use `&ENGINE_INTERNAL_PRINCIPAL_CID`. Path-(b) named-deferral: if the migration is deliberately deferred to G-COMP-1 (the named-NOW destination per CLAUDE.md #18), add a Row D-N entry to V1-FROZEN-INTERFACE-DEFERRED.md naming all 4 un-attributed read surfaces + their napi consumption sites with G-COMP-1 as the closure target. Recommended: PATH-(b) per the v1-beta-vs-v1-GM sequencing precedent at Row D-4 (FORENSIC) — the substantive migration is a Phase-4-Meta-Composing-era wave, and Row D-7's narrow scope was a HARD RULE 12 clause-(b) miss not a fundamental redesign.",
+      "proposed_fix_path_a": "Mint 5 new pub fn sibling methods on engine (read_view_as / get_edge_as / edges_from_as / edges_to_as / diagnose_read_as) following the read_node_as signature pattern; migrate bindings/napi/src/lib.rs 4 call sites to use &ENGINE_INTERNAL_PRINCIPAL_CID. Estimate: ~150 LOC engine + ~30 LOC napi + ~80 LOC tests = ~260 LOC (1 implementer agent).",
+      "proposed_fix_path_b": "Add ONE comprehensive Row D-N entry to docs/V1-FROZEN-INTERFACE-DEFERRED.md naming the 4 un-migrated napi read surfaces + their engine-side `pub fn` callees + G-COMP-1 as closure target. Same anchor as Row D-7. ~50 LOC docs.",
+      "fix_loc_estimate": "path-(a) ~260 LOC / path-(b) ~50 LOC docs",
+      "risk_if_skipped": "Production napi consumers (JS/TS/Electron admin shells) can call diagnose_read / get_edge / edges_from / edges_to / read_view without any principal-attribution at the napi boundary — these 4 surfaces bypass the Class B β boundary CLAUDE.md baked-in #18 was minted to close. The Engine::call_as walk-thread DOES enforce read-time policy gating for any reads INSIDE a handler walk, so this is not a Phase-1 invariant violation — but the napi binding's direct CRUD reads (which are the most common JS-side consumption pattern) are un-attributed. Per CLAUDE.md #18: 'napi exposes only the un-attributed default-no-principal path only' — the Row-D-7 narrative reads as IF this is the deliberate-v1-beta posture for ALL reads, but the absence of a named Row D-N entry means it's invisible to future plan-doc scans + future Phase-4-Meta-Composing scope drafting.",
+      "convergence_note": "MAJOR severity (not BLOCKER) because (a) the Engine::call_as walk-thread DOES enforce principal attribution for any reads inside a handler — the consequence is to direct-CRUD-from-JS reads only; (b) the architectural intent (per CLAUDE.md #18) is unclear on whether direct napi CRUD reads SHOULD be principal-attributed at all (the comment at engine_crud.rs:96-103 says `get_node` is 'read-as-user-root' — but the post-Row-D-7 state migrated `get_node` away from that semantic without a documented intent-change). Q5 termination NOT met; clean R6-FP candidate via path-(b)."
+    },
+    {
+      "id": "l10-r6r2-MAJ-2",
+      "severity": "MAJOR",
+      "title": "V1-FROZEN-INTERFACE row 978 lists 12 freeze-mandated `benten-engine` types as 'verified MISSING at HEAD' + 'APPLY' but 7 of those 12 STILL lack #[non_exhaustive] at integration HEAD — including 4 directly consumed via napi surface families L10 owns (SuspensionOutcome / StreamCursor / SubscribeCursor / Transport)",
+      "evidence": {
+        "discipline_applied": "§3.6j sweep-completeness self-verify (orchestrator depth-discipline #2 + #7) + ground-truth-verify per §3.5n",
+        "freeze_doc_row_978": {
+          "file": "docs/V1-FROZEN-INTERFACE.md",
+          "line": 978,
+          "row_text": "| `benten-engine` | `UserViewInputPattern` / `TraceStep` / `Transport` (thin_client) / `AtriumMode` / `SuspensionOutcome` / `DelegationResolution` / `NextChunkPoll` / `StreamCursor` / `SubscribeCursor` / `WriteBoundaryChainOutcome` / `ManifestEnvelopeRecheckOutcome` / `ManifestVerifyMode` | **12+ verified MISSING at HEAD** | APPLY |"
+        },
+        "per_type_ground_truth_audit": {
+          "audit_command_reproducer": "for t in UserViewInputPattern TraceStep AtriumMode SuspensionOutcome DelegationResolution NextChunkPoll StreamCursor SubscribeCursor WriteBoundaryChainOutcome ManifestEnvelopeRecheckOutcome ManifestVerifyMode Transport; do echo \"$t:\"; f=$(grep -rln \"^pub \\(enum\\|struct\\) $t\" crates/benten-engine/src/); grep -B1 \"^pub \\(enum\\|struct\\) $t\" \"$f\" | head -2; done",
+          "results": [
+            {"type": "UserViewInputPattern", "file": "crates/benten-engine/src/outcome.rs", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "no"},
+            {"type": "TraceStep", "file": "crates/benten-engine/src/outcome.rs", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "yes — napi Engine::trace returns TraceStep family (trace.ts)"},
+            {"type": "Transport", "file": "crates/benten-engine/src/thin_client.rs:597", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "yes — re-exported via crates/benten-renderer-tauri::InProcessSessionBridge"},
+            {"type": "AtriumMode", "file": "crates/benten-engine/src/atrium_api.rs", "non_exhaustive": "APPLIED", "l10_consumed_via_napi": "yes — atrium.rs"},
+            {"type": "SuspensionOutcome", "file": "crates/benten-engine/src/engine_wait.rs", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "yes — bindings/napi/src/wait.rs:34 + :113-114 explicit match on SuspensionOutcome::{Complete,Suspended}"},
+            {"type": "DelegationResolution", "file": "crates/benten-engine/src/shares_policy_resolver.rs", "non_exhaustive": "APPLIED", "l10_consumed_via_napi": "indirect"},
+            {"type": "NextChunkPoll", "file": "crates/benten-engine/src/engine_stream.rs", "non_exhaustive": "APPLIED", "l10_consumed_via_napi": "yes — stream.rs::NextChunkPollNapi"},
+            {"type": "StreamCursor", "file": "crates/benten-engine/src/engine_stream.rs", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "yes — stream.rs"},
+            {"type": "SubscribeCursor", "file": "crates/benten-engine/src/engine_subscribe.rs", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "yes — bindings/napi/src/subscribe.rs:34+119-128 explicit consumption + cursor parsing"},
+            {"type": "WriteBoundaryChainOutcome", "file": "crates/benten-engine/src/write_boundary_chain_validator.rs", "non_exhaustive": "APPLIED", "l10_consumed_via_napi": "indirect"},
+            {"type": "ManifestEnvelopeRecheckOutcome", "file": "crates/benten-engine/src/manifest_envelope_recheck.rs", "non_exhaustive": "MISSING", "l10_consumed_via_napi": "indirect via Engine surface"},
+            {"type": "ManifestVerifyMode", "file": "crates/benten-engine/src/manifest_signing.rs", "non_exhaustive": "APPLIED", "l10_consumed_via_napi": "indirect"}
+          ],
+          "summary": "5 of 12 APPLIED (AtriumMode / DelegationResolution / NextChunkPoll / WriteBoundaryChainOutcome / ManifestVerifyMode); 7 of 12 MISSING (UserViewInputPattern / TraceStep / Transport / SuspensionOutcome / StreamCursor / SubscribeCursor / ManifestEnvelopeRecheckOutcome) — including 4 with direct napi consumption (TraceStep / Transport / SuspensionOutcome / SubscribeCursor)",
+          "l10_scope_subset": "Of the 7 still-missing, FOUR are directly consumed via napi public surfaces L10 owns: TraceStep (Engine::trace surface) + Transport (thin_client.rs:597 via benten-renderer-tauri InProcessSessionBridge) + SuspensionOutcome (bindings/napi/src/wait.rs explicit match) + SubscribeCursor (bindings/napi/src/subscribe.rs explicit consumption). The other 3 missing (UserViewInputPattern / StreamCursor / ManifestEnvelopeRecheckOutcome) are L6/L17 scope but show the same systemic gap."
+        },
+        "freeze_self_certification_drift": {
+          "freeze_doc_claim_at_row_978": "**12+ verified MISSING at HEAD** | APPLY",
+          "actual_state": "freeze doc says all 12 need APPLY (i.e. all are MISSING); after R6 R1 FP cluster, 5 of 12 got APPLIED but the freeze-doc row text was NOT updated to reflect partial closure",
+          "drift_consequence": "freeze-doc-self-certification is misleading — claims all 12 still need APPLY when 5 are done; reviewer reading row 978 would either over-trust the closure rate OR under-trust the freeze-doc accuracy. §3.6j sweep-completeness discipline calls for self-verifying claims against actual state.",
+          "secondary_finding": "the `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` audit test does NOT walk all 12 row-978 types — verified 0 occurrences of TraceStep / SubscribeCursor / SuspensionOutcome / UserViewInputPattern / ManifestEnvelopeRecheckOutcome in the audit file; same workspace-walking gap as the renderer-tauri side in l10-r6r2-MIN-1"
+        },
+        "cross_lens_cross_confirmation": {
+          "L6_freeze_substrate_completeness": "L6 (freeze-substrate completeness) should catch the same 7-of-12 row-978 gap from the cross-crate inventory side; L10 catches it from the napi-consumer side",
+          "L17_named_deferral_completeness": "L17 (HARD RULE 12 named-deferral coverage) would catch the freeze-doc self-certification drift — the row 978 'verified MISSING at HEAD' claim is post-hoc invalidated by FP closures without doc update",
+          "L8_ivm_strategy_carve_out_precedent": "L8 IVM Strategy `#[non_exhaustive]` carve-out at G-CORE-9 R2 + the workspace audit-test pattern at g_core_9_non_exhaustive_audit_drop.rs (drop crate's parallel test) demonstrates the proper per-crate audit-test shape; benten-engine + benten-renderer-tauri are the two crates where the audit-test workspace-walking gap persists"
+        },
+        "risk_if_skipped": "Same as l10-r6r2-MIN-1: future Phase-4-Meta-Composing addition of a new variant to SuspensionOutcome / SubscribeCursor / TraceStep / Transport becomes a non-recoverable SemVer break of `benten-engine` v1.x consumers — they hit `non_exhaustive_omitted_patterns` lint as a hard error. The napi binding's bindings/napi/src/wait.rs:113-114 + bindings/napi/src/subscribe.rs:126-128 explicit match arms become breaking. Severity escalated from MINOR to MAJOR because (a) 7-of-12 verified-MISSING-then-still-missing is a systemic FP gap not a one-off oversight; (b) 4 are directly L10-consumed via napi surfaces; (c) row 978's own self-certification text is now stale and misleading."
+      },
+      "disposition": "FIX-NOW (per HARD RULE 12 default + maximalist-doctrine ratification). Single orchestrator-direct sweep: add #[non_exhaustive] to the 7 missing types + extend g_core_9_non_exhaustive_audit.rs to walk all 12 row-978 types + UPDATE row 978's '**12+ verified MISSING at HEAD**' text to reflect post-FP state. Per §3.6j sub-rule extension: when a row claims 'verified MISSING' then closure-PRs land, the row text MUST be updated synchronously.",
+      "proposed_fix": "(a) add #[non_exhaustive] to: TraceStep (outcome.rs), UserViewInputPattern (outcome.rs), Transport (thin_client.rs:597), SuspensionOutcome (engine_wait.rs), StreamCursor (engine_stream.rs), SubscribeCursor (engine_subscribe.rs), ManifestEnvelopeRecheckOutcome (manifest_envelope_recheck.rs). ~14 LOC src; verify clippy `non_exhaustive_omitted_patterns` cascade-fix in napi wait.rs:113-114 + subscribe.rs:126-128 (add `_ => ...` wildcard arms). ~5 LOC napi cascade. (b) extend crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs to add per-type pin assertions for the 7 newly-applied types + the 5 already-applied (12 total) — ~80 LOC test additions. (c) update docs/V1-FROZEN-INTERFACE.md row 978 text: replace '**12+ verified MISSING at HEAD**' with the post-FP closure summary (or just 'all 12 APPLIED at integration HEAD' after the FP closes the gap).",
+      "fix_loc_estimate": "~14 LOC src + ~5 LOC napi cascade + ~80 LOC test + ~5 LOC docs = ~104 LOC total; orchestrator-direct (single-author, no cross-crate cascade beyond the trivial napi match-arm additions)",
+      "convergence_note": "MAJOR severity per: (a) the freeze-doc self-certification drift (row 978 stale text) is a §3.6j sweep-completeness violation; (b) the 7-of-12 gap is systemic not one-off; (c) 4 are directly L10-consumed via napi. Clean R6-FP-1 close candidate; same FP can pair with l10-r6r2-MIN-1 (renderer-tauri side) to land ONE coherent #[non_exhaustive] sweep across both crates + a unified workspace-walking audit test."
+    },
+    {
+      "id": "l10-r6r2-MIN-1",
       "severity": "MINOR",
-      "title": "R6 R1 L10 MINOR l10-r6r1-min-1 STILL UNCLOSED at integration HEAD: IpcMethod / CapRequirement / IpcRequest / AdminUiManifest still lack #[non_exhaustive] and g_core_9_non_exhaustive_audit.rs still does not walk benten-renderer-tauri types",
+      "title": "CARRY-FORWARD: R6 R1 L10 MINOR l10-r6r1-min-1 STILL UNCLOSED at integration HEAD: IpcMethod / CapRequirement / IpcRequest / AdminUiManifest (+ TauriRenderer + InProcessSessionBridge per maximalist sweep extension) still lack #[non_exhaustive] and g_core_9_non_exhaustive_audit.rs still does not walk benten-renderer-tauri types",
       "evidence": {
         "freeze_mandate": {
           "file": "docs/V1-FROZEN-INTERFACE.md",
           "line": 997,
           "row": "| `benten-renderer-tauri` | `IpcMethod` (per-method allowlist) | TBD | APPLY |",
-          "freeze_section": "## 11. META #907 `#[non_exhaustive]` sweep — MAXIMALIST application",
           "note": "Line number moved from 969 → 997 between R6 R1 (base 4bbc4cac) and R6 R2 (base 3c80546f) due to other freeze-doc additions; the row IS unchanged — still TBD → APPLY"
         },
-        "head_state_at_3c80546f": [
-          {
-            "file": "crates/benten-renderer-tauri/src/lib.rs",
-            "line": 105,
-            "decl": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub struct IpcMethod { pub name: &'static str, pub cap: CapRequirement }",
-            "missing": "#[non_exhaustive]",
-            "row_969_mandate": "explicit APPLY"
-          },
-          {
-            "file": "crates/benten-renderer-tauri/src/lib.rs",
-            "line": 83,
-            "decl": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum CapRequirement { None, Required(&'static str) }",
-            "missing": "#[non_exhaustive] (per maximalist doctrine — pub enum with both arms today; future Optional/Conditional/Delegated arms are reasonable additive extensions)"
-          },
-          {
-            "file": "crates/benten-renderer-tauri/src/lib.rs",
-            "line": 223,
-            "decl": "#[derive(Debug, Clone)]\npub struct IpcRequest { pub method, pub payload, pub session }",
-            "missing": "#[non_exhaustive] (per maximalist doctrine — pub struct that will plausibly need additive fields, e.g. correlation_id, trace_span)"
-          },
-          {
-            "file": "crates/benten-renderer-tauri/src/lib.rs",
-            "line": 306,
-            "decl": "#[derive(Debug, Clone, Default)]\npub struct AdminUiManifest { pub granted_caps: BTreeSet<String> }",
-            "missing": "#[non_exhaustive] (per maximalist doctrine — pub struct that will widen as the admin-UI-v0 manifest evolves)"
-          }
-        ],
-        "current_non_exhaustive_application_in_crate": [
-          {
-            "file": "crates/benten-renderer-tauri/src/lib.rs",
-            "line": 243,
-            "type": "IpcError",
-            "status": "#[non_exhaustive] APPLIED (the only L10-scope type carrying it)"
-          }
+        "head_state_at_3c80546f_complete_sweep": [
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 83, "type": "CapRequirement (enum)", "non_exhaustive": "MISSING (per maximalist doctrine — pub enum; future Optional/Conditional/Delegated arms reasonable)"},
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 105, "type": "IpcMethod (struct)", "non_exhaustive": "MISSING (row 997 explicit APPLY mandate)"},
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 223, "type": "IpcRequest (struct)", "non_exhaustive": "MISSING (per maximalist doctrine — pub struct; future correlation_id/trace_span fields reasonable)"},
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 244, "type": "IpcError (enum)", "non_exhaustive": "APPLIED (the only L10-scope type carrying it at HEAD)"},
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 306, "type": "AdminUiManifest (struct)", "non_exhaustive": "MISSING (per maximalist doctrine — pub struct; future fields as admin-UI-v0 manifest evolves)"},
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 356, "type": "InProcessSessionBridge (struct)", "non_exhaustive": "MISSING (private fields only; SemVer concern weaker but maximalist doctrine still applies — defensible per #11 carve-out reasoning if explicitly documented)"},
+          {"file": "crates/benten-renderer-tauri/src/lib.rs", "line": 423, "type": "TauriRenderer (struct)", "non_exhaustive": "MISSING (private fields only; same as InProcessSessionBridge)"}
         ],
         "audit_test_gap_unchanged": {
           "file": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs",
           "lines": 319,
           "tauri_grep_result": "0 occurrences of `tauri` / `renderer` / `IpcMethod` / `CapRequirement` / `IpcRequest` / `AdminUiManifest`",
-          "row_8_e_mandate": "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 8.e — workspace-walking audit test required",
-          "drift": "test does NOT walk workspace-wide; row 969/997 IpcMethod mandate consequently un-enforced — same gap as R6 R1 L10 surfaced"
+          "row_8_e_mandate": "docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 8.e — workspace-walking audit test required"
         },
-        "carve_out_status": {
-          "file": "docs/V1-FROZEN-INTERFACE-DEFERRED.md",
-          "renderer_tauri_carve_outs": "NONE for IpcMethod / CapRequirement / IpcRequest / AdminUiManifest (verified at integration HEAD)",
-          "note": "row 997 is unambiguous APPLY (not DEFER); the absence at HEAD is real drift continuing from R6 R1"
-        },
-        "fp_pass_recap": "R6 R1 FP cluster (A/B/C/D/E/F4) landed the engine-side substrate + visibility tighten + Bundle-3 #[non_exhaustive] sweeps + audit-test additions for other crates (benten-drop g_core_9_non_exhaustive_audit_drop.rs minted; benten-engine audit extended), but the benten-renderer-tauri-side row 969/997 closure was NOT included in any FP bundle — verified by git log on the lib.rs file (no FP commits touch the four type decls)"
+        "fp_pass_recap": "R6 R1 FP cluster (A/B/C/D/E/F4) landed substantial #[non_exhaustive] sweeps for other crates (benten-drop g_core_9_non_exhaustive_audit_drop.rs minted; benten-engine audit extended), but the benten-renderer-tauri-side row 997 closure was NOT included in any FP bundle"
       },
-      "disposition": "FIX-NOW (orchestrator-direct in R6-FP-1) — HARD RULE 12 default applies; not OUT-OF-SCOPE (it IS the lens scope + the prior R6 R1 L10 MINOR explicitly named this gap); not BELONGS-NAMED-NOW (the destination IS the freeze wave which is converging now in R6 — and the R6 R1 L10 ratification already named R6-FP-1 as the close destination, which did not include it); not DISAGREE (the freeze doc is the source of truth and the maximalist doctrine is ratified by Ben as the §11 architectural position).",
-      "proposed_fix": "(a) add `#[non_exhaustive]` to `IpcMethod` (struct line 105), `CapRequirement` (enum line 83), `IpcRequest` (struct line 223), `AdminUiManifest` (struct line 306) — 4 attribute additions, ~6 LOC including any consumer match-arm updates the lint surfaces (`tools/benten-admin-shell/src/main.rs` lines 54-57 destructures `m.cap` exhaustively but the `Required(scope) | None` match is already exhaustive — adding `#[non_exhaustive]` on the LOCAL crate's types does NOT require a wildcard arm in the same workspace per Rust semantics; only cross-crate consumers would need `_ =>` but `tools/benten-admin-shell` is in the same workspace so it's unaffected). (b) extend `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` with one new `#[test] fn benten_renderer_tauri_audit_arm_coverage()` that exercises the now-non_exhaustive types via a `match`-with-`_` arm + a presence pin — ~30 LOC. The carve-out registry mention in Row 8.e (audit-walks-workspace-wide) can stay deferred to the post-freeze G-COMP-1 wave per the named-NOW pattern (the per-type pin closes THIS row 997 gap defensively without requiring the full workspace walker now).",
-      "fix_loc_estimate": "~6 LOC src + ~30 LOC test = ~36 LOC total",
-      "risk_if_skipped": "Future Phase-4-Meta-Composing addition of (e.g.) a `CapRequirement::Conditional(predicate)` arm becomes a non-recoverable SemVer break of `benten-renderer-tauri` v1.x consumers — they hit the `non_exhaustive_omitted_patterns` lint as a hard error and the crate cannot ship a minor-version bump. The freeze doc's lean-DEFENSIVE guidance exists precisely to forestall this class of bug; missing the row 997 APPLY at v1-beta is exactly the failure mode item 11 was written to prevent. CARRY-FORWARD from R6 R1 L10 confirms this MINOR did not get closed in any R6 R1 FP bundle.",
-      "convergence_note": "single-author orchestrator-direct fix; no cross-crate cascade; the lint-surfaced consumer updates (if any) are mechanical match-arm `_ =>` additions inside this same crate's tests. No new BLOCKER risk; clean R6 R2 FP-1 close candidate. CARRY-FORWARD from R6 R1: this MINOR was named for R6-FP-1 close at R6 R1 but the FP bundle did not include it (FP-A/B/C/D/E/F4 were named workstreams; renderer-tauri non_exhaustive was not in any FP scope-doc)."
+      "disposition": "FIX-NOW (orchestrator-direct in R6-FP-1; can pair with l10-r6r2-MAJ-2 for one coherent #[non_exhaustive] sweep across benten-engine + benten-renderer-tauri).",
+      "proposed_fix": "Add `#[non_exhaustive]` to `CapRequirement` (line 83), `IpcMethod` (line 105), `IpcRequest` (line 223), `AdminUiManifest` (line 306), `InProcessSessionBridge` (line 356), `TauriRenderer` (line 423) — 6 attribute additions, ~6 LOC. Extend `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` (or mint sibling `crates/benten-renderer-tauri/tests/g_core_9_non_exhaustive_audit_tauri.rs` following the benten-drop pattern) — ~40 LOC test additions.",
+      "fix_loc_estimate": "~6 LOC src + ~40 LOC test = ~46 LOC total"
     },
     {
-      "id": "l10-r6r2-min-2",
+      "id": "l10-r6r2-MIN-2",
       "severity": "MINOR",
       "title": "NEW from integration-branch scope: napi `Engine::new` + `Engine::open_with_policy` constructors do NOT route through `ProductionEngineBuilder` at v1-beta — the deferral is documented only in source-code comments + the compile-test pin's forensic-anchor narrative, NOT in `docs/V1-FROZEN-INTERFACE-DEFERRED.md` as a Row D-N entry (HARD RULE 12 clause-(b) compliance gap)",
       "evidence": {
+        "discipline_applied": "HARD RULE 12 NAMED-destination specificity (orchestrator depth-discipline #5)",
         "head_state_at_3c80546f": {
           "file": "bindings/napi/src/lib.rs",
           "line_278_constructor": "pub fn new(path: String) -> napi::Result<Self> { let inner = InnerEngine::open(&path).map_err(engine_err)?; ... }",
           "line_309_factory": "let builder = match policy { PolicyKind::NoAuth => EngineBuilder::new(), PolicyKind::Ucan => EngineBuilder::new().capability_policy_ucan_durable(), PolicyKind::GrantBacked => EngineBuilder::new().capability_policy_grant_backed(), }; let inner = builder.open(&path).map_err(engine_err)?;",
           "observation": "Both constructors bypass `ProductionEngineBuilder` — they construct via `InnerEngine::open` / `EngineBuilder::new()` directly, so the `ProductionManifestEnvelopeRechecker` (the substrate Row D-4 just shipped) is NOT installed on the napi-produced Engine"
         },
+        "ground_truth_audit_command": "grep -rn 'Engine::open\\|EngineBuilder::new\\|ProductionEngineBuilder\\|InnerEngine::open' bindings/napi/src/*.rs tools/*/src/*.rs",
+        "ground_truth_results": {
+          "napi_construction_sites": [
+            "bindings/napi/src/lib.rs:279 — InnerEngine::open (BYPASSES ProductionEngineBuilder)",
+            "bindings/napi/src/lib.rs:310-312 — EngineBuilder::new()... (BYPASSES ProductionEngineBuilder)",
+            "bindings/napi/src/lib.rs:2453 — benten_engine::Engine::open in test (#[cfg(test)] path; not production)"
+          ],
+          "tools_construction_sites": [
+            "tools/benten-admin-shell/src/main.rs:47 — AdminShellState::new_production() does NOT construct an Engine (only DidKeyedSession + TauriRenderer); admin-shell's tauri-feature path forwards Engine construction to the integrator binary's Tauri command handler (out of scope)",
+            "verified zero Engine::open / EngineBuilder / ProductionEngineBuilder construction in tools/benten-dev/src/* (devserver uses Engine via dep but constructs it via test harness paths only)",
+            "verified zero Engine::open construction in tools/cite-drift-detector / tools/create-benten-app / tools/bench-wat-rebake"
+          ],
+          "verdict": "napi binding is the SOLE production Engine construction site outside of tests — and it bypasses ProductionEngineBuilder. The F4 compile-test pin (bindings/napi/tests/r6_r1_fp_c_napi_engine_routes_through_production_builder.rs) verifies surface availability but NOT actual routing — the test name is misleading ('routes_through' implies actual routing; it actually verifies 'is_accessible_from')"
+        },
         "informal_deferral_in_source": [
           {
             "file": "crates/benten-engine/src/production_engine_builder.rs",
             "lines": "20-22",
             "text": "ProductionEngineBuilder::build() is the production constructor; napi `Engine::new(path)` / `Engine::open_with_policy` SHOULD route through here (Commit 6 napi compile-test pin verifies the routing per CRITIC-1 FIX-3).",
-            "issue": "uses 'SHOULD' not 'DOES'; comment says routing is verified by the pin, but the pin only verifies surface availability (see below)"
+            "issue": "uses 'SHOULD' not 'DOES'; comment says routing is verified by the pin, but the pin only verifies surface availability"
           },
           {
             "file": "bindings/napi/tests/r6_r1_fp_c_napi_engine_routes_through_production_builder.rs",
@@ -115,164 +234,166 @@
           "file": "docs/V1-FROZEN-INTERFACE-DEFERRED.md",
           "lines": "203-213",
           "status_marker": "~~Row D-4~~ — ProductionManifestEnvelopeRechecker production impl + default-builder wiring — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)",
-          "closure_scope": "ProductionManifestEnvelopeRechecker substantive impl + ProductionEngineBuilder canonical constructor (per CRITIC-2 F-2.2 rename) + synthesized-fallback hardening (Row D-18 coupling)",
-          "what_is_NOT_closed": "napi binding (`bindings/napi/src/lib.rs::Engine::new` + `Engine::open_with_policy`) routing through `ProductionEngineBuilder` — the substrate is shipped but the napi consumption is not wired; full PluginLibrary-driven chain walk is named for G-COMP-1 in Row D-4 (FORENSIC) at lines 215-236",
-          "row_d4_forensic_text": "the v1-beta posture: the always-installed Noop returns NotApplicable (admit) for resolvable peer-DIDs. Layer-A empty/sentinel-DID short-circuit IS live. The per-resolvable-DID substantive recheck is NOT live in shipped binaries."
-        },
-        "hard_rule_12_clause_b_analysis": {
-          "rule_text": "BELONGS-NAMED-NOW to specific existing destination + entry lands NOW (not 'I'll add it later'; 'carry to next brief' is NOT a named destination)",
-          "current_state": "The deferral lives in source-code comments + a forensic-anchor compile-test. Neither is a 'specific existing destination' per HARD RULE 12 clause-(b). DEFERRED.md is the named destination mechanism for v1-beta deferrals; Row D-4 (FORENSIC) covers the engine-side rechecker substrate consumption, but does NOT name the napi binding-side routing.",
-          "verdict": "informal deferral — needs either (a) FIX-NOW (migrate napi constructors to ProductionEngineBuilder; ~10 LOC) or (b) formalize as a NEW Row D-N entry in DEFERRED.md naming bindings/napi/src/lib.rs:278+309 as the deferred consumption site"
-        },
-        "production_runtime_consequence": "napi-produced Engine instances run with the always-installed NoopManifestEnvelopeRechecker (admit on resolvable peer-DIDs) rather than the ProductionManifestEnvelopeRechecker; the Layer-A empty/sentinel-DID short-circuit (the structural fail-CLOSED defense) IS live, but the per-resolvable-DID substantive recheck is not. This is the SAME v1-beta posture Row D-4 (FORENSIC) names as deferred — but for napi consumers specifically (which is the production-binary path for JS / TS / Electron / Node-based admin shells), the deferred consumption is now LOAD-BEARING without explicit naming."
+          "what_is_NOT_closed": "napi binding routing through `ProductionEngineBuilder` — the substrate is shipped but the napi consumption is not wired"
+        }
       },
-      "disposition": "FIX-NOW path (a) preferred per HARD RULE 12 default; OR FIX-NOW path (b) (formal Row D-N entry in DEFERRED.md) acceptable per HARD RULE 12 clause-(b). Either disposition closes the gap; the orchestrator-direct should pick path (b) for v1-beta-to-v1-GM if the migration is genuinely deliberate (it is, per the test-file comment + the Row D-4 narrative), OR path (a) (~10 LOC orchestrator-direct edit in `bindings/napi/src/lib.rs`) if the migration is small enough to land in R6-FP.",
-      "proposed_fix_path_a": "Edit `bindings/napi/src/lib.rs:278+309`: replace `InnerEngine::open(&path)` with `ProductionEngineBuilder::new().open(&path)`; replace `EngineBuilder::new()...build()` chain with `ProductionEngineBuilder::new()...build()` (need to add `inner_mut()` chaining for capability_policy_ucan_durable / capability_policy_grant_backed since ProductionEngineBuilder doesn't expose them directly — use `b.inner_mut().capability_policy_ucan_durable()` pattern). ~10 LOC src + maybe 5 LOC test pin update. Verify the existing `r6_r1_fp_c_napi_engine_routes_through_production_builder.rs` compile-test pin's narrative needs update (it currently says 'does NOT YET install' — would change to 'does install').",
+      "disposition": "FIX-NOW path-(a) preferred per HARD RULE 12 default OR path-(b) acceptable per HARD RULE 12 clause-(b) — either disposition closes the gap; the orchestrator-direct should pick path-(b) for v1-beta-to-v1-GM if the migration is genuinely deliberate (it is, per the test-file comment + the Row D-4 narrative), OR path-(a) if the migration is small enough to land in R6-FP. Recommend path-(b) — coherent with Row D-4 (FORENSIC) deferral narrative.",
+      "proposed_fix_path_a": "Edit `bindings/napi/src/lib.rs:278+309`: replace `InnerEngine::open(&path)` with `ProductionEngineBuilder::new().open(&path)`; replace `EngineBuilder::new()...build()` chain with `ProductionEngineBuilder::new().inner_mut()...build()` pattern. ~15 LOC src + test-pin narrative update.",
       "proposed_fix_path_b": "Add a new Row D-N entry to `docs/V1-FROZEN-INTERFACE-DEFERRED.md` naming `bindings/napi/src/lib.rs::Engine::{new, open_with_policy}` as the deferred consumption of ProductionEngineBuilder; anchor to Row D-4 (FORENSIC) for the substrate; name G-COMP-1 napi-binding-migration wave as the v1-GM closure target. ~30 LOC docs.",
-      "fix_loc_estimate": "path (a) ~15 LOC total / path (b) ~30 LOC docs",
-      "risk_if_skipped": "Production napi consumers (JS / TS / Electron / Node-based admin shells — including the eventually-built thin-compute shape (b) host) run without the substantive ProductionManifestEnvelopeRechecker for the duration of v1-beta. The Layer-A empty/sentinel-DID short-circuit IS live, so the structural sec-r4r1-2 BLOCKER class stays closed, but the per-resolvable-DID recheck (which catches the substantive Compromise #26 / sec-r4r1-1 narrative — peer-DID-signature-but-stale-revocation) is silently absent on the napi production path. Without a formal Row D-N entry the deferral is invisible to future plan-doc scans + Phase-4-Meta-Composing scope drafting.",
-      "convergence_note": "path-(b) is single-author docs-edit; path-(a) is single-author 15-LOC napi-edit; either way no cross-crate cascade; clean R6 R2 FP-1 close. Recommended: path-(b) if the deferral is genuinely deliberate (per Row D-4 narrative the substantive recheck is named for G-COMP-1 — keeping napi in lock-step is coherent); path-(a) only if Ben's call is to land the routing-only-no-rechecker shape at v1-beta (which is structurally fine — ProductionEngineBuilder just installs the rechecker; the Noop posture is preserved by not having a PluginLibrary wired)."
+      "fix_loc_estimate": "path-(a) ~15 LOC / path-(b) ~30 LOC docs"
+    },
+    {
+      "id": "l10-r6r2-MIN-3",
+      "severity": "MINOR",
+      "title": "NEW from cross-lens cross-confirmation with L11 phantom-cite discipline: Row D-7 closure narrative carries a phantom cite to napi `put_node` which was never exposed at the napi boundary",
+      "evidence": {
+        "discipline_applied": "L11 phantom-cite-string cross-confirmation + ground-truth-verify per §3.5n",
+        "phantom_cite": {
+          "file": "docs/V1-FROZEN-INTERFACE-DEFERRED.md",
+          "lines": "295-297",
+          "text": "the §8-A tighten cascades through 75+ call sites across the workspace AND breaks the napi binding's public `get_node` / `put_node` methods at `bindings/napi/src/lib.rs::Engine::{get_node, put_node}`. Per HARD RULE 12 clause-(b) the disposition is BELONGS-NAMED-NOW here.",
+          "phantom": "napi `put_node` — verified via `grep 'pub fn put_node\\|inner\\.put_node' bindings/napi/src/lib.rs` returns 0 production matches (only the test-only path at line 2453 references engine put_node; the napi public surface has NO put_node method — writes flow via create_node/update_node/delete_node)",
+          "git_history_verify": "git log --all -S 'pub fn put_node' -- bindings/napi/src/lib.rs returns no commits adding/removing such a method — napi never exposed put_node"
+        },
+        "consequence": "Row D-7 narrative is technically inaccurate but substantively correct (the get_node migration was real; the put_node mention is a phantom that didn't need migration because it didn't exist). Low-impact cite-drift but per pim-N-cite-drift discipline (§3.5h MANDATORY-PRE-MERGE) should be cleaned up to avoid future agent confusion when scoping the parallel-migration-cluster pattern.",
+        "cross_lens_cross_confirmation": "L11 ratified 7 phantom cite-strings; this is the 8th, in a sibling Row narrative the L11 lens scope did not include (DEFERRED.md narratives vs WIRE-FORMAT-INVENTORY.md narratives)"
+      },
+      "disposition": "FIX-NOW (orchestrator-direct edit). Strip the phantom `put_node` reference from Row D-7's lines 295-297. ~3 LOC docs edit.",
+      "proposed_fix": "In docs/V1-FROZEN-INTERFACE-DEFERRED.md:295-297 replace '`get_node` / `put_node` methods at `bindings/napi/src/lib.rs::Engine::{get_node, put_node}`' with '`get_node` method at `bindings/napi/src/lib.rs::Engine::get_node` (napi has no `put_node` exposure — writes flow via `create_node`/`update_node`/`delete_node`; the original Row D-7 narrative incorrectly named both)'. ~3 LOC docs.",
+      "fix_loc_estimate": "~3 LOC docs"
     }
   ],
   "phase_wide_cross_checks_passed": [
     {
-      "check": "Row D-7 §8-A visibility cluster tighten + napi cascade CLOSED at R6 R1 FP-A Bundle F2",
+      "check": "Row D-7 §8-A visibility cluster tighten + napi cascade — PARTIAL closure (get_node only, not the same-attack-class siblings — see l10-r6r2-MAJ-1)",
       "evidence": [
         "bindings/napi/src/lib.rs:347-358 — `Engine::get_node` migrates to `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)` per CLAUDE.md baked-in #18 + V1-FROZEN-INTERFACE.md §1",
-        "crates/benten-engine/src/internal_principal.rs — `ENGINE_INTERNAL_PRINCIPAL_CID` sentinel const lives at the documented location; computed as `Cid::from_blake3_digest(blake3(b\"engine-internal-principal\"))` per docs/V1-FROZEN-INTERFACE.md:213",
-        "crates/benten-engine/src/lib.rs:205 — `pub use crate::internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID` — engine-side re-export so napi can `use benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID`",
+        "crates/benten-engine/src/internal_principal.rs — `ENGINE_INTERNAL_PRINCIPAL_CID` sentinel const lives at the documented location",
+        "crates/benten-engine/src/lib.rs:205 — `pub use crate::internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID` re-export",
         "crates/benten-engine/src/engine_crud.rs:168 — `pub(crate) fn read_node` (the §8-A tightened method) — verified `pub(crate)`, not `pub`",
-        "crates/benten-engine/src/engine_wait.rs:1155 — `pub fn read_node_as(&self, principal: &Cid, cid: &Cid) -> Result<Option<Node>, EngineError>` — the canonical public surface; signature matches CLAUDE.md baked-in #18 Class B β",
-        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:280-291 — Row D-7 marked CLOSED (retracted) with full closure narrative per pim-13 / §3.12 retention discipline"
+        "crates/benten-engine/src/engine_wait.rs:1155 — `pub fn read_node_as(&self, principal: &Cid, cid: &Cid) -> Result<Option<Node>, EngineError>` — canonical public surface",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:280-291 — Row D-7 marked CLOSED (retracted) with full closure narrative"
       ],
-      "verdict": "Row D-7 substantively closed; napi behavior preserved (sentinel principal flows through the canonical `read_node_inner` seam with `actor_cid: Some(*principal)`); Inv-11 + Option-C `DeniedRead` collapse semantics fire identically"
+      "verdict": "Row D-7's NAMED scope substantively closed; the SAME-ATTACK-CLASS SIBLING gap (diagnose_read / read_view / get_edge / edges_from / edges_to) is NOT closed — see l10-r6r2-MAJ-1"
     },
     {
-      "check": "Row D-4 ProductionManifestEnvelopeRechecker substrate CLOSED at R6 R1 FP-F4 §S4 (engine-side only)",
+      "check": "Row D-4 ProductionManifestEnvelopeRechecker substrate CLOSED at R6 R1 FP-F4 §S4 (engine-side only; see l10-r6r2-MIN-2 for napi-side routing gap)",
       "evidence": [
-        "crates/benten-engine/src/production_engine_builder.rs minted — wraps EngineBuilder + installs ProductionManifestEnvelopeRechecker post-build via `engine.set_manifest_envelope_rechecker(Arc::new(ProductionManifestEnvelopeRechecker::new()))`",
+        "crates/benten-engine/src/production_engine_builder.rs minted — wraps EngineBuilder + installs ProductionManifestEnvelopeRechecker post-build",
         "crates/benten-engine/src/production_manifest_envelope_rechecker.rs minted — substantive impl",
-        "bindings/napi/tests/r6_r1_fp_c_napi_engine_routes_through_production_builder.rs minted — compile-test pin verifying `ProductionEngineBuilder` IS accessible from the napi binding crate (surface verification, NOT routing verification)",
-        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:203-213 — Row D-4 marked CLOSED at FP-F4 §S4; Row D-4 (FORENSIC) at 215-236 preserves the deferred-consumption narrative for the per-resolvable-DID substantive recheck",
-        "wasm32 cfg-gate landed at fix-up #9 (commit 72a41844): `pub mod production_engine_builder` is cfg-gated `#[cfg(not(feature = \"browser-backend\"))]` to mirror `crate::builder::EngineBuilder` — wasm32-unknown-unknown bundle compiles"
+        "bindings/napi/tests/r6_r1_fp_c_napi_engine_routes_through_production_builder.rs minted — compile-test pin verifying ProductionEngineBuilder IS accessible (surface verification, NOT routing verification)",
+        "wasm32 cfg-gate landed at fix-up #9 commit 72a41844"
       ],
-      "verdict": "engine-side substrate landed cleanly; napi-side ROUTING-through-builder is NOT closed (covered by l10-r6r2-min-2)"
+      "verdict": "engine-side substrate landed cleanly; napi-side ROUTING-through-builder is NOT closed (covered by l10-r6r2-MIN-2)"
     },
     {
-      "check": "active_session_count_for_test admin-shell production-caller carve-out (R4b L6-MAJOR-1 PIVOT path-(b) Row D-22 + fix-up #6)",
+      "check": "active_session_count_for_test admin-shell production-caller carve-out (R4b L6-MAJOR-1 PIVOT path-(b) Row D-22 + fix-up #6) — SWEEP-COMPLETE per §3.6j",
       "evidence": [
-        "tools/benten-admin-shell/src/main.rs:62 — production caller `state.session().active_session_count_for_test()` (boot-banner active sessions count; un-cfg-gated production path)",
-        "crates/benten-engine/src/thin_client.rs:528-535 — `pub fn active_session_count_for_test(&self) -> usize` marked `#[doc(hidden)] #[must_use]` — un-cfg-gated (was cfg-gated by FP-A F1.a sweep, broke admin-shell production build, un-cfg-gated again at fix-up #6 commit 40cb433a)",
-        "tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs:130-141 — explicit carve-out registry entry: `(\"crates/benten-engine/src/thin_client.rs\", \"active_session_count_for_test\")` with narrative comment naming the admin-shell consumer + v1-GM rename target (drop the misleading `_for_test` suffix)",
-        "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-22 — 115 `pub fn .*_for_test` surfaces deferred to G-COMP-1 cfg-gate sweep wave; admin-shell-consumed surfaces named in the carve-out registry are part of this Row D-22 scope"
+        "tools/benten-admin-shell/src/main.rs:62 — production caller",
+        "crates/benten-engine/src/thin_client.rs:528-535 — `pub fn active_session_count_for_test(&self)` un-cfg-gated",
+        "tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs:130-141 — explicit carve-out registry entry with narrative comment",
+        "§3.6j sweep verification: grep `_for_test|_for_testing` tools/*/src/*.rs returns ONLY: tools/benten-admin-shell/src/main.rs:62 (the named carve-out) + tools/benten-dev/src/lib.rs (which properly cfg-gates 8 helpers under `#[cfg(any(test, feature = \"testing\"))]`) + zero other production callers across tools/benten-dev/main.rs / inspect_state.rs / reload.rs / watcher.rs / tools/cite-drift-detector / tools/create-benten-app / tools/bench-wat-rebake — SWEEP COMPLETE"
       ],
-      "verdict": "HARD RULE 12 clause-(b) compliant — named carve-out registry IS the specific destination; entry landed at fix-up #6 + the carve-out registry update; coherent with Row D-22 narrative; not an L10 finding"
+      "verdict": "HARD RULE 12 clause-(b) compliant; SWEEP-COMPLETE self-verified per §3.6j discipline; no additional production-shaped callers exist in tools/"
     },
     {
       "check": "Row D-6 §4.25 sync-hydrate consumption of UnresolvedDeny CLOSED at R6 R1 FP-F4 §S4",
-      "evidence": [
-        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:257-265 — Row D-6 marked CLOSED; `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome` minted",
-        "narrative: the §4.36 merge-time + §4.25 hydrate-time both consume the shared `ManifestEnvelopeRecheckOutcome::UnresolvedDeny` primitive"
-      ],
+      "evidence": ["docs/V1-FROZEN-INTERFACE-DEFERRED.md:257-265 — Row D-6 marked CLOSED; `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome` minted"],
       "verdict": "sync-side consumption now structurally enforced; not an L10 finding (sync-side scope; L7 owns)"
     },
     {
       "check": "napi PR-B (#1203) AsyncTask migration end-to-end — production-runtime LIVE",
       "evidence": [
-        "bindings/napi/src/lib.rs::NextChunkTask: `Task::compute()` polls `state.close_requested` between bounded `next_chunk_with_timeout` waits; runs on libuv worker pool, NOT JS main thread",
-        "bindings/napi/src/lib.rs::StreamHandleJs::next returns `AsyncTask<NextChunkTask>` — Promise-returning shape per #1203",
-        "packages/engine/src/stream.ts NativeStreamHandle.next signature `Promise<Buffer | null>` — TS consumer awaits the Promise inside Symbol.asyncIterator",
-        "test pins present: streamhandle_next_asynctask_roundtrip.spec.ts + streamhandle_libuv_non_starvation.spec.ts + streamhandle_close_concurrent_with_blocked_next.spec.ts"
+        "bindings/napi/src/lib.rs::NextChunkTask::compute polls close_requested + runs on libuv worker pool",
+        "StreamHandleJs::next returns AsyncTask<NextChunkTask>",
+        "packages/engine/src/stream.ts NativeStreamHandle.next signature Promise<Buffer | null>",
+        "test pins present"
       ],
-      "verdict": "production-runtime LIVE; TS shape locked at V1-FROZEN-INTERFACE row 838"
+      "verdict": "production-runtime LIVE"
     },
     {
       "check": "#652 close()-cancel-of-stuck-next() race-closure (G-CORE-10 Option-C Mutex-split) — production-runtime LIVE",
-      "evidence": [
-        "bindings/napi/src/lib.rs::StreamHandleJs::close: non-blocking sync close — sets `close_requested` + `is_drained_cached` SYNCHRONOUSLY without waiting on handle lock; opportunistic try_lock for immediate drop; either way bounded-constant-time return",
-        "STREAM_NEXT_POLL_INTERVAL=50ms — close() observed within ~50ms of being set",
-        "NextChunkTask::compute checks `state.close_requested` at top of each loop iteration AND uses `try_lock` for the fast-path close-before-acquire branch",
-        "Mutex-split: `state.handle: Arc<Mutex<Option<StreamHandle>>>` is the lock the AsyncTask holds; `close_requested: AtomicBool` is the cancellation signal observable WITHOUT that lock — closing the original #652 race"
-      ],
-      "verdict": "production-runtime LIVE; pre-v1 small hardening landed (CLAUDE.md baked-in #15)"
+      "evidence": ["non-blocking sync close; STREAM_NEXT_POLL_INTERVAL=50ms; Mutex-split atomic + handle separation"],
+      "verdict": "production-runtime LIVE"
     },
     {
       "check": "browser thin-client bundle (wasm32-unknown-unknown shape (b)) — honest-disclosure discipline preserved",
       "evidence": [
-        "bindings/napi/src/wasm_browser.rs: BrowserManifestStore in-RAM with HONEST `is_persistent() -> false` until G18-A-followup wires IDB (Compromise #19 PARTIALLY CLOSED narrative; the dishonest-flag-flip drift hazard is structurally prevented)",
-        "browser_runtime_available() cfg-split: symbol present on every target; answer target-honest — TS callers always see `typeof === 'function'`",
-        "FORBIDDEN_PREFIXES sweep at crates/benten-renderer-tauri/tests/three_rung_baked_in_17_defense_extension_pin.rs (forbids loro/iroh/wasmtime/multi-thread-tokio/redb in wasm32 bundle) — 3-rung defense per CLAUDE.md baked-in #17",
-        "named RED-PHASE deferral at bindings/napi/tests/wasm_bundle_size.rs → phase-3-backlog §4.3 G18-A-followup (HARD RULE 12 clause-(b) compliant)",
-        "production_engine_builder cfg-gate fix-up #9 — wasm32+browser-backend bundle compiles cleanly after F4's S4 design landed without the cfg-gate; pim-N candidate captured in the fix-up #9 commit message (when adding a new module that depends on a cfg-gated module, the new module must mirror the same gate)"
+        "BrowserManifestStore HONEST is_persistent() returns false; cfg-split target-honest browser_runtime_available()",
+        "FORBIDDEN_PREFIXES sweep at three_rung_baked_in_17_defense_extension_pin.rs forbids loro/iroh/wasmtime",
+        "production_engine_builder cfg-gate fix-up #9 — wasm32+browser-backend compiles cleanly"
       ],
-      "verdict": "honest-disclosure discipline preserved; partial-close narrative landed; wasm32 bundle compile state coherent"
+      "verdict": "honest-disclosure preserved; wasm32 bundle compile state coherent"
     },
     {
-      "check": "embedded webview shape (c) — Tauri 2.x renderer (CLAUDE.md baked-in #19)",
+      "check": "embedded webview shape (c) — Tauri 2.x renderer (CLAUDE.md baked-in #19) — T3 three-rung defense LIVE",
       "evidence": [
-        "T3 three-rung defense (crates/benten-renderer-tauri/src/lib.rs): rung 1 IPC_METHODS allowlist (typed slice — bijection-by-construction; the former parallel-array shape with `unwrap_or(\"\")` fail-OPEN drift hazard is structurally eliminated by the typed CapRequirement::None vs Required(scope) sum), rung 2 per-method cap binding (AdminUiManifest::grants), rung 3 WEBVIEW_CSP_HEADER (default-src 'none'; forbids 'unsafe-eval' + 'unsafe-inline'; 'wasm-unsafe-eval' is the wasm-only relaxation)",
-        "tauri-runtime-verso swap-readiness: Renderer trait at crates/benten-platform-foundation/src/materializer.rs carries NO Tauri-specific types in render() signature; `_assert_renderer_object_safety()` compile-test pin at crates/benten-renderer-tauri/src/lib.rs:602",
-        "br-r1-14 cross-protocol contract: InProcessSessionBridge re-uses benten_engine::thin_client::DidKeyedSession + SessionToken (same cryptographic state machine as shape (b); transport=Transport::Ipc)",
-        "test coverage: ipc_allowlist_rejects_unknown_method.rs + ipc_method_invocation_requires_manifest_cap.rs + webview_csp_locked_no_unsafe_eval.rs + ipc_method_name_stability_drift_detector.rs (baseline-byte-for-byte against docs/public-api/benten-renderer-tauri.json) + compromised_webview_cannot_escalate_to_native_filesystem.rs + arch_n_benten_renderer_tauri_dep_direction.rs + tauri_runtime_verso_swap_readiness_compile_test.rs + in_process_ipc_session_token_contract_matches_thin_client.rs"
+        "rung 1 IPC_METHODS allowlist; rung 2 per-method cap binding (AdminUiManifest::grants); rung 3 WEBVIEW_CSP_HEADER",
+        "tauri-runtime-verso swap-readiness: _assert_renderer_object_safety() compile-test pin",
+        "br-r1-14 cross-protocol contract: InProcessSessionBridge re-uses DidKeyedSession + SessionToken"
       ],
-      "verdict": "production-runtime LIVE; engine-extension trust model (CLAUDE.md #19) preserved; verso swap-readiness intact; the ONLY gap is the row 997 #[non_exhaustive] application (covered by l10-r6r2-min-1)"
+      "verdict": "production-runtime LIVE; the ONLY gap is the row 997 #[non_exhaustive] application (l10-r6r2-MIN-1)"
     },
     {
       "check": "bridged-dual-runtime ratification (CLAUDE.md baked-in #17 §8-C)",
       "evidence": [
-        "bindings/napi/src/atrium.rs::js_atrium_runtime() (line 85-94): process-singleton `tokio::runtime::Builder::new_multi_thread().enable_all()` runtime — ENGINE-OWNED, not host-shell-borrowed",
-        "No `tauri::Builder::with_runtime` references anywhere; `crates/benten-renderer-tauri/Cargo.toml` has ZERO tauri/tokio production deps (rung-2 forbidden-dep assertion at three_rung_baked_in_17_defense_extension_pin.rs:53-60)",
-        "JsAtrium uses napi::bindgen_prelude::Task (NOT tokio_rt feature) — block_on runs on `js_atrium_runtime()` from AsyncTask::compute, off the JS thread (bindings/napi/INTERNALS.md:98)"
+        "bindings/napi/src/atrium.rs::js_atrium_runtime() process-singleton engine-owned tokio::runtime",
+        "ZERO tauri/tokio production deps in benten-renderer-tauri Cargo.toml"
       ],
-      "verdict": "bridged-dual-runtime contract held; no shell-runtime-handle threading"
+      "verdict": "bridged-dual-runtime contract held"
     },
     {
       "check": "SANDBOX wasm32 typed-reject + cfg-split discipline",
       "evidence": [
-        "bindings/napi/src/sandbox.rs: sandbox_target_supported cfg-split — `true` native / `false` wasm32; symbol present on every target so TS sees `typeof === 'function'`",
-        "E_SANDBOX_UNAVAILABLE_ON_WASM typed error mirrors crypto-agility #5 typed-reject pattern (never silent fallback) — surfaced wasm32-side per docs/SANDBOX-LIMITS.md §5",
-        "_for_test surfaces are cfg-gated under `feature = test-helpers` with a `Err(E_PRIMITIVE_NOT_IMPLEMENTED)` body in the production build path (defense-in-depth — production cdylib still surfaces a typed error if called)"
+        "sandbox_target_supported cfg-split target-honest",
+        "E_SANDBOX_UNAVAILABLE_ON_WASM typed error mirrors #5 typed-reject",
+        "_for_test surfaces cfg-gated under feature='test-helpers'"
       ],
-      "verdict": "production-runtime LIVE; typed-reject + cfg-split + sentinel-drop all consistent"
+      "verdict": "production-runtime LIVE"
     },
     {
-      "check": "TS public-API drift detector (#1204; G-CORE-9 V1-FROZEN row 2)",
+      "check": "TS public-API drift detector (#1204; G-CORE-9 V1-FROZEN row 2) — LIVE + regenerated",
       "evidence": [
-        "packages/engine/etc/public-api.txt: 403 LOC; 360 export entries; baseline regenerated at fix-up #10 (commit 0974b2ec) + fix-up #11 (commit a1e0e653) to absorb F4's 2 new ErrorCode classes + DSL classes from Agent B",
-        ".github/workflows/ts-public-api.yml: INFORMATIONAL ONLY at v1-beta — drift surfaces as step summary; workflow always exits 0; promotion to required is a v1-Composing or post-v1 OSS-launch-era decision (mirrors cargo-public-api ci-decisions framing)",
-        "Initial implementation uses extract-from-.d.ts structural diff; migration to @microsoft/api-extractor is a v1-Composing window enhancement per V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 2",
-        "pnpm-workspace.yaml minted at fix-up #9 (commit 72a41844) so pnpm install recursively installs packages/engine devDeps including @types/node"
+        "packages/engine/etc/public-api.txt: 403 LOC; 360 export entries; regenerated at fix-up #10+#11",
+        ".github/workflows/ts-public-api.yml INFORMATIONAL ONLY at v1-beta",
+        "pnpm-workspace.yaml minted at fix-up #9"
       ],
-      "verdict": "TS public-API drift detector workflow LIVE + baseline regenerated cleanly post-integration; informational status preserved per ci-decisions §4 framing"
+      "verdict": "TS public-API drift detector workflow LIVE + baseline regenerated cleanly"
     },
     {
       "check": "wasm32-wasip1 sister target + canonical-fixture-CID dual-target invariant",
-      "evidence": [
-        "bindings/napi/src/wasm_target.rs: wasi_target_kind / wasi_runtime_supports_redb_native / wasi_canonical_fixture_cid all cfg-split; wasi_canonical_fixture_cid recomputes the Phase-1 canonical CID via benten_core::testing::canonical_test_node() — unconditional surface (intentionally not cfg-gated; per source 'tiny + costs nothing at runtime')",
-        "wasm-runtime.yml workflow compares wasm32-wasip1 answer against native answer for cross-target CID stability"
-      ],
+      "evidence": ["bindings/napi/src/wasm_target.rs cfg-split + wasi_canonical_fixture_cid unconditional surface"],
       "verdict": "wasm-r1-1 dual-target invariant preserved"
     },
     {
-      "check": "for_test_symbols_are_feature_gated.rs workspace audit (NEW at integration HEAD)",
+      "check": "for_test_symbols_are_feature_gated.rs workspace audit (NEW at integration HEAD) — SWEEP-COMPLETE",
       "evidence": [
-        "tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs minted at integration — 367 LOC walking crates/* + tools/* for `pub fn .*_for_test` / `_for_testing` surfaces; verifies each is either cfg-gated under `feature = \"test-helpers\"` OR appears in the explicit carve-out registry CARVE_OUT_REGISTRY",
-        "carve-out registry currently names: `with_budget_for_testing` × 7 (benten-ivm views) + `active_session_count_for_test` (benten-engine thin_client; admin-shell production caller)",
-        "Row D-22 narrative coupling: the 115 `_for_test` surfaces deferred to G-COMP-1 are not yet feature-gated; the carve-out registry is the v1-beta seam pending the sweep"
+        "tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs minted at integration — 367 LOC walking crates/* + tools/*",
+        "carve-out registry currently names: 7 ivm with_budget_for_testing + active_session_count_for_test (admin-shell)",
+        "Row D-22 narrative coupling"
       ],
-      "verdict": "new audit test landed cleanly; carve-out registry coherent with Row D-22 deferral; admin-shell production caller properly named"
+      "verdict": "new audit test landed cleanly; carve-out registry coherent"
+    },
+    {
+      "check": "Production Engine construction sweep across napi + tools — §3.5n ground-truth-verify",
+      "evidence": [
+        "audit command: grep -rn 'Engine::open|EngineBuilder::new|ProductionEngineBuilder|InnerEngine::open' bindings/napi/src/*.rs tools/*/src/*.rs",
+        "napi-side: 2 production sites (bindings/napi/src/lib.rs:279 + 310-312) BOTH bypass ProductionEngineBuilder (covered by l10-r6r2-MIN-2)",
+        "tools-side: ZERO production Engine construction in admin-shell (constructs only DidKeyedSession + TauriRenderer); ZERO in benten-dev/cite-drift-detector/create-benten-app/bench-wat-rebake",
+        "test-only sites correctly use raw Engine::open (out of scope per F4 pin)"
+      ],
+      "verdict": "napi binding is sole production Engine construction site; both constructor + factory bypass ProductionEngineBuilder (l10-r6r2-MIN-2); tools/ surface is clean"
     }
   ],
   "absent_findings_explicit": {
     "no_blocker": true,
-    "no_major": true,
-    "no_obs": true,
-    "rationale": "L10 R3 + R4 returned total-zero clean-sweep. R6 R1 R6 R2 PHASE-WIDE re-reviews are structurally confirmation passes. The five production-runtime surface families (napi/browser/webview/sandbox/dual-runtime/admin-shell) are all correct, well-pinned, and well-disclosed. The TWO MINORs surface from cross-checks the FREEZE-narrow tiers did not run: (1) the R6 R1 L10 row 969/997 MINOR carried forward unclosed; (2) the new integration-branch-scope informal-deferral of napi+ProductionEngineBuilder routing. Both are well-scoped orchestrator-direct closes (~50 LOC total)."
+    "rationale_no_blocker": "None of the surfaced findings violate Phase-1 invariants directly at production runtime. l10-r6r2-MAJ-1 (un-attributed read siblings) does not bypass Engine::call_as walk-thread principal-attribution (only direct napi CRUD reads); l10-r6r2-MAJ-2 (#[non_exhaustive] gap) is future-SemVer-defense not runtime hazard. All findings are well-scoped orchestrator-direct or 1-agent fixes."
   },
   "convergence_recommendation": {
-    "for_R6_R2": "2 MINOR — well-scoped orchestrator-direct closes; no BLOCKER / no MAJOR; Q5 termination NOT met (BLOCKER+MAJOR=0 but MINOR=2 — Q5 requires 0 substantive=BLOCKER+MAJOR for termination, so this round is APPROVE-clean for substantive convergence but RECOMMENDS R6-FP for MINOR closure per maximalist-convergence discipline)",
-    "fix_plan": "R6 R2 FP-1 (or first batch): (a) add `#[non_exhaustive]` to `IpcMethod` + `CapRequirement` + `IpcRequest` + `AdminUiManifest`; extend g_core_9_non_exhaustive_audit.rs with `benten_renderer_tauri_audit_arm_coverage` test (~36 LOC); (b) close l10-r6r2-min-2 via path-(b) (add Row D-N to V1-FROZEN-INTERFACE-DEFERRED.md naming the napi binding-side ProductionEngineBuilder routing deferral, anchored to Row D-4 (FORENSIC); ~30 LOC docs) OR path-(a) (migrate napi constructors; ~15 LOC src). Total ~50-75 LOC across one src file + one test file + one docs file.",
-    "for_R6_R3": "if R6-FP closes both MINORs and Q5 full-council returns 0 substantive findings, L10 advances to APPROVE-FOR-TAG"
+    "for_R6_R2": "2 MAJOR + 3 MINOR; NOT Q5-terminal. R6-FP-1 cluster recommended:",
+    "fix_plan": "Bundle A (~104 LOC orchestrator-direct): l10-r6r2-MAJ-2 (12-type #[non_exhaustive] sweep + audit-test extension + row 978 text update) + l10-r6r2-MIN-1 (renderer-tauri 6-type sweep + sibling audit test). Bundle B (~50 LOC docs): l10-r6r2-MAJ-1 path-(b) (single Row D-N entry naming 4 un-attributed read siblings + G-COMP-1 closure target) + l10-r6r2-MIN-2 path-(b) (Row D-N entry naming napi-side ProductionEngineBuilder routing deferral) + l10-r6r2-MIN-3 (Row D-7 phantom-cite cleanup). Total ~154 LOC; orchestrator-direct, single-PR feasible.",
+    "for_R6_R3": "if R6-FP closes all 5 findings + Q5 full-council returns 0 substantive findings, L10 advances to APPROVE-FOR-TAG"
   },
-  "lens_l10_phase_4_meta_core_substantive_assessment": "L10 client-surfaces is in EXCELLENT shape at integration HEAD 3c80546f. The R6 R1 FP cluster landed substantial work: §8-A visibility tighten + napi cascade through ENGINE_INTERNAL_PRINCIPAL_CID (Row D-7 closure); ProductionEngineBuilder + ProductionManifestEnvelopeRechecker substrate (Row D-4 closure); §4.25 sync-hydrate consumption (Row D-6 closure); R4b-FP-D-22 admin-shell active_session_count_for_test carve-out; for_test_symbols_are_feature_gated.rs workspace audit; pnpm-workspace.yaml + ts-public-api baseline regeneration. The five production-runtime surface families L10 owns are all correct + well-pinned. The 2 MINORs are both v1-beta defense-against-future-breakage cleanups (non_exhaustive maximalist application + formal naming of an informal deferral), neither blocks v1-beta shippability."
+  "lens_l10_phase_4_meta_core_substantive_assessment": "L10 client-surfaces is in GOOD shape at integration HEAD 3c80546f, with substantial R6 R1 FP work landed (§8-A get_node + napi cascade through ENGINE_INTERNAL_PRINCIPAL_CID; ProductionEngineBuilder substrate; sync-hydrate UnresolvedDeny; admin-shell carve-out; for_test_symbols workspace audit; pnpm-workspace.yaml + ts-public-api baseline regen). The AUGMENTED depth-discipline pass surfaced 2 MAJOR same-attack-class sibling gaps that the FREEZE-narrow R3/R4/R6-R1 lens passes missed: (a) only 1 of 5 napi read surfaces migrated through the principal-attribution sentinel; (b) only 5 of 12 freeze-mandated benten-engine types got #[non_exhaustive] applied despite explicit row 978 'APPLY' mandate. Both are clean R6-FP-1 closes via path-(b) named-deferral (~50 LOC docs) or path-(a) substantive sweep (~260 LOC + ~104 LOC). Neither blocks v1-beta shippability. The 3 MINORs (renderer-tauri non_exhaustive carry-forward, napi-ProductionEngineBuilder routing informal-deferral, Row D-7 phantom-cite) round out a coherent R6-FP-1 sweep target.",
+  "augmentation_process_note": "This R6 R2 L10 review was AUGMENTED post-submission per orchestrator follow-up applying depth disciplines that L3 + L11 sibling lenses surfaced as material. Initial submission disposition was APPROVE-WITH-2-MINORS; augmented disposition is APPROVE-WITH-2-MAJORS-AND-3-MINORS. The escalation comes entirely from the same-attack-class sibling discipline (l10-r6r2-MAJ-1) + §3.6j sweep-completeness self-verify against row 978 (l10-r6r2-MAJ-2) + L11 phantom-cite cross-confirmation (l10-r6r2-MIN-3). The original 2 MINORs (l10-r6r2-MIN-1 renderer-tauri carry-forward + l10-r6r2-MIN-2 napi-ProductionEngineBuilder informal-deferral) stand unchanged. Discipline learned: FREEZE-narrow review tiers (R3/R4) optimize for the explicitly-named-in-Row scope; R6 phase-close convergence councils MUST apply same-attack-class sibling expansion + §3.6j sweep-completeness + cross-lens cross-confirmation to catch the architectural-class gaps the narrow tiers structurally cannot. Codifies a new dispatch-conventions candidate: pim-N-r6-converge-augment-with-cross-lens-findings."
 }
