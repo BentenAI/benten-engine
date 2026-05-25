@@ -359,6 +359,7 @@ impl CidExistenceCache {
     /// until explicitly removed. Used by
     /// `RedbBackend::force_bloom_positive_for_test` (plan §4.7 row for
     /// atk-3 / sec-r1-4).
+    #[cfg(any(test, feature = "testing"))]
     pub fn force_positive_for_test(&mut self, cid: &Cid) {
         self.forced_positives.insert(*cid);
     }

@@ -37,6 +37,17 @@ bench = false
 # semver-pre-1.0 minor version with a `Loro version pinned + Dependabot
 # fast-track per scope-real-10` clause analogous to iroh's G16-A pinning.
 # G16-C adds: the MST primitives crate(s) chosen at G16-C dispatch time.
+
+# R6 R1 FP-A Bundle F1.b — `testing` feature gates the in-crate
+# `pub fn .*_for_test*` helpers in `mst.rs` + `ucan_blobs_protocol.rs`.
+# Chains through to sibling `benten-caps/testing` because the
+# `serve_request_for_test` / `record_revocation_for_test` /
+# `dispatch_count_for_test` helpers transitively compose with
+# `AuthorizationGrant::synthetic_for_test` fixtures.
+[features]
+default = []
+testing = ["benten-caps/testing", "benten-id/testing"]
+
 [dependencies]
 # benten-id provides the Ed25519 Keypair / PublicKey / Did surfaces that
 # peer_id.rs derives the iroh NodeId from (per net-minor-2 + ds-8 +

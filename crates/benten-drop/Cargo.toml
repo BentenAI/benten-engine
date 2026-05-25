@@ -26,6 +26,21 @@ bench = false
 #   - benten-core — Cid + canonical-bytes seam (spec_cid + per-Node plaintext_cids)
 #   - benten-id — Keypair (test fixtures + Ed25519 envelope signing)
 #   - benten-errors — ErrorCode discriminants for the wave's typed mints
+
+# R6 R1 FP-A Bundle F1.b — `testing` feature gates the
+# `pub fn .*_for_test*` constructors / helpers / fixtures per
+# V1-FROZEN-INTERFACE.md §1. Chains through to sibling crates whose
+# `_for_test` items this crate's fixtures (build_5_recipe_bundle_*) +
+# tamper / consume helpers transitively call.
+[features]
+default = []
+testing = [
+    "benten-caps/testing",
+    "benten-id/testing",
+    "benten-crypto-suite/testing",
+    "benten-core/testing",
+]
+
 [dependencies]
 benten-core = { path = "../benten-core" }
 benten-errors = { workspace = true }

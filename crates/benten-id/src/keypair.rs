@@ -170,6 +170,7 @@ impl PublicKey {
     /// Ed25519 public-key encoding.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn to_bytes_for_test(&self) -> [u8; 32] {
         self.inner.to_bytes()
     }
@@ -239,6 +240,7 @@ impl Keypair {
     /// `*_for_test` convention.
     #[doc(hidden)]
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn public_key_verifying_key_for_test(&self) -> VerifyingKey {
         *self.verifying.as_verifying_key()
     }

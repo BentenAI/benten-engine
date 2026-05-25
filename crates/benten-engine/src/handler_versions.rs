@@ -197,6 +197,10 @@ impl Engine {
         predecessor_cid: Option<&Cid>,
         seq: u64,
     ) -> Result<(), EngineError> {
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         let node = make_version_node(handler_id, version_cid, predecessor_cid, seq);
         self.backend()
             .put_node_with_context(

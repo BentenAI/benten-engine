@@ -481,6 +481,7 @@ pub fn workflow_content_hash(sg: &Subgraph) -> Result<[u8; 32], benten_core::Cor
 /// closure path).
 #[doc(hidden)]
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn fixture_manifest_for_test(scopes: &[&str]) -> PluginManifest {
     use crate::plugin_manifest::{CapRequirement, SharesPolicy, SharesPolicyDefault};
     use benten_core::Cid;
@@ -524,6 +525,7 @@ pub fn fixture_manifest_for_test(scopes: &[&str]) -> PluginManifest {
 /// Surfaces [`benten_core::CoreError`] verbatim on DAG-CBOR encode
 /// failure (mirrors [`workflow_content_hash`]).
 #[doc(hidden)]
+#[cfg(any(test, feature = "testing"))]
 pub fn canonical_subgraph_bytes_for_test(sg: &Subgraph) -> Result<Vec<u8>, benten_core::CoreError> {
     canonical_subgraph_bytes(sg)
 }

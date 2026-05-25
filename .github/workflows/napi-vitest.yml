@@ -35,6 +35,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   napi-vitest:
@@ -43,6 +49,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Free disk space (composite)
+        # R6-FP-D 2026-05-24 (L19-r1-MIN-3 close): sibling-drift fix vs
+        # packages-engine-vitest.yml — same heavy cargo + napi-rs build
+        # pattern, was missing the pre-emptive disk-space free. Couples
+        # with the §3.5o env vars in this workflow's env: block above.
+        uses: ./.github/actions/free-disk-space
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable

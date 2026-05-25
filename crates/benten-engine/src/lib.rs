@@ -82,6 +82,23 @@ pub mod shares_policy_resolver;
 // reject mapping; production validator + WRITE-admission wire-up
 // follow per the module's G-CORE-8.2 BELONGS-NAMED-NOW disposition.
 pub mod write_boundary_chain_validator;
+// R6 R1 FP-F4 §S4 (Row D-4 closure) — production
+// ManifestEnvelopeRechecker substantive impl (replaces the
+// always-mounted Noop when ProductionEngineBuilder installs it).
+pub mod production_manifest_envelope_rechecker;
+// R6 R1 FP-F4 §S4 (Row D-4 closure, CRITIC-2 F-2.2) — the canonical
+// production engine constructor that wires the substantive rechecker
+// post-build. Renamed from "EngineBuilder" wrapper to avoid shadowing
+// the engine-side EngineBuilder.
+//
+// **wasm32 cfg-gate (R6 R1 FP integration PR #1351 fix-up #9):**
+// `production_engine_builder` depends on `crate::builder::EngineBuilder`
+// which is itself `#[cfg(not(feature = "browser-backend"))]` (the
+// browser bundle uses a different construction shape). Mirror the gate
+// so the wasm32-unknown-unknown bundle compiles. F4's S4 design landed
+// the module without the gate; CI wasm32 build surfaced the cascade.
+#[cfg(not(feature = "browser-backend"))]
+pub mod production_engine_builder;
 // Phase-4-Meta-Core G-CORE-8 §4.22 — thin-client bridge that
 // resolves the acting principal from the authenticated DID-keyed
 // session (NEVER from client input). Composes the G24-F SHIPPED
@@ -169,6 +186,10 @@ pub mod typed_call_dispatch;
 // `benten-caps/Cargo.toml:40`), so the test path is unaffected.
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod testing;
+// R6 R1 FP-A Bundle F2: always-on sentinel principal for napi un-attributed
+// reads post §8-A visibility tighten. NOT cfg-gated — napi cdylib production
+// build needs the constant.
+pub mod internal_principal;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — preserve every call-site path that existed before the
@@ -177,6 +198,11 @@ pub mod testing;
 
 pub use benten_errors::ErrorCode;
 pub use benten_eval::PrimitiveKind;
+// R6 R1 FP-A Bundle F2: re-export the engine-internal principal CID
+// sentinel for napi + Benten-owned boundary callers that need an
+// un-attributed read pathway post §8-A visibility tighten. See
+// `crates/benten-engine/src/internal_principal.rs` for rationale.
+pub use crate::internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID;
 // Phase-3 G21-T2: typed-CALL surface re-exports so napi binding +
 // downstream consumers can name `TypedCallOp` / `TYPED_CALL_PREFIX`
 // without depending on `benten-eval` directly. Mirrors the existing
@@ -345,7 +371,7 @@ mod tests {
         let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
         let node = canonical_test_node();
         let cid = engine.create_node(&node).unwrap();
-        let fetched = engine.get_node(&cid).unwrap().expect("node exists");
+        let fetched = engine.read_node(&cid).unwrap().expect("node exists");
         assert_eq!(fetched, node);
         assert_eq!(fetched.cid().unwrap(), cid);
     }
@@ -355,6 +381,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let engine = Engine::open(dir.path().join("benten.redb")).unwrap();
         let cid = canonical_test_node().cid().unwrap();
-        assert!(engine.get_node(&cid).unwrap().is_none());
+        assert!(engine.read_node(&cid).unwrap().is_none());
     }
 }

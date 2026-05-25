@@ -2,7 +2,9 @@
 
 A plain-English deep-dive into the foundational crate of the Benten Engine. Read this when you need to understand what `benten-core` owns, how it sits in the workspace, and what philosophical lines it draws around itself. Audience: contributors who already know Rust but are new to the crate.
 
-Current as of HEAD `8141b94` (post `phase-4-foundation-close` tag).
+Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`); body still reflects HEAD `8141b94` post `phase-4-foundation-close` tag baseline.
+
+**Phase-4-Meta-Core delta (additive on this crate):** the `subgraph_spec` module (`spec.rs` + `walker.rs`) shipped at G-CORE-3w per V1-FROZEN-INTERFACE item 15(a) — the 4-thing thin SubgraphSpec primitive (Roots / Expansion / Inclusion / Termination) + `walker_as_subgraph` fractal pin (CLAUDE.md #1 12-primitive irreducibility preserved — no new `PrimitiveKind` minted). `encryption_class.rs` shipped at G-CORE-4 / G-CORE-3 family per V1-FROZEN-INTERFACE item 15(e) — `EncryptionClass { Public, Confidential }` with `#[non_exhaustive]` + codepoint wire table. G-CORE-5 D3 (PR #1309) unified `VersionDag` (one type + opt-in Mode + shared trait + one CURRENT). G-CORE-4 D1 (PR #1311) added `CanonicalViews` A2 seam + IVM 5-arm Strategy + §4.6 vocab (8 typed-field-Node labels + 5 labeled edges + 8 scalars). Read `crates/benten-core/src/{subgraph_spec,encryption_class,version_dag,canonical_views,vocab}.rs` for the Phase-4-Meta-Core surfaces.
 
 ---
 

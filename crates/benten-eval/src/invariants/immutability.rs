@@ -84,6 +84,7 @@ fn value_as_text(value: &Value) -> Option<&str> {
 /// `target_cid` literally set to `target_cid`. Used by R5 unit tests to
 /// exercise the declaration-layer reject in isolation from the full DSL.
 #[must_use]
+#[cfg(any(test, feature = "testing"))]
 pub fn build_subgraph_writing_to_literal_cid_for_test(
     handler_id: &str,
     target_cid: &Cid,

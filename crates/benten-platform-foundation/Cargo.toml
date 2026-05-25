@@ -16,6 +16,17 @@ workspace = true
 path = "src/lib.rs"
 bench = false
 
+# R6 R1 FP-A Bundle F1.b — `testing` feature gates the in-crate
+# `pub fn .*_for_test*` helpers (`fixture_manifest_for_test`,
+# `canonical_subgraph_bytes_for_test`). External sibling `_for_test`
+# consumers reach EXEMPT helpers (Did::from_string_for_test_fixture,
+# SubgraphBuilder::{build_unvalidated,set_property}_for_test) that
+# stay `pub` per the F1.d exempt-list, so no inter-crate testing-chain
+# needed.
+[features]
+default = []
+testing = []
+
 [dependencies]
 # Per D-4F-2 + arch-r1-1: depends on benten-core (Subgraph/SubgraphSpec types)
 # + benten-errors (ErrorCode) + benten-id (Did for plugin-DID + peer-DID

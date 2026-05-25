@@ -227,6 +227,8 @@ export const CATALOG_CODES = [
   "E_DSL_IO_ERROR",
   "E_SUBGRAPH_SPEC_WALK_FAILED",
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
+  "E_PLUGIN_INSTALL_CONSENT_DENIED",
+  "E_PLUGIN_PER_DELEGATION_DENIED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -3142,6 +3144,36 @@ export class EAuditNotLandedPurePqRejected extends BentenError {
 }
 
 /**
+ * E_PLUGIN_INSTALL_CONSENT_DENIED
+ *
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` step 3c — the configured `InstallConsentPolicy::check_install_consent` hook rejected the pending install.
+ * Message template: "install rejected by InstallConsentPolicy::check_install_consent"
+ */
+export class EPluginInstallConsentDenied extends BentenError {
+  static readonly code = "E_PLUGIN_INSTALL_CONSENT_DENIED";
+  static readonly fixHint = "CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial. Distinct from `E_PLUGIN_INSTALL_CONSENT_REQUIRED` (which fires for caps-grew fresh-consent gap at upgrade time): this is the per-install policy-routed gate. Resolution: either supply user consent via the install pipeline's policy hook OR adjust the configured `CapabilityPolicy` to admit the plugin-DID at install time.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_INSTALL_CONSENT_DENIED", "CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial. Distinct from `E_PLUGIN_INSTALL_CONSENT_REQUIRED` (which fires for caps-grew fresh-consent gap at upgrade time): this is the per-install policy-routed gate. Resolution: either supply user consent via the install pipeline's policy hook OR adjust the configured `CapabilityPolicy` to admit the plugin-DID at install time.", message, context);
+    this.name = "EPluginInstallConsentDenied";
+  }
+}
+
+/**
+ * E_PLUGIN_PER_DELEGATION_DENIED
+ *
+ * Thrown at: `crates/benten-engine/src/engine_caps.rs::EngineCapsHandle::delegate_capability` — between Step 2b (shares-policy resolver) and Step 3 (effective scope).
+ * Message template: "delegation rejected by CapabilityPolicy::check_per_delegation"
+ */
+export class EPluginPerDelegationDenied extends BentenError {
+  static readonly code = "E_PLUGIN_PER_DELEGATION_DENIED";
+  static readonly fixHint = "CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial. Forensic-discrimination symmetry with `E_PLUGIN_INSTALL_CONSENT_DENIED` per CRITIC-1 FIX-5. Resolution: adjust the configured `CapabilityPolicy::check_per_delegation` to admit the source→target plugin delegation, or scope the delegated capability to fit within the source plugin's policy.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_PLUGIN_PER_DELEGATION_DENIED", "CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial. Forensic-discrimination symmetry with `E_PLUGIN_INSTALL_CONSENT_DENIED` per CRITIC-1 FIX-5. Resolution: adjust the configured `CapabilityPolicy::check_per_delegation` to admit the source→target plugin delegation, or scope the delegated capability to fit within the source plugin's policy.", message, context);
+    this.name = "EPluginPerDelegationDenied";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3344,4 +3376,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DSL_IO_ERROR": EDslIoError,
   "E_SUBGRAPH_SPEC_WALK_FAILED": ESubgraphSpecWalkFailed,
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED": EAuditNotLandedPurePqRejected,
+  "E_PLUGIN_INSTALL_CONSENT_DENIED": EPluginInstallConsentDenied,
+  "E_PLUGIN_PER_DELEGATION_DENIED": EPluginPerDelegationDenied,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

@@ -1,6 +1,6 @@
 # `benten-errors` — Internals deep-dive
 
-*Read-only audit. Rewritten 2026-05-14 against HEAD `8141b94` (post Phase-4-Foundation close — tag `phase-4-foundation-close` at `0ce98d0`).*
+*Read-only audit. Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`); body still reflects HEAD `8141b94` post Phase-4-Foundation close — tag `phase-4-foundation-close` at `0ce98d0`. Phase-4-Meta-Core added ~25 ErrorCode variants across G-CORE-3a/3c/3f/9 family mints + the §3.5g item-6 `ErrorCode::DslIoError` mint (PR #1342); CATALOG_VARIANT_COUNT 168 → 192 production-throwable (193 with `Unknown(String)`; see §5 below + `docs/ERROR-CATALOG.md` preamble four-count reconciliation).*
 
 ## 1. What this crate does (plain English)
 
@@ -14,7 +14,7 @@ The crate itself is *only* an enum with three accessor functions and one tiny he
 
 **External dependencies (in):** none. Not even `thiserror`. The crate is `no_std + alloc` and uses `alloc::string::String` / `alloc::vec::Vec` directly; consumers wire `thiserror` themselves and map their typed errors through a `.code() -> ErrorCode` accessor.
 
-**Workspace consumers (out):** every other workspace crate. Confirmed at HEAD (workspace is now 12 crates — `benten-platform-foundation` 11th + `benten-renderer-tauri` 12th, both landed during Phase 4-Foundation):
+**Workspace consumers (out):** every other workspace crate. Confirmed at HEAD (workspace is now 14 crates — `benten-platform-foundation` 11th + `benten-renderer-tauri` 12th landed during Phase 4-Foundation; `benten-crypto-suite` 13th + `benten-drop` 14th landed during Phase 4-Meta-Core):
 
 - `benten-core` (`src/lib.rs:122`) — `use benten_errors::ErrorCode`
 - `benten-graph` (`src/lib.rs:29`) — `pub use benten_errors::ErrorCode`

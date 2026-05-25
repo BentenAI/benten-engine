@@ -51,6 +51,16 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("create_node"));
         }
+        // **R6 R1 FP-F4 §S1 — structural-always-on WRITE-admission
+        // consultation** of the configured
+        // `WriteBoundaryChainValidator`. Engine-internal frame: the
+        // CRUD API surface is the user-facing direct write path
+        // (the user-DID is the principal-by-construction); no UCAN
+        // chain anchor in scope. Validator returns NotApplicable;
+        // Layer-1 enforcement remains at `CapabilityPolicy::check_write`.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         // Phase-2a Inv-11 user-facing check. Short-circuits the guard so
         // the typed `E_INV_SYSTEM_ZONE` code surfaces directly — running
         // inside the transaction closure would rewrap the storage-layer
@@ -136,7 +146,26 @@ impl Engine {
     /// `NoAuthBackend` default. Engine-privileged code paths that need
     /// to inspect system-zone Nodes reach through
     /// `self.backend.get_node(cid)` directly.
-    pub fn get_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
+    ///
+    /// # R6 R1 FP-A Bundle F2 — visibility tighten + rename
+    ///
+    /// **Renamed** `get_node` → `read_node` and **tightened** `pub` →
+    /// `pub(crate)` per V1-FROZEN-INTERFACE.md §1 (§8-A Engine visibility
+    /// cluster; Row D-7 closure). The un-attributed semantic was
+    /// previously named `get_node`; the new name `read_node` removes the
+    /// "get" connotation and makes the principal-bearing
+    /// [`Engine::read_node_as`] the canonical public-surface counterpart.
+    /// External callers needing un-attributed reads at a Benten-owned
+    /// boundary use
+    /// `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)`
+    /// per CLAUDE.md baked-in #18.
+    ///
+    /// Test-helper re-exports preserving the old `get_node` spelling are
+    /// available behind `cfg(any(test, feature = "test-helpers"))` at
+    /// [`crate::testing`] — integration tests in sibling crates that
+    /// previously called `engine.get_node(cid)` continue to compile via
+    /// those re-exports without per-test migration.
+    pub(crate) fn read_node(&self, cid: &Cid) -> Result<Option<Node>, EngineError> {
         // Refinement-audit-2026-05 D1 #1189 (Qual-1 #695 + Safe-1 #534 /
         // META #593): the user-facing default read = the canonical
         // `read_node_inner` seam with no attributed principal. Inv-11
@@ -154,6 +183,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("update_node"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend.transaction(|tx| {
             tx.delete_node(old_cid)?;
             tx.put_node(new_node)
@@ -166,6 +199,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("delete_node"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend.transaction(|tx| tx.delete_node(cid))?;
         Ok(())
     }
@@ -176,6 +213,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("create_edge"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         let edge = Edge::new(*source, *target, label.to_string(), None);
         Ok(self.backend.put_edge(&edge)?)
     }
@@ -190,6 +231,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("delete_edge"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend.transaction(|tx| tx.delete_edge(cid))?;
         Ok(())
     }
@@ -198,7 +243,7 @@ impl Engine {
     ///
     /// Option C applies: when the policy's `check_read` denies a read on
     /// the source Node, the returned Vec is empty (symmetric with a
-    /// source CID that has no outgoing edges). See [`Engine::get_node`]
+    /// source CID that has no outgoing edges). See `Engine::read_node`
     /// for the full semantics.
     pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
         if self.read_denied_for_cid(cid)? {

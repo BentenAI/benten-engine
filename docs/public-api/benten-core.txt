@@ -304,7 +304,6 @@ pub const benten_core::subgraph::Subgraph::MAX_DECODE_BYTES: usize
 pub fn benten_core::subgraph::Subgraph::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_core::subgraph::Subgraph::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
 pub fn benten_core::subgraph::Subgraph::edges(&self) -> &[(alloc::string::String, alloc::string::String, alloc::string::String)]
-pub fn benten_core::subgraph::Subgraph::empty_for_test(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn benten_core::subgraph::Subgraph::first_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
 pub fn benten_core::subgraph::Subgraph::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
 pub fn benten_core::subgraph::Subgraph::handle_of(&self, id: &str) -> core::option::Option<benten_core::subgraph::NodeHandle>
@@ -358,7 +357,6 @@ pub fn benten_core::subgraph::SubgraphBuilder::deterministic_for_validator(&self
 pub fn benten_core::subgraph::SubgraphBuilder::edges_for_validator(&self) -> &[(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)]
 pub fn benten_core::subgraph::SubgraphBuilder::emit(&mut self, prev: benten_core::subgraph::NodeHandle, _topic: &str) -> benten_core::subgraph::NodeHandle
 pub fn benten_core::subgraph::SubgraphBuilder::extra_edges_for_validator(&self) -> usize
-pub fn benten_core::subgraph::SubgraphBuilder::force_add_cross_edges_for_testing(&mut self, n: usize) -> &mut Self
 pub fn benten_core::subgraph::SubgraphBuilder::handler_id_for_validator(&self) -> &str
 pub fn benten_core::subgraph::SubgraphBuilder::iterate(&mut self, prev: benten_core::subgraph::NodeHandle, _body: &str, max_iterations: u64) -> benten_core::subgraph::NodeHandle
 pub fn benten_core::subgraph::SubgraphBuilder::iterate_depth_for_validator(&self) -> &[usize]
@@ -1349,7 +1347,6 @@ pub const benten_core::subgraph::Subgraph::MAX_DECODE_BYTES: usize
 pub fn benten_core::subgraph::Subgraph::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_core::subgraph::Subgraph::cid_and_canonical_bytes(&self) -> core::result::Result<(benten_core::Cid, alloc::vec::Vec<u8>), benten_core::CoreError>
 pub fn benten_core::subgraph::Subgraph::edges(&self) -> &[(alloc::string::String, alloc::string::String, alloc::string::String)]
-pub fn benten_core::subgraph::Subgraph::empty_for_test(handler_id: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn benten_core::subgraph::Subgraph::first_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
 pub fn benten_core::subgraph::Subgraph::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_core::CoreError>
 pub fn benten_core::subgraph::Subgraph::handle_of(&self, id: &str) -> core::option::Option<benten_core::subgraph::NodeHandle>
@@ -1403,7 +1400,6 @@ pub fn benten_core::subgraph::SubgraphBuilder::deterministic_for_validator(&self
 pub fn benten_core::subgraph::SubgraphBuilder::edges_for_validator(&self) -> &[(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)]
 pub fn benten_core::subgraph::SubgraphBuilder::emit(&mut self, prev: benten_core::subgraph::NodeHandle, _topic: &str) -> benten_core::subgraph::NodeHandle
 pub fn benten_core::subgraph::SubgraphBuilder::extra_edges_for_validator(&self) -> usize
-pub fn benten_core::subgraph::SubgraphBuilder::force_add_cross_edges_for_testing(&mut self, n: usize) -> &mut Self
 pub fn benten_core::subgraph::SubgraphBuilder::handler_id_for_validator(&self) -> &str
 pub fn benten_core::subgraph::SubgraphBuilder::iterate(&mut self, prev: benten_core::subgraph::NodeHandle, _body: &str, max_iterations: u64) -> benten_core::subgraph::NodeHandle
 pub fn benten_core::subgraph::SubgraphBuilder::iterate_depth_for_validator(&self) -> &[usize]

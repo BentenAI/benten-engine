@@ -235,6 +235,7 @@ impl MstEntry {
     /// `_for_testing` suffix as the audit-trail signal; production
     /// callers always go through [`MstEntry::from_payload`].
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn new_with_explicit_cid_for_testing(declared: MstCid, payload: Vec<u8>) -> Self {
         Self {
             key: String::new(),

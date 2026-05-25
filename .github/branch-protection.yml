@@ -220,6 +220,12 @@ protection:
       - "cargo check (macos-arm64)"
       - "cargo check (macos-x86_64)"
       - "AArch64 SANDBOX runtime (macos-14 / Apple M1)"
+      # === Phase-4-Meta-Core G-CORE-9 FREEZE additions ===
+      # cargo-public-api.yml (G-CORE-9 R1 Fork 3 FREEZE-FLIP 2026-05-24)
+      - "API drift detector (required-failing per G-CORE-9 FREEZE)"
+      # ts-public-api.yml (R6-FP-D L17-MINOR-1 FREEZE-FLIP 2026-05-24;
+      # V1-FROZEN-INTERFACE item 10 + §"Verification mechanism" backstop #2)
+      - "TS API drift detector (required-failing per G-CORE-9 FREEZE)"
 
   # ---- Pull-request review requirements ----
   #

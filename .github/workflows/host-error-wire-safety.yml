@@ -44,6 +44,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). Prevents `No space left on device` / `ld signal 7 SIGBUS`
+  # under cargo compile/link pressure on GH Actions runners.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   wire-safety-test:
@@ -73,9 +79,13 @@ jobs:
         # workflow name + R2 anchor) and cargo failed with "no test target
         # named `host_error_wire_safety`". The actual file stem is the test
         # name itself.
+        # NOTE: `-p benten-engine` package-scoped — feature paths must be
+        # reachable from benten-engine's direct deps. benten-drop/testing +
+        # benten-dev/testing stripped at PR #1351 fix-up #5 (A's F1.c brief
+        # was workspace-shaped; -p package needs the narrower list).
         run: |
           cargo nextest run --profile ci --locked \
-            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing \
             -p benten-engine \
             --test host_error_wire_format_excludes_cids
 

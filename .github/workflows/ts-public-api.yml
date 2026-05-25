@@ -8,10 +8,19 @@ name: ts-public-api (TS API drift detector)
 # Trigger discipline: pull_request branches: [main] + push branches:
 # [main] + workflow_dispatch.
 #
-# Status: INFORMATIONAL ONLY at v1-beta — drift surfaces as a step
-# summary; the workflow always exits 0. Promotion to required is a
-# v1-Composing or post-v1 OSS-launch-era decision (mirrors the
-# cargo-public-api workflow's ci-decisions-2026-04-22.md §4 framing).
+# Status (R6-FP-D 2026-05-24; supersedes prior informational-only
+# posture per R6 R1 L17-MINOR-1 close): REQUIRED-FAILING. The freeze
+# contract at V1-FROZEN-INTERFACE.md item 10 + the §"Verification
+# mechanism (workspace-wide)" preamble (lines 73-80) name this gate as
+# backstop #2 alongside cargo-public-api as a structural CI-failing
+# defense. Mirrors the cargo-public-api FREEZE-FLIP shape (G-CORE-9 R1
+# Fork 3 ratification): drift = workflow fails; baseline-update is the
+# explicit fix-path (and must accompany the PR that introduces the
+# surface change). Branch-protection spec
+# `.github/branch-protection.yml` updated in the same R6-FP-D commit to
+# add `TS API drift detector (required-failing per G-CORE-9 FREEZE)`
+# to the required-status-checks list; live branch-protection PATCH
+# command in the R6-FP-D commit body for orchestrator/Ben to apply.
 #
 # Initial implementation uses an extract-from-.d.ts structural diff
 # against `packages/engine/etc/public-api.txt`. Migration to
@@ -32,10 +41,17 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # §3.5o CI disk-OOM env discipline (codified 2026-05-22; sweep
+  # applied workspace-wide at R6-FP-D 2026-05-24 per L19-r1-MAJ-1
+  # close). The Rust toolchain step below + the napi build invoke
+  # cargo; without these env vars the GH Actions runner can hit
+  # `No space left on device` / `ld signal 7 SIGBUS` during link.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   ts-public-api:
-    name: TS API drift detector (informational)
+    name: TS API drift detector (required-failing per G-CORE-9 FREEZE)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -59,7 +75,13 @@ jobs:
           toolchain: stable
 
       - name: Install workspace deps
-        run: pnpm install --frozen-lockfile
+        # NOTE: --no-frozen-lockfile because pnpm-lock.yaml is NOT
+        # checked in (verified via `git log --all -- pnpm-lock.yaml`
+        # returning empty). At PR #1351 R6 R1 FP integration fix-up #6
+        # discovered Agent D's R6-FP-D ts-public-api workflow ship
+        # assumed a committed lockfile that doesn't exist. Functionally
+        # equivalent for the baseline-regen + diff this workflow performs.
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build @benten/engine TypeScript
         run: pnpm --filter @benten/engine build
@@ -95,15 +117,24 @@ jobs:
             done
           } > packages/engine/etc/public-api.txt.regen
 
-      - name: Diff regenerated vs committed baseline (informational)
+      - name: Diff regenerated vs committed baseline (required-failing per V1-FROZEN-INTERFACE item 10)
+        # R6-FP-D 2026-05-24 (L17-MINOR-1 close): flip from
+        # informational-only to required-failing. Uses the same
+        # tempfile-DRIFT_FLAG_FILE pattern as
+        # cargo-public-api.yml R2-FP-1 to avoid the subshell-loses-var
+        # trap that bit the cargo-public-api gate at G-CORE-9 R2.
         shell: bash
         run: |
           set -o pipefail
+          DRIFT_FLAG_FILE="$(mktemp)"
+          trap 'rm -f "$DRIFT_FLAG_FILE"' EXIT
           {
             echo '## ts-public-api drift report'
             echo
             echo '```diff'
-            diff -u packages/engine/etc/public-api.txt packages/engine/etc/public-api.txt.regen || true
+            if ! diff -u packages/engine/etc/public-api.txt packages/engine/etc/public-api.txt.regen; then
+              echo "1" > "$DRIFT_FLAG_FILE"
+            fi
             echo '```'
             echo
             echo "If the diff is non-empty: review the change. If intentional"
@@ -112,3 +143,7 @@ jobs:
             echo "manifest-review per V1-FROZEN-INTERFACE.md item 10 contract."
             echo "If unintentional, revert the source change."
           } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -s "$DRIFT_FLAG_FILE" ]; then
+            echo "::error::ts-public-api drift detected. Update packages/engine/etc/public-api.txt baseline per the V1-FROZEN-INTERFACE item 10 freeze contract."
+            exit 1
+          fi

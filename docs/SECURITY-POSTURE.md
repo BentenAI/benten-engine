@@ -10,6 +10,50 @@ manifest-envelope recheck at the sync merge boundary) and Compromise #30
 per the 2026-05-19 PQ-default reframe) are appended at the end of the
 table narrative.
 
+> ### Reader's note — substrate-only posture in v1-beta (CLAUDE.md baked-in #18 Layer-1/2/3 plugin trust)
+>
+> The plugin trust model defined at CLAUDE.md baked-in #18
+> ((a) user-as-root, (b) install-time manifest envelope, (c) runtime
+> delegation within manifest envelope) is **SUBSTRATE-ONLY at v1-beta** in
+> the artifacts this doc covers. The structural seams — `CapabilityPolicy`
+> sealed trait + 3 new defaulted hooks (`check_install_consent` /
+> `check_per_delegation` / `check_write_with_audience`) + the
+> `ManifestEnvelopeRecheckOutcome` 4-arm + the
+> `WriteBoundaryChainValidator` consumption hook — all exist and are
+> wire-format-locked at G-CORE-9 freeze. **Consumer wire-in is sequenced**
+> across these named-deferred destinations:
+>
+> - **Compromise #26** — `ProductionManifestEnvelopeRechecker` substantive
+>   per-DID recheck (deferred to G-COMP-1 per Row D-4); v1-beta ships
+>   `NoopManifestEnvelopeRechecker` returning `NotApplicable` for
+>   resolvable peer-DIDs (Layer-A empty-DID short-circuit IS live).
+> - **Compromise #31** — Drop bundle revocation reach (forever-valid
+>   once distributed; OPEN ARCHITECTURAL TRADE-OFF mitigated by tight
+>   `nbf`/`exp` + key rotation per RATIFIED-S&C §R6).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-1** — `WriteBoundaryChainValidator`
+>   runtime consumption at the WRITE admission boundary (Layer-1
+>   user-as-root NOT live at WRITE admission at v1-beta).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-3** — the 3 §8-E
+>   CapabilityPolicy hooks have zero production call sites at v1-beta;
+>   custom impls of any hook are silently ignored (trait signatures +
+>   sealed-discipline locked, so future wire-up is non-breaking).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-5** — `accept_atrium_share`
+>   cross-peer install seam not live; plugins consume through user-DID-
+>   signed install records ONLY at v1-beta.
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-6** — §4.25 sync-hydrate
+>   consumption of `UnresolvedDeny` at handshake.rs not live (§4.36
+>   merge half structurally enforced; §4.25 sync-hydrate half not).
+>
+> The honest disclosure shape: **Layer-1/2/3 is structurally encoded at
+> v1-beta as a frozen substrate; the substantive runtime enforcement
+> across all admission boundaries lands at G-COMP-1**. This is per
+> CLAUDE.md baked-in #15 (v1-beta tags on the frozen interface +
+> structural substrate; G-COMP-1 closes the consumption gap before
+> `v1-GM`). Operators / deployers consuming this binary should treat
+> Layer-3 (runtime delegation envelope-recheck) as **declared-but-not-
+> structurally-enforced at v1-beta** unless they wire a custom
+> `ProductionManifestEnvelopeRechecker` themselves.
+
 ## Phase 4-Foundation close — compromise table
 
 | # | Title | Phase | Status |
@@ -2040,7 +2084,54 @@ implementations of `get_node_label_only` / `put_node` / `read_node_as`
 manifest schema work shipped independently of the Class B β surface; both
 landed in the same pre-Phase-4-Foundation-close window.
 
-### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1 (v1-beta posture retensed at G-CORE-9 FREEZE; cross-peer install verification NOT live at v1-beta)
+### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SUBSTANTIVE SUBSTRATE WIRED at R6 R1 FP-F4 (Rows D-1/D-2/D-3/D-4/D-6/D-18 close); SUBSTANTIVE PluginLibrary-driven CHAIN-WALK still G-COMP-1 deferred
+
+> **R6 R1 FP-F4 retense (2026-05-24).** Per Ben PM-ratified F1 path-(a)
+> full ~13-site cascade + the F4 design pipeline synthesis v3:
+>
+> - **Layer-1 user-as-root WriteBoundaryChainValidator** = STRUCTURALLY
+>   WIRED at every WRITE entry point via the new `Engine::admit_write_chain`
+>   helper + sealed `WriteAdmissionFrame` (Row D-1 closure). The
+>   always-mounted Noop default preserves Phase-3 baseline; production
+>   deployments installing a substantive
+>   `ProductionWriteBoundaryChainValidator` via the
+>   `ProductionEngineBuilder` get fail-CLOSED at the WRITE boundary.
+>   The substantive validator's `UserDidRegistry`-backed chain walk is
+>   the G-COMP-1 deliverable.
+>
+> - **Layer-3 manifest-envelope substantive rechecker** = SUBSTRATE
+>   WIRED with synthesized-fallback hardening (Row D-4 + Row D-18
+>   closure). `ProductionManifestEnvelopeRechecker` returns
+>   `UnresolvedDeny` on `node-id:N` synthesized DIDs; the full
+>   PluginLibrary-driven chain walk for resolvable peers is the
+>   G-COMP-1 deliverable per Row D-4 narrative.
+>
+> - **§8-E CapabilityPolicy hooks** = ALL THREE WIRED (Row D-3 close):
+>   `check_install_consent` at `plugin_lifecycle::install_plugin`
+>   step 3c with typed `PluginInstallConsentDenied` reject;
+>   `check_per_delegation` at `EngineCapsHandle::delegate_capability`
+>   with typed `PluginPerDelegationDenied` reject;
+>   `check_write_with_audience` routed at all 4 production write sites
+>   (audience_did stays None at sweep sites per Δv3-2; populate at
+>   delegate_capability is G-COMP-1).
+>
+> - **§4.37 TOCTOU replay defense** = STRUCTURALLY WIRED at every
+>   install (Row D-2 close): `InstallPorts.install_record_replay_check`
+>   drops `Option<>` for `&mut Fn`; the `None` silent-disable arm is
+>   eliminated.
+>
+> - **§4.25 sync-hydrate consumption** = WIRED (Row D-6 close):
+>   `handshake.rs::sync_hydrate_consume_recheck_outcome` is the
+>   §4.25 surface; the §4.36 + §4.25 consumption sites both route
+>   through the shared `ManifestEnvelopeRecheckUnresolvedDeny`
+>   ErrorCode + typed reject.
+>
+> The remaining G-COMP-1-deferred narrative below stays
+> retrospective; the v1-beta posture is now "substrate-wired with
+> a substantive PluginLibrary-driven chain-walk follow-up" (no
+> longer "substrate-only").
+
+### Compromise #26 (HISTORICAL) — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1 (v1-beta posture retensed at G-CORE-9 FREEZE; cross-peer install verification NOT live at v1-beta)
 
 **G-CORE-9 FREEZE v1-beta posture (2026-05-24 retense).** Per the
 G-CORE-9 R1 triage Fork 2 doc-tighten ratification, this Compromise
@@ -2129,7 +2220,7 @@ check from Compromise #2 sync-replica sub-narrative is.
 
 **G-CORE-8 R5 delta (Phase-4-Meta-Core).** Three structural hardening
 shipped on top of the R4b-FP-1 seam without yet wiring the substantive
-production adapter (which still lands in G-CORE-8.2; see backlog
+production adapter (which still lands in G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4); see backlog
 §4.36):
 
 1. **Typed-arm split at the `Outcome` enum
@@ -2142,7 +2233,7 @@ production adapter (which still lands in G-CORE-8.2; see backlog
    with the matching new ErrorCode
    `ManifestEnvelopeRecheckUnresolvedDeny` so the security-r1-2
    distinction "I cannot decide" vs "I admit" is preserved at the
-   wire-typed layer. Substantive rechecker impls landing at G-CORE-8.2
+   wire-typed layer. Substantive rechecker impls landing at G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4)
    are required to emit `UnresolvedDeny` rather than `NotApplicable`
    when their own internal resolution fails (e.g. missing-manifest /
    chain-root-not-loaded).
@@ -2187,7 +2278,7 @@ production adapter (which still lands in G-CORE-8.2; see backlog
 The G-CORE-8 delta is `CapabilityPolicy`-trait soft-seal +
 manifest-envelope-recheck typed-arm-split + the three adjacent typed
 fail-CLOSED ErrorCodes. The substantive `ProductionManifestEnvelopeRechecker`
-adapter remains DEFERRED to G-CORE-8.2 per backlog §4.36; the seam +
+adapter remains DEFERRED to G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4) per backlog §4.36; the seam +
 typed-arm + structural-empty-peer-DID fail-CLOSED layer landing at
 G-CORE-8 is what makes a substantive adapter drop-in-safe rather than
 a wire-shape change.
@@ -2203,12 +2294,14 @@ outcome_to_row_reject}`;
 structural empty-peer-DID fail-CLOSED arm at
 [`engine.rs:1448-1484`](../crates/benten-engine/src/engine.rs#L1448-L1484));
 `crates/benten-caps/src/manifest_envelope_chain_validation.rs::validate_chain_with_manifest_envelope`
-(the function the G-CORE-8.2 production adapter will call into);
+(the function the G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-4) production adapter will call into);
 `benten-errors::ErrorCode::{ManifestEnvelopeRecheckUnresolvedDeny,
 PluginInstallRecordAlreadyApplied, WriteBoundaryChainNotUserRooted,
 ThinClientBridgePrincipalUnresolved}`.
 
 ### Compromise #30 — Unaudited PQ primitives in the v1-beta hybrid default — OPEN; MITIGATED by hybrid construction; CLOSES at v1-GM
+
+**Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D):** the PQ-hybrid signature codepoint `HYBRID_ED25519_MLDSA65 = 0x0001` at `crates/benten-crypto-suite/src/codepoint.rs` (line ~49); the PQ-hybrid KEM codepoint `HYBRID_X25519_MLKEM768 = 0x647a` at `crates/benten-crypto-suite/src/codepoint.rs` (line ~64); the audit-gated typed-reject arm `try_pure_pq_sole_trust_path -> AuditNotLandedPurePqRejected` (the C11b safety gate ensuring unaudited PQC is never the SOLE trust path at v1-beta); the bidirectional swap-matrix conformance suite at `crates/benten-crypto-suite/tests/tf4_gcore3c_*.rs` + `tf4_pure_pq_gated_audit_landed.rs` covering all 7 swap-matrix arms × both wire directions per V1-FROZEN-INTERFACE item 14(a).
 
 **Status.** **OPEN; MITIGATED.** Per the 2026-05-19 PQ-default reframe
 (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md
@@ -2226,6 +2319,31 @@ and `v1-GM`.
 defined release window. Distinct from Compromise #6 (BLAKE3 collision
 bound — a hash *architectural* bound; the 2026-05-19 reframe is signature
 + encryption only, so Compromise #6 / the hash posture is UNAFFECTED).
+
+**App-layer wire-in gap (R6 R1 L2-R6-MAJOR-2 finding; OPEN; NAMED to
+G-CORE-PQ-WIRE wave).** The 2026-05-19 reframe and the v1-beta default
+above are SUBSTRATE-LAYER true: `benten_crypto_suite::SignatureSuite`
+ships hybrid Ed25519⊕ML-DSA-65 + verify-both-must-succeed semantics
+and the swap matrix exercises all 7 cipher/sig suites at G-CORE-3c
+terminal wave. The APP-LAYER SHIPPED state at v1-beta is NARROWER:
+4 production sites still call classical-only `ed25519_dalek::SigningKey::sign`
+/ verify — `benten-drop::envelope_sig::{sign,verify}_envelope` +
+`benten-platform-foundation::PluginManifest::verify_peer_signature` +
+`benten-platform-foundation::InstallRecord::verify_user_signature` +
+`benten-caps::AuthorizationGrant::binding_sig` (already at Row D-15e).
+Wire-in is deferred to the `G-CORE-PQ-WIRE` wave (sequence: post R6 R1
+FP consolidation + post R6 R2 dispatch; see DEFERRED.md Row D-26 for
+the wave brief). The classical Ed25519 layer at these 4 sites IS the
+audited security floor per the same hybrid-construction safety invariant
+above (the classical-only-baseline-when-PQ-half-fails argument applies
+to the substrate AND to these app-layer sites that use the classical
+primitive directly). Pre-G-CORE-PQ-WIRE-wave-close, the v1-beta posture
+on app-layer signatures is: "audited classical Ed25519 floor; hybrid
+PQ defense-in-depth pending wire-in" — narrower than the substrate
+posture but cryptographically sound at the audited-floor level.
+**Ben 2026-05-24 PM ratification:** "do everything now is really my
+default stance"; wave is queued ACTIVE not exploratory (per
+`feedback_orchestrator_defer_prediction_bias` codification).
 
 **Mitigation (why this is shippable at `v1-beta`).** The hybrid
 construction means **unaudited PQC is never the SOLE trust path**:
@@ -2320,14 +2438,25 @@ Three load-bearing AEAD-layer defenses ride on the per-Node AEAD wrap
    different plaintext identity), the AEAD authenticator fails because
    the reconstructed AAD (binding *Q*) does not match the AAD bound at
    seal time (binding *P*).
-2. **AAD-binds-(plaintext-CID, chunk-index) (per-chunk arm for Nodes ≥
-   64 KiB).** Per `§1.A.FROZEN item 15(g)` the per-chunk AEAD uses
-   `aad_per_chunk(plaintext_cid, chunk_index) =
-   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le`.
-   Shuffling chunk-N's ciphertext to index-M (the **cross-chunk
-   rebinding attack** — silently reordering content within a Node)
-   fails because the reconstructed AAD (binding `chunk_index=M`)
-   doesn't match the seal-time AAD (binding `chunk_index=N`).
+2. **AAD-binds-(plaintext-CID, chunk-index, total_chunks) (per-chunk
+   arm for Nodes ≥ 64 KiB).** Per `§1.A.FROZEN item 15(g)` the
+   per-chunk AEAD uses
+   `aad_per_chunk(plaintext_cid, chunk_index, total_chunks) =
+   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le
+   || total_chunks_u32_le`. Shuffling chunk-N's ciphertext to
+   index-M (the **cross-chunk rebinding attack** — silently
+   reordering content within a Node) fails because the reconstructed
+   AAD (binding `chunk_index=M`) doesn't match the seal-time AAD
+   (binding `chunk_index=N`). Truncating an N-chunk ciphertext to N'
+   chunks (the **cross-chunk truncation attack** — silently dropping
+   content from a Node) ALSO fails because the seal-time AAD
+   committed to `total_chunks=N` but the truncated-presentation
+   recipient reconstructs the AAD with `total_chunks=N'`, and
+   per-chunk AEAD authentication fails at every chunk boundary.
+   **R6 R1 fix-pass (2026-05-24):** the `total_chunks` segment was
+   added at R6 R1, retracting the prior G-CORE-9 R1 triage Fork-1
+   disposition that had deferred this defense to G-COMP-1; see
+   V1-FROZEN-INTERFACE-DEFERRED.md Row D-15 revision-history.
 3. **Two-CID mapping integrity (defense-in-depth at the storage layer).**
    The mapping table row `d:<did>:m:<plaintext_cid> → ciphertext_cid`
    is validated structurally: the envelope's `plaintext_cid` field
@@ -2528,7 +2657,9 @@ codify the contract; the wave-3e pin
 `tf3e_endpoint_id_round_trips_through_verifying_key_byte_identical`
 enforces it.
 
-### Revocation reach (§R6)
+### Revocation reach (§R6) — Compromise #31 detail
+
+**Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D):** the future-serve-cut assertion at `crates/benten-engine/tests/tf3e_revoked_grant_yields_typed_revoked.rs`; the forever-valid-once-distributed Drop bundle property documented at `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`; the `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate ErrorCode at `crates/benten-errors/src/lib.rs` (the typed mitigation arm); the offline-Drop asymmetry section "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" at line 2619 below.
 
 UCAN revocation cuts FUTURE serves only — already-decrypted
 plaintext at the recipient side remains decryptable (cryptographic

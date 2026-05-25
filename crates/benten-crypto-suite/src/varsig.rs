@@ -99,6 +99,7 @@ impl UcanVarsigV1Header {
     /// Test-helper: synthesize a header carrying a raw (possibly unknown)
     /// codepoint — used by adversarial pins.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_raw_codepoint_for_test(codepoint: u16) -> Self {
         let mut bytes = Vec::with_capacity(8);
         bytes.push(VARSIG_MAGIC);
@@ -168,6 +169,7 @@ impl DecodedVarsig {
 
 /// Varsig decode errors.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VarsigError {
     /// Header truncated below minimum length.
     #[error("varsig header truncated")]

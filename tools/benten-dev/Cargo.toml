@@ -20,6 +20,17 @@ bench = false
 name = "benten-dev"
 path = "src/main.rs"
 
+# R6 R1 FP-A Bundle F1.b — `testing` feature gates the in-crate
+# `pub fn .*_for_test*` helpers in `src/lib.rs` (the 8
+# devserver-side test-only handles: `check_attenuation_for_test`,
+# `grant_table_audit_sequence_for_test`, `slow_transform_release_for_test`,
+# `reload_for_test`, `call_for_test`, `call_with_suspension_for_test`,
+# `resume_for_test`, `handler_version_tag_for_test`). All consumers are
+# in-crate tests so no inter-crate testing-chain needed.
+[features]
+default = []
+testing = []
+
 [dependencies]
 benten-core = { path = "../../crates/benten-core" }
 benten-errors = { workspace = true }

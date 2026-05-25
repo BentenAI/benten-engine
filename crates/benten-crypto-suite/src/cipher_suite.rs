@@ -115,6 +115,7 @@ impl CipherSuite {
     /// API — real G-CORE-3 production will route keypair-generation
     /// through the principal-DID infrastructure.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn generate_recipient_keypair_for_test(suite: &Self) -> RecipientKeypair {
         match suite.codepoint.raw() {
             0x647a => {
@@ -482,6 +483,7 @@ impl RecipientKeypair {
     /// hybrid codepoint — the unwrap path MUST surface
     /// [`AeadError::RecipientLacksKeysForSuite`].
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_only_classical_half_for_test(full: &RecipientKeypair) -> Self {
         Self {
             codepoint: full.codepoint,
@@ -552,6 +554,7 @@ impl WrappedKey {
     /// Adversarial helper — strip the ML-KEM-768 half (F-2 enc-side
     /// strip-resistance pin). The unwrap path MUST fail closed.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn without_pq_half_for_test(&self) -> Self {
         let mut out = self.clone();
         // Zero out the ek_mlkem so the unwrap derives a different key
@@ -564,6 +567,7 @@ impl WrappedKey {
 
     /// Adversarial helper — strip the classical X25519 half (F-2).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn without_classical_half_for_test(&self) -> Self {
         let mut out = self.clone();
         out.ek_x.fill(0u8);
@@ -573,6 +577,7 @@ impl WrappedKey {
     /// Adversarial helper — substitute the codepoint discriminator
     /// (F-4 unknown-codepoint-at-decrypt pin).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_codepoint_for_test(&self, codepoint: u16) -> Self {
         let mut out = self.clone();
         out.codepoint = CipherSuiteCodepoint::from_raw(codepoint);

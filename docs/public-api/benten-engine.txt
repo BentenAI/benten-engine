@@ -418,13 +418,8 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_reregister_and_miss(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_warm(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_as_with_suspension(&self, handler_id: &str, op: &str, input: benten_core::Node, principal: &benten_core::Cid) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_for_test(&self, handler_id: &str, op: &str, input: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension<H: benten_engine::engine_wait::HandlerRef>(&self, handler_id: H, op: &str, input: benten_core::Node) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension_on_thin_config_for_test(&self, _handler_id: &str, _op: &str, _input: benten_core::value::Value) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_node_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resolve_subgraph_cid_for_test(&self, handler_id: &str, _op: &str) -> core::result::Result<alloc::string::String, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_as(&self, bytes: &[u8], signal: benten_core::value::Value, principal: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_unauthenticated(&self, bytes: &[u8], signal: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_with_meta(&self, envelope: &[u8], payload: benten_engine::engine_wait::ResumePayload) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
@@ -458,7 +453,6 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::update_node(&self, old_cid: &benten_core::Cid, new_node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 impl benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_view(&self, view_id: &str, _opts: benten_engine::outcome::ViewCreateOptions) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -1091,6 +1085,8 @@ impl core::marker::UnsafeUnpin for benten_engine::install_record_replay::Install
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::install_record_replay::InstallRecordReplayStore
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::install_record_replay::InstallRecordReplayStore
 pub fn benten_engine::install_record_replay::signing_payload_hash(payload: &[u8]) -> [u8; 32]
+pub mod benten_engine::internal_principal
+pub static benten_engine::internal_principal::ENGINE_INTERNAL_PRINCIPAL_CID: std::sync::lazy_lock::LazyLock<benten_core::Cid>
 pub mod benten_engine::ivm_view_read_gate
 pub struct benten_engine::ivm_view_read_gate::IvmViewReadGate
 impl benten_engine::ivm_view_read_gate::IvmViewReadGate
@@ -1155,8 +1151,11 @@ pub trait benten_engine::manifest_envelope_recheck::ManifestEnvelopeRechecker: c
 pub fn benten_engine::manifest_envelope_recheck::ManifestEnvelopeRechecker::recheck_row(&self, peer_did_str: &str, zone: &str, key: &str) -> benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome
 impl benten_engine::manifest_envelope_recheck::ManifestEnvelopeRechecker for benten_engine::manifest_envelope_recheck::NoopManifestEnvelopeRechecker
 pub fn benten_engine::manifest_envelope_recheck::NoopManifestEnvelopeRechecker::recheck_row(&self, _peer_did_str: &str, _zone: &str, _key: &str) -> benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome
+impl benten_engine::manifest_envelope_recheck::ManifestEnvelopeRechecker for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker::recheck_row(&self, peer_did_str: &str, _zone: &str, _key: &str) -> benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome
 pub fn benten_engine::manifest_envelope_recheck::envelope_ceiling_admits_cap_resources<'a>(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, cap_resources: impl core::iter::traits::collect::IntoIterator<Item = &'a str>, zone: &str, key: &str) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::manifest_envelope_recheck::envelope_ceiling_admits_row(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, scope: &str, zone: &str, key: &str) -> core::result::Result<(), benten_engine::error::EngineError>
+pub fn benten_engine::manifest_envelope_recheck::is_synthesized_node_id(did_str: &str) -> bool
 pub fn benten_engine::manifest_envelope_recheck::outcome_to_row_reject(outcome: benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome, zone: &str, key: &str) -> core::result::Result<(), benten_engine::error::EngineError>
 pub mod benten_engine::manifest_signing
 #[non_exhaustive] pub enum benten_engine::manifest_signing::ManifestVerifyError
@@ -1750,6 +1749,42 @@ pub trait benten_engine::outcome::OutcomeExt
 pub fn benten_engine::outcome::OutcomeExt::as_outcome(&self) -> &benten_engine::outcome::Outcome
 pub mod benten_engine::primitive_host
 pub const benten_engine::primitive_host::WALLCLOCK_REFRESH_CEILING: core::time::Duration
+pub mod benten_engine::production_engine_builder
+pub struct benten_engine::production_engine_builder::ProductionEngineBuilder
+impl benten_engine::production_engine_builder::ProductionEngineBuilder
+pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::build(self) -> core::result::Result<benten_engine::engine::Engine, benten_engine::error::EngineError>
+pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::inner_mut(&mut self) -> &mut benten_engine::builder::EngineBuilder
+pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::new() -> Self
+pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::open(self, path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<benten_engine::engine::Engine, benten_engine::error::EngineError>
+impl core::default::Default for benten_engine::production_engine_builder::ProductionEngineBuilder
+pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::default() -> benten_engine::production_engine_builder::ProductionEngineBuilder
+impl core::marker::Freeze for benten_engine::production_engine_builder::ProductionEngineBuilder
+impl core::marker::Send for benten_engine::production_engine_builder::ProductionEngineBuilder
+impl core::marker::Sync for benten_engine::production_engine_builder::ProductionEngineBuilder
+impl core::marker::Unpin for benten_engine::production_engine_builder::ProductionEngineBuilder
+impl core::marker::UnsafeUnpin for benten_engine::production_engine_builder::ProductionEngineBuilder
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_engine::production_engine_builder::ProductionEngineBuilder
+impl !core::panic::unwind_safe::UnwindSafe for benten_engine::production_engine_builder::ProductionEngineBuilder
+pub mod benten_engine::production_manifest_envelope_rechecker
+pub struct benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker::new() -> Self
+impl benten_engine::manifest_envelope_recheck::ManifestEnvelopeRechecker for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker::recheck_row(&self, peer_did_str: &str, _zone: &str, _key: &str) -> benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome
+impl core::clone::Clone for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker::clone(&self) -> benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::default::Default for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker::default() -> benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::fmt::Debug for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::marker::Freeze for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::marker::Send for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::marker::Sync for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::marker::Unpin for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::marker::UnsafeUnpin for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
+impl core::panic::unwind_safe::UnwindSafe for benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker
 pub mod benten_engine::shares_policy_resolver
 #[non_exhaustive] pub enum benten_engine::shares_policy_resolver::DelegationResolution
 pub benten_engine::shares_policy_resolver::DelegationResolution::Admitted
@@ -2252,6 +2287,25 @@ impl core::marker::Unpin for benten_engine::write_boundary_chain_validator::Noop
 impl core::marker::UnsafeUnpin for benten_engine::write_boundary_chain_validator::NoopWriteBoundaryChainValidator
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::write_boundary_chain_validator::NoopWriteBoundaryChainValidator
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::write_boundary_chain_validator::NoopWriteBoundaryChainValidator
+pub struct benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::actor_did(&self) -> core::option::Option<&str>
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::chain_anchor_cid(&self) -> core::option::Option<&benten_core::Cid>
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::engine_internal() -> Self
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::with_chain(chain_anchor_cid: &'a benten_core::Cid, actor_did: &'a str) -> Self
+impl<'a> core::clone::Clone for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::clone(&self) -> benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::default::Default for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::default() -> benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::fmt::Debug for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+pub fn benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::marker::Freeze for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::marker::Send for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::marker::Sync for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::marker::Unpin for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::marker::UnsafeUnpin for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for benten_engine::write_boundary_chain_validator::WriteAdmissionFrame<'a>
 pub trait benten_engine::write_boundary_chain_validator::WriteBoundaryChainValidator: core::marker::Send + core::marker::Sync
 pub fn benten_engine::write_boundary_chain_validator::WriteBoundaryChainValidator::validate_chain(&self, chain_anchor_cid: &benten_core::Cid, actor_did: &str) -> benten_engine::write_boundary_chain_validator::WriteBoundaryChainOutcome
 impl benten_engine::write_boundary_chain_validator::WriteBoundaryChainValidator for benten_engine::write_boundary_chain_validator::NoopWriteBoundaryChainValidator
@@ -2797,13 +2851,8 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_reregister_and_miss(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::benchmark_helper_subgraph_cache_warm(&self, handler_id: &str, op: &str)
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_as_with_suspension(&self, handler_id: &str, op: &str, input: benten_core::Node, principal: &benten_core::Cid) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_for_test(&self, handler_id: &str, op: &str, input: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension<H: benten_engine::engine_wait::HandlerRef>(&self, handler_id: H, op: &str, input: benten_core::Node) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::call_with_suspension_on_thin_config_for_test(&self, _handler_id: &str, _op: &str, _input: benten_core::value::Value) -> core::result::Result<benten_engine::engine_wait::SuspensionOutcome, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node_label_only(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<alloc::string::String>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::put_node(&self, node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_node_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resolve_subgraph_cid_for_test(&self, handler_id: &str, _op: &str) -> core::result::Result<alloc::string::String, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_as(&self, bytes: &[u8], signal: benten_core::value::Value, principal: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_from_bytes_unauthenticated(&self, bytes: &[u8], signal: benten_core::value::Value) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::resume_with_meta(&self, envelope: &[u8], payload: benten_engine::engine_wait::ResumePayload) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
@@ -2837,7 +2886,6 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
-pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_node(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Node>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::update_node(&self, old_cid: &benten_core::Cid, new_node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 impl benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_view(&self, view_id: &str, _opts: benten_engine::outcome::ViewCreateOptions) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -3454,6 +3502,7 @@ pub const benten_engine::SANDBOX_UNAVAILABLE_ON_WASM_TEXT: &str
 pub const benten_engine::STREAM_GRANT_CEILING_CHUNK_COUNT: u64
 pub const benten_engine::STREAM_GRANT_CEILING_WALLCLOCK_MS: u64
 pub const benten_engine::SYSTEM_ZONE_PREFIXES: &[&str]
+pub static benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID: std::sync::lazy_lock::LazyLock<benten_core::Cid>
 pub trait benten_engine::GrantSubject
 pub fn benten_engine::GrantSubject::as_value(&self) -> benten_core::value::Value
 impl benten_engine::subgraph_spec::GrantSubject for &alloc::string::String

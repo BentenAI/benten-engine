@@ -1065,3 +1065,105 @@ impl crate::Engine {
         benten_eval::primitives::subscribe::on_change_registration_count()
     }
 }
+
+// ---------------------------------------------------------------------------
+// R6 R1 FP-A Bundle F2 — §8-A test-helper re-exports
+// ---------------------------------------------------------------------------
+//
+// V1-FROZEN-INTERFACE.md §1 (§8-A; Row D-7 closure) tightened + renamed
+// four Engine methods:
+//
+// - `pub fn get_node` → `pub(crate) fn read_node`
+// - `pub fn get_node_label_only` → `pub(crate) fn read_node_label_only`
+// - `pub fn put_node` → `pub(crate) fn put_node_inner` (disambiguating
+//   rename so this test-helper re-export can keep the historical
+//   `put_node` spelling)
+// - `pub fn resolve_subgraph_cid_for_test` → `pub(crate) fn
+//   resolve_subgraph_cid_inner` (DELETED from public surface; the
+//   `_for_test` suffix is a red-flag per §1)
+//
+// To preserve the ~80 integration tests in sibling crates that called
+// the historical public names, this impl block re-exports the four
+// methods under their old spellings behind the
+// `cfg(any(test, feature = "test-helpers"))` gate that already wraps
+// `pub mod testing`. Integration tests in dev-dep-enabling crates
+// (`benten-engine = { features = ["test-helpers"] }` in their
+// `[dev-dependencies]`) reach them without per-test migration.
+//
+// The cfg gate matches the precedent set by the existing
+// `pub fn testing_*` helpers in this module. Production cdylib /
+// release-binary callers do NOT see these re-exports.
+#[cfg(any(test, feature = "test-helpers"))]
+impl crate::Engine {
+    /// Test-helper re-export of the historical `Engine::get_node`
+    /// spelling.
+    ///
+    /// Delegates to the renamed-and-tightened
+    /// `pub(crate) fn read_node`. See V1-FROZEN-INTERFACE.md §1 (§8-A;
+    /// Row D-7 closure) for the rename rationale + canonical migration
+    /// guidance for non-test callers
+    /// (`read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)`).
+    ///
+    /// # Errors
+    /// Returns [`crate::error::EngineError`] on backend failure.
+    pub fn get_node(
+        &self,
+        cid: &benten_core::Cid,
+    ) -> Result<Option<benten_core::Node>, crate::error::EngineError> {
+        self.read_node(cid)
+    }
+
+    /// Test-helper re-export of the historical
+    /// `Engine::get_node_label_only` spelling.
+    ///
+    /// Delegates to the renamed-and-tightened
+    /// `pub(crate) fn read_node_label_only`. See V1-FROZEN-INTERFACE.md
+    /// §1 (§8-A; Row D-7 closure) for the rename rationale.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::EngineError`] on backend failure.
+    pub fn get_node_label_only(
+        &self,
+        cid: &benten_core::Cid,
+    ) -> Result<Option<String>, crate::error::EngineError> {
+        self.read_node_label_only(cid)
+    }
+
+    /// Test-helper re-export of the historical `Engine::put_node`
+    /// spelling.
+    ///
+    /// Delegates to the renamed-and-tightened
+    /// `pub(crate) fn put_node_inner`. See V1-FROZEN-INTERFACE.md §1
+    /// (§8-A; Row D-7 closure) for the rename rationale.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::EngineError`] on backend / transaction
+    /// failure, or `E_BACKEND_READ_ONLY` when invoked against a
+    /// snapshot-blob engine.
+    pub fn put_node(
+        &self,
+        node: &benten_core::Node,
+    ) -> Result<benten_core::Cid, crate::error::EngineError> {
+        self.put_node_inner(node)
+    }
+
+    /// Test-helper re-export of the historical
+    /// `Engine::resolve_subgraph_cid_for_test` spelling.
+    ///
+    /// Delegates to the renamed-and-tightened
+    /// `pub(crate) fn resolve_subgraph_cid_inner`. See
+    /// V1-FROZEN-INTERFACE.md §1 (§8-A; Row D-7 closure) for the
+    /// rationale (the `_for_test` suffix is a red-flag for public
+    /// surface — production callers should never reach this).
+    ///
+    /// # Errors
+    /// Returns [`crate::error::EngineError`] if the handler is not
+    /// registered.
+    pub fn resolve_subgraph_cid_for_test(
+        &self,
+        handler_id: &str,
+        op: &str,
+    ) -> Result<String, crate::error::EngineError> {
+        self.resolve_subgraph_cid_inner(handler_id, op)
+    }
+}

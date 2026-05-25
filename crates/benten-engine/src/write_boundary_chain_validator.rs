@@ -59,6 +59,70 @@ use benten_errors::ErrorCode;
 
 use crate::EngineError;
 
+/// **R6 R1 FP-F4 (Δv3-2) — sealed write-admission frame** carrying the
+/// optional chain anchor + actor DID the WRITE entry points present to
+/// `Engine::admit_write_chain`. Sealed (private fields) per Class B β +
+/// §1.A.FROZEN item 8 strict-additivity discipline; adding a field is
+/// a non-breaking internal change because no external constructor
+/// exists (only the two `pub` builder fns below).
+///
+/// The frame is the input shape for the structural-always-on WRITE
+/// admission consultation. Most engine-internal WRITE entry points have
+/// no UCAN delegation chain in scope (engine-internal writes are
+/// authoritative-by-construction; the user-DID acts as the principal);
+/// these pass [`WriteAdmissionFrame::engine_internal`]. User-facing CRUD
+/// entry points / delegation / sync-merge can present a chain anchor
+/// when one is in scope.
+///
+/// **Why a sealed frame instead of extending `CapWriteContext` with a
+/// new field:** the CRITIC-2 disposition for D-17 + strict-additivity
+/// prefers ONE local sealed-shape addition over a cascade through every
+/// test fixture that names CapWriteContext.
+#[derive(Debug, Clone, Default)]
+pub struct WriteAdmissionFrame<'a> {
+    chain_anchor_cid: Option<&'a benten_core::Cid>,
+    actor_did: Option<&'a str>,
+}
+
+impl<'a> WriteAdmissionFrame<'a> {
+    /// Engine-internal write: no UCAN chain anchor in scope. The
+    /// validator returns
+    /// [`WriteBoundaryChainOutcome::NotApplicable`] and the write
+    /// proceeds (Layer-1 user-root enforcement at
+    /// `CapabilityPolicy::check_write` remains in force).
+    #[must_use]
+    pub fn engine_internal() -> Self {
+        Self {
+            chain_anchor_cid: None,
+            actor_did: None,
+        }
+    }
+
+    /// A write that carries a UCAN chain anchor + actor DID — the
+    /// validator walks the chain backward from the anchor through the
+    /// engine's `UserDidRegistry` (per the configured
+    /// [`WriteBoundaryChainValidator`] impl).
+    #[must_use]
+    pub fn with_chain(chain_anchor_cid: &'a benten_core::Cid, actor_did: &'a str) -> Self {
+        Self {
+            chain_anchor_cid: Some(chain_anchor_cid),
+            actor_did: Some(actor_did),
+        }
+    }
+
+    /// The chain anchor CID, if any.
+    #[must_use]
+    pub fn chain_anchor_cid(&self) -> Option<&benten_core::Cid> {
+        self.chain_anchor_cid
+    }
+
+    /// The actor DID, if any.
+    #[must_use]
+    pub fn actor_did(&self) -> Option<&str> {
+        self.actor_did
+    }
+}
+
 /// Outcome of a write-boundary chain validation call.
 ///
 /// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 + L6-r1-2

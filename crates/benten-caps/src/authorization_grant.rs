@@ -135,6 +135,7 @@ const fn default_exp_secs() -> u64 {
 impl UcanEnvelope {
     /// Construct a synthetic envelope for the named audience.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test(audience: Cid) -> Self {
         Self {
             audience,
@@ -148,6 +149,7 @@ impl UcanEnvelope {
     /// Construct a synthetic envelope distinct from `synthetic_for_test`
     /// — used by adversarial pins.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test_distinct(audience: Cid, discriminator: u32) -> Self {
         Self {
             audience,
@@ -188,12 +190,14 @@ impl GrantKeyMaterial {
     /// the direct struct-literal construction blocked by the new
     /// `#[non_exhaustive]` attribute (G-CORE-9 R1 Bundle 3).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn from_bytes_for_test(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
 
     /// Construct synthetic key material for tests.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test() -> Self {
         Self {
             bytes: vec![0xAA; 32],
@@ -203,6 +207,7 @@ impl GrantKeyMaterial {
     /// Construct synthetic key material distinct from `synthetic_for_test`
     /// — used by adversarial pins to swap halves.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn synthetic_for_test_distinct(discriminator: u8) -> Self {
         let mut bytes = vec![0u8; 32];
         for (i, b) in bytes.iter_mut().enumerate() {
@@ -347,30 +352,75 @@ pub enum AuthorizationGrantError {
 /// Domain-separation tag for the binding-sig message construction.
 /// Distinct per surface so a signature on the grant body cannot be
 /// reinterpreted as a signature on some other workspace surface.
-const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v1";
+///
+/// **R6 R1 fix-pass (Bundle L3-r1-1):** the domain tag is BUMPED from
+/// `v1` to `v2` to reflect the 5-segment binding-message extension
+/// (now binds `scope` per RATIFIED-S&C §R3 "binding is the foundation"
+/// — scope is part of the foundation). A v1-signed grant will fail
+/// re-verification under v2 binding-message construction (the
+/// domain-separation tag is the very first segment); this is the
+/// intended behavior at v1-beta freeze (no v1-signed grants outside
+/// test fixtures exist yet on the wire).
+const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v2";
 
 impl AuthorizationGrant {
     /// Compute the canonical message the issuer signs / the validator
     /// re-checks. Concatenates the domain-separation tag, the CBOR
     /// canonical bytes of the UCAN, the CBOR canonical bytes of the
-    /// key material, and the audience CID bytes — in that fixed
-    /// order. Both sides MUST agree byte-for-byte for the binding-sig
-    /// to verify.
+    /// key material, the audience CID bytes, and the CBOR canonical
+    /// bytes of the scope (length-prefixed; empty = no-scope sentinel)
+    /// — in that fixed order. Both sides MUST agree byte-for-byte for
+    /// the binding-sig to verify.
+    ///
+    /// **R6 R1 fix-pass (Bundle L3-r1-1):** `scope` is now in the
+    /// binding-message. Prior shape was 4-segment (omitted scope) —
+    /// post-sign mutation of `scope` was undetected, admitting a
+    /// scope-widening attack where an attacker swaps `scope` to a
+    /// wider `RestrictedScope`, the binding-sig still verifies, and
+    /// the ALPN handler ARM 6 admits the wider scope. The L3-r1-1
+    /// MAJOR finding documents the attack. With `scope` in the
+    /// binding-message, any post-sign mutation flips the message
+    /// bytes and `verify_binding` returns `BindingMismatch`.
+    ///
+    /// The scope segment is encoded as `len_u32_le || cbor_bytes` so
+    /// that `scope: None` (no-scope grants, e.g. wave-3b envelope
+    /// fixtures) and `scope: Some(empty)` are unambiguously
+    /// distinguished: `None` encodes as `0_u32_le` (zero-length
+    /// payload); `Some(scope)` encodes as `len_u32_le || cbor(scope)`.
     fn binding_message(
         ucan: &UcanEnvelope,
         key_material: &GrantKeyMaterial,
         audience: &Cid,
+        scope: Option<&crate::restricted_spec::RestrictedScope>,
     ) -> Result<Vec<u8>, AuthorizationGrantError> {
         let ucan_bytes = serde_ipld_dagcbor::to_vec(ucan)
             .map_err(|e| AuthorizationGrantError::Serialization(e.to_string()))?;
         let km_bytes = serde_ipld_dagcbor::to_vec(key_material)
             .map_err(|e| AuthorizationGrantError::Serialization(e.to_string()))?;
-        let mut msg =
-            Vec::with_capacity(BINDING_SIG_DOMAIN.len() + ucan_bytes.len() + km_bytes.len() + 36);
+        let scope_bytes = match scope {
+            Some(s) => serde_ipld_dagcbor::to_vec(s)
+                .map_err(|e| AuthorizationGrantError::Serialization(e.to_string()))?,
+            None => Vec::new(),
+        };
+        let scope_len: u32 = u32::try_from(scope_bytes.len()).map_err(|_| {
+            AuthorizationGrantError::Serialization(
+                "scope CBOR bytes exceed u32 length prefix".to_string(),
+            )
+        })?;
+        let mut msg = Vec::with_capacity(
+            BINDING_SIG_DOMAIN.len()
+                + ucan_bytes.len()
+                + km_bytes.len()
+                + 36
+                + 4
+                + scope_bytes.len(),
+        );
         msg.extend_from_slice(BINDING_SIG_DOMAIN);
         msg.extend_from_slice(&ucan_bytes);
         msg.extend_from_slice(&km_bytes);
         msg.extend_from_slice(audience.as_bytes());
+        msg.extend_from_slice(&scope_len.to_le_bytes());
+        msg.extend_from_slice(&scope_bytes);
         Ok(msg)
     }
 
@@ -392,6 +442,7 @@ impl AuthorizationGrant {
     /// Returns [`AuthorizationGrantError::Serialization`] if CBOR
     /// encoding of either half fails (synthetic test fixtures should
     /// not, but the path is fallible by construction).
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_envelopes_for_test(
         ucan: UcanEnvelope,
         key_material: GrantKeyMaterial,
@@ -400,7 +451,11 @@ impl AuthorizationGrant {
         let signing_key = SigningKey::generate(&mut OsRng);
         let verifying_key = signing_key.verifying_key();
 
-        let msg = Self::binding_message(&ucan, &key_material, &audience)?;
+        // Wave-3b envelope shape has no scope (scope is wave-3e). Pass
+        // None to the 5-segment binding-message; the message commits
+        // to the zero-length scope segment so a post-sign attempt to
+        // add a scope flips the bytes + fails re-verify.
+        let msg = Self::binding_message(&ucan, &key_material, &audience, None)?;
         let sig: Signature = signing_key.sign(&msg);
 
         Ok(Self {
@@ -428,6 +483,7 @@ impl AuthorizationGrant {
     ///
     /// `nbf_secs` defaults to `0` (no not-before restriction).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
@@ -442,6 +498,7 @@ impl AuthorizationGrant {
     /// `tf3e_ucan_nbf_in_future_typed_not_yet_valid` to exercise the
     /// not-before defense-in-depth check.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_with_nbf_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
@@ -469,9 +526,12 @@ impl AuthorizationGrant {
 
         let signing_key = SigningKey::from_bytes(&issuer_kp.secret_bytes_unprotected());
         let verifying_key = signing_key.verifying_key();
-        let msg = Self::binding_message(&ucan, &key_material, &audience_cid).expect(
-            "synthetic UcanEnvelope + GrantKeyMaterial CBOR-encode infallibly in test fixtures",
-        );
+        // R6 R1 fix-pass (L3-r1-1): bind scope into the signed payload
+        // so post-sign scope-widening fails re-verify.
+        let msg = Self::binding_message(&ucan, &key_material, &audience_cid, Some(&scope))
+            .expect(
+                "synthetic UcanEnvelope + GrantKeyMaterial + scope CBOR-encode infallibly in test fixtures",
+            );
         let sig: Signature = signing_key.sign(&msg);
 
         Self {
@@ -493,6 +553,7 @@ impl AuthorizationGrant {
     /// NEVER use this in production fixtures — the sentinel exists
     /// to assert the handler NEVER admits an unresolvable peer.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn issue_with_unresolved_peer_for_test(
         issuer_kp: &benten_id::keypair::Keypair,
         audience_pubkey: &benten_id::keypair::PublicKey,
@@ -526,6 +587,7 @@ impl AuthorizationGrant {
     /// The handler MUST reject this grant via `BindingSigInvalid` (or
     /// `GrantValidation`) WITHOUT dispatching to iroh-blobs.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn malformed_for_test(audience_kp: &benten_id::keypair::Keypair) -> Self {
         let audience_pubkey = audience_kp.public_key();
         let audience_bytes = audience_pubkey.to_bytes();
@@ -617,10 +679,18 @@ impl AuthorizationGrant {
         })?;
         let sig = Signature::from_bytes(&sig_bytes);
 
-        let msg = Self::binding_message(&self.ucan, &self.key_material, &audience)?;
+        // R6 R1 fix-pass (L3-r1-1): re-construct the binding message
+        // with self.scope so post-sign scope-widening is detected at
+        // the binding-sig layer.
+        let msg = Self::binding_message(
+            &self.ucan,
+            &self.key_material,
+            &audience,
+            self.scope.as_ref(),
+        )?;
         vk.verify(&msg, &sig)
             .map_err(|_| AuthorizationGrantError::BindingMismatch {
-                detail: "Ed25519 verify failed against re-constructed (ucan, key_material, audience) message".to_string(),
+                detail: "Ed25519 verify failed against re-constructed (ucan, key_material, audience, scope) message".to_string(),
             })
     }
 
@@ -652,6 +722,7 @@ impl AuthorizationGrant {
     /// the A-1 stolen-UCAN-without-keys adversarial pin to
     /// demonstrate the binding-sig detects the tamper.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_swapped_key_material_for_test(&self, km: GrantKeyMaterial) -> Self {
         Self {
             ucan: self.ucan.clone(),
@@ -668,6 +739,7 @@ impl AuthorizationGrant {
     /// A-2 stolen-keys-without-UCAN adversarial pin to demonstrate
     /// the binding-sig detects the tamper.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_swapped_ucan_for_test(&self, ucan: UcanEnvelope) -> Self {
         Self {
             ucan,
@@ -677,6 +749,30 @@ impl AuthorizationGrant {
             issuer_verifying_key: self.issuer_verifying_key.clone(),
             audience_pubkey: self.audience_pubkey.clone(),
             scope: self.scope.clone(),
+        }
+    }
+
+    /// Test-helper — swap the `scope` half AFTER issue. Used by the
+    /// L3-r1-1 scope-substitution adversarial pin (R6 R1 fix-pass) to
+    /// demonstrate that the binding-sig detects post-sign scope
+    /// widening. Pre-R6-R1, `scope` lived OUTSIDE the binding-message
+    /// and could be mutated freely; the L3-r1-1 fix folds scope INTO
+    /// the binding-message so `verify_binding` returns
+    /// `BindingMismatch` on this tamper.
+    #[must_use]
+    #[cfg(any(test, feature = "testing"))]
+    pub fn with_swapped_scope_for_test(
+        &self,
+        scope: Option<crate::restricted_spec::RestrictedScope>,
+    ) -> Self {
+        Self {
+            ucan: self.ucan.clone(),
+            key_material: self.key_material.clone(),
+            binding_sig: self.binding_sig.clone(),
+            audience_binding: self.audience_binding,
+            issuer_verifying_key: self.issuer_verifying_key.clone(),
+            audience_pubkey: self.audience_pubkey.clone(),
+            scope,
         }
     }
 }

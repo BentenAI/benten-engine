@@ -620,6 +620,15 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // 192. Mirrors the wave's mint of the `Engine::walk_share_scope`
     // engine wrapper at `crates/benten-engine/src/engine_share_scope.rs`.
     ErrorCode::SubgraphSpecWalkFailed,
+    // R6 R1 FP-F4 §S3a + §S3b — CLAUDE.md baked-in #18 §8-E hook
+    // denial codes. `PluginInstallConsentDenied` is the install-time
+    // consent hook (Step 3c of plugin_lifecycle::install_plugin);
+    // `PluginPerDelegationDenied` is the per-delegation runtime hook
+    // (between Steps 2b/3 of engine_caps::delegate_capability).
+    // Forensic-discrimination symmetry per CRITIC-1 FIX-5 + Δv3-3.
+    // CATALOG_VARIANT_COUNT 192 → 193 (S3a) → 194 (S3b).
+    ErrorCode::PluginInstallConsentDenied,
+    ErrorCode::PluginPerDelegationDenied,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -1015,8 +1024,10 @@ fn variant_count_is_pinned() {
     // `Engine::walk_share_scope` consumer surface for the SubgraphSpec
     // walker (the wave-time mint of the engine wrapper at
     // `crates/benten-engine/src/engine_share_scope.rs`). 191 + 1 = 192.
+    // R6 R1 FP-F4 §S3a + §S3b: +2 `PluginInstallConsentDenied` +
+    // `PluginPerDelegationDenied` — the §8-E hook denial codes. 192 → 194.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 192,
+        CATALOG_VARIANT_COUNT, 194,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1297,7 +1308,12 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::AuditNotLandedPurePqRejected
             // G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h)
             // — Engine::walk_share_scope typed reject mapping.
-            | ErrorCode::SubgraphSpecWalkFailed => true,
+            | ErrorCode::SubgraphSpecWalkFailed
+            // R6 R1 FP-F4 §S3a + §S3b — CLAUDE.md baked-in #18 §8-E
+            // hook denial codes (install-time consent + per-delegation
+            // runtime). Forensic-discrimination per CRITIC-1 FIX-5.
+            | ErrorCode::PluginInstallConsentDenied
+            | ErrorCode::PluginPerDelegationDenied => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

@@ -160,9 +160,11 @@ fn tf3d_large_node_chunked_to_16_kib_each_independent_decrypt() {
     // that chunk; assert it round-trips to the expected bytes at offset
     // 7 * IROH_BLOCK_SIZE.
     let middle = 7usize;
+    let total_chunks = u32::try_from(chunked.chunks().len()).unwrap();
     let decrypted_chunk = decrypt_chunk(
         &chunked.chunks()[middle],
         middle,
+        total_chunks,
         &plaintext_cid,
         &node.derive_key_for_test(),
     )
@@ -229,9 +231,11 @@ fn tf3d_cross_chunk_rebinding_fails_aad_binds_chunk_index() {
     let m = 11usize;
     let attacker_ciphertext = &chunked.chunks()[n];
 
+    let total_chunks = u32::try_from(chunked.chunks().len()).unwrap();
     let result = decrypt_chunk(
         attacker_ciphertext,
         m, // wrong index → AAD mismatch
+        total_chunks,
         &plaintext_cid,
         &node.derive_key_for_test(),
     );

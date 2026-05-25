@@ -36,6 +36,7 @@ const ENVELOPE_SIG_DOMAIN: &[u8] = b"benten/g-core-3f/drop-bundle-envelope/v1";
 
 /// Typed envelope-sig failure.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum EnvelopeSigError {
     /// The verifying-key bytes do not parse as an Ed25519 32-byte
     /// public key (covers truncation, wrong length, invalid Edwards

@@ -43,15 +43,8 @@ pub benten_caps::authorization_grant::AuthorizationGrant::scope: core::option::O
 pub benten_caps::authorization_grant::AuthorizationGrant::ucan: benten_caps::authorization_grant::UcanEnvelope
 impl benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_envelopes_for_test(ucan: benten_caps::authorization_grant::UcanEnvelope, key_material: benten_caps::authorization_grant::GrantKeyMaterial, audience: benten_core::Cid) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_nbf_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, nbf_secs: u64, exp_secs: u64) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_unresolved_peer_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::malformed_for_test(audience_kp: &benten_id::keypair::Keypair) -> Self
 pub fn benten_caps::authorization_grant::AuthorizationGrant::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_caps::authorization_grant::AuthorizationGrantError>
 pub fn benten_caps::authorization_grant::AuthorizationGrant::verify_binding(&self, audience: benten_core::Cid) -> core::result::Result<(), benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_key_material_for_test(&self, km: benten_caps::authorization_grant::GrantKeyMaterial) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_ucan_for_test(&self, ucan: benten_caps::authorization_grant::UcanEnvelope) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::clone(&self) -> benten_caps::authorization_grant::AuthorizationGrant
 impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrant
@@ -69,10 +62,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_gran
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
 #[non_exhaustive] pub struct benten_caps::authorization_grant::GrantKeyMaterial
 pub benten_caps::authorization_grant::GrantKeyMaterial::bytes: alloc::vec::Vec<u8>
-impl benten_caps::authorization_grant::GrantKeyMaterial
-pub fn benten_caps::authorization_grant::GrantKeyMaterial::from_bytes_for_test(bytes: alloc::vec::Vec<u8>) -> Self
-pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test() -> Self
-pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test_distinct(discriminator: u8) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::GrantKeyMaterial
 pub fn benten_caps::authorization_grant::GrantKeyMaterial::clone(&self) -> benten_caps::authorization_grant::GrantKeyMaterial
 impl core::cmp::Eq for benten_caps::authorization_grant::GrantKeyMaterial
@@ -100,9 +89,6 @@ pub benten_caps::authorization_grant::UcanEnvelope::discriminator: u32
 pub benten_caps::authorization_grant::UcanEnvelope::exp_secs: u64
 pub benten_caps::authorization_grant::UcanEnvelope::nbf_secs: u64
 pub benten_caps::authorization_grant::UcanEnvelope::unresolved_peer: bool
-impl benten_caps::authorization_grant::UcanEnvelope
-pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test(audience: benten_core::Cid) -> Self
-pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test_distinct(audience: benten_core::Cid, discriminator: u32) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::UcanEnvelope
 pub fn benten_caps::authorization_grant::UcanEnvelope::clone(&self) -> benten_caps::authorization_grant::UcanEnvelope
 impl core::cmp::Eq for benten_caps::authorization_grant::UcanEnvelope
@@ -301,7 +287,6 @@ pub benten_caps::grant::CapabilityGrant::scope: alloc::string::String
 pub benten_caps::grant::CapabilityGrant::ttl_hlc_duration: core::option::Option<core::time::Duration>
 impl benten_caps::grant::CapabilityGrant
 pub fn benten_caps::grant::CapabilityGrant::as_node(&self) -> benten_core::Node
-pub fn benten_caps::grant::CapabilityGrant::attenuated_for_test(actor: &benten_core::Cid, scope: &str, i: usize) -> Self
 pub fn benten_caps::grant::CapabilityGrant::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_caps::grant::CapabilityGrant::new(grantee: benten_core::Cid, issuer: benten_core::Cid, scope: benten_caps::grant::GrantScope) -> Self
 impl core::clone::Clone for benten_caps::grant::CapabilityGrant
@@ -363,10 +348,6 @@ impl core::marker::UnsafeUnpin for benten_caps::grant_backed::GrantBackedPolicy
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
 impl !core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
 pub struct benten_caps::grant_backed::GrantReaderChain
-impl benten_caps::grant_backed::GrantReaderChain
-pub fn benten_caps::grant_backed::GrantReaderChain::check_attenuation_for_test(&self, _scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
-pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_and_config_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>, config: benten_caps::grant_backed::GrantReaderConfig) -> Self
-pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>) -> Self
 impl core::marker::Freeze for benten_caps::grant_backed::GrantReaderChain
 impl core::marker::Send for benten_caps::grant_backed::GrantReaderChain
 impl core::marker::Sync for benten_caps::grant_backed::GrantReaderChain
@@ -553,8 +534,6 @@ pub benten_caps::policy::CapWriteContext::is_privileged: bool
 pub benten_caps::policy::CapWriteContext::label: alloc::string::String
 pub benten_caps::policy::CapWriteContext::pending_ops: alloc::vec::Vec<benten_caps::policy::PendingOp>
 pub benten_caps::policy::CapWriteContext::scope: alloc::string::String
-impl benten_caps::policy::CapWriteContext
-pub fn benten_caps::policy::CapWriteContext::synthetic_for_test() -> Self
 impl core::clone::Clone for benten_caps::policy::CapWriteContext
 pub fn benten_caps::policy::CapWriteContext::clone(&self) -> benten_caps::policy::CapWriteContext
 impl core::default::Default for benten_caps::policy::CapWriteContext
@@ -578,7 +557,6 @@ pub benten_caps::policy::ReadContext::target_cid: core::option::Option<benten_co
 impl benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::by_cid_only(cid: benten_core::Cid) -> Self
 pub fn benten_caps::policy::ReadContext::by_label_only(label: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_caps::policy::ReadContext::synthetic_for_test() -> Self
 impl core::clone::Clone for benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::clone(&self) -> benten_caps::policy::ReadContext
 impl core::default::Default for benten_caps::policy::ReadContext
@@ -1177,15 +1155,8 @@ pub benten_caps::AuthorizationGrant::scope: core::option::Option<benten_caps::re
 pub benten_caps::AuthorizationGrant::ucan: benten_caps::authorization_grant::UcanEnvelope
 impl benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_envelopes_for_test(ucan: benten_caps::authorization_grant::UcanEnvelope, key_material: benten_caps::authorization_grant::GrantKeyMaterial, audience: benten_core::Cid) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_nbf_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, nbf_secs: u64, exp_secs: u64) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::issue_with_unresolved_peer_for_test(issuer_kp: &benten_id::keypair::Keypair, audience_pubkey: &benten_id::keypair::PublicKey, scope: benten_caps::restricted_spec::RestrictedScope, exp_secs: u64) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::malformed_for_test(audience_kp: &benten_id::keypair::Keypair) -> Self
 pub fn benten_caps::authorization_grant::AuthorizationGrant::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_caps::authorization_grant::AuthorizationGrantError>
 pub fn benten_caps::authorization_grant::AuthorizationGrant::verify_binding(&self, audience: benten_core::Cid) -> core::result::Result<(), benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_key_material_for_test(&self, km: benten_caps::authorization_grant::GrantKeyMaterial) -> Self
-pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_ucan_for_test(&self, ucan: benten_caps::authorization_grant::UcanEnvelope) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::clone(&self) -> benten_caps::authorization_grant::AuthorizationGrant
 impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrant
@@ -1211,8 +1182,6 @@ pub benten_caps::CapWriteContext::is_privileged: bool
 pub benten_caps::CapWriteContext::label: alloc::string::String
 pub benten_caps::CapWriteContext::pending_ops: alloc::vec::Vec<benten_caps::policy::PendingOp>
 pub benten_caps::CapWriteContext::scope: alloc::string::String
-impl benten_caps::policy::CapWriteContext
-pub fn benten_caps::policy::CapWriteContext::synthetic_for_test() -> Self
 impl core::clone::Clone for benten_caps::policy::CapWriteContext
 pub fn benten_caps::policy::CapWriteContext::clone(&self) -> benten_caps::policy::CapWriteContext
 impl core::default::Default for benten_caps::policy::CapWriteContext
@@ -1234,7 +1203,6 @@ pub benten_caps::CapabilityGrant::scope: alloc::string::String
 pub benten_caps::CapabilityGrant::ttl_hlc_duration: core::option::Option<core::time::Duration>
 impl benten_caps::grant::CapabilityGrant
 pub fn benten_caps::grant::CapabilityGrant::as_node(&self) -> benten_core::Node
-pub fn benten_caps::grant::CapabilityGrant::attenuated_for_test(actor: &benten_core::Cid, scope: &str, i: usize) -> Self
 pub fn benten_caps::grant::CapabilityGrant::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_caps::grant::CapabilityGrant::new(grantee: benten_core::Cid, issuer: benten_core::Cid, scope: benten_caps::grant::GrantScope) -> Self
 impl core::clone::Clone for benten_caps::grant::CapabilityGrant
@@ -1302,10 +1270,6 @@ impl !core::panic::unwind_safe::RefUnwindSafe for benten_caps::grant_backed::Gra
 impl !core::panic::unwind_safe::UnwindSafe for benten_caps::grant_backed::GrantBackedPolicy
 #[non_exhaustive] pub struct benten_caps::GrantKeyMaterial
 pub benten_caps::GrantKeyMaterial::bytes: alloc::vec::Vec<u8>
-impl benten_caps::authorization_grant::GrantKeyMaterial
-pub fn benten_caps::authorization_grant::GrantKeyMaterial::from_bytes_for_test(bytes: alloc::vec::Vec<u8>) -> Self
-pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test() -> Self
-pub fn benten_caps::authorization_grant::GrantKeyMaterial::synthetic_for_test_distinct(discriminator: u8) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::GrantKeyMaterial
 pub fn benten_caps::authorization_grant::GrantKeyMaterial::clone(&self) -> benten_caps::authorization_grant::GrantKeyMaterial
 impl core::cmp::Eq for benten_caps::authorization_grant::GrantKeyMaterial
@@ -1328,10 +1292,6 @@ impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::GrantKeyMat
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::GrantKeyMaterial
 pub struct benten_caps::GrantReaderChain
-impl benten_caps::grant_backed::GrantReaderChain
-pub fn benten_caps::grant_backed::GrantReaderChain::check_attenuation_for_test(&self, _scope: &str) -> core::result::Result<(), benten_caps::error::CapError>
-pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_and_config_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>, config: benten_caps::grant_backed::GrantReaderConfig) -> Self
-pub fn benten_caps::grant_backed::GrantReaderChain::with_chain_for_test(chain: alloc::vec::Vec<benten_caps::grant::CapabilityGrant>) -> Self
 impl core::marker::Freeze for benten_caps::grant_backed::GrantReaderChain
 impl core::marker::Send for benten_caps::grant_backed::GrantReaderChain
 impl core::marker::Sync for benten_caps::grant_backed::GrantReaderChain
@@ -1508,7 +1468,6 @@ pub benten_caps::ReadContext::target_cid: core::option::Option<benten_core::Cid>
 impl benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::by_cid_only(cid: benten_core::Cid) -> Self
 pub fn benten_caps::policy::ReadContext::by_label_only(label: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_caps::policy::ReadContext::synthetic_for_test() -> Self
 impl core::clone::Clone for benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::clone(&self) -> benten_caps::policy::ReadContext
 impl core::default::Default for benten_caps::policy::ReadContext
@@ -1591,9 +1550,6 @@ pub benten_caps::UcanEnvelope::discriminator: u32
 pub benten_caps::UcanEnvelope::exp_secs: u64
 pub benten_caps::UcanEnvelope::nbf_secs: u64
 pub benten_caps::UcanEnvelope::unresolved_peer: bool
-impl benten_caps::authorization_grant::UcanEnvelope
-pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test(audience: benten_core::Cid) -> Self
-pub fn benten_caps::authorization_grant::UcanEnvelope::synthetic_for_test_distinct(audience: benten_core::Cid, discriminator: u32) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::UcanEnvelope
 pub fn benten_caps::authorization_grant::UcanEnvelope::clone(&self) -> benten_caps::authorization_grant::UcanEnvelope
 impl core::cmp::Eq for benten_caps::authorization_grant::UcanEnvelope
@@ -1718,7 +1674,6 @@ pub fn benten_caps::UserDidRegistry::is_user_did(&self, did: &benten_id::did::Di
 pub fn benten_caps::check_attenuation(parent_scope: impl benten_caps::attenuation::AsAttenuationScope, child_required: impl benten_caps::attenuation::AsAttenuationScope) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::check_delegation_within_envelope<P: benten_caps::plugin_delegation::SharesPolicyView>(cap_pattern: &str, target_plugin_did: &benten_id::did::Did, source_shares: &P) -> benten_caps::plugin_delegation::DelegationDecision
 pub fn benten_caps::check_scope_within_envelope(cap_scope: &str, target_plugin_did: &benten_id::did::Did, source_manifest: &benten_platform_foundation::plugin_manifest::PluginManifest) -> core::result::Result<(), benten_caps::error::CapError>
-pub fn benten_caps::emit_refresh_event_for_test() -> benten_caps::HlcStampedRefreshEvent
 pub fn benten_caps::envelope_ceiling_first_rejected_resource<'a>(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, cap_resources: impl core::iter::traits::collect::IntoIterator<Item = &'a str>) -> core::option::Option<alloc::string::String>
 pub fn benten_caps::envelope_ceiling_rejects_cap(envelope: &benten_id::device_attestation::CapabilityEnvelope, resource: &str) -> bool
 pub fn benten_caps::is_private_namespace_cap(cap_scope: &str) -> bool
