@@ -1,0 +1,123 @@
+{
+  "lens": "L4-sync-iroh-drop",
+  "round": "R6 R2",
+  "phase": "phase-4-meta-core",
+  "reviewer_brief_source": "MORNING-QUEUE-2026-05-24-PM.md + R6-LENS-CATALOG.md L4",
+  "tree_state": {
+    "branch_target_sha": "3c80546f",
+    "branch_target_name": "phase-4-meta-core/r6-r1-fp-integration",
+    "verified_via": "git log --oneline phase-4-meta-core/r6-r1-fp-integration -1",
+    "freshness_pre_flight": "passed (HEAD 3c80546f matches brief)",
+    "agent_worktree_branch": "worktree-agent-a774d9a4d78bb02bb",
+    "agent_worktree_base_sha": "5ca364e7 (PR #1350 R4b R1-FP — newer than R6-R1 FP integration but contains the R6-R1-FP merges; verified L4 surfaces match integration SHA)"
+  },
+  "disposition": "APPROVE-WITH-FIX-NOW",
+  "summary": "F3 cross-chunk-truncation defense (AAD binds total_chunks) is LIVE end-to-end at all 4 production AEAD call sites (aead_wrap.rs L242 encrypt loop / L313 decrypt reassemble / L368 decrypt_chunk independent / L396 encrypt_chunk incremental); cipher-suite side aad_per_chunk is properly 3-arg in benten-crypto-suite; canonical-bytes pin in canonical_bytes_v1_codepoints_and_aad.rs validates the 4-segment AAD layout; 2 dedicated test pins (cross_chunk_truncation_fails + cross_chunk_inflation_fails) at aead_wrap.rs L705/L739 exercise the F3 defense; 5 R6-R1 L4-style findings post-FP-integration are otherwise CLOSED end-to-end. Drop bundle 3-layer fail-fast (envelope-sig BEFORE per-Node-decrypt + grant-binding-sig + AEAD) is wired at consume_offline (bundle.rs:405-428); revocation-reach asymmetry is documented at SECURITY-POSTURE.md Compromise #31 + §R6 detail at line 2660+ + the offline-Drop asymmetry section at line 2706+. UCAN-gated iroh-blobs ALPN handler runs a 6-arm fail-closed validation pipeline (unresolved-peer / audience-binding / nbf-exp / revocation / binding-sig / scope) BEFORE iroh-blobs handoff at ucan_blobs_protocol.rs:420-535. **Two MAJORs require FIX-NOW**: (1) D-6 closure is shape-only (the F4 §S4 helper `sync_hydrate_consume_recheck_outcome` is minted in handshake.rs:744 BUT has zero production callers + zero direct test pins; DEFERRED.md Row D-6 was marked CLOSED at SHA 6f88c643 docs-only, but the F4 implementer that was supposed to wire the production handshake-flow consultation never dispatched per MORNING-QUEUE 'F4 implementer dispatch GATED on F1 ratification + A landing'; the FORENSIC Row D-6 entry at DEFERRED.md:266-278 explicitly states 'the §4.25 sync-hydrate half is NOT [structurally enforced]' contradicting the CLOSED claim at line 257); (2) tf3f defense-in-depth test pin at tf3f_envelope_plus_per_node_sig_defense_in_depth.rs:74-79 accepts PerNodeSignatureInvalid as a valid result-arm, but DropBundleError::PerNodeSignatureInvalid is documented as 'reserved-but-unconstructed until [G-CORE-9] surface lands' (bundle.rs:272-273) — the test's matches!() arm creates an appearance of multi-layer integrity which is misleading without an explanatory cite in the test comment. **One MINOR**: 4 docstring sites in aead_wrap.rs (L12, L28, L97, L204) still document `aad_per_chunk(plaintext_cid, chunk_index)` as a 2-arg signature — stale post-F3 (now 3-arg with total_chunks).",
+  "findings": [
+    {
+      "id": "L4-R6-R2-MAJOR-1",
+      "severity": "MAJOR",
+      "category": "SHAPE-not-SUBSTANCE",
+      "summary": "D-6 closure is shape-only — F4 §S4 minted the `sync_hydrate_consume_recheck_outcome` helper but no production handshake-flow caller consults it and no direct test pin exercises the helper.",
+      "evidence": [
+        "crates/benten-sync/src/handshake.rs:744 — `pub fn sync_hydrate_consume_recheck_outcome` is defined.",
+        "`grep -rn 'sync_hydrate_consume_recheck_outcome' crates/` returns ONLY the definition site; zero callers, zero test sites.",
+        "The named-pin destination at crates/benten-engine/tests/g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314 explicitly cites `crates/benten-sync/src/handshake.rs` as the deferred wire-up destination AND still names it as deferred ('the handshake-time wire-up is a sync-crate concern that touches the iroh sendme handshake — pulled out per HARD-RULE-12 clause (b) to a named follow-up wave').",
+        "The existing test `sync_hydrate_unresolvable_peer_did_fails_closed_parallel_to_merge_recheck` at the same file calls only `outcome_to_row_reject` (the SHARED primitive that pre-dates F4 §S4) with a hardcoded zone label `\"sync-hydrate-zone\"`; it does NOT exercise the new helper.",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:257 marks Row D-6 CLOSED ('R6 R1 FP-F4 §S4 (2026-05-24)') but lines 266-278 retain the FORENSIC Row D-6 entry stating 'the §4.25 sync-hydrate half is NOT [structurally enforced]' + 'the consumer wire-up is the deferred half' — an internal contradiction.",
+        "MORNING-QUEUE-2026-05-24-PM.md confirms 'F4 implementer dispatch GATED on F1 ratification + A landing' — i.e. the agent that was supposed to wire the helper into the handshake flow was never dispatched.",
+        "The D-6 close commit at SHA 6f88c643 was a docs-only retense (no production-code wire-up at the handshake call path)."
+      ],
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Re-open Row D-6 in docs/V1-FROZEN-INTERFACE-DEFERRED.md (revert lines 257-264 to retain the OPEN status; delete the duplicate FORENSIC entry at lines 266-278 OR merge into the single OPEN entry); restore the test-comment 'destination' framing as still-deferred. The F4 implementer must dispatch (post-F1 ratification per the morning queue) to land the actual handshake-flow consultation site AND the integration test that exercises `sync_hydrate_consume_recheck_outcome` via a synthetic UnresolvedDeny outcome routed through a hydrate flow. Alternative: keep the helper minted but reframe DEFERRED Row D-6 as PARTIAL-CLOSED (helper landed; consumer wire-up + integration test deferred) for accurate v1-beta posture.",
+      "pim_anchor": "pim-18 SHAPE-not-SUBSTANCE pre-flight (§3.6f); Q5 cadence iterate-until-zero; the D-6 case is the canonical 'aspirational-prose / dead-code gap' from Phase-1 R7 + Phase-3 R6 R1 patterns."
+    },
+    {
+      "id": "L4-R6-R2-MAJOR-2",
+      "severity": "MAJOR",
+      "category": "TEST-INTEGRITY",
+      "summary": "tf3f defense-in-depth test pin accepts an unconstructible error-arm in matches!() — creates appearance of multi-layer integrity without honest caveat.",
+      "evidence": [
+        "crates/benten-drop/tests/tf3f_envelope_plus_per_node_sig_defense_in_depth.rs:74-79 — the matches!() block accepts `DropBundleError::PerNodeAeadAuthenticationFailed` OR `DropBundleError::PerNodeSignatureInvalid` as valid pass-result-arms.",
+        "crates/benten-drop/src/bundle.rs:265-275 docstring + L272-273 — `per_node_attestation` is explicitly a SIZE-RESERVED placeholder (130-byte sized marker); the real per-Node-signature construction is reserved for G-CORE-9; PerNodeSignatureInvalid typed-reject is `reserved-but-unconstructed until that surface lands`.",
+        "crates/benten-drop/src/bundle.rs:756-766 — implementation comment in build_5_recipe_bundle_impl confirms `per_node_attestation` is opaque 130 bytes of `0xA5`, NOT actual Ed25519 signatures.",
+        "consume_offline (bundle.rs:405-428) does NOT touch per_node_attestation — only envelope-sig + grant-binding + AEAD layers fire.",
+        "Result: the test passes when EITHER (a) the AEAD layer catches the tamper (real) OR (b) the impossible PerNodeSignatureInvalid arm fires (cannot happen at HEAD). The honest read is 'AEAD layer catches all per-Node tampers at G-CORE-3f; per-Node-sig is a sized placeholder for G-CORE-9 upgrade.'"
+      ],
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Drop the `PerNodeSignatureInvalid` arm from the matches!() at tf3f_envelope_plus_per_node_sig_defense_in_depth.rs:78 (the variant is currently unconstructible; accepting it gives a false positive on a hypothetical future regression where AEAD silently passes). Update the test name to reflect the real G-CORE-3f shape (`tf3f_per_node_ciphertext_tamper_caught_by_aead_layer_at_g_core_3f`) OR add an inline comment naming PerNodeSignatureInvalid as 'placeholder for G-CORE-9 upgrade — at HEAD only AeadAuthenticationFailed can fire' so the matches!() arm is documented as forward-compat rather than current-shape.",
+      "pim_anchor": "pim-18 SHAPE-not-SUBSTANCE pre-flight (§3.6f) — body-of-test substantive check; honest-disclose discipline."
+    },
+    {
+      "id": "L4-R6-R2-MINOR-1",
+      "severity": "MINOR",
+      "category": "DOCSTRING-DRIFT",
+      "summary": "4 docstring sites in aead_wrap.rs still document `aad_per_chunk(plaintext_cid, chunk_index)` as a 2-arg signature — stale post-F3 R6-R1-FP (signature is now 3-arg with `total_chunks`).",
+      "evidence": [
+        "crates/benten-graph/src/aead_wrap.rs:12 — module-level docstring: ``aad = aad_per_chunk(plaintext_cid, chunk_index)``",
+        "crates/benten-graph/src/aead_wrap.rs:28 — module-level rebinding-attack docstring: ``aad_per_chunk(plaintext_cid, chunk_index)``",
+        "crates/benten-graph/src/aead_wrap.rs:97 — EncryptedNode::Chunked field docstring: ``aad_per_chunk(plaintext_cid, chunk_index)``",
+        "crates/benten-graph/src/aead_wrap.rs:204 — ChunkedCiphertext struct docstring: ``aad_per_chunk(plaintext_cid, chunk_index)``",
+        "Production sites (L242 / L313 / L368 / L396) + crypto-suite definition + canonical-bytes pin ALL use the 3-arg form (`plaintext_cid`, `chunk_index_u64`, `total_chunks`).",
+        "The F3 fix-pass updated the bodies + added comprehensive new docstrings at decrypt_chunk + encrypt_chunk (L343, L378) but missed the older 4 docstring sites."
+      ],
+      "disposition": "FIX-NOW",
+      "fix_now_action": "Sed the 4 sites to `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)` to match the actual cipher-suite signature. Trivial orchestrator-direct edit.",
+      "pim_anchor": "§3.5b post-fix doc-coupling pre-flight (pim-1 HARDENED) — F3 was a public-shape-change of `aad_per_chunk` and the adjacent docs in the same module did not sweep."
+    },
+    {
+      "id": "L4-R6-R2-OBS-1",
+      "severity": "OBSERVATION",
+      "category": "NAMED-DEFERRAL-VERIFICATION",
+      "summary": "Named-deferral surfaces are properly carried — verified for L4 scope.",
+      "evidence": [
+        "Two-CID map storage durability: TWO_CID_MAP_TABLE at benten-graph/src/redb_backend.rs:111 + two_cid_lookup_scoped/_with_namespace + read_via_two_cid_scoped (2429-2641) — redb-persistent. TwoCidStore at benten-sync/src/two_cid_store.rs:64 is wave-3e in-memory fixture explicitly named as 'production swap-point to iroh_blobs::FsStore' at L31/L111 (not a phantom — production storage durability is the graph-crate concern, properly separated).",
+        "iroh-blobs ALPN handoff: ucan_blobs_protocol.rs:528-534 — 'caller may now dispatch to iroh-blobs ... callers use serve_request_for_test (test) / the production dispatch wire-up (real iroh-blobs)'; serve_request_for_test:549 explicitly named as the test seam; production iroh-blobs wire-up named-deferred to G-CORE-3-real-iroh-blobs.",
+        "per-Node-sig defense-in-depth: bundle.rs:265-275 + L756-766 honestly disclose the SIZE-RESERVED placeholder shape + G-CORE-9 freeze-time upgrade.",
+        "Live-per-request resolver: docs/V1-FROZEN-INTERFACE-DEFERRED.md:363-376 Row D-10 explicitly names ~50 LOC test pin at `crates/benten-engine/tests/g_core_9_share_scope_live_per_request.rs` for G-COMP-1.",
+        "Revocation-reach asymmetry: docs/SECURITY-POSTURE.md Compromise #31 (L30+L91) + §R6 detail (L2660+) + offline-Drop asymmetry section (L2706+) — fully documented; mitigation named (tight UCAN nbf/exp + key rotation + E_UCAN_BLOBS_REQUEST_REJECTED server-side gate); stays OPEN at v1-beta + v1-GM as inherent property."
+      ],
+      "disposition": "VERIFY-STAYS (no action)",
+      "pim_anchor": "HARD RULE 12 named-now destination discipline."
+    },
+    {
+      "id": "L4-R6-R2-OBS-2",
+      "severity": "OBSERVATION",
+      "category": "F3-END-TO-END-VERIFICATION",
+      "summary": "F3 cross-chunk-truncation defense is verified end-to-end at all 4 production AEAD call sites + cipher-suite primitive + canonical-bytes wire-format pin + 2 dedicated negative-test pins.",
+      "evidence": [
+        "Production seal sites (encrypt loop + decrypt reassemble + decrypt_chunk + encrypt_chunk): aead_wrap.rs L242, L313, L368, L396 — all use 3-arg suite_aad_per_chunk with total_chunks plumbed through.",
+        "Cipher-suite primitive aad_per_chunk: benten-crypto-suite/src/aead.rs:240 — 3-arg signature with `total_chunks: u32`; AAD layout binds total_chunks at trailing u32 LE.",
+        "Encrypt-side total_chunks computed at aead_wrap.rs:228-232 (`plaintext.len().div_ceil(IROH_BLOCK_SIZE).max(1)` + u32::try_from with typed reject on overflow).",
+        "Decrypt-side total_chunks read at aead_wrap.rs:303-306 (`chunks.len()` with u32::try_from typed reject).",
+        "Canonical-bytes wire-format pin at benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs:111 — verifies 4-segment layout (tag || cid || u64-LE chunk_index || u32-LE total_chunks).",
+        "Truncation defense pin at aead_wrap.rs:705 (cross_chunk_truncation_fails) — verifies presenting chunk-0 with total_chunks=5 fails AEAD auth when sealed under total_chunks=10.",
+        "Inflation defense pin at aead_wrap.rs:739 (cross_chunk_inflation_fails) — symmetric case verifying total_chunks=20 fails when sealed under total_chunks=10.",
+        "Positive control inside cross_chunk_truncation_fails confirms correct total_chunks=10 still succeeds (anti-stub)."
+      ],
+      "disposition": "VERIFY-STAYS (F3 closure honored end-to-end)"
+    }
+  ],
+  "post_fp_findings_closure_verification": {
+    "F3_AAD_total_chunks_end_to_end": "CLOSED end-to-end at all 4 production AEAD call sites + cipher-suite primitive + canonical-bytes wire-format pin + 2 dedicated negative-test pins.",
+    "D-6_sync_hydrate_UnresolvedDeny_consumption": "PARTIAL — helper minted but consumer wire-up + integration test deferred; DEFERRED.md row mis-labeled as CLOSED (see L4-R6-R2-MAJOR-1).",
+    "two_CID_map_durability": "CLOSED — redb-backed TWO_CID_MAP_TABLE shipped at storage layer; sync-side TwoCidStore is wave-3e fixture (named-deferred swap-point).",
+    "ALPN_UCAN_check_before_iroh_handoff": "CLOSED — 6-arm validation pipeline at ucan_blobs_protocol.rs:420-535 fires before any iroh dispatch (test seam at HEAD; production iroh-blobs wire-up named-deferred per UNAMED follow-up G-CORE-3-real-iroh-blobs).",
+    "Drop_bundle_3_layer_fail_fast": "CLOSED — envelope-sig BEFORE per-Node-decrypt (bundle.rs:405-428 + tf3f_tampered_envelope_sig_fails_before_per_node_decrypt counter pin).",
+    "Drop_bundle_3rd_per_node_sig_layer": "PARTIAL — sized placeholder shipped; per-Node-sig construction reserved for G-CORE-9; documented honestly at bundle.rs:265-275 + 756-766 BUT the test matches!() arm includes the unconstructible variant (see L4-R6-R2-MAJOR-2).",
+    "AAD_binds_plaintext_CID_rebinding_attack": "CLOSED — aad_wrap.rs::rebinding_attack_fails + cross_chunk_rebinding_fails dual pins; suite-layer aad_whole_content + aad_per_chunk domain tags distinct.",
+    "revocation_reach_asymmetry_doc_compromise": "CLOSED — Compromise #31 documented at SECURITY-POSTURE.md:30,91 + §R6 detail at L2660+ + asymmetry section at L2706+.",
+    "live_per_request_resolver_seam": "CLOSED-STRUCTURAL + DEFERRED-TEST — resolver structure in place at V1-FROZEN-INTERFACE.md:1753-1769; test pin properly named at DEFERRED Row D-10.",
+    "stale_docstrings_in_aead_wrap": "OPEN — 4 sites still document 2-arg signature (see L4-R6-R2-MINOR-1)."
+  },
+  "cross_check_signals_for_other_lenses": {
+    "L1_crypto_correctness": "F3 AAD layout is structurally observable; L1 should confirm the codepoint-dispatch + key_material correctness paths (out of L4 scope).",
+    "L2_adversarial": "L4-R6-R2-MAJOR-1 (D-6 shape-only) IS a structural-defense-gap if a sync-hydrate path with UnresolvedDeny exists in production flow — adversarial lens should test whether an unresolvable peer-DID at the sync-handshake boundary can slip past WITHOUT consultation (suspect: YES at HEAD because the helper has no callers).",
+    "L3_grant_walker": "AuthorizationGrant::verify_binding is consumed at consume_offline (bundle.rs:411) + ucan_blobs_protocol ARM 5 (L496-499) — L3 verifies binding-sig semantics.",
+    "L6_capability_system_plugin_trust": "The L4 D-6 finding has L6 implications — the SHARED primitive ManifestEnvelopeRecheckOutcome::UnresolvedDeny is consumed at §4.36 (engine) but NOT at §4.25 (sync-handshake); L6 should re-verify the engine-side §4.36 consumption survives the FP merge."
+  },
+  "iteration_termination_judgment": {
+    "advance_to_next_round": false,
+    "reason": "2 MAJORs require FIX-NOW per HARD RULE 12 + Q5 iterate-until-zero discipline. R6 R2 should triage + dispatch FP to close MAJOR-1 + MAJOR-2 + MINOR-1 before advancing to R3."
+  }
+}
