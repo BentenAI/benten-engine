@@ -19,6 +19,6 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.7"
   }
 }
