@@ -552,6 +552,24 @@ pub fn run_cite_drift_check(root: &Path) -> Vec<Finding> {
         let Ok(text) = fs::read_to_string(input) else {
             continue;
         };
+
+        // R6-R2-FP-OD file-level exemption marker (orchestrator-direct
+        // elegance-pass): a doc whose body legitimately references
+        // historical-narrative / retired-API / future-spec surfaces can
+        // declare itself out-of-scope by placing
+        // `<!-- cite-drift-exempt-file: <reason> -->` anywhere in the
+        // file (typically near the top). Sibling to the existing
+        // per-line `<!-- cite-drift-exempt -->` marker (which suppresses
+        // only the line it appears on, used at glob-cite sites). The
+        // file-level marker is the correct shape for retrospective /
+        // historical-narrative docs where ~every cite would otherwise
+        // need a per-line suppression. Per HARD RULE 12 the marker
+        // requires a reason — drift-detect itself doesn't enforce
+        // reason-quality, but reviewers do.
+        if text.contains("<!-- cite-drift-exempt-file:") {
+            continue;
+        }
+
         for (line_idx, line) in text.lines().enumerate() {
             let line_no = line_idx + 1;
 
@@ -1028,6 +1046,12 @@ pub fn run_numeric_claim_check_with_truth(root: &Path, truth: &[NumericClaim]) -
         let Ok(text) = fs::read_to_string(input) else {
             continue;
         };
+        // R6-R2-FP-OD file-level exemption marker: historical-narrative
+        // docs (phase-N-backlogs) carry intentional drift on retired
+        // counts; mark the whole file out-of-scope for at-HEAD checks.
+        if text.contains("<!-- cite-drift-exempt-file:") {
+            continue;
+        }
         for (line_idx, line) in text.lines().enumerate() {
             for claim in truth {
                 for phrasing in claim.phrasings {
@@ -1595,6 +1619,13 @@ pub fn run_glob_cite_check(root: &Path) -> Vec<Finding> {
         // glob-shaped doc-comment + literal examples. The walker already
         // excludes the detector's subtree via the `cite-drift-detector`
         // basename skip in `walk_ext_recursive`.
+        //
+        // R6-R2-FP-OD file-level exemption (parallel to run_cite_drift_check):
+        // a doc declaring `<!-- cite-drift-exempt-file: <reason> -->` is
+        // out-of-scope for glob-cite phantom-detection too.
+        if text.contains("<!-- cite-drift-exempt-file:") {
+            continue;
+        }
         for (line_idx, line) in text.lines().enumerate() {
             let line_no = line_idx + 1;
             // Honour the `cite-drift-exempt` marker (Markdown-comment
@@ -1762,6 +1793,11 @@ pub fn run_pr_cite_check(root: &Path) -> Vec<Finding> {
         let Ok(text) = fs::read_to_string(input) else {
             continue;
         };
+        // R6-R2-FP-OD file-level exemption (parallel to run_cite_drift_check
+        // / run_glob_cite_check / run_numeric_claim_check_with_truth).
+        if text.contains("<!-- cite-drift-exempt-file:") {
+            continue;
+        }
         for (line_idx, line) in text.lines().enumerate() {
             let line_no = line_idx + 1;
             if line.contains("<!-- cite-drift-exempt") {

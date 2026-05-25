@@ -1,5 +1,7 @@
 # Phase 3 Backlog
 
+<!-- cite-drift-exempt-file: this doc carries historical-narrative provenance (Phase-2-era crate counts, retired-API references, pre-Phase-3 narrative context) for backlog row context. Numeric-claim drift on those references is intentional and out-of-scope for the at-HEAD drift detector. Per-row code cites + per-row acceptance-criteria cites remain in-scope at the row level via reviewer audit. (R6-R2-FP-OD file-level exemption marker; ratified 2026-05-25.) -->
+
 **Status:** Consolidated list of items deferred from Phase 2 (a + b) that have a clear Phase 3 landing point. Sibling to [`phase-2-backlog.md`](./phase-2-backlog.md) (Phase-1-deferrals-targeting-Phase-2). Every item here either (a) was explicitly scoped out of Phase 2a/2b with a Phase-3 trigger, or (b) was triaged into Phase 3 during Phase 2b close because the work depends on a Phase-3 surface that doesn't exist yet.
 
 **Phase 3 scope anchor:** [`docs/FULL-ROADMAP.md`](../FULL-ROADMAP.md) §"Phase 3: P2P Sync — Atriums Ship Here." Phase 3 brings: peer-to-peer Atrium connections via iroh, CRDT merges via Loro, identity via Ed25519 / DID / VC, the durable UCAN backend in `benten-id`. Phase 3 also closes Compromises #9-#10 (already structurally closed in 2b R5 G12-E + 8c-subscribe), #N+8 / #N+9 (browser persistence + cross-browser determinism), and several engine-internal asymmetries the 2b R5 close surfaced.

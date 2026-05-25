@@ -327,6 +327,120 @@ D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
 
 ---
 
+## Cohort 7 — R6 R2 FP-A audience-pubkey BLOCKER + DropBundle truncation (this PR)
+
+This cohort lands at PR<R6-R2-FP-integration> (R6 R2 FP Strategy-C
+consolidation re-do, off post-PR-#1351 main, 2026-05-25). Closes the
+L2-R2-BLOCKER-1 audience_pubkey post-sign substitution access-theft
+hazard + L4-MAJ DropBundle inter-Recipe truncation sibling. Sharpens
+the previously-closed Row D-1 with the apply_atrium_merge per-row
+chain-bearing site (now 14 admit_write_chain sites; 2 chain-bearing).
+
+### Wire-format breaking change
+
+- **`BINDING_SIG_DOMAIN` v2 → v3** at
+  `crates/benten-caps/src/authorization_grant.rs::BINDING_SIG_DOMAIN`.
+  Pre-FP-A the `AuthorizationGrant.audience_pubkey` field lived
+  OUTSIDE the signed `binding_message` — a network adversary could
+  mutate `audience_pubkey` to her own bytes, connect to a producer with
+  her own iroh `EndpointId`, and the UcanBlobsHandler ARM 2
+  (audience-binding) check (`conn_pubkey == eve_pubkey ==
+  grant.audience_pubkey`) would MATCH while ARM 5 (binding-sig verify)
+  still verified because the bound `audience_binding` = CID(bob_pubkey)
+  was untouched. Silent access-theft (not just attribution-forgery).
+  Post-FP-A the `audience_pubkey` is folded in as the 6th binding-
+  message segment (`len_u32_le || pubkey_bytes`) AND the domain-tag
+  bumps v2 → v3. Domain-separation at segment 1 means v2-signed grants
+  fail re-verification under v3 (intended pre-tag behavior; no
+  v2-signed grants exist on the wire yet — test fixtures only).
+- **`DropBundle` per-recipe AAD extension** at
+  `crates/benten-drop/src/bundle.rs::DropBundle` consumption. The
+  per-`Recipe` AEAD seal now binds `aad_per_recipe` (position +
+  list-length) in addition to `aad_whole_content(plaintext_cid)`. Pre-
+  FP-A a malicious relay could DROP a `Recipe` from
+  `DropBundle.content: Vec<EncryptedContent>` and the recipient's
+  `consume_offline` iteration would still verify each remaining
+  per-Recipe AEAD tag individually (the AAD committed to neither
+  position nor list length) — silent delivery of a truncated bundle.
+  Post-FP-A the per-Recipe AAD binds both, so any drop fails AEAD
+  verification at the affected position. **No wire-format version bump
+  for `DropBundle`** because the existing `DropBundleVersion` enum is
+  the wire-version surface and the AAD-binding extension preserves the
+  on-wire byte layout (the AAD is computed at verify-time, not
+  serialized into the bundle).
+
+### Substrate honesty (Row D-1 sharpening; no public-API shape change)
+
+- **`apply_atrium_merge` per-row admit now CHAIN-BEARING** at
+  `crates/benten-engine/src/engine.rs::apply_atrium_merge`. Pre-FP-B
+  13 of 13 `admit_write_chain` sites passed
+  `WriteAdmissionFrame::engine_internal()`; only `delegate_capability`
+  was chain-bearing. Inbound-sync per-row writes routed through
+  `append_version` (engine_internal frame), so the
+  `WriteBoundaryChainValidator` never observed the peer-DID at row
+  admission. Post-FP-B the `apply_atrium_merge` per-row loop presents
+  `WriteAdmissionFrame::with_chain(peer_actor_cid, peer_did)`, closing
+  the asymmetry (outbound writes chain-walked, inbound sync rows now
+  also chain-walked). 14 admit_write_chain sites total; 2 chain-bearing
+  (`delegate_capability` + `apply_atrium_merge` per-row), 12
+  engine_internal. Behavior change: in deployments with a substantive
+  `WriteBoundaryChainValidator` installed, inbound-sync rows with a
+  peer-DID outside the user-as-root chain are now REJECTED at admission
+  (previously admitted silently as `engine_internal`).
+
+### Documentation / retract
+
+- **`V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15c retracted.** The
+  earlier D-15c framing (`audience_pubkey` as "deferred wire-format
+  add") was based on a misread of the v2 binding-message: D-15c
+  asserted that adding `audience_pubkey` to the binding-message was a
+  deferrable nicety, but the L2-R2-BLOCKER-1 cross-confirmation showed
+  it was a load-bearing access-theft defense. Row D-15c is now marked
+  `~~RETRACTED~~` with a pointer to this Cohort 7 entry.
+- **`V1-WIRE-FORMAT-INVENTORY.md` Item 6** updated to `BINDING_SIG_DOMAIN v3`
+  with the audience-pubkey binding context.
+- **`SECURITY-POSTURE.md`** updated with the L18-related callouts (no
+  open Compromise mints; closes via existing `BindingMismatch` +
+  `BindingSigInvalid` variants).
+
+### New ErrorCode mints
+
+None — this cohort closes through existing `BindingMismatch` +
+`BindingSigInvalid` variants. CATALOG_VARIANT_COUNT unchanged at 194.
+
+### Migration for downstream consumers
+
+- **Downstream re-issue grants signed under v2 must be re-signed under
+  v3.** The change is shape-preserving at the byte-layout level (one
+  new segment appended to the signed-payload preimage); only the
+  signature changes. Test fixtures using
+  `issue_with_nbf_for_test` are unaffected (the test helper signs over
+  the 6-segment payload directly).
+- **No code-change required** for callers that consume
+  `AuthorizationGrant` through the
+  `AuthorizationGrant::verify_binding` API — the helper internally
+  reconstructs the 6-segment payload under the v3 domain tag.
+- **`DropBundle` producers** must use the `aad_per_recipe`-aware seal
+  path (which is the only path on the post-FP-A surface; the prior
+  whole-content-AAD-only path was internal-only).
+- **`apply_atrium_merge` callers** with a substantive
+  `WriteBoundaryChainValidator` installed should audit their inbound-
+  sync admission behavior — peer-DIDs outside the user-as-root chain
+  are now REJECTED at admission instead of silently admitted.
+
+### Tests added (per pim-2 §3.6b sub-rule 4 substantive)
+
+- `crates/benten-caps/tests/tf3b_audience_substitution_post_sign_rejected.rs` (3 sub-tests; bare verify_binding API)
+- `crates/benten-sync/tests/tf3e_audience_substitution_arm2_arm5_integration.rs` (2 sub-tests; full handler dispatch)
+- `crates/benten-drop/tests/tf3d_inter_recipe_truncation_rejected.rs` (truncation defense)
+
+`would-FAIL-on-revert` verified per pim-18 §3.6f: surgical revert of
+`audience_pubkey` arg → `None` at both call sites caused 3/3 tf3b
+tests to FAIL with `Got: Ok(())` (silent admission). Post-fix: 3/3 +
+2/2 PASS.
+
+---
+
 ## How to consume this ledger
 
 1. **Adopting v1-beta:** read Cohort 1 + 2 first (wire-format + public-API shape changes you must adapt to).
@@ -338,4 +452,8 @@ D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
 
 ## Provenance
 
-Authored at G-CORE-9 R1 fix-pass (this PR; 2026-05-24) per L18-r1-2/3 closure. Subsequent R2-Rn rounds verify completeness vs the `git log 8141b94..HEAD` walk.
+Authored at G-CORE-9 R1 fix-pass (PR #1346; 2026-05-24) per L18-r1-2/3 closure. Subsequent R2-Rn rounds verify completeness vs the `git log 8141b94..HEAD` walk.
+
+Cohort 6 landed at PR #1351 (R6 R1 FP Strategy-C consolidation; 2026-05-25).
+
+Cohort 7 landed at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C consolidation re-do off post-#1351 main; 2026-05-25) — closes the L2-R2-BLOCKER-1 audience_pubkey BLOCKER + L4-MAJ DropBundle inter-Recipe AAD sibling + Row D-1 sharpening (apply_atrium_merge per-row chain-bearing admit).

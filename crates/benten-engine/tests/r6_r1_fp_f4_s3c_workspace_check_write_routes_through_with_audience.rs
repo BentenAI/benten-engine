@@ -103,9 +103,12 @@ fn trait_default_check_write_with_audience_delegates_to_check_write() {
 /// **§S3c arm 3 — workspace-walker sweep (SUBSTANTIVE source scan).**
 /// Walks every `crates/benten-engine/src/*.rs` file and asserts the
 /// production count of `.check_write_with_audience(` consumer-call
-/// sites matches the Δv3-7 enumerated 4 (engine.rs:1421 +
-/// engine_wait.rs:906 + engine_diagnostics.rs:85 +
-/// primitive_host.rs:618). The earlier `.check_write(` shape is
+/// sites matches the Δv3-7 enumerated 4 (symbol-form per §3.5b
+/// HARDENED point 3, line numbers omitted because all 4 are
+/// high-churn surfaces: `engine.rs::apply_atrium_merge`,
+/// `engine_wait.rs::put_node_inner`,
+/// `engine_diagnostics.rs::transaction`,
+/// `primitive_host.rs::check_capability`). The earlier `.check_write(` shape is
 /// EXCLUDED from this count by design — a regression that re-introduced
 /// `policy.check_write(&ctx)` at any of the 4 sites would drop this
 /// count, firing the assertion.

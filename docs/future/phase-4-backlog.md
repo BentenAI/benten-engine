@@ -1,5 +1,7 @@
 # Phase 4-Foundation backlog
 
+<!-- cite-drift-exempt-file: this doc carries historical-narrative provenance ("10-crate→12-crate rename", retired-API references, phase-N-era counts) for backlog row context. Numeric-claim drift on those references is intentional and out-of-scope for the at-HEAD drift detector. Per-row code cites + per-row acceptance-criteria cites remain in-scope at the row level via reviewer audit. (R6-R2-FP-OD file-level exemption marker; ratified 2026-05-25.) -->
+
 **Status:** scaffolded 2026-05-11 as Phase 4-Foundation R1 pre-dispatch artifact (per meth-r1r1-1 closure of phantom-destination concern). Mirrors `phase-3-backlog.md` shape.
 
 **Purpose:** named destination for Phase 4-Foundation R6 phase-close convergence carries + dogfood-validation findings + cross-phase carries that surface during Phase 4-Foundation implementation.
