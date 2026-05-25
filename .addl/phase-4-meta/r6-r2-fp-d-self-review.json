@@ -1,0 +1,136 @@
+{
+  "lens": "R6-R2-FP-D",
+  "lens_name": "SHAPE-not-SUBSTANCE test body rewrite + §3.6f strengthening (regression-guard substantive-arm contract)",
+  "agent_id": "r6-r2-fp-d-shape-not-substance",
+  "review_round": "R6-R2-FP",
+  "review_target": {
+    "branch": "phase-4-meta-core/r6-r2-fp-d-shape-not-substance",
+    "base_branch": "phase-4-meta-core/r6-r1-fp-integration",
+    "base_head": "32bd9edb26e627ab7b684afff6f47b39ec0c0726",
+    "scope": "Rewrites ~16 SHAPE-not-SUBSTANCE test bodies across 7 test files spanning the F4 regression-guard family (S1+S2+S3a+S3b+S3c+S4) + L9 DSL chunk-3 cross-language tautology. Each rewrite invokes a production entry point (install_plugin / delegate_capability / engine.create_node / source-walker) + asserts an observable consequence + verified would-FAIL-on-revert via production-source mutation. Strengthens §3.6f with 4 sub-rules (a)-(e) operationalizing SHAPE-vs-SUBSTANCE for regression-guard test families specifically. Closes L2-R6-R2-MAJOR-2 + L9-r6r2-MINOR-3 + L13-MAJ-1 + L13-MIN-4 + L13-MIN-5 (16 origin instances). L13-MAJ-2 (audience_pubkey sibling) is OWNED BY sibling agent R6-R2-FP-A; L13-MIN-1 + L13-MIN-2 + L13-MIN-3 are doc-only deferrals OWNED BY orchestrator-direct."
+  },
+  "disposition": "APPROVE-WITH-FIXES",
+  "convergence_disposition": "READY-FOR-STRATEGY-C-CONSOLIDATION",
+  "ground_truth_verified_at_head": "32bd9edb26e627ab7b684afff6f47b39ec0c0726",
+  "loc_delta": {
+    "insertions": 1021,
+    "deletions": 187,
+    "files_changed": 7,
+    "per_file": [
+      {"file": "crates/benten-dsl-compiler/tests/tf_dsl_chunk3_closures.rs", "ins": 86, "del": 9, "note": "L9-r6r2-MINOR-3 tautology → cross-file TS source-scan"},
+      {"file": "crates/benten-engine/tests/r6_r1_fp_f4_s1_write_boundary_chain_validator_wired_at_all_write_entry_points.rs", "ins": 73, "del": 9, "note": "L13-MIN-4 arm 3 const-tautology → real fs::read_dir walker"},
+      {"file": "crates/benten-engine/tests/r6_r1_fp_f4_s3b_delegate_capability_consults_check_per_delegation.rs", "ins": 258, "del": 56, "note": "L2-MAJOR-2 + L13-MAJ-1: 5 trait-isolation arms → real Engine + delegate_capability end-to-end"},
+      {"file": "crates/benten-engine/tests/r6_r1_fp_f4_s3c_workspace_check_write_routes_through_with_audience.rs", "ins": 163, "del": 17, "note": "L13-MIN-4 arm 3 + L13-MIN-5 arm 5: const-tautology walker + empty-body forensic anchor → real source-walkers"},
+      {"file": "crates/benten-engine/tests/r6_r1_fp_f4_s4_production_rechecker_builder_and_d18_synthesized_fallback.rs", "ins": 32, "del": 2, "note": "L13-MAJ-1: arm 1 builder-open-only → substantive rechecker semantic assertion"},
+      {"file": "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s2_install_ports_drops_option_and_side_door_deprecated.rs", "ins": 111, "del": 15, "note": "L13-MAJ-1: arm 3 closure-direct → real install_plugin pipeline + counting closure"},
+      {"file": "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s3a_install_pipeline_consults_check_install_consent.rs", "ins": 298, "del": 79, "note": "L13-MAJ-1 + L13-MIN-5: 6 trait-isolation/empty-body arms → real install_plugin end-to-end + cascade-residue ordering pin"}
+    ]
+  },
+  "findings": [
+    {
+      "id": "R6-R2-FP-D-CLOSURE-1",
+      "severity": "MAJOR",
+      "title": "L2-R6-R2-MAJOR-2 closure — 6 F4 regression-guards uniformly SUBSTANTIVE-NOT-SHAPE",
+      "files": [
+        "crates/benten-engine/tests/r6_r1_fp_f4_s1_write_boundary_chain_validator_wired_at_all_write_entry_points.rs:101-180",
+        "crates/benten-engine/tests/r6_r1_fp_f4_s3c_workspace_check_write_routes_through_with_audience.rs:106-200",
+        "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s3a_install_pipeline_consults_check_install_consent.rs:117-380",
+        "crates/benten-engine/tests/r6_r1_fp_f4_s3b_delegate_capability_consults_check_per_delegation.rs:131-340",
+        "crates/benten-engine/tests/r6_r1_fp_f4_s4_production_rechecker_builder_and_d18_synthesized_fallback.rs:27-65",
+        "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s2_install_ports_drops_option_and_side_door_deprecated.rs:128-280"
+      ],
+      "body": "L2-R6-R2-MAJOR-2 ground-truth-verified at HEAD 32bd9edb: 6 F4 regression-guard tests uniformly displayed SHAPE-not-SUBSTANCE pattern (2 const-tautology workspace-walkers + 4 trait-isolation arms). Rewrote all 6 to invoke production entry points (install_plugin, delegate_capability, engine.create_node, fs::read_dir source walkers) + assert observable consequences (typed error fire, counter increment, cascade-residue absence, source-walker count). Verified would-FAIL-on-revert demonstrations: (a) commenting out one `self.admit_write_chain(` call in engine_crud.rs → S1 walker FAILS with count 12/13 + per-file breakdown diagnostic; (b) commenting out `policy.check_per_delegation` wire-in at engine_caps.rs:572-590 → S3b arm 1 FAILS with `Ok(cid)` instead of expected typed deny; (c) commenting out `policy.check_install_consent` block at plugin_lifecycle.rs:967-973 → S3a arms 1+2+3+6 ALL FAIL (counter=0 / Ok(InstallOutcome) instead of typed deny / library not empty); (d) commenting out `(ports.install_record_replay_check)(&payload_hash)?;` at plugin_lifecycle.rs:949 → S2 arm 3 FAILS with observed=0. All 33 affected tests passing post-rewrite (23 benten-engine + 10 benten-platform-foundation).",
+      "disposition": "FIX-NOW (closed in this PR)",
+      "would_fail_on_revert_demonstrated": true
+    },
+    {
+      "id": "R6-R2-FP-D-CLOSURE-2",
+      "severity": "MINOR",
+      "title": "L9-r6r2-MINOR-3 closure — DSL #839 cross-language mirror tautology rewritten to cross-file TS source-scan",
+      "files": [
+        "crates/benten-dsl-compiler/tests/tf_dsl_chunk3_closures.rs:247-339"
+      ],
+      "body": "Rewrote `dsl_839_error_code_mirror_matches_typescript_constant_literal` from `assert_eq!(E_DSL_BACKEND_REJECTED, \"E_DSL_BACKEND_REJECTED\")` (self-equality tautology where lhs IS the const + rhs IS its declared literal) to a real cross-file scan: reads `packages/engine/src/errors.generated.ts` at test time, locates the `EDslBackendRejected extends BentenError` class declaration, parses the `static readonly code = \"...\"` literal, asserts equality with the Rust `E_DSL_BACKEND_REJECTED` const. Now genuinely catches Rust↔TS cross-language drift (the §3.5g item 6 amendment); pre-rewrite was paper-only. Verified passing.",
+      "disposition": "FIX-NOW (closed in this PR)",
+      "would_fail_on_revert_demonstrated": "Implicit — any rename of either Rust const value OR TS `EDslBackendRejected.code` literal without atomic update of the other side → assertion fires with both literals named in diagnostic"
+    },
+    {
+      "id": "R6-R2-FP-D-CLOSURE-3",
+      "severity": "MAJOR",
+      "title": "L13-MAJ-1 closure — 18-of-34 F4 trait-isolation tests rewritten to invoke production entry points",
+      "files": [
+        "crates/benten-engine/tests/r6_r1_fp_f4_s3b_delegate_capability_consults_check_per_delegation.rs (all 5 arms)",
+        "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s3a_install_pipeline_consults_check_install_consent.rs (arms 1+2+3+4+6)",
+        "crates/benten-engine/tests/r6_r1_fp_f4_s4_production_rechecker_builder_and_d18_synthesized_fallback.rs (arm 1)",
+        "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s2_install_ports_drops_option_and_side_door_deprecated.rs (arm 3)"
+      ],
+      "body": "Trait-isolation rewrites: each test now constructs a real Engine (via EngineBuilder + capability_policy / capability_policy_grant_backed + tempfile-backed open) or runs the full plugin_lifecycle::install_plugin pipeline (with InstallParams + InstallPorts threading the test's policy/closure as the load-bearing wire). Production entry points exercised: engine.caps().delegate_capability + plugin_lifecycle::install_plugin + ProductionEngineBuilder::new().open + ProductionManifestEnvelopeRechecker::recheck_row + InstallPorts.install_record_replay_check via install_plugin. Forensic-discrimination arms now verify argument-forwarding contracts (canonical signing-payload BLAKE3 / `did:key:` plugin_did / source-principal-DID / target-plugin-DID / cap-scope). Ordering pins (S3a arm 6 + S3b arm 5) use observable side-effects (cascade-residue absence / typed-code divergence on private-namespace short-circuit). 18 affected tests; all passing post-rewrite.",
+      "disposition": "FIX-NOW (closed in this PR)",
+      "would_fail_on_revert_demonstrated": true
+    },
+    {
+      "id": "R6-R2-FP-D-CLOSURE-4",
+      "severity": "MINOR",
+      "title": "L13-MIN-4 closure — S1 arm 3 + S3c arm 3 const-tautology workspace-walkers rewritten to real fs::read_dir source-scans",
+      "files": [
+        "crates/benten-engine/tests/r6_r1_fp_f4_s1_write_boundary_chain_validator_wired_at_all_write_entry_points.rs:100-179",
+        "crates/benten-engine/tests/r6_r1_fp_f4_s3c_workspace_check_write_routes_through_with_audience.rs:99-187"
+      ],
+      "body": "Both arms previously declared `const EXPECTED: usize = N; assert_eq!(EXPECTED, N)` — pure tautology. Rewritten using the `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` source-walker precedent: walks `crates/benten-engine/src/*.rs`, counts non-definition consumer call-sites via line-scan, excludes `pub(crate) fn admit_write_chain(` / `fn check_write_with_audience(` definition lines, asserts count matches the declared expected value. Diagnostic includes per-file breakdown so a future drift names the offending file. Verified by mutation: commenting out one `self.admit_write_chain(` call in engine_crud.rs → S1 walker FAILS with `left: 12, right: 13` + per-file breakdown.",
+      "disposition": "FIX-NOW (closed in this PR)",
+      "would_fail_on_revert_demonstrated": true
+    },
+    {
+      "id": "R6-R2-FP-D-CLOSURE-5",
+      "severity": "MINOR",
+      "title": "L13-MIN-5 closure — 2 empty-body `#[test]` forensic anchors rewritten to substantive assertions",
+      "files": [
+        "crates/benten-engine/tests/r6_r1_fp_f4_s3c_workspace_check_write_routes_through_with_audience.rs:124-200 (ucan_grounded arm)",
+        "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s3a_install_pipeline_consults_check_install_consent.rs:323-380 (ordering arm)"
+      ],
+      "body": "Pre-rewrite: 2 `#[test]` arms with zero assertion bodies registering as PASS-by-vacuity (S3c arm 5 `ucan_grounded_excluded_per_delta_v3_7` + S3a arm 6 `install_consent_hook_fires_before_cap_cascade_documented`). Post-rewrite: (a) S3c arm 5 now reads `crates/benten-caps/src/ucan_grounded.rs`, locates every `policy.check_write*` consumer call, walks backward to assert each is inside `#[cfg(test)]` / `#[test]` / `mod tests` scope — a regression that lifted a policy call into production substrate code fires the assertion. (b) S3a arm 6 now uses observable side-effects of denial at step 3c: `library.is_empty()` AND `cascade.minted_grants().is_empty()` AND `cascade.provisioned_count() == 0` — proving cap-cascade (Step 9) was never reached. Reordering so consent fires AFTER cap-cascade → grants accumulate → cascade.minted_grants() non-empty → assertion fires.",
+      "disposition": "FIX-NOW (closed in this PR)",
+      "would_fail_on_revert_demonstrated": true
+    },
+    {
+      "id": "R6-R2-FP-D-CODIFICATION-1",
+      "severity": "OBS",
+      "title": "§3.6f strengthening — regression-guard test substantive-arm contract (4-sub-rule extension)",
+      "files": [
+        ".addl/phase-4-meta/r6-r2-fp-d-section-3-6f-extension.md (STAGED for orchestrator consolidation)",
+        ".addl/phase-4-meta/r6-r2-fp-d-memory-feedback_pim_n_regression_guard_substantive_arm.md (STAGED for memory mint)"
+      ],
+      "body": "§3.6f sub-rule extension (a)-(e): (a) production entry point invocation MANDATORY; (b) observable consequence MANDATORY; (c) would-FAIL-on-revert demonstrated in commit body; (d) NEVER `assert_eq!(N, N)` walker shape; (e) NEVER zero-assertion `#[test]` arms. Origins (16 instances across one wave's regression test family per HARD RULE 12 / §3.6h — ALL CLOSED in this PR). Memory file mints `feedback_pim_n_regression_guard_substantive_arm` with cross-links to pim-18 parent + pim-2 sibling + pim-12 sibling. MEMORY.md index entry one-line under '🟡 Load-bearing operational > Review composition + convergence' near pim-18.",
+      "disposition": "STAGED-FOR-ORCHESTRATOR (orchestrator-direct consolidation moves .md content into dispatch-conventions.md §3.6f + memory dir during Strategy-C PR consolidation)"
+    }
+  ],
+  "scope_boundary_explicit": {
+    "owned_by_fp_d": [
+      "Rewrite ~16 SHAPE-not-SUBSTANCE test bodies (L2-MAJOR-2 + L9-MINOR-3 + L13-MAJ-1 + L13-MIN-4 + L13-MIN-5)",
+      "§3.6f sub-rule extension (a)-(e) STAGED at .addl/phase-4-meta/r6-r2-fp-d-section-3-6f-extension.md",
+      "Memory file mint STAGED at .addl/phase-4-meta/r6-r2-fp-d-memory-feedback_pim_n_regression_guard_substantive_arm.md"
+    ],
+    "owned_by_sibling_fp_a": [
+      "L3 audience_pubkey same-attack-class sibling test pin (L13-MAJ-2) — NOT touched per per-agent ownership split"
+    ],
+    "owned_by_sibling_fp_b": [
+      "§4.37 replay + §S3a deny + tf_compromise_1_wallclock new test pin MINTS — NOT touched per per-agent ownership split (audited at PR-review time for §3.6f compliance)"
+    ],
+    "owned_by_sibling_fp_c": [
+      "Phantom-cite scanner .md cite cleanups — NOT touched per per-agent ownership split"
+    ],
+    "owned_by_orchestrator_direct": [
+      "L13-MIN-1 G-CORE-8.2 workspace naming-drift sweep (23 hits / 10 files)",
+      "L13-MIN-2 Row D-22 enumeration miscount (115/6 → 156/10)",
+      "L13-MIN-3 Row D-22 sub-task 5 destination cite-drift"
+    ]
+  },
+  "gate_results": {
+    "scoped_pre_flight": "Per-package nextest run: 23 benten-engine F4 tests + 10 benten-platform-foundation F4 tests + 3 benten-dsl-compiler chunk-3 #839 tests all PASS",
+    "would_fail_on_revert_verification": "4 of 7 test-files mutation-verified end-to-end (S1 + S3a + S3b + S2); restore-clean post each mutation confirmed via `git status` empty",
+    "workspace_clippy_pending": "Orchestrator-direct §3.5h workspace clippy pre-push gate will run at Strategy-C consolidation time per pim-N-cite-drift-fp1-recurrence (§3.5h amendment) — agent did NOT push directly per coordinator brief correction (Strategy-C consolidation supersedes per-agent PR drafts)"
+  },
+  "no_pr_opened_per_brief_correction": "Coordinator confirmed Strategy-C batch consolidation across 4 FP branches (A/B/C/D + orchestrator-direct) into ONE integration branch + ONE PR + ONE CI cycle (matching PR #1351 precedent). FP-D branch is PUSHED to origin; orchestrator opens the consolidated PR.",
+  "absolute_path_forbidden_compliance": "All edits + writes occur strictly inside ${WORKTREE_ROOT}; no operations on absolute paths outside the worktree. `.addl/phase-4-meta/*.md` + `.addl/phase-4-meta/r6-r2-fp-d-self-review.json` force-added via `git add -f` since `.addl/` is project-level gitignored.",
+  "commit_before_return_compliance": "All file outputs (3 .md + 1 .json under .addl/phase-4-meta/) + all test-file rewrites force-added via `git add -f .addl` + standard `git add crates/...` + single commit BEFORE return per `feedback_agent_output_must_commit_before_return`."
+}

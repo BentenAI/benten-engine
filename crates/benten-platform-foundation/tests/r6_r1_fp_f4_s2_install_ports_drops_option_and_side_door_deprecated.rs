@@ -17,14 +17,25 @@
 
 #![allow(deprecated)]
 
+mod common;
+
 use benten_core::Cid;
 use benten_errors::ErrorCode;
 use benten_id::did::Did;
 use benten_id::keypair::Keypair;
+use benten_platform_foundation::install_consent::AdmitAllInstallConsent;
 use benten_platform_foundation::manifest_store::ManifestStore;
-use benten_platform_foundation::plugin_manifest::InstallRecord;
+use benten_platform_foundation::plugin_library::PluginLibrary;
+use benten_platform_foundation::plugin_lifecycle::{
+    InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
+};
+use benten_platform_foundation::plugin_manifest::{
+    CapRequirement, InstallRecord, PluginManifest, RendererBackend, RendererConfig, SharesPolicy,
+    sign_manifest,
+};
 use benten_platform_foundation::testing::noop_replay_check;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn signed_record(
@@ -45,6 +56,30 @@ fn signed_record(
     let sig = user.sign(&record.signing_payload());
     record.user_signature = sig.to_bytes().to_vec();
     record
+}
+
+fn build_signed_manifest(name: &str, author: &Keypair) -> PluginManifest {
+    let mut manifest = PluginManifest {
+        plugin_name: name.to_string(),
+        content_cid: Cid::from_blake3_digest([0u8; 32]),
+        peer_did: author.public_key().to_did(),
+        peer_signature: vec![0u8; 64],
+        requires: vec![CapRequirement::new("store:notes:read")],
+        shares: SharesPolicy::none(),
+        renderer_config: Some(RendererConfig {
+            output_format: "html_json".to_string(),
+            renderer_backends: Some(vec![RendererBackend::BrowserWasm32]),
+            hosting_target: None,
+            bundle_size_budget_kb: Some(256),
+        }),
+        composes_plugins: None,
+        accepts_content: None,
+        requires_schema_authors: None,
+        requires_plugin_authors: None,
+    };
+    manifest.content_cid = manifest.compute_content_cid();
+    manifest.peer_signature = sign_manifest(&manifest, author);
+    manifest
 }
 
 /// **§S2 arm 1 — Option drop landed:** the field type is now
@@ -78,26 +113,87 @@ fn noop_replay_check_admits_every_hash() {
     assert!(noop(&[0x00u8; 32]).is_ok());
 }
 
-/// **§S2 arm 3 — substantive replay-check closure is consulted at the
-/// expected boundary.** Wires a CountingReplayCheck that returns
-/// `Err(PluginInstallRecordAlreadyApplied)` on the second presentation
-/// of the same hash. This is the production-arm shape; integration with
-/// `Engine::install_record_replay_store().record_and_check` is the same
-/// surface.
+/// **§S2 arm 3 — production-arm: counting replay-check is consulted at
+/// step 3b via install_plugin end-to-end.**
+/// Wires a counting closure through `InstallPorts.install_record_replay_check`
+/// + invokes the full `install_plugin` pipeline. Asserts the closure
+/// was consulted AT LEAST ONCE (Step 3b mandatory call) with a
+/// non-zero canonical signing-payload BLAKE3 hash (the canonical
+/// identity per §4.37 contract).
+///
+/// **Would-FAIL-on-revert (pim-18 §3.6f):** delete the
+/// `(ports.install_record_replay_check)(&payload_hash)?` call at
+/// plugin_lifecycle.rs:949 → closure never fires → counter stays at 0
+/// → assertion fires.
 #[test]
-fn counting_replay_check_observes_invocation_at_install_time() {
+fn counting_replay_check_consulted_via_install_plugin_end_to_end() {
     let calls: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let observed: Arc<Mutex<Vec<[u8; 32]>>> = Arc::new(Mutex::new(Vec::new()));
     let calls_clone = calls.clone();
-    let check = move |_hash: &[u8; 32]| -> Result<(), ErrorCode> {
+    let observed_clone = observed.clone();
+    let mut check = move |hash: &[u8; 32]| -> Result<(), ErrorCode> {
         calls_clone.fetch_add(1, Ordering::SeqCst);
+        observed_clone.lock().unwrap().push(*hash);
         Ok(())
     };
-    // Direct invocation — mimics what plugin_lifecycle.rs does at the
-    // step-3b boundary. End-to-end test is in r6fp_a_plugin_trust_blocker_closures.rs.
-    let hash = [0x99u8; 32];
-    assert!(check(&hash).is_ok());
-    assert!(check(&hash).is_ok());
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+    let author = Keypair::generate();
+    let user_kp = Keypair::generate();
+    let user_did = user_kp.public_key().to_did();
+    let manifest = build_signed_manifest("s2-arm3", &author);
+    let bytes = serde_ipld_dagcbor::to_vec(&manifest).expect("encode manifest");
+    let cid = manifest.content_cid;
+
+    let mut library = PluginLibrary::new();
+    let mut store = benten_id::plugin_did::PluginDidStore::new();
+    let plugin_did = common::manifest_fixtures::mint_and_insert_plugin_did(&mut store);
+    let install_record =
+        common::manifest_fixtures::signed_install_record(&user_kp, cid, plugin_did.clone(), 3);
+
+    let mut cascade = InMemoryInstallCascade::new();
+    let mut private_ns = InMemoryInstallCascade::new();
+    let admit_policy = AdmitAllInstallConsent;
+    let mut ports = InstallPorts {
+        cap_minter: &mut cascade,
+        private_ns: &mut private_ns,
+        install_record_replay_check: &mut check,
+        policy: &admit_policy,
+    };
+    let params = InstallParams {
+        now_secs: 1_700_000_000,
+        installer_shape: InstallerShape::FullPeer,
+        user_trust_list: &[],
+        user_did: &user_did,
+        version_chain: None,
+        prior_installed_cid: None,
+        expected_plugin_did: &plugin_did,
+    };
+    install_plugin(
+        &mut library,
+        &mut store,
+        &mut ports,
+        &params,
+        &bytes,
+        &cid,
+        &install_record,
+        1,
+        &|_| None,
+    )
+    .expect("admitting closure → install_plugin admits");
+
+    let observed_count = calls.load(Ordering::SeqCst);
+    assert!(
+        observed_count >= 1,
+        "LOAD-BEARING: production install_plugin path MUST consult \
+         install_record_replay_check at step 3b; observed={observed_count}"
+    );
+
+    let hashes = observed.lock().unwrap();
+    assert!(
+        hashes.iter().any(|h| *h != [0u8; 32]),
+        "production step-3b boundary MUST forward the canonical \
+         signing_payload() BLAKE3 hash (never all-zero); observed hashes={hashes:?}"
+    );
 }
 
 /// **§S2 arm 4 — `install_verified_record_unchecked` side-door still

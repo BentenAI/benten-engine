@@ -77,13 +77,14 @@ fn outcome_to_admission_reject_surfaces_typed_code_on_chain_not_user_rooted() {
     assert_eq!(err.code(), ErrorCode::WriteBoundaryChainNotUserRooted);
 }
 
-/// **§S1 arm 3 — workspace-walker audit fixture (R6 R2 FP-B updated).**
-/// SUBSTANTIVE per pim-18 §3.6f: this arm now walks the workspace via
-/// `grep` for every `admit_write_chain(` production call site + asserts
-/// the count matches the expected enumeration. Reverting any site
-/// removes a grep-hit + this test fires.
+/// **§S1 arm 3 — workspace-walker audit (SUBSTANTIVE source scan;
+/// R6 R2 FP-B + FP-D combined).**
+/// Walks every `crates/benten-engine/src/*.rs` file, counts non-
+/// definition `admit_write_chain(` consumption sites, and asserts the
+/// count matches the post-R6-R2-FP-B enumeration (14 sites: 13 from
+/// F1 path-(a) + 1 NEW chain-bearing apply_atrium_merge per-row site).
 ///
-/// Per-file breakdown (14 sites total post-R6-R2-FP-B):
+/// Per-file breakdown (post-R6-R2-FP-B):
 /// - engine_crud.rs: 5 (create_node + update_node + delete_node +
 ///   create_edge + delete_edge)
 /// - engine_caps.rs: 2 (privileged_put_node + delegate_capability
@@ -98,67 +99,82 @@ fn outcome_to_admission_reject_surfaces_typed_code_on_chain_not_user_rooted() {
 ///   merge boundary; pre-FP-B only `delegate_capability` was
 ///   chain-bearing — every other site was `engine_internal`)
 ///
-/// Total: 14 sites; of which 2 are chain-bearing
-/// (`delegate_capability` + `apply_atrium_merge` per-row),
-/// 12 are engine_internal.
+/// Total: 14 sites (production consumers; the `pub(crate) fn admit_write_chain`
+/// definition at engine.rs is EXCLUDED so the assertion catches both
+/// drift directions: a new entry-point landing without wiring, OR an
+/// existing wiring being silently deleted). Of which 2 are chain-bearing
+/// (`delegate_capability` + `apply_atrium_merge` per-row) and 12 are
+/// engine_internal.
 ///
-/// Adding a new WRITE entry point requires bumping this count + adding
-/// the new site's per-arm coverage to this test file.
+/// **Would-FAIL-on-revert (pim-18 §3.6f):** delete any
+/// `self.admit_write_chain(` / `self.engine.admit_write_chain(` line
+/// from any production source file → count drops below 13 → assertion
+/// fires. Equivalent: re-introduce `assert_eq!(N, N)` shape →
+/// substantive-arm contract violated (this very rewrite).
 #[test]
 fn workspace_walker_audit_fourteen_admit_write_chain_call_sites() {
-    use std::process::Command;
+    use std::fs;
+    use std::path::PathBuf;
 
-    // Walk the production crates/*/src/ tree for `admit_write_chain(`
-    // hits — the actual call sites. Test files + comments are excluded
-    // by restricting to `src/` directories.
-    let output = Command::new("grep")
-        .args([
-            "-rn",
-            "--include=*.rs",
-            "admit_write_chain(",
-            "crates/benten-engine/src/",
-        ])
-        .current_dir(workspace_root())
-        .output()
-        .expect("grep runs");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Filter to lines that are actual call sites (not declaration of
-    // `pub(crate) fn admit_write_chain` itself + not doc-comments).
-    let call_sites: Vec<&str> = stdout
-        .lines()
-        .filter(|line| {
-            // Skip the function definition line itself.
-            !line.contains("pub(crate) fn admit_write_chain")
-                // Skip doc-cite lines (start with whitespace + `///` after the path:line: prefix).
-                && !line.contains(":///")
-                && !line.contains(":    ///")
-                // Skip `&self.admit_write_chain` self-method-call references in test wrappers (none in src/).
-                // Skip lines that only mention `admit_write_chain` in a comment block / docstring.
-                && line.contains(".admit_write_chain(")
-        })
+    // Post-R6-R2-FP-B: 13 from F1 path-(a) cascade + 1 new chain-bearing
+    // apply_atrium_merge per-row admit (Row D-1 sharpened closure).
+    const EXPECTED_WRITE_SITES_POST_R6_R2_FP_B: usize = 14;
+
+    // Walk up from CARGO_MANIFEST_DIR (crates/benten-engine) to crates/.
+    let crate_src: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+
+    let mut total: usize = 0;
+    let mut breakdown: Vec<(String, usize)> = Vec::new();
+
+    let entries = fs::read_dir(&crate_src).expect("read src/ dir");
+    let mut files: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("rs"))
         .collect();
-    // 14 sites enumerated above; tolerate 14+ (additions extend; never
-    // contract). Pre-R6-R2-FP-B was 13; post-FP-B is 14.
-    const EXPECTED_WRITE_SITES_MIN: usize = 14;
-    assert!(
-        call_sites.len() >= EXPECTED_WRITE_SITES_MIN,
-        "expected ≥{EXPECTED_WRITE_SITES_MIN} admit_write_chain call sites; \
-         got {} — sites:\n{}",
-        call_sites.len(),
-        call_sites.join("\n")
-    );
-}
+    files.sort();
 
-/// Resolve the workspace root from CARGO_MANIFEST_DIR (crate dir) →
-/// parent → parent so paths like `crates/benten-engine/src/` resolve.
-fn workspace_root() -> std::path::PathBuf {
-    let crate_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    crate_dir
-        .parent()
-        .expect("crate has parent")
-        .parent()
-        .expect("workspace root")
-        .to_path_buf()
+    for f in &files {
+        let body = fs::read_to_string(f).expect("read source file");
+        let mut count = 0usize;
+        for line in body.lines() {
+            // Match `.admit_write_chain(` consumer-call shape; exclude
+            // the `pub(crate) fn admit_write_chain(` definition site +
+            // any `&fn admit_write_chain` reference forms.
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("pub(crate) fn admit_write_chain(")
+                || trimmed.starts_with("pub fn admit_write_chain(")
+                || trimmed.starts_with("fn admit_write_chain(")
+            {
+                continue;
+            }
+            // Consumer pattern: `self.admit_write_chain(` or
+            // `self.engine.admit_write_chain(`.
+            if line.contains(".admit_write_chain(") {
+                count += 1;
+            }
+        }
+        if count > 0 {
+            breakdown.push((
+                f.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_string(),
+                count,
+            ));
+            total += count;
+        }
+    }
+
+    assert_eq!(
+        total, EXPECTED_WRITE_SITES_POST_R6_R2_FP_B,
+        "Post-R6-R2-FP-B WRITE-site count drift detected: source scan found {total} \
+         `admit_write_chain(` consumer call-sites across crates/benten-engine/src/ \
+         but EXPECTED_WRITE_SITES_POST_R6_R2_FP_B={EXPECTED_WRITE_SITES_POST_R6_R2_FP_B}. \
+         Per-file breakdown: {breakdown:?}. If a new WRITE entry point landed, bump \
+         the const + add per-arm coverage to this file; if an existing wire-in was \
+         deleted, restore it (Layer-1 user-as-root enforcement regression)."
+    );
 }
 
 /// **§S1 arm 4 — privileged-bypass property:** `outcome_to_admission_reject`
