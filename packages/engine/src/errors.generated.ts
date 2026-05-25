@@ -227,6 +227,8 @@ export const CATALOG_CODES = [
   "E_DSL_IO_ERROR",
   "E_SUBGRAPH_SPEC_WALK_FAILED",
   "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED",
+  "E_PLUGIN_INSTALL_CONSENT_DENIED",
+  "E_PLUGIN_PER_DELEGATION_DENIED",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -3132,17 +3134,26 @@ export class ESubgraphSpecWalkFailed extends BentenError {
  * Thrown at: `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
  * Message template: "pure-PQ-sole-trust-path rejected (audit not landed): hybrid construction is the audited path until the independent ml-dsa/ml-kem/slh-dsa audit (NF-2 / C-GM-AUDIT) lands"
  */
+export class EAuditNotLandedPurePqRejected extends BentenError {
+  static readonly code = "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED";
+  static readonly fixHint = "Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED", "Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.", message, context);
+    this.name = "EAuditNotLandedPurePqRejected";
+  }
+}
+
 /**
  * E_PLUGIN_INSTALL_CONSENT_DENIED
  *
- * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` step 3c — the configured `InstallConsentPolicy::check_install_consent` hook (wrapping `benten_caps::CapabilityPolicy::check_install_consent`) rejected the pending install. R6 R1 FP-F4 §S3a closes Row D-3-a.
+ * Thrown at: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` step 3c — the configured `InstallConsentPolicy::check_install_consent` hook rejected the pending install.
  * Message template: "install rejected by InstallConsentPolicy::check_install_consent"
  */
 export class EPluginInstallConsentDenied extends BentenError {
   static readonly code = "E_PLUGIN_INSTALL_CONSENT_DENIED";
   static readonly fixHint = "CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial. Distinct from `E_PLUGIN_INSTALL_CONSENT_REQUIRED` (which fires for caps-grew fresh-consent gap at upgrade time): this is the per-install policy-routed gate. Resolution: either supply user consent via the install pipeline's policy hook OR adjust the configured `CapabilityPolicy` to admit the plugin-DID at install time.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_INSTALL_CONSENT_DENIED", "CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial.", message, context);
+    super("E_PLUGIN_INSTALL_CONSENT_DENIED", "CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial. Distinct from `E_PLUGIN_INSTALL_CONSENT_REQUIRED` (which fires for caps-grew fresh-consent gap at upgrade time): this is the per-install policy-routed gate. Resolution: either supply user consent via the install pipeline's policy hook OR adjust the configured `CapabilityPolicy` to admit the plugin-DID at install time.", message, context);
     this.name = "EPluginInstallConsentDenied";
   }
 }
@@ -3150,24 +3161,15 @@ export class EPluginInstallConsentDenied extends BentenError {
 /**
  * E_PLUGIN_PER_DELEGATION_DENIED
  *
- * Thrown at: `crates/benten-engine/src/engine_caps.rs::EngineCapsHandle::delegate_capability` — the configured `CapabilityPolicy::check_per_delegation` hook rejected a cross-plugin delegation request. R6 R1 FP-F4 §S3b closes Row D-3-b.
+ * Thrown at: `crates/benten-engine/src/engine_caps.rs::EngineCapsHandle::delegate_capability` — between Step 2b (shares-policy resolver) and Step 3 (effective scope).
  * Message template: "delegation rejected by CapabilityPolicy::check_per_delegation"
  */
 export class EPluginPerDelegationDenied extends BentenError {
   static readonly code = "E_PLUGIN_PER_DELEGATION_DENIED";
   static readonly fixHint = "CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial. Forensic-discrimination symmetry with `E_PLUGIN_INSTALL_CONSENT_DENIED` per CRITIC-1 FIX-5. Resolution: adjust the configured `CapabilityPolicy::check_per_delegation` to admit the source→target plugin delegation, or scope the delegated capability to fit within the source plugin's policy.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_PLUGIN_PER_DELEGATION_DENIED", "CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial.", message, context);
+    super("E_PLUGIN_PER_DELEGATION_DENIED", "CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial. Forensic-discrimination symmetry with `E_PLUGIN_INSTALL_CONSENT_DENIED` per CRITIC-1 FIX-5. Resolution: adjust the configured `CapabilityPolicy::check_per_delegation` to admit the source→target plugin delegation, or scope the delegated capability to fit within the source plugin's policy.", message, context);
     this.name = "EPluginPerDelegationDenied";
-  }
-}
-
-export class EAuditNotLandedPurePqRejected extends BentenError {
-  static readonly code = "E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED";
-  static readonly fixHint = "Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.";
-  constructor(message: string, context?: Record<string, unknown>) {
-    super("E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED", "Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.", message, context);
-    this.name = "EAuditNotLandedPurePqRejected";
   }
 }
 
