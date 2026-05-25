@@ -1,0 +1,173 @@
+{
+  "lens": "sync-merge-architecture",
+  "scope": "Path F evaluation for Row D-3-c (audience_did at apply_atrium_merge): writes self-attest via grant_chain reference",
+  "head_sha_verified": "31d1a169",
+  "disposition": "APPROVE-WITH-REFINEMENTS",
+  "summary": "Path F is structurally feasible at v1-beta and aligns elegantly with the project's code-as-graph + plugins-as-subgraphs philosophy: the LOCAL write path already names a `capability_grant_cid: Option<Cid>` field on `PendingOp::PutNode` + `ChangeEvent` + `AttributionFrame` (engine_caps L630 already threads a chain anchor via `WriteAdmissionFrame::with_chain`). The structural gap Path F closes is at the SYNC WIRE: `apply_atrium_merge` hard-codes `capability_grant_cid: Cid::from_blake3_digest([0u8; 32])` at engine.rs:1634 because the Loro `StampedValue` wire shape (crdt.rs:174) carries only `value + hlc` — the writer-side grant_cid is information-lost crossing the CRDT boundary. Recommended sub-flavor F-1 (the elegant permanent shape): grant_cid as a SIBLING field on a new versioned `StampedValueV2 { value, hlc, grant_cid: Option<Cid> }` wire payload, NOT as a property on the user Node (option (i) cascades through user-CID stability and is the wrong place). Cap-policy hook signature extends `CapWriteContext { ..., authorizing_grant_cid: Option<Cid> }` (sibling to existing `actor_cid` + `audience_did`); audience-aware impls derive audience from grant via in-graph `system:CapabilityGrant` lookup at recheck time (already routinely done by `EngineCapsHandle::revoke_capability_by_grant_cid` at engine_caps.rs:278+). LOC: ~1100-1500 across 6 surfaces; cross-cuts heavily with G-CORE-PQ-WIRE (binding_sig shape change in same wave-window). Refinement: the wire-bump MUST land in the same wave as G-CORE-PQ-WIRE — both are pre-v1-beta-tag wire-format-window mutations on identity-bearing surfaces; merging them avoids two consecutive wire breaks for downstream peers.",
+  "findings": [
+    {
+      "id": "PATH-F-Q1-CURRENT-GRANT-LOCATE",
+      "title": "Q1: Current grant-identification mechanism at per-row recheck — scope-walking, NOT grant_cid-threaded",
+      "severity": "OBS",
+      "summary": "`GrantBackedPolicy::check_write` at grant_backed.rs:484 calls `self.grants.has_unrevoked_grant_matching(scope, actor_cid)` — pure (scope, optional actor) lookup; no grant_cid is presented by the caller. `UcanGroundedPolicy::check_write` at ucan_grounded.rs:418 has a fast-path delegating to GrantBackedPolicy (same shape) then a slow-path that derives `audience` from `ctx.actor_hint`'s DID and walks the typed-cap proof chain. Neither consumes a grant_cid. This is option (a)+(b) hybrid from the brief: principal's grant store walked by scope, optionally filtered by actor_cid.",
+      "code_citations": [
+        "crates/benten-caps/src/grant_backed.rs:484 — `self.grants.has_unrevoked_grant_matching(scope, None)?`",
+        "crates/benten-caps/src/ucan_grounded.rs:456 — `let audience = match principal_did_from_context(ctx)`",
+        "crates/benten-engine/src/engine.rs:1402-1442 — apply_atrium_merge constructs synthetic CapWriteContext with `audience_did: None` per Δv3-2 close note; calls check_write_with_audience"
+      ],
+      "implication": "Path F's structural delta = adding `authorizing_grant_cid: Option<Cid>` to CapWriteContext (sibling to existing `audience_did` + `actor_cid`); cap-policy impls that opt-in to grant_cid-driven dispatch consult the in-graph `system:CapabilityGrant` Node directly (`engine.read_node` style) rather than walking the principal's grant store. Existing scope-based policies remain backward-compat (ignore the new field)."
+    },
+    {
+      "id": "PATH-F-Q2-WHERE-GRANT-CID-LIVES",
+      "title": "Q2: grant_cid SHOULD live in the SYNC WIRE ENVELOPE (option ii), NOT in user Node properties (option i)",
+      "severity": "MAJOR-RECOMMENDATION",
+      "summary": "Option (i) — grant_cid as a property like `system:authorization_grant_cid` on the user Node — would mutate the user Node's CID per crates/benten-core/src/lib.rs:189-202 (`Node` CID = hash(labels + properties), `anchor_id` excluded via `#[serde(skip)]`). This forces every plugin/user write to carry a different CID pre/post Path F — a SUBSTANTIAL canonical-bytes break that ripples through every test fixture, every #843 golden-CID test, every cross-peer convergence assertion. Option (ii) — grant_cid in the sync-merge envelope alongside `StampedValue` — keeps user CIDs stable and confines the wire change to a single versioned struct: `StampedValueV2 { value, hlc, grant_cid: Option<Cid> }`. Option (iii) — graph edge from row to grant Node — works at the local-graph layer but doesn't survive the Loro CRDT round-trip without ALSO appearing on the wire (the edge would need to be ship-on-the-merge-bytes). Option (ii) is the structurally correct answer: writes are self-attesting at the WIRE LAYER (the sync envelope), not at the content-addressed user-data layer. The local-graph projection (option iii edge from row to grant) is the post-merge consequence of the wire-attestation, applied by `apply_atrium_merge` after the row lands.",
+      "code_citations": [
+        "crates/benten-core/src/lib.rs:189-202 — Node CID = labels + properties only; anchor_id excluded",
+        "crates/benten-sync/src/crdt.rs:174-181 — StampedValue { value, hlc } current wire shape",
+        "crates/benten-sync/src/crdt.rs:369-378 — set_property → StampedValue construction; outbound granularity",
+        "crates/benten-engine/src/engine_caps.rs:196 — `system:CapabilityGrant` Node label convention",
+        "crates/benten-engine/src/engine_caps.rs:278-282 — `revoke_capability_by_grant_cid` already does CID-keyed grant Node lookup"
+      ],
+      "implication": "Recommended shape: extend StampedValue to a versioned wire form `StampedValueV2 { value, hlc, grant_cid: Option<Cid> }` (or add as `#[serde(default, skip_serializing_if = \"Option::is_none\")]` field on existing StampedValue — preserves DAG-CBOR back-compat for pre-Path-F peers); `set_property` gains an optional grant_cid param; the receiving `apply_atrium_merge` populates `AttributionFrame.capability_grant_cid` from the wire grant_cid (replacing the L1634 zero-CID hard-code)."
+    },
+    {
+      "id": "PATH-F-Q3-CID-IMPACT",
+      "title": "Q3: CID-impact CONFINED to wire-envelope + merge-Version-Node IF option (ii) wire-envelope shape chosen; USER NODE CIDs UNCHANGED",
+      "severity": "OBS",
+      "summary": "With option (ii) wire-envelope placement (recommended): user Node CIDs UNCHANGED (no property addition). The merge-Version-Node CID at engine.rs:1644 (`attribution.cid()`) WILL change because `AttributionFrame.capability_grant_cid` shifts from a zero CID to the real grant_cid — but this is the DESIRED change (the attribution is now substantively populated). `AttributionFrame` already has `serde(default)` + `skip_serializing_if = is_zero` discipline (exec_state.rs:78-111 pattern for sandbox_depth/peer_did_set/device_did/sync_hop_depth) — the canonical-bytes-stability discipline IS already established for this struct. Inv-10 canonical-bytes order-independence is unaffected (still BTreeMap/Vec deterministic order). Inv-13 immutability: the user Node's immutability invariant is unaffected (no property mutation). IVM view CID-dependence: IVM views key on label-hint + actor cap-set per ivm_view_read_gate.rs:127 — they don't currently read grant_cid; no IVM CID cascade. The merge-Version-Node CID change IS in scope per the v1-beta wire-format-freeze window (CLAUDE.md baked-in #15 / G-CORE-9 freeze contract).",
+      "code_citations": [
+        "crates/benten-eval/src/exec_state.rs:78-111 — AttributionFrame serde-skip-on-default discipline pattern",
+        "crates/benten-engine/src/engine.rs:1629-1647 — current AttributionFrame construction with zero grant_cid",
+        "crates/benten-engine/src/ivm_view_read_gate.rs:127 — admits(row_cid) — no grant_cid input",
+        "docs/INVARIANT-COVERAGE.md:37 — Inv-10 canonical_bytes via DAG-CBOR ordering"
+      ],
+      "implication": "v1-beta absorption is structurally clean: user Node CIDs untouched, merge-Version-Node CIDs gain a real grant_cid attribution (desirable), wire envelope evolves with `#[serde(default, skip_serializing_if)]` back-compat discipline."
+    },
+    {
+      "id": "PATH-F-Q4-FORWARD-COMPAT-RELAY",
+      "title": "Q4: Forward-compat to multi-device + Garden-Grove untrusted-host + Kith selective-disclosure",
+      "severity": "MAJOR-FINDING-FOR-PATH-F",
+      "summary": "Multi-device (Phase-3 LIVE): writer = Alice; relay-peer = Alice's-phone. Path F: Alice's-laptop signs the write under grant_cid X (Alice's self-grant); Alice's-phone relays the merge bytes carrying grant_cid X. Receiving peer Bob looks up grant X in HIS local copy of the graph (UCAN chain delivered separately via UCAN-blobs protocol per ucan_blobs_protocol.rs:109 — already exists). Path F works HERE. Garden-Grove (Phase-7+) untrusted-host: peer X holds Alice's ciphertext for Alice. X relays Alice's writes — wire grant_cid is Alice's grant; X has NO grant of his own to substitute. Path F holds; X cannot forge a grant_cid that Alice's-recipient-peer can validate (binding_sig of AuthorizationGrant defends per authorization_grant.rs:653 `verify_binding`). Kith selective-disclosure (Phase-7+): identity-view-projection — the projection is a READ pattern (the writer still signed under their full grant; the projector restricts the read). Path F at the WRITE side is orthogonal to selective-read; the existing IVM read-gate composes. CRITICAL CAVEAT: at relay, the grant ITSELF must be discoverable. Today UcanBlobsRequest at ucan_blobs_protocol.rs:114 carries the full grant on the wire for blob fetches. For CRDT row merges, the grant_cid in the wire envelope is a CID REFERENCE — the receiving peer needs to actually have/fetch the grant Node bytes to verify. RECOMMENDED REFINEMENT: pair Path F with a grant-CID-resolution port (`GrantResolver` trait at benten-caps) — `fn resolve_grant(cid: &Cid) -> Result<AuthorizationGrant>`. Default impl reads from local backend; production impl can fetch via UCAN-blobs protocol if missing locally. This is exactly the post-Phase-3 grant-fetch infrastructure that should exist at v1-beta.",
+      "code_citations": [
+        "crates/benten-sync/src/ucan_blobs_protocol.rs:108-119 — UcanBlobsRequest carries full AuthorizationGrant on wire (precedent for grant-on-wire pattern)",
+        "crates/benten-caps/src/authorization_grant.rs:653-678 — verify_binding cryptographic defense; relay cannot forge",
+        "crates/benten-engine/src/engine_caps.rs:84 — `system:CapabilityGrant` Nodes live in the local graph; CID-addressable"
+      ],
+      "implication": "Path F holds across all 3 deployment shapes IF a GrantResolver port is co-shipped (grant-CID resolution: local backend first, UCAN-blobs fetch fallback). The fetch protocol already exists. Without GrantResolver, the receiving peer hits a structural unknown — known-grant_cid but unknown-grant-bytes — and would need fail-CLOSED → quarantine semantics (consistent with G-CORE-8 §4.36 unresolved-peer-DID fail-CLOSED at engine.rs:1486-1499)."
+    },
+    {
+      "id": "PATH-F-Q5-LOC-ESTIMATE",
+      "title": "Q5: LOC estimate ~1100-1500 across 6 surfaces",
+      "severity": "OBS",
+      "summary": "Per-surface delta with refinements applied:",
+      "loc_breakdown": {
+        "wire_envelope_versioning": "StampedValue → StampedValue { value, hlc, grant_cid: Option<Cid> } with `#[serde(default, skip_serializing_if = Option::is_none)]`. ~30 LOC in crdt.rs + ~50 LOC test cascade.",
+        "writecontext_extension": "CapWriteContext { ..., authorizing_grant_cid: Option<Cid> } field + Default impl + synthetic_for_test + builder. Per V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 hazard, this is a public-shape change requiring `#[non_exhaustive]` mitigation (already attached at policy.rs:162). ~40 LOC in policy.rs + ~80 LOC test-fixture cascade (~30 workspace test sites by precedent).",
+        "set_property_signature": "LoroDoc::set_property gains optional grant_cid param. ~25 LOC in crdt.rs + ~100-150 LOC call-site cascade across crates/benten-engine/src/engine.rs (~30 call sites of set_property via primitive_host write path).",
+        "apply_atrium_merge_consume": "engine.rs:1402-1442 ctx construction updated to populate authorizing_grant_cid from wire; engine.rs:1634 zero-CID replaced by real grant_cid; new GrantResolver fetch on miss (~150 LOC).",
+        "grant_resolver_port": "New trait GrantResolver in benten-caps + default LocalBackendGrantResolver impl + Production-side UcanBlobsGrantResolver impl wiring. ~250-350 LOC.",
+        "policy_audience_derivation_helper": "Helper at benten-caps for `derive_audience_from_grant_cid(resolver, grant_cid) -> Option<String>` consumed by audience-aware impls. ~60 LOC + ~100 LOC tests.",
+        "v1_frozen_interface_doc_updates": "V1-FROZEN-INTERFACE.md + V1-FROZEN-INTERFACE-DEFERRED.md Row D-3-c re-disposition from PARTIAL to CLOSED; SECURITY-POSTURE Compromise narrative; ERROR-CATALOG potential new code (`E_SYNC_GRANT_CID_UNRESOLVABLE`). ~80 LOC.",
+        "test_cascade_substantive_arms": "End-to-end pin per pim-2 §3.6b: production-runtime arm + observable consequence + would-FAIL-if-no-op'd. Test families: (a) end-to-end sync-merge with grant_cid populated → cap-policy observes real grant → audience-aware reject fires when policy attenuates; (b) wire backward-compat: pre-Path-F peer sends rows without grant_cid → grant_cid resolves None → falls back to existing scope-only check; (c) unresolvable-grant_cid fail-CLOSED per G-CORE-8 §4.36 pattern. ~250-300 LOC."
+      },
+      "total_loc_estimate": "~1100-1500 LOC (~25-40% larger than the largest Row D-3-c partial-close at FP-F4 §S3c which was ~400 LOC; comparable in scope to G-CORE-3e wave per .addl context)",
+      "comparison_to_path_e": "Path E (peer_did_set carrying transport-principal forward as the cap-target) was Δv3-2's PARTIAL close; ~100 LOC + a sustained doc-and-test gap that the audience_did=None decision papers over. Path F closes the gap STRUCTURALLY (writes self-attest) but pays the wire-bump + grant-resolver-port cost."
+    },
+    {
+      "id": "PATH-F-Q6-CROSS-CUTS",
+      "title": "Q6: Cross-cuts with in-flight waves — G-CORE-PQ-WIRE is the natural wave-pair",
+      "severity": "MAJOR-RECOMMENDATION",
+      "summary": "(a) G-CORE-PQ-WIRE (Row D-26) is the dedicated multi-wave initiative changing identity-bearing-surface signature shape at v1-beta — including `AuthorizationGrant::binding_sig` at authorization_grant.rs:247 (already named at Row D-15e re-homed per V1-FROZEN-INTERFACE-DEFERRED.md:1102-1104). Path F changes the SYNC WIRE in the same v1-beta-wire-format-freeze window. RECOMMENDATION: bundle Path F into the G-CORE-PQ-WIRE wave (or sequence Path F immediately AFTER G-CORE-PQ-WIRE within the same window) — both wave-form a single wire-bump for downstream peers rather than two consecutive breaks. (b) Compromise #11 IVM views read-gate: per-row recheck IS the IVM read-gate input surface; Path F enriches what info is available at IVM eval time (writer's grant_cid). The IVM read-gate's `IvmViewReadGate::admits(row_cid)` signature stays unchanged (the gate consults the actor's cap set; grant_cid enriches the WRITER side, not the READER side). NO IVM cascade. (c) CLAUDE.md baked-in #5 (canonical bytes contract): MerketVersion Node CID changes (from zero-stuffed AttributionFrame to substantively-populated); already absorbed by serde-skip-on-default. User Node CIDs UNCHANGED. (d) Inv-13 immutability (system-zone prefix reject at engine.rs:1327-1338): unaffected — the new grant_cid lives in the wire envelope, not as a property key. (e) Inv-14 device-grain attribution: composes cleanly; AttributionFrame already extends device_did + grant_cid sibling-style.",
+      "code_citations": [
+        "crates/benten-caps/src/authorization_grant.rs:247 — binding_sig: Vec<u8> (PQ-WIRE wave target)",
+        "docs/V1-FROZEN-INTERFACE-DEFERRED.md:1093-1152 — G-CORE-PQ-WIRE wave scope",
+        "crates/benten-engine/src/ivm_view_read_gate.rs:127 — admits signature (unchanged by Path F)",
+        "crates/benten-engine/src/engine.rs:1327-1338 — Inv-13 row-4b system-zone reject (unaffected)"
+      ]
+    },
+    {
+      "id": "PATH-F-Q7-ALTERNATIVE-SIBLING-NODE",
+      "title": "Q7: Alternative Path F-2 — sibling `system:WriteAuthorization` Node with edge to row and edge to grant",
+      "severity": "OBS",
+      "summary": "Alternative F-2: don't add grant_cid to wire envelope; instead the OUTBOUND sync also ships a sibling `system:WriteAuthorization` Node carrying { row_cid, grant_cid, writer_did } + an edge `AUTHORIZED_BY` from row to grant. Pros: keeps StampedValue wire shape unchanged; uses existing edge/Node machinery; consistent with code-as-graph philosophy. Cons: (a) requires sync to ship multiple Nodes per row (~3x wire bloat for high-write-volume scenarios), (b) atomic-merge semantics — what if the WriteAuthorization Node lands but the row doesn't, or vice versa? Requires synchronized landing discipline at apply_atrium_merge, (c) sync_subgraph/share boundary needs to compute + ship the WriteAuthorization Nodes per row (substantive refactor at the outbound side). RECOMMENDATION: Path F-2 is WORSE than F-1 — F-1's wire-envelope `grant_cid` is the smallest delta achieving the same semantic (writers self-attest at the wire layer). F-1 wins on (a) wire compactness, (b) atomic-merge (one row carries its own attestation), (c) outbound simplicity (just plumb grant_cid through set_property). F-2 is preserved as a fallback if v1-beta wire-format-freeze closes BEFORE Path F can land — then attestation moves to a per-row Node + edge addition, which is wire-format-COMPATIBLE (just additional Nodes).",
+      "implication": "F-1 (wire-envelope sibling field) is the recommended PRIMARY implementation; F-2 (sibling Node + edge) is the post-v1-beta fallback if the wire window closes."
+    }
+  ],
+  "loc_estimate_total": "~1100-1500 LOC across 6 surfaces (wire envelope versioning + WriteContext extension + set_property signature + apply_atrium_merge consume + GrantResolver port + policy audience derivation + doc/test cascade)",
+  "cross_cuts": [
+    {
+      "wave": "G-CORE-PQ-WIRE (Row D-26)",
+      "impact": "HIGH — recommend bundling: both mutate v1-beta wire-format-freeze window on identity-bearing surfaces (binding_sig + grant_cid both touch AuthorizationGrant / sync envelope)",
+      "sequencing": "Bundle within same wave-window OR sequence Path F IMMEDIATELY AFTER PQ-WIRE within same window — avoids two consecutive wire breaks"
+    },
+    {
+      "wave": "Compromise #11 IVM views read-gate (CLOSED at G15-A)",
+      "impact": "NONE — IVM gate signature unchanged; writer-side grant_cid is orthogonal to reader-side cap-set check",
+      "sequencing": "N/A"
+    },
+    {
+      "wave": "CLAUDE.md baked-in #5 canonical bytes contract",
+      "impact": "LOW — user Node CIDs UNCHANGED (recommended option ii placement); merge-Version-Node CID changes (desirable, AttributionFrame already has serde-skip-on-default for stability)",
+      "sequencing": "v1-beta wire-format-freeze window absorbs"
+    },
+    {
+      "wave": "Row D-17 #[non_exhaustive] CapWriteContext",
+      "impact": "POSITIVE — D-17 ALREADY APPLIED non_exhaustive at policy.rs:162 (V1-FROZEN-INTERFACE-DEFERRED Row D-17 disposition); Path F's CapWriteContext field addition is now additively-safe per the disposition that's already in place",
+      "sequencing": "Path F can add the field without breaking external direct-struct-literal callers"
+    },
+    {
+      "wave": "Row D-3-c PARTIAL CLOSED at R6 R1 FP-F4 §S3c",
+      "impact": "CLOSES — Path F lands the substantive populate-side that §S3c's audience_did=None left deferred",
+      "sequencing": "Path F upgrades D-3-c from PARTIAL to FULLY CLOSED"
+    },
+    {
+      "wave": "G-CORE-9 v1-interface freeze",
+      "impact": "HIGH — Path F MUST land BEFORE G-CORE-9 v1-interface-freeze closes, OR the wire change becomes a v1.x breaking change. Window timing is the critical scheduling constraint.",
+      "sequencing": "Pre-`v1-beta` tag; same window as G-CORE-PQ-WIRE"
+    }
+  ],
+  "recommended_path": "F-1 (wire-envelope sibling field — StampedValue gains grant_cid: Option<Cid> with serde-default-skip; CapWriteContext gains authorizing_grant_cid field; apply_atrium_merge consumes; co-ship GrantResolver port for relay scenarios). BUNDLE with G-CORE-PQ-WIRE wave OR sequence immediately after in same v1-beta-wire-format-freeze window.",
+  "risk_assessment": [
+    {
+      "risk": "Grant-CID-unresolvable at receiving peer (relay scenario)",
+      "likelihood": "MEDIUM at multi-device sync today; HIGH at Garden-Grove Phase-7+",
+      "mitigation": "Co-ship GrantResolver port (local-first, UCAN-blobs-fetch fallback per existing ucan_blobs_protocol.rs:109 precedent); fail-CLOSED with typed `E_SYNC_GRANT_CID_UNRESOLVABLE` matching G-CORE-8 §4.36 fail-CLOSED pattern at engine.rs:1486-1499"
+    },
+    {
+      "risk": "Wire-format break for pre-Path-F peers",
+      "likelihood": "MEDIUM during transition (concurrent network of mixed peers)",
+      "mitigation": "Use `#[serde(default, skip_serializing_if = Option::is_none)]` on StampedValue.grant_cid field — pre-Path-F peers see None on inbound, omit on outbound; symmetric back-compat. Post-Path-F peers admit pre-Path-F rows under existing scope-only check (the audience_did=None path stays valid)."
+    },
+    {
+      "risk": "Outbound side: writer must KNOW which grant authorized each write",
+      "likelihood": "LOW — primitive_host write path already threads `capability_grant_cid` through ChangeEvent (primitive_host.rs:165); the threading is half-shipped at the local-attribution side. Path F extends the same thread to the outbound sync side.",
+      "mitigation": "Build on existing primitive_host.rs:165 / engine_wait.rs:305 grant_cid threading; the writer-side info is already captured."
+    },
+    {
+      "risk": "LOC budget overshoot",
+      "likelihood": "MEDIUM — ~1100-1500 LOC is the orchestrator-estimate; cascade through ~30 test fixture sites historically underestimates by 30-50% per phase-4-meta R5 precedent",
+      "mitigation": "Wave-decompose: F-1.a wire-envelope shape + F-1.b set_property cascade + F-1.c apply_atrium_merge consume + F-1.d GrantResolver port + F-1.e policy helper. Mini-review per wave per pim-2."
+    },
+    {
+      "risk": "Schedule slip past G-CORE-9 v1-interface freeze closes the wire-format window",
+      "likelihood": "HIGH — current state: Phase-4-Meta-Core R6 R1 just consolidated 5 sub-branches at PR #1351; FP-G remaining; G-CORE-PQ-WIRE wave R0 pre-work hasn't started. Path F adding a wave-window into this window pushes the tag date.",
+      "mitigation": "Either (a) bundle Path F INTO G-CORE-PQ-WIRE wave R0 (same wave-pair; same wire-window), OR (b) accept Path F-2 (sibling Node + edge) fallback as the post-v1-beta path — F-2 is wire-format-compatible so it can land in any Phase-4-Meta-Composing wave. Surface this to Ben as the architectural fork."
+    }
+  ],
+  "ben_decision_surface": {
+    "fork": "Path F-1 (wire-envelope) bundled with G-CORE-PQ-WIRE in v1-beta-wire-format-freeze window VERSUS Path F-2 (sibling Node + edge) deferred to Phase-4-Meta-Composing post-v1-beta",
+    "F1_pros": "Closes Row D-3-c structurally NOW; one wire-bump bundled with PQ-WIRE; receiving peers have full attestation per-row",
+    "F1_cons": "~1100-1500 LOC of wave-window pressure; coordinates with PQ-WIRE wave R0 scoping; GrantResolver port is new cross-crate surface",
+    "F2_pros": "Wire-format-compatible — can land any time without window pressure; preserves Row D-3-c PARTIAL CLOSED disposition until F-2 wave",
+    "F2_cons": "3x wire-bloat for high-write scenarios; atomic-merge complexity (row + WriteAuthorization Node must land together); doesn't actually close Row D-3-c at v1-beta tag"
+  },
+  "verification_disciplines_applied": [
+    "Every file:line citation verified at HEAD 31d1a169 (post-PR #1353 docs-test fix)",
+    "Quoted code snippets walked end-to-end: apply_atrium_merge L1215-L1647 + GrantBackedPolicy::check_write L420-492 + StampedValue L174-181 + WriteContext L943-1006 + AttributionFrame L71-112 + UcanBlobsRequest L108-119 + AuthorizationGrant L238-279",
+    "§3.5n ground-truth-verify applied: did NOT trust the V1-FROZEN-INTERFACE-DEFERRED.md Row D-3-c PARTIAL CLOSED narrative; walked to engine.rs:1402-1442 to confirm `audience_did: None` literal at the populate site",
+    "Cross-crate dependency walk: benten-sync (StampedValue) → benten-engine (apply_atrium_merge consume) → benten-caps (CapWriteContext + policy hook) → benten-graph (WriteContext namespace_did precedent) — all in-tree relationships traced",
+    "Post-fix doc-coupling pim-1 §3.5b: identified V1-FROZEN-INTERFACE.md + V1-FROZEN-INTERFACE-DEFERRED.md + ERROR-CATALOG.md + SECURITY-POSTURE.md as doc-coupling cascade if Path F lands"
+  ],
+  "schema_compliance": "§3.6i canonical: disposition top-level + findings array + per-finding disposition per HARD RULE 12 + well-formed JSON validated locally"
+}
