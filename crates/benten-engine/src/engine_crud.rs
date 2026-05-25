@@ -243,7 +243,7 @@ impl Engine {
     ///
     /// Option C applies: when the policy's `check_read` denies a read on
     /// the source Node, the returned Vec is empty (symmetric with a
-    /// source CID that has no outgoing edges). See [`Engine::read_node`]
+    /// source CID that has no outgoing edges). See `Engine::read_node`
     /// for the full semantics.
     pub fn edges_from(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
         if self.read_denied_for_cid(cid)? {
