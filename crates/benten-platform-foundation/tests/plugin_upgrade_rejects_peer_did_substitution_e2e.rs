@@ -204,6 +204,15 @@ fn install_plugin_rejects_peer_did_substitution_on_upgrade_path() {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "Linear end-to-end positive-control test wiring v1 install + \
+              v2 same-peer-DID upgrade through install_plugin(...) — boundary \
+              pin for T10-(a) over-strictness. Inlining keeps the v1→v2 \
+              ordering audit-able as a single test body; helper-extraction \
+              would split the would-FAIL-on-revert assertion across helpers \
+              and obscure the test's intent."
+)]
 fn install_plugin_admits_same_peer_did_upgrade_on_upgrade_path() {
     // Positive control / boundary: same peer-DID upgrade DOES admit
     // (assuming all other gates pass). Would-FAIL if the T10-(a) check
