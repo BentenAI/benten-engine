@@ -18,6 +18,7 @@ use thiserror::Error;
 /// downgrade-attack vector and would silently strand peers that wrote
 /// content under a different codepoint.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UnsupportedAlgorithm {
     /// Unknown / reserved-unimplemented signature codepoint.
     #[error("unsupported signature codepoint 0x{codepoint:04x}")]
@@ -50,6 +51,7 @@ pub enum UnsupportedAlgorithm {
 /// [`VerifyError::StripResistanceViolated`]: there is no `Ok(())` arm that
 /// silently accepts a stripped / single-half / cross-message-spliced sig.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum VerifyError {
     /// The classical Ed25519 half failed to verify.
     #[error("Ed25519 (classical) half verify failed")]
@@ -93,6 +95,7 @@ impl PartialEq for VerifyError {
 
 /// Crate-level error envelope.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CryptoError {
     /// Typed-unsupported codepoint dispatch failure.
     #[error(transparent)]

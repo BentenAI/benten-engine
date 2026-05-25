@@ -367,16 +367,22 @@ freeze wave SURFACES the decision; Ben makes it.
   per build-backlog row 5; otherwise wire shape is named-but-deferred).
 - The per-chunk AEAD wire layout — chunk_size = `IROH_BLOCK_SIZE = 16384`
   (item 15(g)) — locked at `crates/benten-crypto-suite/src/aead.rs:52`.
-  AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64)` per
-  `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (as-shipped
-  v1-beta). The `total_chunks` defense against cross-chunk-truncation
-  is **deferred to G-COMP-1 (see DEFERRED.md Row D-9 + D-15)** per the G-CORE-9 R1 triage Fork 1
-  ratification (escalation criterion: adding `total_chunks` would
-  break existing per-chunk byte-pin tests; per-chunk truncation
-  surfaces as `AeadError::Authentication` on the truncated slice via
-  the outer SnapshotBlob CID + signature binding). See
-  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-9 + the post-v1-beta
-  hardening watch-list (Row D-15) for the augmentation path.
+  AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)`
+  per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment
+  layout: domain-tag || plaintext_cid || chunk_index LE || total_chunks LE).
+  The `total_chunks` segment closes the cross-chunk-truncation attack
+  (an attacker who truncates a 10-chunk ciphertext to 5 chunks cannot
+  fabricate per-chunk AAD-matching tags because the seal-time AAD
+  committed to `total_chunks=10`). Wire layout pinned at
+  `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::aad_per_chunk_canonical_layout_pinned`
+  + behavioral truncation/inflation pins at
+  `crates/benten-graph/src/aead_wrap.rs::tests::{cross_chunk_truncation_fails, cross_chunk_inflation_fails}`.
+  **R6 R1 fix-pass note:** the prior G-CORE-9 R1 triage Fork 1 disposition
+  (defer `total_chunks` to G-COMP-1, retain 2-tuple AAD at v1-beta) was
+  RETRACTED at R6 R1 per the L1/L3 cross-confirmation cluster + the
+  spec text "binds plaintext_cid + chunk_index + total_chunks"
+  brought into alignment with the as-shipped code. See
+  `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15 revision-history.
 - Sentinel CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`
   remains the canonical Phase-1 golden fixture and MUST round-trip
   identically under v1 canonical bytes.

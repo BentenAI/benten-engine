@@ -92,29 +92,37 @@ fn codepoint_table_integer_values_pinned() {
 
 /// L11-MAJOR-1 closure (code-side; doc-side closure is Bundle 7) —
 /// per-chunk AEAD AAD layout pinned at the as-shipped 2-arg shape per
-/// Fork 1 ratification (doc retracted from 3-tuple to 2-tuple).
+/// F3 ratification (R6 R1 fix-pass — Fork 1 retraction supersedes the
+/// earlier 2-tuple layout). The AAD now binds 4 segments per
+/// `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk`.
 ///
 /// The exact byte layout is:
-///   `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_le_bytes()`
+///   `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_le_bytes() || total_chunks.to_le_bytes()`
 ///
-/// Any change to add `total_chunks` or any other component is a
-/// wire-format break; this test fails first to signal the
-/// freeze-discipline coupling.
+/// The `total_chunks: u32` little-endian segment closes the
+/// cross-chunk-truncation attack — an attacker who truncates a 10-chunk
+/// ciphertext to 5 chunks cannot fabricate per-chunk AAD-matching tags
+/// because the seal-time AAD committed to `total_chunks=10`.
+///
+/// Any change to the segment order, encoding, or set is a wire-format
+/// break; this test fails first to signal the freeze-discipline
+/// coupling.
 #[test]
 fn aad_per_chunk_canonical_layout_pinned() {
-    // Synthetic plaintext_cid + chunk_index.
+    // Synthetic plaintext_cid + chunk_index + total_chunks.
     let plaintext_cid = [0xAA_u8; 32]; // 32-byte CID hash payload
     let chunk_index: u64 = 0x0123_4567_89AB_CDEF;
+    let total_chunks: u32 = 0xDEAD_BEEF;
 
-    let aad = aad_per_chunk(&plaintext_cid, chunk_index);
+    let aad = aad_per_chunk(&plaintext_cid, chunk_index, total_chunks);
 
-    // Verify layout (3 segments): tag || plaintext_cid || chunk_index LE.
+    // Verify layout (4 segments): tag || plaintext_cid || chunk_index LE || total_chunks LE.
     let tag = b"benten-aead:chunk:";
-    let expected_len = tag.len() + plaintext_cid.len() + 8;
+    let expected_len = tag.len() + plaintext_cid.len() + 8 + 4;
     assert_eq!(
         aad.len(),
         expected_len,
-        "AAD layout regression — expected (tag || cid || u64-LE), total {} bytes; got {} bytes",
+        "AAD layout regression — expected (tag || cid || u64-LE chunk_index || u32-LE total_chunks), total {} bytes; got {} bytes",
         expected_len,
         aad.len()
     );
@@ -135,18 +143,33 @@ fn aad_per_chunk_canonical_layout_pinned() {
 
     // Segment 3: chunk_index encoded as little-endian u64.
     assert_eq!(
-        &aad[tag.len() + plaintext_cid.len()..],
+        &aad[tag.len() + plaintext_cid.len()..tag.len() + plaintext_cid.len() + 8],
         &chunk_index.to_le_bytes(),
         "AAD chunk_index encoding changed — wire-format break"
     );
 
-    // Explicit hex pin: with cid = 32x 0xAA + chunk_index = 0x0123456789ABCDEF,
-    // expected bytes = b"benten-aead:chunk:" || [0xAA]*32 || [0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01]
-    let expected_tail = [0xEF_u8, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01];
+    // Segment 4 (F3): total_chunks encoded as little-endian u32.
     assert_eq!(
-        &aad[aad.len() - 8..],
-        &expected_tail,
-        "AAD u64-LE encoding regression — must use to_le_bytes() not to_be_bytes()"
+        &aad[aad.len() - 4..],
+        &total_chunks.to_le_bytes(),
+        "AAD total_chunks encoding regression — F3 wire-format break"
+    );
+
+    // Explicit hex pin: with cid = 32x 0xAA + chunk_index = 0x0123456789ABCDEF +
+    // total_chunks = 0xDEADBEEF, expected tail =
+    //   [0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01] (u64-LE chunk_index)
+    //   || [0xEF, 0xBE, 0xAD, 0xDE]                       (u32-LE total_chunks)
+    let expected_chunk_idx_bytes = [0xEF_u8, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01];
+    let expected_total_chunks_bytes = [0xEF_u8, 0xBE, 0xAD, 0xDE];
+    assert_eq!(
+        &aad[aad.len() - 12..aad.len() - 4],
+        &expected_chunk_idx_bytes,
+        "AAD u64-LE chunk_index encoding regression — must use to_le_bytes() not to_be_bytes()"
+    );
+    assert_eq!(
+        &aad[aad.len() - 4..],
+        &expected_total_chunks_bytes,
+        "AAD u32-LE total_chunks encoding regression — must use to_le_bytes() not to_be_bytes()"
     );
 }
 

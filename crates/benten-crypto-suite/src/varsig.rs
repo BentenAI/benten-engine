@@ -169,6 +169,7 @@ impl DecodedVarsig {
 
 /// Varsig decode errors.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VarsigError {
     /// Header truncated below minimum length.
     #[error("varsig header truncated")]

@@ -103,6 +103,7 @@ impl TwoCidMap {
 ///   correctly but the AEAD authenticator rejected (AAD mismatch /
 ///   tag mismatch). The cryptographic tamper-detection arm.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TwoCidMapError {
     /// No mapping entry for the queried plaintext CID under the
     /// active scope (un-namespaced or per-DID partition). Semantically

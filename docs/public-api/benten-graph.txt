@@ -66,10 +66,10 @@ pub const benten_graph::aead_wrap::IROH_BLOCK_SIZE: usize
 pub const benten_graph::aead_wrap::WHOLE_AEAD_THRESHOLD: usize
 pub fn benten_graph::aead_wrap::decode_encrypted_node(bytes: &[u8]) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::decrypt(envelope: &benten_graph::aead_wrap::EncryptedNode, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
-pub fn benten_graph::aead_wrap::decrypt_chunk(chunk: &benten_crypto_suite::aead::AeadEnvelope, chunk_index: usize, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::decrypt_chunk(chunk: &benten_crypto_suite::aead::AeadEnvelope, chunk_index: usize, total_chunks: u32, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::encode_encrypted_node(encrypted: &benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::encrypt(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::aead_wrap::AeadError>
-pub fn benten_graph::aead_wrap::encrypt_chunk(chunk_plaintext: &[u8], chunk_index: usize, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::encrypt_chunk(chunk_plaintext: &[u8], chunk_index: usize, total_chunks: u32, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_graph::aead_wrap::AeadError>
 pub mod benten_graph::backend
 pub enum benten_graph::backend::DurabilityMode
 pub benten_graph::backend::DurabilityMode::Async
