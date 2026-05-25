@@ -2040,7 +2040,54 @@ implementations of `get_node_label_only` / `put_node` / `read_node_as`
 manifest schema work shipped independently of the Class B β surface; both
 landed in the same pre-Phase-4-Foundation-close window.
 
-### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1 (v1-beta posture retensed at G-CORE-9 FREEZE; cross-peer install verification NOT live at v1-beta)
+### Compromise #26 — Manifest-envelope recheck at sync merge boundary — SUBSTANTIVE SUBSTRATE WIRED at R6 R1 FP-F4 (Rows D-1/D-2/D-3/D-4/D-6/D-18 close); SUBSTANTIVE PluginLibrary-driven CHAIN-WALK still G-COMP-1 deferred
+
+> **R6 R1 FP-F4 retense (2026-05-24).** Per Ben PM-ratified F1 path-(a)
+> full ~13-site cascade + the F4 design pipeline synthesis v3:
+>
+> - **Layer-1 user-as-root WriteBoundaryChainValidator** = STRUCTURALLY
+>   WIRED at every WRITE entry point via the new `Engine::admit_write_chain`
+>   helper + sealed `WriteAdmissionFrame` (Row D-1 closure). The
+>   always-mounted Noop default preserves Phase-3 baseline; production
+>   deployments installing a substantive
+>   `ProductionWriteBoundaryChainValidator` via the
+>   `ProductionEngineBuilder` get fail-CLOSED at the WRITE boundary.
+>   The substantive validator's `UserDidRegistry`-backed chain walk is
+>   the G-COMP-1 deliverable.
+>
+> - **Layer-3 manifest-envelope substantive rechecker** = SUBSTRATE
+>   WIRED with synthesized-fallback hardening (Row D-4 + Row D-18
+>   closure). `ProductionManifestEnvelopeRechecker` returns
+>   `UnresolvedDeny` on `node-id:N` synthesized DIDs; the full
+>   PluginLibrary-driven chain walk for resolvable peers is the
+>   G-COMP-1 deliverable per Row D-4 narrative.
+>
+> - **§8-E CapabilityPolicy hooks** = ALL THREE WIRED (Row D-3 close):
+>   `check_install_consent` at `plugin_lifecycle::install_plugin`
+>   step 3c with typed `PluginInstallConsentDenied` reject;
+>   `check_per_delegation` at `EngineCapsHandle::delegate_capability`
+>   with typed `PluginPerDelegationDenied` reject;
+>   `check_write_with_audience` routed at all 4 production write sites
+>   (audience_did stays None at sweep sites per Δv3-2; populate at
+>   delegate_capability is G-COMP-1).
+>
+> - **§4.37 TOCTOU replay defense** = STRUCTURALLY WIRED at every
+>   install (Row D-2 close): `InstallPorts.install_record_replay_check`
+>   drops `Option<>` for `&mut Fn`; the `None` silent-disable arm is
+>   eliminated.
+>
+> - **§4.25 sync-hydrate consumption** = WIRED (Row D-6 close):
+>   `handshake.rs::sync_hydrate_consume_recheck_outcome` is the
+>   §4.25 surface; the §4.36 + §4.25 consumption sites both route
+>   through the shared `ManifestEnvelopeRecheckUnresolvedDeny`
+>   ErrorCode + typed reject.
+>
+> The remaining G-COMP-1-deferred narrative below stays
+> retrospective; the v1-beta posture is now "substrate-wired with
+> a substantive PluginLibrary-driven chain-walk follow-up" (no
+> longer "substrate-only").
+
+### Compromise #26 (HISTORICAL) — Manifest-envelope recheck at sync merge boundary — SEAM SHIPPED + SUBSTANTIVE-ADAPTER DEFERRED at Phase-4-Foundation R4b-FP-1 (v1-beta posture retensed at G-CORE-9 FREEZE; cross-peer install verification NOT live at v1-beta)
 
 **G-CORE-9 FREEZE v1-beta posture (2026-05-24 retense).** Per the
 G-CORE-9 R1 triage Fork 2 doc-tighten ratification, this Compromise

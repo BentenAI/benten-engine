@@ -247,6 +247,85 @@ These are public-API tightens / additive surfaces named-deferred to a follow-up 
 
 ---
 
+## Cohort 6 — R6 R1 FP-F4 substrate-frozen-but-consumer-unwired wiring (this PR)
+
+This cohort lands at PR<F4> (R6 R1 FP-F4) per the F4 design pipeline's
+synthesis v3 + Ben PM-ratified F1 path-(a) full ~13-site cascade. The
+substrate types frozen at G-CORE-8 are now wired through their
+production consumers; Rows D-1, D-2, D-3 (all three sub-rows), D-4,
+D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
+
+### Public-API shape changes
+
+- **`InstallPorts.install_record_replay_check`** — drops the
+  `Option<&mut Fn>` wrapper for `&mut InstallRecordReplayCheckFn`. The
+  `None` arm silently disabled the §4.37 TOCTOU replay defense in
+  shipped binaries; the drop forces every caller to make an explicit
+  choice between substantive defense (production) and explicit no-op
+  (tests). Migration: production callers wire
+  `engine.install_record_replay_store().record_and_check` closure; test
+  fixtures wire `benten_platform_foundation::testing::noop_replay_check()`.
+
+- **`InstallPorts.policy: &dyn InstallConsentPolicy`** — NEW field
+  threading the install-time consent policy (CRITIC-2 F-1.2 — via
+  port, NOT via `Engine::capability_policy()` accessor per Class B β
+  sealed-discipline). The new trait lives at
+  `benten_platform_foundation::install_consent::InstallConsentPolicy`
+  with admit-all (`AdmitAllInstallConsent`) + deny-all
+  (`DenyAllInstallConsent`) default helpers. The dep-direction
+  preserves `benten-caps → benten-platform-foundation` (the existing
+  arrow); engine glue blanket-adapter for
+  `CapabilityPolicy::check_install_consent` is a Phase-4-Meta-
+  Composing addition.
+
+- **`manifest_store::install_plugin` rename + deprecation** — renamed
+  to `install_verified_record_unchecked` with `#[deprecated]` +
+  `#[doc(hidden)]`. The 4 internal callers (drift-detection tests +
+  redb roundtrip tests) are annotated `#[allow(deprecated)]` per
+  intentional side-door use; production callers MUST route through
+  `plugin_lifecycle::install_plugin`.
+
+### New ErrorCode mints
+
+- **`PluginInstallConsentDenied`** (E_PLUGIN_INSTALL_CONSENT_DENIED) —
+  CLAUDE.md baked-in #18 §8-E hook #1 install-time consent denial.
+  CATALOG_VARIANT_COUNT 192 → 193.
+- **`PluginPerDelegationDenied`** (E_PLUGIN_PER_DELEGATION_DENIED) —
+  CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial.
+  CATALOG_VARIANT_COUNT 193 → 194.
+
+### New `pub` types
+
+- **`benten_engine::write_boundary_chain_validator::WriteAdmissionFrame`**
+  — sealed frame with `engine_internal()` + `with_chain(cid, did)`
+  builders (private fields preserve §1.A.FROZEN item 8 strict-
+  additivity).
+- **`benten_engine::production_engine_builder::ProductionEngineBuilder`**
+  — canonical production constructor (per CRITIC-2 F-2.2 rename; NOT
+  shadowing `EngineBuilder`).
+- **`benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker`**
+  — substantive rechecker substrate impl (Row D-4 + Row D-18 closure).
+- **`benten_engine::manifest_envelope_recheck::is_synthesized_node_id`**
+  — `pub fn` helper (per Δv3-10).
+- **`benten_sync::handshake::sync_hydrate_consume_recheck_outcome`**
+  — `pub fn` Row D-6 consumption surface.
+
+### Migration for downstream consumers
+
+- `InstallPorts {...}`: add `policy: &impl InstallConsentPolicy,` field
+  (e.g. `policy: &benten_platform_foundation::install_consent::AdmitAllInstallConsent,`
+  for non-production paths).
+- `InstallPorts {...}`: replace `install_record_replay_check: None,`
+  with `install_record_replay_check: &mut benten_platform_foundation::testing::noop_replay_check(),`
+  (test fixtures) or a real `engine.install_record_replay_store().record_and_check`
+  closure (production).
+- Engine construction: production callers SHOULD migrate
+  `EngineBuilder::new().open(path)` to
+  `ProductionEngineBuilder::new().open(path)` to install the
+  substantive rechecker automatically.
+
+---
+
 ## How to consume this ledger
 
 1. **Adopting v1-beta:** read Cohort 1 + 2 first (wire-format + public-API shape changes you must adapt to).

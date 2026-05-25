@@ -1,3 +1,8 @@
+// R6 R1 FP-F4 §S2 — the byte-mutation drift detection arm uses the
+// `install_verified_record_unchecked` side-door deliberately (the
+// drift scenario requires bypassing the full pipeline).
+#![allow(deprecated)]
+
 //! Phase-4-Foundation R4-FP-1 — T5a LOAD-BEARING pin: post-install
 //! install-record drift detected at load-verified.
 //!
@@ -72,7 +77,7 @@ fn plugin_manifest_post_install_record_byte_mutation_detected_at_load_verified()
 
     let mut store = ManifestStore::new();
     store
-        .install_plugin(plugin_did.clone(), original.clone())
+        .install_verified_record_unchecked(plugin_did.clone(), original.clone())
         .expect("install ok");
 
     // Baseline: load_verified succeeds.

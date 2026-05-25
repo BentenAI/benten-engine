@@ -249,6 +249,13 @@ impl Engine {
         props.insert("name".into(), Value::Text(manifest.name.clone()));
         props.insert("version".into(), Value::Text(manifest.version.clone()));
         let node = Node::new(vec!["system:ModuleManifest".into()], props);
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation. Module
+        // install is an engine-internal privileged write path
+        // (user-DID is the authoritative principal); no UCAN chain
+        // anchor in scope.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         // Privileged write — mirrors grant_capability's path. We do NOT
         // depend on the returned storage CID matching `computed` (the
         // storage CID hashes the FULL Node including the label, which is
@@ -321,6 +328,10 @@ impl Engine {
         let mut props: BTreeMap<String, Value> = BTreeMap::new();
         props.insert("manifest_cid".into(), Value::Text(cid.to_base32()));
         let node = Node::new(vec!["system:ModuleManifestRevocation".into()], props);
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend()
             .put_node_with_context(
                 &node,

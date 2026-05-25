@@ -897,10 +897,17 @@ impl Engine {
                 device_cid,
                 audience_did: None,
             };
-            policy.check_write(&ctx).map_err(|e| EngineError::Other {
-                code: ErrorCode::CapRevokedMidEval,
-                message: format!("resume: capability re-check denied: {e}"),
-            })?;
+            // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
+            // Default delegates to `check_write`; audience-aware impls
+            // observe `ctx.audience_did` (left as None at this wait-
+            // resume site — no plugin audience in scope at engine-
+            // internal wait completion).
+            policy
+                .check_write_with_audience(&ctx)
+                .map_err(|e| EngineError::Other {
+                    code: ErrorCode::CapRevokedMidEval,
+                    message: format!("resume: capability re-check denied: {e}"),
+                })?;
         }
 
         Ok(terminal_ok_outcome())
@@ -1090,6 +1097,10 @@ impl Engine {
                     .to_string(),
             });
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         Ok(self.backend().transaction(|tx| tx.put_node(node))?)
     }
 

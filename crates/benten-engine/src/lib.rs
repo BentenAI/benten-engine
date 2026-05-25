@@ -82,6 +82,15 @@ pub mod shares_policy_resolver;
 // reject mapping; production validator + WRITE-admission wire-up
 // follow per the module's G-CORE-8.2 BELONGS-NAMED-NOW disposition.
 pub mod write_boundary_chain_validator;
+// R6 R1 FP-F4 §S4 (Row D-4 closure) — production
+// ManifestEnvelopeRechecker substantive impl (replaces the
+// always-mounted Noop when ProductionEngineBuilder installs it).
+pub mod production_manifest_envelope_rechecker;
+// R6 R1 FP-F4 §S4 (Row D-4 closure, CRITIC-2 F-2.2) — the canonical
+// production engine constructor that wires the substantive rechecker
+// post-build. Renamed from "EngineBuilder" wrapper to avoid shadowing
+// the engine-side EngineBuilder.
+pub mod production_engine_builder;
 // Phase-4-Meta-Core G-CORE-8 §4.22 — thin-client bridge that
 // resolves the acting principal from the authenticated DID-keyed
 // session (NEVER from client input). Composes the G24-F SHIPPED

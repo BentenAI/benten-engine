@@ -51,6 +51,16 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("create_node"));
         }
+        // **R6 R1 FP-F4 §S1 — structural-always-on WRITE-admission
+        // consultation** of the configured
+        // `WriteBoundaryChainValidator`. Engine-internal frame: the
+        // CRUD API surface is the user-facing direct write path
+        // (the user-DID is the principal-by-construction); no UCAN
+        // chain anchor in scope. Validator returns NotApplicable;
+        // Layer-1 enforcement remains at `CapabilityPolicy::check_write`.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         // Phase-2a Inv-11 user-facing check. Short-circuits the guard so
         // the typed `E_INV_SYSTEM_ZONE` code surfaces directly — running
         // inside the transaction closure would rewrap the storage-layer
@@ -173,6 +183,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("update_node"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend.transaction(|tx| {
             tx.delete_node(old_cid)?;
             tx.put_node(new_node)
@@ -185,6 +199,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("delete_node"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend.transaction(|tx| tx.delete_node(cid))?;
         Ok(())
     }
@@ -195,6 +213,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("create_edge"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         let edge = Edge::new(*source, *target, label.to_string(), None);
         Ok(self.backend.put_edge(&edge)?)
     }
@@ -209,6 +231,10 @@ impl Engine {
         if self.is_read_only_snapshot() {
             return Err(backend_read_only("delete_edge"));
         }
+        // R6 R1 FP-F4 §S1 — WRITE-admission consultation.
+        self.admit_write_chain(
+            &crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal(),
+        )?;
         self.backend.transaction(|tx| tx.delete_edge(cid))?;
         Ok(())
     }
