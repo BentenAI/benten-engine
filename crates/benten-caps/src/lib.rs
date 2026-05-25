@@ -222,6 +222,22 @@ pub mod evaluator_delegation {
     pub fn iterate_batch_boundary_for<P: CapabilityPolicy + ?Sized>(policy: &P) -> usize {
         policy.iterate_batch_boundary()
     }
+
+    /// **R6 R2 FP-B (L6-r6r2-l6-7 closure — Compromise #1 wall-clock
+    /// TOCTOU half wire):** consult the policy's wall-clock refresh
+    /// ceiling override. Re-introduced sibling to
+    /// [`iterate_batch_boundary_for`] now that
+    /// `benten_engine::primitive_host::check_capability` actually
+    /// consumes the value (Pre-FP-B the trait method had ZERO
+    /// production callers; the prior wrapper was deleted per #674 as
+    /// "true zero-consumer". Re-minting it for the post-FP-B consumer
+    /// keeps test-mocks observable via the same delegation-helper
+    /// pattern as iterate_batch_boundary_for).
+    pub fn wallclock_refresh_ceiling_for<P: CapabilityPolicy + ?Sized>(
+        policy: &P,
+    ) -> core::time::Duration {
+        policy.wallclock_refresh_ceiling()
+    }
 }
 
 /// Refresh event emitted when the evaluator re-validates a capability grant

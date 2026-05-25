@@ -381,6 +381,35 @@ impl Engine {
     /// Returns [`EngineError::Cap`] when the caller lacks `debug:read`.
     /// Backend read failures bubble through [`EngineError::Graph`].
     pub fn diagnose_read(&self, cid: &Cid) -> Result<DiagnosticInfo, EngineError> {
+        self.diagnose_read_inner(None, cid)
+    }
+
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::diagnose_read`]. Threads `principal` onto
+    /// the gate + verdict `ReadContext.actor_cid` so a future per-
+    /// principal `debug:read` gate keys correctly. Behaviour at v1-beta
+    /// matches the un-attributed surface (the canonical `debug:read`
+    /// gate does not yet key on `actor_cid`); the seam is the load-
+    /// bearing migration point for napi per CLAUDE.md baked-in #18.
+    ///
+    /// # Errors
+    /// Forwards [`Engine::diagnose_read`] errors.
+    pub fn diagnose_read_as(
+        &self,
+        principal: &Cid,
+        cid: &Cid,
+    ) -> Result<DiagnosticInfo, EngineError> {
+        self.diagnose_read_inner(Some(*principal), cid)
+    }
+
+    /// Inner seam shared by [`Engine::diagnose_read`] +
+    /// [`Engine::diagnose_read_as`]. `principal=None` is the user-facing
+    /// default; `Some(cid)` is the Class-B-β attributed call.
+    fn diagnose_read_inner(
+        &self,
+        principal: Option<Cid>,
+        cid: &Cid,
+    ) -> Result<DiagnosticInfo, EngineError> {
         // Gate on `debug:read`. We thread the probe through the configured
         // policy's check_read with a canonical `"debug"` label so a
         // Phase-1 GrantBackedPolicy + grant("...", "store:debug:read")
@@ -397,6 +426,7 @@ impl Engine {
                 label: "debug".into(),
                 target_cid: Some(*cid),
                 device_cid,
+                actor_cid: principal,
                 ..Default::default()
             };
             if let Err(e) = policy.check_read(&ctx) {
@@ -435,6 +465,7 @@ impl Engine {
                     label: label.clone(),
                     target_cid: Some(*cid),
                     device_cid,
+                    actor_cid: principal,
                     ..Default::default()
                 };
                 match policy.check_read(&ctx) {
