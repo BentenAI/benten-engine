@@ -75,7 +75,13 @@ jobs:
           toolchain: stable
 
       - name: Install workspace deps
-        run: pnpm install --frozen-lockfile
+        # NOTE: --no-frozen-lockfile because pnpm-lock.yaml is NOT
+        # checked in (verified via `git log --all -- pnpm-lock.yaml`
+        # returning empty). At PR #1351 R6 R1 FP integration fix-up #6
+        # discovered Agent D's R6-FP-D ts-public-api workflow ship
+        # assumed a committed lockfile that doesn't exist. Functionally
+        # equivalent for the baseline-regen + diff this workflow performs.
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build @benten/engine TypeScript
         run: pnpm --filter @benten/engine build

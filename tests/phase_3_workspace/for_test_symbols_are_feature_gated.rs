@@ -127,6 +127,18 @@ const EXEMPT_PUB_ITEMS: &[(&str, &str)] = &[
         "crates/benten-ivm/src/views/version_current.rs",
         "with_budget_for_testing",
     ),
+    // benten-engine thin_client — active_session_count_for_test consumed
+    // by tools/benten-admin-shell/src/main.rs:62 (boot banner active
+    // sessions count). Added at R6 R1 FP integration PR #1351 fix-up #6
+    // after A's F1.a sweep cfg-gated the method, breaking the
+    // admin-shell production build (admin-shell doesn't enable
+    // benten-engine/test-helpers feature in its dep declaration).
+    // v1-GM rename target per the same row: drop the misleading
+    // `_for_test` suffix.
+    (
+        "crates/benten-engine/src/thin_client.rs",
+        "active_session_count_for_test",
+    ),
 ];
 
 /// Discover every `crates/*/src/**/*.rs` + `tools/*/src/**/*.rs` source
