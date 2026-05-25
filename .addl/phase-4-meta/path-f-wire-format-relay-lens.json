@@ -1,0 +1,178 @@
+{
+  "lens": "wire-format + multi-device-sync — Path F evaluation for Row D-3-c (audience_did at apply_atrium_merge)",
+  "head_sha_verified": "31d1a1691c432512720a7c5d7dc6a8637573598b",
+  "co_landed_sha": "4b1333b1",
+  "disposition": "RECOMMEND-PATH-E-INSTEAD",
+
+  "summary": "Path F (grant_cid in row payload, self-attesting) is wire-format-FEASIBLE but ARCHITECTURALLY-REDUNDANT and CONCEPTUALLY-MISFRAMED for Row D-3-c. (1) The slot Path F proposes to add already exists: `AttributionFrame.capability_grant_cid: Cid` (benten-eval/src/exec_state.rs:77) ships at v1-beta and lands in every Atrium-merge Version Node via the serialized `attribution_frame_cid` property (benten-engine/src/engine.rs:1634, 1655). Path F's `grant_cid in row payload` is therefore not a NEW wire-format surface — it is a SUBSTANTIVE POPULATION of an already-frozen slot that is currently set to all-zero at apply_atrium_merge (engine.rs:1634). (2) The DeviceAttestationEnvelope V2 (engine_sync.rs:311) signs the row CID via `payload_hash = BLAKE3(loro_export_bytes)` + the envelope_signature — so any row-payload extension is automatically tamper-resistant END-TO-END on the wire. (3) BUT the conceptual frame is wrong: the Row D-3-c `audience_did = None` disposition (already PARTIAL-CLOSED at FP-F4 §S3c per Δv3-2) is SEMANTICALLY CORRECT for inbound sync. Inbound sync is `audience-absent` — the originating writer (Alice's phone) wrote with audience=None against her own zone; the merge boundary's `peer_did` is the TRANSPORT-PRINCIPAL, not a cap-target. Adding grant_cid does NOT close Row D-3-c because Row D-3-c is about the audience-aware HOOK observing the right context, not about adding new grant-chain info. (4) Path E (grant_cid populated in the existing AttributionFrame slot at WRITE-attribution time, not at MERGE time; carried through CRDT merge unchanged via the per-row stamped wire shape) IS the elegant permanent shape and is strictly additive to existing infrastructure. The remaining critique below is constructive: IF Ben elects Path F anyway for self-attesting-cap-chain-on-rows future-proofing, the variant should be Path F-ii (populate the existing AttributionFrame.capability_grant_cid slot, not add a new Node property), with the 36-byte per-row cost paid only at v1-beta wire-format-freeze IF the AttributionFrame.cid skip_serializing_if_default discipline is preserved (a grant_cid of all-zero CID elides — purely-local writes pay zero bytes; sync-attributed rows pay 36 bytes; matches the existing peer_did_set / device_did discipline).",
+
+  "ratified_finding_1_attribution_frame_already_has_slot": {
+    "severity": "BLOCKER-of-Path-F-as-written",
+    "site": "crates/benten-eval/src/exec_state.rs:77",
+    "evidence": "`pub capability_grant_cid: Cid` is field 3 of 7 in AttributionFrame; ships v1-beta; encoded into canonical-bytes at exec_state.rs:188-191 as the `grant` key under the AttributionFrame Node. Currently always populated with `Cid::from_blake3_digest([0u8; 32])` at the sync-merge construction site (engine.rs:1634): `capability_grant_cid: Cid::from_blake3_digest([0u8; 32])`. The slot exists; the substantive-population is the v1-beta gap.",
+    "implication": "Path F as written (`bundle grant_cid into row payload`) duplicates a structurally-frozen slot. The wire-format inventory at docs/V1-WIRE-FORMAT-INVENTORY.md item 1 (Node/Edge canonical CBOR) already covers AttributionFrame-cid-as-node-property semantics. Path F-i (Node properties) is wrong shape; Path F-ii (AttributionFrame) is right shape; Path F-iii (sync-merge envelope) is wrong layer."
+  },
+
+  "multi_device_sync_analysis": {
+    "scenario": "Alice's phone → Alice's laptop → Alice's desktop (LIVE v1-beta-shippable per Phase-3 G16-D wave-6b + Compromise #16)",
+    "step_by_step": [
+      "1. Phone constructs row: `StampedValue { value: 'note bytes', hlc }` (benten-sync/src/crdt.rs:174). Per-row payload at the CRDT layer = (value, hlc). The grant_cid info IS NOT carried at the StampedValue layer today.",
+      "2. Phone wraps Loro export in DeviceAttestationEnvelope V2 (engine_sync.rs:425 new_signed): `payload_hash = BLAKE3(loro_export_bytes)` + `envelope_signature` covers (version, attestation, payload_hash, session_nonce). The envelope's `attestation` carries the phone's signed device-DID linked to user-DID via RotationLog.",
+      "3. Phone sends to Laptop via iroh ALPN. Laptop's apply_atrium_merge (engine.rs:1215) verifies envelope_signature → device_did → trust-store → RotationLog walk → confirms phone is one of Alice's devices.",
+      "4. Laptop's per-row recheck loop (engine.rs:1291-1442): bumps recheck counter, HLC-skew check, system-zone prefix reject, in-memory revocation check, structural CapabilityPolicy.check_write_with_audience hook (currently with audience_did=None per FP-F4 §S3c Δv3-2), manifest-envelope-rechecker, envelope-ceiling AND, F3 replay-marker.",
+      "5. Laptop mints merge Version Node with serialized AttributionFrame.cid as property (engine.rs:1655). The AttributionFrame.capability_grant_cid is all-zero TODAY (engine.rs:1634) — this is the slot Path E would populate.",
+      "6. Laptop syncs to Desktop. At Desktop's apply_atrium_merge: peer_did = laptop-DID (transport). Desktop's recheck loop walks the SAME defenses against laptop's envelope, NOT against phone's original envelope. The original chain (phone's grant → user-root) is NOT re-walked because there is no grant_cid carried at the row level today.",
+      "7. UNDER PATH F (if grant_cid carried in row payload): Desktop's verifier could walk the chain phone-grant → user-root. The original envelope_signature would NOT cover the laptop→desktop hop (envelope is the laptop's, not the phone's), so the row-level grant_cid would NOT have a multi-hop signature chain UNLESS we ALSO propagate the originating device's envelope through every hop (which we do NOT do today). Falls back to AttributionFrame.peer_did_set carrying the contributing peer-DID set (which DOES happen today via Loro winning_attribution — engine.rs:1247, 1636-1640).",
+      "8. GAP IDENTIFIED: today the chain trust at apply_atrium_merge anchors at the IMMEDIATE peer (transport), NOT the ORIGINAL writer. The proper resolution is: AttributionFrame.peer_did_set (LIVE) preserves the contributing peer-DID SET (Loro merges multiple peers' writes into one Version Node); AttributionFrame.capability_grant_cid (SLOT-LIVE, POPULATE-PENDING) should carry the per-row originating-grant-CID so a later audit can walk. Path E is correct."
+    ],
+    "verdict": "Multi-device sync ALREADY WORKS at the trust level (the per-row recheck loop + structural-always-on policy.check_write_with_audience hook + the cumulative AttributionFrame chain). Path F adds NO security property the existing infrastructure does not already provide; it duplicates AttributionFrame.capability_grant_cid in a way that conflicts with the canonical-bytes contract (item 1 of inventory)."
+  },
+
+  "device_attestation_interaction": {
+    "envelope_shape": "DeviceAttestationEnvelope V2 (engine_sync.rs:311) carries (version: u8 = 2, attestation: Option<DeviceAttestation>, payload_hash: [u8;32], session_nonce: [u8;32], envelope_signature: Vec<u8>).",
+    "payload_binding": "envelope_signature covers (version, attestation, payload_hash, session_nonce). payload_hash = BLAKE3(loro_export_bytes). Any mutation of the Loro payload — including adding grant_cid to row payload under Path F-i — breaks the payload_hash binding. This means Path F-i requires re-signing at every hop.",
+    "redundancy_check": "Path F's `cap-policy walks grant_cid chain → user-root` is REDUNDANT with the COLLAPSED unified chain-validation seam (DECISION-RECORD §4; Compromise #23 post-COLLAPSE; engine.rs:1456-1531 the envelope-ceiling-AND + manifest-envelope-recheck path). The single seam at validate_chain_with_manifest_envelope ALREADY does chain validation against the user-root; the grant_cid Path F proposes is the SAME info the envelope ceiling carries.",
+    "orthogonality": "DeviceAttestationEnvelope is about DEVICE-grain identity (which physical hardware wrote). AttributionFrame.capability_grant_cid is about CAPABILITY-grain authority (which grant authorized). They are ORTHOGONAL but COMPOSED at the single chain-validation seam. Path F-ii (populate AttributionFrame.capability_grant_cid) preserves this orthogonality; Path F-i (Node properties) confuses the layers.",
+    "verdict": "DeviceAttestationEnvelope already does the heavy lifting Path F's row-level signature would duplicate. Path F adds no defense the envelope doesn't already provide; it ADDS a per-row 36-byte cost without closing any attack class the envelope leaves open."
+  },
+
+  "canonical_bytes_impact": {
+    "path_f_i_node_properties": {
+      "shape": "Row Node properties gain `grant_cid: Bytes(36)` key (BLAKE3 CID).",
+      "impact": "Changes the row's canonical bytes → changes the row's CID. Per CLAUDE.md #5 + V1-WIRE-FORMAT-INVENTORY.md item 1: this is a BREAKING wire-format change to the Phase-1 Node/Edge canonical CBOR baseline. Sentinel CID `bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda` would NOT be affected (sentinel is fixture; not a sync row), but the broader Phase-1 baseline contract IS impacted because rows under the sync layer would carry a slot that pre-#989 rows do not.",
+      "v1_beta_breakability": "P-III no-users-yet override applies (CLAUDE.md baked-in #15). Pre-tag is OK. But the cost is justification: why add a wire-format breakage when AttributionFrame already has the slot?"
+    },
+    "path_f_ii_attribution_frame": {
+      "shape": "AttributionFrame.capability_grant_cid populated with non-zero grant_cid (already a structurally-locked slot at exec_state.rs:77; encoded at exec_state.rs:188-191).",
+      "impact": "ZERO wire-format change. The slot already encodes its bytes into the AttributionFrame canonical bytes; the AttributionFrame CID is computed at engine.rs:1644. Substantively populating the slot at engine.rs:1634 (where it is currently all-zero) is NOT a wire-format change — it is a SEMANTIC change (the slot was a placeholder; now it carries meaning).",
+      "additivity": "Per the AttributionFrame skip_serializing_if_default discipline (exec_state.rs:94, 100, 110): peer_did_set / device_did / sync_hop_depth elide when default. capability_grant_cid does NOT currently use #[serde(skip_serializing_if = ...)] — it always serializes. SO the AttributionFrame CID of an Atrium-merge Version Node TODAY already commits to a specific (all-zero) grant_cid, which means populating it with a real grant_cid CHANGES the AttributionFrame.cid AND the merge Version Node CID. This is a wire-format-IMPACT change that requires a v1-beta Cohort entry, but the SHAPE is unchanged.",
+      "elegance": "The AttributionFrame slot was DESIGNED for this. exec_state.rs:55-65 docstring: `capability_grant_cid: CID of the capability grant authorising the step`. Path E uses the slot for its designed purpose."
+    },
+    "path_f_iii_sync_merge_envelope": {
+      "shape": "Add grant_cid to DeviceAttestationEnvelope or to the per-row StampedValue at crdt.rs:174.",
+      "impact": "DeviceAttestationEnvelope is per-MERGE (signs whole Loro payload), not per-ROW — so adding grant_cid there cannot carry per-row grant differentiation when one peer's Loro doc has rows authored under different grants (which is the legitimate case at a multi-actor zone). Adding to StampedValue requires Loro upstream wire-format coordination — out of scope for v1-beta.",
+      "verdict": "Wrong layer. Path F-iii does not compose with multi-grant-per-zone scenarios."
+    }
+  },
+
+  "attribution_frame_interaction": {
+    "current_state": "AttributionFrame fields at exec_state.rs:71-112: actor_cid, handler_cid, capability_grant_cid, sandbox_depth, peer_did_set (Option), device_did (Option), sync_hop_depth (u32). All 7 fields ship v1-beta. The CID encoding at exec_state.rs:175-234 enforces the Phase-2a CID-stability discipline (skip-on-default for sandbox_depth / peer_did_set / device_did / sync_hop_depth).",
+    "gap": "capability_grant_cid is the ONE slot that does NOT have skip-on-default (exec_state.rs:188-191 always-inserts the `grant` key). This is HISTORICAL — the slot was added at Phase 1 with all-zero default as the un-attributed fallback. A non-zero grant_cid would currently change the AttributionFrame.cid relative to today's default.",
+    "path_f_ii_recommended_variant": "POPULATE capability_grant_cid at engine.rs:1634 with the originating-row's grant_cid (resolved from the per-row write context). NO new field; NO new wire-format surface; ALREADY-FROZEN slot used for its designed purpose. Compatible with the AttributionFrame-cid-changes wire-format discipline because (a) the SHAPE is unchanged, (b) the AttributionFrame CID change is observable in tests as a fixture refresh (Phase-2a CID stability discipline applies — D20-RESOLVED precedent).",
+    "verdict": "F-ii is the elegant permanent shape AND it is what Path E was always going to be. Calling it `Path F` instead of `Path E variant ii` is naming sleight-of-hand."
+  },
+
+  "relay_scenario_walkthroughs": [
+    {
+      "scenario": "Multi-device sync (LIVE v1-beta)",
+      "path_f_ii_handling": "AttributionFrame.capability_grant_cid populated at originating-write time on phone; threads through Loro merge to laptop (Loro StampedValue carries the value+HLC; grant_cid lives in AttributionFrame which lives in the Version Node's properties — NOT in StampedValue, so it does NOT propagate per-row through CRDT today). GAP: AttributionFrame is per-merge-Node, not per-row inside the Loro doc. The originating phone's grant_cid does not survive the laptop's apply_atrium_merge because the laptop constructs a FRESH AttributionFrame at engine.rs:1629 with its OWN effective_actor_cid. CLOSED only by ALSO carrying grant_cid in StampedValue OR by laptop preserving phone's original AttributionFrame across merges (requires laptop to NOT re-construct).",
+      "verdict": "Multi-device sync STILL works today (cap-recheck at apply_atrium_merge enforces revocation; envelope ceiling AND enforces ceiling). Path F-ii would IMPROVE per-Node attribution audit-trail but does NOT close a known attack class. Path E's variant should be: thread the AUTHORING peer's grant_cid through StampedValue (CRDT-wire-format extension, requires Loro upstream coordination) OR accept that AttributionFrame at merge-time captures the MERGING peer's view (current state, semantically defensible)."
+    },
+    {
+      "scenario": "Garden-Grove untrusted-host (Phase 7+)",
+      "path_f_handling": "Peer X (untrusted host) holds ciphertext for peer Y. Peer Z requests row from X. UCAN-blobs ALPN handler (benten-sync/src/ucan_blobs_protocol.rs; #1323 G-CORE-3d two-CID store) does the authorization: X serves ciphertext_cid; the per-chunk AEAD wrap (V1-WIRE-FORMAT-INVENTORY item 4; codepoint 0x647a HYBRID_X25519_MLKEM768) seals bytes for Z's audience. The grant_cid is structurally bound via UCAN audience_binding in AuthorizationGrant (benten-caps/src/authorization_grant.rs:250). Path F adds NOTHING — the chain-walk is already done at the ALPN handler boundary against the AuthorizationGrant's audience_pubkey + scope.",
+      "verdict": "WORKS today (Phase 7+ infrastructure). Path F redundant."
+    },
+    {
+      "scenario": "AI-agent on behalf of user (Phase 6+)",
+      "path_f_handling": "Agent's peer relays user-authorized writes. UCAN audience = agent-DID; chain = agent-grant → user-root. Captured today via the sealed CapabilityPolicy trait (policy.rs:356) + the audience-aware check_write_with_audience hook (policy.rs:573). The grant_cid carrying the agent-grant resolves through the existing CapWriteContext.audience_did (policy.rs:224) + the WriteAuthority::SyncReplica path. Path F-ii would populate AttributionFrame.capability_grant_cid with the agent-grant; this is GOOD for audit-trail but the AUTHORIZATION decision already lands without it.",
+      "verdict": "Path F-ii adds audit-trail value (helpful, not security-critical). Path F-i (Node properties) is redundant."
+    },
+    {
+      "scenario": "Offline-then-rejoin via iroh relay",
+      "path_f_handling": "Writer offline; queues; iroh relay forwards. Relay-peer is the iroh public relay (transport only; per Compromise #22 — metadata leakage to public relays). The relay does NOT sign or attest; the writer's DeviceAttestationEnvelope + the writer's authorship signature flow through unchanged. The originating grant_cid would be populated at the writer's offline-write time (AttributionFrame.capability_grant_cid at engine.rs WriteContext-construction path); it lands at the receiver's apply_atrium_merge unchanged.",
+      "verdict": "WORKS. Path F-ii via AttributionFrame slot population. No relay-specific addition needed."
+    },
+    {
+      "scenario": "Kith selective-disclosure (Phase 7+)",
+      "path_f_handling": "Identity-view projections. Writes attributed to identity-views via the AttributionFrame.actor_cid + future identity-view layer. The grant_cid concept generalizes: a Kith selective-disclosure projection is itself authorized by a grant whose audience is the view-DID. AttributionFrame.capability_grant_cid carries the projection-grant CID. The wire-format inventory does NOT need new entries; the existing AttributionFrame slot suffices.",
+      "verdict": "WORKS. Path F-ii via AttributionFrame slot population."
+    }
+  ],
+
+  "cohort_entry_draft": {
+    "cohort": "Cohort 1 — Wire-format byte-shape changes",
+    "title": "PR #(TBD) — AttributionFrame.capability_grant_cid substantive population at apply_atrium_merge (closes Row D-3-c residual + improves Inv-14 audit-trail)",
+    "what_changed": "engine.rs:1634 substantively populates AttributionFrame.capability_grant_cid (previously all-zero). The slot is structurally-frozen at v1-beta (exec_state.rs:77); the SHAPE is unchanged; the SEMANTIC contract tightens (sync-merge Version Nodes now commit to the originating-row grant CID rather than the all-zero placeholder).",
+    "why_break_ok": "P-III no-users-yet override per CLAUDE.md baked-in #5. AttributionFrame.cid of sync-merge Version Nodes is content-distinguishable from the pre-population shape (Inv-14 stronger evidence). Fixture refresh per Phase-2a CID-stability D20-RESOLVED precedent.",
+    "migration_path": "Test fixtures for sync-merge Version Node CIDs regenerated. Phase-1 baseline Node/Edge sentinel CID (`bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda`) UNAFFECTED. Pre-population fixtures live in `crates/benten-engine/tests/sync_replica_attribution.rs` family — regenerate via the existing fixture-refresh discipline.",
+    "anchor": "crates/benten-engine/src/engine.rs:1634 (currently `capability_grant_cid: Cid::from_blake3_digest([0u8; 32])`); resolution path = derive from per-row WriteContext.with_authority / per-row originating-grant lookup",
+    "v1_wire_format_inventory_update": "NONE NEW. Item 1 (Node/Edge canonical) carries the AttributionFrame Node bytes already; the AttributionFrame.cid changing is a content-addressed change to the merge Version Node bytes, NOT a new wire-format surface. Update Item 1's Status note to mention `AttributionFrame.capability_grant_cid substantively populated at G-CORE-9 R(N) (was all-zero placeholder)`."
+  },
+
+  "payload_size_analysis": {
+    "path_f_i_cost": "36 bytes per row Node property (CID bytes). At 1M rows = ~36 MB.",
+    "path_f_ii_cost": "ZERO new bytes. AttributionFrame.capability_grant_cid ALREADY emits 36 bytes per merge Version Node (always serializes the all-zero CID today). Populating it with non-zero grant_cid changes the bytes but NOT the byte-count.",
+    "elegance_verdict": "Path F-ii is FREE — the cost was already paid at Phase 1 when the AttributionFrame slot shipped with always-on emit. Substantively populating it is pure semantic improvement at zero wire-format-byte cost. Path F-i is wasteful (duplicates a structurally-frozen slot). Path E (which is equivalent to Path F-ii) wins on cost grounds alone.",
+    "skip_on_default_amendment_optional": "OPTIONAL: extend AttributionFrame to skip-on-default capability_grant_cid (add `#[serde(skip_serializing_if = is_zero_cid)]`). This would make purely-local-default frames byte-identical to the Phase-1 baseline AND make sync-attributed frames pay only the 36 bytes when truly attributed. BUT this is a wire-format CHANGE (the always-emit shape ships at v1-beta) requiring a Cohort entry. Defer to G-COMP-1 v1-assessment-window."
+  },
+
+  "recommended_variant": {
+    "choice": "Path E (substantive population of existing AttributionFrame.capability_grant_cid slot at apply_atrium_merge)",
+    "rationale_1": "Zero wire-format-shape change (the slot already ships v1-beta and always serializes 36 bytes). Only a SEMANTIC change to the slot's meaning at sync-merge construction sites.",
+    "rationale_2": "The AttributionFrame.capability_grant_cid slot was DESIGNED for this (docstring at exec_state.rs:55-65 + field docstring at 76). Path F as written invents a NEW wire-format surface (row Node `grant_cid` property) that DUPLICATES the existing slot.",
+    "rationale_3": "Row D-3-c's `audience_did = None at sweep sites per Δv3-2` disposition is SEMANTICALLY CORRECT — peer_did at apply_atrium_merge IS transport-principal NOT cap-target. Path E populating AttributionFrame.capability_grant_cid is ORTHOGONAL to the audience_did question (the hook still receives audience_did=None correctly; the AttributionFrame separately carries the originating-grant audit-trail).",
+    "rationale_4": "DeviceAttestationEnvelope V2 already does end-to-end signature binding via payload_hash + envelope_signature. Path F's row-level `genuine vs forged` defense is REDUNDANT with the envelope-signature binding. Path E adds NO redundant signature — it leverages the envelope_signature that already covers the AttributionFrame-bearing Version Node bytes through the apply_atrium_merge pipeline.",
+    "rationale_5": "Composes cleanly with all 5 future relay scenarios (multi-device-sync LIVE / Garden-Grove untrusted-host / AI-agent on behalf of user / offline-then-rejoin / Kith selective-disclosure) — see relay_scenario_walkthroughs.",
+    "if_ben_overrides_to_path_f": "Variant Path F-ii (populate the AttributionFrame slot). NEVER Path F-i (Node properties — duplicates frozen slot). NEVER Path F-iii (sync-merge envelope — wrong layer, breaks multi-grant-per-zone). The cohort entry above stands."
+  },
+
+  "risk_assessment": [
+    {
+      "rank": 1,
+      "risk": "Naming confusion between Path E and Path F-ii.",
+      "severity": "MAJOR",
+      "mitigation": "Adopt explicit naming: `Path E = substantive-population-of-AttributionFrame.capability_grant_cid`. Reject Path F-i + Path F-iii. The orchestrator decision-point should NOT present `Path F (any variant)` vs `Path E` as orthogonal; they collapse to the same thing under the right variant."
+    },
+    {
+      "rank": 2,
+      "risk": "Multi-hop attribution loss: laptop re-constructs AttributionFrame at apply_atrium_merge (engine.rs:1629) using its OWN effective_actor_cid, NOT the phone's originating grant. The phone's grant_cid does NOT survive the laptop-merge today.",
+      "severity": "MAJOR (existing pre-Path-E gap, not introduced by Path E)",
+      "mitigation": "Path E variant: thread per-row originating-grant-CID via StampedValue (CRDT-wire-format extension) OR accept the merge-time-reconstruction semantics (laptop attributes the merged Version Node to ITSELF; phone's contribution survives in peer_did_set). Defer the StampedValue extension to G-COMP-1 (couples to Loro upstream coordination)."
+    },
+    {
+      "rank": 3,
+      "risk": "AttributionFrame.cid change at sync-merge Version Nodes invalidates fixture-pinned CIDs across `crates/benten-engine/tests/sync_replica_attribution.rs` family.",
+      "severity": "MINOR (mechanical fixture-refresh, well-precedented at D20-RESOLVED Phase-2a CID-stability)",
+      "mitigation": "Regenerate fixtures in the same wave that lands Path E. Add Cohort entry per cohort_entry_draft."
+    },
+    {
+      "rank": 4,
+      "risk": "Path E does NOT close Row D-3-c. Row D-3-c is about the audience-aware hook observing the right context; Path E is about the AttributionFrame slot population. They are orthogonal.",
+      "severity": "OBS (re-framing)",
+      "mitigation": "Row D-3-c's `audience_did = None per Δv3-2` PARTIAL-CLOSED disposition (DEFERRED.md:167-175) is structurally correct. Path E lands as a SEPARATE row (audit-trail strengthening, not Row D-3-c closure). Re-name the row Path E lands under: `D-3-c-followup` or new row `D-NEW: AttributionFrame.capability_grant_cid substantive population at apply_atrium_merge`."
+    },
+    {
+      "rank": 5,
+      "risk": "F3 anti-replay TOCTOU race (Compromise #23 / Row D-8) remains OPEN at v1-beta whether or not Path E lands. Path E does NOT close it; Path E does NOT widen it.",
+      "severity": "OBS (orthogonal)",
+      "mitigation": "Per DEFERRED.md Row D-8 G-COMP-1 closure path. Independent of Path E/F discussion."
+    }
+  ],
+
+  "ground_truth_verification": {
+    "files_read_at_head_31d1a169": [
+      "crates/benten-engine/src/engine.rs:1200-1666 (apply_atrium_merge full body)",
+      "crates/benten-eval/src/exec_state.rs:50-235 (AttributionFrame struct + CID encoding)",
+      "crates/benten-sync/src/crdt.rs:160-280 (StampedValue + HlcWire + LoroDoc)",
+      "crates/benten-sync/src/handshake_wire.rs:40-200 (HandshakeFrame + builder)",
+      "crates/benten-engine/src/engine_sync.rs:280-450 (DeviceAttestationEnvelope V2)",
+      "crates/benten-graph/src/lib.rs:920-1040 (WriteContext incl. namespace_did)",
+      "crates/benten-caps/src/policy.rs:155-575 (CapWriteContext + ReadContext + CapabilityPolicy trait incl. check_write_with_audience)",
+      "crates/benten-caps/src/authorization_grant.rs:220-350 (AuthorizationGrant struct)",
+      "docs/V1-WIRE-FORMAT-INVENTORY.md (full)",
+      "docs/V1-BETA-BREAKING-CHANGES.md:1-120",
+      "docs/V1-FROZEN-INTERFACE-DEFERRED.md:150-265 (Row D-3 family + Row D-4)",
+      "docs/SECURITY-POSTURE.md:1303-1330 + 1724-1751 (Compromise #16 + #23)"
+    ],
+    "claims_verified": [
+      "AttributionFrame.capability_grant_cid is a frozen v1-beta slot (exec_state.rs:77). VERIFIED.",
+      "apply_atrium_merge currently constructs AttributionFrame with capability_grant_cid = all-zero (engine.rs:1634). VERIFIED.",
+      "AttributionFrame.cid encoding always emits the `grant` key (exec_state.rs:188-191; no #[serde(skip_serializing_if = ...)] on capability_grant_cid). VERIFIED.",
+      "DeviceAttestationEnvelope V2 envelope_signature covers (version, attestation, payload_hash, session_nonce) (engine_sync.rs:337-341). VERIFIED.",
+      "Row D-3-c PARTIAL CLOSED at FP-F4 §S3c per Δv3-2 with audience_did=None (DEFERRED.md:167-175). VERIFIED.",
+      "CapabilityPolicy::check_write_with_audience is a defaulted-impl method delegating to check_write (policy.rs:573). VERIFIED.",
+      "Per-row recheck loop at engine.rs:1291-1442 calls check_write_with_audience with audience_did=None (engine.rs:1411). VERIFIED."
+    ]
+  }
+}
