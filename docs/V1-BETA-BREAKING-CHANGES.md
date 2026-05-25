@@ -441,6 +441,26 @@ tests to FAIL with `Got: Ok(())` (silent admission). Post-fix: 3/3 +
 
 ---
 
+# Cohort 8 — R6-R2-FP 9-item WIRE-NOW batch (consolidated; Groups A + B + C; 2026-05-25)
+
+This cohort consolidates the 9-item WIRE-NOW batch ratified by Ben (2026-05-25 LATE-MORNING #9 ADDENDUM) per the **v1-beta-freeze-window auto-WIRE-NOW discipline** (`feedback_orchestrator_defer_prediction_bias.md` amendment 2026-05-25): any DEFERRED.md row whose deferral rationale rests on "v1-beta-shippable as-is, fix post-tag" for a pub-API / wire-format / ErrorCode-catalog surface automatically flips to WIRE-NOW.
+
+**Sub-branch consolidation map (Strategy-C cascade)** — all merged into `phase-4-meta-core/r6-r2-fp-integration-redo` ; final integration HEAD = `66b02b37` (post-consolidation):
+
+| Group | Sub-branch SHA | Items closed |
+|---|---|---|
+| **Group C** (batch-c-dsl-catalog) | `13faa4b1` → consolidated at `3c95ed29` | Item 5: D-19 Strategy::C → Reserved rename + 3 DSL ErrorCode mints; CATALOG_VARIANT_COUNT 194 → 197 |
+| **Group A** (batch-a-crypto-identity) | `4bf64fba` → consolidated at `9cb059fb` | Items 2/3/4/7/8: L6 install-consent auto-install + L1 issuer_verifying_key self-bind + Path G AttributionFrame substantive + D-13 KDF info-tag + D-8 F3 anti-replay TOCTOU CAS |
+| **Group B** (batch-b-engine-structural) | `db0235e5` → consolidated at `66b02b37` | Items 6/9: D-17 `#[non_exhaustive]` partial cascade + D-18 synthesized-fallback hardening |
+| (pre-fix-up) wasm32-fixup | `ba0e5080` → consolidated at `59a8bc66` | 4 wasm32-unknown-unknown CI failures from FP-B cascade |
+| (pre-consolidation prep) | `ce7a3f38` | Cohort 8 PLANNED + Row D-27 mint + staged-memory cleanup |
+
+**Item 1 NOT in this cohort** — G-CORE-PQ-WIRE wave (PQ-hybrid Ed25519⊕ML-DSA-65 wire-in at 4 production sites + `benten_id::Keypair` cascade per Row D-26) sequenced as **separate 3-wave dispatch (PQ-WIRE-1 canary + PQ-WIRE-2 3-parallel + PQ-WIRE-3 consolidation)** per R0 plan at `.addl/phase-4-meta/g-core-pq-wire-r0-plan.md`. Sequenced AFTER PR #1356 merges to avoid trivial merge-conflict on `benten-id::keypair.rs`. Will become its own Cohort (likely Cohort 9 or 10 depending on intervening landings).
+
+Per-group entries follow below as Cohort 8 (Group X) subsections; provenance summary lines at end of file.
+
+---
+
 ## Cohort 8 (Group C) — Row D-19 G-COMP-1 wave WIRE-NOW (this PR, Batch C)
 
 This cohort lands at PR<R6-R2-FP-integration-redo> Group C
