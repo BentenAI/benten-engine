@@ -1,0 +1,162 @@
+{
+  "lens": "crypto + capability correctness",
+  "phase": "Phase-4-Meta-Core R6 R2",
+  "row": "D-3-c (audience_did at apply_atrium_merge)",
+  "evaluation_target": "Path F — writes self-attest via grant_chain reference (grant_cid in row payload; cap-policy walks grant chain at per-row recheck)",
+  "head_verified": "4b1333b1 + 31d1a169 (worktree HEAD)",
+  "additional_commits_audited": ["6204152d (FP-A v2->v3 binding_sig)", "a9150ef0 (FP-B substrate-honesty / admit_write_chain wire)"],
+  "disposition": "RECOMMEND-PATH-E-INSTEAD",
+  "summary": "Path F is internally coherent and would close the explicit attack class it names (grant-not-found / grant-revoked at per-row recheck) by anchoring rows to a content-addressed grant via grant_cid. However Path F is the WRONG SHAPE for Row D-3-c at v1-beta on five concrete grounds verified against HEAD: (1) the audience_did field at apply_atrium_merge is structurally None per Delta-v3-2 because peer_did is transport-principal NOT cap-target — Path F SOLVES a different problem (per-write provenance) than the row asks (audience-aware enrichment); (2) the substantive PluginLibrary-driven chain walker that Path F's grant_cid would feed into is not built (Compromise #26, Row D-4 G-COMP-1 deferred) — Path F's grant_cid in the row would dead-end at the always-mounted Noop rechecker at v1-beta; (3) the FP-A v2->v3 binding-sig fix (commit 6204152d 2026-05-25) is the ratified pattern for this class — bind audience-cryptographic-material INTO the signed envelope rather than carry a separate lookup handle — and Path F would re-introduce the v2-shaped split-handle pattern FP-A just retired; (4) the AttributionFrame already carries a capability_grant_cid slot (crates/benten-eval/src/exec_state.rs:77) populated as zero-Cid at apply_atrium_merge (engine.rs:1634) — wiring it substantively is the cheaper Path E; (5) Path F couples the on-the-wire row shape to a v1-API freeze decision that V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 explicitly defers (CapWriteContext::audience_did is the agreed v1-API surface; adding a row-level grant_cid wire-format field reopens a frozen surface). Path F's substance — the chain-walked cap-derivation — is RIGHT for a different row (the substantive Layer-3 manifest-envelope rechecker at Row D-4 G-COMP-1) but WRONG as the D-3-c closure mechanism. Path E (audience-aware hook with structural None at sync sweep sites + substantive populate-site at delegate_capability G-COMP-1; already implemented per Delta-v3-2) preserves the FP-A v3-binding-sig discipline and stays inside the v1-API freeze.",
+  "attack_classes_closed": [
+    {
+      "name": "audience_did substitution at apply_atrium_merge",
+      "verdict": "NOT-MEANINGFULLY-CLOSED",
+      "detail": "Per Delta-v3-2 (V1-FROZEN-INTERFACE-DEFERRED.md:171) audience_did at apply_atrium_merge is structurally None — peer_did is transport-principal NOT cap-target. There is no substitution to close because there is no audience to substitute. Path F would add grant_cid as a NEW field carrying provenance, not closing the named audience_did concern.",
+      "citation": "crates/benten-engine/src/engine.rs:1411 audience_did: None; V1-FROZEN-INTERFACE-DEFERRED.md:167-175"
+    },
+    {
+      "name": "grant-not-found at recheck (original D-3-c scope per brief)",
+      "verdict": "PARTIALLY-CLOSED-BUT-DEAD-ENDS",
+      "detail": "Path F closes 'cap-policy at recheck cannot find a grant authorizing THIS write' by carrying the grant identity. But the recheck site at engine.rs:1421 (post-FP-F4 §S3c, ratified 2026-05-24) routes through check_write_with_audience whose v1-beta default delegates to check_write (policy.rs:573); the audience-aware impl is G-COMP-1 deferred per V1-FROZEN-INTERFACE-DEFERRED.md:154-175. Path F's grant_cid would land in the row but the recheck arm consuming it does not yet exist as a production policy override — the closure is conditional on G-COMP-1.",
+      "citation": "crates/benten-engine/src/engine.rs:1421; crates/benten-caps/src/policy.rs:573; V1-FROZEN-INTERFACE-DEFERRED.md:154-175"
+    },
+    {
+      "name": "grant-revoked-after-write at per-row recheck",
+      "verdict": "ALREADY-CLOSED-BY-OTHER-MEANS",
+      "detail": "Phase-3 G16-B-F per-row revocation observability is ALREADY shipped at engine.rs:1372-1387 via is_actor_revoked_for_zone — both zone-shape probes (bare + ':write'). The actor-CID derivation is BLAKE3-of-utf8-bytes-of-first-resolved-peer-DID (engine.rs:1289). Adding grant_cid to the row would offer a different keying axis but does NOT close anything not already closed; the existing typed E_SYNC_REVOKED_DURING_SESSION reject (engine.rs:1382) already fires on revocation observed mid-session.",
+      "citation": "crates/benten-engine/src/engine.rs:1285-1387"
+    },
+    {
+      "name": "scope-substitution attack (L3-r6-r1-1 / FP-F4 fix-pass family)",
+      "verdict": "ALREADY-CLOSED-AT-FP-F4-BINDING-MSG-EXTENSION",
+      "detail": "R6 R1 FP-F4 Bundle L3-r1-1 folded scope INTO binding_message as the 5th segment (authorization_grant.rs:390-425) + bumped BINDING_SIG_DOMAIN v1->v2 at constant BINDING_SIG_DOMAIN (was v1, now v2 then v3 at FP-A). Post-sign scope mutation now flips bytes -> verify_binding returns BindingMismatch. Path F's grant_cid mechanism is orthogonal to this closure.",
+      "citation": "crates/benten-caps/src/authorization_grant.rs:357-425; commit 4b1333b1 R6 R1 FP-F4"
+    },
+    {
+      "name": "audience_pubkey post-sign-mutable (L3-r6-r2-1 BLOCKER / FP-A)",
+      "verdict": "ALREADY-CLOSED-AT-FP-A-VIA-BINDING-MSG-EXTENSION",
+      "detail": "Commit 6204152d (2026-05-25) folded audience_pubkey INTO binding_message as 6th segment + bumped BINDING_SIG_DOMAIN v2->v3. The ratified pattern for closing audience-binding gaps is 'extend the signed envelope', NOT 'carry a separate lookup handle.' Path F violates this ratified pattern by adding grant_cid as a row-level field that the recipient then dereferences — exactly the split-handle shape FP-A retired (audience_pubkey lived OUTSIDE binding_message → Eve-substitution attack).",
+      "citation": "commit 6204152d body; crates/benten-caps/src/authorization_grant.rs:357-365 (v3 domain tag)"
+    }
+  ],
+  "attack_classes_introduced": [
+    {
+      "name": "Grant-CID-substitution-into-row attack",
+      "severity": "MAJOR",
+      "detail": "If grant_cid is added to a row's properties as a new field but NOT folded into the row's canonical-bytes content addressing OR into some signed envelope at apply_atrium_merge, an attacker on the wire can substitute a different grant_cid that points to a grant authorizing some-write-with-overlapping-scope. The substitution is detectable only by the recipient's recheck consulting the resolved grant's scope against the row's actual labels. This is closeable but adds defensive surface that the FP-A pattern (bind into the signed envelope) already obviates.",
+      "mitigation": "Would require grant_cid to be part of the row's canonical-bytes encoding (which it would be if added to Node properties — CIDv1 + DAG-CBOR canonicalization per Inv-10 covers this) AND a signature over the row at the writer that the recipient verifies — which is a NEW signed-envelope construction Path F's brief does not name. Without this, Path F is a wire-substitutable handle, the exact anti-pattern FP-A's v3 binding-msg fix retired."
+    },
+    {
+      "name": "Grant-chain-resolution DoS amplification at sync-merge",
+      "severity": "MAJOR",
+      "detail": "Walking a grant chain (each step is a backend read against a grant CID) per row in apply_atrium_merge multiplies the per-merge cost by chain-depth. The existing Safe-2 #543 MAX_CHAIN_DEPTH=64 ceiling (manifest_envelope_chain_validation.rs:154) bounds the multiplier but a 64-deep chain × N rows per merge is a substantial new attacker-controlled-multiplier surface against the sync hot path. Mitigation = cap-on-cap (e.g. cache chain-walks per (grant_cid, scope)) but that introduces a new TOCTOU window between cached-admit and runtime revocation. Path E avoids this entirely by delegating chain-walk to the existing single Layer-3 rechecker site that fires once per row, not per-step.",
+      "mitigation": "Path F brief does not specify a chain-walk cache; bare Path F = N rows × chain_depth backend reads per merge."
+    },
+    {
+      "name": "Cross-zone-grant-confusion if grant_cid resolves but scope mismatch is silently treated as deny",
+      "severity": "MINOR",
+      "detail": "If the recipient resolves grant_cid and finds a valid unrevoked grant but for a DIFFERENT scope (e.g., zone-A:write but the row is in zone-B), the natural response is deny. But the typed error shape becomes ambiguous: is this 'grant not found' or 'grant found but wrong-scope'? Audit telemetry quality matters at sync-merge; the existing per-row recheck returns typed E_SYNC_REVOKED_DURING_SESSION which carries strong attribution semantics. A new wrong-scope arm needs a distinct typed code or audit pipelines drift.",
+      "mitigation": "Mintable; ErrorCode minting is cheap. But the audit-clarity cost is real."
+    },
+    {
+      "name": "Replay attack on revoked-then-pre-revocation-cached grant_cid",
+      "severity": "MINOR-BUT-PRESENT",
+      "detail": "If a recipient caches grant_cid → grant-content resolution (which Path F essentially requires to avoid the DoS attack above), and that grant is later revoked, the cache must invalidate. The existing per-row recheck consults the in-memory revocation set at engine.rs:1372 which is the source of truth at-call-time. Path F's caching layer would need to share that invalidation channel. Solvable but adds another sync seam."
+    }
+  ],
+  "chain_walk_semantics": {
+    "path_f_verification_flow": [
+      "1. Row arrives via Loro merge with new property `grant_cid: Cid` (Path F assumes this addition)",
+      "2. apply_atrium_merge per-row loop reads grant_cid from the row",
+      "3. Cap-policy receives grant_cid via a new field on CapWriteContext (or via a new method on CapabilityPolicy taking grant_cid) — REQUIRES ADDING A FIELD TO CapWriteContext which is v1-API-FROZEN per V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (CapWriteContext field additions deferred to G-COMP-1)",
+      "4. Cap-policy walks grant chain: resolve grant_cid via backend; if grant is AuthorizationGrant-shaped, verify_binding against current audience; walk up chain via grant's reference to parent grant",
+      "5. At each step verify chain non-widening (per chain_validator.rs::validate_chain_narrowing) + verify the per-grant binding_sig (post-FP-A v3 6-segment)",
+      "6. At root: verify root issuer is a registered user-DID (Layer 1 user-as-root; CLAUDE.md baked-in #18)",
+      "7. Verify root chain matches the row's labels (the row's authorized scope is the leaf cap of the chain)",
+      "8. Verify the leaf grant is not revoked (consult revocation set / system:CapabilityRevocation Nodes)",
+      "9. Admit if all checks pass; else typed reject"
+    ],
+    "cryptographic_basis_for_integrity": "Each AuthorizationGrant carries binding_sig over the 6-segment canonical bytes (BINDING_SIG_DOMAIN_v3 || ucan_cbor || km_cbor || audience_cid || len(scope) || scope_cbor || len(audience_pubkey) || audience_pubkey) per the post-FP-A authorization_grant.rs:357-425 + commit 6204152d. issuer_verifying_key is carried inline (authorization_grant.rs:257). Chain linkage between grants is currently UNDEFINED in the AuthorizationGrant type — there is no parent_grant_cid field. Path F as named would require ADDING parent_grant_cid to AuthorizationGrant which (per the #[non_exhaustive] discipline at authorization_grant.rs:237) is non-breaking for external code but DOES change the canonical bytes shape — requiring another BINDING_SIG_DOMAIN bump (v3->v4) which is the FP-A wire-format-change escape that should not be casually multiplied.",
+    "comparison_to_existing_chain_walkers": "Two existing chain walkers: (a) validate_chain_narrowing (chain_validator.rs) operates on Vec<Scope> — purely structural narrowing, no signature walk; (b) validate_chain_with_manifest_envelope (manifest_envelope_chain_validation.rs:261) operates on Vec<DelegationStep> — does NOT re-verify UCAN signatures (per its doc-comment line 240: 'does NOT re-verify UCAN signatures'), only enforces envelope semantics; (c) UCANBackend::validate_chain_for_audience_at (ucan_grounded.rs:368) is the only existing walker that verifies signatures along a chain. Path F would need to mint a FOURTH chain walker (grant-CID-walker) or fold this onto (c) — feasible but increases the seam count and creates a new question of which walker is authoritative for which call site."
+  },
+  "compromise_impact": [
+    {
+      "compromise": "#11 IVM views coarse-grained read-gate",
+      "impact": "NO-DIRECT-IMPACT",
+      "detail": "Compromise #11 is CLOSED at G15-A (Phase-3 R5 wave-5a) via the per-row materialization gate. Path F operates on the WRITE side at apply_atrium_merge; the READ side simplification Path F's brief speculates about would NOT touch #11's closure. #11 stands on IvmViewReadGate (engine_views.rs) which consults the actor's cap-set independently of any write-time grant_cid."
+    },
+    {
+      "compromise": "#21 napi-cdylib install_module Ed25519 + UCAN-proof-chain bypass",
+      "impact": "NO-DIRECT-IMPACT",
+      "detail": "Compromise #21 is CLOSED at Phase-3 G14-C wave-4b (BLOCKER fix-pass). It addresses napi-cdylib boundary forgery of install_module Ed25519 + UCAN-proof-chain bypass — the boundary is the napi FFI surface, not the sync-merge per-row recheck. Path F at apply_atrium_merge does not interact with the napi install path."
+    },
+    {
+      "compromise": "#23 Wire device-attestation envelope (COLLAPSED to provenance-label + unified-spine)",
+      "impact": "POTENTIAL-CONFLICT",
+      "detail": "Compromise #23 was COLLAPSED at COLLAPSE P3 — the device-attestation envelope's J8 ceiling AND is the single-seam authority enforced at engine.rs:1509-1531 via manifest_envelope_recheck::envelope_ceiling_admits_row. Path F adds a second-seam authority (grant_cid chain-walk) at the same recheck site — re-introducing the parallel-pipe anti-pattern the COLLAPSE explicitly retired ('the device envelope is no longer a distinct trust-root; it is a ceiling the one seam enforces'). Path F violates the COLLAPSE P3 single-seam discipline."
+    },
+    {
+      "compromise": "#26 Manifest-envelope recheck at sync merge boundary (substrate-wired, full chain-walk G-COMP-1 deferred)",
+      "impact": "PATH-F-IS-THIS-ROW",
+      "detail": "Compromise #26 explicitly names the PluginLibrary-driven chain walk as G-COMP-1 deferred (SECURITY-POSTURE.md:2087-2107). Path F's chain-walk substance IS the substantive ProductionManifestEnvelopeRechecker work — but routing that work through grant_cid in the row payload at v1-beta versus the existing rechecker port at engine.rs:1456-1507 is the wrong site. The rechecker port already exists; substantively populating it is the G-COMP-1 deliverable. Path F adds a NEW seam parallel to the existing port — duplicate-substrate."
+    },
+    {
+      "compromise": "#30 unaudited PQ primitives in v1-beta hybrid default",
+      "impact": "POTENTIAL-CROSS-CUT",
+      "detail": "G-CORE-PQ-WIRE wires PQ-hybrid through identity-bearing surfaces. AuthorizationGrant.binding_sig is currently Ed25519-only (authorization_grant.rs:55 imports ed25519_dalek::SigningKey). Path F's chain walk would multiply Ed25519 signature verifications per row by chain-depth — when PQ-hybrid lands, each step becomes hybrid Ed25519⊕ML-DSA-65 verify (~1.7× slower per the ratified PQ-default contract). Per-row × chain-depth × PQ-hybrid amplification is a real cost at the sync hot path. Path E (defer chain-walk to ONE site per row at the rechecker port) avoids this multiplier."
+    },
+    {
+      "compromise": "#31 Drop bundle revocation reach (forever-valid once distributed)",
+      "impact": "NO-DIRECT-IMPACT",
+      "detail": "Compromise #31 governs the Drop bundle (G-CORE-3f) and is explicitly named in CLAUDE.md baked-in #18 as 'revocation cuts future serves, already-derived keys remain decryptable; Drop bundles forever-valid once distributed.' Path F's grant_cid in the sync-merge row does not interact with Drop bundle revocation reach."
+    }
+  ],
+  "edge_cases": [
+    {
+      "case": "Row written without a grant (user-root direct write)",
+      "verdict": "PATH-F-PROBLEMATIC",
+      "detail": "Path F's brief proposes `grant_cid: Option<Cid>` where absent = user-root direct. But the existing per-row recheck at engine.rs:1372 uses the actor_cid derived from peer_did. For a user-root direct write, the user-DID IS the actor; the grant_cid would be None; cap-policy would fall back to whatever default the policy uses — which on GrantBackedPolicy fail-CLOSES if scopes is empty (grant_backed.rs:334) but on the audience-aware default impl delegates to check_write (policy.rs:573). The semantic 'absent grant_cid = user-root' is implicit + fragile; it relies on the policy implementation knowing to interpret None correctly. The existing actor_cid-based path is explicit (the actor IS the user-root or IS attested via DeviceAttestation per CLAUDE.md baked-in #18 layer 1)."
+    },
+    {
+      "case": "Row written via SANDBOX execution",
+      "verdict": "PATH-F-AMBIGUOUS",
+      "detail": "SANDBOX outputs route through the WRITE primitive (CLAUDE.md baked-in #16). The grant authorizing the SANDBOX execution is the cap held by the principal that issued the CALL into SANDBOX — which is captured in AttributionFrame.capability_grant_cid (exec_state.rs:77) at the originating engine. At sync time, the AttributionFrame is serialized + a CID is stored in the merge Version Node property 'attribution_frame_cid' (engine.rs:1655). So the grant_cid for a SANDBOX-mediated write IS ALREADY ON THE WIRE via the attribution_frame_cid property — Path F duplicates this. Path E (substantively populate the existing AttributionFrame.capability_grant_cid slot, currently zero-Cid at engine.rs:1634) reuses the existing surface."
+    },
+    {
+      "case": "Row written by Engine internals (system zones)",
+      "verdict": "PATH-F-WOULD-CONFLICT-WITH-Inv-11",
+      "detail": "System zones bypass user cap policy (the privileged-bypass at grant_backed.rs:425: `if ctx.is_privileged { return Ok(()) }`). The apply_atrium_merge per-row loop already rejects system-zone-prefixed keys at engine.rs:1327-1338 with E_SYNC_DIVERGENT_CID_REJECTED — system-zone writes do not legitimately arrive via sync-merge. Path F's grant_cid for system zone writes is therefore moot (they don't arrive); for the engine-privileged direct writes at the local engine, ctx.is_privileged=true short-circuits before any grant lookup."
+    }
+  ],
+  "invariant_preservation": [
+    {
+      "invariant": "Inv-10 canonical-bytes (DAG-CBOR order-independent)",
+      "verdict": "PRESERVED",
+      "detail": "Adding grant_cid as a new property in the row's Node properties BTreeMap preserves canonical-bytes encoding — BTreeMap ordering + DAG-CBOR canonicalization handles ordering invariance per the existing engine.rs:1650 props insertion pattern. No Inv-10 break."
+    },
+    {
+      "invariant": "Inv-13 immutability (write re-puts of persisted CID fire E_INV_IMMUTABILITY)",
+      "verdict": "PRESERVED",
+      "detail": "If grant_cid is part of the row's Node body, it is part of the CID input — different grant_cid = different CID = no re-put collision. The existing Inv-13 firing matrix at apply_atrium_merge engine.rs:1327-1338 fires on system-zone-prefixed keys in the merge body, which Path F does not change."
+    },
+    {
+      "invariant": "Inv-14 attribution (AttributionFrame per primitive frame)",
+      "verdict": "DUPLICATES-EXISTING-SURFACE",
+      "detail": "AttributionFrame.capability_grant_cid (exec_state.rs:77) already exists as the canonical attribution slot for the grant authorizing a write. At apply_atrium_merge this slot is currently populated as Cid::from_blake3_digest([0u8; 32]) per engine.rs:1634 — a known-zero sentinel marking 'not yet wired.' Path F's grant_cid in the row payload duplicates this slot at a different layer (row property vs attribution frame), creating two sources-of-truth. Inv-14 prefers ONE attribution surface per frame; Path F arguably weakens Inv-14 by introducing a second."
+    }
+  ],
+  "recommended_path": {
+    "primary_recommendation": "Path E (audience-aware enrichment, with structural None at sync sweep sites + substantive populate-site at delegate_capability G-COMP-1) is ALREADY IMPLEMENTED at HEAD per Delta-v3-2 (FP-F4 §S3c, ratified 2026-05-24). Path E preserves the FP-A v3-binding-sig discipline (bind-into-signed-envelope, not split-handle), stays inside the v1-API freeze, and avoids the chain-walk DoS multiplier + PQ-hybrid amplification at the sync hot path. Row D-3-c is appropriately PARTIAL-CLOSED at v1-beta per V1-FROZEN-INTERFACE-DEFERRED.md:154-175; the residual populate-side at delegate_capability is correctly G-COMP-1 destination per the existing rechecker port shape.",
+    "secondary_recommendation_if_path_e_insufficient": "If Path E is judged insufficient by post-this-lens deliberation, the right elaboration is NOT Path F's grant_cid-in-row-payload but rather: (1) substantively populate AttributionFrame.capability_grant_cid (exec_state.rs:77) at apply_atrium_merge (engine.rs:1634, currently zero-Cid sentinel) per the EXISTING surface; (2) extend ProductionManifestEnvelopeRechecker at G-COMP-1 to walk the attribution-carried grant_cid through the existing single rechecker port at engine.rs:1456-1507. This reuses three existing surfaces (AttributionFrame slot + rechecker port + chain validator) instead of minting a row-payload field + a new chain walker + a new ErrorCode family.",
+    "explicit_path_f_rejection_grounds": [
+      "G1: violates COLLAPSE P3 single-seam-authority discipline (engine.rs:1509-1531 narrative)",
+      "G2: violates ratified FP-A v3-binding-sig pattern (bind-into-envelope not split-handle; commit 6204152d)",
+      "G3: requires adding field to CapWriteContext, which V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 explicitly defers to G-COMP-1",
+      "G4: dead-ends at v1-beta because PluginLibrary-driven chain-walk rechecker is G-COMP-1 deferred (Compromise #26)",
+      "G5: duplicates existing AttributionFrame.capability_grant_cid slot (exec_state.rs:77)",
+      "G6: introduces chain-walk DoS multiplier (Safe-2 #543 bound × N rows) at sync hot path",
+      "G7: PQ-hybrid amplification (~1.7× per-step Ed25519⊕ML-DSA-65 verify × chain-depth × N rows when G-CORE-PQ-WIRE lands)"
+    ]
+  },
+  "v1_beta_posture_assessment": "Row D-3-c is APPROPRIATELY-PARTIAL-CLOSED at v1-beta per the existing Delta-v3-2 disposition (V1-FROZEN-INTERFACE-DEFERRED.md:167-175). The structural FP-F4 §S3c wire of check_write_with_audience at the 4 production sites IS the load-bearing v1-beta substrate; the audience-aware substantive populate-side belongs at G-COMP-1 alongside the rest of the Layer-3 substantive rechecker (Compromise #26 G-COMP-1 destination). NO further pre-v1-beta work is needed on Row D-3-c; Path F should be rejected and the row left at its current PARTIAL-CLOSED disposition."
+}
