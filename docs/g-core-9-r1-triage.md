@@ -158,12 +158,12 @@ Under night-shift stance, the orchestrator made 3 ratifications via foundational
 ### Fork 2 — Substrate-frozen-but-consumer-unwired
 
 **Options:**
-- (a) FIX-NOW wire the 5 substrates (WriteBoundaryChainValidator + InstallRecordReplayStore + 3 §8-E hooks + ProductionManifestEnvelopeRechecker + accept_atrium_share) at G-CORE-9 — extends scope by ~300-500 LOC + ~20-30 test pins; the substrates are correctly factored but need WRITE-admission + delegate-cap + install-pipeline wire-up at 7+ call sites; risk: pulling G-CORE-8.2 forward.
+- (a) FIX-NOW wire the 5 substrates (WriteBoundaryChainValidator + InstallRecordReplayStore + 3 §8-E hooks + ProductionManifestEnvelopeRechecker + accept_atrium_share) at G-CORE-9 — extends scope by ~300-500 LOC + ~20-30 test pins; the substrates are correctly factored but need WRITE-admission + delegate-cap + install-pipeline wire-up at 7+ call sites; risk: pulling G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to G-COMP-1) forward.
 - (b) DOC-TIGHTEN — distinguish signature-frozen vs consumption-deferred surfaces in V1-FROZEN-INTERFACE.md sections 8 + 12; author `docs/V1-FROZEN-INTERFACE-DEFERRED.md` enumerating G-COMP-1 destinations; reopen Compromise #26.
 
 **Orchestrator's call:** **(b)** — the FREEZE wave's contract is to lock SIGNATURES at v1-beta, not to ship every consumer. Per `feedback_inverted_prework_post_campaign_phase` reasoning. The substrates' shape is locked correctly; the consumer wire-up is genuine G-COMP-1 work. The honest fix is to make the freeze-doc narrative reflect this.
 
-**Rebuttal window:** if Ben prefers option (a), the work IS scoped at G-CORE-8.2 / G-COMP-1 — pulling it forward to G-CORE-9 doubles this PR's LOC but is consistent with "v1-beta tag means EVERY Layer-1/Layer-2/Layer-3 defense is structurally live." The split is "what does freeze MEAN" — signatures vs end-to-end behavior. Both are legitimate framings; the orchestrator picked the lower-risk one under night-shift discipline.
+**Rebuttal window:** if Ben prefers option (a), the work IS scoped at G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to G-COMP-1) / G-COMP-1 — pulling it forward to G-CORE-9 doubles this PR's LOC but is consistent with "v1-beta tag means EVERY Layer-1/Layer-2/Layer-3 defense is structurally live." The split is "what does freeze MEAN" — signatures vs end-to-end behavior. Both are legitimate framings; the orchestrator picked the lower-risk one under night-shift discipline.
 
 ### Fork 3 — cargo-public-api workflow informational → required-failing
 

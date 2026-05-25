@@ -1,13 +1,30 @@
 # benten-graph — Crate Internals
 
-A plain-English, code-grounded tour of the `benten-graph` crate as it stands at
-HEAD `8141b94` (Phase-4-Foundation close, post tag `phase-4-foundation-close`).
-The crate body has been substantively stable since the Phase-3 close window —
-the last source change was the `docs(phase-rename)` retense at `00f2784`
-2026-05-11, and the last code change was `dcd1275` (class-e bug fixes,
-2026-05-10) + `92bd65e` (W9-T6 verify-on-read, 2026-05-08). This is a READ-ONLY
-audit — no claims here about future plans, just what the code does today and
-where the design seams sit.
+A plain-English, code-grounded tour of the `benten-graph` crate. Last refreshed
+2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass`
+base `4bbc4cac`).
+
+**Phase-4-Foundation baseline** (pre-tag `phase-4-foundation-close`, HEAD `8141b94`):
+the last pre-Phase-4-Meta source change was the `docs(phase-rename)` retense at
+`00f2784` 2026-05-11; the last code change was `dcd1275` (class-e bug fixes,
+2026-05-10) + `92bd65e` (W9-T6 verify-on-read, 2026-05-08).
+
+**Phase-4-Meta-Core code-changes (additive):**
+- **G-CORE-1 (PR #1304)** — `WriteContext::namespace_did` add per CLAUDE.md
+  baked-in #18 + the v1-API-stabilization window; storage-partition seam.
+- **G-CORE-3d (PR #1323)** — per-Node AEAD via the new `aead_wrap.rs` module
+  + the `two_cid_map.rs` plaintext-CID → ciphertext-CID mapping table
+  (durable, redb-backed); per-chunk AEAD ≥64 KiB chunked at IROH_BLOCK_SIZE
+  per RATIFIED-S&C §R6 Spike H+1.2.
+- **G-CORE-6a (PR #1325)** — `SubgraphBuilder::build()` single-fallible-point
+  refactor; verify-pass.
+- **G-CORE-6b (PR #1331)** — SnapshotBlob v1→v2 wire-format bump (cohort-1
+  no-users-yet override; INTERNALS body §3a tracks the new format).
+- **mega6 (#1277)** + **batch-D2-D10 (#1290)** + **P-II (#1295)** — Strategy-C
+  refinement-audit drain consolidations.
+
+This is a READ-ONLY audit — no claims here about future plans, just what the
+code does today and where the design seams sit.
 
 ## 1. What this crate does
 
@@ -248,6 +265,31 @@ buggy subscription.
   iroh-fetch impl. Every operation returns a typed error
   (`Phase3DeferredFetch` for reads, `BackendReadOnly` for writes) so any
   call site fails loud rather than degrading silently.
+
+### `aead_wrap.rs` (Phase-4-Meta-Core, G-CORE-3d PR #1323)
+
+The **per-Node AEAD wrap/unwrap seam** for the Sharing & Confidentiality
+stack. Produces `EncryptedNode` ciphertexts that `benten-drop` carries as
+its `EncryptedContent` payload. Calls into `benten-crypto-suite::aead`
+for the codepoint-dispatched primitive — this crate does NOT instantiate
+AEAD primitives directly (per CLAUDE.md #5 only-call-site rule). The AAD
+binds the plaintext-CID + chunk-index 2-tuple per RATIFIED-S&C §R6 R1
+Bundle 11b retract; `total_chunks` defense deferred to G-COMP-1 per
+V1-FROZEN-INTERFACE-DEFERRED Row D-15a. The per-chunk path is exercised
+when content size exceeds `WHOLE_CONTENT_AEAD_THRESHOLD = 64 KiB`; chunk
+size = `IROH_BLOCK_SIZE = 16 KiB` golden constant pin per
+V1-FROZEN-INTERFACE item 15(g).
+
+### `two_cid_map.rs` (Phase-4-Meta-Core, G-CORE-3d PR #1323)
+
+The **plaintext-CID → ciphertext-CID mapping table** that lets the
+engine resolve a logical (plaintext) CID to the on-disk encrypted
+artifact under encryption-by-default. **Durable (redb-backed)** at this
+crate's layer per V1-FROZEN-INTERFACE item 15(g); the
+`benten-sync::two_cid_store::TwoCidStore` adapter in the sync crate is
+the wave-3e in-memory swap-point for the future
+`iroh_blobs::FsStore` production wire-up. Keys are stored under a
+dedicated table; lookups are O(1) via the redb backend's usual scan.
 
 ## 4. Public API surface
 

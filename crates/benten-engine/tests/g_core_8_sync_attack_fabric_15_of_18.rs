@@ -40,7 +40,7 @@
 //!     V-11 schema-author-trust-list-bypass-via-merge (§4.32)   DISP-B (BELONGS-NAMED-NOW — `crates/benten-platform-foundation/tests/tf7_g_core_7_install_lifecycle_hardening.rs` §4.32 arm; G-CORE-7 merged at #1312)
 //!     V-12 unsigned-or-tampered-install-record-via-merge       SUBSTANTIVE
 //!     V-13 device-attestation-forged-at-plugin-share (Compromise #21) DISP-B (BELONGS-NAMED-NOW — Compromise #21 closure test named in CLAUDE.md baked-in #18 + Phase-3 device-DID-attestation merged at PR #163; META #684 closure surface)
-//!     V-14 audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D) DISP-B (BELONGS-NAMED-NOW — R3-W5's `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs` cross-wave §4-D file)
+//!     V-14 audience-mismatch-via-AuthorizationGrant-and-CapPolicy (§4-D) DISP-B (BELONGS-NAMED-NOW — `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-3 (consumption-deferred to G-COMP-1; previously phantom-cited `cross_wave_3_x_8_authorizationgrant_audience_matches_capabilitypolicy.rs` retargeted at R4b-FP commit 8240a56c; banner-line retargeted at R6-FP-D))
 //!     V-15 chain-validator-skipped-via-merge-path (§4.23)      DISP-B (BELONGS-NAMED-NOW — R3-W4's `g_core_8_write_boundary_user_root_chain_validator_4_23.rs` in this partition; §4.23 structural-always-on)
 //!     V-16 willow-protocol-confidential-sync-replay              DISP-A (OOS — willow parked Phase-5+ Kith watch-list per CLAUDE.md 2026-05-21)
 //!     V-17 garden-grove-untrusted-host-byzantine-merge          DISP-A (OOS — Phase-7+ peers-hold-ciphertext; this Core wave is single-engine sync defense)
@@ -356,7 +356,7 @@ fn v6_default_builder_installs_production_rechecker_not_noop_footgun() {
     assert_eq!(err.code(), ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny);
 
     // The Noop continues returning NotApplicable (preserved at
-    // G-CORE-8) — production glue at G-CORE-8.2 wires the substantive
+    // G-CORE-8) — production glue at G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-6 / Row D-4) wires the substantive
     // rechecker via `Engine::set_manifest_envelope_rechecker`.
     let noop = NoopManifestEnvelopeRechecker;
     assert_eq!(
@@ -559,6 +559,9 @@ fn v12_unsigned_or_tampered_install_record_via_merge_rejected() {
 // the existing G-COMP-1 deferral pattern for the §8-E hook
 // consumption — the audience-mismatch composition rides with Row D-3
 // closure as the audience-aware hook's negative-arm integration pin.
+// **R6-FP-D 2026-05-24:** file-head banner at L43 was also retargeted
+// at R6-FP-D (closing the L13 MIN-1 §3.6j sweep-completeness self-verify
+// residual).
 //
 // Un-ignore-when: G-COMP-1 wave lands Row D-3
 // (`check_write_with_audience` production wire-up); the §4-D

@@ -773,25 +773,84 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 ### Row D-21 — `crates/benten-crypto-suite/INTERNALS.md` authorship
 
+- **CLOSED 2026-05-24 at R6-FP-D L16-MAJOR-1 close.** The
+  `crates/benten-crypto-suite/INTERNALS.md` file was authored at
+  R6-FP-D (this PR) following the
+  `crates/benten-platform-foundation/INTERNALS.md` structural template;
+  the row remains here in the DEFERRED ledger for archaeology
+  (commit history grep-able). The companion `crates/benten-drop/INTERNALS.md`
+  was also authored at the same time (closes the implicit follow-up
+  for the Drop crate).
 - **Frozen surface (v1-beta):** the `benten-crypto-suite` crate is
   item-6-locked at V1-FROZEN-INTERFACE.md (codepoint table + public
   surface frozen at G-CORE-9). The INTERNALS.md doc has no v1-beta
-  signature impact; it is internal architecture-record only.
-- **Deferred consumption (Phase-4-Meta-Composing OR G-COMP-1
-  destination):** author `crates/benten-crypto-suite/INTERNALS.md`
-  following the structure of `crates/benten-caps/INTERNALS.md` covering
-  codepoint table + typed-reject dispatch pattern + SwapMatrix umbrella
-  + 5 named constructors + C11b safety gate + X-Wing vendored combiner
-  provenance + AeadEnvelope/GrantKeyMaterial/AeadKeyMaterial
-  type-collision-resolution name discipline.
-- **v1-beta posture:** missing-but-deferred-not-blocking-tag; the
-  crate's rustdoc + the V1-FROZEN-INTERFACE.md item 6 + the lib.rs
-  module docstring carry the load-bearing architecture narrative at
-  v1-beta. INTERNALS.md is the post-v1-beta architecture-record
-  augmentation.
+  signature impact; it is internal architecture-record only — the
+  authorship at R6-FP-D is doc-coupling completeness, not a freeze
+  contract change.
 - **Anchor:** spec item 6 + V1-FROZEN-INTERFACE.md item 15.d + the
   rename pair at #1344 row 7 (GrantKeyMaterial / AeadKeyMaterial) +
-  L18-r1-5 + L18-r2-3.
+  L18-r1-5 + L18-r2-3 + R6-FP-D L16-MAJOR-1.
+
+---
+
+### Row D-25 — V1-BETA-BREAKING-CHANGES.md ledger completion sweep
+
+- **Frozen surface (v1-beta):** none — this row is a doc-completion
+  obligation, not a code-surface change. The v1-beta wire bytes + the
+  v1-beta public API are wholly set; what is deferred is the
+  *enumeration audit-trail* in the breaking-changes ledger.
+- **Deferred consumption (G-COMP-1 destination):** author per-PR
+  Cohort 2 rows in `docs/V1-BETA-BREAKING-CHANGES.md` for the ~13
+  substrate-canary + Strategy-C-consolidation PRs identified at the
+  R6 R1 L18 phase-wide lens:
+  - **Substrate canaries (8 PRs, ~+321 pub surface):** #1319 G-CORE-3a
+    CANARY (KeyMaterial + AeadEnvelope + structural_kdf + X-Wing wrap);
+    #1323 G-CORE-3d (per-Node AEAD + two-CID map + per-chunk AEAD
+    ≥64 KiB); #1324 G-CORE-3b (RestrictedSpec + AuthorizationGrant +
+    Scope + chain validator — the original mint; rename row already
+    enumerated at #1344); #1307 G-CORE-2 (signature-agility integration
+    crate mint, +101 pub); #1309 G-CORE-5 (D3 VersionDag unification);
+    #1311 G-CORE-4 (D1 CanonicalViews + IVM 5-arm + materializer walk
+    + §4.6 vocab); #1312 G-CORE-7 (install-lifecycle hardening across
+    6 §4.x backlog rows); #1325 Strategy-C wave-1 batch (DSL chunk-1 +
+    G-CORE-3w walker + G-CORE-10 Option-C + G-CORE-6a verify-pass).
+  - **DSL chunk asymmetry (1 PR):** #1326 DSL chunk-2 (closes #663 +
+    #760 + #929 + #931 + #934); the chunk-3 #1339 row is already
+    enumerated at Cohort 2 line 138 — chunks 1+2 are the asymmetric gap.
+  - **Wave-1/2 Strategy-C (2 PRs):** #1235 + #1237 (incl. benten-graph
+    trait shape change — verbatim break-OK signal).
+  - **#707-trust-subset (1 PR):** #1251 (device-revocation/recheck
+    parallel pipes collapse; precursor to the #1271 chain-validation
+    seam consolidation row already enumerated).
+  - **Strategy-C drain batches (6 PRs, net -14 pub surface from
+    deletions):** #1261 + #1262 + #1269 + #1277 + #1282 + #1290 —
+    can roll up into 1 row "Strategy-C refinement-audit drain — net
+    -14 pub-surface across 6 batches" with per-batch PR-cite list.
+- **v1-beta posture:** the v1-beta-tag artifact is whole; the ledger
+  is incomplete-but-not-misleading (the existing 15 PRs ARE
+  ratified-honestly enumerated; the gap is enumeration coverage, not
+  factual error). Downstream consumers reading the ledger see the
+  Cohort 5 cross-reference + can consult `git log
+  phase-4-foundation-close..HEAD` + the per-PR PR-body for the
+  uncovered set. The L18 lens's positive-confirmation findings
+  (l18-r6-3/5/6) verify the existing entries' honesty.
+- **Forward-protection (brief-template mandate, mirror of Row D-22
+  sub-task 6):** every future fix-pass PR authoring brief MUST
+  include as a §3.5b post-fix-doc-coupling pre-flight item:
+  "If the PR introduces a public-API surface change OR a wire-format
+  byte-shape change, enumerate the change in
+  `docs/V1-BETA-BREAKING-CHANGES.md` as a new Cohort row (or extend
+  an existing row) in the SAME PR. Failure to enumerate creates a
+  same-shape recurrence vs L18 R6 R1 phase-wide enumeration gap." This
+  mandate lands at R5-BRIEF-pim-checklist.md authorship (per L15-MAJOR-2
+  pim-checklist consolidation) so the rule fires forward at G-COMP-1
+  wave authoring time.
+- **Anchor:** R6-FP-D L18-r6-1 + l18-r6-2 path-(b) closure (Ben/
+  orchestrator preferred path-(b) over path-(a) full enumeration for
+  cycle-budget; both are HARD RULE 12 compliant; R4b-FP commit
+  8240a56c machinery proven for path-(b)). Cross-cite from
+  `docs/V1-BETA-BREAKING-CHANGES.md` Cohort 5 (the cite line landed in
+  this same commit).
 
 ### Row D-23 — §4-B G-CORE-3 × G-CORE-4 SubgraphSpec live-eval + IVM CanonicalViews subscription invalidation test pin
 

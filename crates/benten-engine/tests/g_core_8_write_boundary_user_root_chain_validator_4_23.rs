@@ -157,10 +157,10 @@ fn write_with_chain_not_terminating_at_user_root_is_denied_fail_closed() {
     // -----------------------------------------------------------------
     // G-CORE-8 §4.23 LANDED (port + Noop default + typed reject + setter).
     // The substantive WRITE-admission STRUCTURAL wire-up into the
-    // engine's commit path is the G-CORE-8.2 follow-up wave
+    // engine's commit path is the G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-1) follow-up wave
     // (HARD-RULE-12 BELONGS-NAMED-NOW disposition; named destination:
     // `crates/benten-engine/src/write_boundary_chain_validator.rs`
-    // module header documents the G-CORE-8.2 follow-up scope —
+    // module header documents the G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-1) follow-up scope —
     // requires audit of every WRITE call site to ensure no admission
     // path is missed; the Ben-decision on the engine-default
     // posture (admit vs reject for un-installed validator) waits on
@@ -225,7 +225,7 @@ fn user_initiated_write_tracing_to_user_root_succeeds_positive_arm() {
     // primitive's `Admitted` outcome maps to Ok(()) — the positive
     // proceed path for a user-rooted chain. The full production
     // WRITE-admission integration test (engine commit path consulting
-    // the install-record-backed UserDidRegistry) is the G-CORE-8.2
+    // the install-record-backed UserDidRegistry) is the G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-1)
     // follow-up; here we exercise the primitive contract that the
     // wire-up will consume.
     // -----------------------------------------------------------------
@@ -288,7 +288,7 @@ fn plugin_did_cannot_mint_root_grant_structural_elevation_defense() {
     // ChainValidator's `ChainNotUserRooted` outcome rejects a plugin-
     // rooted elevation chain with the typed
     // `WriteBoundaryChainNotUserRooted` code at the WRITE-admission
-    // seam. Production WRITE-admission integration is the G-CORE-8.2
+    // seam. Production WRITE-admission integration is the G-COMP-1 (per docs/V1-FROZEN-INTERFACE-DEFERRED.md; phantom-wave 'G-CORE-8.2' retargeted at R6-FP-D to Row D-1)
     // follow-up; the primitive contract IS the substantive defense
     // (mirrors how the manifest_envelope_chain_validation already
     // refuses plugin-rooted chains, but distinct in that this surface

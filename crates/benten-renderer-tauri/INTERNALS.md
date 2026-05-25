@@ -2,6 +2,8 @@
 
 Plain-English deep-dive for the 12th workspace crate, shipped in Phase 4-Foundation wave G24-E. The second `Renderer` trait impl after `BrowserRender` (which lives in `benten-platform-foundation`); host for the Tauri 2.x embedded-webview deployment shape (c) per CLAUDE.md baked-in commitment #17. Read-only audit — no compile / no cargo / no claims about CI state.
 
+Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`). Phase-4-Meta-Core touched this crate minimally — the §8-C bridged-dual-runtime contract ratified 2026-05-18 reaffirms the existing "ZERO tauri/tokio production deps" arch pin at `tests/arch_n_benten_renderer_tauri_dep_direction.rs`; no source-side changes required this phase.
+
 ---
 
 ## 1. What this crate does
