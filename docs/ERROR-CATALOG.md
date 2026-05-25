@@ -1814,7 +1814,7 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Message:** "DSL build error: handler must terminate with RESPOND" (carries the inner [`Diagnostic`])
 - **Context:** `{ message: string, source_position?: Span }`
 - **Fix:** The DSL handler subgraph does not terminate with a RESPOND primitive. Per CLAUDE.md commitment #1 + #4 (12 operation primitives + DAGs only + RESPOND-terminated handlers), the DSL compiler's `emit` build-phase pass refuses to emit a handler missing RESPOND. Add a trailing `.respond(...)` call to the handler chain (or its DSL-method equivalent). Phase-4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8) mints the first-class catalog mirror for the pre-existing `pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND` wire-string constant + `CompileError::Build(_)` variant (post-#790 rename from `CompileError::Emit`).
-- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::emit` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::build` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
 - **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 196 → 197). Routes to `ON_ERROR`.
 
 <!-- reachability: ignore -->

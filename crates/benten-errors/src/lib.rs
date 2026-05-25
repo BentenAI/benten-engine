@@ -1431,9 +1431,10 @@ pub enum ErrorCode {
     /// terminating RESPOND primitive. First-class catalog mirror of the
     /// pre-existing `pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND`
     /// wire-string constant + `CompileError::Build(Diagnostic)` variant
-    /// at `crates/benten-dsl-compiler/src/lib.rs::emit` (the post-AST
+    /// at `crates/benten-dsl-compiler/src/lib.rs::build` (the post-AST
     /// build-phase pass that refuses to emit a handler subgraph lacking
-    /// a RESPOND terminator). Per CLAUDE.md commitment #1 (12 operation
+    /// a RESPOND terminator; historically named `emit` per the lib.rs
+    /// rename note at line 287). Per CLAUDE.md commitment #1 (12 operation
     /// primitives, RESPOND-terminated handlers) this is a structural
     /// invariant the DSL compiler enforces at the build boundary. Maps
     /// to `E_DSL_MISSING_RESPOND`.

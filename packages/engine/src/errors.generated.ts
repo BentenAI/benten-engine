@@ -3209,7 +3209,7 @@ export class EDslUnknownPrimitive extends BentenError {
 /**
  * E_DSL_MISSING_RESPOND
  *
- * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::emit` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
+ * Thrown at: `crates/benten-dsl-compiler/src/lib.rs::build` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
  * Message template: "DSL build error: handler must terminate with RESPOND" (carries the inner [`Diagnostic`])
  */
 export class EDslMissingRespond extends BentenError {
