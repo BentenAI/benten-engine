@@ -319,7 +319,7 @@ impl DevServer {
     }
 
     /// Testing shim — release the slow-transform gate so any thread
-    /// parked inside [`DevServer::call_for_test`] on a `slow_transform`
+    /// parked inside `DevServer::call_for_test` on a `slow_transform`
     /// handler resumes.
     ///
     /// Scope: the gate is per-[`DevServer`] instance — each `DevServer`
@@ -341,7 +341,7 @@ impl DevServer {
     /// version tag — `"v1"` → `"v2"` → …
     ///
     /// Cap grants are NEVER cleared by this call. In-flight evaluations
-    /// (calls that have already begun via [`DevServer::call_for_test`])
+    /// (calls that have already begun via `DevServer::call_for_test`)
     /// complete against their original version — the coordinator holds
     /// the reload until all in-flight calls release their guards.
     ///
@@ -860,7 +860,7 @@ impl DevServerBuilder {
     }
 }
 
-/// Outcome of a [`DevServer::call_for_test`] / [`DevServer::resume_for_test`].
+/// Outcome of a `DevServer::call_for_test` / `DevServer::resume_for_test`.
 #[derive(Debug, Clone)]
 pub struct DevCallOutcome {
     version_tag: String,

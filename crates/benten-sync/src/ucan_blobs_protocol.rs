@@ -119,7 +119,7 @@ pub struct UcanBlobsRequest {
 }
 
 /// Response from the UCAN-gated iroh-blobs ALPN handler — emitted by
-/// the test-instrumented [`UcanBlobsHandler::serve_request_for_test`]
+/// the test-instrumented `UcanBlobsHandler::serve_request_for_test`
 /// arm. The production wire-up delegates the bytes response to
 /// `iroh_blobs::provider::handle_connection`.
 #[derive(Debug, Clone)]
@@ -195,7 +195,7 @@ pub enum UcanBlobsHandlerError {
         now_secs: u64,
     },
     /// The grant has been revoked (recorded in the handler's
-    /// revocation store via [`UcanBlobsHandler::record_revocation_for_test`]).
+    /// revocation store via `UcanBlobsHandler::record_revocation_for_test`).
     /// Couples Phase-3 revocation infrastructure per §R6 reach
     /// (already-decrypted plaintext is NOT revoked; that's the
     /// documented cryptographic limit). Maps to

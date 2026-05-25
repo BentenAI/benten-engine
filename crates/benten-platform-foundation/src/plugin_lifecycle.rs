@@ -710,7 +710,7 @@ where
     /// disabled the §4.37 TOCTOU defense in shipped binaries). Every
     /// caller MUST supply a substantive closure. Production callers
     /// wire `make_engine_replay_check_closure(engine.install_record_replay_store())`;
-    /// test fixtures wire [`crate::testing::noop_replay_check()`]
+    /// test fixtures wire `crate::testing::noop_replay_check()` (cfg-gated under `testing` feature; plain-backtick cite to avoid rustdoc intra-doc-link resolution against private modules in default build)
     /// (admit-all, intentional non-defense; documents the test that
     /// is NOT exercising the replay-defense surface).
     ///
