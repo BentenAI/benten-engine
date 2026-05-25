@@ -82,14 +82,12 @@ fn fake_cid() -> Cid {
 #[test]
 fn check_write_drives_decision_through_the_single_pushdown_seam() {
     let policy = GrantBackedPolicy::new(Arc::new(SeamOnlyReader { answer: true }));
-    let ctx = CapWriteContext {
-        label: "post".into(),
-        pending_ops: vec![PendingOp::PutNode {
-            cid: fake_cid(),
-            labels: vec!["post".into()],
-        }],
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "post".into();
+    ctx.pending_ops = vec![PendingOp::PutNode {
+        cid: fake_cid(),
+        labels: vec!["post".into()],
+    }];
     // Permits iff the seam (not an exact-match path) was consulted.
     policy
         .check_write(&ctx)
@@ -99,14 +97,12 @@ fn check_write_drives_decision_through_the_single_pushdown_seam() {
 #[test]
 fn check_write_denies_through_the_single_seam_when_seam_says_no() {
     let policy = GrantBackedPolicy::new(Arc::new(SeamOnlyReader { answer: false }));
-    let ctx = CapWriteContext {
-        label: "post".into(),
-        pending_ops: vec![PendingOp::PutNode {
-            cid: fake_cid(),
-            labels: vec!["post".into()],
-        }],
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "post".into();
+    ctx.pending_ops = vec![PendingOp::PutNode {
+        cid: fake_cid(),
+        labels: vec!["post".into()],
+    }];
     let err = policy
         .check_write(&ctx)
         .expect_err("seam returning false must deny through the single seam");
@@ -116,10 +112,8 @@ fn check_write_denies_through_the_single_seam_when_seam_says_no() {
 #[test]
 fn check_read_drives_decision_through_the_single_pushdown_seam() {
     let policy = GrantBackedPolicy::new(Arc::new(SeamOnlyReader { answer: true }));
-    let ctx = benten_caps::ReadContext {
-        label: "post".into(),
-        ..Default::default()
-    };
+    let mut ctx = benten_caps::ReadContext::default();
+    ctx.label = "post".into();
     policy
         .check_read(&ctx)
         .expect("seam returning true must permit read; exact-match panics if bypassed");
@@ -153,14 +147,12 @@ fn deep_scope_trailing_wildcard_grant_admitted_through_policy_seam() {
     }));
     let _ = stored_parent;
 
-    let ctx = CapWriteContext {
-        label: required_label.into(),
-        pending_ops: vec![PendingOp::PutNode {
-            cid: fake_cid(),
-            labels: vec![required_label.into()],
-        }],
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = required_label.into();
+    ctx.pending_ops = vec![PendingOp::PutNode {
+        cid: fake_cid(),
+        labels: vec![required_label.into()],
+    }];
     // `store:<label>:write` has >6 colon-segments; only the
     // `store:<label>:*` trailing parent is stored. Pre-#1141 this was
     // silently denied (n>6 drop). Post-#1141 it is admitted.

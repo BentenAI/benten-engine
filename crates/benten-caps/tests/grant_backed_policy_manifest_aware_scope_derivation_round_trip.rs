@@ -131,11 +131,9 @@ fn manifest_aware_scope_derivation_round_trip() {
         .find(|s| s.starts_with(REQUIRES_PREFIX))
         .expect("at least one requires-prefixed scope")
         .clone();
-    let ctx = CapWriteContext {
-        label: String::new(),
-        scope: scope.clone(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = String::new();
+    ctx.scope = scope.clone();
     policy
         .check_write(&ctx)
         .expect("G27-D round-trip: manifest-derived scope must permit when grant present");
@@ -143,11 +141,9 @@ fn manifest_aware_scope_derivation_round_trip() {
     // Step 3: inverse arm — scope outside envelope denies.
     let empty_grants = Arc::new(MockGrants { grants: vec![] });
     let policy_2 = GrantBackedPolicy::new(empty_grants);
-    let ctx_2 = CapWriteContext {
-        label: String::new(),
-        scope: scope.clone(),
-        ..Default::default()
-    };
+    let mut ctx_2 = CapWriteContext::default();
+    ctx_2.label = String::new();
+    ctx_2.scope = scope.clone();
     let err = policy_2.check_write(&ctx_2).expect_err("no grant → deny");
     assert!(
         matches!(err, CapError::Denied { .. }),

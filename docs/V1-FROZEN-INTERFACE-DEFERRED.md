@@ -621,17 +621,34 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   predicated on a future codepoint-mint that already happened). The
   original L11-R2-MINOR-4 closure-evidence was mis-stated.
 
-### ~~Row D-18~~ — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+### ~~Row D-18~~ — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening — **CLOSED at R6 R1 FP-F4 §S4 (rechecker layer, 2026-05-24) + R6-R2 FP Item 9 (engine substrate layer, 2026-05-25)**
 
-> **STATUS: CLOSED.** `is_synthesized_node_id(did_str: &str) -> bool`
-> helper minted at `crates/benten-engine/src/manifest_envelope_recheck.rs`
-> per Δv3-10. The `ProductionManifestEnvelopeRechecker` consults
-> this helper + returns `UnresolvedDeny` when the peer-DID is
-> the `node-id:N` synthesized-fallback shape. The
-> substantive-rechecker-installed-detection-couple narrative is
-> preserved: the Noop default continues to admit (NotApplicable)
-> so default-Noop test fixtures don't over-fire; only the
-> substantive rechecker hardens.
+> **STATUS: CLOSED end-to-end.**
+>
+> **R6 R1 FP-F4 §S4 (2026-05-24) — rechecker layer:**
+> `is_synthesized_node_id(did_str: &str) -> bool` helper minted at
+> `crates/benten-engine/src/manifest_envelope_recheck.rs` per Δv3-10.
+> The `ProductionManifestEnvelopeRechecker` consults this helper +
+> returns `UnresolvedDeny` when the peer-DID is the `node-id:N`
+> synthesized-fallback shape. The substantive-rechecker-installed-
+> detection-couple narrative is preserved: the Noop default continues
+> to admit (NotApplicable) so default-Noop test fixtures don't
+> over-fire; only the substantive rechecker hardens.
+>
+> **R6-R2 FP Item 9 (2026-05-25) — engine substrate layer:**
+> structural defense-in-depth lift: `ManifestEnvelopeRechecker` gains
+> a `fn is_substantive(&self) -> bool` default method (default `true`;
+> Noop overrides to `false`). `Engine::apply_atrium_merge`'s per-row
+> loop now short-circuits with `ManifestEnvelopeRecheckUnresolvedDeny`
+> when both `rechecker.is_substantive()` AND
+> `is_synthesized_node_id(peer_did_str)` hold — BEFORE consulting the
+> rechecker. This makes the synthesized-fallback reject the LOAD-BEARING
+> defense at the engine substrate (CLAUDE.md #18 Layer-3
+> structural-always-on), so a faulty production rechecker impl that
+> admits `node-id:N` is no longer reachable on this code path.
+> Regression-guard at `crates/benten-engine/tests/r6_r2_fp_item_9_d18_substantive_rechecker_detection_couple.rs`
+> exercises a faulty-admit-all substantive rechecker + asserts the
+> engine substrate rejects regardless.
 
 ### Row D-18 (FORENSIC) — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
 
@@ -659,6 +676,10 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   v1-beta posture.
 
 ### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` + lens-scoped pub-type extension `#[non_exhaustive]` application (with cascade)
+
+> **STATUS (2026-05-25):** the 3 NAMED types in the row title — `CapWriteContext`, `ReadContext`, `SuspensionOutcome` — **CLOSED at R6-R2 FP Item 6**. The attribute is applied at the type sites (`crates/benten-caps/src/policy.rs::CapWriteContext` + `crates/benten-caps/src/policy.rs::ReadContext` + `crates/benten-engine/src/engine_wait.rs::SuspensionOutcome`). The cross-crate cascade migrated all `~6` production sites in `benten-engine` to the `default()` + field-mutation pattern; all `~13` benten-caps integration-test sites mechanically converted; `bindings/napi/src/wait.rs` + `crates/benten-eval/benches/wait_suspend_resume_latency.rs` gained wildcard arms. `ReadContext::by_label_and_cid(label, cid, device_cid)` constructor minted at `crates/benten-caps/src/policy.rs` to handle the typed dual-shape case from `primitive_host::check_read_capability`. Audit-test deferral comments at `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` lifted; the SuspensionOutcome arm-coverage pin now exercises the `_` wildcard guard. cargo-public-api baselines `docs/public-api/benten-caps.txt` + `docs/public-api/benten-engine.txt` regenerated.
+>
+> **REMAINING (G-COMP-1 destination):** the R2 EXTENSION lens-scoped pub-type set (~40+ types across `benten-engine` outcome.rs + `benten-ivm` view + `benten-platform-foundation` materializer + `benten-core` Subgraph cluster) — these were NOT closed at Item 6 (item scope was the 3 NAMED types per the title; lifting the EXTENSION set would balloon cascade ~10×). The R2 EXTENSION set carries its own per-class carve-outs documented inline below (e.g., `benten-ivm` view-instance + kernel-internal surface = "no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api baseline shape").
 
 - **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11
   table row enumerates `CapWriteContext` + `ReadContext` +

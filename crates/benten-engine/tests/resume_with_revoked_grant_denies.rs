@@ -92,6 +92,8 @@ fn resume_with_revoked_grant_denies() {
     {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("WAIT handler must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine
         .suspend_to_bytes(&suspended)

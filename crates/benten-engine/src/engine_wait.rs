@@ -182,12 +182,13 @@ pub enum ResumePayload {
 /// Phase-2a G3-B return shape for `call_with_suspension`. A handler may
 /// complete inline or suspend awaiting an external signal.
 ///
-/// `#[non_exhaustive]` application DEFERRED to G-COMP-1 per
-/// V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (G-CORE-9 R1 fix-pass):
-/// the attribute cascades through ~32 workspace test sites that
-/// exhaust-match `Complete + Suspended`; the freeze contract treats
-/// new variants as breaking at v1-beta engineering discipline.
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 — applied at
+/// R6-R2 FP Item 6 (D-17 closure): cross-crate match consumers must
+/// include a `_` wildcard arm. The freeze contract treats new variants
+/// as breaking at v1-beta engineering discipline; this attribute is
+/// the structural enforcement.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum SuspensionOutcome {
     /// The handler ran to completion.
     Complete(Outcome),
@@ -886,17 +887,13 @@ impl Engine {
             // suspend/resume boundary per D-PHASE-3-25. `None` for legacy
             // / non-attested engines preserves prior behavior.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = CapWriteContext {
-                label: "system:WaitResume".into(),
-                actor_cid: head.map(|f| f.actor_cid),
-                scope: "wait:resume".into(),
-                is_privileged: false,
-                actor_hint: None,
-                pending_ops: Vec::new(),
-                authority: benten_caps::WriteAuthority::User,
-                device_cid,
-                audience_did: None,
-            };
+            // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+            let mut ctx = CapWriteContext::default();
+            ctx.label = "system:WaitResume".into();
+            ctx.actor_cid = head.map(|f| f.actor_cid);
+            ctx.scope = "wait:resume".into();
+            ctx.authority = benten_caps::WriteAuthority::User;
+            ctx.device_cid = device_cid;
             // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
             // Default delegates to `check_write`; audience-aware impls
             // observe `ctx.audience_did` (left as None at this wait-

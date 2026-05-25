@@ -73,10 +73,9 @@ impl CapabilityPolicy for InvertedPanicPolicy {
 #[test]
 fn inverted_panic_policy_admits_via_check_write_with_audience() {
     let policy: Arc<dyn CapabilityPolicy> = Arc::new(InvertedPanicPolicy);
-    let ctx = CapWriteContext {
-        label: "user-zone:doc".to_string(),
-        ..Default::default()
-    };
+    // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "user-zone:doc".to_string();
     // Must NOT panic — the policy's check_write_with_audience returns
     // Ok directly without delegating to check_write (which panics).
     assert!(policy.check_write_with_audience(&ctx).is_ok());
@@ -90,10 +89,9 @@ fn inverted_panic_policy_admits_via_check_write_with_audience() {
 #[test]
 fn trait_default_check_write_with_audience_delegates_to_check_write() {
     let policy = benten_caps::NoAuthBackend::new();
-    let ctx = CapWriteContext {
-        label: "user-zone:doc".to_string(),
-        ..Default::default()
-    };
+    // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "user-zone:doc".to_string();
     // NoAuthBackend admits everything; the default
     // check_write_with_audience delegates to check_write.
     assert!(policy.check_write(&ctx).is_ok());

@@ -76,11 +76,9 @@ fn grant_backed_policy_derives_scope_from_write_context_scope_field() {
     // Substantive arm: scope explicitly threaded; label hints at a
     // DIFFERENT scope shape so the regression fires if the policy
     // ever reverts to label-only derivation.
-    let ctx = CapWriteContext {
-        label: "post".into(),
-        scope: "store:custom:write".into(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "post".into();
+    ctx.scope = "store:custom:write".into();
 
     // Would-FAIL-if-no-op'd: revert G27-B; the policy derives
     // `store:post:write` from the label, which doesn't match the
@@ -94,9 +92,7 @@ fn grant_backed_policy_derives_scope_from_write_context_scope_field() {
 /// Compile-time witness: the lift target field exists on `CapWriteContext`.
 #[test]
 fn write_context_scope_field_present_compile_witness() {
-    let ctx = CapWriteContext {
-        scope: "store:any:write".into(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.scope = "store:any:write".into();
     let _: &str = ctx.scope.as_str();
 }

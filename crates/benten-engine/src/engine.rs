@@ -1399,17 +1399,14 @@ impl Engine {
             // mirror.
             if let Some(policy) = self.policy.as_ref() {
                 let scope = format!("{zone}:write");
-                let ctx = benten_caps::CapWriteContext {
-                    label: zone.to_string(),
-                    actor_cid: peer_actor_cid,
-                    scope: scope.clone(),
-                    is_privileged: false,
-                    actor_hint: None,
-                    pending_ops: Vec::new(),
-                    authority: benten_caps::WriteAuthority::User,
-                    device_cid: None,
-                    audience_did: None,
-                };
+                // R6-R2-FP Item 6 (Row D-17): `CapWriteContext` is
+                // `#[non_exhaustive]`; construct via default + field
+                // mutation per the Bundle 3 forward-compat pattern.
+                let mut ctx = benten_caps::CapWriteContext::default();
+                ctx.label = zone.to_string();
+                ctx.actor_cid = peer_actor_cid;
+                ctx.scope = scope.clone();
+                ctx.authority = benten_caps::WriteAuthority::User;
                 // R6 R1 FP-F4 §S3c (Row D-3-c partial close per Δv3-2):
                 // route through `check_write_with_audience` (the §8-E
                 // hook #3 enrichment surface). Default impl delegates
@@ -1473,16 +1470,21 @@ impl Engine {
                 // form for peer_node_ids absent from the local registry.
                 // The literal-empty-set short-circuit catches the
                 // truly-empty-input case (which IS the structural defense
-                // when peer_node_ids is empty); the synthesized-fallback
-                // hardening (rejecting `node-id:N`-prefixed DIDs as
-                // unresolvable) IS DEFERRED to G-COMP-1 per
-                // V1-FROZEN-INTERFACE-DEFERRED.md Row D-18 because the
-                // default-Noop test fixtures rely on the synthesized
-                // fallback admitting (test scenarios register no
-                // peer-DIDs); the hardening would over-fire there. The
-                // proper closure couples the synthesized-fallback reject
-                // to substantive-rechecker-installed detection (NOT the
-                // always-mounted Noop path).
+                // when peer_node_ids is empty).
+                //
+                // **R6-R2-FP Item 9 (Row D-18 closure):** synthesized-
+                // fallback hardening — when a substantive (non-Noop)
+                // rechecker is installed, reject synthesized `node-id:N`
+                // DIDs as unresolvable BEFORE consulting the rechecker.
+                // The substantive-rechecker-detection couple (via
+                // `ManifestEnvelopeRechecker::is_substantive`) prevents
+                // over-firing under the default-Noop test fixtures which
+                // intentionally don't register peer-DIDs. Defense-in-depth:
+                // even though substantive `Production*Rechecker` impls
+                // SHOULD reject `node-id:`-prefixed DIDs on their own,
+                // the engine substrate now enforces this structurally so
+                // a forgetful impl can't admit by accident (CLAUDE.md #18
+                // Layer-3 structural-always-on).
                 match resolved_dids.into_iter().next() {
                     None => {
                         // (b) unresolvable-peer-DID at the merge-recheck
@@ -1498,6 +1500,31 @@ impl Engine {
                         });
                     }
                     Some(peer_did_str) => {
+                        // R6-R2-FP Item 9 (Row D-18): substantive-
+                        // rechecker-detection-coupled synthesized-fallback
+                        // reject. The Noop default returns
+                        // `is_substantive() = false` so test fixtures
+                        // continue to admit synthesized DIDs (the
+                        // pre-Item-9 behavior). Production rechecker
+                        // impls inherit `is_substantive() = true` and
+                        // opt-into the structural hardening.
+                        if rechecker.is_substantive()
+                            && crate::manifest_envelope_recheck::is_synthesized_node_id(
+                                &peer_did_str,
+                            )
+                        {
+                            return Err(EngineError::Other {
+                                code: ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+                                message: format!(
+                                    "apply_atrium_merge: synthesized-fallback peer-DID \
+                                     '{peer_did_str}' rejected under substantive \
+                                     manifest-envelope rechecker at merge boundary \
+                                     (zone='{zone}' key='{key}') — fail-CLOSED per \
+                                     Row D-18 substantive-rechecker-detection couple \
+                                     (CLAUDE.md #18 Layer-3 structural-always-on)"
+                                ),
+                            });
+                        }
                         let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
                         // R6 R2 FP-B (L2-R2-MAJOR-6 closure / Row D-6 wire):
                         // route the outcome through the sync-hydrate consumer

@@ -528,12 +528,9 @@ impl PrimitiveHost for Engine {
             (_, None) => benten_caps::ReadContext::by_label_only(label),
             (false, Some(cid)) => {
                 let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                benten_caps::ReadContext {
-                    label: label.to_string(),
-                    target_cid: Some(*cid),
-                    device_cid,
-                    ..Default::default()
-                }
+                // R6-R2-FP Item 6 (Row D-17): non_exhaustive — use typed
+                // constructor for the label-AND-cid dual-shape case.
+                benten_caps::ReadContext::by_label_and_cid(label, *cid, device_cid)
             }
         };
         self.check_read_ctx(&ctx)
@@ -622,11 +619,10 @@ impl PrimitiveHost for Engine {
             // policies can dispatch per-device per D-PHASE-3-25.
             // `None` for legacy / non-attested engines.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::CapWriteContext {
-                label: required.to_string(),
-                device_cid,
-                ..Default::default()
-            };
+            // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+            let mut ctx = benten_caps::CapWriteContext::default();
+            ctx.label = required.to_string();
+            ctx.device_cid = device_cid;
             // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
             // Default delegates to `check_write`; audience-aware impls
             // observe `ctx.audience_did` (left as None at evaluator-
