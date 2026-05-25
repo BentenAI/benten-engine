@@ -552,6 +552,25 @@ pub fn run_cite_drift_check(root: &Path) -> Vec<Finding> {
         let Ok(text) = fs::read_to_string(input) else {
             continue;
         };
+
+        // File-level exemption marker (R6-R2-FP-OD 2026-05-25 elegance-pass
+        // extension per `feedback_extra_reflection_pass_for_elegant_permanent_shape`):
+        // Historical narrative docs (campaign retrospectives, frozen-at-write
+        // forensic logs, NIGHT-SHIFT-LOGs, decision records, phase-N retros)
+        // legitimately use line-precision cites as snapshots-in-time — promoting
+        // them to symbol form would lose temporal-precision (the cite's value
+        // is "what was at THIS line at THIS moment", not "navigate to the live
+        // symbol"). The file-level marker honors that intent without weakening
+        // the cite-drift discipline for living docs.
+        //
+        // Author convention: add `<!-- cite-drift-exempt-file: <reason> -->`
+        // at the top of the historical narrative file. Per-line exempt
+        // (`<!-- cite-drift-exempt -->`) remains the right tool for one-off
+        // cites in otherwise-living docs.
+        if text.contains("<!-- cite-drift-exempt-file:") {
+            continue;
+        }
+
         for (line_idx, line) in text.lines().enumerate() {
             let line_no = line_idx + 1;
 
