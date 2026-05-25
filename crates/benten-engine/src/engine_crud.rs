@@ -226,6 +226,29 @@ impl Engine {
         Ok(self.backend.get_edge(cid)?)
     }
 
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::get_edge`]. Engine-internal callers
+    /// (canonical Benten-owned boundary callers — e.g. the napi binding
+    /// at boundaries that lack a caller-supplied principal) thread
+    /// [`crate::ENGINE_INTERNAL_PRINCIPAL_CID`] through here; non-trusted
+    /// principals (plugin reads, Atrium sync, etc.) thread their own
+    /// principal so the cap policy observes the attribution.
+    ///
+    /// Behaviour at v1-beta is unchanged versus the un-attributed
+    /// `get_edge` (Edges have no per-Edge ReadContext gating in the
+    /// current cap policy; the attribution is forensic — it surfaces to
+    /// future cap-policy variants that gate edges per-principal). The
+    /// signature is the principal-bearing seam so the napi migration is a
+    /// one-line change and a future per-principal edge gate is a single-
+    /// site policy addition.
+    ///
+    /// # Errors
+    /// Forwards [`Engine::get_edge`] errors.
+    pub fn get_edge_as(&self, principal: &Cid, cid: &Cid) -> Result<Option<Edge>, EngineError> {
+        let _ = principal; // Forensic threading — see docstring.
+        self.get_edge(cid)
+    }
+
     /// Delete an Edge by CID.
     pub fn delete_edge(&self, cid: &Cid) -> Result<(), EngineError> {
         if self.is_read_only_snapshot() {
@@ -252,11 +275,41 @@ impl Engine {
         Ok(self.backend.edges_from(cid)?)
     }
 
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::edges_from`]. The Option-C `DeniedRead`
+    /// collapse fires against the principal-bearing `ReadContext` so a
+    /// non-trusted principal observing a denied source-Node sees an
+    /// empty Vec, symmetric with the no-edges shape. Behaviour vs the
+    /// un-attributed surface differs only when the cap policy keys on
+    /// `actor_cid`.
+    ///
+    /// # Errors
+    /// Forwards backend + cap-policy errors.
+    pub fn edges_from_as(&self, principal: &Cid, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
+        if self.read_denied_for_cid_as(principal, cid)? {
+            return Ok(Vec::new());
+        }
+        Ok(self.backend.edges_from(cid)?)
+    }
+
     /// Return every Edge whose `target == cid`.
     ///
     /// Option C applies: see [`Engine::edges_from`].
     pub fn edges_to(&self, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
         if self.read_denied_for_cid(cid)? {
+            return Ok(Vec::new());
+        }
+        Ok(self.backend.edges_to(cid)?)
+    }
+
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::edges_to`]. Mirrors
+    /// [`Engine::edges_from_as`] but for inbound edges.
+    ///
+    /// # Errors
+    /// Forwards backend + cap-policy errors.
+    pub fn edges_to_as(&self, principal: &Cid, cid: &Cid) -> Result<Vec<Edge>, EngineError> {
+        if self.read_denied_for_cid_as(principal, cid)? {
             return Ok(Vec::new());
         }
         Ok(self.backend.edges_to(cid)?)
@@ -291,6 +344,19 @@ impl Engine {
         // backend miss must NOT report "denied" (no leakage signal), so
         // we additionally confirm the Node actually exists.
         let denied_or_absent = self.read_node_inner(cid, None)?.is_none();
+        Ok(denied_or_absent && self.backend.get_node(cid)?.is_some())
+    }
+
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** principal-bearing companion of
+    /// [`Self::read_denied_for_cid`]. Thread `Some(*principal)` onto the
+    /// canonical [`Self::read_node_inner`] so the cap policy observes the
+    /// attribution. Used by the `_as` edge readers
+    /// ([`Engine::edges_from_as`] / [`Engine::edges_to_as`]).
+    fn read_denied_for_cid_as(&self, principal: &Cid, cid: &Cid) -> Result<bool, EngineError> {
+        if self.policy.as_deref().is_none() {
+            return Ok(false);
+        }
+        let denied_or_absent = self.read_node_inner(cid, Some(*principal))?.is_none();
         Ok(denied_or_absent && self.backend.get_node(cid)?.is_some())
     }
 

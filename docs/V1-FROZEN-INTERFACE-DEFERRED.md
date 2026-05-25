@@ -75,19 +75,33 @@ Each row: (i) frozen surface (where the signature locks at v1-beta),
 (iii) v1-beta posture (what the binary actually enforces / does not
 enforce at v1-beta), (iv) Compromise / spec anchor.
 
-### ~~Row D-1~~ — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context) — **CLOSED at R6 R1 FP-F4 §S1** (2026-05-24)
+### ~~Row D-1~~ — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context) — **CLOSED at R6 R1 FP-F4 §S1** (2026-05-24) — **SHARPENED at R6 R2 FP-B** (2026-05-25)
 
-> **STATUS: CLOSED.** Per Ben PM-ratified F1 path-(a) full ~13-site
-> cascade ("if we're going to want to do them all eventually, then I
-> say do the full ~13-site cascade now"), the `WriteBoundaryChainValidator`
-> consumption is now structurally-always-on at all 13 WRITE entry
-> points (engine_crud × 5 + engine_caps × 2 + engine_views × 1 +
-> engine_modules × 2 + engine_diagnostics × 1 + engine_wait × 1 +
-> handler_versions × 1) via the new `Engine::admit_write_chain` helper
-> + sealed `WriteAdmissionFrame`. Layer-1 user-as-root invariant is
+> **STATUS: CLOSED (sharpened).** Per Ben PM-ratified F1 path-(a) full
+> ~13-site cascade ("if we're going to want to do them all eventually,
+> then I say do the full ~13-site cascade now"), the
+> `WriteBoundaryChainValidator` consumption is now structurally-
+> always-on at **14** WRITE entry points (engine_crud × 5 + engine_caps
+> × 2 + engine_views × 1 + engine_modules × 2 + engine_diagnostics × 1
+> + engine_wait × 1 + handler_versions × 1 + **R6 R2 FP-B: apply_atrium_merge
+> per-row chain-bearing × 1**) via the new `Engine::admit_write_chain`
+> helper + sealed `WriteAdmissionFrame`.
+>
+> **R6 R2 FP-B (L2-R2-MAJOR-1 closure):** pre-FP-B 13 of 13 sites
+> passed `WriteAdmissionFrame::engine_internal()`; the
+> `delegate_capability` site was the **only** chain-bearing caller.
+> Inbound-sync per-row writes routed only through `append_version`
+> (engine_internal frame), so the WriteBoundaryChainValidator never
+> observed the peer-DID at row admission. Post-FP-B the
+> `apply_atrium_merge` per-row loop presents a
+> `WriteAdmissionFrame::with_chain(peer_actor_cid, peer_did)` frame,
+> closing the asymmetry where outbound writes were chain-walked but
+> inbound sync rows were not. Layer-1 user-as-root invariant is
 > structurally enforced at every WRITE admission when a production
-> validator is installed. Row retained for forensic context per
-> pim-13 / §3.12.
+> validator is installed; 2 of 14 sites are chain-bearing
+> (delegate_capability + apply_atrium_merge per-row); 12 are
+> engine-internal frame. Row retained for forensic context per pim-13
+> / §3.12.
 
 ### Row D-1 (FORENSIC) — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context)
 
@@ -254,14 +268,24 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   ingest).
 - **Anchor:** Compromise #26 retense; CLAUDE.md #18 Layer-2.
 
-### ~~Row D-6~~ — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+### ~~Row D-6~~ — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24) — **WIRED at R6 R2 FP-B** (2026-05-25)
 
-> **STATUS: CLOSED.** `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome`
-> minted as the §4.25 sync-hydrate handshake-time consumption surface
-> for `ManifestEnvelopeRecheckUnresolvedDeny` + `PluginDelegationOutsideManifestEnvelope`
-> ErrorCode arms. The `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`
-> named-pin destination is now wired (the §4.36 merge-time +
-> §4.25 hydrate-time both consume the shared primitive).
+> **STATUS: CLOSED + WIRED.** `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome`
+> minted at R6 R1 FP-F4 §S4 as the §4.25 sync-hydrate handshake-time
+> consumption surface. **R6 R2 FP-B (L2-R2-MAJOR-6 closure):** the
+> helper was minted but had ZERO production callers (verified by
+> §3.5n grep 2026-05-25). Post-FP-B the merge boundary at
+> `apply_atrium_merge` per-row routes the recheck outcome through
+> `sync_hydrate_consume_recheck_outcome` (forensic parity arm — the
+> typed-error decision still surfaces via the engine-side
+> `outcome_to_row_reject`; the hydrate consumer is the parity-with-
+> handshake observability arm). The new
+> `manifest_envelope_recheck::outcome_to_error_code` projection helper
+> bridges the two surfaces' shapes. The
+> `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`
+> named-pin destination is now wired (the §4.36 merge-time + §4.25
+> hydrate-time both consume the shared primitive; per-row consultation
+> now exercises both).
 
 ### Row D-6 (FORENSIC) — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs
 

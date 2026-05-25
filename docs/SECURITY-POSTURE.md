@@ -282,7 +282,23 @@ per-iteration check, at the cost of the O(N) backend read) and
 wall-clock bound on the TOCTOU window (auditor finding
 [g4-p2-uc-2](../.addl/phase-1/r5-g4-pass2-ucan-capability-auditor.json)
 — TRANSFORM-heavy handlers can push the 100-iteration cap past 10
-minutes of wall-clock time). The deferred integration tests
+minutes of wall-clock time).
+
+**R6 R2 FP-B (2026-05-25) — wall-clock half WIRED.** The
+`CapabilityPolicy::wallclock_refresh_ceiling()` trait method (default
+300s per §9.13) is now consumed by `primitive_host.rs::check_capability`
+at every batch boundary — previously the method existed but had ZERO
+production callers, leaving the wall-clock TOCTOU half UNCLOSED in
+shipped binaries. Post-FP-B a revocation-sensitive backend can tighten
+the bound observably: a policy returning a 60-second ceiling forces a
+refresh every 60s of monotonic elapsed regardless of iteration count.
+Pinned at
+`crates/benten-engine/tests/tf_compromise_1_wallclock_refresh_fires.rs`
+(grep-based source pin asserts the consumer call site exists; trait-
+surface arms pin the policy method's reachability). The remaining
+`schedule_revocation_at_iteration` API on GrantReader + populated
+`iterate_write_handler` fixture (the iteration-count half) stays
+deferred. The deferred integration tests
 `capability_revoked_mid_iteration_denies_subsequent_batches` and
 `writes_in_current_batch_are_not_retroactively_denied` in
 `crates/benten-caps/tests/toctou_iteration.rs` remain `#[ignore]`

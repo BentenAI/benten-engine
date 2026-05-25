@@ -232,7 +232,8 @@ mod napi_surface {
     use std::time::Duration;
 
     use benten_core::{Node as CoreNode, Value};
-    use benten_engine::{Engine as InnerEngine, EngineBuilder, ViewCreateOptions};
+    use benten_engine::production_engine_builder::ProductionEngineBuilder;
+    use benten_engine::{Engine as InnerEngine, ViewCreateOptions};
     use napi::bindgen_prelude::*;
     use napi_derive::napi;
 
@@ -274,9 +275,21 @@ mod napi_surface {
     #[napi]
     impl Engine {
         /// Open or create an engine against a local redb file.
+        ///
+        /// **R6 R2 FP-B (L2-MAJOR-5 closure):** routes through
+        /// [`ProductionEngineBuilder::open`] which installs the substantive
+        /// `ProductionManifestEnvelopeRechecker` (Row D-4 + Row D-18). The
+        /// Phase-4-Meta-Core posture at v1-beta is: every napi `Engine`
+        /// construction site reaches a production-substrate-bearing engine
+        /// (NOT a raw `EngineBuilder` Noop). The compile-test pin at
+        /// `bindings/napi/tests/r6_r1_fp_c_napi_engine_routes_through_production_builder.rs`
+        /// + this site's own runtime path together close the substrate-honesty
+        /// gap that L2-MAJOR-5 ground-truth-verified at PR #1351's HEAD.
         #[napi(constructor)]
         pub fn new(path: String) -> napi::Result<Self> {
-            let inner = InnerEngine::open(&path).map_err(engine_err)?;
+            let inner = ProductionEngineBuilder::new()
+                .open(&path)
+                .map_err(engine_err)?;
             Ok(Self {
                 inner: Arc::new(inner),
             })
@@ -306,12 +319,36 @@ mod napi_surface {
             // `system:CapabilityGrant` / `system:CapabilityRevocation`
             // Nodes; the underlying UCAN proof-chain validator lives
             // at `benten_caps::backends::UCANBackend` (G14-B wave-4b).
-            let builder = match policy {
-                PolicyKind::NoAuth => EngineBuilder::new(),
-                PolicyKind::Ucan => EngineBuilder::new().capability_policy_ucan_durable(),
-                PolicyKind::GrantBacked => EngineBuilder::new().capability_policy_grant_backed(),
-            };
-            let inner = builder.open(&path).map_err(engine_err)?;
+            // R6 R2 FP-B (L2-MAJOR-5 closure): route through
+            // `ProductionEngineBuilder` so the substantive
+            // `ProductionManifestEnvelopeRechecker` is installed for every
+            // policy variant. We thread the policy-specific configuration
+            // through `inner_mut()` so the production substrate (Row D-4 /
+            // Row D-18 + future Row D-1 production validator hangs) wraps
+            // the policy-bearing engine without re-implementing the
+            // builder chain.
+            let mut production = ProductionEngineBuilder::new();
+            match policy {
+                PolicyKind::NoAuth => {
+                    // No-op: default builder + production substrate.
+                }
+                PolicyKind::Ucan => {
+                    // Replace the inner builder so the policy chain
+                    // applies. `inner_mut` returns the mutable inner
+                    // EngineBuilder; we swap in a configured one via
+                    // `mem::replace` (the EngineBuilder consumes-self
+                    // chain shape requires this swap).
+                    let inner_ref = production.inner_mut();
+                    let configured = std::mem::take(inner_ref).capability_policy_ucan_durable();
+                    *inner_ref = configured;
+                }
+                PolicyKind::GrantBacked => {
+                    let inner_ref = production.inner_mut();
+                    let configured = std::mem::take(inner_ref).capability_policy_grant_backed();
+                    *inner_ref = configured;
+                }
+            }
+            let inner = production.open(&path).map_err(engine_err)?;
             Ok(Self {
                 inner: Arc::new(inner),
             })
@@ -362,10 +399,18 @@ mod napi_surface {
         ///
         /// Returns `{ cid, existsInBackend, deniedByPolicy, notFound }`.
         /// See named compromise #2 in `docs/SECURITY-POSTURE.md`.
+        ///
+        /// **R6 R2 FP-B (L10-MAJ-1 closure):** routes through the
+        /// principal-bearing `diagnose_read_as` with
+        /// `ENGINE_INTERNAL_PRINCIPAL_CID` per CLAUDE.md baked-in #18
+        /// + the F2 napi migration precedent.
         #[napi]
         pub fn diagnose_read(&self, cid: String) -> napi::Result<serde_json::Value> {
             let parsed = parse_cid(&cid)?;
-            let info = self.inner.diagnose_read(&parsed).map_err(engine_err)?;
+            let info = self
+                .inner
+                .diagnose_read_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)
+                .map_err(engine_err)?;
             let mut map = serde_json::Map::new();
             map.insert("cid".into(), serde_json::Value::from(info.cid.to_base32()));
             map.insert(
@@ -427,10 +472,18 @@ mod napi_surface {
         }
 
         /// Retrieve an Edge by CID. Returns `null` on miss.
+        ///
+        /// **R6 R2 FP-B (L10-MAJ-1 closure):** routes through the
+        /// principal-bearing `get_edge_as` with
+        /// `ENGINE_INTERNAL_PRINCIPAL_CID` per CLAUDE.md baked-in #18.
         #[napi]
         pub fn get_edge(&self, cid: String) -> napi::Result<Option<serde_json::Value>> {
             let parsed = parse_cid(&cid)?;
-            match self.inner.get_edge(&parsed).map_err(engine_err)? {
+            match self
+                .inner
+                .get_edge_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)
+                .map_err(engine_err)?
+            {
                 Some(edge) => Ok(Some(edge_to_json(&edge))),
                 None => Ok(None),
             }
@@ -444,18 +497,30 @@ mod napi_surface {
         }
 
         /// All Edges whose `source` is `cid`.
+        ///
+        /// **R6 R2 FP-B (L10-MAJ-1 closure):** routes through
+        /// `edges_from_as` with `ENGINE_INTERNAL_PRINCIPAL_CID`.
         #[napi]
         pub fn edges_from(&self, cid: String) -> napi::Result<Vec<serde_json::Value>> {
             let parsed = parse_cid(&cid)?;
-            let edges = self.inner.edges_from(&parsed).map_err(engine_err)?;
+            let edges = self
+                .inner
+                .edges_from_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)
+                .map_err(engine_err)?;
             Ok(edges.iter().map(edge_to_json).collect())
         }
 
         /// All Edges whose `target` is `cid`.
+        ///
+        /// **R6 R2 FP-B (L10-MAJ-1 closure):** routes through
+        /// `edges_to_as` with `ENGINE_INTERNAL_PRINCIPAL_CID`.
         #[napi]
         pub fn edges_to(&self, cid: String) -> napi::Result<Vec<serde_json::Value>> {
             let parsed = parse_cid(&cid)?;
-            let edges = self.inner.edges_to(&parsed).map_err(engine_err)?;
+            let edges = self
+                .inner
+                .edges_to_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &parsed)
+                .map_err(engine_err)?;
             Ok(edges.iter().map(edge_to_json).collect())
         }
 
@@ -857,7 +922,12 @@ mod napi_surface {
             view_id: String,
             _query: serde_json::Value,
         ) -> napi::Result<serde_json::Value> {
-            let outcome = self.inner.read_view(&view_id).map_err(engine_err)?;
+            // R6 R2 FP-B (L10-MAJ-1 closure): route through
+            // `read_view_as` with ENGINE_INTERNAL_PRINCIPAL_CID.
+            let outcome = self
+                .inner
+                .read_view_as(&benten_engine::ENGINE_INTERNAL_PRINCIPAL_CID, &view_id)
+                .map_err(engine_err)?;
             Ok(outcome_to_json(&outcome))
         }
 
@@ -1552,7 +1622,12 @@ mod napi_surface {
         #[cfg(not(target_arch = "wasm32"))]
         #[napi(factory, js_name = "fromSnapshotBlob")]
         pub fn from_snapshot_blob(bytes: Buffer) -> napi::Result<Self> {
-            let inner = InnerEngine::from_snapshot_blob(bytes.as_ref()).map_err(engine_err)?;
+            // R6 R2 FP-B (L2-MAJOR-5 closure): route through
+            // ProductionEngineBuilder so the substantive
+            // ProductionManifestEnvelopeRechecker is installed even on
+            // snapshot-blob hydration.
+            let inner =
+                ProductionEngineBuilder::from_snapshot_blob(bytes.as_ref()).map_err(engine_err)?;
             Ok(Self {
                 inner: Arc::new(inner),
             })

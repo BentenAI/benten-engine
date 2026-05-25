@@ -92,6 +92,19 @@ benten-errors = { workspace = true }
 benten-eval = { path = "../benten-eval", features = ["diag"] }
 benten-graph = { path = "../benten-graph" }
 benten-ivm = { path = "../benten-ivm" }
+# R6 R2 FP-B (L6-r6r2-l6-1 closure): benten-engine takes a NARROW
+# production dep on benten-platform-foundation so the engine-side
+# `capability_policy_install_consent` adapter can `impl
+# InstallConsentPolicy` (trait lives in platform-foundation per the
+# install-pipeline boundary). Cycle-safe: benten-platform-foundation
+# does NOT depend on benten-engine in production (only dev), and does
+# NOT depend on benten-caps in production (the original install_consent
+# module-doc warned of a cycle but the actual link graph permits this
+# placement; benten-caps → platform-foundation prod-dep already exists,
+# benten-platform-foundation → benten-caps would close the cycle,
+# benten-engine → benten-platform-foundation + benten-caps stays
+# strictly downstream of both).
+benten-platform-foundation = { path = "../benten-platform-foundation" }
 blake3 = { workspace = true }
 # Phase-3 R5 wave-9 W9-T5 (§6.11) — workspace-level base64 codec for
 # `manifest_signing.rs`. Replaces the previous ~80 LOC inline base64
@@ -229,15 +242,13 @@ iroh = { version = "1.0.0-rc.0", default-features = false, features = ["tls-ring
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }
-# Phase 4-Foundation G24-A: admin UI v0 integration test crate consumes
-# the canonical 4-category navigation constants
-# (`INDEXEDDB_FORBIDDEN_STORES`, `WINTERTC_FORBIDDEN_APIS`,
-# `NAV_CATEGORIES`, `build_admin_ui_v0_subgraph`, etc.) from the
-# admin-UI-v0 module that lives in `benten-platform-foundation`. This
-# is a dev-dep ONLY — production `benten-engine` does NOT depend on
-# `benten-platform-foundation` (preserves arch-r1-1 thinness; pinned
-# by `crates/benten-platform-foundation/tests/arch_n_benten_platform_foundation_dep_direction.rs`).
-benten-platform-foundation = { path = "../benten-platform-foundation" }
+# R6 R2 FP-B (L6-r6r2-l6-1 closure): platform-foundation is now a
+# production dep (see [dependencies] above for rationale + cycle-safety
+# analysis). The dev-dep duplicate previously listed here is collapsed
+# into the prod entry above. Test crates that consume admin-UI-v0
+# constants (`INDEXEDDB_FORBIDDEN_STORES`, `WINTERTC_FORBIDDEN_APIS`,
+# `NAV_CATEGORIES`, `build_admin_ui_v0_subgraph`, etc.) reach them
+# through the production dep — no separate dev-dep needed.
 # Phase 2a R3 tests: proptest + serde + serde_ipld_dagcbor reach into the
 # DAG-CBOR schema directly for tamper-injection paths (notably
 # `resume_with_missing_attribution_triple_rejects` derives `Serialize`
