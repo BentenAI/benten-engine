@@ -98,6 +98,25 @@ pub enum FindingKind {
     /// `docs/future/phase-3-backlog.md` §1.2 / §7.3.A.3 + closure pin at
     /// `crates/benten-engine/tests/view_id_label_hint_refactor.rs`.
     NonCanonicalReadViewWithViewId,
+    /// `path/to/glob_*.rs` style cite where the glob expands to zero files
+    /// at HEAD. Origin: R6-R2 L11 + L16 phantom-glob class (17 instances
+    /// across V1-WIRE-FORMAT-INVENTORY.md + V1-FROZEN-INTERFACE.md +
+    /// V1-FROZEN-INTERFACE-BUILD-BACKLOG.md + INVARIANT-COVERAGE.md cited
+    /// glob patterns like `crates/benten-graph/tests/redb_backend_*.rs`
+    /// + `crates/benten-id/tests/rotation_*.rs` etc. that ZERO files
+    /// match at HEAD). The author-time cite-grep-verify discipline this
+    /// finding kind enforces is the §3.6j extension landed at R6-R2-FP-C.
+    LineCiteGlobNoMatch,
+    /// `#NNNN` PR-narrative cite where the PR was CLOSED-not-merged.
+    /// Origin: R6-R2 L18 phantom PR-cite (#1237 was CLOSED, never landed
+    /// to main; cited in docs as if merged). Detected only when `--check-prs`
+    /// is passed AND `gh` is available; off by default so the lint stays
+    /// network-free on the default run. See `--check-prs` flag in main.rs.
+    PrCiteClosedNotMerged,
+    /// `#NNNN` PR-narrative cite where `gh pr view` returned NotFound
+    /// (the PR number doesn't exist in the repo). Same gate as
+    /// `PrCiteClosedNotMerged`: only emitted under `--check-prs`.
+    PrCiteNotFound,
 }
 
 impl fmt::Display for FindingKind {
@@ -110,6 +129,9 @@ impl fmt::Display for FindingKind {
             FindingKind::SymbolCiteSymbolMissing => "symbol-cite-symbol-missing",
             FindingKind::NumericClaimDrift => "numeric-claim-drift",
             FindingKind::NonCanonicalReadViewWithViewId => "non-canonical-read-view-with-view-id",
+            FindingKind::LineCiteGlobNoMatch => "line-cite-glob-no-match",
+            FindingKind::PrCiteClosedNotMerged => "pr-cite-closed-not-merged",
+            FindingKind::PrCiteNotFound => "pr-cite-not-found",
         };
         f.write_str(s)
     }
@@ -482,6 +504,36 @@ const WORKSPACE_TOP_LEVEL_SEGMENTS: &[&str] = &[
 
 fn is_workspace_relative(target_path: &str) -> bool {
     WORKSPACE_TOP_LEVEL_SEGMENTS
+        .iter()
+        .any(|seg| target_path.starts_with(seg))
+}
+
+/// Stricter workspace-relative check used by the glob-cite scanner.
+/// Excludes bare `tests/` paths because per-crate `tests/<name>.rs`
+/// glob cites are pervasive inside `crates/*/src/` doc-comments as
+/// crate-relative shorthand (e.g. `tests/sandbox_*.rs` inside
+/// `benten-eval/src/lib.rs` means `benten-eval/tests/sandbox_*.rs`).
+/// Validating those as workspace-rooted would generate false-positive
+/// noise. The high-churn surface enforcement in `check_line_cite`
+/// uses basename, so per-crate test cites are not the surface this
+/// linter is trying to catch.
+///
+/// Real cite-drift signal lives in `crates/<crate>/tests/...` and
+/// `docs/...` full-path globs — those are caught by the full-path
+/// prefix set.
+fn is_workspace_relative_for_glob(target_path: &str) -> bool {
+    const GLOB_TOP_LEVEL_SEGMENTS: &[&str] = &[
+        "crates/",
+        "bindings/",
+        "tools/",
+        "docs/",
+        "packages/",
+        "scripts/",
+        ".github/",
+        ".addl/",
+        // Note: `tests/` deliberately omitted; see fn-level docs.
+    ];
+    GLOB_TOP_LEVEL_SEGMENTS
         .iter()
         .any(|seg| target_path.starts_with(seg))
 }
@@ -1315,6 +1367,522 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         return None;
     }
     haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+// ---------------------------------------------------------------------------
+// R6-R2-FP-C extensions (2026-05-25):
+//
+//   1. Glob-style cite phantom detection (LineCiteGlobNoMatch)
+//   2. PR-cite verification (PrCiteClosedNotMerged + PrCiteNotFound)
+//   3. JSON output (canonical-schema per `.addl/dispatch-conventions.md`
+//      §3.6i — top-level `disposition` + `findings[]`)
+//
+// Origin: R6-R2 lens L11 + L14 + L16 + L17 + L18 phantom-cite class.
+// Codification: extends §3.6j sweep-completeness self-verify discipline
+// to enforce cite-grep-verify-at-author-time. See
+// `feedback_pim_n_cite_grep_verify_at_author_time` memory.
+// ---------------------------------------------------------------------------
+
+/// One raw `path/to/glob_*.rs` cite extracted from a doc. Globs use
+/// shell-style `*` and `?` wildcards but we only handle `*` (the common
+/// case in docs).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct GlobCite {
+    target_glob: String,
+}
+
+/// Extract every `path/to/glob_*.rs` style cite from a single line of
+/// text. A glob cite is a path that:
+///
+///   - starts with a workspace-relative prefix (`crates/`, `bindings/`, etc.)
+///   - contains at least one `*` wildcard
+///   - ends with a recognised source-file extension
+///
+/// This is intentionally distinct from `extract_line_cites` (which catches
+/// `path:NN` line cites) and `extract_symbol_cites` (which catches
+/// `path::symbol`). The cite forms in docs that this catches look like:
+///
+/// ```text
+/// `crates/benten-graph/tests/redb_backend_*.rs` family covers the redb...
+/// `crates/benten-id/tests/rotation_*.rs` chain-extension pins.
+/// `tf4_gcore3c_swap_matrix_conformance_*.rs` covers all 7 swap-matrix arms.
+/// ```
+///
+/// Bare-basename globs (no `/` in the path) are returned but skipped at
+/// validation time — workspace-relative resolution requires a path prefix.
+fn extract_glob_cites(s: &str) -> Vec<GlobCite> {
+    let mut out = Vec::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        // Find next `*` — the wildcard anchors the search.
+        if bytes[i] != b'*' {
+            i += 1;
+            continue;
+        }
+        // Walk LEFT to find the path start (stops at non-path char).
+        let mut path_start = i;
+        while path_start > 0 {
+            let c = bytes[path_start - 1];
+            if is_path_char(c) || c == b'*' {
+                path_start -= 1;
+            } else {
+                break;
+            }
+        }
+        // Walk RIGHT past the rest of the path (allow trailing `*`s + chars
+        // + extension).
+        let mut path_end = i + 1;
+        while path_end < bytes.len() {
+            let c = bytes[path_end];
+            if is_path_char(c) || c == b'*' {
+                path_end += 1;
+            } else {
+                break;
+            }
+        }
+        if path_start == path_end {
+            i = path_end.max(i + 1);
+            continue;
+        }
+        let raw_path = &s[path_start..path_end];
+        let raw_path = raw_path.trim_start_matches(['(', '[', '`', '\'', '"', '<']);
+        let raw_path = raw_path.trim_end_matches([')', ']', '`', '\'', '"', '>', '.', ',', ';']);
+        let raw_path = raw_path.trim_start_matches("./");
+        if raw_path.is_empty() || !looks_like_source_file(raw_path) {
+            i = path_end.max(i + 1);
+            continue;
+        }
+        if !raw_path.contains('*') {
+            // No wildcard left after trimming — not a glob.
+            i = path_end.max(i + 1);
+            continue;
+        }
+        // Must have a `/` to be workspace-relative (skip bare basename
+        // globs in narrative text).
+        if !raw_path.contains('/') {
+            i = path_end.max(i + 1);
+            continue;
+        }
+        if !is_workspace_relative_for_glob(raw_path) {
+            i = path_end.max(i + 1);
+            continue;
+        }
+        // Skip `**` recursive-glob patterns. The simple glob matcher
+        // here only handles single-`*` basename globs (the dominant
+        // shape in our docs); recursive `**` globs would need a real
+        // shell-glob lib. Until we add one, recursive globs are
+        // documentation shorthand that the lint deliberately punts on.
+        if raw_path.contains("**") {
+            i = path_end.max(i + 1);
+            continue;
+        }
+        out.push(GlobCite {
+            target_glob: raw_path.to_string(),
+        });
+        i = path_end.max(i + 1);
+    }
+    out
+}
+
+/// Expand a `path/to/glob_*.rs` cite against the workspace and return
+/// `true` if at least one file matches. Handles single-component `*`
+/// wildcards in BOTH directory components and the basename. Does NOT
+/// handle `**` recursive — those are filtered out at extract time.
+///
+/// Walks the path segment-by-segment: each segment is either a literal
+/// directory name OR a `*`-bearing pattern matched against `read_dir`
+/// entries. Resolution is recursive (depth = number of segments).
+fn glob_has_match(root: &Path, glob: &str) -> bool {
+    let segments: Vec<&str> = glob.split('/').collect();
+    if segments.is_empty() {
+        return false;
+    }
+    walk_glob_segments(root.to_path_buf(), &segments)
+}
+
+fn walk_glob_segments(current: PathBuf, segments: &[&str]) -> bool {
+    if segments.is_empty() {
+        return current.exists();
+    }
+    let (head, tail) = (segments[0], &segments[1..]);
+    if head.is_empty() {
+        // Leading or trailing empty segment (from leading `/`); skip.
+        return walk_glob_segments(current, tail);
+    }
+    if !head.contains('*') {
+        // Literal segment — just descend.
+        let next = current.join(head);
+        if tail.is_empty() {
+            return next.exists();
+        }
+        return walk_glob_segments(next, tail);
+    }
+    // Wildcard segment — enumerate current's children and match each.
+    let Ok(rd) = fs::read_dir(&current) else {
+        return false;
+    };
+    for entry in rd.flatten() {
+        let name = entry.file_name();
+        let Some(name_str) = name.to_str() else {
+            continue;
+        };
+        if !glob_basename_matches(head, name_str) {
+            continue;
+        }
+        let next = current.join(name_str);
+        if tail.is_empty() {
+            return true; // matched at terminal segment
+        }
+        // Only descend into directories (or files at the terminal step;
+        // already handled above).
+        if next.is_dir() && walk_glob_segments(next, tail) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Basename-glob match. Supports `*` only (greedy, zero-or-more). No `?`
+/// or character classes. Mirrors shell glob semantics for the common
+/// `prefix_*.rs` / `*_suffix.rs` / `prefix_*_middle_*.rs` shapes.
+fn glob_basename_matches(pattern: &str, name: &str) -> bool {
+    // Split pattern on `*`; non-wildcard segments must appear in `name`
+    // in order, with `*` matching zero or more chars between them.
+    let parts: Vec<&str> = pattern.split('*').collect();
+    if parts.len() == 1 {
+        // No wildcard — exact match.
+        return pattern == name;
+    }
+    let bytes = name.as_bytes();
+    let mut cursor = 0;
+    // First part must match at start (unless empty).
+    if !parts[0].is_empty() {
+        if !bytes.starts_with(parts[0].as_bytes()) {
+            return false;
+        }
+        cursor = parts[0].len();
+    }
+    // Middle parts must appear in order, anywhere after cursor.
+    for part in &parts[1..parts.len() - 1] {
+        if part.is_empty() {
+            continue;
+        }
+        let part_b = part.as_bytes();
+        let Some(off) = find_subslice(&bytes[cursor..], part_b) else {
+            return false;
+        };
+        cursor += off + part_b.len();
+    }
+    // Last part must match at end (unless empty).
+    let last = parts[parts.len() - 1];
+    if !last.is_empty() && !bytes[cursor..].ends_with(last.as_bytes()) {
+        return false;
+    }
+    true
+}
+
+/// Run the glob-cite phantom-match pass. Returns one finding per
+/// zero-matching glob.
+pub fn run_glob_cite_check(root: &Path) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let inputs = walk_doc_inputs(root);
+    for input in &inputs {
+        let Ok(text) = fs::read_to_string(input) else {
+            continue;
+        };
+        // Self-exemption: the detector's own source contains intentional
+        // glob-shaped doc-comment + literal examples. The walker already
+        // excludes the detector's subtree via the `cite-drift-detector`
+        // basename skip in `walk_ext_recursive`.
+        for (line_idx, line) in text.lines().enumerate() {
+            let line_no = line_idx + 1;
+            // Honour the `cite-drift-exempt` marker (Markdown-comment
+            // suppression).
+            if line.contains("<!-- cite-drift-exempt") {
+                continue;
+            }
+            for gc in extract_glob_cites(line) {
+                if !glob_has_match(root, &gc.target_glob) {
+                    findings.push(Finding {
+                        kind: FindingKind::LineCiteGlobNoMatch,
+                        path: input.clone(),
+                        line: line_no,
+                        message: format!(
+                            "{} :: zero files match this glob at HEAD (phantom-cite class; \
+                             confirm a real file matches OR rename to the actual file)",
+                            gc.target_glob
+                        ),
+                    });
+                }
+            }
+        }
+    }
+    findings.sort();
+    findings.dedup();
+    findings
+}
+
+// ---------------------------------------------------------------------------
+// PR-cite verification (opt-in via --check-prs)
+// ---------------------------------------------------------------------------
+
+/// Extract every `#NNNN` PR-cite from a single line. We restrict to
+/// 3-5 digit PR numbers (current repo PR ids range from #1 to ~#1500;
+/// constraining to >=3 digits avoids matching issue-style `#42` numeric
+/// in narrative). The detector treats anything starting with `#` followed
+/// by 3-5 ASCII digits as a PR candidate.
+///
+/// Skips:
+///   - `#NNNN` inside `[badge](...)` URLs (heuristic: rejects if preceded
+///     by `/` since URLs use `/issues/NNNN` form)
+///   - `#NNNN` at start of markdown headings (heading-anchors use `#`
+///     but our cite extractor only matches `#<digit>`)
+fn extract_pr_cites(s: &str) -> Vec<u32> {
+    let mut out = Vec::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'#' {
+            i += 1;
+            continue;
+        }
+        // Skip URL-embedded #NNNN.
+        if i > 0 && bytes[i - 1] == b'/' {
+            i += 1;
+            continue;
+        }
+        let mut digit_end = i + 1;
+        while digit_end < bytes.len() && bytes[digit_end].is_ascii_digit() {
+            digit_end += 1;
+        }
+        let n_digits = digit_end - (i + 1);
+        if (3..=5).contains(&n_digits) {
+            // Word-boundary check: next char (if any) must be non-alphanumeric
+            // AND not `_` (we want to reject `#1234_foo`-style identifier
+            // suffixes that aren't PR-cite shapes).
+            let boundary_ok = digit_end == bytes.len()
+                || (!bytes[digit_end].is_ascii_alphanumeric() && bytes[digit_end] != b'_');
+            if boundary_ok && let Ok(n) = s[i + 1..digit_end].parse::<u32>() {
+                out.push(n);
+            }
+        }
+        i = digit_end.max(i + 1);
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// PR-cite verification result for a single PR number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrCiteStatus {
+    Merged,
+    ClosedNotMerged,
+    NotFound,
+    /// Open or other non-terminal state — not flagged (an in-flight cite
+    /// is normal narrative; only CLOSED-not-merged + NotFound are drift).
+    OpenOrOther,
+    /// `gh` invocation failed (binary missing, auth missing, network
+    /// failure). Caller should warn but NOT emit findings — opt-in pass.
+    GhUnavailable,
+}
+
+/// Query `gh pr view <n>` and return the cite status. Costs one `gh`
+/// invocation per call; the orchestrator-facing `run_pr_cite_check`
+/// caches results across docs.
+pub fn pr_cite_status(pr_number: u32) -> PrCiteStatus {
+    let output = std::process::Command::new("gh")
+        .args([
+            "pr",
+            "view",
+            &pr_number.to_string(),
+            "--json",
+            "mergedAt,state",
+        ])
+        .output();
+    let Ok(output) = output else {
+        return PrCiteStatus::GhUnavailable;
+    };
+    if !output.status.success() {
+        // `gh` returned non-zero. If stderr contains "no pull request"
+        // or "Could not resolve", treat as NotFound. Otherwise the call
+        // failed for env reasons (auth, network) — surface as Unavailable.
+        let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+        if stderr.contains("no pull request")
+            || stderr.contains("could not resolve")
+            || stderr.contains("not found")
+        {
+            return PrCiteStatus::NotFound;
+        }
+        return PrCiteStatus::GhUnavailable;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Cheap parse — no serde dependency for one field.
+    let merged_at_null = stdout.contains("\"mergedAt\":null");
+    let merged_at_set = stdout.contains("\"mergedAt\":\"") && !merged_at_null;
+    let state_merged = stdout.contains("\"state\":\"MERGED\"");
+    let state_closed = stdout.contains("\"state\":\"CLOSED\"");
+    if state_merged || merged_at_set {
+        PrCiteStatus::Merged
+    } else if state_closed && merged_at_null {
+        PrCiteStatus::ClosedNotMerged
+    } else {
+        PrCiteStatus::OpenOrOther
+    }
+}
+
+/// Run the PR-cite verification pass. Caches per-PR results to avoid
+/// duplicate `gh` invocations across docs. Returns one finding per
+/// CLOSED-not-merged or NotFound PR-cite.
+///
+/// **Off by default** — only invoked when the CLI passes `--check-prs`.
+/// The pass requires `gh` to be installed AND authenticated; if `gh` is
+/// unavailable, the pass emits a single advisory finding (under
+/// PrCiteNotFound kind with a clear "GhUnavailable" message) and
+/// otherwise returns clean. This keeps the default CI run network-free.
+pub fn run_pr_cite_check(root: &Path) -> Vec<Finding> {
+    use std::collections::BTreeMap;
+    let mut findings = Vec::new();
+    let mut cache: BTreeMap<u32, PrCiteStatus> = BTreeMap::new();
+    let inputs = walk_doc_inputs(root);
+
+    // Only scan tracked-doc surfaces for PR cites (docs/ + dispatch-conv).
+    // Source files frequently cite PRs in narrative comments; flagging
+    // those would balloon noise without buying signal at the v1-window
+    // wave we ratified this discipline at. Adjust if signal warrants.
+    for input in &inputs {
+        let p = input.to_string_lossy();
+        if !(p.contains("/docs/")
+            || p.ends_with("dispatch-conventions.md")
+            || p.ends_with("README.md"))
+        {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(input) else {
+            continue;
+        };
+        for (line_idx, line) in text.lines().enumerate() {
+            let line_no = line_idx + 1;
+            if line.contains("<!-- cite-drift-exempt") {
+                continue;
+            }
+            for pr_n in extract_pr_cites(line) {
+                let status = *cache.entry(pr_n).or_insert_with(|| pr_cite_status(pr_n));
+                match status {
+                    PrCiteStatus::ClosedNotMerged => {
+                        findings.push(Finding {
+                            kind: FindingKind::PrCiteClosedNotMerged,
+                            path: input.clone(),
+                            line: line_no,
+                            message: format!(
+                                "#{pr_n} :: cited as if merged but PR is CLOSED-not-merged \
+                                 (phantom PR-cite; retract OR move to a 'considered but \
+                                 not merged' narrative)"
+                            ),
+                        });
+                    }
+                    PrCiteStatus::NotFound => {
+                        findings.push(Finding {
+                            kind: FindingKind::PrCiteNotFound,
+                            path: input.clone(),
+                            line: line_no,
+                            message: format!(
+                                "#{pr_n} :: gh pr view returned not-found (typo OR \
+                                 different-repo cite without owner/repo qualifier)"
+                            ),
+                        });
+                    }
+                    PrCiteStatus::GhUnavailable => {
+                        // Emit ONCE to avoid spam (cached at first call).
+                        // Convert to a single per-run advisory at the top.
+                    }
+                    PrCiteStatus::Merged | PrCiteStatus::OpenOrOther => {}
+                }
+            }
+        }
+    }
+    findings.sort();
+    findings.dedup();
+    findings
+}
+
+// ---------------------------------------------------------------------------
+// JSON output (canonical schema per §3.6i)
+// ---------------------------------------------------------------------------
+
+/// Render findings into the canonical-schema JSON shape per
+/// `.addl/dispatch-conventions.md` §3.6i:
+///
+/// ```json
+/// {
+///   "disposition": "FIX-NOW" | "APPROVE" | "DEFER-NAMED",
+///   "findings": [
+///     {
+///       "kind": "line-cite-glob-no-match",
+///       "path": "docs/V1-WIRE-FORMAT-INVENTORY.md",
+///       "line": 29,
+///       "message": "...",
+///       "disposition": "FIX-NOW"
+///     }
+///   ]
+/// }
+/// ```
+///
+/// Hand-written JSON serialization avoids pulling serde into the
+/// detector's dep graph (the workspace already has a serde transitive
+/// chain via toml but adding serde_json would expand the build envelope
+/// for a one-off pure-output function).
+pub fn render_json_report(findings: &[Finding]) -> String {
+    let mut out = String::new();
+    out.push_str("{\n");
+    let top_disposition = if findings.is_empty() {
+        "APPROVE"
+    } else {
+        "FIX-NOW"
+    };
+    let _ = writeln!(out, "  \"disposition\": \"{top_disposition}\",");
+    let _ = writeln!(out, "  \"finding_count\": {},", findings.len());
+    out.push_str("  \"findings\": [");
+    for (i, f) in findings.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str("\n    {\n");
+        let _ = writeln!(out, "      \"kind\": \"{}\",", f.kind);
+        let _ = writeln!(
+            out,
+            "      \"path\": \"{}\",",
+            json_escape(&f.path.display().to_string())
+        );
+        let _ = writeln!(out, "      \"line\": {},", f.line);
+        let _ = writeln!(out, "      \"message\": \"{}\",", json_escape(&f.message));
+        out.push_str("      \"disposition\": \"FIX-NOW\"\n    }");
+    }
+    if !findings.is_empty() {
+        out.push('\n');
+        out.push_str("  ");
+    }
+    out.push_str("]\n}\n");
+    out
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------

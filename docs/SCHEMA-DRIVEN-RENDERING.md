@@ -213,7 +213,7 @@ See [`ERROR-CATALOG.md`](ERROR-CATALOG.md) for the full catalogue.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) §"Fourteen crates" — `benten-platform-foundation` is the 11th crate (schema-compiler + materializer + plugin-manifest + Renderer trait); the workspace expanded to 14 with `benten-renderer-tauri` (12th), `benten-crypto-suite` (13th), and `benten-drop` (14th) at Phase 4-Meta-Core
 - [`PLUGIN-MANIFEST.md`](PLUGIN-MANIFEST.md) — plugin manifests reference schema CIDs; `requires_schema_authors` trust-list
 - [`ADMIN-UI.md`](ADMIN-UI.md) — admin UI v0 workflow editor uses schema-driven form generation (consumes this vocabulary)
-- [`ENGINE-SPEC.md`](ENGINE-SPEC.md) — Renderer trait surface; engine integration
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) + [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) — Renderer trait surface; engine integration (the historical `ENGINE-SPEC.md` cite-target was deleted at Phase-4-Foundation per `docs/future/phase-3-backlog.md` cs-r1-2 MERGE-into-ARCHITECTURE.md disposition)
 
 ---
 

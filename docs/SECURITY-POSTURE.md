@@ -1174,8 +1174,10 @@ The §14.6 target remains aspirational for the redb backend
 until upstream redb (or a Benten write-batching layer) lands;
 non-redb backends are not constrained by it.
 
-**Cross-refs.** plan §arch-r1-1; plan §3 G13-E; ENGINE-SPEC
-§14.6 macOS caveat;
+**Cross-refs.** plan §arch-r1-1; plan §3 G13-E; historical ENGINE-SPEC
+§14.6 macOS caveat (the ENGINE-SPEC doc was MERGED-into-ARCHITECTURE.md
+at Phase-4-Foundation per cs-r1-2 disposition; the macOS-fdatasync content
+now lives in `docs/ARCHITECTURE.md` durability section);
 [`crates/benten-graph/benches/crud_post_create_dispatch_group_durability.rs`];
 [`crates/benten-graph/benches/durability_modes.rs`];
 [`docs/future/phase-2-backlog.md`] §9.1 (CLOSED-IN-PHASE-3-G13-E);
@@ -2142,7 +2144,7 @@ deferred destinations:
   PluginLibrary + UserDidRegistry consult)** = NOT LIVE at v1-beta;
   default engine ships `NoopManifestEnvelopeRechecker` returning
   `NotApplicable` for every input → admit-via-Layer-3. The structural
-  empty-peer-DID fail-CLOSED at `engine.rs:1462-1476` IS live (covers
+  empty-peer-DID fail-CLOSED at `crates/benten-engine/src/engine.rs::apply_atrium_merge` (the `ManifestEnvelopeRecheckUnresolvedDeny` arm; grep-discoverable per pim-13 §3.12 / §3.6j cite-grep-verify discipline — line numbers omitted per §3.5b HARDENED point 3 high-churn-surface rule) IS live (covers
   the "I cannot identify the writer" case); the per-resolvable-DID
   substantive recheck is deferred. Destination: `docs/V1-FROZEN-INTERFACE-DEFERRED.md`
   row "ProductionManifestEnvelopeRechecker production impl +
@@ -2301,7 +2303,7 @@ ThinClientBridgePrincipalUnresolved}`.
 
 ### Compromise #30 — Unaudited PQ primitives in the v1-beta hybrid default — OPEN; MITIGATED by hybrid construction; CLOSES at v1-GM
 
-**Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D):** the PQ-hybrid signature codepoint `HYBRID_ED25519_MLDSA65 = 0x0001` at `crates/benten-crypto-suite/src/codepoint.rs` (line ~49); the PQ-hybrid KEM codepoint `HYBRID_X25519_MLKEM768 = 0x647a` at `crates/benten-crypto-suite/src/codepoint.rs` (line ~64); the audit-gated typed-reject arm `try_pure_pq_sole_trust_path -> AuditNotLandedPurePqRejected` (the C11b safety gate ensuring unaudited PQC is never the SOLE trust path at v1-beta); the bidirectional swap-matrix conformance suite at `crates/benten-crypto-suite/tests/tf4_gcore3c_*.rs` + `tf4_pure_pq_gated_audit_landed.rs` covering all 7 swap-matrix arms × both wire directions per V1-FROZEN-INTERFACE item 14(a).
+**Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D; line numbers omitted per §3.5b HARDENED point 3 / R6-R2-FP-C §3.6j cite-grep-verify discipline — symbol-form citations are the load-bearing surface):** the PQ-hybrid signature codepoint `crates/benten-crypto-suite/src/codepoint.rs::HYBRID_ED25519_MLDSA65 = 0x0001`; the PQ-hybrid KEM codepoint `crates/benten-crypto-suite/src/codepoint.rs::HYBRID_X25519_MLKEM768 = 0x647a`; the audit-gated typed-reject arm `try_pure_pq_sole_trust_path -> AuditNotLandedPurePqRejected` (the C11b safety gate ensuring unaudited PQC is never the SOLE trust path at v1-beta); the bidirectional swap-matrix conformance suite at `crates/benten-crypto-suite/tests/tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs` + `crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs` + `crates/benten-crypto-suite/tests/tf4_pure_pq_gated_audit_landed.rs` covering all 7 swap-matrix arms × both wire directions per V1-FROZEN-INTERFACE item 14(a).
 
 **Status.** **OPEN; MITIGATED.** Per the 2026-05-19 PQ-default reframe
 (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md
@@ -2394,7 +2396,7 @@ side-stepped by a transport-envelope claim.
 `.addl/pq-research/RATIFIED-crypto-agility-2026-05-18.md` (the
 build-now stack + framing, superseded-in-part); CLAUDE.md baked-in #5 /
 #15; the v1-beta PQ-audit issue #1302 + issues #1300 / #1301; the four
-`.addl/pq-research/landscape-*-2026-05-19.md` corroboration passes;
+`.addl/pq-research/landscape-*-2026-05-19.md` corroboration passes <!-- cite-drift-exempt: `.addl/` is gitignored; these planning artifacts exist locally for orchestrator workflows but are not tracked in the public tree. -->;
 `.addl/pq-research/landscape-pq-algorithm-diversity-2026-05-19.md` (the
 NF-1 PQ⊕PQ post-classical-death documented end-state + FIPS-207
 build-trigger). **G-CORE-3c runtime gate (Phase-4-Meta-Core terminal
@@ -2659,7 +2661,7 @@ enforces it.
 
 ### Revocation reach (§R6) — Compromise #31 detail
 
-**Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D):** the future-serve-cut assertion at `crates/benten-engine/tests/tf3e_revoked_grant_yields_typed_revoked.rs`; the forever-valid-once-distributed Drop bundle property documented at `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`; the `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate ErrorCode at `crates/benten-errors/src/lib.rs` (the typed mitigation arm); the offline-Drop asymmetry section "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" at line 2619 below.
+**Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D):** the future-serve-cut assertion at `crates/benten-engine/tests/resume_with_revoked_grant_denies.rs` + `crates/benten-sync/tests/tf3e_replay_attack_ucan_expired.rs`; the forever-valid-once-distributed Drop bundle property documented at `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`; the `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate ErrorCode at `crates/benten-errors/src/lib.rs::ErrorCode::UcanBlobsRequestRejected` (the typed mitigation arm); the offline-Drop asymmetry section "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" below (grep the section title to locate at HEAD per §3.5b HARDENED point 3 / §3.6j cite-grep-verify discipline; line number omitted to avoid future drift).
 
 UCAN revocation cuts FUTURE serves only — already-decrypted
 plaintext at the recipient side remains decryptable (cryptographic

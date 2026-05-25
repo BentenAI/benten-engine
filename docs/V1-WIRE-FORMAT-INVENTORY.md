@@ -26,7 +26,7 @@
 
 **Byte-pin test coverage:**
 - `crates/benten-core/tests/canonical_bytes_fastpath_stable.rs` + `crates/benten-core/tests/node_cid.rs` — sentinel-CID + canonical-bytes round-trip pins.
-- `crates/benten-graph/tests/redb_backend_*.rs` family — exercises the redb on-disk format (which embeds the Node/Edge canonical bytes).
+- `crates/benten-graph/tests/redb_schema_version_envelope_pin.rs` + `crates/benten-graph/tests/in_memory_backend_equiv_to_redb.rs` + `crates/benten-graph/tests/kvbackend_conformance.rs` — exercise the redb on-disk format (which embeds the Node/Edge canonical bytes) and conformance equivalence.
 
 **FREEZE-WAVE status:** ✅ COVERED.
 
@@ -213,7 +213,7 @@
 **Format version:** `schema_version: u8 = 1` (additive-via-discriminator; v2 path is the explicit re-open mechanism).
 
 **Byte-pin test coverage:**
-- `crates/benten-eval/tests/execution_state_envelope_*.rs` round-trip pins.
+- `crates/benten-eval/tests/exec_state_envelope_shape.rs` round-trip pins.
 - Cross-process resume coverage at the engine-eval boundary tests.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level (round-trip + schema-version discriminator); hex-byte regression-pin deferred to G-COMP-1 inventory walk per Row D-9 widening.
@@ -244,7 +244,7 @@
 **Format version:** `MAX_WIRE_VERSION: u8 = 2`.
 
 **Byte-pin test coverage:**
-- `crates/benten-engine/tests/g16_d_*.rs` device-attestation pins.
+- `crates/benten-engine/tests/device_attestation_envelope_direct.rs` device-attestation pins (post-COLLAPSE-P4 retense; the historical `g16_d_*.rs` family was consolidated).
 - Cross-wire-version negotiation pins inside `apply_atrium_merge`.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; G-COMP-1 byte-walk deferred per Row D-9 widening.
@@ -260,7 +260,7 @@
 **Format version:** the parent envelope's `MAX_WIRE_VERSION` discriminates.
 
 **Byte-pin test coverage:**
-- `crates/benten-id/tests/device_attestation_canonical_*.rs` round-trip + signature-verification pins.
+- `crates/benten-id/tests/device_attestation.rs` + `crates/benten-id/tests/canonical_bytes_trait.rs` round-trip + signature-verification pins.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
 
@@ -290,7 +290,7 @@
 **Format version:** UCAN spec version; v1 frozen per the Varsig-header coupling at item 5.
 
 **Byte-pin test coverage:**
-- `crates/benten-id/tests/ucan_*.rs` round-trip + canonical-bytes pins.
+- `crates/benten-id/tests/ucan.rs` + `crates/benten-id/tests/prop_ucan_attenuation.rs` round-trip + canonical-bytes pins.
 - `crates/benten-caps/tests/prop_ucan_window.rs` proptests over nbf/exp time-window properties.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; the Varsig HEADER is item 5 (separately frozen); this is the SIGNED-OVER BODY.
@@ -306,7 +306,7 @@
 **Format version:** the manifest's own `schema_version` field.
 
 **Byte-pin test coverage:**
-- `crates/benten-engine/tests/g_core_sandbox_*.rs` round-trip pins + module-store reopen pins.
+- `crates/benten-engine/tests/module_manifest_canonical.rs` + `crates/benten-engine/tests/engine_open_rebuilds_module_manifest_active_set_from_persisted_zone.rs` + `crates/benten-engine/tests/sandbox_execute_via_engine_dispatch_invokes_executor.rs` round-trip pins + module-store reopen pins.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level.
 
@@ -354,7 +354,7 @@
 **Format version:** the frame carries an explicit `wire_version: u8` field.
 
 **Byte-pin test coverage:**
-- `crates/benten-sync/tests/handshake_*.rs` round-trip + wire-version-negotiation pins.
+- `crates/benten-sync/tests/handshake.rs` round-trip + wire-version-negotiation pins.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; hex-byte regression-pin deferred to G-COMP-1 inventory walk per Row D-9 widening.
 
@@ -384,8 +384,8 @@
 **Format version:** N/A baseline (32-byte width is the contract).
 
 **Byte-pin test coverage:**
-- `crates/benten-id/tests/tf3e_endpoint_id_*.rs` byte-identity contract pin.
-- `crates/benten-sync/tests/peer_id_*.rs` round-trip pins.
+- `crates/benten-sync/tests/tf3e_zero_conversion_endpoint_id_is_verifying_key.rs` byte-identity contract pin (host crate is `benten-sync`, NOT `benten-id`).
+- `crates/benten-sync/tests/peer_id.rs` round-trip pins.
 
 **FREEZE-WAVE status:** ✅ COVERED.
 
@@ -401,7 +401,7 @@
 
 **Byte-pin test coverage:**
 - `crates/benten-sync/tests/loro_*.rs` round-trip pins.
-- `crates/benten-sync/tests/stamped_value_*.rs` codec-roundtrip pins.
+- `crates/benten-sync/tests/loro_lww.rs` + `crates/benten-sync/tests/loro_rich_type.rs` codec-roundtrip pins (StampedValue is defined inside `crates/benten-sync/src/crdt.rs::StampedValue`; coverage lives in the Loro integration tests, not a dedicated `stamped_value_*.rs` file).
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: upstream Loro is a dependency-pinned wire-format; mutating it requires a Loro upstream-version bump which couples to the sync wire-protocol freeze.
 
@@ -416,7 +416,7 @@
 **Format version:** record-level discriminator on each record-type.
 
 **Byte-pin test coverage:**
-- `crates/benten-engine/tests/suspension_store_*.rs` round-trip + cross-process resume + forward-compat pins.
+- `crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs` + `crates/benten-engine/tests/redb_suspension_in_process.rs` round-trip + cross-process resume + forward-compat pins.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: these are CRATE-PRIVATE wire-format-bearing surfaces (not part of the public freeze contract — listed here for completeness per the L11 phase-wide sweep; the freeze-contract-public scope covers items 1-23).
 
@@ -436,20 +436,20 @@
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |
 | 9 | EncryptionClass codepoint (NEW G-CORE-9) | #[non_exhaustive] + codepoint table | encryption_class.rs unit tests | ✅ COVERED |
 | 10 | Crypto-suite codepoint table | V1-FROZEN §6 integers | canonical_bytes_v1_codepoints_and_aad.rs + tf4_gcore3c_swap_matrix_*.rs | ✅ COVERED |
-| 11 | ExecutionStateEnvelope (redb-persisted resume) | `schema_version: u8 = 1` | benten-eval execution_state_envelope_*.rs round-trip | ✅ COVERED (substrate-level) |
-| 12 | RedbBackend whole-file schema-version | `GRAPH_SCHEMA_VERSION: u32 = 1` | redb_schema_version_envelope_pin.rs (3 arms) | ✅ COVERED |
-| 13 | DeviceAttestationEnvelope (Atrium handshake) | `MAX_WIRE_VERSION: u8 = 2` | g16_d_*.rs + apply_atrium_merge pins | ✅ COVERED (substrate-level) |
-| 14 | DeviceAttestation (signed inner record) | parent envelope version | device_attestation_canonical_*.rs | ✅ COVERED (substrate-level) |
-| 15 | RotationLog + RotationAttestation (DID-rotation chain) | additive-via-record | rotation_*.rs | ✅ COVERED (substrate-level) |
-| 16 | UCAN body canonical bytes (distinct from Varsig header) | UCAN spec v1 | ucan_*.rs + prop_ucan_window.rs | ✅ COVERED (substrate-level) |
-| 17 | ModuleManifest (SANDBOX-module envelope) | manifest schema_version | g_core_sandbox_*.rs | ✅ COVERED (substrate-level) |
-| 18 | PluginManifest (2 shapes: shareable + signing-payload) | CID identity (#18) | plugin_manifest_*.rs + admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs | ✅ COVERED (substrate-level; PQ-hybrid app-layer sig pending per L2-R6-MAJOR-2 fork) |
-| 19 | ManifestStore records (PluginManifestRecord) | record schema_version | tf7_*.rs reopen pins | ✅ COVERED (substrate-level) |
-| 20 | HandshakeFrame + HandshakePayload + RevocationEntry | `wire_version: u8` | handshake_*.rs | ✅ COVERED (substrate-level) |
-| 21 | MST proto messages + canonical encoding | message-tagged discriminator | mst_*.rs | ✅ COVERED (substrate-level) |
-| 22 | Atrium PeerId (== iroh EndpointId byte-identical) | 32-byte width contract | tf3e_endpoint_id_*.rs + peer_id_*.rs | ✅ COVERED |
-| 23 | LoroDoc canonical export + StampedValue codec | Loro upstream version | loro_*.rs + stamped_value_*.rs | ✅ COVERED (upstream-pinned) |
-| 24 | suspension_store on-disk records (crate-private) | per-record discriminator + #[serde(default)] | suspension_store_*.rs | ✅ COVERED (substrate-level; crate-private — not in public freeze scope) |
+| 11 | ExecutionStateEnvelope (redb-persisted resume) | `schema_version: u8 = 1` | crates/benten-eval/tests/exec_state_envelope_shape.rs | ✅ COVERED (substrate-level) |
+| 12 | RedbBackend whole-file schema-version | `GRAPH_SCHEMA_VERSION: u32 = 1` | crates/benten-graph/tests/redb_schema_version_envelope_pin.rs (3 arms) | ✅ COVERED |
+| 13 | DeviceAttestationEnvelope (Atrium handshake) | `MAX_WIRE_VERSION: u8 = 2` | crates/benten-engine/tests/device_attestation_envelope_direct.rs + apply_atrium_merge pins | ✅ COVERED (substrate-level) |
+| 14 | DeviceAttestation (signed inner record) | parent envelope version | crates/benten-id/tests/device_attestation.rs + canonical_bytes_trait.rs | ✅ COVERED (substrate-level) |
+| 15 | RotationLog + RotationAttestation (DID-rotation chain) | additive-via-record | crates/benten-id/tests/rotation_log_rehydrated_at_engine_open.rs + sibling rotation tests | ✅ COVERED (substrate-level) |
+| 16 | UCAN body canonical bytes (distinct from Varsig header) | UCAN spec v1 | crates/benten-id/tests/ucan.rs + prop_ucan_attenuation.rs | ✅ COVERED (substrate-level) |
+| 17 | ModuleManifest (SANDBOX-module envelope) | manifest schema_version | crates/benten-engine/tests/module_manifest_canonical.rs | ✅ COVERED (substrate-level) |
+| 18 | PluginManifest (2 shapes: shareable + signing-payload) | CID identity (#18) | crates/benten-platform-foundation/tests/plugin_manifest_full_round_trip.rs + crates/benten-engine/tests/admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs | ✅ COVERED (substrate-level; PQ-hybrid app-layer sig pending per L2-R6-MAJOR-2 fork) |
+| 19 | ManifestStore records (PluginManifestRecord) | record schema_version | crates/benten-platform-foundation/tests/ (manifest-store reopen pins) | ✅ COVERED (substrate-level) |
+| 20 | HandshakeFrame + HandshakePayload + RevocationEntry | `wire_version: u8` | crates/benten-sync/tests/handshake.rs | ✅ COVERED (substrate-level) |
+| 21 | MST proto messages + canonical encoding | message-tagged discriminator | crates/benten-sync/tests/mst_diff.rs + mst_revocation_priority.rs | ✅ COVERED (substrate-level) |
+| 22 | Atrium PeerId (== iroh EndpointId byte-identical) | 32-byte width contract | crates/benten-sync/tests/tf3e_zero_conversion_endpoint_id_is_verifying_key.rs + peer_id.rs | ✅ COVERED |
+| 23 | LoroDoc canonical export + StampedValue codec | Loro upstream version | crates/benten-sync/tests/loro_lww.rs + loro_rich_type.rs (StampedValue defined in `crates/benten-sync/src/crdt.rs::StampedValue`) | ✅ COVERED (upstream-pinned) |
+| 24 | suspension_store on-disk records (crate-private) | per-record discriminator + #[serde(default)] | crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs + redb_suspension_in_process.rs | ✅ COVERED (substrate-level; crate-private — not in public freeze scope) |
 
 **Outcome (R6 R1 L11 expansion, 2026-05-24):** 23 of 24 surfaces have byte-pin / round-trip coverage at v1-beta substrate-level (items 11-24 added at R6 R1 L11 closure per the lens's phase-wide sweep finding L11-R6-R1-MAJOR-1). The one DEFERRED public surface (MerkleRangeProof, item 3) is genuinely-not-built (no phantom freeze). The G-COMP-1 wave consumes this expanded inventory for the hex-byte regression-pin sweep per Row D-9 widening. Item 24 is crate-private + retained for completeness; it is NOT in the public freeze contract scope.
 
