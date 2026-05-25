@@ -221,14 +221,12 @@ fn apply_atrium_merge_routes_device_trust_through_single_ceiling_seam() {
     // Some(...)` or `device_cid: Some(...)` — that's the regression
     // this pin actually catches.
     let has_legacy_explicit_none = body.contains("device_cid: None");
-    let has_default_pattern =
-        body.contains("CapWriteContext::default()");
-    let has_forbidden_some_threading = body.contains("device_cid: Some(")
-        || body.contains(".device_cid = Some(");
+    let has_default_pattern = body.contains("CapWriteContext::default()");
+    let has_forbidden_some_threading =
+        body.contains("device_cid: Some(") || body.contains(".device_cid = Some(");
 
     assert!(
-        (has_legacy_explicit_none || has_default_pattern)
-            && !has_forbidden_some_threading,
+        (has_legacy_explicit_none || has_default_pattern) && !has_forbidden_some_threading,
         "COLLAPSE #605/#707-trust REGRESSION: the apply_atrium_merge \
          per-row synthetic WriteContext device_cid invariant violated. \
          Required: EITHER `device_cid: None` (legacy struct-literal) OR \
