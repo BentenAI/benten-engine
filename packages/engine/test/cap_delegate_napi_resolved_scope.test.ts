@@ -42,9 +42,17 @@ describe("G24-D-FP-3 — Engine.delegateCapability resolved-scope class-of-bug r
     const engine = await openOrSkip(":memory:", PolicyKind.GrantBacked);
     if (!engine) return;
     try {
+      // Real did:keys generated via `Keypair::generate().public_key().to_did()`
+      // — the napi `delegateCapability` binding gates on `Did::resolve()`
+      // (Ed25519 base58btc decode + 32-byte pubkey round-trip) per the
+      // #1206 / refinement-audit-2026-05 closure at
+      // `bindings/napi/src/lib.rs:790`. Fake `did:key:z6Mk<placeholder>`
+      // strings fail validation with `E_PLUGIN_DID_MALFORMED` — must use
+      // real Ed25519-derived DIDs even in test fixtures.
       const sourcePluginDid =
-        "did:key:z6MkSourcePluginTsSide1234567890abcdefghi";
-      const pluginBDid = "did:key:z6MkPluginBAudienceTsSide1234567890abcdef";
+        "did:key:z6MkvSk9SMA2V9E6hut1CzjRYoBmQevwu8wEy3VVdH5Y4DFw";
+      const pluginBDid =
+        "did:key:z6MkmRvASXvzkjZ9j2Lt2qCDdDxs1LJ8JThogFaW6hWRMM1H";
 
       // Step 1 — mint source grant; admits writes at `store:post:write`.
       const sourceGrantCid = await engine.grantCapability({
@@ -130,10 +138,11 @@ describe("G24-D-FP-3 — Engine.delegateCapability resolved-scope class-of-bug r
     const engine = await openOrSkip(":memory:", PolicyKind.GrantBacked);
     if (!engine) return;
     try {
+      // Real did:keys (see preceding test for rationale).
       const ownerPluginDid =
-        "did:key:z6MkPrivateOwnerTsSide1234567890abcdefghij";
+        "did:key:z6MkrskuAH9V2LQGd3qjeM8r9gbncyrJFkHjntAjvu7ry1po";
       const otherPluginDid =
-        "did:key:z6MkOtherAudienceTsSide12345678901234abcdef";
+        "did:key:z6MkwaNZDhVC1Dgqa1V2cDRphDWm2Ah4qG5Rsv4mFb1SRqu6";
       const privateScope = `private:${ownerPluginDid}:notes`;
 
       const sourceGrantCid = await engine.grantCapability({
