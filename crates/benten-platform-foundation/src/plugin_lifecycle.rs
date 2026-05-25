@@ -863,8 +863,10 @@ pub struct InstallOutcome {
 ///    custom `CapabilityPolicy` impls (e.g. wrapping a curated DID
 ///    trust-list) can reject with typed
 ///    `PluginInstallConsentDenied`. The engine-side adapter
-///    [`benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent`]
-///    (minted at R6 R2 FP-B) bridges the engine's configured
+///    `benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent`
+///    (minted at R6 R2 FP-B; plain-backtick cite to avoid rustdoc
+///    intra-doc-link resolution against benten-engine which isn't a
+///    dep of benten-platform-foundation) bridges the engine's configured
 ///    `CapabilityPolicy` to the install-pipeline's
 ///    [`crate::install_consent::InstallConsentPolicy`] port.
 /// 4. **Seam 2 — clock-injected validation** —

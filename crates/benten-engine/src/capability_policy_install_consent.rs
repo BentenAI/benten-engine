@@ -14,7 +14,7 @@
 //!
 //! ## Wire-in
 //!
-//! [`ProductionEngineBuilder`] threads a `CapabilityPolicyInstallConsent`
+//! `crate::production_engine_builder::ProductionEngineBuilder` threads a `CapabilityPolicyInstallConsent`
 //! wrapping the configured `CapabilityPolicy` into the install pipeline's
 //! Step 3c so a custom policy's `check_install_consent` is honored at
 //! runtime (the L6-r6r2-l6-1 finding's substantive close — pre-FP-B the

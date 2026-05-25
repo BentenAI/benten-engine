@@ -47,6 +47,15 @@ use benten_platform_foundation::plugin_manifest::{
 /// of the same install-record with typed
 /// `PluginInstallRecordAlreadyApplied` pre-mint.
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "Linear end-to-end positive-then-negative test wiring v1 install \
+              + same-record second-presentation through install_plugin(...) — \
+              boundary pin for §4.37 TOCTOU defense. Inlining keeps the v1 \
+              admit + v1-replay reject ordering audit-able as a single test \
+              body; helper-extraction would split the would-FAIL-on-revert \
+              assertion across helpers and obscure the test's intent."
+)]
 fn install_record_replay_through_install_plugin_rejects_second_presentation() {
     let alice = Keypair::generate();
     let user_kp = Keypair::generate();
