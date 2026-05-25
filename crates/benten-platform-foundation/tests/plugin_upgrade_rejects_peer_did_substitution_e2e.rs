@@ -38,6 +38,14 @@ use benten_platform_foundation::plugin_library::PluginLibrary;
 use benten_platform_foundation::plugin_lifecycle::{
     InMemoryInstallCascade, InstallParams, InstallPorts, InstallerShape, install_plugin,
 };
+// R6 R1 FP integration consolidation 2026-05-24:
+// B's branch was based on a0b75637 (pre-F4) when InstallPorts had
+// `install_record_replay_check: Option<&mut Fn>` and no `policy` field.
+// F4's Δv3-2 + S2 + S3a dropped the Option AND added the policy port.
+// This test is plugin-upgrade-shape (not exercising replay or install-consent),
+// so wires admit-everything helpers from foundation::testing + ::install_consent.
+use benten_platform_foundation::install_consent::AdmitAllInstallConsent;
+use benten_platform_foundation::testing::noop_replay_check;
 
 #[test]
 #[allow(clippy::too_many_lines)]
@@ -89,7 +97,8 @@ fn install_plugin_rejects_peer_did_substitution_on_upgrade_path() {
         let mut ctx = InstallPorts {
             cap_minter: &mut cascade,
             private_ns: &mut private_ns,
-            install_record_replay_check: None,
+            install_record_replay_check: &mut noop_replay_check(),
+            policy: &AdmitAllInstallConsent,
         };
         let ctx_params = InstallParams {
             now_secs: 1_700_000_000,
@@ -146,7 +155,8 @@ fn install_plugin_rejects_peer_did_substitution_on_upgrade_path() {
     let mut ctx_upgrade = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check(),
+        policy: &AdmitAllInstallConsent,
     };
     let ctx_upgrade_params = InstallParams {
         now_secs: 1_700_000_000,
@@ -237,7 +247,8 @@ fn install_plugin_admits_same_peer_did_upgrade_on_upgrade_path() {
         let mut ctx = InstallPorts {
             cap_minter: &mut cascade,
             private_ns: &mut private_ns,
-            install_record_replay_check: None,
+            install_record_replay_check: &mut noop_replay_check(),
+            policy: &AdmitAllInstallConsent,
         };
         let ctx_params = InstallParams {
             now_secs: 1_700_000_000,
@@ -284,7 +295,8 @@ fn install_plugin_admits_same_peer_did_upgrade_on_upgrade_path() {
     let mut ctx_upgrade = InstallPorts {
         cap_minter: &mut cascade2,
         private_ns: &mut private_ns2,
-        install_record_replay_check: None,
+        install_record_replay_check: &mut noop_replay_check(),
+        policy: &AdmitAllInstallConsent,
     };
     let ctx_upgrade_params = InstallParams {
         now_secs: 1_700_000_000,
