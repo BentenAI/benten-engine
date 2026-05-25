@@ -211,7 +211,9 @@ fn install_plugin_rejects_peer_did_substitution_on_upgrade_path() {
               pin for T10-(a) over-strictness. Inlining keeps the v1→v2 \
               ordering audit-able as a single test body; helper-extraction \
               would split the would-FAIL-on-revert assertion across helpers \
-              and obscure the test's intent."
+              and obscure the test's intent. (Conflict-resolved at R6-R2-FP \
+              Strategy-C consolidation: fix-up #15 + FP-A both applied this \
+              allow; HEAD's reason-bearing form preserved.)"
 )]
 fn install_plugin_admits_same_peer_did_upgrade_on_upgrade_path() {
     // Positive control / boundary: same peer-DID upgrade DOES admit
