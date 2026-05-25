@@ -1,0 +1,125 @@
+{
+  "phase": "phase-4-meta-core",
+  "round": "R6-R2",
+  "lens": "L2-adversarial",
+  "lens_scope": "Threat-model adversarial review against substrate-frozen-but-now-consumer-wired surfaces (F4 S1/S2/S3a/S3b/S3c/S4 + B L2-R6-MAJOR-1 closure + E PQ-hybrid app-layer deferral)",
+  "reviewed_at": "2026-05-24",
+  "integration_branch": "phase-4-meta-core/r6-r1-fp-integration",
+  "head_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "disposition": "FINDINGS-PRESENT",
+  "summary": "5 MAJOR + 1 MINOR + 1 OBS. The F4 substrate consumer wire-in landed structurally at all 13 admit_write_chain call sites, but adversarial inspection surfaces 3 v1-beta-security-claim-honesty MAJORs (D-1 closure narrative overclaims; apply_atrium_merge passes engine_internal frame contradicting its own docstring; §S1 regression-guard is paper-only) + 2 substrate-frozen-but-consumer-unwired MAJORs (napi binding routes through raw EngineBuilder so v1-beta ships Noop rechecker; engine never populates WriteContext::namespace_did so cross-DID partition is paper at the consumer layer). The B-branch closures (T10-upgrade verify_upgrade_author_continuity wired; BINDING_SIG_DOMAIN v1->v2; F3 AAD total_chunks defense) all verify substantively. The E-branch G-CORE-PQ-WIRE deferral is honestly NAMED. All R6 R1 L2 MAJORs from the originating round are partially closed; the residue is concentrated in this lens's NEW findings around claim-vs-code honesty + consumer-unwired gaps.",
+  "r6_r1_l2_closures_verified": [
+    {
+      "ref": "L2-R6-MAJOR-1",
+      "topic": "T10-upgrade gap (verify_upgrade_author_continuity unwired)",
+      "status": "CLOSED",
+      "evidence": "crates/benten-platform-foundation/src/plugin_lifecycle.rs:1021-1026 — verify_upgrade_author_continuity called at install_plugin step 7a between consent + cap-cascade; resolver-gated; PluginAuthorNotTrusted reuse per orchestrator DISAGREE."
+    },
+    {
+      "ref": "L2-R6-MAJOR-2",
+      "topic": "PQ-hybrid 3-site classical-only",
+      "status": "DEFERRED-NAMED-NOW",
+      "evidence": "Per Ben Path A ratification routed to G-CORE-PQ-WIRE wave (Row D-26 in V1-FROZEN-INTERFACE-DEFERRED.md); E-branch 300-line escalation doc preserved at R6-R1-FP-E-HARD-ESCALATION.md."
+    },
+    {
+      "ref": "L2-R6-MAJOR-3",
+      "topic": "cross-DID partition (G-CORE-1 #989)",
+      "status": "SUBSTRATE-CLOSED-CONSUMER-OPEN",
+      "evidence": "crates/benten-graph/src/redb_backend.rs honors namespace_did partition (point read, label scan, raw iter, edges, change-event fanout); BrowserBackend fail-closes on Some(did). Substrate is real + tested. BUT see new finding L2-R6-R2-MAJOR-7: no engine WRITE pathway populates namespace_did, so the partition is structurally inert at the engine consumer layer at v1-beta."
+    }
+  ],
+  "findings": [
+    {
+      "id": "L2-R6-R2-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "apply_atrium_merge per-row write passes engine_internal frame — sync-merged peer writes BYPASS WriteBoundaryChainValidator structurally even when installed",
+      "site": "crates/benten-engine/src/engine_diagnostics.rs:532-536 (append_version) called from crates/benten-engine/src/engine.rs:1664 (apply_atrium_merge per-row merge Version Node mint)",
+      "code_quote": "self.admit_write_chain(&crate::write_boundary_chain_validator::WriteAdmissionFrame::engine_internal())?;",
+      "doc_claim_contradicted": "crates/benten-engine/src/engine.rs:2049-2050 — `User-facing CRUD entry points / delegation / sync-merge can present a chain anchor when one is in scope.` (the docstring explicitly names sync-merge as a chain-bearing site)",
+      "threat_model": "Sync-merged writes are the highest-leverage adversarial surface in Phase-3+ untrusted-peer scenarios — a peer presenting a CRDT op-log row that lands as a Version Node passes through admit_write_chain with engine_internal frame, which short-circuits at engine.rs:2064-2070 (chain_anchor_cid=None -> Ok(())). The Layer-1 user-as-root invariant (CLAUDE.md baked-in #18) is structurally NOT enforced for inbound sync writes even when a substantive WriteBoundaryChainValidator is installed. Per-row cap-recheck at engine.rs:1291+ still fires (defends against revoked actor), but the cap-rooted-chain check is absent.",
+      "disposition": "FIX-NOW or DEFER-NAMED-NOW",
+      "fix_now_shape": "Thread an Atrium-anchored chain frame at the apply_atrium_merge per-row site: derive chain_anchor_cid from the seed's peer-attribution + actor_did from the resolved peer_did, then call append_version with a new transactional path that takes a WriteAdmissionFrame (or add an `append_version_with_chain` shim that admits a non-engine-internal frame). Estimated LOC: ~80-120 + 2-3 test pins.",
+      "defer_named_now_destination": "If FIX-NOW is out of R6 R2 scope, add NEW Row D-N to docs/V1-FROZEN-INTERFACE-DEFERRED.md (sibling of Row D-1) naming `apply_atrium_merge chain-bearing WriteAdmissionFrame` as the G-COMP-1 destination, AND retense the Row D-1 CLOSED narrative + engine.rs:2049-2050 docstring to remove the sync-merge claim so the doc no longer contradicts the code."
+    },
+    {
+      "id": "L2-R6-R2-MAJOR-2",
+      "severity": "MAJOR",
+      "title": "D-1 CLOSED narrative in V1-FROZEN-INTERFACE-DEFERRED.md overclaims structural-always-on Layer-1 enforcement — 12 of 13 admit_write_chain sites pass engine_internal frame and unconditionally admit",
+      "site": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:78-90 (Row D-1 CLOSED narrative)",
+      "code_quote": "Layer-1 user-as-root invariant is structurally enforced at every WRITE admission when a production validator is installed.",
+      "doc_claim_contradicted": "Per workspace grep, 12 of 13 admit_write_chain sites pass `WriteAdmissionFrame::engine_internal()`. The helper at engine.rs:2061-2070 short-circuits when chain_anchor_cid is None. Only crates/benten-engine/src/engine_caps.rs:629 (delegate_capability) presents a chain-bearing frame. Layer-1 fires at the delegation-cap-mint entry point ONLY; all other WRITE entry points collapse to NotApplicable.",
+      "threat_model": "v1-beta-security-claim-honesty cluster (L2-R6-MAJOR-3 shape at R6 R1). A reader of V1-FROZEN-INTERFACE-DEFERRED.md would conclude Layer-1 is comprehensively enforced post-FP-F4; the truth is that the interface is uniformly mounted but the enforcement surface is structurally narrow.",
+      "disposition": "FIX-NOW",
+      "fix_now_shape": "Retense docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-1 CLOSED narrative to: `Layer-1 fires at the delegation-cap-mint entry point (engine_caps::EngineCapsHandle::delegate_capability); all other WRITE entry points (engine_crud CRUD x5 + engine_modules install/uninstall x2 + engine_views x1 + engine_diagnostics x1 + engine_wait x1 + handler_versions x1 + engine_caps privileged_put_node x1 = 12 sites) pass WriteAdmissionFrame::engine_internal and collapse to NotApplicable. Full Layer-1 enforcement across the non-delegation WRITE surface (including apply_atrium_merge per-row, the highest-leverage adversarial site) is the G-COMP-1 cascade — see new Row D-N for apply_atrium_merge chain-bearing wiring.` Same retense at SECURITY-POSTURE.md Compromise #26 v1-beta-posture summary. Estimated LOC: ~25 in 2 docs."
+    },
+    {
+      "id": "L2-R6-R2-MAJOR-3",
+      "severity": "MAJOR",
+      "title": "§S1 regression-guard test `workspace_walker_audit_thirteen_admit_write_chain_call_sites` is paper-only and cannot detect site-revert regressions",
+      "site": "crates/benten-engine/tests/r6_r1_fp_f4_s1_write_boundary_chain_validator_wired_at_all_write_entry_points.rs:100-104",
+      "code_quote": "const EXPECTED_WRITE_SITES_PER_F1_PATH_A: usize = 13;\nassert_eq!(EXPECTED_WRITE_SITES_PER_F1_PATH_A, 13);",
+      "doc_claim_contradicted": "Same file's module docstring (lines 18-22): `§3.5n orchestrator ground-truth-verify shape — Each enumerated site has a corresponding admit_write_chain( grep-hit in production code; reverting any one site removes the grep-hit + breaks Layer-1 enforcement at that boundary.` The test claims to be a ground-truth-verify shape but exercises no ground-truth check.",
+      "threat_model": "META #707 asymmetric-at-parallel-entry-points class: revert detection at 13 distributed sites requires a centralized assertion. The current test passes irrespective of code state (13 == 13 always). A regression that drops one admit_write_chain call would land green CI.",
+      "disposition": "FIX-NOW",
+      "fix_now_shape": "Replace the paper assertion with a real workspace walker — `let admit_call_count = std::process::Command::new(\"grep\").args([\"-rE\", \"admit_write_chain\\\\(\", \"crates/benten-engine/src/\"]).output()...count_lines()...; assert_eq!(admit_call_count, EXPECTED_WRITE_SITES_PER_F1_PATH_A);` — OR commit to a const-string-array enumeration of (file, line-anchor-pattern) pairs that the test walks. Either shape catches reverts. Estimated LOC: ~30-50 in the same test file."
+    },
+    {
+      "id": "L2-R6-R2-MAJOR-4",
+      "severity": "MAJOR",
+      "title": "Engine WRITE pathways never populate WriteContext::namespace_did — cross-DID storage partition (G-CORE-1 #989) is consumer-unwired at the engine layer at v1-beta; gap not named in V1-FROZEN-INTERFACE-DEFERRED",
+      "site": "Workspace grep `grep -rn namespace_did crates/benten-engine/src/` returns ZERO hits. The substrate (crates/benten-graph/src/redb_backend.rs::put_node_with_context honors namespace_did; crates/benten-graph/src/browser_backend.rs fail-closes on Some) is structurally real but no engine WRITE call site populates namespace_did=Some(did).",
+      "code_quote": "(empty — grep returns no hits)",
+      "doc_claim_contradicted": "docs/SECURITY-POSTURE.md:1916-1932 describes the storage-partition mechanism + claims `the cross-DID non-leak invariant ... holds structurally`. The mechanism IS real; what's missing is engine-side adoption. SECURITY-POSTURE.md does NOT explicitly state `at v1-beta no engine WRITE populates namespace_did so all engine writes land in the un-namespaced default partition`. Honest by omission, but the reader could conclude partition isolation is live; it is structurally inert at the consumer layer.",
+      "threat_model": "Substrate-frozen-but-consumer-unwired pattern (the same shape as the WriteBoundaryChainValidator path before F4). The Principal primitive authority-half (per CLAUDE.md baked-in #18 amendment 2026-05-18) is paper-only at v1-beta — multi-tenancy isolation depends on CapabilityPolicy gating alone, which only binds a cooperating engine (not the Phase-7 untrusted-host / peers-hold-ciphertext threat model the docs name).",
+      "disposition": "FIX-NOW (doc retense) + DEFER-NAMED-NOW (substantive wiring)",
+      "fix_now_shape": "Add NEW Row D-N to docs/V1-FROZEN-INTERFACE-DEFERRED.md naming `engine-side namespace_did population at WRITE entry points` as a G-COMP-1 destination. Wave brief: thread the engine's principal-DID through WriteContext at every engine_crud + engine_modules + engine_caps + engine_diagnostics + engine_wait write site (the same 13-site cascade F4 just landed for admit_write_chain). Also add a one-sentence v1-beta-posture clarification at SECURITY-POSTURE.md:1916-1932: `At v1-beta no engine WRITE call site populates namespace_did; all engine writes land in the default un-namespaced partition. The substrate is verified end-to-end (RedbBackend / BrowserBackend) but engine-side consumer wiring is the G-COMP-1 deliverable per Row D-N.`"
+    },
+    {
+      "id": "L2-R6-R2-MAJOR-5",
+      "severity": "MAJOR",
+      "title": "napi Engine::new / Engine::open_with_policy STILL routes through raw EngineBuilder (NOT ProductionEngineBuilder) — v1-beta napi-shipped binary mounts NoopManifestEnvelopeRechecker at the primary platform entry point",
+      "site": "bindings/napi/tests/r6_r1_fp_c_napi_engine_routes_through_production_builder.rs:30-43 — the test file explicitly documents the gap as a `Phase-4-Meta-Composing wave per Row D-4 narrative`",
+      "code_quote": "let _b = ProductionEngineBuilder::new();  // compile-test only; napi binding still uses InnerEngine::open(&path)?",
+      "doc_claim_contradicted": "docs/V1-FROZEN-INTERFACE-DEFERRED.md:203-213 Row D-4 CLOSED narrative: `ProductionManifestEnvelopeRechecker substantive impl shipped at ... ProductionEngineBuilder shipped at ... as the canonical production constructor.` The reader could conclude the napi-shipped binary uses this. The compile-test pin discloses the gap, but the V1-FROZEN-INTERFACE-DEFERRED narrative does not.",
+      "threat_model": "v1-beta primary platform entry point ships Noop rechecker at all 3 deployment shapes (a/b/c per CLAUDE.md #17): the Tauri shell's wrapped napi, the browser napi, the future edge worker napi. Layer-3 manifest-envelope recheck at sync merge is structurally INERT in the actual binary even though the substrate IS shipped.",
+      "disposition": "FIX-NOW",
+      "fix_now_shape": "Either (a) Migrate bindings/napi/src/lib.rs Engine::new + Engine::open_with_policy to ProductionEngineBuilder::new().open(&path)? + .policy(policy).open(&path)?. (~10 LOC + 1-2 test pins). The Δv3-10 + CRITIC-1 FIX-3 brief explicitly named this as a one-line change. OR (b) Retense Row D-4 CLOSED narrative to: `ProductionManifestEnvelopeRechecker substantive impl + ProductionEngineBuilder canonical constructor TYPES are shipped; napi binding routing migration is the G-COMP-1 deliverable so v1-beta napi-shipped binaries still ship NoopManifestEnvelopeRechecker via the existing EngineBuilder path.` Option (a) is the strong preference (~10 LOC closes the gap structurally)."
+    },
+    {
+      "id": "L2-R6-R2-MAJOR-6-CARRY",
+      "severity": "MAJOR-CARRY",
+      "title": "audience_did=None at all 3 check_write_with_audience call sites — audience-binding gate is structurally inert at every WRITE consultation",
+      "site": "crates/benten-engine/src/engine_wait.rs:898 + crates/benten-engine/src/engine_subscribe.rs:364 + crates/benten-engine/src/engine.rs:1411 (apply_atrium_merge per-row cap-recheck)",
+      "code_quote": "audience_did: None,",
+      "doc_claim_contradicted": "ALREADY DISCLOSED at docs/V1-FROZEN-INTERFACE-DEFERRED.md:167-175 Row D-3-c PARTIAL CLOSED narrative + SECURITY-POSTURE.md:2114-2116. The rationale `peer_did at apply_atrium_merge is transport-principal NOT cap-target` is plausibly defensible (cap-target is the resource owner; peer_did is the message sender).",
+      "threat_model": "The cross-atrium UCAN replay defense (CLR-2 / cap-major-2) requires audience-binding at the per-row cap consultation; passing None makes that defense inert at the cap-recheck site. The Phase-3 G16-B-F per-row cap-recheck still fires + revoked actors still get blocked, but a cross-atrium UCAN whose audience matches a different atrium's audience would not be rejected at the per-row consultation. Per Δv3-2 disposition this is named-deferred to G-COMP-1 + the existing Layer-3 check_per_delegation wiring is argued to cover the delegate-runtime audience-discrimination needs — the case is plausible but not adversarially airtight.",
+      "disposition": "ALREADY-CLOSED-by-disclosure-in-D-3-c (CARRIED for forensic completeness; no new action)",
+      "rationale": "Disclosure is honest; the rationale is defensible; the G-COMP-1 destination is named. The CARRIED designation reflects this lens's adversarial obligation to NAME the gap explicitly even when it's already disclosed."
+    },
+    {
+      "id": "L2-R6-R2-MINOR-1",
+      "severity": "MINOR",
+      "title": "install_plugin step 3c discards check_install_consent's actual ErrorCode via `.is_err()` remap to PluginInstallConsentDenied — information loss for incident diagnosis",
+      "site": "crates/benten-platform-foundation/src/plugin_lifecycle.rs:958-964",
+      "code_quote": "if ports.policy.check_install_consent(&payload_hash, plugin_did_str).is_err() {\n    return Err(ErrorCode::PluginInstallConsentDenied);\n}",
+      "threat_model": "A CapabilityPolicy::check_install_consent impl that returns a typed ErrorCode::Unauthenticated (e.g. user-DID signature failed at the policy's pre-check) gets silently flattened to PluginInstallConsentDenied. The high-level install_plugin caller can't distinguish denied-by-policy from denied-due-to-policy-internal-error.",
+      "disposition": "OBS-only",
+      "rationale": "The install_plugin entry point IS a high-level surface where the user-facing shape is 'denied'; underlying reasons are still surfacable through policy-side tracing/logging. Acceptable surface posture; not a security gap. Could be improved by preserving the underlying code via map_err(|inner| { tracing::error!(?inner); ErrorCode::PluginInstallConsentDenied }), but no functional change."
+    },
+    {
+      "id": "L2-R6-R2-OBS-1",
+      "severity": "OBS",
+      "title": "B-branch closures (T10-upgrade verify_upgrade_author_continuity wiring; BINDING_SIG_DOMAIN v1->v2 with scope in binding-message; F3 AAD total_chunks defense; #[non_exhaustive] sweep) ALL verify substantively",
+      "site": "crates/benten-platform-foundation/src/plugin_lifecycle.rs:1021-1026 + crates/benten-caps/src/authorization_grant.rs:364,418-423 + crates/benten-crypto-suite/src/aead.rs:240-246 + crates/benten-graph/src/aead_wrap.rs:228-246",
+      "disposition": "NO-FINDING (confirmation that B-branch L2-R6-MAJOR-1 + L3-r1-1 + F3 closures landed substantively — the adversarial lens confirms the closures hold)"
+    }
+  ],
+  "pim_n_candidates": [
+    {
+      "shape": "substrate-frozen-but-consumer-unwired honesty contract",
+      "description": "When a substrate is frozen at one wave (G-CORE-8) and consumed at a later wave (F4), the consumer-side wiring is itself a substrate-frozen-but-consumer-unwired axis (e.g. ProductionEngineBuilder is shipped but napi doesn't route through it; WriteBoundaryChainValidator helper is mounted but 12 of 13 frames are engine_internal). The pim-N codification: every CLOSED row in V1-FROZEN-INTERFACE-DEFERRED.md whose closure is interface-mounted-but-consumer-narrow MUST surface the consumer-narrow scope explicitly in the same row's closure narrative AND name the consumer-wide G-COMP-1 destination as a sibling row. Applies to: Row D-1 (admit_write_chain frame-shape) + Row D-4 (napi routing) + the new Row D-N this review names (namespace_did population).",
+      "recurrence_count": "3+ at R6 R2 (admit_write_chain + namespace_did + napi-ProductionEngineBuilder); originating pattern at L2-R6-MAJOR-1 R6 R1 (verify_upgrade_author_continuity helper present but unwired)"
+    }
+  ],
+  "verification_notes": "Worktree HEAD verified: 3c80546f37adee8cb2c05e1257e4aa883370ab92 matches FETCH_HEAD of origin/phase-4-meta-core/r6-r1-fp-integration. Did NOT --admin-bypass anywhere. Did NOT modify any production code (this is a review-only lens). All findings ground-truth-verified by direct file reads against the integration branch + workspace greps. The §3.5n orchestrator ground-truth-verify discipline was applied to each finding (every code claim is anchored to a file:line + verified quote)."
+}
