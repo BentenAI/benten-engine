@@ -441,7 +441,7 @@ tests to FAIL with `Got: Ok(())` (silent admission). Post-fix: 3/3 +
 
 ---
 
-## Cohort 8 — Row D-19 G-COMP-1 wave WIRE-NOW (this PR, Batch C)
+## Cohort 8 (Group C) — Row D-19 G-COMP-1 wave WIRE-NOW (this PR, Batch C)
 
 This cohort lands at PR<R6-R2-FP-integration-redo> Group C
 (R6-R2-batch-c-dsl-catalog sub-branch; 2026-05-25). Closes
@@ -543,6 +543,116 @@ bytes" forensic argument (Row D-19 anchor).
   etc. against the typed `BentenError` subclasses surfaced by the
   napi `mapNativeError` boundary (previously these collapsed to the
   base `BentenError("E_UNKNOWN")` class).
+## Cohort 8 (Group A) — R6 R2 batch-A substrate-honesty WIRE-NOW additions (this PR)
+
+This cohort lands at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C
+consolidation re-do; 2026-05-25) — substrate-honesty WIRE-NOW pass
+per Ben's 2026-05-25 ratification (Group A: L6 install-consent auto-
+install + L1 self-bind + Path G capability_grant_cid + D-13 codepoint
+info-tag + D-8 F3 CAS).
+
+### Wire-format breaking changes
+
+- **`BINDING_SIG_DOMAIN` v3 → v4** at
+  `crates/benten-caps/src/authorization_grant.rs::BINDING_SIG_DOMAIN`.
+  Pre-Item-3 the `AuthorizationGrant.issuer_verifying_key` field
+  lived OUTSIDE the signed `binding_message` — a network adversary
+  could swap `issuer_verifying_key` to an attacker-controlled
+  Ed25519 pubkey + forge a fresh `binding_sig` over the 6-segment
+  message using their own signing key; `verify_binding` would
+  Ed25519-verify under the SWAPPED vk + admit the grant. Classical
+  "self-bind" invariant gap. Post-Item-3 the
+  `issuer_verifying_key` is folded in as the 7th binding-message
+  segment (fixed 32-byte Ed25519 vk, no length prefix). Domain-
+  separation at segment 1 means v3-signed grants fail re-verification
+  under v4 (intended pre-tag behavior; no v3-signed grants exist on
+  the wire outside test fixtures). Net signed-surface invariant
+  shape: 7 fields (6 inherited from Cohort 7 v3 + the new self-bind).
+- **`structural_kdf::derive_root` signature change** at
+  `crates/benten-crypto-suite/src/structural_kdf.rs::derive_root`.
+  Pre-Item-7 the function took `(k_principal, root_cid)` and
+  derived `K(root) = HKDF-SHA256(K_principal, info="root" || root_cid)`.
+  Post-Item-7 the function takes a third `cipher_suite_codepoint:
+  u16` parameter and derives `K(root) = HKDF-SHA256(K_principal,
+  info = "root:codepoint:" || codepoint_le_bytes || root_cid)`. The
+  info-tag binding closes the attacker-controlled envelope codepoint
+  → key newtype attack class (Row D-13). All callers updated. K_root
+  keys derived under different codepoints now observably differ →
+  cross-codepoint key reuse is structurally impossible. **Wire-format-
+  coupled** because K_root feeds downstream AEAD wrap; pre-Item-7
+  K_root values are not byte-compatible with post-Item-7. Pre-v1-beta-
+  freeze with no users yet — P-III no-users-yet override applies.
+
+### Public-API additions (additive)
+
+- **`Engine::install_consent_adapter()`** at
+  `crates/benten-engine/src/engine.rs::Engine::install_consent_adapter`.
+  Returns a
+  `crate::capability_policy_install_consent::CapabilityPolicyInstallConsent`
+  bound to the engine's configured `CapabilityPolicy` (or
+  `NoAuthBackend` if none). Row D-3-a substantive close: a custom
+  `CapabilityPolicy` impl passed via
+  `EngineBuilder::capability_policy(...)` now has its
+  `check_install_consent` hook consulted at install time when the
+  caller threads `engine.install_consent_adapter()` into
+  `InstallPorts.policy`. Pre-Item-2 the L6-r6r2-l6-1 adapter existed
+  but had ZERO production callers wrapping the engine's CONFIGURED
+  policy. Additive (no breakage).
+- **`KVBackend::compare_and_insert`** at
+  `crates/benten-graph/src/backend.rs::KVBackend::compare_and_insert`.
+  Atomic check-absent-then-insert primitive (default impl: non-
+  atomic get + put; RedbBackend override: single-txn atomic).
+  Row D-8 closure: `benten_caps::FrameReplayMarker::mark_and_check_frame`
+  now routes through this primitive so concurrent inbound
+  `apply_atrium_merge` presentations of the same session-nonce cannot
+  both observe "absent" and both admit (the F3 anti-replay TOCTOU
+  class). Default impl preserves behavior for in-RAM / non-
+  transactional backends; on the redb-backed backend redb write-txn
+  exclusivity gates the CAS. Additive (new trait method with
+  default impl — non-breaking for external impls).
+- **`AuthorizationGrant::with_swapped_issuer_verifying_key_for_test`**
+  at `crates/benten-caps/src/authorization_grant.rs`. Test-helper
+  swap of the `issuer_verifying_key` field for adversarial pins.
+  `#[cfg(any(test, feature = "testing"))]`-gated.
+
+### Substrate-honesty (Path G; no public-API shape change)
+
+- **`apply_atrium_merge` AttributionFrame.capability_grant_cid now
+  substantively populated** at
+  `crates/benten-engine/src/engine.rs::apply_atrium_merge`. Pre-Path-G
+  the slot was the zero-Cid sentinel even when the per-row
+  `admit_write_chain` call presented a substantive grant CID anchor.
+  Post-Path-G the slot equals `peer_actor_cid` (= blake3 hash of
+  the resolved peer-DID — the same value the per-row chain-bearing
+  `admit_write_chain(WriteAdmissionFrame::with_chain(...))` already
+  threads). The slot is now observable in the durable AttributionFrame
+  bytes minted at the merge Version Node; downstream forensic /
+  audit pipelines can reconstruct "what grant authorized this
+  inbound write?" from the durable merge-Node properties. Scope:
+  LOCAL-origin (this-hop) substantive population. Multi-hop
+  preservation across `apply_atrium_merge` → outbound-sync →
+  next-peer-merge is OUT of Path G scope (Row D-27 / G-COMP-1
+  deferred). **Observable behavior change:** existing tests that
+  asserted `capability_grant_cid: zero` at the merge AttributionFrame
+  (sync_replica_attribution.rs + tests/integration/atrium_two_device.rs)
+  updated to assert the substantive shape.
+
+### New ErrorCode mints
+
+None — Items 2/3/4/7/8 close through existing variants
+(`PluginInstallConsentDenied`, `BindingMismatch`,
+`DeviceAttestationForged`). CATALOG_VARIANT_COUNT unchanged at 194.
+
+### Tests added (§3.6f SUBSTANTIVE-arm)
+
+- `crates/benten-engine/tests/r6_r2_batch_a_install_consent_adapter_auto_install.rs` (2 tests)
+- `crates/benten-caps/tests/tf3b_issuer_verifying_key_substitution_post_sign_rejected.rs` (2 tests)
+- `crates/benten-engine/tests/r6_r2_batch_a_path_g_capability_grant_cid_substantive_at_apply_atrium_merge.rs` (1 test)
+- `crates/benten-crypto-suite/src/structural_kdf.rs::tests::derive_root_distinguishes_cipher_suite_codepoints` (new unit pin)
+- `crates/benten-caps/tests/tf_d8_frame_replay_marker_cas_atomic_under_concurrent_inbound.rs` (2 tests)
+
+All assert production-entry-point invocation + observable consequence
++ demonstrate would-FAIL-on-revert in test docstrings.
 
 ---
 
@@ -566,3 +676,5 @@ Cohort 7 landed at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C consolidat
 Cohort 8 PLANNED entry RESOLVED — superseded by FINAL Cohort 8 entries from batch-a + batch-b + batch-c consolidating into ONE canonical Cohort 8 at the end of the Strategy-C cascade. Per-group fragmentary "Cohort 8 landed at..." Provenance lines are temporary; final canonical Cohort 8 unification happens after batch-a + batch-b merge.
 
 Cohort 8 Group C (batch-c) — `phase-4-meta-core/r6-r2-batch-c-dsl-catalog` sub-branch at `13faa4b1` (2026-05-25); closes Row D-19 atomic 4-surface §3.5g rename `Strategy::C` → `Strategy::Reserved` + 3 first-class DSL ErrorCode mints (`E_DSL_PARSE_ERROR` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND`); CATALOG_VARIANT_COUNT 194 → 197.
+
+Cohort 8 Group A (batch-a-crypto-identity) — `phase-4-meta-core/r6-r2-batch-a-crypto-identity` sub-branch at `4bf64fba` (2026-05-25); substrate-honesty WIRE-NOW pass: L6 install-consent auto-install (Row D-3-a) + L1 issuer_verifying_key self-bind (BINDING_SIG_DOMAIN v3→v4) + Path G capability_grant_cid substantive at apply_atrium_merge + Row D-13 structural_kdf info-tag codepoint-binding + Row D-8 F3 anti-replay TOCTOU CAS substrate.

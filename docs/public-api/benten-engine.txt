@@ -490,6 +490,7 @@ impl<B: benten_graph::graph_backend::GraphBackend> benten_engine::engine::Engine
 pub fn benten_engine::engine::EngineGeneric<B>::emit_event(&self, channel: &str, payload: benten_core::value::Value) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<B>::emit_with_handler(&self, channel: &str, payload: benten_core::value::Value, route: benten_engine::handler_router::HandlerRoute) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<B>::handler_route_log(&self) -> alloc::sync::Arc<benten_engine::handler_router::HandlerRouteLog>
+pub fn benten_engine::engine::EngineGeneric<B>::install_consent_adapter(&self) -> benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
 pub fn benten_engine::engine::EngineGeneric<B>::install_record_replay_store(&self) -> &alloc::sync::Arc<benten_engine::install_record_replay::InstallRecordReplayStore>
 pub fn benten_engine::engine::EngineGeneric<B>::is_read_only_snapshot(&self) -> bool
 pub fn benten_engine::engine::EngineGeneric<B>::monotonic_source(&self) -> &alloc::sync::Arc<dyn benten_eval::time_source::MonotonicSource>
@@ -2930,6 +2931,7 @@ impl<B: benten_graph::graph_backend::GraphBackend> benten_engine::engine::Engine
 pub fn benten_engine::engine::EngineGeneric<B>::emit_event(&self, channel: &str, payload: benten_core::value::Value) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<B>::emit_with_handler(&self, channel: &str, payload: benten_core::value::Value, route: benten_engine::handler_router::HandlerRoute) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<B>::handler_route_log(&self) -> alloc::sync::Arc<benten_engine::handler_router::HandlerRouteLog>
+pub fn benten_engine::engine::EngineGeneric<B>::install_consent_adapter(&self) -> benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
 pub fn benten_engine::engine::EngineGeneric<B>::install_record_replay_store(&self) -> &alloc::sync::Arc<benten_engine::install_record_replay::InstallRecordReplayStore>
 pub fn benten_engine::engine::EngineGeneric<B>::is_read_only_snapshot(&self) -> bool
 pub fn benten_engine::engine::EngineGeneric<B>::monotonic_source(&self) -> &alloc::sync::Arc<dyn benten_eval::time_source::MonotonicSource>

@@ -95,8 +95,8 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 fn tf3a_p1_5_node_walk_same_path_yields_same_key_sequence() {
     let k_principal = StructuralKdfKey::from_bytes_for_test(&[0u8; 32]);
     let root_cid = fixed_cid(0xA0);
-    let k_root_owner = derive_root(&k_principal, &root_cid);
-    let k_root_recip = derive_root(&k_principal, &root_cid);
+    let k_root_owner = derive_root(&k_principal, &root_cid, 0x647a);
+    let k_root_recip = derive_root(&k_principal, &root_cid, 0x647a);
     assert_eq!(
         k_root_owner.as_bytes(),
         k_root_recip.as_bytes(),
@@ -147,7 +147,7 @@ fn tf3a_p1_5_node_walk_same_path_yields_same_key_sequence() {
 fn tf3a_p1_path_divergence_different_predecessor_different_key_same_node() {
     let k_principal = StructuralKdfKey::from_bytes_for_test(&[1u8; 32]);
     let root_cid = fixed_cid(0xB0);
-    let k_root = derive_root(&k_principal, &root_cid);
+    let k_root = derive_root(&k_principal, &root_cid, 0x647a);
 
     let target_cid = fixed_cid(0xBC);
     let edge_label = b"edge:ITEM_TYPE";
@@ -181,7 +181,7 @@ fn tf3a_p1_path_divergence_different_predecessor_different_key_same_node() {
 fn tf3a_p1_step_info_tag_elision_changes_derived_key() {
     let k_principal = StructuralKdfKey::from_bytes_for_test(&[2u8; 32]);
     let root_cid = fixed_cid(0xC0);
-    let k_root = derive_root(&k_principal, &root_cid);
+    let k_root = derive_root(&k_principal, &root_cid, 0x647a);
 
     let edge_label = b"edge:ITEM_TYPE";
     let target_cid = fixed_cid(0xC1);
@@ -213,7 +213,7 @@ fn tf3a_p1_step_info_tag_elision_changes_derived_key() {
 fn tf3a_p2_root_key_independent_of_step_keys_via_info_tag() {
     let k_principal = StructuralKdfKey::from_bytes_for_test(&[3u8; 32]);
     let root_cid = fixed_cid(0xD0);
-    let k_root_via_derive_root = derive_root(&k_principal, &root_cid);
+    let k_root_via_derive_root = derive_root(&k_principal, &root_cid, 0x647a);
     let k_root_via_derive_step_no_edge = derive_step(
         &StructuralKdfKey::from_bytes_for_test(&k_principal.as_bytes()),
         b"",

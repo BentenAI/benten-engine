@@ -356,6 +356,43 @@ pub trait KVBackend: Send + Sync {
     /// Implementation-defined.
     fn put_batch(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> Result<(), Self::Error>;
 
+    /// **R6 R2 batch-A Item 8 (Row D-8 closure / F3 anti-replay TOCTOU
+    /// CAS).** Atomically check `key`'s absence + insert `value` if
+    /// absent, in a single critical section. Returns `Ok(true)` when
+    /// the key was already present (i.e. the caller's insert was
+    /// REJECTED), `Ok(false)` when the insert succeeded (the key was
+    /// absent + is now present).
+    ///
+    /// This is the load-bearing CAS surface for the
+    /// `benten_caps::FrameReplayMarker::mark_and_check_frame` anti-
+    /// replay defense. Pre-Item-8 the marker did a non-atomic
+    /// `get()` + `put()` pair under separate transactions; concurrent
+    /// inbound `apply_atrium_merge` presentations of the same
+    /// session-nonce could BOTH observe "not yet applied" + BOTH
+    /// proceed (the F3 TOCTOU class). Post-Item-8 the marker calls
+    /// this method and the redb-backed impl runs the get + put inside
+    /// a SINGLE redb write transaction (txn-atomic at the storage
+    /// layer); at most one concurrent attempt admits.
+    ///
+    /// The default impl is a non-atomic get + put — preserves
+    /// behavior for in-RAM / non-transactional backends but is
+    /// observably racy under concurrent callers. RedbBackend
+    /// overrides this method with the txn-atomic implementation.
+    ///
+    /// # Errors
+    /// Implementation-defined per [`Self::Error`].
+    fn compare_and_insert(&self, key: &[u8], value: &[u8]) -> Result<bool, Self::Error> {
+        // Default: non-atomic get + put. Backends that need atomicity
+        // (RedbBackend) override; in-RAM / thin-client backends do
+        // not see concurrent anti-replay traffic so the default
+        // suffices for them.
+        if self.get(key)?.is_some() {
+            return Ok(true);
+        }
+        self.put(key, value)?;
+        Ok(false)
+    }
+
     /// Whether this backend honors [`DurabilityMode`] preferences.
     ///
     /// `DurabilityMode` lives in this trait-surface module as the

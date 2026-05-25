@@ -330,10 +330,16 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
         "did:key:zAliceAccount".to_string(),
         format!("node-id:{}", hlc_laptop),
     ]);
+    // R6 R2 batch-A Item 4 (Path G substantive close): both peers
+    // register the OTHER peer's hlc_node_id under "did:key:zAliceAccount"
+    // (same logical identity, multi-device), so `peer_actor_cid` =
+    // blake3 hash of that resolved DID for BOTH directions.
+    let peer_actor_cid =
+        Cid::from_blake3_digest(*blake3::hash(b"did:key:zAliceAccount").as_bytes());
     let expected_phone_frame = benten_eval::AttributionFrame {
         actor_cid,
         handler_cid: Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         peer_did_set: Some(phone_peer_did_set),
         device_did: Some(laptop_device_did.as_str().to_string()),
@@ -342,7 +348,7 @@ async fn atrium_two_device_same_identity_selective_zone_sync() {
     let expected_laptop_frame = benten_eval::AttributionFrame {
         actor_cid,
         handler_cid: Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         peer_did_set: Some(laptop_peer_did_set),
         device_did: Some(phone_device_did.as_str().to_string()),
