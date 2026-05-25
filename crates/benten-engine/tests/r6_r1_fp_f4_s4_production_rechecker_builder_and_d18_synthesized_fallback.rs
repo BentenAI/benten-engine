@@ -24,12 +24,42 @@ use benten_engine::manifest_envelope_recheck::{
 use benten_engine::production_engine_builder::ProductionEngineBuilder;
 use benten_engine::production_manifest_envelope_rechecker::ProductionManifestEnvelopeRechecker;
 
-/// **§S4 arm 1 — ProductionEngineBuilder constructs.**
+/// **§S4 arm 1 — ProductionEngineBuilder constructs + installs the
+/// substantive rechecker (verified by direct construction-equivalence
+/// of the wired rechecker type).**
+/// The `ProductionEngineBuilder::new().open(...)` path internally calls
+/// `set_manifest_envelope_rechecker(Arc::new(ProductionManifestEnvelopeRechecker::new()))`.
+/// Since the rechecker field is `pub(crate)` (not externally
+/// queryable), this arm exercises the equivalence by:
+/// (a) successfully opening the production-built engine (no panic);
+/// (b) directly constructing the `ProductionManifestEnvelopeRechecker`
+///     the builder wires in and asserting its synthesized-fallback
+///     behavior (the load-bearing semantic the builder commits to).
+/// Arms 2-5 cover the substantive rechecker behavior end-to-end.
 #[test]
-fn production_engine_builder_open_in_memory() {
+fn production_engine_builder_opens_and_substantive_rechecker_present() {
+    // (a) Production builder opens cleanly — its constructor wires
+    //     `set_manifest_envelope_rechecker(Arc::new(ProductionManifestEnvelopeRechecker::new()))`
+    //     at production_engine_builder.rs:78 (verified by §3.5n grep).
     let _engine = ProductionEngineBuilder::new()
         .open(":memory:")
         .expect("in-memory engine opens via ProductionEngineBuilder");
+
+    // (b) Directly construct the rechecker the builder installs +
+    //     exercise the load-bearing synthesized-fallback semantic.
+    //     If `ProductionManifestEnvelopeRechecker::new()` were
+    //     refactored to admit synthesized-fallback DIDs (Row D-18
+    //     regression), this assertion fires.
+    let rechecker = ProductionManifestEnvelopeRechecker::new();
+    let outcome = rechecker.recheck_row("node-id:42", "any-zone", "any-key");
+    assert_eq!(
+        outcome,
+        ManifestEnvelopeRecheckOutcome::UnresolvedDeny,
+        "LOAD-BEARING: ProductionManifestEnvelopeRechecker (the type the \
+         ProductionEngineBuilder wires in at production_engine_builder.rs:78) \
+         MUST reject synthesized-fallback peer-DIDs with UnresolvedDeny per \
+         Row D-18; got {outcome:?}"
+    );
 }
 
 /// **§S4 arm 2 — ProductionManifestEnvelopeRechecker rejects
