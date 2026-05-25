@@ -760,6 +760,7 @@ impl AuthorizationGrant {
     /// the binding-message so `verify_binding` returns
     /// `BindingMismatch` on this tamper.
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with_swapped_scope_for_test(
         &self,
         scope: Option<crate::restricted_spec::RestrictedScope>,
