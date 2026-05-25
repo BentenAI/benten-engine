@@ -90,6 +90,14 @@ pub mod production_manifest_envelope_rechecker;
 // production engine constructor that wires the substantive rechecker
 // post-build. Renamed from "EngineBuilder" wrapper to avoid shadowing
 // the engine-side EngineBuilder.
+//
+// **wasm32 cfg-gate (R6 R1 FP integration PR #1351 fix-up #9):**
+// `production_engine_builder` depends on `crate::builder::EngineBuilder`
+// which is itself `#[cfg(not(feature = "browser-backend"))]` (the
+// browser bundle uses a different construction shape). Mirror the gate
+// so the wasm32-unknown-unknown bundle compiles. F4's S4 design landed
+// the module without the gate; CI wasm32 build surfaced the cascade.
+#[cfg(not(feature = "browser-backend"))]
 pub mod production_engine_builder;
 // Phase-4-Meta-Core G-CORE-8 §4.22 — thin-client bridge that
 // resolves the acting principal from the authenticated DID-keyed
