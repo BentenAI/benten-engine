@@ -47,6 +47,15 @@ use benten_platform_foundation::plugin_manifest::{
 /// of the same install-record with typed
 /// `PluginInstallRecordAlreadyApplied` pre-mint.
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "Linear end-to-end §4.37 install-record replay-defense pin: \
+              two presentations of the same install-record through \
+              install_plugin(...) — Boundary pin for the §3.6f \
+              SHAPE-not-SUBSTANCE contract (production-arm-driven). \
+              Inlining keeps the v1→v2 replay ordering audit-able as a \
+              single test body."
+)]
 fn install_record_replay_through_install_plugin_rejects_second_presentation() {
     let alice = Keypair::generate();
     let user_kp = Keypair::generate();
