@@ -2250,7 +2250,19 @@ impl<B: GraphBackend> EngineGeneric<B> {
     /// [`InstallConsentPolicy`]: benten_platform_foundation::install_consent::InstallConsentPolicy
     /// [`CapabilityPolicy`]: benten_caps::CapabilityPolicy
     /// [`NoAuthBackend`]: benten_caps::NoAuthBackend
+    ///
+    /// # Deployment-shape gate
+    ///
+    /// This method is `#[cfg(not(target_arch = "wasm32"))]` because the
+    /// underlying `capability_policy_install_consent` module is itself
+    /// non-wasm32-only (per CLAUDE.md baked-in #17 deployment-shape
+    /// gate; the plugin install-consent path is full-peer-only — thin
+    /// compute surfaces / wasm32-unknown-unknown do not host plugin
+    /// install). Pairs with the wasm32-fixup `pub mod` cfg-gate at
+    /// `crates/benten-engine/src/lib.rs` (`feedback_cfg_gate_cascade_hygiene`
+    /// memory).
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn install_consent_adapter(
         &self,
     ) -> crate::capability_policy_install_consent::CapabilityPolicyInstallConsent {
