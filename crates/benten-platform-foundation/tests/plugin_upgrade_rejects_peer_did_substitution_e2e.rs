@@ -204,6 +204,14 @@ fn install_plugin_rejects_peer_did_substitution_on_upgrade_path() {
 }
 
 #[test]
+// R6 R2 FP-A §3.5h pre-push gate cleanup: stable-Rust clippy
+// `too_many_lines` (104/100) fires on this test (introduced at
+// b90a1f7b R6-R1-FP-integration). The body is sequential setup +
+// assertions following the same shape as the surrounding tests; a
+// surgical extraction would obscure the boundary semantics. Suppress
+// inline per the convention used elsewhere in the suite for similarly-
+// shaped e2e fixtures.
+#[allow(clippy::too_many_lines)]
 fn install_plugin_admits_same_peer_did_upgrade_on_upgrade_path() {
     // Positive control / boundary: same peer-DID upgrade DOES admit
     // (assuming all other gates pass). Would-FAIL if the T10-(a) check

@@ -40,8 +40,8 @@
 
 use benten_core::Cid;
 use benten_crypto_suite::aead::{
-    aad_per_chunk as suite_aad_per_chunk, aad_whole_content as suite_aad_whole_content,
-    unwrap as suite_unwrap, wrap as suite_wrap,
+    aad_per_chunk as suite_aad_per_chunk, aad_per_recipe as suite_aad_per_recipe,
+    aad_whole_content as suite_aad_whole_content, unwrap as suite_unwrap, wrap as suite_wrap,
 };
 use benten_crypto_suite::{
     AeadEnvelope, AeadError as SuiteAeadError, AeadKeyMaterial, CipherSuiteCodepoint,
@@ -129,6 +129,35 @@ impl EncryptedNode {
                 chunked,
             })
         }
+    }
+
+    /// Encrypt `plaintext` bytes under `key` with AAD bound to
+    /// `(plaintext_cid, recipe_index, total_recipes)` — for use within
+    /// a multi-Recipe container (e.g. `DropBundle.content`). Closes
+    /// the inter-Recipe truncation attack per the F3 chunk precedent.
+    ///
+    /// Always returns an [`EncryptedNode::Whole`] (multi-Recipe
+    /// containers seal each Recipe as a whole; chunked Recipes within
+    /// a bundle are NOT a wave-3f shape). The decrypt counterpart is
+    /// [`decrypt_recipe_encrypted_node`].
+    ///
+    /// **R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling).**
+    ///
+    /// # Errors
+    ///
+    /// Same arms as [`Self::encrypt`].
+    pub fn encrypt_recipe(
+        plaintext: &[u8],
+        plaintext_cid: &Cid,
+        key: &[u8],
+        recipe_index: u32,
+        total_recipes: u32,
+    ) -> Result<Self, AeadError> {
+        let envelope = encrypt_recipe(plaintext, recipe_index, total_recipes, plaintext_cid, key)?;
+        Ok(Self::Whole {
+            plaintext_cid: *plaintext_cid,
+            envelope,
+        })
     }
 
     /// The plaintext CID this envelope was sealed against — the AAD
@@ -395,6 +424,125 @@ pub fn encrypt_chunk(
         .map_err(|_| AeadError::Authentication("chunk index exceeds u64".to_string()))?;
     let aad = suite_aad_per_chunk(plaintext_cid.as_bytes(), chunk_index_u64, total_chunks);
     suite_wrap(chunk_plaintext, &key_material, &aad).map_err(AeadError::from)
+}
+
+/// Encrypt one Recipe's bytes at `recipe_index` of a multi-Recipe
+/// container (e.g. `DropBundle.content: Vec<EncryptedContent>`) whose
+/// total Recipe count is `total_recipes`. Position-aware AAD binding
+/// closes the inter-Recipe truncation attack at the container layer.
+///
+/// **R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling):** prior to this
+/// helper, multi-Recipe containers sealed each Recipe with
+/// `EncryptedNode::encrypt` (whole-content AAD only). An attacker
+/// could drop one Recipe from the `Vec` and the remaining Recipes'
+/// AEAD tags still verified individually because the per-Recipe seal
+/// committed neither to its position nor to the list length. With
+/// `recipe_index` + `total_recipes` AAD-bound (matching the F3
+/// precedent for per-chunk), per-Recipe authentication fails when
+/// the consumer reconstructs AAD with a shorter `total_recipes`.
+///
+/// Mirrors [`encrypt_chunk`] exactly in shape — the only differences
+/// are the AAD seam ([`suite_aad_per_recipe`] vs `aad_per_chunk`) and
+/// that the position type is `u32` (Recipe lists are bounded
+/// container-wise; chunk indices are `u64` because individual content
+/// can be much larger than the container Recipe count).
+///
+/// The returned [`AeadEnvelope`] is a self-contained whole-content
+/// envelope that the consumer pairs with `recipe_index` +
+/// `total_recipes` at decrypt time via [`decrypt_recipe`].
+///
+/// # Errors
+///
+/// Same arms as [`EncryptedNode::encrypt`].
+pub fn encrypt_recipe(
+    plaintext: &[u8],
+    recipe_index: u32,
+    total_recipes: u32,
+    plaintext_cid: &Cid,
+    key: &[u8],
+) -> Result<AeadEnvelope, AeadError> {
+    let key_material = make_key_material(key)?;
+    let aad = suite_aad_per_recipe(plaintext_cid.as_bytes(), recipe_index, total_recipes);
+    suite_wrap(plaintext, &key_material, &aad).map_err(AeadError::from)
+}
+
+/// Decrypt one Recipe at `recipe_index` of a multi-Recipe container
+/// whose total Recipe count is `total_recipes` — the consumer-side
+/// counterpart to [`encrypt_recipe`].
+///
+/// **R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling):** the consumer
+/// (e.g. `DropBundle::consume_offline`) MUST present the same
+/// `total_recipes` the producer sealed under; presenting a different
+/// value (the inter-Recipe truncation attack — claim a 5-Recipe
+/// bundle is really 4-Recipe) surfaces `AeadError::Authentication`.
+///
+/// # Errors
+///
+/// - [`AeadError::Authentication`] on tag mismatch — including the
+///   inter-Recipe rebinding attack (Recipe-N's ciphertext presented
+///   at index M ≠ N) AND the inter-Recipe truncation attack
+///   (Recipe presented under a different `total_recipes` value).
+/// - [`AeadError::CiphertextTooShort`] on structural failures.
+/// - [`AeadError::Unsupported`] on codepoint mismatch.
+pub fn decrypt_recipe(
+    envelope: &AeadEnvelope,
+    recipe_index: u32,
+    total_recipes: u32,
+    plaintext_cid: &Cid,
+    key: &[u8],
+) -> Result<Vec<u8>, AeadError> {
+    let key_material = AeadKeyMaterial::from_raw_bytes(envelope.cipher_codepoint, key);
+    if envelope.ciphertext.len() < 16 {
+        return Err(AeadError::CiphertextTooShort {
+            got: envelope.ciphertext.len(),
+        });
+    }
+    let aad = suite_aad_per_recipe(plaintext_cid.as_bytes(), recipe_index, total_recipes);
+    suite_unwrap(envelope, &key_material, &aad).map_err(AeadError::from)
+}
+
+/// Decrypt an `EncryptedNode` that was sealed via
+/// [`EncryptedNode::encrypt_recipe`] (i.e. with per-Recipe AAD binding).
+/// The consumer MUST present the same `recipe_index` + `total_recipes`
+/// the producer sealed under.
+///
+/// **R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling):** the inter-Recipe
+/// truncation defense fires here — if the bundle's `Vec<Recipe>` is
+/// truncated by a relay, the consumer reconstructs AAD with a smaller
+/// `total_recipes` than was sealed and AEAD authentication fails
+/// cryptographically (no silent admission).
+///
+/// Only [`EncryptedNode::Whole`] is supported (per the wave-3f shape:
+/// each Recipe is a whole-content seal at the bundle layer). A
+/// `EncryptedNode::Chunked` input returns
+/// [`AeadError::Unsupported`].
+///
+/// # Errors
+///
+/// - [`AeadError::Authentication`] on any tamper — including
+///   inter-Recipe truncation/shuffle, plaintext-CID rebinding, and
+///   ciphertext bit-flip.
+/// - [`AeadError::CiphertextTooShort`] on structural failures.
+/// - [`AeadError::Unsupported`] on codepoint mismatch OR on a
+///   `EncryptedNode::Chunked` input.
+pub fn decrypt_recipe_encrypted_node(
+    node: &EncryptedNode,
+    key: &[u8],
+    recipe_index: u32,
+    total_recipes: u32,
+) -> Result<Vec<u8>, AeadError> {
+    match node {
+        EncryptedNode::Whole {
+            plaintext_cid,
+            envelope,
+        } => decrypt_recipe(envelope, recipe_index, total_recipes, plaintext_cid, key),
+        EncryptedNode::Chunked { .. } => Err(AeadError::Unsupported {
+            note: "EncryptedNode::Chunked is not supported by the per-Recipe \
+                   bundle-level decrypt path; Recipes must be sealed via \
+                   EncryptedNode::encrypt_recipe which always returns Whole"
+                .to_string(),
+        }),
+    }
 }
 
 /// Serialize an [`EncryptedNode`] into a wire byte vector that can be

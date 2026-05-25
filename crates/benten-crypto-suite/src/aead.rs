@@ -246,6 +246,39 @@ pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) 
     aad
 }
 
+/// Build the canonical AAD for per-Recipe AEAD within a multi-Recipe
+/// container (e.g. a `DropBundle`'s `content: Vec<EncryptedContent>`):
+/// binds `(plaintext-CID, recipe_index, total_recipes)`.
+///
+/// **R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling):** closes the
+/// inter-Recipe truncation attack. Pre-fix, each Recipe was sealed
+/// with `aad_whole_content(plaintext_cid)` only — an attacker could
+/// drop one Recipe from `bundle.content` and the remaining Recipes'
+/// AEAD tags still verified individually because the per-Recipe seal
+/// committed neither to its position in the list nor to the list
+/// length. With `recipe_index` + `total_recipes` bound via this AAD,
+/// per-Recipe authentication fails if an attacker presents a sliced
+/// list (the per-Recipe AAD committed at seal time names the
+/// original `total_recipes` count + each Recipe's original position).
+///
+/// Shape mirrors [`aad_per_chunk`] exactly: distinct domain-separator
+/// prefix (`benten-aead:recipe:`) so a per-Recipe seal can NEVER be
+/// reinterpreted as a per-chunk seal or a whole-content seal. The
+/// position + total are encoded little-endian.
+///
+/// **Wire-format note:** this is the v1-beta canonical layout for the
+/// DropBundle per-Recipe AAD. Encoders MUST fail-CLOSED if
+/// `total_recipes` exceeds `u32::MAX`.
+#[must_use]
+pub fn aad_per_recipe(plaintext_cid: &[u8], recipe_index: u32, total_recipes: u32) -> Vec<u8> {
+    let mut aad = Vec::with_capacity(b"benten-aead:recipe:".len() + plaintext_cid.len() + 4 + 4);
+    aad.extend_from_slice(b"benten-aead:recipe:");
+    aad.extend_from_slice(plaintext_cid);
+    aad.extend_from_slice(&recipe_index.to_le_bytes());
+    aad.extend_from_slice(&total_recipes.to_le_bytes());
+    aad
+}
+
 /// Wrap (seal) `plaintext` under `key` + bind `aad` via
 /// ChaCha20-Poly1305. The returned [`AeadEnvelope`] carries the
 /// format-version discriminator + cipher codepoint so decrypt-side can
