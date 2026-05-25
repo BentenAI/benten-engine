@@ -1195,6 +1195,88 @@ Row D-15's audit-readiness concern.
 
 ---
 
+### Row D-27 — StampedValue per-row originating-grant_cid plumbing for multi-hop attribution preservation
+
+- **Frozen surface (v1-beta):** `apply_atrium_merge` reconstructs
+  `AttributionFrame` fresh per merged row at `crates/benten-engine/src/engine.rs:1629`
+  using whichever `effective_actor_cid` the LOCAL device computes —
+  the ORIGINATING peer's authorization-grant CID does not survive the
+  sync hop. The `StampedValue` wire envelope (`crates/benten-sync/src/crdt.rs:174-181`)
+  carries `(value, hlc)` only; it has NO per-row grant_cid slot.
+  Multi-hop chain consumers therefore see the laptop's fresh-reconstructed
+  attribution, not the phone's original grant.
+
+  This is the **wire/persistence half** of the Path-G/Row-D-3-c
+  AttributionFrame work. Path G (this PR cycle) substantively
+  populates the EXISTING `AttributionFrame.capability_grant_cid` slot
+  (`crates/benten-eval/src/exec_state.rs:77`; currently zero-Cid
+  sentinel at `engine.rs:1634`) for LOCAL-origin writes via
+  `WriteContext.authorizing_grant_cid` propagation — ~30-50 LOC; zero
+  wire-shape change; only the semantic contract tightens. Row D-27 is
+  what Path G does NOT close: the MULTI-HOP preservation across
+  apply_atrium_merge boundaries.
+
+- **Deferred consumption (G-COMP-1):** extend `StampedValue` →
+  `StampedValueV2 { value, hlc, originating_grant_cid: Option<Cid> }`
+  + rewire the apply_atrium_merge fresh-reconstruct pattern at
+  engine.rs:1629 to PRESERVE the originating grant_cid (rather than
+  overwrite with local-device attribution) + extend
+  `ProductionManifestEnvelopeRechecker` (Compromise #26 / Row D-4
+  destination) to walk the preserved grant_cid through the existing
+  single rechecker port at engine.rs:1456-1507. ~600-800 LOC across
+  benten-sync (StampedValue extension; opaque-bytes-via-LoroValue::Binary
+  per crdt.rs:174-181 + 392-410 + 848 — NO Loro upstream coordination
+  needed; opaque-bytes is fully Benten-controlled at the codec layer)
+  + benten-engine apply_atrium_merge semantic redesign + ChainResolver
+  port co-ship + ledger-row backward-compat fallback (fresh-reconstruct
+  on None).
+
+- **Real defer rationale (corrected 2026-05-25 by FINAL cross-lens
+  ground-truth-verify against HEAD `31d1a169`):** the apply_atrium_merge
+  fresh-reconstruct pattern is a **semantic redesign**, not a Loro
+  upstream-coordination cost (the earlier path-f-wire-format-relay-lens
+  framing was factually incorrect about Loro coord requirements; see
+  `.addl/phase-4-meta/path-f-sync-merge-arch-FINAL-cross-lens.json`
+  for the corrected analysis). The semantic redesign couples to the
+  G-COMP-1 chain-walker consumer (currently
+  `NoopManifestEnvelopeRechecker` admits all per Compromise #26
+  PARTIAL closure) — landing Row D-27 standalone before the chain-walker
+  is wired would mint a slot no consumer reads. Same cohort as the
+  ProductionManifestEnvelopeRechecker substantive impl + GrantResolver
+  port + Row D-4 closure.
+
+- **Path-G/Path-E lens triangulation provenance (2026-05-25):** Path-F
+  investigation surfaced 3 lens variants (F-i row-properties / F-ii
+  AttributionFrame slot populate / F-iii sync envelope sibling) which
+  converged after FINAL cross-lens onto **Path G = F-ii substantively
+  populate the EXISTING slot at v1-beta + Row D-27 = F-iii wire envelope
+  extension deferred to G-COMP-1**. 3-lens unanimous on Path G after the
+  predecessor sync-merge-arch lens self-corrected on 2 factual errors:
+  (1) `CapWriteContext` does NOT have `#[non_exhaustive]` at HEAD
+  (doc-comment at `crates/benten-caps/src/policy.rs:151-161` shows
+  G-COMP-1-deferred — Row D-17 cascade is therefore MANDATORY in the
+  WIRE-NOW batch, not assumed-done); (2) Loro StampedValue is opaque
+  Benten-DAG-CBOR bytes encoded as `LoroValue::Binary` (verified at
+  crdt.rs:848) — not a coord blocker; real defer-rationale is the
+  semantic redesign above.
+
+- **v1-beta posture:** Path G's local-grant_cid threading at v1-beta
+  closes the audit-trail half of the Row D-3-c context (LOCAL-origin
+  writes have substantive `capability_grant_cid` instead of zero-Cid
+  sentinel); Row D-27's multi-hop preservation closure ships at
+  G-COMP-1. Row D-3-c itself remains APPROPRIATELY-PARTIAL-CLOSED per
+  Delta-v3-2 (audience_did=None at apply_atrium_merge sites is
+  semantically correct because peer_did is transport-principal NOT
+  cap-target).
+
+- **Anchor:** Path-F lens triangulation JSONs at
+  `.addl/phase-4-meta/path-f-{sync-merge-arch,crypto-cap,wire-format-relay,sync-merge-arch-FINAL-cross-lens}-lens.json`
+  + the 4 LATE-MORNING addenda in `.addl/phase-4-meta/NIGHT-SHIFT-2026-05-25.md`
+  + the 9-item WIRE-NOW batch ratified for PR #1356 (item 4 = Path G
+  AttributionFrame slot population).
+
+---
+
 ## Update discipline
 
 This document updates via PR:

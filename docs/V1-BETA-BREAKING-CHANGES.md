@@ -457,3 +457,32 @@ Authored at G-CORE-9 R1 fix-pass (PR #1346; 2026-05-24) per L18-r1-2/3 closure. 
 Cohort 6 landed at PR #1351 (R6 R1 FP Strategy-C consolidation; 2026-05-25).
 
 Cohort 7 landed at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C consolidation re-do off post-#1351 main; 2026-05-25) — closes the L2-R2-BLOCKER-1 audience_pubkey BLOCKER + L4-MAJ DropBundle inter-Recipe AAD sibling + Row D-1 sharpening (apply_atrium_merge per-row chain-bearing admit).
+
+---
+
+## Cohort 8 — PLANNED (9-item WIRE-NOW batch; queued for PR #1356 follow-up + G-CORE-PQ-WIRE wave; 2026-05-25 ratified)
+
+**Status:** PLANNED; not yet landed. This entry placeholder reflects the 2026-05-25 morning ratification (3-lens unanimous Path G + v1-beta-freeze-window auto-WIRE-NOW discipline) so downstream consumers can preview the shape of the next cohort. Will be expanded to full Cohort-7-style detail (per-site cite, ErrorCode mints, test files, would-FAIL-on-revert evidence) at land-time.
+
+**Scope (9 items, sequenced within PR #1356 follow-up + G-CORE-PQ-WIRE wave):**
+
+| # | Item | Surface | Defer-row retracted / row minted |
+|---|---|---|---|
+| 1 | G-CORE-PQ-WIRE wave (PQ-hybrid Ed25519⊕ML-DSA-65 wire at 4 production sites + `benten_id::Keypair` cascade) | benten-drop envelope_sig + PluginManifest verify_peer_signature + InstallRecord verify_user_signature + AuthorizationGrant binding_sig | Row D-26 RETRACTED (this is the wave dispatch) |
+| 2 | L6 CapabilityPolicyInstallConsent engine-side auto-install | ProductionEngineBuilder default registers adapter | new (substrate-honesty cluster) |
+| 3 | L1 issuer_verifying_key in binding_message (7-field signed-surface invariant closure) | AuthorizationGrant binding_message extension | new (substrate-honesty cluster) |
+| 4 | Path G AttributionFrame.capability_grant_cid substantive population at apply_atrium_merge | `crates/benten-engine/src/engine.rs:1634` (replace zero-Cid sentinel with `WriteContext.authorizing_grant_cid` propagation) | Row D-3-c remains PARTIAL-CLOSED; NEW Row D-27 minted for multi-hop preservation (G-COMP-1 deferred) |
+| 5 | D-19 Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_ERROR / UNKNOWN_PRIMITIVE / MISSING_RESPOND) | Atomic 4-surface §3.5g rename (Rust enum + wire string + TS class + CATALOG_VARIANT_COUNT 192→195) | Row D-19 RETRACTED |
+| 6 | D-17 `#[non_exhaustive]` cascade on CapWriteContext + ReadContext + SuspensionOutcome | benten-caps policy.rs + benten-engine + ~50+ struct-literal call sites + test fixtures | Row D-17 RETRACTED |
+| 7 | D-13 structural_kdf info-tag codepoint-binding | benten-cryptography aead_wrap.rs (~20 LOC) | Row D-13 RETRACTED |
+| 8 | D-8 F3 anti-replay TOCTOU CAS (atomic compare-and-swap at FrameReplayMarker) | benten-engine FrameReplayMarker structure + redb txn semantics | Row D-8 RETRACTED |
+| 9 | D-18 synthesized-fallback structural hardening (fail-CLOSED beyond literal-empty case) | benten-engine apply_atrium_merge synthesized-fallback branch reject (~30 LOC) | Row D-18 RETRACTED |
+
+**Ratification chain:**
+- Substrate-honesty cluster (items 2-3 + G-CORE-PQ-WIRE pre-work scope) flipped DEFERRED→WIRE-NOW per Ben 2026-05-25 morning ("WIRE NOW and DEFER seem at odds" critique).
+- Path G (item 4) ratified by 3-lens triangulation (sync-merge-arch FINAL cross-lens SHIFT-TO-PATH-G-CONVERGENCE; crypto-cap RECOMMEND-PATH-E; wire-format-relay RECOMMEND-PATH-E). Multi-hop preservation deferred to Row D-27 (G-COMP-1).
+- v1-beta-freeze-window cluster (items 5-9) flipped DEFERRED→WIRE-NOW per the 2026-05-25 v1-beta-freeze-window auto-WIRE-NOW discipline (memory amendment to `feedback_orchestrator_defer_prediction_bias`): any deferred row whose rationale rests on "v1-beta-shippable as-is, fix post-tag" for a pub-API / wire-format / ErrorCode-catalog surface automatically flips to WIRE-NOW.
+
+**Sequencing note:** G-CORE-PQ-WIRE α/β/γ sub-fork HOW choice (additive sibling pubkey / envelope version bump / DID-extension) remains DIVERGENT and surfaces to Ben at wave R0 design pre-work — not autonomous per convergent-paths-within-auth (divergent paths require explicit ratification).
+
+**Anchor:** `.addl/phase-4-meta/NIGHT-SHIFT-2026-05-25.md` (4 addenda) + Path-F lens triangulation JSONs at `.addl/phase-4-meta/path-f-{sync-merge-arch,crypto-cap,wire-format-relay,sync-merge-arch-FINAL-cross-lens}-lens.json` + Row D-27 mint at `docs/V1-FROZEN-INTERFACE-DEFERRED.md`.
