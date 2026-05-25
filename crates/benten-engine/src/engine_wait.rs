@@ -1121,7 +1121,7 @@ impl Engine {
     ///
     /// # Inv-11 + Option-C denial semantics
     ///
-    /// The runtime probe mirrors [`Engine::get_node`]: (1) a missing
+    /// The runtime probe mirrors [`Engine::read_node`]: (1) a missing
     /// CID returns `Ok(None)`; (2) a resolved Node whose primary label
     /// lands inside a system-zone prefix returns `Ok(None)`
     /// regardless of the principal (Inv-11 cannot be overridden by
@@ -1131,7 +1131,7 @@ impl Engine {
     /// symmetric None — denial is indistinguishable from miss at the
     /// public API).
     ///
-    /// The load-bearing differentiator from [`Engine::get_node`] is
+    /// The load-bearing differentiator from [`Engine::read_node`] is
     /// `actor_cid: Some(*principal)` on the `ReadContext` — that
     /// surface passes `actor_cid: None` (no caller identity in scope);
     /// this surface is the explicit `_as`-principal entry point.
@@ -1139,10 +1139,10 @@ impl Engine {
     /// # #593 — the read-as-an-attenuated-principal half of the pair
     ///
     /// Under the unified trust model (CLAUDE.md baked-in #18; #593
-    /// re-scope), `read_node_as` and [`Engine::get_node`] are not a
+    /// re-scope), `read_node_as` and [`Engine::read_node`] are not a
     /// "checked vs bypass" pair — they are
     /// *read-as-an-attenuated-principal* (this surface) vs
-    /// *read-as-the-engine-user-root* ([`Engine::get_node`], whose
+    /// *read-as-the-engine-user-root* ([`Engine::read_node`], whose
     /// principal is root by construction). Every external / untrusted /
     /// plugin read MUST reach `read_node_as`; the containment that no
     /// such caller instead reaches the un-attributed engine-internal
