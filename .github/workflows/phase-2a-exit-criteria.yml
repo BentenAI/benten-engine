@@ -193,18 +193,29 @@ jobs:
         with:
           key: phase-2a-perf
       - name: Compile benches
+        # NOTE: --features benten-engine/test-helpers needed for
+        # get_node_label_only_sub_1us — R6 R1 FP-A's F2 visibility tighten
+        # (2026-05-24) renamed `Engine::get_node_label_only` to
+        # `pub(crate) fn read_node_label_only` + relocated the public
+        # spelling to the test-helpers re-export module
+        # (crates/benten-engine/src/testing.rs). Bench calls the public
+        # historical spelling so MUST enable test-helpers feature.
+        # Caught at PR #1351 fix-up #13.
         run: |
           cargo bench --locked --no-run \
+            --features benten-engine/test-helpers \
             -p benten-eval --bench multiplicative_budget_overhead \
             -p benten-engine --bench get_node_label_only_sub_1us
       - name: Run multiplicative_budget_overhead
         run: |
           cargo bench --locked \
+            --features benten-engine/test-helpers \
             -p benten-eval --bench multiplicative_budget_overhead \
             -- --measurement-time 3
       - name: Run get_node_label_only_sub_1us
         run: |
           cargo bench --locked \
+            --features benten-engine/test-helpers \
             -p benten-engine --bench get_node_label_only_sub_1us \
             -- --measurement-time 3
       - name: Enforce CI-gated thresholds
