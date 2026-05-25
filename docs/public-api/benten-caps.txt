@@ -45,7 +45,6 @@ impl benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
 pub fn benten_caps::authorization_grant::AuthorizationGrant::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_caps::authorization_grant::AuthorizationGrantError>
 pub fn benten_caps::authorization_grant::AuthorizationGrant::verify_binding(&self, audience: benten_core::Cid) -> core::result::Result<(), benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_scope_for_test(&self, scope: core::option::Option<benten_caps::restricted_spec::RestrictedScope>) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::clone(&self) -> benten_caps::authorization_grant::AuthorizationGrant
 impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrant
@@ -1158,7 +1157,6 @@ impl benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_caps::authorization_grant::AuthorizationGrantError>
 pub fn benten_caps::authorization_grant::AuthorizationGrant::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_caps::authorization_grant::AuthorizationGrantError>
 pub fn benten_caps::authorization_grant::AuthorizationGrant::verify_binding(&self, audience: benten_core::Cid) -> core::result::Result<(), benten_caps::authorization_grant::AuthorizationGrantError>
-pub fn benten_caps::authorization_grant::AuthorizationGrant::with_swapped_scope_for_test(&self, scope: core::option::Option<benten_caps::restricted_spec::RestrictedScope>) -> Self
 impl core::clone::Clone for benten_caps::authorization_grant::AuthorizationGrant
 pub fn benten_caps::authorization_grant::AuthorizationGrant::clone(&self) -> benten_caps::authorization_grant::AuthorizationGrant
 impl core::fmt::Debug for benten_caps::authorization_grant::AuthorizationGrant
