@@ -86,6 +86,11 @@ pub mod write_boundary_chain_validator;
 // ManifestEnvelopeRechecker substantive impl (replaces the
 // always-mounted Noop when ProductionEngineBuilder installs it).
 pub mod production_manifest_envelope_rechecker;
+// R6 R2 FP-B (L6-r6r2-l6-1 closure) — engine-side adapter wrapping a
+// `CapabilityPolicy` so it can serve as the install-pipeline's
+// `InstallConsentPolicy` port (cycle-safe placement here vs in
+// benten-platform-foundation per its module-doc rationale).
+pub mod capability_policy_install_consent;
 // R6 R1 FP-F4 §S4 (Row D-4 closure, CRITIC-2 F-2.2) — the canonical
 // production engine constructor that wires the substantive rechecker
 // post-build. Renamed from "EngineBuilder" wrapper to avoid shadowing

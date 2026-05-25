@@ -77,12 +77,13 @@ fn outcome_to_admission_reject_surfaces_typed_code_on_chain_not_user_rooted() {
     assert_eq!(err.code(), ErrorCode::WriteBoundaryChainNotUserRooted);
 }
 
-/// **§S1 arm 3 — workspace-walker audit fixture.** At the time of S1
-/// landing, the expected `admit_write_chain(` consumption sites are
-/// the enumerated 13 per PLANNER-A + Ben-ratified F1 path-(a) full
-/// cascade.
+/// **§S1 arm 3 — workspace-walker audit fixture (R6 R2 FP-B updated).**
+/// SUBSTANTIVE per pim-18 §3.6f: this arm now walks the workspace via
+/// `grep` for every `admit_write_chain(` production call site + asserts
+/// the count matches the expected enumeration. Reverting any site
+/// removes a grep-hit + this test fires.
 ///
-/// Per-file breakdown:
+/// Per-file breakdown (14 sites total post-R6-R2-FP-B):
 /// - engine_crud.rs: 5 (create_node + update_node + delete_node +
 ///   create_edge + delete_edge)
 /// - engine_caps.rs: 2 (privileged_put_node + delegate_capability
@@ -92,15 +93,72 @@ fn outcome_to_admission_reject_surfaces_typed_code_on_chain_not_user_rooted() {
 /// - engine_diagnostics.rs: 1 (append_version)
 /// - engine_wait.rs: 1 (put_node_inner)
 /// - handler_versions.rs: 1 (persist_handler_version_entry)
+/// - engine.rs: 1 (R6 R2 FP-B / Row D-1 — apply_atrium_merge per-row
+///   chain-bearing admit; the FIRST chain-bearing site at the sync
+///   merge boundary; pre-FP-B only `delegate_capability` was
+///   chain-bearing — every other site was `engine_internal`)
 ///
-/// Total: 13 sites.
+/// Total: 14 sites; of which 2 are chain-bearing
+/// (`delegate_capability` + `apply_atrium_merge` per-row),
+/// 12 are engine_internal.
 ///
 /// Adding a new WRITE entry point requires bumping this count + adding
 /// the new site's per-arm coverage to this test file.
 #[test]
-fn workspace_walker_audit_thirteen_admit_write_chain_call_sites() {
-    const EXPECTED_WRITE_SITES_PER_F1_PATH_A: usize = 13;
-    assert_eq!(EXPECTED_WRITE_SITES_PER_F1_PATH_A, 13);
+fn workspace_walker_audit_fourteen_admit_write_chain_call_sites() {
+    use std::process::Command;
+
+    // Walk the production crates/*/src/ tree for `admit_write_chain(`
+    // hits — the actual call sites. Test files + comments are excluded
+    // by restricting to `src/` directories.
+    let output = Command::new("grep")
+        .args([
+            "-rn",
+            "--include=*.rs",
+            "admit_write_chain(",
+            "crates/benten-engine/src/",
+        ])
+        .current_dir(workspace_root())
+        .output()
+        .expect("grep runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Filter to lines that are actual call sites (not declaration of
+    // `pub(crate) fn admit_write_chain` itself + not doc-comments).
+    let call_sites: Vec<&str> = stdout
+        .lines()
+        .filter(|line| {
+            // Skip the function definition line itself.
+            !line.contains("pub(crate) fn admit_write_chain")
+                // Skip doc-cite lines (start with whitespace + `///` after the path:line: prefix).
+                && !line.contains(":///")
+                && !line.contains(":    ///")
+                // Skip `&self.admit_write_chain` self-method-call references in test wrappers (none in src/).
+                // Skip lines that only mention `admit_write_chain` in a comment block / docstring.
+                && line.contains(".admit_write_chain(")
+        })
+        .collect();
+    // 14 sites enumerated above; tolerate 14+ (additions extend; never
+    // contract). Pre-R6-R2-FP-B was 13; post-FP-B is 14.
+    const EXPECTED_WRITE_SITES_MIN: usize = 14;
+    assert!(
+        call_sites.len() >= EXPECTED_WRITE_SITES_MIN,
+        "expected ≥{EXPECTED_WRITE_SITES_MIN} admit_write_chain call sites; \
+         got {} — sites:\n{}",
+        call_sites.len(),
+        call_sites.join("\n")
+    );
+}
+
+/// Resolve the workspace root from CARGO_MANIFEST_DIR (crate dir) →
+/// parent → parent so paths like `crates/benten-engine/src/` resolve.
+fn workspace_root() -> std::path::PathBuf {
+    let crate_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    crate_dir
+        .parent()
+        .expect("crate has parent")
+        .parent()
+        .expect("workspace root")
+        .to_path_buf()
 }
 
 /// **§S1 arm 4 — privileged-bypass property:** `outcome_to_admission_reject`

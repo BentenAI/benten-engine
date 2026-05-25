@@ -481,7 +481,16 @@ pub struct WriteContext {
 
 - All four fields `pub`; `Default` impl carries `namespace_did = None`
   (the legacy un-namespaced keyspace; byte-identical to pre-#989).
-- `WriteContext::with_namespace_did(self, did: Cid) -> Self` builder.
+- `WriteContext::with_namespace_did(self, namespace_did: Option<Cid>) -> Self` builder.
+  **R6 R2 FP-B (L5-r2-MAJOR-1 closure):** the parameter is `Option<Cid>`
+  (NOT bare `Cid`) — pass `None` to explicit-downgrade a previously-
+  partitioned context to legacy un-namespaced keyspace, `Some(did)` to
+  confine the write to the per-DID partition. The `Option<_>` shape is
+  the deliberate v1-beta-frozen contract; passing `None` on a
+  per-principal write site is a footgun (silently routes to the legacy
+  un-partitioned keyspace). **Construction discipline:** any production
+  caller threading a per-principal write MUST use `Some(principal_cid)`
+  and treat `None` as the legacy/test-fixture-only shape.
 - `WriteContext::namespace_did(&self) -> Option<&Cid>` accessor.
 - The C1 cross-DID non-leak invariant (doc-block on `benten_graph::WriteContext` in `crates/benten-graph/src/lib.rs`) — structural: keys under per-DID prefix derived from
   `Cid::as_bytes()`; never collide with legacy `n:`/`e:`/`es:`/`et:`

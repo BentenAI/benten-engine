@@ -242,6 +242,32 @@ impl ManifestEnvelopeRechecker for NoopManifestEnvelopeRechecker {
     }
 }
 
+/// **R6 R2 FP-B (L2-R2-MAJOR-6 closure / Row D-6 wire):** project a
+/// [`ManifestEnvelopeRecheckOutcome`] onto the typed `ErrorCode` so the
+/// sync-hydrate boundary
+/// ([`benten_sync::handshake::sync_hydrate_consume_recheck_outcome`])
+/// can consume the same outcome the merge boundary does. Returns the
+/// canonical no-op `Ok` shape for `Admitted`/`NotApplicable` via the
+/// `Ok`-mapped variant in the consumer (this helper is the projection
+/// surface; the consumer is the decision surface).
+///
+/// Sibling of [`outcome_to_row_reject`]: that helper maps outcomes to
+/// `EngineError`; this helper maps outcomes to the stable `ErrorCode`
+/// that the sync-hydrate consumer understands.
+#[must_use]
+pub fn outcome_to_error_code(outcome: &ManifestEnvelopeRecheckOutcome) -> ErrorCode {
+    match outcome {
+        ManifestEnvelopeRecheckOutcome::Admitted
+        | ManifestEnvelopeRecheckOutcome::NotApplicable => ErrorCode::NotFound,
+        ManifestEnvelopeRecheckOutcome::UnresolvedDeny => {
+            ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+        }
+        ManifestEnvelopeRecheckOutcome::OutsideEnvelope { .. } => {
+            ErrorCode::PluginDelegationOutsideManifestEnvelope
+        }
+    }
+}
+
 /// Helper used inside [`crate::Engine::apply_atrium_merge`]'s per-row
 /// loop — converts an `OutsideEnvelope` outcome into the typed engine
 /// error.

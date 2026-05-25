@@ -269,6 +269,19 @@ pub fn benten_engine::cap_snapshot_hash::compute(actor_cid: &benten_core::Cid, g
 pub fn benten_engine::cap_snapshot_hash::compute_legacy(actor_cid: &benten_core::Cid, proof_chain_cids: &[benten_core::Cid]) -> [u8; 32]
 pub fn benten_engine::cap_snapshot_hash::verify(actor_cid: &benten_core::Cid, grant_chain_cids: &[benten_core::Cid], revocation_set: &alloc::collections::btree::set::BTreeSet<benten_core::Cid>, policy_backend_tag: &benten_engine::cap_snapshot_hash::PolicyBackendTag, expected: &[u8; 32]) -> bool
 pub fn benten_engine::cap_snapshot_hash::verify_legacy(actor_cid: &benten_core::Cid, proof_chain_cids: &[benten_core::Cid], expected: &[u8; 32]) -> bool
+pub mod benten_engine::capability_policy_install_consent
+pub struct benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+pub fn benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent::new(policy: alloc::sync::Arc<dyn benten_caps::policy::CapabilityPolicy>) -> Self
+impl benten_platform_foundation::install_consent::InstallConsentPolicy for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+pub fn benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent::check_install_consent(&self, install_record_signing_payload_hash: &[u8; 32], plugin_did_str: &str) -> core::result::Result<(), benten_errors::ErrorCode>
+impl core::marker::Freeze for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl core::marker::Send for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl core::marker::Sync for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl core::marker::Unpin for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl core::marker::UnsafeUnpin for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl !core::panic::unwind_safe::RefUnwindSafe for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
+impl !core::panic::unwind_safe::UnwindSafe for benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent
 pub mod benten_engine::change
 pub struct benten_engine::change::ChangeBroadcast
 impl benten_engine::change::ChangeBroadcast
@@ -378,6 +391,7 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_anchor(&self, name: &str) -> core::result::Result<benten_engine::outcome::AnchorHandle, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::device_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::diagnose_read(&self, cid: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::DiagnosticInfo, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::diagnose_read_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::DiagnosticInfo, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::effective_actor_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::ivm_subscriber_count(&self) -> usize
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::metrics_snapshot(&self) -> alloc::collections::btree::map::BTreeMap<alloc::string::String, f64>
@@ -430,6 +444,7 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::materialize_view_with_gate(&self, view_id: &str, gate: &benten_engine::ivm_view_read_gate::IvmViewReadGate) -> core::result::Result<core::option::Option<alloc::vec::Vec<benten_core::Cid>>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view(&self, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_allow_stale(&self, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_as(&self, principal: &benten_core::Cid, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_strict(&self, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_with(&self, view_id: &str, opts: benten_engine::outcome::ReadViewOptions) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::register_user_view(&self, spec: benten_engine::outcome::UserViewSpec) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -451,8 +466,11 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::update_node(&self, old_cid: &benten_core::Cid, new_node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 impl benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_view(&self, view_id: &str, _opts: benten_engine::outcome::ViewCreateOptions) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -1156,6 +1174,7 @@ pub fn benten_engine::production_manifest_envelope_rechecker::ProductionManifest
 pub fn benten_engine::manifest_envelope_recheck::envelope_ceiling_admits_cap_resources<'a>(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, cap_resources: impl core::iter::traits::collect::IntoIterator<Item = &'a str>, zone: &str, key: &str) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::manifest_envelope_recheck::envelope_ceiling_admits_row(ceiling: core::option::Option<&benten_id::device_attestation::CapabilityEnvelope>, scope: &str, zone: &str, key: &str) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::manifest_envelope_recheck::is_synthesized_node_id(did_str: &str) -> bool
+pub fn benten_engine::manifest_envelope_recheck::outcome_to_error_code(outcome: &benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome) -> benten_errors::ErrorCode
 pub fn benten_engine::manifest_envelope_recheck::outcome_to_row_reject(outcome: benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome, zone: &str, key: &str) -> core::result::Result<(), benten_engine::error::EngineError>
 pub mod benten_engine::manifest_signing
 #[non_exhaustive] pub enum benten_engine::manifest_signing::ManifestVerifyError
@@ -1753,6 +1772,7 @@ pub mod benten_engine::production_engine_builder
 pub struct benten_engine::production_engine_builder::ProductionEngineBuilder
 impl benten_engine::production_engine_builder::ProductionEngineBuilder
 pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::build(self) -> core::result::Result<benten_engine::engine::Engine, benten_engine::error::EngineError>
+pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::from_snapshot_blob(bytes: &[u8]) -> core::result::Result<benten_engine::engine::Engine, benten_engine::error::EngineError>
 pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::inner_mut(&mut self) -> &mut benten_engine::builder::EngineBuilder
 pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::new() -> Self
 pub fn benten_engine::production_engine_builder::ProductionEngineBuilder::open(self, path: impl core::convert::AsRef<std::path::Path>) -> core::result::Result<benten_engine::engine::Engine, benten_engine::error::EngineError>
@@ -2811,6 +2831,7 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_anchor(&self, name: &str) -> core::result::Result<benten_engine::outcome::AnchorHandle, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::device_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::diagnose_read(&self, cid: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::DiagnosticInfo, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::diagnose_read_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<benten_engine::outcome::DiagnosticInfo, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::effective_actor_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::ivm_subscriber_count(&self) -> usize
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::metrics_snapshot(&self) -> alloc::collections::btree::map::BTreeMap<alloc::string::String, f64>
@@ -2863,6 +2884,7 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::materialize_view_with_gate(&self, view_id: &str, gate: &benten_engine::ivm_view_read_gate::IvmViewReadGate) -> core::result::Result<core::option::Option<alloc::vec::Vec<benten_core::Cid>>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view(&self, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_allow_stale(&self, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_as(&self, principal: &benten_core::Cid, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_strict(&self, view_id: &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::read_view_with(&self, view_id: &str, opts: benten_engine::outcome::ReadViewOptions) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::register_user_view(&self, spec: benten_engine::outcome::UserViewSpec) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
@@ -2884,8 +2906,11 @@ pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBack
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::delete_edge(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::delete_node(&self, cid: &benten_core::Cid) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_from_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to(&self, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::edges_to_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<alloc::vec::Vec<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge(&self, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
+pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::get_edge_as(&self, principal: &benten_core::Cid, cid: &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::edge::Edge>, benten_engine::error::EngineError>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::update_node(&self, old_cid: &benten_core::Cid, new_node: &benten_core::Node) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>
 impl benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>
 pub fn benten_engine::engine::EngineGeneric<benten_graph::redb_backend::RedbBackend>::create_view(&self, view_id: &str, _opts: benten_engine::outcome::ViewCreateOptions) -> core::result::Result<benten_core::Cid, benten_engine::error::EngineError>

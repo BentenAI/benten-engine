@@ -91,6 +91,27 @@ impl ProductionEngineBuilder {
             .set_manifest_envelope_rechecker(Arc::new(ProductionManifestEnvelopeRechecker::new()));
         Ok(engine)
     }
+
+    /// **R6 R2 FP-B (L2-MAJOR-5 closure):** snapshot-blob factory routing
+    /// through the production substrate. Mirrors [`Engine::from_snapshot_blob`]
+    /// but installs the `ProductionManifestEnvelopeRechecker` post-hydration
+    /// so napi's `fromSnapshotBlob` factory does NOT ship a Noop posture.
+    ///
+    /// The hydrated engine is `is_read_only_snapshot()` per the underlying
+    /// constructor; the rechecker is installed regardless so a future
+    /// promotion of the snapshot view to a writeable engine (out of scope
+    /// at v1-beta) inherits the production substrate.
+    ///
+    /// # Errors
+    ///
+    /// Forwards all [`Engine::from_snapshot_blob`] errors.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn from_snapshot_blob(bytes: &[u8]) -> Result<Engine, EngineError> {
+        let mut engine = Engine::from_snapshot_blob(bytes)?;
+        engine
+            .set_manifest_envelope_rechecker(Arc::new(ProductionManifestEnvelopeRechecker::new()));
+        Ok(engine)
+    }
 }
 
 #[cfg(test)]

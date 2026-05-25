@@ -219,6 +219,21 @@ impl Engine {
         self.read_view_with(view_id, ReadViewOptions::strict())
     }
 
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::read_view`]. The `principal` is currently
+    /// forensic-only — `read_view_with` does not yet thread `actor_cid`
+    /// onto the per-row cap probe; the migration is the load-bearing
+    /// seam (per CLAUDE.md baked-in #18) so future per-principal view
+    /// gating is a one-site addition. Behaviour at v1-beta matches
+    /// [`Engine::read_view`].
+    ///
+    /// # Errors
+    /// Forwards [`Engine::read_view`] errors.
+    pub fn read_view_as(&self, principal: &Cid, view_id: &str) -> Result<Outcome, EngineError> {
+        let _ = principal; // Forensic threading — see docstring.
+        self.read_view_with(view_id, ReadViewOptions::strict())
+    }
+
     /// Phase-3 G20-A3 (carry-ivm-r6-3 closure): resolve the read-gate
     /// label hint for `view_id`. Canonical hand-written ids resolve
     /// via [`benten_ivm::CanonicalViews::lookup`] (post-G-CORE-4 D1 A2

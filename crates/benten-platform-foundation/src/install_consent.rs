@@ -22,8 +22,12 @@ use benten_errors::ErrorCode;
 /// Called at install-pipeline step 3c (BEFORE the cap-cascade). The
 /// implementation typically delegates to the engine's configured
 /// `benten_caps::CapabilityPolicy::check_install_consent`; the engine-
-/// side adapter `CapabilityPolicyInstallConsent` (NOT in this crate
-/// because of the dep-cycle constraint) wraps the policy.
+/// side adapter
+/// `benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent`
+/// (in `benten-engine` crate per the dep-cycle constraint — `benten-caps`
+/// already depends on this crate, so the adapter cannot live here)
+/// wraps the policy. **R6 R2 FP-B (L6-r6r2-l6-1 closure):** the adapter
+/// now actually exists (was previously named-only in this doc).
 ///
 /// Implementations return `Ok(())` to admit, or any `Err(_)` to deny;
 /// `plugin_lifecycle::install_plugin` maps the denial to typed

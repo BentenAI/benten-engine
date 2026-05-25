@@ -1499,11 +1499,78 @@ impl Engine {
                     }
                     Some(peer_did_str) => {
                         let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
+                        // R6 R2 FP-B (L2-R2-MAJOR-6 closure / Row D-6 wire):
+                        // route the outcome through the sync-hydrate consumer
+                        // BEFORE the row-reject decision so both the merge
+                        // boundary AND the handshake boundary share the same
+                        // typed-rejection contract. The hydrate consumer
+                        // accepts the typed ErrorCode form, so we map the
+                        // outcome to its code first then consult both. The
+                        // hydrate consumer returns Ok(()) on
+                        // Admitted/NotApplicable and a typed
+                        // HandshakeError::PayloadMalformed otherwise; we
+                        // surface its rejection as the typed engine error
+                        // (parity with the row-reject path; deduplication
+                        // happens at the `outcome_to_row_reject` call below
+                        // — the hydrate consumer is the FORENSIC parity arm,
+                        // not a duplicate reject pathway).
+                        let outcome_code =
+                            crate::manifest_envelope_recheck::outcome_to_error_code(&outcome);
+                        if let Err(hydrate_err) =
+                            benten_sync::handshake::sync_hydrate_consume_recheck_outcome(
+                                outcome_code,
+                                zone,
+                                key,
+                            )
+                        {
+                            // FORENSIC: log the parity rejection for
+                            // observability; the downstream
+                            // `outcome_to_row_reject` is the engine-side
+                            // typed-error surface.
+                            tracing::debug!(
+                                target: "benten_engine::sync_hydrate_parity",
+                                zone = %zone,
+                                key = %key,
+                                error = %hydrate_err,
+                                "sync_hydrate_consume_recheck_outcome rejected at merge \
+                                 boundary — typed reject also surfacing via \
+                                 outcome_to_row_reject"
+                            );
+                        }
                         crate::manifest_envelope_recheck::outcome_to_row_reject(
                             outcome, zone, key,
                         )?;
                     }
                 }
+            }
+
+            // R6 R2 FP-B (L2-R2-MAJOR-1 closure / Row D-1 wire):
+            // **chain-bearing admit_write_chain at the sync-merge per-row
+            // boundary.** Pre-FP-B: apply_atrium_merge's terminal write
+            // routed only through `append_version` whose admit_write_chain
+            // frame was `engine_internal` (the "1 of 13 chain-bearing
+            // sites — namely the delegate_capability site only" narrative).
+            // Post-FP-B: each row presents a `with_chain(peer_actor_cid,
+            // peer_did)` frame so the WriteBoundaryChainValidator observes
+            // the actual peer-DID at row admission. The Noop default still
+            // returns `NotApplicable` (engines without a production
+            // validator are unaffected); a production validator catches
+            // chains whose root is not a registered user-DID at the sync
+            // merge boundary (closing the asymmetry where outbound writes
+            // were chain-walked but inbound sync rows were not).
+            if let (Some(actor_cid), Some(peer_did)) = (
+                peer_actor_cid,
+                atrium
+                    .resolve_peer_dids(&seed.peer_node_ids)
+                    .await
+                    .into_iter()
+                    .next(),
+            ) {
+                self.admit_write_chain(
+                    &crate::write_boundary_chain_validator::WriteAdmissionFrame::with_chain(
+                        &actor_cid, &peer_did,
+                    ),
+                )?;
             }
 
             // **COLLAPSE (P3) — J8 envelope-ceiling AND.** The single
