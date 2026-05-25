@@ -75,7 +75,21 @@ Each row: (i) frozen surface (where the signature locks at v1-beta),
 (iii) v1-beta posture (what the binary actually enforces / does not
 enforce at v1-beta), (iv) Compromise / spec anchor.
 
-### Row D-1 — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context)
+### ~~Row D-1~~ — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context) — **CLOSED at R6 R1 FP-F4 §S1** (2026-05-24)
+
+> **STATUS: CLOSED.** Per Ben PM-ratified F1 path-(a) full ~13-site
+> cascade ("if we're going to want to do them all eventually, then I
+> say do the full ~13-site cascade now"), the `WriteBoundaryChainValidator`
+> consumption is now structurally-always-on at all 13 WRITE entry
+> points (engine_crud × 5 + engine_caps × 2 + engine_views × 1 +
+> engine_modules × 2 + engine_diagnostics × 1 + engine_wait × 1 +
+> handler_versions × 1) via the new `Engine::admit_write_chain` helper
+> + sealed `WriteAdmissionFrame`. Layer-1 user-as-root invariant is
+> structurally enforced at every WRITE admission when a production
+> validator is installed. Row retained for forensic context per
+> pim-13 / §3.12.
+
+### Row D-1 (FORENSIC) — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context)
 
 - **Frozen surface (v1-beta):**
   `crates/benten-engine/src/write_boundary_chain_validator.rs` —
@@ -99,7 +113,20 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** CLAUDE.md baked-in #18 Layer-1 user-as-root invariant;
   spec V1-FROZEN-INTERFACE.md item 8.
 
-### Row D-2 — InstallRecordReplayStore lifecycle-required wiring
+### ~~Row D-2~~ — InstallRecordReplayStore lifecycle-required wiring — **CLOSED at R6 R1 FP-F4 §S2** (2026-05-24)
+
+> **STATUS: CLOSED.** `InstallPorts.install_record_replay_check`
+> drops `Option<&mut Fn>` for `&mut Fn` — every install caller MUST
+> supply a substantive closure now. Test fixtures wire
+> `benten_platform_foundation::testing::noop_replay_check()`;
+> production callers wire
+> `engine.install_record_replay_store().record_and_check`.
+> `manifest_store::install_plugin` renamed to
+> `install_verified_record_unchecked` with `#[deprecated]` +
+> `#[doc(hidden)]` to steer callers to the full
+> `plugin_lifecycle::install_plugin` path.
+
+### Row D-2 (FORENSIC) — InstallRecordReplayStore lifecycle-required wiring
 
 - **Frozen surface (v1-beta):**
   `crates/benten-engine/src/install_record_replay.rs` —
@@ -124,7 +151,30 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   `crates/benten-engine/src/install_record_replay.rs:33` module-doc
   per-process invariant.
 
-### Row D-3 — 3 §8-E CapabilityPolicy hooks consumption
+### ~~Row D-3~~ — 3 §8-E CapabilityPolicy hooks consumption — **PARTIAL CLOSED at R6 R1 FP-F4 §S3a / §S3b / §S3c** (2026-05-24)
+
+> **STATUS: PARTIAL CLOSED.**
+> - **Row D-3-a CLOSED** at §S3a: `InstallConsentPolicy` trait in
+>   `benten_platform_foundation::install_consent` + threaded through
+>   `InstallPorts.policy` + consumed at `plugin_lifecycle::install_plugin`
+>   step 3c with typed `ErrorCode::PluginInstallConsentDenied` reject.
+>   CATALOG_VARIANT_COUNT 192→193.
+> - **Row D-3-b CLOSED** at §S3b: `EngineCapsHandle::delegate_capability`
+>   consults `CapabilityPolicy::check_per_delegation` between Step 2b
+>   (shares-policy resolver) and Step 3 (effective scope) with typed
+>   `ErrorCode::PluginPerDelegationDenied` reject.
+>   CATALOG_VARIANT_COUNT 193→194.
+> - **Row D-3-c PARTIAL CLOSED** at §S3c per Δv3-2: the 4 production
+>   `policy.check_write(&ctx)` sites all switched to
+>   `policy.check_write_with_audience(&ctx)`. The audience-aware
+>   enrichment seam IS wired (default delegates to `check_write`);
+>   `audience_did` stays `None` at sweep sites per Δv3-2 (peer_did
+>   at apply_atrium_merge is transport-principal NOT cap-target).
+>   The populate-side at delegate_capability defers to G-COMP-1 +
+>   the existing Layer-3 `check_per_delegation` wiring covers
+>   delegate-runtime audience-discrimination needs.
+
+### Row D-3 (FORENSIC) — 3 §8-E CapabilityPolicy hooks consumption
 
 - **Frozen surface (v1-beta):**
   `crates/benten-caps/src/policy.rs::CapabilityPolicy::{check_install_consent, check_per_delegation, check_write_with_audience}`
@@ -150,7 +200,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   silently ignored.
 - **Anchor:** CLAUDE.md #18 trust model Layer-2 + Layer-3; spec item 8.
 
-### Row D-4 — ProductionManifestEnvelopeRechecker production impl + default-builder wiring
+### ~~Row D-4~~ — ProductionManifestEnvelopeRechecker production impl + default-builder wiring — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+
+> **STATUS: CLOSED.** `ProductionManifestEnvelopeRechecker` substantive
+> impl shipped at `crates/benten-engine/src/production_manifest_envelope_rechecker.rs`
+> + `ProductionEngineBuilder` (per CRITIC-2 F-2.2 rename) shipped at
+> `crates/benten-engine/src/production_engine_builder.rs` as the
+> canonical production constructor that wires the substantive
+> rechecker post-build. At v1-beta the load-bearing addition is the
+> synthesized-fallback hardening (Row D-18 coupling); full
+> PluginLibrary-driven chain walk is the G-COMP-1 deliverable per
+> the substantive-rechecker-installed-detection-couple narrative.
+
+### Row D-4 (FORENSIC) — ProductionManifestEnvelopeRechecker production impl + default-builder wiring
 
 - **Frozen surface (v1-beta):**
   `crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`
@@ -192,7 +254,16 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   ingest).
 - **Anchor:** Compromise #26 retense; CLAUDE.md #18 Layer-2.
 
-### Row D-6 — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs
+### ~~Row D-6~~ — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+
+> **STATUS: CLOSED.** `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome`
+> minted as the §4.25 sync-hydrate handshake-time consumption surface
+> for `ManifestEnvelopeRecheckUnresolvedDeny` + `PluginDelegationOutsideManifestEnvelope`
+> ErrorCode arms. The `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`
+> named-pin destination is now wired (the §4.36 merge-time +
+> §4.25 hydrate-time both consume the shared primitive).
+
+### Row D-6 (FORENSIC) — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs
 
 - **Frozen surface (v1-beta):** the SHARED primitive
   (`ManifestEnvelopeRecheckOutcome::UnresolvedDeny` +
@@ -498,7 +569,19 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   predicated on a future codepoint-mint that already happened). The
   original L11-R2-MINOR-4 closure-evidence was mis-stated.
 
-### Row D-18 — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
+### ~~Row D-18~~ — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+
+> **STATUS: CLOSED.** `is_synthesized_node_id(did_str: &str) -> bool`
+> helper minted at `crates/benten-engine/src/manifest_envelope_recheck.rs`
+> per Δv3-10. The `ProductionManifestEnvelopeRechecker` consults
+> this helper + returns `UnresolvedDeny` when the peer-DID is
+> the `node-id:N` synthesized-fallback shape. The
+> substantive-rechecker-installed-detection-couple narrative is
+> preserved: the Noop default continues to admit (NotApplicable)
+> so default-Noop test fixtures don't over-fire; only the
+> substantive rechecker hardens.
+
+### Row D-18 (FORENSIC) — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
 
 - **Frozen surface (v1-beta):** the structural empty-peer-DID
   fail-CLOSED at `engine.rs:1462-1476` IS live for the literal-empty
