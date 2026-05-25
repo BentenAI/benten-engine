@@ -5,12 +5,15 @@
 //! [`SuspendedHandle`]. The engine-side surface (`engine_wait.rs`,
 //! `Engine::suspend_to_bytes`, `Engine::resume_from_bytes`) lives in G3-B.
 //!
-//! This module ships the unit-level helpers R3 tests drive:
+//! This module ships the unit-level helpers R3 tests drive (all
+//! `#[cfg(any(test, feature = "testing"))]`-gated post R6 R1 FP-A
+//! Bundle F1.d, so cited in plain backticks to avoid intra-doc-link
+//! resolution against private symbols in the default build):
 //!
-//! - [`execute_for_test_signal`] — minimal "suspend on signal" shim.
-//! - [`execute_for_test_signal_with_trace`] — same but emits a
+//! - `execute_for_test_signal` — minimal "suspend on signal" shim.
+//! - `execute_for_test_signal_with_trace` — same but emits a
 //!   [`TraceStep::SuspendBoundary`] row.
-//! - [`execute_and_capture_zone_writes`] — records the one pending-signal
+//! - `execute_and_capture_zone_writes` — records the one pending-signal
 //!   entry WAIT writes into the `system:WaitPending` zone.
 //!
 //! `evaluate`/`resume` as module-level entry points are G3-B surface; we
