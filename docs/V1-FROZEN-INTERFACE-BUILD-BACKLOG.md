@@ -433,7 +433,10 @@ pub trait CapabilityPolicy: Sealed + Send + Sync {
      is the regression-defense backstop named-deferred to G-COMP-1.
 
 4. **Object-safety preserved:**
-   - `crates/benten-caps/tests/object_safety_*.rs` continues to pass
+   <!-- cite-drift-exempt: forward-looking acceptance criterion; the
+        object_safety_*.rs test family is to-be-authored as part of this
+        very row's wave landing, NOT a HEAD-cite. -->
+   - `crates/benten-caps/tests/object_safety_*.rs` continues to pass <!-- cite-drift-exempt -->
      (`Arc<dyn CapabilityPolicy>` boxing).
 
 5. **Delete the old soft-seal marker** at `policy.rs:48-67` (the
@@ -455,7 +458,7 @@ pub trait CapabilityPolicy: Sealed + Send + Sync {
   refuses external impls because `Sealed` is `pub(crate)`).
 - `cargo-public-api` baseline for `benten-caps` (row 1) does NOT expose
   `Sealed` publicly (verify `pub(crate)` visibility).
-- `crates/benten-caps/tests/object_safety_*.rs` passes.
+- `crates/benten-caps/tests/object_safety_*.rs` passes <!-- cite-drift-exempt: forward-looking acceptance criterion per the same disposition above. -->
 
 **LOC estimate:** ~250-400 LOC (mostly mechanical `impl Sealed` adds
 across ~20 test sites + the new module + the compile-fail test +
