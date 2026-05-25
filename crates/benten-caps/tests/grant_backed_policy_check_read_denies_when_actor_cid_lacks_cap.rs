@@ -121,11 +121,9 @@ fn check_read_permits_when_actor_cid_matches_grantee() {
     let grants = ActorAwareMockGrants::new(vec![("store:post:read", Some(user_a))]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = ReadContext {
-        label: "post".into(),
-        actor_cid: Some(user_a),
-        ..Default::default()
-    };
+    let mut ctx = ReadContext::default();
+    ctx.label = "post".into();
+    ctx.actor_cid = Some(user_a);
 
     policy
         .check_read(&ctx)
@@ -149,11 +147,9 @@ fn check_read_denies_when_only_other_principal_holds_scope() {
     let grants = ActorAwareMockGrants::new(vec![("store:post:read", Some(user_b))]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = ReadContext {
-        label: "post".into(),
-        actor_cid: Some(user_a),
-        ..Default::default()
-    };
+    let mut ctx = ReadContext::default();
+    ctx.label = "post".into();
+    ctx.actor_cid = Some(user_a);
 
     let err = policy
         .check_read(&ctx)
@@ -186,11 +182,9 @@ fn check_read_permits_unbounded_grant_for_any_actor() {
     let grants = ActorAwareMockGrants::new(vec![("store:post:read", None)]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = ReadContext {
-        label: "post".into(),
-        actor_cid: Some(user_a),
-        ..Default::default()
-    };
+    let mut ctx = ReadContext::default();
+    ctx.label = "post".into();
+    ctx.actor_cid = Some(user_a);
 
     policy
         .check_read(&ctx)
@@ -213,11 +207,9 @@ fn check_read_denies_when_actor_unset_against_actor_bound_grant() {
     let grants = ActorAwareMockGrants::new(vec![("store:post:read", Some(user_b))]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = ReadContext {
-        label: "post".into(),
-        actor_cid: None, // no actor on the lookup
-        ..Default::default()
-    };
+    let mut ctx = ReadContext::default();
+    ctx.label = "post".into();
+    ctx.actor_cid = None;
 
     let err = policy
         .check_read(&ctx)

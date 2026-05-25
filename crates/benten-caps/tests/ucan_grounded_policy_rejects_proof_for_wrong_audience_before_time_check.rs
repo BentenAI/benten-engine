@@ -132,12 +132,10 @@ fn valid_audience_plus_valid_time_window_permits() {
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 1_000_000_000);
-    let ctx = CapWriteContext {
-        label: "cap:typed:crypto-sign".to_string(),
-        scope: "cap:typed:crypto-sign".to_string(),
-        actor_hint: Some(active_did.clone()),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "cap:typed:crypto-sign".to_string();
+    ctx.scope = "cap:typed:crypto-sign".to_string();
+    ctx.actor_hint = Some(active_did.clone());
 
     assert!(
         policy.check_write(&ctx).is_ok(),
@@ -175,12 +173,10 @@ fn wrong_audience_plus_valid_time_window_rejects() {
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 1_000_000_000);
-    let ctx = CapWriteContext {
-        label: "cap:typed:crypto-sign".to_string(),
-        scope: "cap:typed:crypto-sign".to_string(),
-        actor_hint: Some(attacker_did.clone()),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "cap:typed:crypto-sign".to_string();
+    ctx.scope = "cap:typed:crypto-sign".to_string();
+    ctx.actor_hint = Some(attacker_did.clone());
 
     let err = policy.check_write(&ctx).expect_err(
         "wrong audience + valid time-window MUST reject (cap-r1-1 \
@@ -235,12 +231,10 @@ fn missing_principal_did_with_typed_cap_requirement_falls_back_to_audience_less_
     // actor (e.g., `Engine::dispatch_typed_call_public` at
     // `engine_wait.rs::881-891`). Full actor-threading is the
     // cap-r1-16 + CapWriteContext::now follow-up at G24-D files-owned.
-    let ctx = CapWriteContext {
-        label: "cap:typed:crypto-sign".to_string(),
-        scope: "cap:typed:crypto-sign".to_string(),
-        actor_hint: None,
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "cap:typed:crypto-sign".to_string();
+    ctx.scope = "cap:typed:crypto-sign".to_string();
+    ctx.actor_hint = None;
 
     assert!(
         policy.check_write(&ctx).is_ok(),
@@ -267,12 +261,10 @@ fn valid_audience_plus_expired_time_window_rejects_via_time_check() {
     backend.install_proof(&token).unwrap();
 
     let policy = fresh_policy(Arc::clone(&backend), 200);
-    let ctx = CapWriteContext {
-        label: "cap:typed:crypto-sign".to_string(),
-        scope: "cap:typed:crypto-sign".to_string(),
-        actor_hint: Some(active_did.clone()),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "cap:typed:crypto-sign".to_string();
+    ctx.scope = "cap:typed:crypto-sign".to_string();
+    ctx.actor_hint = Some(active_did.clone());
 
     let err = policy.check_write(&ctx).expect_err(
         "valid audience + expired time-window MUST reject (companion: \

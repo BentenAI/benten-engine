@@ -114,11 +114,9 @@ fn cap_policy_fires_on_plugin_delegated_write_within_manifest_envelope() {
     });
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = CapWriteContext {
-        label: "notes".into(),
-        scope: "store:notes:write".into(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "notes".into();
+    ctx.scope = "store:notes:write".into();
 
     policy
         .check_write(&ctx)

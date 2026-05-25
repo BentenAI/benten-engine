@@ -355,14 +355,11 @@ impl Engine {
                 //     `Ok(())` we return `Keep` (deliver).
                 if let Some(policy) = policy_handle.as_ref() {
                     let label = event.labels.first().cloned().unwrap_or_default();
-                    let ctx = benten_caps::ReadContext {
-                        actor_cid: Some(actor_cid),
-                        label,
-                        target_cid: Some(event.anchor_cid),
-                        device_cid: None,
-                        actor_hint: None,
-                        audience_did: None,
-                    };
+                    // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+                    let mut ctx = benten_caps::ReadContext::default();
+                    ctx.actor_cid = Some(actor_cid);
+                    ctx.label = label;
+                    ctx.target_cid = Some(event.anchor_cid);
                     match policy.check_read(&ctx) {
                         Ok(()) => CapRecheckOutcome::Keep,
                         Err(_) => CapRecheckOutcome::Drop,

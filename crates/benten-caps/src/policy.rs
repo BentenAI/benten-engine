@@ -148,18 +148,13 @@ pub enum PendingOp {
 /// privileged-flag for engine-internal writes. Backends inspect these to
 /// decide whether to authorize the transaction.
 ///
-/// `#[non_exhaustive]` application DEFERRED to G-COMP-1 per
-/// V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (G-CORE-9 R1 fix-pass): the
-/// attribute application cascades through ~50+ workspace test sites
-/// using struct-literal construction with `..Default::default()` (which
-/// is blocked from outside the defining crate); the cascade is genuinely
-/// large + the migration to `Default::default()` + field-mutation
-/// pattern is the right shape for G-COMP-1 to apply atomically. The
-/// signature shape is locked at v1-beta; the attribute is the missing
-/// piece per V1-FROZEN-INTERFACE.md item 11 — adding it post-v1-beta
-/// IS breaking and the v1-beta engineering MUST treat field additions
-/// as breaking until Row D-17 closes.
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 — applied at
+/// R6-R2 FP Item 6 (D-17 closure): direct struct-literal construction
+/// from outside `benten-caps` is now blocked; consumers must use
+/// `..Default::default()` + field-mutation pattern (the structural
+/// forward-compat enforcement for additive `pub` field SemVer-safety).
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct CapWriteContext {
     /// Label of the Node about to be written. For multi-op batches this
     /// carries the primary label of the first op (convenience field;
@@ -254,10 +249,12 @@ impl CapWriteContext {
 ///
 /// See `docs/ERROR-CATALOG.md` for [`crate::CapError::DeniedRead`].
 ///
-/// `#[non_exhaustive]` application DEFERRED to G-COMP-1 per
-/// V1-FROZEN-INTERFACE-DEFERRED.md Row D-17 (same rationale as
-/// CapWriteContext above): cascades through ~30+ workspace test sites.
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md item 11 — applied at
+/// R6-R2 FP Item 6 (D-17 closure; same rationale as CapWriteContext
+/// above). Direct struct-literal construction from outside `benten-caps`
+/// is blocked; consumers use `..Default::default()` field-mutation.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct ReadContext {
     /// Label of the Node (or view / anchor) the caller is trying to read.
     pub label: String,
@@ -339,6 +336,28 @@ impl ReadContext {
             actor_hint: None,
             actor_cid: None,
             device_cid: None,
+            audience_did: None,
+        }
+    }
+
+    /// Construct a `ReadContext` for a typed-label + typed-CID read with
+    /// an optional device-CID. Companion to [`ReadContext::by_cid_only`]
+    /// + [`ReadContext::by_label_only`] for the dual-shape
+    /// (label-AND-cid) caller branch.
+    ///
+    /// R6-R2-FP Item 6 (Row D-17 closure): the `#[non_exhaustive]` attribute
+    /// on `ReadContext` blocks direct struct-literal construction from
+    /// outside `benten-caps`; this constructor is the typed entry point
+    /// for the dual-shape case (replaces inline struct literals in
+    /// `benten-engine::primitive_host::check_read_capability`).
+    #[must_use]
+    pub fn by_label_and_cid(label: impl Into<String>, cid: Cid, device_cid: Option<Cid>) -> Self {
+        Self {
+            label: label.into(),
+            target_cid: Some(cid),
+            actor_hint: None,
+            actor_cid: None,
+            device_cid,
             audience_did: None,
         }
     }

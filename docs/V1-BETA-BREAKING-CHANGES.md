@@ -678,3 +678,77 @@ Cohort 8 PLANNED entry RESOLVED — superseded by FINAL Cohort 8 entries from ba
 Cohort 8 Group C (batch-c) — `phase-4-meta-core/r6-r2-batch-c-dsl-catalog` sub-branch at `13faa4b1` (2026-05-25); closes Row D-19 atomic 4-surface §3.5g rename `Strategy::C` → `Strategy::Reserved` + 3 first-class DSL ErrorCode mints (`E_DSL_PARSE_ERROR` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND`); CATALOG_VARIANT_COUNT 194 → 197.
 
 Cohort 8 Group A (batch-a-crypto-identity) — `phase-4-meta-core/r6-r2-batch-a-crypto-identity` sub-branch at `4bf64fba` (2026-05-25); substrate-honesty WIRE-NOW pass: L6 install-consent auto-install (Row D-3-a) + L1 issuer_verifying_key self-bind (BINDING_SIG_DOMAIN v3→v4) + Path G capability_grant_cid substantive at apply_atrium_merge + Row D-13 structural_kdf info-tag codepoint-binding + Row D-8 F3 anti-replay TOCTOU CAS substrate.
+
+Cohort 8 Group B (batch-b-engine-structural) — `phase-4-meta-core/r6-r2-batch-b-engine-structural` sub-branch at `db0235e5` (2026-05-25); D-17 `#[non_exhaustive]` cascade on CapWriteContext + ReadContext + SuspensionOutcome (~75 sites) + D-18 synthesized-fallback structural hardening at engine substrate (`ManifestEnvelopeRechecker::is_substantive()` default method + apply_atrium_merge per-row short-circuit).
+
+---
+
+## Cohort 8 (Group B) — R6-R2 FP 9-item WIRE-NOW batch (Group B subset: D-17 + D-18) (this PR)
+
+**Ratification date:** 2026-05-25 (Ben-authorized as the v1-beta-freeze-window auto-WIRE-NOW per the orchestrator-defer-prediction-bias amendment).
+
+### Item 6 — `#[non_exhaustive]` cascade on `CapWriteContext` + `ReadContext` + `SuspensionOutcome` (D-17 partial closure)
+
+**What changed.** Three public types in the lens-named set now carry `#[non_exhaustive]`:
+
+- `benten_caps::policy::CapWriteContext` (`crates/benten-caps/src/policy.rs`)
+- `benten_caps::policy::ReadContext` (`crates/benten-caps/src/policy.rs`)
+- `benten_engine::engine_wait::SuspensionOutcome` (`crates/benten-engine/src/engine_wait.rs`)
+
+**Why it's breaking.** Cross-crate consumers can no longer construct these types via struct-literal syntax (`CapWriteContext { ... }`) — including the FRU form `CapWriteContext { field: val, ..Default::default() }`. The compile-time guard makes future additive field additions non-breaking for downstream consumers (the SemVer-asymmetric win the freeze contract requires). Cross-crate `match` consumers on `SuspensionOutcome` now require a `_` wildcard arm.
+
+**What you must change.** Migrate all out-of-crate construction to:
+
+```rust
+let mut ctx = CapWriteContext::default();
+ctx.label = "post".into();
+ctx.actor_cid = Some(actor_cid);
+// ... mutate fields directly
+```
+
+For `ReadContext` dual-shape (label + cid) callers, prefer the new typed constructor:
+
+```rust
+let ctx = ReadContext::by_label_and_cid(label, cid, device_cid);
+```
+
+Cross-crate `match` arms on `SuspensionOutcome` add a wildcard:
+
+```rust
+match outcome {
+    SuspensionOutcome::Complete(o) => { /* ... */ },
+    SuspensionOutcome::Suspended(h) => { /* ... */ },
+    _ => { /* forward-compat guard */ },
+}
+```
+
+**In-tree migration completed in this PR:**
+
+- `crates/benten-engine/src/{engine,engine_wait,engine_crud,engine_diagnostics,engine_subscribe,engine_views,primitive_host}.rs` — 7 production call sites converted to default+mutation pattern
+- `crates/benten-engine/tests/r6_r1_fp_f4_s3c_*.rs` — 2 sites
+- `crates/benten-caps/tests/*.rs` — 12 test files / ~44 sites mechanically converted
+- `bindings/napi/src/wait.rs` + `crates/benten-eval/benches/wait_suspend_resume_latency.rs` — wildcard arms added
+
+**Audit test:** `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` deferral-comments for the 3 types lifted; SuspensionOutcome arm-coverage pin now exercises the `_` wildcard guard.
+
+**cargo-public-api baselines:** `docs/public-api/benten-caps.txt` + `docs/public-api/benten-engine.txt` regenerated.
+
+**REMAINING (NOT in this PR; G-COMP-1 destination):** the Row D-17 R2 EXTENSION set (~40+ additional pub types across `benten-engine` outcome.rs + `benten-ivm` view + `benten-platform-foundation` materializer + `benten-core` Subgraph cluster) — see `docs/V1-FROZEN-INTERFACE-DEFERRED.md::Row D-17` annotation for sub-class carve-outs.
+
+### Item 9 — D-18 synthesized-fallback structural hardening at engine substrate
+
+**What changed.** `ManifestEnvelopeRechecker` trait gains a default method:
+
+```rust
+fn is_substantive(&self) -> bool { true }
+```
+
+`NoopManifestEnvelopeRechecker` overrides to return `false`. `Engine::apply_atrium_merge`'s per-row recheck loop now short-circuits with `ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny` when both `rechecker.is_substantive()` AND `is_synthesized_node_id(peer_did_str)` hold — BEFORE calling `rechecker.recheck_row`. This is the engine substrate's structural defense-in-depth so a faulty production rechecker impl that admits `node-id:N` synthesized DIDs is no longer reachable on this code path.
+
+**Why it's breaking (mild).** Third-party `ManifestEnvelopeRechecker` impls that override the default method (extremely unlikely at v1-beta — the trait is mostly Benten-internal) get a new opt-in API surface. Impls that DON'T override inherit the safe default (`true`).
+
+**Defense narrative.** CLAUDE.md #18 Layer-3 structural-always-on. Under any substantive rechecker, an adversarial peer presenting an unmapped `node-id:N` DID is rejected at the engine substrate regardless of rechecker behavior.
+
+**Regression-guard:** `crates/benten-engine/tests/r6_r2_fp_item_9_d18_substantive_rechecker_detection_couple.rs` — 5 test arms covering default `is_substantive()`, Noop override, faulty-admit-all rechecker rejection, resolvable-DID pass-through, and Noop-+-synthesized non-fire.
+
+**Coupling.** Per Row D-18, full closure couples to Row D-4 (the substantive `ProductionManifestEnvelopeRechecker` impl at G-COMP-1); Item 9's structural pin is the engine-substrate defense-in-depth that holds regardless of which rechecker is mounted.

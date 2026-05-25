@@ -85,10 +85,8 @@ fn rate_limit_clock_injection_consistent_at_window_boundary_1156_626() {
 fn caps_write_context_is_cap_write_context_no_dual_type_collision_1156_885() {
     // Names the post-rename type explicitly. If someone reverted the
     // #1269 rename, this path would not resolve.
-    let ctx = benten_caps::CapWriteContext {
-        label: "post".into(),
-        ..Default::default()
-    };
+    let mut ctx = benten_caps::CapWriteContext::default();
+    ctx.label = "post".into();
     assert_eq!(ctx.label, "post");
 }
 

@@ -124,6 +124,17 @@ pub(crate) fn call_with_suspension_adapter(
                 signal_name: signal_name_str,
             })
         }
+        // R6-R2-FP Item 6 (Row D-17): `SuspensionOutcome` is
+        // `#[non_exhaustive]` cross-crate; a future-3rd-variant
+        // surfaces here as an explicit reject so the napi bridge
+        // never silently routes an unknown shape. The freeze
+        // contract makes the variant set additive; this arm is the
+        // forward-compat guard.
+        _ => Err(napi::Error::from_reason(
+            "SuspensionOutcome: unknown variant — napi bridge does not \
+             yet model this outcome shape (R6-R2-FP Item 6 / D-17 \
+             non_exhaustive forward-compat guard)",
+        )),
     }
 }
 
