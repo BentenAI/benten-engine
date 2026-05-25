@@ -445,18 +445,24 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant`
   is hardcoded `[u8; 64]` (Ed25519 fixed-size); the rest of #5
   framing carries multiformats codepoint-dispatch via varsig.
-- **Deferred consumption (post-audit + Phase-4-Meta-Composing):**
+- **Deferred consumption (G-CORE-PQ-WIRE wave — see Row D-26):**
   promote to varsig-tagged variable-length to admit ML-DSA-65 (3293
   bytes) + future hybrid signatures (Ed25519⊕ML-DSA-65 = 3357 bytes
   concatenated) under the same binding_sig shape. The classical
   half is preserved via the codepoint-dispatch fall-through.
+  Re-homed from "post-audit + Phase-4-Meta-Composing" to the
+  G-CORE-PQ-WIRE wave per Ben 2026-05-24 PM "do everything now"
+  ratification (the structural sub-fork on HOW to carry hybrid
+  pubkeys is the same for binding_sig as for the 3 sites in Row D-26;
+  bundling them in one wave is the do-it-all-properly path).
 - **v1-beta posture:** ed25519_dalek is the only signature primitive
   used for binding_sig at v1-beta so the hardcoded shape is
   consistent. The audit (NF-2 / C-GM-AUDIT) lands BEFORE v1-GM;
   the varsig promotion couples to the audit-result decision on
   whether to ship binding_sig as hybrid-by-default at v1-GM.
 - **Anchor:** L17-r1-6 G-CORE-9 R1 finding + #5 crypto-agility
-  contract + NF-2 / C-GM-AUDIT v1-GM gate.
+  contract + NF-2 / C-GM-AUDIT v1-GM gate + Row D-26 wave-bundling
+  ratification 2026-05-24 PM.
 
 #### Row D-15-RETRACTED — SHA hashcodepoint pre-blessed agile-hash mint
 
@@ -887,6 +893,73 @@ The v1-beta-shipped binary does NOT structurally enforce:
 The v1-GM tag is gated on the independent ml-dsa + ml-kem audit
 (NF-2 / C-GM-AUDIT) per Compromise #30. The audit-landing closes
 Row D-15's audit-readiness concern.
+
+---
+
+### Row D-26 — G-CORE-PQ-WIRE wave: PQ-hybrid app-layer wire-in for all identity-bearing surfaces
+
+- **Frozen surface (v1-beta):** 4 production sites currently
+  classical-only Ed25519 (32-byte verifying-key bytes + 64-byte
+  signature) at the app layer:
+  - `crates/benten-drop/src/envelope_sig.rs::sign_envelope` +
+    `verify_envelope` (DropBundle envelope signature)
+  - `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_peer_signature`
+  - `crates/benten-platform-foundation/src/install_record.rs::InstallRecord::verify_user_signature`
+  - `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant::binding_sig`
+    (already named at Row D-15e; re-homed to this wave per
+    same-structural-sub-fork analysis)
+
+  Plus the `benten_id::Keypair` classical-only structure (~25-30
+  workspace call sites; structurally couples to whichever sub-fork
+  HOW choice is adopted).
+
+- **Deferred consumption (G-CORE-PQ-WIRE wave; Ben 2026-05-24 PM
+  ratification):** wire `benten_crypto_suite::SignatureSuite`
+  hybrid signing + verifying at ALL identity-bearing surfaces in a
+  dedicated multi-wave initiative. Sub-fork HOW choice between:
+  - **(α)** additive sibling pubkey field per site (smallest
+    structural delta; preserves classical-only downgrade arm)
+  - **(β)** envelope v1→v2 version bump per site (cleaner per-site
+    but breaks v1 readers)
+  - **(γ)** DID-extension carries hybrid pubkey bytes (cleanest
+    structurally; cascades through `benten_id::Keypair`)
+
+  The wave's R0 design pre-work selects between α/β/γ based on
+  cross-site cascade analysis (see R6-R1-FP-E-HARD-ESCALATION.md
+  path-analysis doc on E's branch for the LOC budgets + HEAD-verified
+  cascade depths).
+
+- **Wave naming:** `G-CORE-PQ-WIRE` — sequence with Phase-4-Meta-Core
+  R6 R1 FP cycle completion → R6 iteration to strict-Q5 → then
+  G-CORE-PQ-WIRE wave dispatch (pre-tag wire-format window absorbs
+  the wire change; same window that absorbed Agent B's F3 AAD
+  total_chunks fix at R6 R1 FP-B).
+
+- **v1-beta posture:** the v1-beta-tag artifact ships PQ-hybrid at
+  the crypto-suite SUBSTRATE layer (per CLAUDE.md #5 + RATIFIED-pq-
+  default-reframe-2026-05-19); the app-layer SHIPPED state at
+  v1-beta is classical-only Ed25519 for the 4 sites above. This is
+  the SAME classical-floor-under-audited-security posture per CLAUDE.md
+  v1-GATE addition (PQ-hybrid is non-sole-trust at app layer; the
+  classical Ed25519 layer is itself the audited security floor; the
+  hybrid layer is defense-in-depth + post-quantum future-proofing).
+  Compromise #30 narrative honestly discloses this gap with NAMED
+  destination = this G-CORE-PQ-WIRE wave (NOT G-COMP-1 as Compromise
+  #30's pre-2026-05-24-PM narrative suggested).
+
+- **Forward-protection:** per `feedback_orchestrator_defer_prediction_bias`,
+  the wave dispatch MUST be sequenced + sized (not perpetually
+  deferred). Wave R0 brief deadline = post R6 R1 FP consolidation +
+  R6 R2 dispatch (the natural window after the current FP cycle
+  settles). Per Ben 2026-05-24 PM "do everything now is really my
+  default stance" — the wave is queued ACTIVE, not exploratory.
+
+- **Anchor:** L2-R6-MAJOR-2 G-CORE-9 R1 finding (the 3 sites) +
+  Row D-15e (binding_sig sub-fork) + Agent E's R6-R1-FP-E HARD-ESCALATION
+  fork-analysis doc on branch `phase-4-meta-core/r6-r1-fp-e-pq-hybrid-app-layer-wire`
+  at SHA `83096e39` + Ben 2026-05-24 PM "do everything now" ratification
+  (`.addl/phase-4-meta/MORNING-QUEUE-2026-05-24-PM.md` + this session's
+  defer-bias memo codification at `feedback_orchestrator_defer_prediction_bias.md`).
 
 ---
 
