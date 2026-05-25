@@ -887,10 +887,11 @@ mod napi_surface {
         ///
         /// Accepts the JS-side `UserViewSpec` shape:
         /// `{ id: string, inputPattern: { label?: string, anchorPrefix?: string },
-        ///    strategy?: 'A' | 'B' | 'C' }`.
-        /// `strategy` defaults to `'B'` per D8-RESOLVED. `'A'` and `'C'`
+        ///    strategy?: 'A' | 'B' | 'Reserved' }` (the alias `'C'` is also
+        /// accepted as backward-compat for the pre-Row-D-19 rename).
+        /// `strategy` defaults to `'B'` per D8-RESOLVED. `'A'` and `'Reserved'`
         /// produce typed errors (`E_VIEW_STRATEGY_A_REFUSED` /
-        /// `E_VIEW_STRATEGY_C_RESERVED`).
+        /// `E_VIEW_STRATEGY_RESERVED`).
         ///
         /// R6FP-Group-1 (r6-arch-2): renamed from `create_user_view` to
         /// align with the engine's `register_*` lifecycle verb. The

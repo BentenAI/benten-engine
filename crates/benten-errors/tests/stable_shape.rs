@@ -106,10 +106,12 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // Phase-2a ucca-7 parse-time refusal code (lone-`*` GrantScope).
     ErrorCode::CapScopeLoneStarRejected,
     // Phase-2b G8-B (D8-RESOLVED): user-view strategy refusals — `Strategy::A`
-    // is reserved for the 5 Phase-1 hand-written IVM views; `Strategy::C` is
-    // Phase-3+ Z-set / DBSP cancellation reserved.
+    // is reserved for the 5 Phase-1 hand-written IVM views; `Strategy::Reserved`
+    // (renamed from `Strategy::C` at G23-0a; full enum + wire-string + TS-class
+    // atomic rename landed at Row D-19 G-COMP-1 wave Cohort 8) is Phase-3+
+    // Z-set / DBSP cancellation reserved.
     ErrorCode::ViewStrategyARefused,
-    ErrorCode::ViewStrategyCReserved,
+    ErrorCode::ViewStrategyReserved,
     // Phase-2b G7-B SANDBOX invariants (Inv-4 nest depth + Inv-7 output
     // limit) plus the D20 saturation overflow code.
     ErrorCode::InvSandboxDepth,
@@ -629,6 +631,23 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // CATALOG_VARIANT_COUNT 192 → 193 (S3a) → 194 (S3b).
     ErrorCode::PluginInstallConsentDenied,
     ErrorCode::PluginPerDelegationDenied,
+    // Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+    // Cohort 8): first-class catalog mirrors of the pre-existing
+    // `pub const benten_dsl_compiler::E_DSL_*` wire-string constants +
+    // `CompileError::{Parse,Semantic,Build}` variants. Pre-mirror these
+    // 3 routed through `ErrorCode::Unknown(...)`; the mints close the
+    // §3.5g pub-error-variant-first-class-mirror gap so the wire strings
+    // have typed catalog homes (the 3 entries in
+    // `scripts/drift-detect-error-variant-mirror-baseline.txt` for
+    // `CompileError::Parse` / `Semantic` / `Build` are removed by this
+    // wave per §3.5g item 6 amendment closure). The atomic 4-surface
+    // rename of `ViewStrategyCReserved` -> `ViewStrategyReserved` lands
+    // in the same wave (rename, not a mint — does not bump the count).
+    // CATALOG_VARIANT_COUNT 194 -> 195 (Parse) -> 196 (UnknownPrimitive)
+    // -> 197 (MissingRespond).
+    ErrorCode::DslParseError,
+    ErrorCode::DslUnknownPrimitive,
+    ErrorCode::DslMissingRespond,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -1026,8 +1045,17 @@ fn variant_count_is_pinned() {
     // `crates/benten-engine/src/engine_share_scope.rs`). 191 + 1 = 192.
     // R6 R1 FP-F4 §S3a + §S3b: +2 `PluginInstallConsentDenied` +
     // `PluginPerDelegationDenied` — the §8-E hook denial codes. 192 → 194.
+    //
+    // **Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+    // Cohort 8)**: +3 `DslParseError` + `DslUnknownPrimitive` +
+    // `DslMissingRespond` — first-class catalog mirrors of the
+    // pre-existing `CompileError::{Parse,Semantic,Build}` variants /
+    // `pub const benten_dsl_compiler::E_DSL_*` wire-string constants.
+    // The same wave performs the atomic 4-surface rename of
+    // `ViewStrategyCReserved` -> `ViewStrategyReserved` (rename, not a
+    // mint — does not bump the count). 194 -> 197.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 194,
+        CATALOG_VARIANT_COUNT, 197,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1157,7 +1185,7 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::WaitTtlInvalid
             | ErrorCode::WaitMetadataMissing
             | ErrorCode::ViewStrategyARefused
-            | ErrorCode::ViewStrategyCReserved
+            | ErrorCode::ViewStrategyReserved
             | ErrorCode::ViewLabelMismatch
             | ErrorCode::SandboxNestedDispatchDepthExceeded
             | ErrorCode::SandboxFuelExhausted
@@ -1313,7 +1341,12 @@ fn catalog_variant_count_matches_enum() {
             // hook denial codes (install-time consent + per-delegation
             // runtime). Forensic-discrimination per CRITIC-1 FIX-5.
             | ErrorCode::PluginInstallConsentDenied
-            | ErrorCode::PluginPerDelegationDenied => true,
+            | ErrorCode::PluginPerDelegationDenied
+            // Row D-19 G-COMP-1 wave (Cohort 8) — first-class catalog
+            // mirrors of `CompileError::{Parse,Semantic,Build}`.
+            | ErrorCode::DslParseError
+            | ErrorCode::DslUnknownPrimitive
+            | ErrorCode::DslMissingRespond => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

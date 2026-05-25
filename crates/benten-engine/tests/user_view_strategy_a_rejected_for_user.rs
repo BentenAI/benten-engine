@@ -1,12 +1,13 @@
 // Phase 3 G20-A3 — un-ignored: production code at
 // `crates/benten-engine/src/engine_views.rs::register_user_view`
-// already rejects Strategy::A + Strategy::C; this file lifts the
-// red-phase pin to a green-phase end-to-end driver per dispatch-
-// conventions §3.6b (production entry point + observable
-// consequence).
+// already rejects Strategy::A + Strategy::Reserved (renamed from
+// Strategy::C at G23-0a + Row D-19 G-COMP-1 wave Cohort 8 atomic
+// 4-surface rename); this file lifts the red-phase pin to a
+// green-phase end-to-end driver per dispatch-conventions §3.6b
+// (production entry point + observable consequence).
 //
 //! Phase 3 G20-A3 (Phase 2b R4-FP B-1 origin) — D8-RESOLVED:
-//! `Engine::register_user_view` REFUSES Strategy::A + Strategy::C
+//! `Engine::register_user_view` REFUSES Strategy::A + Strategy::Reserved
 //! at registration time.
 //!
 //! Pin source:
@@ -61,8 +62,10 @@ fn user_view_strategy_a_refused_with_typed_error() {
     );
 }
 
-/// Companion: `Strategy::C` (reserved for Phase-3 Z-set cancellation
-/// per g8-concern-3) MUST also be refused for user views.
+/// Companion: `Strategy::Reserved` (reserved for Phase-3 Z-set cancellation
+/// per g8-concern-3; renamed from `Strategy::C` at G23-0a + Row D-19
+/// G-COMP-1 wave Cohort 8 atomic 4-surface rename) MUST also be refused
+/// for user views.
 #[test]
 fn user_view_strategy_c_refused_as_reserved() {
     let dir = tempfile::tempdir().unwrap();
@@ -80,12 +83,18 @@ fn user_view_strategy_c_refused_as_reserved() {
 
     let err = engine
         .register_user_view(spec)
-        .expect_err("register_user_view MUST reject Strategy::C for user views");
+        .expect_err("register_user_view MUST reject Strategy::Reserved for user views");
 
     let rendered = err.to_string();
     assert!(
-        rendered.contains("Strategy::C") || rendered.contains("Strategy C"),
-        "expected typed Strategy::C-reserved error, got: {rendered}"
+        rendered.contains("Strategy::Reserved")
+            || rendered.contains("Strategy Reserved")
+            // Backward-compat note: prior to Row D-19 G-COMP-1 wave Cohort 8
+            // the error message read "Strategy::C"; keep these matchers as
+            // forensic fallbacks in case a tree mid-rename ends up under test.
+            || rendered.contains("Strategy::C")
+            || rendered.contains("Strategy C"),
+        "expected typed Strategy::Reserved error, got: {rendered}"
     );
     assert!(
         rendered.contains("user_c_attempt"),

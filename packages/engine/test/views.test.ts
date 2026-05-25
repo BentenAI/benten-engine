@@ -175,7 +175,12 @@ describe("engine.registerUserView", () => {
     } as unknown as UserViewSpec;
 
     await expect(engine.registerUserView(reservedSpec)).rejects.toMatchObject({
-      message: expect.stringMatching(/E_VIEW_STRATEGY_C_RESERVED|Phase 3|Z-set/i),
+      // Post-Row-D-19 G-COMP-1 wave Cohort 8 the wire string is
+      // E_VIEW_STRATEGY_RESERVED; the `'C'` matcher is retained as a
+      // backward-compat fallback during the rename window.
+      message: expect.stringMatching(
+        /E_VIEW_STRATEGY_RESERVED|E_VIEW_STRATEGY_C_RESERVED|Phase 3|Z-set/i,
+      ),
     });
 
     await engine.close();

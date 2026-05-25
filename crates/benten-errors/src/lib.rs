@@ -194,9 +194,10 @@ pub enum ErrorCode {
     IvmPatternMismatch,
     /// Reserved IVM strategy variant requested but not implemented in this
     /// phase. Phase 2b ships `Strategy::A` (hand-written) + `Strategy::B`
-    /// (Algorithm B); `Strategy::C` (Z-set / DBSP cancellation) is reserved
-    /// for Phase 3+. Surfaces from
-    /// `benten_ivm::testing::try_construct_view_with_strategy(Strategy::C)`.
+    /// (Algorithm B); `Strategy::Reserved` (Z-set / DBSP cancellation;
+    /// renamed from `Strategy::C` at G23-0a) is reserved for Phase 3+.
+    /// Surfaces from
+    /// `benten_ivm::testing::try_construct_view_with_strategy(Strategy::Reserved)`.
     IvmStrategyNotImplemented,
     /// Caller-supplied prior head was never observed by the version anchor.
     /// Surfaces from the prior-head-threaded `benten_core::version::append_version`.
@@ -329,9 +330,14 @@ pub enum ErrorCode {
     /// B path (`Strategy::B`, the user-view default).
     ViewStrategyARefused,
     /// Phase-2b G8-B (D8-RESOLVED): a user view registration declared
-    /// `Strategy::C`. Strategy C is the Z-set / DBSP cancellation algorithm
-    /// reserved for Phase 3+; refused at registration time in Phase 2b.
-    ViewStrategyCReserved,
+    /// `Strategy::Reserved`. The `Reserved` strategy slot (Z-set / DBSP
+    /// cancellation algorithm; renamed from the prior `Strategy::C`
+    /// spelling at G23-0a per arch-r1-14) is reserved for Phase 3+ and
+    /// refused at registration time. Row D-19 G-COMP-1 wave landed the
+    /// Rust enum + wire-string + TS class atomic rename at the
+    /// Phase-4-Meta-Core R6 R2 FP integration (Cohort 8 in
+    /// `docs/V1-BETA-BREAKING-CHANGES.md`).
+    ViewStrategyReserved,
     /// Phase-2b R6-R3 (r6-r3-ivm-1): a user view registration supplied one
     /// of the four canonical view ids whose hand-written view has a
     /// hardcoded `input_pattern_label`, paired with a label that disagrees
@@ -1393,6 +1399,45 @@ pub enum ErrorCode {
     /// `benten_engine::engine_caps::EngineCapsHandle::delegate_capability`.
     /// Maps to `E_PLUGIN_PER_DELEGATION_DENIED`.
     PluginPerDelegationDenied,
+    /// **Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+    /// Cohort 8)** — DSL parse-phase failure (lexer / parser rejection).
+    /// First-class catalog mirror of the pre-existing
+    /// `pub const benten_dsl_compiler::E_DSL_PARSE_ERROR` wire-string
+    /// constant + `CompileError::Parse(Diagnostic)` variant at
+    /// `crates/benten-dsl-compiler/src/lib.rs`. Pre-mirror the
+    /// `CompileError::Parse(d) => ErrorCode::Unknown(d.error_code.to_string())`
+    /// arm in `CompileError::code()` collapsed the typed catalog entry to
+    /// `Unknown`; this mint lets discriminant-switching consumers route
+    /// parse failures via the typed catalog without prose-string parsing.
+    /// Per L9-r3-MIN-1 name-collision closure the wire string
+    /// `E_DSL_PARSE_ERROR` is REUSED (the pre-existing `pub const`
+    /// already occupies that wire slot); this variant ONLY adds the
+    /// typed catalog mirror. Maps to `E_DSL_PARSE_ERROR`.
+    DslParseError,
+    /// **Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+    /// Cohort 8)** — DSL semantic-phase failure for unknown primitive
+    /// references. First-class catalog mirror of the pre-existing
+    /// `pub const benten_dsl_compiler::E_DSL_UNKNOWN_PRIMITIVE`
+    /// wire-string constant + `CompileError::Semantic(Diagnostic)` arm
+    /// (the unknown-keyword dispatch path at
+    /// `crates/benten-dsl-compiler/src/lib.rs::parse_primitive`).
+    /// Pre-mirror the `CompileError::Semantic(d) => ErrorCode::Unknown(d.error_code.to_string())`
+    /// arm in `CompileError::code()` collapsed to `Unknown`; this mint
+    /// gives unknown-primitive failures a typed catalog home. Maps to
+    /// `E_DSL_UNKNOWN_PRIMITIVE`.
+    DslUnknownPrimitive,
+    /// **Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+    /// Cohort 8)** — DSL build-phase failure for handlers missing a
+    /// terminating RESPOND primitive. First-class catalog mirror of the
+    /// pre-existing `pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND`
+    /// wire-string constant + `CompileError::Build(Diagnostic)` variant
+    /// at `crates/benten-dsl-compiler/src/lib.rs::emit` (the post-AST
+    /// build-phase pass that refuses to emit a handler subgraph lacking
+    /// a RESPOND terminator). Per CLAUDE.md commitment #1 (12 operation
+    /// primitives, RESPOND-terminated handlers) this is a structural
+    /// invariant the DSL compiler enforces at the build boundary. Maps
+    /// to `E_DSL_MISSING_RESPOND`.
+    DslMissingRespond,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1558,7 +1603,7 @@ impl ErrorCode {
             ErrorCode::SubscribeReplayWindowExceeded => "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED",
             ErrorCode::Inv11SystemZoneRead => "E_INV_11_SYSTEM_ZONE_READ",
             ErrorCode::ViewStrategyARefused => "E_VIEW_STRATEGY_A_REFUSED",
-            ErrorCode::ViewStrategyCReserved => "E_VIEW_STRATEGY_C_RESERVED",
+            ErrorCode::ViewStrategyReserved => "E_VIEW_STRATEGY_RESERVED",
             ErrorCode::ViewLabelMismatch => "E_VIEW_LABEL_MISMATCH",
             // Phase 2b G7-A SANDBOX surface
             ErrorCode::InvSandboxDepth => "E_INV_SANDBOX_DEPTH",
@@ -1734,6 +1779,14 @@ impl ErrorCode {
             // R6 R1 FP-F4 §S3a + §S3b — §8-E hook denial codes.
             ErrorCode::PluginInstallConsentDenied => "E_PLUGIN_INSTALL_CONSENT_DENIED",
             ErrorCode::PluginPerDelegationDenied => "E_PLUGIN_PER_DELEGATION_DENIED",
+            // Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+            // Cohort 8) — first-class catalog mirrors for the pre-existing
+            // `pub const benten_dsl_compiler::E_DSL_*` wire-string constants
+            // + `CompileError::{Parse,Semantic,Build}` variants. Wire
+            // strings preserved verbatim (no wire change for these 3).
+            ErrorCode::DslParseError => "E_DSL_PARSE_ERROR",
+            ErrorCode::DslUnknownPrimitive => "E_DSL_UNKNOWN_PRIMITIVE",
+            ErrorCode::DslMissingRespond => "E_DSL_MISSING_RESPOND",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2083,7 +2136,7 @@ impl ErrorCode {
             // (Engine::create_view), not along a primitive edge — same routing
             // disposition as DuplicateHandler / InvRegistration.
             ErrorCode::ViewStrategyARefused
-            | ErrorCode::ViewStrategyCReserved
+            | ErrorCode::ViewStrategyReserved
             | ErrorCode::ViewLabelMismatch => None,
 
             // Phase-3 G21-T3 §2.5(d): reserved handler-id namespace
@@ -2261,6 +2314,18 @@ impl ErrorCode {
             ErrorCode::PluginInstallConsentDenied => None,
             ErrorCode::PluginPerDelegationDenied => Some("ON_DENIED"),
 
+            // Row D-19 G-COMP-1 wave (Cohort 8) — first-class catalog
+            // mirrors of the pre-existing
+            // `CompileError::{Parse,Semantic,Build}` variants. All three
+            // fire at the DSL-compile boundary (BEFORE register_subgraph);
+            // no primitive-edge routing nuance applies — mirrors the
+            // DslBackendRejected / DslIoError disposition (route to
+            // ON_ERROR — compile-time failures are downstream-uncomposable
+            // errors at the registration boundary).
+            ErrorCode::DslParseError
+            | ErrorCode::DslUnknownPrimitive
+            | ErrorCode::DslMissingRespond => Some("ON_ERROR"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2402,7 +2467,7 @@ impl core::str::FromStr for ErrorCode {
             "E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED" => ErrorCode::SubscribeReplayWindowExceeded,
             "E_INV_11_SYSTEM_ZONE_READ" => ErrorCode::Inv11SystemZoneRead,
             "E_VIEW_STRATEGY_A_REFUSED" => ErrorCode::ViewStrategyARefused,
-            "E_VIEW_STRATEGY_C_RESERVED" => ErrorCode::ViewStrategyCReserved,
+            "E_VIEW_STRATEGY_RESERVED" => ErrorCode::ViewStrategyReserved,
             "E_VIEW_LABEL_MISMATCH" => ErrorCode::ViewLabelMismatch,
             // Phase 2b G7-A SANDBOX surface
             "E_INV_SANDBOX_DEPTH" => ErrorCode::InvSandboxDepth,
@@ -2582,6 +2647,11 @@ impl core::str::FromStr for ErrorCode {
             // R6 R1 FP-F4 §S3a + §S3b — §8-E hook denial codes.
             "E_PLUGIN_INSTALL_CONSENT_DENIED" => ErrorCode::PluginInstallConsentDenied,
             "E_PLUGIN_PER_DELEGATION_DENIED" => ErrorCode::PluginPerDelegationDenied,
+            // Row D-19 G-COMP-1 wave (Cohort 8) — first-class catalog
+            // mirrors of `CompileError::{Parse,Semantic,Build}`.
+            "E_DSL_PARSE_ERROR" => ErrorCode::DslParseError,
+            "E_DSL_UNKNOWN_PRIMITIVE" => ErrorCode::DslUnknownPrimitive,
+            "E_DSL_MISSING_RESPOND" => ErrorCode::DslMissingRespond,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

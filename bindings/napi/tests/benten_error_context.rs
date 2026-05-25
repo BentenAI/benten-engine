@@ -193,7 +193,7 @@ fn engine_err_carrier_covers_every_engine_error_variant_with_no_structured_field
         EngineError::ViewStrategyARefused {
             view_id: "v".into(),
         },
-        EngineError::ViewStrategyCReserved {
+        EngineError::ViewStrategyReserved {
             view_id: "v".into(),
         },
         EngineError::ViewLabelMismatch {

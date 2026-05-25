@@ -110,13 +110,16 @@ pub enum EngineError {
         view_id: String,
     },
 
-    /// Phase-2b G8-B (D8-RESOLVED): user view registered with `Strategy::C`.
-    /// Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+ and
+    /// Phase-2b G8-B (D8-RESOLVED): user view registered with `Strategy::Reserved`
+    /// (renamed from `Strategy::C` at G23-0a per arch-r1-14; full enum + wire-
+    /// string + TS-class atomic rename landed at Row D-19 G-COMP-1 wave Cohort 8
+    /// in the Phase-4-Meta-Core R6 R2 FP integration). The `Reserved` slot
+    /// (Z-set / DBSP cancellation algorithm) is reserved for Phase 3+ and
     /// refused at registration time in Phase 2b.
     #[error(
-        "user view '{view_id}' declared Strategy::C — Strategy C (Z-set / DBSP cancellation) is reserved for Phase 3+"
+        "user view '{view_id}' declared Strategy::Reserved — the Reserved strategy variant (Z-set / DBSP cancellation; renamed from Strategy::C at G23-0a) is refused at registration"
     )]
-    ViewStrategyCReserved {
+    ViewStrategyReserved {
         /// Identifier of the rejected user view.
         view_id: String,
     },
@@ -463,8 +466,8 @@ impl EngineError {
                 "kind": "viewStrategyARefused",
                 "viewId": view_id,
             }),
-            EngineError::ViewStrategyCReserved { view_id } => json!({
-                "kind": "viewStrategyCReserved",
+            EngineError::ViewStrategyReserved { view_id } => json!({
+                "kind": "viewStrategyReserved",
                 "viewId": view_id,
             }),
             EngineError::ViewLabelMismatch {
@@ -566,7 +569,7 @@ impl EngineError {
             EngineError::IvmViewStale { .. } => ErrorCode::IvmViewStale,
             EngineError::UnknownView { .. } => ErrorCode::UnknownView,
             EngineError::ViewStrategyARefused { .. } => ErrorCode::ViewStrategyARefused,
-            EngineError::ViewStrategyCReserved { .. } => ErrorCode::ViewStrategyCReserved,
+            EngineError::ViewStrategyReserved { .. } => ErrorCode::ViewStrategyReserved,
             EngineError::ViewLabelMismatch { .. } => ErrorCode::ViewLabelMismatch,
             EngineError::NestedTransactionNotSupported => ErrorCode::NestedTransactionNotSupported,
             EngineError::NotImplemented { .. } => ErrorCode::NotImplemented,
