@@ -35,6 +35,7 @@ pub benten_graph::aead_wrap::EncryptedNode::Whole::envelope: benten_crypto_suite
 pub benten_graph::aead_wrap::EncryptedNode::Whole::plaintext_cid: benten_core::Cid
 impl benten_graph::aead_wrap::EncryptedNode
 pub fn benten_graph::aead_wrap::EncryptedNode::encrypt(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<Self, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::EncryptedNode::encrypt_recipe(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8], recipe_index: u32, total_recipes: u32) -> core::result::Result<Self, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::EncryptedNode::plaintext_cid(&self) -> &benten_core::Cid
 impl core::clone::Clone for benten_graph::aead_wrap::EncryptedNode
 pub fn benten_graph::aead_wrap::EncryptedNode::clone(&self) -> benten_graph::aead_wrap::EncryptedNode
@@ -67,9 +68,12 @@ pub const benten_graph::aead_wrap::WHOLE_AEAD_THRESHOLD: usize
 pub fn benten_graph::aead_wrap::decode_encrypted_node(bytes: &[u8]) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::decrypt(envelope: &benten_graph::aead_wrap::EncryptedNode, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::decrypt_chunk(chunk: &benten_crypto_suite::aead::AeadEnvelope, chunk_index: usize, total_chunks: u32, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::decrypt_recipe(envelope: &benten_crypto_suite::aead::AeadEnvelope, recipe_index: u32, total_recipes: u32, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::decrypt_recipe_encrypted_node(node: &benten_graph::aead_wrap::EncryptedNode, key: &[u8], recipe_index: u32, total_recipes: u32) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::encode_encrypted_node(encrypted: &benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<alloc::vec::Vec<u8>, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::encrypt(plaintext: &[u8], plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_graph::aead_wrap::AeadError>
 pub fn benten_graph::aead_wrap::encrypt_chunk(chunk_plaintext: &[u8], chunk_index: usize, total_chunks: u32, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_graph::aead_wrap::AeadError>
+pub fn benten_graph::aead_wrap::encrypt_recipe(plaintext: &[u8], recipe_index: u32, total_recipes: u32, plaintext_cid: &benten_core::Cid, key: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_graph::aead_wrap::AeadError>
 pub mod benten_graph::backend
 pub enum benten_graph::backend::DurabilityMode
 pub benten_graph::backend::DurabilityMode::Async
@@ -143,6 +147,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_graph::backend::ScanResu
 impl core::panic::unwind_safe::UnwindSafe for benten_graph::backend::ScanResult
 pub trait benten_graph::backend::KVBackend: core::marker::Send + core::marker::Sync
 pub type benten_graph::backend::KVBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::backend::KVBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backend::KVBackend::delete(&self, key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backend::KVBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backend::KVBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -151,6 +156,7 @@ pub fn benten_graph::backend::KVBackend::scan(&self, prefix: &[u8]) -> core::res
 pub fn benten_graph::backend::KVBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
 pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -159,6 +165,7 @@ pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
 pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -167,6 +174,7 @@ pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, p
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
 pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -175,6 +183,7 @@ pub fn benten_graph::in_memory_backend::InMemoryBackend::scan(&self, prefix: &[u
 pub fn benten_graph::in_memory_backend::InMemoryBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
 pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -276,6 +285,7 @@ pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::new(
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::with_label(label: impl core::convert::Into<alloc::string::String>) -> Self
 impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
 pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -362,6 +372,7 @@ pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes_wi
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::new(blob: benten_graph::backends::snapshot_blob::SnapshotBlob) -> Self
 impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
 pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -517,6 +528,7 @@ pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::new(
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::with_label(label: impl core::convert::Into<alloc::string::String>) -> Self
 impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
 pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -598,6 +610,7 @@ pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes_wi
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::new(blob: benten_graph::backends::snapshot_blob::SnapshotBlob) -> Self
 impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
 pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -725,6 +738,7 @@ impl benten_graph::in_memory_backend::InMemoryBackend
 pub fn benten_graph::in_memory_backend::InMemoryBackend::new() -> Self
 impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
 pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -795,6 +809,7 @@ pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_with_namespace(&s
 pub fn benten_graph::redb_backend::RedbBackend::writes_committed(&self) -> u64
 impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
 pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -1241,6 +1256,7 @@ impl benten_graph::in_memory_backend::InMemoryBackend
 pub fn benten_graph::in_memory_backend::InMemoryBackend::new() -> Self
 impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
 pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -1265,6 +1281,7 @@ pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::new(
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::with_label(label: impl core::convert::Into<alloc::string::String>) -> Self
 impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
 pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -1325,6 +1342,7 @@ pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_with_namespace(&s
 pub fn benten_graph::redb_backend::RedbBackend::writes_committed(&self) -> u64
 impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
 pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -1471,6 +1489,7 @@ pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes_wi
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::new(blob: benten_graph::backends::snapshot_blob::SnapshotBlob) -> Self
 impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
 pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -1626,6 +1645,7 @@ pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> Self::Snapsho
 pub fn benten_graph::redb_backend::RedbBackend::transaction(&self) -> Self::Transaction
 pub trait benten_graph::KVBackend: core::marker::Send + core::marker::Sync
 pub type benten_graph::KVBackend::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn benten_graph::KVBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::KVBackend::delete(&self, key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::KVBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::KVBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -1634,6 +1654,7 @@ pub fn benten_graph::KVBackend::scan(&self, prefix: &[u8]) -> core::result::Resu
 pub fn benten_graph::KVBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend
 pub type benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::Error = benten_graph::backends::network_fetch_stub::NetworkFetchStubError
+pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::get(&self, _key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -1642,6 +1663,7 @@ pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::scan
 pub fn benten_graph::backends::network_fetch_stub::NetworkFetchStubBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::backends::snapshot_blob::SnapshotBlobBackend
 pub type benten_graph::backends::snapshot_blob::SnapshotBlobBackend::Error = benten_graph::backends::snapshot_blob::SnapshotBlobError
+pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::delete(&self, _key: &[u8]) -> core::result::Result<(), Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, Self::Error>
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::put(&self, _key: &[u8], _value: &[u8]) -> core::result::Result<(), Self::Error>
@@ -1650,6 +1672,7 @@ pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::scan(&self, p
 pub fn benten_graph::backends::snapshot_blob::SnapshotBlobBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::in_memory_backend::InMemoryBackend
 pub type benten_graph::in_memory_backend::InMemoryBackend::Error = benten_graph::GraphError
+pub fn benten_graph::in_memory_backend::InMemoryBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, Self::Error>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::in_memory_backend::InMemoryBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
@@ -1658,6 +1681,7 @@ pub fn benten_graph::in_memory_backend::InMemoryBackend::scan(&self, prefix: &[u
 pub fn benten_graph::in_memory_backend::InMemoryBackend::supports_durability(&self) -> bool
 impl benten_graph::backend::KVBackend for benten_graph::redb_backend::RedbBackend
 pub type benten_graph::redb_backend::RedbBackend::Error = benten_graph::GraphError
+pub fn benten_graph::redb_backend::RedbBackend::compare_and_insert(&self, key: &[u8], value: &[u8]) -> core::result::Result<bool, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::delete(&self, key: &[u8]) -> core::result::Result<(), benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::get(&self, key: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::put(&self, key: &[u8], value: &[u8]) -> core::result::Result<(), benten_graph::GraphError>

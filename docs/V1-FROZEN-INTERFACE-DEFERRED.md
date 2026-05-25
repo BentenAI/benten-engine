@@ -343,26 +343,22 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** spec item 1; V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row
   1.a/1.b/1.c; CLAUDE.md baked-in #18.
 
-### Row D-8 — F3 anti-replay atomic compare-and-swap (FrameReplayMarker TOCTOU)
+### ~~Row D-8 — F3 anti-replay atomic compare-and-swap (FrameReplayMarker TOCTOU)~~ **CLOSED** at R6 R2 batch-A Item 8 (Cohort 8)
 
-- **Frozen surface (v1-beta):**
-  `crates/benten-caps/src/chain_authority.rs:404-421` —
-  `FrameReplayMarker::mark_and_check_frame` get + put non-atomic
-  pair (separate redb transactions). Compromise #23 IS retensed
-  to acknowledge in-window racy.
-- **Deferred consumption (G-COMP-1 destination):** either (a) extend
-  KVBackend trait with a typed `compare_and_insert(key, value)
-  -> Result<bool, _>` method AND change `mark_and_check_frame` to
-  use it, OR (b) route the marker call through
-  `GraphBackend::transaction(|tx| ...)` so both the get + put run
-  inside one txn (the existing transaction API supports this), OR
-  (c) document a serializing per-engine lock around the
-  `apply_atrium_merge` marker call. Option (b) is lowest-cost
-  (~10 LOC change inside `mark_and_check_frame`).
-- **v1-beta posture:** F3 anti-replay defense is racy under
-  concurrent inbound apply_atrium_merge presentations of the same
-  session_nonce. Compromise #23 retensed to disclose.
-- **Anchor:** Compromise #23.
+- **Closure:** Option (a) chosen — `KVBackend::compare_and_insert`
+  added with a default non-atomic impl (preserves behavior for
+  non-transactional backends) + a txn-atomic override on
+  `RedbBackend`. `FrameReplayMarker::mark_and_check_frame` routes
+  through the new primitive. On the redb-backed backend the get +
+  insert + commit run inside a SINGLE redb write transaction; write-
+  txn exclusivity (only ONE write-txn open per-handle at a time) gates
+  concurrent CAS attempts. At most ONE concurrent caller admits.
+- **Test pin:**
+  `crates/benten-caps/tests/tf_d8_frame_replay_marker_cas_atomic_under_concurrent_inbound.rs`
+  — 16-thread race against the same nonce; asserts exactly 1
+  first-observer + 15 replay-rejected.
+- **Anchor:** Compromise #23 (closure narrative updated at
+  SECURITY-POSTURE.md).
 
 ### Row D-9 — wire-format hex-pinned byte-pin tests sweep (6 of 8 deferred)
 
@@ -428,24 +424,20 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   for the file-handling arms is sparse.
 - **Anchor:** L9-DSL-MINOR-2.
 
-### Row D-13 — structural_kdf info-tag codepoint-binding
+### ~~Row D-13 — structural_kdf info-tag codepoint-binding~~ **CLOSED** at R6 R2 batch-A Item 7 (Cohort 8)
 
-- **Frozen surface (v1-beta):** `aead_wrap::make_key_material_matching`
-  threads attacker-controlled envelope codepoint into key newtype
-  (docstring at `aead_wrap.rs:500-506` acknowledges; the natural
-  ChaCha20-Poly1305 defense via K_root divergence IS structurally
-  present at v1-beta).
-- **Deferred consumption (G-COMP-1 destination):** extend
-  `structural_kdf::derive_root` info-tag to include cipher-suite
-  codepoint (e.g. `info = "root:codepoint:<le_bytes>" || root_cid`);
-  ~5 LOC + golden test for backward-compat (since this CHANGES
-  K_root derivation, it is a wire-format-coupled change requiring
-  a backward-compat scheme or version bump per the freeze contract;
-  G-COMP-1 must decide the migration shape).
-- **v1-beta posture:** natural ChaCha20-Poly1305 defense via K_root
-  divergence between codepoint arms IS structurally present at
-  v1-beta (verified L2-MAJ-4 disposition). Codepoint-binding via
-  KDF info is incidental not explicit.
+- **Closure:** `structural_kdf::derive_root` extended to take
+  `cipher_suite_codepoint: u16` AND fold it into the HKDF info-tag
+  (`info = "root:codepoint:" || codepoint_le_bytes || root_cid`).
+  Cross-codepoint key reuse class structurally closed: same
+  `(K_principal, root_cid)` inputs derived under different codepoints
+  produce different K_root values. Wire-format-coupled (K_root feeds
+  downstream AEAD wrap; pre-Item-7 K_root values not byte-compatible
+  with post-Item-7); landed under P-III no-users-yet override per
+  Cohort 8 entry.
+- **Test pin:** `crates/benten-crypto-suite/src/structural_kdf.rs::tests::derive_root_distinguishes_cipher_suite_codepoints`
+  — same `(K_principal, root_cid)` derived under `0x647a` / `0x6400`
+  / `0x647b` MUST produce 3 distinct K_root values.
 - **Anchor:** L2-MAJ-4.
 
 ### Row D-14 — Recursive cargo invocation test hygiene

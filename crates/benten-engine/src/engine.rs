@@ -1693,12 +1693,36 @@ impl Engine {
         // single-user single-device behavior. Phase-4+ AI-agent /
         // handler-attribution flows that call `set_actor_cid(...)`
         // observably retain principal identity across sync merges.
+        //
+        // R6 R2 batch-A Item 4 (Path G substantive close):
+        // `capability_grant_cid` is now populated from `peer_actor_cid`
+        // (the chain-anchor CID threaded through the per-row
+        // `WriteAdmissionFrame::with_chain(peer_actor_cid, peer_did)`
+        // admit_write_chain call above) rather than the zero-Cid
+        // sentinel. `peer_actor_cid` IS structurally the grant-CID
+        // anchor at the inbound-sync per-row boundary (per the
+        // `delegate_capability` precedent at engine_caps.rs:629 where
+        // `source_grant_cid` IS the chain anchor `with_chain` consumes).
+        // Path G scope is the **LOCAL-origin (this-hop) substantive
+        // population**; multi-hop preservation across
+        // `apply_atrium_merge` → outbound-sync → next-peer-merge is
+        // OUT of Path G scope (Row D-27 / G-COMP-1 deferred; semantic
+        // redesign required because `StampedValue` (`crates/benten-sync/
+        // src/crdt.rs:174-181`) does not carry an upstream-grant slot
+        // and `apply_atrium_merge` builds the AttributionFrame fresh
+        // from per-row context rather than reconstructing from the
+        // upstream peer's AttributionFrame).
+        //
+        // 3-lens unanimous Path G triangulation: lens artifacts at
+        // `.addl/phase-4-meta/path-f-{sync-merge-arch,crypto-cap,
+        // wire-format-relay,sync-merge-arch-FINAL-cross-lens}-lens.json`.
         let attribution = benten_eval::AttributionFrame {
             actor_cid: self
                 .effective_actor_cid()
                 .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32])),
             handler_cid: Cid::from_blake3_digest([0u8; 32]),
-            capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),
+            capability_grant_cid: peer_actor_cid
+                .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32])),
             sandbox_depth: 0,
             peer_did_set: if peer_did_set.is_empty() {
                 None
@@ -2153,6 +2177,61 @@ impl<B: GraphBackend> EngineGeneric<B> {
         &self,
     ) -> &Arc<crate::install_record_replay::InstallRecordReplayStore> {
         &self.install_record_replay_store
+    }
+
+    /// **R6 R2 batch-A Item 2 (Row D-3-a substantive close)** — return
+    /// an [`InstallConsentPolicy`] port adapter that bridges the
+    /// engine's configured [`CapabilityPolicy`] to the install
+    /// pipeline's `&dyn InstallConsentPolicy` parameter (the install
+    /// pipeline's CRITIC-2 F-1.2 port-shape; see
+    /// [`crate::capability_policy_install_consent::CapabilityPolicyInstallConsent`]).
+    ///
+    /// Pre-batch-A, callers had to manually construct
+    /// `CapabilityPolicyInstallConsent::new(Arc::clone(&engine_policy_arc))`
+    /// AND somehow extract the policy `Arc` from the engine (no public
+    /// accessor exists — `Engine::policy` is `pub(crate)` per the
+    /// Class B β sealed-discipline). Post-batch-A this accessor
+    /// returns a ready-to-pass adapter that wraps either the engine's
+    /// configured policy OR a [`NoAuthBackend`] (the same default the
+    /// engine itself uses when no policy is configured), so production
+    /// callers wire:
+    ///
+    /// ```ignore
+    /// let adapter = engine.install_consent_adapter();
+    /// let mut ports = InstallPorts {
+    ///     plugin_did_store: &mut store,
+    ///     cap_minter: &mut minter,
+    ///     private_namespace_provisioner: &mut provisioner,
+    ///     manifest_envelope_resolver: &resolver,
+    ///     install_record_replay_check: &mut replay_check,
+    ///     policy: &adapter,
+    /// };
+    /// ```
+    ///
+    /// without any boilerplate. The L6-r6r2-l6-1 substantive close:
+    /// a custom `CapabilityPolicy` impl passed to the builder now has
+    /// its `check_install_consent` invoked at install time via this
+    /// adapter (R6 R2 FP-B minted the adapter type; this accessor is
+    /// the auto-install completion).
+    ///
+    /// Engines built with no `.capability_policy(...)` get a
+    /// `NoAuthBackend`-wrapping adapter (admits every install — the
+    /// observable equivalent of the
+    /// [`benten_platform_foundation::install_consent::AdmitAllInstallConsent`]
+    /// default).
+    ///
+    /// [`InstallConsentPolicy`]: benten_platform_foundation::install_consent::InstallConsentPolicy
+    /// [`CapabilityPolicy`]: benten_caps::CapabilityPolicy
+    /// [`NoAuthBackend`]: benten_caps::NoAuthBackend
+    #[must_use]
+    pub fn install_consent_adapter(
+        &self,
+    ) -> crate::capability_policy_install_consent::CapabilityPolicyInstallConsent {
+        let policy: Arc<dyn benten_caps::CapabilityPolicy> = match self.policy.as_ref() {
+            Some(p) => Arc::clone(p),
+            None => Arc::new(benten_caps::NoAuthBackend),
+        };
+        crate::capability_policy_install_consent::CapabilityPolicyInstallConsent::new(policy)
     }
 
     /// **Refinement-audit-2026-05 Wave-E HELD #1197/#1146** — install

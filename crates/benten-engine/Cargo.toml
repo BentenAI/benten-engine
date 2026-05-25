@@ -51,7 +51,14 @@ iteration-budget-test-grade = []
 # `benten-caps/testing` so the workspace test crates can implement
 # `CapabilityPolicy` for test-doubles via the
 # `benten_caps::__sealed_for_workspace_tests::Sealed` opt-in re-export.
-test-helpers = ["iteration-budget-test-grade", "benten-caps/testing"]
+# R6 R2 batch-A Item 2 also enables `benten-platform-foundation/testing`
+# so the install-consent adapter integration test can reach the
+# `noop_replay_check()` helper.
+test-helpers = [
+    "iteration-budget-test-grade",
+    "benten-caps/testing",
+    "benten-platform-foundation/testing",
+]
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
 # for the 4 exit-gate composite files (wait_resume_determinism,
@@ -305,6 +312,26 @@ required-features = ["test-helpers"]
 
 [[test]]
 name = "resume_decode_failure_not_panic"
+required-features = ["test-helpers"]
+
+# R6 R2 batch-A Item 2 (Row D-3-a substantive close) — install-consent
+# adapter auto-install verification through `install_plugin(...)`.
+# Needs the `testing` opt-in on `benten-caps` to implement the sealed
+# `CapabilityPolicy` trait for the in-test `CountingDenyPolicy`
+# double; gated via `test-helpers` (which already implies
+# `benten-caps/testing`).
+[[test]]
+name = "r6_r2_batch_a_install_consent_adapter_auto_install"
+required-features = ["test-helpers"]
+
+# R6 R2 batch-A Item 4 (Path G substantive close) — verifies
+# AttributionFrame.capability_grant_cid is populated from
+# peer_actor_cid at apply_atrium_merge per Path G. Uses the
+# `Engine::get_node` test-helper re-export (per V1-FROZEN-INTERFACE.md
+# §1 Row D-7 — production callers use `read_node_as`); gated via
+# `test-helpers`.
+[[test]]
+name = "r6_r2_batch_a_path_g_capability_grant_cid_substantive_at_apply_atrium_merge"
 required-features = ["test-helpers"]
 
 [[bench]]

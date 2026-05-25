@@ -391,7 +391,7 @@ pub enum AuthorizationGrantError {
 /// `audience_pubkey: Some(empty)` are unambiguously distinguished:
 /// `None` encodes as `0_u32_le` (zero-length payload); `Some(bytes)`
 /// encodes as `len_u32_le || bytes`.
-const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v3";
+const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v4";
 
 impl AuthorizationGrant {
     /// Compute the canonical message the issuer signs / the validator
@@ -427,6 +427,24 @@ impl AuthorizationGrant {
     /// mutation flips the message bytes and `verify_binding` returns
     /// `BindingMismatch`.
     ///
+    /// **R6 R2 batch-A Item 3 (L1-MAJ-1 closure):**
+    /// `issuer_verifying_key` is now in the binding-message. Prior
+    /// shape was 6-segment (omitted `issuer_verifying_key`) —
+    /// post-sign mutation of `issuer_verifying_key` could be
+    /// substituted by an attacker with a fresh keypair that re-signs
+    /// the same 6-segment message; downstream verifiers (`verify_binding`)
+    /// would Ed25519-verify under the SWAPPED vk and admit the grant
+    /// even though the issuer-identity field no longer matches the
+    /// originally-signing party. This is the classical "self-bind"
+    /// invariant: the binding-message MUST commit to the key the
+    /// binding-sig was produced with, so verify-side cannot accept a
+    /// `(message, sig, vk_attacker)` triple as equivalent to a
+    /// `(message, sig, vk_original)` triple. Without self-bind,
+    /// cross-protocol replay + key-substitution attacks succeed; with
+    /// the vk folded into the 7th segment, any post-sign substitution
+    /// flips the message bytes and `verify_binding` returns
+    /// `BindingMismatch`.
+    ///
     /// The scope segment is encoded as `len_u32_le || cbor_bytes` so
     /// that `scope: None` (no-scope grants, e.g. wave-3b envelope
     /// fixtures) and `scope: Some(empty)` are unambiguously
@@ -434,13 +452,19 @@ impl AuthorizationGrant {
     /// payload); `Some(scope)` encodes as `len_u32_le || cbor(scope)`.
     /// The audience_pubkey segment uses the same length-prefix
     /// discipline (`len_u32_le || pubkey_bytes`) for the same
-    /// None-vs-Some(empty) disambiguation.
+    /// None-vs-Some(empty) disambiguation. The `issuer_verifying_key`
+    /// segment is fixed-length Ed25519 (32 bytes — `[u8; 32]` typed
+    /// at construction) so no length-prefix discipline is necessary;
+    /// the BINDING_SIG_DOMAIN v3→v4 bump preserves domain-separation
+    /// for any pre-self-bind v3 fixtures (re-verify under v4
+    /// construction observably fails the BindingMismatch arm).
     fn binding_message(
         ucan: &UcanEnvelope,
         key_material: &GrantKeyMaterial,
         audience: &Cid,
         scope: Option<&crate::restricted_spec::RestrictedScope>,
         audience_pubkey: Option<&[u8]>,
+        issuer_verifying_key: &[u8; 32],
     ) -> Result<Vec<u8>, AuthorizationGrantError> {
         let ucan_bytes = serde_ipld_dagcbor::to_vec(ucan)
             .map_err(|e| AuthorizationGrantError::Serialization(e.to_string()))?;
@@ -470,7 +494,8 @@ impl AuthorizationGrant {
                 + 4
                 + scope_bytes.len()
                 + 4
-                + audience_pk_bytes.len(),
+                + audience_pk_bytes.len()
+                + 32,
         );
         msg.extend_from_slice(BINDING_SIG_DOMAIN);
         msg.extend_from_slice(&ucan_bytes);
@@ -480,6 +505,10 @@ impl AuthorizationGrant {
         msg.extend_from_slice(&scope_bytes);
         msg.extend_from_slice(&audience_pk_len.to_le_bytes());
         msg.extend_from_slice(audience_pk_bytes);
+        // R6 R2 batch-A Item 3 — 7th segment: issuer_verifying_key
+        // (self-bind invariant). Fixed 32-byte Ed25519 vk; no length
+        // prefix necessary (typed at construction).
+        msg.extend_from_slice(issuer_verifying_key);
         Ok(msg)
     }
 
@@ -512,11 +541,14 @@ impl AuthorizationGrant {
 
         // Wave-3b envelope shape has no scope and no audience_pubkey
         // (both are wave-3e fields). Pass None for both to the
-        // 6-segment binding-message; the message commits to the
+        // 7-segment binding-message; the message commits to the
         // zero-length scope + zero-length audience_pubkey segments so
         // any post-sign attempt to add either flips the bytes + fails
-        // re-verify.
-        let msg = Self::binding_message(&ucan, &key_material, &audience, None, None)?;
+        // re-verify. R6 R2 batch-A Item 3: the issuer_verifying_key
+        // segment self-binds the message to the key actually used to
+        // sign, closing the key-substitution attack class.
+        let vk_bytes: [u8; 32] = verifying_key.to_bytes();
+        let msg = Self::binding_message(&ucan, &key_material, &audience, None, None, &vk_bytes)?;
         let sig: Signature = signing_key.sign(&msg);
 
         Ok(Self {
@@ -593,12 +625,17 @@ impl AuthorizationGrant {
         // audience_pubkey into the signed payload so post-sign
         // audience-substitution attacks fail at verify_binding (ARM 2
         // EndpointId comparison-target was previously unsigned).
+        // R6 R2 batch-A Item 3: bind issuer_verifying_key into the
+        // signed payload (self-bind invariant; closes the key-
+        // substitution attack class).
+        let vk_bytes: [u8; 32] = verifying_key.to_bytes();
         let msg = Self::binding_message(
             &ucan,
             &key_material,
             &audience_cid,
             Some(&scope),
             Some(audience_bytes.as_slice()),
+            &vk_bytes,
         )
         .expect(
             "synthetic UcanEnvelope + GrantKeyMaterial + scope CBOR-encode infallibly in test fixtures",
@@ -759,16 +796,26 @@ impl AuthorizationGrant {
         // audience-substitution attacks (where the attacker mutates
         // the pubkey ARM 2 compares against) are detected at the
         // binding-sig layer rather than silently admitted.
+        // R6 R2 batch-A Item 3 (L1-MAJ-1): also re-construct with
+        // self.issuer_verifying_key (self-bind invariant) so
+        // post-sign key-substitution attacks (where the attacker
+        // mutates the verifying-key field + re-signs the same 6-
+        // segment message with their own fresh keypair) are detected
+        // at the binding-sig layer. The self-bind discipline means
+        // any (msg, sig, vk) triple where `vk` was NOT the same vk
+        // present at sign-time flips the bound message bytes + fails
+        // re-verify here.
         let msg = Self::binding_message(
             &self.ucan,
             &self.key_material,
             &audience,
             self.scope.as_ref(),
             self.audience_pubkey.as_deref(),
+            &vk_bytes,
         )?;
         vk.verify(&msg, &sig)
             .map_err(|_| AuthorizationGrantError::BindingMismatch {
-                detail: "Ed25519 verify failed against re-constructed (ucan, key_material, audience, scope, audience_pubkey) message".to_string(),
+                detail: "Ed25519 verify failed against re-constructed (ucan, key_material, audience, scope, audience_pubkey, issuer_verifying_key) message".to_string(),
             })
     }
 
@@ -873,6 +920,34 @@ impl AuthorizationGrant {
             issuer_verifying_key: self.issuer_verifying_key.clone(),
             audience_pubkey: self.audience_pubkey.clone(),
             scope,
+        }
+    }
+
+    /// **R6 R2 batch-A Item 3 (L1-MAJ-1)** — test-helper to swap the
+    /// `issuer_verifying_key` half AFTER issue. Used by the
+    /// `tf3b_issuer_verifying_key_substitution_post_sign_rejected`
+    /// adversarial pin to demonstrate that the binding-sig self-bind
+    /// detects post-sign key-substitution. Pre-batch-A,
+    /// `issuer_verifying_key` lived OUTSIDE the binding-message and an
+    /// attacker could swap it (alongside a fresh forge of the
+    /// `binding_sig` under their own key) without flipping the
+    /// re-constructed message bytes; the Item 3 fix folds it INTO the
+    /// binding-message as segment 7 (32 fixed bytes) so
+    /// `verify_binding` returns `BindingMismatch` on this tamper.
+    #[must_use]
+    #[cfg(any(test, feature = "testing"))]
+    pub fn with_swapped_issuer_verifying_key_for_test(
+        &self,
+        issuer_verifying_key: Vec<u8>,
+    ) -> Self {
+        Self {
+            ucan: self.ucan.clone(),
+            key_material: self.key_material.clone(),
+            binding_sig: self.binding_sig.clone(),
+            audience_binding: self.audience_binding,
+            issuer_verifying_key,
+            audience_pubkey: self.audience_pubkey.clone(),
+            scope: self.scope.clone(),
         }
     }
 }
