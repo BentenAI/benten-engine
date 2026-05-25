@@ -27,6 +27,9 @@
 //! - `crates/benten-engine/src/engine_diagnostics.rs::transaction` (transaction commit per-write hook)
 //! - `crates/benten-engine/src/primitive_host.rs::check_capability` (evaluator per-write cap-recheck)
 //!
+//! Symbol-form per §3.5b HARDENED point 3 + R6-R2-FP-C §3.6j cite-grep-verify
+//! discipline (line numbers omitted because all 4 are high-churn surfaces).
+//!
 //! EXCLUDED per Δv3-7: `benten-caps::ucan_grounded` — substrate-internal,
 //! NOT policy-routed; the typed-cap composition there is not the
 //! audience-aware hook surface.

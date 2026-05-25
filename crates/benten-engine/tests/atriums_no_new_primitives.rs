@@ -55,7 +55,7 @@ fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engi
  {
     // cag-4 architectural pin. G20-B implementer wires this:
     //
-    //   // Walk packages/engine/examples/atrium-*/handler.ts (or .rs).
+    //   // Walk packages/engine/examples/atrium-*/handler.ts (or .rs). <!-- cite-drift-exempt: forward-pin describing G20-B implementer behavior; the examples directory is not authored at HEAD. -->
     //   // Inspect each example's compiled OperationNode list; every
     //   // node.kind MUST be one of the canonical 12 primitives.
     //   //

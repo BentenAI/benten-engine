@@ -1885,7 +1885,7 @@ Each reduction is documented + corroborated by a sibling test or env-override pa
 
 **Concrete fix-shape (one of two):**
 - (a) Extend a representative existing workflow (likely `napi-vitest.yml` or a fresh `diag-coverage.yml`) with one step `cargo test --package benten-eval --features diag` to exercise the gated code paths.
-- (b) Document the deliberate decision in `.addl/ci-decisions-*.md` stating the `diag` feature is operator-runtime only + does not warrant CI coverage; align `Cargo.toml` comments accordingly.
+- (b) Document the deliberate decision in `.addl/ci-decisions-*.md` <!-- cite-drift-exempt: `.addl/` is gitignored planning workspace; the cite is a destination pointer for orchestrator-side documentation, not a HEAD-cite. --> stating the `diag` feature is operator-runtime only + does not warrant CI coverage; align `Cargo.toml` comments accordingly.
 
 **Touch size:** ~10-30 LOC workflow extension (option a) OR ~20 LOC documentation (option b).
 

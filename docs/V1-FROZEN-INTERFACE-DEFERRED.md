@@ -636,7 +636,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 ### Row D-18 (FORENSIC) — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
 
 - **Frozen surface (v1-beta):** the structural empty-peer-DID
-  fail-CLOSED at `engine.rs:1462-1476` IS live for the literal-empty
+  fail-CLOSED at `crates/benten-engine/src/engine.rs::apply_atrium_merge` (the `ManifestEnvelopeRecheckUnresolvedDeny` arm; symbol-form per §3.5b HARDENED point 3) IS live for the literal-empty
   peer_node_ids case. The synthesized-fallback (`resolve_peer_dids`
   emits `node-id:N` string for unregistered peer_node_ids) ADMITS
   at v1-beta via the always-mounted Noop rechecker (NotApplicable).
@@ -856,8 +856,13 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   - **DSL chunk asymmetry (1 PR):** #1326 DSL chunk-2 (closes #663 +
     #760 + #929 + #931 + #934); the chunk-3 #1339 row is already
     enumerated at Cohort 2 line 138 — chunks 1+2 are the asymmetric gap.
-  - **Wave-1/2 Strategy-C (2 PRs):** #1235 + #1237 (incl. benten-graph
-    trait shape change — verbatim break-OK signal).
+  - **Wave-1/2 Strategy-C (1 PR landed; 1 abandoned):** #1235 (MERGED;
+    incl. benten-graph trait shape change — verbatim break-OK signal).
+    Note: #1237 was CLOSED-not-merged (not part of the v1-beta ledger
+    landing-set; the underlying scope was absorbed into the broader
+    Strategy-C drain batches enumerated below). Earlier R6-R2-FP-C-pre
+    drafts erroneously cited #1237 as if merged; corrected per
+    R6-R2-FP-C cite-grep-verify discipline (§3.6j extension).
   - **#707-trust-subset (1 PR):** #1251 (device-revocation/recheck
     parallel pipes collapse; precursor to the #1271 chain-validation
     seam consolidation row already enumerated).
