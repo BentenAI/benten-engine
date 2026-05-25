@@ -327,6 +327,41 @@ D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
 
 ---
 
+## Cohort 7 — R6 R2 FP wave: audience_pubkey BLOCKER closure + DropBundle inter-Recipe AAD bind + L18 BLK AAD-doc retense (this PR)
+
+This cohort lands at PR (R6 R2 FP Strategy-C consolidation of FP-A audience_pubkey + FP-B substrate-honesty + FP-C phantom-cite scanner + FP-D SHAPE-not-SUBSTANCE). Closes 1 BLOCKER + 26 MAJ + 18 MIN across the R6 R2 19-lens phase-close council per Q5 strict cadence.
+
+### Wire-format byte-shape changes (PQ-window allowed)
+
+- **`BINDING_SIG_DOMAIN v2 → v3`** — `AuthorizationGrant.binding_message` extended from 4-segment `(BINDING_SIG_DOMAIN || ucan || key_material || audience_cid)` to 6-segment `(BINDING_SIG_DOMAIN || ucan || key_material || audience_cid || audience_pubkey || total_recipes_le_u32)` per R6 R2 L2-R2-BLOCKER-1 closure (6-lens cross-confirmed: L1 + L2 + L3 + L4 + L13 + L17). Pre-fix attacker could substitute `audience_pubkey` post-sign without affecting `binding_sig`; `UcanBlobsHandler::ARM 2` compared connection EndpointId to the (forged) `grant.audience_pubkey`, admitting the attacker as the grant's audience. Access-theft severity (not just attribution-forgery). Migration: re-issue all v2-domain grants under v3; no consumer-side migration (verification rejects v2 grants automatically).
+- **`aad_per_recipe` (DropBundle inter-Recipe truncation defense)** — new per-recipe AAD construction at `crates/benten-crypto-suite/src/aead.rs::aad_per_recipe` + `crates/benten-graph/src/aead_wrap.rs::{encrypt_recipe, decrypt_recipe, decrypt_recipe_encrypted_node}`. AAD shape mirrors F3's `aad_per_chunk` precedent (binds `recipe_index_le_u32` + `total_recipes_le_u32` so a truncated DropBundle fails decryption rather than silently admitting). L4 cross-confirmed as SAME-ATTACK-CLASS as F3 chunk truncation. Wire-format change (recipe AAD bytes change); pre-tag PQ-window allowed.
+
+### Public-API shape changes
+
+- **`AuthorizationGrant.binding_message` shape extension** — adds `audience_pubkey` + `total_recipes_le_u32` 5th + 6th segments. Anyone constructing `binding_message` manually (vs `AuthorizationGrant::new_signed`) MUST update construction; recommend always using the high-level constructor.
+- **`DropBundle::build_with_aead_envelope`** — recipe-level AAD now per-recipe (vs whole-bundle); see `aad_per_recipe` above. Helpers re-exported under `benten_graph::aead_wrap::{encrypt_recipe, decrypt_recipe}` for downstream Recipe-level callers.
+- **`V1-FROZEN-INTERFACE-DEFERRED.md Row D-15c RETRACTED**: the rationale ("cooperating attacker who forges audience_pubkey still cannot pass binding_sig verification") was FALSE at the live ARM 2/ARM 5 split — verified by §3.5n ground-truth pre-fix. Row removed; D-15 sub-rows D-15a/b/d/e remain.
+
+### Documentation closures (L18 BLOCKER)
+
+- **AAD shape clarification across cohorts**: Cohorts 3+ Bundle 3 narrative (lines 145+) describes AAD as `(plaintext_cid || chunk_index_le_u32 || total_chunks_le_u32)` 3-tuple per F3's retract-of-retract — this matches HEAD. The L18-r6-r2-1 BLOCKER claim of "Cohorts 3+ still ship 2-tuple AAD claim" was based on pre-F3 narrative; F3 has shipped + the 3-tuple is correct. R6 R2 verification confirms ledger now matches code.
+- **BINDING_SIG_DOMAIN v1→v2 history (L18-r6-r2-2 enumeration)**: B's pre-R6 R2 work bumped v1→v2 (adding `audience_cid` to the 4-segment domain); R6 R2 FP-A extends to v3 (6-segment). The full domain-sep version history is now documented at Row D-15 retense.
+- **`aad_per_chunk` signature change history (L18-r6-r2-3 enumeration)**: F3's `aad_per_chunk` migration from `(plaintext_cid || chunk_index)` 2-tuple to `(plaintext_cid || chunk_index || total_chunks)` 3-tuple landed at Cohort 1 row "AEAD AAD shape — chunk-truncation defense" (line 26+). Pre-F3 callers MUST regenerate their AAD construction.
+
+### Codification / pim-N additions (this PR)
+
+- **`§3.6f` extension** (post-FP-D ratification, 16-instance recurrence): regression-guard tests for any FP-cycle MUST invoke a production entry point + assert observable consequence + demonstrate would-FAIL-on-revert in commit body + NEVER `assert_eq!(CONST, CONST_VAL)` walker shape or zero-assertion `#[test]` arms.
+- **`§3.6j` sub-rule extension** (post-FP-C ratification, ~40-instance recurrence): cite-grep-verify at author-time + sibling-diff-walk; `tools/cite-drift-detector/` extended with `<!-- cite-drift-exempt-file: <reason> -->` marker for historical-narrative docs (R6-R2-FP-OD elegance-pass per `feedback_extra_reflection_pass_for_elegant_permanent_shape`).
+- **NEW memories minted**: `feedback_pim_n_cite_grep_verify_at_author_time` + `feedback_pim_n_regression_guard_substantive_arm` + `feedback_extra_reflection_pass_for_elegant_permanent_shape`.
+
+### Migration for downstream consumers
+
+- v2-domain `AuthorizationGrant` artifacts: re-issue under v3; signature verification under v3 rejects v2-format binding_message. No silent-fallback.
+- `DropBundle` artifacts built pre-Cohort-7 are wire-incompatible: must rebuild with new per-recipe AAD.
+- Test fixtures may use `<!-- cite-drift-exempt -->` per-line marker OR `<!-- cite-drift-exempt-file: <reason> -->` top-of-file marker per the §3.6j extension.
+
+---
+
 ## How to consume this ledger
 
 1. **Adopting v1-beta:** read Cohort 1 + 2 first (wire-format + public-API shape changes you must adapt to).
