@@ -2320,6 +2320,31 @@ defined release window. Distinct from Compromise #6 (BLAKE3 collision
 bound — a hash *architectural* bound; the 2026-05-19 reframe is signature
 + encryption only, so Compromise #6 / the hash posture is UNAFFECTED).
 
+**App-layer wire-in gap (R6 R1 L2-R6-MAJOR-2 finding; OPEN; NAMED to
+G-CORE-PQ-WIRE wave).** The 2026-05-19 reframe and the v1-beta default
+above are SUBSTRATE-LAYER true: `benten_crypto_suite::SignatureSuite`
+ships hybrid Ed25519⊕ML-DSA-65 + verify-both-must-succeed semantics
+and the swap matrix exercises all 7 cipher/sig suites at G-CORE-3c
+terminal wave. The APP-LAYER SHIPPED state at v1-beta is NARROWER:
+4 production sites still call classical-only `ed25519_dalek::SigningKey::sign`
+/ verify — `benten-drop::envelope_sig::{sign,verify}_envelope` +
+`benten-platform-foundation::PluginManifest::verify_peer_signature` +
+`benten-platform-foundation::InstallRecord::verify_user_signature` +
+`benten-caps::AuthorizationGrant::binding_sig` (already at Row D-15e).
+Wire-in is deferred to the `G-CORE-PQ-WIRE` wave (sequence: post R6 R1
+FP consolidation + post R6 R2 dispatch; see DEFERRED.md Row D-26 for
+the wave brief). The classical Ed25519 layer at these 4 sites IS the
+audited security floor per the same hybrid-construction safety invariant
+above (the classical-only-baseline-when-PQ-half-fails argument applies
+to the substrate AND to these app-layer sites that use the classical
+primitive directly). Pre-G-CORE-PQ-WIRE-wave-close, the v1-beta posture
+on app-layer signatures is: "audited classical Ed25519 floor; hybrid
+PQ defense-in-depth pending wire-in" — narrower than the substrate
+posture but cryptographically sound at the audited-floor level.
+**Ben 2026-05-24 PM ratification:** "do everything now is really my
+default stance"; wave is queued ACTIVE not exploratory (per
+`feedback_orchestrator_defer_prediction_bias` codification).
+
 **Mitigation (why this is shippable at `v1-beta`).** The hybrid
 construction means **unaudited PQC is never the SOLE trust path**:
 
