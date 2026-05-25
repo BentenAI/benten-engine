@@ -1,0 +1,101 @@
+{
+  "lens": "L3-grant-walker",
+  "round": "R6-R2",
+  "phase": "phase-4-meta-core",
+  "integration_branch": "phase-4-meta-core/r6-r1-fp-integration",
+  "head_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "scope": [
+    "crates/benten-caps/src/authorization_grant.rs (binding_message + verify_binding + with_swapped_scope_for_test)",
+    "crates/benten-caps/src/restricted_spec.rs (RestrictedScope walker contract + containment)",
+    "crates/benten-caps/src/manifest_envelope_chain_validation.rs (chain validator + 4-arm outcome)",
+    "call sites of verify_binding (benten-drop::bundle, benten-sync::ucan_blobs_protocol)",
+    "UCAN proof-chain interaction with scope binding"
+  ],
+  "r6_r1_l3_r1_1_closure_verification": {
+    "finding": "AuthorizationGrant.scope was post-sign-mutable; binding_message did not cover scope; attacker could widen scope and binding-sig still verified.",
+    "fix_landed_at_pr": "#1351 (R6 R1 FP-B Bundle L3-r1-1)",
+    "evidence": [
+      "BINDING_SIG_DOMAIN bumped v1 -> v2 (authorization_grant.rs:364, b\"benten/g-core-3b/authorization-grant/v2\")",
+      "binding_message now 5-segment: domain || ucan_cbor || km_cbor || audience_cid_bytes || scope_len_u32_le || scope_cbor (authorization_grant.rs:390-425)",
+      "scope_len prefix unambiguously distinguishes scope=None (len=0) from scope=Some(empty) (len>0) (authorization_grant.rs:400-409 + module docs:386-389)",
+      "verify_binding reconstructs the 5-segment message with self.scope.as_ref() (authorization_grant.rs:685-690)",
+      "with_swapped_scope_for_test is cfg(any(test, feature=\"testing\"))-gated (authorization_grant.rs:763-764)",
+      "issue_envelopes_for_test (wave-3b shape) passes None to binding_message which commits to zero-length scope segment so post-sign Some-injection flips bytes (authorization_grant.rs:455-470)",
+      "issue_with_nbf_for_test (wave-3e shape) signs over Some(&scope) (authorization_grant.rs:531-535)",
+      "Test pin tf3b_scope_substitution_post_sign_rejected.rs::scope_substitution_post_sign_rejected_by_binding_sig PASS",
+      "Test pin tf3b_scope_substitution_post_sign_rejected.rs::scope_removal_post_sign_rejected_by_binding_sig PASS (Some->None symmetric)",
+      "Test pin tf3b_scope_substitution_post_sign_rejected.rs::binding_message_domain_tag_is_v2_post_fix PASS",
+      "Companion suite tf3b_authorization_grant_binding_sig_one_signed_artifact.rs all 5 pre-existing tests PASS (A-1/A-2/A-3 + envelope round-trip + cross-surface byte-equality)"
+    ],
+    "domain_separation_review": "v1->v2 bump is the very first segment of binding_message, so any v1-signed grant deserialized today would fail re-verify under v2 binding-message reconstruction. Intended at v1-beta freeze (no v1-signed grants on the wire outside test fixtures). No accidental cross-domain verification possible because v1 prefix and v2 prefix differ in the byte sequence.",
+    "verdict": "CLOSED"
+  },
+  "regression_verification": {
+    "legitimate_grant_paths": "All 5 pre-existing wave-3b binding-sig tests PASS unchanged (A-1 stolen-UCAN-without-keys rejection / A-2 stolen-keys-without-UCAN / A-3 wrong-audience-swap / one_signed_artifact round-trip / online-offline byte-equality). Wave-3e issue_for_test / issue_with_nbf_for_test / issue_with_unresolved_peer_for_test / malformed_for_test compile and the wave-3e ALPN handler ARM 5 verify_binding(grant.audience_binding) still admits freshly-issued grants.",
+    "verdict": "NO REGRESSION"
+  },
+  "findings": [
+    {
+      "id": "L3-r2-1",
+      "severity": "MAJOR",
+      "title": "audience_pubkey is unsigned and exploitable at the ucan_blobs_protocol ARM 2 / ARM 5 split — SAME ATTACK CLASS as the L3-r1-1 scope hole the R6 R1 fix-pass just closed",
+      "site": "crates/benten-caps/src/authorization_grant.rs::binding_message + crates/benten-sync/src/ucan_blobs_protocol.rs:437-499 (ARM 2 + ARM 5)",
+      "attack": "An attacker Eve who obtains any valid AuthorizationGrant G issued for Alice (audience_pubkey=Alice_pk, audience_binding=hash(Alice_pk), scope, binding_sig over (domain||ucan||km||audience_binding||scope)) mutates only G.audience_pubkey = Eve_pk and presents G over Eve's iroh connection. ARM 2 (lines 437-460) reads request.grant.audience_pubkey and compares to connection EndpointId: Eve_pk == Eve_pk -> PASS. ARM 5 (lines 489-499) calls verify_binding(request.grant.audience_binding) — the binding-message reconstructs with audience=grant.audience_binding=hash(Alice) (unchanged), the signed payload also commits to hash(Alice), Ed25519 verify -> PASS. Eve gets Alice's data.",
+      "why_l3_r1_1_fix_did_not_close_this": "L3-r1-1 added scope to binding_message because scope was ARM-checked but unsigned. audience_pubkey is structurally identical: ARM 2 dispatches on it, but binding_message does NOT cover it. The R6 R1 fix-pass added scope but did not sweep the sibling unsigned-but-ARM-checked field in the same struct.",
+      "v1_frozen_deferred_d15c_rationale_contradicted": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15c (lines 529-533) states 'a cooperating attacker who forges audience_pubkey still cannot pass binding_sig verification' and treats this as defense-in-depth not a v1-beta security gap. This rationale is INVALID at the live ARM 2 / ARM 5 split — binding_sig DOES verify because it does not bind audience_pubkey, and ARM 2's pubkey-vs-EndpointId compare uses the unsigned field directly. The same logic Ben ratified to fold scope into binding_message applies verbatim here.",
+      "disposition": "FIX-NOW — fold audience_pubkey into binding_message as a 6th segment (Option<[u8;32]> -> length-prefixed bytes, mirroring the scope_len_u32_le pattern). BUMP BINDING_SIG_DOMAIN v2 -> v3 to reflect the additional binding (mirrors the L3-r1-1 v1->v2 bump rationale). Add tf3b_audience_pubkey_substitution_post_sign_rejected.rs pin (both Some<->Some swap and None<->Some swap shapes). Retract D-15c's 'defense-in-depth only' framing and either close the row (binding now covers audience_pubkey, Option->non-Option promotion remains a separate ergonomics carry) or rewrite its rationale.",
+      "non_defer_rationale": "HARD RULE clause-(a) does not apply (in scope of this lens). Clause-(b) requires NAMED-NOW destination; D-15c exists but its rationale is contradicted by the live attack chain — promotion to FIX-NOW under the same precedent as L3-r1-1 is the correct disposition. Clause-(c) does not apply (this is the identical class as the just-closed L3-r1-1)."
+    },
+    {
+      "id": "L3-r2-2",
+      "severity": "MINOR",
+      "title": "L2-MIN-2 empty-DID defense-in-depth doc-claim does not match code — promised per-step audience check is missing",
+      "site": "crates/benten-caps/src/manifest_envelope_chain_validation.rs:289-294 vs the per-step loop at lines 306-354",
+      "evidence": "The doc-comment at lines 292-294 reads 'The check is also applied at every audience step (within the per-step loop below) for defense-in-depth.' Grep for as_str().is_empty() across the file returns only line 296 (the root_issuer pre-loop check). The per-step loop performs no empty-string audience_did check; if a chain step carries audience_did='' the validator only catches it indirectly via the chain-integrity audience_did != next.issuer_did check (and only if there IS a next step).",
+      "disposition": "FIX-NOW — either (a) add the promised per-step audience_did.as_str().is_empty() check inside the for loop at line 306+ (defense-in-depth as the comment claims), OR (b) delete the claim from the doc-comment (no false advertising) + document the chain-integrity coverage as the load-bearing path. Option (a) is the safer + 3-line fix and matches the L2-MIN-2 fix-pass intent.",
+      "non_defer_rationale": "MINOR — but the gap is a doc-vs-code drift introduced by the same L2-MIN-2 fix pass that landed at R6 R1; closes inline at R6 R2 fix-pass."
+    },
+    {
+      "id": "L3-r2-3",
+      "severity": "MINOR",
+      "title": "ChainValidationOutcome::StepOutsideEnvelope is structurally overloaded for chain-integrity violations",
+      "site": "crates/benten-caps/src/manifest_envelope_chain_validation.rs:307-314",
+      "evidence": "When chain-integrity check fails (step.audience_did != next.issuer_did, line 309), the validator returns step_outside_envelope(next) which builds a StepOutsideEnvelope variant. But the variant's docstring (line 172) states 'An intermediate plugin-DID's manifest shares policy does not permit the delegation step (Layer 2 ↔ Layer 3 mismatch).' A chain-integrity violation is structurally different from an envelope-policy mismatch: the failure has nothing to do with the issuer's manifest envelope. Mapping both into one variant loses attribution clarity for downstream error renderers and security audit logs.",
+      "disposition": "FIX-NOW — add a ChainIntegrityViolation { broken_at_index: usize, observed_audience: Did, expected_issuer: Did } variant + map it to ErrorCode::PluginManifestInvalid (or a new ChainIntegrityViolated code if the catalog can absorb one). Update the helper or replace the step_outside_envelope call at line 313 with the new variant constructor. The 2-line fix preserves the existing ErrorCode mapping shape and gives operators a typed signal distinct from envelope-policy violations.",
+      "non_defer_rationale": "MINOR — clarity-of-attribution finding; trivial to fix inline at R6 R2 fix-pass; matches the pim-5 typed-error discipline."
+    },
+    {
+      "id": "L3-r2-4",
+      "severity": "OBS",
+      "title": "with_swapped_scope_for_test correctly cfg-gated by fix-up #7 — no test-only API leaks into the production surface",
+      "site": "crates/benten-caps/src/authorization_grant.rs:763-777",
+      "evidence": "with_swapped_scope_for_test is gated by #[cfg(any(test, feature = \"testing\"))] (line 763). All three sibling with_swapped_*_for_test helpers (key_material 725, ucan 742, scope 763) share the same gating and the same shape. The companion fix-up #7 (re-cfg-gating after a prior leak) holds.",
+      "disposition": "OBS — no action; positive confirmation of fix-up #7."
+    },
+    {
+      "id": "L3-r2-5",
+      "severity": "OBS",
+      "title": "scope_len_u32_le prefix correctly disambiguates None vs Some(empty) — encoding contract holds",
+      "site": "crates/benten-caps/src/authorization_grant.rs:400-409 + module doc 386-389",
+      "evidence": "binding_message encodes scope as len_u32_le || cbor_bytes. None => len=0, no bytes. Some(scope) => len=cbor.len(), then cbor bytes. The u32 cap is enforced via TryFrom and yields a typed Serialization error if cbor exceeds u32. The serde-derived RestrictedScope CBOR encoding is deterministic (no nondeterministic field ordering — all fields are explicit; BTreeMap is sorted) so the prefix length is stable across re-encodes. Symmetric Some<->None swap test (scope_removal_post_sign_rejected_by_binding_sig) PASS.",
+      "disposition": "OBS — positive confirmation; encoding contract is sound."
+    },
+    {
+      "id": "L3-r2-6",
+      "severity": "OBS",
+      "title": "RestrictedScope.contains 6-dimensional AND-composition is reflexive + transitive — walker contract holds",
+      "site": "crates/benten-caps/src/restricted_spec.rs:218-291",
+      "evidence": "contains() AND-composes per-dimension narrowing checks across all 6 dimensions. roots/edge_allowlist/label_allowlist share allowlist_subset_check (line 301-309) which encodes the unconstrained-None-contains-all + constrained-cannot-widen-to-unconstrained rule. label_denylist inverts (parent's denied set must be subset of child's). max_depth: None-self contains any; Some-self contains lower-or-equal Some-child. property_equalities: every parent constraint must be present and equal in child. Reflexive (s.contains(&s) true by construction across all 6 arms). Transitive by AND-composition of transitive per-dim relations.",
+      "disposition": "OBS — positive confirmation of the Spike H+1.1 composability claim."
+    }
+  ],
+  "verdict_summary": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 2,
+    "obs": 3,
+    "iterate_to_convergence_required": true,
+    "reason": "1 MAJOR (L3-r2-1 audience_pubkey-substitution; same class as the just-closed L3-r1-1 scope hole — promotes per the same precedent) + 2 MINOR (L2-MIN-2 doc/code drift; ChainValidationOutcome attribution clarity) require a FP cycle. Iterate-to-convergence per CLAUDE.md rule 9 Q5: full council re-review the edited artifact after the FP lands."
+  },
+  "disposition": "APPROVE-WITH-MAJOR — L3-r1-1 CLOSED + NO REGRESSION; one new MAJOR (audience_pubkey, identical attack class to L3-r1-1) + two MINOR require a fix-pass before R6 R2 advances; iterate to convergence."
+}
