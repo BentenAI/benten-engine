@@ -411,15 +411,33 @@ impl DropBundle {
         self.auth_grant.verify_binding(recipient_did_cid)?;
 
         // Layer 3: per-Node decode + decrypt under the carried key.
+        // R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling): use the
+        // per-Recipe AAD-binding decrypt path so inter-Recipe
+        // truncation attacks (where a relay drops a Recipe from
+        // self.content) surface as AEAD authentication failures
+        // rather than silent admission of a partial bundle.
         let key_bytes = &self.auth_grant.key_material.bytes;
-        let mut recovered = Vec::with_capacity(self.content.len());
+        let total_recipes_usize = self.content.len();
+        let total_recipes = u32::try_from(total_recipes_usize).map_err(|_| {
+            DropBundleError::CodecError(format!(
+                "bundle recipe count {total_recipes_usize} exceeds u32"
+            ))
+        })?;
+        let mut recovered = Vec::with_capacity(total_recipes_usize);
         for (idx, cell) in self.content.iter().enumerate() {
             let node = cell.to_encrypted_node()?;
-            let plaintext = benten_graph::aead_wrap::decrypt(&node, key_bytes).map_err(|e| {
-                DropBundleError::PerNodeAeadAuthenticationFailed {
-                    index: idx,
-                    detail: format!("{e}"),
-                }
+            let recipe_index = u32::try_from(idx).map_err(|_| {
+                DropBundleError::CodecError(format!("recipe index {idx} exceeds u32"))
+            })?;
+            let plaintext = benten_graph::aead_wrap::decrypt_recipe_encrypted_node(
+                &node,
+                key_bytes,
+                recipe_index,
+                total_recipes,
+            )
+            .map_err(|e| DropBundleError::PerNodeAeadAuthenticationFailed {
+                index: idx,
+                detail: format!("{e}"),
             })?;
             recovered.push(plaintext);
         }
@@ -456,8 +474,19 @@ impl DropBundle {
         }
 
         // Layer 3: per-Node decrypt.
+        // R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling): use the
+        // per-Recipe AAD-binding decrypt path matching consume_offline.
         let key_bytes = &self.auth_grant.key_material.bytes;
-        let mut recovered = Vec::with_capacity(self.content.len());
+        let total_recipes_usize = self.content.len();
+        let total_recipes = u32::try_from(total_recipes_usize).map_err(|_| {
+            (
+                DropBundleError::CodecError(format!(
+                    "bundle recipe count {total_recipes_usize} exceeds u32"
+                )),
+                0,
+            )
+        })?;
+        let mut recovered = Vec::with_capacity(total_recipes_usize);
         let mut attempts = 0usize;
         for (idx, cell) in self.content.iter().enumerate() {
             attempts += 1;
@@ -465,7 +494,21 @@ impl DropBundle {
                 Ok(n) => n,
                 Err(e) => return Err((e, attempts)),
             };
-            match benten_graph::aead_wrap::decrypt(&node, key_bytes) {
+            let recipe_index = match u32::try_from(idx) {
+                Ok(v) => v,
+                Err(_) => {
+                    return Err((
+                        DropBundleError::CodecError(format!("recipe index {idx} exceeds u32")),
+                        attempts,
+                    ));
+                }
+            };
+            match benten_graph::aead_wrap::decrypt_recipe_encrypted_node(
+                &node,
+                key_bytes,
+                recipe_index,
+                total_recipes,
+            ) {
                 Ok(plaintext) => recovered.push(plaintext),
                 Err(e) => {
                     return Err((
@@ -716,15 +759,28 @@ fn build_5_recipe_bundle_impl(
     let key_bytes = alloc::vec![0xAAu8; 32];
 
     // Encrypt each Recipe under a synthetic plaintext-CID
-    // (derived from the recipe label). The AAD-binds-plaintext-CID
-    // contract still holds (per `benten_graph::aead_wrap::encrypt`).
-    let mut content = Vec::with_capacity(recipes.len());
+    // (derived from the recipe label). The AAD binds
+    // `(plaintext_cid, recipe_index, total_recipes)` per the
+    // R6 R2 fix-pass L4-sibling inter-Recipe truncation defense —
+    // dropping a Recipe from the Vec causes consume_offline to
+    // reconstruct AAD with a smaller `total_recipes` value and AEAD
+    // authentication fails cryptographically.
+    let total_recipes_usize = recipes.len();
+    let total_recipes =
+        u32::try_from(total_recipes_usize).expect("5-Recipe fixture count trivially fits u32");
+    let mut content = Vec::with_capacity(total_recipes_usize);
     for (i, body) in recipes.iter().enumerate() {
         let label = format!("recipe-{i}");
         let plaintext_cid = sample_cid_for_label(&label);
-        let cell =
-            benten_graph::aead_wrap::EncryptedNode::encrypt(body, &plaintext_cid, &key_bytes)
-                .expect("AEAD encrypt of small recipe body must succeed");
+        let recipe_index = u32::try_from(i).expect("5-Recipe fixture index trivially fits u32");
+        let cell = benten_graph::aead_wrap::EncryptedNode::encrypt_recipe(
+            body,
+            &plaintext_cid,
+            &key_bytes,
+            recipe_index,
+            total_recipes,
+        )
+        .expect("AEAD encrypt_recipe of small recipe body must succeed");
         let encoded =
             EncryptedContent::from_encrypted_node(&cell).expect("EncryptedContent wraps OK");
         content.push(encoded);

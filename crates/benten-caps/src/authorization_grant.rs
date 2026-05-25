@@ -263,6 +263,17 @@ pub struct AuthorizationGrant {
     /// boundary. Optional for back-compat with wave-3b's
     /// `issue_envelopes_for_test` helper which uses a Cid-form
     /// audience and doesn't carry the raw pubkey bytes.
+    ///
+    /// **R6 R2 fix-pass (R6-R2-FP-A; closes L2-R2-BLOCKER-1):** this
+    /// field is now CRYPTOGRAPHICALLY BOUND via the binding-message
+    /// 6th segment under the v3 domain tag. Pre-v3, this field was
+    /// outside the signed payload — an attacker could mutate it
+    /// post-sign to their own pubkey while `binding_sig` remained
+    /// valid, then connect with their own iroh EndpointId; ARM 2
+    /// (connection EndpointId == grant.audience_pubkey) would admit
+    /// the attacker — access-theft, NOT just attribution-forgery.
+    /// Now any post-sign mutation flips the binding-message bytes +
+    /// `verify_binding` returns `BindingMismatch`.
     #[serde(default, with = "serde_bytes_opt")]
     pub audience_pubkey: Option<Vec<u8>>,
     /// G-CORE-3e: the structured `RestrictedScope` scope this grant
@@ -353,15 +364,34 @@ pub enum AuthorizationGrantError {
 /// Distinct per surface so a signature on the grant body cannot be
 /// reinterpreted as a signature on some other workspace surface.
 ///
-/// **R6 R1 fix-pass (Bundle L3-r1-1):** the domain tag is BUMPED from
+/// **R6 R1 fix-pass (Bundle L3-r1-1):** the domain tag was bumped from
 /// `v1` to `v2` to reflect the 5-segment binding-message extension
 /// (now binds `scope` per RATIFIED-S&C §R3 "binding is the foundation"
-/// — scope is part of the foundation). A v1-signed grant will fail
-/// re-verification under v2 binding-message construction (the
-/// domain-separation tag is the very first segment); this is the
-/// intended behavior at v1-beta freeze (no v1-signed grants outside
-/// test fixtures exist yet on the wire).
-const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v2";
+/// — scope is part of the foundation).
+///
+/// **R6 R2 fix-pass (Bundle R6-R2-FP-A; closes L2-R2-BLOCKER-1 +
+/// L3-r2-1 + L13-MAJ-2 + L17-r2-MAJOR-1 + L4-MAJ + L1-MAJ-1):** the
+/// domain tag is FURTHER BUMPED from `v2` to `v3` to reflect the
+/// 6-segment binding-message extension (now binds `audience_pubkey`
+/// alongside `audience_cid`). Pre-v3, `audience_pubkey` lived OUTSIDE
+/// the signed payload — an attacker could mutate `audience_pubkey` to
+/// their own pubkey post-sign, leaving `binding_sig` valid because
+/// `audience_cid` (which IS bound) was unchanged. The
+/// `UcanBlobsHandler::ARM 2` audience-binding check (connection
+/// EndpointId == grant.audience_pubkey) then admitted the attacker,
+/// completing an access-theft (not just attribution-forgery). With
+/// `audience_pubkey` folded into the binding-message, any post-sign
+/// mutation flips the message bytes + `verify_binding` returns
+/// `BindingMismatch`. A v2-signed grant will fail re-verification
+/// under v3 binding-message construction (the domain-separation tag is
+/// the very first segment); this is the intended behavior at v1-beta
+/// freeze (no v2-signed grants outside test fixtures exist yet on the
+/// wire). The 6th segment is encoded as `len_u32_le || pubkey_bytes`
+/// so `audience_pubkey: None` (legacy wave-3b envelope fixtures) and
+/// `audience_pubkey: Some(empty)` are unambiguously distinguished:
+/// `None` encodes as `0_u32_le` (zero-length payload); `Some(bytes)`
+/// encodes as `len_u32_le || bytes`.
+const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v3";
 
 impl AuthorizationGrant {
     /// Compute the canonical message the issuer signs / the validator
@@ -382,16 +412,35 @@ impl AuthorizationGrant {
     /// binding-message, any post-sign mutation flips the message
     /// bytes and `verify_binding` returns `BindingMismatch`.
     ///
+    /// **R6 R2 fix-pass (Bundle R6-R2-FP-A; closes L2-R2-BLOCKER-1 +
+    /// 5 cross-confirming MAJORs):** `audience_pubkey` is now in the
+    /// binding-message. Prior shape was 5-segment (omitted
+    /// audience_pubkey) — post-sign mutation of `audience_pubkey` was
+    /// undetected, admitting an audience-substitution attack where
+    /// the attacker mutates `audience_pubkey` to their own pubkey,
+    /// connects with their own iroh EndpointId, and the
+    /// `UcanBlobsHandler::ARM 2` (connection-EndpointId ==
+    /// grant.audience_pubkey) admits them — access-theft, NOT just
+    /// attribution-forgery. The `audience_cid` field was bound but
+    /// `audience_pubkey` (the field ARM 2 ACTUALLY compares) was not.
+    /// With `audience_pubkey` in the binding-message, any post-sign
+    /// mutation flips the message bytes and `verify_binding` returns
+    /// `BindingMismatch`.
+    ///
     /// The scope segment is encoded as `len_u32_le || cbor_bytes` so
     /// that `scope: None` (no-scope grants, e.g. wave-3b envelope
     /// fixtures) and `scope: Some(empty)` are unambiguously
     /// distinguished: `None` encodes as `0_u32_le` (zero-length
     /// payload); `Some(scope)` encodes as `len_u32_le || cbor(scope)`.
+    /// The audience_pubkey segment uses the same length-prefix
+    /// discipline (`len_u32_le || pubkey_bytes`) for the same
+    /// None-vs-Some(empty) disambiguation.
     fn binding_message(
         ucan: &UcanEnvelope,
         key_material: &GrantKeyMaterial,
         audience: &Cid,
         scope: Option<&crate::restricted_spec::RestrictedScope>,
+        audience_pubkey: Option<&[u8]>,
     ) -> Result<Vec<u8>, AuthorizationGrantError> {
         let ucan_bytes = serde_ipld_dagcbor::to_vec(ucan)
             .map_err(|e| AuthorizationGrantError::Serialization(e.to_string()))?;
@@ -407,13 +456,21 @@ impl AuthorizationGrant {
                 "scope CBOR bytes exceed u32 length prefix".to_string(),
             )
         })?;
+        let audience_pk_bytes: &[u8] = audience_pubkey.unwrap_or(&[]);
+        let audience_pk_len: u32 = u32::try_from(audience_pk_bytes.len()).map_err(|_| {
+            AuthorizationGrantError::Serialization(
+                "audience_pubkey bytes exceed u32 length prefix".to_string(),
+            )
+        })?;
         let mut msg = Vec::with_capacity(
             BINDING_SIG_DOMAIN.len()
                 + ucan_bytes.len()
                 + km_bytes.len()
                 + 36
                 + 4
-                + scope_bytes.len(),
+                + scope_bytes.len()
+                + 4
+                + audience_pk_bytes.len(),
         );
         msg.extend_from_slice(BINDING_SIG_DOMAIN);
         msg.extend_from_slice(&ucan_bytes);
@@ -421,6 +478,8 @@ impl AuthorizationGrant {
         msg.extend_from_slice(audience.as_bytes());
         msg.extend_from_slice(&scope_len.to_le_bytes());
         msg.extend_from_slice(&scope_bytes);
+        msg.extend_from_slice(&audience_pk_len.to_le_bytes());
+        msg.extend_from_slice(audience_pk_bytes);
         Ok(msg)
     }
 
@@ -451,11 +510,13 @@ impl AuthorizationGrant {
         let signing_key = SigningKey::generate(&mut OsRng);
         let verifying_key = signing_key.verifying_key();
 
-        // Wave-3b envelope shape has no scope (scope is wave-3e). Pass
-        // None to the 5-segment binding-message; the message commits
-        // to the zero-length scope segment so a post-sign attempt to
-        // add a scope flips the bytes + fails re-verify.
-        let msg = Self::binding_message(&ucan, &key_material, &audience, None)?;
+        // Wave-3b envelope shape has no scope and no audience_pubkey
+        // (both are wave-3e fields). Pass None for both to the
+        // 6-segment binding-message; the message commits to the
+        // zero-length scope + zero-length audience_pubkey segments so
+        // any post-sign attempt to add either flips the bytes + fails
+        // re-verify.
+        let msg = Self::binding_message(&ucan, &key_material, &audience, None, None)?;
         let sig: Signature = signing_key.sign(&msg);
 
         Ok(Self {
@@ -528,10 +589,20 @@ impl AuthorizationGrant {
         let verifying_key = signing_key.verifying_key();
         // R6 R1 fix-pass (L3-r1-1): bind scope into the signed payload
         // so post-sign scope-widening fails re-verify.
-        let msg = Self::binding_message(&ucan, &key_material, &audience_cid, Some(&scope))
-            .expect(
-                "synthetic UcanEnvelope + GrantKeyMaterial + scope CBOR-encode infallibly in test fixtures",
-            );
+        // R6 R2 fix-pass (R6-R2-FP-A / L2-R2-BLOCKER-1): bind
+        // audience_pubkey into the signed payload so post-sign
+        // audience-substitution attacks fail at verify_binding (ARM 2
+        // EndpointId comparison-target was previously unsigned).
+        let msg = Self::binding_message(
+            &ucan,
+            &key_material,
+            &audience_cid,
+            Some(&scope),
+            Some(audience_bytes.as_slice()),
+        )
+        .expect(
+            "synthetic UcanEnvelope + GrantKeyMaterial + scope CBOR-encode infallibly in test fixtures",
+        );
         let sig: Signature = signing_key.sign(&msg);
 
         Self {
@@ -640,8 +711,9 @@ impl AuthorizationGrant {
     /// 3. Signature parse + cryptographic verify against the
     ///    re-constructed canonical binding message. Any failure
     ///    returns [`AuthorizationGrantError::BindingMismatch`] —
-    ///    covers A-1 (stolen UCAN), A-2 (stolen keys), and any other
-    ///    tampering of either half.
+    ///    covers A-1 (stolen UCAN), A-2 (stolen keys), A-3 (scope
+    ///    widening), A-4 (audience-pubkey substitution — R6-R2-FP-A),
+    ///    and any other tampering of any signed half.
     ///
     /// # Errors
     ///
@@ -682,15 +754,21 @@ impl AuthorizationGrant {
         // R6 R1 fix-pass (L3-r1-1): re-construct the binding message
         // with self.scope so post-sign scope-widening is detected at
         // the binding-sig layer.
+        // R6 R2 fix-pass (R6-R2-FP-A / L2-R2-BLOCKER-1): also
+        // re-construct with self.audience_pubkey so post-sign
+        // audience-substitution attacks (where the attacker mutates
+        // the pubkey ARM 2 compares against) are detected at the
+        // binding-sig layer rather than silently admitted.
         let msg = Self::binding_message(
             &self.ucan,
             &self.key_material,
             &audience,
             self.scope.as_ref(),
+            self.audience_pubkey.as_deref(),
         )?;
         vk.verify(&msg, &sig)
             .map_err(|_| AuthorizationGrantError::BindingMismatch {
-                detail: "Ed25519 verify failed against re-constructed (ucan, key_material, audience, scope) message".to_string(),
+                detail: "Ed25519 verify failed against re-constructed (ucan, key_material, audience, scope, audience_pubkey) message".to_string(),
             })
     }
 
@@ -748,6 +826,28 @@ impl AuthorizationGrant {
             audience_binding: self.audience_binding,
             issuer_verifying_key: self.issuer_verifying_key.clone(),
             audience_pubkey: self.audience_pubkey.clone(),
+            scope: self.scope.clone(),
+        }
+    }
+
+    /// Test-helper — swap the `audience_pubkey` half AFTER issue. Used
+    /// by the R6-R2-FP-A audience-substitution adversarial pin
+    /// (`tf3b_audience_substitution_post_sign_rejected`) to demonstrate
+    /// that the binding-sig detects post-sign audience-pubkey mutation.
+    /// Pre-R6-R2, `audience_pubkey` lived OUTSIDE the binding-message
+    /// and could be mutated freely; the R6-R2-FP-A fix folds
+    /// audience_pubkey INTO the binding-message so `verify_binding`
+    /// returns `BindingMismatch` on this tamper.
+    #[must_use]
+    #[cfg(any(test, feature = "testing"))]
+    pub fn with_swapped_audience_pubkey_for_test(&self, audience_pubkey: Option<Vec<u8>>) -> Self {
+        Self {
+            ucan: self.ucan.clone(),
+            key_material: self.key_material.clone(),
+            binding_sig: self.binding_sig.clone(),
+            audience_binding: self.audience_binding,
+            issuer_verifying_key: self.issuer_verifying_key.clone(),
+            audience_pubkey,
             scope: self.scope.clone(),
         }
     }

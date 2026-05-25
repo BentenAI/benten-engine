@@ -513,25 +513,34 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   arm registration).
 - **Anchor:** L2-MAJ-3 G-CORE-9 R1 finding.
 
-#### Row D-15c — `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
+#### Row D-15c — RETRACTED at R6 R2 fix-pass (R6-R2-FP-A)
 
-- **Frozen surface (v1-beta):**
-  `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant`
-  carries `audience_pubkey: Option<ed25519_dalek::VerifyingKey>` —
-  the Option lets the legacy synthetic-fixtures path mint a grant
-  WITHOUT the audience pubkey bytes (binding_sig still covers the
-  audience CID via grant.audience).
-- **Deferred consumption (Phase-4-Meta-Composing):** EITHER promote
-  to non-Option (every production constructor populates the
-  audience_pubkey + binding_sig binds it) OR add
-  `AuthorizationGrant::issue_production` mandatory-bytes constructor
-  + retire `synthetic_for_test` fixtures for production paths.
-- **v1-beta posture:** the audience CID IS bound via binding_sig
-  (the typed seal); the missing audience_pubkey gap is a
-  defense-in-depth promotion, not a v1-beta security gap (a
-  cooperating attacker who forges audience_pubkey still cannot
-  pass binding_sig verification).
-- **Anchor:** L6-r1-9 G-CORE-9 R1 finding.
+- **RETRACTED 2026-05-25 (R6 R2 Bundle R6-R2-FP-A).** The original
+  Row D-15c rationale claimed "a cooperating attacker who forges
+  audience_pubkey still cannot pass binding_sig verification" — this
+  was **FALSE at the live ARM 2/ARM 5 split** in
+  `UcanBlobsHandler::validate_request_for_connection`. Verified via
+  §3.5n orchestrator ground-truth: ARM 2 (audience-binding) compared
+  the connection EndpointId to `grant.audience_pubkey` (the
+  post-sign-mutable field), and ARM 5 (binding-sig verification)
+  re-constructed the binding-message using `grant.audience_binding`
+  (the CID of the issue-time audience pubkey) — which an attacker
+  could leave UNCHANGED while mutating `audience_pubkey` to their own
+  pubkey. The pre-fix attack: Eve obtains a grant for Bob, mutates
+  `audience_pubkey` to her own pubkey, connects with her own iroh
+  EndpointId; ARM 2 admits (eve == eve), ARM 5 verifies (bob's
+  audience_binding still bound), iroh-blobs serves the bytes to Eve.
+  Access-theft, NOT just attribution-forgery.
+- **Closed by:** [R6-R2-FP-A] folds `audience_pubkey` into the
+  binding-message (6-segment layout under `BINDING_SIG_DOMAIN v3`
+  bumped from `v2`); pin
+  `crates/benten-caps/tests/tf3b_audience_substitution_post_sign_rejected.rs`
+  exercises the substantive arm + the would-FAIL-on-revert was
+  verified (3/3 tests FAIL when binding_message ignores
+  audience_pubkey).
+- **Cross-confirming findings closed:** L2-R2-BLOCKER-1 + L3-r2-1 +
+  L13-MAJ-2 + L17-r2-MAJOR-1 + L4-MAJ + L1-MAJ-1 (6-lens cross-
+  confirmation).
 
 #### Row D-15d — `AeadEnvelope::to_wire_bytes` nonce-panic → Result
 
