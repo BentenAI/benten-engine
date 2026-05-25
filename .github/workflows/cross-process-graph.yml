@@ -66,8 +66,13 @@ jobs:
         # by the module path so only that scenario runs here.
         timeout-minutes: 5
         run: |
+          # NOTE: `-p benten-engine` scope — feature paths must be reachable
+          # from benten-engine's direct deps. benten-drop/testing + benten-dev/testing
+          # were stripped at PR #1351 R6 R1 FP consolidation (A's F1.c brief
+          # extended workflows blindly; this workflow is package-scoped so
+          # the workspace-wide feature list doesn't apply).
           cargo nextest run \
-            --features benten-eval/testing,benten-engine/test-helpers,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
+            --features benten-eval/testing,benten-engine/test-helpers,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing \
             -p benten-engine \
             --test integration \
             'integration::cross_process_graph::'
