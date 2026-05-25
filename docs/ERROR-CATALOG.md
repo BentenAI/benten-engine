@@ -531,7 +531,7 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 
 - **Message:** "IVM strategy `{strategy:?}` is reserved but not implemented in this phase (deferred to {deferred_to_phase})"
 - **Context:** `{ strategy: "A" | "B" | "C", deferred_to_phase: string }`
-- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability.
+- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name aligned to the variant name at Row D-19 G-COMP-1 wave Cohort 8 (Phase-4-Meta-Core R6 R2 FP integration): `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED` per the atomic 4-surface rename.
 - **Thrown at:** IVM view registration (`benten_ivm::testing::try_construct_view_with_strategy`)
 - **Phase:** 2b (introduced)
 
@@ -725,13 +725,13 @@ All errors are structurally typed (not just strings) on the TypeScript side via 
 - **Thrown at:** `Engine::create_view` registration (G8-B)
 - **Phase:** 2b
 
-### E_VIEW_STRATEGY_C_RESERVED
+### E_VIEW_STRATEGY_RESERVED
 
 - **Message:** "user view '{view_id}' declared Strategy::Reserved — the Reserved strategy variant (Z-set / DBSP cancellation; renamed from Strategy::C at G23-0a) is refused at registration"
 - **Context:** `{ view_id: string }`
-- **Fix:** D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).
+- **Fix:** D8-RESOLVED (Phase 2b). The `Strategy::Reserved` slot (Z-set / DBSP cancellation algorithm; renamed from the prior `Strategy::C` spelling at G23-0a + Row D-19 G-COMP-1 wave Cohort 8 atomic 4-surface rename) is reserved for Phase 3+; refused at registration time. Use `Strategy::B` (or omit the field; user views default to B).
 - **Thrown at:** `Engine::create_view` registration (G8-B)
-- **Phase:** 2b
+- **Phase:** 2b (mint); renamed at Row D-19 G-COMP-1 wave Cohort 8 (Phase-4-Meta-Core R6 R2 FP integration) — wire string `E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED`; variant `ViewStrategyCReserved` → `ViewStrategyReserved`; TS class `EViewStrategyCReserved` → `EViewStrategyReserved`.
 
 ### E_VIEW_LABEL_MISMATCH
 
@@ -1792,6 +1792,30 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** CLAUDE.md baked-in #18 §8-E hook #2 per-delegation runtime denial. Forensic-discrimination symmetry with `E_PLUGIN_INSTALL_CONSENT_DENIED` per CRITIC-1 FIX-5. Resolution: adjust the configured `CapabilityPolicy::check_per_delegation` to admit the source→target plugin delegation, or scope the delegated capability to fit within the source plugin's policy.
 - **Thrown at:** `crates/benten-engine/src/engine_caps.rs::EngineCapsHandle::delegate_capability` — between Step 2b (shares-policy resolver) and Step 3 (effective scope).
 - **Phase:** 4-Meta-Core R6 R1 FP-F4 §S3b (Row D-3-b closure; CATALOG_VARIANT_COUNT 193 → 194).
+
+### E_DSL_PARSE_ERROR
+
+- **Message:** "DSL parse error: {message}" (carries the inner [`Diagnostic`] when constructed via `CompileError::Parse`)
+- **Context:** `{ message: string, source_position?: Span }`
+- **Fix:** The DSL source did not match the grammar (unbalanced braces / unrecognized token / malformed primitive list). Mirror the diagnostic message + source position back to the author; the typed `CompileError::Parse(Diagnostic)` arm at `crates/benten-dsl-compiler/src/lib.rs` carries the offending span. Phase-4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8) mints the first-class catalog mirror for the pre-existing `pub const benten_dsl_compiler::E_DSL_PARSE_ERROR` wire-string constant + `CompileError::Parse(_)` variant; pre-mint the variant routed through `ErrorCode::Unknown(...)` at the napi boundary which collapsed discriminant-switching.
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::compile_str` (lexer + parser) — `CompileError::Parse(_)` variant arm in `CompileError::code()`.
+- **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 194 → 195). Routes to `ON_ERROR`.
+
+### E_DSL_UNKNOWN_PRIMITIVE
+
+- **Message:** "DSL semantic error: unknown primitive '{name}'" (carries the inner [`Diagnostic`])
+- **Context:** `{ message: string, source_position?: Span, primitive_name: string }`
+- **Fix:** The DSL referenced a primitive that is not part of the 12 operation primitives (READ / WRITE / TRANSFORM / BRANCH / ITERATE / WAIT / CALL / RESPOND / EMIT / SANDBOX / SUBSCRIBE / STREAM). Per CLAUDE.md commitment #1 (12 primitives irreducible), the DSL compiler refuses unknown keywords. Check spelling; for typed-CALL-style helpers, write `call('engine:typed:<op>', { ... })` directly (the `typedCall` DSL helper lives at the TS layer, not in the Rust dsl-compiler grammar). Phase-4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8) mints the first-class catalog mirror for the pre-existing `pub const benten_dsl_compiler::E_DSL_UNKNOWN_PRIMITIVE` wire-string constant + `CompileError::Semantic(_)` variant.
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::parse_primitive` (the unknown-keyword dispatch arm) — `CompileError::Semantic(_)` variant arm in `CompileError::code()`.
+- **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 195 → 196). Routes to `ON_ERROR`.
+
+### E_DSL_MISSING_RESPOND
+
+- **Message:** "DSL build error: handler must terminate with RESPOND" (carries the inner [`Diagnostic`])
+- **Context:** `{ message: string, source_position?: Span }`
+- **Fix:** The DSL handler subgraph does not terminate with a RESPOND primitive. Per CLAUDE.md commitment #1 + #4 (12 operation primitives + DAGs only + RESPOND-terminated handlers), the DSL compiler's `emit` build-phase pass refuses to emit a handler missing RESPOND. Add a trailing `.respond(...)` call to the handler chain (or its DSL-method equivalent). Phase-4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8) mints the first-class catalog mirror for the pre-existing `pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND` wire-string constant + `CompileError::Build(_)` variant (post-#790 rename from `CompileError::Emit`).
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::emit` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
+- **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 196 → 197). Routes to `ON_ERROR`.
 
 <!-- reachability: ignore -->
 

@@ -38,6 +38,9 @@ pub benten_errors::ErrorCode::DropBundleVersionUnsupported
 pub benten_errors::ErrorCode::DslBackendRejected
 pub benten_errors::ErrorCode::DslInvalidShape
 pub benten_errors::ErrorCode::DslIoError
+pub benten_errors::ErrorCode::DslMissingRespond
+pub benten_errors::ErrorCode::DslParseError
+pub benten_errors::ErrorCode::DslUnknownPrimitive
 pub benten_errors::ErrorCode::DslUnregisteredHandler
 pub benten_errors::ErrorCode::DuplicateHandler
 pub benten_errors::ErrorCode::EngineConfigInvalid
@@ -186,7 +189,7 @@ pub benten_errors::ErrorCode::VersionBranched
 pub benten_errors::ErrorCode::VersionUnknownPrior
 pub benten_errors::ErrorCode::ViewLabelMismatch
 pub benten_errors::ErrorCode::ViewStrategyARefused
-pub benten_errors::ErrorCode::ViewStrategyCReserved
+pub benten_errors::ErrorCode::ViewStrategyReserved
 pub benten_errors::ErrorCode::WaitMetadataMissing
 pub benten_errors::ErrorCode::WaitSignalShapeMismatch
 pub benten_errors::ErrorCode::WaitSuspended

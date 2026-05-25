@@ -49,7 +49,9 @@ pub enum UserViewInputPattern {
 /// ViewCreateOptions)` overload of `Engine::create_view`. The default
 /// strategy is `Strategy::B` per D8-RESOLVED — `Strategy::A` is reserved
 /// for the 5 hand-written Phase-1 views (Rust-only) and is refused at
-/// registration time; `Strategy::C` is reserved for Phase 3+.
+/// registration time; `Strategy::Reserved` (renamed from `Strategy::C`
+/// at G23-0a + Row D-19 G-COMP-1 wave Cohort 8 atomic 4-surface rename)
+/// is reserved for Phase 3+.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserViewSpec {
     pub(crate) id: String,
@@ -112,10 +114,11 @@ impl UserViewSpecBuilder {
 
     /// Explicitly opt into a strategy. Default is `Strategy::B` for user
     /// views (D8-RESOLVED). `Strategy::A` is rejected by `Engine::create_view`
-    /// at registration time (hand-written = Rust-only) and `Strategy::C`
-    /// is rejected as Phase-3-reserved — both via typed errors that the
-    /// builder itself does NOT preempt (so the typed error surfaces at the
-    /// engine boundary where the catalog code is wired).
+    /// at registration time (hand-written = Rust-only) and `Strategy::Reserved`
+    /// (renamed from `Strategy::C` at G23-0a + Row D-19 G-COMP-1 wave Cohort 8
+    /// atomic 4-surface rename) is rejected as Phase-3-reserved — both via
+    /// typed errors that the builder itself does NOT preempt (so the typed
+    /// error surfaces at the engine boundary where the catalog code is wired).
     #[must_use]
     pub fn strategy(mut self, strategy: benten_ivm::Strategy) -> Self {
         self.strategy = Some(strategy);

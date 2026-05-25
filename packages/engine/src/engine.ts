@@ -1398,8 +1398,9 @@ export class Engine {
    * Pass `{ id, inputPattern, strategy?, project? }`. Returns a
    * [`UserView`] handle exposing `id`, `strategy`, `inputPattern`,
    * `snapshot()`, and `onUpdate()`. Strategy defaults to `'B'` per
-   * D8-RESOLVED; `'A'` and `'C'` produce typed errors
-   * (`E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED`).
+   * D8-RESOLVED; `'A'` and `'Reserved'` (or the backward-compat alias
+   * `'C'`) produce typed errors (`E_VIEW_STRATEGY_A_REFUSED` /
+   * `E_VIEW_STRATEGY_RESERVED`).
    *
    * # Naming (r6-arch-2 closure)
    *
@@ -1434,7 +1435,7 @@ export class Engine {
     const resolvedStrategy = resolveUserViewStrategy(spec);
     try {
       // The Rust side enforces the typed E_VIEW_STRATEGY_A_REFUSED /
-      // E_VIEW_STRATEGY_C_RESERVED errors; we forward the strategy
+      // E_VIEW_STRATEGY_RESERVED errors; we forward the strategy
       // string verbatim so the engine boundary owns the policy.
       // R6 Round-2 r6-r2-napi-2: bind `native` to `this.inner` —
       // napi-rs class methods require the napi class instance as

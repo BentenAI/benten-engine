@@ -984,8 +984,8 @@ pub benten_engine::error::EngineError::ViewLabelMismatch::got_label: alloc::stri
 pub benten_engine::error::EngineError::ViewLabelMismatch::view_id: alloc::string::String
 pub benten_engine::error::EngineError::ViewStrategyARefused
 pub benten_engine::error::EngineError::ViewStrategyARefused::view_id: alloc::string::String
-pub benten_engine::error::EngineError::ViewStrategyCReserved
-pub benten_engine::error::EngineError::ViewStrategyCReserved::view_id: alloc::string::String
+pub benten_engine::error::EngineError::ViewStrategyReserved
+pub benten_engine::error::EngineError::ViewStrategyReserved::view_id: alloc::string::String
 pub benten_engine::error::EngineError::WaitSuspended
 pub benten_engine::error::EngineError::WaitSuspended::handle: benten_eval::primitives::wait::SuspendedHandle
 impl benten_engine::error::EngineError
@@ -2399,8 +2399,8 @@ pub benten_engine::EngineError::ViewLabelMismatch::got_label: alloc::string::Str
 pub benten_engine::EngineError::ViewLabelMismatch::view_id: alloc::string::String
 pub benten_engine::EngineError::ViewStrategyARefused
 pub benten_engine::EngineError::ViewStrategyARefused::view_id: alloc::string::String
-pub benten_engine::EngineError::ViewStrategyCReserved
-pub benten_engine::EngineError::ViewStrategyCReserved::view_id: alloc::string::String
+pub benten_engine::EngineError::ViewStrategyReserved
+pub benten_engine::EngineError::ViewStrategyReserved::view_id: alloc::string::String
 pub benten_engine::EngineError::WaitSuspended
 pub benten_engine::EngineError::WaitSuspended::handle: benten_eval::primitives::wait::SuspendedHandle
 impl benten_engine::error::EngineError

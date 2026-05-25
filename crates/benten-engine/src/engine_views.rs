@@ -675,8 +675,10 @@ impl Engine {
     /// - [`EngineError::ViewStrategyARefused`] when the spec declared
     ///   `Strategy::A` (Strategy A is hand-written-IVM-only; user views
     ///   cannot claim that lane).
-    /// - [`EngineError::ViewStrategyCReserved`] when the spec declared
-    ///   `Strategy::C` (Z-set / DBSP cancellation reserved for Phase 3+).
+    /// - [`EngineError::ViewStrategyReserved`] when the spec declared
+    ///   `Strategy::Reserved` (Z-set / DBSP cancellation reserved for Phase 3+;
+    ///   renamed from `Strategy::C` at G23-0a per arch-r1-14 + full enum + wire-
+    ///   string + TS-class atomic rename at Row D-19 G-COMP-1 wave Cohort 8).
     /// - [`EngineError::ViewLabelMismatch`] (R6-R3 r6-r3-ivm-1) when the
     ///   spec id matches one of the four canonical view ids whose
     ///   hand-written dispatch arm has hardcoded `input_pattern_label`
@@ -708,7 +710,7 @@ impl Engine {
                 });
             }
             benten_ivm::Strategy::Reserved => {
-                return Err(EngineError::ViewStrategyCReserved {
+                return Err(EngineError::ViewStrategyReserved {
                     view_id: spec.id().to_string(),
                 });
             }

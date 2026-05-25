@@ -741,7 +741,11 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation;
   L8-R2-MAJOR-CARRY-2 + L8-R2-MINOR-CARRY-1 G-CORE-9 R2 extensions.
 
-### Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)
+### ~~Row D-19~~ — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints) — **CLOSED at R6-R2-FP-integration-redo Group C / Cohort 8 (2026-05-25)**
+
+**Status: CLOSED.** Landed at the R6-R2-batch-c-dsl-catalog sub-branch of the R6-R2-FP-integration-redo PR (2026-05-25) per the v1-beta-freeze-window auto-WIRE-NOW discipline. The atomic 4-surface §3.5g rename + 3 first-class catalog mints all shipped in a single commit; CATALOG_VARIANT_COUNT 194 → 197; cargo-public-api + ts-public-api baselines regenerated; drift-detect baseline removed the 3 grandfathered `CompileError::{Parse,Semantic,Build}` lines per §3.5g item 6 amendment closure. See `docs/V1-BETA-BREAKING-CHANGES.md` Cohort 8 for the full migration enumeration; row body retained below for forensic context.
+
+**Original (pre-closure) row body:**
 
 - **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt` (`pub benten_errors::ErrorCode::ViewStrategyCReserved`) + `docs/public-api/benten-engine.txt` (`pub benten_engine::error::EngineError::ViewStrategyCReserved` + `pub benten_engine::EngineError::ViewStrategyCReserved` re-export) lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break. (Path-symbol cites per pim-1 / §3.5b HARDENED point 3; previous numeric line cites at benten-errors.txt:188 + benten-engine.txt:976,977,2329,2330 had drifted uniformly off-by-one to 187 / 975,976,2328,2329 post baseline regeneration.)
 - **Deferred consumption (G-COMP-1 destination):** atomic 4-surface rename per §3.5g:

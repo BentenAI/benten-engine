@@ -66,7 +66,7 @@ const KNOWN_USER_VIEW_FIELDS: &[&str] = &["id", "inputPattern", "strategy"];
 /// Strategy parsing is permissive on case (`'B'` / `'b'` both accepted) so
 /// JS callers can hand-write either form. Unknown strategies surface as
 /// `E_INPUT_LIMIT` at the napi boundary; the typed
-/// `E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_C_RESERVED` errors fire
+/// `E_VIEW_STRATEGY_A_REFUSED` / `E_VIEW_STRATEGY_RESERVED` errors fire
 /// at the engine boundary inside `Engine::create_user_view`.
 pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserViewSpec> {
     let obj = match v {
@@ -130,7 +130,7 @@ pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserVi
         let strategy_str = strategy_value.as_str().ok_or_else(|| {
             napi::Error::new(
                 Status::InvalidArg,
-                "createView spec.strategy: must be a string ('A' / 'B' / 'C')",
+                "createView spec.strategy: must be a string ('A' / 'B' / 'Reserved'; 'C' accepted as backward-compat alias for 'Reserved')",
             )
         })?;
         let strategy = match strategy_str.to_ascii_uppercase().as_str() {
@@ -141,7 +141,7 @@ pub(crate) fn parse_user_view_spec(v: &serde_json::Value) -> napi::Result<UserVi
                 return Err(napi::Error::new(
                     Status::GenericFailure,
                     format!(
-                        "E_INPUT_LIMIT: createView spec.strategy `{other}` is not one of 'A' / 'B' / 'C'"
+                        "E_INPUT_LIMIT: createView spec.strategy `{other}` is not one of 'A' / 'B' / 'Reserved' (or 'C' as backward-compat alias)"
                     ),
                 ));
             }

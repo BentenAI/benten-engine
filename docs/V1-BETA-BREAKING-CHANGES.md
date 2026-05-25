@@ -240,7 +240,7 @@ These are public-API tightens / additive surfaces named-deferred to a follow-up 
 
 - ~~**Row D-7 — §8-A Engine visibility cluster tighten + napi cascade**~~ **CLOSED at R6 R1 FP-A Bundle F2 (2026-05-24)** — the four methods (`Engine::get_node` → `pub(crate) fn read_node`, `Engine::put_node` → `pub(crate) fn put_node_inner`, `Engine::get_node_label_only` → `pub(crate) fn read_node_label_only`, `Engine::resolve_subgraph_cid_for_test` → `pub(crate) fn resolve_subgraph_cid_inner`) all tightened at v1-beta. Napi `Engine::get_node` migrated to `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)`. ~80 sibling-crate integration tests preserved via cfg-gated test-helper re-exports in `crates/benten-engine/src/testing.rs` (no per-test migration). External callers needing un-attributed reads use `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)` (the always-on sentinel constant minted at `crates/benten-engine/src/internal_principal.rs` + re-exported at the crate root). See V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-7~~ for forensic context.
 - **Row D-11 — `walk_share_scope_as` principal-bearing additive overload** (G-COMP-1 destination) — `Engine::walk_share_scope` is principal-unbearing at v1-beta; the principal-bearing variant for recipient-side path-tagged-key derivation is additive Composing-time enhancement per RATIFIED-S&C §R4.
-- **Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items** (G-COMP-1 destination) — Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_ERROR reusing existing `pub const` + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND); the obsolete `Strategy::C` naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. (Per G-CORE-9 R3-FP L9-r3-MIN-1 closure: the wire string `E_DSL_PARSE_ERROR` is reused — the existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR` already occupies that slot; G-COMP-1 delivers the enum variant `DslParseError` + TS class `EDslParseError` mirror.)
+- ~~**Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items**~~ **CLOSED at R6-R2-FP-integration-redo Group C (Cohort 8 above; 2026-05-25)** — Strategy::C → Reserved rename + 3 DSL ErrorCode mints landed atomically as the Row D-19 G-COMP-1 wave WIRE-NOW per the v1-beta-freeze-window auto-WIRE-NOW discipline. CATALOG_VARIANT_COUNT 194 → 197. See Cohort 8 above for full enumeration; see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` ~~Row D-19~~ for forensic context.
 - **Row D-17 (extended) — `#[non_exhaustive]` cascade for ~12+ lens-scoped pub types** (G-COMP-1 destination) — CapWriteContext / ReadContext / SuspensionOutcome + the extended set from L8-R2-MAJOR-CARRY-2 (UserViewInputPattern / TraceStep / StreamCursor / SubscribeCursor / EngineViewsHandle / AtriumConfig / SyncStatus + the outcome.rs 13-pub-struct set + benten-ivm SubgraphSpec/KernelInput/View* + benten-platform-foundation Vocab*/Scalar/RenderError + Mode). **Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) were CLOSED at G-CORE-9 R2 (Bundle R2.8) and are NOT deferred.**
 - **Row D-20 — L6-r1-3 trybuild compile-fail regression backstop** (G-COMP-1 destination) — the CapabilityPolicy hard-seal MECHANISM IS structurally enforced by rustc at v1-beta; only the explicit negative-arm compile-fail test fixture is deferred.
 - ~~**Row D-22 — workspace `pub fn .*_for_test` `#[cfg]` gating sweep**~~ **CLOSED at R6 R1 FP-A Bundle F1.a-e (2026-05-24)** — workspace cfg-gating sweep COMPLETE. 70+ `pub fn .*_for_test*` declarations across 11 crates gated under `#[cfg(any(test, feature = "testing"))]` (or `feature = "test-helpers"` for benten-engine). 14 production-shaped items remain `pub` per the EXEMPT_PUB_ITEMS allow-list at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` + V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ EXEMPT section. 8 affected cargo-public-api baselines regenerated; 7 CI workflows extended `--features` lists with the 6 new `testing` chains. No-regression test pin lives at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` (`no_ungated_pub_for_test_symbols_in_production_source` + `exempt_list_entries_all_exist`). See V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ for forensic context.
@@ -441,6 +441,111 @@ tests to FAIL with `Got: Ok(())` (silent admission). Post-fix: 3/3 +
 
 ---
 
+## Cohort 8 — Row D-19 G-COMP-1 wave WIRE-NOW (this PR, Batch C)
+
+This cohort lands at PR<R6-R2-FP-integration-redo> Group C
+(R6-R2-batch-c-dsl-catalog sub-branch; 2026-05-25). Closes
+[`V1-FROZEN-INTERFACE-DEFERRED.md`](V1-FROZEN-INTERFACE-DEFERRED.md)
+**Row D-19** WIRE-NOW per the v1-beta-freeze-window auto-WIRE-NOW
+discipline: the obsolete `Strategy::C` naming + the 3 ungranted DSL
+ErrorCodes would otherwise ride into v1-beta wire bytes + freeze as
+SemVer-breaking-post-tag-fix surfaces. Atomic 4-surface §3.5g rename
++ 3 first-class ErrorCode mints land in a single commit.
+
+### Wire-format breaking change
+
+- **`E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED`** at
+  `crates/benten-errors/src/lib.rs::ErrorCode::ViewStrategyReserved`
+  (variant `ViewStrategyCReserved` → `ViewStrategyReserved`; `as_str`
+  arm + `from_str` arm both swap to the new wire string atomically).
+  This is a **wire-format byte-shape breaking change** for any
+  consumer pattern-matching on the on-disk / on-the-wire string
+  `"E_VIEW_STRATEGY_C_RESERVED"`. The variant is a registration-time
+  refusal code (`Engine::register_user_view`), so the wire surface
+  is narrow: error-handling code in the napi binding + TS DSL
+  validator + downstream test code that asserted on the old string.
+
+### Public-API shape changes
+
+- **Rust enum variant rename:** `benten_errors::ErrorCode::ViewStrategyCReserved`
+  → `benten_errors::ErrorCode::ViewStrategyReserved`.
+- **Rust EngineError variant rename:** `benten_engine::error::EngineError::ViewStrategyCReserved`
+  → `benten_engine::error::EngineError::ViewStrategyReserved` (+ the
+  `pub use` re-export `benten_engine::EngineError::ViewStrategyReserved`).
+- **TS class rename:** `EViewStrategyCReserved` → `EViewStrategyReserved`
+  in `packages/engine/src/errors.generated.ts` (auto-regen from
+  `docs/ERROR-CATALOG.md`; cargo-public-api + ts-public-api baselines
+  updated in same commit).
+- **TS Strategy union widened:** `type Strategy = "A" | "B" | "C"`
+  → `type Strategy = "A" | "B" | "C" | "Reserved"`. The new
+  `"Reserved"` value is the canonical name; `"C"` is retained as a
+  backward-compat alias (the napi parser accepts both → maps to
+  `Strategy::Reserved` Rust-side).
+- **`EngineError.diagnostic()` JSON `kind` rename:** `"viewStrategyCReserved"`
+  → `"viewStrategyReserved"` in `error.rs::diagnostic()`. Consumers
+  pattern-matching on the JSON `kind` field must update.
+
+### New first-class ErrorCode mints (CATALOG_VARIANT_COUNT 194 → 197)
+
+Three pre-existing DSL `pub const benten_dsl_compiler::E_DSL_*`
+wire-string constants gain first-class typed catalog mirrors per
+§3.5g pub-error-variant-first-class-mirror discipline. Pre-mint the
+napi `mapNativeError` boundary collapsed all three to
+`ErrorCode::Unknown(string)`; first-class mirrors let TS consumers
+match by typed BentenError subclass (`EDslParseError` /
+`EDslUnknownPrimitive` / `EDslMissingRespond`).
+
+- **`E_DSL_PARSE_ERROR` → `ErrorCode::DslParseError`** (TS class
+  `EDslParseError`). Mirror of `CompileError::Parse(Diagnostic)` at
+  `crates/benten-dsl-compiler/src/lib.rs`. Wire string unchanged.
+- **`E_DSL_UNKNOWN_PRIMITIVE` → `ErrorCode::DslUnknownPrimitive`** (TS
+  class `EDslUnknownPrimitive`). Mirror of `CompileError::Semantic(_)`.
+  Wire string unchanged.
+- **`E_DSL_MISSING_RESPOND` → `ErrorCode::DslMissingRespond`** (TS
+  class `EDslMissingRespond`). Mirror of the `CompileError::Build(_)`
+  sub-case where the inner `Diagnostic.error_code == E_DSL_MISSING_RESPOND`
+  (the other Build sub-case — `E_DSL_INVALID_SHAPE` — continues to
+  route through the pre-existing `ErrorCode::DslInvalidShape`).
+  Wire string unchanged.
+
+### Drift-detect baseline removals
+
+`scripts/drift-detect-error-variant-mirror-baseline.txt` removes
+the 3 grandfathered lines `CompileError::{Parse,Semantic,Build}`
+per §3.5g item 6 amendment closure — the variants now have
+first-class typed mirrors, so the drift-detect scanner enforces
+the rule going forward.
+
+### Why break-OK at v1-beta
+
+The v1-beta tag locks public-API + wire-format + ErrorCode catalog
+surfaces. Deferring this rename / mint until post-v1-beta would
+require a SemVer-breaking fix-pass. The atomic 4-surface §3.5g
+rename + the 3 catalog mints land NOW in the freeze window per the
+"obsolete names + ungranted DSL ErrorCodes ride into v1-beta wire
+bytes" forensic argument (Row D-19 anchor).
+
+### Migration path
+
+- **Rust consumers:** rename `ErrorCode::ViewStrategyCReserved` →
+  `ErrorCode::ViewStrategyReserved`; `EngineError::ViewStrategyCReserved
+  { view_id }` → `EngineError::ViewStrategyReserved { view_id }`. The
+  field shape (single `view_id: String`) is unchanged.
+- **TS consumers:** `import { EViewStrategyCReserved }` →
+  `import { EViewStrategyReserved }`. Code asserting on the wire
+  string `"E_VIEW_STRATEGY_C_RESERVED"` → `"E_VIEW_STRATEGY_RESERVED"`.
+  Code asserting on the JSON `kind` field `"viewStrategyCReserved"`
+  → `"viewStrategyReserved"`.
+- **DSL ErrorCode consumers:** existing string-keyed switches on
+  `E_DSL_PARSE_ERROR` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND`
+  continue to work; the wire strings are unchanged. TS consumers
+  upgrading to typed-class dispatch can now `instanceof EDslParseError`
+  etc. against the typed `BentenError` subclasses surfaced by the
+  napi `mapNativeError` boundary (previously these collapsed to the
+  base `BentenError("E_UNKNOWN")` class).
+
+---
+
 ## How to consume this ledger
 
 1. **Adopting v1-beta:** read Cohort 1 + 2 first (wire-format + public-API shape changes you must adapt to).
@@ -457,3 +562,5 @@ Authored at G-CORE-9 R1 fix-pass (PR #1346; 2026-05-24) per L18-r1-2/3 closure. 
 Cohort 6 landed at PR #1351 (R6 R1 FP Strategy-C consolidation; 2026-05-25).
 
 Cohort 7 landed at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C consolidation re-do off post-#1351 main; 2026-05-25) — closes the L2-R2-BLOCKER-1 audience_pubkey BLOCKER + L4-MAJ DropBundle inter-Recipe AAD sibling + Row D-1 sharpening (apply_atrium_merge per-row chain-bearing admit).
+
+Cohort 8 landed at PR<R6-R2-FP-integration-redo> Group C (R6-R2-batch-c-dsl-catalog sub-branch; 2026-05-25) — closes Row D-19 G-COMP-1 wave WIRE-NOW per the v1-beta-freeze-window auto-WIRE-NOW discipline. Atomic 4-surface §3.5g rename `Strategy::C` → `Strategy::Reserved` + 3 first-class DSL ErrorCode mints (`E_DSL_PARSE_ERROR` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND`). CATALOG_VARIANT_COUNT 194 → 197.

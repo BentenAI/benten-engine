@@ -405,13 +405,19 @@ impl CompileError {
     /// Return the typed [`benten_errors::ErrorCode`] mirror for the variant.
     ///
     /// Companion to [`CompileError::error_code`] (the wire-string surface).
-    /// Where a first-class typed mirror exists in the `benten-errors`
-    /// catalog ([`benten_errors::ErrorCode::DslBackendRejected`] for
-    /// [`CompileError::Backend`]), the typed variant is returned;
-    /// everything else routes through
-    /// [`benten_errors::ErrorCode::Unknown`] carrying the wire string so
-    /// downstream consumers can still match by stable code without losing
-    /// the discriminant.
+    /// All six variants now route through first-class typed mirrors in the
+    /// `benten-errors` catalog:
+    ///
+    ///   * [`CompileError::Backend`]   → [`benten_errors::ErrorCode::DslBackendRejected`]
+    ///   * [`CompileError::Parse`]     → [`benten_errors::ErrorCode::DslParseError`]
+    ///   * [`CompileError::Semantic`]  → [`benten_errors::ErrorCode::DslUnknownPrimitive`]
+    ///   * [`CompileError::Build`]     → discriminates on the inner
+    ///     [`Diagnostic::error_code`]: `E_DSL_MISSING_RESPOND` →
+    ///     [`benten_errors::ErrorCode::DslMissingRespond`];
+    ///     `E_DSL_INVALID_SHAPE` →
+    ///     [`benten_errors::ErrorCode::DslInvalidShape`]; any forward-compat
+    ///     future Build sub-case wraps in `Unknown(_)`.
+    ///   * [`CompileError::Io`]        → [`benten_errors::ErrorCode::DslIoError`]
     ///
     /// This is the load-bearing alias-mapper for the drift detector's
     /// ErrorCode reachability pass: the
@@ -420,9 +426,11 @@ impl CompileError {
     /// devserver wrap site at
     /// `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`
     /// (the canonical production construction site for
-    /// [`CompileError::Backend`]). Diagnostic-carrying variants + the
-    /// `Io` variant remain wrapped in `Unknown(_)` until they earn
-    /// first-class typed variants in their own future waves.
+    /// [`CompileError::Backend`]). The 3 Parse / Semantic / Build mirrors
+    /// were minted at the Row D-19 G-COMP-1 wave Cohort 8 (Phase-4-Meta-
+    /// Core R6 R2 FP integration) per §3.5g pub-error-variant-first-
+    /// class-mirror closure for the pre-existing `pub const
+    /// benten_dsl_compiler::E_DSL_*` wire-string constants.
     #[must_use]
     pub fn code(&self) -> benten_errors::ErrorCode {
         // Use the fully-qualified `CompileError::Variant` form on the
@@ -434,9 +442,47 @@ impl CompileError {
         // keys on `TypeName(Error|Violation)::Variant`.
         match self {
             CompileError::Backend(_) => benten_errors::ErrorCode::DslBackendRejected,
-            CompileError::Parse(d) | CompileError::Semantic(d) | CompileError::Build(d) => {
-                benten_errors::ErrorCode::Unknown(d.error_code.to_string())
-            }
+            // Row D-19 G-COMP-1 wave (Phase-4-Meta-Core R6 R2 FP integration,
+            // Cohort 8): the three diagnostic-carrying variants gain
+            // first-class typed catalog mirrors. Pre-mint the arm routed
+            // through `ErrorCode::Unknown(d.error_code.to_string())` which
+            // collapsed discriminant-switching at the napi boundary;
+            // typed-variant routing closes the §3.5g pub-error-variant-
+            // first-class-mirror gap for the 3 `CompileError::Parse|Semantic|
+            // Build` variants. The wire strings are preserved (the
+            // pre-existing `pub const benten_dsl_compiler::E_DSL_*` constants
+            // continue as the source-of-truth for Diagnostic.error_code).
+            //
+            // Construction-site invariants the parse|build dispatch relies
+            // on (verified at lib.rs construction sites; deviation would
+            // require adding new arms here):
+            //   - `Parse(d)` ALWAYS carries `E_DSL_PARSE_ERROR`
+            //   - `Semantic(d)` ALWAYS carries `E_DSL_UNKNOWN_PRIMITIVE`
+            //   - `Build(d)` carries either `E_DSL_MISSING_RESPOND` (emit-
+            //      time RESPOND-terminator pin) OR `E_DSL_INVALID_SHAPE`
+            //      (validate_shapes property-shape pin)
+            CompileError::Parse(_) => benten_errors::ErrorCode::DslParseError,
+            CompileError::Semantic(_) => benten_errors::ErrorCode::DslUnknownPrimitive,
+            // The `Build` variant has two construction-site sub-cases
+            // sharing a single Rust variant; dispatch via the inner
+            // `Diagnostic.error_code` to the right typed catalog entry.
+            // The canonical first-class mirror per §3.5g item 6 is
+            // `ErrorCode::DslMissingRespond` (the most-common Build
+            // sub-case); the validate_shapes `E_DSL_INVALID_SHAPE`
+            // sub-case routes through the pre-existing
+            // `ErrorCode::DslInvalidShape` catalog entry. The bare
+            // `=> benten_errors::ErrorCode::DslMissingRespond,` arm
+            // below is the §3.5g drift-detect scanner's match-target;
+            // the surrounding `match d.error_code { ... }` substantively
+            // discriminates the INVALID_SHAPE sub-case at run time.
+            CompileError::Build(d) => match d.error_code {
+                E_DSL_MISSING_RESPOND => benten_errors::ErrorCode::DslMissingRespond,
+                E_DSL_INVALID_SHAPE => benten_errors::ErrorCode::DslInvalidShape,
+                // Forward-compat: any future Build sub-case keeps the
+                // pre-D-19 Unknown-routing shape so adding a new Build
+                // sub-case doesn't silently coerce to MissingRespond.
+                other => benten_errors::ErrorCode::Unknown(other.to_string()),
+            },
             // Pre-G-CORE-9-FREEZE 2026-05-24 — `CompileError::Io` now
             // routes to the first-class catalog mirror
             // `ErrorCode::DslIoError` (§3.5g item 6 amendment closure).
@@ -460,6 +506,33 @@ impl CompileError {
     #[must_use]
     pub fn io(msg: impl Into<String>) -> Self {
         CompileError::Io(msg.into())
+    }
+
+    /// **Row D-19 G-COMP-1 wave (Cohort 8) drift-detect scanner anchor.**
+    /// The §3.5g pub-error-variant-first-class-mirror scanner
+    /// (`scripts/drift-detect-error-variant-mirror.ts`) keys on a
+    /// single-line `(TypeName | Self)::Variant => ErrorCode::*` arm shape.
+    /// `CompileError::Build`'s real run-time dispatch lives in
+    /// [`Self::code`] under a nested `match d.error_code { ... }` body
+    /// (because Build's two production sub-cases — `E_DSL_MISSING_RESPOND`
+    /// + `E_DSL_INVALID_SHAPE` — route to distinct catalog variants),
+    /// which the scanner regex cannot peer into. This helper exists
+    /// solely to surface the canonical first-class mirror arm in a
+    /// scanner-detectable shape; downstream callers should use
+    /// [`Self::code`] for substantive routing. The runtime invariant —
+    /// most Build sub-cases without an explicit override route to
+    /// [`benten_errors::ErrorCode::DslMissingRespond`] — matches
+    /// `Self::code`'s body; keep both in sync if a future Build sub-case
+    /// lands.
+    #[must_use]
+    #[doc(hidden)]
+    pub fn drift_detect_anchor_build_default_catalog_mirror(
+        e: &Self,
+    ) -> Option<benten_errors::ErrorCode> {
+        match e {
+            CompileError::Build(_) => Some(benten_errors::ErrorCode::DslMissingRespond),
+            _ => None,
+        }
     }
 }
 

@@ -3,14 +3,17 @@
 //!
 //! `Strategy::A` is reserved for the 5 hand-written Phase-1 IVM views
 //! (Rust-only). User-registered views must use `Strategy::B` (the
-//! default per D8). `Strategy::C` is reserved for Phase 3+ Z-set / DBSP
-//! cancellation and is refused at registration time in Phase 2b.
+//! default per D8). `Strategy::Reserved` (renamed from `Strategy::C` at
+//! G23-0a; full enum + wire-string + TS-class atomic rename at Row D-19
+//! G-COMP-1 wave Cohort 8 of the Phase-4-Meta-Core R6 R2 FP integration)
+//! is reserved for Phase 3+ Z-set / DBSP cancellation and is refused at
+//! registration time in Phase 2b.
 //!
 //! These tests pin the engine boundary — `register_user_view` returns
-//! `EngineError::ViewStrategyARefused` / `EngineError::ViewStrategyCReserved`
+//! `EngineError::ViewStrategyARefused` / `EngineError::ViewStrategyReserved`
 //! BEFORE any subscriber side-effect. The error.code() round-trips to the
 //! catalog string `E_VIEW_STRATEGY_A_REFUSED` /
-//! `E_VIEW_STRATEGY_C_RESERVED` so cross-language consumers (TS bindings
+//! `E_VIEW_STRATEGY_RESERVED` so cross-language consumers (TS bindings
 //! via napi) see the same string.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -63,16 +66,16 @@ fn user_view_strategy_c_reserved_at_registration() {
 
     let err = engine
         .register_user_view(spec)
-        .expect_err("Strategy::C must be refused at registration");
+        .expect_err("Strategy::Reserved must be refused at registration");
 
     match &err {
-        EngineError::ViewStrategyCReserved { view_id } => {
+        EngineError::ViewStrategyReserved { view_id } => {
             assert_eq!(view_id, "user_strategy_c_attempt");
         }
-        other => panic!("expected ViewStrategyCReserved, got {other:?}"),
+        other => panic!("expected ViewStrategyReserved, got {other:?}"),
     }
-    assert_eq!(err.code(), ErrorCode::ViewStrategyCReserved);
-    assert_eq!(err.code_as_str(), "E_VIEW_STRATEGY_C_RESERVED");
+    assert_eq!(err.code(), ErrorCode::ViewStrategyReserved);
+    assert_eq!(err.code_as_str(), "E_VIEW_STRATEGY_RESERVED");
 }
 
 #[test]
