@@ -1708,8 +1708,16 @@ fn extract_pr_cites(s: &str) -> Vec<u32> {
 /// PR-cite verification result for a single PR number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrCiteStatus {
+    /// PR exists at the upstream repo + is merged. Cite is valid.
     Merged,
+    /// PR exists but was CLOSED without merging (rejected / superseded /
+    /// duplicate). Cite is drift — narrative referencing a closed-not-
+    /// merged PR should be updated to the actual landing PR (or removed
+    /// if the cite was speculative).
     ClosedNotMerged,
+    /// `gh pr view <n>` returned no such PR. Either the cite is a typo
+    /// (wrong digit) or the cite references a future PR not yet opened.
+    /// Both shapes are drift.
     NotFound,
     /// Open or other non-terminal state — not flagged (an in-flight cite
     /// is normal narrative; only CLOSED-not-merged + NotFound are drift).
