@@ -1098,7 +1098,7 @@ Row D-15's audit-readiness concern.
   - `crates/benten-drop/src/envelope_sig.rs::sign_envelope` +
     `verify_envelope` (DropBundle envelope signature)
   - `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_peer_signature`
-  - `crates/benten-platform-foundation/src/install_record.rs::InstallRecord::verify_user_signature`
+  - `crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature`
   - `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant::binding_sig`
     (already named at Row D-15e; re-homed to this wave per
     same-structural-sub-fork analysis)

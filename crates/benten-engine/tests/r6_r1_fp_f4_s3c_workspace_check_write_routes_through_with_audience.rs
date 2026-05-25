@@ -21,11 +21,11 @@
 //!
 //! ## Sweep enumeration (Δv3-7)
 //!
-//! 4 production sites switched:
-//! - `crates/benten-engine/src/engine.rs:1413` (apply_atrium_merge per-row recheck)
-//! - `crates/benten-engine/src/engine_wait.rs:900` (WAIT-resume put_node)
-//! - `crates/benten-engine/src/engine_diagnostics.rs:84` (transaction commit per-write hook)
-//! - `crates/benten-engine/src/primitive_host.rs:613` (evaluator per-write cap-recheck)
+//! 4 production sites switched (symbol-form per §3.5b HARDENED point 3):
+//! - `crates/benten-engine/src/engine.rs::apply_atrium_merge` (per-row recheck)
+//! - `crates/benten-engine/src/engine_wait.rs::put_node_inner` (WAIT-resume put_node)
+//! - `crates/benten-engine/src/engine_diagnostics.rs::transaction` (transaction commit per-write hook)
+//! - `crates/benten-engine/src/primitive_host.rs::check_capability` (evaluator per-write cap-recheck)
 //!
 //! EXCLUDED per Δv3-7: `benten-caps::ucan_grounded` — substrate-internal,
 //! NOT policy-routed; the typed-cap composition there is not the
@@ -46,8 +46,9 @@ impl CapabilityPolicy for InvertedPanicPolicy {
     fn check_write(&self, _ctx: &CapWriteContext) -> Result<(), CapError> {
         panic!(
             "InvertedPanicPolicy::check_write was called — this means the §S3c \
-             wiring was reverted at one of the 4 production sites (engine.rs:1413, \
-             engine_wait.rs:900, engine_diagnostics.rs:84, primitive_host.rs:613). \
+             wiring was reverted at one of the 4 production sites (engine.rs::apply_atrium_merge, \
+             engine_wait.rs::put_node_inner, engine_diagnostics.rs::transaction, \
+             primitive_host.rs::check_capability). \
              The §3.5n orchestrator-ground-truth check failed."
         );
     }
