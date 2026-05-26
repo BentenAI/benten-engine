@@ -2430,6 +2430,40 @@ sign-off + pinned crate versions matching the audited versions. The
 named typed-arm is what the v1-GM-gating CI lane greps for (a generic
 `Err` would silently regress the C-GM-AUDIT gate).
 
+### Compromise #31 — LAMPS Composite ML-DSA combiner is EUF-CMA-only NOT SUF-CMA — OPEN at construction layer; CLOSED-EQUIVALENT at application layer via Inv-15 (Phase-4-Meta-Core mint)
+
+**Code anchors:** the v1-beta default signature codepoint `crates/benten-crypto-suite/src/codepoint.rs::SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001` (LAMPS Composite ML-DSA `id-MLDSA65-Ed25519-SHA512` per `draft-ietf-lamps-pq-composite-sigs-19`, OID `1.3.6.1.5.5.7.6.48`, IANA early-allocated 2025-10-20); the Inv-15 application-layer closure described in [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) "Inv-15 Phase-4-Meta-Core mint + 3-layer decomposition" section; the existing payload-CID surfaces at `crates/benten-engine/src/engine_caps.rs::Engine::revoke_capability_by_grant_cid` + `crates/benten-platform-foundation/src/plugin_manifest.rs::manifest_cid`; the G-CORE-PQ-WIRE-1 audit + property-test cluster + cite-drift-detector `LoadBearingSigBundleCidPattern` scanner extension (planned).
+
+**Status.** **OPEN at construction layer; CLOSED-EQUIVALENT at application layer.** Per LAMPS draft-19 §9.2.2: *"NOT RECOMMENDED for use in applications where it has not been shown that EUF-CMA is acceptable."* The construction is EUF-CMA-secure (both components must verify) but NOT SUF-CMA-preserving (cannot prevent a malicious holder from minting a different-bytes signature on the same payload). It provides only Weakly-Non-Separable per LAMPS draft §10 (NOT Strongly-Non-Separable). For systems that key revocation, dedupe, or audit-uniqueness off signature bytes, the EUF-only scope admits a malleability bypass — an attacker with valid `(payload, sig)` could in principle mint `(payload, sig')` and observe different behavior wherever sig-CID was load-bearing.
+
+**Why we ship LAMPS despite this** (per cryptographer-review-bird-of-prey-vs-lamps 2026-05-26 + Ben ratification "all yes across the board"):
+1. **Ecosystem interop**: OpenPGP-PQC `draft-ietf-openpgp-pqc-17` mandates the same `ML-DSA-65+Ed25519` composite (RFC publication expected H1-2026; Sequoia PGP committed ship-on-publication); BouncyCastle 1.80+ / OpenSSL 3.5 / AWS KMS / Thales HSM all ship LAMPS composite.
+2. **Implementation maturity**: production Rust impls (`ml-dsa` 0.1.0) + reference test vectors exist for LAMPS; not yet for SUF-CMA-preserving alternatives.
+3. **WG-adopted vs individual**: LAMPS is WG document; alternatives (`draft-prabel-cfrg-suf-hybrid-sigs-01`, Bird-of-Prey per Bossuat et al. EUROCRYPT 2026 IACR 2025/1844) are individual submissions or unpublished-as-Internet-Draft constructions.
+4. **The application-layer fix is cheaper and structurally cleaner** than betting v1-beta on fresh academic crypto (cf. ml-dsa CVE precedent GHSA-hcp2-x6j4-29j7 = implementation-vs-algorithm risk class L2 surfaced).
+
+**Mitigation (why this is shippable at `v1-beta`) — Inv-15 3-layer decomposition.** Benten closes the SUF-CMA gap at the application layer via the project-wide invariant Inv-15 (Phase-4-Meta-Core mint per Ben ratification 2026-05-26): every CID-based identifier in Benten refers to a canonical PAYLOAD, never a sig-inclusive bundle. The 3-layer decomposition:
+
+| Layer | Decision space | Benten today |
+|---|---|---|
+| **Identity** | What canonical bytes uniquely name "this thing" | payload-CID (Node bytes / canonical-manifest bytes / canonical-UCAN-claims bytes) |
+| **Authentication** | Who attests + by which sig algorithm | codepoint-dispatched signature (LAMPS at `0x0001`; agility seam per baked-in #5) |
+| **Revocation** | "This thing no longer authorizes X" | semantic tuple `(issuer, subject, cap, audience, validity)` — NOT sig-bundle-CID |
+
+Verified 2026-05-26 (Q1+Q2 ground-truth-verify): `Engine::revoke_capability_by_grant_cid` uses Node-content-addressed CID (sig sidecar excluded); plugin `manifest_cid` is computed-then-signed (consent record signs over `(manifest_cid || ...)`). The hazard is mostly pre-mitigated by Benten's existing architecture at the load-bearing surfaces; the G-CORE-PQ-WIRE-1 wave bundles the cross-surface audit (UCAN backend / device attestation / Atrium Drop / sync merge proofs / EMIT envelopes) + the per-surface MallorySigner property tests + the cite-drift-detector scanner extension + the pim-N codification.
+
+**Net.** SUF-CMA-equivalent application-layer security despite EUF-CMA-only construction-layer scope. The malleability bypass enumerated in the L12 finding does NOT obtain in Benten because the load-bearing identifiers + revocation semantics don't key off sig-bundle bytes.
+
+**Closure condition (construction-layer half).** **CLOSES at `v1.x` future-additive codepoint when SUF-CMA-preserving constructions mature.** Bird-of-Prey (Bossuat et al., EUROCRYPT 2026, IACR 2025/1844) proposes a SUF-CMA-preserving combiner for the exact EdDSA+ML-DSA pair with smaller sigs (smaller than sum of components). `draft-prabel-cfrg-suf-hybrid-sigs-01` is the IETF-side individual submission. When EITHER (a) Bird-of-Prey-class construction receives WG adoption + production-quality reference impls + independent impl audit, OR (b) draft-prabel achieves CFRG-adoption + similar maturity, Benten adds the construction as an additive codepoint via the crypto-agility framework (CLAUDE.md baked-in #5) — pure additive upgrade, no wire-format break, no re-sign of historic content. Construction-layer EUF-CMA-only scope persists in historic LAMPS-signed artifacts indefinitely; new content can opt into the SUF-CMA-preserving codepoint when available.
+
+**Closure condition (application-layer half).** **CLOSES at G-CORE-PQ-WIRE-1 wave when** (a) cross-surface audit confirms all 7 enumerated signature surfaces use payload-CID-or-tuple keyed identity/revocation (Q1+Q2 already verified; UCAN backend / device attestation / Atrium Drop / sync merge proofs / EMIT envelopes pending); (b) per-surface MallorySigner property tests land at `tests/inv15_sig_malleability_does_not_change_identifier.rs`; (c) cite-drift-detector `LoadBearingSigBundleCidPattern` scanner ships; (d) pim-N "Future signed-data designs MUST 3-layer-decompose" codified in dispatch-conventions.
+
+**Class.** Construction-formal-property-scope-vs-application-requirements. Distinct from Compromise #30 (impl-audit-maturity scope of the underlying primitives — different threat class; both apply simultaneously to the v1-beta hybrid). Distinct from Compromise #6 (BLAKE3 hash collision bound — unrelated property at the hash layer).
+
+**Cross-refs.** [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) "Inv-15 Phase-4-Meta-Core mint + 3-layer decomposition" (the load-bearing closure mechanism); `.addl/phase-4-meta/cryptographer-review-bird-of-prey-vs-lamps.md` (origin finding — the senior cryptographer's CONDITIONAL NO-GO on Bird-of-Prey + the elegant-permanent-shape recommendation); `.addl/phase-4-meta/critic-lens-l12-combiner-soundness.json` (initial discovery by L12 adversarial critic); CLAUDE.md baked-in #5 retense (LAMPS-default + Inv-15 + Bird-of-Prey-future-additive); `.addl/phase-4-meta/NIGHT-SHIFT-2026-05-26.md` LATE-AFTERNOON #1 ADDENDUM (Ben ratification record).
+
+**Honest-disclosure standing.** The blog framing for Position B (in revision; tracked at `.addl/phase-4-meta/position-b-revision-roadmap.md` + dispatched revision agent at branch `phase-4-meta-core/position-b-revision-v2`) MUST surface this compromise + the Inv-15 closure mechanism + the future-additive path as honesty caveats #7 + #8 + #9 per the cryptographer-review's blog-revision-requirements. The compromise is publicly defensible; the framing is "we shipped LAMPS for interop + closed the SUF-CMA gap at the application layer via Inv-15 + Bird-of-Prey-class is on our roadmap."
+
 ## Per-Node AEAD wrap layer — rebinding-attack-prevention (G-CORE-3d / #1301)
 
 **Section landed at Phase-4-Meta-Core G-CORE-3d wave (per R0.8

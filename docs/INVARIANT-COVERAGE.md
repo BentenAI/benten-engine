@@ -1,10 +1,17 @@
-# Invariant Coverage — Phase 4-Foundation Close
+# Invariant Coverage — Phase 4-Foundation Close + Phase-4-Meta-Core Inv-15 Mint
 
-CLAUDE.md commits to **14 invariants** governing the Benten engine.
-This document tracks per-invariant enforcement state, the enforcing
-crate, and the regression suite that pins it.
+CLAUDE.md commits to **15 invariants** governing the Benten engine
+(14 from Phase 4-Foundation + Inv-15 minted at Phase-4-Meta-Core per
+Ben ratification 2026-05-26: "sig-bundle CIDs are never load-bearing
+identifiers" — the application-layer 3-layer decomposition that closes
+the LAMPS Composite ML-DSA EUF-CMA-only construction-scope per L12
+finding + the cryptographer-review-of-bird-of-prey-vs-lamps elegant
+permanent shape). This document tracks per-invariant enforcement
+state, the enforcing crate, and the regression suite that pins it.
 
-**Phase 4-Foundation status:** 14 of 14 invariants enforced. Phase-4-Foundation extends Inv-14 with the plugin-DID principal classifier (see `Inv-14 Phase-4-Foundation plugin-DID principal extension` sub-section below) — the principal-type matrix now spans User-local + User-sync-merged + Device-multi-device-sync + Plugin-app-level-subgraph + Plugin-via-materializer-read. Inv-4 + Inv-7 went
+**Phase 4-Foundation status:** 14 of 14 Phase-4-Foundation invariants enforced. Phase-4-Foundation extends Inv-14 with the plugin-DID principal classifier (see `Inv-14 Phase-4-Foundation plugin-DID principal extension` sub-section below) — the principal-type matrix now spans User-local + User-sync-merged + Device-multi-device-sync + Plugin-app-level-subgraph + Plugin-via-materializer-read.
+
+**Phase-4-Meta-Core status:** Inv-15 REGISTERED (in this doc + linked in CLAUDE.md baked-in #5) but **NOT-YET-FULLY-ENFORCED-BY-AUTOMATION** at HEAD. Existing payload-CID discipline at the load-bearing surfaces (`Engine::revoke_capability_by_grant_cid` + plugin `manifest_cid`, per ground-truth-verify 2026-05-26 Q1+Q2 favorable) means the SUF-CMA-equivalent property already holds structurally at those surfaces today; the G-CORE-PQ-WIRE-1 wave bundles the cross-surface audit (UCAN backend `revoke(ucan_cid)` + device attestation envelope + Atrium Drop bundles + sync merge proofs + EMIT event envelopes) + the property-test discipline (`tests/inv15_sig_malleability_does_not_change_identifier.rs` per surface; MallorySigner-generated valid-but-different-bytes sigs on the same payload MUST leave identifiers unchanged) + the `cite-drift-detector` scanner extension (`LoadBearingSigBundleCidPattern` flagging `*_by_*_cid` callers whose arg sources include sig bytes). Net: 14 of 15 fully-enforced; Inv-15 partially-enforced-via-existing-discipline + on the G-CORE-PQ-WIRE-1 enforcement-completion path. Inv-4 + Inv-7 went
 ACTIVE in Phase 2b alongside the SANDBOX runtime (registration arm
 landed in G7-B; runtime arm landed across waves 8b + 8h with a bounded
 honest-disclosure for Inv-4 — see the "Inv-4 + Inv-7 runtime arm
@@ -39,6 +46,7 @@ the full retense.
 | 12 | Aggregate validation catch-all — multi-invariant violations roll up | 1 | `InvariantViolation::Registration` (at `crates/benten-eval/src/lib.rs::InvariantViolation` — fires when two or more invariants violate simultaneously) | `crates/benten-eval/tests/invariants_9_10_12.rs::registration_catch_all_populates_violated_list` |
 | 13 | Immutability — User WRITE re-puts of an already-persisted CID fire `E_INV_IMMUTABILITY` | 2a | `invariants::immutability` + `WriteAuthority` firing matrix | `crates/benten-engine/tests/inv_13_*.rs` |
 | 14 | Causal attribution — every primitive frame carries an `AttributionFrame` (Phase-3 G16-B device-grain extension: `peer_did_set` + `device_did` + `sync_hop_depth` slots — see "Inv-14 Phase-3 G16-B device-grain extension" below) | 2a / 3 | `evaluator::attribution` runtime threading + `ATTRIBUTION_PROPERTY_KEY` registration check + `crates/benten-engine/src/engine_sync.rs` sync-merge frame construction (G16-B) | `crates/benten-eval/tests/attribution_*.rs` (glob matches frame_shape + non_regression + sandbox + invariant_14 files), `crates/benten-engine/tests/hlc_attribution_frame.rs` + `sec_r6r1_01_inv_14_attribution_threading_preserved_under_g12_c.rs` + `sync_replica_attribution.rs` + `resume_with_missing_attribution_triple_rejects.rs` + `resume_with_tampered_attribution_rejected.rs`, plus the G16-B sync-merge round-trip suite |
+| 15 | **Sig-bundle CIDs are never load-bearing identifiers — REGISTERED (Phase-4-Meta-Core; enforcement-completion at G-CORE-PQ-WIRE-1)** | 4-Meta-Core | Existing discipline at load-bearing surfaces: `crates/benten-engine/src/engine_caps.rs::Engine::revoke_capability_by_grant_cid` (looks up `system:CapabilityGrant` Node by Node-content-addressed CID — labels + properties only; sig sidecar excluded) + `crates/benten-platform-foundation/src/plugin_manifest.rs::manifest_cid` (computed-then-signed; consent record signs over `(manifest_cid \|\| ...)`). G-CORE-PQ-WIRE-1 brief mandates: cross-surface audit + per-surface MallorySigner property tests + cite-drift-detector `LoadBearingSigBundleCidPattern` scanner | Today: existing payload-CID-discipline tests + ground-truth-verify 2026-05-26 (Q1+Q2 favorable). Planned: `crates/benten-engine/tests/inv15_sig_malleability_does_not_change_identifier.rs` cluster (per-surface MallorySigner property tests landing at G-CORE-PQ-WIRE-1) — see "Inv-15 Phase-4-Meta-Core mint + 3-layer decomposition" section below |
 
 ---
 
@@ -336,6 +344,46 @@ receiver side, so the frame remains the invariant's source of truth.
 
 ---
 
+## Inv-15 Phase-4-Meta-Core mint + 3-layer decomposition
+
+**Origin**: surfaced by senior cryptographer review of LAMPS Composite ML-DSA vs Bird-of-Prey for v1-beta default (`.addl/phase-4-meta/cryptographer-review-bird-of-prey-vs-lamps.md`, branch `phase-4-meta-core/cryptographer-review-bird-of-prey @ 36afe06b`). Ben ratification 2026-05-26 ("all yes across the board"): LAMPS Composite ML-DSA at codepoint `0x0001` as v1-beta default + Inv-15 framework + G-CORE-PQ-WIRE-1 bundles audit/hardening.
+
+**Statement**: Every CID-based identifier in Benten refers to a canonical PAYLOAD, never a sig-inclusive bundle. Revocation, dedupe, audit-uniqueness, and any property depending on signature-uniqueness MUST key off either (a) the payload-CID or (b) a semantic tuple — never off the sig-bundle-CID.
+
+**Why it matters**: LAMPS Composite ML-DSA is EUF-CMA-only (NOT SUF-CMA) per `draft-ietf-lamps-pq-composite-sigs-19` §9.2.2 ("NOT RECOMMENDED for use in applications where it has not been shown that EUF-CMA is acceptable") + provides only Weakly-Non-Separable per draft §10 (NOT Strongly-Non-Separable). For systems that key revocation, dedupe, or audit-uniqueness off signature bytes, EUF-only signatures admit malleability bypasses — an attacker holding a valid `(payload, sig)` could in principle mint `(payload, sig')` (different bytes, same payload, both verify) and observe different behavior wherever sig-CID was load-bearing. Inv-15 closes this hazard architecturally — independent of construction choice — by mandating payload-CID identity + semantic-tuple revocation. Net: SUF-CMA-equivalent application-layer security despite EUF-CMA-only construction-layer scope.
+
+**3-layer decomposition** (the elegant permanent shape this invariant enforces):
+
+| Layer | Decision space | Benten today |
+|---|---|---|
+| **Identity** | What canonical bytes uniquely name "this thing" | payload-CID (Node bytes / canonical-manifest bytes / canonical-UCAN-claims bytes) |
+| **Authentication** | Who attests + by which sig algorithm | codepoint-dispatched signature (LAMPS at `0x0001`; agility seam per CLAUDE.md baked-in #5) |
+| **Revocation** | "This thing no longer authorizes X" | semantic tuple `(issuer, subject, cap, audience, validity)` — NOT sig-bundle-CID |
+
+Each layer changes orthogonally; you can upgrade authentication (e.g. add Bird-of-Prey-class SUF-CMA-preserving codepoint at `0x0002` when WG-adopted + impl-audited) without touching identity or revocation; you can refine revocation semantics without touching identity or authentication; you can extend identity without touching either of the others.
+
+**Enforcement-completion path** (G-CORE-PQ-WIRE-1 brief bundles all of these):
+
+1. **Cross-surface audit** of every signature-touching surface to verify payload-CID discipline:
+   - ✓ `Engine::revoke_capability_by_grant_cid` (Q1 verified 2026-05-26: Node-content-addressed; sig sidecar)
+   - ✓ Plugin `manifest_cid` (Q2 verified 2026-05-26: computed-then-signed; consent record signs over `(manifest_cid || ...)`)
+   - ⏳ UCAN backend `revoke(ucan_cid)` — depends on call sites; expected payload-CID per UCAN spec but unverified
+   - ⏳ Device attestation envelope V2 — expected payload-bound but unverified
+   - ⏳ Sync merge proofs (CRDT log entries) — expected content-keyed but unverified
+   - ⏳ Atrium Drop bundles (multi-sig CBOR envelopes) — expected content-keyed but unverified
+   - ⏳ Subscription / EMIT event envelopes — expected content-keyed but unverified
+2. **Per-surface MallorySigner property tests** at `crates/benten-engine/tests/inv15_sig_malleability_does_not_change_identifier.rs` (test cluster; one file per audited surface). Property: for every audited surface, a MallorySigner generating valid-but-different-bytes sigs on the same canonical payload MUST leave the identifier unchanged + revocation behavior identical + dedupe behavior identical + audit-uniqueness preserved.
+3. **cite-drift-detector scanner extension** at `tools/cite-drift-detector/src/`: add `LoadBearingSigBundleCidPattern` kind that flags functions matching `*_by_*_cid` whose parameter sources include signature bytes. Stops regression class at PR-time.
+4. **dispatch-conventions pim-N codification**: "Future signed-data designs MUST 3-layer-decompose — every signed-data design proposal MUST explicitly answer (a) identity = payload-CID OR semantic-tuple? (b) authentication = which codepoint? (c) revocation = payload-CID-or-tuple keyed? Designs where identifier = sig-bundle-CID are REJECTED on Inv-15 grounds."
+
+**Failure mode if violated**: a signature surface that keys identity or revocation off sig-bundle-CID admits the EUF-only malleability bypass enumerated in the L12 finding (sigstore/rekor-tiles #425 cross-system parallel; UCAN-revocation-bypass-via-fresh-CID example). The hazard is application-layer, not algorithm-layer — algorithm choice (LAMPS / Bird-of-Prey / draft-prabel) doesn't fix it; only the invariant does.
+
+**Future-additive upgrade path**: when SUF-CMA-preserving constructions like Bird-of-Prey (Bossuat et al. EUROCRYPT 2026; IACR 2025/1844) or `draft-prabel-cfrg-suf-hybrid-sigs` mature + receive WG adoption + receive independent impl audit, Benten adds them as additive codepoints via the crypto-agility framework — pure additive upgrade, no wire-format break, no re-sign of historic content. Inv-15 remains the load-bearing architectural property regardless of construction choice; SUF-CMA-preserving constructions become a defense-in-depth additive layer.
+
+**Cross-references**: `docs/SECURITY-POSTURE.md` Compromise on LAMPS EUF-CMA-only construction-scope (closure via Inv-15); CLAUDE.md baked-in #5 (crypto-agility refinement + LAMPS-default + Inv-15 reference); dispatch-conventions §3 (Future signed-data designs MUST 3-layer-decompose codification); `.addl/phase-4-meta/cryptographer-review-bird-of-prey-vs-lamps.md` (origin finding); `.addl/phase-4-meta/NIGHT-SHIFT-2026-05-26.md` LATE-AFTERNOON #1 ADDENDUM (ratification record).
+
+---
+
 ## What "active" means in this table
 
 A row is **active** iff:
@@ -349,4 +397,6 @@ A row is **active** iff:
    bypasses it without explicit named-compromise documentation in
    `docs/SECURITY-POSTURE.md`).
 
-All 14 invariants meet (1) (2) (3) at Phase 4-Foundation close.
+All 14 Phase-4-Foundation invariants meet (1) (2) (3) at Phase 4-Foundation close.
+
+**Inv-15 (Phase-4-Meta-Core mint)** is REGISTERED at Phase-4-Meta-Core kickoff. Status: partially-enforced-via-existing-discipline at the load-bearing surfaces (`Engine::revoke_capability_by_grant_cid` + plugin `manifest_cid`); the cross-surface audit + property-test cluster + cite-drift-detector scanner extension + pim-N codification all land in G-CORE-PQ-WIRE-1 to reach full (1) (2) (3) status. Until G-CORE-PQ-WIRE-1 closes the audit, Inv-15 status is **"registered-with-active-existing-discipline-at-load-bearing-surfaces-pending-formal-cross-surface-enforcement"** — honest disclosure that the invariant is the right shape but the systematic-enforcement work is on the wave-1 critical path.
