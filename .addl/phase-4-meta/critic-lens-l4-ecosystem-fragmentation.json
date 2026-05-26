@@ -1,0 +1,170 @@
+{
+  "lens_id": "L4",
+  "lens_name": "Ecosystem-fragmentation skeptic critic",
+  "persona": "W3C CCG participant who has lived through DID method proliferation pain (50+ methods, none interoperate cleanly). Believes cooperation > technical leadership; the W3C CCG consensus emerging on did:key (vdods + silverpill + peacekeeper all argue for 'any multikey value' per Agent-1 §B.2) is fragile and depends on small teams NOT minting private-use codepoints that break that consensus. Holds that Benten-private did:key bodies break an unspoken pre-condition that did:key bodies should resolve to a SINGLE NIST/IETF-standard algorithm, not a Benten-defined composite. Reads the dual-codepoint hedge as an admission the first form is wrong-shaped — 'why not just drop the Benten-private did:key form?' If Benten succeeds in driving adoption of hybrid sigs in content-addressed systems, the RIGHT shape is a SHARED multicodec entry (multicodec community process), NOT Benten's private codepoint.",
+  "author": "critic-lens-l4-ecosystem-fragmentation",
+  "date": "2026-05-25",
+  "head_sha_at_review": "31d1a169",
+  "disposition": "MIXED — F7+F2 strongly+; F6 strongly+; F10 +; F3 NEUTRAL; F4 NEUTRAL; F5 -1 (only conditional on Recommendation R-3); F1-equivalent (Benten-private did:key as v1-beta canonical wire format) = VETO unless dropped or migration-committed.",
+  "headline_finding": "The PURSUE-set is mostly defensible from my ecosystem-fragmentation seat, BUT the strategy plan's primary path (F5 blog + F6 library) leans on a wire-format decision (Path γ-1: Benten-private 0x3xxxxx codepoint inside did:key body) that my persona considers harmful to the fragile W3C CCG 'any-multikey-value' consensus. The dual-codepoint hedge (γ-1 + did:jwk fallback) is a meaningful step toward containing the harm, but as currently framed in R0 §3 it ratifies Benten-private as 'v1-beta canonical' and renders did:jwk as 'fallback' — that ordering is structurally backwards from my perspective. The right inversion: did:jwk-as-canonical, Benten-private-as-optimization-arm, AND a public migration commitment to container-form (PR #400/#403) once those merge. With that inversion (R-1) + F7 issue-#70 comment expressing exactly that commitment (R-3), the strategy is cooperation-positive. Without it, the F5 blog post becomes the proof-of-record that Benten ratified private-use squat in a did:key body — and that is the ecosystem-fragmentation signal my persona is paid to surface.",
+  "important_concession_to_my_own_persona": "Agent-1 §B.5 verbatim quote from W3C CID 1.0 EXPLICITLY permits other specs to define multikey header values: *'When defining values for use with publicKeyMultibase and secretKeyMultibase, specification authors MAY define additional header values for other key types in other specifications and MUST NOT define alternate encodings for key types already defined by this specification.'* AND Agent-1 §B.2 records peacekeeper's verbatim statement that EBSI already does this in production with `jwk_jcs-pub` (0xeb51) — a multikey codepoint not in did:key spec nor CID 1.0 spec. So my persona's 'unspoken pre-condition that did:key bodies must be NIST/IETF-standard single-algorithm' is FACTUALLY WEAKER than I would prefer to argue. Governance ground IS cleared. The fragmentation argument has to fall back from 'this is forbidden' to 'this is corrosive at scale' — a softer argument that the strategy CAN defuse with the F7+R-1+R-3 combination.",
+  "verdicts": [
+    {
+      "path": "F2",
+      "name": "Multicodec PR-endorsement (#400 + #403)",
+      "verdict": "strongly+",
+      "rationale": "This is the path most aligned with my persona's worldview. Endorsing the container-form PRs is cooperation-first: it signals Benten reads the maintainers' direction (lidel/vmx/rvagg/MarcoPolo/achingbrain converged on container-form per Agent-1 §A.3) and reinforces the shared-entry shape over private-use squat. Cheap. No-regret. Should be UNCONDITIONAL — even if the rest of the strategy contracts. Recommend the comment explicitly cite the Benten hybrid PQ use-case as adopter-evidence that the container approach is needed (this accelerates merge AND inverts the optics from 'small team that minted private code' to 'small team supporting the maintainers' direction')."
+    },
+    {
+      "path": "F3",
+      "name": "JOSE WG draft contribution to draft-ietf-jose-pq-composite-sigs-01",
+      "verdict": "NEUTRAL",
+      "rationale": "JOSE WG is the right body for the JWK composite-sig shape Benten depends on; adopter use-case input to a v01 draft is legitimate. My persona's concern is bandwidth, not legitimacy: F3 burns scarce small-team time on standards-body engagement that pays off in 12-24 months. The F2 endorsement is higher-leverage per hour of effort because the multicodec maintainers ARE the bottleneck on Benten's preferred long-term shape (container-form did:key). NEUTRAL: pursue if F2+F7 land first and there is bandwidth left, defer if not. Strongly recommend that any F3 contribution explicitly frame Benten as an ADOPTER asking-shape-questions, NEVER as a co-author proposing structural changes."
+    },
+    {
+      "path": "F4",
+      "name": "LAMPS WG mailing list engagement (adopter perspective)",
+      "verdict": "NEUTRAL",
+      "rationale": "LAMPS is downstream of the actual question my persona cares about (W3C CCG / multicodec). LAMPS engagement is a v1-beta deliverable that helps Benten on a different axis (closing the no-production-deployments gap the LAMPS WG cares about) but doesn't address fragmentation in DID ecosystem at all. NEUTRAL: pursue post-v1-beta tag per the strategy doc's sequencing, but don't conflate this with addressing the W3C CCG concerns my persona owns. F4 alone is NOT a substitute for F7 or R-3."
+    },
+    {
+      "path": "F5",
+      "name": "Blog post (Position B — 'why content-addressed long-term-persistence systems should consider this')",
+      "verdict": "-1 (CONDITIONAL on R-1 + R-3; UPGRADE to + if both incorporated; HOLD if only one)",
+      "rationale": "My deepest concern. As currently framed, the blog post is the PUBLIC PROOF-OF-RECORD that Benten ratified a Benten-private did:key body shape — exactly the wrong message to send into a W3C CCG community that is currently converging on 'any multikey value' as a cooperative posture. The blog's §5 ('What we shipped + how') and §7 ('Where this leaves the standards bodies') WILL be read by my persona's peers as 'small team made a wire-format decision without waiting for community direction.' Even with the dual-codepoint hedge described in Section 3, the blog's framing of Benten-private as 'v1-beta canonical' and did:jwk as 'fallback' (matching R0 plan §3 γ-1 wording) inverts the relationship I would want to see. CONDITIONAL on R-1 (invert the ordering: did:jwk-as-canonical, private-codepoint-as-optimization-arm) AND R-3 (file F7 comment FIRST, before blog publication, expressing migration commitment to container-form). With both: + (cooperation-positive narrative). With neither: hold publication or revise to Position A (engineering-notes framing). The strategy doc's §3 framing 'Position B + Section 4 adversarial-lens dispatch is critical risk-mitigation' is correct; I am exercising that dispatch contract."
+    },
+    {
+      "path": "F6",
+      "name": "Open-source did:jwk hybrid extension library (standalone)",
+      "verdict": "strongly+",
+      "rationale": "MY PREFERRED PATH. did:jwk inherits JWK extensibility (any IANA-registered alg works per Agent-1 §B.6) — Benten's hybrid composite can be expressed as a composite JWK the moment IETF lamps-pq-composite-sigs lands an alg name (or even pre-RFC, by mirroring the LAMPS prefix construction). This avoids EVERY one of my concerns: no Benten-private codepoint in a did:key body; no risk to W3C CCG consensus; no fragmentation signal; library is portable across the wider DID ecosystem; if the library succeeds, IT establishes the precedent — which is the RIGHT shape (a shared portable library shape, not a Benten-internal wire format). Strongly recommend the library is positioned as the CANONICAL Benten identity surface (R-1) with the Benten-private did:key form documented as 'wire-size optimization for storage-constrained Benten-internal paths.' If the library lands at crates.io + npm with test vectors and reasonable docs, my persona is mollified."
+    },
+    {
+      "path": "F7",
+      "name": "W3C CCG community engagement (did:key issues #70/#74)",
+      "verdict": "strongly+",
+      "rationale": "MY HOME TERRITORY. This is the single highest-leverage move for cooperation-positive optics. Issues #70 + #74 are LIVE (verified 2026-05-25 via gh issue view 70 --comments + gh issue view 74 --comments). The thread on #70 has 4 comments converging on 'any multikey value' (peacekeeper / vdods / silverpill verbatim per Agent-1 §B.2); #74 has 1 comment (silverpill) pointing at di-quantum-safe. A Benten comment that does TWO THINGS — (a) supports the emerging 'any-multikey-value' consensus and (b) describes the Benten use-case (we ship a hybrid PQ signature scheme; we have a wire-format optimization that uses a private-use codepoint inside did:key for Benten-internal paths; we ALSO publish a did:jwk rendering of every principal as the universal-interop canonical form; we publicly commit to migrating to container-form codepoints (PR #400/#403) once they merge) — turns Benten from 'small team that squatted private-use' into 'small team that exemplifies the cooperation discipline the consensus depends on.' This is the cheapest reputation-investment available. UNCONDITIONAL strongly+. Recommend it land BEFORE the F5 blog post, NOT after, per the strategy doc's sequencing assumption."
+    },
+    {
+      "path": "F10",
+      "name": "Cross-system outreach (iroh first, then Veilid / Willow / libp2p / MLS courtesy)",
+      "verdict": "+",
+      "rationale": "Aligned with my persona's cooperation-first stance. iroh-first private conversation is exactly right — Lens 3 (iroh-maintainer) is a separate concern but the outreach itself is cooperation-positive. Veilid + Willow + libp2p outreach extends the same posture. MLS courtesy is wise; PQXDH+MLS is the per-message-sig context where Benten's argument differs from theirs (per Lens 8 territory) and a courtesy notification prevents downstream miscommunication. Shape 5 (coalition-first with iroh) from the extra-reflection pass is strictly stronger than Shape 1 (solo blog) precisely because it converts Lens 3 from adversarial to collaborative — and from my F4 seat, it ALSO converts the broader ecosystem-fragmentation narrative from 'Benten alone' to 'Benten + iroh.' If coalition forms, even partially, F5 blog becomes vastly less risky from my lens. UNCONDITIONAL +; would upgrade to strongly+ if coalition-pivot decision-point at T+3w is formally on the schedule."
+    }
+  ],
+  "cross_cutting_recommendations": [
+    {
+      "id": "R-1",
+      "name": "Invert canonical/fallback ordering: did:jwk-as-canonical, Benten-private did:key as optimization arm",
+      "applies_to": "R0 plan §3 γ-1; F5 blog §5; F6 library positioning",
+      "blocking_for": ["F5"],
+      "rationale": "R0 plan §3 currently says 'Path γ-1 (RECOMMENDED)' for Benten-private did:key with did:jwk added only as the dual-codepoint hedge from the extra-reflection pass of Agent-1 §5. From my lens, this ordering is structurally backwards. The canonical Benten identity surface SHOULD be did:jwk (universal, portable, inherits JWK alg-extensibility per Agent-1 §B.6, NO multikey codepoint decision needed) — and the Benten-private codepoint inside did:key SHOULD be documented as a wire-size optimization arm used internally for storage-constrained Benten paths. This inversion (a) preserves cross-ecosystem portability as the default, (b) confines the private-use codepoint to Benten-internal scope where collision risk is bounded, (c) removes the 'we ratified Benten-private as a did:key body' optic, (d) is forward-compatible to every container-form migration when PR #400/#403 land. Per Ben's note in CLAUDE.md §0 'Convergent-paths-within-auth': BOTH forms still exist in the wire — this is a naming/canonicalization inversion not a structural rewrite. Likely <10 LOC of doc + naming changes in benten-id + R0 plan §3 narrative. Surface to Ben as a refinement to the γ-1 ratification."
+    },
+    {
+      "id": "R-2",
+      "name": "Strengthen migration commitment to container-form (PR #400/#403) in blog §7",
+      "applies_to": "F5 blog §7 'Where this leaves the standards bodies'; F2 endorsement comment",
+      "blocking_for": ["F5"],
+      "rationale": "Blog §7 should NOT just describe where standards bodies are; it should COMMIT Benten to migrating to container-form (cose-key 0x42 / jwk 0x44) as the canonical Benten wire codepoint once PR #400 and PR #403 merge (multi-member approved per Agent-1 §A.3; merge expected weeks-to-1-month). This commitment (a) signals Benten reads the maintainers' direction, (b) reframes the private-use codepoint as a TRANSITIONAL artifact not a permanent commitment, (c) gives the multicodec maintainers a real adopter-incentive datapoint that the container-form merge timeline matters. The commitment is LOW COST because Benten can articulate it as 'when container-form merges, Benten will mint a v1-beta-to-v1-GM wire-version-bump that pins to the container codepoint as canonical; the Benten-private codepoint becomes deprecated.' This is a public version-policy commitment, not a near-term implementation cost. Without this, blog §7 reads as 'we did our thing; standards bodies will catch up' which is exactly the small-team-overreach optic my persona is sensitive to."
+    },
+    {
+      "id": "R-3",
+      "name": "F7 issue #70/#74 comment lands BEFORE F5 blog publication",
+      "applies_to": "Sequencing of F5 + F7 in strategy doc §3 + Section 6 timeline",
+      "blocking_for": ["F5"],
+      "rationale": "The strategy doc §3 sequences supporting paths as 'F10 first, F2+F7 second.' My lens disagrees on F7 timing: the W3C CCG comment expressing R-1+R-2 commitments MUST land BEFORE F5 publication, NOT after. Rationale: F5 published first establishes the public record of Benten-private-as-canonical; F7 comment after that point is read as 'damage control,' not as 'cooperation discipline up front.' F7 comment landed FIRST establishes the cooperation-positive frame and lets F5 reference the comment ('as we noted in W3C CCG did-key-spec#70, we will migrate to container-form when PR #400/#403 merge'). This sequencing inversion is free (F7 is cheap; no implementation dependency) and dramatically reduces F5's reputation tail risk."
+    },
+    {
+      "id": "R-4",
+      "name": "Document Benten-private codepoint choice in MULTICODEC-PRIVATE-USE-ALLOCATIONS.md per Agent-1 §C.3",
+      "applies_to": "F6 library + R0 plan §3 + new docs/MULTICODEC-PRIVATE-USE-ALLOCATIONS.md per Agent-1 recommendation #2",
+      "blocking_for": [],
+      "rationale": "Agent-1 §C.1 documents 8 projects squatting `0x300000` (libp2p / go-car / Accumulate / Waku / TSP / etc.) — collision risk is real. Agent-1 recommendation #2 prescribes picking a Benten-distinctive sub-range (hash-derived or vanity 0x3BE17E) and documenting in a public allocations doc. This is the discoverable-attribution discipline I want to see from any project minting private-use codepoints. Cooperation-positive. ~1-page doc. Low effort. Folds into F6 library docs naturally. NOT a blocker on F5/F6/F7, just process discipline I would want noted."
+    }
+  ],
+  "particular_concerns_on_dual_codepoint_hedge_gamma_1": {
+    "summary": "The dual-codepoint hedge from Agent-1's extra-reflection pass (Shape 5) and reproduced in R0 plan §3 γ-1 is meaningfully better than pure Benten-private did:key. BUT as currently framed it ratifies Benten-private as 'v1-beta canonical' and did:jwk as 'fallback.' From my F4 seat, this ordering should be inverted per R-1.",
+    "specific_concerns": [
+      {
+        "concern": "Wording 'Benten-private codepoint NOW (Ben's path-γ-1)' and 'fallback' did:jwk rendering",
+        "source_cite": "g-core-pq-wire-r0-plan.md §3 lines 156-168 + pq-codepoint-research-agent-1-multicodec-did.md §5 lines 378-383",
+        "impact": "Public record will show Benten ratified private-use codepoint as canonical did:key body — exactly the W3C CCG fragmentation signal I am paid to surface"
+      },
+      {
+        "concern": "R0 plan §3 γ-1 honesty caveat (line 168) acknowledges 'Benten-owned did:benten-hybrid extension that we render under the did:key: URI scheme by reusing the multibase prefix. Any external resolver hoping to consume Benten hybrid DIDs would need awareness of the Benten codepoint convention'",
+        "source_cite": "g-core-pq-wire-r0-plan.md §3 line 168",
+        "impact": "This is the precise fragmentation surface my persona objects to. The caveat is honest, which is good — but the honest caveat itself documents that external resolvers need Benten-specific awareness. That's interop debt the W3C CCG consensus is explicitly trying to prevent."
+      },
+      {
+        "concern": "The strategy doc Section 6 'Critical sequencing constraint' says 'If Lens 1/4/13 returns convincingly argue for dropping Benten-private did:key, that decision must be made BEFORE wire format freezes at v1-beta tag. PQ-WIRE-1 implementation should not merge until lens returns are in.'",
+        "source_cite": "pq-hybrid-sig-public-stance-strategy.md §6 line 362",
+        "impact": "This is the structural contract that legitimizes my lens authority. I am exercising it via R-1: do NOT drop the Benten-private form (it has real wire-size value as Agent-1 §C.4 calculates) but DO invert the canonical/fallback ordering so the public record is did:jwk-canonical."
+      }
+    ]
+  },
+  "what_would_change_my_disposition": [
+    {
+      "scenario": "All three R-1 + R-2 + R-3 incorporated into strategy revision",
+      "new_disposition_for_F5": "+ (cooperation-positive; F5 becomes a credible signal Benten is in the 'cooperation > leadership' camp)",
+      "overall_lens_disposition": "ENDORSE the full PURSUE set with strong reservations on F4/F3 sequencing (still lower-priority than F2+F7+F6+F10)"
+    },
+    {
+      "scenario": "R-1 incorporated but R-3 sequencing not changed",
+      "new_disposition_for_F5": "NEUTRAL (better than -1; the inversion alone removes the worst-case 'public record of private-codepoint-as-canonical' but post-hoc F7 comment looks like damage control)",
+      "overall_lens_disposition": "Acceptable but suboptimal"
+    },
+    {
+      "scenario": "Neither R-1 nor R-3 incorporated; F5 publishes as-currently-framed",
+      "new_disposition_for_F5": "-1 (HOLD or downgrade to Position A engineering-notes framing per strategy doc §2.4)",
+      "overall_lens_disposition": "Recommend either HOLD F5 publication or revise to Position A; F2+F6+F7+F10 remain UNCONDITIONAL pursue"
+    }
+  ],
+  "evidence_cites_grep_verified": [
+    {
+      "claim": "vdods + silverpill + peacekeeper all argue 'any multikey value' for did:key",
+      "source": "https://github.com/w3c-ccg/did-method-key/issues/70",
+      "verification": "Verified live 2026-05-25 via `gh issue view 70 --repo w3c-ccg/did-method-key --comments` — peacekeeper member-comment + vdods + silverpill comments all reproduced verbatim per Agent-1 §B.2 quotes"
+    },
+    {
+      "claim": "EBSI production uses did:key with jwk_jcs-pub prefix (0xeb51) not in did:key spec — non-canonical-codepoint precedent already exists",
+      "source": "https://github.com/w3c-ccg/did-method-key/issues/70 peacekeeper comment",
+      "verification": "Verified live 2026-05-25 via gh issue view — peacekeeper member-comment quotes EBSI's jwk_jcs-pub usage verbatim"
+    },
+    {
+      "claim": "silverpill issue #74 proposes mldsa-44-pub for did:key §3.1.2 — no PQ-hybrid currently in did:key spec",
+      "source": "https://github.com/w3c-ccg/did-method-key/issues/74",
+      "verification": "Verified live 2026-05-25 via gh issue view 74 — body + 1 comment reproduced; references multicodec PR #392"
+    },
+    {
+      "claim": "CID 1.0 spec EXPLICITLY permits other specs to define multikey header values",
+      "source": "Agent-1 §B.5 verbatim quote from https://www.w3.org/TR/cid-1.0/",
+      "verification": "Trust Agent-1 cite-verification audit; quote is unambiguous: 'specification authors MAY define additional header values for other key types in other specifications'"
+    },
+    {
+      "claim": "Multicodec PR #400 + #403 (container-form: cose-key, jwk, pkix-pub) approved by lidel + vmx + rvagg + MarcoPolo + achingbrain; merge expected weeks-to-1-month",
+      "source": "Agent-1 §A.3",
+      "verification": "Trust Agent-1 audit (gh pr view #400 + #403 cross-checked); verbatim approver quotes reproduced"
+    },
+    {
+      "claim": "R0 plan §3 γ-1 ratifies Benten-private codepoint in did:key body with did:jwk as fallback",
+      "source": "g-core-pq-wire-r0-plan.md lines 156-178",
+      "verification": "Read directly from file in this lens dispatch"
+    },
+    {
+      "claim": "Strategy doc Section 6 contains explicit critical sequencing constraint about Lens 1/4/13 returns potentially forcing drop of Benten-private did:key BEFORE wire format freeze",
+      "source": "pq-hybrid-sig-public-stance-strategy.md line 362",
+      "verification": "Read directly from file in this lens dispatch"
+    }
+  ],
+  "disagree_with_lens_persona_caveats": [
+    {
+      "self_critique": "My persona's strongest position ('Benten-private did:key body is forbidden') is FACTUALLY incorrect per Agent-1 §B.5 (CID 1.0 explicitly permits) and §B.2 (EBSI production precedent). I am exercising my lens in good faith by softening the position to 'corrosive at scale' rather than 'forbidden' — which is the correct intellectual move.",
+      "implication": "R-1 + R-2 + R-3 are RECOMMENDATIONS to strengthen the cooperation-positive optics, NOT BLOCKERS arguing the strategy is illegitimate. Ben should weigh them as 'how to make a defensible position more defensible' not 'these block v1-beta.'"
+    },
+    {
+      "self_critique": "My persona is biased toward 'cooperation > technical leadership' as a value choice. A reasonable person could argue the opposite for THIS specific case (HNDL-for-signed-artifacts is real per the blog's load-bearing argument; ecosystem catch-up may be slow; small-team early-mover is exactly what content-addressed long-term-persistence needs). I am NOT claiming the strategy's underlying thesis is wrong — only that the wire-format ratification choice is suboptimal from an ecosystem-fragmentation perspective.",
+      "implication": "Treat my disposition as ONE input among the 7 HIGH lens dispatch slate; cross-reference with Lens 1 (multiformats-conservative; structurally similar concern from a different seat) and Lens 13 (DID method skeptic; may argue for did:benten: as an even cleaner alternative)."
+    }
+  ],
+  "summary_for_orchestrator_triage": "L4 returns DISPOSITION = MIXED with 3 cross-cutting recommendations (R-1 invert canonical/fallback ordering; R-2 strengthen migration commitment to container-form in blog §7; R-3 F7 comment lands BEFORE F5 blog publication) that are BLOCKING for F5 alone. F2+F6+F7+F10 are UNCONDITIONAL pursue. F3+F4 NEUTRAL bandwidth-permitting. Lens authority cite: strategy doc §6 line 362 explicit critical sequencing constraint admits Lens 4 returns may force drop of Benten-private did:key before wire freeze. Per my exercise of that contract: the structural γ-1 dual-codepoint hedge is OK if canonical/fallback ordering inverts (R-1) AND if Benten lands public migration commitment first (R-3+R-2). Estimated incremental cost: <10 LOC + 1 W3C CCG comment + 1 doc update + sequencing change in strategy doc Section 6 timeline. No work-product is invalidated; the wire format stays as designed; only the public framing and the canonical-form naming change."
+}
