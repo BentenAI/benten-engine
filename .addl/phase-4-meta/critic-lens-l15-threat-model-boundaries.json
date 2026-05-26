@@ -1,0 +1,117 @@
+{
+  "lens": "L15 — Threat-model-boundaries skeptic critic",
+  "persona": "Argues Benten's threat model isn't special enough to warrant the asymmetric public-stance posture. Other content-addressed long-term-persistence systems (Filecoin, Arweave, git, Sigstore, OpenPGP, Debian) ALSO have multi-year-to-multi-decade re-verification properties AND today ship classical-only signatures. Either Benten's class boundary in F5 §4 is real and properly excludes those systems with explicit reasoning, OR they belong inside Benten's class and the claim 'alone among shipped P2P systems' is misleading by sleight-of-hand, OR they share Benten's threat model but defer (in which case Benten must engage with WHY they defer rather than asserting they don't share the threat model).",
+  "branch": "phase-4-meta-core/critic-lens-l15-threat-model-boundaries",
+  "main_head_pinned": "31d1a169",
+  "inputs_verified": [
+    ".addl/phase-4-meta/pq-hybrid-sig-public-stance-strategy.md (Sections 2.1, 3, 4 L15 anticipation, 6 sequencing)",
+    ".addl/phase-4-meta/pq-codepoint-research-agent-3-deployments.md (Section C messaging/TLS, Section B libp2p/Veilid/IPFS, Section E.2 sig-side deliberate non-convergence)",
+    "Live: Filecoin spec /algorithms/crypto/signatures/ — ECDSA-Secp256k1 + BLS-BLS12-381 both classical, NO PQ roadmap in spec",
+    "Live: Arweave permaweb — RSA-PSS classical, designed for ~200 year permanence, NO PQ roadmap in public docs (mas-digital + bravenewcoin survey 2026-05)",
+    "Live: git PQ — Josefsson SPHINCS+ proof-of-concept (2024-12, experimental, no advocacy, no project roadmap)",
+    "Live: Sigstore blog 'Post-Quantum 2025' — explicitly notes PQ-sigs NOT HNDL-exposed; modular agility approach; ML-DSA + LMS PoCs; production target gated on Go ecosystem readiness; Rekor dual-sign (classical-ECDSA + ML-DSA) approach explicitly named as one path",
+    "Live: Trail of Bits 'Building cryptographic agility into Sigstore' (2026-01-29) — quotes 'container image or firmware you sign today might be deployed for 20 years, but the cryptographic signature protecting it may become untrustworthy within 10 years'",
+    "Live: draft-ietf-openpgp-pqc-17 — composite ML-DSA-65+Ed25519 MANDATORY; ML-DSA-87+Ed448 SHOULD; same PQ/T hybrid rationale as Benten; H1-2026 publication expected; Sequoia PGP commits to ship support post-publication",
+    "Live: LAMPS draft-ietf-lamps-pq-composite-sigs — same construction Benten uses (id-MLDSA65-Ed25519-SHA512 OID 1.3.6.1.5.5.7.6.48)"
+  ],
+  "disposition": "REVISE-MAJOR — class boundary in F5 §4 is INSUFFICIENT as currently sketched; the L15 critique lands hard against the 'alone among shipped P2P systems' framing because OpenPGP (which IS the substrate for git/Debian/Sigstore-gitsign content-signing) has IETF WG draft-17 STANDARDIZING composite ML-DSA+Ed25519 with explicit PQ/T-hybrid rationale identical to Benten's, expected H1-2026 publication, and a major implementation (Sequoia PGP) committed to ship-on-publication. This is not 'alone'; it is 'first-shipping but well-aligned with a major adjacent ecosystem standardizing the same construction this year.' That alignment is rhetorically MUCH STRONGER than 'alone in deployment' and the blog post MUST pivot to it. The plan's verdict (PURSUE F5 with adversarial review) survives but the framing in §2.1 and §4 must be substantially revised before publication. Verdicts on the other 6 PURSUE paths (F2/F3/F4/F6/F7/F10) survive unchanged; the OpenPGP-PQC parallel actually strengthens F3 (JOSE WG contribution) and F4 (LAMPS adopter report).",
+  "class_boundary_assessment": "The §4 class boundary as currently sketched (Benten/Willow/IPFS+IPNS-as-mutable IN; TLS/Signal/MLS OUT) is partially right but UNDER-SPECIFIED in three load-bearing ways that L15 attacks at the joint. (a) Filecoin: properly EXCLUDED from Benten's class but for a reason the plan does NOT name — Filecoin signatures authenticate blockchain messages + storage proofs whose validity is gated by the consensus protocol, not by re-verification of historic artifacts by third parties decades later. A 2026 Filecoin storage-proof signature does not need to verify in 2046; by 2046 the deal has expired, the chain has moved on, and what persists is the BLOCKCHAIN STATE (Merkle-committed), not the signature. Filecoin signs the protocol layer, not the persistent-artifact layer. This belongs explicit in §4 — Filecoin is a long-term-persistence system whose signatures are NOT designed to outlive their protocol round, the opposite of Benten Drops. (b) Arweave: properly INCLUDED in Benten's class — Arweave's permaweb explicitly targets ~200-year persistence, signs content with RSA-PSS (classical), has NO public PQ roadmap, and re-validates signatures every time a node serves content. Arweave SHARES Benten's threat model exactly + has not made Benten's choice. The plan must engage with WHY (likely answer: Arweave inherited RSA from its 2018 design lock-in; migrating ~5 PB of signed history to PQ-hybrid is a chain-fork-level event with no clean migration path; the cost-of-incumbent-format-lock is the explanation, NOT a counter-argument to Benten's reasoning). This is actually a STRENGTHENING fact for Benten: 'pick PQ-hybrid before you have a multi-PB legacy you can't migrate' is precisely Benten's pre-v1-freeze argument. (c) git/OpenPGP/Sigstore: misclassified by L15 as 'classical and not moving' — actual ground truth as of 2026-05 is that OpenPGP (the standard substrate for git signing AND a non-trivial fraction of Debian package signing) has draft-ietf-openpgp-pqc at v17 in WG late-stage with composite ML-DSA-65+Ed25519 as MANDATORY, expected H1-2026 RFC publication; Sequoia PGP committed to ship-on-publication; Sigstore (which signs CI artifacts, ML model weights, container images — all 'designed for forever' artifacts) has shipping ML-DSA PoC and Trail-of-Bits-authored architectural agility work explicitly motivated by 'signed today, deployed 20 years' framing. The 'git ships classical' snapshot is true; the 'git's ecosystem is making Benten's choice in parallel' trajectory is also true and must be IN THE BLOG. The honest framing is: Benten is the first SHIPPED P2P content-addressed system to adopt the construction; OpenPGP-WG is independently standardizing the exact same construction (id-MLDSA65-Ed25519-SHA512 / composite ML-DSA-65 + Ed25519) on a parallel timeline; Sigstore architecture is being explicitly retooled for the same threat-model recognition. This is the OPPOSITE of 'alone' and the OPPOSITE of L15's strongest objection. The blog post that engages with this honestly — 'we are early-shipping but well-aligned with an emerging trans-ecosystem consensus that includes OpenPGP and Sigstore' — is rhetorically MUCH STRONGER than the current 'alone' framing.",
+  "findings": [
+    {
+      "id": "L15-MAJOR-1",
+      "severity": "MAJOR",
+      "applies_to": "F5 blog post, §2.1 framing + §4 class boundary",
+      "summary": "The 'alone among shipped P2P systems' framing is technically defensible but rhetorically self-isolating, and OMITS the OpenPGP-PQC parallel that would reframe Benten as 'aligned with an emerging cross-ecosystem PQ/T-hybrid consensus' rather than 'lone outlier.' draft-ietf-openpgp-pqc-17 specifies composite ML-DSA-65+Ed25519 as MANDATORY (the IDENTICAL construction to Benten's choice), expected H1-2026 publication, Sequoia PGP committed to ship-on-publication. The blog post that cites this turns L15's attack into Benten's strongest argument.",
+      "disposition": "FIX-NOW (per HARD RULE 12 clause-c DISAGREE — disagreement is with the plan's current §2.1 framing, not with pursuing F5; specific recommended change is concrete + in-scope for the same artifact)",
+      "recommended_change": "Add to blog §4: 'Benten is the first-shipping P2P content-addressed system to deploy this construction, but we are not alone in recognizing the threat model. OpenPGP's WG draft draft-ietf-openpgp-pqc (at v17, RFC publication expected H1-2026) specifies composite ML-DSA-65+Ed25519 — the SAME LAMPS construction we use — as MANDATORY. Sequoia PGP has committed to ship support on RFC publication. Sigstore is independently retooling for cryptographic agility around ML-DSA. This is not Benten arguing the ecosystem is wrong; this is Benten implementing a construction that adjacent content-signing ecosystems are independently standardizing on the same multi-year timeline.' This factual addition transforms the framing from Position-B-as-overreach to Position-B-as-aligned-with-emerging-consensus.",
+      "estimated_lift": "10-line blog edit + cite to OpenPGP-PQC draft + Sequoia link"
+    },
+    {
+      "id": "L15-MAJOR-2",
+      "severity": "MAJOR",
+      "applies_to": "F5 blog post, §4 class boundary specifically",
+      "summary": "The §4 class boundary as currently sketched (Benten/Willow/IPFS+IPNS IN; TLS/Signal/MLS OUT) DOES NOT engage with Filecoin or Arweave by name, which are the strongest counter-examples in the 'long-term-persistence content-addressed' space and which L15-class critics will immediately surface. Treating them by omission leaves the blog post vulnerable to a 30-second HN comment that wins the argument.",
+      "disposition": "FIX-NOW",
+      "recommended_change": "Expand §4 to explicitly name Filecoin (EXCLUDED, with reason: signs blockchain protocol layer not persistent-artifact layer; signatures expire with consensus round; persistent state is Merkle-committed blockchain not individual sigs) and Arweave (INCLUDED, shares threat model, but has not made Benten's choice for reasons of legacy-format lock-in — making Benten's pre-v1-freeze choice MORE defensible, not less). Also name Sigstore (sits at boundary: persistent artifacts but operational vs identity signatures — both 'this binary was built by org X' and 'this commit was authored by person Y' are persistent claims). The honest 4-line table is: Filecoin OUT (protocol-layer sigs), Arweave IN-but-locked (RSA legacy unable to migrate), git/OpenPGP IN (OpenPGP-WG actively standardizing same construction), Sigstore IN-and-moving (Trail-of-Bits agility work + ML-DSA PoC; production-pending Go ecosystem). This is the table that defeats L15's strongest objection.",
+      "estimated_lift": "20-line table + 100-word per-system explanation = ~150 LOC in blog draft"
+    },
+    {
+      "id": "L15-MAJOR-3",
+      "severity": "MAJOR",
+      "applies_to": "F5 blog post, §2.1 HNDL-for-sigs framing",
+      "summary": "Sigstore's own PQ-2025 blog explicitly states that PQ-sigs are NOT HNDL-exposed (unlike encrypted content) — this is the same Lens-6 objection but from a system inside Benten's class. The §2.1 framing of 'harvest-now-forge-later' is rhetorically powerful but the symmetry with HNDL-for-encryption is WEAKER than the blog draft implies, because forging a 2026-vintage sig in 2046 requires (a) a CRQC, (b) the public key persisting (which it does in did:key but the SUBSTRATE-DID is replaceable via RotationLog), (c) the adversary planting the forgery into a sync replica where verifiers will encounter it. None of these are equivalent to 'harvested ciphertext is decryptable forever' — the encryption case is structurally simpler + structurally more urgent. The blog should acknowledge this difference rather than claim parallelism.",
+      "disposition": "FIX-NOW",
+      "recommended_change": "Add to §2.1 the explicit acknowledgment: 'HNDL-for-signatures is a WEAKER threat than HNDL-for-encryption (which is why X-Wing encryption is unambiguously HNDL-urgent and why we ship it without hesitation). The harvest-now-forge-later threat requires three conditions to coincide — CRQC availability, public-key persistence, and successful injection of forged artifacts into sync replicas — whereas HNDL-for-encryption requires only the first. We argue PQ-hybrid sigs are justified anyway because (a) all three conditions are plausible for Benten's deployment shape, (b) the hybrid construction's marginal cost over classical-only is bounded — the Ed25519 half stays as the audited floor regardless of CRQC timing, (c) deferring the choice means freezing a wire format we cannot evolve post-v1-tag without coordinated migration of all peers. The asymmetry is real but the direction of the argument still holds.' This concession STRENGTHENS the post by pre-empting Lens-6 and L15-class objections.",
+      "estimated_lift": "150-word paragraph addition to §2.1"
+    },
+    {
+      "id": "L15-MINOR-1",
+      "severity": "MINOR",
+      "applies_to": "F5 blog post, asymmetry table in §2.1",
+      "summary": "The current asymmetry table compares Benten to TLS/QUIC and Messaging only. It should add a row for 'Content-addressed protocol layer (Filecoin)' showing Filecoin sits structurally between TLS/QUIC and Benten — persistent network but expiring-sig-validity within consensus rounds — to forestall the immediate counter-example without having to be reactive.",
+      "disposition": "FIX-NOW",
+      "recommended_change": "Add a 5th column to the §2.1 asymmetry table: 'Blockchain consensus (Filecoin/Ethereum/Bitcoin)' with: session lifetime = consensus round; sig re-validated by 3rd parties = no (after consensus, state is Merkle-committed); re-validation horizon = consensus depth; forging past sig useful = no (chain re-org defended separately); HNDL applies to sigs = no. This row preemptively defangs the most common L15-attack vector ('but Filecoin signs forever too').",
+      "estimated_lift": "1 table column"
+    },
+    {
+      "id": "L15-OBS-1",
+      "severity": "OBSERVATION",
+      "applies_to": "Plan-level — Section 3 supporting-paths priority order",
+      "summary": "Given the OpenPGP-PQC parallel discovered in L15 research, supporting path F3 (JOSE WG contribution) becomes higher-value than the plan currently ranks it. The OpenPGP-PQC draft is in active standards-body convergence on the IDENTICAL construction Benten ships; a parallel adopter signal to JOSE WG strengthens the cross-ecosystem 'we are not alone' claim Benten makes in the revised blog framing.",
+      "disposition": "OBSERVATION — out of L15 scope to re-rank supporting paths; surface to plan author / orchestrator for ratification",
+      "recommended_change": "Consider promoting F3 from priority-3 to priority-2 (after F10 iroh-first); the OpenPGP-PQC parallel is the unique cross-ecosystem leverage point that JOSE WG can capitalize on."
+    },
+    {
+      "id": "L15-OBS-2",
+      "severity": "OBSERVATION",
+      "applies_to": "Plan-level — F6 library positioning",
+      "summary": "The F6 did:jwk hybrid extension library becomes substantially more valuable if positioned as 'reference impl shareable with OpenPGP / Sequoia / Sigstore communities' rather than 'Benten-internal extracted code.' Cross-ecosystem reusability of the LAMPS composite combiner is real (same construction across X.509, JOSE, OpenPGP, Benten) — the library's audience should explicitly include those communities.",
+      "disposition": "OBSERVATION — F6 verdict PURSUE survives; consider audience-broadening at extraction time"
+    }
+  ],
+  "per_path_verdicts": [
+    {
+      "path": "F2 — Multicodec PR-endorsement (#400 + #403)",
+      "l15_verdict": "PURSUE-UNCHANGED",
+      "rationale_specific_to_l15": "Threat-model boundaries do not bear on multicodec codepoint shape; the supportive-comments path is orthogonal to the class-boundary critique. L15 has no objection to F2."
+    },
+    {
+      "path": "F3 — JOSE WG draft contribution",
+      "l15_verdict": "PURSUE-WITH-PROMOTION",
+      "rationale_specific_to_l15": "L15 research surfaced the OpenPGP-PQC parallel; JOSE WG becomes the high-leverage cross-ecosystem channel for 'shipping adopter of composite ML-DSA+Ed25519 alongside OpenPGP-WG standardization.' Consider promoting from priority-3 to priority-2."
+    },
+    {
+      "path": "F4 — LAMPS WG mailing list adopter report",
+      "l15_verdict": "PURSUE-STRENGTHENED",
+      "rationale_specific_to_l15": "LAMPS is exactly the WG that owns the construction Benten ships AND that OpenPGP-WG references. A LAMPS adopter report that names BOTH Benten as shipping adopter AND OpenPGP-PQC as parallel-standardizing reframes Benten from 'lone deployment' to 'one of two ecosystem-aligned adopters.' L15 strongly endorses F4."
+    },
+    {
+      "path": "F5 — Blog post",
+      "l15_verdict": "PURSUE-WITH-MAJOR-FRAMING-REVISION (the 3 MAJOR + 1 MINOR findings above must land before publish)",
+      "rationale_specific_to_l15": "The blog is the load-bearing artifact AND the artifact L15 attacks at the joint. With the OpenPGP-PQC parallel + Filecoin/Arweave/Sigstore explicit class-boundary engagement + HNDL-for-sigs honest concession, the blog defeats L15. WITHOUT those, the blog is vulnerable to a single 30-second 'but git/Filecoin/Arweave ship classical' HN comment that wins the argument by sleight-of-omission."
+    },
+    {
+      "path": "F6 — open-source did:jwk hybrid extension library",
+      "l15_verdict": "PURSUE-UNCHANGED-BUT-BROADEN-AUDIENCE",
+      "rationale_specific_to_l15": "Library shipping is orthogonal to class-boundary framing; threat-model assessment does not bear. Per L15-OBS-2, consider explicit OpenPGP/Sequoia/Sigstore audience targeting at extraction time."
+    },
+    {
+      "path": "F7 — W3C CCG community engagement",
+      "l15_verdict": "PURSUE-UNCHANGED",
+      "rationale_specific_to_l15": "CCG engagement is on DID-method shape, not on threat-model framing; L15 has no objection."
+    },
+    {
+      "path": "F10 — Cross-system coordination outreach (iroh-first)",
+      "l15_verdict": "PURSUE-STRONG-ENDORSE",
+      "rationale_specific_to_l15": "If the blog post's reframing succeeds at 'Benten + OpenPGP-WG + Sigstore-architecture all converging on composite ML-DSA+Ed25519,' then iroh outreach has a much stronger framing than 'we made a different call than you.' The conversation becomes 'here is the trans-ecosystem direction; what would it take for iroh-blob content-sigs to follow?' L15 strongly endorses F10 and the Shape-5 coalition-attempt variant in the plan's Extra-reflection pass."
+    }
+  ],
+  "summary_against_lens_persona": "L15's persona launches one of the strongest possible attacks on the public-stance plan: 'other systems with the same threat model didn't make Benten's choice.' That attack DOES land against the current §4 class-boundary sketch — but the research underlying L15 (specifically the OpenPGP-PQC draft-17 + Sigstore architectural-agility work) actually FLIPS the attack on its head. The real ground truth as of 2026-05 is that Benten is NOT alone; it is first-shipping but well-aligned with two adjacent content-signing ecosystems that are independently standardizing the exact same composite construction on the same multi-year timeline. The blog post that engages with this honestly DEFEATS the L15 attack. The blog post that ignores it INVITES the L15 attack. The 3 MAJOR + 1 MINOR findings above are the minimum framing-revision set needed before publication. With those revisions, L15 does not block publication; without them, L15 should be treated as a strongly-negative steelman per the plan's own §4 4-of-7-HIGH-lenses gating criterion. Recommendation: REVISE-MAJOR before publication, do not downgrade to Position A, do not defer — the discovered OpenPGP-PQC parallel is exactly the evidence Benten needs to make Position B defensible.",
+  "convergence_signal": "L15 does NOT recommend abandoning F5 or downgrading Position B; L15 surfaces a load-bearing framing gap (3 MAJOR + 1 MINOR) that, when closed, materially STRENGTHENS the blog's position rather than weakening it. The 4-of-7-HIGH-lenses-veto criterion in plan §5 Failure-mode-E should NOT count L15 as veto-vote IF the blog draft incorporates the OpenPGP-PQC parallel + Filecoin/Arweave/Sigstore explicit boundary engagement.",
+  "honesty_disclaimers": [
+    "L15 persona research found ONE finding (OpenPGP-PQC v17 parallel) that significantly weakens the L15-strongest-attack — this is honest steelmanning + counter-evidence, not adversarial-cherry-picking.",
+    "The §4 table claim 'Filecoin signs protocol layer not persistent-artifact layer' is L15's reading of the Filecoin spec; the spec itself does not name this distinction. A Filecoin-WG-member reviewer might dispute the characterization — recommend independent verification before blog publication cites Filecoin by name.",
+    "The 'Arweave signed-with-RSA-PSS' fact is well-established; the 'Arweave can't migrate because of multi-PB legacy lock-in' rationale is L15's inference, not Arweave's stated position. Soft-claim rather than hard-attribute when citing Arweave.",
+    "L15 read no Filecoin/Arweave/Sigstore primary-source threat-model documents beyond the public spec + the Sigstore blog; deeper investigation may surface counter-evidence to the class-boundary table."
+  ]
+}
