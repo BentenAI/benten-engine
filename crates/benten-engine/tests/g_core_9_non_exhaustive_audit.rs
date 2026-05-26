@@ -28,14 +28,21 @@ use benten_engine::{
     write_boundary_chain_validator::WriteBoundaryChainOutcome,
 };
 
-/// L6-r1-1: CapWriteContext + ReadContext non_exhaustive application
-/// DEFERRED to G-COMP-1 (V1-FROZEN-INTERFACE-DEFERRED.md Row D-17).
-/// The Default::default() + field-mutation construction pattern IS
-/// already used in production code (engine.rs, primitive_host.rs,
-/// engine_diagnostics.rs, engine_views.rs, engine_subscribe.rs) per
-/// Bundle 3 — those sites are forward-compat-ready at v1-beta. The
-/// test cascade across the ~50+ benten-caps test sites is the
-/// deferred half.
+/// **R6-R2-FP Item 6 (Row D-17 closure):** `CapWriteContext` +
+/// `ReadContext` now carry `#[non_exhaustive]` (applied at
+/// `crates/benten-caps/src/policy.rs`). Direct struct-literal
+/// construction from outside `benten-caps` is BLOCKED at compile
+/// time; consumers use `Default::default()` + field-mutation
+/// (this audit test). All ~6 cross-crate production sites in
+/// `benten-engine` already migrated to the default+mutation
+/// pattern per Bundle 3 / Item 6 closure.
+///
+/// Would-FAIL-on-revert: removing `#[non_exhaustive]` from
+/// `CapWriteContext` would still leave this test passing, BUT the
+/// audit test below `cap_write_context_audit_attribute_present`
+/// catches the attribute removal via runtime introspection of
+/// the Debug format (which doesn't capture non_exhaustive, so we
+/// use a sentinel test instead).
 #[test]
 fn cap_write_context_constructs_via_default_and_mutation() {
     let mut ctx = CapWriteContext::default();
@@ -183,32 +190,32 @@ fn next_chunk_poll_audit_arm_coverage() {
     assert_eq!(label(&timeout), "Timeout");
 }
 
-/// L6-r2-3 closure — `SuspensionOutcome` arm-coverage audit pin for the
-/// D-17 deferral: the absence of `#[non_exhaustive]` means this match is
-/// exhaustive at v1-beta WITHOUT a wildcard arm. When G-COMP-1 closes Row
-/// D-17 by applying `#[non_exhaustive]` to `SuspensionOutcome`, this test
-/// gets updated to add the `_` wildcard arm (the update IS the regression
-/// signal that the attribute landed). At v1-beta the type carries 2 arms
-/// (`Complete` + `Suspended`) per `engine_wait.rs:191`.
+/// **R6-R2-FP Item 6 (Row D-17 closure):** `SuspensionOutcome` now
+/// carries `#[non_exhaustive]` (applied at
+/// `crates/benten-engine/src/engine_wait.rs:194`). Cross-crate match
+/// consumers MUST include a `_` wildcard arm; this audit test
+/// exercises the wildcard-guard pattern. The 2 named variants at
+/// v1-beta (`Complete` + `Suspended`) are pinned by the explicit arms;
+/// a 3rd variant would not break this match (because of `_`) but the
+/// freeze-discipline expectation is documented in V1-FROZEN-INTERFACE.md
+/// item 11.
 #[test]
-fn suspension_outcome_d17_deferred_arm_coverage() {
+fn suspension_outcome_d17_arm_coverage_with_wildcard_guard() {
     use benten_engine::engine_wait::SuspensionOutcome;
-    // Construct a Complete arm via the lightweight test path.
     fn classify(s: &SuspensionOutcome) -> &'static str {
-        // No `_` arm — exhaustive at v1-beta. Per Row D-17 deferral.
+        // R6-R2-FP Item 6: `#[non_exhaustive]` requires wildcard arm
+        // from outside the defining crate.
         match s {
             SuspensionOutcome::Complete(_) => "Complete",
             SuspensionOutcome::Suspended(_) => "Suspended",
+            _ => "Unknown(non_exhaustive guard)",
         }
     }
     // Exercise the discriminator via the `unwrap_suspended` ergonomic
     // helper (the substantive construction lives in the engine internals;
-    // the audit value here is the exhaustive match landing in test code).
+    // the audit value here is the match landing in test code).
     let outcome_kind = std::any::type_name::<SuspensionOutcome>();
     assert!(outcome_kind.ends_with("SuspensionOutcome"));
-    // The match is exhaustive: if a 3rd variant lands without #[non_exhaustive]
-    // applied, this test compile-fails (alerting that Row D-17 must close
-    // in the same wave as the variant addition).
     let _: fn(&SuspensionOutcome) -> &'static str = classify;
 }
 

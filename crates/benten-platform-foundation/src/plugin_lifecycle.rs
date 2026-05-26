@@ -708,9 +708,23 @@ where
     /// check port. **R6 R1 FP-F4 §S2 (Row D-2 closure):** the prior
     /// `Option<>` wrapper is dropped (the `None` arm silently
     /// disabled the §4.37 TOCTOU defense in shipped binaries). Every
-    /// caller MUST supply a substantive closure. Production callers
-    /// wire `make_engine_replay_check_closure(engine.install_record_replay_store())`;
-    /// test fixtures wire `crate::testing::noop_replay_check()` (cfg-gated under `testing` feature; plain-backtick cite to avoid rustdoc intra-doc-link resolution against private modules in default build)
+    /// caller MUST supply a substantive closure.
+    ///
+    /// **R6 R2 FP-B (L7-R2-F-4 phantom-cite delete):** the production
+    /// wiring pattern is a closure over the engine's replay store —
+    /// e.g.
+    /// ```ignore
+    /// let store = engine.install_record_replay_store().clone();
+    /// let mut replay_check = move |hash: &[u8; 32]| -> Result<(), ErrorCode> {
+    ///     store.record_and_check(*hash)
+    /// };
+    /// ```
+    /// (the previously-cited helper
+    /// `make_engine_replay_check_closure(...)` was a phantom — no
+    /// such function exists; the closure inline IS the canonical
+    /// pattern).
+    ///
+    /// Test fixtures wire `crate::testing::noop_replay_check()`
     /// (admit-all, intentional non-defense; documents the test that
     /// is NOT exercising the replay-defense surface).
     ///
@@ -829,23 +843,52 @@ pub struct InstallOutcome {
 /// plus the four R4b-FP-1 hardening seams (Seam 2 clock injection,
 /// Seam 4 cycle wiring, consent gate integration, trust-list check).
 ///
-/// Order:
+/// Order (R6 R2 FP-B updated — docstring drift closure for L7-R2-F-1):
 ///
 /// 1. Decode + verify content-CID matches declared.
 /// 2. **Trust-list check** — if `user_trust_list` non-empty, reject with
 ///    `E_PLUGIN_AUTHOR_NOT_TRUSTED` when manifest's `peer_did` is not
 ///    in the list.
-/// 3. **Seam 2** — `validate_with_clock(now_secs)`. Fail-closes with
+/// 3. **InstallRecord consent verify** — verify the user-DID signature
+///    over the install-record + match `record.manifest_cid ==
+///    expected_cid` (defense vs. consent-record substitution). Errors
+///    `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` /
+///    `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH`.
+/// 3b. **§4.37 InstallRecord replay-defense** —
+///    `install_record_replay_check(payload_hash)` consulted BEFORE any
+///    mint occurs. Replay → `PluginInstallRecordAlreadyApplied`.
+/// 3c. **§S3a (R6 R1 FP-F4) install-time consent** —
+///    `policy.check_install_consent(payload_hash, plugin_did_str)`
+///    consulted BEFORE the cap-cascade. Default impl admits all;
+///    custom `CapabilityPolicy` impls (e.g. wrapping a curated DID
+///    trust-list) can reject with typed
+///    `PluginInstallConsentDenied`. The engine-side adapter
+///    `benten_engine::capability_policy_install_consent::CapabilityPolicyInstallConsent`
+///    (minted at R6 R2 FP-B; plain-backtick cite to avoid rustdoc
+///    intra-doc-link resolution against benten-engine which isn't a
+///    dep of benten-platform-foundation) bridges the engine's configured
+///    `CapabilityPolicy` to the install-pipeline's
+///    [`crate::install_consent::InstallConsentPolicy`] port.
+/// 4. **Seam 2 — clock-injected validation** —
+///    `validate_with_clock(now_secs)`. Fail-closes with
 ///    `E_UCAN_CLOCK_NOT_INJECTED` when clock missing + manifest declares
 ///    time-bounded requirements.
-/// 4. **Consent gate** — verify InstallRecord's user-DID signature
-///    (`E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`) AND match
-///    `record.manifest_cid == expected_cid` (defense vs. consent-record-
-///    substitution).
 /// 5. **Heterogeneity** check (`E_PLUGIN_HETEROGENEITY_INCOMPATIBLE`).
-/// 6. **Seam 4** — cycle detection.
+/// 6. **Seam 4** — cycle detection (`detect_composition_cycle`).
 /// 7. **Upgrade DAG-descendant check** (T10-upgrade (b)) when
 ///    `prior_installed_cid` + `version_chain` are supplied.
+/// 7a. **T10-upgrade (a) — same-author DID continuity (R6 R1 Bundle
+///    L2-R6-MAJOR-1 closure).** When `prior_installed_cid` resolves to
+///    a manifest, `verify_upgrade_author_continuity` rejects an
+///    upgrade whose new `peer_did` differs from the prior
+///    (`PluginAuthorNotTrusted`). T10-(a) + T10-(b) are co-defensive
+///    per `docs/admin-ui-v0-threat-model.md` §T10; both gates fire on
+///    every upgrade attempt.
+/// 7b. **Fresh-consent gap at upgrade time** — if the new manifest
+///    `requires` a capability the prior did NOT, reject with
+///    `PluginInstallConsentRequired` (separate from §S3a
+///    `PluginInstallConsentDenied` — forensic-discriminate the caps-
+///    grew gap vs the policy-said-no gap).
 /// 8. **Plugin-DID adoption (caller-mint-first)** — assert
 ///    `install_record.plugin_did == *params.expected_plugin_did`
 ///    (`E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` on mismatch); then

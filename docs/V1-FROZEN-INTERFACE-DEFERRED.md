@@ -75,19 +75,33 @@ Each row: (i) frozen surface (where the signature locks at v1-beta),
 (iii) v1-beta posture (what the binary actually enforces / does not
 enforce at v1-beta), (iv) Compromise / spec anchor.
 
-### ~~Row D-1~~ — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context) — **CLOSED at R6 R1 FP-F4 §S1** (2026-05-24)
+### ~~Row D-1~~ — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context) — **CLOSED at R6 R1 FP-F4 §S1** (2026-05-24) — **SHARPENED at R6 R2 FP-B** (2026-05-25)
 
-> **STATUS: CLOSED.** Per Ben PM-ratified F1 path-(a) full ~13-site
-> cascade ("if we're going to want to do them all eventually, then I
-> say do the full ~13-site cascade now"), the `WriteBoundaryChainValidator`
-> consumption is now structurally-always-on at all 13 WRITE entry
-> points (engine_crud × 5 + engine_caps × 2 + engine_views × 1 +
-> engine_modules × 2 + engine_diagnostics × 1 + engine_wait × 1 +
-> handler_versions × 1) via the new `Engine::admit_write_chain` helper
-> + sealed `WriteAdmissionFrame`. Layer-1 user-as-root invariant is
+> **STATUS: CLOSED (sharpened).** Per Ben PM-ratified F1 path-(a) full
+> ~13-site cascade ("if we're going to want to do them all eventually,
+> then I say do the full ~13-site cascade now"), the
+> `WriteBoundaryChainValidator` consumption is now structurally-
+> always-on at **14** WRITE entry points (engine_crud × 5 + engine_caps
+> × 2 + engine_views × 1 + engine_modules × 2 + engine_diagnostics × 1
+> + engine_wait × 1 + handler_versions × 1 + **R6 R2 FP-B: apply_atrium_merge
+> per-row chain-bearing × 1**) via the new `Engine::admit_write_chain`
+> helper + sealed `WriteAdmissionFrame`.
+>
+> **R6 R2 FP-B (L2-R2-MAJOR-1 closure):** pre-FP-B 13 of 13 sites
+> passed `WriteAdmissionFrame::engine_internal()`; the
+> `delegate_capability` site was the **only** chain-bearing caller.
+> Inbound-sync per-row writes routed only through `append_version`
+> (engine_internal frame), so the WriteBoundaryChainValidator never
+> observed the peer-DID at row admission. Post-FP-B the
+> `apply_atrium_merge` per-row loop presents a
+> `WriteAdmissionFrame::with_chain(peer_actor_cid, peer_did)` frame,
+> closing the asymmetry where outbound writes were chain-walked but
+> inbound sync rows were not. Layer-1 user-as-root invariant is
 > structurally enforced at every WRITE admission when a production
-> validator is installed. Row retained for forensic context per
-> pim-13 / §3.12.
+> validator is installed; 2 of 14 sites are chain-bearing
+> (delegate_capability + apply_atrium_merge per-row); 12 are
+> engine-internal frame. Row retained for forensic context per pim-13
+> / §3.12.
 
 ### Row D-1 (FORENSIC) — WriteBoundaryChainValidator consumption (Engine::commit / Engine::put_node_with_context)
 
@@ -254,14 +268,24 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   ingest).
 - **Anchor:** Compromise #26 retense; CLAUDE.md #18 Layer-2.
 
-### ~~Row D-6~~ — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+### ~~Row D-6~~ — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24) — **WIRED at R6 R2 FP-B** (2026-05-25)
 
-> **STATUS: CLOSED.** `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome`
-> minted as the §4.25 sync-hydrate handshake-time consumption surface
-> for `ManifestEnvelopeRecheckUnresolvedDeny` + `PluginDelegationOutsideManifestEnvelope`
-> ErrorCode arms. The `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`
-> named-pin destination is now wired (the §4.36 merge-time +
-> §4.25 hydrate-time both consume the shared primitive).
+> **STATUS: CLOSED + WIRED.** `crates/benten-sync/src/handshake.rs::sync_hydrate_consume_recheck_outcome`
+> minted at R6 R1 FP-F4 §S4 as the §4.25 sync-hydrate handshake-time
+> consumption surface. **R6 R2 FP-B (L2-R2-MAJOR-6 closure):** the
+> helper was minted but had ZERO production callers (verified by
+> §3.5n grep 2026-05-25). Post-FP-B the merge boundary at
+> `apply_atrium_merge` per-row routes the recheck outcome through
+> `sync_hydrate_consume_recheck_outcome` (forensic parity arm — the
+> typed-error decision still surfaces via the engine-side
+> `outcome_to_row_reject`; the hydrate consumer is the parity-with-
+> handshake observability arm). The new
+> `manifest_envelope_recheck::outcome_to_error_code` projection helper
+> bridges the two surfaces' shapes. The
+> `g_core_8_manifest_envelope_recheck_fail_closed_flip_4_36.rs:300-314`
+> named-pin destination is now wired (the §4.36 merge-time + §4.25
+> hydrate-time both consume the shared primitive; per-row consultation
+> now exercises both).
 
 ### Row D-6 (FORENSIC) — §4.25 sync-hydrate consumption of UnresolvedDeny at handshake.rs
 
@@ -319,26 +343,22 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 - **Anchor:** spec item 1; V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row
   1.a/1.b/1.c; CLAUDE.md baked-in #18.
 
-### Row D-8 — F3 anti-replay atomic compare-and-swap (FrameReplayMarker TOCTOU)
+### ~~Row D-8 — F3 anti-replay atomic compare-and-swap (FrameReplayMarker TOCTOU)~~ **CLOSED** at R6 R2 batch-A Item 8 (Cohort 8)
 
-- **Frozen surface (v1-beta):**
-  `crates/benten-caps/src/chain_authority.rs:404-421` —
-  `FrameReplayMarker::mark_and_check_frame` get + put non-atomic
-  pair (separate redb transactions). Compromise #23 IS retensed
-  to acknowledge in-window racy.
-- **Deferred consumption (G-COMP-1 destination):** either (a) extend
-  KVBackend trait with a typed `compare_and_insert(key, value)
-  -> Result<bool, _>` method AND change `mark_and_check_frame` to
-  use it, OR (b) route the marker call through
-  `GraphBackend::transaction(|tx| ...)` so both the get + put run
-  inside one txn (the existing transaction API supports this), OR
-  (c) document a serializing per-engine lock around the
-  `apply_atrium_merge` marker call. Option (b) is lowest-cost
-  (~10 LOC change inside `mark_and_check_frame`).
-- **v1-beta posture:** F3 anti-replay defense is racy under
-  concurrent inbound apply_atrium_merge presentations of the same
-  session_nonce. Compromise #23 retensed to disclose.
-- **Anchor:** Compromise #23.
+- **Closure:** Option (a) chosen — `KVBackend::compare_and_insert`
+  added with a default non-atomic impl (preserves behavior for
+  non-transactional backends) + a txn-atomic override on
+  `RedbBackend`. `FrameReplayMarker::mark_and_check_frame` routes
+  through the new primitive. On the redb-backed backend the get +
+  insert + commit run inside a SINGLE redb write transaction; write-
+  txn exclusivity (only ONE write-txn open per-handle at a time) gates
+  concurrent CAS attempts. At most ONE concurrent caller admits.
+- **Test pin:**
+  `crates/benten-caps/tests/tf_d8_frame_replay_marker_cas_atomic_under_concurrent_inbound.rs`
+  — 16-thread race against the same nonce; asserts exactly 1
+  first-observer + 15 replay-rejected.
+- **Anchor:** Compromise #23 (closure narrative updated at
+  SECURITY-POSTURE.md).
 
 ### Row D-9 — wire-format hex-pinned byte-pin tests sweep (6 of 8 deferred)
 
@@ -404,24 +424,20 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   for the file-handling arms is sparse.
 - **Anchor:** L9-DSL-MINOR-2.
 
-### Row D-13 — structural_kdf info-tag codepoint-binding
+### ~~Row D-13 — structural_kdf info-tag codepoint-binding~~ **CLOSED** at R6 R2 batch-A Item 7 (Cohort 8)
 
-- **Frozen surface (v1-beta):** `aead_wrap::make_key_material_matching`
-  threads attacker-controlled envelope codepoint into key newtype
-  (docstring at `aead_wrap.rs:500-506` acknowledges; the natural
-  ChaCha20-Poly1305 defense via K_root divergence IS structurally
-  present at v1-beta).
-- **Deferred consumption (G-COMP-1 destination):** extend
-  `structural_kdf::derive_root` info-tag to include cipher-suite
-  codepoint (e.g. `info = "root:codepoint:<le_bytes>" || root_cid`);
-  ~5 LOC + golden test for backward-compat (since this CHANGES
-  K_root derivation, it is a wire-format-coupled change requiring
-  a backward-compat scheme or version bump per the freeze contract;
-  G-COMP-1 must decide the migration shape).
-- **v1-beta posture:** natural ChaCha20-Poly1305 defense via K_root
-  divergence between codepoint arms IS structurally present at
-  v1-beta (verified L2-MAJ-4 disposition). Codepoint-binding via
-  KDF info is incidental not explicit.
+- **Closure:** `structural_kdf::derive_root` extended to take
+  `cipher_suite_codepoint: u16` AND fold it into the HKDF info-tag
+  (`info = "root:codepoint:" || codepoint_le_bytes || root_cid`).
+  Cross-codepoint key reuse class structurally closed: same
+  `(K_principal, root_cid)` inputs derived under different codepoints
+  produce different K_root values. Wire-format-coupled (K_root feeds
+  downstream AEAD wrap; pre-Item-7 K_root values not byte-compatible
+  with post-Item-7); landed under P-III no-users-yet override per
+  Cohort 8 entry.
+- **Test pin:** `crates/benten-crypto-suite/src/structural_kdf.rs::tests::derive_root_distinguishes_cipher_suite_codepoints`
+  — same `(K_principal, root_cid)` derived under `0x647a` / `0x6400`
+  / `0x647b` MUST produce 3 distinct K_root values.
 - **Anchor:** L2-MAJ-4.
 
 ### Row D-14 — Recursive cargo invocation test hygiene
@@ -513,25 +529,34 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   arm registration).
 - **Anchor:** L2-MAJ-3 G-CORE-9 R1 finding.
 
-#### Row D-15c — `AuthorizationGrant.audience_pubkey` Option→non-Option promotion
+#### Row D-15c — RETRACTED at R6 R2 fix-pass (R6-R2-FP-A)
 
-- **Frozen surface (v1-beta):**
-  `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant`
-  carries `audience_pubkey: Option<ed25519_dalek::VerifyingKey>` —
-  the Option lets the legacy synthetic-fixtures path mint a grant
-  WITHOUT the audience pubkey bytes (binding_sig still covers the
-  audience CID via grant.audience).
-- **Deferred consumption (Phase-4-Meta-Composing):** EITHER promote
-  to non-Option (every production constructor populates the
-  audience_pubkey + binding_sig binds it) OR add
-  `AuthorizationGrant::issue_production` mandatory-bytes constructor
-  + retire `synthetic_for_test` fixtures for production paths.
-- **v1-beta posture:** the audience CID IS bound via binding_sig
-  (the typed seal); the missing audience_pubkey gap is a
-  defense-in-depth promotion, not a v1-beta security gap (a
-  cooperating attacker who forges audience_pubkey still cannot
-  pass binding_sig verification).
-- **Anchor:** L6-r1-9 G-CORE-9 R1 finding.
+- **RETRACTED 2026-05-25 (R6 R2 Bundle R6-R2-FP-A).** The original
+  Row D-15c rationale claimed "a cooperating attacker who forges
+  audience_pubkey still cannot pass binding_sig verification" — this
+  was **FALSE at the live ARM 2/ARM 5 split** in
+  `UcanBlobsHandler::validate_request_for_connection`. Verified via
+  §3.5n orchestrator ground-truth: ARM 2 (audience-binding) compared
+  the connection EndpointId to `grant.audience_pubkey` (the
+  post-sign-mutable field), and ARM 5 (binding-sig verification)
+  re-constructed the binding-message using `grant.audience_binding`
+  (the CID of the issue-time audience pubkey) — which an attacker
+  could leave UNCHANGED while mutating `audience_pubkey` to their own
+  pubkey. The pre-fix attack: Eve obtains a grant for Bob, mutates
+  `audience_pubkey` to her own pubkey, connects with her own iroh
+  EndpointId; ARM 2 admits (eve == eve), ARM 5 verifies (bob's
+  audience_binding still bound), iroh-blobs serves the bytes to Eve.
+  Access-theft, NOT just attribution-forgery.
+- **Closed by:** [R6-R2-FP-A] folds `audience_pubkey` into the
+  binding-message (6-segment layout under `BINDING_SIG_DOMAIN v3`
+  bumped from `v2`); pin
+  `crates/benten-caps/tests/tf3b_audience_substitution_post_sign_rejected.rs`
+  exercises the substantive arm + the would-FAIL-on-revert was
+  verified (3/3 tests FAIL when binding_message ignores
+  audience_pubkey).
+- **Cross-confirming findings closed:** L2-R2-BLOCKER-1 + L3-r2-1 +
+  L13-MAJ-2 + L17-r2-MAJOR-1 + L4-MAJ + L1-MAJ-1 (6-lens cross-
+  confirmation).
 
 #### Row D-15d — `AeadEnvelope::to_wire_bytes` nonce-panic → Result
 
@@ -588,22 +613,39 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   predicated on a future codepoint-mint that already happened). The
   original L11-R2-MINOR-4 closure-evidence was mis-stated.
 
-### ~~Row D-18~~ — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening — **CLOSED at R6 R1 FP-F4 §S4** (2026-05-24)
+### ~~Row D-18~~ — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening — **CLOSED at R6 R1 FP-F4 §S4 (rechecker layer, 2026-05-24) + R6-R2 FP Item 9 (engine substrate layer, 2026-05-25)**
 
-> **STATUS: CLOSED.** `is_synthesized_node_id(did_str: &str) -> bool`
-> helper minted at `crates/benten-engine/src/manifest_envelope_recheck.rs`
-> per Δv3-10. The `ProductionManifestEnvelopeRechecker` consults
-> this helper + returns `UnresolvedDeny` when the peer-DID is
-> the `node-id:N` synthesized-fallback shape. The
-> substantive-rechecker-installed-detection-couple narrative is
-> preserved: the Noop default continues to admit (NotApplicable)
-> so default-Noop test fixtures don't over-fire; only the
-> substantive rechecker hardens.
+> **STATUS: CLOSED end-to-end.**
+>
+> **R6 R1 FP-F4 §S4 (2026-05-24) — rechecker layer:**
+> `is_synthesized_node_id(did_str: &str) -> bool` helper minted at
+> `crates/benten-engine/src/manifest_envelope_recheck.rs` per Δv3-10.
+> The `ProductionManifestEnvelopeRechecker` consults this helper +
+> returns `UnresolvedDeny` when the peer-DID is the `node-id:N`
+> synthesized-fallback shape. The substantive-rechecker-installed-
+> detection-couple narrative is preserved: the Noop default continues
+> to admit (NotApplicable) so default-Noop test fixtures don't
+> over-fire; only the substantive rechecker hardens.
+>
+> **R6-R2 FP Item 9 (2026-05-25) — engine substrate layer:**
+> structural defense-in-depth lift: `ManifestEnvelopeRechecker` gains
+> a `fn is_substantive(&self) -> bool` default method (default `true`;
+> Noop overrides to `false`). `Engine::apply_atrium_merge`'s per-row
+> loop now short-circuits with `ManifestEnvelopeRecheckUnresolvedDeny`
+> when both `rechecker.is_substantive()` AND
+> `is_synthesized_node_id(peer_did_str)` hold — BEFORE consulting the
+> rechecker. This makes the synthesized-fallback reject the LOAD-BEARING
+> defense at the engine substrate (CLAUDE.md #18 Layer-3
+> structural-always-on), so a faulty production rechecker impl that
+> admits `node-id:N` is no longer reachable on this code path.
+> Regression-guard at `crates/benten-engine/tests/r6_r2_fp_item_9_d18_substantive_rechecker_detection_couple.rs`
+> exercises a faulty-admit-all substantive rechecker + asserts the
+> engine substrate rejects regardless.
 
 ### Row D-18 (FORENSIC) — L2-MAJ-1 empty-peer-DID synthesized-fallback structural hardening
 
 - **Frozen surface (v1-beta):** the structural empty-peer-DID
-  fail-CLOSED at `engine.rs:1462-1476` IS live for the literal-empty
+  fail-CLOSED at `crates/benten-engine/src/engine.rs::apply_atrium_merge` (the `ManifestEnvelopeRecheckUnresolvedDeny` arm; symbol-form per §3.5b HARDENED point 3) IS live for the literal-empty
   peer_node_ids case. The synthesized-fallback (`resolve_peer_dids`
   emits `node-id:N` string for unregistered peer_node_ids) ADMITS
   at v1-beta via the always-mounted Noop rechecker (NotApplicable).
@@ -626,6 +668,10 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   v1-beta posture.
 
 ### Row D-17 — `CapWriteContext` + `ReadContext` + `SuspensionOutcome` + lens-scoped pub-type extension `#[non_exhaustive]` application (with cascade)
+
+> **STATUS (2026-05-25):** the 3 NAMED types in the row title — `CapWriteContext`, `ReadContext`, `SuspensionOutcome` — **CLOSED at R6-R2 FP Item 6**. The attribute is applied at the type sites (`crates/benten-caps/src/policy.rs::CapWriteContext` + `crates/benten-caps/src/policy.rs::ReadContext` + `crates/benten-engine/src/engine_wait.rs::SuspensionOutcome`). The cross-crate cascade migrated all `~6` production sites in `benten-engine` to the `default()` + field-mutation pattern; all `~13` benten-caps integration-test sites mechanically converted; `bindings/napi/src/wait.rs` + `crates/benten-eval/benches/wait_suspend_resume_latency.rs` gained wildcard arms. `ReadContext::by_label_and_cid(label, cid, device_cid)` constructor minted at `crates/benten-caps/src/policy.rs` to handle the typed dual-shape case from `primitive_host::check_read_capability`. Audit-test deferral comments at `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` lifted; the SuspensionOutcome arm-coverage pin now exercises the `_` wildcard guard. cargo-public-api baselines `docs/public-api/benten-caps.txt` + `docs/public-api/benten-engine.txt` regenerated.
+>
+> **REMAINING (G-COMP-1 destination):** the R2 EXTENSION lens-scoped pub-type set (~40+ types across `benten-engine` outcome.rs + `benten-ivm` view + `benten-platform-foundation` materializer + `benten-core` Subgraph cluster) — these were NOT closed at Item 6 (item scope was the 3 NAMED types per the title; lifting the EXTENSION set would balloon cascade ~10×). The R2 EXTENSION set carries its own per-class carve-outs documented inline below (e.g., `benten-ivm` view-instance + kernel-internal surface = "no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api baseline shape").
 
 - **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11
   table row enumerates `CapWriteContext` + `ReadContext` +
@@ -708,7 +754,11 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   `CapWriteContext` + `ReadContext`; L6-r1-1 G-CORE-9 R1 escalation;
   L8-R2-MAJOR-CARRY-2 + L8-R2-MINOR-CARRY-1 G-CORE-9 R2 extensions.
 
-### Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints)
+### ~~Row D-19~~ — G-CORE-9 R1 Bundle 4 ESCALATED items (Strategy::C → Reserved rename + 3 DSL ErrorCode mints) — **CLOSED at R6-R2-FP-integration-redo Group C / Cohort 8 (2026-05-25)**
+
+**Status: CLOSED.** Landed at the R6-R2-batch-c-dsl-catalog sub-branch of the R6-R2-FP-integration-redo PR (2026-05-25) per the v1-beta-freeze-window auto-WIRE-NOW discipline. The atomic 4-surface §3.5g rename + 3 first-class catalog mints all shipped in a single commit; CATALOG_VARIANT_COUNT 194 → 197; cargo-public-api + ts-public-api baselines regenerated; drift-detect baseline removed the 3 grandfathered `CompileError::{Parse,Semantic,Build}` lines per §3.5g item 6 amendment closure. See `docs/V1-BETA-BREAKING-CHANGES.md` Cohort 8 for the full migration enumeration; row body retained below for forensic context.
+
+**Original (pre-closure) row body:**
 
 - **Frozen surface (v1-beta):** the obsolete `Strategy::C` arm name, the wire string `E_VIEW_STRATEGY_C_RESERVED`, the variant `ViewStrategyCReserved`, the TS class `EViewStrategyCReserved`, and the absence of explicit `E_DSL_PARSE_FAILED` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND` ErrorCodes all freeze at v1-beta. The cargo-public-api baselines at `docs/public-api/benten-errors.txt` (`pub benten_errors::ErrorCode::ViewStrategyCReserved`) + `docs/public-api/benten-engine.txt` (`pub benten_engine::error::EngineError::ViewStrategyCReserved` + `pub benten_engine::EngineError::ViewStrategyCReserved` re-export) lock the obsolete `ViewStrategyCReserved` name; per Bundle 10 Fork 3 the cargo-public-api workflow is required-failing so the rename WINDOW is the G-CORE-9 freeze wave OR a deliberate post-v1-beta SemVer break. (Path-symbol cites per pim-1 / §3.5b HARDENED point 3; previous numeric line cites at benten-errors.txt:188 + benten-engine.txt:976,977,2329,2330 had drifted uniformly off-by-one to 187 / 975,976,2328,2329 post baseline regeneration.)
 - **Deferred consumption (G-COMP-1 destination):** atomic 4-surface rename per §3.5g:
@@ -823,8 +873,13 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   - **DSL chunk asymmetry (1 PR):** #1326 DSL chunk-2 (closes #663 +
     #760 + #929 + #931 + #934); the chunk-3 #1339 row is already
     enumerated at Cohort 2 line 138 — chunks 1+2 are the asymmetric gap.
-  - **Wave-1/2 Strategy-C (2 PRs):** #1235 + #1237 (incl. benten-graph
-    trait shape change — verbatim break-OK signal).
+  - **Wave-1/2 Strategy-C (1 PR landed; 1 abandoned):** #1235 (MERGED;
+    incl. benten-graph trait shape change — verbatim break-OK signal).
+    Note: #1237 was CLOSED-not-merged (not part of the v1-beta ledger
+    landing-set; the underlying scope was absorbed into the broader
+    Strategy-C drain batches enumerated below). Earlier R6-R2-FP-C-pre
+    drafts erroneously cited #1237 as if merged; corrected per
+    R6-R2-FP-C cite-grep-verify discipline (§3.6j extension).
   - **#707-trust-subset (1 PR):** #1251 (device-revocation/recheck
     parallel pipes collapse; precursor to the #1271 chain-validation
     seam consolidation row already enumerated).
@@ -1154,6 +1209,88 @@ Row D-15's audit-readiness concern.
   at SHA `83096e39` + Ben 2026-05-24 PM "do everything now" ratification
   (`.addl/phase-4-meta/MORNING-QUEUE-2026-05-24-PM.md` + this session's
   defer-bias memo codification at `feedback_orchestrator_defer_prediction_bias.md`).
+
+---
+
+### Row D-27 — StampedValue per-row originating-grant_cid plumbing for multi-hop attribution preservation
+
+- **Frozen surface (v1-beta):** `apply_atrium_merge` reconstructs
+  `AttributionFrame` fresh per merged row at `crates/benten-engine/src/engine.rs:1629`
+  using whichever `effective_actor_cid` the LOCAL device computes —
+  the ORIGINATING peer's authorization-grant CID does not survive the
+  sync hop. The `StampedValue` wire envelope (`crates/benten-sync/src/crdt.rs:174-181`)
+  carries `(value, hlc)` only; it has NO per-row grant_cid slot.
+  Multi-hop chain consumers therefore see the laptop's fresh-reconstructed
+  attribution, not the phone's original grant.
+
+  This is the **wire/persistence half** of the Path-G/Row-D-3-c
+  AttributionFrame work. Path G (this PR cycle) substantively
+  populates the EXISTING `AttributionFrame.capability_grant_cid` slot
+  (`crates/benten-eval/src/exec_state.rs:77`; currently zero-Cid
+  sentinel at `engine.rs:1634`) for LOCAL-origin writes via
+  `WriteContext.authorizing_grant_cid` propagation — ~30-50 LOC; zero
+  wire-shape change; only the semantic contract tightens. Row D-27 is
+  what Path G does NOT close: the MULTI-HOP preservation across
+  apply_atrium_merge boundaries.
+
+- **Deferred consumption (G-COMP-1):** extend `StampedValue` →
+  `StampedValueV2 { value, hlc, originating_grant_cid: Option<Cid> }`
+  + rewire the apply_atrium_merge fresh-reconstruct pattern at
+  engine.rs:1629 to PRESERVE the originating grant_cid (rather than
+  overwrite with local-device attribution) + extend
+  `ProductionManifestEnvelopeRechecker` (Compromise #26 / Row D-4
+  destination) to walk the preserved grant_cid through the existing
+  single rechecker port at engine.rs:1456-1507. ~600-800 LOC across
+  benten-sync (StampedValue extension; opaque-bytes-via-LoroValue::Binary
+  per crdt.rs:174-181 + 392-410 + 848 — NO Loro upstream coordination
+  needed; opaque-bytes is fully Benten-controlled at the codec layer)
+  + benten-engine apply_atrium_merge semantic redesign + ChainResolver
+  port co-ship + ledger-row backward-compat fallback (fresh-reconstruct
+  on None).
+
+- **Real defer rationale (corrected 2026-05-25 by FINAL cross-lens
+  ground-truth-verify against HEAD `31d1a169`):** the apply_atrium_merge
+  fresh-reconstruct pattern is a **semantic redesign**, not a Loro
+  upstream-coordination cost (the earlier path-f-wire-format-relay-lens
+  framing was factually incorrect about Loro coord requirements; see
+  `.addl/phase-4-meta/path-f-sync-merge-arch-FINAL-cross-lens.json`
+  for the corrected analysis). The semantic redesign couples to the
+  G-COMP-1 chain-walker consumer (currently
+  `NoopManifestEnvelopeRechecker` admits all per Compromise #26
+  PARTIAL closure) — landing Row D-27 standalone before the chain-walker
+  is wired would mint a slot no consumer reads. Same cohort as the
+  ProductionManifestEnvelopeRechecker substantive impl + GrantResolver
+  port + Row D-4 closure.
+
+- **Path-G/Path-E lens triangulation provenance (2026-05-25):** Path-F
+  investigation surfaced 3 lens variants (F-i row-properties / F-ii
+  AttributionFrame slot populate / F-iii sync envelope sibling) which
+  converged after FINAL cross-lens onto **Path G = F-ii substantively
+  populate the EXISTING slot at v1-beta + Row D-27 = F-iii wire envelope
+  extension deferred to G-COMP-1**. 3-lens unanimous on Path G after the
+  predecessor sync-merge-arch lens self-corrected on 2 factual errors:
+  (1) `CapWriteContext` does NOT have `#[non_exhaustive]` at HEAD
+  (doc-comment at `crates/benten-caps/src/policy.rs:151-161` shows
+  G-COMP-1-deferred — Row D-17 cascade is therefore MANDATORY in the
+  WIRE-NOW batch, not assumed-done); (2) Loro StampedValue is opaque
+  Benten-DAG-CBOR bytes encoded as `LoroValue::Binary` (verified at
+  crdt.rs:848) — not a coord blocker; real defer-rationale is the
+  semantic redesign above.
+
+- **v1-beta posture:** Path G's local-grant_cid threading at v1-beta
+  closes the audit-trail half of the Row D-3-c context (LOCAL-origin
+  writes have substantive `capability_grant_cid` instead of zero-Cid
+  sentinel); Row D-27's multi-hop preservation closure ships at
+  G-COMP-1. Row D-3-c itself remains APPROPRIATELY-PARTIAL-CLOSED per
+  Delta-v3-2 (audience_did=None at apply_atrium_merge sites is
+  semantically correct because peer_did is transport-principal NOT
+  cap-target).
+
+- **Anchor:** Path-F lens triangulation JSONs at
+  `.addl/phase-4-meta/path-f-{sync-merge-arch,crypto-cap,wire-format-relay,sync-merge-arch-FINAL-cross-lens}-lens.json`
+  + the 4 LATE-MORNING addenda in `.addl/phase-4-meta/NIGHT-SHIFT-2026-05-25.md`
+  + the 9-item WIRE-NOW batch ratified for PR #1356 (item 4 = Path G
+  AttributionFrame slot population).
 
 ---
 

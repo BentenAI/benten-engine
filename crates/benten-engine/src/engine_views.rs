@@ -219,6 +219,21 @@ impl Engine {
         self.read_view_with(view_id, ReadViewOptions::strict())
     }
 
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::read_view`]. The `principal` is currently
+    /// forensic-only — `read_view_with` does not yet thread `actor_cid`
+    /// onto the per-row cap probe; the migration is the load-bearing
+    /// seam (per CLAUDE.md baked-in #18) so future per-principal view
+    /// gating is a one-site addition. Behaviour at v1-beta matches
+    /// [`Engine::read_view`].
+    ///
+    /// # Errors
+    /// Forwards [`Engine::read_view`] errors.
+    pub fn read_view_as(&self, principal: &Cid, view_id: &str) -> Result<Outcome, EngineError> {
+        let _ = principal; // Forensic threading — see docstring.
+        self.read_view_with(view_id, ReadViewOptions::strict())
+    }
+
     /// Phase-3 G20-A3 (carry-ivm-r6-3 closure): resolve the read-gate
     /// label hint for `view_id`. Canonical hand-written ids resolve
     /// via [`benten_ivm::CanonicalViews::lookup`] (post-G-CORE-4 D1 A2
@@ -320,12 +335,11 @@ impl Engine {
             // explicit `self.policy.as_deref()` presence guard is now
             // subsumed — behaviour is identical for the no-policy case.)
             let device_cid = self.device_cid();
-            let ctx = benten_caps::ReadContext {
-                label: label_hint.clone(),
-                target_cid: None,
-                device_cid,
-                ..Default::default()
-            };
+            // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+            let mut ctx = benten_caps::ReadContext::default();
+            ctx.label.clone_from(&label_hint);
+            ctx.target_cid = None;
+            ctx.device_cid = device_cid;
             // Refinement-audit-2026-05 D1 #1189 (Safe-1 #534 / META #593):
             // route the IVM view-read gate through the canonical
             // fail-CLOSED `check_read_gate`. The pre-fix `if let
@@ -660,8 +674,10 @@ impl Engine {
     /// - [`EngineError::ViewStrategyARefused`] when the spec declared
     ///   `Strategy::A` (Strategy A is hand-written-IVM-only; user views
     ///   cannot claim that lane).
-    /// - [`EngineError::ViewStrategyCReserved`] when the spec declared
-    ///   `Strategy::C` (Z-set / DBSP cancellation reserved for Phase 3+).
+    /// - [`EngineError::ViewStrategyReserved`] when the spec declared
+    ///   `Strategy::Reserved` (Z-set / DBSP cancellation reserved for Phase 3+;
+    ///   renamed from `Strategy::C` at G23-0a per arch-r1-14 + full enum + wire-
+    ///   string + TS-class atomic rename at Row D-19 G-COMP-1 wave Cohort 8).
     /// - [`EngineError::ViewLabelMismatch`] (R6-R3 r6-r3-ivm-1) when the
     ///   spec id matches one of the four canonical view ids whose
     ///   hand-written dispatch arm has hardcoded `input_pattern_label`
@@ -693,7 +709,7 @@ impl Engine {
                 });
             }
             benten_ivm::Strategy::Reserved => {
-                return Err(EngineError::ViewStrategyCReserved {
+                return Err(EngineError::ViewStrategyReserved {
                     view_id: spec.id().to_string(),
                 });
             }

@@ -188,7 +188,24 @@ pub fn derive_test_seam_key_from_cid_with_namespace(did: Option<&Cid>, cid: &Cid
     // structural-KDF substrate. `derive_root` carries the "root"
     // info-tag for cross-role domain separation per Spike-E +
     // `benten_crypto_suite::structural_kdf` contract.
-    let k_root = benten_crypto_suite::structural_kdf::derive_root(&k_principal, cid.as_bytes());
+    //
+    // R6 R2 batch-A Item 7 (Row D-13 closure): `derive_root` now
+    // additionally binds the cipher-suite codepoint into the HKDF
+    // info-tag (closes the cross-codepoint key-reuse attack class).
+    // At this test-seam wave the codepoint is the v1-beta DEFAULT
+    // (`CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` = `0x647a` —
+    // X-Wing X25519⊕ML-KEM-768) matching the v1-beta wire default
+    // per `RATIFIED-pq-default-reframe-2026-05-19.md`. The full
+    // codepoint-dispatch threading lands at the multi-edge
+    // subgraph-walk wire-up (named at `docs/future/phase-4-backlog.md`
+    // §3.10 G-CORE-3e + see `derive_test_seam_key_from_cid_with_namespace_for_codepoint`
+    // for the codepoint-aware variant if a caller needs to swap arms
+    // before the subgraph-walk wire-up lands).
+    let k_root = benten_crypto_suite::structural_kdf::derive_root(
+        &k_principal,
+        cid.as_bytes(),
+        benten_crypto_suite::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw(),
+    );
     k_root.as_bytes().to_vec()
 }
 
@@ -2967,6 +2984,38 @@ impl KVBackend for RedbBackend {
         }
         write_txn.commit()?;
         Ok(())
+    }
+
+    /// **R6 R2 batch-A Item 8 (Row D-8 closure)** — txn-atomic
+    /// compare-and-insert. Runs the get + insert + commit inside ONE
+    /// redb write transaction so concurrent inbound
+    /// `apply_atrium_merge` presentations of the same session-nonce
+    /// cannot both observe "absent" + both proceed (the F3 anti-replay
+    /// TOCTOU class).
+    ///
+    /// Returns `Ok(true)` if the key was already present (insert
+    /// REJECTED — the caller MUST treat this as the replay arm).
+    /// Returns `Ok(false)` if the insert succeeded (the key is now
+    /// present + the caller MUST treat this as the first-observation
+    /// arm).
+    ///
+    /// At the redb-v4 layer write transactions are serialized (only
+    /// ONE write-txn is open at a time per-handle); the get inside
+    /// the write-txn observes any prior commits + the insert is
+    /// committed before the next write-txn opens — exclusive-write
+    /// txn-atomicity is the CAS substrate.
+    fn compare_and_insert(&self, key: &[u8], value: &[u8]) -> Result<bool, GraphError> {
+        let write_txn = self.begin_write_txn()?;
+        let already_present = {
+            let mut table = write_txn.open_table(NODES_TABLE)?;
+            let present = table.get(key)?.is_some();
+            if !present {
+                table.insert(key, value)?;
+            }
+            present
+        };
+        write_txn.commit()?;
+        Ok(already_present)
     }
 
     fn delete(&self, key: &[u8]) -> Result<(), GraphError> {

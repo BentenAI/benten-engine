@@ -26,12 +26,10 @@ fn noauth_permits_empty_context() {
 #[test]
 fn noauth_permits_populated_context() {
     let policy = NoAuthBackend::new();
-    let ctx = CapWriteContext {
-        label: "Post".to_string(),
-        is_privileged: false,
-        actor_hint: Some("alice".to_string()),
-        ..CapWriteContext::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "Post".to_string();
+    ctx.is_privileged = false;
+    ctx.actor_hint = Some("alice".to_string());
     assert!(policy.check_write(&ctx).is_ok());
 }
 
@@ -41,11 +39,9 @@ fn noauth_permits_system_zone_context() {
     // layer's CapWriteContext::enforce_system_zone check. NoAuth is meant to be
     // zero-cost at the capability layer.
     let policy = NoAuthBackend::new();
-    let ctx = CapWriteContext {
-        label: "system:IVMView".to_string(),
-        is_privileged: true,
-        ..CapWriteContext::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "system:IVMView".to_string();
+    ctx.is_privileged = true;
     assert!(policy.check_write(&ctx).is_ok());
 }
 

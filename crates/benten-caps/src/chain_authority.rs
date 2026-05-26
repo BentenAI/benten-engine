@@ -398,25 +398,28 @@ impl<B: benten_graph::GraphBackend> FrameReplayMarker<B> {
     /// (REPLAY — the caller MUST reject the frame); `Ok(false)` on
     /// first observation (the marker is now persisted).
     ///
+    /// **R6 R2 batch-A Item 8 (Row D-8 closure / Compromise #23
+    /// in-window-racy retraction):** routes through
+    /// `benten_graph::KVBackend::compare_and_insert` which is
+    /// txn-atomic on the redb-backed backend (the get + insert +
+    /// commit run inside ONE redb write transaction). Pre-Item-8
+    /// this was a non-atomic get + put pair under SEPARATE
+    /// transactions; concurrent inbound `apply_atrium_merge`
+    /// presentations of the same session-nonce could BOTH observe
+    /// "not yet applied" + BOTH proceed (the F3 TOCTOU class —
+    /// Compromise #23 retensed-to-acknowledge in-window-racy at
+    /// v1-beta). Post-Item-8 the redb write-txn exclusivity gates
+    /// concurrent CAS attempts: at most ONE admits.
+    ///
     /// # Errors
     ///
-    /// Returns [`crate::CapError::BackendStorage`] on KV read/write failure.
+    /// Returns [`crate::CapError::BackendStorage`] on KV failure.
     pub fn mark_and_check_frame(&self, nonce: &[u8]) -> Result<bool, crate::CapError> {
         let key = Self::nonce_key(nonce);
-        let already = self
-            .backend
-            .get(&key)
+        self.backend
+            .compare_and_insert(&key, &[])
             .map_err(|e| crate::CapError::BackendStorage {
-                reason: format!("KV get frame-replay marker: {e}"),
-            })?
-            .is_some();
-        if !already {
-            self.backend
-                .put(&key, &[])
-                .map_err(|e| crate::CapError::BackendStorage {
-                    reason: format!("KV put frame-replay marker: {e}"),
-                })?;
-        }
-        Ok(already)
+                reason: format!("KV compare_and_insert frame-replay marker: {e}"),
+            })
     }
 }

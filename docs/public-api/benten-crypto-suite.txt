@@ -61,6 +61,7 @@ pub const benten_crypto_suite::aead::ENVELOPE_MAGIC: u8
 pub const benten_crypto_suite::aead::IROH_BLOCK_SIZE: usize
 pub const benten_crypto_suite::aead::WHOLE_CONTENT_AEAD_THRESHOLD: usize
 pub fn benten_crypto_suite::aead::aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::aead::aad_per_recipe(plaintext_cid: &[u8], recipe_index: u32, total_recipes: u32) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::aead::aad_whole_content(plaintext_cid: &[u8]) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::aead::unwrap(envelope: &benten_crypto_suite::aead::AeadEnvelope, key: &benten_crypto_suite::aead::AeadKeyMaterial, aad: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::aead::wrap(plaintext: &[u8], key: &benten_crypto_suite::aead::AeadKeyMaterial, aad: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>
@@ -643,7 +644,7 @@ impl core::marker::Unpin for benten_crypto_suite::structural_kdf::StructuralKdfK
 impl core::marker::UnsafeUnpin for benten_crypto_suite::structural_kdf::StructuralKdfKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::structural_kdf::StructuralKdfKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::structural_kdf::StructuralKdfKey
-pub fn benten_crypto_suite::structural_kdf::derive_root(k_principal: &benten_crypto_suite::structural_kdf::StructuralKdfKey, root_cid: &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::structural_kdf::derive_root(k_principal: &benten_crypto_suite::structural_kdf::StructuralKdfKey, root_cid: &[u8], cipher_suite_codepoint: u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::derive_step(predecessor: &benten_crypto_suite::structural_kdf::StructuralKdfKey, edge_label: &[u8], node_cid: &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub mod benten_crypto_suite::swap_matrix
 pub enum benten_crypto_suite::swap_matrix::SwapKeypair
@@ -1558,5 +1559,5 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::Uc
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
 pub const benten_crypto_suite::AUDIT_LANDED_PURE_PQ_FLAG: bool
 pub const fn benten_crypto_suite::audit_landed_pure_pq_flag() -> bool
-pub fn benten_crypto_suite::derive_root(k_principal: &benten_crypto_suite::structural_kdf::StructuralKdfKey, root_cid: &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::derive_root(k_principal: &benten_crypto_suite::structural_kdf::StructuralKdfKey, root_cid: &[u8], cipher_suite_codepoint: u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::derive_step(predecessor: &benten_crypto_suite::structural_kdf::StructuralKdfKey, edge_label: &[u8], node_cid: &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey

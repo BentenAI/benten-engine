@@ -284,8 +284,10 @@ pattern covers it without re-opening the freeze.
 
 **Verification mechanism:**
 - `cargo-public-api` baseline locks the signature.
-- `crates/benten-engine/tests/r1_fp_3_class_b_beta_read_node_as.rs`
-  (existing test family) carries the behavior pins.
+- `crates/benten-engine/tests/engine_read_node_as_put_node_pre_v1_closure.rs`
+  + `crates/benten-engine/tests/admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs`
+  + `crates/benten-engine/tests/admin_ui_v0_source_never_calls_engine_read_node_only_engine_read_node_as.rs`
+  (existing test family) carry the behavior pins.
 - A documentation pin in `engine_wait.rs`'s rustdoc cites CLAUDE.md #18
   verbatim.
 
@@ -444,7 +446,9 @@ freeze wave SURFACES the decision; Ben makes it.
   remain byte-stable at v1-beta via roundtrip + constant-position +
   format-version-discriminator pins per the L11 lens substantively-covers
   finding** — full hex-pinned-bytes regression-defense is the deferred half.
-- `crates/benten-graph/tests/redb_backend_*.rs` family covers the redb
+- `crates/benten-graph/tests/redb_schema_version_envelope_pin.rs` +
+  `crates/benten-graph/tests/in_memory_backend_equiv_to_redb.rs` +
+  `crates/benten-graph/tests/kvbackend_conformance.rs` cover the redb
   on-disk format.
 - **CI inventory-walking lane** — DEFERRED to G-COMP-1 per Row D-9; the
   drift-detect substrate exists (`.github/workflows/cite-drift.yml` +
@@ -481,7 +485,16 @@ pub struct WriteContext {
 
 - All four fields `pub`; `Default` impl carries `namespace_did = None`
   (the legacy un-namespaced keyspace; byte-identical to pre-#989).
-- `WriteContext::with_namespace_did(self, did: Cid) -> Self` builder.
+- `WriteContext::with_namespace_did(self, namespace_did: Option<Cid>) -> Self` builder.
+  **R6 R2 FP-B (L5-r2-MAJOR-1 closure):** the parameter is `Option<Cid>`
+  (NOT bare `Cid`) — pass `None` to explicit-downgrade a previously-
+  partitioned context to legacy un-namespaced keyspace, `Some(did)` to
+  confine the write to the per-DID partition. The `Option<_>` shape is
+  the deliberate v1-beta-frozen contract; passing `None` on a
+  per-principal write site is a footgun (silently routes to the legacy
+  un-partitioned keyspace). **Construction discipline:** any production
+  caller threading a per-principal write MUST use `Some(principal_cid)`
+  and treat `None` as the legacy/test-fixture-only shape.
 - `WriteContext::namespace_did(&self) -> Option<&Cid>` accessor.
 - The C1 cross-DID non-leak invariant (doc-block on `benten_graph::WriteContext` in `crates/benten-graph/src/lib.rs`) — structural: keys under per-DID prefix derived from
   `Cid::as_bytes()`; never collide with legacy `n:`/`e:`/`es:`/`et:`
@@ -519,9 +532,10 @@ v1-beta-and-forward contract.
 **Verification mechanism:**
 - `cargo-public-api` baseline `docs/public-api/benten-graph.txt`
   (regenerated at the G-CORE-9 build-out wave per build-backlog row 1).
-- `crates/benten-graph/tests/tf1_write_context_namespace_did_*.rs`
-  (G-CORE-1 canary pin family) + existing
-  `tf1_989_cross_did_partition_isolation.rs` pin.
+- `crates/benten-graph/tests/tf1_989_cross_did_partition_isolation.rs`
+  (G-CORE-1 canary pin; the historical `tf1_write_context_namespace_did_*.rs`
+  glob family was consolidated into this single pin file post-G-CORE-1
+  landing — corrected per R6-R2-FP-C cite-grep-verify discipline).
 - A new no-regression test that scans `WriteContext` builder code paths
   for accidental `namespace_did = None` overrides post-write.
 
@@ -653,8 +667,11 @@ each codepoint = SWAPPABLE within the framing):**
   ratified values exactly (a single golden-file test).
 - Existing `tf3a_*` + `tf4_*` tests pin typed-reject behavior.
 - G-CORE-3c's conformance test corpus
-  (`crates/benten-crypto-suite/tests/conformance_*.rs`) exercises all 7
-  swap-matrix arms — these tests are part of the freeze (CI lane).
+  (`crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs`
+  + `crates/benten-crypto-suite/tests/tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs`
+  + `crates/benten-crypto-suite/tests/tf4_pure_pq_gated_audit_landed.rs`)
+  exercises all 7 swap-matrix arms — these tests are part of the freeze
+  (CI lane).
 - The P2P-interop conformance lane (item 14) MUST run on every push and
   pass for v1-beta to ship.
 - Item 4 byte-pin tests cover the wire envelope.
@@ -1480,7 +1497,7 @@ H+1.1; explicit re-open justification required).
 ### 15.d — `AuthorizationGrant` envelope = ONE signed artifact
 
 **Frozen surfaces:**
-- `crates/benten-caps/src/authorization_grant.rs:233` `pub struct
+- `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant` `pub struct
   AuthorizationGrant`:
   - `ucan: UcanEnvelope` (the UCAN half)
   - `key_material: GrantKeyMaterial` (the key-material half; **renamed**
@@ -1500,9 +1517,11 @@ H+1.1; explicit re-open justification required).
 
 **ARCHITECTURAL CONCERN — second name collision (orchestrator-decided
 per distinctive-angle).** Two `KeyMaterial` types at HEAD: (i)
-`crates/benten-caps/src/authorization_grant.rs:166` (the GRANT-bearing
-handle carrying audience binding + paths); (ii)
-`crates/benten-crypto-suite/src/aead.rs:85` (the AEAD-bearing key).
+`crates/benten-caps/src/authorization_grant.rs::GrantKeyMaterial` (the GRANT-bearing
+handle carrying audience binding + paths; post-G-CORE-9 row 7 rename;
+historical name `KeyMaterial`); (ii)
+`crates/benten-crypto-suite/src/aead.rs::AeadKeyMaterial` (the AEAD-bearing key;
+post-G-CORE-9 row 7 rename; historical name `KeyMaterial`).
 Distinct semantics; same name. **Renames LANDED at G-CORE-9
 V1-FROZEN-INTERFACE row 7 (commit `dd12f394`):**
 `benten_caps::KeyMaterial` → `GrantKeyMaterial`;

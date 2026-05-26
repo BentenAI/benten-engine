@@ -63,9 +63,6 @@ BlobError::CidMismatch
 BlobError::Graph
 ChainValidationError::ChainNotNarrowing
 ChunkSinkError::ProducerWallclockExceeded
-CompileError::Build
-CompileError::Parse
-CompileError::Semantic
 CoreError::CidParse
 CrdtError::CanonicalBytesImport
 CrdtError::LoroInternal

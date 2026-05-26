@@ -93,6 +93,13 @@ fn bench_wait_round_trip_no_io(c: &mut Criterion) {
         SuspensionOutcome::Complete(_) => panic!(
             "WAIT reference handler must suspend; G3-A is misconfigured if Complete is returned"
         ),
+        // R6-R2-FP Item 6 (Row D-17): `#[non_exhaustive]` forward-compat
+        // guard. A future-3rd-variant surfaces as a bench-fail with a
+        // clear message rather than silently mis-driving the benchmark.
+        _ => panic!(
+            "SuspensionOutcome: unknown variant — bench expects \
+             Suspended at this point (R6-R2-FP Item 6 / D-17 non_exhaustive)"
+        ),
     };
 
     // Serialize once to capture the envelope bytes used by the resume leg.

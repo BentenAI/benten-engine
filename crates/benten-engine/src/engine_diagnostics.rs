@@ -75,12 +75,11 @@ impl Engine {
                         // per device per D-PHASE-3-25.
                         let device_cid =
                             *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                        let ctx = benten_caps::CapWriteContext {
-                            label: primary_label,
-                            pending_ops: ops,
-                            device_cid,
-                            ..Default::default()
-                        };
+                        // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+                        let mut ctx = benten_caps::CapWriteContext::default();
+                        ctx.label = primary_label;
+                        ctx.pending_ops = ops;
+                        ctx.device_cid = device_cid;
                         // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
                         if let Err(cap_err) = p.check_write_with_audience(&ctx) {
                             self.inner.record_cap_write_denied(&scopes);
@@ -381,6 +380,35 @@ impl Engine {
     /// Returns [`EngineError::Cap`] when the caller lacks `debug:read`.
     /// Backend read failures bubble through [`EngineError::Graph`].
     pub fn diagnose_read(&self, cid: &Cid) -> Result<DiagnosticInfo, EngineError> {
+        self.diagnose_read_inner(None, cid)
+    }
+
+    /// **R6 R2 FP-B (L10-MAJ-1 closure):** Class-B-β attributed-read
+    /// companion of [`Engine::diagnose_read`]. Threads `principal` onto
+    /// the gate + verdict `ReadContext.actor_cid` so a future per-
+    /// principal `debug:read` gate keys correctly. Behaviour at v1-beta
+    /// matches the un-attributed surface (the canonical `debug:read`
+    /// gate does not yet key on `actor_cid`); the seam is the load-
+    /// bearing migration point for napi per CLAUDE.md baked-in #18.
+    ///
+    /// # Errors
+    /// Forwards [`Engine::diagnose_read`] errors.
+    pub fn diagnose_read_as(
+        &self,
+        principal: &Cid,
+        cid: &Cid,
+    ) -> Result<DiagnosticInfo, EngineError> {
+        self.diagnose_read_inner(Some(*principal), cid)
+    }
+
+    /// Inner seam shared by [`Engine::diagnose_read`] +
+    /// [`Engine::diagnose_read_as`]. `principal=None` is the user-facing
+    /// default; `Some(cid)` is the Class-B-β attributed call.
+    fn diagnose_read_inner(
+        &self,
+        principal: Option<Cid>,
+        cid: &Cid,
+    ) -> Result<DiagnosticInfo, EngineError> {
         // Gate on `debug:read`. We thread the probe through the configured
         // policy's check_read with a canonical `"debug"` label so a
         // Phase-1 GrantBackedPolicy + grant("...", "store:debug:read")
@@ -393,12 +421,12 @@ impl Engine {
             // attestation CID into the debug:read gate ReadContext so
             // heterogeneous policies dispatch per-device per D-PHASE-3-25.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::ReadContext {
-                label: "debug".into(),
-                target_cid: Some(*cid),
-                device_cid,
-                ..Default::default()
-            };
+            // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+            let mut ctx = benten_caps::ReadContext::default();
+            ctx.label = "debug".into();
+            ctx.target_cid = Some(*cid);
+            ctx.device_cid = device_cid;
+            ctx.actor_cid = principal;
             if let Err(e) = policy.check_read(&ctx) {
                 // Normalise to CapError::Denied on the diagnostic path —
                 // a DeniedRead on this gate is itself the denial signal.
@@ -431,12 +459,12 @@ impl Engine {
                 // / cap-g16bp-3): thread device-DID-attestation CID for
                 // diagnostic-replay symmetry with the gate path above.
                 let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                let ctx = benten_caps::ReadContext {
-                    label: label.clone(),
-                    target_cid: Some(*cid),
-                    device_cid,
-                    ..Default::default()
-                };
+                // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+                let mut ctx = benten_caps::ReadContext::default();
+                ctx.label.clone_from(&label);
+                ctx.target_cid = Some(*cid);
+                ctx.device_cid = device_cid;
+                ctx.actor_cid = principal;
                 match policy.check_read(&ctx) {
                     Err(CapError::DeniedRead { required, .. }) => Some(required),
                     _ => None,

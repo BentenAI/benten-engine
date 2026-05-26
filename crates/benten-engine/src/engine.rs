@@ -1399,17 +1399,14 @@ impl Engine {
             // mirror.
             if let Some(policy) = self.policy.as_ref() {
                 let scope = format!("{zone}:write");
-                let ctx = benten_caps::CapWriteContext {
-                    label: zone.to_string(),
-                    actor_cid: peer_actor_cid,
-                    scope: scope.clone(),
-                    is_privileged: false,
-                    actor_hint: None,
-                    pending_ops: Vec::new(),
-                    authority: benten_caps::WriteAuthority::User,
-                    device_cid: None,
-                    audience_did: None,
-                };
+                // R6-R2-FP Item 6 (Row D-17): `CapWriteContext` is
+                // `#[non_exhaustive]`; construct via default + field
+                // mutation per the Bundle 3 forward-compat pattern.
+                let mut ctx = benten_caps::CapWriteContext::default();
+                ctx.label = zone.to_string();
+                ctx.actor_cid = peer_actor_cid;
+                ctx.scope = scope.clone();
+                ctx.authority = benten_caps::WriteAuthority::User;
                 // R6 R1 FP-F4 §S3c (Row D-3-c partial close per Δv3-2):
                 // route through `check_write_with_audience` (the §8-E
                 // hook #3 enrichment surface). Default impl delegates
@@ -1473,16 +1470,21 @@ impl Engine {
                 // form for peer_node_ids absent from the local registry.
                 // The literal-empty-set short-circuit catches the
                 // truly-empty-input case (which IS the structural defense
-                // when peer_node_ids is empty); the synthesized-fallback
-                // hardening (rejecting `node-id:N`-prefixed DIDs as
-                // unresolvable) IS DEFERRED to G-COMP-1 per
-                // V1-FROZEN-INTERFACE-DEFERRED.md Row D-18 because the
-                // default-Noop test fixtures rely on the synthesized
-                // fallback admitting (test scenarios register no
-                // peer-DIDs); the hardening would over-fire there. The
-                // proper closure couples the synthesized-fallback reject
-                // to substantive-rechecker-installed detection (NOT the
-                // always-mounted Noop path).
+                // when peer_node_ids is empty).
+                //
+                // **R6-R2-FP Item 9 (Row D-18 closure):** synthesized-
+                // fallback hardening — when a substantive (non-Noop)
+                // rechecker is installed, reject synthesized `node-id:N`
+                // DIDs as unresolvable BEFORE consulting the rechecker.
+                // The substantive-rechecker-detection couple (via
+                // `ManifestEnvelopeRechecker::is_substantive`) prevents
+                // over-firing under the default-Noop test fixtures which
+                // intentionally don't register peer-DIDs. Defense-in-depth:
+                // even though substantive `Production*Rechecker` impls
+                // SHOULD reject `node-id:`-prefixed DIDs on their own,
+                // the engine substrate now enforces this structurally so
+                // a forgetful impl can't admit by accident (CLAUDE.md #18
+                // Layer-3 structural-always-on).
                 match resolved_dids.into_iter().next() {
                     None => {
                         // (b) unresolvable-peer-DID at the merge-recheck
@@ -1498,12 +1500,104 @@ impl Engine {
                         });
                     }
                     Some(peer_did_str) => {
+                        // R6-R2-FP Item 9 (Row D-18): substantive-
+                        // rechecker-detection-coupled synthesized-fallback
+                        // reject. The Noop default returns
+                        // `is_substantive() = false` so test fixtures
+                        // continue to admit synthesized DIDs (the
+                        // pre-Item-9 behavior). Production rechecker
+                        // impls inherit `is_substantive() = true` and
+                        // opt-into the structural hardening.
+                        if rechecker.is_substantive()
+                            && crate::manifest_envelope_recheck::is_synthesized_node_id(
+                                &peer_did_str,
+                            )
+                        {
+                            return Err(EngineError::Other {
+                                code: ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny,
+                                message: format!(
+                                    "apply_atrium_merge: synthesized-fallback peer-DID \
+                                     '{peer_did_str}' rejected under substantive \
+                                     manifest-envelope rechecker at merge boundary \
+                                     (zone='{zone}' key='{key}') — fail-CLOSED per \
+                                     Row D-18 substantive-rechecker-detection couple \
+                                     (CLAUDE.md #18 Layer-3 structural-always-on)"
+                                ),
+                            });
+                        }
                         let outcome = rechecker.recheck_row(&peer_did_str, zone, key);
+                        // R6 R2 FP-B (L2-R2-MAJOR-6 closure / Row D-6 wire):
+                        // route the outcome through the sync-hydrate consumer
+                        // BEFORE the row-reject decision so both the merge
+                        // boundary AND the handshake boundary share the same
+                        // typed-rejection contract. The hydrate consumer
+                        // accepts the typed ErrorCode form, so we map the
+                        // outcome to its code first then consult both. The
+                        // hydrate consumer returns Ok(()) on
+                        // Admitted/NotApplicable and a typed
+                        // HandshakeError::PayloadMalformed otherwise; we
+                        // surface its rejection as the typed engine error
+                        // (parity with the row-reject path; deduplication
+                        // happens at the `outcome_to_row_reject` call below
+                        // — the hydrate consumer is the FORENSIC parity arm,
+                        // not a duplicate reject pathway).
+                        let outcome_code =
+                            crate::manifest_envelope_recheck::outcome_to_error_code(&outcome);
+                        if let Err(hydrate_err) =
+                            benten_sync::handshake::sync_hydrate_consume_recheck_outcome(
+                                outcome_code,
+                                zone,
+                                key,
+                            )
+                        {
+                            // FORENSIC: log the parity rejection for
+                            // observability; the downstream
+                            // `outcome_to_row_reject` is the engine-side
+                            // typed-error surface.
+                            tracing::debug!(
+                                target: "benten_engine::sync_hydrate_parity",
+                                zone = %zone,
+                                key = %key,
+                                error = %hydrate_err,
+                                "sync_hydrate_consume_recheck_outcome rejected at merge \
+                                 boundary — typed reject also surfacing via \
+                                 outcome_to_row_reject"
+                            );
+                        }
                         crate::manifest_envelope_recheck::outcome_to_row_reject(
                             outcome, zone, key,
                         )?;
                     }
                 }
+            }
+
+            // R6 R2 FP-B (L2-R2-MAJOR-1 closure / Row D-1 wire):
+            // **chain-bearing admit_write_chain at the sync-merge per-row
+            // boundary.** Pre-FP-B: apply_atrium_merge's terminal write
+            // routed only through `append_version` whose admit_write_chain
+            // frame was `engine_internal` (the "1 of 13 chain-bearing
+            // sites — namely the delegate_capability site only" narrative).
+            // Post-FP-B: each row presents a `with_chain(peer_actor_cid,
+            // peer_did)` frame so the WriteBoundaryChainValidator observes
+            // the actual peer-DID at row admission. The Noop default still
+            // returns `NotApplicable` (engines without a production
+            // validator are unaffected); a production validator catches
+            // chains whose root is not a registered user-DID at the sync
+            // merge boundary (closing the asymmetry where outbound writes
+            // were chain-walked but inbound sync rows were not).
+            if let (Some(actor_cid), Some(peer_did)) = (
+                peer_actor_cid,
+                atrium
+                    .resolve_peer_dids(&seed.peer_node_ids)
+                    .await
+                    .into_iter()
+                    .next(),
+            ) {
+                self.admit_write_chain(
+                    &crate::write_boundary_chain_validator::WriteAdmissionFrame::with_chain(
+                        &actor_cid, &peer_did,
+                    ),
+                )?;
             }
 
             // **COLLAPSE (P3) — J8 envelope-ceiling AND.** The single
@@ -1626,12 +1720,36 @@ impl Engine {
         // single-user single-device behavior. Phase-4+ AI-agent /
         // handler-attribution flows that call `set_actor_cid(...)`
         // observably retain principal identity across sync merges.
+        //
+        // R6 R2 batch-A Item 4 (Path G substantive close):
+        // `capability_grant_cid` is now populated from `peer_actor_cid`
+        // (the chain-anchor CID threaded through the per-row
+        // `WriteAdmissionFrame::with_chain(peer_actor_cid, peer_did)`
+        // admit_write_chain call above) rather than the zero-Cid
+        // sentinel. `peer_actor_cid` IS structurally the grant-CID
+        // anchor at the inbound-sync per-row boundary (per the
+        // `delegate_capability` precedent at engine_caps.rs:629 where
+        // `source_grant_cid` IS the chain anchor `with_chain` consumes).
+        // Path G scope is the **LOCAL-origin (this-hop) substantive
+        // population**; multi-hop preservation across
+        // `apply_atrium_merge` → outbound-sync → next-peer-merge is
+        // OUT of Path G scope (Row D-27 / G-COMP-1 deferred; semantic
+        // redesign required because `StampedValue` (`crates/benten-sync/
+        // src/crdt.rs:174-181`) does not carry an upstream-grant slot
+        // and `apply_atrium_merge` builds the AttributionFrame fresh
+        // from per-row context rather than reconstructing from the
+        // upstream peer's AttributionFrame).
+        //
+        // 3-lens unanimous Path G triangulation: lens artifacts at
+        // `.addl/phase-4-meta/path-f-{sync-merge-arch,crypto-cap,
+        // wire-format-relay,sync-merge-arch-FINAL-cross-lens}-lens.json`.
         let attribution = benten_eval::AttributionFrame {
             actor_cid: self
                 .effective_actor_cid()
                 .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32])),
             handler_cid: Cid::from_blake3_digest([0u8; 32]),
-            capability_grant_cid: Cid::from_blake3_digest([0u8; 32]),
+            capability_grant_cid: peer_actor_cid
+                .unwrap_or_else(|| Cid::from_blake3_digest([0u8; 32])),
             sandbox_depth: 0,
             peer_did_set: if peer_did_set.is_empty() {
                 None
@@ -2086,6 +2204,73 @@ impl<B: GraphBackend> EngineGeneric<B> {
         &self,
     ) -> &Arc<crate::install_record_replay::InstallRecordReplayStore> {
         &self.install_record_replay_store
+    }
+
+    /// **R6 R2 batch-A Item 2 (Row D-3-a substantive close)** — return
+    /// an [`InstallConsentPolicy`] port adapter that bridges the
+    /// engine's configured [`CapabilityPolicy`] to the install
+    /// pipeline's `&dyn InstallConsentPolicy` parameter (the install
+    /// pipeline's CRITIC-2 F-1.2 port-shape; see
+    /// [`crate::capability_policy_install_consent::CapabilityPolicyInstallConsent`]).
+    ///
+    /// Pre-batch-A, callers had to manually construct
+    /// `CapabilityPolicyInstallConsent::new(Arc::clone(&engine_policy_arc))`
+    /// AND somehow extract the policy `Arc` from the engine (no public
+    /// accessor exists — `Engine::policy` is `pub(crate)` per the
+    /// Class B β sealed-discipline). Post-batch-A this accessor
+    /// returns a ready-to-pass adapter that wraps either the engine's
+    /// configured policy OR a [`NoAuthBackend`] (the same default the
+    /// engine itself uses when no policy is configured), so production
+    /// callers wire:
+    ///
+    /// ```ignore
+    /// let adapter = engine.install_consent_adapter();
+    /// let mut ports = InstallPorts {
+    ///     plugin_did_store: &mut store,
+    ///     cap_minter: &mut minter,
+    ///     private_namespace_provisioner: &mut provisioner,
+    ///     manifest_envelope_resolver: &resolver,
+    ///     install_record_replay_check: &mut replay_check,
+    ///     policy: &adapter,
+    /// };
+    /// ```
+    ///
+    /// without any boilerplate. The L6-r6r2-l6-1 substantive close:
+    /// a custom `CapabilityPolicy` impl passed to the builder now has
+    /// its `check_install_consent` invoked at install time via this
+    /// adapter (R6 R2 FP-B minted the adapter type; this accessor is
+    /// the auto-install completion).
+    ///
+    /// Engines built with no `.capability_policy(...)` get a
+    /// `NoAuthBackend`-wrapping adapter (admits every install — the
+    /// observable equivalent of the
+    /// [`benten_platform_foundation::install_consent::AdmitAllInstallConsent`]
+    /// default).
+    ///
+    /// [`InstallConsentPolicy`]: benten_platform_foundation::install_consent::InstallConsentPolicy
+    /// [`CapabilityPolicy`]: benten_caps::CapabilityPolicy
+    /// [`NoAuthBackend`]: benten_caps::NoAuthBackend
+    ///
+    /// # Deployment-shape gate
+    ///
+    /// This method is `#[cfg(not(target_arch = "wasm32"))]` because the
+    /// underlying `capability_policy_install_consent` module is itself
+    /// non-wasm32-only (per CLAUDE.md baked-in #17 deployment-shape
+    /// gate; the plugin install-consent path is full-peer-only — thin
+    /// compute surfaces / wasm32-unknown-unknown do not host plugin
+    /// install). Pairs with the wasm32-fixup `pub mod` cfg-gate at
+    /// `crates/benten-engine/src/lib.rs` (`feedback_cfg_gate_cascade_hygiene`
+    /// memory).
+    #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn install_consent_adapter(
+        &self,
+    ) -> crate::capability_policy_install_consent::CapabilityPolicyInstallConsent {
+        let policy: Arc<dyn benten_caps::CapabilityPolicy> = match self.policy.as_ref() {
+            Some(p) => Arc::clone(p),
+            None => Arc::new(benten_caps::NoAuthBackend),
+        };
+        crate::capability_policy_install_consent::CapabilityPolicyInstallConsent::new(policy)
     }
 
     /// **Refinement-audit-2026-05 Wave-E HELD #1197/#1146** — install

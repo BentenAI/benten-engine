@@ -109,13 +109,20 @@ async fn sync_replica_write_attribution_carries_device_did_alongside_parent() {
     //   - actor_cid = `effective_actor_cid()` which falls back to
     //     device_cid when set_actor_cid has not been called (single-
     //     user single-device case, exercised here).
-    //   - handler_cid + capability_grant_cid all-zero pre-handler-
-    //     attribution-flow landing.
+    //   - handler_cid all-zero pre-handler-attribution-flow landing.
     //   - sandbox_depth=0; sync slots carry the merge seed.
+    //
+    // R6 R2 batch-A Item 4 (Path G substantive close):
+    // `capability_grant_cid` is now populated from `peer_actor_cid`
+    // (= blake3 hash of the resolved peer-DID) rather than the
+    // zero-Cid sentinel — the inbound-sync per-row chain-anchor
+    // observable in the durable AttributionFrame bytes.
+    let peer_actor_cid =
+        benten_core::Cid::from_blake3_digest(*blake3::hash(b"did:key:peer-b-test").as_bytes());
     let frame_with_device = benten_eval::AttributionFrame {
         actor_cid: device_cid,
         handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         device_did: Some(format!("device-cid:{device_cid}")),
         peer_did_set: Some(std::collections::BTreeSet::from([
@@ -196,10 +203,15 @@ async fn sync_replica_explicit_actor_cid_decouples_from_device_cid() {
     // The expected frame uses the EXPLICIT actor_cid + device-cid-string
     // device_did. If the engine wrongly conflated the two we'd get
     // a CID matching the device-as-actor frame instead.
+    //
+    // R6 R2 batch-A Item 4: capability_grant_cid = peer_actor_cid
+    // (= blake3 hash of the resolved peer-DID) per Path G.
+    let peer_actor_cid =
+        benten_core::Cid::from_blake3_digest(*blake3::hash(b"did:key:peer-b-test").as_bytes());
     let expected_correct = benten_eval::AttributionFrame {
         actor_cid,
         handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         device_did: Some(format!("device-cid:{device_cid}")),
         peer_did_set: Some(std::collections::BTreeSet::from([
@@ -212,7 +224,7 @@ async fn sync_replica_explicit_actor_cid_decouples_from_device_cid() {
     let conflated_wrong = benten_eval::AttributionFrame {
         actor_cid: device_cid,
         handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         device_did: Some(format!("device-cid:{device_cid}")),
         peer_did_set: Some(std::collections::BTreeSet::from([
@@ -338,10 +350,15 @@ async fn inv_14_device_did_attribution_observable_in_production_runtime_arm() {
 
     // Reconstruct the frame the production-arm path is contracted to
     // mint (per cap-g16bp-1 RATIFIED Option A) and assert match.
+    //
+    // R6 R2 batch-A Item 4: capability_grant_cid = peer_actor_cid
+    // (= blake3 hash of the resolved peer-DID) per Path G.
+    let peer_actor_cid =
+        benten_core::Cid::from_blake3_digest(*blake3::hash(b"did:key:peer-prod").as_bytes());
     let expected_frame = benten_eval::AttributionFrame {
         actor_cid: device_cid,
         handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         device_did: Some(format!("device-cid:{device_cid}")),
         peer_did_set: Some(std::collections::BTreeSet::from([
@@ -363,7 +380,7 @@ async fn inv_14_device_did_attribution_observable_in_production_runtime_arm() {
     let device_less_frame = benten_eval::AttributionFrame {
         actor_cid: device_cid,
         handler_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
-        capability_grant_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        capability_grant_cid: peer_actor_cid,
         sandbox_depth: 0,
         device_did: None, // <- the would-fail-if-no-op'd dimension
         peer_did_set: Some(std::collections::BTreeSet::from([

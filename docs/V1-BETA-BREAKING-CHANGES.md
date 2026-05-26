@@ -176,8 +176,8 @@
 - **Migration path:** consumers consume the seam-half at v1-beta; substantive per-DID enforcement is G-COMP-1.
 
 ### G-CORE-9 R1 Bundle 11 — L2-MAJ-1 empty-peer-DID synthesized-fallback hardening (DEFERRED to G-COMP-1 Row D-18)
-- **Status:** **DEFERRED — not landed at v1-beta.** An initial always-on filter at engine.rs:1462 was attempted (commit `34053ed4`) then reverted (commit `3d6f4d66 — "defer L2-MAJ-1 synthesized-peer-DID hardening to G-COMP-1 Row D-18"`) because the always-on form over-fires for the default-Noop test fixtures which intentionally do not register peer-DIDs. The R2 lens (`r2-l2-adversarial-threat-model`) raised this stale claim as L2-R2-BLK-1; R2 fix-pass retenses this row to honesty.
-- **What v1-beta ships:** engine.rs:1463-1477 carries an inline comment naming the deferral rationale (the proper closure couples synthesized-fallback rejection to substantive-rechecker-installed detection; gap closes at Row D-4 closure when ProductionManifestEnvelopeRechecker becomes responsible for its own per-DID resolution).
+- **Status:** **DEFERRED — not landed at v1-beta.** An initial always-on filter at `crates/benten-engine/src/engine.rs::apply_atrium_merge` (symbol-form per §3.5b HARDENED point 3) was attempted (commit `34053ed4`) then reverted (commit `3d6f4d66 — "defer L2-MAJ-1 synthesized-peer-DID hardening to G-COMP-1 Row D-18"`) because the always-on form over-fires for the default-Noop test fixtures which intentionally do not register peer-DIDs. The R2 lens (`r2-l2-adversarial-threat-model`) raised this stale claim as L2-R2-BLK-1; R2 fix-pass retenses this row to honesty.
+- **What v1-beta ships:** `crates/benten-engine/src/engine.rs::apply_atrium_merge` carries an inline comment naming the deferral rationale at the `ManifestEnvelopeRecheckUnresolvedDeny` arm (the proper closure couples synthesized-fallback rejection to substantive-rechecker-installed detection; gap closes at Row D-4 closure when ProductionManifestEnvelopeRechecker becomes responsible for its own per-DID resolution).
 - **Why break-OK:** doc-honesty retense of an attempted-then-reverted change; no public-API impact.
 - **Migration path:** none — at v1-beta the always-mounted Noop rechecker admits everything per Compromise #26 disclosure; under a substantive ProductionRechecker (G-COMP-1 deliverable per Row D-4), the rechecker is responsible for synthesized-DID rejection. See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-18.
 
@@ -240,11 +240,11 @@ These are public-API tightens / additive surfaces named-deferred to a follow-up 
 
 - ~~**Row D-7 — §8-A Engine visibility cluster tighten + napi cascade**~~ **CLOSED at R6 R1 FP-A Bundle F2 (2026-05-24)** — the four methods (`Engine::get_node` → `pub(crate) fn read_node`, `Engine::put_node` → `pub(crate) fn put_node_inner`, `Engine::get_node_label_only` → `pub(crate) fn read_node_label_only`, `Engine::resolve_subgraph_cid_for_test` → `pub(crate) fn resolve_subgraph_cid_inner`) all tightened at v1-beta. Napi `Engine::get_node` migrated to `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)`. ~80 sibling-crate integration tests preserved via cfg-gated test-helper re-exports in `crates/benten-engine/src/testing.rs` (no per-test migration). External callers needing un-attributed reads use `Engine::read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, cid)` (the always-on sentinel constant minted at `crates/benten-engine/src/internal_principal.rs` + re-exported at the crate root). See V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-7~~ for forensic context.
 - **Row D-11 — `walk_share_scope_as` principal-bearing additive overload** (G-COMP-1 destination) — `Engine::walk_share_scope` is principal-unbearing at v1-beta; the principal-bearing variant for recipient-side path-tagged-key derivation is additive Composing-time enhancement per RATIFIED-S&C §R4.
-- **Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items** (G-COMP-1 destination) — Strategy::C → Reserved rename + 3 DSL ErrorCode mints (E_DSL_PARSE_ERROR reusing existing `pub const` + E_DSL_UNKNOWN_PRIMITIVE + E_DSL_MISSING_RESPOND); the obsolete `Strategy::C` naming + 3 ungranted DSL ErrorCodes ride into v1-beta wire bytes. (Per G-CORE-9 R3-FP L9-r3-MIN-1 closure: the wire string `E_DSL_PARSE_ERROR` is reused — the existing `pub const E_DSL_PARSE_ERROR` at `crates/benten-dsl-compiler/src/lib.rs::E_DSL_PARSE_ERROR` already occupies that slot; G-COMP-1 delivers the enum variant `DslParseError` + TS class `EDslParseError` mirror.)
+- ~~**Row D-19 — G-CORE-9 R1 Bundle 4 ESCALATED items**~~ **CLOSED at R6-R2-FP-integration-redo Group C (Cohort 8 above; 2026-05-25)** — Strategy::C → Reserved rename + 3 DSL ErrorCode mints landed atomically as the Row D-19 G-COMP-1 wave WIRE-NOW per the v1-beta-freeze-window auto-WIRE-NOW discipline. CATALOG_VARIANT_COUNT 194 → 197. See Cohort 8 above for full enumeration; see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` ~~Row D-19~~ for forensic context.
 - **Row D-17 (extended) — `#[non_exhaustive]` cascade for ~12+ lens-scoped pub types** (G-COMP-1 destination) — CapWriteContext / ReadContext / SuspensionOutcome + the extended set from L8-R2-MAJOR-CARRY-2 (UserViewInputPattern / TraceStep / StreamCursor / SubscribeCursor / EngineViewsHandle / AtriumConfig / SyncStatus + the outcome.rs 13-pub-struct set + benten-ivm SubgraphSpec/KernelInput/View* + benten-platform-foundation Vocab*/Scalar/RenderError + Mode). **Wire-bytes-load-bearing types (TypedOutputProjection + KernelOutput) were CLOSED at G-CORE-9 R2 (Bundle R2.8) and are NOT deferred.**
 - **Row D-20 — L6-r1-3 trybuild compile-fail regression backstop** (G-COMP-1 destination) — the CapabilityPolicy hard-seal MECHANISM IS structurally enforced by rustc at v1-beta; only the explicit negative-arm compile-fail test fixture is deferred.
 - ~~**Row D-22 — workspace `pub fn .*_for_test` `#[cfg]` gating sweep**~~ **CLOSED at R6 R1 FP-A Bundle F1.a-e (2026-05-24)** — workspace cfg-gating sweep COMPLETE. 70+ `pub fn .*_for_test*` declarations across 11 crates gated under `#[cfg(any(test, feature = "testing"))]` (or `feature = "test-helpers"` for benten-engine). 14 production-shaped items remain `pub` per the EXEMPT_PUB_ITEMS allow-list at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` + V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ EXEMPT section. 8 affected cargo-public-api baselines regenerated; 7 CI workflows extended `--features` lists with the 6 new `testing` chains. No-regression test pin lives at `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` (`no_ungated_pub_for_test_symbols_in_production_source` + `exempt_list_entries_all_exist`). See V1-FROZEN-INTERFACE-DEFERRED.md ~~Row D-22~~ for forensic context.
-- **Row D-25 — V1-BETA-BREAKING-CHANGES.md ledger completion sweep** (G-COMP-1 destination per R6-FP-D path-(b) close of L18-r6-1 + L18-r6-2) — at v1-beta this ledger enumerates 15 of ~42 PRs in the phase-4-meta-core window with substantive break-OK content (36% coverage); the remaining ~13 substrate-canary + Strategy-C-consolidation PRs (#1319 G-CORE-3a + #1323 G-CORE-3d + #1324 G-CORE-3b + #1307 G-CORE-2 + #1309 G-CORE-5 + #1311 G-CORE-4 + #1312 G-CORE-7 + #1325 Strategy-C wave-1 incl DSL chunk-1 + #1326 DSL chunk-2 + #1235/#1237 Wave-1/2 incl benten-graph trait shape + #1251 #707-trust-subset + the 6 Strategy-C drain batches #1261/#1262/#1269/#1277/#1282/#1290) carry cumulative ~+321 pub-surface additions + ~-75 pub-surface deletions left as a named-deferred completion sweep per HARD RULE 12 clause-(b). Closure: a G-COMP-1 wave authors per-PR Cohort 2 rows for the substrate canaries + 1 roll-up row for the Strategy-C drains. Forward-protection: brief-template mandate (mirror of Row D-22 sub-task 6) requires future fix-pass PRs to enumerate their own break-OK additions in the ledger as part of the §3.5b post-fix-doc-coupling pre-flight. Cross-cite: full per-PR enumeration + per-PR pub-delta evidence at `.addl/phase-4-meta/r6-l18-breaking-change.json` l18-r6-1 finding (the lens's path-(b) recommendation). The R4b-FP precedent (commit 8240a56c authoring Rows D-23 + D-24) validates the path-(b) machinery.
+- **Row D-25 — V1-BETA-BREAKING-CHANGES.md ledger completion sweep** (G-COMP-1 destination per R6-FP-D path-(b) close of L18-r6-1 + L18-r6-2) — at v1-beta this ledger enumerates 15 of ~42 PRs in the phase-4-meta-core window with substantive break-OK content (36% coverage); the remaining ~13 substrate-canary + Strategy-C-consolidation PRs (#1319 G-CORE-3a + #1323 G-CORE-3d + #1324 G-CORE-3b + #1307 G-CORE-2 + #1309 G-CORE-5 + #1311 G-CORE-4 + #1312 G-CORE-7 + #1325 Strategy-C wave-1 incl DSL chunk-1 + #1326 DSL chunk-2 + #1235 Wave-1/2 incl benten-graph trait shape (note: #1237 was CLOSED-not-merged; corrected per R6-R2-FP-C cite-grep-verify discipline) + #1251 #707-trust-subset + the 6 Strategy-C drain batches #1261/#1262/#1269/#1277/#1282/#1290) carry cumulative ~+321 pub-surface additions + ~-75 pub-surface deletions left as a named-deferred completion sweep per HARD RULE 12 clause-(b). Closure: a G-COMP-1 wave authors per-PR Cohort 2 rows for the substrate canaries + 1 roll-up row for the Strategy-C drains. Forward-protection: brief-template mandate (mirror of Row D-22 sub-task 6) requires future fix-pass PRs to enumerate their own break-OK additions in the ledger as part of the §3.5b post-fix-doc-coupling pre-flight. Cross-cite: full per-PR enumeration + per-PR pub-delta evidence at `.addl/phase-4-meta/r6-l18-breaking-change.json` l18-r6-1 finding (the lens's path-(b) recommendation). The R4b-FP precedent (commit 8240a56c authoring Rows D-23 + D-24) validates the path-(b) machinery.
 
 ---
 
@@ -327,6 +327,355 @@ D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
 
 ---
 
+## Cohort 7 — R6 R2 FP-A audience-pubkey BLOCKER + DropBundle truncation (this PR)
+
+This cohort lands at PR<R6-R2-FP-integration> (R6 R2 FP Strategy-C
+consolidation re-do, off post-PR-#1351 main, 2026-05-25). Closes the
+L2-R2-BLOCKER-1 audience_pubkey post-sign substitution access-theft
+hazard + L4-MAJ DropBundle inter-Recipe truncation sibling. Sharpens
+the previously-closed Row D-1 with the apply_atrium_merge per-row
+chain-bearing site (now 14 admit_write_chain sites; 2 chain-bearing).
+
+### Wire-format breaking change
+
+- **`BINDING_SIG_DOMAIN` v2 → v3** at
+  `crates/benten-caps/src/authorization_grant.rs::BINDING_SIG_DOMAIN`.
+  Pre-FP-A the `AuthorizationGrant.audience_pubkey` field lived
+  OUTSIDE the signed `binding_message` — a network adversary could
+  mutate `audience_pubkey` to her own bytes, connect to a producer with
+  her own iroh `EndpointId`, and the UcanBlobsHandler ARM 2
+  (audience-binding) check (`conn_pubkey == eve_pubkey ==
+  grant.audience_pubkey`) would MATCH while ARM 5 (binding-sig verify)
+  still verified because the bound `audience_binding` = CID(bob_pubkey)
+  was untouched. Silent access-theft (not just attribution-forgery).
+  Post-FP-A the `audience_pubkey` is folded in as the 6th binding-
+  message segment (`len_u32_le || pubkey_bytes`) AND the domain-tag
+  bumps v2 → v3. Domain-separation at segment 1 means v2-signed grants
+  fail re-verification under v3 (intended pre-tag behavior; no
+  v2-signed grants exist on the wire yet — test fixtures only).
+- **`DropBundle` per-recipe AAD extension** at
+  `crates/benten-drop/src/bundle.rs::DropBundle` consumption. The
+  per-`Recipe` AEAD seal now binds `aad_per_recipe` (position +
+  list-length) in addition to `aad_whole_content(plaintext_cid)`. Pre-
+  FP-A a malicious relay could DROP a `Recipe` from
+  `DropBundle.content: Vec<EncryptedContent>` and the recipient's
+  `consume_offline` iteration would still verify each remaining
+  per-Recipe AEAD tag individually (the AAD committed to neither
+  position nor list length) — silent delivery of a truncated bundle.
+  Post-FP-A the per-Recipe AAD binds both, so any drop fails AEAD
+  verification at the affected position. **No wire-format version bump
+  for `DropBundle`** because the existing `DropBundleVersion` enum is
+  the wire-version surface and the AAD-binding extension preserves the
+  on-wire byte layout (the AAD is computed at verify-time, not
+  serialized into the bundle).
+
+### Substrate honesty (Row D-1 sharpening; no public-API shape change)
+
+- **`apply_atrium_merge` per-row admit now CHAIN-BEARING** at
+  `crates/benten-engine/src/engine.rs::apply_atrium_merge`. Pre-FP-B
+  13 of 13 `admit_write_chain` sites passed
+  `WriteAdmissionFrame::engine_internal()`; only `delegate_capability`
+  was chain-bearing. Inbound-sync per-row writes routed through
+  `append_version` (engine_internal frame), so the
+  `WriteBoundaryChainValidator` never observed the peer-DID at row
+  admission. Post-FP-B the `apply_atrium_merge` per-row loop presents
+  `WriteAdmissionFrame::with_chain(peer_actor_cid, peer_did)`, closing
+  the asymmetry (outbound writes chain-walked, inbound sync rows now
+  also chain-walked). 14 admit_write_chain sites total; 2 chain-bearing
+  (`delegate_capability` + `apply_atrium_merge` per-row), 12
+  engine_internal. Behavior change: in deployments with a substantive
+  `WriteBoundaryChainValidator` installed, inbound-sync rows with a
+  peer-DID outside the user-as-root chain are now REJECTED at admission
+  (previously admitted silently as `engine_internal`).
+
+### Documentation / retract
+
+- **`V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15c retracted.** The
+  earlier D-15c framing (`audience_pubkey` as "deferred wire-format
+  add") was based on a misread of the v2 binding-message: D-15c
+  asserted that adding `audience_pubkey` to the binding-message was a
+  deferrable nicety, but the L2-R2-BLOCKER-1 cross-confirmation showed
+  it was a load-bearing access-theft defense. Row D-15c is now marked
+  `~~RETRACTED~~` with a pointer to this Cohort 7 entry.
+- **`V1-WIRE-FORMAT-INVENTORY.md` Item 6** updated to `BINDING_SIG_DOMAIN v3`
+  with the audience-pubkey binding context.
+- **`SECURITY-POSTURE.md`** updated with the L18-related callouts (no
+  open Compromise mints; closes via existing `BindingMismatch` +
+  `BindingSigInvalid` variants).
+
+### New ErrorCode mints
+
+None — this cohort closes through existing `BindingMismatch` +
+`BindingSigInvalid` variants. CATALOG_VARIANT_COUNT unchanged at 194.
+
+### Migration for downstream consumers
+
+- **Downstream re-issue grants signed under v2 must be re-signed under
+  v3.** The change is shape-preserving at the byte-layout level (one
+  new segment appended to the signed-payload preimage); only the
+  signature changes. Test fixtures using
+  `issue_with_nbf_for_test` are unaffected (the test helper signs over
+  the 6-segment payload directly).
+- **No code-change required** for callers that consume
+  `AuthorizationGrant` through the
+  `AuthorizationGrant::verify_binding` API — the helper internally
+  reconstructs the 6-segment payload under the v3 domain tag.
+- **`DropBundle` producers** must use the `aad_per_recipe`-aware seal
+  path (which is the only path on the post-FP-A surface; the prior
+  whole-content-AAD-only path was internal-only).
+- **`apply_atrium_merge` callers** with a substantive
+  `WriteBoundaryChainValidator` installed should audit their inbound-
+  sync admission behavior — peer-DIDs outside the user-as-root chain
+  are now REJECTED at admission instead of silently admitted.
+
+### Tests added (per pim-2 §3.6b sub-rule 4 substantive)
+
+- `crates/benten-caps/tests/tf3b_audience_substitution_post_sign_rejected.rs` (3 sub-tests; bare verify_binding API)
+- `crates/benten-sync/tests/tf3e_audience_substitution_arm2_arm5_integration.rs` (2 sub-tests; full handler dispatch)
+- `crates/benten-drop/tests/tf3d_inter_recipe_truncation_rejected.rs` (truncation defense)
+
+`would-FAIL-on-revert` verified per pim-18 §3.6f: surgical revert of
+`audience_pubkey` arg → `None` at both call sites caused 3/3 tf3b
+tests to FAIL with `Got: Ok(())` (silent admission). Post-fix: 3/3 +
+2/2 PASS.
+
+---
+
+# Cohort 8 — R6-R2-FP 9-item WIRE-NOW batch (consolidated; Groups A + B + C; 2026-05-25)
+
+This cohort consolidates the 9-item WIRE-NOW batch ratified by Ben (2026-05-25 LATE-MORNING #9 ADDENDUM) per the **v1-beta-freeze-window auto-WIRE-NOW discipline** (`feedback_orchestrator_defer_prediction_bias.md` amendment 2026-05-25): any DEFERRED.md row whose deferral rationale rests on "v1-beta-shippable as-is, fix post-tag" for a pub-API / wire-format / ErrorCode-catalog surface automatically flips to WIRE-NOW.
+
+**Sub-branch consolidation map (Strategy-C cascade)** — all merged into `phase-4-meta-core/r6-r2-fp-integration-redo` ; final integration HEAD = `66b02b37` (post-consolidation):
+
+| Group | Sub-branch SHA | Items closed |
+|---|---|---|
+| **Group C** (batch-c-dsl-catalog) | `13faa4b1` → consolidated at `3c95ed29` | Item 5: D-19 Strategy::C → Reserved rename + 3 DSL ErrorCode mints; CATALOG_VARIANT_COUNT 194 → 197 |
+| **Group A** (batch-a-crypto-identity) | `4bf64fba` → consolidated at `9cb059fb` | Items 2/3/4/7/8: L6 install-consent auto-install + L1 issuer_verifying_key self-bind + Path G AttributionFrame substantive + D-13 KDF info-tag + D-8 F3 anti-replay TOCTOU CAS |
+| **Group B** (batch-b-engine-structural) | `db0235e5` → consolidated at `66b02b37` | Items 6/9: D-17 `#[non_exhaustive]` partial cascade + D-18 synthesized-fallback hardening |
+| (pre-fix-up) wasm32-fixup | `ba0e5080` → consolidated at `59a8bc66` | 4 wasm32-unknown-unknown CI failures from FP-B cascade |
+| (pre-consolidation prep) | `ce7a3f38` | Cohort 8 PLANNED + Row D-27 mint + staged-memory cleanup |
+
+**Item 1 NOT in this cohort** — G-CORE-PQ-WIRE wave (PQ-hybrid Ed25519⊕ML-DSA-65 wire-in at 4 production sites + `benten_id::Keypair` cascade per Row D-26) sequenced as **separate 3-wave dispatch (PQ-WIRE-1 canary + PQ-WIRE-2 3-parallel + PQ-WIRE-3 consolidation)** per R0 plan at `.addl/phase-4-meta/g-core-pq-wire-r0-plan.md`. Sequenced AFTER PR #1356 merges to avoid trivial merge-conflict on `benten-id::keypair.rs`. Will become its own Cohort (likely Cohort 9 or 10 depending on intervening landings).
+
+Per-group entries follow below as Cohort 8 (Group X) subsections; provenance summary lines at end of file.
+
+---
+
+## Cohort 8 (Group C) — Row D-19 G-COMP-1 wave WIRE-NOW (this PR, Batch C)
+
+This cohort lands at PR<R6-R2-FP-integration-redo> Group C
+(R6-R2-batch-c-dsl-catalog sub-branch; 2026-05-25). Closes
+[`V1-FROZEN-INTERFACE-DEFERRED.md`](V1-FROZEN-INTERFACE-DEFERRED.md)
+**Row D-19** WIRE-NOW per the v1-beta-freeze-window auto-WIRE-NOW
+discipline: the obsolete `Strategy::C` naming + the 3 ungranted DSL
+ErrorCodes would otherwise ride into v1-beta wire bytes + freeze as
+SemVer-breaking-post-tag-fix surfaces. Atomic 4-surface §3.5g rename
++ 3 first-class ErrorCode mints land in a single commit.
+
+### Wire-format breaking change
+
+- **`E_VIEW_STRATEGY_C_RESERVED` → `E_VIEW_STRATEGY_RESERVED`** at
+  `crates/benten-errors/src/lib.rs::ErrorCode::ViewStrategyReserved`
+  (variant `ViewStrategyCReserved` → `ViewStrategyReserved`; `as_str`
+  arm + `from_str` arm both swap to the new wire string atomically).
+  This is a **wire-format byte-shape breaking change** for any
+  consumer pattern-matching on the on-disk / on-the-wire string
+  `"E_VIEW_STRATEGY_C_RESERVED"`. The variant is a registration-time
+  refusal code (`Engine::register_user_view`), so the wire surface
+  is narrow: error-handling code in the napi binding + TS DSL
+  validator + downstream test code that asserted on the old string.
+
+### Public-API shape changes
+
+- **Rust enum variant rename:** `benten_errors::ErrorCode::ViewStrategyCReserved`
+  → `benten_errors::ErrorCode::ViewStrategyReserved`.
+- **Rust EngineError variant rename:** `benten_engine::error::EngineError::ViewStrategyCReserved`
+  → `benten_engine::error::EngineError::ViewStrategyReserved` (+ the
+  `pub use` re-export `benten_engine::EngineError::ViewStrategyReserved`).
+- **TS class rename:** `EViewStrategyCReserved` → `EViewStrategyReserved`
+  in `packages/engine/src/errors.generated.ts` (auto-regen from
+  `docs/ERROR-CATALOG.md`; cargo-public-api + ts-public-api baselines
+  updated in same commit).
+- **TS Strategy union widened:** `type Strategy = "A" | "B" | "C"`
+  → `type Strategy = "A" | "B" | "C" | "Reserved"`. The new
+  `"Reserved"` value is the canonical name; `"C"` is retained as a
+  backward-compat alias (the napi parser accepts both → maps to
+  `Strategy::Reserved` Rust-side).
+- **`EngineError.diagnostic()` JSON `kind` rename:** `"viewStrategyCReserved"`
+  → `"viewStrategyReserved"` in `error.rs::diagnostic()`. Consumers
+  pattern-matching on the JSON `kind` field must update.
+
+### New first-class ErrorCode mints (CATALOG_VARIANT_COUNT 194 → 197)
+
+Three pre-existing DSL `pub const benten_dsl_compiler::E_DSL_*`
+wire-string constants gain first-class typed catalog mirrors per
+§3.5g pub-error-variant-first-class-mirror discipline. Pre-mint the
+napi `mapNativeError` boundary collapsed all three to
+`ErrorCode::Unknown(string)`; first-class mirrors let TS consumers
+match by typed BentenError subclass (`EDslParseError` /
+`EDslUnknownPrimitive` / `EDslMissingRespond`).
+
+- **`E_DSL_PARSE_ERROR` → `ErrorCode::DslParseError`** (TS class
+  `EDslParseError`). Mirror of `CompileError::Parse(Diagnostic)` at
+  `crates/benten-dsl-compiler/src/lib.rs`. Wire string unchanged.
+- **`E_DSL_UNKNOWN_PRIMITIVE` → `ErrorCode::DslUnknownPrimitive`** (TS
+  class `EDslUnknownPrimitive`). Mirror of `CompileError::Semantic(_)`.
+  Wire string unchanged.
+- **`E_DSL_MISSING_RESPOND` → `ErrorCode::DslMissingRespond`** (TS
+  class `EDslMissingRespond`). Mirror of the `CompileError::Build(_)`
+  sub-case where the inner `Diagnostic.error_code == E_DSL_MISSING_RESPOND`
+  (the other Build sub-case — `E_DSL_INVALID_SHAPE` — continues to
+  route through the pre-existing `ErrorCode::DslInvalidShape`).
+  Wire string unchanged.
+
+### Drift-detect baseline removals
+
+`scripts/drift-detect-error-variant-mirror-baseline.txt` removes
+the 3 grandfathered lines `CompileError::{Parse,Semantic,Build}`
+per §3.5g item 6 amendment closure — the variants now have
+first-class typed mirrors, so the drift-detect scanner enforces
+the rule going forward.
+
+### Why break-OK at v1-beta
+
+The v1-beta tag locks public-API + wire-format + ErrorCode catalog
+surfaces. Deferring this rename / mint until post-v1-beta would
+require a SemVer-breaking fix-pass. The atomic 4-surface §3.5g
+rename + the 3 catalog mints land NOW in the freeze window per the
+"obsolete names + ungranted DSL ErrorCodes ride into v1-beta wire
+bytes" forensic argument (Row D-19 anchor).
+
+### Migration path
+
+- **Rust consumers:** rename `ErrorCode::ViewStrategyCReserved` →
+  `ErrorCode::ViewStrategyReserved`; `EngineError::ViewStrategyCReserved
+  { view_id }` → `EngineError::ViewStrategyReserved { view_id }`. The
+  field shape (single `view_id: String`) is unchanged.
+- **TS consumers:** `import { EViewStrategyCReserved }` →
+  `import { EViewStrategyReserved }`. Code asserting on the wire
+  string `"E_VIEW_STRATEGY_C_RESERVED"` → `"E_VIEW_STRATEGY_RESERVED"`.
+  Code asserting on the JSON `kind` field `"viewStrategyCReserved"`
+  → `"viewStrategyReserved"`.
+- **DSL ErrorCode consumers:** existing string-keyed switches on
+  `E_DSL_PARSE_ERROR` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND`
+  continue to work; the wire strings are unchanged. TS consumers
+  upgrading to typed-class dispatch can now `instanceof EDslParseError`
+  etc. against the typed `BentenError` subclasses surfaced by the
+  napi `mapNativeError` boundary (previously these collapsed to the
+  base `BentenError("E_UNKNOWN")` class).
+## Cohort 8 (Group A) — R6 R2 batch-A substrate-honesty WIRE-NOW additions (this PR)
+
+This cohort lands at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C
+consolidation re-do; 2026-05-25) — substrate-honesty WIRE-NOW pass
+per Ben's 2026-05-25 ratification (Group A: L6 install-consent auto-
+install + L1 self-bind + Path G capability_grant_cid + D-13 codepoint
+info-tag + D-8 F3 CAS).
+
+### Wire-format breaking changes
+
+- **`BINDING_SIG_DOMAIN` v3 → v4** at
+  `crates/benten-caps/src/authorization_grant.rs::BINDING_SIG_DOMAIN`.
+  Pre-Item-3 the `AuthorizationGrant.issuer_verifying_key` field
+  lived OUTSIDE the signed `binding_message` — a network adversary
+  could swap `issuer_verifying_key` to an attacker-controlled
+  Ed25519 pubkey + forge a fresh `binding_sig` over the 6-segment
+  message using their own signing key; `verify_binding` would
+  Ed25519-verify under the SWAPPED vk + admit the grant. Classical
+  "self-bind" invariant gap. Post-Item-3 the
+  `issuer_verifying_key` is folded in as the 7th binding-message
+  segment (fixed 32-byte Ed25519 vk, no length prefix). Domain-
+  separation at segment 1 means v3-signed grants fail re-verification
+  under v4 (intended pre-tag behavior; no v3-signed grants exist on
+  the wire outside test fixtures). Net signed-surface invariant
+  shape: 7 fields (6 inherited from Cohort 7 v3 + the new self-bind).
+- **`structural_kdf::derive_root` signature change** at
+  `crates/benten-crypto-suite/src/structural_kdf.rs::derive_root`.
+  Pre-Item-7 the function took `(k_principal, root_cid)` and
+  derived `K(root) = HKDF-SHA256(K_principal, info="root" || root_cid)`.
+  Post-Item-7 the function takes a third `cipher_suite_codepoint:
+  u16` parameter and derives `K(root) = HKDF-SHA256(K_principal,
+  info = "root:codepoint:" || codepoint_le_bytes || root_cid)`. The
+  info-tag binding closes the attacker-controlled envelope codepoint
+  → key newtype attack class (Row D-13). All callers updated. K_root
+  keys derived under different codepoints now observably differ →
+  cross-codepoint key reuse is structurally impossible. **Wire-format-
+  coupled** because K_root feeds downstream AEAD wrap; pre-Item-7
+  K_root values are not byte-compatible with post-Item-7. Pre-v1-beta-
+  freeze with no users yet — P-III no-users-yet override applies.
+
+### Public-API additions (additive)
+
+- **`Engine::install_consent_adapter()`** at
+  `crates/benten-engine/src/engine.rs::Engine::install_consent_adapter`.
+  Returns a
+  `crate::capability_policy_install_consent::CapabilityPolicyInstallConsent`
+  bound to the engine's configured `CapabilityPolicy` (or
+  `NoAuthBackend` if none). Row D-3-a substantive close: a custom
+  `CapabilityPolicy` impl passed via
+  `EngineBuilder::capability_policy(...)` now has its
+  `check_install_consent` hook consulted at install time when the
+  caller threads `engine.install_consent_adapter()` into
+  `InstallPorts.policy`. Pre-Item-2 the L6-r6r2-l6-1 adapter existed
+  but had ZERO production callers wrapping the engine's CONFIGURED
+  policy. Additive (no breakage).
+- **`KVBackend::compare_and_insert`** at
+  `crates/benten-graph/src/backend.rs::KVBackend::compare_and_insert`.
+  Atomic check-absent-then-insert primitive (default impl: non-
+  atomic get + put; RedbBackend override: single-txn atomic).
+  Row D-8 closure: `benten_caps::FrameReplayMarker::mark_and_check_frame`
+  now routes through this primitive so concurrent inbound
+  `apply_atrium_merge` presentations of the same session-nonce cannot
+  both observe "absent" and both admit (the F3 anti-replay TOCTOU
+  class). Default impl preserves behavior for in-RAM / non-
+  transactional backends; on the redb-backed backend redb write-txn
+  exclusivity gates the CAS. Additive (new trait method with
+  default impl — non-breaking for external impls).
+- **`AuthorizationGrant::with_swapped_issuer_verifying_key_for_test`**
+  at `crates/benten-caps/src/authorization_grant.rs`. Test-helper
+  swap of the `issuer_verifying_key` field for adversarial pins.
+  `#[cfg(any(test, feature = "testing"))]`-gated.
+
+### Substrate-honesty (Path G; no public-API shape change)
+
+- **`apply_atrium_merge` AttributionFrame.capability_grant_cid now
+  substantively populated** at
+  `crates/benten-engine/src/engine.rs::apply_atrium_merge`. Pre-Path-G
+  the slot was the zero-Cid sentinel even when the per-row
+  `admit_write_chain` call presented a substantive grant CID anchor.
+  Post-Path-G the slot equals `peer_actor_cid` (= blake3 hash of
+  the resolved peer-DID — the same value the per-row chain-bearing
+  `admit_write_chain(WriteAdmissionFrame::with_chain(...))` already
+  threads). The slot is now observable in the durable AttributionFrame
+  bytes minted at the merge Version Node; downstream forensic /
+  audit pipelines can reconstruct "what grant authorized this
+  inbound write?" from the durable merge-Node properties. Scope:
+  LOCAL-origin (this-hop) substantive population. Multi-hop
+  preservation across `apply_atrium_merge` → outbound-sync →
+  next-peer-merge is OUT of Path G scope (Row D-27 / G-COMP-1
+  deferred). **Observable behavior change:** existing tests that
+  asserted `capability_grant_cid: zero` at the merge AttributionFrame
+  (sync_replica_attribution.rs + tests/integration/atrium_two_device.rs)
+  updated to assert the substantive shape.
+
+### New ErrorCode mints
+
+None — Items 2/3/4/7/8 close through existing variants
+(`PluginInstallConsentDenied`, `BindingMismatch`,
+`DeviceAttestationForged`). CATALOG_VARIANT_COUNT unchanged at 194.
+
+### Tests added (§3.6f SUBSTANTIVE-arm)
+
+- `crates/benten-engine/tests/r6_r2_batch_a_install_consent_adapter_auto_install.rs` (2 tests)
+- `crates/benten-caps/tests/tf3b_issuer_verifying_key_substitution_post_sign_rejected.rs` (2 tests)
+- `crates/benten-engine/tests/r6_r2_batch_a_path_g_capability_grant_cid_substantive_at_apply_atrium_merge.rs` (1 test)
+- `crates/benten-crypto-suite/src/structural_kdf.rs::tests::derive_root_distinguishes_cipher_suite_codepoints` (new unit pin)
+- `crates/benten-caps/tests/tf_d8_frame_replay_marker_cas_atomic_under_concurrent_inbound.rs` (2 tests)
+
+All assert production-entry-point invocation + observable consequence
++ demonstrate would-FAIL-on-revert in test docstrings.
+
+---
+
 ## How to consume this ledger
 
 1. **Adopting v1-beta:** read Cohort 1 + 2 first (wire-format + public-API shape changes you must adapt to).
@@ -338,4 +687,88 @@ D-6, D-18 in V1-FROZEN-INTERFACE-DEFERRED.md all close at this PR.
 
 ## Provenance
 
-Authored at G-CORE-9 R1 fix-pass (this PR; 2026-05-24) per L18-r1-2/3 closure. Subsequent R2-Rn rounds verify completeness vs the `git log 8141b94..HEAD` walk.
+Authored at G-CORE-9 R1 fix-pass (PR #1346; 2026-05-24) per L18-r1-2/3 closure. Subsequent R2-Rn rounds verify completeness vs the `git log 8141b94..HEAD` walk.
+
+Cohort 6 landed at PR #1351 (R6 R1 FP Strategy-C consolidation; 2026-05-25).
+
+Cohort 7 landed at PR<R6-R2-FP-integration-redo> (R6 R2 FP Strategy-C consolidation re-do off post-#1351 main; 2026-05-25) — closes the L2-R2-BLOCKER-1 audience_pubkey BLOCKER + L4-MAJ DropBundle inter-Recipe AAD sibling + Row D-1 sharpening (apply_atrium_merge per-row chain-bearing admit).
+
+Cohort 8 PLANNED entry RESOLVED — superseded by FINAL Cohort 8 entries from batch-a + batch-b + batch-c consolidating into ONE canonical Cohort 8 at the end of the Strategy-C cascade. Per-group fragmentary "Cohort 8 landed at..." Provenance lines are temporary; final canonical Cohort 8 unification happens after batch-a + batch-b merge.
+
+Cohort 8 Group C (batch-c) — `phase-4-meta-core/r6-r2-batch-c-dsl-catalog` sub-branch at `13faa4b1` (2026-05-25); closes Row D-19 atomic 4-surface §3.5g rename `Strategy::C` → `Strategy::Reserved` + 3 first-class DSL ErrorCode mints (`E_DSL_PARSE_ERROR` / `E_DSL_UNKNOWN_PRIMITIVE` / `E_DSL_MISSING_RESPOND`); CATALOG_VARIANT_COUNT 194 → 197.
+
+Cohort 8 Group A (batch-a-crypto-identity) — `phase-4-meta-core/r6-r2-batch-a-crypto-identity` sub-branch at `4bf64fba` (2026-05-25); substrate-honesty WIRE-NOW pass: L6 install-consent auto-install (Row D-3-a) + L1 issuer_verifying_key self-bind (BINDING_SIG_DOMAIN v3→v4) + Path G capability_grant_cid substantive at apply_atrium_merge + Row D-13 structural_kdf info-tag codepoint-binding + Row D-8 F3 anti-replay TOCTOU CAS substrate.
+
+Cohort 8 Group B (batch-b-engine-structural) — `phase-4-meta-core/r6-r2-batch-b-engine-structural` sub-branch at `db0235e5` (2026-05-25); D-17 `#[non_exhaustive]` cascade on CapWriteContext + ReadContext + SuspensionOutcome (~75 sites) + D-18 synthesized-fallback structural hardening at engine substrate (`ManifestEnvelopeRechecker::is_substantive()` default method + apply_atrium_merge per-row short-circuit).
+
+---
+
+## Cohort 8 (Group B) — R6-R2 FP 9-item WIRE-NOW batch (Group B subset: D-17 + D-18) (this PR)
+
+**Ratification date:** 2026-05-25 (Ben-authorized as the v1-beta-freeze-window auto-WIRE-NOW per the orchestrator-defer-prediction-bias amendment).
+
+### Item 6 — `#[non_exhaustive]` cascade on `CapWriteContext` + `ReadContext` + `SuspensionOutcome` (D-17 partial closure)
+
+**What changed.** Three public types in the lens-named set now carry `#[non_exhaustive]`:
+
+- `benten_caps::policy::CapWriteContext` (`crates/benten-caps/src/policy.rs`)
+- `benten_caps::policy::ReadContext` (`crates/benten-caps/src/policy.rs`)
+- `benten_engine::engine_wait::SuspensionOutcome` (`crates/benten-engine/src/engine_wait.rs`)
+
+**Why it's breaking.** Cross-crate consumers can no longer construct these types via struct-literal syntax (`CapWriteContext { ... }`) — including the FRU form `CapWriteContext { field: val, ..Default::default() }`. The compile-time guard makes future additive field additions non-breaking for downstream consumers (the SemVer-asymmetric win the freeze contract requires). Cross-crate `match` consumers on `SuspensionOutcome` now require a `_` wildcard arm.
+
+**What you must change.** Migrate all out-of-crate construction to:
+
+```rust
+let mut ctx = CapWriteContext::default();
+ctx.label = "post".into();
+ctx.actor_cid = Some(actor_cid);
+// ... mutate fields directly
+```
+
+For `ReadContext` dual-shape (label + cid) callers, prefer the new typed constructor:
+
+```rust
+let ctx = ReadContext::by_label_and_cid(label, cid, device_cid);
+```
+
+Cross-crate `match` arms on `SuspensionOutcome` add a wildcard:
+
+```rust
+match outcome {
+    SuspensionOutcome::Complete(o) => { /* ... */ },
+    SuspensionOutcome::Suspended(h) => { /* ... */ },
+    _ => { /* forward-compat guard */ },
+}
+```
+
+**In-tree migration completed in this PR:**
+
+- `crates/benten-engine/src/{engine,engine_wait,engine_crud,engine_diagnostics,engine_subscribe,engine_views,primitive_host}.rs` — 7 production call sites converted to default+mutation pattern
+- `crates/benten-engine/tests/r6_r1_fp_f4_s3c_*.rs` — 2 sites
+- `crates/benten-caps/tests/*.rs` — 12 test files / ~44 sites mechanically converted
+- `bindings/napi/src/wait.rs` + `crates/benten-eval/benches/wait_suspend_resume_latency.rs` — wildcard arms added
+
+**Audit test:** `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` deferral-comments for the 3 types lifted; SuspensionOutcome arm-coverage pin now exercises the `_` wildcard guard.
+
+**cargo-public-api baselines:** `docs/public-api/benten-caps.txt` + `docs/public-api/benten-engine.txt` regenerated.
+
+**REMAINING (NOT in this PR; G-COMP-1 destination):** the Row D-17 R2 EXTENSION set (~40+ additional pub types across `benten-engine` outcome.rs + `benten-ivm` view + `benten-platform-foundation` materializer + `benten-core` Subgraph cluster) — see `docs/V1-FROZEN-INTERFACE-DEFERRED.md::Row D-17` annotation for sub-class carve-outs.
+
+### Item 9 — D-18 synthesized-fallback structural hardening at engine substrate
+
+**What changed.** `ManifestEnvelopeRechecker` trait gains a default method:
+
+```rust
+fn is_substantive(&self) -> bool { true }
+```
+
+`NoopManifestEnvelopeRechecker` overrides to return `false`. `Engine::apply_atrium_merge`'s per-row recheck loop now short-circuits with `ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny` when both `rechecker.is_substantive()` AND `is_synthesized_node_id(peer_did_str)` hold — BEFORE calling `rechecker.recheck_row`. This is the engine substrate's structural defense-in-depth so a faulty production rechecker impl that admits `node-id:N` synthesized DIDs is no longer reachable on this code path.
+
+**Why it's breaking (mild).** Third-party `ManifestEnvelopeRechecker` impls that override the default method (extremely unlikely at v1-beta — the trait is mostly Benten-internal) get a new opt-in API surface. Impls that DON'T override inherit the safe default (`true`).
+
+**Defense narrative.** CLAUDE.md #18 Layer-3 structural-always-on. Under any substantive rechecker, an adversarial peer presenting an unmapped `node-id:N` DID is rejected at the engine substrate regardless of rechecker behavior.
+
+**Regression-guard:** `crates/benten-engine/tests/r6_r2_fp_item_9_d18_substantive_rechecker_detection_couple.rs` — 5 test arms covering default `is_substantive()`, Noop override, faulty-admit-all rechecker rejection, resolvable-DID pass-through, and Noop-+-synthesized non-fire.
+
+**Coupling.** Per Row D-18, full closure couples to Row D-4 (the substantive `ProductionManifestEnvelopeRechecker` impl at G-COMP-1); Item 9's structural pin is the engine-substrate defense-in-depth that holds regardless of which rechecker is mounted.

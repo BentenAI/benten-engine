@@ -198,15 +198,47 @@ fn apply_atrium_merge_routes_device_trust_through_single_ceiling_seam() {
     //    seam. Assert the synthetic ctx still carries `device_cid:
     //    None` (provenance-label residual), NOT a re-threaded trust
     //    input, so the seam stays single (not parallel).
+    //
+    // R6-R2-FP Item 6 (Row D-17) shape-pattern update: D-17 added
+    // `#[non_exhaustive]` to `CapWriteContext` which forced all
+    // construction sites to migrate from struct-literal
+    // (`CapWriteContext { ..., device_cid: None, ... }`) to
+    // `CapWriteContext::default()` + field-mutation pattern. With the
+    // new pattern the literal string `device_cid: None` no longer
+    // appears in the construction site (the field is None via
+    // `Default::default()` instead). The COLLAPSE substantive
+    // invariant is unchanged — `Default` produces `device_cid: None`
+    // for the `Option<Cid>` field at the type level — but the
+    // source-grep assertion needs to accept BOTH patterns:
+    //
+    //   - LEGACY struct-literal: `device_cid: None` literal present
+    //   - NEW Default + field-mutation: `CapWriteContext::default()`
+    //     call (relies on Default producing None for the Option<Cid>)
+    //     AND NO `ctx.device_cid = Some(...)` re-threading anywhere
+    //
+    // Either pattern satisfies the COLLAPSE invariant. The forbidden
+    // pattern (which still recreates #707) is `ctx.device_cid =
+    // Some(...)` or `device_cid: Some(...)` — that's the regression
+    // this pin actually catches.
+    let has_legacy_explicit_none = body.contains("device_cid: None");
+    let has_default_pattern = body.contains("CapWriteContext::default()");
+    let has_forbidden_some_threading =
+        body.contains("device_cid: Some(") || body.contains(".device_cid = Some(");
+
     assert!(
-        body.contains("device_cid: None"),
+        (has_legacy_explicit_none || has_default_pattern) && !has_forbidden_some_threading,
         "COLLAPSE #605/#707-trust REGRESSION: the apply_atrium_merge \
-         per-row synthetic WriteContext no longer carries `device_cid: \
-         None`. Under the RATIFIED unified model the device-grain TRUST \
-         decision is the verified-ceiling AND at the single seam; \
-         re-threading device_cid as a trust input here recreates the \
-         exact #707 asymmetric-parallel-entry-point the COLLAPSE deletes \
-         (DECISION-RECORD §4a: device_cid is a provenance-label residual \
-         for the #1234 successor audit, not a sync-merge trust input)."
+         per-row synthetic WriteContext device_cid invariant violated. \
+         Required: EITHER `device_cid: None` (legacy struct-literal) OR \
+         `CapWriteContext::default()` (D-17 Default + field-mutation \
+         pattern, with `device_cid` left at Default's None). FORBIDDEN: \
+         any `ctx.device_cid = Some(...)` or `device_cid: Some(...)` \
+         threading at the synthetic-WriteContext site (recreates the \
+         #707 asymmetric-parallel-entry-point the COLLAPSE deletes; \
+         DECISION-RECORD §4a: device_cid is a provenance-label residual \
+         for the #1234 successor audit, NOT a sync-merge trust input). \
+         Observed: has_legacy_explicit_none={has_legacy_explicit_none}, \
+         has_default_pattern={has_default_pattern}, \
+         has_forbidden_some_threading={has_forbidden_some_threading}."
     );
 }

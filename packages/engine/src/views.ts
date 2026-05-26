@@ -20,8 +20,10 @@
 //   - `strategy === 'A'` is REFUSED with `E_VIEW_STRATEGY_A_REFUSED`
 //     because Strategy A is reserved for the 5 Phase-1 hand-written
 //     views (Rust-only — not user-registerable from TS).
-//   - `strategy === 'C'` is REFUSED with `E_VIEW_STRATEGY_C_RESERVED`
-//     (Phase-3+ Z-set / DBSP cancellation slot).
+//   - `strategy === 'Reserved'` (and the backward-compat alias `'C'`) is
+//     REFUSED with `E_VIEW_STRATEGY_RESERVED` (Phase-3+ Z-set / DBSP
+//     cancellation slot; renamed from the prior `'C'` spelling at
+//     G23-0a + Row D-19 G-COMP-1 wave Cohort 8 atomic 4-surface rename).
 //
 // The refusal paths are pinned in two places — the napi layer and the
 // engine layer — so both bypass paths surface a typed error rather than
@@ -92,9 +94,10 @@ export function validateUserViewSpec(spec: UserViewSpec): string | null {
     if (
       spec.strategy !== "A" &&
       spec.strategy !== "B" &&
-      spec.strategy !== "C"
+      spec.strategy !== "C" &&
+      spec.strategy !== "Reserved"
     ) {
-      return `registerUserView spec.strategy: must be 'A' | 'B' | 'C' (got ${JSON.stringify(spec.strategy)})`;
+      return `registerUserView spec.strategy: must be 'A' | 'B' | 'Reserved' (or 'C' as backward-compat alias) (got ${JSON.stringify(spec.strategy)})`;
     }
   }
   // r6-ivm-3 fail-loud reject: when the spec id matches one of the 4

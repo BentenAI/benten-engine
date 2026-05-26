@@ -247,17 +247,92 @@ fn dsl_io_variant_routes_through_first_class_dsl_io_error_typed_code() {
 /// #839 substantive arm + §3.5g cross-language mirror: the Rust
 /// `E_DSL_BACKEND_REJECTED` constant matches the TS-side
 /// `EDslBackendRejected.code` value (the canonical wire shape).
-/// Without this pin the §3.5g cross-language atomic-update discipline
-/// is paper-only; with it the drift triggers a compile-time literal
-/// mismatch (in Rust) + a runtime test failure (in TS-side suite).
+///
+/// **SUBSTANTIVE-not-SHAPE rewrite (closes L9-r6r2-MINOR-3):** the
+/// prior shape `assert_eq!(E_DSL_BACKEND_REJECTED, "E_DSL_BACKEND_REJECTED")`
+/// was a self-equality tautology — both sides were Rust-internal
+/// constants in the same crate; no possible no-op would cause it to
+/// fail (the LHS const value can ONLY drift via the same commit that
+/// edits the RHS literal). This rewrite reads the TS-side
+/// `packages/engine/src/errors.generated.ts` at test time and asserts
+/// the Rust `E_DSL_BACKEND_REJECTED` constant matches what TS declares
+/// as `EDslBackendRejected.code`.
+///
+/// **Would-FAIL-on-revert (pim-18 §3.6f):**
+/// - Rename Rust-side const value (e.g. `E_DSL_BACKEND_REJECTED` →
+///   `"E_DSL_REJECTED_BY_BACKEND"`) without atomically updating TS →
+///   the source-scan finds the old TS string → assertion fires.
+/// - Rename TS-side class.code value without atomically updating Rust →
+///   the source-scan finds the new TS string → assertion fires.
+/// - Delete the TS-side `EDslBackendRejected.code` line entirely →
+///   source-scan finds zero hits → assertion fires.
+///
+/// (The §3.5g cross-language atomic-update discipline is no longer
+/// paper-only at this pin: drift on EITHER side surfaces as a test
+/// failure.)
 #[test]
 fn dsl_839_error_code_mirror_matches_typescript_constant_literal() {
-    // The literal must match what packages/engine/src/errors.generated.ts
-    // declares as `EDslBackendRejected.code`. If a future agent renames
-    // either side without the §3.5g atomic update, this test catches the
-    // drift at the Rust-side build (the TS-side side is caught by the
-    // catalog round-trip test in benten-errors stable_shape.rs).
-    assert_eq!(E_DSL_BACKEND_REJECTED, "E_DSL_BACKEND_REJECTED");
+    use std::fs;
+    use std::path::PathBuf;
+
+    // Walk from crates/benten-dsl-compiler/ → workspace root →
+    // packages/engine/src/errors.generated.ts.
+    let workspace_root: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("CARGO_MANIFEST_DIR has parent")
+        .parent()
+        .expect("crates/ has parent")
+        .to_path_buf();
+    let ts_path = workspace_root.join("packages/engine/src/errors.generated.ts");
+    assert!(
+        ts_path.exists(),
+        "expected TS-side errors.generated.ts at {ts_path:?}; \
+         file relocation requires updating this cross-language mirror pin"
+    );
+
+    let ts_body = fs::read_to_string(&ts_path).expect("read errors.generated.ts");
+
+    // Locate the EDslBackendRejected class body, find its `static
+    // readonly code = "..."` literal, and assert the literal matches
+    // the Rust-side `E_DSL_BACKEND_REJECTED` value.
+    //
+    // Pattern (per the generator's stable shape; see line 3092-3093 at
+    // landing time):
+    //   export class EDslBackendRejected extends BentenError {
+    //     static readonly code = "E_DSL_BACKEND_REJECTED";
+    let class_marker = "export class EDslBackendRejected extends BentenError";
+    let class_start = ts_body.find(class_marker).unwrap_or_else(|| {
+        panic!(
+            "TS-side class EDslBackendRejected not found in {ts_path:?}; \
+             cross-language §3.5g mirror gap — Rust-side const \
+             E_DSL_BACKEND_REJECTED has NO TS counterpart"
+        )
+    });
+    // Slice from the class declaration forward; find the
+    // `static readonly code = "..."` line within the class body.
+    let class_slice = &ts_body[class_start..];
+    let code_marker = "static readonly code = \"";
+    let code_field_start = class_slice.find(code_marker).unwrap_or_else(|| {
+        panic!(
+            "TS-side EDslBackendRejected class found but `static readonly code = \"...\"` \
+             field missing within class body; cross-language §3.5g mirror gap"
+        )
+    });
+    let after_marker = &class_slice[code_field_start + code_marker.len()..];
+    let ts_code_literal_end = after_marker.find('"').expect(
+        "TS-side EDslBackendRejected.code literal missing closing quote — \
+         malformed errors.generated.ts",
+    );
+    let ts_code_literal = &after_marker[..ts_code_literal_end];
+
+    assert_eq!(
+        ts_code_literal, E_DSL_BACKEND_REJECTED,
+        "§3.5g cross-language drift: Rust-side `E_DSL_BACKEND_REJECTED` = {:?} \
+         but TS-side `EDslBackendRejected.code` = {:?} (read from {:?}); \
+         atomic-update either both sides or neither (the §3.5g item 6 \
+         amendment makes this drift FIX-NOW per HARD RULE 12).",
+        E_DSL_BACKEND_REJECTED, ts_code_literal, ts_path
+    );
 }
 
 // ---------------------------------------------------------------------------

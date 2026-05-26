@@ -528,12 +528,9 @@ impl PrimitiveHost for Engine {
             (_, None) => benten_caps::ReadContext::by_label_only(label),
             (false, Some(cid)) => {
                 let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-                benten_caps::ReadContext {
-                    label: label.to_string(),
-                    target_cid: Some(*cid),
-                    device_cid,
-                    ..Default::default()
-                }
+                // R6-R2-FP Item 6 (Row D-17): non_exhaustive — use typed
+                // constructor for the label-AND-cid dual-shape case.
+                benten_caps::ReadContext::by_label_and_cid(label, *cid, device_cid)
             }
         };
         self.check_read_ctx(&ctx)
@@ -569,10 +566,27 @@ impl PrimitiveHost for Engine {
                 // caller-controlled elapsed; `InstantMonotonicSource`
                 // returns true-monotonic. Either way, wall-clock drift
                 // cannot make the cadence skip.
+                //
+                // **R6 R2 FP-B (L6-r6r2-l6-7 closure — Compromise #1
+                // wall-clock TOCTOU half wire):** consult the configured
+                // policy's `wallclock_refresh_ceiling()` via the
+                // canonical `evaluator_delegation::wallclock_refresh_ceiling_for`
+                // helper (mirror of `iterate_batch_boundary_for`); falls
+                // back to the engine-side static
+                // `WALLCLOCK_REFRESH_CEILING` when no policy is
+                // configured. Pre-FP-B the policy method had ZERO
+                // production callers (verified 2026-05-25); this is the
+                // load-bearing wire-up that closes Compromise #1's
+                // wall-clock half. A revocation-sensitive backend
+                // (Phase-3 UCAN with a short TTL) can now tighten the
+                // bound observably.
+                let ceiling = self.policy().map_or(WALLCLOCK_REFRESH_CEILING, |p| {
+                    benten_caps::evaluator_delegation::wallclock_refresh_ceiling_for(p)
+                });
                 let elapsed = self.monotonic_source.elapsed_since_start();
                 let due = match frame.last_refresh {
                     None => true, // first boundary always fires
-                    Some(last) => elapsed.saturating_sub(last) >= WALLCLOCK_REFRESH_CEILING,
+                    Some(last) => elapsed.saturating_sub(last) >= ceiling,
                 };
                 if due {
                     frame.last_refresh = Some(elapsed);
@@ -605,11 +619,10 @@ impl PrimitiveHost for Engine {
             // policies can dispatch per-device per D-PHASE-3-25.
             // `None` for legacy / non-attested engines.
             let device_cid = *benten_graph::MutexExt::lock_recover(&self.inner.device_cid);
-            let ctx = benten_caps::CapWriteContext {
-                label: required.to_string(),
-                device_cid,
-                ..Default::default()
-            };
+            // R6-R2-FP Item 6 (Row D-17): non_exhaustive — default+mutate.
+            let mut ctx = benten_caps::CapWriteContext::default();
+            ctx.label = required.to_string();
+            ctx.device_cid = device_cid;
             // R6 R1 FP-F4 §S3c: route through `check_write_with_audience`.
             // Default delegates to `check_write`; audience-aware impls
             // observe `ctx.audience_did` (left as None at evaluator-

@@ -25,13 +25,32 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use benten_caps::{CapError, CapWriteContext, CapabilityPolicy, ReadContext};
+use benten_engine::{Engine, EngineError};
 use benten_errors::ErrorCode;
 
-/// Custom policy that records every check_per_delegation call.
-#[derive(Default)]
+const SOURCE_PLUGIN_DID: &str = "did:key:z6MkSourcePluginS3bSiblingHarnessAAAAAAAAAAAAAA";
+const TARGET_PLUGIN_DID: &str = "did:key:z6MkTargetPluginS3bSiblingHarnessBBBBBBBBBBBBBB";
+
+/// Custom policy that records every check_per_delegation call (with
+/// observed-argument capture) + can deny on flag.
 struct CountingPolicy {
     per_delegation_calls: Arc<AtomicUsize>,
     deny_per_delegation: bool,
+    observed_source: std::sync::Mutex<Vec<String>>,
+    observed_target: std::sync::Mutex<Vec<String>>,
+    observed_scope: std::sync::Mutex<Vec<String>>,
+}
+
+impl CountingPolicy {
+    fn new(deny: bool) -> Self {
+        Self {
+            per_delegation_calls: Arc::new(AtomicUsize::new(0)),
+            deny_per_delegation: deny,
+            observed_source: std::sync::Mutex::new(Vec::new()),
+            observed_target: std::sync::Mutex::new(Vec::new()),
+            observed_scope: std::sync::Mutex::new(Vec::new()),
+        }
+    }
 }
 
 impl benten_caps::__sealed_for_workspace_tests::Sealed for CountingPolicy {}
@@ -45,11 +64,20 @@ impl CapabilityPolicy for CountingPolicy {
     }
     fn check_per_delegation(
         &self,
-        _source: &str,
-        _target: &str,
-        _scope: &str,
+        source: &str,
+        target: &str,
+        scope: &str,
     ) -> Result<(), CapError> {
         self.per_delegation_calls.fetch_add(1, Ordering::SeqCst);
+        self.observed_source
+            .lock()
+            .unwrap()
+            .push(source.to_string());
+        self.observed_target
+            .lock()
+            .unwrap()
+            .push(target.to_string());
+        self.observed_scope.lock().unwrap().push(scope.to_string());
         if self.deny_per_delegation {
             Err(CapError::Denied {
                 required: "cap:per-delegation:any".to_string(),
@@ -61,70 +89,250 @@ impl CapabilityPolicy for CountingPolicy {
     }
 }
 
-/// **§S3b arm 1 — typed code surfaces on hook denial.**
-/// `delegate_capability` maps any `Err(_)` from `check_per_delegation`
-/// to `ErrorCode::PluginPerDelegationDenied` per the forensic-
-/// discrimination contract (CRITIC-1 FIX-5).
+/// Construct a real Engine + install the supplied counting policy +
+/// mint a user-rooted grant whose `actor` is the source plugin-DID.
+/// Returns (engine, tempdir, source_grant_cid).
+fn engine_with_policy_and_seeded_grant(
+    policy: Arc<CountingPolicy>,
+) -> (Engine, tempfile::TempDir, benten_core::Cid) {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let path = tempdir.path().join("s3b-sibling.redb");
+    let engine = benten_engine::EngineBuilder::new()
+        .capability_policy(Box::new(CountingPolicyHandle(policy.clone())))
+        .open(&path)
+        .expect("engine opens with custom policy");
+
+    // Mint the source grant: actor = SOURCE_PLUGIN_DID, non-private
+    // scope so Step 2a (private-namespace clause) doesn't short-circuit.
+    let source = engine
+        .caps()
+        .grant_capability(SOURCE_PLUGIN_DID, "store:s3b-sibling:write")
+        .expect("mint source grant under custom policy");
+    (engine, tempdir, source)
+}
+
+/// Wrapper that forwards the trait to the shared Arc<CountingPolicy>
+/// (the engine takes a `Box<dyn CapabilityPolicy>` so the policy itself
+/// must live behind a Box; we hand-thread the Arc for observation).
+struct CountingPolicyHandle(Arc<CountingPolicy>);
+
+impl benten_caps::__sealed_for_workspace_tests::Sealed for CountingPolicyHandle {}
+
+impl CapabilityPolicy for CountingPolicyHandle {
+    fn check_write(&self, ctx: &CapWriteContext) -> Result<(), CapError> {
+        self.0.check_write(ctx)
+    }
+    fn check_read(&self, ctx: &ReadContext) -> Result<(), CapError> {
+        self.0.check_read(ctx)
+    }
+    fn check_per_delegation(
+        &self,
+        source: &str,
+        target: &str,
+        scope: &str,
+    ) -> Result<(), CapError> {
+        self.0.check_per_delegation(source, target, scope)
+    }
+}
+
+/// **§S3b arm 1 — production-arm: delegate_capability surfaces typed
+/// PluginPerDelegationDenied on hook denial.**
+/// Builds a real Engine with a denying policy, mints a source grant,
+/// invokes `engine.caps().delegate_capability(...)`. The hook denial
+/// must surface as the typed `PluginPerDelegationDenied` code at the
+/// production boundary (engine_caps.rs:582).
+///
+/// **Would-FAIL-on-revert (pim-18 §3.6f):** delete the
+/// `policy.check_per_delegation(...)` wiring at engine_caps.rs:572-590
+/// → delegation admits → `expect_err` fails. Equivalent: re-introduce
+/// the trait-direct `assert_eq!(code.as_str(), ...)` shape → the
+/// production wiring is no longer exercised.
 #[test]
 fn delegate_capability_surfaces_plugin_per_delegation_denied_code() {
-    // The typed-code mapping is verified by the existence of the new
-    // ErrorCode variant + the engine_caps.rs site wiring. The
-    // end-to-end integration test (with a real grant + plugin DID
-    // store) is exercised by the existing G27-A/D/G24-D-FP suite;
-    // this arm pins the variant's existence + reachability.
-    let code = ErrorCode::PluginPerDelegationDenied;
-    assert_eq!(code.as_str(), "E_PLUGIN_PER_DELEGATION_DENIED");
-}
+    let policy = Arc::new(CountingPolicy::new(/*deny=*/ true));
+    let (engine, _td, source) = engine_with_policy_and_seeded_grant(policy.clone());
 
-/// **§S3b arm 2 — counting policy observes the hook invocation.**
-#[test]
-fn check_per_delegation_observes_invocation() {
-    let policy = CountingPolicy {
-        per_delegation_calls: Arc::new(AtomicUsize::new(0)),
-        deny_per_delegation: false,
-    };
-    let _ = policy.check_per_delegation("did:key:zSource", "did:key:zTarget", "cap:write:posts");
-    let _ = policy.check_per_delegation("did:key:zSource", "did:key:zOther", "cap:write:comments");
-    assert_eq!(policy.per_delegation_calls.load(Ordering::SeqCst), 2);
-}
+    let err = engine
+        .caps()
+        .delegate_capability(&source, TARGET_PLUGIN_DID, &[])
+        .expect_err(
+            "LOAD-BEARING: denying CapabilityPolicy::check_per_delegation MUST surface \
+             typed PluginPerDelegationDenied at delegate_capability boundary; an \
+             `Ok(cid)` here means the hook wiring at engine_caps.rs:572-590 was \
+             reverted (Layer-3 §8-E hook #2 regression)",
+        );
 
-/// **§S3b arm 3 — deny-arm returns Err.**
-#[test]
-fn check_per_delegation_returns_err_on_denial() {
-    let policy = CountingPolicy {
-        per_delegation_calls: Arc::new(AtomicUsize::new(0)),
-        deny_per_delegation: true,
-    };
-    let result = policy.check_per_delegation("did:key:zA", "did:key:zB", "cap:write:foo");
-    assert!(result.is_err());
-}
-
-/// **§S3b arm 4 — default impl admits all delegations.**
-/// The `CapabilityPolicy::check_per_delegation` default returns
-/// `Ok(())` so existing impls do NOT need to change.
-#[test]
-fn default_check_per_delegation_admits_all() {
-    // NoAuthBackend uses the default impl of check_per_delegation
-    // (admit-all) because it doesn't override.
-    let backend = benten_caps::NoAuthBackend::new();
+    match err {
+        EngineError::Other { code, ref message } => {
+            assert_eq!(
+                code,
+                ErrorCode::PluginPerDelegationDenied,
+                "must surface typed PluginPerDelegationDenied; got {code:?}"
+            );
+            assert!(
+                message.contains("check_per_delegation"),
+                "diagnostic must reference the hook surface; got: {message}"
+            );
+        }
+        other => panic!("expected EngineError::Other PluginPerDelegationDenied; got {other:?}"),
+    }
+    // Verify the hook actually FIRED at least once.
     assert!(
-        backend
-            .check_per_delegation("did:key:zA", "did:key:zB", "cap:any")
-            .is_ok()
+        policy.per_delegation_calls.load(Ordering::SeqCst) >= 1,
+        "denying policy MUST have been consulted via delegate_capability; \
+         per_delegation_calls={}",
+        policy.per_delegation_calls.load(Ordering::SeqCst)
     );
 }
 
-/// **§S3b arm 5 — capability-rejection ordering at delegate_capability.**
+/// **§S3b arm 2 — production-arm: counting policy observes hook
+/// invocation through delegate_capability end-to-end.**
+/// Admitting policy + real engine + real delegate_capability call →
+/// per_delegation_calls increments + delegation succeeds.
 ///
-/// The check_per_delegation hook fires AFTER Step 2b's shares-policy
-/// resolver (private-namespace check + manifest envelope) per the
-/// site wiring at engine_caps.rs. Reverting the wiring would cause
-/// the hook to be silently skipped — surface code drift via the
-/// type-shape assertion below: the hook IS in the CapabilityPolicy
-/// trait + the engine consults it.
+/// **Would-FAIL-on-revert (pim-18 §3.6f):** delete the
+/// `policy.check_per_delegation(...)` call at engine_caps.rs:572-590
+/// → counter stays at 0 → assertion fires.
 #[test]
-fn check_per_delegation_is_callable_on_arc_dyn_capability_policy() {
-    let policy: Arc<dyn CapabilityPolicy> = Arc::new(benten_caps::NoAuthBackend::new());
-    let result = policy.check_per_delegation("did:key:zSource", "did:key:zTarget", "cap:write:any");
-    assert!(result.is_ok());
+fn check_per_delegation_observes_invocation_via_delegate_capability() {
+    let policy = Arc::new(CountingPolicy::new(/*deny=*/ false));
+    let (engine, _td, source) = engine_with_policy_and_seeded_grant(policy.clone());
+
+    let _delegation_cid = engine
+        .caps()
+        .delegate_capability(&source, TARGET_PLUGIN_DID, &[])
+        .expect("admitting CapabilityPolicy → delegation admits end-to-end");
+
+    let observed = policy.per_delegation_calls.load(Ordering::SeqCst);
+    assert!(
+        observed >= 1,
+        "LOAD-BEARING: production delegate_capability path MUST consult \
+         check_per_delegation; observed={observed}"
+    );
+
+    // Verify the hook received the exact source-principal-DID, plugin-DID,
+    // and scope strings the engine threaded through.
+    let sources = policy.observed_source.lock().unwrap();
+    let targets = policy.observed_target.lock().unwrap();
+    let scopes = policy.observed_scope.lock().unwrap();
+    assert!(
+        sources.iter().any(|s| s == SOURCE_PLUGIN_DID),
+        "source-principal-DID forwarding gap: observed_sources={sources:?}"
+    );
+    assert!(
+        targets.iter().any(|t| t == TARGET_PLUGIN_DID),
+        "target-plugin-DID forwarding gap: observed_targets={targets:?}"
+    );
+    assert!(
+        scopes.iter().any(|s| s == "store:s3b-sibling:write"),
+        "cap-scope forwarding gap: observed_scopes={scopes:?}"
+    );
+}
+
+/// **§S3b arm 3 — production-arm: deny + admit divergence at
+/// delegate_capability boundary.** Two engine instances differ ONLY in
+/// the policy's `deny_per_delegation` flag; the admitting one returns
+/// Ok(cid), the denying one returns Err. This pins the production path
+/// observably-FAILS-CLOSED on hook denial vs admits-on-Ok.
+#[test]
+fn admit_vs_deny_diverges_at_delegate_capability_boundary() {
+    // Admit path
+    let admit_policy = Arc::new(CountingPolicy::new(/*deny=*/ false));
+    let (engine_admit, _td1, source_admit) =
+        engine_with_policy_and_seeded_grant(admit_policy.clone());
+    let admit_result =
+        engine_admit
+            .caps()
+            .delegate_capability(&source_admit, TARGET_PLUGIN_DID, &[]);
+    assert!(
+        admit_result.is_ok(),
+        "admitting CapabilityPolicy → delegate_capability MUST admit; got {admit_result:?}"
+    );
+
+    // Deny path
+    let deny_policy = Arc::new(CountingPolicy::new(/*deny=*/ true));
+    let (engine_deny, _td2, source_deny) = engine_with_policy_and_seeded_grant(deny_policy.clone());
+    let deny_result = engine_deny
+        .caps()
+        .delegate_capability(&source_deny, TARGET_PLUGIN_DID, &[]);
+    assert!(
+        deny_result.is_err(),
+        "denying CapabilityPolicy → delegate_capability MUST deny; got {deny_result:?}"
+    );
+
+    // Both paths consulted the hook (the divergence is in the hook
+    // return value, not whether the hook was called).
+    assert!(admit_policy.per_delegation_calls.load(Ordering::SeqCst) >= 1);
+    assert!(deny_policy.per_delegation_calls.load(Ordering::SeqCst) >= 1);
+}
+
+/// **§S3b arm 4 — production-arm: default impl admits delegation
+/// end-to-end (via NoAuthBackend at the engine boundary).** Mirrors
+/// existing precedent: a `NoAuthBackend`-policy engine successfully
+/// delegates because the trait default for `check_per_delegation`
+/// returns `Ok(())`.
+#[test]
+fn default_check_per_delegation_admits_via_engine_with_noauth_backend() {
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let path = tempdir.path().join("s3b-default-noauth.redb");
+    let engine = benten_engine::EngineBuilder::new()
+        .capability_policy(Box::new(benten_caps::NoAuthBackend::new()))
+        .open(&path)
+        .expect("engine opens with NoAuthBackend");
+    let source = engine
+        .caps()
+        .grant_capability(SOURCE_PLUGIN_DID, "store:default-noauth:write")
+        .expect("mint source grant under NoAuth");
+
+    let delegated = engine
+        .caps()
+        .delegate_capability(&source, TARGET_PLUGIN_DID, &[])
+        .expect(
+            "default check_per_delegation (NoAuthBackend → trait default Ok(())) \
+             MUST admit the delegation end-to-end",
+        );
+    assert!(!delegated.to_base32().is_empty());
+}
+
+/// **§S3b arm 5 — production-arm: hook fires AFTER Step-2b shares-
+/// policy resolver (ordering pin).** A private-namespace scope short-
+/// circuits at Step-2a with `PluginPrivateNamespaceDelegationForbidden`
+/// BEFORE the policy hook is consulted, so a DENYING policy installed
+/// for a private-namespace delegation still surfaces the
+/// PRIVATE-NAMESPACE error (not PerDelegationDenied). Reverting the
+/// wiring ordering would surface PerDelegationDenied here instead.
+///
+/// **Would-FAIL-on-revert (pim-18 §3.6f):** reorder so the policy hook
+/// fires before Step-2a → typed code shifts from
+/// `PluginPrivateNamespaceDelegationForbidden` to
+/// `PluginPerDelegationDenied`.
+#[test]
+fn check_per_delegation_fires_after_private_namespace_clause() {
+    let policy = Arc::new(CountingPolicy::new(/*deny=*/ true));
+    let (engine, _td, _source_unused) = engine_with_policy_and_seeded_grant(policy.clone());
+
+    // Mint a private-namespace grant (separate from the seeded one).
+    let private_source = engine
+        .caps()
+        .grant_capability(SOURCE_PLUGIN_DID, "private:did:key:zPrivate:notes")
+        .expect("mint private-namespace source grant");
+
+    let err = engine
+        .caps()
+        .delegate_capability(&private_source, TARGET_PLUGIN_DID, &[])
+        .expect_err("private-namespace delegation MUST reject");
+
+    match err {
+        EngineError::Other { code, .. } => {
+            assert_eq!(
+                code,
+                ErrorCode::PluginPrivateNamespaceDelegationForbidden,
+                "ORDERING PIN: private-namespace clause fires at Step-2a BEFORE \
+                 the §S3b policy hook at engine_caps.rs:572-590; a typed code of \
+                 PluginPerDelegationDenied here would indicate the ordering was \
+                 reverted (policy hook moved BEFORE Step-2a). Got: {code:?}"
+            );
+        }
+        other => panic!("expected EngineError::Other; got {other:?}"),
+    }
 }

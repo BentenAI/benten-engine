@@ -72,23 +72,19 @@ fn capability_policy_can_dispatch_per_device_cid_when_provided() {
     };
 
     // Same actor, different device → different decisions:
-    let ctx_desktop = CapWriteContext {
-        label: "post".into(),
-        actor_cid: Some(actor),
-        device_cid: Some(device_desktop),
-        ..Default::default()
-    };
+    let mut ctx_desktop = CapWriteContext::default();
+    ctx_desktop.label = "post".into();
+    ctx_desktop.actor_cid = Some(actor);
+    ctx_desktop.device_cid = Some(device_desktop);
     assert!(
         policy.check_write(&ctx_desktop).is_ok(),
         "policy MUST permit writes from the desktop device per cap-r4-4 (a)"
     );
 
-    let ctx_phone = CapWriteContext {
-        label: "post".into(),
-        actor_cid: Some(actor),
-        device_cid: Some(device_phone),
-        ..Default::default()
-    };
+    let mut ctx_phone = CapWriteContext::default();
+    ctx_phone.label = "post".into();
+    ctx_phone.actor_cid = Some(actor);
+    ctx_phone.device_cid = Some(device_phone);
     assert!(
         matches!(policy.check_write(&ctx_phone), Err(CapError::Denied { .. })),
         "policy MUST dispatch differently per device_cid per cap-r4-4 (a)"
@@ -105,11 +101,9 @@ fn capability_policy_treats_missing_device_cid_as_legacy_actor_only_path() {
     let actor = cid_for(b"actor:alice");
 
     // Legacy actor-only context (device_cid not provided):
-    let ctx_legacy = CapWriteContext {
-        label: "post".into(),
-        actor_cid: Some(actor),
-        ..Default::default()
-    };
+    let mut ctx_legacy = CapWriteContext::default();
+    ctx_legacy.label = "post".into();
+    ctx_legacy.actor_cid = Some(actor);
     assert!(
         ctx_legacy.device_cid.is_none(),
         "default CapWriteContext MUST leave device_cid None per cap-r4-4 (b) backward-compat"
@@ -121,11 +115,9 @@ fn capability_policy_treats_missing_device_cid_as_legacy_actor_only_path() {
     );
 
     // Same for ReadContext.
-    let read_legacy = ReadContext {
-        label: "post".into(),
-        actor_cid: Some(actor),
-        ..Default::default()
-    };
+    let mut read_legacy = ReadContext::default();
+    read_legacy.label = "post".into();
+    read_legacy.actor_cid = Some(actor);
     assert!(
         read_legacy.device_cid.is_none(),
         "default ReadContext MUST leave device_cid None per cap-r4-4 (b) backward-compat"

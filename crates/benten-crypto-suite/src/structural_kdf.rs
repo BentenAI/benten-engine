@@ -115,17 +115,49 @@ impl Drop for StructuralKdfKey {
 
 /// Derive the root key for a principal-rooted walk.
 ///
-/// Formula (Spike-E + §1.A.FROZEN item 15(f)):
-/// `K(root) = HKDF-SHA256(K_principal, info = "root" || root_cid)`
+/// Formula (R6 R2 batch-A Item 7 — Row D-13 closure;
+/// Spike-E + §1.A.FROZEN item 15(f) extended):
+/// `K(root) = HKDF-SHA256(K_principal,
+///   info = "root:codepoint:" || codepoint_le_bytes || root_cid)`
 ///
 /// The `"root"` HKDF info-tag is the cross-role domain separator (it
 /// disambiguates the root-derivation step from step-derivation; eliding
 /// it would collide root and step keys with `edge_label = b""`).
+///
+/// The `cipher_suite_codepoint` binding closes the
+/// `aead_wrap::make_key_material_matching` attacker-controlled
+/// codepoint → key newtype attack class: pre-Item-7 the same
+/// `(K_principal, root_cid)` pair derived the SAME `K_root` regardless
+/// of which cipher-suite arm the K_root was about to feed (e.g.
+/// `0x647a` X-Wing hybrid vs `0x6400` X25519-classical vs `0x647b`
+/// pure-PQ reserved). An attacker who could mutate the envelope
+/// codepoint between derivation + AEAD-wrap could mix keys across
+/// codepoint arms (cross-codepoint replay attack class). Post-Item-7
+/// the codepoint enters the info-tag → K_root is strongly bound to
+/// the cipher-suite arm it serves, so cross-codepoint key reuse is
+/// structurally impossible (different codepoint → different K_root
+/// → different downstream AEAD key).
+///
+/// The codepoint is encoded as little-endian `u16` bytes (2 bytes)
+/// for compactness + endianness determinism (matches the
+/// `CipherSuiteCodepoint::as_le_bytes` convention at the wire
+/// layer).
+///
+/// Cross-cut with G-CORE-PQ-WIRE swap matrix: the same codepoint
+/// dispatch works for classical AEAD (`0x6400`) + future PQ-hybrid
+/// envelope codepoints (`0x647a` / `0x647b` / `0x647c`); the binding
+/// is additive at the info-tag layer.
 #[must_use]
-pub fn derive_root(k_principal: &StructuralKdfKey, root_cid: &[u8]) -> StructuralKdfKey {
-    // info = "root" || root_cid.
-    let mut info = Vec::with_capacity(4 + root_cid.len());
-    info.extend_from_slice(b"root");
+pub fn derive_root(
+    k_principal: &StructuralKdfKey,
+    root_cid: &[u8],
+    cipher_suite_codepoint: u16,
+) -> StructuralKdfKey {
+    // info = "root:codepoint:" || codepoint_le_bytes || root_cid.
+    let codepoint_bytes = cipher_suite_codepoint.to_le_bytes();
+    let mut info = Vec::with_capacity(15 + codepoint_bytes.len() + root_cid.len());
+    info.extend_from_slice(b"root:codepoint:");
+    info.extend_from_slice(&codepoint_bytes);
     info.extend_from_slice(root_cid);
     hkdf_sha256_32(&k_principal.0, &info)
 }
@@ -175,9 +207,42 @@ mod tests {
     fn derive_root_is_deterministic() {
         let k = StructuralKdfKey::from_bytes([0u8; 32]);
         let cid = [0xA0u8; 32];
-        let a = derive_root(&k, &cid);
-        let b = derive_root(&k, &cid);
+        let a = derive_root(&k, &cid, 0x647a);
+        let b = derive_root(&k, &cid, 0x647a);
         assert_eq!(a.as_bytes(), b.as_bytes());
+    }
+
+    /// **R6 R2 batch-A Item 7 (Row D-13 closure) load-bearing pin:**
+    /// `derive_root` keys MUST differ across cipher-suite codepoints
+    /// even for IDENTICAL `(K_principal, root_cid)` inputs. Closes
+    /// the cross-codepoint key-reuse attack class at the K_root layer.
+    ///
+    /// Would-FAIL-on-revert: drop the `cipher_suite_codepoint`
+    /// parameter from `derive_root` → both arms reduce to the same
+    /// 2-arg call → keys are equal → assertion fires.
+    #[test]
+    fn derive_root_distinguishes_cipher_suite_codepoints() {
+        let k = StructuralKdfKey::from_bytes([0x77u8; 32]);
+        let cid = [0xBBu8; 32];
+        let k_hybrid = derive_root(&k, &cid, 0x647a); // X-Wing hybrid
+        let k_classical = derive_root(&k, &cid, 0x6400); // X25519-classical
+        let k_pq_reserved = derive_root(&k, &cid, 0x647b); // NF-1 reserved
+        assert_ne!(
+            k_hybrid.as_bytes(),
+            k_classical.as_bytes(),
+            "Item 7: K_root MUST differ across codepoint arms (0x647a vs 0x6400) — \
+             cross-codepoint key reuse class closed at the info-tag binding"
+        );
+        assert_ne!(
+            k_hybrid.as_bytes(),
+            k_pq_reserved.as_bytes(),
+            "Item 7: K_root MUST differ across hybrid arms (0x647a vs 0x647b)"
+        );
+        assert_ne!(
+            k_classical.as_bytes(),
+            k_pq_reserved.as_bytes(),
+            "Item 7: K_root MUST differ across classical vs reserved (0x6400 vs 0x647b)"
+        );
     }
 
     #[test]
@@ -196,7 +261,11 @@ mod tests {
         // "root"/"step" info-tags MUST separate the roles.
         let k = StructuralKdfKey::from_bytes([2u8; 32]);
         let cid = [0xCDu8; 32];
-        let k_root = derive_root(&k, &cid);
+        // R6 R2 batch-A Item 7: derive_root now takes a codepoint;
+        // pick the v1-beta default (0x647a) for the role-separation
+        // pin since the role-separation invariant is orthogonal to
+        // the codepoint binding.
+        let k_root = derive_root(&k, &cid, 0x647a);
         let k_step_empty_edge = derive_step(&k, b"", &cid);
         assert_ne!(k_root.as_bytes(), k_step_empty_edge.as_bytes());
     }

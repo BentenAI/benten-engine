@@ -188,6 +188,30 @@ pub trait ManifestEnvelopeRechecker: Send + Sync {
         zone: &str,
         key: &str,
     ) -> ManifestEnvelopeRecheckOutcome;
+
+    /// **R6-R2-FP Item 9 (Row D-18 substantive-rechecker-detection couple)** —
+    /// Whether this rechecker has substantive PluginLibrary state to consult
+    /// (i.e. it is NOT the no-op default). The DEFAULT impl returns `true`
+    /// because production implementations (anything more than the no-op)
+    /// SHOULD opt-into hardening; the [`NoopManifestEnvelopeRechecker`]
+    /// overrides this to return `false`.
+    ///
+    /// `Engine::apply_atrium_merge`'s per-row recheck loop uses this signal
+    /// to gate the synthesized-fallback (`node-id:NNN`) reject hardening:
+    /// reject ONLY when the rechecker is substantive (otherwise the Noop
+    /// default would over-fire on every test fixture that intentionally
+    /// doesn't register peer-DIDs). The proper closure couples
+    /// synthesized-fallback rejection to substantive-rechecker-installed
+    /// detection per Row D-18.
+    ///
+    /// Defense-in-depth narrative: under a substantive rechecker, an
+    /// adversarial peer presenting an unmapped `node-id:N` DID gets
+    /// rejected at the engine substrate BEFORE reaching the rechecker's
+    /// own per-DID resolution; this is the structural-always-on Layer-3
+    /// hardening per CLAUDE.md #18.
+    fn is_substantive(&self) -> bool {
+        true
+    }
 }
 
 /// Default rechecker — returns
@@ -239,6 +263,43 @@ impl ManifestEnvelopeRechecker for NoopManifestEnvelopeRechecker {
         // UnresolvedDeny on the unresolvable-peer path → row-rejects
         // (G-CORE-8 §4.36 fail-CLOSED via the new typed arm).
         ManifestEnvelopeRecheckOutcome::NotApplicable
+    }
+
+    /// **R6-R2-FP Item 9 (Row D-18 closure):** the Noop is by definition
+    /// NOT substantive — it has no PluginLibrary state. This signals to
+    /// `Engine::apply_atrium_merge` that the synthesized-fallback
+    /// (`node-id:NNN`) reject hardening MUST NOT fire, because default-Noop
+    /// test fixtures intentionally don't register peer-DIDs (would
+    /// over-fire). Substantive `Production*Rechecker` impls inherit the
+    /// default `is_substantive() = true` and opt into hardening.
+    fn is_substantive(&self) -> bool {
+        false
+    }
+}
+
+/// **R6 R2 FP-B (L2-R2-MAJOR-6 closure / Row D-6 wire):** project a
+/// [`ManifestEnvelopeRecheckOutcome`] onto the typed `ErrorCode` so the
+/// sync-hydrate boundary
+/// ([`benten_sync::handshake::sync_hydrate_consume_recheck_outcome`])
+/// can consume the same outcome the merge boundary does. Returns the
+/// canonical no-op `Ok` shape for `Admitted`/`NotApplicable` via the
+/// `Ok`-mapped variant in the consumer (this helper is the projection
+/// surface; the consumer is the decision surface).
+///
+/// Sibling of [`outcome_to_row_reject`]: that helper maps outcomes to
+/// `EngineError`; this helper maps outcomes to the stable `ErrorCode`
+/// that the sync-hydrate consumer understands.
+#[must_use]
+pub fn outcome_to_error_code(outcome: &ManifestEnvelopeRecheckOutcome) -> ErrorCode {
+    match outcome {
+        ManifestEnvelopeRecheckOutcome::Admitted
+        | ManifestEnvelopeRecheckOutcome::NotApplicable => ErrorCode::NotFound,
+        ManifestEnvelopeRecheckOutcome::UnresolvedDeny => {
+            ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+        }
+        ManifestEnvelopeRecheckOutcome::OutsideEnvelope { .. } => {
+            ErrorCode::PluginDelegationOutsideManifestEnvelope
+        }
     }
 }
 

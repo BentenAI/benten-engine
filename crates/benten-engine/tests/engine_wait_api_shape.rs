@@ -46,6 +46,8 @@ fn engine_call_with_suspension_returns_suspended_or_complete() {
             // pass — Suspended is a valid variant. Happy path for a no-wait
             // handler is Complete, but both variants must compile.
         }
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     }
 }
 
@@ -74,6 +76,8 @@ fn engine_call_with_suspension_complete_path_equals_engine_call() {
         SuspensionOutcome::Suspended(_) => {
             panic!("no-WAIT handler must Complete, not Suspend")
         }
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     }
 }
 
@@ -92,6 +96,8 @@ fn suspend_to_bytes_produces_dagcbor_envelope() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("wait handler must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("suspend_to_bytes");
 
@@ -116,6 +122,8 @@ fn resume_from_bytes_accepts_suspend_to_bytes_output() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("wait handler must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("suspend");
 
@@ -140,6 +148,8 @@ fn resume_recomputes_payload_cid_rejects_tamper() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let mut bytes = engine.suspend_to_bytes(&handle).expect("bytes");
 
@@ -173,6 +183,8 @@ fn resume_requires_matching_resumption_principal() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("bytes");
 
@@ -195,6 +207,8 @@ fn resume_re_verifies_pinned_subgraph_cids() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("bytes");
 
@@ -232,6 +246,8 @@ fn resume_from_bytes_unauthenticated_skips_step_2_by_design() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("bytes");
 
@@ -269,6 +285,8 @@ fn resume_re_calls_check_write() {
     let handle = match out {
         SuspensionOutcome::Suspended(h) => h,
         SuspensionOutcome::Complete(_) => panic!("must suspend"),
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     let bytes = engine.suspend_to_bytes(&handle).expect("bytes");
 

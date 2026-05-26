@@ -51,7 +51,14 @@ iteration-budget-test-grade = []
 # `benten-caps/testing` so the workspace test crates can implement
 # `CapabilityPolicy` for test-doubles via the
 # `benten_caps::__sealed_for_workspace_tests::Sealed` opt-in re-export.
-test-helpers = ["iteration-budget-test-grade", "benten-caps/testing"]
+# R6 R2 batch-A Item 2 also enables `benten-platform-foundation/testing`
+# so the install-consent adapter integration test can reach the
+# `noop_replay_check()` helper.
+test-helpers = [
+    "iteration-budget-test-grade",
+    "benten-caps/testing",
+    "benten-platform-foundation/testing",
+]
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
 # for the 4 exit-gate composite files (wait_resume_determinism,
@@ -136,6 +143,31 @@ serde_json = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 toml = { workspace = true }
 serde = { workspace = true }
+# R6 R2 FP-B (L6-r6r2-l6-1 closure): benten-engine takes a NARROW
+# production dep on benten-platform-foundation so the engine-side
+# `capability_policy_install_consent` adapter can `impl
+# InstallConsentPolicy` (trait lives in platform-foundation per the
+# install-pipeline boundary). Cycle-safe: benten-platform-foundation
+# does NOT depend on benten-engine in production (only dev), and does
+# NOT depend on benten-caps in production (the original install_consent
+# module-doc warned of a cycle but the actual link graph permits this
+# placement; benten-caps → platform-foundation prod-dep already exists,
+# benten-platform-foundation → benten-caps would close the cycle,
+# benten-engine → benten-platform-foundation + benten-caps stays
+# strictly downstream of both).
+#
+# **wasm32 cfg-gate (R6 R2 wasm32 fixup, integration PR #1356):** the
+# dep is native-only per CLAUDE.md baked-in #17 (deployment-shape gate
+# — plugin install/consent is full-peer-only; thin compute surfaces do
+# NOT host the install pipeline). Matches `benten-caps`'s identical
+# placement of its own `benten-platform-foundation` prod dep (see
+# `crates/benten-caps/Cargo.toml` line 104) + the consuming module
+# `src/capability_policy_install_consent` is itself cfg-gated in
+# `src/lib.rs` mirroring this gate. DO NOT move this back into the
+# unconditional `[dependencies]` table — doing so re-introduces the
+# `getrandom` js-feature transitive failure on
+# `wasm32-unknown-unknown` (per `feedback_cfg_gate_cascade_hygiene`).
+benten-platform-foundation = { path = "../benten-platform-foundation" }
 # wsa-g7a-mr-4 fix-pass: emit a startup-warning when engine.toml relaxes
 # the D24 built-in wallclock ceiling.
 tracing = { workspace = true }
@@ -229,15 +261,13 @@ iroh = { version = "1.0.0-rc.0", default-features = false, features = ["tls-ring
 [dev-dependencies]
 criterion = { workspace = true }
 tempfile = { workspace = true }
-# Phase 4-Foundation G24-A: admin UI v0 integration test crate consumes
-# the canonical 4-category navigation constants
-# (`INDEXEDDB_FORBIDDEN_STORES`, `WINTERTC_FORBIDDEN_APIS`,
-# `NAV_CATEGORIES`, `build_admin_ui_v0_subgraph`, etc.) from the
-# admin-UI-v0 module that lives in `benten-platform-foundation`. This
-# is a dev-dep ONLY — production `benten-engine` does NOT depend on
-# `benten-platform-foundation` (preserves arch-r1-1 thinness; pinned
-# by `crates/benten-platform-foundation/tests/arch_n_benten_platform_foundation_dep_direction.rs`).
-benten-platform-foundation = { path = "../benten-platform-foundation" }
+# R6 R2 FP-B (L6-r6r2-l6-1 closure): platform-foundation is now a
+# production dep (see [dependencies] above for rationale + cycle-safety
+# analysis). The dev-dep duplicate previously listed here is collapsed
+# into the prod entry above. Test crates that consume admin-UI-v0
+# constants (`INDEXEDDB_FORBIDDEN_STORES`, `WINTERTC_FORBIDDEN_APIS`,
+# `NAV_CATEGORIES`, `build_admin_ui_v0_subgraph`, etc.) reach them
+# through the production dep — no separate dev-dep needed.
 # Phase 2a R3 tests: proptest + serde + serde_ipld_dagcbor reach into the
 # DAG-CBOR schema directly for tamper-injection paths (notably
 # `resume_with_missing_attribution_triple_rejects` derives `Serialize`
@@ -294,6 +324,26 @@ required-features = ["test-helpers"]
 
 [[test]]
 name = "resume_decode_failure_not_panic"
+required-features = ["test-helpers"]
+
+# R6 R2 batch-A Item 2 (Row D-3-a substantive close) — install-consent
+# adapter auto-install verification through `install_plugin(...)`.
+# Needs the `testing` opt-in on `benten-caps` to implement the sealed
+# `CapabilityPolicy` trait for the in-test `CountingDenyPolicy`
+# double; gated via `test-helpers` (which already implies
+# `benten-caps/testing`).
+[[test]]
+name = "r6_r2_batch_a_install_consent_adapter_auto_install"
+required-features = ["test-helpers"]
+
+# R6 R2 batch-A Item 4 (Path G substantive close) — verifies
+# AttributionFrame.capability_grant_cid is populated from
+# peer_actor_cid at apply_atrium_merge per Path G. Uses the
+# `Engine::get_node` test-helper re-export (per V1-FROZEN-INTERFACE.md
+# §1 Row D-7 — production callers use `read_node_as`); gated via
+# `test-helpers`.
+[[test]]
+name = "r6_r2_batch_a_path_g_capability_grant_cid_substantive_at_apply_atrium_merge"
 required-features = ["test-helpers"]
 
 [[bench]]

@@ -108,21 +108,25 @@ fn scope_removal_post_sign_rejected_by_binding_sig() {
 }
 
 #[test]
-fn binding_message_domain_tag_is_v2_post_fix() {
+fn binding_message_domain_tag_is_v3_post_fix() {
     // Wire-format pin: the BINDING_SIG_DOMAIN tag was bumped from v1
-    // to v2 at R6 R1 Bundle L3-r1-1 to reflect the scope-segment
-    // addition. A v1-signed grant deserialized today + re-verified
-    // would fail (different domain tag → different signed bytes).
-    // This pin asserts the tag is at v2 to defend against accidental
-    // revert that would re-open the L3-r1-1 attack class.
+    // to v2 at R6 R1 Bundle L3-r1-1 (scope-segment addition), and
+    // FURTHER BUMPED from v2 to v3 at R6 R2 Bundle R6-R2-FP-A
+    // (audience_pubkey-segment addition; closes L2-R2-BLOCKER-1
+    // audience-substitution attack). A v2-signed grant deserialized
+    // today + re-verified would fail (different domain tag →
+    // different signed bytes). This pin asserts the tag is at v3 to
+    // defend against accidental revert that would re-open either the
+    // L3-r1-1 OR L2-R2-BLOCKER-1 attack class.
     //
     // The tag is private (compile-time constant); we exercise via the
     // round-trip: issue under the current binding-message + verify;
-    // if the domain tag were silently reverted to v1, the issue path
-    // would sign over a v1 message but verify_binding would re-construct
-    // a v2 message (or vice versa) — neither symmetric round-trip
-    // failure mode would be caught by the substitution-rejected pin
-    // alone. The freeze-discipline coupling is captured here.
+    // if the domain tag were silently reverted to v1/v2, the issue
+    // path would sign over an older message but verify_binding would
+    // re-construct a v3 message (or vice versa) — neither symmetric
+    // round-trip failure mode would be caught by the substitution-
+    // rejected pin alone. The freeze-discipline coupling is captured
+    // here.
     let issuer_kp = rng_keypair(0xD00D);
     let audience_kp = rng_keypair(0xBABE);
     let scope = RestrictedScope::new();

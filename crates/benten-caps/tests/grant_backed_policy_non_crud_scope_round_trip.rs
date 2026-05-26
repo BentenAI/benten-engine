@@ -69,11 +69,10 @@ fn grant_backed_policy_non_crud_scope_round_trip_private_namespace() {
     let grants = MockGrants::new(&[scope.as_str()]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = CapWriteContext {
-        label: String::new(), // no CRUD label applicable
-        scope: scope.clone(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = String::new();
+    // no CRUD label applicable
+    ctx.scope = scope.clone();
 
     policy.check_write(&ctx).expect(
         "RED-PHASE: G27-B — private-namespace scope must round-trip via CapWriteContext::scope",
@@ -87,11 +86,9 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_requires() {
     let grants = MockGrants::new(&[scope.as_str()]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = CapWriteContext {
-        label: String::new(),
-        scope: scope.clone(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = String::new();
+    ctx.scope = scope.clone();
 
     policy
         .check_write(&ctx)
@@ -105,11 +102,9 @@ fn grant_backed_policy_non_crud_scope_round_trip_manifest_shares() {
     let grants = MockGrants::new(&[scope.as_str()]);
     let policy = GrantBackedPolicy::new(grants);
 
-    let ctx = CapWriteContext {
-        label: String::new(),
-        scope: scope.clone(),
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = String::new();
+    ctx.scope = scope.clone();
 
     policy
         .check_write(&ctx)
@@ -150,15 +145,13 @@ fn grant_backed_policy_scope_overrides_pending_op_label_derivation() {
     // derivation path).
     let stub_cid = Cid::from_blake3_digest(*blake3::hash(b"g27b-test-cid").as_bytes());
 
-    let ctx = CapWriteContext {
-        label: "post".to_string(),
-        scope: scope.to_string(),
-        pending_ops: vec![PendingOp::PutNode {
-            cid: stub_cid,
-            labels: vec!["post".to_string()],
-        }],
-        ..Default::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "post".to_string();
+    ctx.scope = scope.to_string();
+    ctx.pending_ops = vec![PendingOp::PutNode {
+        cid: stub_cid,
+        labels: vec!["post".to_string()],
+    }];
 
     // Pre-G27-B: per-op derivation produces `store:post:write` (NOT
     // granted) AND ignores `ctx.scope`. Post-G27-B: `ctx.scope`

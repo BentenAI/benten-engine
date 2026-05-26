@@ -27,22 +27,18 @@ fn noauth_still_permits_everything_after_phase2a_changes() {
     let policy = NoAuthBackend::new();
 
     // User authority — the Phase-1 default path.
-    let ctx = CapWriteContext {
-        label: "Post".into(),
-        authority: WriteAuthority::User,
-        ..CapWriteContext::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "Post".into();
+    ctx.authority = WriteAuthority::User;
     assert!(
         policy.check_write(&ctx).is_ok(),
         "NoAuth must permit User authority"
     );
 
     // EnginePrivileged — version-chain append path.
-    let ctx = CapWriteContext {
-        label: "Version".into(),
-        authority: WriteAuthority::EnginePrivileged,
-        ..CapWriteContext::default()
-    };
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "Version".into();
+    ctx.authority = WriteAuthority::EnginePrivileged;
     assert!(
         policy.check_write(&ctx).is_ok(),
         "NoAuth must permit EnginePrivileged authority"
@@ -51,12 +47,10 @@ fn noauth_still_permits_everything_after_phase2a_changes() {
     // SyncReplica — Phase-3 reserved but the enum variant must not trip the
     // policy today.
     let origin = Cid::from_blake3_digest([0x7e; 32]);
-    let ctx = CapWriteContext {
-        label: "Doc".into(),
-        authority: WriteAuthority::SyncReplica {
-            origin_peer: origin,
-        },
-        ..CapWriteContext::default()
+    let mut ctx = CapWriteContext::default();
+    ctx.label = "Doc".into();
+    ctx.authority = WriteAuthority::SyncReplica {
+        origin_peer: origin,
     };
     assert!(
         policy.check_write(&ctx).is_ok(),

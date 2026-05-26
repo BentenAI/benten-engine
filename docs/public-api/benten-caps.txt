@@ -278,6 +278,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::error::CapError
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::error::CapError
 pub mod benten_caps::evaluator_delegation
 pub fn benten_caps::evaluator_delegation::iterate_batch_boundary_for<P: benten_caps::policy::CapabilityPolicy + ?core::marker::Sized>(policy: &P) -> usize
+pub fn benten_caps::evaluator_delegation::wallclock_refresh_ceiling_for<P: benten_caps::policy::CapabilityPolicy + ?core::marker::Sized>(policy: &P) -> core::time::Duration
 pub mod benten_caps::grant
 pub struct benten_caps::grant::CapabilityGrant
 pub benten_caps::grant::CapabilityGrant::grantee: benten_core::Cid
@@ -524,7 +525,7 @@ impl core::marker::Unpin for benten_caps::policy::PendingOp
 impl core::marker::UnsafeUnpin for benten_caps::policy::PendingOp
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::PendingOp
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::PendingOp
-pub struct benten_caps::policy::CapWriteContext
+#[non_exhaustive] pub struct benten_caps::policy::CapWriteContext
 pub benten_caps::policy::CapWriteContext::actor_cid: core::option::Option<benten_core::Cid>
 pub benten_caps::policy::CapWriteContext::actor_hint: core::option::Option<alloc::string::String>
 pub benten_caps::policy::CapWriteContext::audience_did: core::option::Option<alloc::string::String>
@@ -547,7 +548,7 @@ impl core::marker::Unpin for benten_caps::policy::CapWriteContext
 impl core::marker::UnsafeUnpin for benten_caps::policy::CapWriteContext
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::policy::CapWriteContext
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::policy::CapWriteContext
-pub struct benten_caps::policy::ReadContext
+#[non_exhaustive] pub struct benten_caps::policy::ReadContext
 pub benten_caps::policy::ReadContext::actor_cid: core::option::Option<benten_core::Cid>
 pub benten_caps::policy::ReadContext::actor_hint: core::option::Option<alloc::string::String>
 pub benten_caps::policy::ReadContext::audience_did: core::option::Option<alloc::string::String>
@@ -556,6 +557,7 @@ pub benten_caps::policy::ReadContext::label: alloc::string::String
 pub benten_caps::policy::ReadContext::target_cid: core::option::Option<benten_core::Cid>
 impl benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::by_cid_only(cid: benten_core::Cid) -> Self
+pub fn benten_caps::policy::ReadContext::by_label_and_cid(label: impl core::convert::Into<alloc::string::String>, cid: benten_core::Cid, device_cid: core::option::Option<benten_core::Cid>) -> Self
 pub fn benten_caps::policy::ReadContext::by_label_only(label: impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::clone(&self) -> benten_caps::policy::ReadContext
@@ -1172,7 +1174,7 @@ impl core::marker::Unpin for benten_caps::authorization_grant::AuthorizationGran
 impl core::marker::UnsafeUnpin for benten_caps::authorization_grant::AuthorizationGrant
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::authorization_grant::AuthorizationGrant
-pub struct benten_caps::CapWriteContext
+#[non_exhaustive] pub struct benten_caps::CapWriteContext
 pub benten_caps::CapWriteContext::actor_cid: core::option::Option<benten_core::Cid>
 pub benten_caps::CapWriteContext::actor_hint: core::option::Option<alloc::string::String>
 pub benten_caps::CapWriteContext::audience_did: core::option::Option<alloc::string::String>
@@ -1458,7 +1460,7 @@ impl core::marker::Unpin for benten_caps::rate_limit::NullRateLimitPolicy
 impl core::marker::UnsafeUnpin for benten_caps::rate_limit::NullRateLimitPolicy
 impl core::panic::unwind_safe::RefUnwindSafe for benten_caps::rate_limit::NullRateLimitPolicy
 impl core::panic::unwind_safe::UnwindSafe for benten_caps::rate_limit::NullRateLimitPolicy
-pub struct benten_caps::ReadContext
+#[non_exhaustive] pub struct benten_caps::ReadContext
 pub benten_caps::ReadContext::actor_cid: core::option::Option<benten_core::Cid>
 pub benten_caps::ReadContext::actor_hint: core::option::Option<alloc::string::String>
 pub benten_caps::ReadContext::audience_did: core::option::Option<alloc::string::String>
@@ -1467,6 +1469,7 @@ pub benten_caps::ReadContext::label: alloc::string::String
 pub benten_caps::ReadContext::target_cid: core::option::Option<benten_core::Cid>
 impl benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::by_cid_only(cid: benten_core::Cid) -> Self
+pub fn benten_caps::policy::ReadContext::by_label_and_cid(label: impl core::convert::Into<alloc::string::String>, cid: benten_core::Cid, device_cid: core::option::Option<benten_core::Cid>) -> Self
 pub fn benten_caps::policy::ReadContext::by_label_only(label: impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for benten_caps::policy::ReadContext
 pub fn benten_caps::policy::ReadContext::clone(&self) -> benten_caps::policy::ReadContext

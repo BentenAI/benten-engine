@@ -1005,16 +1005,19 @@ export interface SandboxNodeDescription {
 }
 
 /**
- * IVM strategy enum (Phase 2b G8 D8-RESOLVED).
+ * IVM strategy enum (Phase 2b G8 D8-RESOLVED; renamed at Row D-19
+ * G-COMP-1 wave Cohort 8 — `'C'` retained as backward-compat alias).
  *
  * - `'A'` — Phase-1 hand-written IVM views (Rust-only). User-registered
  *   views CANNOT claim this lane; passing `'A'` to `engine.createView`
  *   throws `E_VIEW_STRATEGY_A_REFUSED`.
  * - `'B'` — generalized Algorithm B (default for user views).
- * - `'C'` — Z-set / DBSP cancellation (reserved for Phase 3+; passing
- *   `'C'` throws `E_VIEW_STRATEGY_C_RESERVED`).
+ * - `'Reserved'` — Z-set / DBSP cancellation (reserved for Phase 3+;
+ *   renamed from the prior `'C'` spelling at G23-0a + Row D-19 G-COMP-1
+ *   wave Cohort 8 atomic 4-surface rename). Passing `'Reserved'` (or
+ *   the back-compat alias `'C'`) throws `E_VIEW_STRATEGY_RESERVED`.
  */
-export type Strategy = "A" | "B" | "C";
+export type Strategy = "A" | "B" | "C" | "Reserved";
 
 /**
  * Input-pattern selector for [`UserViewSpec`].
@@ -1054,7 +1057,8 @@ export interface UserViewSpec {
    * Strategy opt-in. Defaults to `'B'` per D8-RESOLVED. Pass `'A'` only
    * to verify the typed-error refusal path (the engine refuses A for
    * user views since A is reserved for the 5 Phase-1 hand-written
-   * views). `'C'` is rejected as Phase-3-reserved.
+   * views). `'Reserved'` (or the backward-compat alias `'C'`) is
+   * rejected as Phase-3-reserved.
    */
   strategy?: Strategy;
   /**

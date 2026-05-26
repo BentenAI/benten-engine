@@ -193,6 +193,8 @@ fn wait_primitive_consults_signal_property() {
         SuspensionOutcome::Complete(_) => {
             panic!("WAIT-bearing handler must Suspend, not Complete")
         }
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
     assert_eq!(
         via_susp, cid_alpha,
@@ -355,6 +357,8 @@ fn wait_principal_binding_threads_through_real_handler() {
         SuspensionOutcome::Complete(_) => {
             panic!("real WAIT handler must Suspend, not Complete")
         }
+        // R6-R2-FP Item 6 (D-17): non_exhaustive forward-compat guard.
+        _ => panic!("SuspensionOutcome: unknown variant (non_exhaustive forward-compat guard)"),
     };
 
     let bytes = engine
