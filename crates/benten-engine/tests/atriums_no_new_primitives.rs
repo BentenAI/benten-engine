@@ -116,6 +116,23 @@ fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engi
 /// citation). OBSERVABLE consequence: Phase 3 + Phase 4-Foundation
 /// close without inventing new structural invariants — schemas +
 /// materializers compose from existing ones.
+///
+/// **Phase-4-Meta-Core 2026-05-26 ratification (Ben "all yes across the board"
+/// post-cryptographer-review-of-bird-of-prey-vs-lamps + 15-adversarial-critic
+/// synthesis):** Inv-15 minted — "sig-bundle CIDs are never load-bearing
+/// identifiers"; the application-layer 3-layer decomposition (identity =
+/// canonical-payload-CID + authentication = codepoint-dispatched signature +
+/// revocation = semantic tuple) that closes the LAMPS Composite ML-DSA
+/// EUF-CMA-only construction-scope per L12 finding. Pin updated 14 → 15.
+/// See `docs/INVARIANT-COVERAGE.md` "Inv-15 Phase-4-Meta-Core mint + 3-layer
+/// decomposition" section + `docs/SECURITY-POSTURE.md` Compromise #31 +
+/// CLAUDE.md baked-in #5 Phase-4-Meta-Core 2026-05-26 sharpening.
+///
+/// The test discipline holds (this is NOT a relaxation): any FURTHER
+/// invariant additions beyond Inv-15 still require explicit Ben
+/// ratification + a corresponding update to this pin. Phase-4-Meta-Core
+/// Inv-15 is the one explicitly-ratified addition; future additions stay
+/// gated by this same firing-on-count-change mechanism.
 #[test]
 fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_kind() {
     let inv_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -144,9 +161,11 @@ fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_
         })
         .count();
     assert_eq!(
-        count, 14,
-        "INVARIANT-COVERAGE.md must list exactly 14 invariants per \
-         CLAUDE.md baked-in commitment + Phase-3 exit-criterion 13 \
-         (got {count})"
+        count, 15,
+        "INVARIANT-COVERAGE.md must list exactly 15 invariants per \
+         CLAUDE.md baked-in commitment + Phase-3 exit-criterion 13 + \
+         Phase-4-Meta-Core 2026-05-26 Inv-15 mint ratification \
+         (14 from Phase 4-Foundation + Inv-15 for the LAMPS EUF-CMA-only \
+         3-layer-decomposition mitigation per Compromise #31) (got {count})"
     );
 }
