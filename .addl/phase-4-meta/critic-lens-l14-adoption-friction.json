@@ -1,0 +1,184 @@
+{
+  "lens_id": "L14",
+  "lens_name": "Adoption-friction skeptic critic",
+  "persona": "Practitioner who has tried to drive adoption of new crypto standards across heterogeneous-language ecosystems (Rust + TypeScript + Go + Python + Java + browser-wasm) and watched 'technically-superior-but-unimplementable-in-my-stack' lose to 'technically-mediocre-but-everyone-has-a-one-line-import' six times in a row. Holds three beliefs: (i) adoption is a friction-budget allocation problem, not an argument-quality problem — no matter how good the case for hybrid PQ sigs, if a curious adopter has to write the LAMPS COMPSIG-MLDSA65-Ed25519-SHA512 construction from scratch in TS/Go/Python/Java because no library has it as a one-call API, ~95% bounce; (ii) the load-bearing artifact is therefore NEVER the blog post — it is the test-vector pack + the cross-language reference implementation + the worked one-line examples in every target language; (iii) standards-body engagement (F3/F4) is friction-INCREASING in the short term (introduces uncertainty for adopters: 'wait for RFC?') unless paired with shipping reference code that explicitly de-risks the wait. Reads the strategy plan's F5-as-load-bearing framing as INVERTED — F6 should be load-bearing, F5 supporting. The library's actual contents (does it include the LAMPS composite or just primitives? does it ship test vectors? does it have a TS port?) determine whether the whole strategy moves adoption or merely advocates for it.",
+  "author": "critic-lens-l14-adoption-friction",
+  "date": "2026-05-26",
+  "head_sha_at_review": "462dfe7f",
+  "disposition": "MIXED — F6 strongly+ but ONLY IF scoped per R-1 (ship the LAMPS COMPSIG-MLDSA65-Ed25519-SHA512 composite as a one-call API + test-vector pack + at minimum one non-Rust port (TS via noble); not 'just primitives' or 'just our internal wrap'); F5 -1 conditional on R-2 (reframe blog as 'here is the library + here are the test vectors + here are the gap-languages we are seeding' rather than 'here is our position'); F2 +; F3 NEUTRAL (correct direction, but friction-INCREASING short-term); F4 NEUTRAL same reason; F7 +; F10 + with R-3 (iroh outreach should include 'do you want test vectors / a Rust crate you can depend on?'); F1/F8/F9/F11/F12 unchanged from plan.",
+  "headline_finding": "The strategy plan correctly identifies F6 (library) as 'critical for credibility' but DOES NOT scope F6 with enough specificity to actually close adoption friction. Live-verified library landscape (2026-05-26): (a) the LAMPS COMPSIG-MLDSA65-Ed25519-SHA512 composite (Benten's exact pair) is shipped as a one-call API in essentially ONE place — BouncyCastle Java 1.79+; NOT in @noble/post-quantum (their hybrids module is KEM-only — XWing/KitchenSinkMLKEM768X25519; verified directly from the noble docs); NOT in pyca/cryptography (which only ships pure ML-DSA via OpenSSL 3.5+); NOT in Cloudflare CIRCL (primitives only — sign/mldsa + sign/ed25519 separately); NOT in Go stdlib (ML-DSA pending Go 1.27; no composite); NOT as a standalone Rust crate on crates.io (verified — pqcrypto-mldsa / libcrux-ml-dsa / ml-dsa all ship the primitive, no composite); (b) the IETF draft itself contains a small test-vector appendix but there is NO curated cross-language test-vector pack with reference encodings; (c) FIPS 140-3 only validates pure ML-DSA — composite signatures are explicitly OUTSIDE FIPS (NIST left composition to IETF), which means FIPS-bound adopters CANNOT use the LAMPS construction at all in their validated module, only in a wrap layer above. If Benten ships F6 as 'we extracted our internal Rust crate to crates.io and added one TS port' the cross-language friction is essentially unchanged from today — every other language adopter still has to implement the LAMPS prefix construction (Prefix||Label||len(ctx)||ctx||PH(M)) from scratch against the draft. If Benten ships F6 as scoped per R-1 — Rust crate + TS noble-compatible port + Go reference + Python reference (or at minimum Rust + TS + Go) + a downloadable test-vector pack + worked examples — F6 becomes the asymmetric trust-builder the plan claims it is and the blog earns its keep as a pointer. The headline correction: F6's value scales with cross-language coverage, not with Rust-crate quality.",
+  "important_concession_to_my_own_persona": "The plan's §6 sequencing already names a critical mitigation my persona might initially miss: 'library beta-published' at T+5-6w is BEFORE 'blog published' at T+6-7w. This ordering is the right direction (library-first, blog-as-pointer). My persona's R-1 scope requirement is therefore an AMPLIFICATION of an instinct the plan already has, not a contradiction. Also: BouncyCastle Java HAS the LAMPS composite, which means at least one major enterprise-Java audience can adopt today without Benten building anything — friction in the enterprise-Java segment is already lower than my persona's worst-case framing. AND noble-post-quantum is paulmillr's stack (the same author as @noble/curves, @noble/hashes — the canonical TS crypto family used by every TS web3/crypto project); if Benten contributes a LAMPS-COMPSIG construction upstream to noble-post-quantum/hybrids.js (Path R-1b) rather than shipping a standalone library, the cross-language coverage for TS+browser collapses from 'Benten must maintain a port' to 'Benten lands a PR.' That is the lowest-friction path available and the plan does not consider it. Honest concession: my 'no library exists for any cross-language adopter' framing is wrong for Java enterprise audiences AND undersells the noble-PR-as-distribution-strategy that the existing noble hybrids architecture makes cheap.",
+  "verdicts": [
+    {
+      "path": "F2",
+      "name": "Multicodec PR-endorsement (#400 + #403)",
+      "verdict": "+",
+      "rationale": "Friction-NEUTRAL to slightly friction-REDUCING. Endorsing the container-form multicodec PRs reduces long-term wire-format ambiguity for adopters (one canonical container vs N per-algorithm hybrids). Short-term, the comments themselves are zero-friction for adopters — they neither help nor hurt. UNCONDITIONAL +; cheap and aligned with the right long-term shape; orthogonal to L14's load-bearing F6 concerns."
+    },
+    {
+      "path": "F3",
+      "name": "JOSE WG draft contribution to draft-ietf-jose-pq-composite-sigs-01",
+      "verdict": "NEUTRAL",
+      "rationale": "Standards-track engagement is friction-INCREASING short-term in my persona's framing: cautious adopters read 'JOSE WG draft v01' and decide 'I'll wait for the RFC' — that 'wait' is friction. JOSE WG progress is friction-REDUCING in the 12-24 month horizon (eventual COSE codepoints + JWS alg names mean future JWT/COSE-based adopters get a one-line algorithm string, which collapses friction enormously). NEUTRAL because the short-term harm and long-term benefit roughly cancel for my persona's evaluation. Pursue per plan sequencing if bandwidth allows; do NOT prioritize over F6+test-vectors which has near-term adoption-closing value."
+    },
+    {
+      "path": "F4",
+      "name": "LAMPS WG mailing list engagement (adopter perspective)",
+      "verdict": "NEUTRAL",
+      "rationale": "Same short-term/long-term tradeoff as F3 but with a wider gap: LAMPS adopter reports are very low-friction-impact in the 0-12 month horizon (LAMPS WG audience is cryptographers, not adopters) and meaningful only when the LAMPS RFC publishes. NEUTRAL; pursue per plan sequencing post-v1-beta; do not displace F6 work. One amendment: if Benten ships a real test-vector pack (R-1.b), the LAMPS adopter report becomes structurally stronger because it can cite 'Benten implementation + test vectors agree with draft-19 test vectors at byte-exact level' — that is a concrete WG deliverable LAMPS will value. So R-1.b makes F4 strictly more valuable when it lands."
+    },
+    {
+      "path": "F5",
+      "name": "Blog post (Position B — 'why content-addressed long-term-persistence systems should consider this')",
+      "verdict": "-1 (CONDITIONAL on R-2 — upgrade to + if R-2 incorporated)",
+      "rationale": "My core L14 concern. As currently outlined the blog is ~3500-5000 words of ARGUMENT (§§1-8) + ~200 words on the library (§9). That allocation is INVERTED relative to what closes adoption friction. The asymmetric truth in my persona's experience: a 600-word blog post that says 'we shipped a Rust crate + a noble-PQ PR + a 4-language test-vector pack + a 30-line TS example + a 30-line Go example + a 30-line Java example + here are the gap-languages where we still need help' moves more adoption than 5000 words of HNDL-for-signed-artifacts framing. The argument is not WRONG — but it is competing for reader attention with the friction-closure content, and friction-closure CONVERTS adopters where argument merely INFORMS them. R-2 restructures the blog to lead with the library + test vectors and put the framing argument SECOND as supporting context. With R-2: + (this is the right shape). Without R-2: hold, because publishing 5000 words of argument without the friction-closure scaffolding sets the wrong expectations ('this is a position-paper-shipping company' vs 'this is a library-shipping company that also has a position'). The plan's §4 adversarial-lens dispatch contract is the right vehicle for this restructure; my lens is exercising it."
+    },
+    {
+      "path": "F6",
+      "name": "Open-source did:jwk hybrid extension library (standalone)",
+      "verdict": "strongly+ CONDITIONAL on R-1 scoping; +1 only if scoped as 'thin Rust extraction'; downgrade to NEUTRAL if scope shrinks further",
+      "rationale": "THE load-bearing path for my lens. The plan's framing ('credibility anchor — we shipped the code, here it is to inspect') is correct in direction but UNDER-SCOPED. As live-verified 2026-05-26: no existing cross-language library ships the LAMPS COMPSIG-MLDSA65-Ed25519-SHA512 composite as a one-call API except BouncyCastle Java. Every TS/JS/browser/Go/Python adopter who wants Benten's exact construction today has to read draft-19 §A.1 (the GitHub-rendered LAMPS draft), implement the prefix construction (Prefix || Label || len(ctx) || ctx || PH(M)) from scratch, AND verify their implementation against ad-hoc test vectors they extract from the draft. That is 4-8 hours of careful crypto work per language, which is exactly the friction wall that kills adoption for everyone except dedicated crypto-engineering teams. If F6 ships per R-1 (Rust crate + noble-post-quantum upstream PR for TS + Go reference + curated test-vector pack), adopters across the 4 most-deployed crypto stacks get a one-line `import` path. If F6 ships as 'we extracted our internal crate to crates.io and called it a day' the adoption friction is essentially unchanged from baseline. CONDITIONAL strongly+ on R-1; the difference between scoped-correctly and scoped-narrowly is the difference between F6-as-asymmetric-trust-builder and F6-as-symbolic-gesture. The plan's §3 description of F6 does not specify scope, which is the gap R-1 closes."
+    },
+    {
+      "path": "F7",
+      "name": "W3C CCG community engagement (did:key issues #70/#74)",
+      "verdict": "+",
+      "rationale": "Friction-NEUTRAL for the direct adoption surface my lens watches (cross-language crypto-library availability), but friction-REDUCING in the wider sense that W3C CCG engagement reduces governance uncertainty for did:key-based adopters — and governance uncertainty is its own form of friction. UNCONDITIONAL +. Cheap. The cooperation-positive optics that L4 (ecosystem-fragmentation) cares about ALSO matter for adoption: prospective adopters check 'is this team cooperative or going-it-alone?' as a soft signal of long-term project health."
+    },
+    {
+      "path": "F10",
+      "name": "Cross-system outreach (iroh-first, then Veilid/Willow/libp2p/MLS courtesy)",
+      "verdict": "+ CONDITIONAL on R-3",
+      "rationale": "Coalition-formation IS friction-reducing — if iroh adopts the same LAMPS construction Benten ships, the test vectors + cross-language ports become a SHARED ecosystem investment rather than Benten-alone maintenance burden. My persona's amendment (R-3): the iroh private conversation should include a concrete offer — 'we have test vectors + a Rust crate + a noble PR you can depend on; what would you need to consider following us on the signature side?' This converts the conversation from 'do you agree with our reasoning?' (which Lens 3 covers) to 'here is the shipping infrastructure that reduces YOUR adoption cost' (which is L14's territory and a different and more concrete ask). The plan's Shape 5 (coalition-first with iroh) framing already half-anticipates this; R-3 sharpens it from 'we want your critique' to 'we want your critique AND here is what we'd ship to make your potential adoption easier.' Stronger ask; concrete answer."
+    },
+    {
+      "path": "F1",
+      "name": "Multicodec PR — per-algorithm hybrid codepoint",
+      "verdict": "DO-NOT-PURSUE (unchanged from plan)",
+      "rationale": "Plan correctly identifies as net-negative. L14 has nothing to add."
+    },
+    {
+      "path": "F8",
+      "name": "IRTF CFRG submission on hybrid-sig combiner analysis",
+      "verdict": "DO-NOT-PURSUE (unchanged from plan)",
+      "rationale": "Out of scale and out of L14 scope."
+    },
+    {
+      "path": "F9",
+      "name": "RFC author submission (individual draft)",
+      "verdict": "DO-NOT-PURSUE (unchanged from plan)",
+      "rationale": "Wrong tool; would actively INCREASE adoption friction by introducing yet-another-draft to choose between."
+    },
+    {
+      "path": "F11",
+      "name": "NIST workshop / comment submission",
+      "verdict": "DO-NOT-PURSUE (unchanged from plan)",
+      "rationale": "FIPS 140-3 does NOT validate composite signatures (NIST left composition to IETF); NIST is not the audience for the LAMPS-composite-adopter perspective. Correct call to skip."
+    },
+    {
+      "path": "F12",
+      "name": "Conference talk / paper (RWC / PQCrypto / IETF Hackathon)",
+      "verdict": "DEFER (unchanged from plan, with L14 amendment: IETF Hackathon interop demo is genuinely friction-reducing once LAMPS RFC publishes; consider promoting to PURSUE post-v1-GM tag)",
+      "rationale": "An IETF Hackathon demo where Benten's Rust + noble TS + (ideally) a Go port all interop on the LAMPS test vectors IS exactly the adoption-friction-closure event my persona values. But it requires the LAMPS RFC to be published first (so adopters trust the construction is stable) and the cross-language ports to exist (R-1 prerequisite). Plan's defer is correct for now; flag for promotion later."
+    }
+  ],
+  "cross_cutting_recommendations": [
+    {
+      "id": "R-1",
+      "name": "F6 scope specification: Rust crate + cross-language coverage + test-vector pack (the load-bearing R)",
+      "applies_to": "F6 (primary); F4 + F12 (secondary — they get strictly stronger with R-1.b)",
+      "blocking_for": ["F5"],
+      "rationale": "The plan's F6 description ('open-source did:jwk hybrid extension library standalone') is under-scoped. To actually close adoption friction in the cross-language ecosystem, F6 must include (in priority order): (R-1.a) Rust crate published to crates.io with the LAMPS COMPSIG-MLDSA65-Ed25519-SHA512 construction as a one-call API — both the standalone library AND extracted as a public re-export from `benten-crypto-suite` so adopters do not have to depend on the whole Benten engine; (R-1.b) a curated test-vector pack as a separate downloadable artifact (JSON or CBOR), at minimum: 16 vectors covering valid signatures + the 3 strip attacks (Ed25519-only forgery rejected, ML-DSA-only forgery rejected, swapped-component forgery rejected) + boundary cases (empty message, 255-byte ctx, empty ctx); (R-1.c) at minimum ONE non-Rust port — the highest-leverage choice is a PR upstream to paulmillr/noble-post-quantum (their hybrids.js module currently does KEM-only; adding LAMPS-COMPSIG-MLDSA65-Ed25519-SHA512 is structurally analogous to their existing XWing entry and would distribute through the same npm/CDN channel reaching every TS+browser+Node adopter); (R-1.d) ideally also a Go reference (Cloudflare CIRCL has the primitives — a thin LAMPS-wrap is the right shape) and a Python reference (pyca/cryptography has ML-DSA via OpenSSL 3.5+, same wrap shape applies). Without R-1.a + R-1.b + R-1.c, F6 cannot deliver the 'asymmetric trust-builder' the plan claims; with all three, F6 is the most adoption-positive thing Benten can do in this window. R-1.d is desirable but not strictly blocking."
+    },
+    {
+      "id": "R-2",
+      "name": "F5 blog restructure: lead with library + test vectors + worked examples; framing argument SECOND",
+      "applies_to": "F5",
+      "blocking_for": ["F5 publication"],
+      "rationale": "The plan's blog outline (§§1-8 = ~3500 words argument, §9 = ~200 words library pointer) inverts what closes adoption friction. R-2 restructures to: §1 (300 words) what we shipped — library link + npm/crates.io install + test-vector pack download; §2 (400 words) 30-line code examples in Rust + TS + Go showing sign + verify + strip-attack-rejected; §3 (400 words) the framing argument condensed (HNDL-for-signed-artifacts + asymmetry table); §4 (300 words) honesty caveats (all 5 from plan §2.2, unchanged); §5 (200 words) what we'd like to see — gap-languages (Python composite-wrap, Java direct from BouncyCastle is already there, Swift, Kotlin) — explicit ask for community ports; §6 (200 words) standards-body sequencing pointer to F2/F3/F4; total ~1800 words. The shorter blog has higher adoption conversion in my persona's experience — readers who care about the HNDL argument follow the link, readers who don't can still adopt. The plan's longer-blog framing is appropriate for a different audience (cryptographers, standards-body participants) where convincing-the-reader IS the goal; for the adopter audience the library + test vectors + examples ARE the convincing-the-reader. Recommend explicitly distinguishing the two audiences and choosing the adopter-first restructure given the plan's stated goal of 'closing the no-production-deployments gap.'"
+    },
+    {
+      "id": "R-3",
+      "name": "F10 iroh outreach should include concrete shipping offer, not just argument-validation request",
+      "applies_to": "F10 (primary), Shape 5 coalition framing",
+      "blocking_for": [],
+      "rationale": "Strengthen the iroh outreach from 'do you agree with our reasoning' to 'we have shipping infrastructure that reduces your potential adoption cost; here is what we'd offer.' Concretely: (a) the LAMPS composite Rust crate they could vendor or depend on; (b) the noble PR that handles their TS-facing tooling; (c) the test-vector pack their team could run against any future iroh PQ signature implementation. This is friction-removal language, not advocacy language. Pairs with the existing 'extremely careful framing' mitigation the plan already names. Mitigation cost: ~zero (the artifacts exist anyway under R-1)."
+    },
+    {
+      "id": "R-4",
+      "name": "Add explicit 'gap-languages registry' as living artifact post-publication",
+      "applies_to": "F6 + F5 + post-publication",
+      "blocking_for": [],
+      "rationale": "After blog/library publication, maintain a public 'LAMPS COMPSIG-MLDSA65-Ed25519-SHA512 implementations' registry page (could be a GitHub repo README + community-PR-driven table) listing every known port across languages with audit status + production-readiness + Benten-team-contribution-status. This converts the post-publication phase from 'we wait and see if anyone adopts' to 'we actively track + celebrate ports + flag gap-languages for the community.' Cheap maintenance burden (one PR per new port). The registry itself becomes a friction-closure artifact for the NEXT adopter who searches 'LAMPS composite Swift implementation' and finds either a hit or a clear 'help wanted' marker. The plan does NOT include this; recommend adding to the post-publication checklist."
+    },
+    {
+      "id": "R-5",
+      "name": "Caveat #6 addition to plan §2.2: 'composite signatures are explicitly OUTSIDE FIPS 140-3'",
+      "applies_to": "F5 blog §6 (honesty caveats) + F6 library docs",
+      "blocking_for": [],
+      "rationale": "The plan's §2.2 has 5 honesty caveats; a 6th is FIPS-relevant and L14-relevant: 'FIPS 140-3 validates pure ML-DSA, ML-KEM, SLH-DSA. NIST has explicitly left COMPOSITE constructions to IETF/CFRG/industry. This means FIPS-bound adopters (US federal, DoD, FIPS-compliant healthcare/finance) CANNOT use the LAMPS composite construction inside their validated cryptographic module — they would have to wrap it as a non-FIPS layer above a FIPS-validated module, which is operationally complex and likely unacceptable for many FIPS-bound use cases.' This caveat is friction-honest: it tells the FIPS-bound segment of the audience 'this is not for you (yet)' before they invest exploration effort and bounce angry. The audience this WOULD scare off is one Benten cannot serve regardless; carrying the caveat preserves credibility with the broader audience while not actually losing adoption."
+    }
+  ],
+  "live_evidence_cross_language_landscape": {
+    "verified_2026_05_26": true,
+    "ml_dsa_65_primitive_availability": {
+      "Rust": "MULTIPLE — pqcrypto-mldsa, libcrux-ml-dsa, ml-dsa, kylix-ml-dsa, mldsa-native-rs all on crates.io",
+      "JavaScript_TypeScript_npm": "@noble/post-quantum (paulmillr; auditable, browser+node, NOT independently audited — internal self-audit at v0.6.1 April 2026) — exports ml_dsa44/ml_dsa65/ml_dsa87 from /ml-dsa.js subimport",
+      "Go": "Cloudflare CIRCL sign/mldsa (production-track); Go 1.27 stdlib (proposal accepted, exposing internal impl from Go 1.26)",
+      "Python": "pyca/cryptography ML-DSA module — requires OpenSSL 3.5+ (shipped March 2026) OR AWS-LC OR BoringSSL; ships in wheels for OpenSSL 3.5+ users",
+      "Java": "BouncyCastle 1.79+ (ML-DSA + ML-KEM + SLH-DSA); LTS 2.73.x same",
+      "C_Cpp": "OpenSSL 3.5+, AWS-LC (FIPS-validated), BoringSSL, liboqs (Open Quantum Safe)"
+    },
+    "lamps_composite_id_MLDSA65_Ed25519_SHA512_as_one_call_API": {
+      "Rust": "NOT FOUND on crates.io as standalone — Benten's benten-crypto-suite implements it; would need extraction",
+      "JavaScript_TypeScript_npm": "NOT FOUND — @noble/post-quantum hybrids.js is KEM-ONLY (XWing, KitchenSinkMLKEM768X25519); verified directly from library description: 'hybrid algorithms like Concrete, XWing, and KitchenSink' all KEM constructions",
+      "Go": "NOT FOUND — Cloudflare CIRCL ships primitives only; would need composite wrap",
+      "Python": "NOT FOUND in pyca/cryptography — ML-DSA primitive only, no composite",
+      "Java": "FOUND — BouncyCastle 1.79+ ships LAMPS composite ML-DSA implementation; updated to draft-ietf-lamps-pq-composite-sigs-07+; covers all 18 LAMPS composite OIDs including id-MLDSA65-Ed25519-SHA512",
+      "summary": "ONE of 5 surveyed cross-language ecosystems (Java/BouncyCastle) ships the exact LAMPS composite Benten depends on as a one-call API. The other 4 (Rust, TS, Go, Python) require implementing the LAMPS prefix construction (Prefix||Label||len(ctx)||ctx||PH(M)) by hand against the GitHub-rendered draft-19."
+    },
+    "test_vector_availability": {
+      "official_curated_pack": "NOT FOUND — the IETF draft-19 appendix contains some test vectors but no separately-downloadable curated pack with cross-language reference encodings",
+      "implication": "Each implementer either trusts another implementer's test vectors or extracts ad-hoc from the draft text"
+    },
+    "fips_140_3_composite_signature_status": {
+      "pure_ML_DSA": "FIPS 140-3 validation underway (Go cryptographic module Pending Review at CMVP; AWS-LC FIPS-validated)",
+      "composite_signatures": "EXPLICITLY OUTSIDE FIPS — NIST left composition to IETF/CFRG/industry per Agent-2 §A.3 (NIST SP 800-227 §4.6 gives guidance but does NOT bless one specific combiner construction)",
+      "implication_for_FIPS_bound_adopters": "Cannot use LAMPS composite inside validated module; would have to wrap above the validated module which is operationally complex for FIPS workflows. This caveat is currently MISSING from plan §2.2 honesty list — see R-5."
+    },
+    "noble_post_quantum_self_audit_status": {
+      "version": "0.6.1 (April 2026)",
+      "audit": "Internal self-audit covering everything in scope; NOT independently audited yet; library explicitly states this status",
+      "implication": "Even if Benten contributes LAMPS composite upstream to noble, the TS/browser audience is in the same 'unaudited PQ implementation' boat as the rust ml-dsa crate — Caveat #3 in plan §2.2 applies symmetrically across the stack, not just to the Rust side"
+    },
+    "openssl_3_5_PQ_status": {
+      "shipped": "OpenSSL 3.5 shipped post-quantum support March 2026",
+      "covers": "Pure ML-KEM, pure ML-DSA; no composite",
+      "implication": "Python/Ruby/PHP/Node-via-openssl-bindings all get pure ML-DSA via OpenSSL 3.5+ but still need composite wrap"
+    }
+  },
+  "evidence_for_each_recommendation": {
+    "R-1_F6_scope_specification": "(R-1.c noble PR feasibility) — paulmillr/noble-post-quantum repo structure confirms hybrids.js module exists and exports XWing as a hybrid construction; adding a LAMPS-COMPSIG-MLDSA65-Ed25519-SHA512 export is structurally analogous; library has ed25519 (via @noble/curves), sha512 (via @noble/hashes), ml_dsa65 (existing) — all primitives needed. Estimated PR LOC: ~150-250 LOC for the composite + 16-vector test set. paulmillr is responsive maintainer per public PR history. (R-1.b test-vector pack feasibility) — LAMPS draft-19 §A.1 contains the construction definition; extracting + curating + serializing as JSON+CBOR pack is ~4-8 hours of careful work. (R-1.d Go reference feasibility) — Cloudflare CIRCL has sign/ed25519 + sign/mldsa as separate packages; the LAMPS wrap is ~100 LOC of Go. Total R-1 incremental scope above plan baseline F6: ~1-2 weeks of work for a dedicated implementer.",
+    "R-2_F5_blog_restructure": "Web search corroboration for the 'adopters bounce on long argument-first blogs' pattern was not specifically searched, but the persona's experience-claim is widely-held in cryptographic library adoption literature (cite: the @noble/* family's success is partly attributed to their docs leading with 'install + use' rather than 'why this design'). Plan's own §3 'load-bearing primary public-stance artifact' framing acknowledges the blog is high-leverage; my persona disagrees about WHICH part of the blog is high-leverage (library link + examples vs HNDL argument).",
+    "R-3_F10_iroh_outreach_concrete_offer": "iroh team would have legitimate questions about adopting Benten's LAMPS construction even if their team agrees with the reasoning — 'what library do we depend on? what test vectors? what audit posture?' Pre-answering these questions in the outreach removes a class of friction the plan's current framing leaves unaddressed.",
+    "R-4_gap_languages_registry": "Pattern precedent: the @noble/curves family maintains a comparison table; the openssl-pq tracking page on OpenQuantumSafe.org is widely-cited; multicodec table.csv serves as a similar living artifact. Low maintenance burden, high friction-reduction value.",
+    "R-5_FIPS_caveat_6": "Direct evidence from FIPS 140-3 IG (NIST CSRC) + SP 800-227 §4.6: NIST has explicitly NOT chosen one combiner construction for hybrid composites, leaving the choice to IETF/CFRG/industry — which means FIPS validated modules cannot include composite signatures (no FIPS-blessed combiner). The September 21, 2026 FIPS 140-2 sunset deadline makes this an immediately-relevant adopter concern."
+  },
+  "what_would_change_my_verdict": {
+    "F5_upgrade_to_plus": "Adopt R-2 restructure (lead with library + examples, framing argument condensed and second).",
+    "F6_remain_strongly_plus": "Adopt R-1 with at minimum R-1.a + R-1.b + R-1.c (Rust crate + test-vector pack + noble TS PR upstream); R-1.d (Go + Python references) is desirable but not blocking.",
+    "F6_downgrade_to_NEUTRAL": "Ship F6 as Rust-only crate without test-vector pack or non-Rust ports — at that scope the library does not move the needle on cross-language adoption friction and becomes a symbolic gesture.",
+    "F10_remain_plus": "Adopt R-3 framing (concrete shipping offer, not argument-validation request)."
+  },
+  "interaction_with_other_lenses": {
+    "with_L1_multiformats_conservative": "L1 will likely argue for did:jwk-as-canonical / drop Benten-private. L14 is supportive: the noble PR strategy (R-1.c) lands the LAMPS construction in a place that consumes did:jwk style algorithm-string identifiers naturally, which makes L1's preferred wire-format more adoption-viable for the TS+browser audience.",
+    "with_L2_PQ_skeptic_cryptographer": "L2 will likely sharpen the audit-pending caveat. L14 R-5 aligns (adds the FIPS-out-of-scope caveat); L14 also notes the noble TS library is symmetrically unaudited which extends L2's concern beyond the Rust side. The library + test-vector pack actually HELPS L2's case because cross-implementation interop testing IS one of the best non-formal-verification confidence-building tools available short-term.",
+    "with_L3_iroh_maintainer": "L14 R-3 is structurally complementary: where Lens 3 watches for 'are you respecting our judgment / are you implying iroh was wrong,' L14 watches for 'are you actually offering iroh something concrete they could adopt.' Both lenses are satisfied when the outreach combines respectful argument-presentation (L3) WITH concrete shipping-infrastructure offer (L14).",
+    "with_L4_ecosystem_fragmentation": "L14 R-1.c (upstream PR to noble rather than standalone library) directly serves L4's cooperation-positive framing — Benten contributes to a community library rather than minting a Benten-only TS package. Strong agreement.",
+    "with_L5_small_team_overreach": "L5 will likely argue Benten cannot maintain standards-leadership posture. L14 PARTIALLY aligns: maintenance burden of R-1 scope (Rust crate + test vectors + noble PR + maybe Go/Python ports) IS substantial. Mitigation: most ports are write-once if scoped tight; ongoing maintenance burden is low if the LAMPS construction RFC publishes without major changes (likely given OID early-allocation). Recommend tracking actual maintenance cost as a Tier-1 success metric post-publication and being honest if it exceeds budget.",
+    "with_L6_HNDL_skeptic": "Orthogonal — L6 challenges the framing argument's premise; L14 challenges the framing argument's emphasis. Both lenses agree the framing argument should be shorter (L6: because parts overreach; L14: because friction-closure content matters more).",
+    "with_L7_wire_size_pragmatist": "Aligned — wire-size friction (3373-byte sigs) IS a form of adoption friction L7 surfaces from a different angle. L14 R-5 (FIPS caveat) and L7's 'lead with wire-size table' recommendation are complementary honesty-additions to plan §2.2.",
+    "with_L15_threat_model_boundaries": "L15 will likely argue for sharpened class boundary (Filecoin/Arweave/git/Sigstore). L14 has no direct interaction; sharpening the class boundary is friction-NEUTRAL for L14 (clearer framing for adopters who DO match the class; no impact on adopters who don't)."
+  },
+  "summary_for_orchestrator": "L14 vote: pursue F2 + F6 (scoped per R-1) + F7 + F10 (with R-3 framing) UNCONDITIONALLY; pursue F5 ONLY IF R-2 restructure adopted; treat F3/F4 as NEUTRAL bandwidth-permitting; pim-N-style insight: the load-bearing artifact for adoption-friction-closure is NEVER the blog post in isolation — it is the library + test-vector pack + cross-language ports + worked examples in every target language. The plan's instinct to ship library before blog (§6 sequencing) is correct; my lens amplifies it. The 5 recommendations (R-1 through R-5) are the L14-specific amendments. Headline takeaway: F6's value scales with cross-language coverage, not with Rust-crate quality."
+}
