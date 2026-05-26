@@ -1,0 +1,48 @@
+{
+  "lens": "L6 — HNDL-skeptic for sigs",
+  "persona": "Cryptographer who accepts HNDL-for-encrypted-data as canonical but pushes back on HNDL-for-signatures as a much weaker, more speculative argument. Supports PQ-hybrid for encryption (HNDL-for-data is canonical) but attacks the load-bearing HNDL-for-sigs argument in §2.1 of the public-stance strategy plan as overreach.",
+  "base_sha": "31d1a169",
+  "inputs_read": [
+    ".addl/phase-4-meta/pq-hybrid-sig-public-stance-strategy.md",
+    ".addl/phase-4-meta/pq-codepoint-research-agent-3-deployments.md",
+    "CLAUDE.md baked-in #5 + #15",
+    "Live: postquantum.com TNFL literature (3 articles)",
+    "Live: PQShield 'Harvest-Now-Forge-Later' framing",
+    "Live: NIST/Mosca CRQC timeline overviews",
+    "Live: Sigstore/Gitsign long-term-verification mechanisms",
+    "Live: SPHINCS+ git signing proposals (Josefsson 2024)",
+    "Live: Arweave permanence model (200-year design) for argument-proves-too-much probe",
+    "Live: arXiv compressed-verification PQ-sig with long-term pubkeys (2509.03098)"
+  ],
+  "verdicts": {
+    "F2": {
+      "disposition": "PURSUE — SUPPORT",
+      "rationale": "Endorsing multicodec #400/#403 (container-form codepoints for pkix/cose-key/jwk) is orthogonal to my objection. It's an alignment-with-maintainer-direction move that costs ~2 hours and accrues credibility regardless of whether the HNDL-for-sigs argument survives. No persona-specific concern."
+    },
+    "F3": {
+      "disposition": "PURSUE — SUPPORT (with qualification)",
+      "rationale": "JOSE WG contribution to draft-ietf-jose-pq-composite-sigs-01 is process-correct adopter-feedback. My only persona-specific qualification: when framing Benten as an adopter, lead with the multi-device-key-wrap / encryption use case (where HNDL is canonical and uncontested) rather than the content-signature use case (where the TNFL argument is more contested). Lets the contribution land on the stronger foot."
+    },
+    "F4": {
+      "disposition": "PURSUE — SUPPORT",
+      "rationale": "LAMPS adopter report post-v1-beta is process-aligned and welcomed by the WG (per Lens 9 framing in the plan). My persona doesn't object to LAMPS engagement — the OID `1.3.6.1.5.5.7.6.48` and combiner are sound work. Objection is about the public-stance framing, not the engineering."
+    },
+    "F5": {
+      "disposition": "PURSUE — BUT WITH SUBSTANTIAL §2.1 REVISION (conditional)",
+      "rationale": "F5 is the load-bearing path and §2.1's HNDL-for-signed-artifacts argument is the load-bearing thesis. My honest update after live-research: the TNFL (Trust Now, Forge Later, originally STFT — Sign Today, Forge Tomorrow, 2018) literature is REAL, NAMED, and discussed in industry (PQShield 'Harvest-Now-Forge-Later'; postquantum.com; EverTrust; NIST circles; the Josefsson-2024 SPHINCS+-for-git proposal explicitly motivated by long-term verification). My strongest counter — 'no documented case' — is true but symmetric (HNDL-for-encryption also has no documented realized attack pre-CRQC). My second counter — 'easier CRQC targets exist' — survives partially but doesn't refute the class. My third counter — 'argument proves too much, git/Sigstore/Filecoin/Arweave don't panic' — IS the strongest surviving objection, and the §2.1 draft DOES NOT engage with it (Lens 15 will hit this too). VERDICT: pursue F5 but the §2.1 draft as written is structurally vulnerable on the proves-too-much axis and must be revised before publication. See `hndl_for_sigs_argument_survival` field."
+    },
+    "F6": {
+      "disposition": "PURSUE — SUPPORT (independent of F5 framing)",
+      "rationale": "The did:jwk hybrid extension library is the credibility anchor. It survives my objection in any framing — even if §2.1 collapses to Position A ('here's why Benten chose this'), shipping the code is the asymmetric trust-builder. Decoupling: if §2.1 must be substantially softened or downgraded, F6 still ships."
+    },
+    "F7": {
+      "disposition": "PURSUE — SUPPORT (with framing qualification)",
+      "rationale": "W3C CCG did:key issues #70/#74 engagement is low-cost. My qualification: avoid framing engagement as 'we figured out the right answer'; frame as 'we shipped one approach (Benten-private varsig + dual-codepoint hedge), here are the tradeoffs, what do you think.' Soft posture survives even if the TNFL argument is contested."
+    },
+    "F10": {
+      "disposition": "PURSUE — SUPPORT (HIGH priority, modified framing)",
+      "rationale": "Iroh-first outreach (Shape-5 'coalition-first' refinement) is the strongest move in the entire plan from my persona's view. Reason: iroh's explicit 'waiting for industry consensus' quote is the public marker against which Benten's stance reads as either 'we know something they don't' (high reputation risk) or 'we discussed this with them and chose differently for reasons X/Y/Z' (low risk). Private conversation BEFORE blog publication lets us probe whether iroh-team accepts the TNFL framing or pushes back — if they push back, that's evidence I should weight my own objection more strongly and Benten should downgrade to Position A or defer."
+    }
+  },
+  "hndl_for_sigs_argument_survival": "PARTIAL SURVIVAL. My strongest counter going in — 'TNFL is speculative; no documented case; we don't see git/Sigstore panicking' — collapses on its first claim (TNFL is a NAMED industry-recognized threat class with 8 years of literature: STFT 2018 → TNFL 2023+ → PQShield 'Harvest-Now-Forge-Later' 2024+; multiple PQC industry firms publish on it as an established class). My second claim (no documented realized attack) is true but symmetric with HNDL-for-encryption, which Benten accepts; the symmetry asymmetry doesn't hold. BUT my third claim — 'argument proves too much; git commits, Sigstore, Filecoin/Arweave permaweb, Debian sigs, all have decade+ persistence + classical sigs + no panic' — DOES survive and is the unresolved hole in §2.1. The paragraph asserts content-addressed long-term-persistence creates a structural asymmetry that motivates the choice, but Arweave (200-year design), Filecoin (perpetual renewals), git (decades for major projects), Sigstore (Rekor transparency log for post-cert-expiry verification) all share that structural property and have NOT made Benten's choice. The §2.1 draft doesn't enumerate these comparable systems or explain WHY Benten differs from them — and that gap reads as either (a) Benten thinks it knows better than these established systems (which feeds Lens 5 small-team-overreach) OR (b) Benten hasn't fully thought through the class boundary (which feeds Lens 15 threat-model-boundaries). NARROWING THAT WOULD MAKE THE ARGUMENT DEFENSIBLE: explicitly enumerate the comparable-class systems (git/Sigstore/Filecoin/Arweave/Debian/permaweb) and articulate a SHARPER class boundary than 'content-addressed long-term-persistence' — because that boundary captures too much. Candidate sharper boundaries: (i) 'systems where the SIGNER is the principal AND the signature delegates capability that compounds over time' (UCAN-grant-chain semantics; not just signed-artifact-with-static-meaning like git commits); (ii) 'systems where signature verification is performed by third parties without out-of-band trust signals' (cuts the other way — git/Sigstore HAVE rich social trust signals: GitHub identity, Rekor transparency, web-of-maintainers; Benten's Atrium has weaker such signals at v1-beta); (iii) 'systems where a forged signature causes immediate authority delegation in an automated system without human review' (UCAN delegate-of-delegate chains; plugin manifest auto-install; AI-agent autonomous use per CLAUDE.md baked-in #18). Of these, (iii) is the SHARPEST defensible boundary because it lines up with Benten's specific use cases (plugin manifests, AI-agent autonomy at Phase-6) and gives a real reason why Sigstore/git/Arweave are NOT in the same class (human review is in the loop; forgery alone doesn't yield immediate authority). RECOMMENDED §2.1 REVISION: replace 'content-addressed long-term-persistence' with 'long-lived signatures that delegate capability into automated trust chains without per-use human review.' Concede explicitly that Sigstore/git/Filecoin/Arweave/Debian made the opposite choice and articulate why their threat model differs (in their case, signature consumption flows through human review at install/merge time + rich identity infrastructure; Benten's plugin manifests auto-load on every Atrium peer at every Drop sync). Also add a 'secondary trust factors' paragraph: an adversary forging a 2026-dated Drop in 2035 still has to either (a) sync it visibly into Atriums (detectable by canonical-replica divergence) OR (b) get downstream consumers to accept it via social trust signals (rotation logs, peer attestations, plugin-author Atrium presence). The §2.1 draft as written implies cryptographic signature is the sole trust factor; framing it as ONE factor among several (where PQ-hybrid raises the cost of attacking THIS factor) is more defensible than 'forging the signature wins.' IRRECOVERABLE HOLE IF NOT FIXED: with the current §2.1 framing, a skeptical reader will run the proves-too-much test in their head ('do I see git deprecating Ed25519? no. do I see Debian? no. do I see Filecoin? no. why is Benten special?') and conclude Benten is overreaching. That's the reputation-collapse failure-mode E in the plan."
+}
