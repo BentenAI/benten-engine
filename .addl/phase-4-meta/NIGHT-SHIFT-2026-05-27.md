@@ -481,3 +481,77 @@ MEMORY.md index updated under "Review composition + convergence" subsection.
 7. Then v1-beta-tag
 
 *Updated 2026-05-27 LATE-SESSION. Compact-survival snapshot for next-session pickup.*
+
+---
+
+## 2026-05-27 POST-COMPACT RE-ORIENT ADDENDUM — F+ second-opinion + 3rd-reviewer dispatched + CT-SampleNTT investigation
+
+Session resumed post-compact 2026-05-27. Ben asked the previously-not-explicitly-surfaced question: **is the Option F+ NO-GO actually settled, or did orchestrator fold it into "ratified" without explicit Ben sign-off?** Surfaced the full first-agent NO-GO reasoning in plain English with my-pred + ground-truth-verify; Ben chose to dispatch a second-opinion crypto agent focused on the §6.2 envelope-layer-unification alternative.
+
+### Second-opinion review RETURNED (agent `af962c76177a0b954`, completed ~528s wall-clock)
+
+**File**: `.addl/phase-4-meta/option-f-plus-second-opinion-cryptographer-review.md` on `phase-4-meta-core/option-f-plus-second-opinion-cryptographer-review @ 7e900a3b` (520 lines).
+
+**Verdict**: **CONCUR-WITH-AMENDMENTS** on Option F+ NO-GO. **§6.2 envelope-layer-unification design APPROVED with two amendments.**
+
+**The 2 amendments to §6.2 (load-bearing for final design)**:
+1. **Codepoint MUST be committed inside the canonicalized AAD / info-string** for every Seal/Open call across both `EnvelopePayload` variants. Without this, an adversary who flips the discriminator byte gets a cross-codepoint attack surface (e.g., rewriting a Layer-A vault file's codepoint to LAYER_C_DROP_TO_RECIPIENT forces engine to dispatch HPKE-Open path on AEAD bytes, exposing fresh side-channel measurement on the vault sk per Bernstein–Persichetti "One Time is Enough" 2024).
+2. **Strict-decode discipline with codepoint→variant-tag dispatch + no cross-variant fallback.** Decoder MUST NOT attempt cross-variant decoding on the same bytes.
+
+**3 new independent findings beyond first agent's review**:
+- **§3.3 ML-KEM CBD-sampling is a SECOND side-channel surface stacked on SampleNTT** — even hypothetical-CT-SampleNTT wouldn't fully fix F+. Reinforces NO-GO.
+- **§4.1 Structural pseudo-pubkey-as-identifier oracle attack INDEPENDENT of timing** — if the vault pseudo-pubkey were ever observed (current design says it won't be, but architectural extensibility could change that — KCV, routing identifier, etc.), each password candidate becomes confirm-or-reject via pubkey-derivation determinism. AEAD-under-DAK has no derived pubkey → no such oracle. **This is the load-bearing finding** — even in a counterfactual "CT-everything" universe, F+ is the worse design because of this structural property.
+- **§3.5 PESTO / HPAKE / SPEKE precedent literature** strengthens the "no precedent" argument with cryptographic-research-history (the prior agent's "no precedent" was directionally correct but understated; there IS literature on this class, and it reaches the same NO-GO conclusion).
+
+**Calibration pushback (without reversing conclusion)**: confidence on side-channel magnitude should be MEDIUM not MEDIUM-HIGH on *practical* reachability; but decision-asymmetry still warrants HIGH overall recommendation confidence.
+
+**Inv-16 phrasing recommendation (§4.3)**: **primitive-neutral** framing — articulate the layer/role separation (identity-blob-CID vs ephemeral-permission-CID vs envelope-CID, or analogous) without locking to a primitive choice; leaves crypto-agility seam intact for future-additive codepoints (incl. F+ revisit if its blockers are ever closed).
+
+### Orchestrator-direct CT-SampleNTT investigation findings
+
+Ben's curiosity: *"is constant-time SampleNTT not implemented in RustCrypto ml-kem something other people actually care about? are there existing discussions/whatever? if not should we open one (or even build it as a side-quest PR)?"*
+
+| Signal | Finding |
+|---|---|
+| IETF [draft-sfluhrer-cfrg-ml-kem-security-considerations-04](https://www.ietf.org/archive/id/draft-sfluhrer-cfrg-ml-kem-security-considerations-04.html) (Nov 2025; Informational; multi-org WG-track — Cisco / NIST / Ericsson / Quantinuum / Arqit) | **Explicitly identifies the F+ use case as the load-bearing exception**: *"One exception is in some methods that implement Password Authenticated Key Exchange with ML-KEM, where the public key may be encrypted with the password. In this rather narrow use case, this variable timing needs to be taken into account."* Then concedes: *"Converting this into a constant time operation is expensive enough that it is rarely done."* |
+| Tempo paper IACR ePrint 2025/1399 (Arriaga / Barbosa / Boyen) | Published mitigation blueprint; not yet implemented in production Rust impls |
+| RustCrypto/KEMs `ml-kem` README | **"never been independently audited! USE AT YOUR OWN RISK!"** |
+| RustCrypto/KEMs [Issue #25](https://github.com/RustCrypto/KEMs/issues/25) "Evaluate whether compilation introduces a secret-dependent branch" | OPEN since 2024-06-03 (~24 months stale); cites Kyber `poly_frommsg` clang bug; **no comments, no Tempo / SampleNTT cross-reference** |
+| RustCrypto/KEMs Tempo-specific tracker | **None** — clear contribution gap |
+| Maintenance velocity | Active — ml-kem v0.3.0 / v0.3.1 / v0.3.2 cut April–May 2026; PR #289 "avoid UDIV in compiled output" shows CT-awareness in active development |
+| Cryspen [`libcrux-ml-kem`](https://docs.rs/libcrux-ml-kem) v0.0.9 | Formally verified via hax + F*; "secret independent" proven; **pre-1.0**, not independently audited, doesn't specifically address SampleNTT in public material. Different crate from `hpke-rs` (which had 13 CVEs Feb 2026); same org (Cryspen), separate codebase, separate maturity. |
+
+**Net for Benten**: the gap is real and acknowledged ecosystem-wide. Per Ben's framing — *"if CT-SampleNTT already existed would it be the more ideal/permanent/elegant/stronger shape than the alternative we're considering?"* — **NO**: even in a counterfactual "CT-everything" universe, F+ would still NOT be Benten's better design choice due to (a) second-opinion's §4.1 structural oracle (timing-independent), (b) first-agent's §5 architectural-utility argument (3-of-4 not 4-of-4; different security shapes per layer), (c) second-opinion's §3.3 second-side-channel-surface (CBD-sampling stacked on SampleNTT).
+
+**Side-quest scope decision (Ben-ratified 2026-05-27 post-compact)**: **Level 1 only — open RustCrypto/KEMs issue (~30 min)**. Title: "ml-kem: track Tempo-class constant-time SampleNTT for non-public-seed use cases (PAKE, vault unlock, etc.)"; body: cite Tempo + IETF draft-sfluhrer + Issue #25 cross-link + libcrux-ml-kem context + Benten's encrypt-to-self design as "we evaluated this and chose symmetric-AEAD-under-KDF" downstream-consumer datapoint. Timing: **after F-full doc cascade lands** (Ben's choice; issue text will be cleaner once Benten's own decision is recorded).
+
+### 3rd adversarial-design reviewer dispatched (`aa60741867edfefc6`; ~1.5-3hr ETA)
+
+Per second-opinion's recommendation + Ben's belt-and-suspenders choice. Adversarial / red-team posture explicitly: try to BREAK §6.2-with-Amendments-1+2. Default to DISAGREE if substantive grounds found; CONCUR-WITH-NEW-EVIDENCE if not. Brief enumerates 12 specific attack vectors as starting points (cross-codepoint confusion / BindingContext substitution / codepoint enum extension hazards / strict-decode edge cases / AAD-binding completeness / domain-separation / AEAD-vs-HPKE composition / §4.1-style structural oracles / cross-layer attacks / long-term key-rotation / impl-bug surface / multi-stanza HPKE composition).
+
+Branch on completion: `phase-4-meta-core/option-f-plus-third-reviewer-adversarial-design`.
+
+### Tracked-doc PR cascade STATE
+
+- Branch `phase-4-meta-core/inv-16-compromise-dak-rename-cat-a` CREATED off main `2172cb6d`
+- **PAUSED** pending 3rd-reviewer return; Inv-16 phrasing should follow §4.3 primitive-neutral framing
+- Ben **pre-authorized** bypass-merge-reinstate for this specific doc-only PR (G-CORE-9 FREEZE precedent: PR #1356/#1357)
+- When 3rd-reviewer ratifies: resume + Inv-16 mint (primitive-neutral) + new Compromise # for DAK substrate (incl. Option F+ NO-GO rationale + §4.1 structural-oracle finding + revisit-triggers) + Compromise #30→#31 cross-link + Category A rename application + atrium test count 15→16 + open PR + execute bypass-merge-reinstate
+
+### Standing law refresher (UNCHANGED)
+
+All prior standing law applies. New process datum: **`feedback_review_finding_ground_truth_verify` is what caught the previously-not-surfaced F+ ratification gap** — orchestrator had folded agent NO-GO into "ratified" via the LATE-SESSION ADDENDUM without explicit Ben sign-off. Ben caught it post-compact: *"we never went over that. can you give me all the details? are we sure it's a NO GO?"* Correct discipline going forward: any agent finding that becomes architectural-commitment text MUST be surfaced explicitly with my-pred + plain-English framing for Ben ratification, EVEN IF the agent's finding aligns with orchestrator's expected path. This is `feedback_surface_arch_decisions_under_auth` operating correctly + `feedback_review_finding_ground_truth_verify` as the cross-check.
+
+### IMMEDIATE NEXT-ACTION queue (refreshed)
+
+1. **WAIT**: 3rd-reviewer returns (~1.5-3hr); harvest findings; drop worktree
+2. **If 3rd-reviewer CONCUR**: ratify F+ NO-GO final + resume tracked-doc PR cascade (Inv-16 primitive-neutral + Compromise # for DAK + Compromise #30→#31 + Cat A rename + test count 15→16 + open PR + bypass-merge-reinstate)
+3. **If 3rd-reviewer DISAGREE**: surface to Ben with full reasoning + my-pred (most likely path: even if DISAGREE, the disagreement focuses on amendments-to-amendments rather than wholesale design reversal; we adapt then proceed)
+4. **Orch-direct (post-cascade)**: orchestration-branch CLAUDE.md baked-in #5 retense + #18 amendment + dispatch-conventions §3.5s amendment
+5. **Orch-direct (post-cascade)**: Side-quest Level 1 — open RustCrypto/KEMs CT-SampleNTT issue (~30 min)
+6. **Author F-full R0 plan-doc** consolidating e2r-ffull-scope-review wave-sequencing + Option F+ NO-GO outcome + §6.2 + Amendments 1+2 into proper R0 plan
+7. **F-full R1 critic council** (5-7 lenses; iterate to convergence)
+8. Continue ADDL pipeline: R2 → R3 → R4 → R5 (canary-first; Wave 1 = X-Wing-mislabel corrective + Layer-B residual + 21-draft rename pass) → R4b → R6 R3 → pre-tag sweep → tag `phase-4-meta-core-close`
+9. Then Phase-4-Meta-Composing full ADDL pipeline → tag `phase-4-meta-close` → tag `v1-beta` → external crypto audit (~3 person-weeks) → tag `v1-GM`
+
+*Updated 2026-05-27 POST-COMPACT. Captures F+ second-opinion outcome + 3rd-reviewer dispatch + CT-SampleNTT investigation. Next compact-survival update lands when 3rd-reviewer returns + ratification decision settles.*
