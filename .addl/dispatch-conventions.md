@@ -1703,3 +1703,37 @@ RULE: (a) Cap-exempt review briefs MUST verify findings via **ref-pinned reads**
 **Enforcement seam**: Position B blog revision agent + Shape 5 iroh-outreach prep agent are both briefed with this rule explicitly (per `feedback_review_finding_ground_truth_verify` discipline). Future agent briefs that involve drafting public-facing technical content about other systems MUST inherit this discipline.
 
 **Composes with**: §3.5n review-finding ground-truth-verify (this rule extends that discipline from "verify review findings against code" to "verify external-system reasoning attributions against primary sources"); `feedback_review_finding_ground_truth_verify` foundational memory; §3.5q IETF-vocabulary-precision (same family of discipline — get the externalities right before adopting their framing into Benten's work).
+
+---
+
+## §3.5s — Cross-ecosystem-identifier-as-content discipline (Ben-codified 2026-05-26 from cross-stack-naming discussion + JOSE-archaeology agent §7.2 X-Wing-vs-HPKE-PQ-disambiguation finding)
+
+**Origin**: surfaced during the 15-critic synthesis + L12 cryptographer-review-of-bird-of-prey-vs-lamps + JOSE-archaeology agent return. Ben ratification 2026-05-26: *"use the already-converging cross-ecosystem identifiers (LAMPS OID 1.3.6.1.5.5.7.6.48 + JOSE/COSE alg-name MLDSA65-Ed25519 at COSE alg -55 + multicodec container approach) AS CONTENT inside our envelopes makes a lot of sense."*
+
+**RULE**: Wire-format envelopes that cross ecosystem boundaries (DID URIs, X.509-style certs, JOSE/JWE/JWS envelopes, COSE envelopes, JWK fields, multicodec containers) MUST carry the **cross-ecosystem identifier AS CONTENT** inside the envelope where consumers of that ecosystem will recognize it. The Benten-internal `SigCodepoint` / `CipherSuiteCodepoint` / etc. dispatch numbers stay **hot-path-dispatch-only** and MUST NEVER appear at ecosystem-boundary surfaces in lieu of the cross-ecosystem identifier.
+
+**Concrete mappings (current)**:
+- **PKIX / X.509 / CMS** — algorithm-identifier carried as **LAMPS OID** (e.g. `id-MLDSA65-Ed25519-SHA512` = `1.3.6.1.5.5.7.6.48`)
+- **JOSE / JWE / JWS / JWK** — algorithm-identifier carried as **JOSE/COSE algorithm name** (e.g. `MLDSA65-Ed25519` per `draft-skokan-jose-hpke-pq-pqt-05` / COSE alg `-55`)
+- **Multicodec** — public keys carried via **container-form codepoints** (`cose-key` `0x42` / `jwk` `0x44` per multicodec PRs #400/#403) with the LAMPS-aligned algorithm naming **inside the container**, not via per-algorithm multicodec entries
+- **did:jwk URIs** — algorithm naming in the JWK `alg` field references the JOSE/COSE registry
+- **Benten internal Varsig + AEAD envelope dispatch** — `SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001` / `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768 = 0x647A` stay wire-format-internal-only
+
+**Why this matters**: each ecosystem (PKIX/JOSE/COSE/multicodec/Benten-internal) uses its own dispatch shape (ASN.1 OID vs small-integer-alg-ID vs varint vs 2-byte LE) and there is **no shared registry across them**. Trying to make Benten's internal dispatch codepoint AS the cross-ecosystem identifier would either (a) require external registries to adopt Benten's codepoint (won't happen) or (b) leave Benten's outputs unrecognizable to external consumers. The right pattern: **identify the construction by its cross-ecosystem identifier as content, dispatch internally by codepoint for speed**. Different concerns at different layers.
+
+**Failure mode if violated**: writing a Benten-internal SigCodepoint `0x0001` into a `did:jwk` URI or JWE algorithm field instead of the JOSE-registry name `MLDSA65-Ed25519` would make Benten outputs unrecognizable to JOSE-stack consumers (JWS libraries, WebCrypto, JWKS endpoints) without Benten-private codepoint knowledge. Ecosystem-fragmentation hazard per L4 critic finding; META-message-of-small-team-fragmenting-ecosystem hazard per L1.
+
+**Enforcement seam**:
+- New wire-format envelope designs MUST explicitly answer: "what cross-ecosystem identifier does this envelope carry as content?" alongside "what internal dispatch codepoint resolves the construction internally?"
+- Design-review at PR-time for any envelope-shape changes
+- Future cite-drift-detector extension to flag Benten-private-codepoint references in ecosystem-boundary surface code (DID-URI rendering paths, JWE/JWS envelope construction, etc.)
+
+**Future-additive direction**: when Benten exposes a JOSE-side encrypt-to-recipient surface (Phase-4-Meta+ scope; see G-CORE-PQ-WIRE wave + the F-full architectural direction), the HPKE-PQ-PQT codepoints from `draft-skokan-jose-hpke-pq-pqt` are exactly the cross-ecosystem identifiers that envelope would carry as content. Benten's internal `CipherSuiteCodepoint` continues to be the hot-path dispatch number; the JOSE envelope contents reference the JOSE registry.
+
+**Composes with**:
+- §3.5p (3-layer decomposition for signed-data) — identity layer + authentication layer + revocation layer; cross-ecosystem identifiers live at the authentication layer when crossing ecosystem boundaries
+- §3.5q (IETF-vocabulary-precision) — cross-ecosystem identifier naming should mirror the WG-precise vocabulary (e.g. "MLDSA65-Ed25519" not "X-Wing-style" when the WG-adopted name is the former)
+- §3.5g cross-language rule-mirror — internal SigCodepoint dispatch must be mirrored TS/Rust; cross-ecosystem identifiers are content not dispatch so don't need the same mirror discipline
+- `feedback_extra_reflection_pass_for_elegant_permanent_shape` — the cleanest architectural shape separates DISPATCH (internal codepoints) from IDENTIFICATION (cross-ecosystem content) at each ecosystem-boundary surface
+
+**Concrete current-state corrective triggered by this rule** (cryptographer-review finding 2026-05-26): `crates/benten-crypto-suite/src/cipher_suite.rs` references our X-Wing-style combiner as "X-Wing" but (a) the actual construction is NOT real X-Wing (mismatch on hash function + label) AND (b) the IRTF CFRG Research-Group-ADOPTED name is `MLKEM768-X25519` per `draft-irtf-cfrg-concrete-hybrid-kems-03`. The §3.5s discipline says: rename references in cross-ecosystem-boundary surfaces (DID URIs, did:jwk, multicodec metadata, public docs) to `MLKEM768-X25519`; the internal codepoint `0x647A` stays as-is (matches the IETF-reservation). Pre-v1-beta-tag-must-fix per the cryptographer-review independent of any other architectural decisions.
