@@ -341,3 +341,143 @@ Cross-platform abstraction package recommendation will come from the agent.
 ---
 
 *Authored 2026-05-27 mid-session. Living doc. Updates rolling as work lands + ratifications happen + agent returns.*
+
+---
+
+## 2026-05-27 LATE-SESSION ADDENDUM — End-of-context handoff
+
+### Agent returns + ratifications received this late-session
+
+**e2r-ffull-scope-review RETURNED** (re-dispatch post-rate-limit-reset) at `phase-4-meta-core/encrypt-to-recipient-review-ffull-scope @ 220b5aae`. Full file `.addl/phase-4-meta/e2r-ffull-scope-review.md` (960 lines).
+
+Recommendation: **Ship full F-full scope across Phase-4-Meta-Core + Phase-4-Meta-Composing, both pre-v1-beta-tag.** Do-it-now bias holds; no piece needs deferring past v1-beta-tag.
+
+**Wave-sequencing**:
+- **Phase-4-Meta-Core (~5,000-6,500 LOC)**: X-Wing-mislabel corrective (~24 LOC; INDEPENDENT) + Layer-A real K_principal store (pull G-CORE-3e forward) + Layer-B per-Node AEAD residual + Layer-C encrypt-to-recipient (HPKE-RFC-9180 + MLKEM768-X25519 + multi-stanza + Inv-16) + Layer-D DAK trait + Argon2id substrate + at-rest K_principal/user-DID-key encrypt + multi-device-key-wrap WIRE + remote-permission-call WIRE + minimum desktop platform glue (`keyring-core` + Tauri shell smoke + file-vault fallback)
+- **Phase-4-Meta-Composing (~1,300-2,400 LOC)**: Biometric layer + Stronghold optional backend + Device-link UX flow (QR + approval) + Remote-permission-call UX flow + Identity-recovery `RecoveryHook` stub trait
+
+**Decision rule**: wire-format-affecting → Phase-4-Meta-Core (pre-interface-freeze); UX-coupled → Phase-4-Meta-Composing. Both pre-v1-beta-tag.
+
+### 3 concrete tactical picks Ben RATIFIED 2026-05-27
+
+1. **`keyring-core` v1.0.0** (May 2026; NOT legacy `keyring` which self-says "Do not depend on this crate!")
+2. **Brendan McMillion's `hpke` crate** (NOT `hpke-rs` from Cryspen which has 13 vulnerabilities Feb 2026)
+3. **Signal Provisioning + CTAP 2.2 hybrid-transport inspired protocol shape** for remote-permission-call (QR + ephemeral keypair + signed grant; reuses Layer-C HPKE primitive); pre-merge security mini-review NON-NEGOTIABLE
+
+### Option F+ pseudo-keypair pattern cryptographer review RETURNED 2026-05-27 LATE-SESSION
+
+Agent: `a0bd3aaff8d70cc0e`; pushed at `phase-4-meta-core/option-f-plus-pseudo-keypair-review @ 6d4e173f`; full file at `.addl/phase-4-meta/option-f-plus-pseudo-keypair-review.md` (412 lines).
+
+**Recommendation: NO-GO on Option F+ pseudo-keypair pattern.** Pursue Option B-equivalent: **ChaCha20-Poly1305 AEAD-under-DAK for Layer-A vault** + **HPKE-mode-base[MLKEM768-X25519] for Layer-C drop + Layer-D wraps**. The "unified envelope" intuition is correct but **unification belongs at the envelope/codepoint-dispatch layer, NOT at the primitive layer**. Same outer `EncryptedEnvelope { codepoint, payload, aad_binding }` shape, codepoint-discriminated to `SymmetricAead` for vault vs `HpkeBase` for drop/wraps. This IS the CLAUDE.md baked-in #5 crypto-agility pattern operating as designed.
+
+**5 load-bearing findings**:
+1. The pattern IS formally sound in the IND-CCA2 reduction sense (RFC 9180 §7.1.3 admits deterministic-derived keypairs; X-Wing's `GenerateKeyPairDerand` is the explicit API). **Soundness is NOT the failure mode.**
+2. **The load-bearing concern is a side-channel attack against ML-KEM-768 KeyGen-from-secret-seed via SampleNTT rejection-sampling timing.** Arriaga et al. "Tempo" paper (IACR ePrint 2025/1399) was constructed specifically for this. When seed ρ comes from DAK (password-derived), keygen timing leaks bits of password to co-resident-VM or local-code-execution adversary, enabling online dictionary attack that bypasses Argon2id's memory-hardness. AEAD-under-DAK has no equivalent surface. Mitigations either violate baked-in #5 (vendor patched ml-kem) or wait for upstream constant-time SampleNTT (unscheduled in RustCrypto).
+3. **Zero production-system precedent** for "encrypt-to-self under password-derived asymmetric pseudo-keypair." Age, Bitwarden, 1Password, OPAQUE, Molly (Signal fork), IOTA Stronghold — every reviewed vault system uses symmetric AEAD under KDF-derived key. The deterministic-keypair-from-seed pattern exists (BIP32, determin-ed) but only for pubkey-published or signing use cases, never encrypt-to-self vaults.
+4. **"One primitive across 4 layers" elegance is superficial.** Layer-B (per-Node AEAD) is structurally symmetric anyway; so it's 3-of-4 not 4-of-4. Audit-surface delta is net-larger not net-smaller under F+ (ADDS pseudo-keypair-from-secret-seed analysis surface).
+5. **Right unification = envelope-format layer (codepoint-dispatched), not primitive layer.**
+
+**Net for R0 plan-doc**: structure is now KNOWN — Option B-equivalent with codepoint-dispatched envelope unification. R0 plan-doc authoring can begin once orch-direct doc cascade lands.
+
+### Ben CRITICAL refinement 2026-05-27: ADDL pipeline observance
+
+Ben caught orchestrator proposing to jump directly from "F-full ratified" → "dispatch wave-cascade (R5-style)" without going through the full ADDL pipeline for the F-full new scope.
+
+**Corrected understanding**: F-full is NEW scope that emerged during R6 R2 FP cycle ("tangential exploration"). It has the e2r-ffull-scope-review as R0-INPUT but NOT a proper R0 plan-doc. Per CLAUDE.md ADDL Pipeline section + `feedback_iterate_critical_reviews_to_convergence`, F-full needs its own full ADDL pipeline before R6 R3 can converge the post-F-full state.
+
+**Corrected proceed plan** (ratified by Ben):
+
+```
+Phase-4-Meta-Core close path (CORRECTED):
+
+1. Orchestrator-direct doc cascade (CAN DO NOW; records ratified decisions)
+   - Tracked-doc PR: Inv-16 mint in INVARIANT-COVERAGE.md (15→16) + new Compromise # in SECURITY-POSTURE.md for DAK substrate + Compromise #30 cross-link to #31 + Category A rename application (per x-wing-to-mlkem768-x25519-rename-audit.md) + bypass-merge-reinstate
+   - Orchestration-branch: CLAUDE.md baked-in #5 retense + #18 amendment (forkability + encrypt-everywhere-as-default + storage-vs-access-execution-separation) + dispatch-conventions amendments
+
+2. Wait for Option F+ pseudo-keypair cryptographer review return
+
+3. Author F-full R0 plan-doc consolidating e2r-ffull-scope-review wave-sequencing + Option F+ outcome
+
+4. F-full R1 critic council (5-7 lenses per Pattern 6; iterate to convergence per Q5)
+
+5. F-full R2 test landscape synthesis (1 agent)
+
+6. F-full R3 test-writer dispatch (N parallel per R2; per feedback_r3_agent_count_dynamic)
+
+7. F-full R4 test review (2-3 lenses; iterate to convergence)
+
+8. F-full R5 implementation wave-cascade (canary-first per feedback_canary_first_parallel_implementation):
+   - Wave 1 (canary): X-Wing-mislabel corrective + Layer-B residual + 21-draft rename pass (Category A code + comment drafts)
+   - Wave 2: Layer-A K_principal store (G-CORE-3e pulled forward)
+   - Wave 3 (canary): Layer-C encrypt-to-recipient (HPKE + MLKEM768-X25519 + multi-stanza)
+   - Wave 4: Layer-D DAK substrate + Argon2id + at-rest encryption
+   - Wave 5: Layer-D wire-format pieces (multi-device-key-wrap + remote-permission-call)
+   - Wave 6: Layer-D platform glue (keyring-core + Tauri smoke + file-vault fallback)
+
+9. F-full R4b post-implementation test review (iterate to convergence)
+
+10. R6 R3 phase-close council (full N-lens; evaluates post-F-full state; iterate to strict-Q5)
+
+11. Pre-tag sweep + tag phase-4-meta-core-close (awaits Ben check-in)
+
+Phase-4-Meta-Composing path (CORRECTED):
+
+12. Full ADDL pipeline for Phase-4-Meta-Composing (R0 plan + R1 + R2 + R3 + R4 + R5 [biometric + Stronghold + device-link UX + remote-permission UX + identity-recovery RecoveryHook stub + self-composing admin] + R4b + R6 + pre-tag sweep + tag phase-4-meta-close)
+
+13. Tag v1-beta (after BOTH Phase-4-Meta-Core AND Phase-4-Meta-Composing close)
+
+14. External cryptographer audit (3 person-weeks; parallel-with-some during v1-beta → v1-GM window)
+
+15. Tag v1-GM (after audit lands; replaces single v1 per 2026-05-19 reframe)
+```
+
+### Honest timeline estimate (corrected)
+
+The agent's "4-5 weeks to v1-beta-tag" was R5-only and 2-3× optimistic. With full ADDL:
+
+**v1-beta-tag honest estimate: ~7-15 weeks (~2-4 months) from 2026-05-27.**
+
+Breakdown:
+- Doc cascade + Option F+ return: ~1-3 days
+- F-full R0/R1/R2/R3/R4 (pre-R5): ~10-21 days
+- F-full R5 wave-cascade: ~7-14 days
+- F-full R4b/R6 R3 + convergence iterations: ~7-20 days
+- Phase-4-Meta-Core close subtotal: ~26-60 days
+- Phase-4-Meta-Composing full ADDL: ~21-45 days
+- Subtotal to v1-beta-tag: ~47-105 days (~7-15 weeks)
+- External audit + v1-GM-tag: +21+ days
+
+### 2 new memory files codified 2026-05-27 LATE-SESSION
+
+Both at `/Users/benwork/.claude/projects/-Users-benwork-Documents-benten-engine/memory/`:
+
+1. **`feedback_phase_ordering_precision.md`** — re-read CLAUDE.md baked-in #15 before scope-claim surfaces; v1-beta tagged AFTER both Phase-4-Meta-Core AND Phase-4-Meta-Composing close
+2. **`feedback_addl_pipeline_full_observance.md`** — new architectural-scope work MUST go through full ADDL pipeline before R6 council convergence; e2r-style outputs are R0-INPUT not R0-PLAN
+
+MEMORY.md index updated under "Review composition + convergence" subsection.
+
+### Position B v2 + Shape 5 + 21 drafts STATUS
+
+**Ben earlier decision (2026-05-26)**: hold all 21 drafts until F-full + rename ratify; batch-post in coherent landing.
+
+**Late-session refinement (2026-05-27)**: asymmetry surfaced — F2 multicodec PR #400/#403 endorsements don't cite X-Wing AND have narrowing window; Shape 5 Email-1 doesn't cite X-Wing AND could start 28-day iroh-response clock independently. F7 W3C CCG #70/#74 stable-timing. Other 18 drafts batch with rename. Ben deferred decision on whether to advance F2/Shape-5-Email-1 independently.
+
+### Active background agent at end-of-session
+
+| Agent ID | Topic | Branch on completion | ETA |
+|---|---|---|---|
+| `a0bd3aaff8d70cc0e` | Option F+ pseudo-keypair pattern cryptographer review | `phase-4-meta-core/option-f-plus-pseudo-keypair-review` | ~1.5-3hr from late-session dispatch |
+
+**Critical for next session**: when Option F+ returns, harvest + drop worktree + use findings to inform R0 plan-doc structure (one-primitive vs three-primitives shape).
+
+### IMMEDIATE NEXT-ACTION queue for next session
+
+1. **FIRST**: Verify Option F+ agent state (returned? still running? rate-limited again?). Harvest findings if returned.
+2. **Orchestrator-direct doc cascade**: tracked-doc PR (Inv-16 + Compromise # + #30 link + Category A rename) + orchestration-branch CLAUDE.md retense + dispatch-conventions amendments
+3. **F-full R0 plan-doc authoring** (once Option F+ returns)
+4. **F-full R1 critic council dispatch** (after R0 plan-doc lands)
+5. Continue through R1→R2→R3→R4→R5→R4b→R6 R3
+6. Then Phase-4-Meta-Composing ADDL
+7. Then v1-beta-tag
+
+*Updated 2026-05-27 LATE-SESSION. Compact-survival snapshot for next-session pickup.*
