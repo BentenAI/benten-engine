@@ -555,3 +555,93 @@ All prior standing law applies. New process datum: **`feedback_review_finding_gr
 9. Then Phase-4-Meta-Composing full ADDL pipeline → tag `phase-4-meta-close` → tag `v1-beta` → external crypto audit (~3 person-weeks) → tag `v1-GM`
 
 *Updated 2026-05-27 POST-COMPACT. Captures F+ second-opinion outcome + 3rd-reviewer dispatch + CT-SampleNTT investigation. Next compact-survival update lands when 3rd-reviewer returns + ratification decision settles.*
+
+---
+
+## 2026-05-27 LATE-EVENING ADDENDUM — 9-eyes panel + consolidation + critique-round in flight
+
+Session continued through the day. 3rd-reviewer returned CONCUR-WITH-CALIBRATION + 4 load-bearing amendments + 2 minor. Ben asked for comprehensive coverage of all dimensions → dispatched 6 parallel lens reviewers (L4 impl-engineering + L5 threat-model+audit + L6 privacy + L7 cross-ecosystem-interop + L8 wire-format-stability + L9 atrium-integration). All 6 returned successfully. CT-Decap impl evaluation done orchestrator-direct in parallel; Ben open to Option B (libcrux-ml-kem).
+
+### 9-eyes panel COMPLETE — unanimous F+ NO-GO + design-direction concur
+
+| Lens | Branch | Verdict |
+|---|---|---|
+| L1 1st cryptographer | `phase-4-meta-core/option-f-plus-pseudo-keypair-review @ 6d4e173f` | NO-GO on F+ pseudo-keypair; §6.2 envelope-layer-unification |
+| L2 2nd-opinion cryptographer | `phase-4-meta-core/option-f-plus-second-opinion-cryptographer-review @ 7e900a3b` | CONCUR-WITH-AMENDMENTS (1+2) |
+| L3 adversarial-design | `phase-4-meta-core/option-f-plus-third-reviewer-adversarial-design @ 13b624c3` | CONCUR-WITH-CALIBRATION (Amendments 3-6 + 2 minor) |
+| L4 impl-engineering | `phase-4-meta-core/option-f-plus-lens-l4-impl-engineering @ 4d4aae5f` | CONCUR-WITH-IMPL-AMENDMENTS (6 impl-amendments; recommends libcrux-ml-kem; LE-vs-BE conflict; ~9-10wk cost) |
+| L5 threat-model+audit-readiness | `phase-4-meta-core/option-f-plus-lens-l5-threat-model-audit-readiness @ 3f27f8e0` | AUDIT-READY-IN-DIRECTION (11 Compromise mints + 3 invariants + THREAT-MODEL.md) |
+| L6 privacy/metadata-leak | `phase-4-meta-core/option-f-plus-lens-l6-privacy-metadata-leak @ 986e50bb` | CONCUR-WITH-CALIBRATION + DISAGREE on load-bearing-final (6 amendments + Sealed-Sender slot) |
+| L7 cross-ecosystem-interop | `phase-4-meta-core/option-f-plus-lens-l7-cross-ecosystem-interop @ 208f98bb` | INTERNALLY-SOUND-BUT-§3.5s-NON-COMPLIANT (HPKE-11-KE correction + 2 amendments) |
+| L8 wire-format-stability | `phase-4-meta-core/option-f-plus-lens-l8-wire-format-stability @ d8d3c41c` | CONCUR-WITH-EXTENSIONS (8 amendments + CodepointLifecycle) |
+| L9 atrium-integration | `phase-4-meta-core/option-f-plus-lens-l9-atrium-integration @ 1670aa03` | CONCUR-WITH-CALIBRATION (5 amendments A1-A5; dual-CID disagreement with prior P2P-architect) |
+
+### Consolidation agent landed — unified registry on `phase-4-meta-core/option-f-plus-9-eyes-consolidated-registry @ fbdfeb16`
+
+**File**: `.addl/phase-4-meta/option-f-plus-9-eyes-consolidated-registry.md` (939 lines).
+
+Outputs:
+- **28 unified amendments** (raw ~46 deduplicated)
+  - 18 LOAD-BEARING wire-affecting at v1-beta-freeze
+  - 6 RECOMMENDED v1-beta (impl-engineering + doc-deliverable)
+  - 4 NAMED-DEFERRED with revisit-triggers
+- **13 new Compromise mints (#32-#44)** + extension to #31
+  - Most-load-bearing: #32 (B-P Decap) + #43 (envelope metadata leakage)
+- **3 unified invariants**: Inv-16 (envelope-unification primitive-neutral) + Inv-17 (hybrid-mandatory) + Inv-18 (codepoint-registry + metadata-disclosure)
+- **5 disagreements** for Ben (Q1-Q5; held open per Ben's "let critics surface with full reasoning" choice)
+- **4 pattern-induction meta-findings**
+- **v1-beta cost estimate**: ~9-10 calendar weeks (~35-45 wave-days; compresses to ~7 weeks if R3/R5 briefs absorb upfront)
+
+### The 5 disagreements (consolidator advisory; held open)
+
+| Q# | Decision | Consolidator advisory | Confidence |
+|---|---|---|---|
+| Q1 | Option A (oqs-rs) vs Option B (libcrux-ml-kem) | libcrux-ml-kem | HIGH |
+| Q2 | LE-vs-BE codepoint endianness in existing aead.rs | Migrate to BE pre-freeze (~1 wave-day) | MED-HIGH |
+| Q3 | L9 dual-CID vs prior P2P-architect recipient_set-in-CID | L9 dual-CID | HIGH |
+| Q4 | HPKE-11 vs HPKE-11-KE mode | HPKE-11-KE if key-encryption mode; verify at R0 §4 | MED-HIGH |
+| Q5 | Sealed-Sender as v1-beta-DEFAULT vs RESERVED-FUTURE-ADDITIVE | Additive slot at v1-beta | MED (Ben call) |
+| Q5b (consolidator-surfaced) | Am4 sender-DID-in-AAD vs L6 metadata-leak tension | Both win (keep Am4 default + reserve Sealed-Sender slot per Q5) | — |
+
+### 5 critique-of-consolidation agents dispatched in parallel
+
+Per Ben's direction ("another review round of this triage and the open questions/options and whether they have any other critiques or more elegant final solutions to things for a final re-triage prior to R0 plan writing"). Each sees the consolidator's recommendations + meta-findings (treated as advisory not load-bearing); Q1-Q5 held open per Ben's "let critics surface with full reasoning" choice.
+
+| Critique # | Lens | Branch on completion |
+|---|---|---|
+| C1 | Elegant-shape extra-reflection-pass (per `feedback_extra_reflection_pass_for_elegant_permanent_shape`) | `phase-4-meta-core/option-f-plus-critique-c1-elegant-shape` |
+| C2 | Cross-amendment composability (3rd-reviewer's MED-HIGH residual concern; now actionable with full registry) | `phase-4-meta-core/option-f-plus-critique-c2-composability` |
+| C3 | Fresh-eyes cryptographer on composed whole (re-evaluates Q1-Q5 in full-registry context) | `phase-4-meta-core/option-f-plus-critique-c3-fresh-eyes-cryptographer` |
+| C4 | Process-discipline + pattern-induction (Pattern 6 effectiveness; consolidator value-add; codification candidates) | `phase-4-meta-core/option-f-plus-critique-c4-process-discipline` |
+| C5 | Formal-methods coverage-gap (consolidator flagged no-formal-methods-lens; targets / tools / cost estimate / `docs/SECURITY-PROOFS.md`) | `phase-4-meta-core/option-f-plus-critique-c5-formal-methods` |
+
+ETA: ~1.5-2hr per agent in parallel; total wall-clock ~1.5-2hr from dispatch.
+
+### Active background agents at write-time
+
+| Agent ID | Topic | Branch on completion |
+|---|---|---|
+| `ade1e7f784026c8cc` | C1 elegant-shape | `phase-4-meta-core/option-f-plus-critique-c1-elegant-shape` |
+| `a6c26f0c494e13bbb` | C2 composability | `phase-4-meta-core/option-f-plus-critique-c2-composability` |
+| `a849e7cda77948587` | C3 fresh-eyes | `phase-4-meta-core/option-f-plus-critique-c3-fresh-eyes-cryptographer` |
+| `a4c3ef3c8e48121b9` | C4 process-discipline | `phase-4-meta-core/option-f-plus-critique-c4-process-discipline` |
+| `a8b694f1ff980aaa4` | C5 formal-methods | `phase-4-meta-core/option-f-plus-critique-c5-formal-methods` |
+
+### IMMEDIATE NEXT-ACTION queue (refreshed)
+
+1. **WAIT**: 5 critique agents return (~1.5-2hr; staggered task-notifications)
+2. **For each return**: harvest findings + drop worktree
+3. **When all 5 return**: synthesize critique-round into final re-triage surface for Ben
+4. **Ben final ratification**: Q1-Q5 resolutions + amendment subset + Compromise # mints + invariants + any critique-induced reductions
+5. **RESUME tracked-doc PR cascade**: Inv-16/17/18 mints + N new Compromise # mints + Compromise #30→#31/32 cross-link + Cat A rename + atrium test count + new docs (THREAT-MODEL.md per L5; CRYPTO-CODEPOINTS.md per L7+L8; possibly SECURITY-PROOFS.md per C5) + bypass-merge-reinstate (pre-authorized for this PR only)
+6. **Orchestration-branch updates**: CLAUDE.md baked-in #5 retense + #18 amendment + dispatch-conventions §3.5s amendment with HPKE-11-KE naming + multicodec codepoint corrections per L7
+7. **Side-quest Level 1**: open RustCrypto/KEMs CT-SampleNTT issue (~30 min; post-cascade)
+8. **Author F-full R0 plan-doc** per ratified design (consolidator's §7 skeleton + critique-round refinements)
+9. **F-full R1 critic council** (Pattern 6 with possibly-new standing lenses per C4); iterate to convergence per Q5
+10. Continue full F-full ADDL pipeline + then Phase-4-Meta-Composing pipeline + then v1-beta-tag + external audit + v1-GM-tag
+
+### Compact-survival pointer
+
+If you resume after compaction: read this file + the consolidator's output at `phase-4-meta-core/option-f-plus-9-eyes-consolidated-registry @ fbdfeb16` first. All 9 + 5 critique reviews are on their respective origin branches. The 9-eyes panel + consolidation are SETTLED; the critique-round is the post-consolidation reflection-pass per `feedback_extra_reflection_pass_for_elegant_permanent_shape`. After critique-round returns: surface final re-triage to Ben + ratify subset + RESUME tracked-doc PR cascade + author R0 plan-doc.
+
+*Updated 2026-05-27 LATE-EVENING. Compact-survival snapshot for next-session pickup or continued live session.*
