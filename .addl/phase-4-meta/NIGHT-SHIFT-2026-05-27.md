@@ -645,3 +645,105 @@ ETA: ~1.5-2hr per agent in parallel; total wall-clock ~1.5-2hr from dispatch.
 If you resume after compaction: read this file + the consolidator's output at `phase-4-meta-core/option-f-plus-9-eyes-consolidated-registry @ fbdfeb16` first. All 9 + 5 critique reviews are on their respective origin branches. The 9-eyes panel + consolidation are SETTLED; the critique-round is the post-consolidation reflection-pass per `feedback_extra_reflection_pass_for_elegant_permanent_shape`. After critique-round returns: surface final re-triage to Ben + ratify subset + RESUME tracked-doc PR cascade + author R0 plan-doc.
 
 *Updated 2026-05-27 LATE-EVENING. Compact-survival snapshot for next-session pickup or continued live session.*
+
+---
+
+## 2026-05-28 TODAY-SESSION ADDENDUM — MembershipSet unification panel + N-refinements + M-CONS-v2 + critics in flight
+
+Session continued through 2026-05-28. Substantial architectural-decision day. **30+ agent dispatches** across F+ ratifications resolved earlier today + MembershipSet unification panel (3 catalogers + 5 specialists + M-CONS-v1 + 4 N-refinements + M-CONS-v2 + 3 critics in flight). Ben ratified many decisions; final design captured at `phase-4-meta-core/membership-set-m-cons-v2-consolidator @ e62ff540`.
+
+### F+ ratifications resolved earlier today (post-compact)
+
+| Decision | Resolution |
+|---|---|
+| Q1 ML-KEM impl | **libcrux-ml-kem** (per L4 IMPL-A1) — Ben open + ratified |
+| Q2 Codepoint endianness | **Migrate LE → BE** in `aead.rs` pre-v1-beta-freeze |
+| Q3 CID design | **DUAL-CID** (envelope_blob_cid + plaintext_cid_set HMAC-blinded with K_Set); recipient computes BLAKE3-of-plaintext locally as impl detail; plaintext_cid_local NOT on wire (Ben's catch). Option I `dedup_scope_id: Option<DedupScopeId>` NAMED-deferred as future-additive elegant superset. |
+| Q4 HPKE-11-KE | **Internal commit at v1-beta** (wire-format-affecting; ~0 work); **JOSE-emit adapter NAMED-DEFERRED** to V1-FROZEN-INTERFACE-DEFERRED.md with revisit-trigger = first non-Benten JOSE consumer |
+| Am4 Sender-DID-in-AAD | **Sealed-Sender DEFAULT** (drop parallel non-sealed-sender codepoint; aggressive-privacy posture per Ben's "if additive means saving to do later I'd recommend doing it now") |
+| Path-A vs Path-B (L11 structural fork) | **Path-A.5 hybrid**: keep Anchor+Version+CURRENT pattern + key encryption to immutable Version-Node-CIDs (vindicates Ben's "versioned nodes precedent" intuition); Path-B (rewrite + Willow-shim) = **DISAGREE-WITH-REASONING** per HARD RULE 12 clause-(c) (no v1-beta or foreseeable use case for Willow-interop) |
+
+### Ben's MembershipSet unification insight (load-bearing)
+
+Ben surfaced 2026-05-27 LATE: *"'Atrium' (with multiple users syncing sub-graphs) AND Single User Multi Device AND Single User Single Device are all versions of the same primitive thing."*
+
+Investigated through the largest agent-panel of the session:
+
+#### 3 catalogers (existing-state)
+
+- **M1a multi-device-sync** `@ 3618e051` (452 LOC) — substantial existing impl (AtriumHandle / HandshakeFrame / Loro CRDT / DeviceAttestation V2 / D-C HYBRID); flagged **4-identity-concepts tree (CLAUDE.md #18)** as load-bearing complication for MembershipSet collapse
+- **M1b Atrium-membership-sharing** `@ 1816ea60` (658 LOC) — partial-impl (12 methods); **TENTATIVE STRONG-YES on MembershipSet collapsibility** (8/12 ops fit cleanly; 2 caveats; 2 do NOT fit — register_zone + freshness_window); Garden Atrium-of-Atriums (per L9 O7) recursable
+- **M1c key-management** `@ 50eb901d` (886 LOC) — K_principal STUB at `redb_backend.rs:117-210`; structural KDF chain LIVE per Spike E (this IS Cryptree-aligned arbitrary-depth pattern Ben recalled); DAK + K_Atrium + Layer-C HPKE NOT BUILT
+
+#### 5 specialists
+
+- **M2 primitive design** `@ 6170980b` (901 LOC) — typed-variant `enum MembershipSetKind { Atrium, DeviceMesh, SingleDevice }` (EXACTLY-3 arms per §15.c); 7-op API; DUAL-CID per Ben's catch
+- **M3 amendment transformation** `@ 1ba3a4c3` (833 LOC) — **NET-ELEGANCE-WIN MODEST** at MED-HIGH confidence; -4.3 to -5.5 wave-days; 5 ELIMINATED + 17 SIMPLIFIED + 6 EXPANDED + 2 RENAMED; new Inv-20; Compromise #45-#51 renumbered
+- **M4 red-team** `@ 066785b5` (764 LOC) — CONCUR-WITH-AMENDMENTS @ 75-80%; 5 BREAKs (DAK ≠ K_Atrium / K_principal-cannot-replace / forkability-Atrium-only / kick-differs-per-kind / homogeneous-members-per-kind) — mostly addressed by M2's typed-variants
+- **M5 CGKA candidate survey** `@ 15819500` (533 LOC) — **KEEP no-CGKA for v1-beta**; rename CGKA-LITE → **MultiRecipientSealing** (truth-in-naming; design doesn't deliver FS/PCS that "CGKA-LITE" name implied); MLS-PQ **NOT beta-production-ready** (Revised I-D Needed; OpenMLS PQ branch ships X-Wing NOT in draft); **Cryptree NOT a CGKA** (factual correction — it's a key-derivation tree for filesystem read access; Ben's intuition actually corresponds to Atrium-fork semantic Ben ratified 2026-05-27)
+- **M6 transport-configurability** `@ e5046c87` (531 LOC) — codepoint-reserve at v1-beta initially; iroh-gossip LAYERS as overlay (not replacement); per-MembershipSet matrix; **Ben subsequently overrode to SCOPE-IN iroh-gossip AT v1-beta (+5-8 wave-days; per Q1 ratification)** so impl ships not just slot-reserved
+
+#### M-CONS-v1 consolidator `@ 74580ee6` (1081 LOC)
+
+10/10 composition axes converge; 28 unified amendments + 13 Compromise mints + 3 invariants → expanded under M3 transformations.
+
+#### 4 N-refinement specialists (post-M-CONS-v1)
+
+- **N1 sub-graph sharing elegance** `@ ed592770` (1067 LOC) — surveyed 9 systems (Cryptree / CP-ABE / PRE / Tahoe-LAFS / UCAN/ZCap / Jazz / IPFS / PESTO/Cwtch/Briar / Yjs-Automerge); recommends **Option H NESTED-SPEC** — promote in-code combinators (already shipping `g-core-3w/subgraph-spec-walker @ 5c2947c8` proptest-verified) to first-class grant-time composition primitive: `Scope::RestrictedSelector { scopes: Vec<RestrictedScope>, audit_commitment: Option<Cid> }`. **Benten is at field state-of-the-art**; no foreign primitive needed. +0.95-1.2 wave-days. Preserves all 5 frozen-surface disciplines.
+- **N2 generic-MembershipSet + RBAC + ops** `@ a1b5a552` (1399 LOC) — **HYBRID-RECOMMENDED**: keep typed `MembershipSetKind` discriminator AT v1-beta BUT generalize WITHIN typed shell via **uniform `authorities: BTreeSet<Authority>` slot** replacing M-CONS-v1 §5.1 KindPolicyAdminEntity enum (Ben's "Admin in Atrium = User in DeviceMesh = Self in SingleDevice" intuition correct on signing-authority axis). **3-role RBAC** (Admin > Member > Viewer) + 3-permission (Read/Write/Admin) + UCAN-composed intersection-of-allows. **24 operations enumerated**: 11 v1-beta-LB (incl. 4 new: change_role / member_key_rotation / self_leave / rename/update_metadata; + audit_log_query + update_policy_value sugar) + 6 codepoint-reserve + 3 Phase-4-Meta-Composing + 4 post-v1-beta. Added `MembershipSetMetadata` closing M2's UX gap. +1.5-2.5 wave-days.
+- **N3 continuous-rotation edge cases** `@ 298c80d9` (506 LOC) — stress-tested 6 regulatory + 6 use-case + 6 attack scenarios; **M5 HOLDS** at HIGH 85% confidence; wire format is additive (continuous-rotation can ship post-v1-beta without break); 3 doc-only sharpenings (RotationTrigger doc-enum + clarify `policy.refresh_required_secs` is attestation-refresh NOT K_Set rotation + mint Compromise #54/#55/#56). **GDPR-RTBF specifically needs per-subject crypto-shredding at Atrium-data-layer (separate problem; Compromise #55)** — Ben clarified framing: P2P-by-design semantic, NOT "limitation we should fix."
+- **N4 Signal Sender Keys comparison** `@ 2ee24e9f` (494 LOC) — **CONCUR-WITH-AMENDMENTS**: Benten's MultiRecipientSealing simpler/stronger than SSK in 9-of-10 scenarios (PQ-hybrid day-one / forkable Atrium / content-addressed DAG / trustless storage / first-class DeviceMesh / recursive composition reserve). SSK has NO PCS at protocol level + member-remove O(N²) + pre-quantum + libcrux-AGPLv3-blocking. 3 doc-only refinements: rename `AtriumWithCGKA` → `AtriumWithRotatingGroupKey`; add `RotatingGroupKeyChainedMode` codepoint-reserve sub-slot; add SSK-comparison §-row to `docs/SECURITY-POSTURE.md`. ~1 wave-day.
+
+#### M-CONS-v2 consolidator `@ e62ff540` (1295 LOC)
+
+Final-final integrated design:
+- **31 F-amendments** (F1-F28 + F-N2-A/B/C; F-A1+F-A2 absorbed; F13 renamed AtriumWithRotatingGroupKey; F27 SCOPE-IN per Q1; F28 NEW N1 RestrictedScopeSet)
+- **26 Compromise mints** (25 mints + #31-ext; #53 narrowed; #54/#55/#56 NEW)
+- **Inv-20 extended to 10 clauses** (clause-i uniform Authority + clause-j 3-role RBAC + UCAN intersection-of-allows from N2)
+- **Cost central**: ~85-111 wave-days (vs original ~80-101; net +5 to +10 dominated by Q1 iroh-gossip SCOPE-IN)
+- **Wave-MS-PRIMITIVE** ~10.5-13 wave-days canary (absorbs N1 + N2)
+- **Wave-MS-TRANSPORT** ~5-8 wave-days (iroh-gossip impl per Q1)
+- **4 remaining open Ben-calls** in §9.3 (none arch-fork-class)
+- **8 new pattern-induction findings** P11-P18 codified
+
+### Conceptual clarifications surfaced today
+
+- **Loro = CRDT layer; iroh = transport layer** (different layers; both needed). Benten uses regular `iroh` crate v1.0.0-rc.0 + `loro 1.12` (high-perf CRDT for collaborative editing) + tokio for async + `iroh-blobs` integration pending G-CORE-3e. Live-sync foundations ALREADY in place; iroh-gossip adds broadcast-overlay for scaling (Class B "live feel"; sub-100ms via gossip-protocol).
+- **Cryptree is NOT a CGKA** (M5 factual correction). Benten's **K(N) structural-KDF chain IS Cryptree-aligned arbitrary-depth pattern** per Spike E `K(N) = KDF(K(predecessor), edge_label || N.cid)` — recipient with K(root) + edge_label allowlist + SubgraphSpec walks the graph + derives keys for all reachable Nodes per allowed paths. This is exactly what Ben recalled. Cryptree's "per-subtree access keys" maps to Benten's "per-edge-label-set access at each Node along walk."
+- **Atrium / DeviceMesh / SingleDevice are 3 instances of one MembershipSet primitive** (per Ben's unification insight; ratified by 9-eyes M2-M6 panel + N1-N4 refinements + M-CONS-v2).
+- **Admin in Atrium = User in DeviceMesh = Self in SingleDevice** on the signing-authority axis (N2's Authority-slot generalization).
+- **GDPR-RTBF is P2P-by-design-semantic** for Benten (not protocol-flaw); recipients of shared content retain their copies; applications can implement crypto-shredding at the per-subject-key layer if they want strong-RTBF semantics. Compromise #55 honest-architectural-disclosure framing.
+
+### Cost trajectory across the day
+
+- **Start of session** (2026-05-27 LATE-EVENING handoff): ~7-15 wk to v1-beta-tag (per phase-ordering precision + ADDL-pipeline-full-observance ratifications)
+- **After MembershipSet panel + N-refinements + Q1 SCOPE-IN**: **~17-22 wk to v1-beta-tag (M-CONS-v2 central ~85-111 wave-days)**
+- **Trade-off accepted**: foundational correctness over speed; comprehensive coverage per Ben's preference throughout
+
+### Active background agents at write-time
+
+| Agent ID | Topic | Branch on completion |
+|---|---|---|
+| `a1853b28c3735a226` | M-C1 elegant-shape critique on M-CONS-v2 | `phase-4-meta-core/membership-set-m-c1-v2-elegant-shape` |
+| `a0904cbb09c86f949` | M-C2 composability critique on M-CONS-v2 | `phase-4-meta-core/membership-set-m-c2-v2-composability` |
+| `a63b0abc22d3aee2f` | M-C3 fresh-eyes cryptographer on M-CONS-v2 | `phase-4-meta-core/membership-set-m-c3-v2-fresh-eyes-cryptographer` |
+
+ETA: ~1.5-2hr each in parallel.
+
+### Open items remaining (at write-time)
+
+1. **3 M-C critics return** (~1.5-2hr) → final synthesis to Ben → final-final ratification of 4 remaining Ben-calls per M-CONS-v2 §9.3 + any critic-induced refinements
+2. **Tracked-doc PR cascade**: branch `phase-4-meta-core/inv-16-compromise-dak-rename-cat-a` off `2172cb6d` (CREATED + PAUSED); ready to fill once final-final design ratifies; Ben pre-authorized bypass-merge-reinstate for this PR
+3. **Orchestration-branch updates**: CLAUDE.md baked-in #5 retense + #17 amendment (multi-device-mesh / DeviceMesh kind) + #18 amendment (forkability + Authority-unification + encrypt-everywhere) + dispatch-conventions amendments
+4. **Memories to codify**: Cryptree-NOT-a-CGKA + K(N)-IS-Cryptree-aligned + MembershipSet typed-variant primitive + Authority-slot unification + iroh-gossip-scope-in + multi-agent-panel-pattern + RBAC-3-role-pattern + per-message-ratcheting-codepoint-reserve + GDPR-RTBF-P2P-by-design
+5. **Side-quest Level 1**: open RustCrypto/KEMs CT-SampleNTT issue (~30 min orch-direct; post-cascade)
+6. **F-full R0 plan-doc authoring** post-final-ratification
+7. **F-full ADDL pipeline**: R1 critic council (Pattern 6) + R2 test landscape + R3 test-writers + R4 test review + R5 implementation waves (canary-first: Wave-MS-PRIMITIVE first, then Wave-MS-TRANSPORT, then X-Wing-mislabel + Layer-A/B/C/D wires) + R4b + R6 R3 + pre-tag sweep + tag `phase-4-meta-core-close`
+8. **Phase-4-Meta-Composing** full ADDL pipeline + tag `phase-4-meta-close` + tag `v1-beta` + external crypto audit (~3 person-weeks) + tag `v1-GM`
+9. **21 comment drafts held** (F2 multicodec + F3 JOSE [deadline 2026-05-29; acceptable to miss] + F4a LAMPS + F7 W3C CCG + Position B v2 blog + Shape 5 iroh-outreach + 16 other drafts in `new-comment-drafts.md`) — batch-post post-F-full-ratify + post-rename-applied
+
+### Compact-survival pointer
+
+If you resume after compaction: read CLAUDE.md banner + this addendum + the M-CONS-v2 file at `phase-4-meta-core/membership-set-m-cons-v2-consolidator @ e62ff540` FIRST. All N-refinement + cataloger + specialist outputs are on their respective origin branches enumerated above. The MembershipSet design is settled at M-CONS-v2 + Ben's ratifications; the critics are running on this consolidated design + may surface refinements but unlikely to overturn direction. After critics return: final synthesis + Ben ratify remaining 4 Ben-calls + RESUME tracked-doc PR cascade.
+
+*Updated 2026-05-28 (today). Compact-survival snapshot for the MembershipSet panel + N-refinements + M-CONS-v2 day-long architectural-decision session.*
