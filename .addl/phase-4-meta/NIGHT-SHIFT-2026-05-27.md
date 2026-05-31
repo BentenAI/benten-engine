@@ -747,3 +747,54 @@ ETA: ~1.5-2hr each in parallel.
 If you resume after compaction: read CLAUDE.md banner + this addendum + the M-CONS-v2 file at `phase-4-meta-core/membership-set-m-cons-v2-consolidator @ e62ff540` FIRST. All N-refinement + cataloger + specialist outputs are on their respective origin branches enumerated above. The MembershipSet design is settled at M-CONS-v2 + Ben's ratifications; the critics are running on this consolidated design + may surface refinements but unlikely to overturn direction. After critics return: final synthesis + Ben ratify remaining 4 Ben-calls + RESUME tracked-doc PR cascade.
 
 *Updated 2026-05-28 (today). Compact-survival snapshot for the MembershipSet panel + N-refinements + M-CONS-v2 day-long architectural-decision session.*
+
+---
+
+## 2026-05-29/30 ADDENDUM — MembershipSet refinement arc (cluster + member/compute agents) → M-CONS-FINAL dispatched
+
+Session continued 2026-05-29 → 2026-05-30. The 3 M-C critics (M-C1/M-C2/M-C3) + 6 P-specialists (P1–P6) returned (M-C2 surfaced 4 contradictions + 5 composition-failures + 4 blind-spots; P1–P6 resolved them). Then **Ben surfaced a LOAD-BEARING conceptual reframe** that drove a further **7-agent refinement arc — ALL RETURNED**. Net effect: the design **CONVERGED + SIMPLIFIED dramatically** — every pass *removed* surface. M-CONS-FINAL is now dispatched to consolidate.
+
+### Ben's reframe (load-bearing; drove the arc)
+**"Everything is just a MembershipSet with different rules on how those members can interact."** Corollaries: (1) any graph-sharing-with-ongoing-access *creates* a MembershipSet (Cluster 1); (2) Atrium/Garden/Grove differ by **GOVERNANCE/admin-controls**, not nesting — with **federation + compute as ORTHOGONAL axes** (Cluster 2); (3) agent-nature should be **DERIVED not stored**; (4) **AI-agents are a kind of Plugin**; (5) **compute is a separate first-class resource** decoupled from membership. Grounded in canon: VISION + `docs/archive/exploration/explore-gardens-mvp.md` ("Gardens are Atriums with extra rules; promotion is a config change") + `explore-distributed-compute-vision.md` (compute = metered peer-resource; per-community economics).
+
+### 7 refinement agents (ALL RETURNED; .addl docs force-committed on branches)
+| Agent | Branch @ commit | Headline ruling |
+|---|---|---|
+| CA-1 sharing-as-membership | `…ca1-sharing-as-membership @ 2c60ce0d` | primitive set = **{MembershipSet, Drop}**; RestrictedScopeSet collapses → K(N)+edge-label-allowlist; wire-neutral; −0.4..−0.8 wd. **Caught the #31 collision.** |
+| CA-2 structural/gov/federation | `…ca2-structural-governance-federation @ da0627aa` | 3 orthogonal axes; **Garden/Grove = governance PRESETS not crypto-Kinds** (drop from codepoint-Kind reserve); federation = P3 recursion re-filed (Inv-20 k+l survive); **RoleId→5** (ship 3, reserve Moderator+Invitee); promotion = config-change-no-rekey |
+| CA-2X compute axis | `…ca2x-compute-axis @ 66c41016` | compute = orthogonal READ-only layer (SUPERSEDED by CM-2/CE-1) |
+| CM-1 member model | `…cm1-member-model @ 8855d1c8` | member = existing **Principal**; membership = RELATION; agent-nature **DERIVED** (did:agent:+UCAN), **ZERO stored field**; no MemberKind axis (federation = edge); mint **"nature-derived-never-stored" invariant** |
+| CM-2 compute-resource | `…cm2-compute-resource-model @ 063b0f68` | compute = resource Node + `OwnerRef{Member\|Community\|ThirdParty}` (CE-1 supersedes its reserve) |
+| PA-1 agent-as-Plugin | `…pa1-plugin-agent-member-unification @ ba5c187d` | **AI-agent = derived predicate on Plugin = derived flavor of Principal**; M4 BREAK-5 = default not prohibition; 3 trust categories → 2; did:agent: = optional external alias; **DELETE member_type**; ZERO new frozen field |
+| CE-1 compute elegance | `…ce1-compute-elegance @ 9eacd364` | compute → uniform **PeerResource**; economics **COMPOSES** (UCAN caveats + Credits-ledger-as-graph + signed `CommunityEconomicPolicy` Node); **v1-beta freeze hook = ZERO** (drop CM-2 reserve). Freeze-hook trend CA-2X 2 → CM-2 1 → CE-1 0 |
+
+### Net result: ~ZERO new member/compute wire surface
+Member side: **0 new frozen fields** (Principal + derived predicates; nature never stored). Compute side: **0 reserve** (composes from existing primitives). Maximally consistent with code-as-graph + 12-primitives-irreducible + compose-before-extend + derive-don't-store. Cumulative cost trend across the arc: net-CHEAPER than M-CONS-v2.
+
+### Held orch-direct items DISPOSITIONED (surfaced to Ben 2026-05-30)
+- **Cluster 3 (iroh-gossip):** D6 hybrid (D1 HMAC-blind + D2 fork-rotation + D5 OOB-rendezvous); D3/D8/D9/D10 rejected; D4/D7 Phase-5+.
+- **§9.3 (4 calls):** mint Compromise #56; KEEP `refresh_required_secs` name + clarify; sibling-traits **ALONGSIDE** inherent-impl; CONFIRM transport = iroh-gossip-only.
+- **Cluster 4 (audit):** config-surface + suggested-defaults (Atrium/DeviceMesh=AdminOnly; SingleDevice=Public-All-Members).
+- **Cluster 7:** `key_retention_window_secs` **DEFAULT 7 days, user-definable**.
+- **Cluster 8 (M-C3):** adopt C-5 (AAD-injective doc) + C-6 (mint Inv-21 fork-tie-break) + C-7 (codepoint-AAD-bind).
+
+### #31 COLLISION (VERIFIED on main `2172cb6d`) — cascade must resolve
+`docs/SECURITY-POSTURE.md` uses **#31 for BOTH** "Revocation reach in encryption-at-rest" (G-CORE-9; summary table line 91) **AND** "LAMPS Composite ML-DSA EUF-CMA-only" (PR #1357; prose section line 2433). CLAUDE.md baked-in #5 cites #31=LAMPS. **my-pred: LAMPS keeps #31, renumber the revocation-reach compromise** (lowest blast radius). M-CONS-FINAL owns the canonical assignment.
+
+### M-CONS-FINAL DISPATCHED (agent `a5e9734cb2b6d8f6d`; branch `phase-4-meta-core/membership-set-m-cons-final`)
+Consolidates: M-CONS-v2 baseline + 3 M-C critics + 6 P-specialists + 7 refinement agents + orch-ratified rulings + #-renumbering (#31 + 5 panel collisions: P3/P4/P5/P6/M-C3 each used #57/#58/#59) + §9.3 + Cluster 3/4 dispositions. **Produces:** final design + ONE consolidated Ben-call list + canonical Compromise-#/Inv tables + v1-beta-freeze inventory + cost estimate + R0-plan skeleton. ~2–4hr ETA. **On return: surface clean board to Ben → final ratification.**
+
+### Next steps (post-M-CONS-FINAL)
+1. M-CONS-FINAL returns → surface to Ben → final ratification (+ optional light critic round on FINAL).
+2. **Tracked-doc PR cascade** (branch `inv-16-compromise-dak-rename-cat-a` off `2172cb6d`; **bypass-merge-reinstate PRE-AUTHORIZED** for this PR): Inv-16 + new Compromise mints + **#31 resolution** + Cat-A X-Wing→MLKEM768-X25519 rename + atrium test count 15→16.
+3. **Orchestration-branch updates** (CLAUDE.md baked-in #5 retense + #17 DeviceMesh + #18 forkability/encrypt-everywhere/Authority-unification + dispatch-conventions) + **memory codification** (~13: Cryptree-not-CGKA, K(N)-Cryptree-aligned, MembershipSet-primitive, Authority-unification, everything-is-a-MembershipSet-governance-axis, agents-are-plugins, derive-nature-not-store, compute-composes-zero-hook, RBAC, iroh-gossip-scope-in, multi-agent-panel-pattern, GDPR-RTBF-P2P-by-design, + inline-gitignored-canon-in-briefs).
+4. **F-full R0 plan-doc** → R1 critic council → R2 → R3 → R4 → R5 (canary-first) → R4b → R6 R3 → pre-tag → **tag `phase-4-meta-core-close` (HOLD: Ben check-in)**.
+5. **Phase-4-Meta-Composing** ADDL → tag `phase-4-meta-close` → tag `v1-beta` → external audit → tag `v1-GM`.
+
+### Process lesson codified this arc
+**Gitignored canon is invisible to fresh-worktree agents.** `CLAUDE.md` + `docs/archive/exploration/*` + `.addl/*` are gitignored. CA-2 couldn't read `explore-gardens-mvp.md` (grounded on VISION + the Ben quote instead; conclusion held). Fix applied from CM-1/CM-2 onward: **inline the relevant gitignored-canon passages directly into agent briefs.** Prior `.addl` agent docs ARE readable via `git show <branch>:<path>` because agents force-add them.
+
+### Standing law UNCHANGED
+NEVER --admin-bypass / force-push; NORMAL --squash; HARD RULE 12; do-it-now bias (per `feedback_orchestrator_defer_prediction_bias`); full ADDL observance (per `feedback_addl_pipeline_full_observance`); surface arch forks (per `feedback_surface_arch_decisions_under_auth`); iterate-to-convergence at R1+R4+R4b+R6; agent isolation:worktree + run_in_background + commit-before-return + ABSOLUTE-PATH-FORBIDDEN-outside-${WORKTREE_ROOT}; inline-gitignored-canon-in-briefs. **DO NOT TAG without Ben check-in.**
+
+*Updated 2026-05-30. Compact-survival snapshot for the MembershipSet refinement arc + M-CONS-FINAL dispatch.*
