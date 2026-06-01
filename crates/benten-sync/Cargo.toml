@@ -103,7 +103,7 @@ blake3 = { workspace = true }
 # available); loopback + relay-fallback are required-on-every-PR.
 # Zero iroh-API breakage across the 13 paths we consume — see
 # `.addl/phase-4-meta/iroh-pin-investigation-2026-05-19.md`.
-iroh = { version = "1.0.0-rc.0", default-features = false, features = ["tls-ring"] }
+iroh = { version = "1.0.0-rc.1", default-features = false, features = ["tls-ring"] }
 # Loro: high-performance CRDT framework. Pinned at 1.12 minor (current
 # latest stable 2026-05-06) + Dependabot fast-track per scope-real-10.
 # Native-only (alongside iroh) — Loro stays in `benten-sync` which is
