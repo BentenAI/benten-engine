@@ -18,8 +18,8 @@
     "drift:error-variant-mirror": "node --import tsx scripts/drift-detect-error-variant-mirror.ts"
   },
   "devDependencies": {
-    "tsx": "^4.19.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.8"
   }
 }
