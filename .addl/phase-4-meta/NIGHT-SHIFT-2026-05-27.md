@@ -826,3 +826,36 @@ Inv-20 (12 clauses) + **Inv-21** (fork-tie-break HARD partition) + **Inv-22** (m
 3. **F-full R0 plan-doc authoring** — consolidates the encryption arc (9-eyes registry @ fbdfeb16 + e2r-ffull-scope-review @ 220b5aae + Option-F+ NO-GO §6.2 envelope-unification + Amendments 1–6) AND the MembershipSet primitive (M-CONS-FINAL @ a99dd0c7 §10 skeleton). Then F-full R1 critic council → R2 → R3 → R4 → R5 (canary-first) → R4b → R6 R3 → pre-tag → tag `phase-4-meta-core-close` (HOLD: Ben check-in).
 
 *Updated 2026-06-01. Compact-survival snapshot: M-CONS-FINAL ratified; forward path = orchestration updates + tracked-doc cascade (scope pending) + F-full R0.*
+
+---
+
+## 2026-06-02 ADDENDUM — F-full R0 authored → R1 CONVERGED → R0.3 → R2 dispatched (now using Workflows for the ADDL pipeline)
+
+The ADDL pipeline for F-full is now running, **orchestrated via the Claude Code Workflows feature** (Opus 4.8 research-preview). Progress this session:
+
+### F-full R0 → R1 → R0.2 → R1.2 (CONVERGED)
+- **R0 authored** (`phase-4-meta-core/f-full-r0-plan @ 6755ea41`; 1055 lines) — consolidated the encryption arc (4-layer A/B/C/D + §6.2 codepoint-dispatched envelope) + the MembershipSet primitive (M-CONS-FINAL) + GN graph-native wins + EP-1 engine-plugin symmetry. Seeded 9 R1 questions.
+- **R1.1 critic council** (Workflow `wk0y82kby`; 8 Opus lenses) → **3 BLOCKER + 20 MAJOR + 15 MINOR + 9 OBS**; 7/9 Qs confirmed; triage persisted at `.addl/phase-4-meta/r1-triage.md` (orch commit `50115446`).
+- **Ben ruled 3 forks (2026-06-02):** (1) **Sealed-Sender = DEFAULT** (FREEZE+SHIP-at-Core @ `0x6510`; abuse-control = recipient-issued delivery-tokens, new **Compromise #63**, ~5-8 wd into Core); (2) **Compromise #31 = LAMPS keeps it** (revocation-reach → **#62**; #30 unaudited-PQ stays); (3) **X-Wing = real SHA3-256 construction @ `0x647A`** (LOC ~24 → ~120-220; regen KAT vectors).
+- **R0.2** (`phase-4-meta-core/f-full-r0-plan-r1fp @ 477529d0`; 1547 lines) — applied the 3 rulings + every FIX-NOW + re-ran the §0.3 ground-truth log. Notable: M-15 closed via **correct DISAGREE** (Inv-15 IS registered in-tree — INVARIANT-COVERAGE.md row 15 + header "15 invariants"; the R1.1 finding was stale; ground-truth-verified by orchestrator + 4 lenses).
+- **Codepoint table BLESSED by Ben** (R0.2 §4.0; canonical home `docs/CRYPTO-CODEPOINTS.md` to be authored AT R2 as a freeze-prereq): Sealed-Sender `0x6510` DEFAULT · MembershipSet relocated to `0x6600` (out of the MLS `0x6380/0x6390` bracket; 9-eyes wins that collision) · X-Wing `0x647a` real construction · DeviceLink `0x6310-0x631F` · RemotePermission `0x6320-0x632F` (+ ExecuteWorkflow reserve).
+- **R1.2 convergence council** (Workflow `wnuo0tugv`, fresh all-Opus, batched 2×4): **CONVERGED** — 8/8 APPROVE-FOR-R2 HIGH, **0 BLOCKER + 0 MAJOR**, all 3 BLOCKER + 20 MAJOR CLOSED, 3 trivial new MINOR. No R1.3.
+- **R0.3 micro-touch** (`phase-4-meta-core/f-full-r0-plan-r1fp-r03 @ 4fe9236a`) — the 3 MINOR (tight-`exp` §3.4 sentence + nonce-cache "net-new not shipped-instance" precision §3.10/§3.4 + §7.3 DAK-DAG-split). **THIS IS THE CANONICAL POST-R1 R0.**
+
+### R2 IN FLIGHT (Workflow `we66419zk`)
+R2 test-landscape synthesis restructured as a Workflow per Ben (multi-modal sweep + completeness critic): 6 discovery dimensions (crypto-envelope / membership-sync-crdt / threat-security / wire-freeze-conformance / privacy-metadata / graph-native-invariant; batched 3+3 all-Opus) → completeness critic ("what Inv/Compromise/codepoint/NQ/exit-criterion has no test family?") → synthesis (catalog + coverage matrix + R3 slicing + freeze-gating priorities). **On return: surface → R3 test-writers.**
+
+### Freeze-gating NQ-* carried to R2 (from R1.2)
+NQ-C1 (McMillion-hpke admits PQ KEM into real RFC-9180 context — **gates Canary-ENC-2**) · NQ-C2 (libcrux↔RustCrypto FIPS-203 KAT, Wave-0 gate) · NQ-C3 (cross-ecosystem LAMPS conformance vectors) · NQ-C4 (did:key hybrid-pubkey multicodec — wire-affecting) · NQ-D1 (GossipTransport placement) · NQ-D2 (Inv-21 total-order + kani shape) · NQ-W2 (CRYPTO-CODEPOINTS.md + CI band-collision scanner).
+
+### Workflow-usage lessons codified this session (pim-N candidates)
+- **Schema-free for prose-heavy research/review agents** — forced StructuredOutput silently fails ("completed without calling StructuredOutput"); have lenses RETURN findings as their final message instead. (Cost us 4/5 agents on the first research sweep.)
+- **Batch parallel fan-out into sub-waves of 3-4** — a single burst of 6-8 concurrent agents trips the transient server-side rate-limit ("Server is temporarily limiting requests · not your usage limit"). Batched 2×4 cleared it.
+- **Workflow resume returns CACHED results** — `resumeFromRunId` does NOT re-run rate-limited/failed agents (it replays the cached final result); to re-run failures, dispatch a FRESH run.
+- **Consolidators must refuse to certify on a partial panel** — a rate-limited silence is NOT an APPROVE (the R1.2 consolidator correctly self-policed per `feedback_agent_liveness_verify_not_notification`).
+- **Ben preference (2026-06-02): Opus-only** for council/agent work (not mixed-model), rigor over the cost trim.
+
+### Still queued (post-pipeline / unchanged)
+Tracked-doc cascade (Inv-16 mint + the **#31-fix** + Cat-A X-Wing→MLKEM768-X25519 rename + atrium test 15→16; bypass-merge-reinstate pre-authorized) + orchestration-branch CLAUDE.md/dispatch-conventions updates + ~13 memory codifications + 21 held comment drafts + RustCrypto CT-SampleNTT side-quest. **HOLD on all tags pending Ben.** Next pipeline stages after R2: R3 (test-writers, canary-first) → R4 → R5 (impl waves) → R4b → R6 R3 → pre-tag → `phase-4-meta-core-close`.
+
+*Updated 2026-06-02. Compact-survival snapshot: R1 CONVERGED; canonical R0 = 4fe9236a (R0.3); R2 test-landscape Workflow `we66419zk` in flight.*
