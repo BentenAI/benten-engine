@@ -859,3 +859,40 @@ NQ-C1 (McMillion-hpke admits PQ KEM into real RFC-9180 context — **gates Canar
 Tracked-doc cascade (Inv-16 mint + the **#31-fix** + Cat-A X-Wing→MLKEM768-X25519 rename + atrium test 15→16; bypass-merge-reinstate pre-authorized) + orchestration-branch CLAUDE.md/dispatch-conventions updates + ~13 memory codifications + 21 held comment drafts + RustCrypto CT-SampleNTT side-quest. **HOLD on all tags pending Ben.** Next pipeline stages after R2: R3 (test-writers, canary-first) → R4 → R5 (impl waves) → R4b → R6 R3 → pre-tag → `phase-4-meta-core-close`.
 
 *Updated 2026-06-02. Compact-survival snapshot: R1 CONVERGED; canonical R0 = 4fe9236a (R0.3); R2 test-landscape Workflow `we66419zk` in flight.*
+
+---
+
+## 2026-06-02 LATE ADDENDUM — R2 DONE + R3 test-writers IN FLIGHT (pre-compact prep)
+
+### Pipeline position: F-full ADDL is at **R3 (test-writers), in flight**
+Sequence so far: design exploration → M-CONS-FINAL (`a99dd0c7`) → **R0** (`f-full-r0-plan @ 6755ea41`) → **R1.1** (8-lens Workflow; 3 BLK + 20 MAJ) → **R0.2** (`f-full-r0-plan-r1fp @ 477529d0`; 3 Ben-rulings + every fix) → **R1.2 CONVERGED** (0 BLK/0 MAJ, 8/8 APPROVE) → **R0.3** (`f-full-r0-plan-r1fp-r03 @ 4fe9236a` — **CANONICAL R0**, off main `2172cb6d`) → **R2 test-landscape** (DONE) → **R3 test-writers** (IN FLIGHT).
+
+### R2 DONE — `.addl/phase-4-meta/f-full-r2-test-landscape.md` (committed on orch branch)
+Multi-modal Workflow (6 discovery dims batched 3+3 + completeness critic + synthesis). Output: **~95 unified test families** (deduped from ~163 raw + **22 completeness-critic gap-fills**), **~720-950 red-phase tests**, **~74 of ~95 FREEZE-GATING**. 12 family-groups; full coverage matrix (every Inv-16..22 / Compromise #30-#63 / frozen-codepoint / NQ / §9 exit-criterion → its family; zero uncovered). **8-wave canary-first R3 slicing** (W0 sole-upstream canary; Tier-1 W1/2/3; Tier-2 W4/5/6 = new `benten-membership-set` crate; Tier-3 W7 doc-wave cap-exempt). Freeze-gating P0: NQ-C1 (HPKE-KEM-extensibility, gates Canary-ENC-2), codepoint pins+scanner, zero-`to_le_bytes` BE sweep, real X-Wing KATs.
+
+### F-LC-9 RULED by Ben (2026-06-02): GROUP sends honor Sealed-Sender
+The R2 completeness-critic surfaced a real design hole R1 missed: group multi-stanza sends (`0x6520`/`0x6610`) didn't state whether they honor Sealed-Sender. **Ben ruled: group sends HONOR Sealed-Sender** (a per-stanza inner-sender-DID binding inside the group AAD — sender-DID NOT plaintext on group sends). Pre-freeze wire change; R3-W2 tests it (F-LC-9); **small R0 addition still owed** (record the group-AAD inner-sender binding in the R0 group-codepoint section — fold into R3.2 or the doc-wave).
+
+### R3 IN FLIGHT — Workflow `w1miqerfq` (single sequential canary-gated workflow)
+Structure: **Canary** (W0 crypto-suite test-writer incl. NQ-C1 investigation → W0 mini-review **GATE** emitting `GATE: PASS`/`FIX-NEEDED`; fan-out fires ONLY on PASS) → **Fanout-A** (W1 crypto-KAT / W2 Layer-C incl. F-LC-9 / W3 Layer-D) → **Fanout-B** (W4 MS-structure / W5 AAD+Inv-21+kani-floor / W6 gov+audit) → **DocWave** (W7 cap-exempt) → **Reviews** (per-wave substantive-pin + seam-disjointness mini-reviews) → **Coverage** (full ~95-family + freeze-gating coverage + gap-list + convergence call). Test-writers base off the orch branch (crate code == main except 1 stale test file), read R0.3 via `git show 4fe9236a:...`, write SELF-CONTAINED red-phase stubs (pim-12; V2/BE/EncryptedEnvelope from first commit per M-20) to branches `r3/w{0..7}-*`.
+- **ON RETURN:** if `GATE: FIX-NEEDED` → workflow halts before fan-out, returns W0+findings → orchestrator-led canary fix-pass + re-run. If clean → harvest the 8 wave branches (drop worktrees), review the coverage report, **strategy-C consolidate** the red-phase corpus (rebase onto the canary's landing SHA per R2 tree-divergence note), surface to Ben → **R4 (deeper test-review tier)**.
+
+### Workflow-usage lessons this session (codified as memory `feedback_workflow_tool_addl_pipeline_usage`)
+Schema-free for prose agents (forced StructuredOutput silently fails) · batch parallel into sub-waves of 3-4 (a 6-8 burst trips the transient server-side rate-limit; "Server is temporarily limiting requests · not your usage limit") · **resume returns CACHED, does NOT re-run failed agents** (fresh invocation to re-run) · consolidators must refuse to certify on a partial panel (rate-limit silence ≠ APPROVE) · inline canary-gate (mini-review returns `GATE: PASS/FIX`, conditional fan-out) · persist workflow results via `python3 -c "json.load(...)['result']" > artifact.md` · **Opus-only** (Ben pref 2026-06-02) for council/agent work.
+
+### Saved workflow scripts (for resume/iterate)
+`.../workflows/scripts/`: `f-full-r1-2b-convergence-*.js`, `f-full-r2-test-landscape-*.js`, `f-full-r3-test-writers-*.js` (the live R3 = `wf_ab799dee-898`).
+
+### Canonical artifacts/branches
+Main `2172cb6d` · orch branch HEAD (handoff/triage/landscape docs) `bc592e75`+ · **canonical R0 = R0.3 `4fe9236a`** · R1 triage `.addl/phase-4-meta/r1-triage.md` (orch `50115446`) · R2 landscape `.addl/phase-4-meta/f-full-r2-test-landscape.md`. **Codepoint table BLESSED** (R0.2 §4.0; `CRYPTO-CODEPOINTS.md` authored AT R2 as freeze-prereq): Sealed-Sender `0x6510` DEFAULT, MembershipSet `0x6600`, X-Wing real `0x647a`, MLS keeps `0x6380/0x6390`.
+
+### Next pipeline stages
+R3 lands → consolidate → **R4** (test review, iterate-to-convergence) → **R5** (canary-first impl waves, ≤7-cap) → **R4b** → **R6 R3** (phase-close council) → pre-tag sweep → **tag `phase-4-meta-core-close`** (HOLD: Ben). Then Phase-4-Meta-Composing ADDL → `phase-4-meta-close` → `v1-beta` → external audit → `v1-GM`.
+
+### Queued post-pipeline (UNCHANGED; not compact-critical, in-flight design not yet frozen)
+Tracked-doc cascade (Inv-16 mint + **the #31-fix [LAMPS keeps #31, revocation→#62]** + Cat-A X-Wing→MLKEM768-X25519 rename + atrium test 15→16; bypass-merge-reinstate pre-authorized) · CLAUDE.md baked-in #5 retense + #17/#18 amendments (the everything-is-a-MembershipSet + agents-are-plugins + derive-nature + compute-composes-zero + Rust-engine-plugin reframes — all RATIFIED, captured in M-CONS-FINAL + R0, to codify in CLAUDE.md at the cascade) · ~13 memory codifications · 21 held comment drafts · RustCrypto CT-SampleNTT side-quest. **HOLD all tags pending Ben.**
+
+### Standing law (UNCHANGED)
+NEVER --admin-bypass / force-push; NORMAL --squash; HARD RULE 12; do-it-now bias; full ADDL observance; surface arch forks; iterate-to-convergence R1+R4+R4b+R6; agent isolation:worktree + commit-before-return + ABSOLUTE-PATH-FORBIDDEN; ≤7 implementer cap + scoped-pre-flight; Opus-only (council/agent); inline-gitignored-canon-in-briefs; **DO NOT TAG without Ben check-in**.
+
+*Updated 2026-06-02 LATE (pre-compact). Compact-survival: F-full at R3 test-writers (Workflow `w1miqerfq`) in flight; canonical R0 = R0.3 `4fe9236a`; on R3 return → consolidate → R4.*
