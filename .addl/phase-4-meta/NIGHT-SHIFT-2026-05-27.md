@@ -798,3 +798,31 @@ Consolidates: M-CONS-v2 baseline + 3 M-C critics + 6 P-specialists + 7 refinemen
 NEVER --admin-bypass / force-push; NORMAL --squash; HARD RULE 12; do-it-now bias (per `feedback_orchestrator_defer_prediction_bias`); full ADDL observance (per `feedback_addl_pipeline_full_observance`); surface arch forks (per `feedback_surface_arch_decisions_under_auth`); iterate-to-convergence at R1+R4+R4b+R6; agent isolation:worktree + run_in_background + commit-before-return + ABSOLUTE-PATH-FORBIDDEN-outside-${WORKTREE_ROOT}; inline-gitignored-canon-in-briefs. **DO NOT TAG without Ben check-in.**
 
 *Updated 2026-05-30. Compact-survival snapshot for the MembershipSet refinement arc + M-CONS-FINAL dispatch.*
+
+---
+
+## 2026-06-01 ADDENDUM — M-CONS-FINAL RETURNED + Ben RATIFIED the full board
+
+**M-CONS-FINAL landed** at `phase-4-meta-core/membership-set-m-cons-final @ a99dd0c7` (`.addl/phase-4-meta/membership-set-m-cons-final.md`, 823 lines + created `docs/future/compute-marketplace.md` stub). Frozen wire-surface SHRINKS vs M-CONS-v2; cost **~80–104 wave-days** (−5 to −7). **9 consolidated Ben-calls; Ben ratified ALL.**
+
+### Ratification outcome (2026-06-01)
+- **BC-1..BC-8: RATIFIED AS-IS** (all my-pred):
+  - BC-1 {MembershipSet, Drop}; RestrictedScopeSet → per-member K(N) walk-scope (wire-neutral re-label).
+  - BC-2 Garden/Grove = governance presets on Atrium (NOT crypto-Kinds); dropped from MEMBERSHIP_SET_KIND reserve; P3 recursion → Federation (`MemberRef::SubsetRef`).
+  - BC-3 member = `Principal` (relation not type); no Agent/Member/MemberKind; **`member_type` DELETED**; nature derived (Inv-22); AI-agent = derived Plugin-predicate; trust categories → 2; `did:agent:` = optional external alias.
+  - BC-4 M-C1 fusions: `members_table` + `disposition_class` + metadata/`GovernanceConfig` top-level.
+  - BC-5 all M-C2 fix-nows (role-gen AAD + `E_ROLE_STALE_AT_VERIFY` + 7d retention + tie-break-all-authors + fork-inherits-metadata + ChainedStateTlv reserve) + M-C3 surfaces (F-FE-1 doc + **Inv-21** + F-FE-4 gate).
+  - BC-6 compute = `PeerResource` composes; **`economic_policy` reserve DROPPED** (v1-beta freeze hook = ZERO); Phase-5+ → `compute-marketplace.md`.
+  - BC-7 transport = iroh-gossip ONLY at v1-beta (Willow/iroh-roq/iroh-live codepoint-reserve); P2 D6 privacy (HMAC-blinded topic + fork-rotation + OOB rendezvous).
+  - BC-8 Compromise housekeeping: **LAMPS keeps #31; revocation-reach → #62**; mint #56; resolve #57–#61 (P4≡M-C2-B-1→#57; audit-insider→#58; KEM-key-confirm→#59; RBAC-role-transition→#60; fingerprint-leak→#61); `disposition_class` added; KEEP `refresh_required_secs` name + clarify; sibling-traits ALONGSIDE inherent-impl.
+- **BC-9 (genuine arch-fork): Ben chose SHIP ALL 5 `RoleId` ACTIVE** (Admin/Moderator/Member/Viewer/Invitee) at v1-beta — overrode orchestrator my-pred (ship-3-reserve-2). **Implication: define Moderator + Invitee permission-sets at v1-beta** (Moderator = subset of admin powers; Invitee = pre-acceptance limited; per Gardens-MVP). Governance *workflows* still Phase-4-Meta-Composing. Small cost add over M-CONS-FINAL's ship-3 assumption; **flag for R0**.
+
+### Invariants/Compromises now ratified for landing
+Inv-20 (12 clauses) + **Inv-21** (fork-tie-break HARD partition) + **Inv-22** (member-nature-derived-never-stored). Compromise canonical table: #31=LAMPS (kept), revocation-reach=#62, #56 (journalist FS), #57–#61 (collisions resolved), `disposition_class` column. NOTE: real in-tree state = Inv-1..15 registered on main; Inv-16..22 are design-mints landing via cascade/R0/impl.
+
+### Immediate forward path (post-ratification)
+1. **Orchestration-branch updates** (orchestrator-direct; no main-touch): CLAUDE.md baked-in #5 retense + #17 (DeviceMesh) + #18 (forkability + Authority-unification + everything-is-a-MembershipSet + agents-are-plugins + derive-nature + compute-composes) amendments + dispatch-conventions + **memory codification** (~13 incl. everything-is-a-MembershipSet, agents-are-plugins, derive-nature-not-store, compute-composes-zero-hook, inline-gitignored-canon-in-briefs).
+2. **Tracked-doc PR cascade** (branch `inv-16-compromise-dak-rename-cat-a` off main `2172cb6d`; bypass-merge-reinstate PRE-AUTHORIZED). **SCOPE DECISION PENDING Ben** (surfaced 2026-06-01): land the F+ encryption-arc decisions now (Inv-16 + DAK compromise + **#31 collision fix** + Compromise #30→#31 cross-link + Cat-A X-Wing→MLKEM768-X25519 rename + atrium test count 15→16), with the MembershipSet mints (#56–#62, Inv-19–22) landing via the F-full R0→implementation pipeline — OR land both together. Numbering-coordination caveat: renumbering revocation-reach→#62 forward-references the not-yet-landed panel #45–#61.
+3. **F-full R0 plan-doc authoring** — consolidates the encryption arc (9-eyes registry @ fbdfeb16 + e2r-ffull-scope-review @ 220b5aae + Option-F+ NO-GO §6.2 envelope-unification + Amendments 1–6) AND the MembershipSet primitive (M-CONS-FINAL @ a99dd0c7 §10 skeleton). Then F-full R1 critic council → R2 → R3 → R4 → R5 (canary-first) → R4b → R6 R3 → pre-tag → tag `phase-4-meta-core-close` (HOLD: Ben check-in).
+
+*Updated 2026-06-01. Compact-survival snapshot: M-CONS-FINAL ratified; forward path = orchestration updates + tracked-doc cascade (scope pending) + F-full R0.*
