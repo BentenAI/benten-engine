@@ -516,10 +516,11 @@ SUFFICIENT to express the constraint even though enforcement defers). **Executor
 to §10.2: a rented executor running an arbitrary handler subgraph on untrusted compute is a SANDBOX-escape
 class re-asked at the rented-compute boundary.
 
-**Replay defense (M-1 — load-bearing).** The remote-permission/device-link replay window rides on the
-**outer UCAN nonce-cache** (the shipped substrate; Compromise #25), NOT on generation-counters (counters
-defend key-staleness/substitution; the nonce-cache defends replay) and NOT on the coarse 1-hour epoch bucket.
-The **nonce-cache is promoted to a NAMED load-bearing v1-beta REQUIREMENT** (§3.10).
+**Replay defense (M-1 — load-bearing).** The remote-permission/device-link replay window rides on an **outer
+UCAN-token/`jti`-keyed nonce-cache that is net-new at v1-beta** (it re-uses the Compromise #25
+durable-CAS-marker *pattern*, NOT the #25 sync-frame instance — see §3.10), NOT on generation-counters
+(counters defend key-staleness/substitution; the nonce-cache defends replay) and NOT on the coarse 1-hour
+epoch bucket. The **nonce-cache is promoted to a NAMED load-bearing v1-beta REQUIREMENT** (§3.10).
 
 **Pre-merge security mini-review REQUIRED (e2r §6.7; M-12 — now SCOPED).** Owner = the threat-model lens
 (Pattern 6). **Six pass-classes** (e2r's 5 + audit-Node-binding): (1) replay; (2) device-key-revocation
@@ -543,6 +544,13 @@ future grants, NOT retroactive un-decryption.
 `K_principal` (NOT split at v1-beta default; split-storage is a future-additive `DeviceAuthBackend` impl).
 Vault file is small + DAK-encrypted (safe on untrusted cloud, Bitwarden-equivalent threat model); NOT
 multi-device-synced (different DAKs); device-link key-wrap (§7) is the propagation path.
+
+**Tight-`exp` default mandate (m-6; Compromise #60 + #52).** `SignUcanDelegation` MUST mint with a SHORT
+default `expires_at` (the v1-beta `DeviceAuthBackend` / remote-permission default — not operator-supplied),
+because under ship-all-5 + remote-permission an ephemeral UCAN survives an RBAC role-downgrade (Compromise #60)
+and a removed/downgraded member is bounded ONLY by `exp` (Compromise #52 fork-on-kick has no PCS against the
+already-issued attenuation). The short default caps that survival window; long-lived grants are an explicit
+opt-out, never the default.
 
 **Blast-radius ladder (O-6).** `Decrypt`=1 Node < `SignUcanDelegation`=attenuated-exp-bounded <
 `ExecuteWorkflow`=bounded-decrypt-count < `RemoteUnlock`/device-link=full `K_principal`-permanent. The
@@ -736,8 +744,11 @@ time-bucket (m-11). OOB-bootstrap first-contact metadata residue cross-links #43
   reserve) + the future-ratification-gate AAD-bind test arm.
 
 **The nonce-cache as a NAMED load-bearing v1-beta REQUIREMENT (M-1 / m-8 / NQ-T4).** The replay window for
-DeviceLink + RemotePermission rides on the **UCAN nonce-cache** (the shipped Compromise #25 substrate), NOT
-generation-counters and NOT the coarse 1-hour bucket. v1-beta MUST pin the nonce-cache contract:
+DeviceLink + RemotePermission rides on a **UCAN-token/`jti`-keyed nonce-cache that is NET-NEW at v1-beta** — it
+re-uses the durable-CAS-marker *pattern* shipped as Compromise #25, NOT the #25 sync-frame instance itself
+(#25 rejects replay of previously-seen *sync envelopes*; the Layer-D cache is a distinct `jti`-keyed instance,
+zero shipped at HEAD), NOT generation-counters and NOT the coarse 1-hour bucket. v1-beta MUST pin the
+nonce-cache contract:
 - **Scope:** per-device AND user-global semantics defined (does device C reject a nonce device B consumed? —
   NQ-T4 R2; default = per-device-durable + best-effort-global-via-sync).
 - **Retention:** ≥ the full 1-hour bucket window (so an intra-hour replay is always caught).
@@ -1171,8 +1182,12 @@ findings closed) → tag `v1-beta`.** (NQ-A2: the assessment-window sits BETWEEN
 ```
 [Wave-0: V2 = X-Wing-SHA3-256 + BE + EncryptedEnvelope-rename]
         │  (HARD upstream — M-20: MUST merge before ANY canary authors envelope bytes)
-        ▼
-[Canary-ENC-1 Layer-A] ──┬──► [Layer-B residual]
+        ├──────────────────────────────────────────────────┐
+        ▼                                                    ▼
+[Canary-ENC-1 Layer-A] ──┬──► [Layer-B residual]   [DAK substrate]  (Argon2id + XChaCha20; NO HPKE dep;
+                         │                          ├──► [at-rest encrypt]   parallelizes with Layer-C,
+                         │                          ├──► [keyring-core + file-vault]   depends ONLY on Wave-0)
+                         │                          └──► [Tauri-shell IPC smoke]
                          └──► [Canary-ENC-2 Layer-C HPKE + Sealed-Sender DEFAULT + abuse-control]
                                    │
        [benten-sync (EXISTING; HLC/Loro/MST/transport)] ──┐ (B-1 upstream dep)
@@ -1180,17 +1195,22 @@ findings closed) → tag `v1-beta`.** (NQ-A2: the assessment-window sits BETWEEN
                                    ├──► [Canary-MS-PRIMITIVE  (benten-membership-set; deps benten-sync)]
                                    │         ├──► [Wave-MS-TRANSPORT  (GossipTransport in benten-sync; MST=convergence)]
                                    │         └──► [Wave-MS-GOVERNANCE-AUDIT  (graph-native)]
-                                   └──► [Layer-D DAK] ──┬──► [at-rest encrypt]
-                                                        ├──► [multi-device key-wrap]
-                                                        ├──► [remote-permission-call + ExecuteWorkflow reserve + nonce-cache test + 6-class mini-review]
-                                                        ├──► [keyring-core + file-vault]
-                                                        └──► [Tauri-shell IPC smoke]
+                                   └──► [Layer-D wire pieces  (need [DAK substrate] + Canary-ENC-2; use Layer-C HPKE)]
+                                              ├──► [multi-device key-wrap]
+                                              └──► [remote-permission-call + ExecuteWorkflow reserve + nonce-cache test + 6-class mini-review]
 [Doc-wave] (LAST group)
 ──── phase-4-meta-core-close + G-CORE-9 freeze + external audit OPENS ────
 [biometric] [device-link UX] [remote-permission UX] [Stronghold] [RecoveryHook trait] [audit query tooling] [governance workflows]
 ──── phase-4-meta-close + v1-assessment-window + (audit closed) + v1-beta ────
 ──── (independent ml-dsa/ml-kem audit per NF-2/C-GM-AUDIT) ──── v1-GM ────
 ```
+
+**Parallelization exposed (NEW-1).** The `[DAK substrate]` (Argon2id + XChaCha20 vault + at-rest encrypt +
+keyring-core/file-vault + Tauri-shell smoke) has NO HPKE dependency — it depends only on Wave-0, so it
+proceeds **in parallel with the Layer-C spine (Canary-ENC-2)** rather than gated behind it. Only the
+`[Layer-D wire pieces]` (multi-device key-wrap + remote-permission-call, which DO use Layer-C HPKE) sit
+downstream of Canary-ENC-2. Collapsing the old single `[Layer-D DAK]` node hid this; the split exposes a
+~1.5-day wall-clock parallelization (the DAK-vault track runs alongside the ~1,800–2,400-LOC Layer-C canary).
 
 ---
 
