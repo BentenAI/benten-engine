@@ -1,0 +1,40 @@
+[package]
+name = "benten-membership-set"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "MembershipSet primitive (F-full Phase-4-Meta-Core) — the unifying encrypt-to-N-recipients keying primitive. RED-PHASE stub crate at R3 landing: the lib is an empty placeholder so the R3-W5 test pins (members_table canonical-CBOR AAD bytes + AAD 9-tuple injectivity + Inv-21 fork-tie-break TOTALITY via Version-Node-CID + CRDT/MST/gossip convergence) compile-but-stay-ignored at baseline (canonical RED-phase per pim-12 §3.6e). Each test file carries a SELF-CONTAINED stub-shim (no cross-wave module dep) for parallel safety; the F-full R5 MembershipSet wave replaces stubs with the real `MembershipSet` / `MemberEntry` / `members_table` types + the AAD assembler that hands OPAQUE bytes to benten-crypto-suite (NO reverse dep — m-15 GNC-5)."
+
+[lints]
+workspace = true
+
+[lib]
+# Disable the implicit libtest bench harness so `cargo bench --workspace`
+# passes Criterion CLI flags through. See benten-core/Cargo.toml for the
+# longer rationale.
+bench = false
+
+[dependencies]
+
+[dev-dependencies]
+# Self-contained stub-shim dependencies for the R3-W5 RED-PHASE pins.
+# blake3 backs the stub-shim Cid (multihash 0x1e blake3, parity with
+# benten-core::Cid) used by the AAD body-CID byte-pins + the Inv-21
+# fork-event Version-Node-CID tie-break discriminant.
+blake3 = { workspace = true }
+# serde + serde_ipld_dagcbor materialize the canonical-CBOR (DAG-CBOR)
+# members_table snapshot bytes the F-AAD-1 length-injectivity pins
+# hex-lock (the workspace canonical-bytes encoding per Phase-1 Cid
+# contract). serde_bytes narrows Vec<u8> → CBOR byte-string for the
+# nonce / ciphertext / sig-byte envelope shape.
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+# Convergence property tests (F-CRDT-1/2/3, F-MST-1, F-INV21-2/3
+# proptest surrogate) reuse the in-tree prop_loro_converge.rs / prop_mst.rs
+# 10k-case harness shape. F-INV21-3 names kani arms as v1-GM strengthening
+# (proptest is the v1-beta floor — do NOT block the wave on kani standup).
+proptest = { workspace = true }

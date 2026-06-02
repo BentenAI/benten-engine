@@ -551,6 +551,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-membership-set"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "proptest",
+ "serde",
+ "serde_bytes",
+ "serde_ipld_dagcbor",
+]
+
+[[package]]
 name = "benten-napi"
 version = "0.1.0"
 dependencies = [
