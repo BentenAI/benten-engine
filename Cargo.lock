@@ -551,6 +551,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "benten-membership-set"
+version = "0.1.0"
+
+[[package]]
 name = "benten-napi"
 version = "0.1.0"
 dependencies = [
