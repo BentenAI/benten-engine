@@ -17,14 +17,16 @@
 //!   `MemberRef` as a `u8`-tagged variant (NOT a text string); int-tag is
 //!   canonical for determinism + AAD compactness; the golden vector encodes
 //!   `member_ref` as an integer tag, symmetric with `role`.
-//! - Inv-20 clause-c (AAD 9-tuple) + clause-i (per-DID `MemberEntry`
-//!   fusion) + U3 (canonical-TLV length-injective).
+//! - Inv-20 clause-c (the `0x6610` group AAD = the BLINDED 11-field set per
+//!   R0.6 §3.10/§4.1; supersedes the prior "9-tuple" framing) + clause-i
+//!   (per-DID `MemberEntry` fusion) + U3 (canonical-TLV length-injective).
 //!
 //! ## Why this is FREEZE-GATING (the structural failure mode)
 //!
 //! The `members_table` snapshot is materialized **independently on every
 //! engine** as the CURRENT view of the membership event version-chain, then
-//! bound into the AAD 9-tuple. If two engines serialize the SAME logical
+//! bound into the `0x6610` group AAD (the BLINDED 11-field set per R0.6
+//! §3.10/§4.1). If two engines serialize the SAME logical
 //! membership to DIFFERENT bytes (field-order drift, `Option<SigPubKey>`
 //! presence-encoding drift, `Hlc`/`RoleId`/`MemberRef`-ordinal encoding
 //! drift), the AAD differs and **cross-engine AEAD-open fails for the same

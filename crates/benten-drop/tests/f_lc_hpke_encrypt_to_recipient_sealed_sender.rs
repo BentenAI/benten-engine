@@ -57,7 +57,7 @@
 //!
 //! # R4.3-FIX (F4-004/005 MAJOR) — dedicated `aad_version: u8` byte-0.
 //!
-//! Spec R0.5 §4.1 freezes a dedicated `aad_version: u8` AAD prefix that is
+//! Spec R0.6 §4.1 freezes a dedicated `aad_version: u8` AAD prefix that is
 //! DISTINCT from `ENVELOPE_FORMAT_VERSION_V2` (the envelope serialization-
 //! format byte). The MembershipSet sibling (`f_aad_2`) correctly uses
 //! `const AAD_VERSION: u8 = 0x01` as AAD byte-0. The original Layer-C AAD
@@ -149,15 +149,19 @@
 //!     and each per-recipient-DID `len: u16 BE` (a Layer-C drop band caps
 //!     recipient-DID lists well under 2^16; the band stays u16 for compact
 //!     stanzas).
-//!   - **MembershipSet 9-tuple AAD** (`f_aad_2`): per-field `len: u32 BE`.
+//!   - **MembershipSet 11-field-set AAD** (`f_aad_2`): per-field `len: u32 BE`
+//!     (the R0.6 §3.10/§4.1 BLINDED 11-field set, which supersedes the prior
+//!     "9-tuple" framing).
 //!   - **Layer-D ExecuteWorkflow AAD** (`f_ld_3`): `executor_did len: u32
 //!     BE`.
-//! This canonicalization note's source-of-record destination is **R0.5 §4.1**
-//! (belongs-named-now): §4.1 GAINS an explicit per-object width sub-row at
-//! the doc-wave (Layer-C drop band u16; membership/Layer-D u32). If a shared
-//! Layer-C TLV helper is later introduced, converge it to this u16 contract;
-//! it MUST NOT silently widen to u32 and re-freeze the `0x6510`/`0x6520`
-//! goldens.
+//! This canonicalization note's source-of-record destination is **R0.6 §4.1**
+//! (belongs-named-now): §4.1 carries the per-object width contract in the
+//! frozen `0x6510`/`0x6610` field-sets (Layer-C drop band u16; membership /
+//! Layer-D u32), with R0.6 §4.0's "width-unification-REJECTED" freeze record
+//! as its companion (the u16/u32 per-band widths stay separately-frozen — do
+//! not re-litigate). If a shared Layer-C TLV helper is later introduced,
+//! converge it to this u16 contract; it MUST NOT silently widen to u32 and
+//! re-freeze the `0x6510`/`0x6520` goldens.
 //!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
@@ -223,7 +227,7 @@ mod layer_c_stub {
     /// R4.3-FIX F4-004/005.
     pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
 
-    /// The frozen AAD version prefix byte (R0.5 §4.1: dedicated
+    /// The frozen AAD version prefix byte (R0.6 §4.1: dedicated
     /// `aad_version: u8` prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`;
     /// U1/U3/U14). Mirrors the MembershipSet sibling `f_aad_2` AND the
     /// Layer-C sibling `f_lc_abuse`'s `AAD_VERSION = 0x01` so the engines
@@ -1106,7 +1110,7 @@ fn f_lc_2_group_stanza_aad_byte0_is_aad_version_not_format_version_and_frozen_la
         bytes[0], ENVELOPE_FORMAT_VERSION,
         "F-LC-2 (CLUSTER-1 / F4-004/005): byte-0 MUST NOT be the envelope \
          format version — the AAD version axis and the serialization-format \
-         axis are DISTINCT (R0.5 §4.1)."
+         axis are DISTINCT (R0.6 §4.1)."
     );
 
     // BE codepoint pair (anti-LE drift, M-19).
@@ -1213,7 +1217,7 @@ fn f_lc_3_sealed_sender_single_recipient_aad_binds_audience_union_and_frozen_gol
         bytes[0], ENVELOPE_FORMAT_VERSION,
         "F-LC-3 (CLUSTER-1): byte-0 MUST NOT be the envelope format version \
          — the AAD-version axis and the serialization-format axis are \
-         DISTINCT (R0.5 §4.1)."
+         DISTINCT (R0.6 §4.1)."
     );
 
     // BE codepoint pair (anti-LE drift, M-19).
