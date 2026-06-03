@@ -282,8 +282,8 @@ fn f_gossip_2_topic_absolute_golden_vector_be() {
     // generation little-endian flips this pin RED.
     const TOPIC_GEN_0X01020304_BE_HEX: &str =
         "ef6af36c02eaad82ecfacfb0e6541fda489df1e9cc13e699fe79ba913df0c450";
-    let gen = 0x0102_0304u32;
-    let topic_be = compute_gossip_topic(&k_set, set_id, gen);
+    let generation = 0x0102_0304u32;
+    let topic_be = compute_gossip_topic(&k_set, set_id, generation);
     assert_eq!(
         hex(&topic_be),
         TOPIC_GEN_0X01020304_BE_HEX,
@@ -292,7 +292,7 @@ fn f_gossip_2_topic_absolute_golden_vector_be() {
     // An LE-encoded generation MUST diverge from the frozen BE golden.
     let mut msg_le = Vec::new();
     msg_le.extend_from_slice(set_id);
-    msg_le.extend_from_slice(&gen.to_le_bytes()); // the WRONG byte order
+    msg_le.extend_from_slice(&generation.to_le_bytes()); // the WRONG byte order
     let topic_le: [u8; 32] = blake3::keyed_hash(&k_set, &msg_le).into();
     assert_ne!(
         hex(&topic_le),
