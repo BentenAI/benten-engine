@@ -4,7 +4,7 @@
 //!
 //! - F-full R2 test-landscape §1 Group 8 rows **F-MST-1** (G1 + GNI-26),
 //!   **F-MST-2** (G2), **F-MST-3** (G3).
-//! - R0.3 plan §3.9 (M-10): "**Convergence is backed by the EXISTING MST
+//! - R0.5 plan §3.9 (M-10): "**Convergence is backed by the EXISTING MST
 //!   anti-entropy** (`benten-sync/src/mst.rs`); **iroh-gossip is
 //!   LIVENESS/notification ONLY**". The MST diff + HLC causal order +
 //!   Inv-21 partition rule are the convergence BACKSTOP — gossip's
@@ -22,7 +22,10 @@
 //! - F-MST-2: an MST entry whose declared CID ≠ its payload BLAKE3 is
 //!   rejected at the app layer (substitution defense).
 //! - F-MST-3: a kick/revocation at HLC=T is applied BEFORE any membership
-//!   write at HLC<T from the revoked party (#52 ordering priority).
+//!   write at HLC<T from the revoked party (#52 ordering priority), AND a
+//!   revocation that is itself STALE (HLC ≤ the write) does NOT dominate
+//!   (the symmetric negative control — proves the priority rule is value-
+//!   keyed totality, not a tautology).
 //!
 //! ## pim-2 §3.6b + §3.6f-ext end-to-end discipline
 //!
@@ -30,8 +33,9 @@
 //! `verify_entry_cid` / `apply_in_revocation_priority_order` stand-ins;
 //! asserts OBSERVABLE converged event-set + typed rejection + ordering;
 //! would-FAIL-if-no-op'd (a degraded-to-O(n) diff blows MAX_ROUNDS; a
-//! no-op CID check accepts the substitution; a naive HLC-order applies the
-//! stale write).
+//! no-op CID check accepts the substitution; an always-`Revoked` /
+//! ignore-the-HLC ordering FAILS the symmetric negative control in
+//! F-MST-3).
 //!
 //! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
 //!
@@ -209,20 +213,29 @@ fn f_mst_2_cid_mismatch_substitution_rejected() {
 // ── F-MST-3 ─────────────────────────────────────────────────────────────
 
 /// F-MST-3 — revocation-vs-membership-write ordering priority (#52).
-/// A kick/revocation at HLC=T is applied BEFORE any membership write at
-/// HLC<T from the revoked party (the stale write loses).
+/// A kick/revocation that strictly DOMINATES (HLC=T) is applied BEFORE a
+/// membership write at HLC<T from the revoked party (the stale write
+/// loses). The SYMMETRIC NEGATIVE CONTROL — a revocation that is itself
+/// stale (HLC ≤ the write) does NOT dominate — makes the priority rule
+/// genuinely falsifiable: an always-`Revoked` or HLC-ignoring impl FAILS
+/// the negative arm. (The rule is value-keyed on HLC totality, NOT
+/// arrival order — the function takes no arrival-order parameter — so the
+/// negative control is the load-bearing falsifier, not an arrival-order
+/// re-run.)
 #[test]
 #[ignore = "RED-PHASE: F-MST-3 — revocation ordered ahead of stale membership write (#52); un-ignore at R5"]
 fn f_mst_3_revocation_ordered_ahead_of_stale_write() {
     // Apply a kick of DID-X at T, and X's stale write at T-1. The kick
-    // must win regardless of arrival order.
+    // must win when (and only when) its HLC strictly dominates.
     #[derive(Clone, Debug, PartialEq, Eq)]
     enum Effect {
         Revoked,
         StaleWriteApplied,
     }
     // PRODUCTION-stand-in: priority application — revocation at HLC=T
-    // dominates any write at HLC<T from the revoked party.
+    // dominates any write at HLC<T from the revoked party. A revocation
+    // whose HLC does NOT strictly exceed the write's HLC is itself the
+    // stale one and loses.
     fn apply_in_revocation_priority_order(revocation_hlc: u64, stale_write_hlc: u64) -> Effect {
         if revocation_hlc > stale_write_hlc {
             Effect::Revoked
@@ -231,15 +244,32 @@ fn f_mst_3_revocation_ordered_ahead_of_stale_write() {
         }
     }
     let t = 100u64;
-    // Both arrival orders resolve to Revoked (the stale write at T-1 loses).
+
+    // Positive arm: kick at T dominates a stale write at T-1 — the stale
+    // write loses (#52).
     assert_eq!(
         apply_in_revocation_priority_order(t, t - 1),
         Effect::Revoked,
         "kick at T dominates a stale write at T-1 from the revoked party (#52)"
     );
+
+    // SYMMETRIC NEGATIVE CONTROL: a revocation that is itself stale
+    // (HLC = T-1) against a newer write (HLC = T) does NOT dominate. This
+    // is the load-bearing falsifier — an always-`Revoked` or HLC-ignoring
+    // impl FAILS here, where the positive arm alone could not catch it.
     assert_eq!(
-        apply_in_revocation_priority_order(t, t - 1),
-        Effect::Revoked,
-        "ordering is arrival-order-independent"
+        apply_in_revocation_priority_order(t - 1, t),
+        Effect::StaleWriteApplied,
+        "a STALE revocation (HLC ≤ the write) MUST NOT dominate — proves the priority \
+         rule is value-keyed HLC totality, not an always-revoke no-op"
+    );
+
+    // Boundary: equal HLC is a tie that does NOT grant the revocation
+    // dominance (strict `>` only) — pins the non-strict edge so a `>=`
+    // regression is caught.
+    assert_eq!(
+        apply_in_revocation_priority_order(t, t),
+        Effect::StaleWriteApplied,
+        "equal HLC is NOT strict dominance — a `>=` regression would wrongly revoke here"
     );
 }

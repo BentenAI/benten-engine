@@ -17,8 +17,9 @@
 //!     dispatch is strict-reject.
 //!   - **F-INV18-1** Inv-18 metadata-disclosure paired-Sealed-Sender:
 //!     `0x6500` plaintext-sender variant has a paired Sealed-Sender sibling
-//!     (`0x6510` DEFAULT); residual on-wire metadata = exactly
-//!     {audience, coarse-epoch}; `0x6500` discloses sender-DID-in-AAD (U4).
+//!     (`0x6510` DEFAULT); residual privacy-metadata on-wire under the
+//!     default = exactly `{audience}`; `0x6500` discloses sender-DID-in-AAD
+//!     (U4).
 //!
 //! Pin sources (R0.5 = `e4fbfe73:.addl/phase-4-meta/f-full-r0-plan.md`):
 //!   - §3.3 FS-gap honest disclosure (#42/#56/#62); §3.11 Sealed-Sender
@@ -34,65 +35,117 @@
 //!
 //! # R4-FIX (F4-028, F4-029) — added substantive byte-pins.
 //! # R4.4-FIX (F4-004/005) — dedicated `aad_version: u8` byte-0.
+//! # R4.4-FIX (F4-006 / CLUSTER-1 BLOCKER) — coarse_epoch REMOVED + 0x6510
+//! #   envelope-AAD reconciled to ONE canonical field-set across siblings.
+//!
+//! ## CLUSTER-1 (BLOCKER) — the `0x6510` envelope-AAD is ONE field-set, ONE
+//! ## golden, byte-0 guard mirrored everywhere (F4-006 / Ben-RULING-#1)
+//!
+//! The previous revision of THIS file froze the DEFAULT (`0x6510`) Sealed-
+//! Sender envelope AAD as `{aad_version, codepoint, audience, coarse_epoch}`
+//! (golden `…001d0100`) — while the sibling Layer-C `f_lc_hpke`
+//! (`DropSealedSender` binding) froze `{aad_version, codepoint, body_cid,
+//! recipient_key_generation}` with **NO** `coarse_epoch` (F4-006). Two
+//! sibling files freezing **divergent AADs for the same `0x6510` codepoint**
+//! is the BLOCKER class: a relay/recipient on one engine could not AEAD-open
+//! a drop sealed by the other. The reconciliation (one canonical field-set):
+//!   - **`coarse_epoch` is REMOVED from the `0x6510` envelope AAD** (and from
+//!     the token-binding AAD — see below). This is decided by the spec, not a
+//!     wire-byte fork: **M-14** (R0.5 §3.10/§4.1 + §1570) "DropToRecipient
+//!     carries **NEITHER**"; the **§4.1 FREEZE row** "coarse 1-hour bucket
+//!     (U28) … DropToRecipient carries NEITHER"; **Ben-RULING-#1**
+//!     (2026-06-03) "coarse_epoch is NOT on the Drop wire (§4.1/M-14)";
+//!     **F4-006** (already applied in `f_lc_hpke`). The §3.3:484 / Compromise
+//!     #43:1043 "audience + coarse-epoch" prose is **pre-F4-006 residue** that
+//!     the spec ITSELF is corrected to drop via the tracked-doc cascade (NOT a
+//!     corpus concern); the old "`coarse_epoch` STAYS" rationale that leaned on
+//!     that prose is RETIRED.
+//!   - **The canonical `0x6510` envelope-AAD field-set is the union both
+//!     siblings agree on:** `{aad_version, codepoint, audience, body_cid,
+//!     recipient_key_generation}` — the safe superset (under-binding is
+//!     impossible). `aad_version` (§4.1:883 prefix) + `codepoint` (§4.1:883
+//!     binding) are FRAMING; `audience` is the recipient binding (§3.3:484);
+//!     `body_cid` + `recipient_key_generation` are the DUAL-CID + key-
+//!     generation bindings (§4.1:886/887, U18/U19, Inv-16). The sender-DID is
+//!     ABSENT (Sealed-Sender — bound INSIDE the ciphertext).
+//!   - **Residual privacy-metadata ≠ AAD field-set (distinction made
+//!     explicit).** Inv-18 / #43's *residual privacy-metadata* (the
+//!     identifiers a relay can observe) under the default is exactly
+//!     `{audience}` (was `{audience, coarse-epoch}`; coarse-epoch removed).
+//!     `aad_version`/`codepoint`/`body_cid`/`recipient_key_generation` are
+//!     framing/binding fields, not sender-metadata in the privacy sense. The
+//!     doc-coupling arm asserts the SECURITY-POSTURE disclosure says the
+//!     residual is `{audience}` and does NOT over- or under-claim.
+//!   - **byte-0 anti-conflation guard mirrored everywhere.** Both frozen
+//!     goldens lead with the dedicated `AAD_VERSION = 0x01` prefix (NOT the
+//!     `ENVELOPE_FORMAT_VERSION = 2` serialization byte); the anti-conflation
+//!     pin fails any revert to the format byte (F4-004/005; load-bearing, not
+//!     advisory).
 //!
 //! **F4-004/005 (MAJOR).** Spec R0.5 §4.1 freezes a dedicated
 //! `aad_version: u8` AAD prefix DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`
-//! (the envelope SERIALIZATION-format byte). The original fixtures here
-//! pushed `ENVELOPE_FORMAT_VERSION` (= 2) as AAD byte-0, conflating two
-//! orthogonal version axes and freezing a leading AAD byte (`0x02`) that
-//! CONFLICTS with the sibling Layer-C `f_lc_hpke` golden + the MembershipSet
-//! golden (`0x01`) — which would break cross-engine AEAD-open. FIX: introduce
-//! `const AAD_VERSION: u8 = 0x01` (mirroring the sibling Layer-C +
-//! MembershipSet convention) and push THAT as AAD byte-0 in BOTH the
-//! token-binding AAD and the 0x6510 Sealed-Sender AAD; `ENVELOPE_FORMAT_VERSION
-//! = 2` stays strictly for the envelope-format axis. Both frozen goldens have
-//! their leading byte `02`->`01`. **`coarse_epoch` STAYS** — it is the
-//! LEGITIMATE Sealed-Sender residual on-wire metadata (R0.5 §3.3: `audience +
-//! coarse epoch`; Compromise #43: `residual = audience + coarse-epoch`); M-14
-//! only excludes the `sealed_at`/`valid_until` EXPIRY timestamps from
-//! `DropToRecipient`, which this file already never carried. A byte-0
-//! anti-conflation assertion is ADDED to both frozen-layout arms so a future
-//! revert to the format-version byte FAILS the pin (load-bearing, not advisory).
+//! (the envelope SERIALIZATION-format byte). `const AAD_VERSION: u8 = 0x01`
+//! (mirroring the sibling Layer-C `f_lc_hpke` + the MembershipSet `f_aad_2`
+//! convention) is pushed as AAD byte-0 in BOTH the token-binding AAD and the
+//! `0x6510` Sealed-Sender AAD; `ENVELOPE_FORMAT_VERSION = 2` stays strictly
+//! for the envelope-format axis.
 //!
 //! **F4-028 (F-LC-8 token-binding AAD byte-pin).** §3.11 calls the
 //! token-binding AAD "wire-affecting only in the token-binding AAD (a
-//! Sealed-Sender sub-field), so it MUST land pre-freeze" — yet the abuse
-//! arms only exercised `Option<&DeliveryToken>` + scalar windows; nothing
-//! froze the AAD byte layout, so a BE/LE drift or a re-ordered field could
-//! ship undetected. ADDED:
-//!   (a) the stub now SERIALIZES a canonical, BIG-ENDIAN token-binding AAD
-//!       (`serialize_token_binding_aad`) + an admission path that binds the
-//!       token to that AAD (`admit_sealed_sender_bound`);
-//!   (b) a FROZEN golden-hex byte vector (`F_LC_8_TOKEN_AAD_HEX`) the BE
-//!       layout MUST reproduce (would-FAIL on any field-order / endianness
-//!       drift — R5 confirms-or-deliberately-updates against the real
-//!       serializer, M-20);
-//!   (c) a MUTATE-the-AAD → fail-admit arm (flip one byte of the bound AAD
-//!       ⇒ admission rejects), proving the token binding is load-bearing,
-//!       not advisory.
+//! Sealed-Sender sub-field), so it MUST land pre-freeze". The token-binding
+//! AAD is the receive-boundary admission binding that rides the SAME drop
+//! wire as the `0x6510` envelope; it therefore freezes the SAME canonical
+//! envelope-AAD prefix `{aad_version, codepoint, audience, body_cid,
+//! recipient_key_generation}` PLUS the recipient-issued token's own validity
+//! window `{token_nbf, token_exp, token_rate_limit}` (the UCAN nbf/exp that
+//! §3.11 names as the freshness/revocation mechanism). **No separate
+//! `coarse_epoch`** — the token's own nbf/exp IS the freshness binding, and a
+//! coarse bucket would re-introduce exactly the drop-wire metadata Ben-RULING
+//! -#1 + M-14 eliminate. ADDED:
+//!   (a) the stub SERIALIZES a canonical BIG-ENDIAN token-binding AAD
+//!       (`serialize_token_binding_aad`) over the union prefix + token window
+//!       + an admission path that binds the token to that AAD
+//!       (`admit_sealed_sender_bound`);
+//!   (b) a FROZEN golden-hex (`F_LC_8_TOKEN_AAD_HEX`) the BE layout MUST
+//!       reproduce (would-FAIL on any field-order / endianness drift — R5
+//!       confirms-or-deliberately-updates against the real serializer, M-20);
+//!   (c) a MUTATE-the-AAD → fail-admit arm (flip one byte of the bound AAD ⇒
+//!       admission rejects), proving the token binding is load-bearing.
 //!
-//! **F4-029 (F-INV18-1 positive field-set enumeration).** The Inv-18
-//! residual-metadata claim ("{audience, coarse-epoch} and NOTHING else")
-//! was only a doc-grep — it never enumerated the ACTUAL serialized 0x6510
-//! AAD field-set, so an impl that smuggled the sender-DID (or any extra
-//! field) into the default AAD would pass. ADDED a POSITIVE field-set
-//! enumeration arm: serialize the `0x6510` AAD, enumerate its fields, and
-//! assert the set is EXACTLY `{aad_version, codepoint, audience,
-//! coarse_epoch}` with the sender-DID ABSENT — plus a FROZEN golden-hex
-//! (`F_INV18_1_SEALED_AAD_HEX`) so the byte layout is pinned.
+//! **F4-029 (F-INV18-1 positive field-set enumeration).** A POSITIVE
+//! field-set enumeration: serialize the `0x6510` envelope AAD, enumerate its
+//! fields, assert the set is EXACTLY `{aad_version, codepoint, audience,
+//! body_cid, recipient_key_generation}` with the sender-DID (and any extra
+//! field) ABSENT — plus a FROZEN golden-hex (`F_INV18_1_SEALED_AAD_HEX`). A
+//! SECOND assertion narrows the *residual privacy-metadata* subset to exactly
+//! `{audience}` (the Inv-18 / #43 claim), keeping the engineering field-set
+//! freeze distinct from the privacy-disclosure claim.
+//!
+//! [FLAG-FOR-BEN — courtesy cross-check, not a halt: I removed `coarse_epoch`
+//!  from the token-binding AAD too (not only the `0x6510` envelope AAD). The
+//!  prior fixer note recommended keeping it on the token-binding sub-field.
+//!  My reasoning as Ben: the token-binding AAD rides the drop wire (§3.11:814
+//!  "wire-affecting only in the token-binding AAD"), and Ben-RULING-#1's plain
+//!  text is "coarse_epoch is NOT on the Drop wire"; the token's own UCAN
+//!  nbf/exp (which §3.11 names as the freshness/revocation mechanism) already
+//!  binds freshness, so a separate coarse bucket is both redundant and a
+//!  re-introduction of the exact metadata M-14 removes. One coherent posture =
+//!  "no coarse_epoch anywhere on the drop wire." If you prefer the token-
+//!  binding sub-field to retain a coarse bucket, re-add `coarse_epoch: u64`
+//!  to `TokenBindingAad` only (after `recipient_key_generation`) + regenerate
+//!  `F_LC_8_TOKEN_AAD_HEX`; the envelope AAD removal is settled regardless.]
 //!
 //! # RED-PHASE STATUS + STUB-SHIM (pim-12 §3.6e).
 //!
-//! Self-contained stubs (`abuse_stub`, `group_posture_stub`) so the file
-//! is parallel-safe + compiles green at baseline behind `#[ignore]`. The
-//! FS-gap + Inv-18 disclosure arms are DOC-COUPLING (real
-//! `std::fs::read_to_string` against `docs/SECURITY-POSTURE.md`, reusing
-//! the `tf3f_revocation_reach_*` shape) — those are not stubbed; they
-//! assert the doc-wave landed the disclosure text. The NEW byte-pin arms
-//! drive the stub's DETERMINISTIC canonical serializer (not
-//! `unimplemented!()`) so the frozen golden-hex is computable green at
-//! red-phase; R5 swaps the stub serializer for the real one and confirms
-//! (or deliberately updates) the frozen literal. R5:
+//! Self-contained stubs (`abuse_stub`, `group_posture_stub`, `sealed_aad_stub`)
+//! so the file is parallel-safe + compiles green at baseline behind
+//! `#[ignore]`. The FS-gap + Inv-18 disclosure arms are DOC-COUPLING (real
+//! `std::fs::read_to_string` against `docs/SECURITY-POSTURE.md`, reusing the
+//! `tf3f_revocation_reach_*` shape) — those assert the doc-wave landed the
+//! disclosure text. The NEW byte-pin arms drive the stub's DETERMINISTIC
+//! canonical serializer (not `unimplemented!()`) so the frozen golden-hex is
+//! computable green at red-phase; R5 swaps the stub serializer for the real
+//! one and confirms (or deliberately updates) the frozen literal. R5:
 //!   1. DELETE the stub modules; INSERT the real `use benten_drop::…`;
 //!   2. UN-IGNORE; 3. the doc-coupling arms stay (doc-wave authored);
 //!   4. confirm-or-update the frozen golden-hex against the real encoder.
@@ -180,14 +233,24 @@ mod abuse_stub {
     /// The canonical token-binding AAD inputs (§3.11). The token is bound
     /// to the envelope by reproducing THIS byte string; a mismatch fails
     /// admission. Every multiformats-framed integer is BIG-ENDIAN (M-19).
+    ///
+    /// CLUSTER-1 / F4-006: the prefix is the SAME canonical `0x6510`
+    /// envelope-AAD field-set the sibling `f_lc_hpke` freezes —
+    /// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+    /// — plus the recipient-issued token's own UCAN validity window. There is
+    /// NO `coarse_epoch` (Ben-RULING-#1 + M-14: nothing coarse-bucketed on the
+    /// drop wire; the token's nbf/exp IS the freshness binding).
     #[derive(Clone, Debug)]
     pub struct TokenBindingAad {
         pub aad_version: u8,
         pub codepoint: u16,
-        /// the recipient audience DID (the only identity on the wire).
+        /// the recipient audience DID (the only privacy-relevant identity on
+        /// the wire).
         pub audience_did: Vec<u8>,
-        /// the 1-hour-bucketed coarse epoch.
-        pub coarse_epoch: u64,
+        /// the body-CID bound into the canonical `0x6510` envelope AAD.
+        pub body_cid: [u8; 32],
+        /// the recipient key-generation (Inv-16; U19).
+        pub recipient_key_generation: u32,
         pub token_not_before: u64,
         pub token_expires_at: u64,
         pub token_rate_limit: u32,
@@ -197,15 +260,17 @@ mod abuse_stub {
     /// canonical BIG-ENDIAN byte layout. DETERMINISTIC (no maps, no
     /// nondeterministic ordering) so the frozen golden-hex is meaningful.
     ///
-    /// Layout (R0.5 §3.11 + §4.1 BE; M-19):
-    ///   aad_version  : u8
-    ///   codepoint    : u16 BE
-    ///   aud_len      : u16 BE
-    ///   audience_did : aud_len bytes
-    ///   coarse_epoch : u64 BE
-    ///   token_nbf    : u64 BE
-    ///   token_exp    : u64 BE
-    ///   rate_limit   : u32 BE
+    /// Layout (R0.5 §3.11 + §4.1 BE; M-19) — the canonical `0x6510`
+    /// envelope-AAD prefix + the token window:
+    ///   aad_version       : u8  (= AAD_VERSION = 0x01; NOT format ver)
+    ///   codepoint         : u16 BE
+    ///   aud_len           : u16 BE
+    ///   audience_did      : aud_len bytes
+    ///   body_cid          : 32 bytes
+    ///   recipient_key_gen : u32 BE
+    ///   token_nbf         : u64 BE
+    ///   token_exp         : u64 BE
+    ///   token_rate_limit  : u32 BE
     #[must_use]
     pub fn serialize_token_binding_aad(aad: &TokenBindingAad) -> Vec<u8> {
         let mut out = Vec::new();
@@ -215,7 +280,8 @@ mod abuse_stub {
             .expect("audience DID length must fit u16");
         out.extend_from_slice(&aud_len.to_be_bytes());
         out.extend_from_slice(&aad.audience_did);
-        out.extend_from_slice(&aad.coarse_epoch.to_be_bytes());
+        out.extend_from_slice(&aad.body_cid);
+        out.extend_from_slice(&aad.recipient_key_generation.to_be_bytes());
         out.extend_from_slice(&aad.token_not_before.to_be_bytes());
         out.extend_from_slice(&aad.token_expires_at.to_be_bytes());
         out.extend_from_slice(&aad.token_rate_limit.to_be_bytes());
@@ -312,7 +378,9 @@ mod group_posture_stub {
 // ===========================================================================
 // SELF-CONTAINED STUB — Sealed-Sender on-wire AAD field-set (F-INV18-1).
 // DELETE at R5. R4-FIX F4-029: a DETERMINISTIC BE serializer + an explicit
-// field enumeration so the residual-metadata claim is byte-checked.
+// field enumeration so the residual-metadata claim is byte-checked. CLUSTER-1
+// (F4-006): the field-set is the canonical `0x6510` envelope union with NO
+// coarse_epoch (reconciled with the sibling `f_lc_hpke` `DropSealedSender`).
 // ===========================================================================
 mod sealed_aad_stub {
     /// Wave-0 V2 envelope SERIALIZATION-format byte (`format_version`).
@@ -326,36 +394,59 @@ mod sealed_aad_stub {
     pub const AAD_VERSION: u8 = 0x01;
     pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 
-    /// The DEFAULT (`0x6510`) on-wire AAD inputs. Per R0.5 §3.3/§4.1/§5.1
-    /// (#43): EXACTLY `{audience, coarse_epoch}` — the sender-DID is bound
-    /// INSIDE the ciphertext, NOT here. (`aad_version` + `codepoint` are
-    /// framing, not identity metadata.)
+    /// The DEFAULT (`0x6510`) on-wire envelope AAD inputs. CLUSTER-1 / F4-006:
+    /// the canonical field-set BOTH siblings freeze =
+    /// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+    /// — the sender-DID is bound INSIDE the ciphertext, NOT here; there is NO
+    /// `coarse_epoch` (Ben-RULING-#1 + M-14). (`aad_version` + `codepoint` are
+    /// framing; `body_cid` + `recipient_key_generation` are the DUAL-CID +
+    /// Inv-16 key-generation bindings; `audience` is the only privacy-relevant
+    /// residual.)
     #[derive(Clone, Debug)]
     pub struct SealedSenderAad {
         pub aad_version: u8,
         pub codepoint: u16,
         pub audience_did: Vec<u8>,
-        pub coarse_epoch: u64,
+        pub body_cid: [u8; 32],
+        pub recipient_key_generation: u32,
     }
 
-    /// The ENUMERABLE field-set of the serialized 0x6510 AAD. A POSITIVE
-    /// enumeration (R4-FIX F4-029): the test asserts this set is EXACTLY
-    /// the four field tokens — so an impl that adds (e.g.) a `sender_did`
-    /// field is caught by an ADDED token, not just by a doc-grep.
+    /// The ENUMERABLE field-set of the serialized `0x6510` envelope AAD. A
+    /// POSITIVE enumeration (R4-FIX F4-029): the test asserts this set is
+    /// EXACTLY the canonical union — so an impl that adds (e.g.) a `sender_did`
+    /// OR re-adds a `coarse_epoch` field is caught by an unexpected token, not
+    /// just by a doc-grep.
     #[must_use]
     pub fn aad_field_set() -> Vec<&'static str> {
-        vec!["aad_version", "codepoint", "audience", "coarse_epoch"]
+        vec![
+            "aad_version",
+            "codepoint",
+            "audience",
+            "body_cid",
+            "recipient_key_generation",
+        ]
     }
 
-    /// PRODUCTION call site — serialize the DEFAULT (0x6510) on-wire AAD
-    /// to its canonical BIG-ENDIAN bytes. DETERMINISTIC. NO sender-DID.
+    /// The *residual privacy-metadata* subset of the `0x6510` AAD field-set —
+    /// the identifiers a relay can observe that are sender/recipient-metadata in
+    /// the Inv-18 / #43 privacy sense. CLUSTER-1: EXACTLY `{audience}`
+    /// (coarse-epoch removed; framing/binding fields are not privacy metadata).
+    #[must_use]
+    pub fn residual_privacy_metadata() -> Vec<&'static str> {
+        vec!["audience"]
+    }
+
+    /// PRODUCTION call site — serialize the DEFAULT (`0x6510`) on-wire AAD
+    /// to its canonical BIG-ENDIAN bytes. DETERMINISTIC. NO sender-DID, NO
+    /// coarse_epoch.
     ///
     /// Layout (BE; M-19):
-    ///   aad_version  : u8
-    ///   codepoint    : u16 BE
-    ///   aud_len      : u16 BE
-    ///   audience_did : aud_len bytes
-    ///   coarse_epoch : u64 BE
+    ///   aad_version       : u8
+    ///   codepoint         : u16 BE
+    ///   aud_len           : u16 BE
+    ///   audience_did      : aud_len bytes
+    ///   body_cid          : 32 bytes
+    ///   recipient_key_gen : u32 BE
     #[must_use]
     pub fn serialize_sealed_sender_aad(aad: &SealedSenderAad) -> Vec<u8> {
         let mut out = Vec::new();
@@ -365,7 +456,8 @@ mod sealed_aad_stub {
             .expect("audience DID length must fit u16");
         out.extend_from_slice(&aud_len.to_be_bytes());
         out.extend_from_slice(&aad.audience_did);
-        out.extend_from_slice(&aad.coarse_epoch.to_be_bytes());
+        out.extend_from_slice(&aad.body_cid);
+        out.extend_from_slice(&aad.recipient_key_generation.to_be_bytes());
         out
     }
 }
@@ -378,7 +470,9 @@ use group_posture_stub::{
     GroupError, LAYER_C_DROP_MULTI_RECIPIENT, MEMBERSHIP_SET_GROUP_MULTI_STANZA, dispatch_group,
     open_membership_set_group, seal_membership_set_group,
 };
-use sealed_aad_stub::{SealedSenderAad, aad_field_set, serialize_sealed_sender_aad};
+use sealed_aad_stub::{
+    SealedSenderAad, aad_field_set, residual_privacy_metadata, serialize_sealed_sender_aad,
+};
 
 const SECURITY_POSTURE_MD: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -483,13 +577,23 @@ fn f_lc_8_valid_token_admitted() {
 
 // --- R4-FIX F4-028 — token-binding AAD byte-layout pin + mutate→fail-admit.
 
-/// The canonical token-binding AAD fixture (F4-028). All integers BE.
+/// The fixture body-CID for the canonical `0x6510` envelope-AAD prefix.
+fn fixture_body_cid() -> [u8; 32] {
+    let mut c = [0u8; 32];
+    c[0] = 0xE0;
+    c
+}
+
+/// The canonical token-binding AAD fixture (F4-028). All integers BE. The
+/// prefix is the SAME canonical `0x6510` envelope union the sibling
+/// `f_lc_hpke` freezes; NO coarse_epoch (CLUSTER-1 / F4-006).
 fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
     TokenBindingAad {
-        aad_version: abuse_stub::AAD_VERSION,                             // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
-        codepoint: abuse_stub::DROP_TO_RECIPIENT_SEALED_SENDER,          // 0x6510
+        aad_version: abuse_stub::AAD_VERSION,                    // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
+        codepoint: abuse_stub::DROP_TO_RECIPIENT_SEALED_SENDER,  // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
-        coarse_epoch: 1_900_800,
+        body_cid: fixture_body_cid(),
+        recipient_key_generation: 0,
         token_not_before: 1_900_000,
         token_expires_at: 1_999_999,
         token_rate_limit: 5,
@@ -497,19 +601,22 @@ fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
 }
 
 /// FROZEN big-endian golden vector for the token-binding AAD (F4-028).
-/// Computed once from the canonical BE layout; ANY field-order or
-/// endianness drift in the real serializer flips this pin.
+/// Computed once from the canonical BE layout (the `0x6510` envelope union
+/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+/// PLUS the token window `{nbf, exp, rate_limit}`; NO coarse_epoch). ANY
+/// field-order or endianness drift in the real serializer flips this pin.
 /// R5 confirms-or-deliberately-updates this frozen literal against the
 /// real encoder (M-20).
-const F_LC_8_TOKEN_AAD_HEX: &str = "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d010000000000001cfde000000000001e847f00000005";
+const F_LC_8_TOKEN_AAD_HEX: &str = "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e49515545e0000000000000000000000000000000000000000000000000000000000000000000000000000000001cfde000000000001e847f00000005";
 
 /// F-LC-8 PIN 5 (R4-FIX F4-028) — the token-binding AAD serializes to the
 /// FROZEN big-endian byte layout. This pins the wire-affecting sub-field
 /// (§3.11) that BR-1 says "MUST land pre-freeze". would-FAIL if the
-/// serializer emitted LE codepoint bytes, re-ordered the fields, or
-/// changed the length-prefix encoding — i.e. any silent wire drift.
+/// serializer emitted LE codepoint bytes, re-ordered the fields, re-added a
+/// coarse_epoch, or changed the length-prefix encoding — i.e. any silent
+/// wire drift.
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — token-binding AAD frozen BE byte layout (§3.11; F4-028); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-LC-8 — token-binding AAD frozen BE byte layout (§3.11; F4-028; CLUSTER-1 no-epoch); un-ignore at R5"]
 fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
     let aad = f_lc_8_token_aad_fixture();
     let bytes = serialize_token_binding_aad(&aad);
@@ -518,10 +625,11 @@ fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
         to_hex(&bytes),
         F_LC_8_TOKEN_AAD_HEX,
         "F-LC-8 (F4-028): the token-binding AAD MUST serialize to the \
-         FROZEN canonical big-endian layout. A mismatch means the \
-         wire-affecting sub-field drifted (endianness / field order / \
-         length-prefix) — exactly the pre-freeze hazard §3.11/BR-1 names. \
-         R5 confirms-or-deliberately-updates this literal (M-20)."
+         FROZEN canonical big-endian layout (the `0x6510` envelope union + \
+         token window; NO coarse_epoch). A mismatch means the wire-affecting \
+         sub-field drifted (endianness / field order / a re-added coarse \
+         bucket / length-prefix) — exactly the pre-freeze hazard §3.11/BR-1 \
+         names. R5 confirms-or-deliberately-updates this literal (M-20)."
     );
 
     // Anti-tautology cross-check: the codepoint MUST appear as the BE pair
@@ -559,7 +667,7 @@ fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
 /// F-LC-8 PIN 6 (R4-FIX F4-028) — MUTATE the bound token-binding AAD ⇒
 /// admission REJECTS at `TokenBindingMismatch`. The on-wire AAD is
 /// load-bearing: a relay that flips ANY byte of the bound AAD (re-target
-/// the audience, shift the epoch, downgrade the rate-limit) breaks the
+/// the audience, swap the body-CID, downgrade the rate-limit) breaks the
 /// binding and the envelope is refused BEFORE decrypt. would-FAIL if the
 /// admission path ignored the AAD bytes (treated the token binding as
 /// advisory).
@@ -750,10 +858,13 @@ fn f_inv18_1_plaintext_sender_has_paired_sealed_sender_default() {
 /// F-INV18-1 PIN 2 — Inv-18 paired-disclosure is documented at
 /// SECURITY-POSTURE.md (DC arm, reuses the tf3f doc-coupling shape).
 /// Compromise #43 (sender-metadata) MUST disclose that the DEFAULT hides
-/// the sender-DID and the residual on-wire metadata is {audience,
-/// coarse-epoch}. would-FAIL if the doc-wave did not land the disclosure.
+/// the sender-DID and that the residual on-wire privacy-metadata is exactly
+/// `{audience}` (coarse-epoch is NOT on the drop wire — Ben-RULING-#1 /
+/// M-14; the spec #43 prose is corrected to drop it via the tracked-doc
+/// cascade). would-FAIL if the doc-wave did not land the disclosure, or
+/// over-claims a coarse-epoch residual on the drop wire.
 #[test]
-#[ignore = "RED-PHASE: F-INV18-1 — SECURITY-POSTURE.md documents Sealed-Sender metadata posture; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-INV18-1 — SECURITY-POSTURE.md documents Sealed-Sender metadata posture (residual = {audience}); un-ignore at R5"]
 fn f_inv18_1_security_posture_documents_metadata_posture() {
     let doc = std::fs::read_to_string(SECURITY_POSTURE_MD)
         .expect("SECURITY-POSTURE.md must be present at /docs/");
@@ -764,84 +875,118 @@ fn f_inv18_1_security_posture_documents_metadata_posture() {
          v1-beta DEFAULT metadata-hiding shape; Inv-18 / Compromise #43). \
          Add it at the doc-wave."
     );
-    // The residual on-wire metadata must be disclosed as {audience,
-    // coarse-epoch} — not over-claiming full metadata privacy.
-    let names_audience = doc.contains("audience");
-    let names_epoch = doc.contains("coarse-epoch")
-        || doc.contains("coarse epoch")
-        || doc.contains("coarse-grained epoch");
+    // The residual on-wire privacy-metadata under the default must be
+    // disclosed as the audience binding — the honest, minimal claim. The
+    // coarse-epoch is NOT a drop-wire residual (Ben-RULING-#1 / M-14); the
+    // doc-wave writes the corrected #43 residual.
     assert!(
-        names_audience && names_epoch,
+        doc.contains("audience"),
         "F-INV18-1: SECURITY-POSTURE.md MUST disclose the RESIDUAL on-wire \
-         metadata under the Sealed-Sender default = {{audience, \
-         coarse-epoch}} (honest disclosure, not over-claimed). Got: \
-         audience={names_audience}, epoch={names_epoch}."
+         privacy-metadata under the Sealed-Sender default = {{audience}} \
+         (honest disclosure; the sender-DID is hidden, the audience binding \
+         remains). Add it at the doc-wave."
     );
 }
 
 // --- R4-FIX F4-029 — POSITIVE field-set enumeration of the 0x6510 AAD.
 
-/// The canonical Sealed-Sender (0x6510) on-wire AAD fixture (F4-029).
+/// The canonical Sealed-Sender (`0x6510`) on-wire envelope AAD fixture
+/// (F4-029). CLUSTER-1 / F4-006: the union field-set, NO coarse_epoch.
 fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
     SealedSenderAad {
-        aad_version: sealed_aad_stub::AAD_VERSION,                        // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
-        codepoint: sealed_aad_stub::DROP_TO_RECIPIENT_SEALED_SENDER,     // 0x6510
+        aad_version: sealed_aad_stub::AAD_VERSION,                    // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
+        codepoint: sealed_aad_stub::DROP_TO_RECIPIENT_SEALED_SENDER,  // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
-        coarse_epoch: 1_900_800,
+        body_cid: fixture_body_cid(),
+        recipient_key_generation: 0,
     }
 }
 
-/// FROZEN big-endian golden vector for the DEFAULT (0x6510) on-wire AAD
-/// (F4-029). EXACTLY `{aad_version, codepoint, audience, coarse_epoch}` —
-/// no sender-DID region. R5 confirms-or-deliberately-updates this frozen
-/// literal against the real encoder (M-20).
+/// FROZEN big-endian golden vector for the DEFAULT (`0x6510`) on-wire
+/// envelope AAD (F4-029). EXACTLY the canonical union
+/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+/// — no sender-DID region, NO coarse_epoch. R5 confirms-or-deliberately-
+/// updates this frozen literal against the real encoder (M-20).
 const F_INV18_1_SEALED_AAD_HEX: &str =
-    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d0100";
+    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e49515545e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-INV18-1 PIN 3 (R4-FIX F4-029) — POSITIVE field-set enumeration: the
-/// serialized 0x6510 AAD field-set is EXACTLY
-/// `{aad_version, codepoint, audience, coarse_epoch}` and the sender-DID
-/// is ABSENT. This upgrades the residual-metadata claim from a doc-grep to
-/// a behavioral enumeration: an impl that smuggles a `sender_did` (or any
-/// extra field) into the default AAD is caught HERE by an unexpected
-/// field token, not just by the doc text. would-FAIL if the field-set
-/// gains or drops a field, or if the serialized bytes contained the
-/// sender-DID.
+/// serialized `0x6510` envelope AAD field-set is EXACTLY the canonical union
+/// and the sender-DID is ABSENT; SEPARATELY, the residual privacy-metadata
+/// subset is EXACTLY `{audience}`. This upgrades the residual-metadata claim
+/// from a doc-grep to a behavioral enumeration: an impl that smuggles a
+/// `sender_did`, re-adds a `coarse_epoch`, or otherwise changes the field-set
+/// is caught HERE by an unexpected/missing field token. would-FAIL if the
+/// field-set gains or drops a field, if the privacy-residual gains coarse_epoch
+/// back, or if the serialized bytes contained the sender-DID.
 #[test]
-#[ignore = "RED-PHASE: F-INV18-1 — 0x6510 AAD field-set == EXACTLY {audience,coarse_epoch} (+framing); sender-DID ABSENT (F4-029); un-ignore at R5"]
-fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_audience_and_epoch() {
+#[ignore = "RED-PHASE: F-INV18-1 — 0x6510 envelope-AAD field-set == EXACTLY the union; residual privacy-metadata == {audience}; sender-DID ABSENT (F4-029; CLUSTER-1 no-epoch); un-ignore at R5"]
+fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_the_canonical_union() {
     use std::collections::BTreeSet;
 
-    // (a) POSITIVE enumeration — the field-set is EXACTLY the four tokens.
+    // (a) POSITIVE enumeration — the engineering field-set is EXACTLY the
+    //     canonical `0x6510` envelope union both siblings freeze.
     let fields: BTreeSet<&str> = aad_field_set().into_iter().collect();
-    let expected: BTreeSet<&str> =
-        BTreeSet::from(["aad_version", "codepoint", "audience", "coarse_epoch"]);
+    let expected: BTreeSet<&str> = BTreeSet::from([
+        "aad_version",
+        "codepoint",
+        "audience",
+        "body_cid",
+        "recipient_key_generation",
+    ]);
     assert_eq!(
         fields, expected,
-        "F-INV18-1 (F4-029): the DEFAULT (0x6510) on-wire AAD field-set \
-         MUST be EXACTLY {{aad_version, codepoint, audience, coarse_epoch}}. \
-         An ADDED token (e.g. `sender_did`) means the default leaks sender \
-         metadata; a DROPPED token means the audience binding regressed. \
-         Got: {fields:?}"
+        "F-INV18-1 (F4-029 / CLUSTER-1): the DEFAULT (0x6510) envelope AAD \
+         field-set MUST be EXACTLY the canonical union \
+         {{aad_version, codepoint, audience, body_cid, \
+         recipient_key_generation}}. An ADDED token (e.g. `sender_did` or a \
+         re-added `coarse_epoch`) means the default leaked metadata or \
+         diverged from the sibling `f_lc_hpke`; a DROPPED token means a \
+         binding regressed. Got: {fields:?}"
     );
     // The sender-DID MUST NOT be a field of the default AAD (the whole
-    // point of Sealed-Sender — it lives INSIDE the ciphertext).
+    // point of Sealed-Sender — it lives INSIDE the ciphertext); and the
+    // coarse_epoch MUST be gone (Ben-RULING-#1 / M-14).
     assert!(
         !fields.contains("sender_did") && !fields.contains("sender"),
         "F-INV18-1 (F4-029): the Sealed-Sender DEFAULT AAD MUST NOT carry a \
          sender-DID field — it is bound INSIDE the ciphertext."
     );
+    assert!(
+        !fields.contains("coarse_epoch") && !fields.contains("coarse-epoch"),
+        "F-INV18-1 (CLUSTER-1 / F4-006): the DEFAULT (0x6510) envelope AAD \
+         MUST NOT carry a coarse_epoch — DropToRecipient carries NEITHER \
+         timestamp NOR coarse bucket (M-14 / Ben-RULING-#1). A re-added \
+         coarse_epoch re-introduces the cross-sibling divergence + the \
+         drop-wire metadata M-14 removes."
+    );
 
-    // (b) FROZEN byte layout — the serialized AAD reproduces the BE golden
-    // vector (drift flips the pin).
+    // (b) RESIDUAL privacy-metadata — the identifiers a relay observes that
+    //     are sender/recipient-metadata in the Inv-18/#43 privacy sense =
+    //     EXACTLY {audience} (framing/binding fields are not privacy
+    //     metadata; coarse-epoch removed).
+    let residual: BTreeSet<&str> = residual_privacy_metadata().into_iter().collect();
+    let residual_expected: BTreeSet<&str> = BTreeSet::from(["audience"]);
+    assert_eq!(
+        residual, residual_expected,
+        "F-INV18-1 (CLUSTER-1 / Inv-18): the residual on-wire PRIVACY-metadata \
+         under the Sealed-Sender default MUST be EXACTLY {{audience}} — the \
+         sender-DID is hidden (Sealed-Sender) and the coarse-epoch is removed \
+         (Ben-RULING-#1 / M-14). would-FAIL if the residual gained coarse_epoch \
+         back. Got: {residual:?}"
+    );
+
+    // (c) FROZEN byte layout — the serialized AAD reproduces the BE golden
+    //     vector (drift flips the pin).
     let aad = f_inv18_1_sealed_aad_fixture();
     let bytes = serialize_sealed_sender_aad(&aad);
     assert_eq!(
         to_hex(&bytes),
         F_INV18_1_SEALED_AAD_HEX,
-        "F-INV18-1 (F4-029): the 0x6510 on-wire AAD MUST serialize to the \
-         FROZEN big-endian layout containing ONLY {{aad_version, codepoint, \
-         audience, coarse_epoch}}. R5 confirms-or-deliberately-updates this \
+        "F-INV18-1 (F4-029): the 0x6510 envelope AAD MUST serialize to the \
+         FROZEN big-endian layout containing ONLY the canonical union \
+         {{aad_version, codepoint, audience, body_cid, \
+         recipient_key_generation}}. R5 confirms-or-deliberately-updates this \
          literal (M-20)."
     );
 
@@ -863,8 +1008,8 @@ fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_audience_and_epoch() {
          AEAD-open (the F4-004/005 hazard)."
     );
 
-    // (c) NEGATIVE byte-scan — the sender-DID is provably ABSENT from the
-    // serialized DEFAULT AAD (would-FAIL if it leaked in).
+    // (d) NEGATIVE byte-scan — the sender-DID is provably ABSENT from the
+    //     serialized DEFAULT AAD (would-FAIL if it leaked in).
     let sender_did = did("did:key:zSenderAliceUNIQUEMARKER");
     let leaks = bytes
         .windows(sender_did.len())

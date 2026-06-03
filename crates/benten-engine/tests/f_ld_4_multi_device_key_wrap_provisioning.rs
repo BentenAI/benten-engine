@@ -12,7 +12,9 @@
 //!     session-id → reject; forged/unsigned offer → `E_DEVICE_ATTESTATION_FORGED`-
 //!     class; K_principal-FS-absent disclosure. Extends
 //!     `device_attestation_envelope_direct.rs`."
-//!   - R0.3 plan §3.4 (`...f-full-r0-plan.md:532-541`): the Signal-Provisioning
+//!   - R0.5 plan §3.4 (spec of record; minted against R0.3
+//!     `...f-full-r0-plan.md:532-541` — §3.4 is the stable Layer-D section
+//!     R0.3→R0.5): the Signal-Provisioning
 //!     flow; "no FS for `K_principal` (identity-equivalent by design)".
 //!
 //! ## RED-PHASE + byte-pinning (pim-12 §3.6e + M-20)

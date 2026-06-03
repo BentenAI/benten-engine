@@ -4,7 +4,9 @@
 //!   - `db2d7d6d:.addl/phase-4-meta/f-full-r2-test-landscape.md` §1 Group 8
 //!     F-LD-1: "sealed per #7; default Argon2id+XChaCha20+optional-keyring-core;
 //!     headless via `BENTEN_VAULT_PASSWORD`/IPC."
-//!   - R0.3 plan §3.4 (`4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md:494`):
+//!   - R0.5 plan §3.4 (spec of record; minted against R0.3
+//!     `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md:494` — §3.4 is the
+//!     stable Layer-D section R0.3→R0.5):
 //!     "`DeviceAuthBackend` trait (sealed per #7) with `unlock(prompt) ->
 //!     SecretBox<[u8;32]>` + `lock()` + `supports_biometric()` +
 //!     `supports_remote_unlock()`. Default impl = ... works in all three

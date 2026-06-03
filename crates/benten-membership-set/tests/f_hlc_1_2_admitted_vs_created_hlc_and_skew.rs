@@ -4,14 +4,14 @@
 //!
 //! - F-full R2 test-landscape §1 Group 8 rows **F-HLC-1** (merges D1/D2 +
 //!   GNI-7) + **F-HLC-2** (merges D3 + GNI-3).
-//! - R0.3 plan §3.5.HLC (`created_at_hlc` vs `admitted_at_hlc`, M-7
+//! - R0.5 plan §3.5.HLC (`created_at_hlc` vs `admitted_at_hlc`, M-7
 //!   definition gap):
 //!   * `admitted_at_hlc` (MemberEntry property) = LWW **larger-HLC wins**
 //!     (the in-tree `crdt.rs:535` property rule).
 //!   * `created_at_hlc` (set anchor; immutable) = the Inv-21 fork-tie-break
 //!     discriminant; **ONLY `created_at_hlc` participates in Inv-21** (M-7).
 //!   * They are DISTINCT clocks.
-//! - R0.3 plan §3.10 (HLC-skew classifier; Compromise #25 substrate).
+//! - R0.5 plan §3.10 (HLC-skew classifier; Compromise #25 substrate).
 //!
 //! ## What this pins
 //!

@@ -7,7 +7,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-GOV-1; merges
 //! K3 + GNI-18):
-//!   - R0.3 plan §2.6, §3.6.B, §4.2, §9.1-6.
+//!   - R0.5 plan §2.6, §3.6.B, §4.2, §9.1-6.
 //!   - InstallRecord top-level-signed-Node precedent
 //!     (`docs/PLUGIN-MANIFEST.md`); grep-defense shape from
 //!     `crates/benten-caps/tests/cap_r1_1_audience_binding_grep_defense.rs`.

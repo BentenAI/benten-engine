@@ -98,7 +98,7 @@ fn codepoint_table_integer_values_pinned() {
 ///
 /// **F4-004 / M-19 BIG-ENDIAN migration (RED-PHASE until R5/Wave-0).**
 /// The M-19 freeze ratifies that ALL multiformats-framed integer wire/AAD
-/// fields are **BIG-ENDIAN** (R0.3 §4.1 row "BE endianness"; Q2/U7). The
+/// fields are **BIG-ENDIAN** (R0.5 §4.1 row "BE endianness"; Q2/U7). The
 /// per-chunk AAD's `chunk_index` (u64) + `total_chunks` (u32) are named
 /// M-19 sites. This pin therefore freezes the **BIG-ENDIAN** layout; at
 /// HEAD the production `aad_per_chunk` (`aead.rs:244,245`) still emits

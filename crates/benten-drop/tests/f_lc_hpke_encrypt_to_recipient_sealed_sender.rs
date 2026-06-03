@@ -93,6 +93,26 @@
 //! coarse-epoch on the Layer-C drop wire, re-add it symmetrically to
 //! `f_ld_8` + the §4.1 FREEZE table. Both stubs now agree on NEITHER.]
 //!
+//! # R4.4-FIX (CLUSTER-1 MAJOR) — byte-0 anti-conflation guard MIRRORED here.
+//!
+//! This file already (a) defines `const AAD_VERSION: u8 = 0x01`, (b) pushes
+//! it as the per-stanza plaintext-AAD byte-0 (F4-004/005), and (c) carries no
+//! `coarse_epoch` (F4-006). What it was MISSING — relative to the sibling
+//! `f_lc_abuse` — was an EXPLICIT byte-0 anti-conflation ASSERTION + a frozen
+//! golden-hex for the group plaintext-AAD layout. Without that, a future edit
+//! reverting `plaintext_aad_bytes`' leading `out.push(AAD_VERSION)` to
+//! `out.push(ENVELOPE_FORMAT_VERSION)` (the exact F4-004/005 conflation) would
+//! ship undetected, and the two sibling files would silently re-diverge on the
+//! `0x6510`/`0x6520` envelope-AAD. The CLUSTER-1 reconciliation mirrors the
+//! guard here: a NEW arm (`f_lc_2_group_stanza_aad_byte0_is_aad_version_…`)
+//! drives the DETERMINISTIC `plaintext_aad_bytes()` on a directly-constructed
+//! stanza (the seal fns are `unimplemented!()` at red-phase, so the golden-hex
+//! is driven through the serializer helper, not the panicking seal), and
+//! asserts: byte-0 == `AAD_VERSION` (≠ `ENVELOPE_FORMAT_VERSION`), the BE
+//! codepoint pair, and a FROZEN golden-hex. Both sibling files now carry the
+//! same one-canonical-field-set + byte-0-guard discipline for the `0x65xx`
+//! drop/recipient band.
+//!
 //! # R4.3-FIX (F4-018 MINOR) — per-object length-prefix WIDTH note (§4.1).
 //!
 //! The §4.1 canonical-TLV contract is "length-injective" (U3) — satisfied by
@@ -483,12 +503,21 @@ mod layer_c_stub {
 }
 
 use layer_c_stub::{
-    BindingContext, DROP_TO_RECIPIENT_SEALED_SENDER, ENVELOPE_FORMAT_VERSION, EncryptedEnvelope,
-    HYBRID_X25519_MLKEM768, LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, did,
-    fixed_body_cid, fixed_pk, fixed_sk, group_plaintext_aad_region, open_group_stanza, open_single,
-    seal_group_multi, seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
-    serialize,
+    AAD_VERSION, BindingContext, DROP_TO_RECIPIENT_SEALED_SENDER, ENVELOPE_FORMAT_VERSION,
+    EncryptedEnvelope, HYBRID_X25519_MLKEM768, HpkeRecipientStanza, LAYER_C_DROP,
+    LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, did, fixed_body_cid, fixed_pk, fixed_sk,
+    group_plaintext_aad_region, open_group_stanza, open_single, seal_group_multi,
+    seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender, serialize,
 };
+
+/// Lowercase-hex of a byte slice (test-local; no external dep).
+fn to_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
 
 // ===========================================================================
 // F-LC-1 — HPKE mode_base single-recipient round-trip (0x647A).
@@ -857,6 +886,94 @@ fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
          If this control fails, PIN 5's wire-scan cannot distinguish hiding \
          from a broken scan — the default and non-default paths must differ \
          observably."
+    );
+}
+
+/// The deterministic per-stanza fixture for the group plaintext-AAD golden.
+/// Built DIRECTLY (the seal fns `unimplemented!()` at red-phase) so the
+/// canonical `plaintext_aad_bytes()` serializer is driven without panicking.
+/// DEFAULT (Sealed-Sender) path: `plaintext_sender_did = None`.
+fn f_lc_2_group_stanza_fixture() -> HpkeRecipientStanza {
+    let mut body_cid = [0u8; 32];
+    body_cid[0] = 0xD8;
+    HpkeRecipientStanza {
+        codepoint: LAYER_C_DROP_MULTI_RECIPIENT, // 0x6520
+        body_cid,
+        sorted_recipient_dids: vec![did("did:key:zRecipientA"), did("did:key:zRecipientB")],
+        stanza_index: 0,
+        recipient_key_generation: 0,
+        sealed_inner: vec![0xAB; 8], // opaque; not part of the plaintext AAD
+        plaintext_sender_did: None,  // DEFAULT Sealed-Sender path
+        wrapped_cek: vec![0xCD; 8],  // opaque; not part of the plaintext AAD
+    }
+}
+
+/// FROZEN big-endian golden vector for the DEFAULT group stanza plaintext
+/// AAD (CLUSTER-1 byte-0-guard + layout). Layout (BE):
+///   aad_version u8 | codepoint u16 | body_cid[32] | stanza_index u32 |
+///   recipient_key_generation u32 | recipient_count u16 |
+///   (len u16 || bytes) per sorted recipient DID.
+/// No coarse_epoch (F4-006); leads with `AAD_VERSION = 0x01` (F4-004/005).
+/// R5 confirms-or-deliberately-updates against the real encoder (M-20).
+const F_LC_2_GROUP_STANZA_AAD_HEX: &str = "016520d8000000000000000000000000000000000000000000000000000000000000000000000000000000000200136469643a6b65793a7a526563697069656e744100136469643a6b65793a7a526563697069656e7442";
+
+/// F-LC-2 PIN 7 (R4.4-FIX CLUSTER-1) — the DEFAULT group stanza plaintext-AAD
+/// byte-0 is the dedicated `AAD_VERSION` (= 0x01), NOT the envelope
+/// `ENVELOPE_FORMAT_VERSION` (= 0x02), and the full layout is FROZEN to the
+/// big-endian golden. This MIRRORS the sibling `f_lc_abuse` byte-0
+/// anti-conflation guard so the two files cannot silently re-diverge on the
+/// `0x65xx` drop/recipient-band envelope AAD. would-FAIL if a future edit
+/// reverted `plaintext_aad_bytes`' leading byte to the format version (the
+/// F4-004/005 cross-engine AEAD-open break), emitted an LE codepoint, or
+/// drifted the field order / length widths.
+#[test]
+#[ignore = "RED-PHASE: F-LC-2 — group stanza plaintext-AAD byte-0 == AAD_VERSION (not format ver) + frozen BE layout (CLUSTER-1); un-ignore at R5"]
+fn f_lc_2_group_stanza_aad_byte0_is_aad_version_not_format_version_and_frozen_layout() {
+    let stanza = f_lc_2_group_stanza_fixture();
+    let bytes = stanza.plaintext_aad_bytes();
+
+    // Anti-conflation byte-0 guard (mirrors f_lc_abuse).
+    assert_eq!(
+        bytes[0], AAD_VERSION,
+        "F-LC-2 (CLUSTER-1 / F4-004/005): the group stanza plaintext-AAD \
+         byte-0 MUST be the dedicated AAD_VERSION (0x01), NOT the envelope \
+         serialization format_version (0x02). Reverting this re-introduces \
+         the cross-engine AEAD-open break + re-diverges from f_lc_abuse."
+    );
+    assert_ne!(
+        bytes[0], ENVELOPE_FORMAT_VERSION,
+        "F-LC-2 (CLUSTER-1 / F4-004/005): byte-0 MUST NOT be the envelope \
+         format version — the AAD version axis and the serialization-format \
+         axis are DISTINCT (R0.5 §4.1)."
+    );
+
+    // BE codepoint pair (anti-LE drift, M-19).
+    assert_eq!(
+        &bytes[1..3],
+        &[0x65, 0x20],
+        "F-LC-2 (CLUSTER-1): group codepoint 0x6520 MUST be big-endian \
+         (0x65,0x20) at offset 1, never little-endian (0x20,0x65)."
+    );
+
+    // FROZEN BE layout — drift flips the pin.
+    assert_eq!(
+        to_hex(&bytes),
+        F_LC_2_GROUP_STANZA_AAD_HEX,
+        "F-LC-2 (CLUSTER-1): the DEFAULT group stanza plaintext-AAD MUST \
+         serialize to the FROZEN big-endian layout (aad_version, codepoint, \
+         body_cid, stanza_index, recipient_key_generation, recipient_count, \
+         per-DID len||bytes) with NO coarse_epoch and NO plaintext sender-DID. \
+         R5 confirms-or-deliberately-updates this literal (M-20)."
+    );
+
+    // The sender-DID is NOT on the DEFAULT path plaintext AAD (the
+    // plaintext_sender_did is None), so no sender bytes trail the DID list.
+    let sender = did("did:key:zGroupSenderUNIQUEMARKER");
+    let leaks = bytes.windows(sender.len()).any(|w| w == sender.as_slice());
+    assert!(
+        !leaks,
+        "F-LC-2 (CLUSTER-1): the DEFAULT group stanza plaintext-AAD MUST NOT \
+         carry the sender-DID (it lives in `sealed_inner`)."
     );
 }
 

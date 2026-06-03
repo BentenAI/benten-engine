@@ -7,7 +7,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-AUDIT-3; merges
 //! K2 + T-G3 + GNI-16):
-//!   - R0.3 plan §2.5 BC-8, §3.8 GNC-1, M-17, §4.2; Compromise #58.
+//!   - R0.5 plan §2.5 BC-8, §3.8 GNC-1, M-17, §4.2; Compromise #58.
 //!   - Clone-shape: `crates/benten-ivm/tests/view1_capability_grants.rs`
 //!     (cap-grant read-view) + `crates/benten-caps/tests/
 //!     tf3b_restricted_spec_contains_decidable.rs` (RestrictedScope

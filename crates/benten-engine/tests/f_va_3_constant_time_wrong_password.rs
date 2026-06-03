@@ -9,7 +9,7 @@
 //!     to completion (no fast-fail early-return timing oracle)." Red-phase:
 //!     "structural no-early-return-before-AEAD-open pin + coarse timing-
 //!     invariance harness (best-effort)."
-//!   - R0.3 plan §3.1; Compromise #34 (password-knowledge).
+//!   - R0.5 plan §3.1; Compromise #34 (password-knowledge).
 //!
 //! ## RED-PHASE (pim-12 §3.6e)
 //!

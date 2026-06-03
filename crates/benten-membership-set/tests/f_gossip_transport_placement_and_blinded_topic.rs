@@ -5,7 +5,7 @@
 //!
 //! - F-full R2 test-landscape §1 Group 8 rows **F-GOSSIP-1** (H1/H2 + G1 +
 //!   GNI-26, NQ-D1) + **F-GOSSIP-2** (H3/H4 + PMD-12/13/14/15, NQ-D4, #61).
-//! - R0.3 plan §3.9 (Transport / D6 + convergence model, M-10):
+//! - R0.5 plan §3.9 (Transport / D6 + convergence model, M-10):
 //!   * the new `GossipTransport` lands in `benten-sync` (lean; NQ-D1);
 //!     `benten-membership-set` defines NO transport; NO iroh-concrete leak
 //!     in the trait signature.

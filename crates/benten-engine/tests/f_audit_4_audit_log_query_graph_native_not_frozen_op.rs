@@ -6,7 +6,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-AUDIT-4; merges
 //! K2-M17 + T-G4 + GNI-17, NQ-W3):
-//!   - R0.3 plan §1.5 M-17, §4.2, NQ-W3, CLAUDE.md baked-in #1.
+//!   - R0.5 plan §1.5 M-17, §4.2, NQ-W3, CLAUDE.md baked-in #1.
 //!   - Clone-shape:
 //!     `crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs`
 //!     (12-variant canonical-tag round-trip; the "no 13th primitive"

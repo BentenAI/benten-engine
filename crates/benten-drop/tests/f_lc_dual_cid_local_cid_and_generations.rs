@@ -10,7 +10,10 @@
 //!   - **F-LC-6** `recipient_key_generation` + `k_principal_generation`
 //!     staleness rejection (U19/U20).
 //!
-//! Pin sources (R0.3 = `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`):
+//! Pin sources (spec of record = R0.5; minted against R0.3 =
+//! `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`; §-numbers below are
+//! stable R0.3→R0.5 — verified vs the R0.5 plan at
+//! `phase-4-meta-core/f-full-r0-plan-r05`):
 //!   - §3.3 DUAL-CID (Q3, U18): `envelope_blob_cid = BLAKE3(serialized
 //!     EncryptedEnvelope)` (changes on reseal) vs `plaintext_cid =
 //!     BLAKE3(canonical DropBundlePayload)` (stable, graph-referenced);

@@ -4,7 +4,7 @@
 //! §3.6e`). Closes the **CC-BLK BLOCKER** raised by the R4 completeness
 //! critic: the Drop primitive's central confidentiality invariant — "a
 //! sealed sibling of the graph that **provably carries no `K_Set`**"
-//! (R0.3 §2.5 GN-1 / §3.5) — had NO behavioral pin anywhere in the
+//! (R0.5 §2.5 GN-1 / §3.5) — had NO behavioral pin anywhere in the
 //! F-full corpus and no F-ID in the R2 catalog.
 //!
 //! # Why this is a BLOCKER-class invariant
@@ -23,7 +23,10 @@
 //! per-recipient HPKE-wrapped CEKs (decryptable by THAT recipient's sk),
 //! never the set key.
 //!
-//! Pin sources (R0.3 = `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`):
+//! Pin sources (spec of record = R0.5; minted against R0.3 =
+//! `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`; §-numbers below are
+//! stable R0.3→R0.5 — verified vs the R0.5 plan at
+//! `phase-4-meta-core/f-full-r0-plan-r05`):
 //!   - §2.5 (`{MembershipSet, Drop}` 2 primitives; GN-1).
 //!   - §3.5 / §2.5: "`Drop` (one-shot non-member share). The existing
 //!     `benten-drop/` content-bundle — a sealed sibling of the graph
@@ -267,14 +270,14 @@ fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
 /// live `K_Set` sentinel → assert ABSENT.
 ///
 /// This proves "a Drop is a sealed sibling that provably carries NO group
-/// key" (R0.3 §2.5 GN-1 / §3.5). The Drop carries only the per-recipient
+/// key" (R0.5 §2.5 GN-1 / §3.5). The Drop carries only the per-recipient
 /// HPKE-wrapped CEK (decryptable by THAT recipient), never the set key.
 ///
 /// would-FAIL if an impl bundled the `K_Set` (a total confidentiality
 /// break — it would leak the whole group's keys to a one-shot non-member
 /// recipient).
 #[test]
-#[ignore = "RED-PHASE: F-DROP-NO-KSET — Drop bundle provably carries NO K_Set (CC-BLK; R0.3 §2.5/§3.5); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-DROP-NO-KSET — Drop bundle provably carries NO K_Set (CC-BLK; R0.5 §2.5/§3.5); un-ignore at R5"]
 fn f_drop_no_kset_serialized_payload_omits_k_set() {
     let k_set = live_k_set_sentinel();
     let subtree = sample_subtree();

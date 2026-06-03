@@ -8,7 +8,7 @@
 //! Pin sources (F-full R2 test-landscape §1 Group 12 row F-INV19-1; GAP-3
 //! fill — Inv-19 had NO dedicated family across the 6 dimensions, only a
 //! GNI-10 sub-point):
-//!   - R0.3 plan §5.1 Inv-19, Inv-20 clause-f.
+//!   - R0.5 plan §5.1 Inv-19, Inv-20 clause-f.
 //!   - Clone-shape: `crates/benten-core/tests/version_branched.rs` (the
 //!     Anchor / Version-Node / CURRENT distinction — Anchor is mutable
 //!     (CURRENT moves), Version Nodes are immutable).

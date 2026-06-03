@@ -8,7 +8,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-NAT-1; merges
 //! K4 + GNI-11/12/13):
-//!   - R0.3 plan Inv-22, §1.3, §3.7, §9.1-6.
+//!   - R0.5 plan Inv-22, §1.3, §3.7, §9.1-6.
 //!   - Clone-shape: `crates/benten-core/tests/attribution_mirror.rs`
 //!     (struct-fence) + `crates/benten-caps/tests/
 //!     cap_r1_1_audience_binding_grep_defense.rs` (member_type / MemberKind
@@ -19,7 +19,7 @@
 //!
 //! The prior R3 stub carried a 3-field `MemberEntry { did, is_authority,
 //! sig_pubkey }` — a 3rd divergent shape vs F-AAD-1 / F-MS-3. It is ALIGNED
-//! here to the canonical R0.3 §3.5 / §4.2 **5-field** shape
+//! here to the canonical R0.5 §3.5 / §4.2 **5-field** shape
 //! `MemberEntry { role, is_authority, sig_pubkey, admitted_at_hlc,
 //! member_ref }` (matching `f_aad_1_members_table_canonical_cbor_length_
 //! injective.rs`). The DID is the `BTreeMap<Did, MemberEntry>` KEY, not a
@@ -70,7 +70,7 @@ use benten_id::did::Did;
 // =====================================================================
 mod mset_w6_nature_stub {
     //! Local stub matching the intended W6 member surface. The `MemberEntry`
-    //! shape mirrors the canonical R0.3 §3.5 5-field record (identical to
+    //! shape mirrors the canonical R0.5 §3.5 5-field record (identical to
     //! `f_aad_1`'s stub — F4-042 alignment). CRITICAL: it has NO nature
     //! field — Inv-22 is preserved by-construction. The nature-derivation
     //! functions are `unimplemented!()`.
@@ -108,7 +108,7 @@ mod mset_w6_nature_stub {
         LocalDevice,
     }
 
-    /// The fused member record — canonical R0.3 §3.5 **5-field** shape.
+    /// The fused member record — canonical R0.5 §3.5 **5-field** shape.
     /// Inv-20 clause-i: one DID → one record. Inv-22: ZERO nature field.
     /// The DID is the `BTreeMap<Did, MemberEntry>` KEY, not a field here.
     #[derive(Clone, Debug, PartialEq, Eq)]

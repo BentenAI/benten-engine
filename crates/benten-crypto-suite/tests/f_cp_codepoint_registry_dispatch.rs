@@ -55,7 +55,7 @@ mod f_cp_stub {
     pub const VAULT_ENVELOPE: u16 = 0x6100;
     /// Layer-A 12-byte `SymmetricAead` (ChaCha20-Poly1305) sibling (NEW;
     /// §4.0 vault band `0x6100..0x61FF`; RATIFIED frozen v1-beta variant
-    /// per Ben ruling 3, 2026-06-02 + R0.3 §4.1 "ship both").
+    /// per Ben ruling 3, 2026-06-02 + R0.5 §4.1 "ship both").
     pub const SYMMETRIC_AEAD_12B: u16 = 0x6101;
     /// Layer-C plaintext-sender drop (NEW; §4.0 `0x6500`).
     pub const LAYER_C_DROP: u16 = 0x6500;
@@ -107,7 +107,7 @@ mod f_cp_stub {
         vec![0x0001..=0x0003, 0x0010..=0x0021]
     }
 
-    /// All Benten-assigned envelope codepoint integers from the FULL R0.3
+    /// All Benten-assigned envelope codepoint integers from the FULL R0.5
     /// §4.0 table (the non-collision scanner input). R5 wires this to
     /// enumerate the REAL minted symbols (a source-scan / registry
     /// iterator), not this literal; the stub lists every §4.0 in-band
@@ -115,7 +115,7 @@ mod f_cp_stub {
     /// authoritative set (F4-040).
     ///
     /// Sig codepoints (`0x0001/0x0002/0x0003`) are a SEPARATE `0x00xx`
-    /// namespace (R0.3 §4.0) and are deliberately NOT in this envelope set.
+    /// namespace (R0.5 §4.0) and are deliberately NOT in this envelope set.
     pub fn all_assigned_envelope_codepoints() -> Vec<u16> {
         vec![
             VAULT_ENVELOPE,    // 0x6100 vault (24-byte XNonce)

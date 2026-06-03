@@ -7,7 +7,7 @@
 //! - F-full R2 test-landscape §1 Group 8 rows **F-INV21-1** (E1 + GNI-7),
 //!   **F-INV21-2** (E2 + GNI-8, M-8, NQ-D2), **F-INV21-3** (E2-kani +
 //!   GNI-9, NQ-D2 — NET-NEW kani harness), **F-INV21-4** (E3 + GNI-10).
-//! - R0.3 plan §3.8.Inv-21 (M-7 asymmetry + M-8 totality, load-bearing):
+//! - R0.5 plan §3.8.Inv-21 (M-7 asymmetry + M-8 totality, load-bearing):
 //!   * property rule = LARGER-HLC-wins (LWW); Inv-21 fork = **SMALLER
 //!     `created_at_hlc` wins** = oldest-anchor-wins (DELIBERATE opposite).
 //!   * `MembershipSetId` can NEVER disambiguate concurrent same-anchor

@@ -10,13 +10,23 @@
 //!     constraint**. R2-gated on NQ-T3." Red-phase intent: "variant exists;
 //!     3 fields in AAD (hex-pin); mutate each → Open fails (constraint bound
 //!     not advisory); sufficiency assertion."
-//!   - R0.5 plan §3.4 (`...f-full-r0-plan.md:510-517`): the variant fields +
-//!     "The variant-slot + the AAD-binding of `(executor_did, max_decrypt_count,
-//!     result_recipient_pubkey)` are FROZEN at v1-beta."
-//!   - §10.5 NQ-T3 (`...:1375-1377`): "Does the engine enforce that the rented
-//!     executor cannot exfiltrate plaintext beyond `result_recipient_pubkey`...
-//!     The AAD scope must be SUFFICIENT to express the constraint even though
-//!     enforcement is post-v1-beta."
+//!   - R0.5 plan §3.4 (`...f-full-r0-plan.md:530-536`): the variant struct
+//!     `PermissionOperation::ExecuteWorkflow { workflow_cid, input_node_cids,
+//!     max_decrypt_count, result_recipient_pubkey, executor_did }` + "The
+//!     variant-slot + the AAD-binding of `(executor_did, max_decrypt_count,
+//!     result_recipient_pubkey)` are FROZEN at v1-beta; runtime enforcement
+//!     (no-egress / bounded-decrypt) is post-v1-beta (NQ-T3 confirms the frozen
+//!     AAD scope is SUFFICIENT to express the constraint even though enforcement
+//!     defers)." Mirror in the §4.1 freeze table: the `ExecuteWorkflow` variant
+//!     row (`...:894`, CODEPOINT-RESERVE) + the `aad_version: u8` prefix FREEZE
+//!     row (`...:883`).
+//!   - §10.5 NQ-T3 RATIFIED (`...:1412-1417`; §10.2 risk-row `...:1365`): "the
+//!     frozen 3-field `ExecuteWorkflow` AAD tuple `(executor_did,
+//!     max_decrypt_count, result_recipient_pubkey)` is SUFFICIENT to express the
+//!     no-egress / bounded-decrypt constraint ... runtime enforcement (that the
+//!     rented executor cannot exfiltrate plaintext beyond
+//!     `result_recipient_pubkey` via EMIT/WRITE) stays post-v1-beta — it is NOT
+//!     freeze-gating (M-3)."
 //!
 //! ## NQ-T3 RATIFIED (Ben 2026-06-02; spec R0.5 §10.5)
 //!
@@ -31,6 +41,35 @@
 //! BLAKE3-keyed authenticator is a stand-in for ChaCha20-Poly1305-under-HPKE);
 //! R5 swaps in the real AEAD and un-ignores. The sufficiency assertion is final
 //! per the ratified default — no longer gated on an open question.
+//!
+//! ## R5-DESTINATION: ExecuteWorkflow inherits the `aad_version` prefix from the
+//! ## enclosing `PermissionRequest` envelope — it does NOT freeze a standalone
+//! ## prefix-less AAD (F-LD-3-AADVER-COHERENCE, R4.4)
+//!
+//! The `constraint_aad()` below uses an ASCII string-prefix
+//! (`b"benten-exec-workflow-v1:"`) as a domain-separation tag. This is NOT a
+//! freeze of a top-level wire envelope: per R0.5 §3.4 (`...:530-536`) + §4.1
+//! freeze table (`...:894` variant row + `...:883` `aad_version` row),
+//! `ExecuteWorkflow` is a `PermissionOperation` VARIANT
+//! carried INSIDE the codepoint-dispatched `PermissionRequest` envelope (the
+//! Layer-D `f_ld_2_permission_request_*` family). The §4.1 dedicated
+//! `aad_version: u8` prefix byte (= `0x01`, DISTINCT from
+//! `ENVELOPE_FORMAT_VERSION_V2`; see the F4-004/005 reconciliation in
+//! `f_aad_2` / `f_lc_abuse` / `f_lc_hpke`) is frozen on that ENCLOSING
+//! `PermissionRequest` envelope AAD — `f_ld_2` carries it as byte-0 — and
+//! `ExecuteWorkflow`'s 3-field constraint binding is folded into that envelope
+//! AAD at R5, INHERITING the `aad_version=0x01` prefix.
+//!
+//! Therefore, when un-ignoring at R5, the implementer MUST fold this
+//! `constraint_aad()` into the `f_ld_2 PermissionRequest` envelope AAD
+//! (which begins with the `aad_version=0x01` byte) — and MUST NOT freeze a
+//! standalone, prefix-less, top-level `ExecuteWorkflow` AAD. The string-prefix
+//! here is an intra-variant domain-separation tag for the RED-PHASE stub-shim
+//! only; the cross-layer `aad_version:u8` prefix convention (§4.1) is satisfied
+//! by the enclosing envelope, not by this variant. This is a doc-coherence note
+//! only: the variant's 3-field constraint substrate is correct and freeze-final
+//! per NQ-T3; the prefix arrives via the envelope, so there is no freeze-gating
+//! defect in this file.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -47,6 +86,11 @@ use benten_id::keypair::Keypair;
 // stand-in for ChaCha20-Poly1305-under-HPKE. The property the family freezes
 // is that the three constraint fields are in the AAD, so mutating any of them
 // makes Open fail. R5 swaps in the real AEAD; the AAD shape is the freeze.
+//
+// R5-FOLD-IN (F-LD-3-AADVER-COHERENCE): at R5 this variant's `constraint_aad()`
+// is folded into the enclosing `PermissionRequest` envelope AAD (which carries
+// the §4.1 `aad_version=0x01` byte-0 prefix) — NOT frozen as a standalone
+// prefix-less top-level AAD. See the module-level R5-DESTINATION note above.
 mod shim {
     /// The frozen ExecuteWorkflow variant (R0.5 §3.4 / e2r). M-20: every integer
     /// (`max_decrypt_count: u32`) is BE on the wire.
@@ -60,10 +104,19 @@ mod shim {
     }
 
     impl ExecuteWorkflow {
-        /// The FROZEN AAD: binds exactly the three constraint fields
-        /// `(executor_did, max_decrypt_count, result_recipient_pubkey)` —
+        /// The FROZEN constraint binding: binds exactly the three constraint
+        /// fields `(executor_did, max_decrypt_count, result_recipient_pubkey)` —
         /// the "sufficient to express no-egress" scope (NQ-T3, RATIFIED).
         /// BE integers.
+        ///
+        /// The `b"benten-exec-workflow-v1:"` ASCII tag is an INTRA-VARIANT
+        /// domain-separation prefix for this RED-PHASE stub-shim, NOT the §4.1
+        /// `aad_version:u8` wire prefix. At R5 this binding folds into the
+        /// enclosing `PermissionRequest` envelope AAD, which carries the §4.1
+        /// `aad_version=0x01` byte-0 prefix (see module-level R5-DESTINATION
+        /// note + `f_ld_2`). The variant therefore INHERITS the cross-layer
+        /// `aad_version` prefix from its envelope; it does not freeze a
+        /// standalone prefix-less AAD (F-LD-3-AADVER-COHERENCE, R4.4).
         pub fn constraint_aad(&self) -> Vec<u8> {
             let mut aad = Vec::new();
             aad.extend_from_slice(b"benten-exec-workflow-v1:");
@@ -212,6 +265,13 @@ fn f_ld_3_mutating_result_recipient_pubkey_breaks_open() {
 /// enforcement-vs-advisory runtime check is a post-v1-beta concern that this
 /// freeze deliberately does not gate; R5 un-ignores against the ratified
 /// default.
+///
+/// R5-FOLD-IN note (F-LD-3-AADVER-COHERENCE): "the wire freeze IS the AAD
+/// scope" means the 3-field CONSTRAINT scope. The cross-layer §4.1
+/// `aad_version=0x01` byte-0 prefix is supplied by the enclosing
+/// `PermissionRequest` envelope into which this binding folds at R5 — it is
+/// NOT a property of this standalone variant. See the module-level
+/// R5-DESTINATION note.
 #[test]
 #[ignore = "RED-PHASE: F-LD-3 — NQ-T3-RATIFIED AAD-sufficiency (frozen 3-field AAD sufficient; runtime enforcement post-v1-beta non-freeze-gating); un-ignore at R5"]
 fn f_ld_3_frozen_aad_is_sufficient_to_express_no_egress_constraint_nq_t3_ratified() {

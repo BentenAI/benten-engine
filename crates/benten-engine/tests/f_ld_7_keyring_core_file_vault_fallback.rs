@@ -5,7 +5,7 @@
 //!     F-LD-7: "`keyring-core` v1.0.0 (NOT legacy `keyring`) stores DAK-wrap;
 //!     file-vault fallback; Tauri IPC smoke." Red-phase: "store/retrieve
 //!     round-trip; fallback when keychain absent."
-//!   - R0.3 plan §3.4: the `keyring-core` DAK-wrap store with file-vault
+//!   - R0.5 plan §3.4: the `keyring-core` DAK-wrap store with file-vault
 //!     fallback; CLAUDE.md 3-tactical-picks ratification (`keyring-core` v1.0.0,
 //!     NOT legacy `keyring`).
 //!   - Compromise #51 (Tauri NAPI side-channel) disclosure coupling.

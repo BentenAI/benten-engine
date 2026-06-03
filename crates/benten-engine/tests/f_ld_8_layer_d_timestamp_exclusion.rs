@@ -30,6 +30,19 @@
 //!
 //! V2 + BE from the first commit. The structural pin here is the ABSENCE of a
 //! timestamp field on the drop struct — enforced via a serialized-shape check.
+//!
+//! ## R4.4 falsifiability strengthening (F-LD-8-TAUTOLOGY)
+//!
+//! The earlier `..._has_no_timestamp_bytes` arm cloned `drop_a` into `drop_b`
+//! and asserted byte-equality — VACUOUS: a clone is byte-identical regardless of
+//! whether a timestamp field exists, so a timestamp-leaking impl would still
+//! pass. That arm is replaced below by a **differential** check: two drops built
+//! in two distinct wall-clock contexts (modelled by a `sealed_at_context` an
+//! impl might capture) with identical generation+ciphertext MUST serialize to
+//! IDENTICAL bytes. A timestamp-carrying `to_wire_be` would emit the two contexts
+//! as differing bytes and FAIL the equality — so this arm is would-FAIL-on-no-op
+//! against the exact regression M-14 forbids. The structural field-name invariant
+//! remains carried by `..._carries_no_timestamp_field` below.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -53,23 +66,38 @@ mod shim {
         pub recipient_key_generation: u32,
         pub hpke_ciphertext: Vec<u8>,
         // INTENTIONALLY NO sealed_at / valid_until fields.
+        //
+        // `sealed_at_context` is a SHIM-ONLY field that models the wall-clock an
+        // implementer *might* be tempted to capture at seal time. It is NOT a
+        // wire field: `to_wire_be` / `wire_field_names` MUST ignore it. The
+        // differential arm builds two drops with DIFFERENT contexts and asserts
+        // their wire bytes are EQUAL — a timestamp-leaking `to_wire_be` would
+        // serialize the two contexts differently and fail (would-FAIL-on-no-op).
+        pub sealed_at_context: u64,
     }
 
     impl DropToRecipient {
         /// Canonical wire bytes (V2, BE). The field set is exactly
         /// {version, recipient_key_generation, ciphertext} — no timestamp.
+        ///
+        /// NOTE: `sealed_at_context` is DELIBERATELY NOT serialized. That is the
+        /// whole point of the exclusion. A regression that leaks the timestamp
+        /// would append/encode `sealed_at_context` here and break the
+        /// differential equality arm.
         pub fn to_wire_be(&self) -> Vec<u8> {
             let mut b = Vec::new();
             b.push(self.version);
             b.extend_from_slice(&self.recipient_key_generation.to_be_bytes());
             b.extend_from_slice(&(self.hpke_ciphertext.len() as u32).to_be_bytes());
             b.extend_from_slice(&self.hpke_ciphertext);
+            // INTENTIONALLY: self.sealed_at_context is NOT encoded.
             b
         }
 
         /// The wire field-name set the struct serializes (for the structural
         /// exclusion pin). R5 swaps this for a serde-introspection / golden-CBOR
-        /// field-name check against the real struct.
+        /// field-name check against the real struct. `sealed_at_context` is a
+        /// shim-only non-wire field and MUST NOT appear here.
         pub fn wire_field_names() -> &'static [&'static str] {
             &["version", "recipient_key_generation", "hpke_ciphertext"]
         }
@@ -103,6 +131,11 @@ fn f_ld_8_drop_to_recipient_carries_no_timestamp_field() {
         !names.contains(&"sealed_at") && !names.contains(&"valid_until"),
         "DropToRecipient MUST NOT carry sealed_at/valid_until (forever-valid per #62; L6 closed-by-exclusion); fields = {names:?}"
     );
+    // The shim-only timestamp context MUST NOT have leaked into the wire field set.
+    assert!(
+        !names.contains(&"sealed_at_context"),
+        "sealed_at_context is a non-wire shim field; it MUST NOT appear in the wire field-name set"
+    );
     // Positive shape: it DOES carry the generation field that freshness rides on.
     assert!(
         names.contains(&"recipient_key_generation"),
@@ -110,28 +143,70 @@ fn f_ld_8_drop_to_recipient_carries_no_timestamp_field() {
     );
 }
 
-/// F-LD-8 STRUCTURAL EXCLUSION (wire-byte level): no timestamp bytes leak into
-/// the serialized drop. Two drops "sealed" at very different wall-clock times
-/// serialize to IDENTICAL bytes (given identical generation + ciphertext) —
-/// proving no timestamp is encoded. would-FAIL-if-no-op'd: a timestamp field
-/// would make the two byte-strings differ.
+/// F-LD-8 STRUCTURAL EXCLUSION (wire-byte level, DIFFERENTIAL): no timestamp
+/// bytes leak into the serialized drop. Two drops "sealed" in two DIFFERENT
+/// wall-clock contexts (`sealed_at_context` 1 hour apart) — but with identical
+/// generation + ciphertext — MUST serialize to IDENTICAL bytes, proving the
+/// seal-time wall-clock is excluded from the wire.
+///
+/// would-FAIL-if-no-op'd: a `to_wire_be` that encodes `sealed_at_context`
+/// (i.e. a timestamp-leaking impl) would emit the two contexts as DIFFERING
+/// bytes and fail this equality. This is the exact regression M-14 / Compromise
+/// #62 / the L6 HIGH-leak finding forbid. (The earlier R3 form cloned the
+/// struct and asserted self-equality — vacuous; replaced here per R4.4
+/// F-LD-8-TAUTOLOGY. The struct-level field-name invariant is carried by
+/// `f_ld_8_drop_to_recipient_carries_no_timestamp_field` above.)
 #[test]
-#[ignore = "RED-PHASE: F-LD-8 — no timestamp bytes in serialized drop; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-LD-8 — no timestamp bytes in serialized drop (differential); un-ignore at R5"]
 fn f_ld_8_drop_serialization_has_no_timestamp_bytes() {
-    let drop_a = DropToRecipient {
+    // Two distinct seal-time contexts, exactly one bucket apart, so a
+    // bucket-granularity leak would ALSO be caught (not just sub-second).
+    let early_ctx = 1_900_001_234u64;
+    let late_ctx = early_ctx + LAYER_D_BUCKET_SECS + 777; // > 1 hour later, off-bucket
+    assert_ne!(
+        round_down_to_bucket(early_ctx),
+        round_down_to_bucket(late_ctx),
+        "test scaffold sanity: the two contexts fall in DIFFERENT buckets, so even a \
+         bucket-granularity timestamp leak would diverge the wire bytes"
+    );
+
+    let drop_early = DropToRecipient {
         version: 2,
         recipient_key_generation: 7,
         hpke_ciphertext: vec![0xDE, 0xAD, 0xBE, 0xEF],
+        sealed_at_context: early_ctx,
     };
-    // A "later" drop with the same generation + ciphertext.
-    let drop_b = drop_a.clone();
+    // Same generation + ciphertext; ONLY the seal-time context differs.
+    let drop_late = DropToRecipient {
+        version: 2,
+        recipient_key_generation: 7,
+        hpke_ciphertext: vec![0xDE, 0xAD, 0xBE, 0xEF],
+        sealed_at_context: late_ctx,
+    };
+
     assert_eq!(
-        drop_a.to_wire_be(),
-        drop_b.to_wire_be(),
-        "identical generation+ciphertext MUST serialize identically — no wall-clock timestamp leaks"
+        drop_early.to_wire_be(),
+        drop_late.to_wire_be(),
+        "two drops sealed >1 hour apart (identical generation+ciphertext) MUST serialize \
+         IDENTICALLY — the seal-time wall-clock is NOT on the wire (M-14; L6 closed-by-exclusion). \
+         A timestamp-leaking to_wire_be would diverge these bytes and fail."
     );
+
+    // Cross-check the differential is meaningful: the wire bytes are exactly the
+    // {version, generation, ciphertext} encoding and contain NEITHER context's
+    // little/big-endian byte-pattern (no timestamp magnitude leaked).
+    let wire = drop_early.to_wire_be();
+    for ctx in [early_ctx, late_ctx] {
+        let be = ctx.to_be_bytes();
+        let le = ctx.to_le_bytes();
+        assert!(
+            !wire.windows(8).any(|w| w == be || w == le),
+            "no seal-time wall-clock magnitude ({ctx}) may appear in the drop wire bytes"
+        );
+    }
+
     // V2 framing pin (M-20).
-    assert_eq!(drop_a.version, 2, "drop wire is V2 from first commit");
+    assert_eq!(drop_early.version, 2, "drop wire is V2 from first commit");
 }
 
 /// F-LD-8 DeviceLink/RemotePermission DO carry the bucket (the inverse pin):

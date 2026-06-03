@@ -6,7 +6,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-AUDIT-2; merges
 //! K1-tamper + T-G2 + GNI-15):
-//!   - R0.3 plan §2.6, §3.8, GN-4, §9.1-6.
+//!   - R0.5 plan §2.6, §3.8, GN-4, §9.1-6.
 //!   - Clone-shape:
 //!     `crates/benten-graph/tests/inv_13_dedup_path_does_not_advance_audit_sequence.rs`
 //!     + `inv_13_dedup_does_not_emit_changeevent.rs`

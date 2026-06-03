@@ -4,7 +4,7 @@
 //!
 //! - F-full R2 test-landscape §1 Group 8 rows **F-CRDT-1** (F1 + GNI-26),
 //!   **F-CRDT-2** (F2/F3 + GNI-26), **F-CRDT-3** (F4 + GNI-7).
-//! - R0.3 plan §3.8 + §3.9 (M-10 convergence model): any interleaving of
+//! - R0.5 plan §3.8 + §3.9 (M-10 convergence model): any interleaving of
 //!   N writers' membership ops (admit/kick/role-change) → the SAME
 //!   `members_table` snapshot post-merge; the two object classes
 //!   (member-PROPERTY = larger-HLC LWW; set-IDENTITY fork = smaller

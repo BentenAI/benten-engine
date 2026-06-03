@@ -68,9 +68,9 @@ mod f_va_1_stub {
 
     /// The 12-byte `SymmetricAead` (ChaCha20-Poly1305) sibling codepoint —
     /// a RATIFIED, frozen, shipping v1-beta variant (Ben ruling 3,
-    /// 2026-06-02; "ship both" per R0.3 §4.1 rows `SymmetricAead [u8;12]` +
+    /// 2026-06-02; "ship both" per R0.5 §4.1 rows `SymmetricAead [u8;12]` +
     /// `SymmetricAeadXNonce [u8;24]`). Its assigned home is the Layer-A
-    /// vault band `0x6100..0x61FF` (R0.3 §4.0). It is NOT the vault's own
+    /// vault band `0x6100..0x61FF` (R0.5 §4.0). It is NOT the vault's own
     /// codepoint (the vault uses the 24-byte XNonce variant at `0x6100`);
     /// here it serves as the foil for the nonce-width-discrimination pin.
     pub const SYMMETRIC_AEAD_12B_CODEPOINT: u16 = 0x6101;
@@ -153,7 +153,7 @@ mod f_va_1_stub {
     /// R5 confirms-or-deliberately-updates the frozen literal against the
     /// real `serde_ipld_dagcbor` encoder (M-20).
     ///
-    /// Field order is FROZEN per R0.3 §3.1: k_principal, then
+    /// Field order is FROZEN per R0.5 §3.1: k_principal, then
     /// user_did_signing_key, then user_did_creation_time. The canonical
     /// DAG-CBOR map-key order (length-first, then bytewise) happens to
     /// coincide with this declaration order for these three keys.

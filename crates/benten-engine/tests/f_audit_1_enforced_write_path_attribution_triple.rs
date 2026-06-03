@@ -5,7 +5,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-AUDIT-1; merges
 //! K1 + T-G1 + GNI-14, m-15 GNC-2):
-//!   - R0.3 plan §2.6 (governance-as-signed-config-Node + audit-as-
+//!   - R0.5 plan §2.6 (governance-as-signed-config-Node + audit-as-
 //!     version-chain), §3.8 GNC-2 (`is_actor_active`-gated WRITE), §4.2,
 //!     §9.1-6 (governance/audit graph-native exit criterion).
 //!   - `crates/benten-graph/src/store.rs:468` — `ChangeEvent` attribution
