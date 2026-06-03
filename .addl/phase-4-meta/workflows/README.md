@@ -61,7 +61,7 @@ gitignored `.addl`/`CLAUDE.md` except via `git show`.
 
 ## Reuse mechanics
 
-- **Invoke-by-name:** `.claude/workflows/<name>.js` → `Workflow({name})` (gitignored here, functional).
+- **Invoke-by-name:** `Workflow({scriptPath: ".addl/phase-4-meta/workflows/<name>.js", args})` — invoke-by-scriptPath (the `Workflow({name})` registry is NOT wired in this env; only built-ins resolve by name).
 - **Durable/tracked:** this dir (`.addl/phase-4-meta/workflows/`, force-added).
 - **Not codified (human-gated):** the tag/freeze decision; "is this architectural direction right"; the first
   autonomous-integration run.
