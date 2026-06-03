@@ -1,12 +1,25 @@
 # F-full R0 implementation plan — encryption substrate + MembershipSet primitive (Phase-4-Meta-Core)
 
-> **R0.2 — R1 fix-pass revision.** This revises the R0.1 (`6755ea41`) per the **R1 critic-council triage**
-> (8 lenses; 3 BLOCKER + 20 MAJOR + 15 MINOR + 9 OBS; `.addl/phase-4-meta/r1-triage.md` @ `50115446`) +
-> **Ben's 3 ratified rulings** (Sealed-Sender DEFAULT; Compromise #31 = LAMPS keeps it / revocation → #62;
-> X-Wing = real SHA3-256 construction at `0x647A`). The §0.3 verification log was **re-run against HEAD
-> `2172cb6d`** this pass (the R0.1 log trusted the CLAUDE.md narrative and inverted two facts — corrected
-> below). **§13 is the R1 fix-pass changelog** (every B/M/m/O finding → disposition). Convergence target:
-> R1.2 re-review returns 0 BLOCKER/MAJOR.
+> **R0.4 — R4-review fix-pass revision.** This revises the R0.3 canonical R0 (branch
+> `phase-4-meta-core/f-full-r0-plan-r1fp-r03`; the R0.2/R0.3 prose lineage carried below) by applying the
+> **8 R4-review decisions Ben ratified 2026-06-02**: (1) §3.3 — the `0x6520` group send HONORS Sealed-Sender
+> (inner-sender-DID sealed per-stanza, NOT plaintext AAD; F-LC-9); (2) §4.0 — formalize `0x6101`
+> (`SymmetricAead` ChaCha20-Poly1305 12-byte; `0x6100` stays `SymmetricAeadXNonce` vault); (3) §3.6.B —
+> canonical Admin = Moderator-set ∪ 5 admin-only abilities so Moderator ⊆ Admin (M-11); (4) §4.1 — WIDEN the
+> M-19 LE→BE site-list (+`structural_kdf.rs:157`, `varsig.rs:47/107`, `sizes.rs:183`,
+> `swap_matrix.rs:1539/1540/1548/1550`); (5) NQ-T2 RATIFIED (bucket ⟂ `valid_until`; strict-no-grace); (6)
+> NQ-T3 RATIFIED (frozen 3-field AAD sufficient; runtime enforcement post-v1-beta, non-freeze-gating); (7)
+> NQ-T4 RATIFIED (jti-keyed durable nonce-cache; per-device GUARANTEED + user-global best-effort-eventual;
+> mint a named Compromise for the pre-sync cross-device window); (8) NQ-C5 RATIFIED
+> (bucket=`(raw_unix_secs/3600)*3600` round-down no-jitter; nonce-cache orthogonal, not widened).
+>
+> **R0.2 lineage (retained).** R0.2 revised R0.1 (`6755ea41`) per the **R1 critic-council triage** (8 lenses;
+> 3 BLOCKER + 20 MAJOR + 15 MINOR + 9 OBS; `.addl/phase-4-meta/r1-triage.md` @ `50115446`) + **Ben's 3
+> ratified rulings** (Sealed-Sender DEFAULT; Compromise #31 = LAMPS keeps it / revocation → #62; X-Wing =
+> real SHA3-256 construction at `0x647A`). The §0.3 verification log was **re-run against HEAD `2172cb6d`**
+> that pass (the R0.1 log trusted the CLAUDE.md narrative and inverted two facts — corrected below). **§13 is
+> the R1 fix-pass changelog** (every B/M/m/O finding → disposition). Convergence target: R1.2 re-review
+> returns 0 BLOCKER/MAJOR.
 >
 > **Top-banner re-orient (HANDOFF discipline per `feedback_handoff_top_banner_re_orient.md` — read BEYOND
 > what is named here).** This is the **finalized ADDL R0 plan-doc** for the **F-full** workstream:
@@ -193,7 +206,7 @@ These reflect lead-architect direction post-R1. They override any conflicting fr
 | Q | Resolution | Source |
 |---|---|---|
 | **Q1** | libcrux-ml-kem (see §2.2) | 9-eyes |
-| **Q2** | **BE codepoint endianness** — migrate `aead.rs` LE → BE pre-v1-beta-freeze (rides Wave-0; bumps `ENVELOPE_FORMAT_VERSION_V1 → V2` + regen golden vectors); network-byte-order canonical (RFC 9180 / FIPS 203 / MLS). **Re-scoped (M-19):** ALL multiformats-framed integer wire/AAD fields → BE (codepoint + AAD `chunk_index`/`total_chunks`/`recipe_index`/`total_recipes` at `aead.rs:244,277` + `aead_wrap.rs` + platform-foundation) | 9-eyes Q2 |
+| **Q2** | **BE codepoint endianness** — migrate `aead.rs` LE → BE pre-v1-beta-freeze (rides Wave-0; bumps `ENVELOPE_FORMAT_VERSION_V1 → V2` + regen golden vectors); network-byte-order canonical (RFC 9180 / FIPS 203 / MLS). **Re-scoped (M-19) — complete site-list:** ALL multiformats-framed integer wire/AAD/keying fields → BE (codepoint `aead.rs:165` + AAD `chunk_index`/`total_chunks`/`recipe_index`/`total_recipes` at `aead.rs:244,277` + `aead_wrap.rs` + platform-foundation + `structural_kdf.rs:157` + `varsig.rs:47,107` + `sizes.rs:183` + `swap_matrix.rs:1539,1540,1548,1550`) | 9-eyes Q2 |
 | **Q3** | **DUAL-CID** — `envelope_blob_cid` public (transport; changes on reseal) + `plaintext_cid` graph-referenced (stable). MembershipSet: `plaintext_cid_local` LOCAL-ONLY + `plaintext_cid_set` HMAC-blinded + `envelope_blob_cid` public. Recipient-substitution defense in per-stanza AAD (U17), NOT the CID. **Extends in-tree `TwoCidStore`** (`benten-sync/src/two_cid_store.rs`, G-CORE-3e) — NOT net-new (O-3) | 9-eyes Q3; M-CONS-FINAL F18 |
 | **Q4** | **HPKE-11-KE** (key-encryption mode) — HPKE wraps a CEK; CEK + per-Node `K(N)` bulk-encrypt | 9-eyes Q4 |
 | **Q5 / Am4** | **Sealed-Sender DEFAULT (BR-1, RATIFIED).** Supersedes the 9-eyes consolidator's additive-slot lean. Sealed-Sender at `0x6510` is the v1-beta **default** Layer-C/drop codepoint; the plaintext-sender variant is a non-default sibling (U4 sender-DID-in-AAD applies to IT). Ships at Core; pulls abuse-mitigation (#59 re-scoped) into Core | **BR-1** |
@@ -453,9 +466,17 @@ sharing. Complementary, not duplicative.
 **What it is.** The `encrypt-to-N-recipients` mechanism (the heart of the MembershipSet primitive).
 **Single-recipient:** `EncryptedEnvelope::HpkeBase[MLKEM768-X25519]` (HPKE-RFC-9180 mode_base; codepoint
 `0x647A` KEM; ChaCha20-Poly1305 AEAD; key-encryption mode per Q4). **Multi-recipient/groups:**
-`HpkeMultiBase { cek_aead_ciphertext, cek_aead_nonce, stanzas: Vec<HpkeRecipientStanza> }` (U17) — per-stanza
-AAD binds `(codepoint, body-CID, sorted recipient-DID-list, sender_did, stanza-index,
-recipient_key_generation)` for cross-stanza substitution defense.
+`HpkeMultiBase { cek_aead_ciphertext, cek_aead_nonce, stanzas: Vec<HpkeRecipientStanza> }` (U17). **Group
+sends honor Sealed-Sender (BR-1 / F-LC-9 — RATIFIED).** EVERY group send is Sealed-Sender by default: the
+inner-sender-DID is bound **INSIDE** the sealed/encrypted part **per stanza** (HPKE inner-payload sender-DID +
+post-decrypt-verify), NOT in the plaintext on-wire AAD — consistent with the single-recipient drop
+(`0x6510`) and the MembershipSet group (`0x6610`). The per-stanza **plaintext AAD therefore binds only**
+`(codepoint, body-CID, sorted recipient-DID-list, stanza-index, recipient_key_generation)` for cross-stanza
+substitution defense — **`sender_did` is NOT a plaintext AAD field on the default path**. The
+**plaintext-sender group variant** (sender-DID on-wire-authenticated in AAD) is an explicitly **non-default**
+sibling shape (the same non-default disposition as the `0x6500` plaintext-sender single-recipient drop; U4
+sender-DID-in-AAD applies to IT, and Inv-18's paired-disclosure clause is satisfied because the DEFAULT group
+send is the metadata-hiding shape).
 
 **Sealed-Sender DEFAULT (BR-1 — RATIFIED at Core).** The v1-beta default Layer-C/drop codepoint is
 **`DROP_TO_RECIPIENT_SEALED_SENDER = 0x6510`** (sibling to `LAYER_C_DROP = 0x6500`). On the default path the
@@ -625,8 +646,8 @@ model, not the bytes.
 
   | RoleId | ordinal | UCAN ability-template (v1-beta, pinned at canary; golden-vector test) | hard constraint |
   |---|---|---|---|
-  | **Admin** | 4 | full: admit / kick / role-change / rotate-on-fork / governance-config / read / write / share | superset |
-  | **Moderator** | 3 | read / write / share / moderate-content (hide/flag) — **NO admit / kick / rotate / governance** | **Moderator ⊊ Admin (M-11)** |
+  | **Admin** | 4 | `{read, write, share, moderate_content}` ∪ `{admit-member, kick-member, rotate-keys, assign-roles, edit-governance-config}` — i.e. the full Moderator set PLUS the five admin-only abilities | superset (⊇ Moderator — M-11) |
+  | **Moderator** | 3 | `{read, write, share, moderate_content}` (hide/flag) — **NO admit-member / kick-member / rotate-keys / assign-roles / edit-governance-config** | **Moderator ⊆ Admin (M-11)** |
   | **Member** | 2 | read / write (own) / share-within-policy | — |
   | **Viewer** | 1 | read only | — |
   | **Invitee** | 0 | **NONE — derives ZERO content** (pre-acceptance handshake state only; no `K(N)`, no read) | **Invitee = zero content (M-11)** |
@@ -732,9 +753,13 @@ time-bucket (m-11). OOB-bootstrap first-contact metadata residue cross-links #43
 
 - `role_assignments_generation: u32` in the AAD 9-tuple + `E_ROLE_STALE_AT_VERIFY` (rejects a stanza sealed
   under a stale role-snapshot).
-- The **AAD 9-tuple** (Inv-20 clause-c): `(codepoint, body-CID, sorted-member-DID-list, sender_did,
+- The **AAD 9-tuple** (Inv-20 clause-c) — **MembershipSet group sends honor Sealed-Sender (F-LC-9):** the
+  inner-sender-DID is bound INSIDE the sealed/encrypted part per stanza (NOT in plaintext AAD), so the
+  on-wire tuple binds `(codepoint, body-CID, sorted-member-DID-list, sealed-inner-sender-DID,
   stanza-index, member-key-generation, membership_set_id, membership_set_generation,
-  role_assignments_generation)` — load-bearing for inter-member non-forgeability; SECURITY-PROOFS.md states
+  role_assignments_generation)` (the `sealed-inner-sender-DID` element is the post-decrypt-verified
+  inner-payload sender-DID, NOT an on-wire plaintext field) — load-bearing for inter-member
+  non-forgeability; SECURITY-PROOFS.md states
   the per-stanza-LIVE vs envelope-CONSTANT decomposition. **Precision (m-15 GNC-5):** the AAD assembly passes
   OPAQUE bytes to the crypto-suite (`benten-membership-set` assembles the 9-tuple ⇒ canonical bytes ⇒ hands
   `&[u8]` to `benten-crypto-suite`); the crypto-suite has NO reverse dependency on membership-set (the AAD is
@@ -809,7 +834,9 @@ horizon). The frozen-crypto rule (§1.5) is applied throughout.
 | `0x0001` | `SigCodepoint::HYBRID_ED25519_MLDSA65` | Sig (separate namespace) | **LIVE** (in-tree) | LAMPS Composite ML-DSA; default sig (#31) |
 | `0x0002` | `SigCodepoint::CLASSICAL_ED25519` | Sig | reserved (in-tree) | non-default downgrade |
 | `0x0003` | `SigCodepoint::HYBRID_MLDSA65_SLHDSA` | Sig | reserved-swap-matrix (in-tree) | typed-reject default |
-| `0x6100..0x61FF` | Layer-A vault band | Vault | band reserved | U11; vault envelope `0x6100` |
+| `0x6100..0x61FF` | Layer-A vault / symmetric-AEAD band | Vault / symmetric | band reserved | U11 |
+| `0x6100` | `SymmetricAeadXNonce` (XChaCha20-Poly1305, 24-byte nonce) | Vault (Layer-A) | **FREEZE + SHIP** | vault envelope; reseal-heavy 24-byte nonce (m-4) |
+| `0x6101` | `SymmetricAead` (ChaCha20-Poly1305, 12-byte nonce) | Symmetric-AEAD | **FREEZE** | distinct construction from `0x6100`'s XChaCha20-24B; both ship at v1-beta (§4.1; U12/U32) |
 | `0x6400` | `CipherSuiteCodepoint::CLASSICAL_X25519` | Cipher / Layer-B+C downgrade | **LIVE** (in-tree; **m-12**) | classical-only X25519 downgrade arm |
 | `0x647a` | `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` | Cipher / KEM default | **LIVE** (in-tree) | C-5; **real X-Wing SHA3-256 @ BR-3**; ChaCha20-Poly1305 bulk |
 | `0x647b` | `CipherSuiteCodepoint::HYBRID_MLKEM768_HQC` | Cipher / NF-1 end-state | reserved (in-tree; typed-reject) | NF-1 PQ⊕PQ |
@@ -850,7 +877,7 @@ Benten envelope codepoint lands in an IANA HPKE registry range.
 | Plaintext-sender `LAYER_C_DROP` at `0x6500` (non-default sibling) | **FREEZE** | U4 sender-DID-in-AAD; Compromise #43 (now improved by default-Sealed-Sender) |
 | AAD codepoint binding + `aad_version: u8` prefix + canonical-TLV length-injective | **FREEZE** | U1/U3/U14 |
 | `sealed_at` + `valid_until` epoch (DeviceLink + RemotePermission **ONLY** — M-14) | **FREEZE** | U5; coarse 1-hour bucket (U28); **DropToRecipient carries NEITHER** |
-| **BE endianness** — ALL multiformats-framed integer wire/AAD fields → BE (codepoint `aead.rs:165` + AAD `chunk_index`/`total_chunks`/`recipe_index`/`total_recipes` `:244,277` + `aead_wrap.rs` + platform-foundation); `ENVELOPE_FORMAT_VERSION_V2` | **FREEZE** | Q2 / U7 / M-19; X-Wing corrective bundles this; conformance test asserts no `to_le_bytes` survives on any wire/AAD path |
+| **BE endianness** — ALL multiformats-framed integer wire/AAD fields → BE. **Complete M-19 site-list:** codepoint `aead.rs:165` + AAD `chunk_index`/`total_chunks`/`recipe_index`/`total_recipes` `aead.rs:244,277` + `aead_wrap.rs` + platform-foundation + **`structural_kdf.rs:157`** + **`varsig.rs:47` + `varsig.rs:107`** + **`sizes.rs:183`** + **`swap_matrix.rs:1539,1540,1548,1550`**; `ENVELOPE_FORMAT_VERSION_V2` | **FREEZE** | Q2 / U7 / M-19; X-Wing corrective bundles this; conformance test asserts no `to_le_bytes` survives on any wire/AAD/keying path |
 | DUAL-CID (`envelope_blob_cid` + `plaintext_cid`; MembershipSet adds `plaintext_cid_local` LOCAL-ONLY + `plaintext_cid_set` HMAC-blinded) — **extends in-tree `TwoCidStore`** | **FREEZE** | Q3 / U18 / F18 / O-3 |
 | `recipient_key_generation` + `k_principal_generation` tracking | **FREEZE** | U19/U20 |
 | Codepoint registry IANA-disjoint (`0x6100..0x6FFF`) + scanner + `Did` multikey + `Did::Unknown` | **FREEZE** | U8/U11/U15; Inv-18; §4.0 |
@@ -1369,14 +1396,28 @@ substrate at Core / tooling at Composing (Q5); ~7–15wk headline (Q6); Garden/G
 
 - **NQ-T1 (audit-Node encryption + replication).** Is the `PermissionGrant` audit-Node encrypted + replicated
   to all of the user's devices so a malicious device can't grant-and-hide?
-- **NQ-T2 (`valid_until` clock vs the 1-hr bucket on the remote-permission surface).** Confirm the 1-hour
-  bucket is decoupled from the `valid_until` enforcement clock (else a coarsened `valid_until` widens the
-  coercion/replay window from 60s to ≤1hr). R1-Q-4 re-checked at Layer-D.
-- **NQ-T3 (`ExecuteWorkflow` no-egress enforcement).** Does the engine enforce that the rented executor cannot
-  exfiltrate plaintext beyond `result_recipient_pubkey` (via EMIT/WRITE)? The AAD scope must be SUFFICIENT to
-  express the constraint even though enforcement is post-v1-beta (M-3).
-- **NQ-T4 (nonce-cache spec).** Scope (per-device vs user-global), retention (≥ full 1-hr bucket), durability
-  (survives restart), multi-device shared-rejection semantics (M-1).
+- **NQ-T2 (`valid_until` clock vs the 1-hr bucket on the remote-permission surface) — RATIFIED (Ben 2026-06-02).**
+  The 1-hour metadata bucket (round-down) and the `valid_until` enforcement clock are **orthogonal,
+  separately-encoded fields**. **Rule:** `valid_until` is encoded at **full 1-second granularity** and
+  enforced **STRICTLY** — `present > valid_until → reject`, with **NO grace/skew window**; the coarse 1-hour
+  bucket is **never consulted for expiry**. A coarsened bucket therefore cannot widen the coercion/replay
+  window (it does not touch the enforcement clock). (Note: the "≥1-year grace" mentioned at §3.3 is the
+  recipient-side **drop key-retention** window — Compromise #62 — NOT a `valid_until` grace.) R1-Q-4 closed
+  at Layer-D.
+- **NQ-T3 (`ExecuteWorkflow` no-egress enforcement) — RATIFIED (Ben 2026-06-02).** The frozen 3-field
+  `ExecuteWorkflow` AAD tuple `(executor_did, max_decrypt_count, result_recipient_pubkey)` is **SUFFICIENT to
+  express** the no-egress / bounded-decrypt constraint. **Rule:** the AAD-bound 3-field constraint is frozen
+  at v1-beta; **runtime enforcement** (that the rented executor cannot exfiltrate plaintext beyond
+  `result_recipient_pubkey` via EMIT/WRITE) **stays post-v1-beta — it is NOT freeze-gating** (M-3). Freezing
+  the AAD scope now is what makes the post-v1-beta enforcement non-wire-breaking.
+- **NQ-T4 (nonce-cache spec) — RATIFIED (Ben 2026-06-02).** **Rule:** the nonce-cache is **`jti`-keyed**,
+  **durable** (survives engine restart — persisted, not RAM-only), and retention is **≥ the full 1-hr bucket
+  window**. **Scope:** **per-device-durable is GUARANTEED**; **user-global is best-effort-eventual-via-sync
+  (NOT synchronous)** — a nonce consumed on device B is rejected on device C only after sync propagates the
+  cache entry. The pre-sync cross-device replay window MUST be DISCLOSED as a named Compromise: **mint
+  Compromise #<next>** — "best-effort-eventual cross-device nonce-rejection window" (the window between a
+  nonce being consumed on one device and the rejection propagating to the user's other devices via sync); see
+  the SECURITY-POSTURE doc-cascade (M-1).
 
 ### §10.6 New R2 questions (crypto / standards-interop)
 
@@ -1390,8 +1431,11 @@ substrate at Core / tooling at Composing (Q5); ~7–15wk headline (Q6); Garden/G
   LAMPS is asserted; the swap-matrix tests internal round-trips only)?
 - **NQ-C4 (did:key hybrid-pubkey multicodec).** What multicodec prefix do the PQ-hybrid sig/KEM pubkeys use in
   `did:key`? If no registered multiformats value, what private-value-with-fallback is reserved at G-CORE-9?
-- **NQ-C5 (jitter ↔ clock-skew).** Confirm round-down-no-jitter avoids the ≤2×jitter+skew window-widening
-  cleanly (default per m-9), or does the nonce-cache window need widening?
+- **NQ-C5 (jitter ↔ clock-skew) — RATIFIED (Ben 2026-06-02).** **Rule:** the epoch bucket =
+  `(raw_unix_secs / 3600) * 3600` — **round-DOWN, NO jitter**, deterministic (`bucket % 3600 == 0`). This
+  avoids the ≤2×jitter+skew window-widening (m-9): with no jitter there is no jitter↔skew interaction to
+  widen. The **nonce-cache window does NOT need widening** — bucket and nonce-cache are **orthogonal**
+  (bucket = metadata privacy; nonce-cache = replay defense). They are tuned independently.
 
 ### §10.7 New questions (audit-gate sequencing)
 
@@ -1481,7 +1525,7 @@ one-per-DID; authority vs confidentiality halves); #19 (Rust engine plugins — 
 
 ---
 
-**End of F-full R0.2 plan-doc.** Supersedes M-CONS-FINAL + the 9-eyes registry + e2r-ffull as the canonical
+**End of F-full R0.4 plan-doc.** Supersedes M-CONS-FINAL + the 9-eyes registry + e2r-ffull as the canonical
 F-full scope (9-eyes wins codepoint collisions). Hand to the R1.2 re-review per the iterate-to-convergence
 discipline.
 
