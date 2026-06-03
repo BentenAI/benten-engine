@@ -27,6 +27,17 @@
 //! - **one-HPKE-path-reused**: Layer-C and Layer-D route through the SAME
 //!   HPKE primitive (not two impls).
 //!
+//! # R4.5-MIGRATE (R0.6 Sealed-Sender AAD freeze)
+//!
+//! The Inv-16 `Recipient` `BindingContext` now carries a `body_cid` field
+//! framed as a SELF-DESCRIBING CIDv1 (`0x01 0x71 0x1e 0x20 || 32-byte digest`
+//! = 36 bytes), NOT a bare fixed-32 digest — aligning it with the canonical
+//! `0x6510` envelope union the siblings `f_lc_hpke` / `f_lc_abuse` freeze
+//! (R0.6 BR; CLAUDE.md baked-in #5; restores U3 length-injectivity). The U3
+//! cross-variant collision construction is re-derived over the new field-set.
+//! (This file freezes NO golden-hex — it asserts relative TLV-injectivity /
+//! codepoint-commitment properties — so there is no golden to regenerate.)
+//!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
 //!
 //! `EncryptedEnvelope` / `BindingContext` / the canonical-TLV encoder do
@@ -59,9 +70,19 @@ mod f_inv16_stub {
         Vault { vault_version: u8 },
         /// Layer-B/whole-content per-Node binding.
         WholeContent { plaintext_cid: Vec<u8> },
-        /// Layer-C drop / Layer-D wrap recipient binding.
+        /// Layer-C drop / Layer-D wrap recipient binding — the canonical
+        /// `0x6510` envelope union `{aad_version, codepoint, audience,
+        /// body_cid, recipient_key_generation}`.
+        ///
+        /// R4.5-MIGRATE (R0.6 BR): `body_cid` is a SELF-DESCRIBING CIDv1
+        /// (`0x01 0x71 0x1e 0x20 || 32-byte digest` = 36 bytes), NOT a bare
+        /// fixed-32 digest (CLAUDE.md baked-in #5; restores U3
+        /// length-injectivity) — aligning the Inv-16 `Recipient` binding with
+        /// the canonical `0x6510` union the sibling `f_lc_hpke` /
+        /// `f_lc_abuse` freeze.
         Recipient {
             audience_did: Vec<u8>,
+            body_cid: Vec<u8>,
             recipient_key_generation: u32,
         },
     }
@@ -95,9 +116,11 @@ mod f_inv16_stub {
             }
             BindingContext::Recipient {
                 audience_did,
+                body_cid,
                 recipient_key_generation,
             } => {
                 out.extend_from_slice(audience_did);
+                out.extend_from_slice(body_cid);
                 out.extend_from_slice(&recipient_key_generation.to_be_bytes());
             }
         }
@@ -200,20 +223,39 @@ fn inv16_u2_strict_decode_rejects_cross_variant() {
 #[test]
 #[ignore = "RED-PHASE: F-INV16-1 (U3) — canonical-TLV length-injective (cross-variant collision must NOT coincide); un-ignore at R5"]
 fn inv16_u3_canonical_tlv_length_injective() {
-    // The constructed cross-variant collision (F4-002):
-    //   ctx_c (Recipient): audience_did = [0x41,0x42], gen = 0x0043_4400
-    //          → naive body  41 42 | 00 43 44 00   (aud ‖ gen.to_be_bytes())
-    //   ctx_d (WholeContent): plaintext_cid = [0x41,0x42,0x00,0x43,0x44,0x00]
-    //          → naive body  41 42 00 43 44 00
+    // The constructed cross-variant collision (F4-002; R4.5-MIGRATE re-derived
+    // now that `Recipient` carries a self-describing `body_cid`):
+    //   ctx_c (Recipient): audience_did = [0x41,0x42],
+    //          body_cid = 01 71 1e 20 00*32 (self-describing CIDv1, 36 bytes),
+    //          gen = 0x0043_4400
+    //          → naive body  41 42 | <36 body_cid bytes> | 00 43 44 00
+    //            (aud ‖ body_cid ‖ gen.to_be_bytes())
+    //   ctx_d (WholeContent): plaintext_cid = EXACTLY those 42 concatenated
+    //          bytes → naive body identical.
     // Both naive bodies are BYTE-IDENTICAL (the stub commits no variant tag /
     // no length prefix), so the stub encodes them equal → the U3 pin fires
     // RED. A real length-injective + variant-tagged TLV distinguishes them.
+    let audience = vec![0x41u8, 0x42];
+    // Self-describing CIDv1 over an all-zero 32-byte digest (R4.5-MIGRATE
+    // body_cid framing; the U3 collision cares only about byte-coincidence).
+    let mut body_cid = vec![0x01u8, 0x71, 0x1e, 0x20];
+    body_cid.extend_from_slice(&[0u8; 32]);
+    // NB: `gen` is a reserved keyword in Rust 2024 — use `generation`.
+    let generation: u32 = 0x0043_4400;
+
     let ctx_c = BindingContext::Recipient {
-        audience_did: vec![0x41, 0x42],
-        recipient_key_generation: 0x0043_4400,
+        audience_did: audience.clone(),
+        body_cid: body_cid.clone(),
+        recipient_key_generation: generation,
     };
+    // The WholeContent collision twin = the EXACT naive concatenation of the
+    // Recipient's three fields (aud ‖ body_cid ‖ generation_be).
+    let mut twin = Vec::new();
+    twin.extend_from_slice(&audience);
+    twin.extend_from_slice(&body_cid);
+    twin.extend_from_slice(&generation.to_be_bytes());
     let ctx_d = BindingContext::WholeContent {
-        plaintext_cid: vec![0x41, 0x42, 0x00, 0x43, 0x44, 0x00],
+        plaintext_cid: twin,
     };
 
     // Sanity (documents the construction): the two tuples are genuinely
@@ -223,6 +265,12 @@ fn inv16_u3_canonical_tlv_length_injective() {
         "the U3 collision pair must be two DISTINCT binding tuples (different variants)"
     );
 
+    // The property under test: distinct cross-variant tuples whose naive
+    // concatenations coincide MUST still encode to DISTINCT bytes. Under the
+    // non-injective stub the two encodings collide (this pin fires RED at
+    // baseline — but the test is `#[ignore]`d at red-phase); a real
+    // variant-tagged + length-prefixed injective TLV makes them differ (GREEN
+    // at R5). would-FAIL-if-no-op'd: a no-tag/no-length encoder collides them.
     let enc_c = canonical_tlv_encode(0x6510, &ctx_c);
     let enc_d = canonical_tlv_encode(0x6510, &ctx_d);
     assert_ne!(

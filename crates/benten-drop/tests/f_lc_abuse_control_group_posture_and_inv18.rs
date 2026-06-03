@@ -37,6 +37,14 @@
 //! # R4.4-FIX (F4-004/005) — dedicated `aad_version: u8` byte-0.
 //! # R4.4-FIX (F4-006 / CLUSTER-1 BLOCKER) — coarse_epoch REMOVED + 0x6510
 //! #   envelope-AAD reconciled to ONE canonical field-set across siblings.
+//! # R4.5-MIGRATE (R0.6 Sealed-Sender AAD freeze) — `body_cid` is now a
+//! #   self-describing CIDv1 (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36
+//! #   bytes) on the `0x6510` band, NOT a bare fixed-32 digest (R0.6 BR;
+//! #   CLAUDE.md baked-in #5; restores U3 length-injectivity). Both
+//! #   `0x6510` goldens (`F_INV18_1_SEALED_AAD_HEX` + `F_LC_8_TOKEN_AAD_HEX`)
+//! #   are regenerated over the SAME 32-byte digest with the 4-byte multihash
+//! #   framing prepended (M-20). `aad_version == 0x01` and the no-coarse_epoch
+//! #   posture (item 4) are confirmed unchanged.
 //!
 //! ## CLUSTER-1 (BLOCKER) — the `0x6510` envelope-AAD is ONE field-set, ONE
 //! ## golden, byte-0 guard mirrored everywhere (F4-006 / Ben-RULING-#1)
@@ -248,7 +256,11 @@ mod abuse_stub {
         /// the wire).
         pub audience_did: Vec<u8>,
         /// the body-CID bound into the canonical `0x6510` envelope AAD.
-        pub body_cid: [u8; 32],
+        /// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1
+        /// (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36 bytes), NOT a bare
+        /// fixed-32 digest (CLAUDE.md baked-in #5; restores U3
+        /// length-injectivity).
+        pub body_cid: Vec<u8>,
         /// the recipient key-generation (Inv-16; U19).
         pub recipient_key_generation: u32,
         pub token_not_before: u64,
@@ -266,7 +278,7 @@ mod abuse_stub {
     ///   codepoint         : u16 BE
     ///   aud_len           : u16 BE
     ///   audience_did      : aud_len bytes
-    ///   body_cid          : 32 bytes
+    ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
     ///   recipient_key_gen : u32 BE
     ///   token_nbf         : u64 BE
     ///   token_exp         : u64 BE
@@ -407,7 +419,12 @@ mod sealed_aad_stub {
         pub aad_version: u8,
         pub codepoint: u16,
         pub audience_did: Vec<u8>,
-        pub body_cid: [u8; 32],
+        /// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1
+        /// (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36 bytes), NOT a bare
+        /// fixed-32 digest (CLAUDE.md baked-in #5; restores U3
+        /// length-injectivity). BYTE-IDENTICAL framing to the sibling
+        /// `f_lc_hpke` `DropSealedSender`.
+        pub body_cid: Vec<u8>,
         pub recipient_key_generation: u32,
     }
 
@@ -445,7 +462,7 @@ mod sealed_aad_stub {
     ///   codepoint         : u16 BE
     ///   aud_len           : u16 BE
     ///   audience_did      : aud_len bytes
-    ///   body_cid          : 32 bytes
+    ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
     ///   recipient_key_gen : u32 BE
     #[must_use]
     pub fn serialize_sealed_sender_aad(aad: &SealedSenderAad) -> Vec<u8> {
@@ -578,10 +595,19 @@ fn f_lc_8_valid_token_admitted() {
 // --- R4-FIX F4-028 — token-binding AAD byte-layout pin + mutate→fail-admit.
 
 /// The fixture body-CID for the canonical `0x6510` envelope-AAD prefix.
-fn fixture_body_cid() -> [u8; 32] {
-    let mut c = [0u8; 32];
-    c[0] = 0xE0;
-    c
+///
+/// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1 — `0x01 0x71 0x1e 0x20`
+/// (CIDv1 / dag-cbor / blake3 / 32-byte digest length) || the SAME 32-byte
+/// digest the corpus froze (`[0xE0, 0; 31]`). The digest payload is held
+/// stable across the migration so the only golden delta is the prepended
+/// 4-byte multihash framing (NOT a bare fixed-32 digest; CLAUDE.md baked-in
+/// #5 — never hardcode a hash-width into a frozen wire). 36 bytes total.
+fn fixture_body_cid() -> Vec<u8> {
+    let mut digest = [0u8; 32];
+    digest[0] = 0xE0;
+    let mut cid = vec![0x01u8, 0x71, 0x1e, 0x20];
+    cid.extend_from_slice(&digest);
+    cid
 }
 
 /// The canonical token-binding AAD fixture (F4-028). All integers BE. The
@@ -607,7 +633,7 @@ fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
 /// field-order or endianness drift in the real serializer flips this pin.
 /// R5 confirms-or-deliberately-updates this frozen literal against the
 /// real encoder (M-20).
-const F_LC_8_TOKEN_AAD_HEX: &str = "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e49515545e0000000000000000000000000000000000000000000000000000000000000000000000000000000001cfde000000000001e847f00000005";
+const F_LC_8_TOKEN_AAD_HEX: &str = "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e0000000000000000000000000000000000000000000000000000000000000000000000000000000001cfde000000000001e847f00000005";
 
 /// F-LC-8 PIN 5 (R4-FIX F4-028) — the token-binding AAD serializes to the
 /// FROZEN big-endian byte layout. This pins the wire-affecting sub-field
@@ -908,7 +934,7 @@ fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
 /// — no sender-DID region, NO coarse_epoch. R5 confirms-or-deliberately-
 /// updates this frozen literal against the real encoder (M-20).
 const F_INV18_1_SEALED_AAD_HEX: &str =
-    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e49515545e00000000000000000000000000000000000000000000000000000000000000000000000";
+    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-INV18-1 PIN 3 (R4-FIX F4-029) — POSITIVE field-set enumeration: the
 /// serialized `0x6510` envelope AAD field-set is EXACTLY the canonical union

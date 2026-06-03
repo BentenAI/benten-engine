@@ -248,8 +248,28 @@ mod layer_c_stub {
     /// An audience DID (the recipient-targeting identity bound in the
     /// single-recipient drop AAD), modeled as raw bytes.
     pub type AudienceDid = Vec<u8>;
-    /// A content CID (the body-CID bound in AAD).
+    /// A content-CID DIGEST (the 32-byte BLAKE3 of the body), the input the
+    /// `seal_*` fns receive. The DEFAULT `0x6510`/`0x6500` single-recipient
+    /// AAD binds the SELF-DESCRIBING CIDv1 form of this digest (R4.5-MIGRATE),
+    /// NOT the bare digest. The `0x6520` group stanza band keeps the bare-32
+    /// `BodyCid` (R0.6 BR scope = `0x6510`/`0x6610` ONLY; the separately-frozen
+    /// `0x6520` Layer-C group wire is NOT re-opened by R0.6).
     pub type BodyCid = [u8; 32];
+
+    /// A self-describing CIDv1 (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36
+    /// bytes) — the body-CID form bound into the `0x6510` single-recipient
+    /// envelope AAD (R4.5-MIGRATE; R0.6 BR; CLAUDE.md baked-in #5).
+    pub type SelfDescribingCid = Vec<u8>;
+
+    /// Wrap a 32-byte body-CID DIGEST into its self-describing CIDv1 form
+    /// (`0x01 0x71 0x1e 0x20 || digest`). The seal fns apply this internally
+    /// before binding the body-CID into the `0x6510`/`0x6500` AAD.
+    #[must_use]
+    pub fn self_describing_cid(digest: &BodyCid) -> SelfDescribingCid {
+        let mut cid = vec![0x01u8, 0x71, 0x1e, 0x20];
+        cid.extend_from_slice(digest);
+        cid
+    }
 
     /// The typed `BindingContext` (`#[non_exhaustive]` in production). The
     /// stub enumerates only the Layer-C drop variants this file pins.
@@ -280,7 +300,10 @@ mod layer_c_stub {
             aad_version: u8,
             codepoint: u16,
             audience_did: AudienceDid,
-            body_cid: BodyCid,
+            /// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1
+            /// (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36 bytes), NOT a
+            /// bare fixed-32 digest (CLAUDE.md baked-in #5; restores U3).
+            body_cid: SelfDescribingCid,
             recipient_key_generation: u32,
             sender_did: SenderDid,
         },
@@ -297,7 +320,11 @@ mod layer_c_stub {
             aad_version: u8,
             codepoint: u16,
             audience_did: AudienceDid,
-            body_cid: BodyCid,
+            /// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1
+            /// (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36 bytes), NOT a
+            /// bare fixed-32 digest (CLAUDE.md baked-in #5; restores U3).
+            /// BYTE-IDENTICAL framing to `f_lc_abuse::SealedSenderAad`.
+            body_cid: SelfDescribingCid,
             recipient_key_generation: u32,
         },
     }
@@ -317,7 +344,7 @@ mod layer_c_stub {
         ///   codepoint         : u16 BE
         ///   audience_len      : u16 BE
         ///   audience_did      : audience_len bytes
-        ///   body_cid          : 32 bytes
+        ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
         ///   recipient_key_gen : u32 BE
         ///   [plaintext-sender ONLY] sender_len u16 BE || sender_did bytes
         #[must_use]
@@ -634,11 +661,12 @@ mod layer_c_stub {
 }
 
 use layer_c_stub::{
-    AAD_VERSION, BindingContext, DROP_TO_RECIPIENT_SEALED_SENDER, ENVELOPE_FORMAT_VERSION,
+    AAD_VERSION, BindingContext, BodyCid, DROP_TO_RECIPIENT_SEALED_SENDER, ENVELOPE_FORMAT_VERSION,
     EncryptedEnvelope, HYBRID_X25519_MLKEM768, HpkeRecipientStanza, LAYER_C_DROP,
     LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, did, fixed_body_cid, fixed_pk, fixed_sk,
     group_plaintext_aad_region, open_group_stanza, open_single, seal_group_multi,
-    seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender, serialize,
+    seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
+    self_describing_cid, serialize,
 };
 
 /// Lowercase-hex of a byte slice (test-local; no external dep).
@@ -1125,15 +1153,19 @@ fn f_lc_2_group_stanza_aad_byte0_is_aad_version_not_format_version_and_frozen_la
 /// SAME golden (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD):
 ///   aad_version 0x01 | codepoint 0x6510 |
 ///   audience "did:key:zRecipientAudienceUNIQUE" (32 bytes) |
-///   body_cid [0xE0, 0; 31] | recipient_key_generation 0.
+///   body_cid self-describing CIDv1 over digest [0xE0, 0; 31] (36 bytes;
+///   R4.5-MIGRATE) | recipient_key_generation 0.
 fn f_lc_3_sealed_sender_aad_fixture() -> BindingContext {
-    let mut body_cid = [0u8; 32];
-    body_cid[0] = 0xE0;
+    // R4.5-MIGRATE (R0.6 BR): the body-CID is the SELF-DESCRIBING CIDv1 over
+    // the SAME 32-byte digest the corpus froze (`[0xE0, 0; 31]`) — the only
+    // golden delta is the prepended 4-byte multihash framing.
+    let mut digest: BodyCid = [0u8; 32];
+    digest[0] = 0xE0;
     BindingContext::DropSealedSender {
         aad_version: AAD_VERSION, // 0x01 (dedicated AAD prefix, NOT format ver 0x02)
         codepoint: DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
-        body_cid,
+        body_cid: self_describing_cid(&digest),
         recipient_key_generation: 0,
     }
 }
@@ -1148,7 +1180,7 @@ fn f_lc_3_sealed_sender_aad_fixture() -> BindingContext {
 /// it against the real encoder. If these two literals ever differ, the siblings
 /// have re-diverged on the `0x6510` envelope AAD (the F-NEW-SS-AUD regression).
 const F_LC_SEALED_SENDER_AAD_HEX: &str =
-    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e49515545e00000000000000000000000000000000000000000000000000000000000000000000000";
+    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-LC-3 PIN 1 (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD) — the DEFAULT (`0x6510`)
 /// single-recipient Sealed-Sender envelope AAD binds the canonical union
