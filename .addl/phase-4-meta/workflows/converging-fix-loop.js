@@ -63,9 +63,12 @@ const LENSES = (args && args.lenses) || [
 ].map(k => ({ key: k }))
 
 // ============================== SHARED PREAMBLE ==============================
+// READONLY here is an abbreviated stand-in. AT AUTHORING TIME, inline the FULL COMMON_PREAMBLE from
+// workflow-common.js (read-only contract + pre-flight tree-state + §3.5n ground-truth + HARD-RULE-12
+// disposition + panel-integrity + plain-English) — the sandbox has no imports, so it must be inlined text.
 const READONLY = `
-## READ-ONLY ACCESS CONTRACT (NON-NEGOTIABLE)
-Read everything via \`git show <ref>:<path>\` from the repo. NEVER checkout/cd/commit/branch/modify — a prior agent did exactly that and corrupted a shared tree. Only \`git show\`/\`git ls-tree\`/\`git diff --name-only\`/\`git grep <ref>\` are allowed. You are a reasoner that EMITS text; you do NOT touch git state. (The single integrator stage is the ONLY writer.)`
+## READ-ONLY ACCESS CONTRACT (NON-NEGOTIABLE)  [inline full COMMON_PREAMBLE from workflow-common.js]
+Read everything via \`git show <ref>:<path>\`. NEVER checkout/cd/commit/branch/modify — a prior agent did exactly that and corrupted a shared tree (W6 escape). Only \`git show\`/\`git ls-tree\`/\`git diff --name-only\`/\`git grep <ref>\` allowed. EMIT text; do NOT touch git state. First action: assert the ref+SHA you review matches the brief. Ground every claim in a real line; default REFUTED on uncertainty. (The single integrator stage is the ONLY writer.)`
 
 const ANCHORS = `
 ## ANCHORS
@@ -182,7 +185,7 @@ FIX: ${JSON.stringify(fix, null, 1)}`,
 
   // ---- 5. INTEGRATE (single controlled writer; the loop's OWN integration worktree; disjoint files => no conflict) ----
   phase('Integrate')
-  const integ = await agent(`You are the SINGLE integrator (the only writer this round). Working in the integration worktree \`${CFG.integWorktree}\` checked out on \`${CFG.corpusBranch}\` (the orchestrator owns this worktree — operate ONLY inside it, never the main repo). For each approved file-fix below, write its new_content to the file verbatim, \`git add\`. Then ONE commit: "test(fixloop r${round}): apply ${approved.length} reviewed fixes". Then run the compile-gate: per affected crate \`cargo test -p <crate> [--features ...] --no-run\` and report green/red + any errors. Do NOT run workspace cargo. Report the commit SHA + compile result.
+  const integ = await agent(`You are the SINGLE integrator (the only writer this round). Working in the integration worktree \`${CFG.integWorktree}\` checked out on \`${CFG.corpusBranch}\` (the orchestrator owns this worktree — operate ONLY inside it, never the main repo). For each approved file-fix below, write its new_content to the file verbatim, \`git add\`. Then ONE commit (§3.14 strategy-C — one batched commit per round, not per-file): "test(fixloop r${round}): apply ${approved.length} reviewed fixes". Then run the compile-gate: per affected crate \`cargo test -p <crate> [--features ...] --no-run\` and report green/red + any errors. Do NOT run workspace cargo. Report the commit SHA + compile result. (Worktree-drop-on-merge: any transient fix worktrees are dropped after integration.)
 APPROVED FIXES (file -> new_content): ${JSON.stringify(approved.map(a => ({ file: a.file, finding_ids: a.finding_ids, diff_summary: a.diff_summary })), null, 1)}
 [new_content bodies provided out-of-band by the orchestrator integrator step]`,
     { label: `r${round}-integrate`, phase: 'Integrate' })
@@ -192,7 +195,7 @@ APPROVED FIXES (file -> new_content): ${JSON.stringify(approved.map(a => ({ file
   // ---- 6. GATE: compile + §3.5h/§3.6j self-verify (lint/cite-drift on touched files) ----
   phase('Gate')
   const gate = await agent(`${COMMON}
-Self-verify the round-${round} fixes in \`${CFG.integWorktree}\`: (a) compile-gate result (from integrator) is green behind #[ignore]; (b) §3.5h: scoped clippy + fmt clean on touched crates; (c) §3.6j: every cite added in the fixes resolves (file/symbol/PR exists). Report PASS or the residual to fix. If red, name the minimal compile/lint fix.
+Self-verify the round-${round} fixes in \`${CFG.integWorktree}\`: (a) compile-gate result (from integrator) is green behind #[ignore]; (b) §3.5h: scoped clippy + fmt clean on touched crates; (c) §3.6j: every cite added in the fixes resolves (file/symbol/PR exists); (d) §3.5g cross-language mirror: if any fix introduced/changed an ErrorCode or a wire type crossing the napi/TS boundary, a TS mirror pin is named (or flagged for the R5 brief). Report PASS or the residual to fix. If red, name the minimal compile/lint fix.
 INTEGRATOR REPORT: ${integ}`,
     { label: `r${round}-gate`, phase: 'Gate' })
 
@@ -206,7 +209,7 @@ INTEGRATOR REPORT: ${integ}`,
 // ============================== TERMINAL: pattern-induction + Ben surface ==============================
 phase('Terminal')
 const patternInduction = await agent(`${COMMON}
-Pattern-induction meta-sweep over the ${decisionLog.length}-entry decision log below. Hunt UNNAMED cross-cutting patterns (≥3 recurrence => candidate). Propose: (a) new pim-N / dispatch-convention codifications, (b) any class-of-bug the loop kept re-fixing (a deeper root cause), (c) any finding the loop may have under-fixed. Return a prose list.
+Pattern-induction meta-sweep over the ${decisionLog.length}-entry decision log below. Hunt UNNAMED cross-cutting patterns (≥3 recurrence => candidate). Propose: (a) new pim-N / dispatch-convention codifications, (b) any class-of-bug the loop kept re-fixing (a deeper root cause), (c) any finding the loop may have under-fixed. §3.6h ratification-must-close-origin: if you propose a rule that NAMES a specific origin instance, state that the same landing must close (or DEFER-NAMED-NOW) that origin instance. Return a prose list.
 DECISION LOG (summary): ${JSON.stringify(decisionLog.map(d => ({ round: d.round, kind: d.kind, n: (d.findings || d.approved || []).length })), null, 1)}`,
   { label: 'pattern-induction', phase: 'Terminal' })
 
