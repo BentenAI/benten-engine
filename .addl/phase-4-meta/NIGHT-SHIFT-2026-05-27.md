@@ -897,3 +897,20 @@ Tracked-doc cascade (Inv-16 mint + **the #31-fix [LAMPS keeps #31, revocation→
 NEVER --admin-bypass / force-push; NORMAL --squash; HARD RULE 12; do-it-now bias; full ADDL observance; surface arch forks; iterate-to-convergence R1+R4+R4b+R6; agent isolation:worktree + commit-before-return + ABSOLUTE-PATH-FORBIDDEN; ≤7 implementer cap + scoped-pre-flight; **disk HARD-ABORT new-dispatch at >97%** (raised from ~92% by Ben 2026-06-02; cargo-clean-idle valve at ~90%); Opus-only (council/agent); inline-gitignored-canon-in-briefs; **DO NOT TAG without Ben check-in**.
 
 *Updated 2026-06-02 LATE (pre-compact). Compact-survival: F-full at R3 test-writers (Workflow `w1miqerfq`) in flight; canonical R0 = R0.3 `4fe9236a`; on R3 return → consolidate → R4.*
+
+---
+
+## 2026-06-02 EVENING ADDENDUM — R3 RETURNED + CONVERGED + CONSOLIDATED (steps 1-3 done; R4 next)
+
+**R3 Workflow `w1miqerfq` COMPLETED CLEAN** (17 agents, ~73 min): canary `GATE: PASS` → W1-W7 fan-out → **7/7 mini-reviews APPROVE** → coverage consolidator **CONVERGED** (89/89 families, GAP-LIST empty, **no R3.2 patch needed**). Independently ground-truth-verified: 8 branch tips match, **zero double-implementation** (git set-intersection: 56 distinct test files, none on >1 branch), all 7 verdicts genuine APPROVE.
+
+**Steps 1-3 (harvest + consolidate) DONE:**
+- **Step 1** — main un-parked from the **W6 isolation-escape** (3rd codified instance: W6 committed `r3/w6-gov-audit` onto the MAIN repo working tree). Switched main back to orch branch; **disk HARD-ABORT 92%→97%** committed `dd56aee7`; w6 rebuilt clean (`7945b79c`, 1 test-only commit off main 2172cb6d).
+- **Step 2 (harvest)** — all **8 clean `r3/w*` branches pushed to origin**; **8 workflow worktrees dropped** (disk 90%→86%).
+- **Step 3 (strategy-C consolidate)** — **`phase-4-meta-core/f-full-r3-consolidated @ 50561799`** (off main `2172cb6d`; 60 files = 56 test + new `benten-membership-set` 15th crate + root manifest). **COMPILE-VERIFIED green behind `#[ignore]`** per crate (--no-run; crypto-suite/sync/drop `--features testing`; engine `test-helpers`+`benten-eval/testing`; membership-set `--features testing`). **Real defect caught by compile-verify**: W4+W5's `benten-membership-set` manifests genuinely DIFFERED (consolidator's "identical scaffold" was wrong) — took W4's superset `lib.rs` (`pub mod scaffold`/F-CRATE-2) + merged W5's `[dev-dependencies]` (blake3/serde/serde_bytes/serde_ipld_dagcbor/proptest). Pushed.
+
+**5 R5-FILL carry-items** (named-now for R5 brief; NOT R3 defects — R4 re-examines): (1) W5 F-AAD-1 hex-pin self-referential → hard-code real hex; (2) W5 F-CRDT-3/F-MST-3/F-GOSSIP-1/F-INV21-4 pass-through stubs → real merge path; (3) W4 crate2_b1_dep_set asserts a Cargo.toml comment (count 38 not 39); (4) W0 canary F-INV16-1 U3(+U1/classical_0x6400/aead_lifts) green-against-stub when intended-RED → fix collision-pair; (5) **M-20**: rebase byte-pinning families onto canary landing SHA at R5.
+
+**NEXT = R4 (deeper test review, iterate-to-convergence per rule 9).** Reviews the consolidated corpus (read-only, cap-exempt) before R5 impl. Design = a Workflow round mirroring proven R1 shape (lens council batched 4+4 → adversarial-verify MAJOR/BLOCKER → completeness-critic → consolidator converge-call); iterate across invocations (R4.1→fix→R4.2) until 0 BLOCKER/MAJOR. **Awaiting Ben go to launch R4.** Then R5 (canary-first impl) → R4b → R6 R3 → pre-tag → tag (HOLD: Ben).
+
+*Updated 2026-06-02 EVENING. Compact-survival: R3 CONVERGED+consolidated @ `phase-4-meta-core/f-full-r3-consolidated 50561799` (off main `2172cb6d`); 8 per-wave branches on origin; R4 design surfaced, awaiting Ben go.*
