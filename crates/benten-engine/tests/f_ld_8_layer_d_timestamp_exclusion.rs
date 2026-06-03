@@ -4,23 +4,27 @@
 //!   - `db2d7d6d:.addl/phase-4-meta/f-full-r2-test-landscape.md` §1 Group 8
 //!     F-LD-8: "`DropToRecipient`/Sealed-Sender struct carries NO `sealed_at`/
 //!     `valid_until` (L6 finding closed-by-exclusion); 1-hr bucket on DeviceLink+
-//!     RemotePermission ONLY; round-down-no-jitter (NQ-C5); bucket ⊥ `valid_until`
-//!     clock (NQ-T2)." Red-phase: "structural: drop struct has NO timestamp
-//!     field; DeviceLink/RemotePermission DO; `bucket % 3600 == 0` no-jitter."
-//!   - R0.3 plan §3.10 (`...f-full-r0-plan.md:760-769`): "DropToRecipient carries
+//!     RemotePermission ONLY; round-down-no-jitter (NQ-C5 RATIFIED); bucket ⊥
+//!     `valid_until` clock (NQ-T2 RATIFIED)." Red-phase: "structural: drop struct
+//!     has NO timestamp field; DeviceLink/RemotePermission DO; `bucket % 3600 == 0`
+//!     no-jitter."
+//!   - R0.5 plan §3.10 (`...f-full-r0-plan.md:757-800`): "DropToRecipient carries
 //!     NO sealed_at/valid_until — drops are forever-valid (per #62) ... The U28
 //!     1-hour coarse bucket applies ONLY to the DeviceLink + RemotePermission
 //!     epoch fields ... Default = round-down, NO jitter."
 //!   - Compromise #62 (revocation-reach), L6 drop-timestamp HIGH-leak finding.
 //!
-//! ## NQ-C5 OPEN-SPEC FLAG
+//! ## NQ-C5 — RATIFIED (Ben 2026-06-02)
 //!
-//! NQ-C5 (§10.6) — round-down-no-jitter avoids the ≤2×jitter+skew window-
-//! widening cleanly, OR does the nonce-cache window need widening? — is
-//! UNRESOLVED at R2 (§5.B carry-forward item 6). The `..._round_down_no_jitter_
-//! nq_c5_gated` arm is a RED-PHASE stub referencing the open question; R5
-//! finalizes against the ratified NQ-C5 default (R0 default = round-down,
-//! NO jitter).
+//! NQ-C5 (§10.6:1439) is **RATIFIED**: the epoch bucket =
+//! `(raw_unix_secs / 3600) * 3600` — **round-DOWN, NO jitter**, deterministic
+//! (`bucket % 3600 == 0`). With no jitter there is no jitter↔skew interaction to
+//! double-widen the effective window (m-9). The **nonce-cache window does NOT
+//! need widening** — bucket (metadata privacy) and nonce-cache (replay defense)
+//! are **orthogonal** and tuned independently. The
+//! `..._round_down_no_jitter_nq_c5_gated` arm pins this ratified default; R5
+//! un-ignores it against the same ratified rule (the open-question framing is
+//! resolved — no R5 re-decision pending).
 //!
 //! ## byte-pinning (M-20)
 //!
@@ -79,7 +83,7 @@ mod shim {
     }
 
     /// Round a raw unix-seconds time DOWN to the 1-hr bucket — NO jitter
-    /// (default per m-9/NQ-C5). The result is always a multiple of 3600.
+    /// (RATIFIED per m-9/NQ-C5). The result is always a multiple of 3600.
     pub fn round_down_to_bucket(now_secs: u64) -> u64 {
         (now_secs / LAYER_D_BUCKET_SECS) * LAYER_D_BUCKET_SECS
     }
@@ -148,18 +152,17 @@ fn f_ld_8_device_link_carries_the_one_hour_bucket() {
     );
 }
 
-/// F-LD-8 NQ-C5-GATED round-down-NO-jitter (OPEN-SPEC): the bucket is computed
-/// by pure round-down (multiple of 3600), with NO jitter added. Jitter↔skew can
-/// double-widen the effective window to ≤2×jitter+skew; round-down-no-jitter
-/// avoids it. The bucket is a pure function of the raw time (deterministic;
-/// same input → same bucket; no randomness).
+/// F-LD-8 NQ-C5 round-down-NO-jitter (RATIFIED, Ben 2026-06-02): the bucket is
+/// computed by pure round-down (multiple of 3600), with NO jitter added.
+/// Jitter↔skew can double-widen the effective window to ≤2×jitter+skew;
+/// round-down-no-jitter avoids it. The bucket is a pure function of the raw time
+/// (deterministic; same input → same bucket; no randomness).
 ///
-/// OPEN-SPEC: NQ-C5 (§10.6) is unresolved at R2 (§5.B carry-forward item 6).
-/// This arm pins the R0 default (round-down, no jitter); R5 finalizes against
-/// the ratified NQ-C5 answer (or widens the nonce-cache window if NQ-C5 so
-/// rules).
+/// NQ-C5 (§10.6:1439) is RATIFIED: round-down, no jitter; the nonce-cache window
+/// is NOT widened (bucket and nonce-cache are orthogonal). This arm pins that
+/// ratified rule; R5 un-ignores it against the same rule (no R5 re-decision).
 #[test]
-#[ignore = "RED-PHASE: F-LD-8 — round-down NO-jitter bucket (OPEN-SPEC: gated on NQ-C5 §10.6); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-LD-8 — round-down NO-jitter bucket (NQ-C5 RATIFIED §10.6); un-ignore at R5"]
 fn f_ld_8_bucket_is_round_down_no_jitter_nq_c5_gated() {
     // Any raw time → a multiple of 3600 (no jitter offset).
     for raw in [0u64, 1, 3599, 3600, 3601, 1_900_001_234, 1_900_004_799] {

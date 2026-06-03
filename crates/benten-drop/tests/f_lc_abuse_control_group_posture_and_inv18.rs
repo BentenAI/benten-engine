@@ -20,7 +20,7 @@
 //!     (`0x6510` DEFAULT); residual on-wire metadata = exactly
 //!     {audience, coarse-epoch}; `0x6500` discloses sender-DID-in-AAD (U4).
 //!
-//! Pin sources (R0.3 = `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`):
+//! Pin sources (R0.5 = `e4fbfe73:.addl/phase-4-meta/f-full-r0-plan.md`):
 //!   - §3.3 FS-gap honest disclosure (#42/#56/#62); §3.11 Sealed-Sender
 //!     abuse-control mechanism (BR-1 — recipient-issued delivery tokens;
 //!     refused BEFORE decrypt; per-token rate-limit + revocation via UCAN
@@ -33,6 +33,26 @@
 //!     group AAD (pre-freeze wire change).
 //!
 //! # R4-FIX (F4-028, F4-029) — added substantive byte-pins.
+//! # R4.4-FIX (F4-004/005) — dedicated `aad_version: u8` byte-0.
+//!
+//! **F4-004/005 (MAJOR).** Spec R0.5 §4.1 freezes a dedicated
+//! `aad_version: u8` AAD prefix DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`
+//! (the envelope SERIALIZATION-format byte). The original fixtures here
+//! pushed `ENVELOPE_FORMAT_VERSION` (= 2) as AAD byte-0, conflating two
+//! orthogonal version axes and freezing a leading AAD byte (`0x02`) that
+//! CONFLICTS with the sibling Layer-C `f_lc_hpke` golden + the MembershipSet
+//! golden (`0x01`) — which would break cross-engine AEAD-open. FIX: introduce
+//! `const AAD_VERSION: u8 = 0x01` (mirroring the sibling Layer-C +
+//! MembershipSet convention) and push THAT as AAD byte-0 in BOTH the
+//! token-binding AAD and the 0x6510 Sealed-Sender AAD; `ENVELOPE_FORMAT_VERSION
+//! = 2` stays strictly for the envelope-format axis. Both frozen goldens have
+//! their leading byte `02`->`01`. **`coarse_epoch` STAYS** — it is the
+//! LEGITIMATE Sealed-Sender residual on-wire metadata (R0.5 §3.3: `audience +
+//! coarse epoch`; Compromise #43: `residual = audience + coarse-epoch`); M-14
+//! only excludes the `sealed_at`/`valid_until` EXPIRY timestamps from
+//! `DropToRecipient`, which this file already never carried. A byte-0
+//! anti-conflation assertion is ADDED to both frozen-layout arms so a future
+//! revert to the format-version byte FAILS the pin (load-bearing, not advisory).
 //!
 //! **F4-028 (F-LC-8 token-binding AAD byte-pin).** §3.11 calls the
 //! token-binding AAD "wire-affecting only in the token-binding AAD (a
@@ -91,8 +111,19 @@
 // SELF-CONTAINED STUB — Sealed-Sender abuse-control (F-LC-8). DELETE at R5.
 // ===========================================================================
 mod abuse_stub {
-    /// Wave-0 envelope-format version (M-18/M-19/M-20). V2 from commit 1.
+    /// Wave-0 envelope SERIALIZATION-format byte (`format_version`;
+    /// M-18/M-19/M-20). V2 from commit 1. DISTINCT from the AAD prefix byte
+    /// (`AAD_VERSION`) — R4.4-FIX F4-004/005: NEVER overload this as the
+    /// `aad_version` (conflates two orthogonal version axes + freezes a leading
+    /// AAD byte `0x02` conflicting with the sibling Layer-C + MembershipSet
+    /// golden's `0x01`, breaking cross-engine AEAD-open).
     pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
+    /// The frozen AAD version prefix byte (R0.5 §4.1: dedicated `aad_version: u8`
+    /// prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`). Mirrors the
+    /// MembershipSet + sibling Layer-C `AAD_VERSION = 0x01` convention so every
+    /// engine freezes the SAME leading AAD byte for the identical §4.1 prefix
+    /// (R4.4-FIX F4-004/005).
+    pub const AAD_VERSION: u8 = 0x01;
     /// `DROP_TO_RECIPIENT_SEALED_SENDER` — the v1-beta DEFAULT (BR-1).
     pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 
@@ -166,7 +197,7 @@ mod abuse_stub {
     /// canonical BIG-ENDIAN byte layout. DETERMINISTIC (no maps, no
     /// nondeterministic ordering) so the frozen golden-hex is meaningful.
     ///
-    /// Layout (R0.3 §3.11 + §4.1 BE; M-19):
+    /// Layout (R0.5 §3.11 + §4.1 BE; M-19):
     ///   aad_version  : u8
     ///   codepoint    : u16 BE
     ///   aud_len      : u16 BE
@@ -284,11 +315,18 @@ mod group_posture_stub {
 // field enumeration so the residual-metadata claim is byte-checked.
 // ===========================================================================
 mod sealed_aad_stub {
-    /// Wave-0 V2.
+    /// Wave-0 V2 envelope SERIALIZATION-format byte (`format_version`).
+    /// DISTINCT from the AAD prefix byte (`AAD_VERSION`) — R4.4-FIX F4-004/005.
+    /// NEVER the `aad_version`.
     pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
+    /// The frozen AAD version prefix byte (R0.5 §4.1: dedicated `aad_version: u8`
+    /// prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`). Mirrors the
+    /// MembershipSet + sibling Layer-C `AAD_VERSION = 0x01` convention
+    /// (R4.4-FIX F4-004/005).
+    pub const AAD_VERSION: u8 = 0x01;
     pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 
-    /// The DEFAULT (`0x6510`) on-wire AAD inputs. Per R0.3 §3.3/§4.1/§5.1
+    /// The DEFAULT (`0x6510`) on-wire AAD inputs. Per R0.5 §3.3/§4.1/§5.1
     /// (#43): EXACTLY `{audience, coarse_epoch}` — the sender-DID is bound
     /// INSIDE the ciphertext, NOT here. (`aad_version` + `codepoint` are
     /// framing, not identity metadata.)
@@ -448,7 +486,7 @@ fn f_lc_8_valid_token_admitted() {
 /// The canonical token-binding AAD fixture (F4-028). All integers BE.
 fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
     TokenBindingAad {
-        aad_version: abuse_stub::ENVELOPE_FORMAT_VERSION,                 // 0x02
+        aad_version: abuse_stub::AAD_VERSION,                             // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
         codepoint: abuse_stub::DROP_TO_RECIPIENT_SEALED_SENDER,          // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
         coarse_epoch: 1_900_800,
@@ -463,7 +501,7 @@ fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
 /// endianness drift in the real serializer flips this pin.
 /// R5 confirms-or-deliberately-updates this frozen literal against the
 /// real encoder (M-20).
-const F_LC_8_TOKEN_AAD_HEX: &str = "02651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d010000000000001cfde000000000001e847f00000005";
+const F_LC_8_TOKEN_AAD_HEX: &str = "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d010000000000001cfde000000000001e847f00000005";
 
 /// F-LC-8 PIN 5 (R4-FIX F4-028) — the token-binding AAD serializes to the
 /// FROZEN big-endian byte layout. This pins the wire-affecting sub-field
@@ -494,6 +532,27 @@ fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
         &[0x65, 0x10],
         "F-LC-8 (F4-028): codepoint 0x6510 MUST be big-endian (0x65,0x10) \
          in the token-binding AAD, never little-endian (0x10,0x65)."
+    );
+
+    // R4.4-FIX F4-004/005 anti-conflation pin — AAD byte-0 is the dedicated
+    // `aad_version` (= 0x01), NOT the envelope serialization `format_version`
+    // (= 0x02). These are TWO orthogonal version axes (R0.5 §4.1); freezing the
+    // format byte here would conflict with the sibling Layer-C + MembershipSet
+    // golden (`0x01`) and break cross-engine AEAD-open. would-FAIL if a future
+    // edit reverts AAD byte-0 to the format version.
+    assert_eq!(
+        bytes[0],
+        abuse_stub::AAD_VERSION,
+        "F-LC-8 (F4-004/005): the token-binding AAD byte-0 MUST be the dedicated \
+         AAD_VERSION (0x01), NOT the envelope format version."
+    );
+    assert_ne!(
+        bytes[0],
+        abuse_stub::ENVELOPE_FORMAT_VERSION,
+        "F-LC-8 (F4-004/005): the AAD version axis and the envelope \
+         serialization-format axis are DISTINCT — byte-0 MUST NOT be the format \
+         version (0x02). Reverting this re-introduces the cross-engine \
+         AEAD-open break."
     );
 }
 
@@ -725,7 +784,7 @@ fn f_inv18_1_security_posture_documents_metadata_posture() {
 /// The canonical Sealed-Sender (0x6510) on-wire AAD fixture (F4-029).
 fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
     SealedSenderAad {
-        aad_version: sealed_aad_stub::ENVELOPE_FORMAT_VERSION,            // 0x02
+        aad_version: sealed_aad_stub::AAD_VERSION,                        // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
         codepoint: sealed_aad_stub::DROP_TO_RECIPIENT_SEALED_SENDER,     // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
         coarse_epoch: 1_900_800,
@@ -737,7 +796,7 @@ fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
 /// no sender-DID region. R5 confirms-or-deliberately-updates this frozen
 /// literal against the real encoder (M-20).
 const F_INV18_1_SEALED_AAD_HEX: &str =
-    "02651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d0100";
+    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d0100";
 
 /// F-INV18-1 PIN 3 (R4-FIX F4-029) — POSITIVE field-set enumeration: the
 /// serialized 0x6510 AAD field-set is EXACTLY
@@ -784,6 +843,24 @@ fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_audience_and_epoch() {
          FROZEN big-endian layout containing ONLY {{aad_version, codepoint, \
          audience, coarse_epoch}}. R5 confirms-or-deliberately-updates this \
          literal (M-20)."
+    );
+
+    // R4.4-FIX F4-004/005 anti-conflation pin — the DEFAULT AAD byte-0 is the
+    // dedicated `aad_version` (= 0x01), NOT the envelope `format_version`
+    // (= 0x02). Distinct version axes (R0.5 §4.1); reconciles to the sibling
+    // Layer-C + MembershipSet golden's `0x01`. would-FAIL on a revert.
+    assert_eq!(
+        bytes[0],
+        sealed_aad_stub::AAD_VERSION,
+        "F-INV18-1 (F4-004/005): the DEFAULT (0x6510) AAD byte-0 MUST be the \
+         dedicated AAD_VERSION (0x01), NOT the envelope format version (0x02)."
+    );
+    assert_ne!(
+        bytes[0],
+        sealed_aad_stub::ENVELOPE_FORMAT_VERSION,
+        "F-INV18-1 (F4-004/005): byte-0 MUST NOT be the envelope \
+         serialization-format version — that conflation broke cross-engine \
+         AEAD-open (the F4-004/005 hazard)."
     );
 
     // (c) NEGATIVE byte-scan — the sender-DID is provably ABSENT from the

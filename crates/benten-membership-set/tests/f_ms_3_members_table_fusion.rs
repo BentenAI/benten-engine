@@ -25,7 +25,7 @@
 //! that diverged from F-AAD-1's structured snapshot — two stubs for the SAME
 //! frozen type that would serialize to DIFFERENT canonical bytes (a divergent
 //! AAD = cross-engine decrypt failure). The fix converges BOTH to the ONE
-//! canonical R0.3 §3.5 5-field shape:
+//! canonical R0.5 §3.5 5-field shape:
 //! `MemberEntry { role: RoleId, is_authority: bool, sig_pubkey:
 //! Option<SigPubKey>, admitted_at_hlc: Hlc, member_ref: MemberRef }`
 //! with the 3-field `Hlc`. The fusion semantics this file pins
@@ -47,12 +47,12 @@ use std::collections::BTreeMap;
 
 // ── self-contained in-file stub-shim ────────────────────────────────────────
 //
-// Canonical R0.3 §3.5 shapes — byte-compatible with the F-AAD-1 stub (F4-006).
+// Canonical R0.5 §3.5 shapes — byte-compatible with the F-AAD-1 stub (F4-006).
 
 /// Stand-in for `benten_id::did::Did` (a content-addressed DID string at R5).
 type Did = String;
 
-/// Stand-in for the `admitted_at_hlc` clock — the canonical R0.3 §3.5 3-field
+/// Stand-in for the `admitted_at_hlc` clock — the canonical R0.5 §3.5 3-field
 /// `Hlc` shape (`physical_ms`, `logical`, `node_id`). This is a member-property
 /// clock (NOT Inv-21 `created_at_hlc`).
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -94,7 +94,7 @@ enum MemberRef {
 ///
 /// **ZERO nature field by construction** — `is_ai` / `is_plugin` / member_type
 /// are DERIVED (Inv-22), never stored. The fields below are EXACTLY the frozen
-/// canonical R0.3 §3.5 member surface (5 fields), byte-compatible with the
+/// canonical R0.5 §3.5 member surface (5 fields), byte-compatible with the
 /// F-AAD-1 stub (F4-006). A `member_type: SomeEnum` field here would be the
 /// red-phase FAILURE.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -226,7 +226,7 @@ fn ms3_authority_requires_pubkey() {
 #[test]
 #[ignore = "RED-PHASE: F-MS-3 — MemberEntry has ZERO nature/member_type field (Inv-22 derived); compile-fence; un-ignore at R5"]
 fn ms3_no_member_type_field_compile_fence() {
-    // Compile-fence: this test names EXACTLY the frozen canonical R0.3 §3.5
+    // Compile-fence: this test names EXACTLY the frozen canonical R0.5 §3.5
     // MemberEntry fields. If a future `member_type` / `nature` / `is_ai` field
     // is added to the real struct, the R5 un-ignore (which constructs the real
     // MemberEntry) will either fail to compile (missing field) or this

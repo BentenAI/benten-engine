@@ -651,50 +651,97 @@ fn single_v1_to_v2_bump_and_v1_typed_rejected() {
 ///      authored in its own W-family file against its own decoder at R5,
 ///      un-ignored with the rest of that surface's pins.
 ///
+/// # Two ORTHOGONAL bounds (F-BD-001 — half-pinned-contract closure)
+///
+/// A bounded length-prefix decoder has TWO independent failure modes, and
+/// META #629 is only closed when BOTH are pinned:
+///   - **(I) absolute bound** — `declared > MAX_NONCE_LEN` (a garbage/hostile
+///     width beyond any legal AEAD nonce; the `with_capacity(declared)`
+///     unbounded-pre-allocation DoS).
+///   - **(II) remaining-buffer bound** — `declared ≤ MAX_NONCE_LEN` yet
+///     `declared > bytes_remaining` (a within-MAX width that still slices
+///     past the end of the frame → slice-overread PANIC on
+///     `&bytes[5..5 + declared]`).
+///
+/// Pinning ONLY (I) is the half-pinned-contract trap: an R5 implementer
+/// could ship `if declared > MAX_NONCE_LEN { reject }`, pass green, and
+/// still PANIC on a `declared=20`-with-0-bytes-present frame — the precise
+/// panic-DoS this SOLE upstream canary exists to anchor. This pin closes
+/// the WHOLE class by iterating a table that exercises each bound
+/// independently (the orthogonal "exceeds-remaining-only-within-MAX" row),
+/// so a future bound addition extends the table rather than spawning a
+/// sibling arm that could silently leave a bound unpinned.
+///
 /// would-FAIL-if-no-op'd: the stub `decode_nonce_bounded` does NO bound
-/// check and `with_capacity(declared)`-pre-allocates the attacker-declared
-/// length (modelling the deployed #629 hole), so the "is_err()" pin FAILS
-/// until R5 wires the bounded decoder.
+/// check on EITHER axis and `with_capacity(declared)`-pre-allocates the
+/// attacker-declared length (modelling the deployed #629 hole). At baseline
+/// `declared=255,0-present` → `Ok(vec![])` (avail=0) and `declared=20,
+/// 0-present` → `Ok(vec![])` (avail=0); BOTH hostile rows expect `is_err()`,
+/// so BOTH fire RED until R5 wires the bounded decoder that rejects each
+/// bound independently.
 #[test]
-#[ignore = "RED-PHASE: F-W0-BD-1 (F4-009-BD / META #629) — V2 decoder must typed-reject a hostile declared nonce-len prefix BEFORE allocating; stub pre-allocates unbounded ⇒ RED; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-W0-BD-1 (F4-009-BD / META #629) — V2 decoder must typed-reject a hostile declared nonce-len prefix on BOTH bounds (absolute MAX + remaining-buffer) BEFORE allocating; stub bounds neither ⇒ RED; un-ignore at R5"]
 fn v2_decode_rejects_hostile_length_prefix_before_allocating() {
-    // A 5-byte frame whose declared nonce-len (byte[4]) is 0xFF (=255),
-    // far exceeding MAX_NONCE_LEN (24) AND the 0 bytes actually present —
-    // a classic unbounded-decode DoS vector (declared ≫ available).
-    let hostile = {
-        let mut b = vec![ENVELOPE_MAGIC, ENVELOPE_FORMAT_VERSION_V2];
-        b.extend_from_slice(&0x647Au16.to_be_bytes());
-        b.push(0xFF); // declared nonce-len = 255 (hostile)
-        b
-    };
+    // (declared_nonce_len, nonce_bytes_present, expect_ok, label).
+    // The table pins the two bounds ORTHOGONALLY (F-BD-001): row 1 violates
+    // BOTH bounds, row 2 violates ONLY the remaining-buffer bound (within
+    // MAX yet past the frame end), row 3 is the within-both positive
+    // control. A future bound extends this table, not a sibling test.
+    let cases: [(u8, usize, bool, &str); 3] = [
+        (255, 0, false, "exceeds both: declared 255 > MAX_NONCE_LEN(24) AND > 0 present"),
+        (
+            20,
+            0,
+            false,
+            "exceeds-remaining-only-within-MAX: declared 20 <= MAX_NONCE_LEN(24) yet > 0 present (slice-overread bound)",
+        ),
+        (12, 12, true, "within-both-OK: declared 12 <= MAX_NONCE_LEN(24) AND == 12 present"),
+    ];
+
+    // Fixture sanity: row 2 isolates the remaining-buffer bound — it MUST
+    // stay within MAX_NONCE_LEN so it does NOT trip the absolute bound (if
+    // it did, an absolute-only decoder would spuriously pass this pin and
+    // the orthogonality would be lost).
     assert!(
-        hostile[4] as usize > MAX_NONCE_LEN,
-        "fixture sanity: the declared nonce-len exceeds MAX_NONCE_LEN (the threat being pinned)"
+        (cases[1].0 as usize) <= MAX_NONCE_LEN && (cases[1].0 as usize) > cases[1].1,
+        "fixture sanity: the remaining-buffer-only row must be within MAX_NONCE_LEN yet exceed the bytes present"
+    );
+    // Fixture sanity: row 1 trips the absolute bound (the unbounded-alloc DoS).
+    assert!(
+        (cases[0].0 as usize) > MAX_NONCE_LEN,
+        "fixture sanity: the exceeds-both row must exceed MAX_NONCE_LEN (the unbounded pre-allocation threat)"
     );
 
-    // The bounded decoder MUST typed-reject the hostile declared length
-    // BEFORE allocating. would-FAIL while the stub `with_capacity(255)`-
-    // pre-allocates and returns Ok (the deployed META #629 hole).
-    assert!(
-        EncryptedEnvelope::decode_nonce_bounded(&hostile).is_err(),
-        "a declared nonce-len exceeding MAX_NONCE_LEN (or the remaining buffer) MUST be typed-rejected before allocation (META #629 bounded-decode)"
-    );
-
-    // Positive control: a well-formed frame whose declared nonce-len is
-    // within bounds AND matches the bytes present decodes successfully —
-    // the bound rejects hostile inputs, not all inputs.
-    let wellformed = {
-        let mut b = vec![ENVELOPE_MAGIC, ENVELOPE_FORMAT_VERSION_V2];
-        b.extend_from_slice(&0x647Au16.to_be_bytes());
-        b.push(12); // declared nonce-len = 12 (legal)
-        b.extend_from_slice(&[0u8; 12]); // the 12 nonce bytes are present
-        b
-    };
-    assert_eq!(
-        EncryptedEnvelope::decode_nonce_bounded(&wellformed)
-            .expect("a within-bounds, fully-present nonce-len must decode")
-            .len(),
-        12,
-        "a within-bounds declared nonce-len that matches the bytes present decodes to exactly that length"
-    );
+    for (declared, present, expect_ok, label) in cases {
+        // Build a V2 frame with the declared nonce-len prefix at byte[4]
+        // and exactly `present` nonce bytes following it.
+        let frame = {
+            let mut b = vec![ENVELOPE_MAGIC, ENVELOPE_FORMAT_VERSION_V2];
+            b.extend_from_slice(&0x647Au16.to_be_bytes());
+            b.push(declared);
+            b.extend_from_slice(&vec![0u8; present]);
+            b
+        };
+        let decoded = EncryptedEnvelope::decode_nonce_bounded(&frame);
+        if expect_ok {
+            // Positive control: the bound rejects hostile inputs, not all
+            // inputs — a within-both, fully-present nonce-len decodes to
+            // exactly that length.
+            assert_eq!(
+                decoded
+                    .unwrap_or_else(|e| panic!("[{label}] a within-both, fully-present nonce-len must decode, got Err({e})"))
+                    .len(),
+                declared as usize,
+                "[{label}] a within-bounds declared nonce-len that matches the bytes present decodes to exactly that length"
+            );
+        } else {
+            // The bounded decoder MUST typed-reject the hostile declared
+            // length BEFORE allocating/slicing, on EITHER bound. would-FAIL
+            // while the stub bounds neither axis and returns Ok.
+            assert!(
+                decoded.is_err(),
+                "[{label}] a declared nonce-len that violates the absolute MAX or the remaining-buffer bound MUST be typed-rejected before allocation (META #629 bounded-decode)"
+            );
+        }
+    }
 }

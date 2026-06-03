@@ -277,22 +277,40 @@ fn f_aad_1_members_table_canonical_cbor_hex_pinned() {
 /// string (R0.5 §3.5 F4-007 ruling).
 ///
 /// The byte-level guard against a `MemberRef` text-vs-int regression: the
-/// CBOR bytes for the `UserDid` text string (`0x67` major-type-3 len-7
-/// followed by ASCII `"UserDid"` = `557365724469`) MUST NOT appear anywhere
-/// in the canonical encoding, and the `member_ref` map value MUST be a CBOR
-/// unsigned int (`0x00` for UserDid). A regression to the externally-tagged
-/// text representation re-introduces the asymmetric drift-prone wire string
-/// and fails this arm even if the full hex-pin were (incorrectly) updated.
+/// CBOR bytes for the `UserDid` text string MUST NOT appear anywhere in the
+/// canonical encoding, and the `member_ref` map value MUST be a CBOR unsigned
+/// int (`0x00` for UserDid). A regression to the externally-tagged text
+/// representation re-introduces the asymmetric drift-prone wire string and
+/// fails this arm even if the full hex-pin were (incorrectly) updated.
+///
+/// **Byte-precise needle (F4-007-NEEDLE fix, R4.4):** ASCII `"UserDid"` is
+/// 7 chars = the 7-byte payload `55 73 65 72 44 69 64` (`55736572446964`,
+/// 14 hex). As a CBOR text string it is prefixed by the major-type-3 len-7
+/// header `0x67`, so the full on-wire token is `6755736572446964` (16 hex).
+/// The needle below is the header-inclusive byte-precise token — a regression
+/// to the text representation re-introduces exactly these bytes. (The prior
+/// corpus needle `557365724469` was the 6-byte truncation `UserDi`, missing
+/// the trailing `64`='d'; it still fired via substring match but was not
+/// byte-precise — corrected here.)
 #[test]
 #[ignore = "RED-PHASE: F-AAD-1 — member_ref is an int discriminant not a text string (F4-007); un-ignore at R5"]
 fn f_aad_1_member_ref_is_int_not_text() {
     let hex = hex_encode(&canonical_members_table_bytes(&fixture_table()));
-    // The ASCII "UserDid" CBOR text string must NOT appear: a regression to
-    // `0x67`("UserDid") encoding would re-introduce the F4-007 asymmetry.
+    // The CBOR text string `0x67` + ASCII "UserDid" must NOT appear: a
+    // regression to the `0x67`("UserDid") encoding would re-introduce the
+    // F4-007 asymmetry. `6755736572446964` = CBOR text(7) header `0x67`
+    // followed by the 7-byte payload `55 73 65 72 44 69 64` ("UserDid").
     assert!(
-        !hex.contains("557365724469"),
+        !hex.contains("6755736572446964"),
         "member_ref MUST serialize as an int tag, NOT a CBOR text string (F4-007); \
-         the ASCII \"UserDid\" bytes leaking into the canonical encoding is the regression"
+         the CBOR text(7) \"UserDid\" bytes leaking into the canonical encoding is the regression"
+    );
+    // Defense-in-depth: even the bare 7-byte payload (without the `0x67`
+    // header — e.g. an alternate/indefinite text framing) must not appear.
+    // `55736572446964` = ASCII "UserDid" (7 bytes, 14 hex).
+    assert!(
+        !hex.contains("55736572446964"),
+        "the ASCII \"UserDid\" payload bytes MUST NOT appear in any framing (F4-007)"
     );
     // Positive: the `member_ref` key is followed by a CBOR unsigned int 0x00
     // (UserDid). `6a6d656d6265725f726566` = CBOR text(10) "member_ref"; the
