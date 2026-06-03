@@ -50,8 +50,13 @@ use benten_crypto_suite::error::UnsupportedAlgorithm;
 
 /// SELF-CONTAINED stub-shim for the NEW (not-yet-minted) codepoints.
 mod f_cp_stub {
-    /// Layer-A vault envelope codepoint (NEW; §4.0 `0x6100`).
+    /// Layer-A vault envelope codepoint (NEW; §4.0 `0x6100`; the 24-byte
+    /// `SymmetricAeadXNonce` vault variant).
     pub const VAULT_ENVELOPE: u16 = 0x6100;
+    /// Layer-A 12-byte `SymmetricAead` (ChaCha20-Poly1305) sibling (NEW;
+    /// §4.0 vault band `0x6100..0x61FF`; RATIFIED frozen v1-beta variant
+    /// per Ben ruling 3, 2026-06-02 + R0.3 §4.1 "ship both").
+    pub const SYMMETRIC_AEAD_12B: u16 = 0x6101;
     /// Layer-C plaintext-sender drop (NEW; §4.0 `0x6500`).
     pub const LAYER_C_DROP: u16 = 0x6500;
     /// Layer-C Sealed-Sender DEFAULT (NEW; §4.0 `0x6510`; BR-1 the ONE
@@ -102,18 +107,37 @@ mod f_cp_stub {
         vec![0x0001..=0x0003, 0x0010..=0x0021]
     }
 
-    /// All Benten-assigned envelope codepoint integers from §4.0 (the
-    /// non-collision scanner input). R5 wires this to enumerate the real
-    /// minted symbols; the stub lists the §4.0 table integers.
+    /// All Benten-assigned envelope codepoint integers from the FULL R0.3
+    /// §4.0 table (the non-collision scanner input). R5 wires this to
+    /// enumerate the REAL minted symbols (a source-scan / registry
+    /// iterator), not this literal; the stub lists every §4.0 in-band
+    /// integer so the non-collision + IANA-disjoint scanner has the full
+    /// authoritative set (F4-040).
+    ///
+    /// Sig codepoints (`0x0001/0x0002/0x0003`) are a SEPARATE `0x00xx`
+    /// namespace (R0.3 §4.0) and are deliberately NOT in this envelope set.
     pub fn all_assigned_envelope_codepoints() -> Vec<u16> {
         vec![
-            0x6100, // vault
-            0x647a, 0x6400, 0x647b, 0x647c, // cipher
-            0x6500, 0x6510, 0x6520, // drop / Sealed-Sender / group
-            0x6310, 0x6320, // Layer-D bands
-            0x6380, 0x6390, 0x63A0, 0x63B0, 0x63C0, // MLS/FS brackets
-            0x6600, 0x6610, 0x6620, // MembershipSet band
-            0x6700, // lifecycle band
+            VAULT_ENVELOPE,    // 0x6100 vault (24-byte XNonce)
+            SYMMETRIC_AEAD_12B, // 0x6101 vault 12-byte sibling
+            0x6400,            // cipher classical-only X25519 downgrade
+            0x647a,            // cipher hybrid default (X-Wing X25519⊕ML-KEM-768)
+            0x647b,            // cipher NF-1 PQ⊕PQ (reserved)
+            0x647c,            // cipher pure-PQ swap-matrix arm (reserved)
+            DEVICE_LINK_BAND_BASE,        // 0x6310 Layer-D DeviceLink band base
+            REMOTE_PERMISSION_BAND_BASE,  // 0x6320 Layer-D RemotePermission band base
+            MLS_APPLICATION_BASE,         // 0x6380 MLS-Application bracket
+            MLS_WELCOME_BASE,             // 0x6390 MLS-Welcome bracket
+            CGKA_COMMIT_BASE,             // 0x63A0 CGKA-Commit FS bracket
+            BIRD_OF_PREY_BASE,            // 0x63B0 Bird-of-Prey AKEM FS bracket
+            DRAFT_PRABEL_BASE,            // 0x63C0 draft-prabel FS bracket
+            LAYER_C_DROP,                 // 0x6500 plaintext-sender drop (non-default sibling)
+            DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510 Sealed-Sender DEFAULT
+            LAYER_C_DROP_MULTI_RECIPIENT, // 0x6520 group multi-stanza
+            MEMBERSHIP_SET_ENCRYPTION,        // 0x6600 MembershipSet set-keying
+            MEMBERSHIP_SET_GROUP_MULTI_STANZA, // 0x6610 MembershipSet group multi-stanza
+            MEMBERSHIP_SET_SUBSET_REF,        // 0x6620 MembershipSet federation (reserve)
+            LIFECYCLE_BAND_BASE,          // 0x6700 lifecycle / revocation band base
         ]
     }
 
@@ -208,26 +232,48 @@ fn new_codepoint_integers_wire_locked() {
     );
 }
 
-/// **F-CP-2** — intra-`0x6100..0x6FFF` non-collision + IANA-disjointness.
+/// Collision scanner: returns `true` iff `codepoints` contains a duplicate
+/// (a silent wire collision). The CI scanner (NQ-W2 / Inv-18) is exactly
+/// this check over the full minted set.
+fn scanner_detects_collision(codepoints: &[u16]) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    for cp in codepoints {
+        if !seen.insert(*cp) {
+            return true;
+        }
+    }
+    false
+}
+
+/// **F-CP-2** — intra-`0x6100..0x6FFF` non-collision + IANA-disjointness +
+/// **injection negative arm** (F4-040).
 ///
-/// (a) every assigned integer is unique (`set.len()==vec.len()`); (b)
-/// every Benten *envelope* codepoint lives in `0x6100..=0x6FFF` OR is a
-/// reserved escape (the sig namespace `0x00xx` is separate); (c) no
-/// envelope codepoint lands in an IANA HPKE registry range. Injecting a
-/// colliding const → the scanner fires.
+/// (a) every assigned integer is unique (the scanner reports NO collision
+/// over the real set); (b) every Benten *envelope* codepoint lives in
+/// `0x6100..=0x6FFF` (the sig namespace `0x00xx` is separate); (c) no
+/// envelope codepoint lands in an IANA HPKE registry range; (d)
+/// **INJECTION:** pushing a duplicate/colliding codepoint MUST make the
+/// scanner FIRE — proving the scanner actually detects collisions (not a
+/// vacuous always-pass). would-FAIL-if-no-op'd: a scanner that never
+/// reports a collision passes (a)–(c) but FAILS the injection arm.
 #[test]
-#[ignore = "RED-PHASE: F-CP-2 — intra-band non-collision + IANA-disjoint scanner (NQ-W2); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-CP-2 — intra-band non-collision + IANA-disjoint scanner + injection arm (NQ-W2; F4-040); un-ignore at R5"]
 fn codepoint_registry_non_collision_and_iana_disjoint() {
     let assigned = all_assigned_envelope_codepoints();
 
-    // (a) Non-collision: no two assigned integers are equal.
+    // (a) Non-collision: the scanner reports NO collision over the real set.
+    assert!(
+        !scanner_detects_collision(&assigned),
+        "the assigned envelope codepoint set must be collision-free (a duplicate = a silent wire collision)"
+    );
+    // (also pin the count directly, for a clear diff on regression).
     let mut sorted = assigned.clone();
     sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(
         sorted.len(),
         assigned.len(),
-        "every assigned envelope codepoint must be unique (a duplicate = a silent wire collision)"
+        "every assigned envelope codepoint must be unique"
     );
 
     // (b) Every envelope codepoint is in the Benten band (the experimental
@@ -249,6 +295,66 @@ fn codepoint_registry_non_collision_and_iana_disjoint() {
                 "envelope codepoint 0x{cp:04x} must NOT land in an IANA HPKE registry range {range:?}"
             );
         }
+    }
+
+    // (d) INJECTION negative arm (F4-040): inject a DUPLICATE of an
+    // already-assigned codepoint and assert the scanner FIRES. This proves
+    // the scanner is not vacuously always-pass — a future codepoint minted
+    // to collide an existing one MUST be caught.
+    let mut injected = assigned.clone();
+    injected.push(DROP_TO_RECIPIENT_SEALED_SENDER); // duplicate 0x6510
+    assert!(
+        scanner_detects_collision(&injected),
+        "INJECTION: a duplicate codepoint (0x{DROP_TO_RECIPIENT_SEALED_SENDER:04x}) MUST make the \
+         non-collision scanner FIRE — else the scanner is vacuous (NQ-W2 / Inv-18)"
+    );
+    // A second injection: a NEW colliding value (mint a const equal to an
+    // existing band base) — the scanner must catch it too.
+    let mut injected2 = assigned.clone();
+    injected2.push(VAULT_ENVELOPE); // duplicate 0x6100
+    assert!(
+        scanner_detects_collision(&injected2),
+        "INJECTION: a duplicate of the vault codepoint (0x{VAULT_ENVELOPE:04x}) MUST also fire the scanner"
+    );
+}
+
+/// **F-CP-1 (cont.)** — every newly-minted §4.0 const is PRESENT in the
+/// assigned-codepoint set (F4-041). A new codepoint minted on the registry
+/// but omitted from `all_assigned_envelope_codepoints()` is invisible to the
+/// non-collision/IANA scanner — this arm guards against that omission by
+/// asserting each minted const is a member of the scanned set.
+#[test]
+#[ignore = "RED-PHASE: F-CP-1 — every newly-minted §4.0 const is present in the scanned set (F4-041); un-ignore at R5"]
+fn every_minted_codepoint_present_in_scanned_set() {
+    let assigned = all_assigned_envelope_codepoints();
+    let present = |cp: u16| assigned.contains(&cp);
+
+    // Every minted §4.0 const must be in the scanned set (F4-041). The
+    // not-already-imported consts are referenced via the `f_cp_stub::`
+    // path so the existing import block stays byte-identical.
+    for (sym, cp) in [
+        ("VAULT_ENVELOPE", VAULT_ENVELOPE),
+        ("SYMMETRIC_AEAD_12B", f_cp_stub::SYMMETRIC_AEAD_12B),
+        ("LAYER_C_DROP", f_cp_stub::LAYER_C_DROP),
+        ("DROP_TO_RECIPIENT_SEALED_SENDER", DROP_TO_RECIPIENT_SEALED_SENDER),
+        ("LAYER_C_DROP_MULTI_RECIPIENT", f_cp_stub::LAYER_C_DROP_MULTI_RECIPIENT),
+        ("DEVICE_LINK_BAND_BASE", f_cp_stub::DEVICE_LINK_BAND_BASE),
+        ("REMOTE_PERMISSION_BAND_BASE", f_cp_stub::REMOTE_PERMISSION_BAND_BASE),
+        ("MLS_APPLICATION_BASE", MLS_APPLICATION_BASE),
+        ("MLS_WELCOME_BASE", MLS_WELCOME_BASE),
+        ("CGKA_COMMIT_BASE", CGKA_COMMIT_BASE),
+        ("BIRD_OF_PREY_BASE", f_cp_stub::BIRD_OF_PREY_BASE),
+        ("DRAFT_PRABEL_BASE", DRAFT_PRABEL_BASE),
+        ("MEMBERSHIP_SET_ENCRYPTION", MEMBERSHIP_SET_ENCRYPTION),
+        ("MEMBERSHIP_SET_GROUP_MULTI_STANZA", f_cp_stub::MEMBERSHIP_SET_GROUP_MULTI_STANZA),
+        ("MEMBERSHIP_SET_SUBSET_REF", f_cp_stub::MEMBERSHIP_SET_SUBSET_REF),
+        ("LIFECYCLE_BAND_BASE", f_cp_stub::LIFECYCLE_BAND_BASE),
+    ] {
+        assert!(
+            present(cp),
+            "minted codepoint {sym} (0x{cp:04x}) MUST be present in the scanned set \
+             (else it is invisible to the non-collision/IANA scanner; F4-041)"
+        );
     }
 }
 

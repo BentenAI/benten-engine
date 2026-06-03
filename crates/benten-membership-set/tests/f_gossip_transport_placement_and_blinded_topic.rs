@@ -14,7 +14,7 @@
 //!   * `topic = truncate(HMAC(K_Set, membership_set_id ‖ generation_summary))`;
 //!     current-gen members compute the SAME topic; a fork rotates the
 //!     generation ⇒ rotates the topic; `generation_summary` = the
-//!     set-generation counter, NOT a per-member vector (O-5/m-11); an
+//!     set-generation counter (BE u32), NOT a per-member vector (O-5/m-11); an
 //!     observer without `K_Set` can't link/recover `set_id`; the topic is
 //!     a pure fn of `(K_Set, set_id, gen)` (NO time input). Closes #61.
 //! - Inv-20 clause-d (per-recipient unlinkability = network-observer-only —
@@ -26,33 +26,38 @@
 //! byte derivation breaks rendezvous (current-gen members compute different
 //! topics ⇒ never meet) OR leaks the set fingerprint (#61). F-GOSSIP-1 is
 //! a placement + convergence-independence pin (FG/FN); F-GOSSIP-2 is the
-//! topic-bytes freeze (FG/FN).
+//! topic-bytes freeze (FG/FN) — pinned by an ABSOLUTE golden-hex vector with
+//! a BE/LE differentiator (F4-024).
 //!
 //! ## pim-2 §3.6b + §3.6f-ext end-to-end discipline
 //!
-//! Drives the PRODUCTION `compute_gossip_topic` + `MockGossipTransport`
-//! stand-ins; asserts OBSERVABLE same-gen→same-topic / fork→diff-topic /
-//! K_Set-bitflip→diff-topic / set_id-not-recoverable / convergence-without-gossip;
+//! Drives the PRODUCTION `compute_gossip_topic` + `MockGossipTransport` +
+//! `mst_backstop_converges` stand-ins; asserts OBSERVABLE
+//! same-gen→same-topic / fork→diff-topic / K_Set-bitflip→diff-topic /
+//! set_id-not-recoverable / absolute-golden-bytes / convergence-without-gossip;
 //! would-FAIL-if-no-op'd (a topic keyed off time differs across two clocks;
-//! a topic that embeds set_id in clear is recoverable; convergence that
-//! depended on gossip fails the gossip-disabled arm).
+//! a topic that embeds set_id in clear is recoverable; an LE-encoded
+//! generation flips the golden hex; convergence that depended on gossip
+//! fails the gossip-disabled arm).
 //!
 //! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
 //!
 //! Compiles GREEN behind `#[ignore]`; SELF-CONTAINED stub-shim for
 //! parallel-safe R3. The blinded-topic stub-shim uses BLAKE3-keyed-hash as
 //! the HMAC stand-in (R5 swaps in the real `benten-crypto-suite` HMAC over
-//! `K_Set`); the byte-derivation SHAPE (key ‖ set_id ‖ gen, truncate-to-32,
-//! no time input) is what F-GOSSIP-2 freezes.
+//! `K_Set`); the byte-derivation SHAPE (key ‖ set_id ‖ BE(gen), truncate-to-32,
+//! no time input) is what F-GOSSIP-2 freezes via the absolute golden vector.
 
 #![allow(clippy::unwrap_used)]
 
 // ── SELF-CONTAINED stub-shim ──
 
-/// PRODUCTION-stand-in: `topic = truncate(HMAC(K_Set, set_id ‖ gen))`.
+/// PRODUCTION-stand-in: `topic = truncate(HMAC(K_Set, set_id ‖ BE(gen)))`.
 /// The stub uses BLAKE3 keyed-hash as the HMAC stand-in. R5 routes through
 /// the real crypto-suite HMAC. Pure fn of `(k_set, set_id, generation)` —
-/// NO time input (so two clocks derive the identical topic).
+/// NO time input (so two clocks derive the identical topic). The generation
+/// is encoded BIG-ENDIAN (the freeze-gating byte-order — an LE encoder would
+/// flip the golden vector below).
 fn compute_gossip_topic(k_set: &[u8; 32], set_id: &[u8], generation: u32) -> [u8; 32] {
     let mut msg = Vec::with_capacity(set_id.len() + 4);
     msg.extend_from_slice(set_id);
@@ -102,6 +107,42 @@ impl GossipTransport for MockGossipTransport {
     }
 }
 
+// ── convergence-via-MST stand-in (the sibling of f_mst_*; F4-013) ──
+//
+// Convergence is backed by MST anti-entropy, NOT gossip (gossip = liveness
+// ONLY). The sibling `f_mst_membership_anti_entropy_backstop.rs` owns the
+// O(log n) anti-entropy proof; here we route the placement-independence pin
+// through a behaviour-equivalent stand-in that ACTUALLY exchanges the two
+// peers' state via the MST channel and converges them — so dropping gossip
+// is observably irrelevant, while dropping MST observably prevents
+// convergence. This is the substantive sibling stand-in (NOT a `_gossip`-
+// argument-ignoring tautology).
+
+/// Two peers each hold a set of membership events. Convergence happens iff an
+/// MST anti-entropy exchange occurs (it unions the two sets); gossip
+/// notifications never move state. Returns whether the two peers ended up
+/// holding the SAME event-set. R5 routes through `benten_sync::mst`.
+fn mst_backstop_converges(
+    peer_a: &mut std::collections::BTreeSet<u64>,
+    peer_b: &mut std::collections::BTreeSet<u64>,
+    mst_exchange: bool,
+    gossip_notifications: u32,
+) -> bool {
+    // Gossip notifications NEVER mutate state — they only (in production)
+    // prompt a peer to initiate an MST exchange. We deliberately consume the
+    // count without acting on it to make the "liveness-only" contract
+    // observable: no matter how many notifications fire, convergence rides
+    // ENTIRELY on `mst_exchange`.
+    let _liveness_only = gossip_notifications;
+    if mst_exchange {
+        // MST anti-entropy: union both peers' event-sets (convergence).
+        let union: std::collections::BTreeSet<u64> = peer_a.union(peer_b).copied().collect();
+        *peer_a = union.clone();
+        *peer_b = union;
+    }
+    peer_a == peer_b
+}
+
 // ── F-GOSSIP-1 ──────────────────────────────────────────────────────────
 
 /// F-GOSSIP-1 arm 1 — placement + liveness-only compile-fence.
@@ -133,27 +174,49 @@ fn f_gossip_1_transport_impl_in_isolation_no_iroh_leak() {
 /// F-GOSSIP-1 arm 2 — convergence is INDEPENDENT of gossip (gossip =
 /// liveness-only; MST = the convergence path).
 ///
-/// With ALL gossip dropped, the membership state still converges via the
-/// MST anti-entropy backstop. Conversely, gossip-only (no MST) does NOT
-/// converge — gossip merely notifies; it is never the convergence path.
+/// F4-013: routes through the `mst_backstop_converges` sibling stand-in
+/// (which ACTUALLY moves state across the MST channel) rather than a
+/// `_gossip`-argument-ignoring boolean. With ALL gossip dropped, two
+/// divergent peers still converge via the MST exchange; with NO MST exchange
+/// (even under a storm of gossip notifications), they do NOT converge.
 #[test]
 #[ignore = "RED-PHASE: F-GOSSIP-1 — convergence holds with gossip dropped; gossip-only does not converge; un-ignore at R5"]
 fn f_gossip_1_convergence_independent_of_gossip() {
-    // Model: convergence requires an anti-entropy exchange (`mst_exchanged`),
-    // NOT a gossip notification (`gossip_delivered`).
-    fn converged(mst_exchanged: bool, _gossip_delivered: bool) -> bool {
-        mst_exchanged // gossip is irrelevant to convergence
-    }
-    // Gossip dropped entirely → still converges via MST.
+    use std::collections::BTreeSet;
+
+    // Two peers with DIVERGENT membership event-sets.
+    let base_a: BTreeSet<u64> = [1, 2, 3].into_iter().collect();
+    let base_b: BTreeSet<u64> = [3, 4, 5].into_iter().collect();
+    let expected_union: BTreeSet<u64> = [1, 2, 3, 4, 5].into_iter().collect();
+
+    // Gossip dropped entirely (0 notifications) → still converges via the MST
+    // exchange, AND converges to the correct union (observable consequence —
+    // a no-op MST stand-in would leave them divergent and FAIL here).
+    let mut a = base_a.clone();
+    let mut b = base_b.clone();
+    let converged = mst_backstop_converges(&mut a, &mut b, /* mst */ true, /* gossip */ 0);
     assert!(
-        converged(true, false),
+        converged,
         "convergence holds with ALL gossip dropped (MST backstop)"
     );
-    // Gossip-only (no MST) → does NOT converge.
+    assert_eq!(
+        a, expected_union,
+        "the MST exchange produced the correct converged event-set (union)"
+    );
+    assert_eq!(a, b, "both peers hold the identical converged set");
+
+    // Gossip-only (no MST exchange) → does NOT converge, even under a storm of
+    // notifications. Gossip is liveness-only; it never moves state.
+    let mut a2 = base_a.clone();
+    let mut b2 = base_b.clone();
+    let converged_gossip_only =
+        mst_backstop_converges(&mut a2, &mut b2, /* mst */ false, /* gossip */ 1000);
     assert!(
-        !converged(false, true),
+        !converged_gossip_only,
         "gossip-only (no MST anti-entropy) does NOT converge — gossip is liveness-only"
     );
+    assert_eq!(a2, base_a, "gossip notifications never mutated peer A's state");
+    assert_eq!(b2, base_b, "gossip notifications never mutated peer B's state");
 }
 
 // ── F-GOSSIP-2 ──────────────────────────────────────────────────────────
@@ -173,6 +236,68 @@ fn f_gossip_2_same_generation_same_topic_no_time_input() {
     assert_eq!(
         topic_member_1, topic_member_2,
         "current-gen members compute the SAME topic (pure fn; no time input)"
+    );
+}
+
+/// F-GOSSIP-2 arm 1b — **ABSOLUTE golden-hex byte freeze (F4-024)** for
+/// `truncate_32(HMAC(K_Set, set_id ‖ BE(generation)))`, WITH an explicit
+/// BE/LE differentiator.
+///
+/// The earlier arms only proved relative properties (same-gen→same /
+/// fork→differs). They freeze ZERO absolute bytes: an R5 impl that encoded
+/// the generation LITTLE-ENDIAN, or reordered `set_id ‖ gen`, would pass
+/// every relative arm yet break wire-interop (two engines on different byte
+/// orders never meet). This arm pins the exact 32-byte topic for a fixed
+/// fixture as a FROZEN literal, then proves the freeze is byte-order-sensitive
+/// by showing the SAME generation value LE-encoded yields a DIFFERENT topic.
+#[test]
+#[ignore = "RED-PHASE: F-GOSSIP-2 — absolute golden-hex topic + BE/LE differentiator (F4-024); un-ignore at R5"]
+fn f_gossip_2_topic_absolute_golden_vector_be() {
+    let k_set = [0xABu8; 32];
+    let set_id = blake3::hash(b"set-alpha");
+    let set_id = set_id.as_bytes();
+
+    // Sanity-pin the fixture's set_id so the golden vector below is anchored
+    // to a known input (a drift in BLAKE3 framing would surface here first).
+    const SET_ID_HEX: &str = "8c1559688fd5c3fa7f19b31656441bff5c5e183093d8d8da7ae4d9e932efbdc7";
+    assert_eq!(hex(set_id), SET_ID_HEX, "fixture set_id anchor");
+
+    // FROZEN absolute topic for (K_Set=[0xAB;32], set_id, generation=7).
+    // R5 confirms-or-deliberately-updates this frozen literal against the real
+    // crypto-suite HMAC (M-20).
+    const TOPIC_GEN7_HEX: &str =
+        "3d28ab3c30ff99adeabdfd08310a97a3f78705494e5de709b96ec34618736527";
+    let topic7 = compute_gossip_topic(&k_set, set_id, 7);
+    assert_eq!(
+        hex(&topic7),
+        TOPIC_GEN7_HEX,
+        "absolute golden topic for generation 7 (drift in HMAC framing / set_id‖gen order / truncation fails the pin)"
+    );
+
+    // ── BE/LE differentiator ──────────────────────────────────────────────
+    // Generation 0x01020304 is chosen because its BE encoding (01 02 03 04)
+    // differs from its LE encoding (04 03 02 01). The FROZEN golden is the
+    // BIG-ENDIAN topic. We then compute what an LE encoder WOULD produce and
+    // assert it does NOT match the golden — so any R5 impl that emitted the
+    // generation little-endian flips this pin RED.
+    const TOPIC_GEN_0X01020304_BE_HEX: &str =
+        "ef6af36c02eaad82ecfacfb0e6541fda489df1e9cc13e699fe79ba913df0c450";
+    let gen = 0x0102_0304u32;
+    let topic_be = compute_gossip_topic(&k_set, set_id, gen);
+    assert_eq!(
+        hex(&topic_be),
+        TOPIC_GEN_0X01020304_BE_HEX,
+        "absolute golden topic for generation 0x01020304 encoded BIG-ENDIAN"
+    );
+    // An LE-encoded generation MUST diverge from the frozen BE golden.
+    let mut msg_le = Vec::new();
+    msg_le.extend_from_slice(set_id);
+    msg_le.extend_from_slice(&gen.to_le_bytes()); // the WRONG byte order
+    let topic_le: [u8; 32] = blake3::keyed_hash(&k_set, &msg_le).into();
+    assert_ne!(
+        hex(&topic_le),
+        TOPIC_GEN_0X01020304_BE_HEX,
+        "an LE-encoded generation MUST NOT match the frozen BIG-ENDIAN golden (byte-order is freeze-gating)"
     );
 }
 
@@ -249,4 +374,8 @@ fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
         return false;
     }
     haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }

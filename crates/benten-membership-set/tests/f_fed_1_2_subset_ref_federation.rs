@@ -221,6 +221,39 @@ fn fed1_cycle_detected_from_carried_path() {
 }
 
 #[test]
+#[ignore = "RED-PHASE: F-FED-1 — intra-path cycle [A,B,A] rejected by the recursion-bound (repeat WITHIN hop_path, distinct target); un-ignore at R5"]
+fn fed1_intra_path_cycle_detected() {
+    // F4-044: a cycle that lives ENTIRELY inside the hop_path (a hop repeats
+    // before reaching the target) — distinct from the target-re-appears case
+    // in `fed1_cycle_detected_from_carried_path`. This exercises the
+    // `seen.insert` dedup branch (NOT the `seen.contains(&target)` branch).
+    // The target [0xDD..] is NOT in the path, so a verifier that ONLY checked
+    // "target re-appears" would MISS this and accept the cycle.
+    let intra = KSetAcquisitionPath {
+        target_set_id: [0xDD, 0, 0, 0], // distinct from every hop
+        hop_path: vec![[0xAA, 0, 0, 0], [0xBB, 0, 0, 0], [0xAA, 0, 0, 0]], // A,B,A
+        acquisition_proof_cid: [0; 4],
+    };
+    assert_eq!(
+        intra.verify_offline(),
+        Err(AcquisitionError::CycleDetected),
+        "an intra-path cycle [A,B,A] is rejected from the carried path alone (a repeated hop, target absent)"
+    );
+    // Paired positive control: the SAME shape with a non-repeating middle hop
+    // (A,B,C) and the same distinct target verifies — so the rejection is the
+    // repeat, not a blanket fail on 3-hop paths.
+    let acyclic = KSetAcquisitionPath {
+        target_set_id: [0xDD, 0, 0, 0],
+        hop_path: vec![[0xAA, 0, 0, 0], [0xBB, 0, 0, 0], [0xCC, 0, 0, 0]],
+        acquisition_proof_cid: [0; 4],
+    };
+    assert!(
+        acyclic.verify_offline().is_ok(),
+        "an acyclic 3-hop path (A,B,C) with a distinct target verifies — the intra-path rejection is targeted"
+    );
+}
+
+#[test]
 #[ignore = "RED-PHASE: F-FED-1 — KSetAcquisitionPath wire is V2 + big-endian from the first commit (M-20); un-ignore at R5"]
 fn fed1_wire_is_v2_big_endian() {
     // Hex-pin the frozen field-set serialization. V2 from the first commit;

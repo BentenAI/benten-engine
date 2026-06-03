@@ -15,27 +15,39 @@
 //!     grep-defense) + `crates/benten-ivm/tests/view2_event_dispatch.rs`
 //!     (IVM-view recompute, nature is a view not a stored field).
 //!
+//! ## F4-042 — CANONICAL MemberEntry SHAPE
+//!
+//! The prior R3 stub carried a 3-field `MemberEntry { did, is_authority,
+//! sig_pubkey }` — a 3rd divergent shape vs F-AAD-1 / F-MS-3. It is ALIGNED
+//! here to the canonical R0.3 §3.5 / §4.2 **5-field** shape
+//! `MemberEntry { role, is_authority, sig_pubkey, admitted_at_hlc,
+//! member_ref }` (matching `f_aad_1_members_table_canonical_cbor_length_
+//! injective.rs`). The DID is the `BTreeMap<Did, MemberEntry>` KEY, not a
+//! `MemberEntry` field. Crucially, the canonical 5-field shape carries ZERO
+//! nature field — so the Inv-22 struct-fence is preserved by-construction.
+//!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
 //! The W6 nature-derivation surface (`is_ai_operated` / `MemberEntry` /
 //! `derive_member_nature` IVM view) does not exist at this SHA.
-//! Self-contained stub-shim compiles green; bodies `unimplemented!()`.
-//! W6 R5 implementer:
+//! Self-contained stub-shim compiles green; nature-derivation bodies
+//! `unimplemented!()`. W6 R5 implementer:
 //!   1. DELETE `mset_w6_nature_stub`,
-//!   2. INSERT `use benten_membership_set::member::{MemberEntry,
-//!      is_ai_operated, derive_member_nature};`,
+//!   2. INSERT `use benten_membership_set::member::{MemberEntry, MemberRef,
+//!      RoleId, Hlc, SigPubKey, is_ai_operated, derive_member_nature};`,
 //!   3. UN-IGNORE,
 //!   4. Verify green.
 //!
 //! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!
 //! Arms: (1) `MemberEntry` has ZERO nature field (struct-fence — a
-//! nature-setter is absent); (2) `is_ai_operated` derives PURELY from the
-//! DID method-parse (`did:agent:` → true; `did:key:` → false); (3) the
-//! derived nature is IVM-recomputed from the event chain, never read from a
-//! stored authoritative field (recompute yields the same answer with no
-//! stored field present); (4) GREP-DEFENSE — `member_type` / `MemberKind` /
-//! nature-field source scan == 0.
+//! nature-setter is absent; the canonical 5-field shape carries none); (2)
+//! `is_ai_operated` derives PURELY from the DID method-parse (`did:agent:`
+//! → true; `did:key:` → false); (3) the derived nature is IVM-recomputed
+//! from the event chain, never read from a stored authoritative field
+//! (recompute yields the same answer with no stored field present); (4)
+//! GREP-DEFENSE — `member_type` / `MemberKind` / nature-field source scan
+//! == 0.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports)]
@@ -52,25 +64,61 @@ use benten_id::did::Did;
 // =====================================================================
 // RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
 //     use benten_membership_set::member::{
-//         MemberEntry, MemberNature, is_ai_operated, derive_member_nature,
+//         MemberEntry, MemberRef, RoleId, Hlc, SigPubKey, MemberNature,
+//         is_ai_operated, derive_member_nature,
 //     };
 // =====================================================================
 mod mset_w6_nature_stub {
-    //! Local stub matching the intended W6 member-nature surface. Bodies
-    //! `unimplemented!()`. CRITICAL: `MemberEntry` in the real W6 crate has
-    //! NO nature field — this stub mirrors that by exposing only the
-    //! non-nature fields + a `has_any_nature_field()` introspection the
-    //! struct-fence arm pins to `false`.
+    //! Local stub matching the intended W6 member surface. The `MemberEntry`
+    //! shape mirrors the canonical R0.3 §3.5 5-field record (identical to
+    //! `f_aad_1`'s stub — F4-042 alignment). CRITICAL: it has NO nature
+    //! field — Inv-22 is preserved by-construction. The nature-derivation
+    //! functions are `unimplemented!()`.
 
-    /// The fused member record. Inv-20 clause-i: one DID → one record.
-    /// Inv-22: ZERO nature field. This stub deliberately exposes only
-    /// non-nature fields.
-    #[derive(Clone, Debug)]
+    /// Stub `Hlc` — the 3-field shape (`physical_ms`, `logical`, `node_id`)
+    /// matching the canonical cluster shape (F4-045 alignment family).
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Hlc {
+        pub physical_ms: u64,
+        pub logical: u32,
+        pub node_id: u64,
+    }
+
+    /// Stub `SigPubKey` — present iff `is_authority`.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct SigPubKey(pub Vec<u8>);
+
+    /// Stub `RoleId` — ALL 5 ACTIVE (BC-9); ordinal Invitee=0…Admin=4
+    /// (supersedes M-CONS-FINAL per M-13).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum RoleId {
+        Invitee = 0,
+        Viewer = 1,
+        Member = 2,
+        Moderator = 3,
+        Admin = 4,
+    }
+
+    /// Stub `MemberRef` — Kind-determined keying variant (NOT a nature
+    /// discriminator — m-15 GNC-7).
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum MemberRef {
+        UserDid,
+        DeviceDid,
+        LocalDevice,
+    }
+
+    /// The fused member record — canonical R0.3 §3.5 **5-field** shape.
+    /// Inv-20 clause-i: one DID → one record. Inv-22: ZERO nature field.
+    /// The DID is the `BTreeMap<Did, MemberEntry>` KEY, not a field here.
+    #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct MemberEntry {
-        pub did: String,
+        pub role: RoleId,
         pub is_authority: bool,
         /// Present iff `is_authority` (Inv-20 clause-i: authority ⟹ pubkey).
-        pub sig_pubkey: Option<[u8; 32]>,
+        pub sig_pubkey: Option<SigPubKey>,
+        pub admitted_at_hlc: Hlc,
+        pub member_ref: MemberRef,
     }
 
     /// The derived nature (NOT stored). Returned by IVM-view recomputation.
@@ -82,15 +130,10 @@ mod mset_w6_nature_stub {
     }
 
     impl MemberEntry {
-        pub fn new(_did: &str, _is_authority: bool) -> Self {
-            unimplemented!(
-                "W6 stub — R5 replaces this module with \
-                 `use benten_membership_set::member::*;`"
-            )
-        }
         /// Struct-fence introspection: does `MemberEntry` carry ANY nature
         /// field (`member_type`, `MemberKind`, `is_ai`, etc.)? Real impl:
-        /// `false` — nature is derived, never stored.
+        /// `false` — nature is derived, never stored. The canonical 5-field
+        /// shape above demonstrably has no such field.
         pub fn has_any_nature_field() -> bool {
             unimplemented!("W6 stub — MemberEntry has ZERO nature field (Inv-22)")
         }
@@ -112,14 +155,31 @@ mod mset_w6_nature_stub {
     }
 }
 
-use mset_w6_nature_stub::{MemberEntry, MemberNature, derive_member_nature, is_ai_operated};
+use mset_w6_nature_stub::{
+    derive_member_nature, is_ai_operated, Hlc, MemberEntry, MemberNature, MemberRef, RoleId,
+    SigPubKey,
+};
 
 /// F-NAT-1 (a): `MemberEntry` carries ZERO nature field (struct-fence).
 /// The nature-storage path does not exist — `has_any_nature_field()` is
-/// `false`.
+/// `false`. The canonical 5-field shape `{role, is_authority, sig_pubkey,
+/// admitted_at_hlc, member_ref}` demonstrably has no nature field.
 #[test]
 #[ignore = "RED-PHASE: F-NAT-1 — MemberEntry has zero nature field (Inv-22 struct-fence); un-ignore at W6 R5 (delete mset_w6_nature_stub; insert real `use`)"]
 fn member_entry_has_zero_nature_field() {
+    // Construct a canonical 5-field entry — proving the shape compiles with
+    // NO nature field present (a nature field would be a 6th field here).
+    let _entry = MemberEntry {
+        role: RoleId::Member,
+        is_authority: false,
+        sig_pubkey: None,
+        admitted_at_hlc: Hlc {
+            physical_ms: 1_900_000_000_000,
+            logical: 0,
+            node_id: 1,
+        },
+        member_ref: MemberRef::UserDid,
+    };
     assert!(
         !MemberEntry::has_any_nature_field(),
         "F-NAT-1 (Inv-22): MemberEntry MUST carry ZERO nature field — \

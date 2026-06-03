@@ -23,6 +23,21 @@
 //! Compromise row authored at R5 is auto-included in the coherence sweep.
 //! R4 should verify the parametrization enumerates from the doc.
 //!
+//! **R4-FIX (F4-043) — word-boundary disposition-class match.** PIN 2
+//! previously matched a disposition-class token with a bare substring scan
+//! (`window.contains("MIT")`), which spuriously satisfies the coverage
+//! requirement when the 3-letter token appears INSIDE an unrelated word
+//! ("MIT" inside "co**MIT**ted"/"sub**MIT**", "ATO" inside "neg**ATO**r",
+//! "OOS" inside "l**OOS**e", "SGD" / "CHD" inside hex/identifiers). A row
+//! authored WITHOUT a real disposition class but whose window happens to
+//! contain such a substring would pass the §5 auto-include coherence sweep
+//! — defeating its whole point. The fix replaces the substring scan with a
+//! `window_has_disposition_class` word-boundary matcher (the token must be
+//! delimited by non-`[A-Za-z0-9_-]` boundaries on both sides, or be at a
+//! line/window edge), so only a stand-alone disposition-class TOKEN counts.
+//! A `_baseline` arm proves the matcher itself rejects an embedded
+//! substring (would-FAIL if the matcher relaxed back to `.contains`).
+//!
 //! **RED-PHASE (pim-12 §3.6e):** the F-full disclosure work
 //! (Compromise #32..#63 rows + the `disposition_class` taxonomy
 //! ATO/SGD/CHD/OOS/MIT) does NOT exist at baseline — only #30/#31 are
@@ -113,6 +128,57 @@ fn distinct_compromise_numbers(doc: &str) -> BTreeSet<u32> {
         .collect()
 }
 
+/// R4-FIX (F4-043) — is `token` present in `haystack` as a STAND-ALONE
+/// word, not merely as a substring? A disposition-class token (`MIT`,
+/// `ATO`, …) only "covers" a Compromise row when it appears as its own
+/// token — delimited on both sides by something other than an
+/// identifier-continuation char `[A-Za-z0-9_-]` (or the string edge).
+///
+/// This is what distinguishes a real `| ... | MIT |` table cell from the
+/// accidental `MIT` inside "com**mit**ted" / "sub**mit**". Without it the
+/// §5 auto-include coherence sweep is defeated: a row with NO real class
+/// passes because some unrelated English word in its window embeds the
+/// 3-letter token.
+fn contains_token_word_boundary(haystack: &str, token: &str) -> bool {
+    if token.is_empty() {
+        return false;
+    }
+    let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-';
+    let bytes = haystack.as_bytes();
+    let tbytes = token.as_bytes();
+    let mut start = 0usize;
+    while let Some(rel) = haystack[start..].find(token) {
+        let at = start + rel;
+        let end = at + tbytes.len();
+        // Char immediately before the match (None ⇒ at string start).
+        let before_ok = at == 0
+            || !haystack[..at]
+                .chars()
+                .next_back()
+                .is_some_and(is_ident);
+        // Char immediately after the match (None ⇒ at string end).
+        let after_ok = end >= bytes.len()
+            || !haystack[end..].chars().next().is_some_and(is_ident);
+        if before_ok && after_ok {
+            return true;
+        }
+        // Advance past this occurrence and keep scanning.
+        start = at + 1;
+        if start >= haystack.len() {
+            break;
+        }
+    }
+    false
+}
+
+/// R4-FIX (F4-043) — does `window` name ANY disposition class as a
+/// stand-alone token? (word-boundary, not substring).
+fn window_has_disposition_class(window: &str) -> bool {
+    DISPOSITION_CLASSES
+        .iter()
+        .any(|c| contains_token_word_boundary(window, c))
+}
+
 // ===========================================================================
 // BASELINE ARMS (NOT ignored) — drive the REAL doc + REAL parser.
 // These pass GREEN now and prove the harness reads the doc, not a literal.
@@ -162,6 +228,55 @@ fn f_disc_1_disposition_class_taxonomy_is_exactly_five_baseline() {
     );
 }
 
+/// PIN 0c (baseline) — R4-FIX (F4-043): the word-boundary matcher MUST
+/// reject a disposition-class token that appears only as an EMBEDDED
+/// substring, and MUST accept it as a stand-alone table-cell token. This
+/// is the regression guard for the F4-043 fix itself: if the matcher ever
+/// relaxes back to a bare `.contains`, this baseline arm fires RED.
+///
+/// would-FAIL if `window_has_disposition_class` used substring matching
+/// (then `"committed deliverable"` — which embeds `MIT` — would falsely
+/// report a class).
+#[test]
+fn f_disc_1_disposition_class_match_is_word_boundary_not_substring_baseline() {
+    // Embedded-only substrings that MUST NOT count as a class:
+    //   "committed" / "submit"  embed MIT
+    //   "negator" / "ratoned"   embed ATO
+    //   "loose"                 embeds OOS
+    let embedded_only = [
+        "the row was committed to the doc-wave deliverable",
+        "we must submit the audit before tag",
+        "a conservative negator on the rate-limit",
+        "the binding is loose at this boundary",
+    ];
+    for w in embedded_only {
+        assert!(
+            !window_has_disposition_class(w),
+            "F-DISC-1 (F4-043): an EMBEDDED disposition-class substring \
+             MUST NOT count as coverage. Window {w:?} contains no \
+             stand-alone class token, yet was reported as covered — the \
+             matcher regressed to substring matching."
+        );
+    }
+
+    // Stand-alone tokens (real table cells / inline notes) MUST count:
+    let standalone = [
+        "| Compromise #43 | metadata leakage | ATO | 9-eyes |",
+        "disposition_class = SGD (scoped-gap disclosure)",
+        "this is CHD — closed by design",
+        "residual is OOS for v1-beta",
+        "#34 password-knowledge … MIT.",
+    ];
+    for w in standalone {
+        assert!(
+            window_has_disposition_class(w),
+            "F-DISC-1 (F4-043): a STAND-ALONE disposition-class token MUST \
+             count as coverage. Window {w:?} carries a real class token but \
+             was reported uncovered — the matcher is too strict."
+        );
+    }
+}
+
 // ===========================================================================
 // RED-PHASE ARMS (ignored until R5 doc-wave) — assert the F-full
 // end-state disclosure coherence over Compromise #30..#63.
@@ -199,6 +314,11 @@ fn f_disc_1_all_compromise_30_through_63_rows_present() {
 /// Parametrized over the DOC row-set (not a hand-list) so new rows are
 /// auto-included — the §5 mitigation made executable. Would-FAIL if a
 /// row is added without a disposition class (the silent-drift case).
+///
+/// R4-FIX (F4-043): coverage requires a stand-alone disposition-class
+/// TOKEN (`window_has_disposition_class`, word-boundary), NOT a bare
+/// substring — so a row whose window merely embeds "MIT"/"ATO"/… inside
+/// an unrelated word is NOT spuriously reported as covered.
 #[test]
 #[ignore = "RED-PHASE: F-DISC-1 — every declared Compromise row carries a \
             disposition_class (ATO/SGD/CHD/OOS/MIT); auto-includes new rows; \
@@ -212,8 +332,9 @@ fn f_disc_1_every_declared_row_has_a_disposition_class() {
     );
 
     // For each declared row, the line (or its immediate vicinity) must
-    // name one of the 5 classes. We allow a small lookahead window since
-    // the disposition can sit in the same table row / following cell.
+    // name one of the 5 classes as a STAND-ALONE token (R4-FIX F4-043).
+    // We allow a small lookahead window since the disposition can sit in
+    // the same table row / following cell.
     let lines: Vec<&str> = doc.lines().collect();
     let mut uncovered: Vec<u32> = Vec::new();
     for row in &rows {
@@ -224,7 +345,7 @@ fn f_disc_1_every_declared_row_has_a_disposition_class() {
                 let lo = i.saturating_sub(1);
                 let hi = (i + 3).min(lines.len());
                 let window = lines[lo..hi].join(" ");
-                if DISPOSITION_CLASSES.iter().any(|c| window.contains(c)) {
+                if window_has_disposition_class(&window) {
                     covered = true;
                     break;
                 }
@@ -240,10 +361,11 @@ fn f_disc_1_every_declared_row_has_a_disposition_class() {
     assert!(
         uncovered.is_empty(),
         "every declared Compromise row MUST carry a disposition_class token \
-         (ATO/SGD/CHD/OOS/MIT) within its row window. Uncovered: {:?}. \
-         Because this enumerates from the DOC (not a literal list), a new \
-         Compromise row authored without a class fails HERE — the auto-\
-         include property that closes the §5 single-point-of-failure.",
+         (ATO/SGD/CHD/OOS/MIT) as a stand-alone token within its row window. \
+         Uncovered: {:?}. Because this enumerates from the DOC (not a \
+         literal list) AND matches on word boundaries (not substrings), a \
+         new Compromise row authored without a real class fails HERE — the \
+         auto-include property that closes the §5 single-point-of-failure.",
         uncovered
     );
 }

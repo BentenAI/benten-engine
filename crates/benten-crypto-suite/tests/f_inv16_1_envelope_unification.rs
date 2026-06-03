@@ -67,14 +67,27 @@ mod f_inv16_stub {
     }
 
     /// Canonical-TLV length-injective encode of a `BindingContext` + the
-    /// committed codepoint (U1 + U3). STUB encodes WITHOUT a length prefix
-    /// (deliberately NON-injective) so the U3 injectivity pin FAILS red
-    /// until R5 wires the real length-injective TLV.
+    /// committed codepoint (U1 + U3). The real R5 encoder MUST (a) commit
+    /// the codepoint into the AAD and (b) be length-injective across
+    /// variants (variant tag + per-field length prefixes).
+    ///
+    /// The STUB is DOUBLY-broken (both bugs intentional) so BOTH pins fire
+    /// RED at baseline:
+    ///   * **bug 1 (U1):** does NOT commit the codepoint → two encodes of
+    ///     the same `BindingContext` under different codepoints collide.
+    ///   * **bug 2 (U3):** emits no variant tag and no length prefixes →
+    ///     a `Recipient` tuple and a `WholeContent` tuple whose raw field
+    ///     bytes coincide encode to byte-identical strings (a genuine
+    ///     cross-variant boundary-ambiguity collision).
+    /// R5 fixes both → both pins go GREEN.
     pub fn canonical_tlv_encode(codepoint: u16, ctx: &BindingContext) -> Vec<u8> {
+        // STUB BUG 1 (intentional): the codepoint is DROPPED (not committed
+        // into the AAD) → the U1 pin fires red.
+        let _ = codepoint;
         let mut out = Vec::new();
-        // STUB BUG (intentional): no length prefixes ⇒ adjacent
-        // variable-length fields can collide across distinct tuples.
-        out.extend_from_slice(&codepoint.to_be_bytes());
+        // STUB BUG 2 (intentional): no variant tag, no length prefixes ⇒
+        // distinct tuples across variants collide (the U3 defense a real
+        // length-injective TLV must provide).
         match ctx {
             BindingContext::Vault { vault_version } => out.push(*vault_version),
             BindingContext::WholeContent { plaintext_cid } => {
@@ -120,9 +133,12 @@ use f_inv16_stub::{
 /// Two encodes of the SAME binding context under DIFFERENT codepoints
 /// produce DIFFERENT bytes — so a peer cannot re-interpret an envelope
 /// under a substituted codepoint. would-FAIL-if-no-op'd: an encoder that
-/// drops the codepoint from the AAD yields identical bytes.
+/// drops the codepoint from the AAD yields identical bytes — which is
+/// **exactly the stub's intentional bug 1**, so this pin fires RED at
+/// baseline (F4-008: previously it passed green because the old stub
+/// committed the codepoint; the stub now drops it).
 #[test]
-#[ignore = "RED-PHASE: F-INV16-1 (U1) — codepoint committed into AAD; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-INV16-1 (U1) — codepoint committed into AAD (stub drops it ⇒ fires red); un-ignore at R5"]
 fn inv16_u1_codepoint_committed_in_aad() {
     let ctx = BindingContext::WholeContent {
         plaintext_cid: vec![0xCD; 32],
@@ -160,41 +176,58 @@ fn inv16_u2_strict_decode_rejects_cross_variant() {
 
 /// **F-INV16-1 (U3)** — canonical-TLV length-injective.
 ///
-/// Two DISTINCT binding tuples that would otherwise collide under naive
-/// concatenation MUST encode to DISTINCT byte strings (length-injective).
-/// The classic collision: `audience_did="AB", gen=0x4344` vs
-/// `audience_did="ABCD", gen=0x__` — without a length prefix the
-/// concatenations can coincide. would-FAIL-if-no-op'd: the stub encoder
-/// has no length prefix, so a constructed collision pair encodes equal,
+/// Two DISTINCT binding tuples whose raw field bytes coincide MUST encode
+/// to DISTINCT byte strings (length-injective + variant-tagged). The
+/// genuine collision is **cross-variant boundary ambiguity**: a
+/// `Recipient{audience_did, gen}` and a `WholeContent{plaintext_cid}`
+/// whose `plaintext_cid` equals `audience_did ‖ gen_be`. Under a naive
+/// no-tag/no-length concat the two encode to byte-identical strings; a
+/// length-injective TLV (variant tag + per-field length prefixes) yields
+/// distinct bytes.
+///
+/// **F4-002 (the prior pair was non-firing):** the earlier same-variant
+/// pair used two `Recipient` tuples of DIFFERENT total length (gen is a
+/// fixed-width 4-byte field, so within one variant naive concat is already
+/// injective — equal total length forces equal split). That made
+/// `assert_ne!` trivially true even against the non-injective stub. The
+/// reconstructed pair below produces BYTE-IDENTICAL naive concatenations
+/// (verified: both `41 42 00 43 44 00`) → RED at baseline, GREEN only
+/// against a real length-prefixed + variant-tagged injective encoder.
+///
+/// would-FAIL-if-no-op'd: the stub encoder has no variant tag and no
+/// length prefix, so the constructed cross-variant pair encodes EQUAL,
 /// firing the assertion red until R5 wires the injective TLV.
 #[test]
-#[ignore = "RED-PHASE: F-INV16-1 (U3) — canonical-TLV length-injective (no two tuples collide); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-INV16-1 (U3) — canonical-TLV length-injective (cross-variant collision must NOT coincide); un-ignore at R5"]
 fn inv16_u3_canonical_tlv_length_injective() {
-    // A constructed boundary-ambiguity pair: the same underlying payload
-    // bytes (`audience_did` ‖ `recipient_key_generation` as BE) split at
-    // DIFFERENT field boundaries. Under a naive no-length-prefix concat
-    // these two distinct tuples encode to identical bytes — the collision
-    // a length-injective TLV (U3) must prevent.
-    //
-    //   ctx_c: audience_did = [0x41,0x42,0x00,0x00,0x00], gen = 0x0000_4344
-    //          → naive payload  41 42 00 00 00 | 00 00 43 44
-    //   ctx_d: audience_did = [0x41,0x42,0x00,0x00],      gen = 0x0043_4400
-    //          → naive payload  41 42 00 00    | 00 43 44 00
-    // (distinct splits; a length-injective encoder yields distinct bytes).
+    // The constructed cross-variant collision (F4-002):
+    //   ctx_c (Recipient): audience_did = [0x41,0x42], gen = 0x0043_4400
+    //          → naive body  41 42 | 00 43 44 00   (aud ‖ gen.to_be_bytes())
+    //   ctx_d (WholeContent): plaintext_cid = [0x41,0x42,0x00,0x43,0x44,0x00]
+    //          → naive body  41 42 00 43 44 00
+    // Both naive bodies are BYTE-IDENTICAL (the stub commits no variant tag /
+    // no length prefix), so the stub encodes them equal → the U3 pin fires
+    // RED. A real length-injective + variant-tagged TLV distinguishes them.
     let ctx_c = BindingContext::Recipient {
-        audience_did: vec![0x41, 0x42, 0x00, 0x00, 0x00],
-        recipient_key_generation: 0x0000_4344,
-    };
-    let ctx_d = BindingContext::Recipient {
-        audience_did: vec![0x41, 0x42, 0x00, 0x00],
+        audience_did: vec![0x41, 0x42],
         recipient_key_generation: 0x0043_4400,
     };
+    let ctx_d = BindingContext::WholeContent {
+        plaintext_cid: vec![0x41, 0x42, 0x00, 0x43, 0x44, 0x00],
+    };
+
+    // Sanity (documents the construction): the two tuples are genuinely
+    // DISTINCT binding contexts (different variants).
+    assert_ne!(
+        ctx_c, ctx_d,
+        "the U3 collision pair must be two DISTINCT binding tuples (different variants)"
+    );
 
     let enc_c = canonical_tlv_encode(0x6510, &ctx_c);
     let enc_d = canonical_tlv_encode(0x6510, &ctx_d);
     assert_ne!(
         enc_c, enc_d,
-        "distinct binding tuples with different field-splits MUST encode to distinct bytes (U3 length-injective; the truncation/extension defense)"
+        "distinct binding tuples whose raw field bytes coincide MUST encode to distinct bytes (U3 length-injective + variant-tagged; the truncation/extension/cross-variant defense)"
     );
 }
 

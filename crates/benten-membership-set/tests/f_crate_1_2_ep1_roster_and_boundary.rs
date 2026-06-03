@@ -46,6 +46,7 @@
 
 #![allow(dead_code)]
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 // ── F-CRATE-1 self-contained in-file stub-shim ──────────────────────────────
@@ -110,6 +111,43 @@ fn read_cargo_toml(crate_dir: &str) -> String {
         .join(crate_dir)
         .join("Cargo.toml");
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()))
+}
+
+/// Parse the dependency KEYS declared in a Cargo.toml's `[dependencies]`
+/// section, looking ONLY at REAL (uncommented) `name = ...` lines — never
+/// comment text. This is the F4-014 fix: a whole-file `.contains("benten-sync")`
+/// matches the commented-out `# benten-sync = ...` documentation and so
+/// green-passes against a NON-edge; parsing the section gives a true dep-graph
+/// assertion that tightens once the canary un-comments the real deps.
+fn parsed_dependencies(cargo_toml: &str) -> BTreeSet<String> {
+    let mut deps = BTreeSet::new();
+    let mut in_deps = false;
+    for raw in cargo_toml.lines() {
+        let line = raw.trim();
+        // Section headers. Only the `[dependencies]` table counts (NOT
+        // dev-dependencies / build-dependencies / target.* — those are not the
+        // B-1 production dep set).
+        if line.starts_with('[') && line.ends_with(']') {
+            in_deps = line == "[dependencies]";
+            continue;
+        }
+        if !in_deps {
+            continue;
+        }
+        // Skip comments + blank lines — a commented `# benten-sync = ...` is
+        // NOT a real edge.
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        // A real dependency line is `name = ...`. Take the key before `=`.
+        if let Some((key, _)) = line.split_once('=') {
+            let key = key.trim().trim_matches('"');
+            if !key.is_empty() {
+                deps.insert(key.to_string());
+            }
+        }
+    }
+    deps
 }
 
 fn read_membership_set_sources() -> String {
@@ -272,27 +310,40 @@ fn crate2_no_direct_primitive_construction() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-2 — the B-1 dep direction {crypto-suite, core, caps, id, graph, sync} is upstream-only; un-ignore at R5 once the canary un-comments deps"]
+#[ignore = "RED-PHASE: F-CRATE-2 — the B-1 dep set {crypto-suite, core, caps, id, graph, sync} is a REAL [dependencies] edge-set; un-ignore at R5 once the canary un-comments deps"]
 fn crate2_b1_dep_set_direction() {
-    // At R3 the scaffold's deps are intentionally empty (the canary un-comments
-    // the real set). The DIRECTION pin we CAN make now: the membership crate's
-    // own Cargo.toml documents the B-1 set, and crucially it is the DEPENDENT
-    // (no upstream crate lists it). The reverse-edge absence is covered by
-    // crate2_no_reverse_dependency_edge for crypto-suite + sync; here we pin
-    // that the membership Cargo.toml NAMES the full B-1 set (so the canary
-    // can't silently drop the load-bearing `benten-sync` B-1 dependency).
+    // F4-014: assert the B-1 set as REAL `[dependencies]` edges (parsed from
+    // the section), NOT a whole-file `.contains()` that matches the commented
+    // documentation. At R3 the deps are intentionally commented out for
+    // parallel-safety, so this LOAD-BEARING assertion is the RED-PHASE pin
+    // that GOES GREEN once the R5 canary un-comments the real edges; an impl
+    // (canary) that silently dropped `benten-sync` would keep it RED.
     let cargo = read_cargo_toml("benten-membership-set");
-    for dep in [
+    let real_deps = parsed_dependencies(&cargo);
+    const B1_SET: [&str; 6] = [
         "benten-crypto-suite",
         "benten-core",
         "benten-caps",
         "benten-id",
         "benten-graph",
-        "benten-sync",
-    ] {
+        "benten-sync", // the load-bearing B-1 sync substrate
+    ];
+    for dep in B1_SET {
         assert!(
-            cargo.contains(dep),
-            "the membership crate's Cargo.toml documents the B-1 dep `{dep}` (load-bearing: benten-sync is the B-1 sync substrate)"
+            real_deps.contains(dep),
+            "the membership crate's [dependencies] section MUST carry the B-1 edge `{dep}` as a REAL (uncommented) dependency — NOT comment text (R5 canary un-comments the set)"
         );
     }
+
+    // Grep-defense that the parser is genuinely section-scoped (so the pin
+    // can't be satisfied by a comment): the commented B-1 block is documented
+    // in the file, but parsing finds ZERO of them as real edges at R3
+    // baseline. (This control is what makes the assertions above load-bearing
+    // rather than comment-matched.) The membership crate's Cargo.toml DOES
+    // carry the documentation block naming the intended B-1 set — assert the
+    // documentation is present so the canary can't drop the intent either.
+    assert!(
+        cargo.contains("benten-sync"),
+        "the membership crate's Cargo.toml documents the B-1 set (incl. benten-sync) — the canary un-comments it into a real edge"
+    );
 }

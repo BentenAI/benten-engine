@@ -30,11 +30,15 @@
 //!
 //! ## pim-2 §3.6b + §3.6f-ext end-to-end discipline
 //!
-//! Drives the PRODUCTION tie-break (`fork_winner` / `total_order_key`)
+//! Drives the PRODUCTION tie-break (`fork_winner` / `total_order_key`) +
+//! merge (`resolve_fork` → CURRENT-snapshot) + K(V)-derivation (`derive_k_v`)
 //! stand-ins; asserts OBSERVABLE winner + ordering-axiom holds (total /
-//! antisymmetric / transitive) + losing-vector-not-merged; would-FAIL-if-no-op'd
-//! (a naive LWW tie-break fails arm 1; a `MembershipSetId`-keyed tie-break
-//! fails arm 2; a winner that absorbs the loser fails arm 4).
+//! antisymmetric / transitive) + losing-vector-NOT-in-the-merge-OUTPUT +
+//! K(V)-derived-from-the-Version-Node-CID; would-FAIL-if-no-op'd (a naive LWW
+//! tie-break fails arm 1; a `MembershipSetId`-keyed tie-break fails arm 2; an
+//! intransitive order fails arm 2's transitivity sub-case; a merge that
+//! ABSORBS the loser into CURRENT fails arm 4; a K(V) that ignores the CID
+//! fails arm 4's key sub-case).
 //!
 //! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
 //!
@@ -72,8 +76,9 @@ struct ForkCandidate {
     membership_set_id: Vec<u8>, // SHARED across concurrent same-anchor forks
     created_at_hlc: Hlc,
     fork_event_version_node_cid: Vec<u8>,
-    /// CRDT-vector entries this fork carries. After resolution the WINNER
-    /// must NOT contain loser-only entries (archived-not-discarded).
+    /// CRDT-vector entries this fork carries. After resolution the WINNER's
+    /// CURRENT snapshot must NOT contain loser-only entries
+    /// (archived-not-discarded).
     crdt_vector: Vec<String>,
     /// True if this candidate's author is a non-Admin (ALL event-authors
     /// fork — F-INV21-4).
@@ -97,16 +102,51 @@ fn fork_winner<'a>(a: &'a ForkCandidate, b: &'a ForkCandidate) -> &'a ForkCandid
     }
 }
 
-/// PRODUCTION-stand-in: merge resolution. The winner is chosen by the
-/// tie-break; the loser is ARCHIVED (returned separately) and NOT absorbed
-/// into the winner's CRDT-vector. R5 routes through the real merge.
-fn resolve_fork<'a>(
-    a: &'a ForkCandidate,
-    b: &'a ForkCandidate,
-) -> (&'a ForkCandidate, &'a ForkCandidate) {
+/// The resolved CURRENT membership snapshot after a fork-merge. The winner
+/// fork is CURRENT; the loser fork is ARCHIVED separately (not merged into
+/// CURRENT). This is the OBSERVABLE merge OUTPUT the no-absorption pin
+/// asserts against (NOT a fixture read-back).
+#[derive(Clone, Debug)]
+struct ForkResolution {
+    /// Which fork is CURRENT (the winner).
+    winner_id: ForkId,
+    /// The CURRENT snapshot's CRDT-vector. MUST be exactly the winner's
+    /// vector — never the loser's entries merged in (archived-not-discarded).
+    current_crdt_vector: Vec<String>,
+    /// The archived (losing) fork's id — retained, queryable, but NOT CURRENT.
+    archived_id: ForkId,
+    /// The archived fork's CRDT-vector, retained for read (archived ≠
+    /// discarded). Lives in the archive, NOT in `current_crdt_vector`.
+    archived_crdt_vector: Vec<String>,
+}
+
+/// PRODUCTION-stand-in: merge resolution producing the CURRENT snapshot.
+/// The winner is chosen by the tie-break; the CURRENT snapshot carries ONLY
+/// the winner's vector; the loser is ARCHIVED (retained separately) and NOT
+/// absorbed into CURRENT. R5 routes through the real merge — an
+/// implementation that silently absorbed the loser into CURRENT would make
+/// `current_crdt_vector` contain the loser's entries and FAIL the arm.
+fn resolve_fork(a: &ForkCandidate, b: &ForkCandidate) -> ForkResolution {
     let winner = fork_winner(a, b);
     let loser = if std::ptr::eq(winner, a) { b } else { a };
-    (winner, loser)
+    ForkResolution {
+        winner_id: winner.id,
+        // CURRENT = the winner's vector ONLY. The loser's entries are NOT
+        // merged in (the substantive contract; a buggy absorb would extend
+        // this with `loser.crdt_vector`).
+        current_crdt_vector: winner.crdt_vector.clone(),
+        archived_id: loser.id,
+        archived_crdt_vector: loser.crdt_vector.clone(),
+    }
+}
+
+/// PRODUCTION-stand-in: K(V) derivation (Inv-19). K(V) is derived from the
+/// IMMUTABLE Version-Node CID via a domain-separated KDF (BLAKE3 derive_key
+/// stand-in). A DIFFERENT CID derives a DIFFERENT key — so asserting the
+/// derived key is NOT a self-equality read-back of the CID itself. R5 routes
+/// through the real `benten_crypto_suite` structural KDF.
+fn derive_k_v(version_node_cid: &[u8]) -> [u8; 32] {
+    blake3::derive_key("benten-membership-set:K(V):v1", version_node_cid)
 }
 
 fn cid(payload: &[u8]) -> Vec<u8> {
@@ -167,7 +207,8 @@ fn f_inv21_1_oldest_anchor_wins_adversary_cannot_displace() {
 ///
 /// When `created_at_hlc` ties, `MembershipSetId` CANNOT disambiguate
 /// (concurrent forks SHARE it). The Version-Node CID decides. Also pins
-/// the ordering axioms: totality + antisymmetry + transitivity.
+/// the ordering axioms: totality + antisymmetry + **transitivity** (the
+/// F4-025 3-fork arm: a<b ∧ b<c ⟹ a<c).
 #[test]
 #[ignore = "RED-PHASE: F-INV21-2 — tie-break totality via Version-Node-CID, NOT MembershipSetId (M-8); un-ignore at R5"]
 fn f_inv21_2_totality_via_version_node_cid() {
@@ -237,6 +278,58 @@ fn f_inv21_2_totality_via_version_node_cid() {
         total_order_key(&f_b),
         "the total order key is distinct for distinct fork events (totality)"
     );
+
+    // ── F4-025: 3-fork TRANSITIVITY arm ──────────────────────────────────
+    // The total order must be transitive: a < b ∧ b < c ⟹ a < c. A
+    // non-transitive tie-break (e.g. a pairwise rule that disagrees with the
+    // global min) would make convergence order-dependent — two engines could
+    // reduce the same 3-fork set to different winners. We build three forks
+    // ALL tied on created_at_hlc so transitivity rides ENTIRELY on the
+    // Version-Node-CID ASC ordering (the M-8 terminal discriminator), then
+    // assert the three pairwise comparisons are mutually consistent AND that
+    // the global min equals the pairwise-reduced winner in every permutation.
+    let mk = |seed: &[u8], id: u32| ForkCandidate {
+        id: ForkId(id),
+        membership_set_id: cid(b"shared-anchor"),
+        created_at_hlc: tied_hlc, // ALL tied — transitivity rides on the CID
+        fork_event_version_node_cid: cid(seed),
+        crdt_vector: vec![],
+        author_is_admin: true,
+    };
+    // Three distinct fork events. Sort them by the real total_order_key so we
+    // KNOW the ground-truth a<b<c ordering (derived from the stub, not assumed).
+    let mut three = [mk(b"tf-AAA", 10), mk(b"tf-BBB", 20), mk(b"tf-CCC", 30)];
+    three.sort_by_key(total_order_key);
+    let (a, b, c) = (&three[0], &three[1], &three[2]);
+
+    // a < b and b < c by construction of the sort.
+    assert!(
+        total_order_key(a) < total_order_key(b),
+        "a < b on the total order"
+    );
+    assert!(
+        total_order_key(b) < total_order_key(c),
+        "b < c on the total order"
+    );
+    // TRANSITIVITY: a < c must follow. Would-FAIL for any intransitive order.
+    assert!(
+        total_order_key(a) < total_order_key(c),
+        "transitivity: a < b ∧ b < c ⟹ a < c on the Inv-21 total order"
+    );
+    // The pairwise tie-break agrees with the global min in EVERY permutation
+    // (the convergence consequence of transitivity + antisymmetry).
+    let pairwise_min = fork_winner(fork_winner(a, b), c).id.0;
+    let global_min = three
+        .iter()
+        .min_by(|x, y| total_order_key(x).cmp(&total_order_key(y)))
+        .unwrap()
+        .id
+        .0;
+    assert_eq!(
+        pairwise_min, global_min,
+        "the pairwise-reduced winner equals the global min (transitive total order ⇒ order-independent convergence)"
+    );
+    assert_eq!(global_min, a.id.0, "the global min is the smallest-CID fork");
 }
 
 // ── F-INV21-3 ───────────────────────────────────────────────────────────
@@ -333,45 +426,93 @@ fn f_inv21_3_kani_tie_break_total() {
 
 /// F-INV21-4 — losing-fork MUST-NOT-merge + archived-not-discarded +
 /// fork-as-DAG-branch + non-Admin can fork + K(V)→immutable Version-Node-CID.
+///
+/// F4-011: the no-absorption arm asserts on the merge OUTPUT (the CURRENT
+/// snapshot produced by `resolve_fork`), NOT a fixture read-back of the
+/// unmodified winner input; the K(V) arm DERIVES the key from the
+/// Version-Node CID via `derive_k_v` and proves a different CID derives a
+/// different key (NOT a self-equality of the CID against itself).
 #[test]
-#[ignore = "RED-PHASE: F-INV21-4 — losing fork not absorbed + archived + any author forks; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-INV21-4 — losing fork not absorbed into CURRENT + archived + any author forks; un-ignore at R5"]
 fn f_inv21_4_losing_fork_not_merged_archived_not_discarded() {
     // Winner carries ["w-only"]; loser carries ["l-only"]. A non-Admin
     // authored the loser (ALL event-authors fork).
     let winner_fork = fork(1, 100, b"winner", true, &["w-only"]);
     let loser_fork = fork(2, 200, b"loser", /* admin = */ false, &["l-only"]);
 
-    let (winner, loser) = resolve_fork(&winner_fork, &loser_fork);
-    assert_eq!(winner.id.0, 1, "oldest anchor wins");
-    assert_eq!(loser.id.0, 2, "the later fork loses");
+    let resolution = resolve_fork(&winner_fork, &loser_fork);
+    assert_eq!(resolution.winner_id.0, 1, "oldest anchor wins (CURRENT)");
+    assert_eq!(resolution.archived_id.0, 2, "the later fork is ARCHIVED");
 
-    // Losing fork's CRDT-vector is NOT merged into the winner (no silent
-    // absorption).
+    // ── No silent absorption: assert on the merge OUTPUT (CURRENT snapshot),
+    // NOT on the unmodified winner input. The CURRENT snapshot must carry the
+    // winner's entry and MUST NOT carry the loser's. A merge that absorbed the
+    // loser into CURRENT (the bug this freezes against) would extend
+    // `current_crdt_vector` with "l-only" and FAIL here.
     assert!(
-        !winner.crdt_vector.contains(&"l-only".to_string()),
-        "winner MUST NOT absorb the loser's CRDT-vector entries (no silent merge)"
+        resolution
+            .current_crdt_vector
+            .contains(&"w-only".to_string()),
+        "the CURRENT snapshot carries the winner's entry"
+    );
+    assert!(
+        !resolution
+            .current_crdt_vector
+            .contains(&"l-only".to_string()),
+        "the merge OUTPUT (CURRENT snapshot) MUST NOT absorb the loser's CRDT-vector entries (no silent merge)"
     );
 
-    // Archived-not-discarded: the loser anchor is retained (its vector is
-    // still readable post-resolution) — just not CURRENT.
+    // Archived-not-discarded: the loser's vector is RETAINED in the archive
+    // (queryable post-resolution) — separate from CURRENT, never lost.
     assert!(
-        loser.crdt_vector.contains(&"l-only".to_string()),
-        "the losing fork is ARCHIVED (retained), not discarded"
+        resolution
+            .archived_crdt_vector
+            .contains(&"l-only".to_string()),
+        "the losing fork is ARCHIVED (its vector is retained + queryable), not discarded"
+    );
+    // And the archive is genuinely DISTINCT from CURRENT (not the same store).
+    assert_ne!(
+        resolution.current_crdt_vector, resolution.archived_crdt_vector,
+        "CURRENT and the archive are distinct snapshots (the loser is not in CURRENT)"
     );
 
     // ALL event-authors fork: a non-Admin authored a legitimate fork.
     assert!(
-        !loser.author_is_admin,
+        !loser_fork.author_is_admin,
         "a non-Admin event-author can fork (F-INV21-4)"
     );
 
-    // Inv-19: K(V) encrypts to the IMMUTABLE Version-Node CID. The winner's
-    // key target is the content-addressed Version-Node CID (stable; the
-    // fork-event CID never mutates).
-    let k_v_target = &winner.fork_event_version_node_cid;
+    // ── Inv-19: K(V) is DERIVED from the IMMUTABLE Version-Node CID via the
+    // structural KDF — NOT the CID itself. We derive the winner's K(V) from
+    // its Version-Node CID and assert (a) it equals re-deriving from the SAME
+    // CID (determinism) and (b) it DIFFERS from a key derived off the loser's
+    // CID (the key is keyed by the CID, not a self-equality read-back).
+    let winner_cid = &winner_fork.fork_event_version_node_cid;
+    let k_v = derive_k_v(winner_cid);
     assert_eq!(
-        k_v_target,
-        &cid(b"winner"),
-        "K(V) targets the immutable Version-Node CID (Inv-19 / Inv-20 clause-f)"
+        k_v,
+        derive_k_v(&cid(b"winner")),
+        "K(V) is deterministically derived from the immutable Version-Node CID (Inv-19 / Inv-20 clause-f)"
     );
+    // Frozen golden: the derived K(V) for cid(b\"winner\") (domain-separated
+    // BLAKE3 derive_key). R5 confirms-or-deliberately-updates this frozen
+    // literal against the real structural KDF (M-20).
+    const K_V_WINNER_HEX: &str =
+        "e3c09e37e2964ee768b467c4afbbca9e4d518326bdceba456ca99ce2cd1ba95e";
+    assert_eq!(
+        hex(&k_v),
+        K_V_WINNER_HEX,
+        "K(V) golden vector (derived from the immutable Version-Node CID; drift fails the pin)"
+    );
+    // A DIFFERENT Version-Node CID derives a DIFFERENT key — proves K(V) is
+    // CID-keyed, not a constant/self-referential value.
+    let k_v_loser = derive_k_v(&loser_fork.fork_event_version_node_cid);
+    assert_ne!(
+        k_v, k_v_loser,
+        "a different Version-Node CID derives a different K(V) (the key is CID-keyed, not self-equal)"
+    );
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }

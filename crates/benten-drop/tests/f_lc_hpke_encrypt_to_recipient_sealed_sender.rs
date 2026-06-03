@@ -4,7 +4,8 @@
 //! TDD red-phase per `pim-12 §3.6e`). Families pinned in THIS file:
 //!   - **F-LC-1** HPKE `mode_base` single-recipient round-trip (`0x647A`).
 //!   - **F-LC-2** `HpkeMultiBase` group multi-stanza + cross-stanza AAD
-//!     substitution defense (`0x6520`).
+//!     substitution defense (`0x6520`) — **honoring Sealed-Sender by
+//!     DEFAULT** (R4-FIX F4-003 / BR-1 ruling 1).
 //!   - **F-LC-3** Sealed-Sender DEFAULT (`0x6510`) — sender-DID NOT on the
 //!     wire (paired positive control: `0x6500` DOES carry it).
 //!
@@ -19,12 +20,34 @@
 //!     LAYER_C_DROP_MULTI_RECIPIENT (`HpkeMultiBase` group).
 //!   - §4.1 envelope table: `EncryptedEnvelope` / `BindingContext`
 //!     `#[non_exhaustive]`; per-stanza AAD binds
-//!     `(codepoint, body-CID, sorted recipient-DID-list, sender_did,
-//!     stanza-index, recipient_key_generation)` (U17); BE endianness.
+//!     `(codepoint, body-CID, sorted recipient-DID-list, stanza-index,
+//!     recipient_key_generation)` (U17); BE endianness.
 //!   - Inv-16 (envelope-unification) + Inv-18 (paired Sealed-Sender
 //!     disclosure satisfied by `0x6510` being DEFAULT).
 //!   - R2 landscape `db2d7d6d:.addl/phase-4-meta/f-full-r2-test-landscape.md`
 //!     §1 Group 7: F-LC-1 (~4-6), F-LC-2 (~6-8), F-LC-3 (~7-10).
+//!
+//! # R4-FIX (F4-003 BLOCKER) — `0x6520` group send HONORS Sealed-Sender.
+//!
+//! Ben RULING 1 (2026-06-02, BR-1): **EVERY group send honors
+//! Sealed-Sender** — the inner-sender-DID is bound INSIDE the sealed
+//! (encrypted) part PER STANZA, NOT in the plaintext AAD. The original
+//! F-LC-2 here pinned a `0x6520` group send whose per-stanza struct carried
+//! a `sender_did` field bound into the PLAINTEXT AAD (mirroring the
+//! non-default `0x6500` plaintext-sender variant) — which CONTRADICTS the
+//! ruling and silently defeats Sealed-Sender for every group send. The fix:
+//!   - the DEFAULT group seal (`seal_group_multi`) now produces stanzas
+//!     whose plaintext AAD binds ONLY
+//!     `(codepoint, body-CID, sorted recipient-DID-list, stanza-index,
+//!     recipient_key_generation)` — the inner-sender-DID lives INSIDE the
+//!     sealed per-stanza payload (`sealed_inner`), recovered post-decrypt
+//!     (mirrors how `0x6510`/`0x6610` do it);
+//!   - a NEW `0x6520` SEALED-GROUP wire-scan arm asserts the sender-DID
+//!     does NOT appear in the plaintext AAD bytes (would-FAIL if it leaks);
+//!   - the non-default plaintext-sender group variant is kept as an
+//!     EXPLICITLY-LABELED non-default arm (`seal_group_multi_plaintext_`
+//!     `sender`) with its own paired-control scan, so the substitution /
+//!     re-target defenses still exercise a real per-stanza AAD field-set.
 //!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
@@ -53,13 +76,15 @@
 //! `VERSION` is `2` and every wire integer (codepoint, stanza-index,
 //! recipient_key_generation, coarse-epoch) is `to_be_bytes`.
 //!
-//! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f-ext).
+//! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f).
 //!
 //! Each test drives a PRODUCTION call site (`seal_*` / `open_*` /
-//! `serialize`) + asserts an OBSERVABLE consequence + is
-//! would-FAIL-if-no-op'd. The stub `unimplemented!()`s its seal/open
-//! bodies so a forgotten stub at R5 PANICS (the opposite of a silent-green
-//! SHAPE-trap). NEVER `assert_eq!(CONST, CONST_VAL)`; NEVER a
+//! `serialize` / `plaintext_aad_bytes`) + asserts an OBSERVABLE
+//! consequence + is would-FAIL-if-no-op'd. Seal/open bodies
+//! `unimplemented!()` so a forgotten stub at R5 PANICS (the opposite of a
+//! silent-green SHAPE-trap); the AAD-serialization helpers are
+//! DETERMINISTIC so the Sealed-Sender wire-scan is computable green at
+//! red-phase. NEVER `assert_eq!(CONST, CONST_VAL)`; NEVER a
 //! zero-assertion arm.
 
 #![allow(clippy::unwrap_used)]
@@ -76,7 +101,9 @@
 // CIDs / DIDs / keys are modeled as fixed byte arrays so the file is
 // hermetic. The seal/open bodies `unimplemented!()` so the runtime arms
 // only pass once R5 wires the real production path (and the `#[ignore]`
-// is lifted).
+// is lifted). The AAD-serialization helpers ARE implemented
+// deterministically so the Sealed-Sender wire-scan (F4-003) is meaningful
+// at red-phase.
 mod layer_c_stub {
     /// Wave-0 envelope-format version (M-18/M-19/M-20). V2 from commit 1.
     pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
@@ -124,18 +151,75 @@ mod layer_c_stub {
     }
 
     /// A single recipient stanza of an `HpkeMultiBase` group envelope.
-    /// Per-stanza AAD binds the full U17 tuple.
+    ///
+    /// R4-FIX F4-003 / BR-1 ruling 1: the DEFAULT group send HONORS
+    /// Sealed-Sender. The PLAINTEXT per-stanza AAD binds ONLY the U17
+    /// tuple WITHOUT the sender-DID; the inner-sender-DID lives INSIDE the
+    /// sealed per-stanza payload (`sealed_inner`). The NON-default
+    /// plaintext-sender variant sets `plaintext_sender_did = Some(..)` and
+    /// binds it into the AAD (paired control only).
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct HpkeRecipientStanza {
         pub codepoint: u16,
         pub body_cid: BodyCid,
         /// sorted recipient-DID-list (the WHOLE list, bound per stanza).
         pub sorted_recipient_dids: Vec<SenderDid>,
-        pub sender_did: SenderDid,
         pub stanza_index: u32,
         pub recipient_key_generation: u32,
+        /// The DEFAULT (Sealed-Sender) path: the inner-sender-DID is sealed
+        /// INSIDE this opaque payload alongside the wrapped CEK, recovered
+        /// only post-decrypt. NEVER appears in the plaintext AAD.
+        pub sealed_inner: Vec<u8>,
+        /// NON-default plaintext-sender variant ONLY: when `Some`, the
+        /// sender-DID is bound into the PLAINTEXT AAD (U4). `None` on the
+        /// DEFAULT Sealed-Sender path.
+        pub plaintext_sender_did: Option<SenderDid>,
         /// HPKE-wrapped content-encryption-key for THIS recipient.
         pub wrapped_cek: Vec<u8>,
+    }
+
+    impl HpkeRecipientStanza {
+        /// PRODUCTION helper — the canonical PLAINTEXT per-stanza AAD bytes
+        /// (what a relay reads in the clear). DETERMINISTIC + big-endian
+        /// (M-19). On the DEFAULT Sealed-Sender path this binds the U17
+        /// tuple WITHOUT the sender-DID; on the non-default plaintext-sender
+        /// path the sender-DID is appended (U4).
+        ///
+        /// Layout (BE):
+        ///   aad_version       : u8
+        ///   codepoint         : u16 BE
+        ///   body_cid          : 32 bytes
+        ///   stanza_index      : u32 BE
+        ///   recipient_key_gen : u32 BE
+        ///   recipient_count   : u16 BE
+        ///   for each sorted recipient DID: len u16 BE || bytes
+        ///   [non-default only] sender_len u16 BE || sender_did bytes
+        #[must_use]
+        pub fn plaintext_aad_bytes(&self) -> Vec<u8> {
+            let mut out = Vec::new();
+            out.push(ENVELOPE_FORMAT_VERSION);
+            out.extend_from_slice(&self.codepoint.to_be_bytes());
+            out.extend_from_slice(&self.body_cid);
+            out.extend_from_slice(&self.stanza_index.to_be_bytes());
+            out.extend_from_slice(&self.recipient_key_generation.to_be_bytes());
+            let count =
+                u16::try_from(self.sorted_recipient_dids.len()).expect("recipient count fits u16");
+            out.extend_from_slice(&count.to_be_bytes());
+            for did in &self.sorted_recipient_dids {
+                let len = u16::try_from(did.len()).expect("recipient DID len fits u16");
+                out.extend_from_slice(&len.to_be_bytes());
+                out.extend_from_slice(did);
+            }
+            // Non-default plaintext-sender variant ONLY (U4). The DEFAULT
+            // Sealed-Sender path leaves this empty — the sender-DID is in
+            // `sealed_inner`, never here.
+            if let Some(sender) = &self.plaintext_sender_did {
+                let len = u16::try_from(sender.len()).expect("sender DID len fits u16");
+                out.extend_from_slice(&len.to_be_bytes());
+                out.extend_from_slice(sender);
+            }
+            out
+        }
     }
 
     /// The codepoint-dispatched `EncryptedEnvelope` (Inv-16). The stub
@@ -212,7 +296,10 @@ mod layer_c_stub {
         unimplemented!("R5 wires benten_drop::layer_c::open_single")
     }
 
-    /// PRODUCTION call site — group multi-stanza seal (`0x6520`).
+    /// PRODUCTION call site — group multi-stanza seal (`0x6520`), DEFAULT
+    /// path: HONORS Sealed-Sender (R4-FIX F4-003 / BR-1 ruling 1). Each
+    /// stanza's PLAINTEXT AAD binds the U17 tuple WITHOUT the sender-DID;
+    /// the inner-sender-DID is sealed INSIDE the per-stanza payload.
     pub fn seal_group_multi(
         _recipient_pks: &[RecipientPubKey],
         _sender_did: &SenderDid,
@@ -220,24 +307,65 @@ mod layer_c_stub {
         _recipient_key_generation: u32,
         _plaintext: &[u8],
     ) -> EncryptedEnvelope {
-        unimplemented!("R5 wires benten_drop::layer_c::seal_group_multi")
+        unimplemented!(
+            "R5 wires benten_drop::layer_c::seal_group_multi (0x6520, Sealed-Sender DEFAULT)"
+        )
+    }
+
+    /// PRODUCTION call site — group multi-stanza seal under the
+    /// NON-DEFAULT plaintext-sender posture (`0x6520` with the
+    /// `plaintext_sender_did` AAD field set). EXPLICITLY non-default —
+    /// exists only so the paired metadata-disclosure control + the
+    /// substitution/re-target arms can exercise a real per-stanza AAD
+    /// field-set. NOT the shipped default (BR-1 ruling 1).
+    pub fn seal_group_multi_plaintext_sender(
+        _recipient_pks: &[RecipientPubKey],
+        _sender_did: &SenderDid,
+        _body_cid: &BodyCid,
+        _recipient_key_generation: u32,
+        _plaintext: &[u8],
+    ) -> EncryptedEnvelope {
+        unimplemented!(
+            "R5 wires the NON-default plaintext-sender group seal (0x6520; paired control only)"
+        )
     }
 
     /// PRODUCTION call site — group multi-stanza open (recipient at
-    /// `my_index` opens via their stanza). Tampered/substituted/reordered
+    /// `my_index` opens via their stanza). On the DEFAULT path it recovers
+    /// the inner-sender-DID post-decrypt. Tampered/substituted/reordered
     /// stanza → `Err`.
     pub fn open_group_stanza(
         _recipient_sk: &RecipientSecKey,
         _my_index: usize,
         _env: &EncryptedEnvelope,
-    ) -> Result<Vec<u8>, LayerCError> {
+    ) -> Result<(Vec<u8>, SenderDid), LayerCError> {
         unimplemented!("R5 wires benten_drop::layer_c::open_group_stanza")
     }
 
     /// PRODUCTION call site — canonical serialize to wire bytes (V2 + BE).
-    /// What the relay sees on the network.
+    /// What the relay sees on the network. The serialized form concatenates
+    /// every stanza's PLAINTEXT AAD (clear) + the opaque sealed/wrapped
+    /// material (`sealed_inner` + `wrapped_cek`, opaque to the relay).
     pub fn serialize(_env: &EncryptedEnvelope) -> Vec<u8> {
         unimplemented!("R5 wires benten_drop::layer_c::serialize")
+    }
+
+    /// PRODUCTION helper — the concatenated PLAINTEXT AAD region of a
+    /// serialized group envelope (the bytes a relay reads in the clear,
+    /// EXCLUDING the opaque sealed/wrapped material). DETERMINISTIC so the
+    /// F4-003 Sealed-Sender wire-scan is computable at red-phase.
+    #[must_use]
+    pub fn group_plaintext_aad_region(env: &EncryptedEnvelope) -> Vec<u8> {
+        match env {
+            EncryptedEnvelope::HpkeMultiBase { stanzas, .. } => {
+                let mut out = Vec::new();
+                for st in stanzas {
+                    out.extend_from_slice(&st.plaintext_aad_bytes());
+                }
+                out
+            }
+            EncryptedEnvelope::HpkeBase { .. } => Vec::new(),
+        }
     }
 
     // -- hermetic test fixtures (NOT crate `_for_test` helpers) --
@@ -258,9 +386,10 @@ mod layer_c_stub {
 
 use layer_c_stub::{
     BindingContext, DROP_TO_RECIPIENT_SEALED_SENDER, ENVELOPE_FORMAT_VERSION, EncryptedEnvelope,
-    HYBRID_X25519_MLKEM768, HpkeRecipientStanza, LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT,
-    LayerCError, did, fixed_body_cid, fixed_pk, fixed_sk, open_group_stanza, open_single,
-    seal_group_multi, seal_plaintext_sender, seal_sealed_sender, serialize,
+    HYBRID_X25519_MLKEM768, LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, did,
+    fixed_body_cid, fixed_pk, fixed_sk, group_plaintext_aad_region, open_group_stanza, open_single,
+    seal_group_multi, seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
+    serialize,
 };
 
 // ===========================================================================
@@ -370,6 +499,7 @@ fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
 
 // ===========================================================================
 // F-LC-2 — HpkeMultiBase group multi-stanza + cross-stanza AAD defense.
+//          DEFAULT honors Sealed-Sender (R4-FIX F4-003 / BR-1 ruling 1).
 // ===========================================================================
 
 /// F-LC-2 PIN 1 — N recipients each open their own stanza to the same
@@ -387,7 +517,7 @@ fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
     let env = seal_group_multi(&pks, &sender, &body_cid, 0, &plaintext);
 
     for (idx, sk) in sks.iter().enumerate() {
-        let recovered = open_group_stanza(sk, idx, &env)
+        let (recovered, _recovered_sender) = open_group_stanza(sk, idx, &env)
             .unwrap_or_else(|e| panic!("recipient {idx} MUST open their stanza: {e:?}"));
         assert_eq!(
             recovered, plaintext,
@@ -516,6 +646,120 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
         LAYER_C_DROP_MULTI_RECIPIENT, 0x6520,
         "F-LC-2: LAYER_C_DROP_MULTI_RECIPIENT MUST be the wire-locked \
          integer 0x6520."
+    );
+}
+
+/// F-LC-2 PIN 5 (R4-FIX F4-003 / BR-1 ruling 1) — the DEFAULT `0x6520`
+/// group send HONORS Sealed-Sender: the sender-DID is bound per-stanza
+/// INSIDE the sealed payload, and DOES NOT appear anywhere in the
+/// PLAINTEXT AAD region of the serialized group envelope. This is the
+/// load-bearing consequence of ruling 1 — group sends must NOT silently
+/// defeat the Sealed-Sender default. would-FAIL if the default group seal
+/// bound the sender-DID into the plaintext per-stanza AAD (the bug the old
+/// F-LC-2 stanza shape had).
+#[test]
+#[ignore = "RED-PHASE: F-LC-2 — DEFAULT 0x6520 group send honors Sealed-Sender, sender-DID NOT in plaintext AAD (F4-003); un-ignore at R5"]
+fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
+    let pks = [fixed_pk(0x60), fixed_pk(0x61), fixed_pk(0x62)];
+    let sender = did("did:key:zGroupSenderUNIQUEMARKER");
+    let body_cid = fixed_body_cid(0xD6);
+
+    let env = seal_group_multi(&pks, &sender, &body_cid, 0, b"group payload");
+
+    // (a) Typed-shape guard: NO stanza carries a plaintext_sender_did on
+    //     the DEFAULT path (it lives in `sealed_inner` instead).
+    match &env {
+        EncryptedEnvelope::HpkeMultiBase { stanzas, .. } => {
+            for (i, st) in stanzas.iter().enumerate() {
+                assert!(
+                    st.plaintext_sender_did.is_none(),
+                    "F-LC-2 (F4-003): on the DEFAULT 0x6520 group path, \
+                     stanza {i} MUST NOT carry a plaintext_sender_did — \
+                     Sealed-Sender binds it INSIDE `sealed_inner`. would-\
+                     FAIL if the default leaked the sender-DID into the AAD."
+                );
+                assert!(
+                    !st.sealed_inner.is_empty(),
+                    "F-LC-2 (F4-003): each DEFAULT stanza MUST carry a sealed \
+                     inner payload (where the inner-sender-DID lives)."
+                );
+            }
+        }
+        EncryptedEnvelope::HpkeBase { .. } => panic!("group seal MUST produce HpkeMultiBase"),
+    }
+
+    // (b) WIRE-SCAN: the sender-DID byte sequence MUST NOT appear in the
+    //     concatenated PLAINTEXT AAD region of the serialized envelope.
+    let plaintext_aad = group_plaintext_aad_region(&env);
+    let leaks_in_aad = plaintext_aad
+        .windows(sender.len())
+        .any(|w| w == sender.as_slice());
+    assert!(
+        !leaks_in_aad,
+        "F-LC-2 (F4-003 / BR-1 ruling 1): the DEFAULT 0x6520 group send \
+         MUST HONOR Sealed-Sender — the sender-DID MUST NOT appear in the \
+         PLAINTEXT per-stanza AAD region of the serialized envelope. It is \
+         bound per-stanza INSIDE the sealed payload, recovered only \
+         post-decrypt. would-FAIL if the default group path bound the \
+         sender-DID into the plaintext AAD (silently defeating the \
+         Sealed-Sender default for every group send)."
+    );
+
+    // (c) Full-wire scan (defense-in-depth): the sender-DID does not leak
+    //     into ANY plaintext wire field of the serialized group envelope.
+    let wire = serialize(&env);
+    let leaks_in_wire = wire.windows(sender.len()).any(|w| w == sender.as_slice());
+    assert!(
+        !leaks_in_wire,
+        "F-LC-2 (F4-003): the serialized DEFAULT 0x6520 group wire MUST NOT \
+         contain the sender-DID in any plaintext field."
+    );
+}
+
+/// F-LC-2 PIN 6 (R4-FIX F4-003 paired control) — the EXPLICITLY-non-default
+/// plaintext-sender group variant (`0x6520` with `plaintext_sender_did`
+/// set) DOES place the sender-DID in the plaintext AAD (U4). This is the
+/// paired positive control that proves PIN 5's wire-scan is not vacuously
+/// passing (the two paths must differ observably). The non-default variant
+/// is NOT the shipped default. would-FAIL if even the non-default variant
+/// hid the sender-DID (then the scanner cannot distinguish the paths).
+#[test]
+#[ignore = "RED-PHASE: F-LC-2 — paired control: NON-default plaintext-sender 0x6520 DOES carry sender-DID in AAD (F4-003); un-ignore at R5"]
+fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
+    let pks = [fixed_pk(0x70), fixed_pk(0x71)];
+    let sender = did("did:key:zGroupSenderUNIQUEMARKER");
+    let body_cid = fixed_body_cid(0xD7);
+
+    let env = seal_group_multi_plaintext_sender(&pks, &sender, &body_cid, 0, b"group payload");
+
+    match &env {
+        EncryptedEnvelope::HpkeMultiBase { stanzas, .. } => {
+            for (i, st) in stanzas.iter().enumerate() {
+                assert_eq!(
+                    st.plaintext_sender_did.as_deref(),
+                    Some(sender.as_slice()),
+                    "F-LC-2 (F4-003 control): the NON-default plaintext-sender \
+                     group variant MUST bind the sender-DID into stanza {i}'s \
+                     plaintext AAD (U4)."
+                );
+            }
+        }
+        EncryptedEnvelope::HpkeBase { .. } => {
+            panic!("plaintext-sender group seal MUST produce HpkeMultiBase")
+        }
+    }
+
+    let plaintext_aad = group_plaintext_aad_region(&env);
+    let leaks = plaintext_aad
+        .windows(sender.len())
+        .any(|w| w == sender.as_slice());
+    assert!(
+        leaks,
+        "F-LC-2 (F4-003 PAIRED CONTROL): the NON-default plaintext-sender \
+         group variant MUST place the sender-DID in the plaintext AAD (U4). \
+         If this control fails, PIN 5's wire-scan cannot distinguish hiding \
+         from a broken scan — the default and non-default paths must differ \
+         observably."
     );
 }
 

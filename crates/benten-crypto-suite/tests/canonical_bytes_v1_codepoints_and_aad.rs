@@ -96,33 +96,50 @@ fn codepoint_table_integer_values_pinned() {
 /// earlier 2-tuple layout). The AAD now binds 4 segments per
 /// `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk`.
 ///
-/// The exact byte layout is:
-///   `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_le_bytes() || total_chunks.to_le_bytes()`
+/// **F4-004 / M-19 BIG-ENDIAN migration (RED-PHASE until R5/Wave-0).**
+/// The M-19 freeze ratifies that ALL multiformats-framed integer wire/AAD
+/// fields are **BIG-ENDIAN** (R0.3 §4.1 row "BE endianness"; Q2/U7). The
+/// per-chunk AAD's `chunk_index` (u64) + `total_chunks` (u32) are named
+/// M-19 sites. This pin therefore freezes the **BIG-ENDIAN** layout; at
+/// HEAD the production `aad_per_chunk` (`aead.rs:244,245`) still emits
+/// LITTLE-ENDIAN, so this test is gated `#[ignore]` and the W0/M-19 step
+/// that flips the production encoder to BE un-ignores it. This leaves
+/// exactly ONE canonical big-endian per-chunk-AAD pin across the corpus
+/// (the prior on-main LE assertion is migrated here, not duplicated).
 ///
-/// The `total_chunks: u32` little-endian segment closes the
+/// The exact post-M-19 byte layout is:
+///   `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_be_bytes() || total_chunks.to_be_bytes()`
+///
+/// The `total_chunks: u32` big-endian segment closes the
 /// cross-chunk-truncation attack — an attacker who truncates a 10-chunk
 /// ciphertext to 5 chunks cannot fabricate per-chunk AAD-matching tags
 /// because the seal-time AAD committed to `total_chunks=10`.
 ///
-/// Any change to the segment order, encoding, or set is a wire-format
+/// Any change to the segment order, encoding, or endianness is a wire-format
 /// break; this test fails first to signal the freeze-discipline
-/// coupling.
+/// coupling. would-FAIL-if-no-op'd: while the production encoder still
+/// emits LE (or if a future refactor reverts to LE), the BE assertions
+/// below fail (the explicit `assert_ne!` BE-not-LE guard makes the
+/// endianness distinction load-bearing).
 #[test]
+#[ignore = "RED-PHASE: F4-004 / M-19 — per-chunk AAD MUST be BIG-ENDIAN (aead.rs:244,245 is LE today); un-ignore at R5/Wave-0 when the M-19 step flips the production encoder to BE"]
 fn aad_per_chunk_canonical_layout_pinned() {
-    // Synthetic plaintext_cid + chunk_index + total_chunks.
+    // Synthetic plaintext_cid + chunk_index + total_chunks. The chosen
+    // values have DISTINCT big-endian and little-endian byte orders, so the
+    // endianness assertions actually discriminate the two.
     let plaintext_cid = [0xAA_u8; 32]; // 32-byte CID hash payload
     let chunk_index: u64 = 0x0123_4567_89AB_CDEF;
     let total_chunks: u32 = 0xDEAD_BEEF;
 
     let aad = aad_per_chunk(&plaintext_cid, chunk_index, total_chunks);
 
-    // Verify layout (4 segments): tag || plaintext_cid || chunk_index LE || total_chunks LE.
+    // Verify layout (4 segments): tag || plaintext_cid || chunk_index BE || total_chunks BE.
     let tag = b"benten-aead:chunk:";
     let expected_len = tag.len() + plaintext_cid.len() + 8 + 4;
     assert_eq!(
         aad.len(),
         expected_len,
-        "AAD layout regression — expected (tag || cid || u64-LE chunk_index || u32-LE total_chunks), total {} bytes; got {} bytes",
+        "AAD layout regression — expected (tag || cid || u64-BE chunk_index || u32-BE total_chunks), total {} bytes; got {} bytes",
         expected_len,
         aad.len()
     );
@@ -141,35 +158,49 @@ fn aad_per_chunk_canonical_layout_pinned() {
         "AAD plaintext_cid binding changed — wire-format break"
     );
 
-    // Segment 3: chunk_index encoded as little-endian u64.
+    // Segment 3: chunk_index encoded as BIG-endian u64 (M-19).
     assert_eq!(
         &aad[tag.len() + plaintext_cid.len()..tag.len() + plaintext_cid.len() + 8],
-        &chunk_index.to_le_bytes(),
-        "AAD chunk_index encoding changed — wire-format break"
+        &chunk_index.to_be_bytes(),
+        "AAD chunk_index encoding changed — MUST be BIG-ENDIAN per M-19 (wire-format break)"
     );
 
-    // Segment 4 (F3): total_chunks encoded as little-endian u32.
+    // Segment 4 (F3): total_chunks encoded as BIG-endian u32 (M-19).
     assert_eq!(
         &aad[aad.len() - 4..],
-        &total_chunks.to_le_bytes(),
-        "AAD total_chunks encoding regression — F3 wire-format break"
+        &total_chunks.to_be_bytes(),
+        "AAD total_chunks encoding regression — MUST be BIG-ENDIAN per M-19 (F3 wire-format break)"
     );
 
     // Explicit hex pin: with cid = 32x 0xAA + chunk_index = 0x0123456789ABCDEF +
-    // total_chunks = 0xDEADBEEF, expected tail =
-    //   [0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01] (u64-LE chunk_index)
-    //   || [0xEF, 0xBE, 0xAD, 0xDE]                       (u32-LE total_chunks)
-    let expected_chunk_idx_bytes = [0xEF_u8, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01];
-    let expected_total_chunks_bytes = [0xEF_u8, 0xBE, 0xAD, 0xDE];
+    // total_chunks = 0xDEADBEEF, expected tail (BIG-ENDIAN per M-19) =
+    //   [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF] (u64-BE chunk_index)
+    //   || [0xDE, 0xAD, 0xBE, 0xEF]                       (u32-BE total_chunks)
+    let expected_chunk_idx_bytes = [0x01_u8, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF];
+    let expected_total_chunks_bytes = [0xDE_u8, 0xAD, 0xBE, 0xEF];
     assert_eq!(
         &aad[aad.len() - 12..aad.len() - 4],
         &expected_chunk_idx_bytes,
-        "AAD u64-LE chunk_index encoding regression — must use to_le_bytes() not to_be_bytes()"
+        "AAD u64-BE chunk_index encoding regression — must use to_be_bytes() not to_le_bytes() (M-19)"
     );
     assert_eq!(
         &aad[aad.len() - 4..],
         &expected_total_chunks_bytes,
-        "AAD u32-LE total_chunks encoding regression — must use to_le_bytes() not to_be_bytes()"
+        "AAD u32-BE total_chunks encoding regression — must use to_be_bytes() not to_le_bytes() (M-19)"
+    );
+
+    // would-FAIL guard: the bytes are NOT in little-endian order (the
+    // pre-M-19 aead.rs:244,245 layout is migrated away). This makes the
+    // endianness flip load-bearing — a reversion to LE fails here.
+    assert_ne!(
+        &aad[tag.len() + plaintext_cid.len()..tag.len() + plaintext_cid.len() + 8],
+        &chunk_index.to_le_bytes(),
+        "AAD chunk_index MUST NOT be little-endian (M-19 migrates aead.rs:244 LE → BE)"
+    );
+    assert_ne!(
+        &aad[aad.len() - 4..],
+        &total_chunks.to_le_bytes(),
+        "AAD total_chunks MUST NOT be little-endian (M-19 migrates aead.rs:245 LE → BE)"
     );
 }
 

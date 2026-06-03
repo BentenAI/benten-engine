@@ -66,8 +66,13 @@ mod f_va_1_stub {
     /// The frozen vault wire codepoint (R0 §4.0 vault band `0x6100`).
     pub const VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT: u16 = 0x6100;
 
-    /// The 12-byte sibling codepoint (`SymmetricAead`) — present so the
-    /// nonce-width-discrimination pin has a foil. NOT the vault's codepoint.
+    /// The 12-byte `SymmetricAead` (ChaCha20-Poly1305) sibling codepoint —
+    /// a RATIFIED, frozen, shipping v1-beta variant (Ben ruling 3,
+    /// 2026-06-02; "ship both" per R0.3 §4.1 rows `SymmetricAead [u8;12]` +
+    /// `SymmetricAeadXNonce [u8;24]`). Its assigned home is the Layer-A
+    /// vault band `0x6100..0x61FF` (R0.3 §4.0). It is NOT the vault's own
+    /// codepoint (the vault uses the 24-byte XNonce variant at `0x6100`);
+    /// here it serves as the foil for the nonce-width-discrimination pin.
     pub const SYMMETRIC_AEAD_12B_CODEPOINT: u16 = 0x6101;
 
     /// XChaCha20-Poly1305 nonce width (m-4). STUB emits the WRONG width so the
@@ -135,10 +140,66 @@ mod f_va_1_stub {
         Ok(())
     }
 
-    /// Re-serialize a decoded payload to canonical CBOR. STUB returns an empty
-    /// Vec so the round-trip-byte-identity pin fails until R5.
-    pub fn canonical_cbor_for_test(_payload: &VaultPayload) -> Vec<u8> {
-        Vec::new()
+    /// Re-serialize a decoded payload to canonical DAG-CBOR.
+    ///
+    /// **F4-038 golden-hex (per the R4-fix GOLDEN-HEX procedure):** the
+    /// prior stub returned an empty Vec, so the format-freeze test could
+    /// only assert self-equality (`first == second`) — it froze ZERO bytes
+    /// and pinned nothing about the field ORDER. This stub now emits a
+    /// REAL deterministic canonical DAG-CBOR encoding (definite-length,
+    /// canonical map-key order, big-endian integers per M-19) so the
+    /// `VAULT_PAYLOAD_GOLDEN_HEX` literal below freezes the exact field-order
+    /// bytes. Any field reorder / encoding / endianness drift flips the pin.
+    /// R5 confirms-or-deliberately-updates the frozen literal against the
+    /// real `serde_ipld_dagcbor` encoder (M-20).
+    ///
+    /// Field order is FROZEN per R0.3 §3.1: k_principal, then
+    /// user_did_signing_key, then user_did_creation_time. The canonical
+    /// DAG-CBOR map-key order (length-first, then bytewise) happens to
+    /// coincide with this declaration order for these three keys.
+    pub fn canonical_cbor_for_test(payload: &VaultPayload) -> Vec<u8> {
+        // Minimal hand-rolled canonical CBOR (no serde dep in the stub).
+        fn uint(major: u8, n: u64) -> Vec<u8> {
+            let m = major << 5;
+            if n < 24 {
+                vec![m | (n as u8)]
+            } else if n < 0x100 {
+                vec![m | 24, n as u8]
+            } else if n < 0x1_0000 {
+                let b = (n as u16).to_be_bytes();
+                vec![m | 25, b[0], b[1]]
+            } else if n < 0x1_0000_0000 {
+                let b = (n as u32).to_be_bytes();
+                vec![m | 26, b[0], b[1], b[2], b[3]]
+            } else {
+                let b = n.to_be_bytes();
+                let mut v = vec![m | 27];
+                v.extend_from_slice(&b);
+                v
+            }
+        }
+        fn tstr(s: &str) -> Vec<u8> {
+            let mut out = uint(3, s.len() as u64);
+            out.extend_from_slice(s.as_bytes());
+            out
+        }
+        fn bstr(b: &[u8]) -> Vec<u8> {
+            let mut out = uint(2, b.len() as u64);
+            out.extend_from_slice(b);
+            out
+        }
+
+        let mut out = uint(5, 3); // map of 3 pairs
+        // Pair 1: "k_principal" => bstr(k_principal)
+        out.extend(tstr("k_principal"));
+        out.extend(bstr(&payload.k_principal));
+        // Pair 2: "user_did_signing_key" => bstr(signing_key)
+        out.extend(tstr("user_did_signing_key"));
+        out.extend(bstr(&payload.user_did_signing_key));
+        // Pair 3: "user_did_creation_time" => u64 (BE per M-19)
+        out.extend(tstr("user_did_creation_time"));
+        out.extend(uint(0, payload.user_did_creation_time));
+        out
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,15 +303,35 @@ fn xnonce_codepoint_with_12_byte_nonce_is_rejected() {
     );
 }
 
+/// The FROZEN canonical DAG-CBOR golden hex for `fixture_payload()`
+/// (F4-038). Computed ONCE from the canonical encoder (definite-length map
+/// of 3 pairs; field order k_principal ‖ user_did_signing_key ‖
+/// user_did_creation_time; bstr values; the u64 creation-time `0x65432100`
+/// encodes as the 5-byte CBOR uint `1a 65 43 21 00` — BIG-ENDIAN per M-19).
+/// This is an ABSOLUTE byte vector, NOT a self-referential re-encode — any
+/// field reorder / encoding / endianness drift flips this pin.
+/// R5 confirms-or-deliberately-updates against the real
+/// `serde_ipld_dagcbor` encoder (M-20).
+const VAULT_PAYLOAD_GOLDEN_HEX: &str = "a36b6b5f7072696e636970616c5820111111111111111111111111111111111111111111111111111111111111111174757365725f6469645f7369676e696e675f6b657958402222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222276757365725f6469645f6372656174696f6e5f74696d651a65432100";
+
+/// Lowercase-hex-encode a byte slice (no external dep).
+fn to_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
+
 /// F-VA-1 (d) — the CBOR payload is canonical + re-serialize is byte-identical
-/// (field-order freeze: k_principal, user_did_signing_key,
-/// user_did_creation_time).
+/// + the EXACT field-order bytes are frozen (F4-038 golden-hex; field-order
+/// freeze: k_principal, user_did_signing_key, user_did_creation_time).
 ///
-/// would-FAIL-if-no-op'd: the stub returns an empty Vec for both serializations
-/// so the non-empty + equality assertions fail until R5 emits real canonical
-/// CBOR. A field-reorder produces different bytes.
+/// would-FAIL-if-no-op'd: a field-reorder, a non-big-endian integer, or any
+/// encoding drift produces bytes ≠ the frozen `VAULT_PAYLOAD_GOLDEN_HEX`. The
+/// golden-hex literal is an ABSOLUTE frozen vector (not `enc(x)==enc(x)`).
 #[test]
-#[ignore = "RED-PHASE: F-VA-1 — vault CBOR payload is canonical + re-serialize byte-identical (field-order freeze); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-VA-1 — vault CBOR payload canonical + re-serialize byte-identical + frozen golden-hex field-order pin; un-ignore at R5"]
 fn vault_cbor_payload_canonical_and_reserializes_byte_identical() {
     let payload = fixture_payload();
     let first = canonical_cbor_for_test(&payload);
@@ -258,12 +339,24 @@ fn vault_cbor_payload_canonical_and_reserializes_byte_identical() {
     assert!(
         !first.is_empty(),
         "canonical CBOR of the vault payload MUST be non-empty (a frozen \
-         format has bytes); would-FAIL while the stub returns []"
+         format has bytes)"
     );
     assert_eq!(
         first, second,
         "canonical CBOR re-serialize MUST be byte-identical (deterministic \
          field order: k_principal, user_did_signing_key, \
          user_did_creation_time); would-FAIL on a non-canonical encoder"
+    );
+
+    // F4-038 golden-hex: freeze the EXACT field-order bytes. A field reorder
+    // (e.g. user_did_creation_time first) or a little-endian creation-time
+    // produces a different hex string → this pin flips. This is the
+    // freeze-gating field-order assertion the prior self-equality arm lacked.
+    assert_eq!(
+        to_hex(&first),
+        VAULT_PAYLOAD_GOLDEN_HEX,
+        "vault payload canonical-DAG-CBOR bytes MUST match the frozen golden-hex \
+         (field order k_principal ‖ user_did_signing_key ‖ user_did_creation_time; \
+         big-endian creation-time per M-19); a reorder/encoding/endianness drift flips this"
     );
 }

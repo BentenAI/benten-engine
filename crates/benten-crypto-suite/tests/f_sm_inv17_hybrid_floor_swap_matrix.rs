@@ -93,24 +93,52 @@ mod f_sm_stub {
     pub fn strip_classical_half(sealed: &[u8]) -> Vec<u8> {
         sealed.to_vec()
     }
+
+    /// Produce the output of the **no-encryption** (`0x0000` /
+    /// `no_encryption_public_class`) swap-matrix arm. The security-relevant
+    /// property (CC-MAJ-SM2): selecting no-encryption MUST emit the
+    /// plaintext VERBATIM (the public-class deployment posture — the data
+    /// IS readable, by design; it must NOT be silently encrypted, and must
+    /// NOT be refused). STUB deliberately does NOT emit the plaintext
+    /// verbatim (it wraps the plaintext with a sentinel byte, modelling a
+    /// "wrong-but-plausible" impl that default-encrypts-and-discards-key or
+    /// mis-wires the arm) so the verbatim-plaintext pin FAILS red until R5
+    /// wires the real no-encryption path.
+    pub fn seal_no_encryption(plaintext: &[u8]) -> Vec<u8> {
+        // STUB BUG (intentional): NOT verbatim — prepends a sentinel so the
+        // output != plaintext. R5's real no-encryption arm returns the
+        // plaintext unchanged.
+        let mut out = vec![0xFFu8];
+        out.extend_from_slice(plaintext);
+        out
+    }
 }
 
-use f_sm_stub::{Cfg, open, seal, strip_classical_half, strip_pq_half};
+use f_sm_stub::{Cfg, open, seal, seal_no_encryption, strip_classical_half, strip_pq_half};
 
 const RECIPIENT_PUB: [u8; 32] = [0x42; 32];
 const PLAINTEXT: &[u8] = b"benten-swap-matrix-fixture";
 
 /// **F-SM-1** — Inv-17 hybrid-mandatory floor: no pure-PQ LIVE or
-/// selectable at the v1-beta default.
+/// selectable at the v1-beta default. **ALREADY-LIVE REGRESSION-GUARD**
+/// (F4-017): this arm exercises ONLY the LIVE in-tree `SwapMatrix` +
+/// `CipherSuiteCodepoint` surface (no stub, no V2-corpus dependency), so
+/// it asserts an already-shipped fact and is NOT a red-phase pin — it has
+/// no would-FAIL-vs-stub arm because there is no stub. Per the R4 triage
+/// (F4-017: "add a would-FAIL arm OR re-scope as an already-LIVE
+/// regression-guard — un-ignore + label"), it is re-scoped as a
+/// regression-guard and un-ignored: it guards against a future regression
+/// that (a) flips the v1-beta default off PQ-hybrid, (b) silently opens
+/// the pure-PQ audit gate, or (c) collides `0x647c`/`0x647b`.
 ///
 /// (a) the v1-beta default's encryption half IS PQ-hybrid + the classical
 /// half is present (`encryption_active`); (b) the pure-PQ arm is NOT
 /// reachable at the workspace baseline (`AUDIT_LANDED_PURE_PQ_FLAG ==
 /// false` ⇒ `try_pure_pq_sole_trust_path` errors); (c) `0x647c ≠ 0x647b`.
-/// would-FAIL-if-no-op'd: if the audit flag were silently `true`, the
-/// pure-PQ constructor would succeed (the floor would be breached).
+/// would-FAIL-on-regression: if the audit flag were silently `true`, the
+/// pure-PQ constructor would succeed (the floor would be breached) — this
+/// guard fires.
 #[test]
-#[ignore = "RED-PHASE: F-SM-1 — Inv-17 hybrid floor; no pure-PQ LIVE/selectable at v1-beta; un-ignore at R5 (rides V2 corpus)"]
 fn inv17_hybrid_floor_no_pure_pq_live() {
     let default = SwapMatrix::v1_beta_default();
     assert!(
@@ -158,8 +186,19 @@ fn inv17_hybrid_floor_no_pure_pq_live() {
 /// in BOTH directions, and each arm dispatches its distinct codepoint.
 /// would-FAIL-if-no-op'd: a config whose `cipher_suite_codepoint()` did
 /// not match its arm, or whose round-trip dropped the plaintext, fails.
+///
+/// **CC-MAJ-SM2 (no-encryption arm; minted at R4):** the no-encryption
+/// (`0x0000` / `no_encryption_public_class`) arm previously had ONLY a
+/// codepoint pin ("no ciphertext to round-trip; its codepoint pin
+/// suffices") — its security-relevant property was untested. The
+/// public-class posture is that the data IS readable by design, so
+/// selecting no-encryption MUST emit the **plaintext VERBATIM** (not
+/// silently encrypted, not refused). The new arm pins exactly that; the
+/// stub `seal_no_encryption` deliberately does NOT emit verbatim (it wraps
+/// with a sentinel — a wrong-but-plausible default-encrypt mis-wire) so
+/// the pin fires RED until R5 wires the real no-encryption path.
 #[test]
-#[ignore = "RED-PHASE: F-SM-2 — full bidirectional cipher swap matrix (each arm a real path); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-SM-2 — full bidirectional cipher swap matrix (each arm a real path) + CC-MAJ-SM2 no-encryption emits plaintext verbatim; un-ignore at R5"]
 fn full_bidirectional_cipher_swap_matrix() {
     // Each arm dispatches its expected codepoint (the swap-matrix axis is real).
     assert_eq!(
@@ -180,8 +219,7 @@ fn full_bidirectional_cipher_swap_matrix() {
         "no-encryption arm dispatches 0x0000 (NONE_PLAINTEXT)"
     );
 
-    // Bidirectional round-trip for each ENCRYPTING arm (no-encryption arm
-    // has no ciphertext to round-trip; its codepoint pin above suffices).
+    // Bidirectional round-trip for each ENCRYPTING arm.
     for cfg in [Cfg::HybridDefault, Cfg::ClassicalOnly, Cfg::Nf1PqPq] {
         let sealed = seal(cfg, PLAINTEXT, &RECIPIENT_PUB);
         let opened = open(cfg, &sealed, &RECIPIENT_PUB)
@@ -191,6 +229,27 @@ fn full_bidirectional_cipher_swap_matrix() {
             "swap-matrix arm {cfg:?} must round-trip plaintext in both directions"
         );
     }
+
+    // CC-MAJ-SM2: the no-encryption (0x0000) arm emits the plaintext
+    // VERBATIM (public-class posture: the bytes ARE readable, by design).
+    // would-FAIL-if-no-op'd: the stub prepends a sentinel (a wrong-but-
+    // plausible "default-encrypt-and-discard-key" mis-wire), so the
+    // verbatim assertion fires RED until R5 wires the real arm.
+    let no_enc_out = seal_no_encryption(PLAINTEXT);
+    assert_eq!(
+        no_enc_out, PLAINTEXT,
+        "the no-encryption arm (0x0000 / public-class) MUST emit the plaintext VERBATIM \
+         (not silently encrypted, not refused); would-FAIL while the stub wraps it"
+    );
+    // The output is the plaintext with NO added framing — it is readable
+    // without any recipient key material (the public-class confidentiality
+    // posture: data IS readable by design).
+    assert_eq!(
+        no_enc_out.len(),
+        PLAINTEXT.len(),
+        "the no-encryption arm output MUST carry NO AEAD tag / key framing (length == plaintext length); \
+         would-FAIL while the stub adds a sentinel byte"
+    );
 }
 
 /// **F-SM-3** — strip-resistance / committing-combiner negative.

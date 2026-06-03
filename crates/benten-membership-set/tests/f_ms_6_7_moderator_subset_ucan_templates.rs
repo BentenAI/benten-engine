@@ -9,8 +9,8 @@
 //!
 //! Moderator's ability-set (read / write / share / moderate-content) is a
 //! **STRICT subset** of Admin's: `admin ⊇ moderator` AND `moderator ⊉ admin`
-//! (proper containment). Moderator has **NO** admit / kick / rotate-on-fork /
-//! governance-config. (#52 role-downgrade-subsume context.)
+//! (proper containment). Moderator has **NO** admit / kick / rotate / assign-
+//! roles / governance-config. (#52 role-downgrade-subsume context.)
 //!
 //! # What F-MS-7 pins (R0 §3.6.B / R1-Q-9 / §9.1-5)
 //!
@@ -19,13 +19,24 @@
 //! signed `GovernanceConfig`, **NOT** a frozen permission-flags bitfield (a
 //! bitfield is the rejected shape — grep-defense).
 //!
+//! # Ratified Admin ability set (Ben 2026-06-02 — ruling 2)
+//!
+//! `Admin = Moderator's {read, write, share, moderate_content}
+//!        ∪ {admit-member, kick-member, rotate-keys, assign-roles,
+//!           edit-governance-config}`.
+//! This satisfies M-11 (Moderator ⊊ Admin) AND restores `assign-roles`
+//! (the role-change ability the prior R3 draft dropped). The 5 admin-exclusive
+//! governance abilities are `{admit-member, kick-member, rotate-keys,
+//! assign-roles, edit-governance-config}`.
+//!
 //! # RED-PHASE status (pim-12 §3.6e)
 //!
 //! Self-contained in-file stub-shim; compiles green behind `#[ignore]`. R5
 //! swaps in `benten_membership_set::role::{RoleId, ability_template}` (which
 //! composes against benten-caps UCAN) and un-ignores. Would-FAIL-if-no-op'd: a
-//! Moderator that contains `admit`/`kick`/`rotate`, an Admin that doesn't
-//! superset Moderator, or a frozen permission-flags-bitfield representation all
+//! Moderator that contains `admit-member`/`kick-member`/`rotate-keys`/
+//! `assign-roles`, an Admin that doesn't superset Moderator OR that drops
+//! `assign-roles`, or a frozen permission-flags-bitfield representation all
 //! break a pin.
 
 #![allow(dead_code)]
@@ -47,6 +58,9 @@ enum RoleId {
 /// (semantics compose from UCAN, NOT a packed bitfield — F-MS-7 grep-defense).
 /// At R5 these come from `ability_template(role)` resolving real UCAN
 /// ability-tokens.
+///
+/// Admin = Moderator ∪ {admit-member, kick-member, rotate-keys, assign-roles,
+/// edit-governance-config} per the ratified ruling-2 set.
 fn ability_template(role: RoleId) -> BTreeSet<&'static str> {
     let v: &[&str] = match role {
         RoleId::Invitee => &[], // NONE — zero content (F-MS-5)
@@ -54,21 +68,31 @@ fn ability_template(role: RoleId) -> BTreeSet<&'static str> {
         RoleId::Member => &["read", "write_own", "share_within_policy"],
         RoleId::Moderator => &["read", "write", "share", "moderate_content"],
         RoleId::Admin => &[
+            // Moderator's four (Admin ⊇ Moderator).
             "read",
             "write",
             "share",
             "moderate_content",
-            "admit",
-            "kick",
-            "rotate_on_fork",
-            "governance_config",
+            // The five admin-exclusive governance abilities (ruling 2).
+            "admit-member",
+            "kick-member",
+            "rotate-keys",
+            "assign-roles",
+            "edit-governance-config",
         ],
     };
     v.iter().copied().collect()
 }
 
-/// The set of admin-exclusive governance abilities a Moderator must NEVER hold.
-const ADMIN_EXCLUSIVE: [&str; 4] = ["admit", "kick", "rotate_on_fork", "governance_config"];
+/// The set of admin-exclusive governance abilities a Moderator must NEVER hold
+/// (the ratified ruling-2 five-element set). Restores `assign-roles`.
+const ADMIN_EXCLUSIVE: [&str; 5] = [
+    "admit-member",
+    "kick-member",
+    "rotate-keys",
+    "assign-roles",
+    "edit-governance-config",
+];
 
 // ── F-MS-6 pins ──────────────────────────────────────────────────────────────
 
@@ -88,15 +112,19 @@ fn ms6_moderator_strict_subset_of_admin() {
         !admin.is_subset(&moderator),
         "Admin is NOT a subset of Moderator — the containment is STRICT (Moderator ⊊ Admin)"
     );
-    // There is at least one ability Admin has that Moderator lacks.
-    assert!(
-        admin.difference(&moderator).count() >= 1,
-        "Admin strictly exceeds Moderator"
+    // Admin strictly exceeds Moderator by exactly the 5 admin-exclusive
+    // governance abilities (ruling 2). Would-FAIL if Admin dropped one (e.g.
+    // assign-roles) or gained a non-governance ability beyond the union.
+    let diff: BTreeSet<&str> = admin.difference(&moderator).copied().collect();
+    let exclusive: BTreeSet<&str> = ADMIN_EXCLUSIVE.iter().copied().collect();
+    assert_eq!(
+        diff, exclusive,
+        "Admin = Moderator ∪ {{admit-member, kick-member, rotate-keys, assign-roles, edit-governance-config}} (ruling 2)"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-6 — Moderator has NO admit/kick/rotate/governance abilities; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-MS-6 — Moderator has NO admit/kick/rotate/assign-roles/governance abilities; un-ignore at R5"]
 fn ms6_moderator_denied_admin_governance() {
     let moderator = ability_template(RoleId::Moderator);
     // Moderator must NOT hold any admin-exclusive governance ability.
@@ -107,11 +135,18 @@ fn ms6_moderator_denied_admin_governance() {
         );
     }
     // Paired positive control: Admin DOES hold all of them — so the negatives
-    // above are load-bearing, not vacuous.
+    // above are load-bearing, not vacuous. (Includes assign-roles, restored
+    // per ruling 2.)
     let admin = ability_template(RoleId::Admin);
     for ability in ADMIN_EXCLUSIVE {
         assert!(admin.contains(ability), "Admin holds '{ability}'");
     }
+    // Explicitly assert the restored role-change ability lives on Admin (the
+    // F4-020 finding: the prior draft dropped it).
+    assert!(
+        admin.contains("assign-roles"),
+        "Admin holds 'assign-roles' (the role-change ability restored per ruling 2)"
+    );
 }
 
 // ── F-MS-7 pins ──────────────────────────────────────────────────────────────
@@ -120,7 +155,8 @@ fn ms6_moderator_denied_admin_governance() {
 #[ignore = "RED-PHASE: F-MS-7 — per-role UCAN ability-template golden-vector (stable across canary); un-ignore at R5"]
 fn ms7_per_role_ucan_ability_golden_vector() {
     // Golden-vector per role. Drift fails the pin (the template is canary-pinned
-    // because the abilities AAD-bind via role_assignments_generation).
+    // because the abilities AAD-bind via role_assignments_generation). Each
+    // expected slice is sorted (BTreeSet order) so the equality is exact.
     let golden: [(RoleId, &[&str]); 5] = [
         (RoleId::Invitee, &[]),
         (RoleId::Viewer, &["read"]),
@@ -134,13 +170,15 @@ fn ms7_per_role_ucan_ability_golden_vector() {
         ),
         (
             RoleId::Admin,
+            // Sorted BTreeSet order of the ruling-2 Admin set.
             &[
-                "admit",
-                "governance_config",
-                "kick",
+                "admit-member",
+                "assign-roles",
+                "edit-governance-config",
+                "kick-member",
                 "moderate_content",
                 "read",
-                "rotate_on_fork",
+                "rotate-keys",
                 "share",
                 "write",
             ],
@@ -170,7 +208,7 @@ fn ms7_no_permission_flags_bitfield() {
     // Removing one ability yields a strictly-smaller set (bitfield-free: no
     // implicit flag-coupling forces multiple bits to move together).
     let mut narrowed = admin.clone();
-    narrowed.remove("governance_config");
+    narrowed.remove("edit-governance-config");
     assert_eq!(
         narrowed.len(),
         admin.len() - 1,

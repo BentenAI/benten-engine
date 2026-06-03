@@ -77,7 +77,9 @@ mod f_va_4_stub {
     }
 
     /// Whether the real wrapper redacts its Debug. STUB = false (red-phase);
-    /// R5's `SecretBox` = true.
+    /// R5's `SecretBox` = true. NOTE (F4-037): the leak-defense pin no longer
+    /// gates on this const — it asserts directly on the rendered Debug string
+    /// (the observable consequence). Kept as documentation of R5 intent.
     pub const WRAPPER_DEBUG_REDACTS: bool = false;
 
     /// Drives the zeroize-on-Drop contract over a controlled buffer. The real
@@ -122,27 +124,50 @@ mod f_va_4_stub {
     pub const DROP_ZEROIZES: bool = false;
 }
 
-use f_va_4_stub::{DROP_ZEROIZES, StubSecretKey, WRAPPER_DEBUG_REDACTS, ZeroizeWitness};
+use f_va_4_stub::{DROP_ZEROIZES, StubSecretKey, ZeroizeWitness};
 
 /// F-VA-4 (a) — the unlocked-key handle is a secret wrapper whose Debug does
 /// NOT leak the key bytes (Compromise #36 coredump/log-leak defense).
 ///
-/// would-FAIL-if-no-op'd: the stub's Debug renders the raw bytes; the real
-/// `SecretBox` Debug renders only `SecretBox<…>`. The pin scans the rendered
-/// Debug string for the key's byte pattern.
+/// **F4-037 (distinct-byte fixture; drop the const conjunct):** the prior
+/// fixture was all-same-byte (`[0xC3;32]`) — a weak foil whose single value
+/// could coincidentally appear in (or be absent from) a redacted render, and
+/// the assertion gated on the `WRAPPER_DEBUG_REDACTS` const (an
+/// `assert(CONST && ...)` conjunct). The fixture is now a DISTINCT-byte
+/// pattern, and the assertion is solely on the actual rendered string (the
+/// observable consequence) — no const conjunct. The scan looks for the
+/// decimal renderings of several distinct key bytes (the `{:?}` array form
+/// renders `[222, 173, 190, 239, ...]`); a leaking Debug contains them, a
+/// redacted `SecretBox<…>` render does not.
+///
+/// would-FAIL-if-no-op'd: the stub's Debug renders the raw bytes (so the
+/// scan finds the distinct values → fires red); the real `SecretBox` Debug
+/// renders only `SecretBox<…>`.
 #[test]
 #[ignore = "RED-PHASE: F-VA-4 — unlocked K_principal wrapper Debug MUST NOT leak key bytes (secrecy::SecretBox; #36); un-ignore at R5"]
 fn secret_wrapper_debug_does_not_leak_key() {
-    let key_bytes = [0xC3u8; 32];
+    // Distinct-byte fixture (a robust foil): each leading byte is a different
+    // multi-digit decimal value, so the Debug-leak scan is unambiguous.
+    let mut key_bytes = [0u8; 32];
+    let distinctive: [u8; 8] = [0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xD0];
+    key_bytes[..8].copy_from_slice(&distinctive);
+    for (i, b) in key_bytes.iter_mut().enumerate().skip(8) {
+        *b = (i as u8).wrapping_mul(7).wrapping_add(3); // varied, non-constant tail
+    }
     let secret = StubSecretKey::new(key_bytes);
     let rendered = format!("{secret:?}");
 
-    // The key as a hex/byte signature that MUST NOT appear in a Debug render.
-    let leaked = rendered.contains("195") // 0xC3 == 195 in the `{:?}` array form
-        || rendered.contains("c3")
-        || rendered.contains("C3");
+    // The `{:?}` array form renders bytes as DECIMAL: 0xDE=222, 0xAD=173,
+    // 0xBE=190, 0xEF=239, 0xCA=202, 0xFE=254. A leaking Debug contains these
+    // distinct multi-digit values; a redacted `SecretBox<…>` render does not.
+    let leaked = rendered.contains("222")
+        || rendered.contains("173")
+        || rendered.contains("190")
+        || rendered.contains("239")
+        || rendered.contains("202")
+        || rendered.contains("254");
     assert!(
-        WRAPPER_DEBUG_REDACTS && !leaked,
+        !leaked,
         "the unlocked-K_principal wrapper MUST redact its Debug (secrecy::\
          SecretBox renders `SecretBox<…>`, never the bytes) — a coredump or a \
          log line MUST NOT contain the key (Compromise #36). would-FAIL while \

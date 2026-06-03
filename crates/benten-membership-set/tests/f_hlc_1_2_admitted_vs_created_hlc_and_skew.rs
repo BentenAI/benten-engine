@@ -144,6 +144,52 @@ fn f_hlc_1_admitted_at_hlc_lww_larger_wins() {
         converged_ab, "Moderator",
         "larger HLC (t2=200) wins for admitted_at_hlc"
     );
+
+    // F4-039: equal-`physical_ms` tie sub-case — the lex-compare is NOT
+    // physical_ms-only. When two concurrent admits share `physical_ms`, the
+    // tie breaks on (logical, then node_id) per the derived lexicographic Ord.
+    // An impl that compared ONLY `physical_ms` would treat these as equal and
+    // resolve non-deterministically (or keep the wrong one) — this arm fails
+    // for any such under-constrained compare.
+    let tie_lo = Hlc {
+        physical_ms: 300,
+        logical: 0,
+        node_id: 0x1111_1111,
+    };
+    let tie_hi_logical = Hlc {
+        physical_ms: 300, // SAME physical_ms
+        logical: 1,       // larger logical breaks the tie
+        node_id: 0x0000_0000,
+    };
+    // Larger (logical) wins despite the SAME physical_ms and SMALLER node_id.
+    let converged_logical = admitted_at_hlc_lww((tie_lo, "Member"), (tie_hi_logical, "Moderator"));
+    assert_eq!(
+        converged_logical, "Moderator",
+        "equal physical_ms ⇒ the LARGER logical wins (lex-compare, not physical_ms-only)"
+    );
+    assert_eq!(
+        admitted_at_hlc_lww((tie_hi_logical, "Moderator"), (tie_lo, "Member")),
+        "Moderator",
+        "equal physical_ms tie-break is commutative"
+    );
+
+    // And when physical_ms AND logical both tie, node_id is the terminal
+    // discriminator (totality of the lex order).
+    let tie_node_lo = Hlc {
+        physical_ms: 300,
+        logical: 7,
+        node_id: 10,
+    };
+    let tie_node_hi = Hlc {
+        physical_ms: 300, // SAME
+        logical: 7,       // SAME
+        node_id: 20,      // larger node_id breaks the tie
+    };
+    assert_eq!(
+        admitted_at_hlc_lww((tie_node_lo, "Member"), (tie_node_hi, "Moderator")),
+        "Moderator",
+        "equal (physical_ms, logical) ⇒ larger node_id wins (lex-compare totality)"
+    );
 }
 
 /// F-HLC-1 arm 2 — the M-7 distinction: only `created_at_hlc` drives the

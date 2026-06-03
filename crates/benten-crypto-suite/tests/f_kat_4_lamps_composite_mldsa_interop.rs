@@ -185,11 +185,17 @@ fn benten_lamps_signature_outbound_shape() {
 /// F-KAT-4 (c) — NEGATIVE: a mismatched OID is rejected (the OID is load-bearing
 /// in the composite verification).
 ///
-/// would-FAIL-if-no-op'd: a verifier that ignores the OID would accept the
-/// wrong-OID sig. (Uses the WIRED model so the rejection is meaningful — R5
-/// preserves: even the real verifier rejects a mismatched OID.)
+/// **F4-036 (REGRESSION-GUARD, not a red-phase pin):** unlike pins (a)/(b)
+/// which fire red against the unwired stub, this arm drives the WIRED verify
+/// model (`enforce = true`) deliberately, so it asserts an ALREADY-CORRECT
+/// fact — the OID-binding rejection that R5's real verifier must preserve. It
+/// is correctly classified as a regression-guard (it guards against a future
+/// verifier that drops the OID check), NOT a would-FAIL-vs-stub red-phase pin.
+///
+/// would-FAIL-on-regression: a verifier that ignores the OID would accept the
+/// wrong-OID sig. R5 preserves: even the real verifier rejects a mismatched OID.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-4 — a mismatched LAMPS OID MUST be rejected (OID load-bearing); un-ignore at R5"]
+#[ignore = "REGRESSION-GUARD (F4-036): mismatched LAMPS OID MUST be rejected (OID load-bearing; drives the WIRED model — asserts an already-correct fact); un-ignore at R5"]
 fn mismatched_oid_is_rejected() {
     let mut sig = external_fixture(Ecosystem::BouncyCastle);
     // Tamper the OID to a different composite (e.g. a P256 composite OID).

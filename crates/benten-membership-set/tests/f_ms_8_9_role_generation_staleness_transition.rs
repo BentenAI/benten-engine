@@ -72,6 +72,20 @@ struct EphemeralGrant {
 const DEFAULT_EXP_BOUND_SECS: u64 = 3600;
 
 impl EphemeralGrant {
+    /// Production-shaped issuance that ENFORCES the §3.4 tight-exp default: a
+    /// requested expiry is CLAMPED to `nbf + DEFAULT_EXP_BOUND_SECS` so the
+    /// #60 survival window stays small regardless of what the caller asked
+    /// for. At R5 this is the benten-caps ephemeral-grant minting path. A
+    /// no-op issuer that honored an unbounded `requested_exp` verbatim would
+    /// produce an over-long grant and FAIL `ms9_tight_exp_default_bounds_…`.
+    fn issue_bounded(nbf: u64, requested_exp: u64) -> Self {
+        let max_exp = nbf.saturating_add(DEFAULT_EXP_BOUND_SECS);
+        EphemeralGrant {
+            nbf,
+            exp: requested_exp.min(max_exp),
+        }
+    }
+
     /// Production-shaped validity check: the grant is valid iff `now ∈
     /// [nbf, exp)`. A membership-set role *downgrade* does NOT appear here —
     /// the grant survives until `exp` (#60). At R5 this is the benten-caps
@@ -154,18 +168,36 @@ fn ms9_role_transition_survives_prior_ucan() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-9 — §3.4 tight-exp default keeps the #60 survival window small (exp-nbf ≤ default-bound); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-MS-9 — §3.4 tight-exp default keeps the #60 survival window small (issuer CLAMPS over-long requests); un-ignore at R5"]
 fn ms9_tight_exp_default_bounds_survival_window() {
-    // The default ephemeral-grant lifetime is tight, so the #60 survival
-    // window is small. Would-FAIL if the default bound were unbounded/large.
-    let grant = EphemeralGrant {
-        nbf: 1000,
-        exp: 1000 + DEFAULT_EXP_BOUND_SECS,
-    };
+    // F4-033: the prior arm constructed `exp = nbf + DEFAULT_EXP_BOUND_SECS`
+    // and then asserted `lifetime ≤ DEFAULT_EXP_BOUND_SECS` — true BY
+    // CONSTRUCTION (tautological; a no-op issuer passes). Instead, drive the
+    // real ISSUER (`issue_bounded`) with an OVER-LONG requested expiry and
+    // assert it CLAMPS the survival window down to the default bound. A
+    // no-op issuer that honored the over-long request verbatim would FAIL.
+    let nbf = 1000;
+    let over_long_request = nbf + 10 * DEFAULT_EXP_BOUND_SECS; // 10× too long
+    let grant = EphemeralGrant::issue_bounded(nbf, over_long_request);
     assert!(
         grant.lifetime_secs() <= DEFAULT_EXP_BOUND_SECS,
-        "the §3.4 default keeps exp-nbf ≤ default-bound (tight survival window)"
+        "the issuer CLAMPS an over-long requested expiry to the §3.4 default bound (tight survival window)"
     );
+    assert_eq!(
+        grant.exp,
+        nbf + DEFAULT_EXP_BOUND_SECS,
+        "an over-long request is clamped exactly to nbf + DEFAULT_EXP_BOUND_SECS"
+    );
+
+    // A WITHIN-bound request is honored as-is (the issuer is not a blanket
+    // clamp-to-max — would-FAIL-if-no-op'd in the other direction).
+    let short_request = nbf + 60; // 1 minute, well under the bound
+    let short_grant = EphemeralGrant::issue_bounded(nbf, short_request);
+    assert_eq!(
+        short_grant.exp, short_request,
+        "a within-bound request is honored verbatim (not force-extended)"
+    );
+
     assert_eq!(
         DEFAULT_EXP_BOUND_SECS, 3600,
         "the v1-beta tight-exp default is the 1-hour bound"

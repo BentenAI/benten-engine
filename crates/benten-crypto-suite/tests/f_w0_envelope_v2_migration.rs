@@ -222,13 +222,31 @@ fn x_wing_0x647a_uses_real_sha3_256_construction_not_hkdf() {
 /// after the real-X-Wing rewrite (§3.2(a): "re-derive the classical-
 /// downgrade combiner consistently").
 ///
-/// Pins that the classical arm produces a DISTINCT, well-defined output
-/// from the hybrid arm (the rewrite must not collapse the two arms).
+/// **F4-009 strengthening (was green-when-intended-RED):** the prior arms
+/// (`hybrid != classical`, `classical != [0;32]`) both passed green against
+/// the stub (`combine_x_wing → [0;32]`, `classical → [0x22;32]`) — so this
+/// pin on the SOLE upstream canary asserted nothing about the rewrite. The
+/// load-bearing RED arm is now: **the hybrid `0x647A` combiner produces the
+/// real draft-connolly X-Wing output** (drives the real SHA3-256
+/// construction). The stub's `combine_x_wing` returns `[0;32]` ≠ the KAT
+/// `[0x11;32]` → RED; R5's real combiner == the KAT → GREEN. The
+/// distinct-arms + well-defined-classical assertions are kept as the
+/// consistency property (the rewrite must not collapse the two arms).
 #[test]
-#[ignore = "RED-PHASE: F-W0-1 — classical 0x6400 combiner re-derived consistently with the real-X-Wing rewrite; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-W0-1 — classical 0x6400 combiner re-derived consistently with the real-X-Wing rewrite (hybrid must equal the real draft-connolly KAT); un-ignore at R5"]
 fn classical_0x6400_combiner_consistent_after_rewrite() {
     let hybrid = combine_x_wing(&SS_MLKEM, &SS_X25519, &CT_X25519, &PK_X25519);
     let classical = classical_combine_for_fixture();
+
+    // Load-bearing RED arm: the hybrid arm IS the real X-Wing construction
+    // (the rewrite happened). would-FAIL while the stub combiner returns
+    // [0;32] instead of the real draft-connolly KAT.
+    assert_eq!(
+        hybrid,
+        draft_connolly_x_wing_kat_for_fixture(),
+        "the hybrid 0x647A combiner MUST be the real draft-connolly X-Wing SHA3-256 construction (else the classical re-derivation rides a stand-in, not the rewrite)"
+    );
+    // The rewrite must not collapse the two arms: classical ≠ hybrid.
     assert_ne!(
         hybrid, classical,
         "classical 0x6400 and hybrid 0x647A combiners must derive distinct keys (the rewrite must not collapse arms)"
@@ -332,8 +350,19 @@ fn codepoint_serialized_big_endian_on_wire() {
 /// (replacing the untyped `&[u8]` AAD at `aead.rs:145`); pins that the
 /// codepoint is committed in the typed binding's serialized form + that a
 /// cross-variant `BindingContext` mismatch strict-rejects (U2).
+///
+/// **F4-009 strengthening (was enum-literal-only):** the prior arms
+/// (`matches!(aad_binding, Vault{..})`, `aad_binding != whole`) were both
+/// trivially true at construction and pinned nothing on the SOLE upstream
+/// canary. The lift's load-bearing observable is the **serialized wire
+/// form** — the lifted `EncryptedEnvelope` MUST serialize the V2 format
+/// version + the codepoint BIG-ENDIAN (the typed-binding lift rides the
+/// SAME single V1→V2 bump). The stub `to_wire_bytes` writes V1 + LE
+/// deliberately, so the wire-form assertions fire RED until R5 wires the
+/// real lifted serializer. The variant-distinction assertions are kept as
+/// the typed-AAD shape property.
 #[test]
-#[ignore = "RED-PHASE: F-W0-4 — AeadEnvelope→EncryptedEnvelope lift + typed BindingContext (grep=ZERO at HEAD); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-W0-4 — AeadEnvelope→EncryptedEnvelope lift + typed BindingContext (grep=ZERO at HEAD; stub serializes V1/LE ⇒ wire-form arms fire red); un-ignore at R5"]
 fn aead_envelope_lifts_to_encrypted_envelope_with_typed_binding() {
     let vault = EncryptedEnvelope {
         format_version: ENVELOPE_FORMAT_VERSION_V2,
@@ -359,6 +388,24 @@ fn aead_envelope_lifts_to_encrypted_envelope_with_typed_binding() {
     assert_ne!(
         vault.aad_binding, whole,
         "cross-variant BindingContext mismatch must be distinguishable (U2 strict-decode, no cross-variant fallback)"
+    );
+
+    // Load-bearing RED arm: the lifted envelope's WIRE FORM rides the
+    // single V1→V2 bump + BE codepoint. would-FAIL while the stub
+    // serializer writes V1 + LE (the rename/lift never landed).
+    let wire = vault.to_wire_bytes();
+    assert_eq!(
+        wire[0], ENVELOPE_MAGIC,
+        "the lifted EncryptedEnvelope serializes byte-0 == envelope magic"
+    );
+    assert_eq!(
+        wire[1], ENVELOPE_FORMAT_VERSION_V2,
+        "the lifted EncryptedEnvelope MUST serialize byte-1 == V2 (the lift rides the single V1→V2 bump); would-FAIL while the stub writes V1"
+    );
+    assert_eq!(
+        [wire[2], wire[3]],
+        0x6100u16.to_be_bytes(),
+        "the lifted EncryptedEnvelope MUST serialize the vault codepoint BIG-ENDIAN (M-19); would-FAIL while the stub writes LE"
     );
 }
 

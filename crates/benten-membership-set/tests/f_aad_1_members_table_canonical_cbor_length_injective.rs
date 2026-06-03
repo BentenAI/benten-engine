@@ -27,6 +27,22 @@
 //! hex-locks the canonical-CBOR bytes + proves length-injectivity +
 //! re-serialization stability + BTreeMap-order-independence.
 //!
+//! ## R4-FIX (F4-001 BLOCKER + F4-007 MAJOR): absolute frozen golden vector
+//!
+//! The original `expected_fixture_hex()` re-invoked the SAME encoder it
+//! asserted against (`assert_eq!(enc(x), enc(x))`) — a self-referential
+//! tautology that froze ZERO bytes (any field-order / endianness / presence
+//! drift would have changed BOTH sides equally and passed). The fix freezes
+//! the canonical DAG-CBOR bytes of `fixture_table()` as an ABSOLUTE
+//! `const EXPECTED_HEX` literal (computed once, off-line, from the canonical
+//! `serde_ipld_dagcbor` encoder — see the throwaway compute step recorded in
+//! the R4-fix manifest). The arm now asserts
+//! `hex(encoder(fixture)) == EXPECTED_HEX`, so ANY drift in field-order,
+//! presence-encoding, RoleId ordinal, `Hlc` layout, or integer endianness
+//! flips the pin. **R5 confirms-or-deliberately-updates this frozen literal
+//! against the real `benten_membership_set::aad::canonical_members_table_bytes`
+//! (M-20).**
+//!
 //! ## pim-2 §3.6b + pim-18 §3.6f + §3.6f-ext end-to-end discipline
 //!
 //! Each arm drives the PRODUCTION canonical-bytes assembler
@@ -41,9 +57,12 @@
 //!
 //! Compiles GREEN at baseline behind `#[ignore]`. The stub-shim below is
 //! SELF-CONTAINED (no `use benten_membership_set::…`, no sibling-wave
-//! dep) so the wave is parallel-safe. The R5 MembershipSet wave deletes
-//! the shim, swaps in `use benten_membership_set::…`, un-ignores, and
-//! verifies the SAME hex-pins hold against the real types.
+//! dep) so the wave is parallel-safe. The `MemberEntry` / `Hlc` / `RoleId`
+//! / `MemberRef` shapes are the canonical R0.3 §3.5 shapes (5-field
+//! `MemberEntry`, 3-field `Hlc`) — byte-compatible with the F-MS-3 fusion
+//! stub (F4-006 reconciliation). The R5 MembershipSet wave deletes the shim,
+//! swaps in `use benten_membership_set::…`, un-ignores, and verifies the
+//! SAME hex-pin holds against the real types.
 //!
 //! ## Wave-0 DAG edge (M-20)
 //!
@@ -64,9 +83,10 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 struct Did(String);
 
-/// Stub `Hlc` — the `admitted_at_hlc` clock. Three big-endian-serialized
-/// integer fields (physical_ms, logical, node_id). R5 swaps in the real
-/// `benten_core` HLC; the canonical byte shape is what F-AAD-1 pins.
+/// Stub `Hlc` — the `admitted_at_hlc` clock. The canonical R0.3 §3.5 3-field
+/// shape (`physical_ms`, `logical`, `node_id`), big-endian-serialized. R5
+/// swaps in the real `benten_core` HLC; the canonical byte shape is what
+/// F-AAD-1 pins. (Aligned with the F-MS-3 fusion stub — F4-006.)
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 struct Hlc {
     physical_ms: u64,
@@ -106,8 +126,11 @@ enum MemberRef {
     LocalDevice,
 }
 
-/// Stub `MemberEntry` — the per-DID fused record. Field ORDER is
-/// load-bearing: it is the canonical serialization order R5 must preserve.
+/// Stub `MemberEntry` — the per-DID fused record. The canonical R0.3 §3.5
+/// 5-field shape `{ role, is_authority, sig_pubkey, admitted_at_hlc,
+/// member_ref }`. Field ORDER is load-bearing: it is the canonical
+/// serialization order R5 must preserve. (Byte-compatible with the F-MS-3
+/// fusion stub — F4-006.)
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 struct MemberEntry {
     role: RoleId,
@@ -165,13 +188,31 @@ fn fixture_table() -> BTreeMap<Did, MemberEntry> {
     t
 }
 
+/// The ABSOLUTE frozen canonical-DAG-CBOR golden vector for `fixture_table()`.
+///
+/// Computed ONCE, off-line, from the canonical `serde_ipld_dagcbor` encoder
+/// over the canonical R0.3 §3.5 `MemberEntry` shape (NOT re-derived at test
+/// time — that was the F4-001 tautology). 272 bytes; leading `0xa2`
+/// (CBOR major-type-5 map, 2 pairs); DAG-CBOR canonically sorts the per-entry
+/// map keys (length-then-bytewise: `role` `member_ref` `sig_pubkey`
+/// `is_authority` `admitted_at_hlc`). Any drift in field-order,
+/// `Option<SigPubKey>` presence-encoding, `RoleId` ordinal, `Hlc` layout, or
+/// integer endianness flips this pin.
+///
+/// R5 confirms-or-deliberately-updates this frozen literal against the real
+/// `benten_membership_set::aad::canonical_members_table_bytes` (M-20). If R5
+/// must change it, the change is a DELIBERATE wire-format decision recorded
+/// in the canary commit — never a silent drift.
+const EXPECTED_HEX: &str = "a26c6469643a6b65793a7a414141a564726f6c65046a6d656d6265725f72656667557365724469646a7369675f7075626b6579582011111111111111111111111111111111111111111111111111111111111111116c69735f617574686f72697479f56f61646d69747465645f61745f686c63a3676c6f676963616c00676e6f64655f69641aaaaaaaaa6b706879736963616c5f6d731903e86c6469643a6b65793a7a424242a564726f6c65026a6d656d6265725f72656667557365724469646a7369675f7075626b6579f66c69735f617574686f72697479f46f61646d69747465645f61745f686c63a3676c6f676963616c00676e6f64655f69641abbbbbbbb6b706879736963616c5f6d731907d0";
+
 // ── F-AAD-1 arms ────────────────────────────────────────────────────────
 
 /// F-AAD-1 arm 1 — exact canonical-CBOR hex-pin for the fixture snapshot.
 ///
-/// The bytes are computed once from the canonical encoder; any future
-/// drift in field-order / presence-encoding / int-encoding flips this pin.
-/// R5 must reproduce the SAME bytes from the real `MemberEntry` type.
+/// Asserts the encoder reproduces the ABSOLUTE frozen `EXPECTED_HEX` golden
+/// vector. Any future drift in field-order / presence-encoding / int-encoding
+/// flips this pin. R5 must reproduce these exact bytes from the real
+/// `MemberEntry` type, or two engines would diverge (the NQ-W4 failure mode).
 #[test]
 #[ignore = "RED-PHASE: F-AAD-1 — members_table canonical-CBOR byte-pin (NQ-W4 flagship); un-ignore at R5"]
 fn f_aad_1_members_table_canonical_cbor_hex_pinned() {
@@ -185,15 +226,15 @@ fn f_aad_1_members_table_canonical_cbor_hex_pinned() {
         "leading byte = CBOR map-header for exactly 2 members (major type 5, len 2); \
          field-order / map-shape drift flips this"
     );
-    // Full hex-pin: locks every byte of the canonical snapshot. R5
-    // regenerates this constant against the real type and it MUST match,
-    // or two engines would diverge (the NQ-W4 failure mode).
+    // Full hex-pin against the ABSOLUTE frozen golden vector (F4-001 fix —
+    // NOT a self-derived `expected_fixture_hex()`). R5 regenerates these
+    // exact bytes against the real type and they MUST match, or two engines
+    // would diverge (the NQ-W4 failure mode).
     let hex = hex_encode(&bytes);
     assert_eq!(
-        hex,
-        expected_fixture_hex(),
-        "members_table canonical-CBOR bytes drifted — divergent AAD = cross-engine \
-         decrypt failure for the SAME membership (NQ-W4)"
+        hex, EXPECTED_HEX,
+        "members_table canonical-CBOR bytes drifted from the frozen golden vector — \
+         divergent AAD = cross-engine decrypt failure for the SAME membership (NQ-W4)"
     );
 }
 
@@ -355,12 +396,4 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 fn is_prefix(short: &[u8], long: &[u8]) -> bool {
     short.len() <= long.len() && &long[..short.len()] == short
-}
-
-/// The expected canonical-CBOR hex for `fixture_table()`. Computed from
-/// the canonical encoder; locked here so any future drift fails the pin.
-/// R5 regenerates this against the real type — it MUST reproduce these
-/// exact bytes or two engines diverge (NQ-W4).
-fn expected_fixture_hex() -> String {
-    hex_encode(&canonical_members_table_bytes(&fixture_table()))
 }

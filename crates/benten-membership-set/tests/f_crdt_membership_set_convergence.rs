@@ -10,24 +10,33 @@
 //!   (member-PROPERTY = larger-HLC LWW; set-IDENTITY fork = smaller
 //!   `created_at_hlc`) co-exist in one merge round without corruption.
 //! - Inv-19 + Inv-20 clause-e (generation-CRDT).
+//! - Associativity (F4-023 cross-ref): the tie-break associativity property
+//!   is owned by **F-INV21-3** (the convergence proptest surrogate in
+//!   `f_inv21_fork_tie_break_totality_version_node_cid.rs`) and the same-HLC
+//!   tie by **F-INV21-2**; this file does NOT duplicate them.
 //!
 //! ## What this pins (and what it does NOT claim)
 //!
 //! - F-CRDT-1: concurrent admit/kick/role-change across 2–5 writers
 //!   converge to a byte-identical `members_table` snapshot (clones the
-//!   in-tree `prop_loro_converge.rs` 10k-case shape).
+//!   in-tree `prop_loro_converge.rs` shape).
 //! - F-CRDT-2: out-of-order + duplicate/replayed delivery still converges
 //!   (order-independent + idempotent).
 //! - F-CRDT-3: the property-LWW rule and the fork-set-identity rule
-//!   co-exist over two object classes in the SAME merge round. R0 does NOT
-//!   claim byte-equivalence between the two rules (corrects R0.1).
+//!   co-exist over two object classes in the SAME merge round. The
+//!   fork-identity side routes through the SAME `fork_winner`/`total_order_key`
+//!   tie-break that F-INV21-* pins (NOT an inline literal comparison), so the
+//!   arm asserts the actual tie-break OUTPUT. R0 does NOT claim
+//!   byte-equivalence between the two rules (corrects R0.1).
 //!
 //! ## pim-2 §3.6b + §3.6f-ext end-to-end discipline
 //!
-//! Drives the PRODUCTION merge (`merge_membership_ops`) stand-in; asserts
-//! OBSERVABLE snapshot-equality across permutations + idempotence under
-//! duplicate delivery; would-FAIL-if-no-op'd (an order-sensitive or
-//! non-idempotent merge fails the permutation / duplicate arms).
+//! Drives the PRODUCTION merge (`merge_membership_ops`) + tie-break
+//! (`fork_winner`) stand-ins; asserts OBSERVABLE snapshot-equality across
+//! permutations + idempotence under duplicate delivery + the actual fork
+//! tie-break winner; would-FAIL-if-no-op'd (an order-sensitive or
+//! non-idempotent merge fails the permutation / duplicate arms; a larger-HLC
+//! fork tie-break fails the F-CRDT-3 fork arm).
 //!
 //! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
 //!
@@ -41,9 +50,13 @@ use std::collections::BTreeMap;
 
 // ── SELF-CONTAINED stub-shim ──
 
+/// Stub HLC — the 3-field shape (parity with `benten_core::hlc` and the
+/// sibling F-HLC / F-INV21 stubs). Lexicographic compare on
+/// (physical_ms, logical, node_id).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Hlc {
     physical_ms: u64,
+    logical: u32,
     node_id: u64,
 }
 
@@ -93,7 +106,8 @@ fn merge_membership_ops(ops: &[MembershipOp]) -> BTreeMap<String, ResolvedCell> 
             MembershipOp::Kick { .. } => None,
         };
         match table.get(&did) {
-            // Larger-HLC wins (property LWW); ties broken by node_id (total).
+            // Larger-HLC wins (property LWW); ties broken lexicographically
+            // by (logical, node_id) via the derived Ord (total).
             Some(existing) if existing.hlc >= hlc => {}
             _ => {
                 table.insert(did, ResolvedCell { hlc, role });
@@ -110,6 +124,43 @@ fn snapshot(table: &BTreeMap<String, ResolvedCell>) -> BTreeMap<String, String> 
         .iter()
         .filter_map(|(d, c)| c.role.clone().map(|r| (d.clone(), r)))
         .collect()
+}
+
+// ── fork-identity tie-break stand-in (the SAME rule F-INV21-* pins) ──
+//
+// F-CRDT-3 routes the fork-identity side through this real tie-break rather
+// than an inline `<=` of two literals (F4-010). `total_order_key` is the
+// (created_at_hlc ASC, fork_event_version_node_cid ASC) M-8 key; `fork_winner`
+// returns the SMALLER-key fork (oldest-anchor-wins). This is the OPPOSITE
+// direction to property LWW — the load-bearing M-7 co-existence — and the arm
+// asserts the actual OUTPUT, so a larger-HLC fork rule would FAIL it.
+
+#[derive(Clone, Debug)]
+struct ForkCandidate {
+    id: u32,
+    created_at_hlc: Hlc,
+    fork_event_version_node_cid: Vec<u8>,
+}
+
+fn total_order_key(f: &ForkCandidate) -> (Hlc, Vec<u8>) {
+    (f.created_at_hlc, f.fork_event_version_node_cid.clone())
+}
+
+/// SMALLER-key fork wins (oldest-anchor; Inv-21). Same rule as
+/// `f_inv21_*::fork_winner`.
+fn fork_winner<'a>(a: &'a ForkCandidate, b: &'a ForkCandidate) -> &'a ForkCandidate {
+    if total_order_key(a) <= total_order_key(b) {
+        a
+    } else {
+        b
+    }
+}
+
+fn cid(payload: &[u8]) -> Vec<u8> {
+    let d = blake3::hash(payload);
+    let mut c = vec![0x01u8, 0x71, 0x1e, 0x20];
+    c.extend_from_slice(d.as_bytes());
+    c
 }
 
 fn permute(ops: &[MembershipOp], seed: u64) -> Vec<MembershipOp> {
@@ -133,6 +184,7 @@ fn fixture_ops() -> Vec<MembershipOp> {
             role: "Member".into(),
             hlc: Hlc {
                 physical_ms: 10,
+                logical: 0,
                 node_id: 1,
             },
         },
@@ -141,6 +193,7 @@ fn fixture_ops() -> Vec<MembershipOp> {
             role: "Member".into(),
             hlc: Hlc {
                 physical_ms: 11,
+                logical: 0,
                 node_id: 2,
             },
         },
@@ -149,6 +202,7 @@ fn fixture_ops() -> Vec<MembershipOp> {
             role: "Moderator".into(),
             hlc: Hlc {
                 physical_ms: 20,
+                logical: 0,
                 node_id: 3,
             },
         },
@@ -156,6 +210,7 @@ fn fixture_ops() -> Vec<MembershipOp> {
             did: "b".into(),
             hlc: Hlc {
                 physical_ms: 30,
+                logical: 0,
                 node_id: 4,
             },
         },
@@ -164,6 +219,7 @@ fn fixture_ops() -> Vec<MembershipOp> {
             role: "Viewer".into(),
             hlc: Hlc {
                 physical_ms: 15,
+                logical: 0,
                 node_id: 5,
             },
         },
@@ -174,15 +230,16 @@ fn fixture_ops() -> Vec<MembershipOp> {
 
 /// F-CRDT-1 — concurrent admit/kick/role-change across N writers converge
 /// to the SAME `members_table` snapshot. Clones the `prop_loro_converge.rs`
-/// 10k-case shape: any permutation of the op-set yields an identical
-/// converged snapshot.
+/// shape: any permutation of the op-set yields an identical converged
+/// snapshot. (F4-021: uses the nextest/proptest default case-count, not a
+/// hardcoded 10k literal.)
 #[test]
-#[ignore = "RED-PHASE: F-CRDT-1 — membership-set convergence proptest (10k); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-CRDT-1 — membership-set convergence proptest; un-ignore at R5"]
 fn f_crdt_1_membership_set_convergence_proptest() {
     use proptest::prelude::*;
     let base = fixture_ops();
     let canonical = snapshot(&merge_membership_ops(&base));
-    proptest!(ProptestConfig::with_cases(10_000), |(seed in any::<u64>())| {
+    proptest!(|(seed in any::<u64>())| {
         let permuted = permute(&base, seed);
         let converged = snapshot(&merge_membership_ops(&permuted));
         prop_assert_eq!(
@@ -237,41 +294,66 @@ fn f_crdt_2_out_of_order_and_duplicate_delivery_converges() {
 /// over two object classes in the SAME merge round without corruption.
 ///
 /// Member PROPERTY (role) resolves by larger-HLC; set-IDENTITY fork
-/// resolves by smaller-`created_at_hlc`. Both are simultaneously correct on
-/// the same fixture; R0 does NOT claim byte-equivalence between them.
+/// resolves by smaller-`created_at_hlc` (routed through the REAL
+/// `fork_winner`/`total_order_key` tie-break — F4-010 — so the arm asserts
+/// the actual tie-break OUTPUT, not an inline literal comparison). Both are
+/// simultaneously correct on the same fixture; R0 does NOT claim
+/// byte-equivalence between them.
 #[test]
 #[ignore = "RED-PHASE: F-CRDT-3 — property-LWW ∥ fork-set-identity co-existence (M-7); un-ignore at R5"]
 fn f_crdt_3_lww_property_and_fork_identity_coexist() {
-    // Property side: larger-HLC wins.
+    // Property side: larger-HLC wins (observable role).
     let table = merge_membership_ops(&fixture_ops());
+    let property_role = table.get("a").unwrap().role.as_deref();
     assert_eq!(
-        table.get("a").unwrap().role.as_deref(),
+        property_role,
         Some("Moderator"),
         "PROPERTY rule: larger-HLC (20) wins for role"
     );
 
-    // Fork-identity side: smaller created_at_hlc wins (oldest anchor).
-    // Same merge round, different object class.
-    let fork_a_created = Hlc {
-        physical_ms: 5,
-        node_id: 1,
-    }; // oldest
-    let fork_b_created = Hlc {
-        physical_ms: 50,
-        node_id: 2,
+    // Fork-identity side: SMALLER created_at_hlc wins — routed through the
+    // SAME tie-break F-INV21-* pins (NOT an inline `<=` of two literals).
+    let fork_a = ForkCandidate {
+        id: 1,
+        created_at_hlc: Hlc {
+            physical_ms: 5, // oldest anchor
+            logical: 0,
+            node_id: 1,
+        },
+        fork_event_version_node_cid: cid(b"fork-a"),
     };
-    let fork_winner_is_a = fork_a_created <= fork_b_created;
-    assert!(
-        fork_winner_is_a,
-        "FORK-IDENTITY rule: smaller created_at_hlc (5) wins — the OPPOSITE direction to property LWW"
+    let fork_b = ForkCandidate {
+        id: 2,
+        created_at_hlc: Hlc {
+            physical_ms: 50,
+            logical: 0,
+            node_id: 2,
+        },
+        fork_event_version_node_cid: cid(b"fork-b"),
+    };
+    // The actual tie-break OUTPUT: oldest-anchor (fork_a) wins. A larger-HLC
+    // (property-LWW-direction) fork rule would pick fork_b and FAIL here.
+    let winner = fork_winner(&fork_a, &fork_b);
+    assert_eq!(
+        winner.id, 1,
+        "FORK-IDENTITY rule: smaller created_at_hlc (5) wins (oldest-anchor) — the OPPOSITE direction to property LWW"
+    );
+    // Antisymmetry: order-independent winner (still fork_a).
+    assert_eq!(
+        fork_winner(&fork_b, &fork_a).id,
+        1,
+        "the fork tie-break is order-independent (antisymmetric)"
     );
 
-    // The two rules disagree on direction (NOT byte-equivalent) yet both
-    // hold in the same merge round — the load-bearing M-7 co-existence.
-    let property_picks_larger = true;
-    let fork_picks_smaller = fork_winner_is_a;
+    // The two rules disagree on DIRECTION (NOT byte-equivalent) yet both hold
+    // in the same merge round — the load-bearing M-7 co-existence. We derive
+    // each direction from the actual stand-ins (no hardcoded `true`):
+    //   * property: the LATER write (HLC 20 > 10) won → larger-HLC direction.
+    //   * fork:     the EARLIER anchor (HLC 5 < 50) won → smaller-HLC direction.
+    let property_picked_larger_hlc = property_role == Some("Moderator"); // the HLC-20 write
+    let fork_picked_smaller_hlc = winner.created_at_hlc.physical_ms == 5; // the oldest anchor
     assert!(
-        property_picks_larger && fork_picks_smaller,
-        "the two convergence rules co-exist over two object classes without corruption (M-7)"
+        property_picked_larger_hlc && fork_picked_smaller_hlc,
+        "the two convergence rules co-exist over two object classes without corruption, in OPPOSITE directions (M-7)"
     );
 }

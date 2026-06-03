@@ -32,6 +32,35 @@
 //!     Sealed-Sender — adds a per-stanza inner-sender-DID binding to the
 //!     group AAD (pre-freeze wire change).
 //!
+//! # R4-FIX (F4-028, F4-029) — added substantive byte-pins.
+//!
+//! **F4-028 (F-LC-8 token-binding AAD byte-pin).** §3.11 calls the
+//! token-binding AAD "wire-affecting only in the token-binding AAD (a
+//! Sealed-Sender sub-field), so it MUST land pre-freeze" — yet the abuse
+//! arms only exercised `Option<&DeliveryToken>` + scalar windows; nothing
+//! froze the AAD byte layout, so a BE/LE drift or a re-ordered field could
+//! ship undetected. ADDED:
+//!   (a) the stub now SERIALIZES a canonical, BIG-ENDIAN token-binding AAD
+//!       (`serialize_token_binding_aad`) + an admission path that binds the
+//!       token to that AAD (`admit_sealed_sender_bound`);
+//!   (b) a FROZEN golden-hex byte vector (`F_LC_8_TOKEN_AAD_HEX`) the BE
+//!       layout MUST reproduce (would-FAIL on any field-order / endianness
+//!       drift — R5 confirms-or-deliberately-updates against the real
+//!       serializer, M-20);
+//!   (c) a MUTATE-the-AAD → fail-admit arm (flip one byte of the bound AAD
+//!       ⇒ admission rejects), proving the token binding is load-bearing,
+//!       not advisory.
+//!
+//! **F4-029 (F-INV18-1 positive field-set enumeration).** The Inv-18
+//! residual-metadata claim ("{audience, coarse-epoch} and NOTHING else")
+//! was only a doc-grep — it never enumerated the ACTUAL serialized 0x6510
+//! AAD field-set, so an impl that smuggled the sender-DID (or any extra
+//! field) into the default AAD would pass. ADDED a POSITIVE field-set
+//! enumeration arm: serialize the `0x6510` AAD, enumerate its fields, and
+//! assert the set is EXACTLY `{aad_version, codepoint, audience,
+//! coarse_epoch}` with the sender-DID ABSENT — plus a FROZEN golden-hex
+//! (`F_INV18_1_SEALED_AAD_HEX`) so the byte layout is pinned.
+//!
 //! # RED-PHASE STATUS + STUB-SHIM (pim-12 §3.6e).
 //!
 //! Self-contained stubs (`abuse_stub`, `group_posture_stub`) so the file
@@ -39,13 +68,19 @@
 //! FS-gap + Inv-18 disclosure arms are DOC-COUPLING (real
 //! `std::fs::read_to_string` against `docs/SECURITY-POSTURE.md`, reusing
 //! the `tf3f_revocation_reach_*` shape) — those are not stubbed; they
-//! assert the doc-wave landed the disclosure text. R5:
+//! assert the doc-wave landed the disclosure text. The NEW byte-pin arms
+//! drive the stub's DETERMINISTIC canonical serializer (not
+//! `unimplemented!()`) so the frozen golden-hex is computable green at
+//! red-phase; R5 swaps the stub serializer for the real one and confirms
+//! (or deliberately updates) the frozen literal. R5:
 //!   1. DELETE the stub modules; INSERT the real `use benten_drop::…`;
-//!   2. UN-IGNORE; 3. the doc-coupling arms stay (doc-wave authored).
+//!   2. UN-IGNORE; 3. the doc-coupling arms stay (doc-wave authored);
+//!   4. confirm-or-update the frozen golden-hex against the real encoder.
 //!
 //! # Wave-0 (M-20) + would-FAIL (pim-2 + pim-18 + §3.6f-ext). Behavioral
 //! stubs `unimplemented!()` so a forgotten stub at R5 PANICS; doc arms
-//! assert a doc string that did NOT exist pre-doc-wave.
+//! assert a doc string that did NOT exist pre-doc-wave; the byte-pin arms
+//! freeze ABSOLUTE BE bytes (drift flips the pin).
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -56,6 +91,11 @@
 // SELF-CONTAINED STUB — Sealed-Sender abuse-control (F-LC-8). DELETE at R5.
 // ===========================================================================
 mod abuse_stub {
+    /// Wave-0 envelope-format version (M-18/M-19/M-20). V2 from commit 1.
+    pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
+    /// `DROP_TO_RECIPIENT_SEALED_SENDER` — the v1-beta DEFAULT (BR-1).
+    pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
+
     /// A recipient-issued, short-lived, rate-limited UCAN-backed delivery
     /// token (Signal's delivery-token pattern adapted to Benten's
     /// capability spine). Modeled minimally: issuer + validity window +
@@ -78,6 +118,10 @@ mod abuse_stub {
         TokenExpiredOrNotYetValid,
         /// Token's per-token rate-limit exhausted.
         RateLimitExceeded,
+        /// The presented token's binding does NOT reproduce the envelope's
+        /// token-binding AAD (tampered AAD / wrong audience / endianness or
+        /// field-order drift). R4-FIX F4-028.
+        TokenBindingMismatch,
     }
 
     /// PRODUCTION call site — the receive-boundary admission check that
@@ -98,6 +142,74 @@ mod abuse_stub {
     /// implementation gates admission ahead of decrypt.
     pub fn decrypt_was_attempted_for_last_admit() -> bool {
         unimplemented!("R5 wires the pre-decrypt ordering observability")
+    }
+
+    // -- R4-FIX F4-028 — token-binding AAD (wire-affecting sub-field) --
+
+    /// The canonical token-binding AAD inputs (§3.11). The token is bound
+    /// to the envelope by reproducing THIS byte string; a mismatch fails
+    /// admission. Every multiformats-framed integer is BIG-ENDIAN (M-19).
+    #[derive(Clone, Debug)]
+    pub struct TokenBindingAad {
+        pub aad_version: u8,
+        pub codepoint: u16,
+        /// the recipient audience DID (the only identity on the wire).
+        pub audience_did: Vec<u8>,
+        /// the 1-hour-bucketed coarse epoch.
+        pub coarse_epoch: u64,
+        pub token_not_before: u64,
+        pub token_expires_at: u64,
+        pub token_rate_limit: u32,
+    }
+
+    /// PRODUCTION call site — serialize the token-binding AAD to its
+    /// canonical BIG-ENDIAN byte layout. DETERMINISTIC (no maps, no
+    /// nondeterministic ordering) so the frozen golden-hex is meaningful.
+    ///
+    /// Layout (R0.3 §3.11 + §4.1 BE; M-19):
+    ///   aad_version  : u8
+    ///   codepoint    : u16 BE
+    ///   aud_len      : u16 BE
+    ///   audience_did : aud_len bytes
+    ///   coarse_epoch : u64 BE
+    ///   token_nbf    : u64 BE
+    ///   token_exp    : u64 BE
+    ///   rate_limit   : u32 BE
+    #[must_use]
+    pub fn serialize_token_binding_aad(aad: &TokenBindingAad) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.push(aad.aad_version);
+        out.extend_from_slice(&aad.codepoint.to_be_bytes());
+        let aud_len = u16::try_from(aad.audience_did.len())
+            .expect("audience DID length must fit u16");
+        out.extend_from_slice(&aud_len.to_be_bytes());
+        out.extend_from_slice(&aad.audience_did);
+        out.extend_from_slice(&aad.coarse_epoch.to_be_bytes());
+        out.extend_from_slice(&aad.token_not_before.to_be_bytes());
+        out.extend_from_slice(&aad.token_expires_at.to_be_bytes());
+        out.extend_from_slice(&aad.token_rate_limit.to_be_bytes());
+        out
+    }
+
+    /// PRODUCTION call site — admission with an EXPLICIT token-binding AAD.
+    /// The relay presents the on-wire `bound_aad_bytes` (what was sealed);
+    /// admission recomputes the canonical AAD from the presented token +
+    /// envelope context and REQUIRES byte-equality, then applies the
+    /// window + rate checks. A tampered AAD (any field flipped, any
+    /// endianness/order drift) fails at `TokenBindingMismatch` BEFORE the
+    /// window/rate checks even run.
+    pub fn admit_sealed_sender_bound(
+        _token: &DeliveryToken,
+        _ctx: &TokenBindingAad,
+        _bound_aad_bytes: &[u8],
+        _now: u64,
+        _sends_already_under_token: u32,
+    ) -> Result<(), AdmitError> {
+        unimplemented!(
+            "R5 wires the bound Sealed-Sender admission check (§3.11) — recompute the \
+             canonical BE token-binding AAD, require byte-equality with the presented \
+             bytes, then apply nbf/exp + rate-limit"
+        )
     }
 }
 
@@ -166,13 +278,69 @@ mod group_posture_stub {
     }
 }
 
+// ===========================================================================
+// SELF-CONTAINED STUB — Sealed-Sender on-wire AAD field-set (F-INV18-1).
+// DELETE at R5. R4-FIX F4-029: a DETERMINISTIC BE serializer + an explicit
+// field enumeration so the residual-metadata claim is byte-checked.
+// ===========================================================================
+mod sealed_aad_stub {
+    /// Wave-0 V2.
+    pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
+    pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
+
+    /// The DEFAULT (`0x6510`) on-wire AAD inputs. Per R0.3 §3.3/§4.1/§5.1
+    /// (#43): EXACTLY `{audience, coarse_epoch}` — the sender-DID is bound
+    /// INSIDE the ciphertext, NOT here. (`aad_version` + `codepoint` are
+    /// framing, not identity metadata.)
+    #[derive(Clone, Debug)]
+    pub struct SealedSenderAad {
+        pub aad_version: u8,
+        pub codepoint: u16,
+        pub audience_did: Vec<u8>,
+        pub coarse_epoch: u64,
+    }
+
+    /// The ENUMERABLE field-set of the serialized 0x6510 AAD. A POSITIVE
+    /// enumeration (R4-FIX F4-029): the test asserts this set is EXACTLY
+    /// the four field tokens — so an impl that adds (e.g.) a `sender_did`
+    /// field is caught by an ADDED token, not just by a doc-grep.
+    #[must_use]
+    pub fn aad_field_set() -> Vec<&'static str> {
+        vec!["aad_version", "codepoint", "audience", "coarse_epoch"]
+    }
+
+    /// PRODUCTION call site — serialize the DEFAULT (0x6510) on-wire AAD
+    /// to its canonical BIG-ENDIAN bytes. DETERMINISTIC. NO sender-DID.
+    ///
+    /// Layout (BE; M-19):
+    ///   aad_version  : u8
+    ///   codepoint    : u16 BE
+    ///   aud_len      : u16 BE
+    ///   audience_did : aud_len bytes
+    ///   coarse_epoch : u64 BE
+    #[must_use]
+    pub fn serialize_sealed_sender_aad(aad: &SealedSenderAad) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.push(aad.aad_version);
+        out.extend_from_slice(&aad.codepoint.to_be_bytes());
+        let aud_len = u16::try_from(aad.audience_did.len())
+            .expect("audience DID length must fit u16");
+        out.extend_from_slice(&aud_len.to_be_bytes());
+        out.extend_from_slice(&aad.audience_did);
+        out.extend_from_slice(&aad.coarse_epoch.to_be_bytes());
+        out
+    }
+}
+
 use abuse_stub::{
-    AdmitError, DeliveryToken, admit_sealed_sender, decrypt_was_attempted_for_last_admit,
+    AdmitError, DeliveryToken, TokenBindingAad, admit_sealed_sender,
+    admit_sealed_sender_bound, decrypt_was_attempted_for_last_admit, serialize_token_binding_aad,
 };
 use group_posture_stub::{
     GroupError, LAYER_C_DROP_MULTI_RECIPIENT, MEMBERSHIP_SET_GROUP_MULTI_STANZA, dispatch_group,
     open_membership_set_group, seal_membership_set_group,
 };
+use sealed_aad_stub::{SealedSenderAad, aad_field_set, serialize_sealed_sender_aad};
 
 const SECURITY_POSTURE_MD: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -181,6 +349,15 @@ const SECURITY_POSTURE_MD: &str = concat!(
 
 fn did(s: &str) -> Vec<u8> {
     s.as_bytes().to_vec()
+}
+
+/// Lowercase-hex of a byte slice (test-local; no external dep).
+fn to_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
 }
 
 // ===========================================================================
@@ -263,6 +440,110 @@ fn f_lc_8_valid_token_admitted() {
         outcome.is_ok(),
         "F-LC-8: a valid, in-window, under-rate delivery token MUST be \
          ADMITTED (positive control). Got: {outcome:?}"
+    );
+}
+
+// --- R4-FIX F4-028 — token-binding AAD byte-layout pin + mutate→fail-admit.
+
+/// The canonical token-binding AAD fixture (F4-028). All integers BE.
+fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
+    TokenBindingAad {
+        aad_version: abuse_stub::ENVELOPE_FORMAT_VERSION,                 // 0x02
+        codepoint: abuse_stub::DROP_TO_RECIPIENT_SEALED_SENDER,          // 0x6510
+        audience_did: did("did:key:zRecipientAudienceUNIQUE"),
+        coarse_epoch: 1_900_800,
+        token_not_before: 1_900_000,
+        token_expires_at: 1_999_999,
+        token_rate_limit: 5,
+    }
+}
+
+/// FROZEN big-endian golden vector for the token-binding AAD (F4-028).
+/// Computed once from the canonical BE layout; ANY field-order or
+/// endianness drift in the real serializer flips this pin.
+/// R5 confirms-or-deliberately-updates this frozen literal against the
+/// real encoder (M-20).
+const F_LC_8_TOKEN_AAD_HEX: &str = "02651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d010000000000001cfde000000000001e847f00000005";
+
+/// F-LC-8 PIN 5 (R4-FIX F4-028) — the token-binding AAD serializes to the
+/// FROZEN big-endian byte layout. This pins the wire-affecting sub-field
+/// (§3.11) that BR-1 says "MUST land pre-freeze". would-FAIL if the
+/// serializer emitted LE codepoint bytes, re-ordered the fields, or
+/// changed the length-prefix encoding — i.e. any silent wire drift.
+#[test]
+#[ignore = "RED-PHASE: F-LC-8 — token-binding AAD frozen BE byte layout (§3.11; F4-028); un-ignore at R5"]
+fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
+    let aad = f_lc_8_token_aad_fixture();
+    let bytes = serialize_token_binding_aad(&aad);
+
+    assert_eq!(
+        to_hex(&bytes),
+        F_LC_8_TOKEN_AAD_HEX,
+        "F-LC-8 (F4-028): the token-binding AAD MUST serialize to the \
+         FROZEN canonical big-endian layout. A mismatch means the \
+         wire-affecting sub-field drifted (endianness / field order / \
+         length-prefix) — exactly the pre-freeze hazard §3.11/BR-1 names. \
+         R5 confirms-or-deliberately-updates this literal (M-20)."
+    );
+
+    // Anti-tautology cross-check: the codepoint MUST appear as the BE pair
+    // 0x65 0x10 at offset 1 (NOT the LE 0x10 0x65). would-FAIL if a future
+    // edit reverted aead.rs LE on this path (M-19).
+    assert_eq!(
+        &bytes[1..3],
+        &[0x65, 0x10],
+        "F-LC-8 (F4-028): codepoint 0x6510 MUST be big-endian (0x65,0x10) \
+         in the token-binding AAD, never little-endian (0x10,0x65)."
+    );
+}
+
+/// F-LC-8 PIN 6 (R4-FIX F4-028) — MUTATE the bound token-binding AAD ⇒
+/// admission REJECTS at `TokenBindingMismatch`. The on-wire AAD is
+/// load-bearing: a relay that flips ANY byte of the bound AAD (re-target
+/// the audience, shift the epoch, downgrade the rate-limit) breaks the
+/// binding and the envelope is refused BEFORE decrypt. would-FAIL if the
+/// admission path ignored the AAD bytes (treated the token binding as
+/// advisory).
+#[test]
+#[ignore = "RED-PHASE: F-LC-8 — mutate token-binding AAD ⇒ fail-admit (F4-028); un-ignore at R5"]
+fn f_lc_8_mutated_token_binding_aad_fails_admit() {
+    let aad = f_lc_8_token_aad_fixture();
+    let token = DeliveryToken {
+        not_before: aad.token_not_before,
+        expires_at: aad.token_expires_at,
+        rate_limit: aad.token_rate_limit,
+    };
+    let now = 1_900_800;
+
+    // Positive control: the UNMODIFIED bound AAD is admitted.
+    let good_bytes = serialize_token_binding_aad(&aad);
+    let ok = admit_sealed_sender_bound(&token, &aad, &good_bytes, now, 1);
+    assert!(
+        ok.is_ok(),
+        "F-LC-8 (F4-028): the UNMODIFIED bound token-binding AAD MUST be \
+         admitted (positive control; proves the mismatch arm is not \
+         vacuous). Got: {ok:?}"
+    );
+
+    // Adversary flips one byte of the bound AAD (e.g. inside the audience
+    // DID — re-targeting the token to a different recipient).
+    let mut tampered = good_bytes.clone();
+    let flip_at = 6; // inside the audience-DID region (after the 5-byte header)
+    tampered[flip_at] ^= 0xFF;
+    assert_ne!(
+        tampered, good_bytes,
+        "sanity: the tamper must actually change the bytes"
+    );
+
+    let outcome = admit_sealed_sender_bound(&token, &aad, &tampered, now, 1);
+    assert!(
+        matches!(outcome, Err(AdmitError::TokenBindingMismatch)),
+        "F-LC-8 (F4-028): a Sealed-Sender envelope whose bound \
+         token-binding AAD was MUTATED MUST be refused at \
+         `TokenBindingMismatch` (the admission path recomputes the \
+         canonical BE AAD and requires byte-equality). would-FAIL if the \
+         AAD bytes were ignored — then a relay could re-target/replay the \
+         token freely. Got: {outcome:?}"
     );
 }
 
@@ -436,6 +717,86 @@ fn f_inv18_1_security_posture_documents_metadata_posture() {
          metadata under the Sealed-Sender default = {{audience, \
          coarse-epoch}} (honest disclosure, not over-claimed). Got: \
          audience={names_audience}, epoch={names_epoch}."
+    );
+}
+
+// --- R4-FIX F4-029 — POSITIVE field-set enumeration of the 0x6510 AAD.
+
+/// The canonical Sealed-Sender (0x6510) on-wire AAD fixture (F4-029).
+fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
+    SealedSenderAad {
+        aad_version: sealed_aad_stub::ENVELOPE_FORMAT_VERSION,            // 0x02
+        codepoint: sealed_aad_stub::DROP_TO_RECIPIENT_SEALED_SENDER,     // 0x6510
+        audience_did: did("did:key:zRecipientAudienceUNIQUE"),
+        coarse_epoch: 1_900_800,
+    }
+}
+
+/// FROZEN big-endian golden vector for the DEFAULT (0x6510) on-wire AAD
+/// (F4-029). EXACTLY `{aad_version, codepoint, audience, coarse_epoch}` —
+/// no sender-DID region. R5 confirms-or-deliberately-updates this frozen
+/// literal against the real encoder (M-20).
+const F_INV18_1_SEALED_AAD_HEX: &str =
+    "02651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554500000000001d0100";
+
+/// F-INV18-1 PIN 3 (R4-FIX F4-029) — POSITIVE field-set enumeration: the
+/// serialized 0x6510 AAD field-set is EXACTLY
+/// `{aad_version, codepoint, audience, coarse_epoch}` and the sender-DID
+/// is ABSENT. This upgrades the residual-metadata claim from a doc-grep to
+/// a behavioral enumeration: an impl that smuggles a `sender_did` (or any
+/// extra field) into the default AAD is caught HERE by an unexpected
+/// field token, not just by the doc text. would-FAIL if the field-set
+/// gains or drops a field, or if the serialized bytes contained the
+/// sender-DID.
+#[test]
+#[ignore = "RED-PHASE: F-INV18-1 — 0x6510 AAD field-set == EXACTLY {audience,coarse_epoch} (+framing); sender-DID ABSENT (F4-029); un-ignore at R5"]
+fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_audience_and_epoch() {
+    use std::collections::BTreeSet;
+
+    // (a) POSITIVE enumeration — the field-set is EXACTLY the four tokens.
+    let fields: BTreeSet<&str> = aad_field_set().into_iter().collect();
+    let expected: BTreeSet<&str> =
+        BTreeSet::from(["aad_version", "codepoint", "audience", "coarse_epoch"]);
+    assert_eq!(
+        fields, expected,
+        "F-INV18-1 (F4-029): the DEFAULT (0x6510) on-wire AAD field-set \
+         MUST be EXACTLY {{aad_version, codepoint, audience, coarse_epoch}}. \
+         An ADDED token (e.g. `sender_did`) means the default leaks sender \
+         metadata; a DROPPED token means the audience binding regressed. \
+         Got: {fields:?}"
+    );
+    // The sender-DID MUST NOT be a field of the default AAD (the whole
+    // point of Sealed-Sender — it lives INSIDE the ciphertext).
+    assert!(
+        !fields.contains("sender_did") && !fields.contains("sender"),
+        "F-INV18-1 (F4-029): the Sealed-Sender DEFAULT AAD MUST NOT carry a \
+         sender-DID field — it is bound INSIDE the ciphertext."
+    );
+
+    // (b) FROZEN byte layout — the serialized AAD reproduces the BE golden
+    // vector (drift flips the pin).
+    let aad = f_inv18_1_sealed_aad_fixture();
+    let bytes = serialize_sealed_sender_aad(&aad);
+    assert_eq!(
+        to_hex(&bytes),
+        F_INV18_1_SEALED_AAD_HEX,
+        "F-INV18-1 (F4-029): the 0x6510 on-wire AAD MUST serialize to the \
+         FROZEN big-endian layout containing ONLY {{aad_version, codepoint, \
+         audience, coarse_epoch}}. R5 confirms-or-deliberately-updates this \
+         literal (M-20)."
+    );
+
+    // (c) NEGATIVE byte-scan — the sender-DID is provably ABSENT from the
+    // serialized DEFAULT AAD (would-FAIL if it leaked in).
+    let sender_did = did("did:key:zSenderAliceUNIQUEMARKER");
+    let leaks = bytes
+        .windows(sender_did.len())
+        .any(|w| w == sender_did.as_slice());
+    assert!(
+        !leaks,
+        "F-INV18-1 (F4-029): the serialized DEFAULT (0x6510) AAD MUST NOT \
+         contain the sender-DID byte sequence — Sealed-Sender binds it \
+         INSIDE the ciphertext, never the on-wire AAD."
     );
 }
 
