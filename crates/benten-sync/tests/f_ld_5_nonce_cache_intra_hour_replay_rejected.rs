@@ -10,22 +10,38 @@
 //!     intra-bucket → 2nd `Err` from nonce-cache; **disable-cache negative**
 //!     (replay would pass — bucket alone insufficient); restart-durability arm;
 //!     clock-manipulation-both-ways → rejection unchanged."
-//!   - R0.3 plan §3.4/§3.10 (`...f-full-r0-plan.md:519-523,746-758`): "an OUTER
+//!   - R0.5 plan §3.4/§3.10 (`...f-full-r0-plan.md:540-545,776-789`): "an OUTER
 //!     UCAN-token/`jti`-keyed nonce-cache that is NET-NEW at v1-beta ... re-uses
 //!     the Compromise #25 durable-CAS-marker *pattern*, NOT the #25 sync-frame
 //!     instance". Scope/retention/durability/multi-device per NQ-T4.
 //!
-//! ## NQ-T4 OPEN-SPEC FLAG
+//! ## NQ-T4 RATIFIED (§10.5; Ben 2026-06-02)
 //!
-//! NQ-T4 (§10.5) — the nonce-cache spec (per-device vs user-global scope; the
-//! cross-device shared-rejection semantics) — is UNRESOLVED at R2 (§5.B carry-
-//! forward item 4 / T-C3). The `..._multi_device_shared_rejection_nq_t4_gated`
-//! arm below is authored as a RED-PHASE stub referencing the open question; its
-//! exact "does device C reject a nonce device B consumed?" assertion is
-//! finalized at R5 once NQ-T4 ratifies the default (R0 names the default as
-//! "per-device-durable + best-effort-global-via-sync").
+//! NQ-T4 (§10.5) — the nonce-cache spec — is **RATIFIED**. The cache is
+//! `jti`-keyed, durable (survives engine restart), retention ≥ the full 1-hr
+//! bucket. **Scope (ratified default):** **per-device-durable is GUARANTEED**;
+//! **user-global is best-effort-eventual-via-sync (NOT synchronous)** — a nonce
+//! consumed on device B is rejected on device C **only after** sync propagates
+//! the cache entry. The `..._multi_device_shared_rejection_nq_t4_gated` arm
+//! below pins this ratified contract in BOTH directions: (a) the load-bearing
+//! **pre-sync** positive control — a fresh device C, before sync reaches it,
+//! ADMITS the same jti (the disclosed best-effort-eventual window); and
+//! (b) the **post-sync** rejection — once B's consumed-jti set syncs to C, C
+//! rejects it. The pre-sync window is the disclosed Compromise #64
+//! ("best-effort-eventual cross-device nonce-rejection window"); see the
+//! SECURITY-POSTURE doc-cascade (M-1). The arm stays `#[ignore]`'d (RED-PHASE)
+//! until R5 wires the real Layer-D nonce-cache.
 //!
-//! ## NET-NEW jti-keyed instance (R0.3 §3.10 precision)
+//! ## Compromise #64 — best-effort-eventual cross-device window (FLAG-FOR-BEN)
+//!
+//! NQ-T4's ratification (§10.5) mandates minting a named Compromise for the
+//! pre-sync cross-device replay window. The synthesis assigns **#64**; the
+//! SECURITY-POSTURE row + #64 number are FLAGGED-FOR-BEN to ratify in the
+//! doc-cascade. The pre-sync sub-arm below is bound to that disclosure: it is
+//! the failing would-FAIL-on-no-op control that demonstrates the window is real
+//! (a fresh device C admits the jti) rather than synchronous/guaranteed.
+//!
+//! ## NET-NEW jti-keyed instance (R0.5 §3.10 precision)
 //!
 //! This is a DISTINCT `jti`-keyed nonce-cache, NOT the shipped #25 sync-frame
 //! cache. The shim below models the jti-keyed durable CAS-marker; R5 replaces
@@ -73,7 +89,9 @@ mod cache {
             }
         }
 
-        /// Hydrate from the durable store (simulates engine restart).
+        /// Hydrate from the durable store (simulates engine restart, OR a
+        /// cross-device sync that propagated another device's consumed-jti
+        /// set into this device's durable cache).
         pub fn from_durable(durable: HashSet<[u8; 32]>) -> Self {
             Self {
                 seen: durable.clone(),
@@ -214,16 +232,29 @@ fn f_ld_5_distinct_jti_same_bucket_is_admitted() {
         .expect("a DISTINCT jti in the same bucket MUST be admitted (keyed on nonce, not bucket)");
 }
 
-/// F-LD-5 NQ-T4-GATED multi-device shared-rejection (OPEN-SPEC).
+/// F-LD-5 NQ-T4-GATED multi-device shared-rejection (RATIFIED §10.5).
 ///
-/// NQ-T4 (§10.5) — does device C reject a nonce device B consumed? — is
-/// UNRESOLVED at R2. R0 names the default as "per-device-durable +
-/// best-effort-global-via-sync". This RED-PHASE stub pins the
-/// best-effort-global shape: once B's consumed-jti set syncs to C, C rejects
-/// the same jti. The EXACT after-sync-vs-pre-sync semantics are finalized at
-/// R5 against the ratified NQ-T4 default. See §5.B carry-forward item 4 / T-C3.
+/// NQ-T4 (§10.5) is **RATIFIED**: per-device-durable is GUARANTEED; user-global
+/// is **best-effort-eventual-via-sync (NOT synchronous)**. This arm pins that
+/// contract in BOTH directions so it reads as the eventual-not-synchronous
+/// guarantee it actually is — NOT as if cross-device rejection were immediate.
+///
+/// 1. **PRE-SYNC POSITIVE CONTROL (load-bearing; Compromise #64):** a fresh
+///    device C that has NOT yet received B's consumed-jti set via sync ADMITS
+///    the same jti — `Ok(())`. This is the disclosed best-effort-eventual
+///    window (the gap between consumption on B and propagation to C). It is the
+///    would-FAIL-on-no-op control: a (false) synchronous-global cache would
+///    have to reject here, but the ratified contract admits.
+/// 2. **POST-SYNC REJECTION:** once B's durable consumed-jti set has synced into
+///    device C, C rejects the same jti — closing the window after propagation.
+///
+/// The pre-sync arm is bound to **Compromise #64** ("best-effort-eventual
+/// cross-device nonce-rejection window"; FLAG-FOR-BEN on the #64 number + the
+/// SECURITY-POSTURE row). The exact wire/sync mechanism is finalized at R5
+/// against the real Layer-D nonce-cache; the eventual-not-synchronous SHAPE is
+/// frozen here.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — NQ-T4-gated multi-device shared rejection (OPEN-SPEC: gated on NQ-T4 §10.5); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-LD-5 — NQ-T4-gated multi-device shared rejection (RATIFIED §10.5: per-device GUARANTEED + user-global best-effort-eventual; pre-sync window = Compromise #64); un-ignore at R5"]
 fn f_ld_5_multi_device_shared_rejection_nq_t4_gated() {
     let jti = [0x77; 32];
 
@@ -231,12 +262,25 @@ fn f_ld_5_multi_device_shared_rejection_nq_t4_gated() {
     let mut device_b = JtiNonceCache::new(true);
     device_b.admit(jti, 1_900_000_800).expect("B admits");
 
-    // After best-effort-global sync, B's durable set reaches device C.
-    let mut device_c = JtiNonceCache::from_durable(device_b.durable_snapshot());
-
-    // Device C now rejects the same jti (post-sync, per the R0 default).
-    let err = device_c
+    // (1) PRE-SYNC POSITIVE CONTROL — Compromise #64 best-effort-eventual
+    //     window. A fresh device C that has NOT received B's consumed-jti set
+    //     (no durable hydration / sync has not propagated) ADMITS the same jti.
+    //     This is the disclosed cross-device replay window; a synchronous-global
+    //     cache would (wrongly) reject here. would-FAIL-on-no-op: if the cache
+    //     were synchronous-global the admit would return Err.
+    let mut device_c_pre_sync = JtiNonceCache::new(true); // no sync yet
+    device_c_pre_sync
         .admit(jti, 1_900_000_800)
-        .expect_err("post-sync, device C MUST reject a jti device B consumed (NQ-T4 default)");
+        .expect(
+            "PRE-SYNC: a fresh device C (sync has not propagated B's jti) MUST ADMIT the same jti \
+             — the disclosed best-effort-eventual cross-device window (Compromise #64)",
+        );
+
+    // (2) POST-SYNC REJECTION — after best-effort-global sync, B's durable
+    //     consumed-jti set reaches device C; C now rejects the same jti.
+    let mut device_c_post_sync = JtiNonceCache::from_durable(device_b.durable_snapshot());
+    let err = device_c_post_sync
+        .admit(jti, 1_900_000_800)
+        .expect_err("POST-SYNC: device C MUST reject a jti device B consumed (NQ-T4 ratified default)");
     assert_eq!(err, NonceCacheError::ReplayedNonce);
 }

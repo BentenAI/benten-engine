@@ -1,4 +1,4 @@
-//! F-NAT-2 (R3-W6 gov-audit) — Inv-22 unlinkability SCOPE-HONESTY:
+//! F-NAT-2 (R3-W6 gov-audit) — Inv-20 clause-d unlinkability SCOPE-HONESTY:
 //! per-recipient unlinkability is **network-observer-only**; it does NOT
 //! protect against a malicious admin (an admin sees the full
 //! `members_table`). Compromise #58 (insider-correlation) survives as an
@@ -6,7 +6,7 @@
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 12 row F-NAT-2; merges
 //! PMD-20/25 + GNI-6, m-7):
-//!   - R0.3 plan §3.8 m-7, Inv-20 clause-d, §5.2 Compromise #58.
+//!   - R0.5 plan §3.8 m-7, Inv-20 clause-d, §5.2 Compromise #58.
 //!   - Clone-shape (doc-coupling):
 //!     `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`.
 //!   - Class DC/FG: behavioral unlinkability arm + the disclosure-coherence
@@ -109,10 +109,11 @@ fn malicious_admin_can_correlate_members_boundary_not_over_claimed() {
     assert!(
         admin_can_correlate_members(members_table),
         "F-NAT-2: a malicious ADMIN (holding the members_table) CAN correlate \
-         members — unlinkability does NOT protect against the admin (Inv-22 \
-         m-7; Compromise #58). This assertion EXISTS so the unlinkability \
-         claim is honest (network-observer-only), not over-claimed as \
-         admin-proof. would-FAIL if W6 over-promises admin-proof unlinkability"
+         members — unlinkability does NOT protect against the admin (Inv-20 \
+         clause-d m-7; Compromise #58). This assertion EXISTS so the \
+         unlinkability claim is honest (network-observer-only), not \
+         over-claimed as admin-proof. would-FAIL if W6 over-promises \
+         admin-proof unlinkability"
     );
 }
 

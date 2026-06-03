@@ -5,20 +5,26 @@
 //! R3-W4, families **F-CRATE-1** (merges GNI-22) and **F-CRATE-2** (merges
 //! GNI-23, B-1).
 //!
-//! # What F-CRATE-1 pins (R0 §2.7 EP-1 / §6.3 / §9.1-7)
+//! # What F-CRATE-1 pins (R0.5 §2.7 EP-1 / §6.3 / §9.1-7)
 //!
-//! The EP-1 three-tier extensibility roster:
+//! The EP-1 three-tier extensibility roster (R0.5 §2.7, the m-15 GNC-4
+//! precision edit, line 264):
 //! - **Tier-1 OPEN** backend seams `{KVBackend, BlobBackend, GraphBackend,
-//!   Renderer, Transport, Materializer, DeviceAuthBackend}` are object-safe +
-//!   conformance-tested.
+//!   Renderer, Transport, Materializer}` are object-safe + conformance-tested.
+//!   **EXACTLY SIX** — `DeviceAuthBackend` is NOT here (it is a sealed policy
+//!   seam, below).
 //! - **Tier-2 SEALED** policy seams `{CapabilityPolicy, GrantReader (#830),
-//!   DeviceAuthBackend}` — Benten-internal, no external impl.
+//!   DeviceAuthBackend (#7)}` — Benten-internal, no external impl (R0.5 §2.7
+//!   line 267-268 + §6.3 line 1125 "sealed policy seam (Tier-2; #7)").
 //! - **Tier-3 ENUM-dispatch**: `benten_ivm::Strategy` is an ENUM, NOT a trait
 //!   seam (m-15 GNC-4 / baked-in #2).
+//! - The open and sealed tiers are **DISJOINT** — no seam is both an OPEN
+//!   object-safe backend AND a SEALED policy trait (a sealed trait cannot be
+//!   an open extension point; this is the F4-008 correctness boundary).
 //! - **NO** `EngineExtension` / `ExtensionRegistry`; no registry (grep-defense).
 //! - `Scope` is **EXACTLY-2-arm** (a 3rd arm is a HALT-AND-SURFACE).
 //!
-//! # What F-CRATE-2 pins (R0 §6.1 / §6.3 / §1.4 / B-1 / NQ-D1)
+//! # What F-CRATE-2 pins (R0.5 §6.1 / §6.3 / §1.4 / B-1 / NQ-D1)
 //!
 //! The 15th crate `benten-membership-set` EXISTS; its mechanism-half (frozen)
 //! is the Kind enum + `0x6600/0x6610/0x6620` + multi-stanza keying glue
@@ -41,8 +47,10 @@
 //! and un-ignores; the F-CRATE-2 grep pins tighten to the full B-1 dep set
 //! once the canary un-comments the deps. Would-FAIL-if-no-op'd: an
 //! `ExtensionRegistry`, a `Scope` 3rd arm, a reverse dep edge
-//! (crypto-suite/sync → membership-set), or a direct primitive import in the
-//! membership crate all break a pin.
+//! (crypto-suite/sync → membership-set), a direct primitive import in the
+//! membership crate, OR re-adding `DeviceAuthBackend` to the OPEN tier (which
+//! breaks both the `len()==6` pin and the open/sealed disjointness pin) all
+//! break a pin.
 
 #![allow(dead_code)]
 
@@ -53,17 +61,24 @@ use std::path::PathBuf;
 
 /// The EP-1 Tier-1 OPEN backend seams (object-safe). At R5 these reference the
 /// real workspace traits; here we model them as a roster the test enumerates.
-const TIER1_OPEN_SEAMS: [&str; 7] = [
+///
+/// **EXACTLY SIX** per R0.5 §2.7 line 264 (the m-15 GNC-4 precision edit).
+/// `DeviceAuthBackend` is deliberately NOT in this roster — it is a SEALED
+/// policy seam (see [`TIER2_SEALED_SEAMS`]), and a sealed trait cannot be an
+/// open object-safe extension point (the F4-008 correctness boundary).
+const TIER1_OPEN_SEAMS: [&str; 6] = [
     "KVBackend",
     "BlobBackend",
     "GraphBackend",
     "Renderer",
     "Transport",
     "Materializer",
-    "DeviceAuthBackend",
 ];
 
-/// The EP-1 Tier-2 SEALED policy seams.
+/// The EP-1 Tier-2 SEALED policy seams (R0.5 §2.7 line 267-268 + §6.3 line
+/// 1125). Benten-internal; no external crate can impl these. `DeviceAuthBackend`
+/// is the #7 sealed seam (sibling test `f_ld_1_device_auth_backend_sealed_headless`
+/// pins the real sealed-supertrait shape).
 const TIER2_SEALED_SEAMS: [&str; 3] = ["CapabilityPolicy", "GrantReader", "DeviceAuthBackend"];
 
 /// Stand-in for `benten_ivm::Strategy` — an ENUM, not a trait (m-15 GNC-4).
@@ -115,10 +130,10 @@ fn read_cargo_toml(crate_dir: &str) -> String {
 
 /// Parse the dependency KEYS declared in a Cargo.toml's `[dependencies]`
 /// section, looking ONLY at REAL (uncommented) `name = ...` lines — never
-/// comment text. This is the F4-014 fix: a whole-file `.contains("benten-sync")`
-/// matches the commented-out `# benten-sync = ...` documentation and so
-/// green-passes against a NON-edge; parsing the section gives a true dep-graph
-/// assertion that tightens once the canary un-comments the real deps.
+/// comment text. A whole-file `.contains("benten-sync")` matches the
+/// commented-out `# benten-sync = ...` documentation and so green-passes
+/// against a NON-edge; parsing the section gives a true dep-graph assertion
+/// that tightens once the canary un-comments the real deps.
 fn parsed_dependencies(cargo_toml: &str) -> BTreeSet<String> {
     let mut deps = BTreeSet::new();
     let mut in_deps = false;
@@ -181,30 +196,68 @@ fn walk_rs(dir: &std::path::Path) -> Vec<PathBuf> {
 // ── F-CRATE-1 pins ──────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — EP-1 Tier-1 OPEN seams (7) object-safe roster; un-ignore at R5 against real workspace traits"]
+#[ignore = "RED-PHASE: F-CRATE-1 — EP-1 Tier-1 OPEN seams (EXACTLY 6) object-safe roster; un-ignore at R5 against real workspace traits"]
 fn crate1_tier1_open_seam_roster() {
-    // The 7 Tier-1 open backend seams. At R5 each is asserted object-safe via a
-    // `dyn Trait` coercion (clone of graph_backend_trait.rs). Here we pin the
-    // exact roster so the canary can't silently drop/add a seam.
+    // The 6 Tier-1 open backend seams (R0.5 §2.7 line 264). At R5 each is
+    // asserted object-safe via a `dyn Trait` coercion (clone of
+    // graph_backend_trait.rs). Here we pin the exact roster so the canary can't
+    // silently drop/add a seam. `DeviceAuthBackend` is intentionally ABSENT —
+    // it is a SEALED policy seam (Tier-2), not an open object-safe backend.
     assert_eq!(
         TIER1_OPEN_SEAMS.len(),
-        7,
-        "EP-1 Tier-1 has exactly 7 open backend seams"
+        6,
+        "EP-1 Tier-1 has EXACTLY 6 open backend seams (R0.5 §2.7 line 264); DeviceAuthBackend is sealed Tier-2, NOT open"
     );
-    assert!(TIER1_OPEN_SEAMS.contains(&"DeviceAuthBackend"));
-    assert!(TIER1_OPEN_SEAMS.contains(&"Materializer"));
+    assert!(
+        TIER1_OPEN_SEAMS.contains(&"Materializer"),
+        "Materializer is the 6th open backend seam"
+    );
+    assert!(
+        !TIER1_OPEN_SEAMS.contains(&"DeviceAuthBackend"),
+        "DeviceAuthBackend must NOT be an OPEN object-safe seam — it is a sealed policy seam (#7) per R0.5 §2.7 line 267-268 + §6.3 line 1125"
+    );
 }
 
 #[test]
 #[ignore = "RED-PHASE: F-CRATE-1 — EP-1 Tier-2 SEALED policy seams (CapabilityPolicy/GrantReader/DeviceAuthBackend); un-ignore at R5"]
 fn crate1_tier2_sealed_seam_roster() {
-    // DeviceAuthBackend straddles Tier-1 (object-safe) AND Tier-2 (sealed: no
-    // external impl) per the roster. The sealed set is the policy seam.
+    // The sealed policy seams: Benten-internal, no external impl. R0.5 §2.7
+    // line 267-268 names all three; §6.3 line 1125 makes DeviceAuthBackend the
+    // #7 sealed seam (NOT a Tier-1 open backend — sibling f_ld_1 pins the real
+    // sealed-supertrait shape).
     assert!(TIER2_SEALED_SEAMS.contains(&"CapabilityPolicy"));
     assert!(TIER2_SEALED_SEAMS.contains(&"GrantReader"));
     assert!(
         TIER2_SEALED_SEAMS.contains(&"DeviceAuthBackend"),
         "DeviceAuthBackend is a sealed policy seam (#7)"
+    );
+}
+
+#[test]
+#[ignore = "RED-PHASE: F-CRATE-1 — Tier-1 OPEN and Tier-2 SEALED rosters are DISJOINT (F4-008 boundary: no seam is both); un-ignore at R5 against real workspace traits"]
+fn crate1_open_and_sealed_tiers_are_disjoint() {
+    // The F4-008 correctness boundary as a SINGLE partition check: a seam is
+    // either an OPEN object-safe backend OR a SEALED policy trait — NEVER both
+    // (a sealed trait, by construction, cannot be an open external extension
+    // point). Two independently-editable `contains` arrays leave a forward
+    // drift hole: a future canary could re-add `DeviceAuthBackend` to BOTH and
+    // the per-array presence checks would each still pass. This disjointness
+    // pin is the source-of-truth that closes that class — it FAILS the instant
+    // any seam appears in both rosters (which is exactly the pre-fix F4-008
+    // state). R5 evaluates it against the real workspace trait sets.
+    let open: BTreeSet<&str> = TIER1_OPEN_SEAMS.iter().copied().collect();
+    let sealed: BTreeSet<&str> = TIER2_SEALED_SEAMS.iter().copied().collect();
+    let overlap: BTreeSet<&str> = open.intersection(&sealed).copied().collect();
+    assert!(
+        overlap.is_empty(),
+        "OPEN and SEALED seam tiers MUST be disjoint — overlap {overlap:?} means a sealed trait is wrongly listed as an open object-safe backend (R0.5 §2.7: open=6, DeviceAuthBackend sealed)"
+    );
+    // And the two tiers together name exactly the 9 distinct seams (6 open + 3
+    // sealed) — proves the partition is complete + non-overlapping in one shot.
+    assert_eq!(
+        open.len() + sealed.len(),
+        open.union(&sealed).count(),
+        "no seam is double-counted across the open/sealed partition"
     );
 }
 
@@ -312,8 +365,8 @@ fn crate2_no_direct_primitive_construction() {
 #[test]
 #[ignore = "RED-PHASE: F-CRATE-2 — the B-1 dep set {crypto-suite, core, caps, id, graph, sync} is a REAL [dependencies] edge-set; un-ignore at R5 once the canary un-comments deps"]
 fn crate2_b1_dep_set_direction() {
-    // F4-014: assert the B-1 set as REAL `[dependencies]` edges (parsed from
-    // the section), NOT a whole-file `.contains()` that matches the commented
+    // Assert the B-1 set as REAL `[dependencies]` edges (parsed from the
+    // section), NOT a whole-file `.contains()` that matches the commented
     // documentation. At R3 the deps are intentionally commented out for
     // parallel-safety, so this LOAD-BEARING assertion is the RED-PHASE pin
     // that GOES GREEN once the R5 canary un-comments the real edges; an impl

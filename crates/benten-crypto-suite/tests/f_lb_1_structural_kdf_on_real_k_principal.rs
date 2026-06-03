@@ -5,11 +5,21 @@
 //!     `tf3a_structural_kdf_step_root_derivation.rs` with a real-`K_principal`
 //!     arm; 5-Node parity; info-tag-elision negative; runs on real
 //!     `K_principal` not stub").
-//!   - R0 §3.2 Layer-B: `K(root) = HKDF-SHA256(K_principal, "root"||root_cid)`;
+//!   - R0.5 §3.2 Layer-B: `K(root) = HKDF-SHA256(K_principal, "root"||root_cid)`;
 //!     `K(N) = HKDF-SHA256(K(predecessor), "step"||edge_label||N.cid)`
 //!     (Cryptree-aligned structural-KDF chain). "Residual after Layer-A (~50
 //!     LOC): once `K_principal` is a real type, the existing combiner plugs into
 //!     it."
+//!   - **R0.5 §4.2 FREEZE-table row "Per-member K(N) walk-scope" + Inv-20
+//!     clause-h** ("per-member `K(N)` walk-scope"; the 8th of the 12 a–l
+//!     MembershipSet clauses, R0.5 §10 Inv-20). This is the Cryptree
+//!     selective-share confinement property — a member who holds `K(X)` for
+//!     one walk-scope MUST NOT be able to derive `K(Y)` for a sibling `Y`
+//!     outside that scope. **R2 §2.1 mis-maps clause-h to F-AUDIT-3**, which
+//!     only pins `AuditAccessGradation` UCAN read-scope and never touches
+//!     `K(N)`; F-LB-1 (this file) is clause-h's correct behavioral home (the
+//!     R2 §2.1 + §"Inv-20 12-clause coverage" rows are corrected this round to
+//!     `clause-h → F-LB-1`).
 //!   - In-tree LIVE surface `benten_crypto_suite::structural_kdf`
 //!     (`derive_root`/`derive_step`/`StructuralKdfKey`) — the existing G-CORE-3a
 //!     canary module (already on `main`).
@@ -19,13 +29,17 @@
 //!
 //! F-LB-1 is the bridge pin: the structural-KDF chain (LIVE) must derive from a
 //! REAL `K_principal` (the Layer-A vault output), not a test stub, AND preserve
-//! the two load-bearing properties end-to-end on that real key:
+//! the load-bearing properties end-to-end on that real key:
 //!   1. 5-Node walk parity (same canonical path → byte-identical key sequence);
 //!   2. path-divergence (different predecessor → different key at the same Node);
 //!   3. the `"step"` info-tag is load-bearing (eliding it changes the key) — the
 //!      multitenant-r1.4-2 / crypto-agility-r1.4-2 root-cause negative control;
 //!   4. the chain is seeded from the REAL `K_principal` handle (a different
-//!      `K_principal` yields a different root key — the keying-root binding).
+//!      `K_principal` yields a different root key — the keying-root binding);
+//!   5. **sibling-confinement (Inv-20 clause-h)** — a member who is given ONLY
+//!      `K(X)` for one walk-scope CANNOT compute `K(Y)` for a non-descendant
+//!      sibling `Y`, because `derive_step` is a one-way HKDF over the
+//!      predecessor (the Cryptree selective-share confinement guarantee).
 //!
 //! # Hybrid live/stub strategy (wave-independence)
 //!
@@ -33,8 +47,8 @@
 //! LIVE on `main` (the G-CORE-3a canary), so this file USES the real derivation
 //! API directly — that part is not stubbed. What is NOT live is the **real
 //! `K_principal` source** (the Layer-A vault `UnlockedKeyMaterial.k_principal`,
-//! which R0 §3.1 names a STUB). Per wave-independence (NO dependency on W1's own
-//! vault file `f_va_*` or on W0's modules), this file commits a LOCAL
+//! which R0.5 §3.1 names a STUB). Per wave-independence (NO dependency on W1's
+//! own vault file `f_va_*` or on W0's modules), this file commits a LOCAL
 //! `f_lb_1_k_principal_stub` modelling the vault-derived `K_principal` source.
 //! The R5 closing wave:
 //!   1. DELETEs the `f_lb_1_k_principal_stub` module,
@@ -48,9 +62,11 @@
 //!
 //! The derivation pins drive the LIVE `derive_root`/`derive_step` production
 //! call sites over a fixed 5-Node walk + assert byte-level consequences. The
-//! info-tag-elision negative uses the LIVE
-//! `StructuralKdfKey::derive_step_without_info_tag_for_test` foil. The
+//! info-tag-elision negative uses a LOCAL no-`"step"` foil. The
 //! real-`K_principal` binding pin would FAIL on a chain that ignores the seed.
+//! The clause-h sibling-confinement pin would FAIL on any derivation that let a
+//! held step-key re-derive a non-descendant sibling's key (an over-derivable
+//! chain).
 
 #![allow(clippy::unwrap_used)]
 #![allow(dead_code)]
@@ -211,7 +227,7 @@ fn structural_kdf_path_divergence_on_real_k_principal() {
 
 /// F-LB-1 (c) — the `"step"` HKDF info-tag is load-bearing on the real chain.
 ///
-/// Negative control via the LIVE `derive_step_without_info_tag_for_test` foil.
+/// Negative control via the LOCAL `derive_step_without_step_info_tag` foil.
 /// would-FAIL-if-no-op'd: a `derive_step` that omits the `"step"` prefix matches
 /// the foil (the crypto-agility-r1.4-2 root-cause).
 #[test]
@@ -268,5 +284,94 @@ fn structural_kdf_root_bound_to_real_k_principal_seed() {
          for the SAME root_cid — the structural-KDF chain is genuinely keyed \
          off the Layer-A vault output (the keying-root binding; O-2). would-FAIL \
          on a seed-independent derivation."
+    );
+}
+
+/// F-LB-1 (e) — **Inv-20 clause-h: per-member `K(N)` walk-scope confinement
+/// (Cryptree sibling-confinement).**
+///
+/// This is the C-MAJOR-2 closure: clause-h ("per-member `K(N)` walk-scope",
+/// R0.5 §4.2 FREEZE-table + §10 Inv-20) had ZERO behavioral pin in the corpus
+/// and was mis-mapped by R2 §2.1 to F-AUDIT-3 (which only covers audit
+/// read-gradation). F-LB-1 is its correct home.
+///
+/// # The confinement property
+///
+/// A member granted ONLY the step-key `K(X)` for one walk-scope (subtree X)
+/// receives a `StructuralKdfKey` opaque handle — they hold derived key MATERIAL,
+/// not `K_principal` and not `K(root)`. Because `derive_step` is a one-way
+/// HKDF-expand over the predecessor key, from `K(X)` a member can ONLY walk
+/// FORWARD into X's own descendants. They CANNOT:
+///   - reach a non-descendant sibling `Y` (a different subtree off the same
+///     root), because reaching `Y` requires `K(root)`→…→`K(Y)`, and the
+///     root/sibling-prefix predecessors are NOT recoverable from `K(X)` (HKDF
+///     pre-image resistance);
+///   - reconstruct `K(root)` from any `K(N)` they hold.
+///
+/// We pin this STRUCTURALLY (the held material is insufficient) rather than
+/// attempting to break HKDF: the test models the member as holding ONLY `K(X)`
+/// (subtree-X step-key) and asserts that the sibling key `K(Y)` — which the
+/// owner computes from `K(root)` along a DISJOINT walk — is unequal to anything
+/// the X-holder can derive by walking forward from `K(X)` with `Y`'s own
+/// edge/cid. The forward-walk-from-X result is path-tagged by X's predecessor
+/// chain, so it can never collide with the owner's root-anchored `K(Y)`.
+///
+/// would-FAIL-if-no-op'd: a structure-INDEPENDENT derivation (one that ignored
+/// the predecessor — exactly the formula Spike-E disproved) would let the
+/// X-holder land on `K(Y)` by supplying `Y`'s edge_label+cid, collapsing the
+/// confinement. The `assert_ne!` fires only on a one-way path-tagged chain.
+#[test]
+#[ignore = "RED-PHASE: F-LB-1 (e) — Inv-20 clause-h per-member K(N) walk-scope confinement (sibling Y NOT derivable from K(X)); un-ignore at R5"]
+fn structural_kdf_clause_h_sibling_walk_scope_confinement_on_real_k_principal() {
+    let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x9Cu8; 32]);
+
+    // The OWNER holds K_principal and derives the shared root.
+    let k_root = derive_root(
+        &vault.structural_kdf_root_key(),
+        &fixed_cid(0xA0),
+        CODEPOINT_HYBRID,
+    );
+
+    // Two DISJOINT sibling subtrees hang off the root via different edges/cids:
+    //   X  reached by edge:ITEM_TYPE  → cid 0xA1
+    //   Y  reached by edge:VERSION_OF → cid 0xA2  (a NON-descendant of X)
+    let k_x = derive_step(&k_root, b"edge:ITEM_TYPE", &fixed_cid(0xA1));
+    let k_y = derive_step(&k_root, b"edge:VERSION_OF", &fixed_cid(0xA2));
+
+    // Sanity: the two sibling scope-keys are themselves distinct (different
+    // predecessors-of-root edges; the selective-share precondition).
+    assert_ne!(
+        k_x.as_bytes(),
+        k_y.as_bytes(),
+        "sibling subtrees X and Y MUST have distinct scope-keys (selective-share \
+         precondition for clause-h confinement)."
+    );
+
+    // The member is granted ONLY K(X). Everything they can compute is a FORWARD
+    // walk from K(X). The most adversarial attempt: replay Y's OWN edge_label +
+    // cid against the held K(X), trying to land on Y's key.
+    let x_holder_attempt_at_y =
+        derive_step(&k_x, b"edge:VERSION_OF", &fixed_cid(0xA2));
+
+    // CONFINEMENT: the X-holder's forward walk (predecessor = K(X)) can NEVER
+    // equal the owner's root-anchored K(Y) (predecessor = K(root)). The chain is
+    // path-tagged — Y's key is bound to its root predecessor, unreachable from X.
+    assert_ne!(
+        x_holder_attempt_at_y.as_bytes(),
+        k_y.as_bytes(),
+        "Inv-20 clause-h VIOLATED: a member holding ONLY K(X) reconstructed the \
+         non-descendant sibling key K(Y). The structural-KDF chain is \
+         over-derivable — derive_step ignored its predecessor (the \
+         structure-INDEPENDENT formula Spike-E disproved). would-FAIL on a \
+         confined one-way path-tagged chain."
+    );
+
+    // And the held K(X) is not itself K(root): the X-holder cannot present their
+    // grant as the principal/root scope.
+    assert_ne!(
+        k_x.as_bytes(),
+        k_root.as_bytes(),
+        "a per-member scope-key K(X) MUST NOT equal K(root) — the member holds \
+         a confined sub-scope, not the principal root (clause-h walk-scope)."
     );
 }

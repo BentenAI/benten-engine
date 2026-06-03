@@ -1,5 +1,5 @@
 //! F-LD-3 — `ExecuteWorkflow` codepoint-reserve slot + AAD-binding frozen
-//! (RED-PHASE; byte-pinning; NQ-T3-gated sufficiency arm).
+//! (RED-PHASE; byte-pinning; NQ-T3-RATIFIED sufficiency arm).
 //!
 //! R3 wave **W3-layer-d**. Pin sources:
 //!   - `db2d7d6d:.addl/phase-4-meta/f-full-r2-test-landscape.md` §1 Group 8
@@ -10,7 +10,7 @@
 //!     constraint**. R2-gated on NQ-T3." Red-phase intent: "variant exists;
 //!     3 fields in AAD (hex-pin); mutate each → Open fails (constraint bound
 //!     not advisory); sufficiency assertion."
-//!   - R0.3 plan §3.4 (`...f-full-r0-plan.md:510-517`): the variant fields +
+//!   - R0.5 plan §3.4 (`...f-full-r0-plan.md:510-517`): the variant fields +
 //!     "The variant-slot + the AAD-binding of `(executor_did, max_decrypt_count,
 //!     result_recipient_pubkey)` are FROZEN at v1-beta."
 //!   - §10.5 NQ-T3 (`...:1375-1377`): "Does the engine enforce that the rented
@@ -18,15 +18,19 @@
 //!     The AAD scope must be SUFFICIENT to express the constraint even though
 //!     enforcement is post-v1-beta."
 //!
-//! ## NQ-T3 OPEN-SPEC FLAG
+//! ## NQ-T3 RATIFIED (Ben 2026-06-02; spec R0.5 §10.5)
 //!
-//! NQ-T3 (§10.5) is UNRESOLVED at R2 (the §5.B R2→R3 carry-forward lists F-LD-3
-//! as "R2-resolution-gated"). The `..._aad_is_sufficient_to_express_no_egress_
-//! constraint` arm below pins the FROZEN-AAD-SCOPE shape (the three bound
-//! fields), which is the R0-stated invariant regardless of NQ-T3's runtime-
-//! enforcement answer. It is authored as a RED-PHASE stub referencing the open
-//! question; R5 confirms the exact sufficiency assertion against the ratified
-//! NQ-T3 default.
+//! NQ-T3 is **RATIFIED**: the frozen 3-field AAD `(executor_did,
+//! max_decrypt_count, result_recipient_pubkey)` is SUFFICIENT to express the
+//! no-egress / bounded-decrypt constraint; runtime enforcement is post-v1-beta
+//! and **non-freeze-gating** (the wire freeze is the AAD scope, not the runtime
+//! check). The `..._aad_is_sufficient_to_express_no_egress_constraint` arm
+//! below pins exactly that ratified property: the three bound fields are the
+//! complete frozen substrate, so post-v1-beta runtime enforcement never needs a
+//! wire-format addition. The arm stays `#[ignore]`'d as a RED-PHASE stub (the
+//! BLAKE3-keyed authenticator is a stand-in for ChaCha20-Poly1305-under-HPKE);
+//! R5 swaps in the real AEAD and un-ignores. The sufficiency assertion is final
+//! per the ratified default — no longer gated on an open question.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -44,7 +48,7 @@ use benten_id::keypair::Keypair;
 // is that the three constraint fields are in the AAD, so mutating any of them
 // makes Open fail. R5 swaps in the real AEAD; the AAD shape is the freeze.
 mod shim {
-    /// The frozen ExecuteWorkflow variant (R0 §3.4 / e2r). M-20: every integer
+    /// The frozen ExecuteWorkflow variant (R0.5 §3.4 / e2r). M-20: every integer
     /// (`max_decrypt_count: u32`) is BE on the wire.
     #[derive(Clone)]
     pub struct ExecuteWorkflow {
@@ -58,7 +62,8 @@ mod shim {
     impl ExecuteWorkflow {
         /// The FROZEN AAD: binds exactly the three constraint fields
         /// `(executor_did, max_decrypt_count, result_recipient_pubkey)` —
-        /// the "sufficient to express no-egress" scope (NQ-T3). BE integers.
+        /// the "sufficient to express no-egress" scope (NQ-T3, RATIFIED).
+        /// BE integers.
         pub fn constraint_aad(&self) -> Vec<u8> {
             let mut aad = Vec::new();
             aad.extend_from_slice(b"benten-exec-workflow-v1:");
@@ -193,7 +198,7 @@ fn f_ld_3_mutating_result_recipient_pubkey_breaks_open() {
     );
 }
 
-/// F-LD-3 NQ-T3 SUFFICIENCY arm (OPEN-SPEC, gated on NQ-T3).
+/// F-LD-3 NQ-T3 SUFFICIENCY arm (RATIFIED, Ben 2026-06-02).
 ///
 /// Pins that the FROZEN AAD scope is *sufficient to express* the no-egress /
 /// bounded-decrypt constraint — i.e. all three constraint fields the runtime
@@ -201,12 +206,15 @@ fn f_ld_3_mutating_result_recipient_pubkey_breaks_open() {
 /// enforcement has a complete frozen substrate to enforce against (no later
 /// wire-format change is required to ADD a constraint field).
 ///
-/// OPEN-SPEC: NQ-T3 (§10.5) is unresolved at R2. This arm pins the R0-stated
-/// sufficiency property; the EXACT enforcement-vs-advisory assertion is
-/// finalized at R5 once NQ-T3 ratifies. See §5.B carry-forward item 3.
+/// NQ-T3 (§10.5) is RATIFIED: the frozen 3-field AAD is sufficient; runtime
+/// enforcement is post-v1-beta and non-freeze-gating. This arm pins the
+/// ratified sufficiency property (the wire freeze IS the AAD scope). The
+/// enforcement-vs-advisory runtime check is a post-v1-beta concern that this
+/// freeze deliberately does not gate; R5 un-ignores against the ratified
+/// default.
 #[test]
-#[ignore = "RED-PHASE: F-LD-3 — NQ-T3-gated AAD-sufficiency (OPEN-SPEC: gated on NQ-T3 §10.5); un-ignore at R5"]
-fn f_ld_3_frozen_aad_is_sufficient_to_express_no_egress_constraint_nq_t3_gated() {
+#[ignore = "RED-PHASE: F-LD-3 — NQ-T3-RATIFIED AAD-sufficiency (frozen 3-field AAD sufficient; runtime enforcement post-v1-beta non-freeze-gating); un-ignore at R5"]
+fn f_ld_3_frozen_aad_is_sufficient_to_express_no_egress_constraint_nq_t3_ratified() {
     let executor = Keypair::generate();
     let ew = sample(&executor);
     let aad = ew.constraint_aad();

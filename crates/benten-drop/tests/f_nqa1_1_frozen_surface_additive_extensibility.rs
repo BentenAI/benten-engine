@@ -27,7 +27,45 @@
 //! **The RecoveryHook-absent-at-Core boundary (NQ-W5/m-14)** is the
 //! Phase-4-Meta-Composing seam: at CORE the `RecoveryArtifact` codepoint
 //! is RESERVED but the `RecoveryHook` trait is NOT frozen (it lands in
-//! Composing). §2.5-§9.2-10 names this boundary; F-NQA1-1 pins it.
+//! Composing). §3.4 / §9.2-10 names this boundary; F-NQA1-1 pins it.
+//!
+//! **Codepoint-reserve fidelity (F4-010, R4.3-corrected 2026-06-03).**
+//! The reserve integers used below are the ONLY ones the canonical
+//! `f-full-r0-plan` **§4.0** allocation table (R0.5) actually blesses:
+//!   - `SubsetRef`              → **`0x6620`** (`MEMBERSHIP_SET_SUBSET_REF`,
+//!                                 §4.0 line for the MembershipSet band).
+//!   - `ExecuteWorkflow`        → lives **inside the `0x6320..0x632F`
+//!                                 RemotePermission band** (§4.0: "incl.
+//!                                 `ExecuteWorkflow` reserve"). §4.0 freezes
+//!                                 the *band*, not a standalone integer, so
+//!                                 we register the band base `0x6320` and
+//!                                 assert band-membership, NOT a fabricated
+//!                                 `0x6321`.
+//!   - `RecoveryArtifact`       → §4.0 names **NO codepoint integer** for
+//!                                 it at Core (it is a *conceptual*
+//!                                 reserve-at-Core per §3.4 / §9.2-10; the
+//!                                 codepoint is allocated in Composing
+//!                                 alongside the trait). We therefore do
+//!                                 NOT invent a `0x6330`; the boundary is
+//!                                 pinned by the source-scan arms (PIN 0c /
+//!                                 PIN 2), not by an integer.
+//!   - `RotatingGroupKeyChainedMode` / `ChainedStateTlv` → the chained-mode
+//!                                 reserve lives in the FS-future
+//!                                 `0x6380..0x63CF` MLS/CGKA brackets +
+//!                                 the per-stanza `Option<ChainedStateTlv>`
+//!                                 sub-slot (§3.3 line "Per-stanza
+//!                                 `Option<ChainedStateTlv>` codepoint-
+//!                                 reserve sub-slot"). It is NOT a
+//!                                 standalone `0x6611` (and `0x6610` is the
+//!                                 LIVE-FREEZE `MEMBERSHIP_SET_GROUP_MULTI_
+//!                                 STANZA`, so `0x6611` would alias the
+//!                                 membership band). We register the
+//!                                 FS-future bracket base `0x6380` for the
+//!                                 typed-reject property and pin the
+//!                                 sub-slot AAD-binding by NAME (PIN 4).
+//! The prior corpus (`0x6321`/`0x6330`/`0x6611`) invented three integers
+//! no §4.0 row blesses — an additive-extensibility test must not invent
+//! the very codepoints it claims are reserved.
 //!
 //! **RED-PHASE (pim-12 §3.6e):** the F-full reserved codepoints +
 //! V2 envelope decode + the RecoveryHook boundary do NOT exist at
@@ -54,12 +92,70 @@
 
 const ENVELOPE_FORMAT_VERSION_V2: u8 = 2;
 
-// A small known + reserved codepoint set (subset, BE on the wire).
-const CP_LIVE_HPKE_BASE: u16 = 0x647A; // X-Wing MLKEM768-X25519 (LIVE)
-const CP_RESERVED_EXECUTE_WORKFLOW: u16 = 0x6321; // Layer-D reserve
-const CP_RESERVED_SUBSET_REF: u16 = 0x6620; // federation reserve
-const CP_RESERVED_RECOVERY_ARTIFACT: u16 = 0x6330; // reserved-at-Core, trait NOT frozen
-const CP_RESERVED_ROTATING_GROUP_KEY: u16 = 0x6611; // RotatingGroupKeyChainedMode reserve
+// Codepoints below are the §4.0-blessed values ONLY (F4-010). BE on wire.
+const CP_LIVE_HPKE_BASE: u16 = 0x647A; // X-Wing MLKEM768-X25519 (LIVE; §4.0)
+
+/// `ExecuteWorkflow` reserve. §4.0 freezes the **`0x6320..0x632F`
+/// RemotePermission band** ("incl. `ExecuteWorkflow` reserve"), not a
+/// standalone integer. We register the band BASE and assert band-membership.
+const CP_BAND_REMOTE_PERMISSION_BASE: u16 = 0x6320; // §4.0 RemotePermission band
+const CP_BAND_REMOTE_PERMISSION_END: u16 = 0x632F;
+
+/// `SubsetRef` federation reserve — the ONE standalone integer §4.0 names
+/// in this cluster: `MEMBERSHIP_SET_SUBSET_REF = 0x6620` (refused at
+/// v1-beta; Inv-20 clause-k).
+const CP_RESERVED_SUBSET_REF: u16 = 0x6620; // §4.0 MembershipSet band
+
+/// `RotatingGroupKeyChainedMode` / `ChainedStateTlv` chained-mode reserve.
+/// §4.0 places the FS-future / chained reserves in the
+/// **`0x6380..0x63CF`** MLS/CGKA brackets (NOT a standalone `0x6611`;
+/// `0x6610` is the LIVE-FREEZE `MEMBERSHIP_SET_GROUP_MULTI_STANZA`). We
+/// register the bracket BASE for the typed-reject property; the per-stanza
+/// sub-slot AAD-binding is pinned by NAME (PIN 4).
+const CP_BAND_FS_FUTURE_BASE: u16 = 0x6380; // §4.0 MLS-Application / FS-future bracket
+
+// NOTE (F4-010): `RecoveryArtifact` has NO §4.0 codepoint integer at Core
+// (it is a conceptual reserve-at-Core per §3.4 / §9.2-10; the integer is
+// allocated in Composing alongside the trait). We deliberately do NOT mint
+// a `0x6330` here — the boundary is pinned by the source-scan arms below.
+
+// ---------------------------------------------------------------------------
+// §4.0-PROVENANCE GUARD (F4-010 self-enforcing regression guard).
+//
+// The F4-010 bug was: this additive-extensibility test *invented* three
+// codepoints (`0x6321`/`0x6330`/`0x6611`) that no §4.0 row blesses. The
+// prose discipline ("use §4.0-blessed values only") is not self-enforcing —
+// a future edit could re-introduce a fabricated standalone integer and the
+// test would still pass. To make the fix permanent, every codepoint this
+// test treats as RESERVED must be provably traceable to §4.0: either a
+// §4.0-NAMED STANDALONE integer, or a member of a §4.0-NAMED BAND base.
+// `cp_blessed_by_s40` is the single source of truth; PIN 0b asserts its
+// reserved set passes it, so any future fabricated standalone integer
+// fails the test loudly (not silently).
+// ---------------------------------------------------------------------------
+
+/// The §4.0-named STANDALONE reserve integers this test legitimately uses.
+/// (Only `SubsetRef@0x6620` qualifies in this cluster — §4.0 line for
+/// `MEMBERSHIP_SET_SUBSET_REF`.)
+const S40_NAMED_STANDALONE_RESERVES: &[u16] = &[CP_RESERVED_SUBSET_REF];
+
+/// The §4.0-named BAND `(base, end)` ranges this test uses a base of.
+/// `0x6320..0x632F` RemotePermission (holds `ExecuteWorkflow`); the
+/// `0x6380..0x63CF` FS-future bracket (holds the chained-mode reserve —
+/// §4.0 spans MLS-Application `0x6380` through draft-prabel `0x63CF`).
+const S40_NAMED_BANDS: &[(u16, u16)] = &[
+    (CP_BAND_REMOTE_PERMISSION_BASE, CP_BAND_REMOTE_PERMISSION_END), // 0x6320..0x632F
+    (CP_BAND_FS_FUTURE_BASE, 0x63CF), // 0x6380..0x63CF FS-future bracket
+];
+
+/// True iff `cp` is traceable to §4.0: a NAMED standalone integer OR inside
+/// a NAMED band. A fabricated integer (the F4-010 regression) returns false.
+fn cp_blessed_by_s40(cp: u16) -> bool {
+    S40_NAMED_STANDALONE_RESERVES.contains(&cp)
+        || S40_NAMED_BANDS
+            .iter()
+            .any(|&(base, end)| cp >= base && cp <= end)
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum StubDecodeError {
@@ -197,29 +293,88 @@ fn f_nqa1_1_new_codepoint_does_not_break_old_decode_baseline() {
 /// (NEVER silent acceptance), and unknown codepoints also typed-reject
 /// (NEVER silent fallback). Real dispatch over the stub. Would-FAIL if a
 /// reserved/unknown codepoint silently decodes to plaintext.
+///
+/// The reserved set uses ONLY §4.0-blessed values (F4-010): the
+/// RemotePermission band base (`0x6320`, holds `ExecuteWorkflow`), the
+/// `SubsetRef` integer (`0x6620`), and the FS-future bracket base
+/// (`0x6380`, holds the chained-mode reserve). `RecoveryArtifact` is
+/// intentionally absent (no §4.0 integer at Core).
+///
+/// This arm ALSO carries the F4-010 self-enforcing guard: it asserts every
+/// reserved codepoint is §4.0-traceable via `cp_blessed_by_s40`, and that
+/// the three fabricated integers the prior corpus invented
+/// (`0x6321`/`0x6330`/`0x6611`) are PROVABLY rejected by it — so a revert
+/// re-minting any of them fails this test loudly.
 #[test]
 fn f_nqa1_1_reserved_and_unknown_codepoints_typed_reject_baseline() {
     let reserved = [
-        CP_RESERVED_EXECUTE_WORKFLOW,
-        CP_RESERVED_SUBSET_REF,
-        CP_RESERVED_RECOVERY_ARTIFACT,
-        CP_RESERVED_ROTATING_GROUP_KEY,
+        CP_BAND_REMOTE_PERMISSION_BASE, // ExecuteWorkflow reserve (band base)
+        CP_RESERVED_SUBSET_REF,         // 0x6620, §4.0-named
+        CP_BAND_FS_FUTURE_BASE,         // RotatingGroupKeyChainedMode reserve (bracket base)
     ];
 
-    // A reserved codepoint → ReservedAtV1Beta (typed).
-    let exec = stub_seal_v2(CP_RESERVED_EXECUTE_WORKFLOW, b"x");
+    // F4-010 SELF-ENFORCING GUARD: every codepoint we treat as RESERVED MUST
+    // trace to §4.0 (a NAMED standalone integer OR a NAMED band member). This
+    // is the permanent regression guard — a future edit that re-introduces a
+    // fabricated standalone integer (the original `0x6321`/`0x6330`/`0x6611`)
+    // fails HERE, loudly, instead of silently passing.
+    for &cp in &reserved {
+        assert!(
+            cp_blessed_by_s40(cp),
+            "F4-010: reserved codepoint {cp:#06x} is NOT traceable to the \
+             §4.0 allocation table (not a named standalone, not inside a \
+             named band). An additive-extensibility test MUST NOT invent \
+             the codepoints it claims are reserved."
+        );
+    }
+    // And the converse: the three fabricated integers the prior corpus
+    // invented are PROVABLY not §4.0-blessed (demonstrates would-FAIL on a
+    // revert that re-mints them). `0x6611` additionally aliases the LIVE
+    // `MEMBERSHIP_SET_GROUP_MULTI_STANZA` band (`0x6610`), which is the
+    // sharpest reason it could never be a fresh reserve.
+    for &fabricated in &[0x6321u16, 0x6330u16, 0x6611u16] {
+        assert!(
+            !cp_blessed_by_s40(fabricated),
+            "F4-010: {fabricated:#06x} was a FABRICATED integer (no §4.0 \
+             row blesses it); the guard MUST reject it."
+        );
+    }
+
+    // `ExecuteWorkflow` band base → ReservedAtV1Beta (typed).
+    let exec = stub_seal_v2(CP_BAND_REMOTE_PERMISSION_BASE, b"x");
     assert_eq!(
         stub_decode_v2(&exec, &[CP_LIVE_HPKE_BASE], &reserved),
         Err(StubDecodeError::ReservedAtV1Beta(
-            CP_RESERVED_EXECUTE_WORKFLOW
+            CP_BAND_REMOTE_PERMISSION_BASE
         )),
-        "ExecuteWorkflow reserved codepoint MUST typed-reject at v1-beta."
+        "ExecuteWorkflow reserve (in the §4.0 0x6320..0x632F \
+         RemotePermission band) MUST typed-reject at v1-beta."
     );
+    // §4.0 freezes the BAND, not a single integer: every value in the
+    // band is a RemotePermission codepoint. Pin the band invariant so a
+    // future fabricated standalone integer (the F4-010 regression) is
+    // caught.
+    assert!(
+        CP_BAND_REMOTE_PERMISSION_BASE <= CP_BAND_REMOTE_PERMISSION_END
+            && (CP_BAND_REMOTE_PERMISSION_END - CP_BAND_REMOTE_PERMISSION_BASE) == 0x0F,
+        "the §4.0 RemotePermission band MUST be 0x6320..0x632F (16 slots); \
+         `ExecuteWorkflow` is a reserve WITHIN it, not a standalone integer."
+    );
+
     let subset = stub_seal_v2(CP_RESERVED_SUBSET_REF, b"x");
     assert_eq!(
         stub_decode_v2(&subset, &[CP_LIVE_HPKE_BASE], &reserved),
         Err(StubDecodeError::ReservedAtV1Beta(CP_RESERVED_SUBSET_REF)),
-        "SubsetRef@0x6620 reserved codepoint MUST typed-reject at v1-beta."
+        "SubsetRef@0x6620 reserved codepoint MUST typed-reject at v1-beta \
+         (§4.0 MEMBERSHIP_SET_SUBSET_REF)."
+    );
+
+    let chained = stub_seal_v2(CP_BAND_FS_FUTURE_BASE, b"x");
+    assert_eq!(
+        stub_decode_v2(&chained, &[CP_LIVE_HPKE_BASE], &reserved),
+        Err(StubDecodeError::ReservedAtV1Beta(CP_BAND_FS_FUTURE_BASE)),
+        "RotatingGroupKeyChainedMode reserve (in the §4.0 0x6380..0x63CF \
+         FS-future bracket) MUST typed-reject at v1-beta."
     );
 
     // A truly unknown codepoint → UnsupportedAlgorithm (typed, no fallback).
@@ -282,7 +437,10 @@ fn f_nqa1_1_reserved_slots_registered_in_codepoint_module() {
         missing.is_empty(),
         "the F-full CODEPOINT-RESERVE set MUST be registered (each \
          typed-rejecting at v1-beta): missing {:?}. R5 mints them in the \
-         crypto-suite codepoint registry.",
+         crypto-suite codepoint registry (each at its §4.0-named band: \
+         ExecuteWorkflow in 0x6320..0x632F, SubsetRef@0x6620, \
+         RecoveryArtifact codepoint allocated alongside the Composing \
+         trait, chained-mode in 0x6380..0x63CF).",
         missing
     );
 }

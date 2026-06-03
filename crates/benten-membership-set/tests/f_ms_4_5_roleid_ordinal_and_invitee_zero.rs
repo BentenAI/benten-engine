@@ -21,13 +21,28 @@
 //! constraint: admitting an Invitee must NOT yield any key-derivation or read
 //! capability; the Invitee UCAN ability-template is NONE.
 //!
+//! # Per-role UCAN ability cardinality (F-MS-7 authoritative; ruling 2)
+//!
+//! The full per-role UCAN ability-templates are golden-vector-pinned in
+//! `f_ms_6_7_moderator_subset_ucan_templates.rs` (family F-MS-7). This file
+//! only needs the *cardinalities* (for the Invitee=0 floor + a non-vacuous
+//! positive control), and they MUST agree with that authoritative golden:
+//! `Invitee = 0`, `Viewer = 1`, `Member = 3`, `Moderator = 4`,
+//! **`Admin = 9`** = Moderator's `{read, write, share, moderate_content}` (4)
+//! ∪ the five admin-exclusive governance abilities
+//! `{admit-member, kick-member, rotate-keys, assign-roles,
+//! edit-governance-config}` (5) per Ben 2026-06-02 ruling 2 (restores
+//! `assign-roles`). The prior `Admin => 8` was the pre-ruling-2 count (before
+//! `assign-roles` was restored) and is corrected here.
+//!
 //! # RED-PHASE status (pim-12 §3.6e)
 //!
 //! Self-contained in-file stub-shim; compiles green behind `#[ignore]`. R5
 //! swaps in `benten_membership_set::role::RoleId` +
 //! `…::keying::derive_member_key` and un-ignores. Would-FAIL-if-no-op'd: a
-//! Viewer=0 ordinal (the M-CONS-FINAL value), a missing role, or an Invitee
-//! that derives a non-empty `K(N)` / non-None UCAN template all break a pin.
+//! Viewer=0 ordinal (the M-CONS-FINAL value), a missing role, an Invitee
+//! that derives a non-empty `K(N)` / non-None UCAN template, or an Admin
+//! cardinality that drifts from the F-MS-7 nine all break a pin.
 
 #![allow(dead_code)]
 
@@ -76,15 +91,26 @@ fn grants_read_cap(role: RoleId) -> bool {
     !matches!(role, RoleId::Invitee)
 }
 
-/// Production-shaped UCAN ability-template count per role (F-MS-7 pins the full
-/// templates; here we only need that Invitee's template is empty / NONE).
+/// Production-shaped per-role UCAN ability-template *cardinality* keyed off
+/// role. The full templates are F-MS-7's authoritative golden
+/// (`f_ms_6_7_moderator_subset_ucan_templates.rs`); these counts MUST agree
+/// with that golden's `ability_template(role).len()`:
+///
+/// - `Invitee  = 0` — NONE (zero-content floor, M-11)
+/// - `Viewer   = 1` — read only
+/// - `Member   = 3` — read / write(own) / share-within-policy
+/// - `Moderator= 4` — read / write / share / moderate-content
+/// - `Admin    = 9` — Moderator's 4 ∪ the 5 admin-exclusive governance
+///   abilities `{admit-member, kick-member, rotate-keys, assign-roles,
+///   edit-governance-config}` (ruling 2; `assign-roles` restored).
 fn ucan_ability_count(role: RoleId) -> usize {
     match role {
         RoleId::Invitee => 0,   // NONE — zero content
         RoleId::Viewer => 1,    // read only
         RoleId::Member => 3,    // read / write(own) / share-within-policy
-        RoleId::Moderator => 4, // read / write / share / moderate
-        RoleId::Admin => 8,     // full superset
+        RoleId::Moderator => 4, // read / write / share / moderate-content
+        // 4 Moderator ∪ 5 admin-exclusive (ruling 2) — agrees with F-MS-7.
+        RoleId::Admin => 9,
     }
 }
 
@@ -189,4 +215,47 @@ fn ms5_invitee_no_read_cap_no_ucan_abilities() {
     // + a non-empty template — so the Invitee floor is a real boundary.
     assert!(grants_read_cap(RoleId::Viewer));
     assert!(ucan_ability_count(RoleId::Viewer) >= 1);
+}
+
+// ── F-MS-7 cross-file cardinality agreement (F4-RBAC-1) ──────────────────────
+
+#[test]
+#[ignore = "RED-PHASE: F4-RBAC-1 — per-role UCAN ability cardinalities agree with F-MS-7 (Admin=9, ruling 2); un-ignore at R5"]
+fn ms_ucan_ability_cardinality_agrees_with_f_ms_7() {
+    // F-MS-7 (`f_ms_6_7_moderator_subset_ucan_templates.rs`) is the
+    // authoritative per-role UCAN ability-template golden. The cardinalities
+    // this file uses for its Invitee floor + positive controls MUST match
+    // `ability_template(role).len()` there, or the two stubs disagree about a
+    // frozen RBAC surface (the F4-006-class "two stubs, one type, divergent
+    // semantics" the fix-round exists to close).
+    //
+    // Authoritative cardinalities (ruling 2; Admin restores assign-roles → 9):
+    let expected: [(RoleId, usize); 5] = [
+        (RoleId::Invitee, 0),
+        (RoleId::Viewer, 1),
+        (RoleId::Member, 3),
+        (RoleId::Moderator, 4),
+        // Admin = 4 Moderator ∪ 5 admin-exclusive governance abilities
+        // {admit-member, kick-member, rotate-keys, assign-roles,
+        // edit-governance-config} (ruling 2). Would-FAIL on the stale 8 (the
+        // pre-ruling-2 count before assign-roles was restored).
+        (RoleId::Admin, 9),
+    ];
+    for (role, count) in expected {
+        assert_eq!(
+            ucan_ability_count(role),
+            count,
+            "{role:?} UCAN ability cardinality must agree with F-MS-7's authoritative golden (ability_template(role).len())"
+        );
+    }
+
+    // Structural cross-check of the ruling-2 decomposition that pins Admin=9:
+    // Moderator(4) ∪ admin-exclusive(5) with empty intersection = 9.
+    let moderator = ucan_ability_count(RoleId::Moderator);
+    let admin_exclusive_governance = 5; // {admit,kick,rotate,assign-roles,edit-governance-config}
+    assert_eq!(
+        ucan_ability_count(RoleId::Admin),
+        moderator + admin_exclusive_governance,
+        "Admin = Moderator (4) ∪ the 5 admin-exclusive governance abilities (ruling 2) = 9"
+    );
 }

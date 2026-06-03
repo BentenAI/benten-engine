@@ -25,6 +25,13 @@
 //!   `ss_x‖ss_mlkem‖ek_x‖ek_mlkem‖pub_x‖pub_mlkem` with a SHA3-256-of-
 //!   info-tag salt + `info="x-wing-v1-benten-0x647a"` — a Benten-private
 //!   combiner MISLABELED "X-Wing", NOT the real draft-connolly construction.
+//! - The real construction (spec R0.5 §3.2(a) / C-6, verified against
+//!   `draft-connolly-cfrg-xwing-kem-10` §6) is
+//!   `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)` — the 6-byte
+//!   `XWingLabel = 0x5c2e2f2f5e5c` (ASCII `\.//^\`) is **APPENDED** as the
+//!   suffix, NOT prepended (R4.2-corrected 2026-06-03; the prepended form
+//!   is the superseded v01-v02 construction and would freeze a
+//!   non-interoperable KEM at the IETF-reserved `0x647A`).
 //! - `grep EncryptedEnvelope|BindingContext` → **ZERO** at HEAD (the
 //!   shipped type is the flat `AeadEnvelope` with an untyped `&[u8]` AAD).
 //!
@@ -35,18 +42,34 @@
 //! compiles green at baseline behind `#[ignore]`. The R5 closing wave MUST:
 //!   1. DELETE the local `f_w0_stub` module,
 //!   2. INSERT real imports against the V2 `EncryptedEnvelope` / real
-//!      X-Wing `combine_x_wing` / BE serializer,
+//!      X-Wing `combine_x_wing` (label APPENDED) / BE serializer / the V2
+//!      bounded-decode `from_wire_bytes`,
 //!   3. UN-IGNORE the tests + verify all PASS green,
 //!   4. Regenerate ALL golden/KAT vectors (construction change ⇒ new keys).
+//!
+//! # R5 destinations for the local source-scan shims (F4-012)
+//!
+//! The two local source-scan shims are NOT thrown away at un-ignore — each
+//! has a NAMED conformance home the R5 closing wave folds them into:
+//!   - `wire_path_to_le_bytes_count()` (the M-19 LE-survivor scanner) →
+//!     R5 deletes the stub and re-points the F-W0-3 `assert_eq!(…, 0)` pin
+//!     at the **delivered workspace conformance helper**
+//!     `benten_crypto_suite::conformance::endianness::wire_path_le_survivor_count()`
+//!     (the single canonical zero-`to_le_bytes` M-19 gate; same helper the
+//!     other byte-families' BE pins consume). The scanner is a delivered
+//!     import, not a per-file local.
+//!   - `info_tag_ascii_flagged_by_be_scanner()` (the m-1 ASCII-not-flagged
+//!     negative) → folds into the SAME `conformance::endianness` helper as
+//!     its `ascii_label_excluded()` query.
 //!
 //! # Would-FAIL-if-no-op'd (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!
 //! Every pin drives a PRODUCTION call site (the real combiner / the real
-//! BE serializer / the real `EncryptedEnvelope` constructor) + asserts an
-//! OBSERVABLE byte-level consequence + is would-FAIL-if-no-op'd (the
-//! negative `assert_ne!` arms FAIL if the in-tree HKDF/LE/`AeadEnvelope`
-//! survives). NO `assert_eq!(CONST, CONST_VAL)` shapes; NO zero-assertion
-//! arms.
+//! BE serializer / the real `EncryptedEnvelope` constructor / the V2
+//! bounded-decode decoder) + asserts an OBSERVABLE byte-level consequence
+//! + is would-FAIL-if-no-op'd (the negative `assert_ne!` arms FAIL if the
+//! in-tree HKDF/LE/`AeadEnvelope` survives). NO `assert_eq!(CONST,
+//! CONST_VAL)` shapes; NO zero-assertion arms.
 
 #![allow(dead_code)]
 
@@ -60,11 +83,17 @@ mod f_w0_stub {
     pub const ENVELOPE_FORMAT_VERSION_V1: u8 = 0x01;
     pub const ENVELOPE_MAGIC: u8 = 0xae;
 
+    /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
+    /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the suffix of the
+    /// combiner pre-image, NOT prepended (spec R0.5 §3.2(a), verified vs
+    /// `draft-connolly-cfrg-xwing-kem-10` §6; R4.2-corrected 2026-06-03).
+    pub const XWING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
+
     /// The real draft-connolly X-Wing combiner (SHA3-256). STUB returns a
     /// deterministic-but-WRONG output so the positive KAT pin and the
     /// negative "≠ legacy HKDF" pin both fail until R5 wires the real
     /// construction. R5 replaces this with
-    /// `SHA3-256(X-Wing-label ‖ ss_M ‖ ss_X ‖ ct_X ‖ pk_X)`.
+    /// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)` — label APPENDED.
     pub fn combine_x_wing(
         _ss_mlkem: &[u8],
         _ss_x25519: &[u8],
@@ -72,6 +101,30 @@ mod f_w0_stub {
         _pk_x25519: &[u8],
     ) -> [u8; 32] {
         [0u8; 32]
+    }
+
+    /// The exact byte sequence fed to `SHA3-256` by the combiner (the
+    /// "pre-image"). The F-W0-1-LABEL construction-order witness pin hashes
+    /// over this to confirm `XWingLabel` is the **appended suffix**, not a
+    /// prepended prefix. STUB deliberately builds the **PREPENDED** layout
+    /// (the superseded/wrong order) so the suffix-assertion fires RED until
+    /// R5 wires the real appended construction; R5 re-points this at the
+    /// real combiner's pre-image builder.
+    pub fn x_wing_combiner_preimage(
+        ss_mlkem: &[u8],
+        ss_x25519: &[u8],
+        ct_x25519: &[u8],
+        pk_x25519: &[u8],
+    ) -> Vec<u8> {
+        let mut pre = Vec::new();
+        // STUB BUG (intentional): PREPENDS the label (the wrong, superseded
+        // v01-v02 order) so the appended-suffix pin is RED at baseline.
+        pre.extend_from_slice(&XWING_LABEL);
+        pre.extend_from_slice(ss_mlkem);
+        pre.extend_from_slice(ss_x25519);
+        pre.extend_from_slice(ct_x25519);
+        pre.extend_from_slice(pk_x25519);
+        pre
     }
 
     /// The in-tree LEGACY HKDF-SHA256 combiner output for the SAME inputs.
@@ -124,6 +177,13 @@ mod f_w0_stub {
         pub ciphertext: Vec<u8>,
     }
 
+    /// Hard upper bound on a decoded nonce length (12 or 24 bytes are the
+    /// only legal AEAD nonce widths; anything larger is a hostile/garbage
+    /// declared length-prefix). The V2 bounded-decode decoder MUST reject a
+    /// declared `nonce_len` exceeding this BEFORE allocating/reading
+    /// (META #629 unbounded-decode DoS class).
+    pub const MAX_NONCE_LEN: usize = 24;
+
     impl EncryptedEnvelope {
         /// Serialize to wire bytes — V2 layout, codepoint **BIG-ENDIAN**.
         /// STUB writes LITTLE-ENDIAN + V1 deliberately so the BE pin + the
@@ -157,12 +217,37 @@ mod f_w0_stub {
                 ciphertext: Vec::new(),
             })
         }
+
+        /// Bounded-decode the declared `nonce_len` length-prefix (byte[4])
+        /// against the remaining buffer + `MAX_NONCE_LEN` BEFORE reading or
+        /// allocating (META #629 flagship). STUB does NO bound check + uses
+        /// `with_capacity(declared)` so a hostile declared length triggers
+        /// an unbounded pre-allocation — the F4-009-BD pin asserts this is
+        /// typed-rejected, which is RED until R5 wires the bounded decoder.
+        pub fn decode_nonce_bounded(bytes: &[u8]) -> Result<Vec<u8>, &'static str> {
+            if bytes.len() < 5 {
+                return Err("too short");
+            }
+            let declared = bytes[4] as usize;
+            // STUB BUG (intentional): NO bound check against MAX_NONCE_LEN
+            // and NO check against the remaining buffer. A real bounded
+            // decoder MUST reject `declared > MAX_NONCE_LEN` and
+            // `declared > bytes.len() - 5` BEFORE allocating. The stub
+            // instead pre-allocates the attacker-declared capacity and
+            // copies whatever is present, modelling the deployed #629 hole.
+            let mut buf = Vec::with_capacity(declared);
+            let avail = (bytes.len() - 5).min(declared);
+            buf.extend_from_slice(&bytes[5..5 + avail]);
+            Ok(buf)
+        }
     }
 
     /// Source-scan: count of `to_le_bytes` occurrences surviving on any
     /// wire/AAD path. STUB returns the in-tree count (3 known sites in
     /// `aead.rs` + more across the workspace) so the zero-scanner pin is
-    /// RED. R5 wires this to the real scanner result (which MUST be 0).
+    /// RED. R5 deletes this stub and re-points the F-W0-3 pin at the
+    /// delivered `conformance::endianness::wire_path_le_survivor_count()`
+    /// helper (the named M-19 destination above), which MUST return 0.
     pub fn wire_path_to_le_bytes_count() -> usize {
         13
     }
@@ -170,7 +255,8 @@ mod f_w0_stub {
     /// Whether the X-Wing HKDF info-tag ASCII string was (wrongly) flagged
     /// by the endianness scanner. STUB returns `false` (correct: the
     /// ASCII info-tag is NOT endianness-affected, m-1) — the negative pin
-    /// asserts the scanner does NOT touch it.
+    /// asserts the scanner does NOT touch it. R5 folds into the same
+    /// `conformance::endianness` helper (named destination above).
     pub fn info_tag_ascii_flagged_by_be_scanner() -> bool {
         false
     }
@@ -178,10 +264,11 @@ mod f_w0_stub {
 
 use f_w0_stub::{
     BindingContext, ENVELOPE_FORMAT_VERSION_V1, ENVELOPE_FORMAT_VERSION_V2, ENVELOPE_MAGIC,
-    EncryptedEnvelope, classical_combine_for_fixture, combine_x_wing,
+    EncryptedEnvelope, MAX_NONCE_LEN, XWING_LABEL, classical_combine_for_fixture, combine_x_wing,
     draft_connolly_x_wing_kat_for_fixture, info_tag_ascii_flagged_by_be_scanner,
-    legacy_hkdf_combine, wire_path_to_le_bytes_count,
+    legacy_hkdf_combine, wire_path_to_le_bytes_count, x_wing_combiner_preimage,
 };
+use sha3::{Digest, Sha3_256};
 
 // Fixed X-Wing combiner fixture (stable inputs so the KAT is deterministic).
 const SS_MLKEM: [u8; 32] = [0xA1; 32];
@@ -215,6 +302,76 @@ fn x_wing_0x647a_uses_real_sha3_256_construction_not_hkdf() {
         real,
         draft_connolly_x_wing_kat_for_fixture(),
         "0x647A combiner must equal the draft-connolly X-Wing KAT for the fixed fixture"
+    );
+}
+
+/// **F-W0-1-LABEL (F4-002 + F4-003)** — the X-Wing combiner pre-image
+/// **APPENDS** the 6-byte `XWingLabel = 0x5c2e2f2f5e5c` (ASCII `\.//^\`)
+/// as the trailing suffix `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`,
+/// NOT prepended (spec R0.5 §3.2(a) / C-6, verified vs
+/// `draft-connolly-cfrg-xwing-kem-10` §6; R4.2-corrected 2026-06-03).
+///
+/// This is the construction-order witness pin the R4.2 review demanded
+/// (F4-003): the corpus previously froze only opaque sentinel KATs, so a
+/// wrong/absent label or a prepended ordering was UNCAUGHT. The pin now
+/// makes a wrong order observable and would-FAIL-if-no-op'd:
+///   (a) the explicit `XWING_LABEL` const equals the published 6 bytes —
+///       pins the label value itself (no longer absent from the corpus);
+///   (b) the combiner pre-image ENDS WITH the 6 label bytes (appended
+///       suffix) and the 4 input shared-secrets/ciphertext/pubkey precede
+///       it; the stub builds the PREPENDED (wrong) order, so the
+///       suffix-assertion FAILS until R5 wires the real appended pre-image;
+///   (c) the label is NOT a prefix of the pre-image (explicit
+///       would-FAIL-on-the-superseded-order guard).
+#[test]
+#[ignore = "RED-PHASE: F-W0-1-LABEL (F4-002/003) — XWingLabel=0x5c2e2f2f5e5c APPENDED as suffix of the combiner pre-image (NOT prepended); stub prepends ⇒ RED; un-ignore at R5"]
+fn x_wing_label_is_appended_suffix_not_prepended() {
+    // (a) The label value itself is pinned (F4-003: previously absent).
+    assert_eq!(
+        XWING_LABEL,
+        [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c],
+        "XWingLabel must be the 6 bytes 0x5c2e2f2f5e5c (ASCII \\.//^\\) per draft-connolly-cfrg-xwing-kem-10 §6"
+    );
+
+    let pre = x_wing_combiner_preimage(&SS_MLKEM, &SS_X25519, &CT_X25519, &PK_X25519);
+    let n = pre.len();
+    assert!(
+        n >= XWING_LABEL.len() + SS_MLKEM.len(),
+        "pre-image must contain the four inputs plus the label"
+    );
+
+    // (b) APPENDED: the final 6 bytes of the pre-image ARE the label, and
+    //     the four inputs precede it in order. would-FAIL while the stub
+    //     prepends the label (the superseded v01-v02 ordering).
+    assert_eq!(
+        &pre[n - XWING_LABEL.len()..],
+        &XWING_LABEL[..],
+        "XWingLabel must be APPENDED as the trailing suffix of the combiner pre-image (NOT prepended); a prepended label freezes a non-interoperable KEM at the IETF-reserved 0x647A"
+    );
+    assert_eq!(
+        &pre[..SS_MLKEM.len()],
+        &SS_MLKEM[..],
+        "the pre-image must begin with ss_M (ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel ordering)"
+    );
+
+    // (c) would-FAIL-on-the-superseded-order guard: the label is NOT the
+    //     leading prefix of the pre-image.
+    assert_ne!(
+        &pre[..XWING_LABEL.len()],
+        &XWING_LABEL[..],
+        "XWingLabel must NOT be prepended (the prepended form is the superseded v01-v02 construction)"
+    );
+
+    // Construction-order witness: hashing the real appended pre-image
+    // reproduces the combiner output (the label position changes the hash,
+    // so a prepended-vs-appended mismatch is byte-observable here).
+    let mut h = Sha3_256::new();
+    h.update(&pre);
+    let preimage_digest: [u8; 32] = h.finalize().into();
+    assert_eq!(
+        preimage_digest,
+        combine_x_wing(&SS_MLKEM, &SS_X25519, &CT_X25519, &PK_X25519),
+        "the combiner output must equal SHA3-256 over the appended-label pre-image (construction-order witness)"
     );
 }
 
@@ -290,6 +447,11 @@ fn x_wing_interop_kat_byte_for_byte() {
 /// wire/AAD path; (b) the X-Wing info-tag ASCII string is NOT flagged
 /// (m-1: ASCII strings are not endianness-affected). would-FAIL-if-no-
 /// op'd: at HEAD the count is non-zero (LE present at `aead.rs:165,244,277`).
+///
+/// (F4-012) The LE-survivor scanner has a NAMED R5 home — see the module
+/// header's "R5 destinations for the local source-scan shims" block: R5
+/// re-points this pin at
+/// `benten_crypto_suite::conformance::endianness::wire_path_le_survivor_count()`.
 #[test]
 #[ignore = "RED-PHASE: F-W0-3 — zero `to_le_bytes` survives on any wire/AAD path (M-19 flagship); un-ignore at R5"]
 fn zero_to_le_bytes_survives_on_wire_or_aad_paths() {
@@ -452,5 +614,87 @@ fn single_v1_to_v2_bump_and_v1_typed_rejected() {
     assert!(
         EncryptedEnvelope::from_wire_bytes(&v1_bytes).is_err(),
         "a V1-framed byte stream must be typed-rejected post-V2-freeze (no silent V1 acceptance)"
+    );
+}
+
+/// **F-W0-BD-1 (F4-009-BD)** — the V2 bounded-decode decoder REJECTS a
+/// hostile declared length-prefix BEFORE allocating/reading (META #629
+/// unbounded-decode DoS class; flagship anchor on the SOLE upstream
+/// canary).
+///
+/// # F4-009-BD disposition (HARD RULE 12; flagship-now + already-named home)
+///
+/// R4.2 surfaced (F4-009/F4-030) that NO test in the F-full corpus asserts
+/// a wire decoder rejects a hostile declared length-prefix before
+/// allocating — the META #629 deployed-invariant class on the
+/// freeze-gating wire surfaces. The R4.3 brief routes F4-009-BD to THIS
+/// canary file. Disposition (two parts, both HARD-RULE-valid):
+///
+///   1. **FIX-NOW (lands here):** the flagship `EncryptedEnvelope` V2
+///      nonce-len reject arm below — RED at `#[ignore]` against the stub's
+///      unbounded `with_capacity(declared)` (the deployed #629 hole). This
+///      closes the "no decoder-reject test anywhere on the upstream
+///      canary" gap NOW, not at R5.
+///   2. **BELONGS-NAMED-NOW (already-persisted destination):** the
+///      per-surface remainder (`HpkeMultiBase.recipient_count`,
+///      `DropBundlePayload.{node_count,ct_len,cek_len}`, the 9-tuple
+///      permission TLV `aud_len`, the DAG-CBOR vault/members-table decode)
+///      is the **F4-009/F4-030 "META #629 decode-side bounded-decode
+///      family" already dispositioned R5-fill-named in the committed
+///      `.addl/phase-4-meta/r4-2-triage.md`** ("R5-fill-named" bucket +
+///      "META #629 decode-side bounded-decode family … per wire surface
+///      (HpkeMultiBase / PermissionRequest / DropBundlePayload /
+///      TokenBindingAad)"). That triage row IS the landed named home —
+///      this anchor does NOT invent a new landscape row (a docstring that
+///      claims a doc edit this single-file write-scope cannot perform
+///      would be a phantom destination). Each per-surface reject arm is
+///      authored in its own W-family file against its own decoder at R5,
+///      un-ignored with the rest of that surface's pins.
+///
+/// would-FAIL-if-no-op'd: the stub `decode_nonce_bounded` does NO bound
+/// check and `with_capacity(declared)`-pre-allocates the attacker-declared
+/// length (modelling the deployed #629 hole), so the "is_err()" pin FAILS
+/// until R5 wires the bounded decoder.
+#[test]
+#[ignore = "RED-PHASE: F-W0-BD-1 (F4-009-BD / META #629) — V2 decoder must typed-reject a hostile declared nonce-len prefix BEFORE allocating; stub pre-allocates unbounded ⇒ RED; un-ignore at R5"]
+fn v2_decode_rejects_hostile_length_prefix_before_allocating() {
+    // A 5-byte frame whose declared nonce-len (byte[4]) is 0xFF (=255),
+    // far exceeding MAX_NONCE_LEN (24) AND the 0 bytes actually present —
+    // a classic unbounded-decode DoS vector (declared ≫ available).
+    let hostile = {
+        let mut b = vec![ENVELOPE_MAGIC, ENVELOPE_FORMAT_VERSION_V2];
+        b.extend_from_slice(&0x647Au16.to_be_bytes());
+        b.push(0xFF); // declared nonce-len = 255 (hostile)
+        b
+    };
+    assert!(
+        hostile[4] as usize > MAX_NONCE_LEN,
+        "fixture sanity: the declared nonce-len exceeds MAX_NONCE_LEN (the threat being pinned)"
+    );
+
+    // The bounded decoder MUST typed-reject the hostile declared length
+    // BEFORE allocating. would-FAIL while the stub `with_capacity(255)`-
+    // pre-allocates and returns Ok (the deployed META #629 hole).
+    assert!(
+        EncryptedEnvelope::decode_nonce_bounded(&hostile).is_err(),
+        "a declared nonce-len exceeding MAX_NONCE_LEN (or the remaining buffer) MUST be typed-rejected before allocation (META #629 bounded-decode)"
+    );
+
+    // Positive control: a well-formed frame whose declared nonce-len is
+    // within bounds AND matches the bytes present decodes successfully —
+    // the bound rejects hostile inputs, not all inputs.
+    let wellformed = {
+        let mut b = vec![ENVELOPE_MAGIC, ENVELOPE_FORMAT_VERSION_V2];
+        b.extend_from_slice(&0x647Au16.to_be_bytes());
+        b.push(12); // declared nonce-len = 12 (legal)
+        b.extend_from_slice(&[0u8; 12]); // the 12 nonce bytes are present
+        b
+    };
+    assert_eq!(
+        EncryptedEnvelope::decode_nonce_bounded(&wellformed)
+            .expect("a within-bounds, fully-present nonce-len must decode")
+            .len(),
+        12,
+        "a within-bounds declared nonce-len that matches the bytes present decodes to exactly that length"
     );
 }

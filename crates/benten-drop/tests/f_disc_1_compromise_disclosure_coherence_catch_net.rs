@@ -7,7 +7,7 @@
 //!
 //! Pin source: `.addl/phase-4-meta/f-full-r2-test-landscape.md` §1
 //! Group-12 **F-DISC-1**:
-//!   "for EACH Compromise #30..#63: (a) `SECURITY-POSTURE.md` row exists
+//!   "for EACH Compromise #30..#64: (a) `SECURITY-POSTURE.md` row exists
 //!    with correct `disposition_class` (ATO/SGD/CHD/OOS/MIT); (b) OOS/SGD
 //!    disclosure text present + not over-claimed; (c) the BR-2 re-point
 //!    triple (#31=LAMPS, #62=revocation-reach, #30=unaudited-PQ) at correct
@@ -17,11 +17,38 @@
 //!    per `feedback_extra_reflection_pass_for_elegant_permanent_shape`."
 //!
 //! **Single-shape rationale + R4 NOTE (§5 thinness mitigation):** this
-//! family closes 18 honest-disclosure Compromise rows in ONE parametrized
+//! family closes 19 honest-disclosure Compromise rows in ONE parametrized
 //! family. The parametrization enumerates from the DOC row-set
 //! (`extract_compromise_rows`), NOT a literal hand-list — so a new
 //! Compromise row authored at R5 is auto-included in the coherence sweep.
 //! R4 should verify the parametrization enumerates from the doc.
+//!
+//! **R4.3-FIX (C-MAJOR-1-64) — Compromise #64 (NQ-T4) included in the
+//! closed F-full range.** NQ-T4 RATIFIED (spec R0.5 §10.5; Ben 2026-06-02)
+//! mandated: "the pre-sync cross-device replay window MUST be DISCLOSED as
+//! a named Compromise: **mint Compromise #<next>** — 'best-effort-eventual
+//! cross-device nonce-rejection window'". The next free slot after the
+//! §5.2 canonical table (which ends at #63 = Sealed-Sender abuse-control,
+//! BR-1) is **#64**, `disposition_class = SGD` (Substrate-Guarantee-
+//! Disclosure — it discloses the per-device-durable-GUARANTEED /
+//! user-global-best-effort-eventual-via-sync substrate boundary, the same
+//! honest-disclosure class as its sibling #62 revocation-reach + #57). The
+//! PIN-1 closed range previously stopped at `30u32..=63`, silently
+//! foreclosing the ONE row a Ben ruling specifically mandated — the
+//! catch-net whose whole purpose is to auto-include every Compromise. The
+//! fix extends PIN-1 to `30u32..=64` and adds PIN 6, a dedicated #64
+//! row-presence + SGD-class + coherent-disclosure-text pin so the
+//! NQ-T4-mandated disclosure cannot be dropped at R5 un-ignore.
+//!
+//! The load-bearing **positive-control half** of C-MAJOR-1-64 — a fresh
+//! `JtiNonceCache::new(true)` on device C ADMITTING (`Ok(())`) a jti
+//! device B just consumed, BEFORE best-effort sync propagates the cache
+//! entry — lives in the sibling wire file
+//! `benten-sync/tests/f_ld_5_nonce_cache_intra_hour_replay_rejected.rs`
+//! (the `..._multi_device_shared_rejection_nq_t4_gated` arm gains the
+//! pre-sync `Ok(())` sub-arm bound to #64). That is a DISTINCT fix surface
+//! (different crate / file); this file owns only the disclosure-coherence
+//! half (the doc row exists + is coherent).
 //!
 //! **R4-FIX (F4-043) — word-boundary disposition-class match.** PIN 2
 //! previously matched a disposition-class token with a bare substring scan
@@ -39,7 +66,7 @@
 //! substring (would-FAIL if the matcher relaxed back to `.contains`).
 //!
 //! **RED-PHASE (pim-12 §3.6e):** the F-full disclosure work
-//! (Compromise #32..#63 rows + the `disposition_class` taxonomy
+//! (Compromise #32..#64 rows + the `disposition_class` taxonomy
 //! ATO/SGD/CHD/OOS/MIT) does NOT exist at baseline — only #30/#31 are
 //! present and the taxonomy is MIT/ATO-only. The end-state coherence
 //! arms are `#[ignore = "RED-PHASE: F-DISC-1 ..."]`; R5's doc-wave
@@ -70,11 +97,17 @@ use std::collections::BTreeSet;
 /// The five legitimate disposition classes the F-full posture taxonomy
 /// uses. Stable token set the doc-wave row scheme must encode.
 ///   ATO = Accepted-Trade-Off
-///   SGD = Scoped-Gap-Disclosure
-///   CHD = Closed-by-Hardening/Design
+///   SGD = Substrate-Guarantee-Disclosure
+///   CHD = Composition-Hazard-Honest-Disclosure
 ///   OOS = Out-Of-Scope
-///   MIT = Mitigated
+///   MIT = Mitigated-Open
 const DISPOSITION_CLASSES: &[&str] = &["ATO", "SGD", "CHD", "OOS", "MIT"];
+
+/// The highest Compromise number in the **closed F-full range** per spec
+/// R0.5 §5.2 + §10.5 (NQ-T4 mint). #63 = Sealed-Sender abuse-control
+/// (BR-1); **#64 = best-effort-eventual cross-device nonce-rejection
+/// window (NQ-T4; SGD)** — the slot a Ben ruling specifically mandated.
+const F_FULL_TOP_COMPROMISE: u32 = 64;
 
 /// A parsed Compromise row: its number + the line text we found it on.
 #[derive(Debug, Clone)]
@@ -128,6 +161,22 @@ fn distinct_compromise_numbers(doc: &str) -> BTreeSet<u32> {
         .collect()
 }
 
+/// Join a small window of lines centred on the FIRST line that declares
+/// `Compromise #<n>`, for coherence scans (the disposition class / a
+/// re-point narration can sit in the same table row or an adjacent cell).
+/// Returns an empty string if the row is absent.
+fn row_window(lines: &[&str], n: u32, lookbehind: usize, lookahead: usize) -> String {
+    let needle = format!("Compromise #{n}");
+    for (i, l) in lines.iter().enumerate() {
+        if l.contains(&needle) {
+            let lo = i.saturating_sub(lookbehind);
+            let hi = (i + lookahead).min(lines.len());
+            return lines[lo..hi].join(" ");
+        }
+    }
+    String::new()
+}
+
 /// R4-FIX (F4-043) — is `token` present in `haystack` as a STAND-ALONE
 /// word, not merely as a substring? A disposition-class token (`MIT`,
 /// `ATO`, …) only "covers" a Compromise row when it appears as its own
@@ -135,10 +184,12 @@ fn distinct_compromise_numbers(doc: &str) -> BTreeSet<u32> {
 /// identifier-continuation char `[A-Za-z0-9_-]` (or the string edge).
 ///
 /// This is what distinguishes a real `| ... | MIT |` table cell from the
-/// accidental `MIT` inside "com**mit**ted" / "sub**mit**". Without it the
-/// §5 auto-include coherence sweep is defeated: a row with NO real class
-/// passes because some unrelated English word in its window embeds the
-/// 3-letter token.
+/// accidental `MIT` inside an upper-case identifier like `COMMITTED` /
+/// `SUBMIT` (the match is case-sensitive against the doc's UPPERCASE
+/// class cells, so the collision risk is upper-case embeddings). Without
+/// it the §5 auto-include coherence sweep is defeated: a row with NO real
+/// class passes because some unrelated token in its window embeds the
+/// 3-letter class token.
 fn contains_token_word_boundary(haystack: &str, token: &str) -> bool {
     if token.is_empty() {
         return false;
@@ -235,19 +286,26 @@ fn f_disc_1_disposition_class_taxonomy_is_exactly_five_baseline() {
 /// relaxes back to a bare `.contains`, this baseline arm fires RED.
 ///
 /// would-FAIL if `window_has_disposition_class` used substring matching
-/// (then `"committed deliverable"` — which embeds `MIT` — would falsely
-/// report a class).
+/// (then `"COMMITTED deliverable"` — which embeds the upper-case `MIT` —
+/// would falsely report a class).
 #[test]
 fn f_disc_1_disposition_class_match_is_word_boundary_not_substring_baseline() {
-    // Embedded-only substrings that MUST NOT count as a class:
-    //   "committed" / "submit"  embed MIT
-    //   "negator" / "ratoned"   embed ATO
-    //   "loose"                 embeds OOS
+    // Embedded-only substrings that MUST NOT count as a class. The
+    // disposition-class tokens are UPPERCASE in the real doc table cells
+    // (`| MIT |`, `| ATO |`, …) and `contains_token_word_boundary` is
+    // (correctly) case-sensitive against them — so the embedded counter-
+    // examples MUST embed the UPPERCASE token to actually exercise the
+    // substring-vs-word-boundary distinction. (Lowercase "committed"
+    // does NOT contain "MIT" case-sensitively, so a lowercase example
+    // would pass against a naive `.contains` too — defeating the guard.)
+    //   "COMMITTED" / "SUBMIT"  embed MIT  (C-O-M-**M-I-T**-T-E-D)
+    //   "NEGATOR"               embeds ATO (N-E-G-**A-T-O**-R)
+    //   "LOOSE"                 embeds OOS (L-**O-O-S**-E)
     let embedded_only = [
-        "the row was committed to the doc-wave deliverable",
-        "we must submit the audit before tag",
-        "a conservative negator on the rate-limit",
-        "the binding is loose at this boundary",
+        "the row was COMMITTED to the doc-wave deliverable",
+        "we must SUBMIT the audit before tag",
+        "a conservative NEGATOR on the rate-limit",
+        "the binding is LOOSE at this boundary",
     ];
     for w in embedded_only {
         assert!(
@@ -262,8 +320,8 @@ fn f_disc_1_disposition_class_match_is_word_boundary_not_substring_baseline() {
     // Stand-alone tokens (real table cells / inline notes) MUST count:
     let standalone = [
         "| Compromise #43 | metadata leakage | ATO | 9-eyes |",
-        "disposition_class = SGD (scoped-gap disclosure)",
-        "this is CHD — closed by design",
+        "disposition_class = SGD (substrate-guarantee disclosure)",
+        "this is CHD — composition-hazard honest-disclosure",
         "residual is OOS for v1-beta",
         "#34 password-knowledge … MIT.",
     ];
@@ -277,25 +335,43 @@ fn f_disc_1_disposition_class_match_is_word_boundary_not_substring_baseline() {
     }
 }
 
+/// PIN 0d (baseline) — R4.3-FIX (C-MAJOR-1-64): the closed F-full range
+/// top is #64, NOT #63. Guards against the range silently regressing back
+/// to #63 (which would drop the NQ-T4-mandated disclosure from the
+/// auto-include sweep). Would-FAIL if `F_FULL_TOP_COMPROMISE` is lowered.
+#[test]
+fn f_disc_1_closed_range_top_is_64_not_63_baseline() {
+    assert_eq!(
+        F_FULL_TOP_COMPROMISE, 64,
+        "the closed F-full Compromise range MUST run #30..=#64. NQ-T4 \
+         (spec R0.5 §10.5; Ben 2026-06-02) mandated minting Compromise #64 \
+         — the best-effort-eventual cross-device nonce-rejection window. \
+         #63 = Sealed-Sender abuse-control (BR-1) is NOT the top. Lowering \
+         this back to 63 silently forecloses the one row a Ben ruling \
+         specifically mandated — exactly the catch-net regression \
+         C-MAJOR-1-64 closes."
+    );
+}
+
 // ===========================================================================
 // RED-PHASE ARMS (ignored until R5 doc-wave) — assert the F-full
-// end-state disclosure coherence over Compromise #30..#63.
+// end-state disclosure coherence over Compromise #30..#64.
 // ===========================================================================
 
-/// PIN 1 — every Compromise #30..#63 row EXISTS in the doc.
+/// PIN 1 — every Compromise #30..#64 row EXISTS in the doc.
 /// Parametrized over the closed F-full range (the R5 end-state mints all
-/// of #32..#63); the sweep is driven by `distinct_compromise_numbers`
-/// so any NEW row beyond #63 is auto-swept by PIN 2.
+/// of #32..#64); the sweep is driven by `distinct_compromise_numbers`
+/// so any NEW row beyond #64 is auto-swept by PIN 2.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — all Compromise #30..#63 rows present in \
-            SECURITY-POSTURE.md; #32..#63 minted by R5 F-full doc-wave; \
-            un-ignore at R5"]
-fn f_disc_1_all_compromise_30_through_63_rows_present() {
+#[ignore = "RED-PHASE: F-DISC-1 — all Compromise #30..#64 rows present in \
+            SECURITY-POSTURE.md; #32..#64 minted by R5 F-full doc-wave \
+            (#64 = NQ-T4 cross-device nonce-rejection window); un-ignore at R5"]
+fn f_disc_1_all_compromise_30_through_64_rows_present() {
     let doc = security_posture_md();
     let numbers = distinct_compromise_numbers(&doc);
 
     let mut missing: Vec<u32> = Vec::new();
-    for n in 30u32..=63 {
+    for n in 30u32..=F_FULL_TOP_COMPROMISE {
         if !numbers.contains(&n) {
             missing.push(n);
         }
@@ -303,9 +379,12 @@ fn f_disc_1_all_compromise_30_through_63_rows_present() {
     assert!(
         missing.is_empty(),
         "SECURITY-POSTURE.md MUST carry a row for EVERY Compromise \
-         #30..#63 (the F-full closed range). Missing: {:?}. R5 doc-wave \
-         mints #32..#63.",
-        missing
+         #30..#{} (the F-full closed range). Missing: {:?}. R5 doc-wave \
+         mints #32..#{} (incl. #64 = NQ-T4 cross-device nonce-rejection \
+         window).",
+        F_FULL_TOP_COMPROMISE,
+        missing,
+        F_FULL_TOP_COMPROMISE
     );
 }
 
@@ -338,20 +417,8 @@ fn f_disc_1_every_declared_row_has_a_disposition_class() {
     let lines: Vec<&str> = doc.lines().collect();
     let mut uncovered: Vec<u32> = Vec::new();
     for row in &rows {
-        // Locate the row's line index, then scan a small window.
-        let mut covered = false;
-        for (i, l) in lines.iter().enumerate() {
-            if l.contains(&format!("Compromise #{}", row.number)) {
-                let lo = i.saturating_sub(1);
-                let hi = (i + 3).min(lines.len());
-                let window = lines[lo..hi].join(" ");
-                if window_has_disposition_class(&window) {
-                    covered = true;
-                    break;
-                }
-            }
-        }
-        if !covered {
+        let window = row_window(&lines, row.number, 1, 3);
+        if !window_has_disposition_class(&window) {
             uncovered.push(row.number);
         }
     }
@@ -384,18 +451,7 @@ fn f_disc_1_br2_re_point_triple_at_correct_slots() {
     let doc = security_posture_md();
     let lines: Vec<&str> = doc.lines().collect();
 
-    let row_window = |n: u32| -> String {
-        for (i, l) in lines.iter().enumerate() {
-            if l.contains(&format!("Compromise #{}", n)) {
-                let lo = i.saturating_sub(1);
-                let hi = (i + 4).min(lines.len());
-                return lines[lo..hi].join(" ");
-            }
-        }
-        String::new()
-    };
-
-    let w31 = row_window(31);
+    let w31 = row_window(&lines, 31, 1, 4);
     assert!(
         w31.contains("LAMPS") || w31.contains("Composite ML-DSA") || w31.contains("EUF-CMA"),
         "Compromise #31 MUST be the LAMPS Composite ML-DSA / EUF-CMA-only \
@@ -403,7 +459,7 @@ fn f_disc_1_br2_re_point_triple_at_correct_slots() {
         w31
     );
 
-    let w62 = row_window(62);
+    let w62 = row_window(&lines, 62, 1, 4);
     assert!(
         w62.contains("revocation-reach")
             || w62.contains("revocation reach")
@@ -411,7 +467,7 @@ fn f_disc_1_br2_re_point_triple_at_correct_slots() {
         "Compromise #62 MUST be the revocation-reach re-point slot (BR-2)."
     );
 
-    let w30 = row_window(30);
+    let w30 = row_window(&lines, 30, 1, 4);
     assert!(
         w30.contains("unaudited") || w30.contains("PQ") || w30.contains("audit"),
         "Compromise #30 MUST be the unaudited-PQ re-point slot (BR-2)."
@@ -445,20 +501,14 @@ fn f_disc_1_oos_sgd_disclosures_present_and_not_over_claimed() {
     let mut absent: Vec<u32> = Vec::new();
     let mut over_claimed: Vec<u32> = Vec::new();
     for &n in honest_only {
-        let mut found = false;
-        for (i, l) in lines.iter().enumerate() {
-            if l.contains(&format!("Compromise #{}", n)) {
-                found = true;
-                let lo = i.saturating_sub(1);
-                let hi = (i + 4).min(lines.len());
-                let window = lines[lo..hi].join(" ").to_ascii_lowercase();
-                if over_claim_tokens.iter().any(|t| window.contains(t)) {
-                    over_claimed.push(n);
-                }
-            }
-        }
-        if !found {
+        let window = row_window(&lines, n, 1, 4);
+        if window.is_empty() {
             absent.push(n);
+            continue;
+        }
+        let lc = window.to_ascii_lowercase();
+        if over_claim_tokens.iter().any(|t| lc.contains(t)) {
+            over_claimed.push(n);
         }
     }
     assert!(
@@ -499,5 +549,93 @@ fn f_disc_1_load_bearing_disclosures_present() {
         "the load-bearing thinly-touched Compromise disclosures named in \
          the F-DISC-1 spec MUST be present: missing {:?}.",
         missing
+    );
+}
+
+/// PIN 6 — R4.3-FIX (C-MAJOR-1-64): the NQ-T4-mandated **Compromise #64**
+/// row EXISTS, carries `disposition_class = SGD` (Substrate-Guarantee-
+/// Disclosure) as a stand-alone token, and its disclosure text coherently
+/// names the best-effort-eventual cross-device nonce-rejection window.
+///
+/// Spec R0.5 §10.5 (NQ-T4; Ben 2026-06-02): "the pre-sync cross-device
+/// replay window MUST be DISCLOSED as a named Compromise: mint Compromise
+/// #<next> — 'best-effort-eventual cross-device nonce-rejection window'".
+/// #64 is the next free slot after §5.2's #63 (Sealed-Sender abuse-control,
+/// BR-1). Its sibling #62 revocation-reach + #57 (which it cross-links)
+/// are SGD; #64 is the same honest-architectural-disclosure class.
+///
+/// This is the disclosure-coherence half of C-MAJOR-1-64. The positive-
+/// control half (device C ADMITS a not-yet-synced jti) lives in the
+/// sibling `benten-sync` file `f_ld_5_nonce_cache_intra_hour_replay_
+/// rejected.rs`.
+///
+/// Would-FAIL if R5 mints #64 without an SGD class (or omits it), or
+/// dresses the inherently-best-effort window as fully closed.
+#[test]
+#[ignore = "RED-PHASE: F-DISC-1 — Compromise #64 (NQ-T4 cross-device \
+            nonce-rejection window) present + SGD class + coherent text; \
+            sibling positive-control in benten-sync f_ld_5; un-ignore at R5"]
+fn f_disc_1_compromise_64_nq_t4_cross_device_nonce_window_present_and_sgd() {
+    let doc = security_posture_md();
+    let lines: Vec<&str> = doc.lines().collect();
+    let numbers = distinct_compromise_numbers(&doc);
+
+    // (a) the row exists.
+    assert!(
+        numbers.contains(&64),
+        "Compromise #64 MUST be minted (NQ-T4; spec R0.5 §10.5). It is the \
+         best-effort-eventual cross-device nonce-rejection window — the \
+         window between a nonce being consumed on one device and the \
+         rejection propagating to the user's other devices via sync. Ben \
+         ruled this MUST be a named Compromise. Absent ⇒ the ratified \
+         disclosure goes un-disclosed."
+    );
+
+    // (b) its disposition class is a stand-alone SGD token (word-boundary,
+    //     per F4-043) — NOT MIT/ATO/OOS/CHD. SGD = Substrate-Guarantee-
+    //     Disclosure (per-device-durable GUARANTEED; user-global
+    //     best-effort-eventual-via-sync).
+    let w64 = row_window(&lines, 64, 1, 4);
+    assert!(
+        contains_token_word_boundary(&w64, "SGD"),
+        "Compromise #64 MUST carry disposition_class = SGD as a stand-alone \
+         token (it discloses the per-device-durable-GUARANTEED / \
+         user-global-best-effort-eventual substrate boundary — the same \
+         honest-disclosure class as its sibling #62 + #57). Got window: \
+         {:?}",
+        w64
+    );
+
+    // (c) the disclosure text coherently names the cross-device /
+    //     pre-sync nonce window (not a mislabelled re-use of another row).
+    let lc = w64.to_ascii_lowercase();
+    assert!(
+        (lc.contains("nonce") || lc.contains("jti"))
+            && (lc.contains("cross-device")
+                || lc.contains("cross device")
+                || lc.contains("multi-device")
+                || lc.contains("pre-sync")
+                || lc.contains("best-effort")),
+        "Compromise #64's disclosure text MUST coherently name the \
+         cross-device / pre-sync best-effort-eventual nonce-rejection \
+         window (NQ-T4). Got window: {:?}",
+        w64
+    );
+
+    // (d) not over-claimed: the window is inherently best-effort-eventual
+    //     by NQ-T4 ruling, so it MUST NOT be narrated as fully closed.
+    let over_claim_tokens = [
+        "fully mitigated",
+        "fully closed",
+        "no residual risk",
+        "completely eliminated",
+        "synchronous rejection guaranteed",
+    ];
+    assert!(
+        !over_claim_tokens.iter().any(|t| lc.contains(t)),
+        "Compromise #64 is an SGD honest-disclosure of a best-effort-\
+         eventual window (NQ-T4: user-global is NOT synchronous). It MUST \
+         NOT be over-claimed as fully closed / synchronous. Got: {:?}",
+        w64
     );
 }

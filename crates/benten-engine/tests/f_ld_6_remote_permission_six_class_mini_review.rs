@@ -11,20 +11,28 @@
 //!     audit-Node-binding — grant REJECTED if `audit_node_cid` absent/
 //!     unresolvable; audit-Node encrypted to device-mesh + replicated (NQ-T1).
 //!     ... **This group IS the harness the §6.7 mini-review reads.**"
-//!   - R0.3 plan §3.4 (`...f-full-r0-plan.md:525-530`): the six pass-classes;
-//!     "the grant MUST be REJECTED if `audit_node_cid` is absent/unresolvable".
-//!   - §10.5 NQ-T2 (`...:1372-1374`): "Confirm the 1-hour bucket is decoupled
-//!     from the `valid_until` enforcement clock."
+//!   - R0.5 plan §3.4: the six pass-classes; "the grant MUST be REJECTED if
+//!     `audit_node_cid` is absent/unresolvable".
+//!   - R0.5 plan §10.5 NQ-T2: "the 1-hour bucket is decoupled from the
+//!     `valid_until` enforcement clock" — RATIFIED.
+//!   - R0.5 plan §9.1 item-4: "the remote-permission-call pre-merge security
+//!     mini-review PASSED, clean on all SIX pass-classes".
 //!
-//! ## NQ-T1 / NQ-T2 OPEN-SPEC FLAGS
+//! ## NQ-T1 / NQ-T2 RATIFIED (Ben 2026-06-02)
 //!
-//! - Class-3 (clock-skew) is gated on **NQ-T2** (§10.5; unresolved at R2; §5.B
-//!   carry-forward item 5): the 1-hr bucket ⊥ `valid_until` enforcement-clock
-//!   decoupling. The `..._clock_skew_..._nq_t2_gated` arm is a RED-PHASE stub
-//!   referencing the open question; R5 finalizes against the ratified default.
-//! - Class-6 (audit-Node-binding) references **NQ-T1** (audit-Node encrypted +
-//!   replicated to all the user's devices); the replication arm is pinned at
-//!   the shape level here, behavioral encryption pinned at R5.
+//! - Class-3 (clock-skew) is grounded by **NQ-T2** (R0.5 §10.5 — RATIFIED): the
+//!   1-hour metadata bucket (round-down) and the `valid_until` enforcement
+//!   clock are orthogonal, separately-encoded fields. `valid_until` is encoded
+//!   at full 1-second granularity and enforced STRICTLY — `present >
+//!   valid_until → reject`, NO grace/skew window; the coarse 1-hour bucket is
+//!   never consulted for expiry. The `..._clock_skew_..._nq_t2_gated` arm pins
+//!   exactly this strict-no-grace decoupling. (The `_nq_t2_gated` suffix is the
+//!   historical arm name; the question it gated is now ratified.)
+//! - Class-6 (audit-Node-binding) is grounded by **NQ-T1** (R0.5 §10.5 —
+//!   RATIFIED): the audit-Node is encrypted + replicated to all the user's
+//!   devices so a malicious device can't grant-and-hide; the replication arm is
+//!   pinned at the shape level here (unresolvable ⇒ reject), behavioral
+//!   encryption pinned at R5.
 //!
 //! ## §6.7 harness contract
 //!
@@ -37,7 +45,6 @@
 #![allow(dead_code)]
 #![cfg(not(target_arch = "wasm32"))]
 
-use benten_id::keypair::Keypair;
 use std::collections::HashSet;
 
 // ---------------------------------------------------------------------------
@@ -48,7 +55,7 @@ mod shim {
 
     pub const LAYER_D_BUCKET_SECS: u64 = 3600;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
     pub enum GrantRejection {
         /// Class 1.
         Replay,
@@ -65,6 +72,52 @@ mod shim {
         /// Class 6 — audit_node_cid absent or unresolvable.
         AuditNodeMissing,
     }
+
+    impl GrantRejection {
+        /// The frozen M-12 roster — the SINGLE source of truth for "how many
+        /// pass-classes the §6.7 mini-review reads." The self-coverage pin
+        /// asserts the BEHAVIORALLY-observed rejection set equals this roster,
+        /// so the harness can never silently cover fewer (or more) classes than
+        /// the roster names.
+        pub const ALL: [GrantRejection; 6] = [
+            GrantRejection::Replay,            // 1
+            GrantRejection::DeviceKeyRevoked,  // 2
+            GrantRejection::Expired,           // 3
+            GrantRejection::ConfusedDeputy,    // 4
+            GrantRejection::UiSummaryMismatch, // 5
+            GrantRejection::AuditNodeMissing,  // 6
+        ];
+
+        /// Compiler-enforced roster-drift guard. This `match` is NON-wildcard
+        /// (no `_ =>` arm): if a future edit adds a 7th `GrantRejection`
+        /// variant (a new pass-class) WITHOUT adding it to `ALL`, this stops
+        /// compiling — forcing the roster + every consumer (the self-coverage
+        /// pin) to be updated in lock-step. Forecloses the class-of-bug where a
+        /// new rejection class silently escapes the §6.7 "clean on all"
+        /// coverage check.
+        const fn assert_in_roster(self) -> usize {
+            match self {
+                GrantRejection::Replay => 0,
+                GrantRejection::DeviceKeyRevoked => 1,
+                GrantRejection::Expired => 2,
+                GrantRejection::ConfusedDeputy => 3,
+                GrantRejection::UiSummaryMismatch => 4,
+                GrantRejection::AuditNodeMissing => 5,
+            }
+        }
+    }
+
+    // Compile-time tie: `ALL` enumerates exactly the variants the non-wildcard
+    // `assert_in_roster` match arms cover, in order. If a variant is added to
+    // the enum, `assert_in_roster` fails to compile until it gains an arm; if
+    // `ALL` and the arms then disagree on cardinality/order, this const fails.
+    const _ROSTER_INDEX_CONSISTENT: () = {
+        let mut i = 0;
+        while i < GrantRejection::ALL.len() {
+            assert!(GrantRejection::ALL[i].assert_in_roster() == i);
+            i += 1;
+        }
+    };
 
     /// A simplified grant + the acceptance context. The acceptance pipeline
     /// runs the six checks in the §6.7-mandated order: confused-deputy
@@ -110,7 +163,7 @@ mod shim {
             return Err(GrantRejection::UiSummaryMismatch);
         }
         // Class 3 time-window (valid_until enforcement clock — distinct from
-        // the 1-hr bucket per NQ-T2).
+        // the 1-hr bucket per NQ-T2; strict, no grace/skew).
         if ctx.now_secs > ctx.valid_until {
             return Err(GrantRejection::Expired);
         }
@@ -281,17 +334,19 @@ fn f_ld_6_class5_ui_summary_hash_mismatch_rejected() {
     );
 }
 
-/// F-LD-6 CLASS 3 NQ-T2-GATED (clock-skew, OPEN-SPEC): the `valid_until`
-/// enforcement clock is DECOUPLED from the coarse 1-hr bucket. A 60-second
-/// `valid_until` presented at +90 seconds → REJECT (the bucket does NOT
-/// coarsen `valid_until` up to 1hr; else the coercion/replay window widens from
-/// 60s to ≤1hr).
+/// F-LD-6 CLASS 3 NQ-T2 (clock-skew, RATIFIED): the `valid_until` enforcement
+/// clock is DECOUPLED from the coarse 1-hr bucket. A 60-second `valid_until`
+/// presented at +90 seconds → REJECT (the bucket does NOT coarsen `valid_until`
+/// up to 1hr; else the coercion/replay window widens from 60s to ≤1hr).
 ///
-/// OPEN-SPEC: NQ-T2 (§10.5) is unresolved at R2 (§5.B carry-forward item 5).
-/// This arm pins the R0-stated decoupling; R5 finalizes the exact enforcement
-/// semantics against the ratified NQ-T2 default.
+/// NQ-T2 (R0.5 §10.5) is RATIFIED (Ben 2026-06-02): `valid_until` is encoded at
+/// full 1-second granularity and enforced STRICTLY — `present > valid_until →
+/// reject`, NO grace/skew window; the coarse 1-hour bucket is never consulted
+/// for expiry. This arm pins exactly that strict-no-grace decoupling. (The
+/// `_nq_t2_gated` suffix is the historical arm name from the open-question era;
+/// the question is now ratified — the arm stays.)
 #[test]
-#[ignore = "RED-PHASE: F-LD-6 — class 3 clock-skew: 1-hr bucket ⊥ valid_until clock (OPEN-SPEC: gated on NQ-T2 §10.5); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-LD-6 — class 3 clock-skew: 1-hr bucket ⊥ valid_until clock (NQ-T2 §10.5 RATIFIED: strict, no grace); un-ignore at R5"]
 fn f_ld_6_class3_clock_skew_bucket_decoupled_from_valid_until_nq_t2_gated() {
     let mut nc = HashSet::new();
     let revoked = HashSet::new();
@@ -303,26 +358,101 @@ fn f_ld_6_class3_clock_skew_bucket_decoupled_from_valid_until_nq_t2_gated() {
     assert_eq!(
         accept_grant(ctx),
         Err(GrantRejection::Expired),
-        "valid_until enforcement clock is fine-grained (60s window), NOT coarsened to the 1-hr bucket — \
-         a 90s-late presentation MUST reject; the 1-hr bucket (={LAYER_D_BUCKET_SECS}s) does NOT widen it"
+        "valid_until enforcement clock is fine-grained (60s window) + strict (no grace), NOT coarsened to \
+         the 1-hr bucket — a 90s-late presentation MUST reject; the 1-hr bucket (={LAYER_D_BUCKET_SECS}s) \
+         does NOT widen it"
     );
 }
 
-/// F-LD-6 harness self-coverage: all SIX pass-classes have an executable arm
-/// (so the §6.7 mini-review "clean on all six" claim is grounded). This pin
-/// fails if a class loses its arm. would-FAIL-if-no-op'd: dropping any
-/// `GrantRejection` variant from the asserted set fails the exhaustiveness.
+/// F-LD-6 harness self-coverage (FALSIFIABLE + ROSTER-DRIFT-PROOF): drive the
+/// six real production rejection arms through `accept_grant` and assert that the
+/// observed `GrantRejection` set equals `GrantRejection::ALL` — the shim-owned
+/// single source of truth for the M-12 roster. So the §6.7 mini-review "clean
+/// on all six" claim is grounded in observable behavior, not in a literal-array
+/// length, AND it stays tied to the enum's own roster.
+///
+/// would-FAIL-if-no-op'd (two ways):
+///   1. **Gate dropped / classes collapse** — if a production gate is removed
+///      (a hostile ctx is admitted → `expect_err` panics) or two classes start
+///      returning the same `GrantRejection`, the observed set drops below the
+///      roster and the set-equality fails.
+///   2. **Roster drift** — if a 7th pass-class is added to `GrantRejection`
+///      without a behavioral arm here, the shim's non-wildcard
+///      `assert_in_roster` match stops compiling until `ALL` is updated, and
+///      then `observed != ALL` until this arm exercises the new class. A new
+///      class can never silently escape the "clean on all" coverage check.
+///
+/// (Replaces the prior tautological `assert_eq!(classes.len(), 6)` over a
+/// 6-element literal, which froze nothing — F4-020.)
 #[test]
-#[ignore = "RED-PHASE: F-LD-6 — six pass-classes all have executable arms; un-ignore at R5"]
+#[ignore = "RED-PHASE: F-LD-6 — six pass-classes all have falsifiable executable arms; un-ignore at R5"]
 fn f_ld_6_all_six_pass_classes_have_executable_arms() {
-    // Enumerate the six rejection classes the harness MUST distinguish.
-    let classes = [
-        GrantRejection::Replay,            // 1
-        GrantRejection::DeviceKeyRevoked,  // 2
-        GrantRejection::Expired,           // 3
-        GrantRejection::ConfusedDeputy,    // 4
-        GrantRejection::UiSummaryMismatch, // 5
-        GrantRejection::AuditNodeMissing,  // 6
-    ];
-    assert_eq!(classes.len(), 6, "the §6.7 mini-review reads exactly six pass-classes");
+    let mut observed: HashSet<GrantRejection> = HashSet::new();
+
+    // Class 1 — replay (jti already in cache).
+    {
+        let mut nc = HashSet::from([[0x01; 32]]);
+        let revoked = HashSet::new();
+        let resolvable = HashSet::from([[0xCC; 32]]);
+        observed.insert(
+            accept_grant(valid_ctx(&mut nc, &revoked, &resolvable))
+                .expect_err("class 1 must reject"),
+        );
+    }
+    // Class 2 — revoked issuer device key.
+    {
+        let mut nc = HashSet::new();
+        let revoked = HashSet::from([[0xAA; 32]]);
+        let resolvable = HashSet::from([[0xCC; 32]]);
+        observed.insert(
+            accept_grant(valid_ctx(&mut nc, &revoked, &resolvable))
+                .expect_err("class 2 must reject"),
+        );
+    }
+    // Class 3 — expired valid_until (strict, NQ-T2).
+    {
+        let mut nc = HashSet::new();
+        let revoked = HashSet::new();
+        let resolvable = HashSet::from([[0xCC; 32]]);
+        let mut ctx = valid_ctx(&mut nc, &revoked, &resolvable);
+        ctx.now_secs = ctx.valid_until + 1;
+        observed.insert(accept_grant(ctx).expect_err("class 3 must reject"));
+    }
+    // Class 4 — confused-deputy (audience mismatch).
+    {
+        let mut nc = HashSet::new();
+        let revoked = HashSet::new();
+        let resolvable = HashSet::from([[0xCC; 32]]);
+        let mut ctx = valid_ctx(&mut nc, &revoked, &resolvable);
+        ctx.grant_audience = b"other-device-did".to_vec();
+        observed.insert(accept_grant(ctx).expect_err("class 4 must reject"));
+    }
+    // Class 5 — UI-deception (summary-hash mismatch).
+    {
+        let mut nc = HashSet::new();
+        let revoked = HashSet::new();
+        let resolvable = HashSet::from([[0xCC; 32]]);
+        let mut ctx = valid_ctx(&mut nc, &revoked, &resolvable);
+        ctx.displayed_summary_hash = [0x99; 32];
+        observed.insert(accept_grant(ctx).expect_err("class 5 must reject"));
+    }
+    // Class 6 — audit-Node missing.
+    {
+        let mut nc = HashSet::new();
+        let revoked = HashSet::new();
+        let resolvable = HashSet::from([[0xCC; 32]]);
+        let mut ctx = valid_ctx(&mut nc, &revoked, &resolvable);
+        ctx.audit_node_cid = None;
+        observed.insert(accept_grant(ctx).expect_err("class 6 must reject"));
+    }
+
+    // Tie the assertion to the shim-owned roster (NOT a hand-written literal),
+    // so adding a 7th pass-class can never silently escape this coverage check.
+    let expected: HashSet<GrantRejection> = GrantRejection::ALL.into_iter().collect();
+    assert_eq!(
+        observed, expected,
+        "the §6.7 mini-review reads exactly the GrantRejection::ALL pass-classes, each behaviorally \
+         exercised; if a gate is dropped, two classes collapse, or a new class is added without an arm, \
+         the observed set diverges from the roster and this fails"
+    );
 }
