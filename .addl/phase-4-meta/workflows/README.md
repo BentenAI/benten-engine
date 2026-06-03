@@ -13,7 +13,7 @@ integration mechanics.
 | **R2** test-landscape | `addl-r2-test-landscape.js` | N discovery dims (each blind) → completeness-critic (hunts what all missed) → synthesis (family catalog + coverage matrix + canary-first R3 slicing + freeze-gating priorities). |
 | **R3** red-phase test-writers | `addl-r3-test-writers.js` | Canary + GATE (fan-out fires only on PASS) → fan-out waves → per-wave substantive+seam mini-reviews → coverage-verify/converge. |
 | **R4 / R4b** test-corpus review | `addl-review-council.js` (tier R4) | Same council as R1, lens-set = test-quality + wire-freeze + crypto + invariant + coverage + ruling-fidelity. Iterate to convergence. |
-| **R4-fix / R6-fix / any fix round** | `converging-fix-loop.js` | Autonomous review→fix→re-review→loop until no new BLK/MAJ; fixes ALL non-disagreed findings (HARD-RULE-12); decision-log = audit-not-gate. |
+| **R4-fix / R6-fix / any fix round** | `converging-fix-loop.js` | **Lens-architect (Phase 0) self-composes the lens set** + per-round completeness-critic (lens-gap detector that grows the panel) → autonomous review→fix→re-review→loop until no new BLK/MAJ **and no missed-lens**; fixes ALL non-disagreed findings (HARD-RULE-12); decision-log = audit-not-gate. |
 | **R5** implementation | `addl-r5-impl-to-green.js` | Canary-first impl waves, each looping impl→un-ignore→test→fix until GREEN; gate fan-out on canary; strategy-C integrate + full-suite. |
 | **R6** phase-close council | `addl-review-council.js` (tier R6) | Full council every round (Q5); iterate until 0 substantive; pattern-induction. Wrap with `converging-fix-loop.js` for the fix rounds. |
 | *(shared)* | `workflow-common.js` | Canonical preamble + codification map — INLINE it at authoring/invoke time (the sandbox has no imports). |
@@ -23,8 +23,10 @@ integration mechanics.
 - **Across-invocation (orchestrator in the loop):** run `addl-review-council` → orchestrator triages + fixes the
   artifact → run it again on the edited artifact → repeat. The orchestrator gates each fix. Use for review tiers
   where fixes are high-judgment and you want eyes on each round (R1, R4, R6).
-- **In-workflow autonomous (`converging-fix-loop`):** the loop reviews → fixes ALL non-disagreed findings →
-  integrates → compile-gates → re-reviews → loops. `args.mode`:
+- **In-workflow autonomous (`converging-fix-loop`):** a **lens-architect (Phase 0) composes the lens set for this
+  corpus** (Pattern 6 — pass `args.lenses` to skip it); then the loop reviews → runs a **per-round completeness-critic
+  whose missed-lenses grow the panel** (so it can't falsely converge on an incomplete set) → fixes ALL non-disagreed
+  findings → integrates → compile-gates → re-reviews → loops. `args.mode`:
   - `'checkpoint'` (default, SAFE): emits fixes to `/tmp` + returns a fix-list; the orchestrator integrates +
     compile-gates + re-invokes. This is the validated shakedown shape.
   - `'autonomous'`: an in-workflow integrator does its own git writes + cargo. ⚠️ **WATCH the first few runs**
