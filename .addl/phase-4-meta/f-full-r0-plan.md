@@ -131,7 +131,7 @@ plan-doc.
 | `PrimitiveKind` = 12 irreducible (Read…Stream); no Agent/Plugin/Event | `crates/benten-core/src/subgraph.rs:71–93` (12 variants) | ✓ |
 | `K(N)` structural-KDF chain live | `crates/benten-crypto-suite/src/structural_kdf.rs:8–9` (`K(root)=HKDF-SHA256(K_principal, "root"\|\|root_cid)`; `K(N)=HKDF-SHA256(K(pred), "step"\|\|edge_label\|\|N.cid)`) | ✓ |
 | ⚠️ **`AeadEnvelope` is the SHIPPED type** (NOT `EncryptedEnvelope`); flat struct; untyped `&[u8]` AAD; **LE** codepoint | `crates/benten-crypto-suite/src/aead.rs:145` (`pub struct AeadEnvelope { format_version, cipher_codepoint, nonce, ciphertext }`); `:165` (`.to_le_bytes()`); `:244,277` (AAD index/count fields all `to_le_bytes`); grep `EncryptedEnvelope`/`BindingContext` = **ZERO** | ✓ (M-18 corrected) |
-| ⚠️ **In-tree `0x647a` combiner is HKDF-SHA256, NOT real X-Wing** | `crates/benten-crypto-suite/src/cipher_suite.rs:37,45,78` — `combined = HKDF-SHA256(ss_x \|\| ss_mlkem \|\| ek_x \|\| ek_mlkem \|\| …, info="x-wing-v1-benten-0x647a")`; `sha3` IS already a dep (`:65 use sha3::Digest`). Real X-Wing = `SHA3-256("\.//^\\" \|\| ss_M \|\| ss_X \|\| ct_X \|\| pk_X)` per `draft-connolly-cfrg-xwing-kem`. **The label says "X-Wing" but the construction is a Benten-private HKDF combiner** | ✓ (M-4 grounded; Ben ruling #3) |
+| ⚠️ **In-tree `0x647a` combiner is HKDF-SHA256, NOT real X-Wing** | `crates/benten-crypto-suite/src/cipher_suite.rs:37,45,78` — `combined = HKDF-SHA256(ss_x \|\| ss_mlkem \|\| ek_x \|\| ek_mlkem \|\| …, info="x-wing-v1-benten-0x647a")`; `sha3` IS already a dep (`:65 use sha3::Digest`). Real X-Wing = `SHA3-256(ss_M \|\| ss_X \|\| ct_X \|\| pk_X \|\| "\.//^\\")` per `draft-connolly-cfrg-xwing-kem-10` (label **APPENDED**; XWingLabel=`0x5c2e2f2f5e5c`; R4.2-corrected 2026-06-03). **The label says "X-Wing" but the construction is a Benten-private HKDF combiner** | ✓ (M-4 grounded; Ben ruling #3) |
 | Cipher codepoints LIVE in-tree | `crates/benten-crypto-suite/src/codepoint.rs:199` `HYBRID_X25519_MLKEM768=0x647a` (LIVE) + `:205` `CLASSICAL_X25519=0x6400` (LIVE downgrade) + `:214` `HYBRID_MLKEM768_HQC=0x647b` (reserved) + `:228` `PURE_PQ_MLKEM768_ONLY=0x647c` (reserved-named, typed-reject `:268`) | ✓ (m-12: `0x6400` IS in-tree) |
 | Sig codepoints in-tree | `codepoint.rs:49` `HYBRID_ED25519_MLDSA65=0x0001` (LIVE) + `:60` `CLASSICAL_ED25519=0x0002` + `:64` `HYBRID_MLDSA65_SLHDSA=0x0003` (reserved swap-matrix) | ✓ |
 | Benten codepoint range = `0x6100..0x6FFF` IANA-disjoint | 9-eyes U8/U11 (`:559`); no in-tree assertion yet (a `CRYPTO-CODEPOINTS.md` doc-wave deliverable) | ✓ |
@@ -188,7 +188,7 @@ These reflect lead-architect direction post-R1. They override any conflicting fr
 | C-3 | **Amendments 1–6** (U1–U6): codepoint committed in AAD/info (U1); strict-decode, no cross-variant fallback (U2); canonical-TLV length-injective (U3); sender-DID in AAD for non-vault (U4) — **NOTE BR-1: the DEFAULT path is Sealed-Sender, so the sender-DID-in-AAD U4 rule applies to the non-default plaintext-sender codepoint**; DeviceLink+RemotePermission bind sealed-at+valid-until epoch (U5); ML-KEM Decap CT-mitigation (U6) | 9-eyes Group A–C |
 | C-4 | v1-beta **signature** default = **LAMPS Composite ML-DSA** `id-MLDSA65-Ed25519-SHA512` at `SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001`; EUF-CMA-only at construction, SUF-equivalent at app-layer via **Inv-15** (in-tree REGISTERED) | CLAUDE.md #5; Compromise #31 (LAMPS, per BR-2) |
 | C-5 | v1-beta **encryption** default = **X25519⊕ML-KEM-768** (MLKEM768-X25519) at codepoint **`0x647A`** + **ChaCha20-Poly1305** bulk | CLAUDE.md #5 |
-| C-6 | **X-Wing corrective (BR-3): REAL X-Wing SHA3-256 construction at `0x647A`** (NOT re-label). Current code (`cipher_suite.rs:37`) computes a Benten-private `HKDF-SHA256` combiner mislabeled "X-Wing" + uses an **LE** codepoint (`aead.rs:165`); codepoint `0x647A` is IETF-reserved for the X-Wing-identical MLKEM768-X25519. **Replace the combiner with `SHA3-256(label \|\| ss_M \|\| ss_X \|\| ct_X \|\| pk_X)`** + LE→BE; **regenerate ALL golden/KAT vectors** (construction change ⇒ new keys). LOC ≈ **120–220** (combiner rewrite + BE sweep + full vector regen + interop KAT), NOT ~24. Pre-tag-must-fix; INDEPENDENT of F-full | cryptographer review; e2r §15.1; BR-3 |
+| C-6 | **X-Wing corrective (BR-3): REAL X-Wing SHA3-256 construction at `0x647A`** (NOT re-label). Current code (`cipher_suite.rs:37`) computes a Benten-private `HKDF-SHA256` combiner mislabeled "X-Wing" + uses an **LE** codepoint (`aead.rs:165`); codepoint `0x647A` is IETF-reserved for the X-Wing-identical MLKEM768-X25519. **Replace the combiner with `SHA3-256(ss_M \|\| ss_X \|\| ct_X \|\| pk_X \|\| XWingLabel)`** (label **APPENDED**; XWingLabel=`0x5c2e2f2f5e5c`; R4.2-corrected — NOT prepended) + LE→BE; **regenerate ALL golden/KAT vectors** (construction change ⇒ new keys). LOC ≈ **120–220** (combiner rewrite + BE sweep + full vector regen + interop KAT), NOT ~24. Pre-tag-must-fix; INDEPENDENT of F-full | cryptographer review; e2r §15.1; BR-3 |
 | C-7 | Crypto-agility per baked-in **#5**: codepoint-dispatch + typed-reject (`UnsupportedAlgorithm`); never fork primitives; one integration crate is the only call site | CLAUDE.md #5 |
 | C-8 | **Inv-17 hybrid-mandatory floor**: every KEM use site MUST be PQ-classical hybrid; **no pure-PQ codepoint LIVE/selectable** at v1-beta or v1-GM — reserved-named-typed-rejected arms (`0x647c`) are permitted for swap-matrix conformance only, audit-gated (m-3 sharpening) | 9-eyes Inv-17 |
 
@@ -432,7 +432,7 @@ Ground-truth (§0.3): in-tree `cipher_suite.rs:37` computes `combined = HKDF-SHA
 || ek_mlkem || …, info="x-wing-v1-benten-0x647a")` — a **Benten-private HKDF combiner mislabeled "X-Wing"** —
 and `aead.rs:165` writes the codepoint **LE**. **Two corrections:**
 - **(a) Real X-Wing combiner.** Replace the HKDF-SHA256 combiner with the actual X-Wing construction per
-  `draft-connolly-cfrg-xwing-kem`: `SHA3-256(X-Wing-label || ss_M || ss_X || ct_X || pk_X)` (`ss_M` =
+  `draft-connolly-cfrg-xwing-kem-10`: `SHA3-256(ss_M || ss_X || ct_X || pk_X || XWingLabel)` — the label is **APPENDED** (XWingLabel = the 6 bytes `0x5c2e2f2f5e5c`, ASCII `\.//^\`), NOT prepended; the prepended form is the superseded v01-v02 construction and would freeze a non-interoperable KEM at the IETF-reserved `0x647A`. (R4.2-corrected 2026-06-03, verified against draft-10 §6.) (`ss_M` =
   ML-KEM-768 shared secret; `ss_X` = X25519 shared secret; `ct_X` = X25519 ciphertext/ephemeral-pubkey;
   `pk_X` = X25519 recipient pubkey; the exact label bytes + input ordering per the draft). `sha3` is ALREADY
   a dep (`cipher_suite.rs:65`). **This is a CONSTRUCTION change** — the derived key differs from the current
@@ -614,6 +614,11 @@ enum RoleId { Admin = 4, Moderator = 3, Member = 2, Viewer = 1, Invitee = 0 }  /
 new frozen member field = ZERO.** **NQ-W4 (R2):** pin the exact length-injective (U3) canonical-CBOR byte
 encoding of the AAD-bound `BTreeMap<Did, MemberEntry>` snapshot (`MemberEntry` field order + `Option<SigPubKey>`
 presence-encoding + `Hlc` encoding) or two engines materialize divergent AAD for the same membership.
+**Canonical enum representation (R4.2 F4-007 ruling, Ben 2026-06-03): ALL `MemberEntry` enums serialize as an
+INTEGER discriminant in canonical-CBOR/AAD — `RoleId` as its `u8` ordinal AND `MemberRef` as a `u8`-tagged
+variant (NOT a text string).** Int-discriminant is canonical for determinism + AAD compactness; the golden
+vectors must encode `member_ref` as an integer tag, symmetric with `role`. (Fixes the asymmetric int/text
+representation frozen in the R3 golden.)
 
 **`Drop` (one-shot non-member share).** The existing `benten-drop/` content-bundle — a sealed sibling of the
 graph (content = encrypted Nodes + a SubgraphSpec; envelope = frozen crypto wire; provably carries no
@@ -1525,7 +1530,7 @@ one-per-DID; authority vs confidentiality halves); #19 (Rust engine plugins — 
 
 ---
 
-**End of F-full R0.4 plan-doc.** Supersedes M-CONS-FINAL + the 9-eyes registry + e2r-ffull as the canonical
+**End of F-full R0.5 plan-doc.** Supersedes M-CONS-FINAL + the 9-eyes registry + e2r-ffull as the canonical
 F-full scope (9-eyes wins codepoint collisions). Hand to the R1.2 re-review per the iterate-to-convergence
 discipline.
 
