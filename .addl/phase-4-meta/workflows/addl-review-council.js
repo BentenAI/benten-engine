@@ -1,54 +1,70 @@
 /*
- * addl-review-council.js — FINALIZED generic adversarial review council (one ROUND of R1 / R4 / R4b / R6).
+ * addl-review-council.js — FINALIZED generic adversarial review council with a SELF-COMPOSING lens set.
  *
- * The single reusable shape behind every ADDL review tier that gates+mutates an artifact and iterates to
- * convergence (rule 9 / Q5): N lenses → structure → adversarial-verify (refute BLK/MAJ) → completeness-critic
- * → converge (refuse-on-partial-panel). ITERATE ACROSS INVOCATIONS: run it → triage/fix the artifact → run it
- * again on the EDITED artifact → until a full round returns 0 BLOCKER/MAJOR. (To auto-iterate review+FIX in one
- * run, use converging-fix-loop.js instead; this is the review-only round.)
+ * One reusable shape behind every ADDL review tier that gates+mutates an artifact and iterates to convergence
+ * (rule 9 / Q5): LENS-ARCHITECT (Phase 0) composes the lens set for THIS artifact → N lenses → structure →
+ * adversarial-verify → completeness-critic → converge (refuse-on-partial). ITERATE ACROSS INVOCATIONS until 0 BLK/MAJ.
  *
- * Used for: R1 (plan critic-council) · R4/R4b (test-corpus review) · R6 (phase-close council). The lens SET +
- * artifact + framing are passed via args; the machinery is identical. (extra-reflection-pass applied to the
- * library itself: one council, not four.)
+ * ── THE LENS-ARCHITECT (Phase 0) — Pattern 6 made structural ──────────────────────────────────────────────
+ * Instead of a hand-authored fixed lens set, a meta-reviewer reflects on the assigned work and COMPOSES the
+ * comprehensive lens set = the applicable STANDARD lenses (baseline catalog, always considered) + BESPOKE lenses
+ * unique to this artifact's surface. A second architect-reviewer (extra-reflection-pass) hunts a missed/redundant
+ * lens. This PROPERLY GATES convergence: the set is complete by construction up-front, and the completeness-critic
+ * at the end checks "did the architect miss a lens?" → any gap is a finding that feeds the next round's architect.
+ * So you cannot falsely converge because the lens that would have caught the bug was never in the set.
  *
- * METHODOLOGY ENCODED: Pattern-6 (lenses by surface) · iterate-to-convergence/Q5 (full council every round)
- *   · adversarial-verify (refute false positives) · completeness-critic (fresh gap-hunt) · ground-truth-verify
- *   · refuse-on-partial-panel · HARD-RULE-12 dispositions · plain-English converge call. (See workflow-common.js.)
+ * METHODOLOGY ENCODED: Pattern-6 (auto-composed lenses-by-surface) · extra-reflection-pass (architect-reviewer)
+ *   · iterate-to-convergence/Q5 · adversarial-verify · completeness-critic (also lens-gap detector) · ground-truth
+ *   · refuse-on-partial-panel · HARD-RULE-12 · plain-English converge call. (See workflow-common.js + README.)
  *
- * INVOKE: Workflow({ name:'addl-review-council', args:{ cfg:{...}, lenses:[...] } })
- *   args.cfg    = { tier:'R1'|'R4'|'R6', artifactRef, artifactDesc, enumerate:'<cmd to list files>', specRef,
- *                  specPath, orchRef, framing:'<what this round is + any known-correct do-not-reflag>', canon }
- *   args.lenses = [{ key, mandate, focus }]   (Pattern-6 lens set for THIS artifact)
+ * INVOKE: Workflow({ name:'addl-review-council', args:{ cfg:{...} } })
+ *   args.cfg = { tier:'R1'|'R4'|'R6', artifactRef, artifactDesc, enumerate:'<cmd>', specRef, specPath, orchRef,
+ *               framing, canon,
+ *               standardCatalog:'<baseline lens list for this review-type>' (optional; default per tier below),
+ *               mustInclude:['<lens keys that MUST be in the set>'] (optional),
+ *               priorMissedLenses:'<lenses the prior round\'s completeness-critic flagged as missing>' (optional),
+ *               targetLensCount: <int> (optional soft target; architect right-sizes, not pads) }
+ *   args.lenses (optional) = [{key,mandate,focus}]  — if provided, SKIPS the architect and uses these verbatim.
  */
 
 export const meta = {
   name: 'addl-review-council',
-  description: 'Generic adversarial review council (R1/R4/R4b/R6): N lenses (batched 4) -> structure -> adversarial-verify -> completeness-critic -> converge; refuse on partial panel',
-  phases: [{ title: 'Review' }, { title: 'Structure' }, { title: 'Verify' }, { title: 'Completeness' }, { title: 'Converge' }],
+  description: 'Generic review council with self-composing lens set: lens-architect (Pattern-6) -> N lenses (batched 4) -> structure -> adversarial-verify -> completeness-critic (also lens-gap) -> converge; refuse on partial panel',
+  phases: [{ title: 'LensArchitecture' }, { title: 'Review' }, { title: 'Structure' }, { title: 'Verify' }, { title: 'Completeness' }, { title: 'Converge' }],
 }
 
 const CFG = (args && args.cfg) || {}
-const LENSES = (args && args.lenses) || []
+
+// Baseline STANDARD lens catalogs (the always-consider set the architect selects from + extends). Override via cfg.standardCatalog.
+const DEFAULT_CATALOG = {
+  R1: 'spec-coherence/internal-consistency · security+threat-model · architecture-fit (matches baked-in commitments) · completeness/gaps vs requirements · feasibility/sequencing · invariant-preservation · cross-cutting-consistency · ruling/decision-fidelity · forward-class-of-bug (does the design foreclose bug classes)',
+  R4: 'substantive-pin&falsifiability (would-FAIL-on-no-op) · RED-PHASE/TDD discipline (pim-12) · coverage/adversarial-gap-audit · determinism/flakiness/test-isolation/CI-realism · wire-freeze byte-correctness · encoding/serialization · invariant-semantics · capability/authority · threat-model/adversary+bounded-decode · cross-wave-seam consistency · cross-language/TS-mirror · ruling-fidelity (spec→test)',
+  R4b: 'substantive-pin · new-surfaces coverage · cross-lang-mirror · named-destinations/no-phantom-deferrals · regression vs prior phase · would-FAIL-on-revert',
+  R6: 'spec-to-code compliance (pim-13 R7) · all-R1/R4 standard lenses · doc-coupling/cite-drift · regression · pattern-induction (unnamed cross-cutting) · invariant-coverage at HEAD · threat-model · public-surface/SemVer · convergence-readiness',
+}
+
+const TIER = CFG.tier || 'R'
+const STD = CFG.standardCatalog || DEFAULT_CATALOG[TIER] || 'task-appropriate review dimensions'
 
 const COMMON = `
-You are ONE lens on the **${CFG.tier || 'ADDL'} review council**. ${CFG.framing || 'Find everything WRONG, WEAK, MISSING, or MIS-SPECIFIED in the artifact from your lens, before it advances.'}
-
 ## READ-ONLY CONTRACT (NON-NEGOTIABLE)
-Read ONLY via \`git show <ref>:<path>\`. NEVER checkout/cd/commit/branch/modify (the W6 escape corrupts a shared tree). First action: state the ref+SHA you review + assert it matches the brief. Ground EVERY finding in a real line you read; if you cannot substantiate it, DROP it (§3.5n).
+Read ONLY via \`git show <ref>:<path>\`. NEVER checkout/cd/commit/branch/modify (the W6 escape corrupts a shared tree). First action: state the ref+SHA you read + assert it matches the brief. Ground EVERY claim in a real line; if you cannot substantiate it, DROP it (§3.5n).
 
 ## ANCHORS
 - Artifact under review: ${CFG.artifactDesc} — ref \`${CFG.artifactRef}\`. Enumerate: \`${CFG.enumerate || 'git show ' + CFG.artifactRef + ':' + (CFG.specPath || '')}\`. Read: \`git show ${CFG.artifactRef}:<path>\`.
 - Spec of record: \`git show ${CFG.specRef}:${CFG.specPath}\`.
-${CFG.orchRef ? `- Prior-round triage / landscape (if any): \`git show ${CFG.orchRef}:.addl/...\`` : ''}
+${CFG.orchRef ? `- Prior-round triage / landscape: \`git show ${CFG.orchRef}:.addl/...\`` : ''}
 
 ${CFG.canon || ''}
-
-## OUTPUT CONTRACT
-Return findings AS YOUR FINAL MESSAGE in prose (no structured-output tool). Per finding: \`[SEVERITY] <file/area> | <id> | DEFECT | WHY (for the gate/freeze) | DISPOSITION (fix-now | belongs-named-now(doc) | out-of-scope(reason) | disagree(cite))\`. SEVERITY ∈ {BLOCKER, MAJOR, MINOR, OBS}. End: \`LENS VERDICT: <APPROVE | FINDINGS-RAISED> — N BLK / N MAJ / N MIN / N OBS\`.
 `
 
 const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o }
 
+const LENSSET_SCHEMA = { type: 'object', additionalProperties: false, required: ['lenses', 'rationale', 'convergence_bar'], properties: {
+  lenses: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['key', 'mandate', 'focus', 'origin'], properties: {
+    key: { type: 'string' }, mandate: { type: 'string' }, focus: { type: 'string' },
+    origin: { type: 'string', enum: ['standard', 'bespoke', 'must-include', 'prior-missed'] } } } },
+  rationale: { type: 'string' }, convergence_bar: { type: 'string' } } }
 const FINDINGS_SCHEMA = { type: 'object', additionalProperties: false, required: ['panel_returned', 'panel_expected', 'findings'], properties: {
   panel_returned: { type: 'integer' }, panel_expected: { type: 'integer' },
   findings: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'severity', 'file', 'claim', 'recommended_disposition'], properties: {
@@ -59,42 +75,70 @@ const VERDICT_SCHEMA = { type: 'object', additionalProperties: false, required: 
   finding_id: { type: 'string' }, verdict: { type: 'string', enum: ['CONFIRMED', 'REFUTED', 'PARTIAL'] },
   corrected_severity: { type: 'string', enum: ['BLOCKER', 'MAJOR', 'MINOR', 'OBS', 'NONE'] }, reasoning: { type: 'string' } } }
 
-// 1. REVIEW — N lenses, batched 4 (rate-limit), schema-free prose
+// ===== PHASE 0: LENS ARCHITECTURE — compose the lens set for THIS artifact (Pattern 6, structural) =====
+phase('LensArchitecture')
+let lensSet
+if (args && args.lenses && args.lenses.length) {
+  lensSet = { lenses: args.lenses.map(l => ({ ...l, origin: l.origin || 'must-include' })), rationale: 'provided verbatim via args.lenses (architect skipped)', convergence_bar: '0 confirmed BLOCKER/MAJOR' }
+  log(`lens set provided verbatim: ${lensSet.lenses.length} lenses (architect skipped)`)
+} else {
+  const composed = await agent(`${COMMON}
+## YOU ARE THE LENS ARCHITECT (meta-reviewer) for the ${TIER} review of: ${CFG.artifactDesc}
+Reflect on the ACTUAL assigned work and COMPOSE the comprehensive review lens set (Pattern 6: reviewer composition follows lens surface). Steps:
+1. SKIM the artifact (enumerate + read the load-bearing parts) + the spec, so you know what this work actually IS and where it can break.
+2. From the STANDARD baseline catalog for ${TIER} — [ ${STD} ] — select the lenses that APPLY (and note any that are N/A for this artifact, so we don't pad).
+3. INVENT the BESPOKE lenses this specific artifact needs that the standard set doesn't name (its unique surface — e.g. a crypto-construction lens for a crypto corpus, a distributed-systems lens for a sync corpus, a specific-ruling-fidelity lens, an unusual failure mode you can see in THIS work).
+4. MUST-INCLUDE (always add, mark origin must-include): ${(CFG.mustInclude || []).join(', ') || '(none)'}.
+5. PRIOR-MISSED (lenses a prior round's completeness-critic flagged as missing — add them, mark origin prior-missed): ${CFG.priorMissedLenses || '(none)'}.
+Right-size the set${CFG.targetLensCount ? ` (soft target ~${CFG.targetLensCount} lenses)` : ' (typically 8-16; enough to cover the surface, not padded)'} — each lens DISTINCT (no two lenses that would find the same thing). For each lens give: key (short), mandate (what to hunt, specific to this artifact), focus (which files/sections), origin. Then state the RATIONALE (why this set is comprehensive for THIS work) + the CONVERGENCE_BAR (what "0 findings" must mean here — e.g. "every freeze-gating byte verified + every ruling has a faithful pin").`,
+    { label: `${TIER}-lens-architect`, phase: 'LensArchitecture', schema: LENSSET_SCHEMA })
+  // extra-reflection-pass: a second architect hunts a missed/redundant lens
+  const refined = await agent(`${COMMON}
+## ARCHITECT-REVIEWER (extra-reflection-pass) for the ${TIER} lens set
+A lens-architect composed the set below for: ${CFG.artifactDesc}. Reason AS BEN: (a) is there a lens this artifact NEEDS that's MISSING (a failure mode / spec obligation / adversary angle no lens covers)? (b) any two lenses REDUNDANT (would find the same thing — merge)? (c) is the convergence_bar right + complete? Return the FINAL refined lens set (add missing, merge redundant, sharpen mandates). Keep it distinct + right-sized.
+COMPOSED SET: ${JSON.stringify(composed, null, 1)}`,
+    { label: `${TIER}-lens-architect-review`, phase: 'LensArchitecture', schema: LENSSET_SCHEMA })
+  lensSet = refined || composed
+  log(`lens-architect composed ${lensSet.lenses.length} lenses (${lensSet.lenses.filter(l => l.origin === 'bespoke').length} bespoke). Convergence bar: ${lensSet.convergence_bar}`)
+}
+const LENSES = lensSet.lenses
+
+// ===== 1. REVIEW — composed lenses, batched 4 =====
 phase('Review')
 const reports = []
 for (const b of chunk(LENSES, 4)) {
   reports.push(...await parallel(b.map(L => () =>
-    agent(`${COMMON}\n## YOUR LENS: ${L.key}\n**Focus:** ${L.focus || 'the whole artifact'}\n**Mandate:** ${L.mandate}`,
-      { label: `${CFG.tier || 'R'}:${L.key}`, phase: 'Review' }))))
+    agent(`${COMMON}\n## YOUR LENS: ${L.key}\n**Focus:** ${L.focus}\n**Mandate:** ${L.mandate}\n\nReturn findings AS YOUR FINAL MESSAGE in prose. Per finding: \`[SEVERITY] <file/area> | <id> | DEFECT | WHY | DISPOSITION (fix-now | belongs-named-now(doc) | out-of-scope(reason) | disagree(cite))\`. SEVERITY ∈ {BLOCKER,MAJOR,MINOR,OBS}. End: \`LENS VERDICT: <APPROVE|FINDINGS-RAISED> — N BLK/N MAJ/N MIN/N OBS\`.`,
+      { label: `${TIER}:${L.key}`, phase: 'Review' }))))
 }
 const live = reports.filter(Boolean)
 log(`council: ${live.length}/${LENSES.length} lenses returned`)
 
-// 2. STRUCTURE — dedup, classify
+// ===== 2. STRUCTURE =====
 phase('Structure')
-const structured = await agent(`${COMMON}\nStructuring consolidator. From the ${live.length} lens reports, extract EVERY distinct finding, dedup (keep highest severity + note corroborating lenses), assign ids, classify recommended_disposition per HARD RULE 12 (fix-now / belongs-named-now / out-of-scope / disagree). panel_returned=${live.length}, panel_expected=${LENSES.length}. Do NOT invent findings.\n=== REPORTS ===\n${live.map((r, i) => `--- ${i + 1} ---\n${r}`).join('\n')}`,
+const structured = await agent(`${COMMON}\nStructuring consolidator. From the ${live.length} lens reports, extract EVERY distinct finding, dedup (highest severity + corroborating lenses), assign ids, classify recommended_disposition per HARD RULE 12. panel_returned=${live.length}, panel_expected=${LENSES.length}. Do NOT invent findings.\n=== REPORTS ===\n${live.map((r, i) => `--- ${i + 1} ---\n${r}`).join('\n')}`,
   { label: 'structure', phase: 'Structure', schema: FINDINGS_SCHEMA })
 
-// 3. ADVERSARIAL VERIFY — refute each BLOCKER/MAJOR (batched 4)
+// ===== 3. ADVERSARIAL VERIFY (BLK/MAJ, batched 4) =====
 phase('Verify')
 const majors = (structured?.findings || []).filter(f => f.severity === 'BLOCKER' || f.severity === 'MAJOR')
 const verdicts = []
 for (const b of chunk(majors, 4)) {
   const res = await parallel(b.map(f => () =>
-    agent(`${COMMON}\n## ADVERSARIALLY REFUTE finding ${f.id} [${f.severity}] (lens ${f.lens}; file ${f.file}; ${f.family || ''})\nCLAIM: ${f.claim}\nGo to the actual artifact (\`git show ${CFG.artifactRef}:${f.file}\`) + spec; try to REFUTE it. Default REFUTED if you cannot independently reproduce the defect. CONFIRMED only if you reproduce it. PARTIAL if real but mis-severity.`,
+    agent(`${COMMON}\n## ADVERSARIALLY REFUTE finding ${f.id} [${f.severity}] (lens ${f.lens}; file ${f.file}; ${f.family || ''})\nCLAIM: ${f.claim}\nGo to the actual artifact + spec; try to REFUTE it. Default REFUTED if you cannot independently reproduce the defect. CONFIRMED only if you reproduce it. PARTIAL if real but mis-severity.`,
       { label: `verify:${f.id}`, phase: 'Verify', schema: VERDICT_SCHEMA })))
   verdicts.push(...res.filter(Boolean))
 }
 
-// 4. COMPLETENESS CRITIC — fresh gap-hunt
+// ===== 4. COMPLETENESS CRITIC — fresh gap-hunt + LENS-GAP detector =====
 phase('Completeness')
-const critic = await agent(`${COMMON}\n## COMPLETENESS CRITIC (fresh, independent)\nThe council + verify just ran. What did the WHOLE panel MISS? (a) which spec/invariant/requirement has NO covering finding/coverage? (b) which adversary path / failure mode untested? (c) a whole dimension or lens uncovered? Independently spot-check the spec against the artifact. Return a prose GAP list (each: what's missing + severity + why + recommended action). If no real gap, say so explicitly.`,
+const critic = await agent(`${COMMON}\n## COMPLETENESS CRITIC (fresh, independent) + LENS-GAP detector\nThe ${LENSES.length}-lens council (auto-composed by a lens-architect) + verify just ran. Two jobs: (1) what did the panel MISS — which spec/invariant/obligation/adversary-path has NO covering finding? (2) **LENS-GAP**: did the lens-architect MISS A LENS this artifact needed (a whole dimension no lens examined)? Name it explicitly — it feeds the next round's architect. Independently spot-check the spec vs the artifact. Return a prose GAP list (each: what's missing + severity + why + recommended action) + an explicit MISSED-LENSES list (or "none"). The composed lens set was: ${JSON.stringify(LENSES.map(l => l.key))}.`,
   { label: 'completeness-critic', phase: 'Completeness' })
 
-// 5. CONVERGE — refuse on partial panel
+// ===== 5. CONVERGE — refuse on partial panel =====
 phase('Converge')
 const confirmed = verdicts.filter(v => v.verdict === 'CONFIRMED' || v.verdict === 'PARTIAL')
-const converge = await agent(`${COMMON}\n## CONVERGENCE CONSOLIDATOR\nPANEL: ${live.length}/${LENSES.length}. **If < ${LENSES.length} returned you MUST NOT certify CONVERGED — call PANEL-INCOMPLETE + name the missing lenses (a rate-limited silence is not an APPROVE).**\nINPUTS:\n- findings (${(structured?.findings || []).length}): ${JSON.stringify(structured?.findings || [], null, 1)}\n- adversarial verdicts on BLK/MAJ: ${JSON.stringify(verdicts, null, 1)}\n- confirmed/partial after verify: ${confirmed.length}\n- completeness-critic gaps:\n${critic}\nPRODUCE: (1) CONVERGENCE CALL = CONVERGED / NOT-CONVERGED / PANEL-INCOMPLETE (CONVERGED requires full panel AND zero CONFIRMED BLOCKER AND zero CONFIRMED MAJOR; REFUTED don't count; MINOR/OBS + genuine-named-deferrals don't block but MUST be named). (2) triage table (every CONFIRMED finding + disposition per HARD-RULE-12). (3) the FIX work-list vs the named carry-list. (4) crisp summary for orchestrator + Ben.`,
+const converge = await agent(`${COMMON}\n## CONVERGENCE CONSOLIDATOR\nPANEL: ${live.length}/${LENSES.length}. **If < ${LENSES.length} returned you MUST NOT certify CONVERGED — call PANEL-INCOMPLETE + name missing lenses.** Convergence bar for this artifact (from the lens-architect): "${lensSet.convergence_bar}".\nINPUTS:\n- findings (${(structured?.findings || []).length}): ${JSON.stringify(structured?.findings || [], null, 1)}\n- adversarial verdicts: ${JSON.stringify(verdicts, null, 1)}\n- confirmed/partial: ${confirmed.length}\n- completeness-critic (incl. MISSED-LENSES):\n${critic}\nPRODUCE: (1) CONVERGENCE CALL = CONVERGED / NOT-CONVERGED / PANEL-INCOMPLETE (CONVERGED requires full panel AND zero CONFIRMED BLOCKER AND zero CONFIRMED MAJOR AND no MISSED-LENS that could hide a BLK/MAJ; REFUTED don't count; MINOR/OBS + named-deferrals don't block but MUST be named). (2) triage table (every CONFIRMED finding + disposition). (3) FIX work-list vs named carry-list. (4) any MISSED-LENSES to add next round. (5) crisp summary for orchestrator + Ben.`,
   { label: 'converge', phase: 'Converge' })
 
-return { panel: `${live.length}/${LENSES.length}`, structured, verdicts, critic, converge }
+return { tier: TIER, lensSet, panel: `${live.length}/${LENSES.length}`, structured, verdicts, critic, converge }
