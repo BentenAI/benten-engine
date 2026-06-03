@@ -12,7 +12,10 @@
 //! Pin sources (canonical R0.5 design = `e4fbfe73:.addl/phase-4-meta/`
 //! `f-full-r0-plan.md`):
 //!   - §3.3 "Layer-C — encrypt-to-recipient (HPKE + MLKEM768-X25519 +
-//!     multi-stanza; Sealed-Sender DEFAULT)".
+//!     multi-stanza; Sealed-Sender DEFAULT)". §3.3:484 — the on-wire AAD
+//!     "carries only audience + coarse epoch"; post Ben-RULING-#1 / M-14 the
+//!     coarse-epoch is OFF the drop wire, so the single-recipient drop AAD
+//!     binds the **audience** (the spec-mandated recipient-targeting field).
 //!   - §4.0 codepoint table: `0x647A` HYBRID_X25519_MLKEM768 (real X-Wing
 //!     SHA3-256, ChaCha20-Poly1305 bulk); `0x6500` LAYER_C_DROP
 //!     (plaintext-sender, non-default); `0x6510`
@@ -24,8 +27,9 @@
 //!     recipient_key_generation)` (U17); BE endianness; a dedicated
 //!     `aad_version: u8` prefix DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`
 //!     (U1/U3/U14) — see the AAD_VERSION note below (R4-FIX F4-004/005).
-//!   - Inv-16 (envelope-unification) + Inv-18 (paired Sealed-Sender
-//!     disclosure satisfied by `0x6510` being DEFAULT).
+//!   - Inv-16 (envelope-unification: the `Recipient` `BindingContext` carries
+//!     `{audience_did, recipient_key_generation}`) + Inv-18 (paired
+//!     Sealed-Sender disclosure satisfied by `0x6510` being DEFAULT).
 //!   - R2 landscape `db2d7d6d:.addl/phase-4-meta/f-full-r2-test-landscape.md`
 //!     §1 Group 7: F-LC-1 (~4-6), F-LC-2 (~6-8), F-LC-3 (~7-10).
 //!
@@ -80,7 +84,9 @@
 //!     residual-metadata mitigation-roadmap framing (U22–U28), NOT a mandate
 //!     that the Layer-C drop wire carries a coarse-epoch field. Drops are
 //!     "forever-valid (per #62; freshness rides recipient-key-generation +
-//!     the nonce-cache, NOT a timestamp)".
+//!     the nonce-cache, NOT a timestamp)". The single-recipient drop AAD
+//!     therefore binds the **audience** (recipient-targeting) but NEITHER
+//!     timestamp NOR coarse bucket.
 //! The original Layer-C `BindingContext` + seal fns carried a `coarse_epoch:
 //! u64` (4 mentions), contradicting M-14 and disagreeing with the Layer-D
 //! drop sibling `f_ld_8` (0 mentions). The fix: REMOVE `coarse_epoch` from
@@ -93,25 +99,38 @@
 //! coarse-epoch on the Layer-C drop wire, re-add it symmetrically to
 //! `f_ld_8` + the §4.1 FREEZE table. Both stubs now agree on NEITHER.]
 //!
-//! # R4.4-FIX (CLUSTER-1 MAJOR) — byte-0 anti-conflation guard MIRRORED here.
+//! # R4.4-FIX (CLUSTER-1 MAJOR) — single-recipient AAD = sibling union; byte-0 guard.
 //!
-//! This file already (a) defines `const AAD_VERSION: u8 = 0x01`, (b) pushes
-//! it as the per-stanza plaintext-AAD byte-0 (F4-004/005), and (c) carries no
-//! `coarse_epoch` (F4-006). What it was MISSING — relative to the sibling
-//! `f_lc_abuse` — was an EXPLICIT byte-0 anti-conflation ASSERTION + a frozen
-//! golden-hex for the group plaintext-AAD layout. Without that, a future edit
-//! reverting `plaintext_aad_bytes`' leading `out.push(AAD_VERSION)` to
-//! `out.push(ENVELOPE_FORMAT_VERSION)` (the exact F4-004/005 conflation) would
-//! ship undetected, and the two sibling files would silently re-diverge on the
-//! `0x6510`/`0x6520` envelope-AAD. The CLUSTER-1 reconciliation mirrors the
-//! guard here: a NEW arm (`f_lc_2_group_stanza_aad_byte0_is_aad_version_…`)
-//! drives the DETERMINISTIC `plaintext_aad_bytes()` on a directly-constructed
-//! stanza (the seal fns are `unimplemented!()` at red-phase, so the golden-hex
-//! is driven through the serializer helper, not the panicking seal), and
-//! asserts: byte-0 == `AAD_VERSION` (≠ `ENVELOPE_FORMAT_VERSION`), the BE
-//! codepoint pair, and a FROZEN golden-hex. Both sibling files now carry the
-//! same one-canonical-field-set + byte-0-guard discipline for the `0x65xx`
-//! drop/recipient band.
+//! The R4.3 CLUSTER-1 reconciliation aligned the `f_lc_abuse` /
+//! `f_lc_hpke` siblings on the byte-0 / `coarse_epoch` axes for the GROUP
+//! (`0x6520`) stanza — but left the `f_lc_hpke` **single-recipient**
+//! `DropSealedSender` binding stale on the **audience** axis. The sibling
+//! `f_lc_abuse::SealedSenderAad` (and the Inv-16 `Recipient` `BindingContext`
+//! in `f_inv16_1`) bind the canonical `0x6510` envelope-AAD union
+//! `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+//! and freeze a golden (`F_INV18_1_SEALED_AAD_HEX`); the `f_lc_hpke`
+//! `DropSealedSender` here bound only `{codepoint, body_cid,
+//! recipient_key_generation}` — NO `aad_version`, NO `audience` — and froze
+//! no single-recipient golden (its `serialize`/`plaintext_aad_bytes` were
+//! unimplemented for `HpkeBase`). That is the audience-axis divergence
+//! (F-NEW-SS-AUD): an R5 impl that freezes this file's field-set would drop
+//! the spec-mandated recipient-audience binding (§3.3:484), while one that
+//! freezes the sibling golden would break cross-engine AEAD-open against the
+//! audience-less form. The CLUSTER-1 audience-axis fix:
+//!   - `DropSealedSender` GAINS `aad_version` + `audience_did` so its bound
+//!     field-set is the canonical union, BYTE-IDENTICAL to
+//!     `f_lc_abuse::SealedSenderAad` (and the Inv-16 `Recipient` binding);
+//!   - a DETERMINISTIC `BindingContext::DropSealedSender::plaintext_aad_`
+//!     `bytes()` serializer reproduces the SAME frozen golden
+//!     (`F_LC_SEALED_SENDER_AAD_HEX` == the sibling's
+//!     `F_INV18_1_SEALED_AAD_HEX`) so the two files CANNOT silently
+//!     re-diverge on the `0x6510` single-recipient envelope AAD;
+//!   - a NEW arm asserts byte-0 == `AAD_VERSION` (≠ `ENVELOPE_FORMAT_VERSION`),
+//!     the BE codepoint, the audience binding present, the sender-DID absent,
+//!     and the FROZEN golden (mirrors the group byte-0 guard for `0x6520`).
+//! Both sibling files now carry the SAME one-canonical-field-set + byte-0
+//! anti-conflation guard for BOTH the `0x6510` single-recipient AND the
+//! `0x6520` group AAD layouts across the `0x65xx` drop/recipient band.
 //!
 //! # R4.3-FIX (F4-018 MINOR) — per-object length-prefix WIDTH note (§4.1).
 //!
@@ -123,6 +142,9 @@
 //! widths cannot silently "break the other golden." The per-object widths
 //! are therefore acceptable BUT must be written down (not implicit). The
 //! frozen per-object widths:
+//!   - **Layer-C single-recipient `0x6510` AAD** (THIS file): `audience_len:
+//!     u16 BE` (matches the sibling `f_lc_abuse::serialize_sealed_sender_aad`
+//!     EXACTLY — the shared golden depends on it).
 //!   - **Layer-C group stanza AAD** (THIS file): `recipient_count: u16 BE`
 //!     and each per-recipient-DID `len: u16 BE` (a Layer-C drop band caps
 //!     recipient-DID lists well under 2^16; the band stays u16 for compact
@@ -134,7 +156,8 @@
 //! (belongs-named-now): §4.1 GAINS an explicit per-object width sub-row at
 //! the doc-wave (Layer-C drop band u16; membership/Layer-D u32). If a shared
 //! Layer-C TLV helper is later introduced, converge it to this u16 contract;
-//! it MUST NOT silently widen to u32 and re-freeze the `0x6520` golden.
+//! it MUST NOT silently widen to u32 and re-freeze the `0x6510`/`0x6520`
+//! goldens.
 //!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
@@ -172,9 +195,9 @@
 //! consequence + is would-FAIL-if-no-op'd. Seal/open bodies
 //! `unimplemented!()` so a forgotten stub at R5 PANICS (the opposite of a
 //! silent-green SHAPE-trap); the AAD-serialization helpers are
-//! DETERMINISTIC so the Sealed-Sender wire-scan is computable green at
-//! red-phase. NEVER `assert_eq!(CONST, CONST_VAL)`; NEVER a
-//! zero-assertion arm.
+//! DETERMINISTIC so the Sealed-Sender wire-scan + frozen-golden pins are
+//! computable green at red-phase. NEVER `assert_eq!(CONST, CONST_VAL)`;
+//! NEVER a zero-assertion arm.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -191,8 +214,8 @@
 // hermetic. The seal/open bodies `unimplemented!()` so the runtime arms
 // only pass once R5 wires the real production path (and the `#[ignore]`
 // is lifted). The AAD-serialization helpers ARE implemented
-// deterministically so the Sealed-Sender wire-scan (F4-003) is meaningful
-// at red-phase.
+// deterministically so the Sealed-Sender wire-scan (F4-003) + the frozen
+// single-recipient/group AAD goldens (CLUSTER-1) are meaningful at red-phase.
 mod layer_c_stub {
     /// Wave-0 envelope-format version (M-18/M-19/M-20). V2 from commit 1.
     /// This is the envelope SERIALIZATION-format byte (the `format_version`
@@ -202,9 +225,10 @@ mod layer_c_stub {
 
     /// The frozen AAD version prefix byte (R0.5 §4.1: dedicated
     /// `aad_version: u8` prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`;
-    /// U1/U3/U14). Mirrors the MembershipSet sibling `f_aad_2`'s
-    /// `AAD_VERSION = 0x01` so the two engines freeze the SAME leading AAD
-    /// byte for the identical §4.1 prefix (R4.3-FIX F4-004/005).
+    /// U1/U3/U14). Mirrors the MembershipSet sibling `f_aad_2` AND the
+    /// Layer-C sibling `f_lc_abuse`'s `AAD_VERSION = 0x01` so the engines
+    /// freeze the SAME leading AAD byte for the identical §4.1 prefix
+    /// (R4.3-FIX F4-004/005 + R4.4-FIX CLUSTER-1).
     pub const AAD_VERSION: u8 = 0x01;
 
     // §4.0 codepoint integers — Layer-C drop / recipient band. Wire-locked.
@@ -221,11 +245,23 @@ mod layer_c_stub {
     /// A sender DID, modeled as raw bytes (`did:key` multibase string in
     /// production).
     pub type SenderDid = Vec<u8>;
+    /// An audience DID (the recipient-targeting identity bound in the
+    /// single-recipient drop AAD), modeled as raw bytes.
+    pub type AudienceDid = Vec<u8>;
     /// A content CID (the body-CID bound in AAD).
     pub type BodyCid = [u8; 32];
 
     /// The typed `BindingContext` (`#[non_exhaustive]` in production). The
     /// stub enumerates only the Layer-C drop variants this file pins.
+    ///
+    /// R4.4-FIX CLUSTER-1: BOTH single-recipient drop variants bind the
+    /// canonical `0x65xx` envelope-AAD prefix
+    /// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+    /// — BYTE-IDENTICAL to the sibling `f_lc_abuse::SealedSenderAad` and the
+    /// Inv-16 `Recipient` `BindingContext`. The `audience_did` is the
+    /// recipient-targeting binding the spec mandates (§3.3:484). The
+    /// plaintext-sender variant ADDS the sender-DID (U4); the Sealed-Sender
+    /// variant does NOT (it lives inside the ciphertext).
     ///
     /// R4.3-FIX F4-006: NEITHER drop variant carries a `coarse_epoch` (nor
     /// `sealed_at`/`valid_until`). Per M-14 + §4.1 FREEZE, DropToRecipient
@@ -236,25 +272,104 @@ mod layer_c_stub {
     #[non_exhaustive]
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub enum BindingContext {
-        /// Plaintext-sender drop (`0x6500`): sender-DID is bound INTO the
-        /// AAD (U4) — i.e. it IS on the wire in the serialized envelope.
-        /// Carries NEITHER timestamp NOR coarse-epoch (M-14; F4-006).
+        /// Plaintext-sender drop (`0x6500`, NON-default): binds the canonical
+        /// audience prefix PLUS the sender-DID (U4) — i.e. the sender-DID IS
+        /// on the wire in the serialized envelope. Carries NEITHER timestamp
+        /// NOR coarse-epoch (M-14; F4-006).
         DropPlaintextSender {
+            aad_version: u8,
             codepoint: u16,
+            audience_did: AudienceDid,
             body_cid: BodyCid,
+            recipient_key_generation: u32,
             sender_did: SenderDid,
-            recipient_key_generation: u32,
         },
-        /// Sealed-Sender drop (`0x6510`, DEFAULT): the AAD carries ONLY the
-        /// audience binding (codepoint + body-CID + recipient_key_generation);
-        /// the sender-DID lives INSIDE the ciphertext (HPKE inner-payload)
-        /// and is recovered post-decrypt. Carries NEITHER timestamp NOR
-        /// coarse-epoch (M-14; F4-006).
+        /// Sealed-Sender drop (`0x6510`, DEFAULT): the AAD binds the canonical
+        /// `0x65xx` envelope union
+        /// `{aad_version, codepoint, audience, body_cid,
+        /// recipient_key_generation}` — the `audience_did` is the
+        /// recipient-targeting binding (§3.3:484); the sender-DID lives INSIDE
+        /// the ciphertext (HPKE inner-payload) and is recovered post-decrypt.
+        /// Carries NEITHER timestamp NOR coarse-epoch (M-14; F4-006). This is
+        /// BYTE-IDENTICAL to the sibling `f_lc_abuse::SealedSenderAad`
+        /// (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD).
         DropSealedSender {
+            aad_version: u8,
             codepoint: u16,
+            audience_did: AudienceDid,
             body_cid: BodyCid,
             recipient_key_generation: u32,
         },
+    }
+
+    impl BindingContext {
+        /// PRODUCTION helper — the canonical PLAINTEXT single-recipient drop
+        /// AAD bytes (what a relay reads in the clear). DETERMINISTIC +
+        /// big-endian (M-19). BYTE-IDENTICAL to the sibling
+        /// `f_lc_abuse::serialize_sealed_sender_aad` for the Sealed-Sender
+        /// (`0x6510`) variant so the two files freeze the SAME golden and
+        /// cannot silently re-diverge (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD).
+        ///
+        /// Layout (BE) — the canonical `0x65xx` envelope union; R4.3-FIX
+        /// F4-004/005 (`aad_version` byte-0, distinct from `format_version`)
+        /// + F4-018 (`audience_len: u16 BE`, matching the sibling EXACTLY):
+        ///   aad_version       : u8  (= AAD_VERSION = 0x01; NOT format ver)
+        ///   codepoint         : u16 BE
+        ///   audience_len      : u16 BE
+        ///   audience_did      : audience_len bytes
+        ///   body_cid          : 32 bytes
+        ///   recipient_key_gen : u32 BE
+        ///   [plaintext-sender ONLY] sender_len u16 BE || sender_did bytes
+        #[must_use]
+        pub fn plaintext_aad_bytes(&self) -> Vec<u8> {
+            let mut out = Vec::new();
+            match self {
+                BindingContext::DropSealedSender {
+                    aad_version,
+                    codepoint,
+                    audience_did,
+                    body_cid,
+                    recipient_key_generation,
+                } => {
+                    // R4.3-FIX F4-004/005: dedicated AAD version byte (0x01),
+                    // NOT the envelope format version (2). Reconciles to the
+                    // sibling/membership AAD golden's leading byte.
+                    out.push(*aad_version);
+                    out.extend_from_slice(&codepoint.to_be_bytes());
+                    push_audience(&mut out, audience_did);
+                    out.extend_from_slice(body_cid);
+                    out.extend_from_slice(&recipient_key_generation.to_be_bytes());
+                }
+                BindingContext::DropPlaintextSender {
+                    aad_version,
+                    codepoint,
+                    audience_did,
+                    body_cid,
+                    recipient_key_generation,
+                    sender_did,
+                } => {
+                    out.push(*aad_version);
+                    out.extend_from_slice(&codepoint.to_be_bytes());
+                    push_audience(&mut out, audience_did);
+                    out.extend_from_slice(body_cid);
+                    out.extend_from_slice(&recipient_key_generation.to_be_bytes());
+                    // Non-default plaintext-sender variant ONLY (U4): the
+                    // sender-DID is appended into the PLAINTEXT AAD.
+                    let len = u16::try_from(sender_did.len()).expect("sender DID len fits u16");
+                    out.extend_from_slice(&len.to_be_bytes());
+                    out.extend_from_slice(sender_did);
+                }
+            }
+            out
+        }
+    }
+
+    /// R4.3-FIX F4-018: Layer-C drop band uses a `u16 BE` audience length
+    /// prefix (matches the sibling `f_lc_abuse::serialize_sealed_sender_aad`).
+    fn push_audience(out: &mut Vec<u8>, audience_did: &[u8]) {
+        let aud_len = u16::try_from(audience_did.len()).expect("audience DID len fits u16");
+        out.extend_from_slice(&aud_len.to_be_bytes());
+        out.extend_from_slice(audience_did);
     }
 
     /// A single recipient stanza of an `HpkeMultiBase` group envelope.
@@ -374,13 +489,15 @@ mod layer_c_stub {
 
     /// PRODUCTION call site — single-recipient HPKE-base seal (`0x647A`)
     /// under the Sealed-Sender DEFAULT (`0x6510`): the sender-DID is bound
-    /// INSIDE the ciphertext, NOT in the AAD.
+    /// INSIDE the ciphertext, NOT in the AAD; the AAD binds the `audience`
+    /// (recipient-targeting) + body-CID + recipient_key_generation.
     ///
     /// R4.3-FIX F4-006: NO `coarse_epoch` parameter — DropToRecipient carries
     /// NEITHER timestamp NOR coarse bucket (M-14). Freshness rides
     /// `recipient_key_generation` + the nonce-cache.
     pub fn seal_sealed_sender(
         _recipient_pk: &RecipientPubKey,
+        _audience_did: &AudienceDid,
         _sender_did: &SenderDid,
         _body_cid: &BodyCid,
         _recipient_key_generation: u32,
@@ -391,11 +508,12 @@ mod layer_c_stub {
 
     /// PRODUCTION call site — single-recipient HPKE-base seal under the
     /// plaintext-sender NON-DEFAULT path (`0x6500`): sender-DID bound INTO
-    /// the AAD (U4).
+    /// the AAD (U4); the AAD also binds the `audience` (recipient-targeting).
     ///
     /// R4.3-FIX F4-006: NO `coarse_epoch` parameter (M-14).
     pub fn seal_plaintext_sender(
         _recipient_pk: &RecipientPubKey,
+        _audience_did: &AudienceDid,
         _sender_did: &SenderDid,
         _body_cid: &BodyCid,
         _recipient_key_generation: u32,
@@ -462,10 +580,23 @@ mod layer_c_stub {
 
     /// PRODUCTION call site — canonical serialize to wire bytes (V2 + BE).
     /// What the relay sees on the network. The serialized form concatenates
-    /// every stanza's PLAINTEXT AAD (clear) + the opaque sealed/wrapped
-    /// material (`sealed_inner` + `wrapped_cek`, opaque to the relay).
+    /// the PLAINTEXT AAD (clear) + the opaque sealed/wrapped material
+    /// (`enc`/`sealed_inner` + `ciphertext`/`wrapped_cek`, opaque to relay).
     pub fn serialize(_env: &EncryptedEnvelope) -> Vec<u8> {
         unimplemented!("R5 wires benten_drop::layer_c::serialize")
+    }
+
+    /// PRODUCTION helper — the PLAINTEXT AAD region of a serialized
+    /// SINGLE-RECIPIENT envelope (the bytes a relay reads in the clear,
+    /// EXCLUDING the opaque `enc` + `ciphertext`). DETERMINISTIC so the
+    /// single-recipient Sealed-Sender wire-scan + frozen golden are
+    /// computable at red-phase (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD).
+    #[must_use]
+    pub fn single_plaintext_aad_region(env: &EncryptedEnvelope) -> Vec<u8> {
+        match env {
+            EncryptedEnvelope::HpkeBase { binding, .. } => binding.plaintext_aad_bytes(),
+            EncryptedEnvelope::HpkeMultiBase { .. } => Vec::new(),
+        }
     }
 
     /// PRODUCTION helper — the concatenated PLAINTEXT AAD region of a
@@ -531,11 +662,12 @@ fn to_hex(bytes: &[u8]) -> String {
 fn f_lc_1_hpke_base_single_recipient_round_trips() {
     let pk = fixed_pk(0x01);
     let sk = fixed_sk(0x01);
+    let audience = did("did:key:zRecipientAudience");
     let sender = did("did:key:zAlice");
     let body_cid = fixed_body_cid(0xC1);
     let plaintext = b"layer-c single recipient payload".to_vec();
 
-    let env = seal_sealed_sender(&pk, &sender, &body_cid, 0, &plaintext);
+    let env = seal_sealed_sender(&pk, &audience, &sender, &body_cid, 0, &plaintext);
     let (recovered, recovered_sender) = open_single(&sk, &env)
         .expect("intended recipient MUST open the HPKE-base single-recipient envelope");
 
@@ -560,10 +692,11 @@ fn f_lc_1_hpke_base_single_recipient_round_trips() {
 fn f_lc_1_wrong_recipient_sk_fails_to_open() {
     let pk = fixed_pk(0x02);
     let wrong_sk = fixed_sk(0x77); // NOT the matching sk for pk
+    let audience = did("did:key:zRecipientAudience");
     let sender = did("did:key:zAlice");
     let body_cid = fixed_body_cid(0xC2);
 
-    let env = seal_sealed_sender(&pk, &sender, &body_cid, 0, b"secret");
+    let env = seal_sealed_sender(&pk, &audience, &sender, &body_cid, 0, b"secret");
     let outcome = open_single(&wrong_sk, &env);
 
     assert!(
@@ -582,6 +715,7 @@ fn f_lc_1_wrong_recipient_sk_fails_to_open() {
 fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
     let env = seal_sealed_sender(
         &fixed_pk(0x03),
+        &did("did:key:zRecipientAudience"),
         &did("did:key:zAlice"),
         &fixed_body_cid(0xC3),
         0,
@@ -983,36 +1117,161 @@ fn f_lc_2_group_stanza_aad_byte0_is_aad_version_not_format_version_and_frozen_la
 // Highest-novelty surface (R2 §1 Group 7). The metadata posture IS the
 // wire contract.
 
-/// F-LC-3 PIN 1 — on the DEFAULT (`0x6510`) path the serialized wire
+/// The deterministic single-recipient `0x6510` Sealed-Sender envelope-AAD
+/// fixture. Built DIRECTLY (the seal fns `unimplemented!()` at red-phase) so
+/// the canonical `BindingContext::plaintext_aad_bytes()` serializer is driven
+/// without panicking. The values are IDENTICAL to the sibling
+/// `f_lc_abuse::f_inv18_1_sealed_aad_fixture` so the two files freeze the
+/// SAME golden (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD):
+///   aad_version 0x01 | codepoint 0x6510 |
+///   audience "did:key:zRecipientAudienceUNIQUE" (32 bytes) |
+///   body_cid [0xE0, 0; 31] | recipient_key_generation 0.
+fn f_lc_3_sealed_sender_aad_fixture() -> BindingContext {
+    let mut body_cid = [0u8; 32];
+    body_cid[0] = 0xE0;
+    BindingContext::DropSealedSender {
+        aad_version: AAD_VERSION, // 0x01 (dedicated AAD prefix, NOT format ver 0x02)
+        codepoint: DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510
+        audience_did: did("did:key:zRecipientAudienceUNIQUE"),
+        body_cid,
+        recipient_key_generation: 0,
+    }
+}
+
+/// FROZEN big-endian golden vector for the DEFAULT (`0x6510`) single-recipient
+/// Sealed-Sender envelope AAD — the canonical union
+/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`,
+/// NO sender-DID region, NO coarse_epoch (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD /
+/// F4-006). This literal is BYTE-IDENTICAL to the sibling
+/// `f_lc_abuse::F_INV18_1_SEALED_AAD_HEX` (computed once from the shared BE
+/// layout via a throwaway script, M-20). R5 confirms-or-deliberately-updates
+/// it against the real encoder. If these two literals ever differ, the siblings
+/// have re-diverged on the `0x6510` envelope AAD (the F-NEW-SS-AUD regression).
+const F_LC_SEALED_SENDER_AAD_HEX: &str =
+    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e49515545e00000000000000000000000000000000000000000000000000000000000000000000000";
+
+/// F-LC-3 PIN 1 (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD) — the DEFAULT (`0x6510`)
+/// single-recipient Sealed-Sender envelope AAD binds the canonical union
+/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
+/// — byte-0 == `AAD_VERSION` (≠ `ENVELOPE_FORMAT_VERSION`), the BE codepoint,
+/// the recipient `audience` present, the sender-DID ABSENT — and reproduces
+/// the FROZEN golden that is BYTE-IDENTICAL to the sibling
+/// `f_lc_abuse::F_INV18_1_SEALED_AAD_HEX`. This closes the audience-axis
+/// divergence: `f_lc_hpke`'s single-recipient binding now matches the sibling
+/// (and the Inv-16 `Recipient` binding) exactly. would-FAIL if the binding
+/// omits the spec-mandated `audience` (§3.3:484), reverts byte-0 to the format
+/// version (the F4-004/005 cross-engine AEAD-open break), re-adds a
+/// coarse_epoch, leaks the sender-DID, or drifts the layout.
+#[test]
+#[ignore = "RED-PHASE: F-LC-3 — single-recipient 0x6510 AAD == canonical union (audience bound, sender absent) + frozen BE golden == sibling (CLUSTER-1 / F-NEW-SS-AUD); un-ignore at R5"]
+fn f_lc_3_sealed_sender_single_recipient_aad_binds_audience_union_and_frozen_golden() {
+    let binding = f_lc_3_sealed_sender_aad_fixture();
+    let audience = did("did:key:zRecipientAudienceUNIQUE");
+    let sender = did("did:key:zSenderAliceUNIQUEMARKER");
+    let bytes = binding.plaintext_aad_bytes();
+
+    // Anti-conflation byte-0 guard (mirrors f_lc_abuse single-recipient).
+    assert_eq!(
+        bytes[0], AAD_VERSION,
+        "F-LC-3 (CLUSTER-1 / F4-004/005): the single-recipient 0x6510 AAD \
+         byte-0 MUST be the dedicated AAD_VERSION (0x01), NOT the envelope \
+         serialization format_version (0x02)."
+    );
+    assert_ne!(
+        bytes[0], ENVELOPE_FORMAT_VERSION,
+        "F-LC-3 (CLUSTER-1): byte-0 MUST NOT be the envelope format version \
+         — the AAD-version axis and the serialization-format axis are \
+         DISTINCT (R0.5 §4.1)."
+    );
+
+    // BE codepoint pair (anti-LE drift, M-19).
+    assert_eq!(
+        &bytes[1..3],
+        &[0x65, 0x10],
+        "F-LC-3 (CLUSTER-1): the Sealed-Sender drop codepoint 0x6510 MUST be \
+         big-endian (0x65,0x10) at offset 1."
+    );
+
+    // The recipient AUDIENCE MUST be bound (§3.3:484 recipient-targeting) —
+    // this is the axis F-NEW-SS-AUD was missing. would-FAIL on the
+    // audience-less form the stale binding froze.
+    let audience_present = bytes.windows(audience.len()).any(|w| w == audience.as_slice());
+    assert!(
+        audience_present,
+        "F-LC-3 (F-NEW-SS-AUD): the single-recipient 0x6510 AAD MUST bind the \
+         recipient AUDIENCE DID (§3.3:484 recipient-targeting). would-FAIL on \
+         the stale audience-less binding that diverged from f_lc_abuse + the \
+         Inv-16 Recipient binding."
+    );
+
+    // The SENDER-DID MUST be ABSENT (Sealed-Sender — it lives inside the
+    // ciphertext, not the AAD).
+    let sender_leaks = bytes.windows(sender.len()).any(|w| w == sender.as_slice());
+    assert!(
+        !sender_leaks,
+        "F-LC-3 (CLUSTER-1): the single-recipient 0x6510 AAD MUST NOT carry \
+         the sender-DID — Sealed-Sender binds it INSIDE the ciphertext."
+    );
+
+    // FROZEN BE layout — and it MUST equal the sibling's golden (shared
+    // literal proves the siblings cannot silently re-diverge).
+    assert_eq!(
+        to_hex(&bytes),
+        F_LC_SEALED_SENDER_AAD_HEX,
+        "F-LC-3 (CLUSTER-1 / F-NEW-SS-AUD): the single-recipient 0x6510 AAD \
+         MUST serialize to the FROZEN canonical union layout (aad_version, \
+         codepoint, audience_len||audience, body_cid, recipient_key_gen) — \
+         BYTE-IDENTICAL to the sibling f_lc_abuse::F_INV18_1_SEALED_AAD_HEX. \
+         If this literal ever differs from the sibling's, the two engines \
+         have re-diverged on the 0x6510 envelope AAD. R5 confirms-or-\
+         deliberately-updates this literal (M-20)."
+    );
+}
+
+/// F-LC-3 PIN 2 — on the DEFAULT (`0x6510`) path the serialized wire
 /// bytes DO NOT contain the sender-DID. The sender-DID is bound INSIDE
 /// the ciphertext (HPKE inner-payload); the on-wire AAD = audience binding
-/// only (codepoint + body-CID + recipient-key-generation; NO timestamp NOR
-/// coarse-epoch — M-14 / F4-006). would-FAIL if the default seal leaks the
+/// (codepoint + audience + body-CID + recipient-key-generation; NO timestamp
+/// NOR coarse-epoch — M-14 / F4-006). would-FAIL if the default seal leaks the
 /// sender-DID into the AAD (the bug `0x6500` deliberately has, that `0x6510`
 /// fixes).
 #[test]
 #[ignore = "RED-PHASE: F-LC-3 — sealed-sender default 0x6510 sender-DID NOT on wire; un-ignore at R5"]
 fn f_lc_3_sealed_sender_default_omits_sender_did_from_wire() {
+    let audience = did("did:key:zRecipientAudienceUNIQUE");
     let sender = did("did:key:zSenderAliceUNIQUEMARKER");
     let env = seal_sealed_sender(
         &fixed_pk(0x50),
+        &audience,
         &sender,
         &fixed_body_cid(0xE0),
         0,
         b"sealed-sender payload",
     );
 
-    // The default seal MUST carry the Sealed-Sender binding (no sender-DID
-    // field in the AAD-bearing binding).
+    // The default seal MUST carry the Sealed-Sender binding (audience bound,
+    // no sender-DID field in the AAD-bearing binding).
     match &env {
         EncryptedEnvelope::HpkeBase {
-            binding: BindingContext::DropSealedSender { codepoint, .. },
+            binding:
+                BindingContext::DropSealedSender {
+                    codepoint,
+                    audience_did,
+                    ..
+                },
             ..
-        } => assert_eq!(
-            *codepoint, DROP_TO_RECIPIENT_SEALED_SENDER,
-            "F-LC-3: the v1-beta DEFAULT MUST be the Sealed-Sender drop \
-             (0x6510)."
-        ),
+        } => {
+            assert_eq!(
+                *codepoint, DROP_TO_RECIPIENT_SEALED_SENDER,
+                "F-LC-3: the v1-beta DEFAULT MUST be the Sealed-Sender drop \
+                 (0x6510)."
+            );
+            assert_eq!(
+                audience_did, &audience,
+                "F-LC-3: the Sealed-Sender drop AAD MUST bind the recipient \
+                 audience DID (§3.3:484)."
+            );
+        }
         _ => panic!(
             "F-LC-3: the default Layer-C seal MUST produce an HpkeBase with \
              a DropSealedSender binding (BR-1). A DropPlaintextSender here \
@@ -1034,17 +1293,19 @@ fn f_lc_3_sealed_sender_default_omits_sender_did_from_wire() {
     );
 }
 
-/// F-LC-3 PIN 2 — PAIRED POSITIVE CONTROL: the NON-default plaintext-sender
+/// F-LC-3 PIN 3 — PAIRED POSITIVE CONTROL: the NON-default plaintext-sender
 /// sibling (`0x6500`) DOES carry the sender-DID on the wire (U4). This is
-/// the control that proves PIN 1 is not vacuously passing because the
+/// the control that proves PIN 2 is not vacuously passing because the
 /// scanner is broken. would-FAIL if `0x6500` ALSO hid the sender-DID
 /// (then the scanner can't tell the two paths apart).
 #[test]
 #[ignore = "RED-PHASE: F-LC-3 — paired control 0x6500 DOES carry sender-DID (U4); un-ignore at R5"]
 fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
+    let audience = did("did:key:zRecipientAudienceUNIQUE");
     let sender = did("did:key:zSenderAliceUNIQUEMARKER");
     let env = seal_plaintext_sender(
         &fixed_pk(0x51),
+        &audience,
         &sender,
         &fixed_body_cid(0xE1),
         0,
@@ -1052,12 +1313,13 @@ fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
     );
 
     // The non-default seal MUST carry the plaintext-sender binding with the
-    // sender-DID bound INTO the AAD (U4).
+    // sender-DID bound INTO the AAD (U4), audience also bound.
     match &env {
         EncryptedEnvelope::HpkeBase {
             binding:
                 BindingContext::DropPlaintextSender {
                     codepoint,
+                    audience_did,
                     sender_did,
                     ..
                 },
@@ -1066,6 +1328,11 @@ fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
             assert_eq!(
                 *codepoint, LAYER_C_DROP,
                 "F-LC-3: the plaintext-sender sibling MUST be 0x6500."
+            );
+            assert_eq!(
+                audience_did, &audience,
+                "F-LC-3: the 0x6500 binding MUST also bind the recipient \
+                 audience DID (§3.3:484)."
             );
             assert_eq!(
                 sender_did, &sender,
@@ -1082,12 +1349,12 @@ fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
         leaks,
         "F-LC-3 PAIRED CONTROL: the NON-default plaintext-sender (0x6500) \
          MUST place the sender-DID on the wire (U4). If this control fails, \
-         the PIN-1 scanner cannot distinguish hiding from a broken scan — \
+         the PIN-2 scanner cannot distinguish hiding from a broken scan — \
          the two paths must differ observably."
     );
 }
 
-/// F-LC-3 PIN 3 — post-decrypt the recovered sender-DID equals the bound
+/// F-LC-3 PIN 4 — post-decrypt the recovered sender-DID equals the bound
 /// sender. The Sealed-Sender property is "hidden on the wire, recovered
 /// by the recipient." would-FAIL if the inner-payload sender-DID is not
 /// recoverable (then Sealed-Sender breaks sender attribution entirely).
@@ -1096,8 +1363,9 @@ fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
 fn f_lc_3_recovered_inner_sender_did_equals_bound() {
     let pk = fixed_pk(0x52);
     let sk = fixed_sk(0x52);
+    let audience = did("did:key:zRecipientAudience");
     let sender = did("did:key:zCarol");
-    let env = seal_sealed_sender(&pk, &sender, &fixed_body_cid(0xE2), 0, b"hi");
+    let env = seal_sealed_sender(&pk, &audience, &sender, &fixed_body_cid(0xE2), 0, b"hi");
 
     let (_pt, recovered_sender) =
         open_single(&sk, &env).expect("recipient MUST open the sealed-sender envelope");
@@ -1109,7 +1377,7 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
     );
 }
 
-/// F-LC-3 PIN 4 — a FORGED inner sender-DID is rejected. The inner
+/// F-LC-3 PIN 5 — a FORGED inner sender-DID is rejected. The inner
 /// sender-DID is bound such that tampering with it fails the post-decrypt
 /// verify (Inv-16 sender-DID-or-Sealed-Sender clause). would-FAIL if the
 /// inner sender-DID is unauthenticated (then anyone can spoof the sender).
@@ -1118,8 +1386,9 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
 fn f_lc_3_forged_inner_sender_did_rejected() {
     let pk = fixed_pk(0x53);
     let sk = fixed_sk(0x53);
+    let audience = did("did:key:zRecipientAudience");
     let sender = did("did:key:zCarol");
-    let env = seal_sealed_sender(&pk, &sender, &fixed_body_cid(0xE3), 0, b"hi");
+    let env = seal_sealed_sender(&pk, &audience, &sender, &fixed_body_cid(0xE3), 0, b"hi");
 
     // Adversary tampers the ciphertext (where the inner sender-DID lives).
     let mut tampered = env.clone();
