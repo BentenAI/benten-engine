@@ -10,10 +10,15 @@
 //!   - **F-LC-6** `recipient_key_generation` + `k_principal_generation`
 //!     staleness rejection (U19/U20).
 //!
-//! Pin sources (spec of record = R0.5; minted against R0.3 =
+//! Pin sources (spec of record is now **R0.7** =
+//! `111cca9c:.addl/phase-4-meta/f-full-r0-plan.md`; minted against R0.3 =
 //! `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`; §-numbers below are
-//! stable R0.3→R0.5 — verified vs the R0.5 plan at
-//! `phase-4-meta-core/f-full-r0-plan-r05`):
+//! stable R0.3→R0.5→R0.7 — DUAL-CID / generation-staleness surface is
+//! byte-unchanged R0.5→R0.7. R0.7 adds ONE precision: the abstract
+//! `plaintext_cid_set` "HMAC" blinding is `blake3::keyed_hash(K_Set, ·)` —
+//! the native BLAKE3 keyed MAC (no hmac/sha2 dep; bytes unchanged), the SAME
+//! primitive `f_aad_2`'s `membership_set_id_commitment` + the §3.9 gossip
+//! topic use (see `blind_set_cid` doc below):
 //!   - §3.3 DUAL-CID (Q3, U18): `envelope_blob_cid = BLAKE3(serialized
 //!     EncryptedEnvelope)` (changes on reseal) vs `plaintext_cid =
 //!     BLAKE3(canonical DropBundlePayload)` (stable, graph-referenced);
@@ -70,7 +75,13 @@ mod two_cid_stub {
     /// is the transport handle (changes on reseal). `plaintext_cid_local`
     /// is LOCAL-ONLY (never serialized to any wire artifact);
     /// `plaintext_cid_set` is HMAC-blinded under `K_Set` for set-scoped
-    /// dedup without cross-set linkage.
+    /// dedup without cross-set linkage. **R0.7 precision:** the abstract
+    /// `HMAC` here is `blake3::keyed_hash(K_Set, ·)` — BLAKE3's native keyed
+    /// MAC (no hmac/sha2 dep; truncate-to-32 is the native BLAKE3 width); the
+    /// abstract name is kept, the bytes are unchanged. This is the SAME keyed
+    /// MAC the sibling `f_aad_2`'s `membership_set_id_commitment` + the §3.9
+    /// gossip topic use; R5 routes all three through the real
+    /// `benten-crypto-suite` keyed MAC over `K_Set`.
     #[derive(Debug, Default)]
     pub struct TwoCidStore {
         /// plaintext_cid → envelope_blob_cid (transport handle).
@@ -124,9 +135,16 @@ mod two_cid_stub {
 
     /// PRODUCTION call site — the HMAC-blinded `plaintext_cid_set` under a
     /// per-set key `K_Set`. A bit-flip in `K_Set` MUST change the output
-    /// (no cross-set linkage). Inputs HMAC'd as BE bytes (M-20).
+    /// (no cross-set linkage). Inputs HMAC'd as BE bytes (M-20). **R0.7
+    /// precision:** the `HMAC` here is `blake3::keyed_hash(K_Set, ·)` —
+    /// BLAKE3's native keyed MAC (no hmac/sha2 dep; truncate-to-32 = the
+    /// native BLAKE3 output width); the abstract name is kept, the bytes are
+    /// unchanged. IDENTICAL primitive to the sibling `f_aad_2`'s
+    /// `membership_set_id_commitment` keyed MAC + the §3.9 gossip-topic
+    /// construction; R5 routes through the real `benten-crypto-suite` keyed
+    /// MAC over `K_Set`.
     pub fn blind_set_cid(_plaintext_cid: &Cid, _k_set: &[u8; 32]) -> Cid {
-        unimplemented!("R5 wires plaintext_cid_set HMAC-blinding")
+        unimplemented!("R5 wires plaintext_cid_set HMAC-blinding (blake3::keyed_hash over K_Set)")
     }
 
     /// PRODUCTION call site — collect EVERY wire-serialization surface
