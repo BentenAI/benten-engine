@@ -1,5 +1,32 @@
 # F-full R0 implementation plan — encryption substrate + MembershipSet primitive (Phase-4-Meta-Core)
 
+> **R0.7 — `blake3::keyed_hash` precision + `0x6520` group-AAD blinding (Ben-ratified 2026-06-04).** Two
+> freeze-record updates on top of R0.6. **(1) Construction-name precision (no byte change):** everywhere this
+> doc writes the MembershipSet set-id commitment / §3.9 gossip topic as `HMAC(K_Set, …)`, the FROZEN primitive
+> is **`blake3::keyed_hash(K_Set, …)`** — BLAKE3's native keyed MAC (the membership-set crate has NO hmac/sha2
+> dependency; BLAKE3-keyed IS a MAC; truncate-to-32 is the native BLAKE3 output width), reused from the §3.9
+> gossip topic; R5 routes both through the real `benten-crypto-suite` keyed MAC over `K_Set`. The abstract name
+> `HMAC` is kept as the role-label; the bytes/construction are UNCHANGED. Sites clarified: §3.3 (commitment
+> def), §3.9 (gossip topic), §3.10 (`0x6610` 11-field block), §4.1 (`0x6610` row). **(2) `0x6520` group AAD
+> BLINDED (NEW wire change):** `0x6520 = LAYER_C_DROP_MULTI_RECIPIENT` (`EnvelopePayload::HpkeMultiBase` —
+> the Layer-C **multi-recipient** group send; NOT a MembershipSet) carries the SAME recipient-roster
+> social-graph leak (#61-class) as `0x6610`, with the same un-retrofittable-past-freeze deadline → it is
+> blinded the same way: **`audience_set_commitment (32B) = BLAKE3(0x01 ‖ lp(did_0) ‖ lp(did_1) ‖ …)`** over the
+> canonical SORTED recipient-DID list (lp = u32-BE length prefix) REPLACES the raw sorted recipient-DID-list;
+> **`stanza_count` is bound alongside `stanza_index`** (truncation/censorship defense); **`body_cid` becomes a
+> self-describing CIDv1** (`0x01 0x71 0x1e 0x20 ‖ 32-byte BLAKE3`). UNLIKE `0x6610`, `0x6520` is NOT a
+> MembershipSet so it carries **NO `membership_set_id_commitment`, NO `membership_set_generation`, NO
+> `role_assignments_generation`**. The Layer-C drop-band field widths are PRESERVED (the §4.0
+> width-unification-REJECTED note governs — `recipient_count` stays u16 BE per the band). All bindings
+> (cross-stanza substitution U17; inter-member non-forgeability) PRESERVED; the relay sees only an opaque
+> 32-byte tag. HONEST SCOPE: identity-HIDING not unlinkability (the commitment recurs for a static recipient
+> set); full per-send unlinkability = **U25, CODEPOINT-RESERVE for v1-GM**, additive with no wire break. Edit
+> sites: §3.3 (new `0x6520` blinded field-set + blinding rationale), §4.0 (`0x6520` row → point at field-set),
+> §4.1 (`0x6520` row → point at field-set + new `0x6520` AAD-field-set row). **NOTE:** the f_lc_hpke F-LC-2
+> corpus `0x6520` assembler + `F_LC_2_GROUP_STANZA_AAD_HEX` golden are the pre-blinding shape and MUST be
+> migrated to this blinded field-set at R4.6/R5 (R0.7 deliberately RE-OPENS `0x6520`, superseding the corpus
+> "not re-opened by R0.6" note).
+>
 > **R0.6 — Sealed-Sender AAD freeze record (Ben-ratified after a 6-lens design council, 2026-06-03).** This
 > revises R0.5 with **7 RATIFIED Sealed-Sender envelope-AAD freeze decisions** (the v1-beta wire that freezes
 > at G-CORE-9; AAD = authenticated-not-encrypted, i.e. plaintext on the wire): **(1)** `0x6510` single-recipient
@@ -522,7 +549,11 @@ authenticated-not-encrypted, i.e. plaintext on the wire).**
     recipient-DID list (replaces the prior raw `sorted recipient-DID-list`).
   - **`membership_set_id_commitment = HMAC(K_Set, "benten:setid:v1" || membership_set_id)` truncated to 32
     bytes** — the SAME construction §3.9 already uses for the gossip topic (replaces the prior raw
-    `membership_set_id`).
+    `membership_set_id`). **Frozen primitive (R0.7 precision):** `HMAC` here denotes
+    **`blake3::keyed_hash(K_Set, "benten:setid:v1" || membership_set_id)`** — BLAKE3's native keyed MAC, NOT
+    HMAC-SHA256 (`benten-membership-set` carries no hmac/sha2 dep; BLAKE3-keyed IS a MAC; truncate-to-32 is the
+    native BLAKE3 output width). The abstract name is kept; the bytes are unchanged. R5 routes through the real
+    `benten-crypto-suite` keyed MAC over `K_Set`.
   - **`stanza_count` is bound alongside `stanza_index`** as a truncation/censorship defense: without it an
     active relay can silently drop trailing stanzas to censor a co-recipient and each surviving stanza still
     verifies.
@@ -533,6 +564,35 @@ Compromise #61 blinding posture (set-identifying material is never published in 
 group AAD obey that rule. Recipients hold `K_Set` + the member list, so they recompute + verify both
 commitments — ALL binding properties (cross-stanza substitution U17; inter-member non-forgeability) are
 PRESERVED; the relay sees only opaque 32-byte tags.
+
+- **`0x6520` `LAYER_C_DROP_MULTI_RECIPIENT` group per-stanza AAD (BLINDED; RATIFIED R0.7).** `0x6520` is the
+  Layer-C **multi-recipient** group send (`EnvelopePayload::HpkeMultiBase`) — DISTINCT from the `0x6610`
+  MembershipSet group; it is NOT a MembershipSet. It carries the SAME recipient-roster social-graph leak
+  (#61-class) as `0x6610`, with the same un-retrofittable-past-freeze deadline, so it is BLINDED the same way.
+  Frozen on-wire AAD (BE; everything authenticated-not-encrypted): `{ aad_version (0x01, u8), codepoint
+  (0x6520, u16 BE), body_cid (self-describing CIDv1, 36B), recipient_count (u16 BE), audience_set_commitment (32B), stanza_index
+  (u32 BE), stanza_count (u32 BE), recipient_key_generation (u32 BE) }`. The
+  **sealed-inner-sender-DID stays INSIDE the ciphertext** per stanza (post-decrypt-verified; F-LC-9 / BR-1) —
+  NOT a plaintext AAD field. Three fields change from the prior raw `0x6520` shape:
+  - **`audience_set_commitment = BLAKE3(0x01 || lp(did_0) || lp(did_1) || …)`** over the CANONICAL SORTED
+    recipient-DID list (lp = u32-BE length prefix) — the IDENTICAL construction to `0x6610` — REPLACES the
+    prior raw `sorted recipient-DID-list (len u16 BE || bytes per DID)`.
+  - **`stanza_count` is bound alongside `stanza_index`** (relay-truncation/censorship defense — an active
+    relay cannot silently drop trailing stanzas; each survivor fails the bound count).
+  - **`body_cid` is a self-describing CIDv1** (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3 digest` = 36 bytes),
+    NOT a bare fixed-32 (CLAUDE.md baked-in #5; restores U3 length-injectivity) — consistent with
+    `0x6510`/`0x6610`.
+  - **UNLIKE `0x6610`:** `0x6520` is NOT a MembershipSet, so it carries **NO `membership_set_id_commitment`,
+    NO `membership_set_generation`, NO `role_assignments_generation`** (those are MembershipSet-only fields).
+  - **Field widths follow the Layer-C drop band, NOT the MembershipSet band** (the §4.0
+    width-unification-REJECTED note governs): `recipient_count` is **u16 BE** (the band's existing
+    convention), the same per-band width the prior raw `0x6520` shape used for its recipient cardinality.
+  - **Rationale (freeze record):** same #61 / §3.9 anti-fingerprint posture as `0x6610` — recipients hold the
+    member list and recompute + verify `audience_set_commitment`; the relay sees only an opaque 32-byte tag;
+    all bindings (cross-stanza substitution U17; inter-member non-forgeability) PRESERVED. **Honest scope:**
+    identity-HIDING not unlinkability (the commitment recurs for a static recipient set); full per-send
+    unlinkability = **U25, CODEPOINT-RESERVE for v1-GM**, additive with no wire break.
+
 
 **HONEST SCOPE of the blinding (freeze record).** This achieves identity-HIDING, NOT unlinkability — the same
 commitment recurs for a static group, so a network observer can still link sends to "the same unknown group."
@@ -802,7 +862,10 @@ increments MUST NOT merge into the winner (archived-not-discarded). NQ-D2 (R2) p
 ### §3.9 Transport / D6 (iroh-gossip privacy) + convergence model (M-10)
 
 `TransportConfig` — iroh-gossip impl ships at v1-beta behind `GossipPlusBlobs` (BC-7). Privacy (P2 D6):
-HMAC-blinded topic `topic = HMAC(K_Set, membership_set_id || generation_summary)` (truncated) + fork-rotation
+HMAC-blinded topic `topic = HMAC(K_Set, membership_set_id || generation_summary)` (truncated; **R0.7
+precision: the frozen primitive is `blake3::keyed_hash(K_Set, membership_set_id || generation_summary)` — the
+SAME BLAKE3-keyed MAC used for `membership_set_id_commitment`, truncate-to-32 being the native BLAKE3 width;
+no hmac/sha2 dep; bytes unchanged**) + fork-rotation
 (topic rotates on fork) + OOB rendezvous (bootstrap invite via a Layer-C Drop-bundle). The blinded-topic is
 keying-derived crypto wire (frozen-crypto rule); the transport selection itself is a runtime/network +
 codepoint-dispatch concern (NOT graph-data). Closes Compromise **#61** (fingerprint-leak via gossip topic).
@@ -838,7 +901,9 @@ time-bucket (m-11). OOB-bootstrap first-contact metadata residue cross-links #43
   inner-payload sender-DID, NOT an on-wire plaintext field. **Two fields are BLINDED** (per Compromise #61 /
   §3.9 posture): `audience_set_commitment = BLAKE3(0x01 || lp(did_0) || lp(did_1) || …)` over the canonical
   SORTED recipient-DID list (replaces the raw member-DID-list), and `membership_set_id_commitment =
-  HMAC(K_Set, "benten:setid:v1" || membership_set_id)` truncated to 32 bytes (the §3.9 gossip-topic
+  HMAC(K_Set, "benten:setid:v1" || membership_set_id)` truncated to 32 bytes — **R0.7 precision: `HMAC` here
+  is `blake3::keyed_hash(K_Set, …)`, BLAKE3's native keyed MAC (no hmac/sha2 dep; truncate-to-32 = native
+  BLAKE3 width; bytes unchanged)** — (the §3.9 gossip-topic
   construction; replaces the raw `membership_set_id`). **`stanza_count` is bound alongside `stanza_index`** as
   a truncation/censorship defense (an active relay cannot silently drop trailing stanzas — each survivor would
   fail the bound count). Recipients hold `K_Set` + the member list ⇒ recompute + verify both commitments ⇒ all
@@ -933,7 +998,7 @@ horizon). The frozen-crypto rule (§1.5) is applied throughout.
 | `0x647c` | `CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY` | Cipher / swap-matrix | reserved-named (in-tree; typed-reject; audit-gated) | Inv-17: never LIVE at v1-beta/v1-GM |
 | `0x6500` | `LAYER_C_DROP` (plaintext-sender) | Layer-C drop / recipient band | **FREEZE** (non-default sibling) | U4 sender-DID-in-AAD applies here |
 | `0x6510` | `DROP_TO_RECIPIENT_SEALED_SENDER` | Layer-C drop / recipient band | **FREEZE + SHIP — v1-beta DEFAULT (BR-1)** | sender-DID inside ciphertext; #43-improving |
-| `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` (`HpkeMultiBase` group) | Layer-C group multi-stanza | **FREEZE** | U17 cross-stanza AAD defense |
+| `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` (`HpkeMultiBase` group) | Layer-C group multi-stanza | **FREEZE** | U17 cross-stanza AAD defense; **per-stanza AAD BLINDED (R0.7) — see §3.3 / §4.1 `0x6520` AAD field-set** (audience_set_commitment + stanza_count + self-describing body_cid; NOT a MembershipSet — no set-id/generation fields) |
 | `0x6310..0x631F` | DeviceLink band | Layer-D device-link | **FREEZE** | `ProvisioningOffer`/`Payload`/`InnerPayload` |
 | `0x6320..0x632F` | RemotePermission band | Layer-D remote-permission | **FREEZE** | `PermissionRequest`/`PermissionGrant`; incl. `ExecuteWorkflow` reserve |
 | `0x6380..0x638F` | **MLS-Application** | FS-future bracket | **CODEPOINT-RESERVE** | U13 (9-eyes; NOT MembershipSet) |
@@ -968,12 +1033,13 @@ would benefit from a unified width, and unifying them would be a wire-break for 
 | `EnvelopePayload::SymmetricAead [u8;12]` (ChaCha20-Poly1305) | **FREEZE** | U12 |
 | `EnvelopePayload::SymmetricAeadXNonce [u8;24]` (XChaCha20-Poly1305; **Layer-A vault uses THIS** — m-4) | **FREEZE** | U12/U32 (ship both at v1-beta) |
 | `EnvelopePayload::HpkeBase[MLKEM768-X25519]` (Layer-C single / Layer-D wraps) at `0x647A` | **FREEZE** | C-5; HPKE-11-KE (Q4); real X-Wing (BR-3) |
-| `EnvelopePayload::HpkeMultiBase` (group multi-stanza) at `0x6520` | **FREEZE** | U17; cross-stanza AAD defense |
+| `EnvelopePayload::HpkeMultiBase` (group multi-stanza) at `0x6520` | **FREEZE** | U17; cross-stanza AAD defense; **per-stanza AAD BLINDED (R0.7) — see the `0x6520` AAD field-set row below** |
 | **Sealed-Sender `DROP_TO_RECIPIENT_SEALED_SENDER` at `0x6510`** | **FREEZE + SHIP — v1-beta DEFAULT (BR-1)** | flips from R0.1 CODEPOINT-RESERVE; ships at Core; pulls #59/#63 abuse-control into Core; R1-Q-2 |
 | Plaintext-sender `LAYER_C_DROP` at `0x6500` (non-default sibling) | **FREEZE** | U4 sender-DID-in-AAD; Compromise #43 (now improved by default-Sealed-Sender) |
 | AAD codepoint binding + `aad_version: u8` prefix + canonical-TLV length-injective | **FREEZE** | U1/U3/U14 |
 | **`0x6510` single-recipient AAD field-set** = `{aad_version(0x01,u8), codepoint(0x6510,u16 BE), audience(recipient DID, u32-BE length-prefixed), body_cid(self-describing CIDv1), recipient_key_generation(u32 BE)}` (minimal-sufficient union, Option A) | **FREEZE** | D1; NO stanza-index / NO sender_did (sealed inside ciphertext) / NO coarse_epoch; `body_cid` self-describing (D3; #5) |
-| **`0x6610` group per-stanza AAD field-set** = `{aad_version(0x01,u8), codepoint(0x6610,u16 BE), body_cid(self-describing CIDv1), member_count(u32 BE), audience_set_commitment(32B), stanza_index(u32 BE), stanza_count(u32 BE), member_key_generation(u32 BE), membership_set_id_commitment(32B), membership_set_generation(u32 BE), role_assignments_generation(u32 BE)}` (11 fields; BLINDED) | **FREEZE** | D2; `audience_set_commitment`=BLAKE3 over sorted DIDs + `membership_set_id_commitment`=HMAC(K_Set,"benten:setid:v1"‖id)/32 (§3.9 / #61); `stanza_count` truncation-defense (D4); sealed-sender-DID inside ciphertext; identity-HIDING not unlinkable (U25 v1-GM) |
+| **`0x6610` group per-stanza AAD field-set** = `{aad_version(0x01,u8), codepoint(0x6610,u16 BE), body_cid(self-describing CIDv1), member_count(u32 BE), audience_set_commitment(32B), stanza_index(u32 BE), stanza_count(u32 BE), member_key_generation(u32 BE), membership_set_id_commitment(32B), membership_set_generation(u32 BE), role_assignments_generation(u32 BE)}` (11 fields; BLINDED) | **FREEZE** | D2; `audience_set_commitment`=BLAKE3 over sorted DIDs + `membership_set_id_commitment`=HMAC(K_Set,"benten:setid:v1"‖id)/32 — **R0.7: `HMAC`=`blake3::keyed_hash` (native BLAKE3 keyed MAC; no hmac/sha2 dep; bytes unchanged)** — (§3.9 / #61); `stanza_count` truncation-defense (D4); sealed-sender-DID inside ciphertext; identity-HIDING not unlinkable (U25 v1-GM) |
+| **`0x6520` group per-stanza AAD field-set** = `{aad_version(0x01,u8), codepoint(0x6520,u16 BE), body_cid(self-describing CIDv1, 36B), recipient_count(u16 BE), audience_set_commitment(32B), stanza_index(u32 BE), stanza_count(u32 BE), recipient_key_generation(u32 BE)}` (8 fields; BLINDED; NOT a MembershipSet) | **FREEZE** | R0.7; Layer-C multi-recipient group (`HpkeMultiBase`); `audience_set_commitment`=BLAKE3(0x01‖lp(did)…) over sorted recipient DIDs (replaces raw roster); `stanza_count` truncation-defense; `body_cid` self-describing (#5); NO membership_set_id/generation/role fields (NOT `0x6610`); `recipient_count` u16 BE per Layer-C drop band (§4.0 width-unification-rejected); sealed-sender-DID inside ciphertext (F-LC-9); identity-HIDING not unlinkable (U25 v1-GM); **corpus F-LC-2 assembler+golden migrate at R4.6/R5** |
 | `sealed_at` + `valid_until` epoch (DeviceLink + RemotePermission **ONLY** — M-14) | **FREEZE** | U5; coarse 1-hour bucket (U28) is **Layer-D-ONLY (RULING-1 / §3.10)**; **DropToRecipient + the `0x6510`/`0x6610` AAD carry NO coarse_epoch** — Sealed-Sender Drop freshness rides recipient-key-generation + the nonce-cache, NOT a time field |
 | **BE endianness** — ALL multiformats-framed integer wire/AAD fields → BE. **Complete M-19 site-list:** codepoint `aead.rs:165` + AAD `chunk_index`/`total_chunks`/`recipe_index`/`total_recipes` `aead.rs:244,277` + `aead_wrap.rs` + platform-foundation + **`structural_kdf.rs:157`** + **`varsig.rs:47` + `varsig.rs:107`** + **`sizes.rs:183`** + **`swap_matrix.rs:1539,1540,1548,1550`**; `ENVELOPE_FORMAT_VERSION_V2` | **FREEZE** | Q2 / U7 / M-19; X-Wing corrective bundles this; conformance test asserts no `to_le_bytes` survives on any wire/AAD/keying path |
 | DUAL-CID (`envelope_blob_cid` + `plaintext_cid`; MembershipSet adds `plaintext_cid_local` LOCAL-ONLY + `plaintext_cid_set` HMAC-blinded) — **extends in-tree `TwoCidStore`** | **FREEZE** | Q3 / U18 / F18 / O-3 |
@@ -1623,9 +1689,11 @@ one-per-DID; authority vs confidentiality halves); #19 (Rust engine plugins — 
 
 ---
 
-**End of F-full R0.6 plan-doc.** Supersedes M-CONS-FINAL + the 9-eyes registry + e2r-ffull as the canonical
+**End of F-full R0.7 plan-doc.** Supersedes M-CONS-FINAL + the 9-eyes registry + e2r-ffull as the canonical
 F-full scope (9-eyes wins codepoint collisions); R0.6 adds the 7 Ben-ratified Sealed-Sender AAD freeze
-decisions (the v1-beta envelope wire). Hand to the R1.2 re-review per the iterate-to-convergence discipline.
+decisions (the v1-beta envelope wire); R0.7 adds the `blake3::keyed_hash` construction-name precision + the
+`0x6520` group-AAD blinding (audience_set_commitment + stanza_count + self-describing body_cid). Hand to the
+R1.2 re-review per the iterate-to-convergence discipline.
 
 ---
 
