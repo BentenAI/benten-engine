@@ -15,7 +15,7 @@
 //! - The `members_table` snapshot canonical-CBOR serialization (the
 //!   AAD-bound keying minimum; NQ-W4).
 //! - Per-Kind constructors + cardinality validation; the **`0x6610` group
-//!   AAD = the BLINDED 11-field set** assembly (R0.6 §3.10/§4.1; supersedes
+//!   AAD = the BLINDED 11-field set** assembly (R0.7 §3.10/§4.1; supersedes
 //!   the prior "9-tuple" framing) → **OPAQUE bytes** handed to the
 //!   crypto-suite (m-15 GNC-5; no reverse dep); the fork-tie-break (Inv-21)
 //!   CRDT rule; the federation recursion-bound (Inv-20 clause-k).

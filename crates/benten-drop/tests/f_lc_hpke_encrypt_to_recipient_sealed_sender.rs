@@ -13,7 +13,9 @@
 //!
 //! Pin sources — spec of record is now **R0.7** (`111cca9c:.addl/phase-4-meta/`
 //! `f-full-r0-plan.md`); the `0x6510` single-recipient field-set is the
-//! R0.5/R0.6-frozen union (R0.7 §4.1:1040 leaves it byte-unchanged), the
+//! R0.7-frozen union whose `audience` is `u32-BE-length-prefixed` (R0.7
+//! header:33 / §3.3:539 / §4.1:1040 — **R4.6-FIX F-LC-AUD-U32 corrected the
+//! prior u16-length-prefix slip**), the
 //! `0x6520` group per-stanza AAD is the **R0.7-RE-OPENED BLINDED** field-set
 //! (R0.7 §3.3:568-594 / §4.1:1042):
 //!   - **§3.3 / §4.1 `0x6520`** ("Layer-C `LAYER_C_DROP_MULTI_RECIPIENT` group
@@ -180,10 +182,13 @@
 //! Both sibling files now carry the SAME one-canonical-field-set + byte-0
 //! anti-conflation guard for BOTH the `0x6510` single-recipient AND the
 //! `0x6520` group AAD layouts across the `0x65xx` drop/recipient band. The
-//! `0x6510` single-recipient AAD is NOT re-opened by R0.7 (R0.7 §4.1:1040
-//! leaves it byte-unchanged); only the `0x6520` group AAD is blinded.
+//! `0x6510` single-recipient AAD field-SET is unchanged by R0.7, but its
+//! `audience` length-prefix WIDTH is corrected u16→`u32-BE` (R4.6-FIX
+//! F-LC-AUD-U32; R0.7 §4.1:1040 freezes the `0x6510` audience at
+//! `u32-BE-length-prefixed`); the `0x6520` group AAD is additionally blinded.
 //!
 //! # R4.3-FIX (F4-018 MINOR) — per-object length-prefix WIDTH note (§4.1).
+//! # R4.6-FIX (F-LC-AUD-U32 BLOCKER) — `0x6510` audience length-prefix = u32-BE.
 //!
 //! The §4.1 canonical-TLV contract is "length-injective" (U3) — satisfied by
 //! ANY injective length-prefix width; it does NOT mandate one global width.
@@ -191,17 +196,31 @@
 //! (Layer-C `0x6500`/`0x6510`/`0x6520`; MembershipSet `0x6600`/`0x6610`;
 //! Layer-D `0x6310`/wraps), NOT one shared TLV encoder — so distinct-per-object
 //! widths cannot silently "break the other golden." The per-object widths
-//! are therefore acceptable BUT must be written down (not implicit). The
-//! frozen per-object widths:
-//!   - **Layer-C single-recipient `0x6510` AAD** (THIS file): `audience_len:
-//!     u16 BE` (matches the sibling `f_lc_abuse::serialize_sealed_sender_aad`
-//!     EXACTLY — the shared golden depends on it).
+//! are therefore acceptable BUT must be written down (not implicit), and where
+//! R0.7 FREEZES a specific width it is BINDING (NOT a free choice). The frozen
+//! per-object widths:
+//!   - **Layer-C single-recipient `0x6510` AAD** (THIS file): `audience` is a
+//!     `u32-BE` length-prefixed recipient DID — **R0.7 header:33 / §3.3:539 /
+//!     §4.1:1040 freeze the `0x6510` audience at `u32-BE-length-prefixed`**
+//!     with ZERO u16 authorization. **R4.6-FIX (F-LC-AUD-U32):** the prior
+//!     `audience_len: u16 BE` was a "settled-territory" wire-byte SLIP — it
+//!     conflated the audience-DID length-prefix (a variable-field lp, frozen
+//!     u32-BE consistent with the membership / Layer-D / commitment-internal
+//!     u32-BE lp convention) with the `0x6520` band's `recipient_count`
+//!     CARDINALITY field (a count, correctly u16 per §4.0). The audience field
+//!     is NOT a cardinality field; §4.0 width-unification-REJECTED governs the
+//!     `recipient_count` cardinality, NOT the audience length-prefix. The
+//!     sibling `f_lc_abuse::serialize_sealed_sender_aad` migrates in lockstep
+//!     (the shared golden `F_LC_SEALED_SENDER_AAD_HEX == F_INV18_1_SEALED_AAD_HEX`
+//!     stays byte-identical, now with the u32-BE prefix).
 //!   - **Layer-C group `0x6520` stanza AAD** (THIS file): `recipient_count:
-//!     u16 BE` is the band's cardinality width; the `audience_set_commitment`
-//!     hash internally uses a **u32-BE** per-DID length prefix (the
-//!     IDENTICAL construction to `0x6610` — these two widths are SEPARATE
-//!     axes and MUST NOT be conflated; the band's u16 governs the on-wire
-//!     `recipient_count`, the u32-BE lp governs only the bytes fed to BLAKE3).
+//!     u16 BE` is the band's CARDINALITY width (a count, NOT a length-prefix;
+//!     §4.0 width-unification-REJECTED governs it — stays u16); the
+//!     `audience_set_commitment` hash internally uses a **u32-BE** per-DID
+//!     length prefix (the IDENTICAL construction to `0x6610`). The on-wire
+//!     `recipient_count` cardinality (u16) and the variable-field length
+//!     prefixes (u32-BE: the `0x6510` audience + the commitment-internal lp)
+//!     are SEPARATE axes and MUST NOT be conflated.
 //!   - **MembershipSet 11-field-set AAD** (`f_aad_2`): per-field `len: u32 BE`
 //!     (the §3.10/§4.1 BLINDED 11-field set).
 //!   - **Layer-D ExecuteWorkflow AAD** (`f_ld_3`): `executor_did len: u32
@@ -451,10 +470,12 @@ mod layer_c_stub {
         ///
         /// Layout (BE) — the canonical `0x65xx` envelope union; R4.3-FIX
         /// F4-004/005 (`aad_version` byte-0, distinct from `format_version`)
-        /// + F4-018 (`audience_len: u16 BE`, matching the sibling EXACTLY):
+        /// + R4.6-FIX F-LC-AUD-U32 (`audience_len: u32 BE` per R0.7
+        /// header:33 / §3.3:539 / §4.1:1040 — corrected from the prior u16
+        /// slip; matches the sibling EXACTLY):
         ///   aad_version       : u8  (= AAD_VERSION = 0x01; NOT format ver)
         ///   codepoint         : u16 BE
-        ///   audience_len      : u16 BE
+        ///   audience_len      : u32 BE
         ///   audience_did      : audience_len bytes
         ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
         ///   recipient_key_gen : u32 BE
@@ -503,10 +524,14 @@ mod layer_c_stub {
         }
     }
 
-    /// R4.3-FIX F4-018: Layer-C drop band uses a `u16 BE` audience length
-    /// prefix (matches the sibling `f_lc_abuse::serialize_sealed_sender_aad`).
+    /// R4.6-FIX F-LC-AUD-U32: the `0x6510` single-recipient AAD `audience` is a
+    /// `u32-BE` length-prefixed recipient DID — R0.7 header:33 / §3.3:539 /
+    /// §4.1:1040 freeze it at `u32-BE-length-prefixed` (corrected from the prior
+    /// u16 slip that conflated this variable-field lp with the `0x6520` band's
+    /// `recipient_count` cardinality). Matches the sibling
+    /// `f_lc_abuse::serialize_sealed_sender_aad` (migrated in lockstep).
     fn push_audience(out: &mut Vec<u8>, audience_did: &[u8]) {
-        let aud_len = u16::try_from(audience_did.len()).expect("audience DID len fits u16");
+        let aud_len = u32::try_from(audience_did.len()).expect("audience DID len fits u32");
         out.extend_from_slice(&aud_len.to_be_bytes());
         out.extend_from_slice(audience_did);
     }
@@ -1454,8 +1479,9 @@ fn f_lc_2_commitment_uses_u32_be_lp_identical_to_0x6610() {
 // F-LC-3 — Sealed-Sender DEFAULT (0x6510): sender-DID NOT on the wire.
 // ===========================================================================
 // Highest-novelty surface (R2 §1 Group 7). The metadata posture IS the
-// wire contract. NOT re-opened by R0.7 (R0.7 §4.1:1040 leaves the 0x6510
-// single-recipient field-set byte-unchanged); only 0x6520 is blinded.
+// wire contract. The 0x6510 single-recipient field-SET is byte-stable across
+// R0.7, but its `audience` length-prefix WIDTH is corrected u16→u32-BE
+// (R4.6-FIX F-LC-AUD-U32; R0.7 §4.1:1040); 0x6520 is additionally blinded.
 
 /// The deterministic single-recipient `0x6510` Sealed-Sender envelope-AAD
 /// fixture. Built DIRECTLY (the seal fns `unimplemented!()` at red-phase) so
@@ -1484,16 +1510,19 @@ fn f_lc_3_sealed_sender_aad_fixture() -> BindingContext {
 
 /// FROZEN big-endian golden vector for the DEFAULT (`0x6510`) single-recipient
 /// Sealed-Sender envelope AAD — the canonical union
-/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`,
-/// NO sender-DID region, NO coarse_epoch (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD /
-/// F4-006). This literal is BYTE-IDENTICAL to the sibling
-/// `f_lc_abuse::F_INV18_1_SEALED_AAD_HEX` (computed once from the shared BE
-/// layout via a throwaway script, M-20). NOT re-opened by R0.7. R5
-/// confirms-or-deliberately-updates it against the real encoder. If these two
-/// literals ever differ, the siblings have re-diverged on the `0x6510`
-/// envelope AAD (the F-NEW-SS-AUD regression).
+/// `{aad_version, codepoint, audience(u32-BE length-prefixed), body_cid,
+/// recipient_key_generation}`, NO sender-DID region, NO coarse_epoch (R4.4-FIX
+/// CLUSTER-1 / F-NEW-SS-AUD / F4-006). **R4.6-FIX F-LC-AUD-U32:** the `audience`
+/// length-prefix is `u32-BE` (`00000020` for the 32-byte fixture DID) per R0.7
+/// header:33 / §3.3:539 / §4.1:1040 — corrected from the prior u16 (`0020`)
+/// slip; the golden grew +2 bytes (77→79). This literal stays BYTE-IDENTICAL to
+/// the sibling `f_lc_abuse::F_INV18_1_SEALED_AAD_HEX` (both migrate u16→u32 in
+/// lockstep; computed once from the shared BE layout via a throwaway script,
+/// M-20). R5 confirms-or-deliberately-updates it against the real encoder. If
+/// these two literals ever differ, the siblings have re-diverged on the
+/// `0x6510` envelope AAD (the F-NEW-SS-AUD regression).
 const F_LC_SEALED_SENDER_AAD_HEX: &str =
-    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
+    "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-LC-3 PIN 1 (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD) — the DEFAULT (`0x6510`)
 /// single-recipient Sealed-Sender envelope AAD binds the canonical union
@@ -1535,6 +1564,25 @@ fn f_lc_3_sealed_sender_single_recipient_aad_binds_audience_union_and_frozen_gol
         &[0x65, 0x10],
         "F-LC-3 (CLUSTER-1): the Sealed-Sender drop codepoint 0x6510 MUST be \
          big-endian (0x65,0x10) at offset 1."
+    );
+
+    // R4.6-FIX F-LC-AUD-U32: the `audience` length-prefix MUST be u32-BE
+    // (R0.7 header:33 / §3.3:539 / §4.1:1040 freeze the 0x6510 audience at
+    // `u32-BE-length-prefixed`). For the 32-byte fixture DID that is the four
+    // bytes `00 00 00 20` at offset 3 (immediately after aad_version[0] +
+    // codepoint[1..3]). would-FAIL on a u16 (`00 20`) regression — the prior
+    // "settled-territory" slip that conflated this variable-field lp with the
+    // 0x6520 band's `recipient_count` cardinality (which is correctly u16).
+    assert_eq!(
+        &bytes[3..7],
+        &(audience.len() as u32).to_be_bytes(),
+        "F-LC-3 (R4.6 / F-LC-AUD-U32): the 0x6510 audience length-prefix MUST \
+         be u32-BE ({:?} for the {}-byte audience DID), NOT u16. R0.7 \
+         header:33 / §3.3:539 / §4.1:1040 freeze the audience at \
+         `u32-BE-length-prefixed`. would-FAIL if the serializer regressed to \
+         a u16 prefix (the F-LC-AUD-U32 wire-byte slip).",
+        (audience.len() as u32).to_be_bytes(),
+        audience.len()
     );
 
     // The recipient AUDIENCE MUST be bound (§3.3:484 recipient-targeting) —

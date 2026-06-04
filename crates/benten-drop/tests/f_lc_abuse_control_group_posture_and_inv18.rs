@@ -21,7 +21,9 @@
 //!     default = exactly `{audience}`; `0x6500` discloses sender-DID-in-AAD
 //!     (U4).
 //!
-//! Pin sources (R0.5 = `e4fbfe73:.addl/phase-4-meta/f-full-r0-plan.md`):
+//! Pin sources — spec of record is now **R0.7**
+//! (`111cca9c:.addl/phase-4-meta/f-full-r0-plan.md`; the §-numbers below are
+//! stable across the R0.5→R0.6→R0.7 revisions; R0.5 was `e4fbfe73`):
 //!   - §3.3 FS-gap honest disclosure (#42/#56/#62); §3.11 Sealed-Sender
 //!     abuse-control mechanism (BR-1 — recipient-issued delivery tokens;
 //!     refused BEFORE decrypt; per-token rate-limit + revocation via UCAN
@@ -59,7 +61,7 @@
 //! a drop sealed by the other. The reconciliation (one canonical field-set):
 //!   - **`coarse_epoch` is REMOVED from the `0x6510` envelope AAD** (and from
 //!     the token-binding AAD — see below). This is decided by the spec, not a
-//!     wire-byte fork: **M-14** (R0.5 §3.10/§4.1 + §1570) "DropToRecipient
+//!     wire-byte fork: **M-14** (R0.7 §3.10/§4.1 + §1570) "DropToRecipient
 //!     carries **NEITHER**"; the **§4.1 FREEZE row** "coarse 1-hour bucket
 //!     (U28) … DropToRecipient carries NEITHER"; **Ben-RULING-#1**
 //!     (2026-06-03) "coarse_epoch is NOT on the Drop wire (§4.1/M-14)";
@@ -90,7 +92,7 @@
 //!     pin fails any revert to the format byte (F4-004/005; load-bearing, not
 //!     advisory).
 //!
-//! **F4-004/005 (MAJOR).** Spec R0.5 §4.1 freezes a dedicated
+//! **F4-004/005 (MAJOR).** Spec R0.7 §4.1 freezes a dedicated
 //! `aad_version: u8` AAD prefix DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`
 //! (the envelope SERIALIZATION-format byte). `const AAD_VERSION: u8 = 0x01`
 //! (mirroring the sibling Layer-C `f_lc_hpke` + the MembershipSet `f_aad_2`
@@ -179,7 +181,7 @@ mod abuse_stub {
     /// AAD byte `0x02` conflicting with the sibling Layer-C + MembershipSet
     /// golden's `0x01`, breaking cross-engine AEAD-open).
     pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
-    /// The frozen AAD version prefix byte (R0.5 §4.1: dedicated `aad_version: u8`
+    /// The frozen AAD version prefix byte (R0.7 §4.1: dedicated `aad_version: u8`
     /// prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`). Mirrors the
     /// MembershipSet + sibling Layer-C `AAD_VERSION = 0x01` convention so every
     /// engine freezes the SAME leading AAD byte for the identical §4.1 prefix
@@ -272,11 +274,11 @@ mod abuse_stub {
     /// canonical BIG-ENDIAN byte layout. DETERMINISTIC (no maps, no
     /// nondeterministic ordering) so the frozen golden-hex is meaningful.
     ///
-    /// Layout (R0.5 §3.11 + §4.1 BE; M-19) — the canonical `0x6510`
+    /// Layout (R0.7 §3.11 + §4.1 BE; M-19) — the canonical `0x6510`
     /// envelope-AAD prefix + the token window:
     ///   aad_version       : u8  (= AAD_VERSION = 0x01; NOT format ver)
     ///   codepoint         : u16 BE
-    ///   aud_len           : u16 BE
+    ///   aud_len           : u32 BE  (R4.6-FIX F-LC-AUD-U32; R0.7 §4.1:1040)
     ///   audience_did      : aud_len bytes
     ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
     ///   recipient_key_gen : u32 BE
@@ -288,8 +290,12 @@ mod abuse_stub {
         let mut out = Vec::new();
         out.push(aad.aad_version);
         out.extend_from_slice(&aad.codepoint.to_be_bytes());
-        let aud_len = u16::try_from(aad.audience_did.len())
-            .expect("audience DID length must fit u16");
+        // R4.6-FIX F-LC-AUD-U32: u32-BE audience length-prefix (R0.7
+        // header:33 / §3.3:539 / §4.1:1040 — corrected from the prior u16 slip
+        // that conflated this variable-field lp with the 0x6520 band's
+        // recipient_count cardinality). Matches the sibling f_lc_hpke.
+        let aud_len = u32::try_from(aad.audience_did.len())
+            .expect("audience DID length must fit u32");
         out.extend_from_slice(&aud_len.to_be_bytes());
         out.extend_from_slice(&aad.audience_did);
         out.extend_from_slice(&aad.body_cid);
@@ -399,7 +405,7 @@ mod sealed_aad_stub {
     /// DISTINCT from the AAD prefix byte (`AAD_VERSION`) — R4.4-FIX F4-004/005.
     /// NEVER the `aad_version`.
     pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
-    /// The frozen AAD version prefix byte (R0.5 §4.1: dedicated `aad_version: u8`
+    /// The frozen AAD version prefix byte (R0.7 §4.1: dedicated `aad_version: u8`
     /// prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`). Mirrors the
     /// MembershipSet + sibling Layer-C `AAD_VERSION = 0x01` convention
     /// (R4.4-FIX F4-004/005).
@@ -460,7 +466,7 @@ mod sealed_aad_stub {
     /// Layout (BE; M-19):
     ///   aad_version       : u8
     ///   codepoint         : u16 BE
-    ///   aud_len           : u16 BE
+    ///   aud_len           : u32 BE  (R4.6-FIX F-LC-AUD-U32; R0.7 §4.1:1040)
     ///   audience_did      : aud_len bytes
     ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
     ///   recipient_key_gen : u32 BE
@@ -469,8 +475,12 @@ mod sealed_aad_stub {
         let mut out = Vec::new();
         out.push(aad.aad_version);
         out.extend_from_slice(&aad.codepoint.to_be_bytes());
-        let aud_len = u16::try_from(aad.audience_did.len())
-            .expect("audience DID length must fit u16");
+        // R4.6-FIX F-LC-AUD-U32: u32-BE audience length-prefix (R0.7
+        // header:33 / §3.3:539 / §4.1:1040 — corrected from the prior u16 slip
+        // that conflated this variable-field lp with the 0x6520 band's
+        // recipient_count cardinality). Matches the sibling f_lc_hpke.
+        let aud_len = u32::try_from(aad.audience_did.len())
+            .expect("audience DID length must fit u32");
         out.extend_from_slice(&aud_len.to_be_bytes());
         out.extend_from_slice(&aad.audience_did);
         out.extend_from_slice(&aad.body_cid);
@@ -628,12 +638,15 @@ fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
 
 /// FROZEN big-endian golden vector for the token-binding AAD (F4-028).
 /// Computed once from the canonical BE layout (the `0x6510` envelope union
-/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
-/// PLUS the token window `{nbf, exp, rate_limit}`; NO coarse_epoch). ANY
-/// field-order or endianness drift in the real serializer flips this pin.
-/// R5 confirms-or-deliberately-updates this frozen literal against the
-/// real encoder (M-20).
-const F_LC_8_TOKEN_AAD_HEX: &str = "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e0000000000000000000000000000000000000000000000000000000000000000000000000000000001cfde000000000001e847f00000005";
+/// `{aad_version, codepoint, audience(u32-BE length-prefixed), body_cid,
+/// recipient_key_generation}` PLUS the token window `{nbf, exp, rate_limit}`;
+/// NO coarse_epoch). **R4.6-FIX F-LC-AUD-U32:** the `audience` length-prefix is
+/// `u32-BE` (`00000020`) per R0.7 header:33 / §3.3:539 / §4.1:1040 — corrected
+/// from the prior u16 (`0020`) slip; golden grew +2 bytes. ANY field-order or
+/// endianness drift in the real serializer flips this pin. R5
+/// confirms-or-deliberately-updates this frozen literal against the real
+/// encoder (M-20).
+const F_LC_8_TOKEN_AAD_HEX: &str = "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e0000000000000000000000000000000000000000000000000000000000000000000000000000000001cfde000000000001e847f00000005";
 
 /// F-LC-8 PIN 5 (R4-FIX F4-028) — the token-binding AAD serializes to the
 /// FROZEN big-endian byte layout. This pins the wire-affecting sub-field
@@ -668,9 +681,22 @@ fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
          in the token-binding AAD, never little-endian (0x10,0x65)."
     );
 
+    // R4.6-FIX F-LC-AUD-U32: the token-binding AAD reuses the canonical 0x6510
+    // envelope union prefix, so its `audience` length-prefix is ALSO u32-BE
+    // (`00 00 00 20` at offset 3 for the 32-byte fixture DID) per R0.7
+    // §4.1:1040. would-FAIL on a u16 regression (the F-LC-AUD-U32 slip).
+    assert_eq!(
+        &bytes[3..7],
+        &(aad.audience_did.len() as u32).to_be_bytes(),
+        "F-LC-8 (R4.6 / F-LC-AUD-U32): the token-binding AAD audience \
+         length-prefix MUST be u32-BE ({:?}), NOT u16 — it reuses the 0x6510 \
+         envelope union prefix (R0.7 §4.1:1040).",
+        (aad.audience_did.len() as u32).to_be_bytes()
+    );
+
     // R4.4-FIX F4-004/005 anti-conflation pin — AAD byte-0 is the dedicated
     // `aad_version` (= 0x01), NOT the envelope serialization `format_version`
-    // (= 0x02). These are TWO orthogonal version axes (R0.5 §4.1); freezing the
+    // (= 0x02). These are TWO orthogonal version axes (R0.7 §4.1); freezing the
     // format byte here would conflict with the sibling Layer-C + MembershipSet
     // golden (`0x01`) and break cross-engine AEAD-open. would-FAIL if a future
     // edit reverts AAD byte-0 to the format version.
@@ -930,11 +956,16 @@ fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
 
 /// FROZEN big-endian golden vector for the DEFAULT (`0x6510`) on-wire
 /// envelope AAD (F4-029). EXACTLY the canonical union
-/// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
-/// — no sender-DID region, NO coarse_epoch. R5 confirms-or-deliberately-
-/// updates this frozen literal against the real encoder (M-20).
+/// `{aad_version, codepoint, audience(u32-BE length-prefixed), body_cid,
+/// recipient_key_generation}` — no sender-DID region, NO coarse_epoch.
+/// **R4.6-FIX F-LC-AUD-U32:** the `audience` length-prefix is `u32-BE`
+/// (`00000020` for the 32-byte fixture DID) per R0.7 header:33 / §3.3:539 /
+/// §4.1:1040 — corrected from the prior u16 (`0020`) slip; stays BYTE-IDENTICAL
+/// to the sibling `f_lc_hpke::F_LC_SEALED_SENDER_AAD_HEX` (both migrate in
+/// lockstep). R5 confirms-or-deliberately-updates this frozen literal against
+/// the real encoder (M-20).
 const F_INV18_1_SEALED_AAD_HEX: &str =
-    "01651000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
+    "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-INV18-1 PIN 3 (R4-FIX F4-029) — POSITIVE field-set enumeration: the
 /// serialized `0x6510` envelope AAD field-set is EXACTLY the canonical union
@@ -1011,14 +1042,31 @@ fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_the_canonical_union() {
         F_INV18_1_SEALED_AAD_HEX,
         "F-INV18-1 (F4-029): the 0x6510 envelope AAD MUST serialize to the \
          FROZEN big-endian layout containing ONLY the canonical union \
-         {{aad_version, codepoint, audience, body_cid, \
+         {{aad_version, codepoint, audience(u32-BE length-prefixed), body_cid, \
          recipient_key_generation}}. R5 confirms-or-deliberately-updates this \
          literal (M-20)."
     );
 
+    // R4.6-FIX F-LC-AUD-U32: the `audience` length-prefix MUST be u32-BE
+    // (R0.7 header:33 / §3.3:539 / §4.1:1040). For the 32-byte fixture DID
+    // that is `00 00 00 20` at offset 3 (after aad_version[0] + codepoint[1..3]).
+    // would-FAIL on a u16 (`00 20`) regression — the prior settled-territory
+    // slip that conflated this variable-field lp with the 0x6520 band's
+    // recipient_count cardinality. Mirrors the sibling f_lc_hpke F-LC-3 guard.
+    assert_eq!(
+        &bytes[3..7],
+        &(aad.audience_did.len() as u32).to_be_bytes(),
+        "F-INV18-1 (R4.6 / F-LC-AUD-U32): the 0x6510 audience length-prefix \
+         MUST be u32-BE ({:?} for the {}-byte audience DID), NOT u16. R0.7 \
+         §4.1:1040 freezes the audience at `u32-BE-length-prefixed`. would-FAIL \
+         on a u16 regression (the F-LC-AUD-U32 wire-byte slip).",
+        (aad.audience_did.len() as u32).to_be_bytes(),
+        aad.audience_did.len()
+    );
+
     // R4.4-FIX F4-004/005 anti-conflation pin — the DEFAULT AAD byte-0 is the
     // dedicated `aad_version` (= 0x01), NOT the envelope `format_version`
-    // (= 0x02). Distinct version axes (R0.5 §4.1); reconciles to the sibling
+    // (= 0x02). Distinct version axes (R0.7 §4.1); reconciles to the sibling
     // Layer-C + MembershipSet golden's `0x01`. would-FAIL on a revert.
     assert_eq!(
         bytes[0],
