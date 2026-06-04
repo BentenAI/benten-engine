@@ -414,6 +414,7 @@ dependencies = [
  "benten-errors",
  "benten-graph",
  "benten-id",
+ "blake3",
  "serde",
  "serde_bytes",
  "serde_ipld_dagcbor",
