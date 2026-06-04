@@ -1475,6 +1475,65 @@ fn f_lc_2_commitment_uses_u32_be_lp_identical_to_0x6610() {
     );
 }
 
+/// F-LC-2 PIN 10 (R4.6 / F-46-01 — ROSTER-SORT-CANONICAL falsifiability) —
+/// the `audience_set_commitment` is spec-mandated (R0.7 §3.3) over the
+/// **CANONICAL SORTED** recipient-DID list, and `plaintext_aad_bytes` reaches
+/// that canonicalization ONLY through the assembler's internal `.sort()`
+/// (`audience_set_commitment`, lines 386-392 here) — the fixture roster
+/// `[zRecipientA, zRecipientB]` is already lexically sorted, so the existing
+/// frozen-layout / roster-non-leak / lp-width pins all stay GREEN even if a
+/// future R5 edit drops that internal sort. This arm closes that
+/// falsifiability hole: it hands the WHOLE `HpkeRecipientStanza`
+/// serializer an **UNSORTED (reverse-order) roster** and asserts the
+/// `plaintext_aad_bytes()` output is BYTE-IDENTICAL to the sorted-fixture
+/// golden. It MIRRORS the sibling `0x6610` arm
+/// (`f_aad_2::f_aad_2_member_did_list_sort_order_canonical`, F4-012) so the
+/// two engines guard the sort-canonicalization in lockstep. would-FAIL if the
+/// production serializer (or `audience_set_commitment`) regressed to NOT
+/// canonically sorting the roster before deriving the commitment — a silent
+/// cross-engine convergence break (recipients holding the roster in a
+/// different order would recompute a different commitment and fail AEAD-open).
+/// NON-TAUTOLOGICAL: the reversed-roster commitment differs from the sorted
+/// one if the sort is removed (the lp-width PIN 9 already proves the
+/// commitment is perturbation-sensitive).
+#[test]
+#[ignore = "RED-PHASE: F-LC-2 — assembler canonically sorts the recipient roster BEHIND the commitment (unsorted input ⇒ same bytes); un-ignore at R5"]
+fn f_lc_2_group_stanza_aad_unsorted_roster_canonical() {
+    // The sorted-fixture serialization (the frozen golden baseline).
+    let sorted = f_lc_2_group_stanza_fixture();
+    let sorted_bytes = sorted.plaintext_aad_bytes();
+    assert_eq!(
+        to_hex(&sorted_bytes),
+        F_LC_2_GROUP_STANZA_AAD_HEX,
+        "F-LC-2 (R4.6 / F-46-01): the sorted-fixture serialization MUST match \
+         the frozen golden (baseline for the unsorted-equivalence assertion)."
+    );
+
+    // Same recipient SET, presented UNSORTED (reverse order). NO in-body
+    // sort — the assembler (`audience_set_commitment`) must canonicalize
+    // internally before deriving the commitment.
+    let mut reordered = f_lc_2_group_stanza_fixture();
+    reordered.recipient_dids =
+        vec![did("did:key:zRecipientB"), did("did:key:zRecipientA")];
+    let reordered_bytes = reordered.plaintext_aad_bytes();
+
+    assert_eq!(
+        sorted_bytes, reordered_bytes,
+        "F-LC-2 (R4.6 / F-46-01): an UNSORTED-but-equal recipient roster MUST \
+         serialize to IDENTICAL plaintext-AAD bytes — the assembler \
+         canonicalizes (sorts) the roster internally before deriving the \
+         audience_set_commitment (R0.7 §3.3 cross-engine convergence; mirrors \
+         f_aad_2's F4-012 sort-canonical arm). would-FAIL if the internal \
+         .sort() were dropped at R5."
+    );
+    assert_eq!(
+        to_hex(&reordered_bytes),
+        F_LC_2_GROUP_STANZA_AAD_HEX,
+        "F-LC-2 (R4.6 / F-46-01): the unsorted-roster serialization MUST ALSO \
+         reproduce the frozen golden — the sort is fully behind the wire."
+    );
+}
+
 // ===========================================================================
 // F-LC-3 — Sealed-Sender DEFAULT (0x6510): sender-DID NOT on the wire.
 // ===========================================================================

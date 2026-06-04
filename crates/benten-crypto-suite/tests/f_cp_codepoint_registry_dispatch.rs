@@ -214,9 +214,18 @@ fn codepoint_integers_wire_locked_live_arms() {
 }
 
 /// **F-CP-1 (cont.)** — §4.0 NEW codepoint integers wire-locked, with the
-/// load-bearing Sealed-Sender = `0x6510` (the ONE canonical value, §0.4).
+/// load-bearing Sealed-Sender = `0x6510` (the ONE canonical value, §0.4)
+/// AND the two R4.6-corrected band values: MembershipSet group multi-stanza
+/// = `0x6610` (NOT the `0x6600` set-keying value — the slip the R4.5b
+/// migration introduced into "settled" territory, corrected per R0.7
+/// §3.10/§4.1) and Layer-C group multi-stanza = `0x6520` (the blinded
+/// 8-field set's codepoint, R0.7 §3.3/§4.0). These two standalone
+/// value-locks are this registry file's OWN direct defense against a
+/// future single-const edit re-introducing either slip (the cross-file
+/// f_aad_2/f_lc_hpke goldens catch it indirectly; THIS file is the
+/// canonical wire-lock and must lock them explicitly — F-46-03).
 #[test]
-#[ignore = "RED-PHASE: F-CP-1 — §4.0 NEW codepoint integers wire-locked incl. Sealed-Sender 0x6510 (the ONE canonical value); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-CP-1 — §4.0 NEW codepoint integers wire-locked incl. Sealed-Sender 0x6510 (the ONE canonical value) + MembershipSet-group 0x6610 + Layer-C-group 0x6520 (R4.6 corrections); un-ignore at R5"]
 fn new_codepoint_integers_wire_locked() {
     assert_eq!(
         VAULT_ENVELOPE, 0x6100,
@@ -229,6 +238,20 @@ fn new_codepoint_integers_wire_locked() {
     assert_eq!(
         MEMBERSHIP_SET_ENCRYPTION, 0x6600,
         "MembershipSetEncryption RELOCATED to 0x6600 (was M-CONS-FINAL 0x6380 which collided MLS-Application; §0.4)"
+    );
+    assert_eq!(
+        f_cp_stub::MEMBERSHIP_SET_GROUP_MULTI_STANZA, 0x6610,
+        "MembershipSet group multi-stanza is 0x6610 NOT the 0x6600 set-keying value (R0.7 §4.0 \
+         allocation table — THE single source of truth for the integer; §3.10/§4.1 the BLINDED \
+         11-field AAD that binds it; the R4.5b migration slipped this to 0x6600 in 'settled' \
+         territory — locked here so a future single-const edit re-introducing 0x6600 fails THIS \
+         registry test directly, not only via the cross-file f_aad_2 golden)"
+    );
+    assert_eq!(
+        f_cp_stub::LAYER_C_DROP_MULTI_RECIPIENT, 0x6520,
+        "Layer-C group multi-stanza (the blinded 8-field set's codepoint) is 0x6520 (R0.7 §3.3/§4.0; \
+         locked here so a single-const drift fails THIS registry test directly, not only via the \
+         cross-file f_lc_hpke golden)"
     );
 }
 

@@ -10,7 +10,7 @@
 //! A stanza sealed under a stale `role_assignments_generation` is **rejected
 //! at verify** with the NEW ErrorCode `E_ROLE_STALE_AT_VERIFY`. (The
 //! `role_assignments_generation` counter is the 11th field of the `0x6610`
-//! group AAD = the BLINDED 11-field set per R0.6 §3.10/§4.1; supersedes the
+//! group AAD = the BLINDED 11-field set per R0.7 §3.10/§4.1; supersedes the
 //! prior "9-tuple" framing — F-AAD-2.) Sealing at
 //! generation `G` and advancing the set to `G+1` must invalidate the older
 //! stanza at verify time.
