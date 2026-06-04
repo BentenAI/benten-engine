@@ -4,7 +4,7 @@
 //!
 //! - F-full R2 test-landscape §1 Group 8 row **F-AAD-2** (merges B2 +
 //!   T-E2 + WF-C5 + GNI-2 + CE-I1).
-//! - R0.6 plan §3.10 / §4.1 (the **`0x6610` group per-stanza AAD = the BLINDED
+//! - R0.7 plan §3.10 / §4.1 (the **`0x6610` group per-stanza AAD = the BLINDED
 //!   11-field set**, Inv-20 clause-c) — **MembershipSet group sends honor
 //!   Sealed-Sender (F-LC-9):** the inner-sender-DID is bound INSIDE the
 //!   sealed/encrypted part per stanza (NOT in plaintext AAD), so the on-wire
@@ -18,20 +18,38 @@
 //!      sender-DID is the **post-decrypt-verified inner-payload sender-DID, NOT
 //!      an on-wire plaintext field** — "load-bearing for inter-member
 //!      non-forgeability".
-//! - R0.6 plan §4.1 (the AAD encoding contract): "AAD codepoint binding +
+//! - R0.7 plan §4.1 (the AAD encoding contract): "AAD codepoint binding +
 //!   `aad_version: u8` prefix + **canonical-TLV** length-injective" (U1/U3/U14).
-//! - R0.6 plan §3.10 precision (m-15 GNC-5): the AAD assembly hands
+//! - R0.7 plan §3.10 precision (m-15 GNC-5): the AAD assembly hands
 //!   **OPAQUE bytes** to `benten-crypto-suite`; the crypto-suite has **NO
 //!   reverse dependency** on membership-set (the AAD is opaque to it).
 //! - U1 (codepoint committed in AAD), U3 (canonical-TLV length-injective),
 //!   U14.
 //!
+//! ## R4.6-FIX (R0.7 §3.10/§4.1 — group codepoint corrected `0x6600` → `0x6610`)
+//!
+//! The spec of record advanced from R0.6 → **R0.7**. The `0x6610` group
+//! per-stanza AAD codepoint was previously frozen here at the **set-keying**
+//! value `0x6600` (`MEMBERSHIP_SET_ENCRYPTION`) — a slip in "settled territory":
+//! this assembler IS the group multi-stanza per-stanza AAD, so its codepoint is
+//! the group-multi-stanza value `0x6610` (`MEMBERSHIP_SET_GROUP_MULTI_STANZA`),
+//! NOT the set-keying envelope value `0x6600`. R0.7 §3.10/§4.1 (the
+//! `0x6610` 11-field block + the §4.1 codepoint row at the
+//! MembershipSet-band `0x6610` line) mandate `0x6610`. The fix:
+//!   - The fixture default codepoint is now `MEMBERSHIP_SET_GROUP_MULTI_STANZA`
+//!     (`0x6610`), the spec-correct group per-stanza codepoint.
+//!   - The frozen golden changes by EXACTLY the one codepoint byte (idx 2,
+//!     `00` → `10`); the two 32-byte commitments / body_cid / all counts are
+//!     codepoint-INDEPENDENT and stay byte-identical (M-20 re-verified).
+//!   - The single-field-distinctness arm now mutates the codepoint to a
+//!     DIFFERENT value (`MEMBERSHIP_SET_ENCRYPTION` `0x6600`) so the byte-binding
+//!     distinctness proof stays NON-tautological (mutating a field to its own
+//!     default would be a no-op).
+//!
 //! ## R4.5-MIGRATE (R0.6 Sealed-Sender AAD freeze — BLINDED group AAD)
 //!
-//! The spec of record advanced from R0.5 → **R0.6** (7 Ben-RATIFIED
-//! Sealed-Sender AAD freeze decisions, 2026-06-03). The `0x6610` group
-//! per-stanza AAD is now the **BLINDED 11-field set** (was the raw 9-tuple
-//! with a plaintext roster + raw set-id). The migration applied here:
+//! The `0x6610` group per-stanza AAD is the **BLINDED 11-field set** (was the
+//! raw 9-tuple with a plaintext roster + raw set-id). The migration applied:
 //!   1. **`audience_set_commitment` (32B) replaces the raw
 //!      `sorted_member_dids[]` roster.** `audience_set_commitment =
 //!      BLAKE3(0x01 || lp(did_0) || lp(did_1) || …)` over the CANONICAL
@@ -43,9 +61,11 @@
 //!   2. **`membership_set_id_commitment` (32B) replaces the raw
 //!      `membership_set_id`.** `membership_set_id_commitment =
 //!      HMAC(K_Set, "benten:setid:v1" || membership_set_id)` truncated to 32
-//!      bytes — the SAME construction the §3.9 gossip topic uses (the sibling
+//!      bytes — where R0.7 §4.1 clarifies **`HMAC` = `blake3::keyed_hash`**
+//!      (native BLAKE3 keyed MAC; no hmac/sha2 dep; bytes unchanged) — the SAME
+//!      construction the §3.9 gossip topic uses (the sibling
 //!      `f_gossip_transport_placement_and_blinded_topic.rs` stub-shims the
-//!      HMAC as `blake3::keyed_hash(K_Set, ·)`; this file reuses the EXACT
+//!      keyed MAC as `blake3::keyed_hash(K_Set, ·)`; this file reuses the EXACT
 //!      same primitive + truncation + BLAKE3 helper).
 //!   3. **`stanza_count` (u32 BE) is bound ALONGSIDE `stanza_index`** as a
 //!      truncation/censorship defense (without it an active relay can silently
@@ -69,10 +89,10 @@
 //! ## R4-FIX (F4-001 BLOCKER + F4-012 + F4-026 + F4-046 + F4-DS-CITE) — carried
 //!
 //! - **F4-001 (BLOCKER) — MembershipSet group sends honor Sealed-Sender
-//!   (F-LC-9 / BR-1 ruling 1).** The DEFAULT (`0x6600`/`0x6610`) group-send
-//!   AAD binds the **sealed-inner-sender-DID INSIDE the sealed per-stanza
-//!   payload** (`sealed_inner`), recovered only post-decrypt; the PLAINTEXT
-//!   11-field AAD binds ONLY the on-wire fields (NO plaintext sender). The
+//!   (F-LC-9 / BR-1 ruling 1).** The DEFAULT (`0x6610`) group-send AAD binds
+//!   the **sealed-inner-sender-DID INSIDE the sealed per-stanza payload**
+//!   (`sealed_inner`), recovered only post-decrypt; the PLAINTEXT 11-field AAD
+//!   binds ONLY the on-wire fields (NO plaintext sender). The
 //!   no-plaintext-sender wire-scan + the paired non-default plaintext-sender
 //!   control are carried forward.
 //! - **F4-026 (CBOR↔TLV reconciliation):** the assembler is a deterministic
@@ -86,7 +106,9 @@
 //!   for `member_count` — internally).
 //! - **F4-046 (over-fenced arm5):** the crypto-suite-no-reverse-dep
 //!   compile-fence reads a sibling `Cargo.toml` at runtime — un-ignored.
-//! - **F4-DS-CITE:** stale `R0.3/R0.5 §` cites bumped to `R0.6 §`.
+//! - **F4-DS-CITE:** stale `R0.3/R0.5/R0.6 §` cites bumped to `R0.7 §` on the
+//!   bytes R0.7 re-froze (the codepoint); R0.6 §3.10/§4.1 still govern the
+//!   blinding field-set whose bytes R0.7 leaves unchanged.
 //!
 //! ## pim-2 §3.6b + pim-18 §3.6f + §3.6f-ext end-to-end discipline
 //!
@@ -94,14 +116,14 @@
 //! (`assemble_group_aad`, stand-in for R5
 //! `benten_membership_set::aad::assemble_group_aad`), asserts an OBSERVABLE
 //! consequence (distinct bytes per single-field mutation / frozen
-//! `aad_version` prefix / canonicalized-sort BEHIND the commitment /
-//! sealed-inner sender-DID absent from plaintext AAD / paired non-default
-//! sender present / opaque-`Vec<u8>` return type / blinded set-id +
+//! `aad_version` prefix / frozen `0x6610` codepoint / canonicalized-sort BEHIND
+//! the commitment / sealed-inner sender-DID absent from plaintext AAD / paired
+//! non-default sender present / opaque-`Vec<u8>` return type / blinded set-id +
 //! audience-set tags do NOT leak the raw roster or raw set-id), and
 //! would-FAIL-if-no-op'd (an assembler that dropped a field, used LE, omitted
-//! the version prefix, skipped the internal sort, published the raw roster /
-//! raw set-id, dropped `stanza_count`, OR leaked the sealed-inner sender-DID
-//! into the plaintext AAD fails the corresponding arm).
+//! the version prefix, froze the wrong codepoint, skipped the internal sort,
+//! published the raw roster / raw set-id, dropped `stanza_count`, OR leaked the
+//! sealed-inner sender-DID into the plaintext AAD fails the corresponding arm).
 //!
 //! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
 //!
@@ -112,30 +134,34 @@
 //! ## Wave-0 DAG edge (M-20)
 //!
 //! The AAD's `codepoint` field is the V2-era `EncryptedEnvelope` codepoint
-//! (`MembershipSetEncryption = 0x6600`, group multi-stanza `0x6610`); every
-//! integer field is authored **big-endian** from the first commit; the
-//! `aad_version` prefix is the V2-era version byte; the two 32-byte
-//! commitments are computed ONCE off-line (M-20: golden frozen vs the stub
-//! commitment helpers; R5 confirms vs the real encoder).
+//! (group multi-stanza `MembershipSetGroupMultiStanza = 0x6610`; the set-keying
+//! envelope `MembershipSetEncryption = 0x6600` is the DISTINCT set-keying
+//! codepoint used by the distinctness arm); every integer field is authored
+//! **big-endian** from the first commit; the `aad_version` prefix is the V2-era
+//! version byte; the two 32-byte commitments are computed ONCE off-line (M-20:
+//! golden frozen vs the stub commitment helpers; R5 confirms vs the real
+//! encoder).
 
 #![allow(clippy::unwrap_used)]
 
 // ── SELF-CONTAINED stub-shim (R5 replaces with `benten_membership_set::aad`) ──
 
-/// The frozen AAD version prefix byte (R0.6 §4.1: `aad_version: u8` prefix).
+/// The frozen AAD version prefix byte (R0.7 §4.1: `aad_version: u8` prefix).
 /// V2-era; bumped only on a deliberate AAD wire-format change. Distinct from
 /// `ENVELOPE_FORMAT_VERSION_V2` (the envelope wire-format version) — the
-/// AAD-version axis is its own byte (R0.6 §4.1).
+/// AAD-version axis is its own byte (R0.7 §4.1).
 const AAD_VERSION: u8 = 0x01;
 
-/// The DEFAULT MembershipSet set-keying envelope codepoint (`0x6600`,
-/// Sealed-Sender by default — F-LC-9 / BR-1 ruling 1; §4.0 RELOCATED from
-/// the M-CONS-FINAL `0x6380` that collided MLS-Application). On this path the
-/// inner-sender-DID is sealed INSIDE the per-stanza payload, NEVER in the
-/// plaintext AAD.
+/// The MembershipSet **set-keying** envelope codepoint (`0x6600`,
+/// `MEMBERSHIP_SET_ENCRYPTION`, Sealed-Sender by default — F-LC-9 / BR-1
+/// ruling 1; §4.0 RELOCATED from the M-CONS-FINAL `0x6380` that collided
+/// MLS-Application). This is the SET-KEYING envelope codepoint — DISTINCT from
+/// the group per-stanza codepoint below; used here only as the single-field
+/// distinctness mutation target (a different-codepoint value).
 const MEMBERSHIP_SET_ENCRYPTION: u16 = 0x6600;
-/// The DEFAULT group multi-stanza codepoint (`0x6610`, also Sealed-Sender by
-/// default).
+/// The **DEFAULT group multi-stanza per-stanza AAD** codepoint (`0x6610`,
+/// `MEMBERSHIP_SET_GROUP_MULTI_STANZA`, also Sealed-Sender by default). This is
+/// the codepoint THIS group per-stanza AAD assembler binds (R0.7 §3.10/§4.1).
 const MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16 = 0x6610;
 
 /// The §3.9 / setid-commitment domain-separation label (R0.6 §3.10):
@@ -152,19 +178,19 @@ const K_SET_FIXTURE: [u8; 32] = [0x5e; 32];
 // defines no plaintext-sender sibling (only `0x6600`/`0x6610`/`0x6620`-reserve),
 // so squatting an unassigned band value (e.g. `0x6601`) would (a) collide with
 // the FROZEN-band Inv-18 / NQ-W2 CI scanner's ownership assertion and (b) read
-// as a real assignment. The control instead keeps the DEFAULT keying codepoint
+// as a real assignment. The control instead keeps the DEFAULT group codepoint
 // and varies the ONE typed field that actually distinguishes the paths
 // (`plaintext_sender_did`) — see `fixture_nondefault_plaintext_sender`.
 
 /// The `0x6610` group per-stanza AAD inputs (Inv-20 clause-c; BLINDED
-/// 11-field set per R0.6 §3.10/§4.1). `member_dids` is the member-DID list;
+/// 11-field set per R0.7 §3.10/§4.1). `member_dids` is the member-DID list;
 /// the assembler canonicalizes (sorts) it before deriving
 /// `audience_set_commitment` + `member_count`, so a reorder must NOT change
 /// the bytes — that is what makes two engines agree.
 ///
 /// **R4.5-MIGRATE (R0.6):** the raw roster + raw set-id are BLINDED. The
 /// assembler emits `audience_set_commitment` (over the sorted DIDs) and
-/// `membership_set_id_commitment` (HMAC over `K_Set`) instead of the raw
+/// `membership_set_id_commitment` (keyed MAC over `K_Set`) instead of the raw
 /// values, and binds `stanza_count` alongside `stanza_index`.
 ///
 /// **F4-001 / F-LC-9:** the sender-DID is NOT a plaintext field. On the
@@ -172,7 +198,8 @@ const K_SET_FIXTURE: [u8; 32] = [0x5e; 32];
 /// (recovered post-decrypt) and is NEVER bound into the plaintext AAD.
 #[derive(Clone, Debug)]
 struct GroupAadInputs {
-    /// `MembershipSetEncryption` codepoint family (`0x6600`/`0x6610`) — BE u16.
+    /// The group per-stanza codepoint (`0x6610`
+    /// `MEMBERSHIP_SET_GROUP_MULTI_STANZA` on the DEFAULT path) — BE u16.
     codepoint: u16,
     /// Canonical body-CID (the encrypted-payload CID) — a self-describing
     /// CIDv1 (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3`).
@@ -181,7 +208,7 @@ struct GroupAadInputs {
     /// is byte-neutral because only the COMMITMENT over the sorted list and
     /// the count are bound). NOT published in the clear (BLINDED).
     member_dids: Vec<String>,
-    /// The group key `K_Set` (keys the `membership_set_id_commitment` HMAC).
+    /// The group key `K_Set` (keys the `membership_set_id_commitment` keyed MAC).
     k_set: [u8; 32],
     /// Per-stanza index — BE u32.
     stanza_index: u32,
@@ -189,7 +216,7 @@ struct GroupAadInputs {
     stanza_count: u32,
     /// Member-key generation — BE u32.
     member_key_generation: u32,
-    /// The raw set identity — BLINDED via HMAC into
+    /// The raw set identity — BLINDED via keyed MAC into
     /// `membership_set_id_commitment` (never on the wire in the clear).
     membership_set_id: Vec<u8>,
     /// Set generation counter — BE u32.
@@ -207,13 +234,13 @@ struct GroupAadInputs {
 }
 
 impl GroupAadInputs {
-    /// The canonical DEFAULT (`0x6600`, Sealed-Sender) fixture. The
-    /// sender-DID (`did:key:zSENDER…` — a UNIQUE marker absent from the member
-    /// list, so the wire-scan is meaningful) is sealed INSIDE `sealed_inner`,
-    /// NEVER in the plaintext AAD.
+    /// The canonical DEFAULT (`0x6610` group multi-stanza, Sealed-Sender)
+    /// fixture. The sender-DID (`did:key:zSENDER…` — a UNIQUE marker absent
+    /// from the member list, so the wire-scan is meaningful) is sealed INSIDE
+    /// `sealed_inner`, NEVER in the plaintext AAD.
     fn fixture() -> Self {
         GroupAadInputs {
-            codepoint: MEMBERSHIP_SET_ENCRYPTION,
+            codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
             body_cid: stub_cid(b"body-payload"),
             member_dids: vec!["did:key:zAAA".to_string(), "did:key:zBBB".to_string()],
             k_set: K_SET_FIXTURE,
@@ -232,7 +259,7 @@ impl GroupAadInputs {
     }
 
     /// The paired non-default plaintext-sender control: the SAME logical send
-    /// as `fixture()` — including the SAME (`0x6600`) keying codepoint — but the
+    /// as `fixture()` — including the SAME (`0x6610`) group codepoint — but the
     /// sender-DID is bound into the plaintext AAD (U4) instead of sealed inside
     /// `sealed_inner`. NOT a shipped default; exists ONLY to prove the default
     /// path's wire-scan is non-vacuous. Holding the codepoint FIXED makes the
@@ -279,12 +306,14 @@ fn audience_set_commitment(member_dids: &[String]) -> [u8; 32] {
 
 /// **R4.5-MIGRATE (R0.6 §3.10).** `membership_set_id_commitment =
 /// HMAC(K_Set, "benten:setid:v1" || membership_set_id)` truncated to 32
-/// bytes — the SAME construction §3.9 already uses for the gossip topic. The
-/// sibling `f_gossip_transport_placement_and_blinded_topic.rs` stub-shims the
-/// HMAC primitive as `blake3::keyed_hash(K_Set, ·)` (truncate-to-32 is already
-/// the BLAKE3 output width); this file reuses the EXACT same primitive +
-/// truncation + BLAKE3 helper (do NOT invent a different HMAC/hash). R5 routes
-/// both through the real `benten-crypto-suite` HMAC over `K_Set`.
+/// bytes — the SAME construction §3.9 already uses for the gossip topic, where
+/// R0.7 §4.1 clarifies `HMAC` = `blake3::keyed_hash` (native BLAKE3 keyed MAC;
+/// no hmac/sha2 dep; bytes unchanged). The sibling
+/// `f_gossip_transport_placement_and_blinded_topic.rs` stub-shims the keyed MAC
+/// as `blake3::keyed_hash(K_Set, ·)` (truncate-to-32 is already the BLAKE3
+/// output width); this file reuses the EXACT same primitive + truncation +
+/// BLAKE3 helper (do NOT invent a different HMAC/hash). R5 routes both through
+/// the real `benten-crypto-suite` keyed MAC over `K_Set`.
 fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) -> [u8; 32] {
     let mut msg = Vec::new();
     msg.extend_from_slice(SETID_COMMITMENT_LABEL);
@@ -298,7 +327,7 @@ fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) -> [
 /// `benten-membership-set` assembles the canonical bytes and hands `&[u8]` to
 /// `benten-crypto-suite`; the crypto-suite never sees `GroupAadInputs`.
 ///
-/// Encoding = the R0.6 §3.10/§4.1 canonical-TLV contract — the BLINDED
+/// Encoding = the R0.7 §3.10/§4.1 canonical-TLV contract — the BLINDED
 /// 11-field set, big-endian, length-injective:
 ///   aad_version (u8) | codepoint (u16 BE) |
 ///   body_cid (lp; self-describing CIDv1) | member_count (u32 BE) |
@@ -331,7 +360,7 @@ fn assemble_group_aad(t: &GroupAadInputs) -> Vec<u8> {
     buf.extend_from_slice(&t.stanza_index.to_be_bytes());
     buf.extend_from_slice(&t.stanza_count.to_be_bytes());
     buf.extend_from_slice(&t.member_key_generation.to_be_bytes());
-    // membership_set_id_commitment — HMAC(K_Set, label || set_id) (BLINDED;
+    // membership_set_id_commitment — keyed_hash(K_Set, label || set_id) (BLINDED;
     // replaces the raw membership_set_id).
     buf.extend_from_slice(&membership_set_id_commitment(&t.k_set, &t.membership_set_id));
     buf.extend_from_slice(&t.membership_set_generation.to_be_bytes());
@@ -345,7 +374,7 @@ fn assemble_group_aad(t: &GroupAadInputs) -> Vec<u8> {
 }
 
 /// Length-prefix helper: writes `len: u32 BE || bytes` (the U3 length-injective
-/// framing; membership band uses u32 per the R0.6 §4.1 per-object width note).
+/// framing; membership band uses u32 per the R0.7 §4.1 per-object width note).
 fn lp(buf: &mut Vec<u8>, bytes: &[u8]) {
     buf.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
     buf.extend_from_slice(bytes);
@@ -362,33 +391,38 @@ fn stub_cid(payload: &[u8]) -> Vec<u8> {
 }
 
 /// The ABSOLUTE frozen canonical-TLV golden vector for the DEFAULT
-/// (`0x6600`, Sealed-Sender) `GroupAadInputs::fixture()` BLINDED 11-field AAD.
+/// (`0x6610` group multi-stanza, Sealed-Sender) `GroupAadInputs::fixture()`
+/// BLINDED 11-field AAD.
 ///
 /// Computed ONCE, off-line, from the canonical-TLV assembler (M-20). **131
 /// bytes** (NO plaintext sender field — F4-001 / F-LC-9); leading `0x01`
-/// (`aad_version`); bytes 1..3 = `0x6600` (BE codepoint). NEITHER the raw
-/// member roster NOR the raw set-id appears — they are BLINDED into the two
+/// (`aad_version`); bytes 1..3 = `0x6610` (BE codepoint — R4.6-FIX corrected
+/// from the prior `0x6600` set-keying value per R0.7 §3.10/§4.1). NEITHER the
+/// raw member roster NOR the raw set-id appears — they are BLINDED into the two
 /// 32-byte commitments (`audience_set_commitment` +
 /// `membership_set_id_commitment`). Any drift in field-order, endianness, the
-/// version prefix, the length-prefix framing, the internal sort, the
-/// commitment constructions, the `stanza_count` binding, OR a re-introduced
+/// version prefix, the codepoint, the length-prefix framing, the internal sort,
+/// the commitment constructions, the `stanza_count` binding, OR a re-introduced
 /// plaintext sender / raw roster / raw set-id flips this pin. R5
 /// confirms-or-deliberately-updates this frozen literal against the real
-/// `benten_membership_set::aad::assemble_group_aad` (M-20).
-const EXPECTED_AAD_HEX: &str = "0166000000002401711e20cfa9fea5491b9bf64cdc143778c3ff6e0123d8f7bca130f292b27a9bde54a86000000002f89cac9e8f674417d5c99d74d6a96e7b46065b82bd5e198de9811ae9d34c230d000000000000000100000001b3ae4d07499bd779184c6d28735cf4c2458a5d63904a383e57bbcc940bdebe760000000100000001";
+/// `benten_membership_set::aad::assemble_group_aad` (M-20). (The two 32-byte
+/// commitments / body_cid / counts are codepoint-INDEPENDENT, so the R4.6
+/// correction changed ONLY golden byte index 2, `00` → `10`.)
+const EXPECTED_AAD_HEX: &str = "0166100000002401711e20cfa9fea5491b9bf64cdc143778c3ff6e0123d8f7bca130f292b27a9bde54a86000000002f89cac9e8f674417d5c99d74d6a96e7b46065b82bd5e198de9811ae9d34c230d000000000000000100000001b3ae4d07499bd779184c6d28735cf4c2458a5d63904a383e57bbcc940bdebe760000000100000001";
 
 // ── F-AAD-2 arms ────────────────────────────────────────────────────────
 
 /// F-AAD-2 arm 0 — frozen canonical-TLV golden vector + `aad_version` prefix.
 ///
 /// Pins the ABSOLUTE bytes of the canonical DEFAULT BLINDED 11-field fixture
-/// (R4.5-MIGRATE + F4-026 + F4-001): the `aad_version` prefix byte, the BE
-/// codepoint, the self-describing body-CID, the two 32-byte blinded
-/// commitments, `stanza_count`, and NO plaintext sender field. Any field-order
-/// / endianness / version-prefix / commitment / count drift — or a
-/// re-introduced plaintext sender / raw roster — flips this.
+/// (R4.5-MIGRATE + F4-026 + F4-001 + R4.6 codepoint correction): the
+/// `aad_version` prefix byte, the BE `0x6610` codepoint, the self-describing
+/// body-CID, the two 32-byte blinded commitments, `stanza_count`, and NO
+/// plaintext sender field. Any field-order / endianness / version-prefix /
+/// codepoint / commitment / count drift — or a re-introduced plaintext sender /
+/// raw roster — flips this.
 #[test]
-#[ignore = "RED-PHASE: F-AAD-2 — BLINDED 11-field canonical-TLV golden + aad_version prefix (R0.6 §3.10/§4.1); un-ignore at R5"]
+#[ignore = "RED-PHASE: F-AAD-2 — BLINDED 11-field canonical-TLV golden + aad_version prefix (R0.7 §3.10/§4.1); un-ignore at R5"]
 fn f_aad_2_canonical_tlv_golden_vector_and_version_prefix() {
     let bytes = assemble_group_aad(&GroupAadInputs::fixture());
     assert!(!bytes.is_empty(), "AAD bytes must be non-empty");
@@ -396,13 +430,16 @@ fn f_aad_2_canonical_tlv_golden_vector_and_version_prefix() {
     // defense — U1/U14). R5 reproduces this exact prefix.
     assert_eq!(
         bytes[0], AAD_VERSION,
-        "leading byte = the frozen aad_version prefix (R0.6 §4.1)"
+        "leading byte = the frozen aad_version prefix (R0.7 §4.1)"
     );
-    // The BE codepoint immediately follows the version prefix.
+    // The BE codepoint immediately follows the version prefix — the group
+    // multi-stanza value 0x6610 (R0.7 §3.10/§4.1), NOT the 0x6600 set-keying
+    // envelope value.
     assert_eq!(
         &bytes[1..3],
-        &0x6600u16.to_be_bytes(),
-        "codepoint is bound BIG-ENDIAN immediately after aad_version (U1; M-19 BE)"
+        &0x6610u16.to_be_bytes(),
+        "codepoint is bound BIG-ENDIAN immediately after aad_version, and is the \
+         group multi-stanza 0x6610 (U1; M-19 BE; R0.7 §3.10/§4.1)"
     );
     // Full absolute golden vector.
     assert_eq!(
@@ -440,8 +477,12 @@ fn f_aad_2_aad_version_is_byte_bound() {
 fn f_aad_2_plaintext_field_single_mutation_distinct() {
     let base = assemble_group_aad(&GroupAadInputs::fixture());
 
+    // Mutate the codepoint AWAY from the 0x6610 default to a DIFFERENT value
+    // (the 0x6600 set-keying envelope codepoint) so the distinctness proof
+    // stays NON-tautological — mutating a field to its own default would be a
+    // no-op (R4.6-FIX: the default is now 0x6610, so we mutate to 0x6600).
     let mut m = GroupAadInputs::fixture();
-    m.codepoint = MEMBERSHIP_SET_GROUP_MULTI_STANZA; // 0x6610
+    m.codepoint = MEMBERSHIP_SET_ENCRYPTION; // 0x6600 — a DIFFERENT codepoint
     assert_ne!(base, assemble_group_aad(&m), "codepoint is byte-bound (U1)");
 
     let mut m = GroupAadInputs::fixture();
@@ -525,7 +566,7 @@ fn f_aad_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     //     (it lives sealed inside `sealed_inner` instead).
     assert!(
         t.plaintext_sender_did.is_none(),
-        "F-AAD-2 (F4-001): on the DEFAULT 0x6600/0x6610 group path the inputs \
+        "F-AAD-2 (F4-001): on the DEFAULT 0x6610 group path the inputs \
          MUST NOT carry a plaintext_sender_did — Sealed-Sender binds the \
          inner-sender-DID INSIDE `sealed_inner`."
     );
@@ -553,7 +594,7 @@ fn f_aad_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
 }
 
 /// F-AAD-2 arm 1c (F4-001 paired control) — the non-default plaintext-sender
-/// variant (`plaintext_sender_did = Some(..)`, SAME `0x6600` keying codepoint)
+/// variant (`plaintext_sender_did = Some(..)`, SAME `0x6610` group codepoint)
 /// DOES place the sender-DID in the plaintext AAD (U4).
 #[test]
 #[ignore = "RED-PHASE: F-AAD-2 — paired control: NON-default plaintext-sender DOES carry sender-DID in AAD (F4-001); un-ignore at R5"]
@@ -625,8 +666,8 @@ fn f_aad_2_blinded_commitments_do_not_leak_raw_roster_or_set_id() {
         !set_id_leaks,
         "F-AAD-2 (R4.5-MIGRATE / #61): the raw membership_set_id MUST NOT appear \
          in the plaintext group AAD — it is BLINDED into \
-         membership_set_id_commitment (HMAC(K_Set, label || set_id)). would-FAIL \
-         if the assembler published the raw set-id (the pre-R0.6 shape)."
+         membership_set_id_commitment (keyed_hash(K_Set, label || set_id)). \
+         would-FAIL if the assembler published the raw set-id (the pre-R0.6 shape)."
     );
 
     // POSITIVE control: the two 32-byte commitments ARE present (recomputable
@@ -648,8 +689,8 @@ fn f_aad_2_blinded_commitments_do_not_leak_raw_roster_or_set_id() {
 /// F-AAD-2 arm 1e (R4.5-MIGRATE) — the commitment constructions reuse the EXACT
 /// §3.9 gossip-topic primitives. `audience_set_commitment` is BLAKE3 over
 /// `0x01 || lp(did)…` of the SORTED list; `membership_set_id_commitment` is
-/// `blake3::keyed_hash(K_Set, label || set_id)` (the gossip-topic HMAC
-/// stand-in). would-FAIL if the assembler used a different hash/HMAC or a
+/// `blake3::keyed_hash(K_Set, label || set_id)` (the gossip-topic keyed-MAC
+/// stand-in). would-FAIL if the assembler used a different hash/MAC or a
 /// different domain-separation framing.
 #[test]
 #[ignore = "RED-PHASE: F-AAD-2 — commitments reuse the §3.9 gossip-topic BLAKE3/keyed-hash primitives; un-ignore at R5"]
@@ -682,7 +723,7 @@ fn f_aad_2_commitments_reuse_gossip_topic_primitives() {
         membership_set_id_commitment(&t.k_set, &t.membership_set_id),
         mscid_expected,
         "membership_set_id_commitment MUST be keyed_hash(K_Set, \"benten:setid:v1\" || id) \
-         — the SAME §3.9 gossip-topic HMAC primitive + truncation (BLAKE3 32-wide)"
+         — the SAME §3.9 gossip-topic keyed-MAC primitive + truncation (BLAKE3 32-wide)"
     );
 }
 
@@ -751,7 +792,7 @@ fn f_aad_2_assembler_emits_opaque_bytes() {
     );
     assert_eq!(
         bytes[0], AAD_VERSION,
-        "canonical-TLV aad_version prefix (R0.6 §4.1) — opaque to crypto-suite"
+        "canonical-TLV aad_version prefix (R0.7 §4.1) — opaque to crypto-suite"
     );
 }
 

@@ -73,3 +73,12 @@ thiserror = { workspace = true }
 # (`build_5_recipe_bundle_for_*`, `flip_byte_in_content_for_test`,
 # `tamper_envelope_signature_for_test`, etc.). Already a regular dep
 # above; listed here for clarity that the dev-time pins exercise it.
+#
+# R4.6-MIGRATE (R0.7 §3.3/§4.1 — `0x6520` group-AAD blinding): the
+# `f_lc_hpke` pin's self-contained `layer_c_stub::audience_set_commitment`
+# helper computes the BLINDED `audience_set_commitment` via `blake3::hash`
+# (the IDENTICAL primitive `benten-membership-set`'s `f_aad_2` `0x6610`
+# commitment uses), so the two engines agree byte-for-byte over the same
+# roster. Mirrors the workspace pin; `default-features = false` (the core
+# `blake3::hash` API needs no default features).
+blake3 = { workspace = true }
