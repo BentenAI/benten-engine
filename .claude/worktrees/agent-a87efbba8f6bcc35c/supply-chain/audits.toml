@@ -1,0 +1,25 @@
+# cargo-vet audits — Phase-3 G20-A3 onboarding baseline (sec-r1-5).
+#
+# Entries land here as the Benten team performs reviews. The empty-but-
+# structurally-present shape is intentional at onboarding time: the
+# `[criteria.crypto-reviewed]` entry below is a scaffolded local
+# criterion that mirrors the `config.toml` definition so cargo-vet's
+# parser sees the criterion in this file too (some workflows surface
+# `audits.toml` as the criterion source-of-truth).
+#
+# Onboarding-cycle audit cadence: quarterly per sec-r1-5. The Phase-3
+# G20-A3 brief commits the empty baseline; the first audit pass adds
+# entries against the actual dep graph (`cargo vet certify <crate>
+# safe-to-deploy` + `cargo vet certify <crypto-crate> crypto-reviewed`).
+
+[criteria.crypto-reviewed]
+description = """
+This crate has been reviewed by a Benten-team-designated crypto reviewer
+for the surfaces actually consumed by benten-id (Ed25519 keypair +
+signing, did:key encoding, UCAN delegation-chain validation). The
+reviewer has confirmed the crypto path is constant-time where
+specified, free of obvious side-channel leaks in the consumed surface,
+and free of known CVEs at the audit-pin time. Per sec-r1-5 the manual
+review cadence is quarterly. crypto-reviewed implies safe-to-deploy.
+"""
+implies = "safe-to-deploy"

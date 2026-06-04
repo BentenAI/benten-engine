@@ -1,0 +1,691 @@
+// Vitest smoke suite for the napi-rs v3 Engine class bindings (G8-A).
+//
+// Canonical fixture: `benten_core::testing::canonical_test_node` — labels
+// `["Post"]` with properties `{title, published, views, tags}`. The CID
+// round-trip test asserts the base32 string the Rust spike committed.
+
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createRequire } from "node:module";
+
+// napi-rs v3 emits a platform-suffixed `.node` addon plus an `index.js` CJS
+// loader. Vitest runs this file as ESM (package.json sets `"type": "module"`)
+// so the `require()` statements inside the generated loader throw. We bypass
+// the loader and `createRequire` the platform-specific `.node` binary
+// directly — every Phase-1 CI lane runs one platform at a time so this is
+// equivalent to what `index.js` would dispatch.
+const require = createRequire(import.meta.url);
+function loadNative(): any {
+  const platform = process.platform;
+  const arch = process.arch;
+  const name = `./benten-napi.${platform}-${arch}.node`;
+  return require(name);
+}
+const native = loadNative();
+
+const CANONICAL_CID = "bafyr4iflzldgzjrtknevsib24ewiqgtj65pm2ituow3yxfpq57nfmwduda";
+const CANONICAL_LABELS = ["Post"];
+const CANONICAL_PROPS = {
+  title: "Hello, Benten",
+  published: true,
+  views: 42,
+  tags: ["rust", "graph"],
+};
+
+let tmp: string;
+let engine: any;
+
+beforeAll(() => {
+  tmp = mkdtempSync(join(tmpdir(), "benten-napi-"));
+  engine = new native.Engine(join(tmp, "benten.redb"));
+});
+
+afterAll(() => {
+  rmSync(tmp, { recursive: true, force: true });
+});
+
+describe("ts_roundtrip_cid_matches_rust_fixture", () => {
+  it("hashes the canonical test Node to the committed CID", () => {
+    const cid = engine.createNode(CANONICAL_LABELS, CANONICAL_PROPS);
+    expect(cid).toBe(CANONICAL_CID);
+    const fetched = engine.getNode(cid);
+    expect(fetched).not.toBeNull();
+    expect(fetched.labels).toEqual(CANONICAL_LABELS);
+    expect(fetched.properties).toEqual(CANONICAL_PROPS);
+  });
+});
+
+describe("ts_crud_full_cycle", () => {
+  it("creates, reads, updates, and deletes a Node", () => {
+    const cid1 = engine.createNode(["post"], { title: "first" });
+    expect(engine.getNode(cid1).properties.title).toBe("first");
+
+    const cid2 = engine.updateNode(cid1, ["post"], { title: "updated" });
+    expect(cid2).not.toBe(cid1);
+    expect(engine.getNode(cid2).properties.title).toBe("updated");
+
+    engine.deleteNode(cid2);
+    expect(engine.getNode(cid2)).toBeNull();
+  });
+
+  it("creates an edge and reads it back via edges_from / edges_to", () => {
+    const a = engine.createNode(["post"], { title: "a" });
+    const b = engine.createNode(["post"], { title: "b" });
+    const edgeCid = engine.createEdge(a, b, "RELATED_TO");
+    const edge = engine.getEdge(edgeCid);
+    expect(edge.source).toBe(a);
+    expect(edge.target).toBe(b);
+    expect(edge.label).toBe("RELATED_TO");
+
+    const out = engine.edgesFrom(a);
+    expect(out.length).toBeGreaterThanOrEqual(1);
+    expect(out[0].target).toBe(b);
+
+    const inbound = engine.edgesTo(b);
+    expect(inbound.length).toBeGreaterThanOrEqual(1);
+    expect(inbound[0].source).toBe(a);
+  });
+});
+
+describe("ts_subgraph_register_and_call", () => {
+  it("registers a crud handler and dispatches an op through it", () => {
+    const handlerId = engine.registerCrud("post");
+    expect(typeof handlerId).toBe("string");
+    const outcome = engine.call(handlerId, "create", { title: "p1" });
+    expect(typeof outcome).toBe("object");
+    // The outcome carries either a `createdCid` or a `cid` alias; both forms
+    // indicate the CRUD create path ran end-to-end.
+    const reportedCid = outcome.createdCid ?? outcome.cid;
+    expect(typeof reportedCid).toBe("string");
+    // Tighter: CIDv1 multibase base32 starts with `b` and runs ~59 chars
+    // for a BLAKE3-256 digest. This catches regressions that return empty
+    // strings, UUIDs, or plain hex.
+    expect(reportedCid.startsWith("b")).toBe(true);
+    expect(reportedCid.length).toBeGreaterThanOrEqual(50);
+    // Round-trip: the reported CID must resolve to the node we wrote.
+    const fetched = engine.getNode(reportedCid);
+    expect(fetched).not.toBeNull();
+    expect(fetched.properties.title).toBe("p1");
+  });
+});
+
+describe("ts_trace_contains_per_node_timings", () => {
+  it("returns a trace with per-step durationUs", () => {
+    // Phase 2a G11-A Wave 2b: TraceStep is a discriminated union; the
+    // `crud(post):create` walk emits only `type === "primitive"` rows
+    // (no WAIT, no budget exhaustion). Assert the discriminant + the
+    // per-row fields explicitly so the shape pin survives variant
+    // additions.
+    const handlerId = engine.registerCrud("post");
+    const trace = engine.trace(handlerId, "create", { title: "traced" });
+    expect(Array.isArray(trace.steps)).toBe(true);
+    expect(trace.steps.length).toBeGreaterThan(0);
+    for (const step of trace.steps) {
+      expect(step.type).toBe("primitive");
+      expect(typeof step.nodeCid).toBe("string");
+      expect(typeof step.durationUs).toBe("number");
+      expect(step.durationUs).toBeGreaterThan(0);
+    }
+  });
+});
+
+// Closes r4b-rtc-2: one Vitest smoke test per napi method that had zero
+// TS-side coverage. Tests that need a Phase-2 primitive to exercise real
+// behavior are `it.skip`'d with a TODO(phase-2-*) reason rather than
+// passing vacuously.
+describe("napi engine — extended surface", () => {
+  let extDir: string;
+  let ext: any;
+
+  beforeEach(() => {
+    extDir = mkdtempSync(join(tmpdir(), "benten-napi-ext-"));
+    ext = new native.Engine(join(extDir, "benten.redb"));
+  });
+
+  afterEach(() => {
+    rmSync(extDir, { recursive: true, force: true });
+  });
+
+  it("grantCapability writes a system:CapabilityGrant Node", () => {
+    // The grant Node lands in a system-zone label
+    // (`system:CapabilityGrant`); Phase-2a Inv-11 makes user-path
+    // `getNode(cid)` collapse to null for system-zone reads, so we
+    // verify the write landed via:
+    //   1. the returned CID has CIDv1 base32 shape,
+    //   2. `countNodesWithLabel("system:CapabilityGrant")` incremented,
+    //   3. `diagnoseRead(cid).existsInBackend === true` (the privileged
+    //      Option-C diagnostic bypasses the cap-policy gate under
+    //      NoAuth, surfacing the backend's authoritative answer).
+    const beforeGrants = ext.countNodesWithLabel("system:CapabilityGrant");
+    const cid = ext.grantCapability({
+      actor: "alice",
+      scope: "store:post:write",
+    });
+    expect(typeof cid).toBe("string");
+    expect(cid.startsWith("b")).toBe(true);
+    expect(cid.length).toBeGreaterThanOrEqual(50);
+    expect(ext.countNodesWithLabel("system:CapabilityGrant")).toBe(
+      beforeGrants + 1,
+    );
+    const diag = ext.diagnoseRead(cid);
+    expect(diag.existsInBackend).toBe(true);
+    expect(diag.notFound).toBe(false);
+  });
+
+  it("revokeCapability writes a CapabilityRevocation record", () => {
+    const grantCid = ext.grantCapability({
+      actor: "bob",
+      scope: "store:post:delete",
+    });
+    const beforeCount = ext.countNodesWithLabel("system:CapabilityRevocation");
+    ext.revokeCapability(grantCid, "bob");
+    const afterCount = ext.countNodesWithLabel("system:CapabilityRevocation");
+    expect(afterCount).toBe(beforeCount + 1);
+    // The original grant Node is untouched by the Phase-1 revocation path
+    // (the revocation is a separate record, per engine docs at
+    // crates/benten-engine/src/lib.rs#1175). User-path `getNode` cannot
+    // see system-zone Nodes under Inv-11, so verify via diagnoseRead
+    // (Option-C diagnostic bypasses the cap-policy gate under NoAuth).
+    const diag = ext.diagnoseRead(grantCid);
+    expect(diag.existsInBackend).toBe(true);
+    expect(diag.notFound).toBe(false);
+  });
+
+  it("readView returns a structured ok outcome for a live view id", () => {
+    // R6FP-tail (NEW-1 BLOCKER closure): `Engine::read_view` now wires
+    // through `Subscriber::read_view_allow_stale` → `View::read_allow_stale`
+    // (default-delegating to `View::read`) so the user-facing API actually
+    // returns the materialized view rows post-fix. Pre-fix the path
+    // returned `Vec::new()` despite docstring claiming "the view's
+    // current state" — that drift is closed.
+    ext.createNode(["post"], { title: "p-1", createdAt: 1000 });
+    const outcome = ext.readView("content_listing", {});
+    expect(typeof outcome).toBe("object");
+    expect(outcome.ok).toBe(true);
+    expect(Array.isArray(outcome.list)).toBe(true);
+    // Post-fix: write of 1 post is materialized via ContentListingView.
+    expect(outcome.list.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("readView returns populated list after matching writes", () => {
+    // Un-skip post-NEW-1-BLOCKER closure (was `it.skip` with rationale
+    // "Phase-1 read_view returns empty list" — that contract changed
+    // when R6FP-tail wired the user-facing API through `View::read`).
+    ext.createNode(["post"], { title: "p-1", createdAt: 1000 });
+    ext.createNode(["post"], { title: "p-2", createdAt: 2000 });
+    const outcome = ext.readView("content_listing", {});
+    expect(outcome.list.length).toBeGreaterThanOrEqual(2);
+    const titles = outcome.list.map((n: any) => n.properties?.title);
+    expect(titles).toContain("p-1");
+    expect(titles).toContain("p-2");
+  });
+
+  it("callAs dispatches through a handler with an explicit actor CID", () => {
+    const handlerId = ext.registerCrud("post");
+    // Any valid CID works as the actor principal under NoAuth — just
+    // re-use a Node CID as a stand-in for a Phase-1 actor identifier.
+    const actorCid = ext.createNode(["Actor"], { handle: "carol" });
+    const outcome = ext.callAs(handlerId, "create", { title: "via-callAs" }, actorCid);
+    expect(typeof outcome).toBe("object");
+    expect(outcome.ok).toBe(true);
+    const createdCid = outcome.createdCid ?? outcome.cid;
+    expect(typeof createdCid).toBe("string");
+    expect(createdCid.startsWith("b")).toBe(true);
+    const fetched = ext.getNode(createdCid);
+    expect(fetched).not.toBeNull();
+    expect(fetched.properties.title).toBe("via-callAs");
+  });
+
+  // r6b-dx-C5: callAs must accept a friendly principal string in
+  // addition to a real CID — the QUICKSTART example uses `"alice"`
+  // without minting a Node first. The napi layer hashes the string
+  // into a deterministic synthetic CID.
+  it("callAs accepts a friendly principal string and synthesizes a stable CID", () => {
+    const handlerId = ext.registerCrud("post");
+    const first = ext.callAs(handlerId, "create", { title: "alice-1" }, "alice");
+    const second = ext.callAs(handlerId, "create", { title: "alice-2" }, "alice");
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    const c1 = first.createdCid ?? first.cid;
+    const c2 = second.createdCid ?? second.cid;
+    expect(typeof c1).toBe("string");
+    expect(typeof c2).toBe("string");
+    // Different Node contents yield different CIDs (not a static actor
+    // echo) — the actor is threaded in for attribution, not returned.
+    expect(c1).not.toBe(c2);
+  });
+
+  it("createView registers a view that bumps ivmSubscriberCount", () => {
+    const before = ext.ivmSubscriberCount();
+    const beforeDefs = ext.countNodesWithLabel("system:IVMView");
+    // `content_listing_<label>` is a Phase-1 canonical id family that the
+    // engine auto-instantiates as a live ContentListingView.
+    const viewCid = ext.createView({ viewId: "content_listing_article" });
+    expect(typeof viewCid).toBe("string");
+    expect(viewCid.startsWith("b")).toBe(true);
+    const after = ext.ivmSubscriberCount();
+    expect(after).toBe(before + 1);
+    // The definition Node is persisted under `system:IVMView`; Inv-11
+    // makes the user-path `getNode` collapse to null for system-zone
+    // reads, so verify the write via the system-zone label counter +
+    // the Option-C diagnostic.
+    expect(ext.countNodesWithLabel("system:IVMView")).toBe(beforeDefs + 1);
+    const diag = ext.diagnoseRead(viewCid);
+    expect(diag.existsInBackend).toBe(true);
+    expect(diag.notFound).toBe(false);
+  });
+
+  it("emitEvent publishes through EmitBroadcast bus per G19-B", () => {
+    // Phase-3 G19-B wave-7 LANDING (closes phase-3-backlog §7.8):
+    // standalone Engine.emitEvent is now wired end-to-end. The napi
+    // adapter publishes the event to the engine's EmitBroadcast bus
+    // (engine.rs::emit_event → inner.emit_broadcast.publish), the same
+    // bus consumed by subscribe_emit_events. Calling emitEvent
+    // succeeds (no throw) and the event becomes observable to any
+    // subscribed onEmit callback. The pre-G19-B contract that surfaced
+    // E_PRIMITIVE_NOT_IMPLEMENTED is retired — the carrier was a
+    // placeholder for "named-destination-deferred to Phase 3 §7.8";
+    // Phase 3 has now landed it.
+    expect(() => ext.emitEvent("user.signed_up", { userId: "u1" })).not.toThrow();
+  });
+
+  it("countNodesWithLabel returns the number of Nodes stored under a label", () => {
+    expect(ext.countNodesWithLabel("widget")).toBe(0);
+    ext.createNode(["widget"], { n: 1 });
+    ext.createNode(["widget"], { n: 2 });
+    ext.createNode(["widget"], { n: 3 });
+    // An unrelated label must not inflate the widget count.
+    ext.createNode(["gadget"], { n: 99 });
+    expect(ext.countNodesWithLabel("widget")).toBe(3);
+    expect(ext.countNodesWithLabel("gadget")).toBe(1);
+    expect(ext.countNodesWithLabel("nonexistent-label")).toBe(0);
+  });
+
+  it("ivmSubscriberCount reports the default engine's pre-wired view set", () => {
+    // The default EngineBuilder wires exactly one ContentListingView
+    // (label `post`) — see crates/benten-engine/src/lib.rs#1764.
+    // Additional canonical views (capability_grants, event_dispatch,
+    // governance_inheritance, version_current) are Phase-2 auto-wire
+    // scope per the createView source comment. Assert the Phase-1 shape
+    // so a future expansion to 5 flips this test loudly.
+    const count = ext.ivmSubscriberCount();
+    expect(typeof count).toBe("number");
+    expect(count).toBe(1);
+  });
+
+  it("metricsSnapshot surfaces per-capability write counters (compromise #5)", () => {
+    // Run a handful of CRUD creates under NoAuth and assert the
+    // aggregate + per-scope committed counters are populated.
+    const handlerId = ext.registerCrud("post");
+    for (let i = 0; i < 4; i += 1) {
+      ext.call(handlerId, "create", { title: `metric-${i}` });
+    }
+    const metrics = ext.metricsSnapshot();
+    expect(typeof metrics).toBe("object");
+    expect(metrics["benten.writes.committed"]).toBe(4);
+    expect(metrics["benten.writes.committed.store:post:write"]).toBe(4);
+
+    // Typed accessor round-trips the same data without the flattened keys.
+    const perScope = ext.capabilityWritesCommitted();
+    expect(perScope["store:post:write"]).toBe(4);
+    expect(Object.keys(ext.capabilityWritesDenied())).toHaveLength(0);
+  });
+
+  it("openWithPolicy opens with NoAuth and accepts writes", () => {
+    const dir2 = mkdtempSync(join(tmpdir(), "benten-napi-policy-"));
+    try {
+      const e = native.Engine.openWithPolicy(
+        join(dir2, "benten.redb"),
+        "NoAuth",
+      );
+      const cid = e.createNode(["post"], { title: "noauth-works" });
+      expect(typeof cid).toBe("string");
+      expect(cid.startsWith("b")).toBe(true);
+      const node = e.getNode(cid);
+      expect(node).not.toBeNull();
+      expect(node.properties.title).toBe("noauth-works");
+    } finally {
+      rmSync(dir2, { recursive: true, force: true });
+    }
+  });
+
+  it("openWithPolicy(Ucan) opens; unauthorized handler dispatch is denied by the durable UCAN policy", () => {
+    // Pre-G21-T2 framing: the UcanBackend was a `LegacyUcanStubBackend`
+    // returning `E_CAP_NOT_IMPLEMENTED` on every check (the "Phase-3 stub
+    // error"). Post-G21-T2 (audit-6-1 closure) the `Ucan` policy kind
+    // routes through the real durable
+    // `benten_caps::UcanGroundedPolicy` (UCANBackend proof-chain
+    // validator + grant-store reads); an unauthorized call now correctly
+    // surfaces `E_CAP_DENIED` rather than the stub `not implemented`
+    // sentinel. The flip from the stub code to the typed cap-denial is
+    // the GREEN signal that the durable backend is live; this test
+    // asserts the GREEN-phase shape.
+    //
+    // Opening must succeed. Direct `createNode` does NOT trigger the
+    // capability hook in Phase 1 (the hook runs at tx-commit inside the
+    // evaluator per crates/benten-engine/src/lib.rs#1959); dispatching
+    // through a registered handler is the path that invokes
+    // `policy.check_write` and therefore the UCAN durable backend.
+    const dir2 = mkdtempSync(join(tmpdir(), "benten-napi-ucan-"));
+    try {
+      const e = native.Engine.openWithPolicy(
+        join(dir2, "benten.redb"),
+        "Ucan",
+      );
+      const handlerId = e.registerCrud("post");
+      expect(typeof handlerId).toBe("string");
+      // The call outcome may surface the cap-denial as either a thrown
+      // napi error or a non-ok Outcome with an errorCode. Accept both to
+      // stay resilient across the evaluator's error-propagation shape.
+      let surfaced: string | undefined;
+      try {
+        const outcome = e.call(handlerId, "create", { title: "via-ucan" });
+        surfaced = outcome?.errorCode ?? JSON.stringify(outcome);
+        expect(outcome.ok).toBe(false);
+      } catch (err: any) {
+        surfaced = String(err?.message ?? err);
+      }
+      expect(surfaced).toMatch(/E_CAP_DENIED|denied|capability/i);
+      // Negative pin: the legacy stub code MUST NOT fire post-G21-T2 —
+      // its presence would mean the durable backend regressed back to
+      // the stub.
+      expect(surfaced).not.toMatch(/E_CAP_NOT_IMPLEMENTED/);
+    } finally {
+      rmSync(dir2, { recursive: true, force: true });
+    }
+  });
+
+  it("deleteEdge removes an edge so getEdge returns null", () => {
+    const a = ext.createNode(["post"], { title: "src" });
+    const b = ext.createNode(["post"], { title: "dst" });
+    const edgeCid = ext.createEdge(a, b, "RELATED_TO");
+    expect(ext.getEdge(edgeCid)).not.toBeNull();
+    ext.deleteEdge(edgeCid);
+    expect(ext.getEdge(edgeCid)).toBeNull();
+    // edgesFrom/edgesTo must no longer surface the deleted edge either.
+    const out = ext.edgesFrom(a);
+    expect(out.some((e: any) => e.target === b && e.label === "RELATED_TO")).toBe(false);
+  });
+});
+
+describe("napi misc surfaces", () => {
+  it("reports a non-negative change_event_count after writes", () => {
+    const before = engine.changeEventCount();
+    engine.createNode(["post"], { title: "bump" });
+    const after = engine.changeEventCount();
+    expect(after).toBeGreaterThanOrEqual(before);
+  });
+
+  it("renders a registered handler as Mermaid source", () => {
+    const handlerId = engine.registerCrud("post");
+    const mermaid = engine.handlerToMermaid(handlerId);
+    expect(typeof mermaid).toBe("string");
+    expect(mermaid).toMatch(/flowchart/);
+  });
+});
+
+describe("bytes_vs_list_preserve_content_addressing_at_napi_boundary", () => {
+  // r6-perf-6 regression guard. Two Nodes — one carrying a Uint8Array
+  // property, the other carrying a plain number[] property with the
+  // same elements — MUST hash to distinct CIDs. The prior heuristic
+  // collapsed both to `Value::List` and therefore produced identical
+  // CIDs, silently violating the content-addressing contract for any
+  // caller who round-tripped a Buffer through the napi boundary.
+  it("distinguishes Uint8Array from plain number[] at the CID level", () => {
+    const bytesCid = engine.createNode(["blob"], {
+      payload: new Uint8Array([0, 1, 2, 3, 255]),
+    });
+    const listCid = engine.createNode(["blob"], {
+      payload: [0, 1, 2, 3, 255],
+    });
+    expect(bytesCid).not.toBe(listCid);
+    // Both must also be valid base32-multibase CIDs (`b` prefix).
+    expect(bytesCid.startsWith("b")).toBe(true);
+    expect(listCid.startsWith("b")).toBe(true);
+  });
+
+  it("Uint8Array round-trips as a byte-indexed Object via getNode", () => {
+    // Typed arrays are the canonical Bytes-shaped input on the napi
+    // boundary — napi-rs serializes them to an Object with numeric-
+    // string keys (because `napi_is_array` returns false for
+    // TypedArrays), which our inbound decoder routes to
+    // `Value::Bytes`. `getNode` then emits a structurally-equivalent
+    // shape so the round-trip preserves both the CID and the byte
+    // values.
+    //
+    // Node's `Buffer` type extends `Uint8Array` but carries extra
+    // prototype methods that napi-rs's serde_json decoder treats as
+    // "JS functions" — so `Buffer.from(...)` is NOT the right shape
+    // for the boundary as of Phase 1. Callers who have a Buffer
+    // should pass `new Uint8Array(buf)` for the round-trip; Phase-2's
+    // native TypedArray path lifts this constraint.
+    const cid = engine.createNode(["blob"], {
+      payload: new Uint8Array([7, 8, 9]),
+    });
+    const fetched = engine.getNode(cid);
+    expect(fetched).not.toBeNull();
+    // The emitted shape is an Object with numeric keys; reconstruct
+    // the byte array to confirm the three bytes are intact.
+    const payload = fetched.properties.payload;
+    expect(typeof payload).toBe("object");
+    expect(payload["0"]).toBe(7);
+    expect(payload["1"]).toBe(8);
+    expect(payload["2"]).toBe(9);
+  });
+
+  it("plain JS objects with alphabetic keys are not misclassified as Bytes", () => {
+    const cid = engine.createNode(["post"], {
+      meta: { title: "hello", rank: 42 },
+    });
+    const fetched = engine.getNode(cid);
+    expect(fetched.properties.meta.title).toBe("hello");
+    expect(fetched.properties.meta.rank).toBe(42);
+  });
+});
+
+// 5d-J workstream 1 — Option C diagnose_read napi surface.
+describe("engine.diagnoseRead (Option C)", () => {
+  it("surfaces exists+readable under NoAuth", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-diag-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    const cid = eng.createNode(["post"], { title: "diag-me" });
+    const info = eng.diagnoseRead(cid);
+    expect(info.cid).toBe(cid);
+    expect(info.existsInBackend).toBe(true);
+    expect(info.deniedByPolicy).toBeNull();
+    expect(info.notFound).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reports notFound=true for a CID that was never written", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-diag-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    // Write one Node just so the backend is populated, then diagnose a
+    // different CID we never wrote.
+    eng.createNode(["post"], { title: "seeded" });
+    // A valid-shape CID that does not exist in the backend. Reuse the
+    // canonical fixture CID — it's a legitimate CIDv1 string but the
+    // fresh temp engine never wrote under it.
+    const phantom = CANONICAL_CID;
+    const info = eng.diagnoseRead(phantom);
+    expect(info.existsInBackend).toBe(false);
+    expect(info.notFound).toBe(true);
+    expect(info.deniedByPolicy).toBeNull();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+// Phase 2a R4 cov-8 / Wave-3 napi F5: the WAIT napi bridge end-to-end
+// test. The TS DSL layer has its own WAIT tests
+// (`packages/engine/src/wait.test.ts`); this one fires the
+// callWithSuspension + resumeFromBytesUnauthenticated calls directly
+// through the native binary so a napi-layer regression (e.g. a lost
+// suspension handle across the boundary) is caught before the DSL
+// wraps it.
+//
+// The napi surface returns the suspended handle as a base64 string
+// inside the `{ kind, handle }` JSON shape so the napi return type
+// stays a single `serde_json::Value`. The TS DSL wrapper decodes this
+// to a `Buffer` before exposing it to user code; here we exercise the
+// raw native surface and decode inline.
+describe("napi WAIT bridge round-trip (Phase 2a cov-8)", () => {
+  it("callWithSuspension + resumeFromBytesUnauthenticated roundtrip through the native binary", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-wait-napi-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    try {
+      expect(typeof eng.callWithSuspension).toBe("function");
+      expect(typeof eng.resumeFromBytesUnauthenticated).toBe("function");
+      expect(typeof eng.resumeFromBytesAs).toBe("function");
+
+      // Register a minimal WAIT-composing handler via the napi
+      // `registerSubgraph` JSON surface. Any spec carrying a `wait`
+      // primitive trips `should_suspend` inside the engine's WAIT
+      // executor (`crates/benten-engine/src/engine_wait.rs`) so
+      // callWithSuspension returns the Suspended arm.
+      const handlerId = eng.registerSubgraph({
+        handlerId: "wait:napi_bridge",
+        actions: ["wait:run"],
+        root: "n0",
+        nodes: [
+          { id: "n0", primitive: "wait", args: { signal: "external:ping" }, edges: {} },
+          { id: "n1", primitive: "respond", args: { body: "$result" }, edges: {} },
+        ],
+      });
+      expect(typeof handlerId).toBe("string");
+
+      const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
+      expect(suspended).toBeTruthy();
+      expect(suspended.kind).toBe("suspended");
+      // Handle is base64-encoded over the napi JSON surface; decode to
+      // the Uint8Array shape the resume_from_bytes_unauthenticated
+      // adapter expects.
+      expect(typeof suspended.handle).toBe("string");
+      const bytes = Buffer.from(suspended.handle as string, "base64");
+      expect(bytes.length).toBeGreaterThan(0);
+
+      const resumed = eng.resumeFromBytesUnauthenticated(bytes, {
+        payload: "hello",
+      });
+      expect(resumed).toBeTruthy();
+      // Phase-2a synthesizes a terminal OK outcome on resume; assert
+      // the Outcome shape (ok=true, edge="OK") rather than a
+      // `kind: complete` discriminant — that wrapping happens in the
+      // TS DSL, not at the raw napi surface.
+      expect(resumed.ok).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Phase 2a R4b Wave-3c COVERAGE M1 — resumeFromBytesAs end-to-end. The
+// existing suite at line 532 only smoke-checks `typeof eng.resumeFromBytesAs
+// === "function"`. This test fires the principal-attributed resume through
+// the full 4-step protocol, asserting both (a) a wrong-principal CID
+// surfaces `E_RESUME_ACTOR_MISMATCH` (step 2 enforcement) and (b) the
+// shape of the rejected error reaches the napi caller as a typed throw
+// rather than a silent no-op.
+//
+// Rationale for the negative assertion (step-2 mismatch) over a positive
+// match: the napi raw surface does NOT expose `callAsWithSuspension`, so
+// suspension uses `default_principal_for(handler_id)` (engine_wait.rs ~line
+// 294) — a CID that's NOT round-trippable through the napi boundary
+// without re-implementing the BLAKE3 derivation in TS. The negative
+// assertion proves step 2 is wired and reachable from napi (which the
+// shape-pin smoke test does NOT) without depending on a private
+// derivation. The matching positive flow is covered at the Rust layer
+// by `engine_wait_api_shape::resume_requires_matching_resumption_principal`.
+describe("napi resumeFromBytesAs end-to-end (Phase 2a R4b cov-M1)", () => {
+  it("rejects a principal CID that does not match the suspended envelope's resumption_principal_cid", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-resume-as-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    try {
+      const handlerId = eng.registerSubgraph({
+        handlerId: "wait:napi_resume_as",
+        actions: ["wait:run"],
+        root: "n0",
+        nodes: [
+          { id: "n0", primitive: "wait", args: { signal: "external:resume-as" }, edges: {} },
+          { id: "n1", primitive: "respond", args: { body: "$result" }, edges: {} },
+        ],
+      });
+      const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
+      expect(suspended.kind).toBe("suspended");
+      const bytes = Buffer.from(suspended.handle as string, "base64");
+      expect(bytes.length).toBeGreaterThan(0);
+
+      // A valid-shape CID that is provably NOT the synthesised default
+      // principal for the handler. Use the canonical fixture CID — it's
+      // a legitimate CIDv1 string that the suspend path never names.
+      const wrongPrincipal = CANONICAL_CID;
+
+      // Step 2 of the resume protocol must reject the mismatched
+      // principal with E_RESUME_ACTOR_MISMATCH (engine_wait.rs ~line 460).
+      // napi-rs surfaces engine errors as thrown JS Errors carrying the
+      // typed code in the message.
+      expect(() => {
+        eng.resumeFromBytesAs(bytes, { payload: "x" }, wrongPrincipal);
+      }).toThrow(/E_RESUME_ACTOR_MISMATCH/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Phase 2a R4b Wave-3c COVERAGE M2-followup — duration-form WAIT
+// suspension at the napi boundary. The existing tests at line 525 cover
+// the signal-form (`wait({ signal: "external:ping" })`); this sibling
+// pins the duration-form (`wait({ duration: "1ms" })`) so a regression
+// in the napi-side primitive arg encoding for `duration` is caught at
+// the boundary, not just at the DSL layer
+// (`packages/engine/src/wait.test.ts`).
+//
+// Phase-2a contract per `engine_wait::should_suspend`: ANY `wait`
+// primitive triggers the Suspended arm regardless of the `args`
+// shape (signal vs. duration). This test pins that the duration form
+// reaches the napi-layer suspension path.
+describe("napi callWithSuspension duration-form (Phase 2a R4b cov-M2-followup)", () => {
+  it("duration-form wait suspends through the napi bridge identical to the signal-form path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "benten-wait-duration-napi-"));
+    const eng = new native.Engine(join(dir, "benten.redb"));
+    try {
+      const handlerId = eng.registerSubgraph({
+        handlerId: "wait:napi_duration_form",
+        actions: ["wait:run"],
+        root: "n0",
+        nodes: [
+          {
+            id: "n0",
+            primitive: "wait",
+            // 1ms — the napi layer doesn't yet plumb a sub-millisecond
+            // deadline-elapsed completion, so duration-form WAITs go
+            // through the same suspend → resume_from_bytes path as
+            // signal-form (per `should_suspend` in engine_wait.rs).
+            args: { duration: "1ms" },
+            edges: {},
+          },
+          { id: "n1", primitive: "respond", args: { body: "$result" }, edges: {} },
+        ],
+      });
+
+      const suspended = eng.callWithSuspension(handlerId, "wait:run", {});
+      expect(suspended).toBeTruthy();
+      expect(suspended.kind).toBe("suspended");
+      expect(typeof suspended.handle).toBe("string");
+      const bytes = Buffer.from(suspended.handle as string, "base64");
+      expect(bytes.length).toBeGreaterThan(0);
+
+      // Round-trip through resumeFromBytesUnauthenticated to confirm the
+      // duration-form envelope decodes + clears the 4-step protocol the
+      // same way the signal-form envelope does. Phase-2a synthesises a
+      // terminal-OK outcome on resume.
+      const resumed = eng.resumeFromBytesUnauthenticated(bytes, {});
+      expect(resumed).toBeTruthy();
+      expect(resumed.ok).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

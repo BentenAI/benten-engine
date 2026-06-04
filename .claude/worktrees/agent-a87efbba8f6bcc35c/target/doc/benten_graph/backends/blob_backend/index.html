@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Phase-3 G14-C wave-4b — concrete redb-native `BlobBackend` impl."><title>benten_graph::backends::blob_backend - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="benten_graph" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module blob_backend</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../benten_graph/index.html">benten_<wbr>graph</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module blob_<wbr>backend</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-this-is" title="What this is">What this is</a></li><li><a href="#storage-shape" title="Storage shape">Storage shape</a></li><li><a href="#why-not-a-raw-redb-side-table" title="Why not a raw redb side-table">Why not a raw redb side-table</a></li><li><a href="#async-shape-adapter" title="Async-shape adapter">Async-shape adapter</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In benten_<wbr>graph::<wbr>backends</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">benten_graph</a>::<wbr><a href="../index.html">backends</a></div><h1>Module <span>blob_<wbr>backend</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Phase-3 G14-C wave-4b — concrete redb-native <a href="../blob_backend_trait/trait.BlobBackend.html" title="trait benten_graph::backends::blob_backend_trait::BlobBackend"><code>BlobBackend</code></a> impl.</p>
+<h3 id="what-this-is"><a class="doc-anchor" href="#what-this-is">§</a>What this is</h3>
+<p>Closure of <strong>Compromise #17</strong> (in-memory module-bytes registry).
+Implements the <a href="../blob_backend_trait/trait.BlobBackend.html" title="trait benten_graph::backends::blob_backend_trait::BlobBackend"><code>BlobBackend</code></a>
+trait surface scaffolded at G13-pre-B in
+<code>crates/benten-graph/src/backends/blob_backend_trait.rs</code> over a
+redb-backed durable side-table (<code>system:ModuleBytes</code> zone Nodes).</p>
+<h3 id="storage-shape"><a class="doc-anchor" href="#storage-shape">§</a>Storage shape</h3>
+<p>Each blob is persisted as a Node in the <code>system:ModuleBytes</code> zone:</p>
+<ul>
+<li><code>labels: ["system:ModuleBytes"]</code></li>
+<li><code>properties.blob_cid: Value::Text(cid.to_base32())</code></li>
+<li><code>properties.blob_bytes: Value::Bytes(bytes)</code></li>
+</ul>
+<p>The <code>system:</code> zone prefix is a privileged-write surface
+(<code>crates/benten-engine/src/system_zones.rs::SYSTEM_ZONE_PREFIXES</code>),
+mirroring how <code>system:ModuleManifest</code> already persists module
+manifests at G10-B. Storing blobs as graph Nodes — rather than as
+a parallel redb side-table the storage layer would need to crack
+open — preserves CLAUDE.md baked-in commitment #3 (code-as-graph)
+and keeps the durable surface uniformly inspectable via the
+existing <code>get_by_label</code> accessor.</p>
+<p>Per CLAUDE.md baked-in commitment #4 (BLAKE3 + DAG-CBOR + CIDv1),
+blob CIDs are computed as <code>BLAKE3(blob_bytes)</code> wrapped in the
+Benten CIDv1 envelope (matches <code>Cid::from_blake3_digest</code>). The
+authoritative CID-validation gate lives at the engine’s
+<code>Engine::register_module_bytes</code> call site per
+D-PHASE-3-12 RESOLVED — the <code>BlobBackend::put</code> impl here recomputes
+defense-in-depth so an attacker writing into the backend directly
+cannot poison the cache (the CID stored in <code>properties.blob_cid</code>
+is hash-derived from the bytes).</p>
+<h3 id="why-not-a-raw-redb-side-table"><a class="doc-anchor" href="#why-not-a-raw-redb-side-table">§</a>Why not a raw redb side-table</h3>
+<p>The trait-level put accepts a caller-supplied CID; storing blobs
+as system-zone Nodes lets us reuse the existing
+<code>put_node_with_context</code> privileged-write path + the
+<code>get_by_label</code> / <code>get_node</code> accessors for rehydration. A parallel
+redb side-table would duplicate the privileged-write capability
+plumbing + require new public methods on <code>RedbBackend</code> for blob-
+shaped reads + writes. The system-zone Node shape is structurally
+the simpler surface.</p>
+<h3 id="async-shape-adapter"><a class="doc-anchor" href="#async-shape-adapter">§</a>Async-shape adapter</h3>
+<p>The <a href="../blob_backend_trait/trait.BlobBackend.html" title="trait benten_graph::backends::blob_backend_trait::BlobBackend"><code>BlobBackend</code></a>
+trait returns <code>impl Future + Send</code> per D-PHASE-3-7. redb itself is
+synchronous, so this impl wraps each operation in
+<code>core::future::ready(...)</code>. The browser-side IndexedDB impl
+(G18-A wave-5a) will use the natively-async IDB API directly.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.RedbBlobBackend.html" title="struct benten_graph::backends::blob_backend::RedbBlobBackend">Redb<wbr>Blob<wbr>Backend</a></dt><dd>Concrete redb-native <a href="../blob_backend_trait/trait.BlobBackend.html" title="trait benten_graph::backends::blob_backend_trait::BlobBackend"><code>BlobBackend</code></a> implementation closing
+<strong>Compromise #17</strong>.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.BlobError.html" title="enum benten_graph::backends::blob_backend::BlobError">Blob<wbr>Error</a></dt><dd>G14-C <a href="struct.RedbBlobBackend.html" title="struct benten_graph::backends::blob_backend::RedbBlobBackend"><code>RedbBlobBackend</code></a> error surface. Routes both
+content-integrity violations (cid-mismatch — defense-in-depth at
+the trait boundary per D-PHASE-3-12) and underlying redb errors
+into one typed enum so consumers can <code>.source()</code>-chain across
+the heterogeneous backends.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.BLOB_BYTES_PROPERTY.html" title="constant benten_graph::backends::blob_backend::BLOB_BYTES_PROPERTY">BLOB_<wbr>BYTES_<wbr>PROPERTY</a></dt><dd>G14-C property key carrying the blob’s raw bytes. <code>Value::Bytes</code>
+round-trips through DAG-CBOR.</dd><dt><a class="constant" href="constant.BLOB_CID_PROPERTY.html" title="constant benten_graph::backends::blob_backend::BLOB_CID_PROPERTY">BLOB_<wbr>CID_<wbr>PROPERTY</a></dt><dd>G14-C property key carrying the blob’s CID base32 string. Set on
+every <code>system:ModuleBytes</code> Node so a rehydration scan can index by
+CID without re-canonicalizing the Node.</dd><dt><a class="constant" href="constant.MAX_MODULE_BYTES_ZONE_SCAN.html" title="constant benten_graph::backends::blob_backend::MAX_MODULE_BYTES_ZONE_SCAN">MAX_<wbr>MODULE_<wbr>BYTES_<wbr>ZONE_<wbr>SCAN</a></dt><dd>Hard cap on the number of <code>system:ModuleBytes</code> Nodes a single
+<a href="struct.RedbBlobBackend.html#method.get_sync" title="method benten_graph::backends::blob_backend::RedbBlobBackend::get_sync"><code>RedbBlobBackend::get_sync</code></a> / <a href="struct.RedbBlobBackend.html#method.list_blob_cids" title="method benten_graph::backends::blob_backend::RedbBlobBackend::list_blob_cids"><code>RedbBlobBackend::list_blob_cids</code></a>
+scan will decode before refusing (#567, META #629 DoS-via-unbounded-
+decode benten-graph slice).</dd><dt><a class="constant" href="constant.MODULE_BYTES_LABEL.html" title="constant benten_graph::backends::blob_backend::MODULE_BYTES_LABEL">MODULE_<wbr>BYTES_<wbr>LABEL</a></dt><dd>G14-C label used for the durable module-bytes side-table. The label
+MUST start with <code>system:</code> so the <code>guard_system_zone_node</code> helper at
+the redb backend’s write boundary requires the privileged
+<a href="../../struct.WriteContext.html#method.privileged_for_engine_api" title="associated function benten_graph::WriteContext::privileged_for_engine_api"><code>WriteContext::privileged_for_engine_api</code></a> context to write here.</dd></dl></section></div></main></body></html>

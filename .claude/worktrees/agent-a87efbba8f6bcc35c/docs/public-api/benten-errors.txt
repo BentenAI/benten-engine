@@ -1,0 +1,253 @@
+pub mod benten_errors
+#[non_exhaustive] pub enum benten_errors::ErrorCode
+pub benten_errors::ErrorCode::AeadRebindingAttackDetected
+pub benten_errors::ErrorCode::AtriumInactive
+pub benten_errors::ErrorCode::AtriumRelayUnreachable
+pub benten_errors::ErrorCode::AtriumTransportDegraded
+pub benten_errors::ErrorCode::AuditNotLandedPurePqRejected
+pub benten_errors::ErrorCode::AuthorizationGrantBindingSigInvalid
+pub benten_errors::ErrorCode::BackendNotFound
+pub benten_errors::ErrorCode::BackendReadOnly
+pub benten_errors::ErrorCode::CapAttenuation
+pub benten_errors::ErrorCode::CapBackendStorage
+pub benten_errors::ErrorCode::CapChainTooDeep
+pub benten_errors::ErrorCode::CapDenied
+pub benten_errors::ErrorCode::CapDeniedRead
+pub benten_errors::ErrorCode::CapNotImplemented
+pub benten_errors::ErrorCode::CapPeerBandwidthExceeded
+pub benten_errors::ErrorCode::CapRateLimitExceeded
+pub benten_errors::ErrorCode::CapRevoked
+pub benten_errors::ErrorCode::CapRevokedMidEval
+pub benten_errors::ErrorCode::CapScopeLoneStarRejected
+pub benten_errors::ErrorCode::CapSnapshotHashMismatch
+pub benten_errors::ErrorCode::CapUcanAttenuationViolated
+pub benten_errors::ErrorCode::CapUcanAudienceMismatch
+pub benten_errors::ErrorCode::CapUcanBadSignature
+pub benten_errors::ErrorCode::CapUcanExpired
+pub benten_errors::ErrorCode::CapUcanNotYetValid
+pub benten_errors::ErrorCode::CapWallclockExpired
+pub benten_errors::ErrorCode::ChainNarrowingViolation
+pub benten_errors::ErrorCode::CidParse
+pub benten_errors::ErrorCode::CidUnsupportedCodec
+pub benten_errors::ErrorCode::CidUnsupportedHash
+pub benten_errors::ErrorCode::DevServerStopped
+pub benten_errors::ErrorCode::DeviceAttestationForged
+pub benten_errors::ErrorCode::DropBundleEnvelopeSigInvalid
+pub benten_errors::ErrorCode::DropBundleMode3InlineRejected
+pub benten_errors::ErrorCode::DropBundleVersionUnsupported
+pub benten_errors::ErrorCode::DslBackendRejected
+pub benten_errors::ErrorCode::DslInvalidShape
+pub benten_errors::ErrorCode::DslIoError
+pub benten_errors::ErrorCode::DslUnregisteredHandler
+pub benten_errors::ErrorCode::DuplicateHandler
+pub benten_errors::ErrorCode::EngineConfigInvalid
+pub benten_errors::ErrorCode::ExecStateTampered
+pub benten_errors::ErrorCode::GraphInternal
+pub benten_errors::ErrorCode::GraphSchemaVersionMismatch
+pub benten_errors::ErrorCode::HandshakeReplayWithinBoundedWindow
+pub benten_errors::ErrorCode::HlcSkewExceeded
+pub benten_errors::ErrorCode::HostBackendUnavailable
+pub benten_errors::ErrorCode::HostCapabilityExpired
+pub benten_errors::ErrorCode::HostCapabilityRevoked
+pub benten_errors::ErrorCode::HostNotFound
+pub benten_errors::ErrorCode::HostWriteConflict
+pub benten_errors::ErrorCode::InputLimit
+pub benten_errors::ErrorCode::Inv11SystemZoneRead
+pub benten_errors::ErrorCode::InvAttribution
+pub benten_errors::ErrorCode::InvContentHash
+pub benten_errors::ErrorCode::InvCycle
+pub benten_errors::ErrorCode::InvDepthExceeded
+pub benten_errors::ErrorCode::InvDeterminism
+pub benten_errors::ErrorCode::InvFanoutExceeded
+pub benten_errors::ErrorCode::InvImmutability
+pub benten_errors::ErrorCode::InvIterateBudget
+pub benten_errors::ErrorCode::InvIterateMaxMissing
+pub benten_errors::ErrorCode::InvRegistration
+pub benten_errors::ErrorCode::InvSandboxDepth
+pub benten_errors::ErrorCode::InvSandboxOutput
+pub benten_errors::ErrorCode::InvStreamConfig
+pub benten_errors::ErrorCode::InvSystemZone
+pub benten_errors::ErrorCode::InvTooManyEdges
+pub benten_errors::ErrorCode::InvTooManyNodes
+pub benten_errors::ErrorCode::IvmPatternMismatch
+pub benten_errors::ErrorCode::IvmStrategyNotImplemented
+pub benten_errors::ErrorCode::IvmViewStale
+pub benten_errors::ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
+pub benten_errors::ErrorCode::MaterializerCapDenied
+pub benten_errors::ErrorCode::MaterializerSchemaMismatch
+pub benten_errors::ErrorCode::MaterializerSubscribeSeamFailure
+pub benten_errors::ErrorCode::ModuleManifestCidMismatch
+pub benten_errors::ErrorCode::ModuleMigrationsRequirePersistence
+pub benten_errors::ErrorCode::NamespacedWriteUnsupported
+pub benten_errors::ErrorCode::NestedTransactionNotSupported
+pub benten_errors::ErrorCode::NoCapabilityPolicyConfigured
+pub benten_errors::ErrorCode::NotFound
+pub benten_errors::ErrorCode::NotImplemented
+pub benten_errors::ErrorCode::PluginAuthorNotTrusted
+pub benten_errors::ErrorCode::PluginContentCidMismatch
+pub benten_errors::ErrorCode::PluginContentPeerKeyRotated
+pub benten_errors::ErrorCode::PluginContentPeerSignatureInvalid
+pub benten_errors::ErrorCode::PluginDelegationOutsideManifestEnvelope
+pub benten_errors::ErrorCode::PluginDeviceAttestationForged
+pub benten_errors::ErrorCode::PluginDidHandleDuplicate
+pub benten_errors::ErrorCode::PluginDidHandleNotPreInserted
+pub benten_errors::ErrorCode::PluginHeterogeneityIncompatible
+pub benten_errors::ErrorCode::PluginInstallConsentRequired
+pub benten_errors::ErrorCode::PluginInstallRecordAlreadyApplied
+pub benten_errors::ErrorCode::PluginInstallRecordConsentingUserMismatch
+pub benten_errors::ErrorCode::PluginInstallRecordManifestCidMismatch
+pub benten_errors::ErrorCode::PluginInstallRecordPluginDidMismatch
+pub benten_errors::ErrorCode::PluginInstallRecordUserSignatureInvalid
+pub benten_errors::ErrorCode::PluginLibraryIndexTamper
+pub benten_errors::ErrorCode::PluginManifestInvalid
+pub benten_errors::ErrorCode::PluginMetaCompositionCycleRejected
+pub benten_errors::ErrorCode::PluginNewVersionAvailable
+pub benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden
+pub benten_errors::ErrorCode::PrimitiveNotImplemented
+pub benten_errors::ErrorCode::ProductionRequiresCaps
+pub benten_errors::ErrorCode::RecipientLacksKeysForSuite
+pub benten_errors::ErrorCode::RegistryDiscoveryTimeout
+pub benten_errors::ErrorCode::ReloadSubscriberUnsubscribed
+pub benten_errors::ErrorCode::ReservedHandlerNamespace
+pub benten_errors::ErrorCode::ResumeActorMismatch
+pub benten_errors::ErrorCode::ResumeSubgraphDrift
+pub benten_errors::ErrorCode::SandboxEscapeAttempt
+pub benten_errors::ErrorCode::SandboxFuelExhausted
+pub benten_errors::ErrorCode::SandboxHostFnDenied
+pub benten_errors::ErrorCode::SandboxHostFnNotFound
+pub benten_errors::ErrorCode::SandboxHostFnRandomBudgetExceeded
+pub benten_errors::ErrorCode::SandboxManifestRegistrationDeferred
+pub benten_errors::ErrorCode::SandboxManifestUnknown
+pub benten_errors::ErrorCode::SandboxMemoryExhausted
+pub benten_errors::ErrorCode::SandboxModuleInvalid
+pub benten_errors::ErrorCode::SandboxModuleNotInstalled
+pub benten_errors::ErrorCode::SandboxNestedDispatchDenied
+pub benten_errors::ErrorCode::SandboxNestedDispatchDepthExceeded
+pub benten_errors::ErrorCode::SandboxStackOverflow
+pub benten_errors::ErrorCode::SandboxUnavailableOnWasm
+pub benten_errors::ErrorCode::SandboxWallclockExceeded
+pub benten_errors::ErrorCode::SandboxWallclockInvalid
+pub benten_errors::ErrorCode::SchemaEmitNewPrimitiveRejected
+pub benten_errors::ErrorCode::SchemaSandboxHostFnRejected
+pub benten_errors::ErrorCode::SchemaValidationFailed
+pub benten_errors::ErrorCode::SchemaVocabCycleRejected
+pub benten_errors::ErrorCode::SchemaVocabEdgeMismatch
+pub benten_errors::ErrorCode::SchemaVocabInvalidLabel
+pub benten_errors::ErrorCode::SchemaVocabRefTargetMissing
+pub benten_errors::ErrorCode::SchemaVocabRequiredPropertyMissing
+pub benten_errors::ErrorCode::SchemaVocabScalarUnknown
+pub benten_errors::ErrorCode::Serialize
+pub benten_errors::ErrorCode::SnapshotBlobSchemaVersionMismatch
+pub benten_errors::ErrorCode::StorageQuotaExceeded
+pub benten_errors::ErrorCode::StreamBackpressureDropped
+pub benten_errors::ErrorCode::StreamClosedByPeer
+pub benten_errors::ErrorCode::StreamHandleLeaked
+pub benten_errors::ErrorCode::StreamProducerWallclockExceeded
+pub benten_errors::ErrorCode::SubgraphSpecWalkFailed
+pub benten_errors::ErrorCode::SubscribeCursorLost
+pub benten_errors::ErrorCode::SubscribeDeliveryFailed
+pub benten_errors::ErrorCode::SubscribePatternInvalid
+pub benten_errors::ErrorCode::SubscribeReplayWindowExceeded
+pub benten_errors::ErrorCode::SubscribeRevokedMidStream
+pub benten_errors::ErrorCode::SubsystemDisabled
+pub benten_errors::ErrorCode::SyncCapUnverified
+pub benten_errors::ErrorCode::SyncDivergentCidRejected
+pub benten_errors::ErrorCode::SyncHashMismatch
+pub benten_errors::ErrorCode::SyncHlcDrift
+pub benten_errors::ErrorCode::SyncHopDepthExceeded
+pub benten_errors::ErrorCode::SyncRevokedDuringSession
+pub benten_errors::ErrorCode::SystemZoneWrite
+pub benten_errors::ErrorCode::ThinClientAuthRejected
+pub benten_errors::ErrorCode::ThinClientBridgePrincipalUnresolved
+pub benten_errors::ErrorCode::ThinClientChallengeReplay
+pub benten_errors::ErrorCode::ThinClientHandshakeInvalid
+pub benten_errors::ErrorCode::ThinClientOriginMismatch
+pub benten_errors::ErrorCode::ThinClientSessionExpired
+pub benten_errors::ErrorCode::TransformSyntax
+pub benten_errors::ErrorCode::TwoCidMappingIntegrityMismatch
+pub benten_errors::ErrorCode::TwoCidMappingNotFound
+pub benten_errors::ErrorCode::TxAborted
+pub benten_errors::ErrorCode::TypedCallCapDenied
+pub benten_errors::ErrorCode::TypedCallDispatchError
+pub benten_errors::ErrorCode::TypedCallInvalidInput
+pub benten_errors::ErrorCode::TypedCallUnknownOp
+pub benten_errors::ErrorCode::UcanBlobsRequestNotInScope
+pub benten_errors::ErrorCode::UcanBlobsRequestRejected
+pub benten_errors::ErrorCode::UcanClockNotInjected
+pub benten_errors::ErrorCode::Unknown(alloc::string::String)
+pub benten_errors::ErrorCode::UnknownView
+pub benten_errors::ErrorCode::UnresolvedPeerDeny
+pub benten_errors::ErrorCode::ValueFloatNan
+pub benten_errors::ErrorCode::ValueFloatNonFinite
+pub benten_errors::ErrorCode::ValueOutOfRange
+pub benten_errors::ErrorCode::VersionBranched
+pub benten_errors::ErrorCode::VersionUnknownPrior
+pub benten_errors::ErrorCode::ViewLabelMismatch
+pub benten_errors::ErrorCode::ViewStrategyARefused
+pub benten_errors::ErrorCode::ViewStrategyCReserved
+pub benten_errors::ErrorCode::WaitMetadataMissing
+pub benten_errors::ErrorCode::WaitSignalShapeMismatch
+pub benten_errors::ErrorCode::WaitSuspended
+pub benten_errors::ErrorCode::WaitTimeout
+pub benten_errors::ErrorCode::WaitTtlExpired
+pub benten_errors::ErrorCode::WaitTtlInvalid
+pub benten_errors::ErrorCode::WriteBoundaryChainNotUserRooted
+pub benten_errors::ErrorCode::WriteConflict
+impl benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::as_static_str(&self) -> &'static str
+pub fn benten_errors::ErrorCode::as_str(&self) -> &str
+pub fn benten_errors::ErrorCode::routed_edge_label(&self) -> core::option::Option<&'static str>
+impl core::clone::Clone for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::clone(&self) -> benten_errors::ErrorCode
+impl core::cmp::Eq for benten_errors::ErrorCode
+impl core::cmp::Ord for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::cmp(&self, other: &benten_errors::ErrorCode) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::eq(&self, other: &benten_errors::ErrorCode) -> bool
+impl core::cmp::PartialEq<&str> for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::eq(&self, other: &&str) -> bool
+impl core::cmp::PartialEq<benten_errors::ErrorCode> for &str
+pub fn &str::eq(&self, other: &benten_errors::ErrorCode) -> bool
+impl core::cmp::PartialOrd for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::partial_cmp(&self, other: &benten_errors::ErrorCode) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_errors::ErrorCode
+pub fn benten_errors::ErrorCode::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::StructuralPartialEq for benten_errors::ErrorCode
+impl core::str::traits::FromStr for benten_errors::ErrorCode
+pub type benten_errors::ErrorCode::Err = benten_errors::ParseErrorCodeError
+pub fn benten_errors::ErrorCode::from_str(s: &str) -> core::result::Result<Self, Self::Err>
+impl core::marker::Freeze for benten_errors::ErrorCode
+impl core::marker::Send for benten_errors::ErrorCode
+impl core::marker::Sync for benten_errors::ErrorCode
+impl core::marker::Unpin for benten_errors::ErrorCode
+impl core::marker::UnsafeUnpin for benten_errors::ErrorCode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_errors::ErrorCode
+impl core::panic::unwind_safe::UnwindSafe for benten_errors::ErrorCode
+pub struct benten_errors::ParseErrorCodeError(_)
+impl benten_errors::ParseErrorCodeError
+pub fn benten_errors::ParseErrorCodeError::as_str(&self) -> &str
+pub fn benten_errors::ParseErrorCodeError::into_inner(self) -> alloc::string::String
+impl core::clone::Clone for benten_errors::ParseErrorCodeError
+pub fn benten_errors::ParseErrorCodeError::clone(&self) -> benten_errors::ParseErrorCodeError
+impl core::cmp::Eq for benten_errors::ParseErrorCodeError
+impl core::cmp::PartialEq for benten_errors::ParseErrorCodeError
+pub fn benten_errors::ParseErrorCodeError::eq(&self, other: &benten_errors::ParseErrorCodeError) -> bool
+impl core::error::Error for benten_errors::ParseErrorCodeError
+impl core::fmt::Debug for benten_errors::ParseErrorCodeError
+pub fn benten_errors::ParseErrorCodeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_errors::ParseErrorCodeError
+pub fn benten_errors::ParseErrorCodeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_errors::ParseErrorCodeError
+impl core::marker::Freeze for benten_errors::ParseErrorCodeError
+impl core::marker::Send for benten_errors::ParseErrorCodeError
+impl core::marker::Sync for benten_errors::ParseErrorCodeError
+impl core::marker::Unpin for benten_errors::ParseErrorCodeError
+impl core::marker::UnsafeUnpin for benten_errors::ParseErrorCodeError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_errors::ParseErrorCodeError
+impl core::panic::unwind_safe::UnwindSafe for benten_errors::ParseErrorCodeError
+pub const benten_errors::FIRING_CODES_AT_PHASE_2A_SNAPSHOT: &[benten_errors::ErrorCode]
+pub const benten_errors::RESERVED_CODES_AT_PHASE_2A_SNAPSHOT: &[benten_errors::ErrorCode]

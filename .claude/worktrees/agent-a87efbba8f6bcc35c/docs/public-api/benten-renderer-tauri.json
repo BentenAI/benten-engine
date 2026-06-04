@@ -1,0 +1,47 @@
+{
+  "_comment": "Per-NEW-crate cargo-public-api baseline per seq-minor-5 + gap #1a (r2-test-landscape §5). The F2 test `ipc_method_name_stability_drift_detector.rs` references this file as the source of truth for the IPC method-name allowlist; the `_anticipated_method_set` array is matched byte-for-byte against `TauriRenderer::ipc_method_allowlist()` at HEAD. Adding a method requires an explicit baseline update + admin UI v0 manifest review (T3 defense — silent IPC surface expansion is a manifest-bypass risk).",
+  "_baseline_seed_at_commit": "Phase-4-Foundation G24-E wave-7 landing",
+  "_crate": "benten-renderer-tauri",
+  "_version": "0.1.0",
+  "_surfaces": [
+    "pub enum CapRequirement { None, Required(&'static str) }",
+    "pub struct IpcMethod { pub name: &'static str, pub cap: CapRequirement }",
+    "pub const IPC_METHODS: &[IpcMethod]",
+    "pub fn ipc_method(name: &str) -> Option<&'static IpcMethod>",
+    "pub fn ipc_method_names() -> impl Iterator<Item = &'static str>",
+    "pub const WEBVIEW_CSP_HEADER: &str",
+    "pub struct IpcRequest { pub method: String, pub payload: serde_json::Value, pub session: Option<SessionToken> }",
+    "pub enum IpcError { MethodNotInAllowlist, CapabilityNotInManifest, SessionResolve(ThinClientSessionError), MissingSession }",
+    "pub fn IpcError::error_code(&self) -> ErrorCode",
+    "pub struct AdminUiManifest { pub granted_caps: BTreeSet<String> }",
+    "pub fn AdminUiManifest::with_caps<I, S>(caps: I) -> Self",
+    "pub fn AdminUiManifest::grants(&self, req: &CapRequirement) -> bool",
+    "pub struct InProcessSessionBridge",
+    "pub fn InProcessSessionBridge::new(session: Arc<DidKeyedSession>) -> Self",
+    "pub fn InProcessSessionBridge::transport(&self) -> Transport",
+    "pub fn InProcessSessionBridge::resolve(&self, token: &SessionToken, presented_origin: &str) -> Result<String, ThinClientSessionError>",
+    "pub fn InProcessSessionBridge::session(&self) -> &Arc<DidKeyedSession>",
+    "pub struct TauriRenderer",
+    "pub fn TauriRenderer::new_with_manifest(manifest: AdminUiManifest) -> Self",
+    "pub fn TauriRenderer::with_bridge(self, bridge: InProcessSessionBridge) -> Self",
+    "pub fn TauriRenderer::manifest(&self) -> &AdminUiManifest",
+    "pub fn TauriRenderer::webview_csp_header(&self) -> &'static str",
+    "pub fn TauriRenderer::ipc_method_allowlist() -> Vec<String>",
+    "pub fn TauriRenderer::dispatch_ipc(&self, request: IpcRequest) -> Result<(), IpcError>",
+    "impl Renderer for TauriRenderer"
+  ],
+  "_ipc_method_name_allowlist_baseline": {
+    "_comment": "Drift-detector baseline for the IPC allowlist method-name set, per gap #1a. The drift-detector pin asserts the populated list at HEAD matches this baseline byte-for-byte. Adding a method requires an explicit baseline update + manifest review (T3 defense — silent IPC surface expansion is a manifest-bypass risk).",
+    "_status": "POPULATED_AT_G24_E_WAVE_7",
+    "_anticipated_method_set": [
+      "engine.read_node_as",
+      "engine.call_as",
+      "engine.subscribe_via_on_change_as_with_cursor",
+      "engine.list_caps",
+      "engine.identity.user_did",
+      "plugin.manifest.review",
+      "plugin.install.consent",
+      "ui.notify"
+    ]
+  }
+}

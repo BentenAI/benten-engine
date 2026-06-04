@@ -1,0 +1,33 @@
+# Clippy configuration for Benten Engine.
+# See https://rust-lang.github.io/rust-clippy/master/ for lint list.
+
+avoid-breaking-exported-api = true
+cognitive-complexity-threshold = 30
+type-complexity-threshold = 250
+too-many-arguments-threshold = 7
+
+# Benten-specific terms that must not trigger the `doc_markdown` lint. These are
+# concrete standards/identifiers, not generic jargon — wrapping them in backticks
+# everywhere they appear in docs is noise.
+doc-valid-idents = [
+    "CIDv1", "CID", "IPLD", "DAG-CBOR", "BLAKE3", "UCAN", "DID", "MVCC",
+    "HLC", "IVM", "WASM", "P2P", "ADDL", "OAuth", "PostgreSQL", "AGE",
+    "WebSocket", "SSE", "TypeScript", "JavaScript", "Node.js",
+    # Standard clippy defaults (see clippy docs) — re-listed because specifying
+    # this key replaces the default list entirely.
+    "KiB", "MiB", "GiB", "TiB", "PiB", "EiB",
+    "DirectX", "ECMAScript", "GPLv2", "GPLv3",
+    "GitHub", "GitLab", "IPv4", "IPv6", "ClojureScript", "CoffeeScript",
+    "JavaScript", "PureScript", "TypeScript",
+    "NaN", "NaNs",
+    "OAuth", "GraphQL",
+    "OCaml",
+    "OpenDNS", "OpenGL", "OpenMP", "OpenSSH", "OpenSSL", "OpenStreetMap",
+    "OpenTelemetry", "WebGL", "WebGL2", "WebGPU",
+    "TensorFlow",
+    "TrueType",
+    "iOS", "macOS", "FreeBSD",
+    "TeX", "LaTeX", "BibTeX", "BibLaTeX",
+    "MinGW",
+    "CamelCase",
+]

@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="In-memory `KVBackend` implementation backed by a `BTreeMap`."><title>benten_graph::in_memory_backend - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="benten_graph" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module in_memory_backend</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../benten_graph/index.html">benten_<wbr>graph</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module in_<wbr>memory_<wbr>backend</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#scope-vs-crateredbbackend" title="Scope vs. `crate::RedbBackend`">Scope vs. <code>crate::RedbBackend</code></a></li><li><a href="#concurrency" title="Concurrency">Concurrency</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate benten_<wbr>graph</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">benten_graph</a></div><h1>Module <span>in_<wbr>memory_<wbr>backend</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>In-memory <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a> implementation backed by a <code>BTreeMap</code>.</p>
+<p>HANDOFF §3.F wave-5: 9 of 10 <code>packages/engine/test/*.test.ts</code> files use
+<code>Engine.open(":memory:")</code> and need a transient backend. <code>InMemoryBackend</code>
+satisfies the <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a> trait surface — get / put / delete / scan /
+put_batch — with byte-for-byte parity to <a href="../redb_backend/struct.RedbBackend.html" title="struct benten_graph::redb_backend::RedbBackend"><code>crate::RedbBackend</code></a>’s
+<code>KVBackend</code> impl on the same op sequences (see
+<code>tests/in_memory_backend_equiv_to_redb.rs</code>).</p>
+<h3 id="scope-vs-crateredbbackend"><a class="doc-anchor" href="#scope-vs-crateredbbackend">§</a>Scope vs. <a href="../redb_backend/struct.RedbBackend.html" title="struct benten_graph::redb_backend::RedbBackend"><code>crate::RedbBackend</code></a></h3>
+<p><code>InMemoryBackend</code> implements ONLY the <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a> trait. It is <strong>not</strong>
+a <a href="../store/trait.NodeStore.html" title="trait benten_graph::store::NodeStore"><code>crate::store::NodeStore</code></a> or <a href="../store/trait.EdgeStore.html" title="trait benten_graph::store::EdgeStore"><code>crate::store::EdgeStore</code></a> — those
+traits carry per-CID change-event subscription, index maintenance, and
+the <code>WriteContext</code> capability-policy hook, which are
+<a href="../redb_backend/struct.RedbBackend.html" title="struct benten_graph::redb_backend::RedbBackend"><code>crate::RedbBackend</code></a>-specific concerns wired into the engine’s
+<code>Arc&lt;RedbBackend&gt;</code> field. Wiring <code>Engine::open(":memory:")</code> to a
+transient store therefore goes through redb’s own <code>InMemoryBackend</code>
+(a memory-backed redb page store) so the engine retains full
+<code>RedbBackend</code> semantics — the higher-level invariants (Inv-11 system-
+zone gating, Inv-13 immutability cache, change-event publishing,
+transaction primitive) are unchanged.</p>
+<p>This file provides the <strong>pure-trait</strong> in-memory backend so that future
+non-redb consumers documented in the <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a> trait docs (Phase 2
+WASM peer-fetch, iroh-fetch, test mocks) have a reference impl with a
+known-correct equivalence proof against redb.</p>
+<h3 id="concurrency"><a class="doc-anchor" href="#concurrency">§</a>Concurrency</h3>
+<p>A <code>Mutex&lt;BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;&gt;</code> is used rather than <code>papaya</code> for
+three reasons:</p>
+<ol>
+<li>Ordered iteration is required for <a href="../backend/trait.KVBackend.html#tymethod.scan" title="method benten_graph::backend::KVBackend::scan"><code>KVBackend::scan</code></a> (prefix
+semantics) — <code>BTreeMap::range</code> makes this O(log n + hits) without
+extra sorting.</li>
+<li><code>put_batch</code> is required to be atomic; a single coarse <code>Mutex</code> makes
+that trivially correct.</li>
+<li>The intended workload is single-process tests / transient runs; the
+finer-grained concurrency <code>papaya</code> provides is not needed and would
+complicate the atomic-batch contract.</li>
+</ol>
+<p>Lock poisoning surfaces as <a href="../enum.GraphError.html#variant.Redb" title="variant benten_graph::GraphError::Redb"><code>crate::GraphError::Redb</code></a> with a
+<code>"in-memory: lock poisoned"</code> payload; this matches the
+<code>Redb(String)</code>-payload precedent used elsewhere for non-redb-origin
+storage-layer failures.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.InMemoryBackend.html" title="struct benten_graph::in_memory_backend::InMemoryBackend">InMemory<wbr>Backend</a></dt><dd>In-memory <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a>. See module docs.</dd></dl></section></div></main></body></html>

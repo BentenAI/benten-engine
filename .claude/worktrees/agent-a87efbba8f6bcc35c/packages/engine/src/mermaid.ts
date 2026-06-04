@@ -1,0 +1,204 @@
+// Render a Subgraph as a Mermaid `flowchart` diagram.
+//
+// Pure function. No runtime dependency on `@benten/engine-native`.
+// Output conforms to the Mermaid flowchart grammar (verified in
+// `mermaid.test.ts` using `@mermaid-js/parser`).
+//
+// Shape: one node per subgraph primitive, one directed edge per
+// outgoing edge. Edge labels are preserved (`NEXT`, `CASE:<value>`,
+// `ON_NOT_FOUND`, etc.). Node shapes are chosen per primitive to aid
+// readability when rendered — Mermaid otherwise renders every node as
+// a plain rectangle.
+//
+// Node-id rule: Mermaid ids must be alphanumeric-ish. We sanitize the
+// DSL node ids (e.g. `read-3`) into `n_read_3` so Mermaid accepts them
+// regardless of whether the DSL id scheme changes.
+
+import type { Subgraph, SubgraphNode } from "./types.js";
+
+/**
+ * Render the given `Subgraph` as a Mermaid flowchart string.
+ *
+ * Guarantees:
+ *   * Output starts with `flowchart TD\n`.
+ *   * Contains at least one `-->` edge when the subgraph has ≥2 linked
+ *     nodes. (A one-node subgraph has no edges; we emit just the node
+ *     declaration, still parseable.)
+ *   * Stable across runs (no timestamps, no random ids).
+ *   * Every node appears exactly once, regardless of how many edges
+ *     reference it.
+ */
+export function toMermaid(sg: Subgraph): string {
+  const lines: string[] = ["flowchart TD"];
+
+  // Stable node ordering: sort by DSL id for deterministic output
+  // independent of insertion order changes.
+  const nodes = [...sg.nodes].sort((a, b) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+  );
+
+  // Node declarations first, then edges. This ensures Mermaid knows
+  // about every node before an edge references it.
+  for (const n of nodes) {
+    lines.push(`  ${mermaidId(n.id)}${nodeShape(n)}`);
+  }
+
+  // Edges in a stable order (by source id, then edge label).
+  for (const n of nodes) {
+    const edgeKeys = Object.keys(n.edges).sort();
+    for (const edgeLabel of edgeKeys) {
+      const targetId = n.edges[edgeLabel];
+      // Phase 2a G3-B (dx-r1-9): WAIT outgoing edges render as dashed
+      // `-.->` with the explicit label `on resume`. The dashed arrow is
+      // Mermaid's visual signal that the edge fires after a suspend
+      // boundary (the WAIT primitive parks the executor until a signal
+      // arrives or a duration elapses). Other primitives keep the solid
+      // `-->` arrow with their original edge label (`NEXT` collapses to
+      // an unlabeled edge).
+      if (n.primitive === "wait") {
+        lines.push(
+          `  ${mermaidId(n.id)} -.->|on resume| ${mermaidId(targetId)}`,
+        );
+        continue;
+      }
+      const label = edgeLabel === "NEXT" ? "" : edgeLabel;
+      if (label) {
+        lines.push(
+          `  ${mermaidId(n.id)} -->|${escapeLabel(label)}| ${mermaidId(targetId)}`,
+        );
+      } else {
+        lines.push(`  ${mermaidId(n.id)} --> ${mermaidId(targetId)}`);
+      }
+    }
+  }
+
+  // Ensure trailing newline for a textual hash-stable output.
+  return lines.join("\n") + "\n";
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function mermaidId(dslId: string): string {
+  // Replace any character Mermaid may not accept in a bare id.
+  // Alphanumerics + underscore is the safe subset.
+  return "n_" + dslId.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+function nodeShape(n: SubgraphNode): string {
+  const label = escapeLabel(`${n.primitive.toUpperCase()}: ${shortArgs(n)}`);
+  switch (n.primitive) {
+    case "branch":
+      return `{${label}}`;
+    case "respond":
+    case "emit":
+      return `([${label}])`;
+    case "iterate":
+      return `[/${label}/]`;
+    case "call":
+      return `[[${label}]]`;
+    case "transform":
+      return `>${label}]`;
+    default:
+      return `[${label}]`;
+  }
+}
+
+function shortArgs(n: SubgraphNode): string {
+  // Pick a couple of interesting keys per primitive for the label. Keep
+  // the rendered label short — Mermaid struggles with extremely long
+  // labels and the intent is at-a-glance visual, not full detail.
+  const a = n.args;
+  const pick = (k: string): string =>
+    a[k] === undefined ? "" : String(a[k]);
+  switch (n.primitive) {
+    case "read":
+      // G19-D §7.9 cascade: post-translateReadArgs the property bag
+      // carries `label` (verbatim) + `query_kind` (translated from
+      // user-facing `by`). Render the translated keys to match the
+      // landed DSL shape.
+      return [pick("label"), pick("query_kind")].filter(Boolean).join(":");
+    case "write":
+      return pick("label");
+    case "transform":
+      // G19-D §7.9 cascade: TRANSFORM keeps `expr` verbatim. No change.
+      return pick("expr").slice(0, 40);
+    case "branch":
+      // G19-D §7.9 cascade: post-translateBranchArgs the BRANCH primitive
+      // node's args bag carries `match_value` (translated from user-facing
+      // `on`). Pre-cascade this arm read `pick("on")` and rendered empty.
+      return pick("match_value");
+    case "iterate":
+      // G19-D §7.9 cascade: post-translateIterateArgs the ITERATE node
+      // carries `items` (translated from user-facing `over`) + `max`
+      // (verbatim). Render translated keys.
+      return `${pick("items")} x${pick("max")}`;
+    case "call":
+      // G19-D §7.9 cascade: post-translateCallArgs the CALL node carries
+      // `target` (translated from user-facing `handler`) + `call_op`
+      // (translated from user-facing `action`). Render translated keys.
+      return [pick("target"), pick("call_op")].filter(Boolean).join("/");
+    case "respond":
+      // G19-D §7.9 cascade: RespondArgs.edge is by-design NOT spread
+      // into the property bag (edge-table-driven routing); RESPOND args
+      // bag carries `body` + `status`. Pre-cascade this arm tried to
+      // pick `edge` first which was always absent — the body fallback
+      // happened to work. Now read body/status directly.
+      return pick("body") || pick("status") || "";
+    case "emit":
+      // R6 Round-3 r6-r3-cr-1: the DSL builders write `channel: args.event`
+      // into the SubgraphNode args bag (see `dsl.ts::emit()` builders) so the
+      // eval-side EMIT primitive (which reads `channel`) fires correctly.
+      // Pre-fix this case picked `event`, which was never present, and the
+      // rendered label was empty `EMIT: `. Read `channel` to match the
+      // landed DSL shape.
+      return pick("channel");
+    case "wait":
+      // R6-R5 r6-r5-pcds-2 cascade: the DSL spread now translates
+      // `duration: "5m"` into `duration_ms: 300_000` (Int) +
+      // `signal: <s>` stays as Text + `signal: + duration` translates
+      // duration to `timeout_ms: <ms>` (see `dsl.ts::translateWaitArgs`).
+      // Pre-pcds-2-fix this arm read `duration` (which the spread no
+      // longer writes) and would render `WAIT: ` (empty). Post-fix
+      // prefer the signal name when present (more meaningful at-a-glance
+      // than the millisecond integer); fall back to a `<N>ms` rendering
+      // of the duration.
+      {
+        const sig = pick("signal");
+        if (sig) return sig;
+        const dms = pick("duration_ms");
+        if (dms) return `${dms}ms`;
+        const tms = pick("timeout_ms");
+        if (tms) return `${tms}ms`;
+        return "";
+      }
+    case "stream":
+      return pick("source");
+    case "subscribe":
+      // R6-R5 r6-r5-pcds-1 (22nd producer/consumer drift): the DSL
+      // builders write `pattern: args.event` into the SubgraphNode args
+      // bag (see `dsl.ts::SubgraphBuilder.subscribe` + `CaseBuilder.subscribe`)
+      // so the eval-side SUBSCRIBE primitive (which reads `pattern`)
+      // matches. PR #74 r6-r4-cr-1 landed the DSL-side rename; the
+      // analogous SUBSCRIBE arm of this renderer was missed in that
+      // fix-pass + rendered an empty label `SUBSCRIBE: ` for every
+      // DSL-built SUBSCRIBE node. Read `pattern` to match the landed
+      // DSL shape (mirrors the `case "emit"` precedent above).
+      return pick("pattern");
+    case "sandbox":
+      return pick("module");
+    default:
+      return "";
+  }
+}
+
+function escapeLabel(s: string): string {
+  // Mermaid labels don't tolerate quotes or closing brackets without
+  // escaping. We strip aggressive punctuation rather than escaping —
+  // the rendered label is already a short at-a-glance string.
+  return s
+    .replace(/"/g, "'")
+    .replace(/[\]\[{}()|<>]/g, "")
+    .trim();
+}

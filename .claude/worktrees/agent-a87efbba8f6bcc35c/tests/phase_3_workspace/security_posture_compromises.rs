@@ -1,0 +1,537 @@
+//! Phase-3 SECURITY-POSTURE.md compromise-closure pins.
+//!
+//! ## Ownership (per r2-test-landscape §13 ambiguous-ownership pre-emption)
+//!
+//! Each R3 agent owns DISJOINT test-fn names within this shared file:
+//!
+//! - **R3-A** (R3 canary): G13-E #12 (DurabilityMode::Group flip).
+//! - **R3-B**: G14-C #17 + #18 + #21 + G14-D #2 D5 + #10.
+//! - **R3-C**: G15-A #11 (per-row read-gate).
+//! - **R3-D**: G17-A2 #16 + G18-A #19 + #20.
+//! - **R3-E** (G20-B closure dispatch): authors `security_posture_phase_3_close_compromise_table_present`
+//!   FINAL pin asserting the docs-sweep retensed every closed
+//!   compromise.
+//!
+//! ## Pin sources
+//!
+//! - r2-test-landscape §2.1 G13-E row `security_posture_compromise_12_marked_closed`.
+//! - S-3 / C-8 (G13-E DurabilityMode::Group flip closes Compromise #12).
+//! - `docs/SECURITY-POSTURE.md` Compromise #12 (APFS fsync floor).
+
+#![allow(clippy::unwrap_used)]
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #12 retense. G13-E wave-3 shipped DurabilityMode::Group default flip (PR #105) + Compromise #12 CLOSED in SECURITY-POSTURE.md; test body pins specific doc-drift assertion that needs driver authoring; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch (sibling to §7.3.A.5 doc-drift detector closure shape) per Wave-E rationale-only sweep."]
+fn security_posture_compromise_12_marked_closed() {
+    // S-3 / C-8 pin. G13-E implementer retenses
+    // `docs/SECURITY-POSTURE.md` so Compromise #12 (APFS fsync floor)
+    // is marked CLOSED-IN-PHASE-3-G13-E (or equivalent post-G13-E
+    // tense). The test asserts the CLOSED marker is present.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   // Find the Compromise #12 section. The exact marker may be
+    //   // any of: "CLOSED at G13-E", "CLOSED-IN-PHASE-3-G13-E",
+    //   // "Status: CLOSED (G13-E)". Implementer pins the chosen form.
+    //   let section = extract_compromise_section(&posture, 12);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #12 must be marked CLOSED at G13-E per S-3 / C-8");
+    //   assert!(section.contains("G13-E") || section.contains("Phase 3"),
+    //       "Compromise #12 closure must cite G13-E (or Phase 3) for traceability");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects which compromises Phase 3 closed. Defends
+    // against the "code change landed, doc never updated" failure
+    // shape (cap-major-2 / pim-1 doc-coupling).
+    unimplemented!(
+        "G13-E wires SECURITY-POSTURE.md grep assertion that Compromise #12 is marked CLOSED"
+    );
+}
+
+// =====================================================================
+// R3-D pins (per r2-test-landscape §13 disjoint-fn-name partition):
+//   - G17-A2 Compromise #16 (random host-fn → workspace CSPRNG)
+//   - G18-A  Compromise #19 (IndexedDB persistence)
+//   - G18-A  Compromise #20 (cross-browser determinism CI cadence)
+// =====================================================================
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #16 retense (random host-fn workspace CSPRNG). G17-A2 wave-5b shipped (PR #118); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn security_posture_compromise_16_marked_closed() {
+    // r2-test-landscape §2.5 G17-A2 pin. G17-A2 implementer wires:
+    //
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 16);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #16 (random host-fn) must be marked CLOSED at G17-A2");
+    //   assert!(section.contains("G17-A2") || section.contains("Phase 3"),
+    //       "Compromise #16 closure must cite G17-A2 (or Phase 3) for traceability");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md table reflects
+    // that the workspace-CSPRNG decision (D-PHASE-3-11) closed
+    // Compromise #16. Defends pim-1 doc-coupling for the random
+    // host-fn surface.
+    unimplemented!(
+        "G17-A2 wires SECURITY-POSTURE.md grep assertion that Compromise #16 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #19 retense (IndexedDB persistence). G18-A wave-5a shipped PARTIAL closure; full closure tracked at §4.3 G18-A-followup destination; test body pins doc-drift assertion; un-ignore at §4.3 landing per Wave-E rationale-only sweep."]
+fn security_posture_compromise_19_marked_closed() {
+    // r2-test-landscape §2.6 G18-A pin. G18-A implementer wires:
+    //
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 19);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #19 (IndexedDB persistence) must be marked CLOSED at G18-A");
+    //
+    //   // Per CLAUDE.md baked-in #17: the closure narrative must
+    //   // reflect THIN-CLIENT cache scope (NOT full sync state):
+    //   assert!(section.contains("thin-client") || section.contains("thin client"),
+    //       "Compromise #19 closure narrative must reflect thin-client cache scope per CLAUDE.md baked-in #17");
+    //
+    //   // br-r4-r1-6 / br-r4-r2-4 MINOR pin: the closure narrative
+    //   // MUST also record the rationale for why IndexedDB was chosen
+    //   // OVER alternatives (notably OPFS / File System Access API).
+    //   // Without this rationale-record the architectural-history
+    //   // trail is lost — Phase-4-or-later cannot revisit the
+    //   // decision because the original tradeoffs aren't recorded.
+    //   // Same shape as Phase-2b 'closed-without-rationale-record'
+    //   // patterns that produced the wave-8j retrospective re-
+    //   // derivations.
+    //   assert!(
+    //       section.contains("OPFS") || section.contains("File System Access"),
+    //       "Compromise #19 closure narrative MUST name the OPFS / File System \
+    //        Access API alternative considered per br-r4-r1-6 / br-r4-r2-4");
+    //   assert!(
+    //       section.contains("chosen") || section.contains("rationale")
+    //         || section.contains("revisit"),
+    //       "Compromise #19 closure narrative MUST record the chosen-over / \
+    //        rationale / revisit-trigger for IndexedDB-vs-OPFS per br-r4-r1-6");
+    //
+    // OBSERVABLE consequence: the closure narrative honestly says
+    // "closed at thin-client cache scope," not aspirationally "closed
+    // at full sync state." Defends architectural commitment +
+    // doc-coupling. The rationale-record assertion locks in the
+    // architectural-history trail per pim-1 §3.5b (closed-with-rationale,
+    // not closed-with-only-the-verb).
+    unimplemented!(
+        "G18-A wires SECURITY-POSTURE.md grep assertion that Compromise #19 is marked CLOSED at thin-client scope \
+         + rationale-record asserting OPFS/File System Access alternative + chosen/rationale/revisit per br-r4-r1-6"
+    );
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #20 retense (cross-browser determinism CI cadence). G18-A wave-5a shipped PARTIAL closure; full closure tracked at §4.3 G18-A-followup destination; test body pins doc-drift assertion; un-ignore at §4.3 landing per Wave-E rationale-only sweep."]
+fn security_posture_compromise_20_marked_closed() {
+    // r2-test-landscape §2.6 G18-A pin. G18-A implementer wires:
+    //
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 20);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #20 (cross-browser determinism) must be marked CLOSED at G18-A");
+    //
+    //   // Closure narrative cites the Playwright matrix + cadence:
+    //   assert!(section.contains("Playwright") || section.contains("playwright")
+    //         || section.contains("cross-browser-determinism"),
+    //       "Compromise #20 closure narrative must cite the Playwright matrix mechanism");
+    //
+    //   // The actual workflow exists:
+    //   let wf = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join(".github").join("workflows")
+    //           .join("cross-browser-determinism.yml")
+    //   );
+    //   assert!(wf.is_ok(),
+    //       ".github/workflows/cross-browser-determinism.yml must exist per Compromise #20 closure");
+    //
+    // OBSERVABLE consequence: a closure claim is paired with the
+    // actual mechanism (Playwright matrix workflow). Defends pim-1
+    // doc-coupling — the doc says "closed by X mechanism" AND X
+    // mechanism actually exists.
+    unimplemented!(
+        "G18-A wires SECURITY-POSTURE.md + cross-browser-determinism.yml paired existence assertion"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// R3-B compromise-closure pins (G14-C #17 + #18 + #21 + G14-D #2 D5 + #10).
+//
+// Pin sources (per r2-test-landscape §2.2 G14-C + G14-D):
+//
+// - `security_posture_compromise_17_marked_closed` — G14-C plan §3
+// - `security_posture_compromise_18_marked_closed` — G14-C plan §3
+// - `security_posture_compromise_21_marked_closed` — G14-C S-4
+// - `security_posture_compromise_2_marked_closed` — G14-D plan §3
+// - `security_posture_compromise_10_engine_side_asymmetry_marked_closed` — G14-D plan §3
+//
+// Each pin asserts a specific marker has been added to
+// `docs/SECURITY-POSTURE.md` — the docs sweep at the owning wave is
+// the load-bearing producer; this pin is the consumer side.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #17 retense. G14-C wave-4b shipped (PR #110); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn security_posture_compromise_17_marked_closed() {
+    // G14-C plan §3 pin. Compromise #17 = durable module-bytes
+    // registry. G14-C wave-4b retenses SECURITY-POSTURE.md so #17 is
+    // marked CLOSED with citation to G14-C.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 17);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #17 must be marked CLOSED at G14-C");
+    //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
+    //       "Compromise #17 closure must cite G14-C for traceability");
+    //   // Closure narrative cites the durable module-bytes registry
+    //   // mechanism (the load-bearing surface, not just the verb):
+    //   assert!(section.contains("module") && (section.contains("durable") || section.contains("registry")),
+    //       "Compromise #17 closure narrative must cite durable module-bytes registry mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects that Compromise #17 closed at G14-C via the
+    // durable module-bytes registry. Defends against the "code change
+    // landed, doc never updated" failure shape (cap-major-2 / pim-1
+    // doc-coupling closure for #17).
+    unimplemented!(
+        "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #17 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #18 retense. G14-C wave-4b shipped; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn security_posture_compromise_18_marked_closed() {
+    // G14-C plan §3 pin. Compromise #18 = handler-version chain
+    // durability. G14-C wave-4b retenses SECURITY-POSTURE.md so #18
+    // is marked CLOSED with citation to G14-C.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 18);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #18 must be marked CLOSED at G14-C");
+    //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
+    //       "Compromise #18 closure must cite G14-C (or Phase 3) for traceability");
+    //   // Closure narrative cites the handler-version chain as the
+    //   // durable mechanism (versus the Phase-2b in-memory shape):
+    //   assert!(section.contains("handler-version") || section.contains("handler version"),
+    //       "Compromise #18 closure narrative must cite the handler-version chain mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects that the handler-version chain durability
+    // closed Compromise #18 at G14-C. Defends against the "code change
+    // landed, doc never updated" failure shape (cap-major-2 / pim-1
+    // doc-coupling).
+    unimplemented!(
+        "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #18 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #21 retense. G14-C wave-4b shipped; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn security_posture_compromise_21_marked_closed() {
+    // G14-C S-4 pin. Compromise #21 = manifest signing populated.
+    // G14-C wave-4b closes via Ed25519 sign at install + verify at
+    // load.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 21);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #21 must be marked CLOSED at G14-C");
+    //   assert!(section.contains("G14-C") || section.contains("Phase 3"),
+    //       "Compromise #21 closure must cite G14-C (or Phase 3) for traceability");
+    //   // Closure narrative cites Ed25519 sign-at-install + verify-at-load
+    //   // (the load-bearing mechanism, not just the surface):
+    //   assert!(section.contains("Ed25519") || section.contains("ed25519"),
+    //       "Compromise #21 closure narrative must cite Ed25519 signing mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md compromise table
+    // accurately reflects that manifest-signing landed at G14-C. Defends
+    // against the "code change landed, doc never updated" failure shape
+    // (cap-major-2 / pim-1 doc-coupling).
+    unimplemented!(
+        "G14-C wires SECURITY-POSTURE.md grep assertion that Compromise #21 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #2 retense. G14-D wave-5a shipped (PR #115); test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn security_posture_compromise_2_marked_closed() {
+    // G14-D plan §3 pin. Compromise #2 D5 = SUBSCRIBE cross-trust-
+    // boundary filtering. G14-D wave-5a closes via per-event cap
+    // recheck against durable grant store + delivery-time filter.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 2);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #2 must be marked CLOSED at G14-D");
+    //   assert!(section.contains("G14-D") || section.contains("Phase 3"),
+    //       "Compromise #2 closure must cite G14-D (or Phase 3) for traceability");
+    //   // Closure narrative cites the registration-open + delivery-time
+    //   // filter shape (the load-bearing reversal of the Phase-2b interim):
+    //   assert!(section.contains("delivery") || section.contains("per-event"),
+    //       "Compromise #2 D5 closure narrative must cite delivery-time per-event cap recheck");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md table reflects
+    // that Compromise #2 D5 closed at G14-D via the delivery-time
+    // filter shape. Defends against doc-coupling pim-1 + the
+    // registration-open architectural commitment per plan §3 G14-D.
+    unimplemented!(
+        "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #2 is marked CLOSED"
+    );
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — SECURITY-POSTURE.md Compromise #10 (engine-side) retense. G14-D wave-5a shipped; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn security_posture_compromise_10_engine_side_asymmetry_marked_closed() {
+    // G14-D plan §3 pin. Compromise #10 = WAIT-suspend / WAIT-resume
+    // engine-side asymmetry (cap_snapshot_hash binding). G14-D
+    // wave-5a closes via cross-process round-trip + UCAN proof-chain
+    // binding.
+    //
+    // Concrete shape:
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 10);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #10 must be marked CLOSED at G14-D");
+    //   assert!(section.contains("G14-D") || section.contains("Phase 3"),
+    //       "Compromise #10 closure must cite G14-D (or Phase 3) for traceability");
+    //   // Closure narrative cites cap_snapshot_hash + cross-process resume
+    //   // (the load-bearing mechanism, not just the surface):
+    //   assert!(section.contains("cap_snapshot_hash") || section.contains("cross-process"),
+    //       "Compromise #10 closure narrative must cite cap_snapshot_hash binding mechanism");
+    //
+    // OBSERVABLE consequence: the SECURITY-POSTURE.md table reflects
+    // that Compromise #10 closed at G14-D via cap_snapshot_hash UCAN
+    // proof-chain binding + cross-process round-trip. Defends pim-1
+    // doc-coupling for the WAIT-resume surface.
+    unimplemented!(
+        "G14-D wires SECURITY-POSTURE.md grep assertion that Compromise #10 is marked CLOSED"
+    );
+}
+
+#[test]
+fn security_posture_compromise_11_materialization_gate_landed_at_g15_a() {
+    // R3-C ownership per r2-test-landscape §13 ambiguous-ownership
+    // pre-emption + ivm-minor-7 (positive claim, not pending).
+    //
+    // G15-A implementer retenses `docs/SECURITY-POSTURE.md` so
+    // Compromise #11 (IVM views coarse-grained read-gate) is marked
+    // CLOSED-IN-PHASE-3-G15-A (or equivalent post-G15-A tense, with
+    // the closure narrative referencing the composition: G15-A
+    // materialization-time gate + G14-D delivery-time gate).
+    //
+    // Concrete shape (r4-r2-ivm-5 STRENGTHENED — symbol-form cites per
+    // §3.5b HARDENED point-1: every path::symbol cite verified at HEAD,
+    // proptest-symbol-of-record + materialization-gate-symbol-of-record
+    // for Compromise #11 closure narrative):
+    //   let posture = std::fs::read_to_string(
+    //       std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //           .join("..").join("..").join("docs").join("SECURITY-POSTURE.md")
+    //   ).unwrap();
+    //   let section = extract_compromise_section(&posture, 11);
+    //   assert!(section.to_lowercase().contains("closed"),
+    //       "SECURITY-POSTURE.md Compromise #11 must be marked CLOSED at G15-A");
+    //   assert!(section.contains("G15-A") || section.contains("G14-D")
+    //         || section.contains("Phase 3"),
+    //       "Compromise #11 closure narrative must cite G15-A (materialization-time gate) and/or G14-D (delivery-time gate)");
+    //
+    //   // r4-r2-ivm-5 STRENGTHENING: closure narrative cites the
+    //   // proptest symbol-of-record (G15-B drift-detector) AND the
+    //   // materialization-gate symbol-of-record (G15-A view-read gate).
+    //   // Replaces the prior generic substring-containment ('G15-A' /
+    //   // 'G14-D' / 'Phase 3') with proptest-symbol cites per
+    //   // ivm-major-2 narrative + §3.5b HARDENED point-1.
+    //   assert!(
+    //       section.contains("prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern"),
+    //       "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite \
+    //        the proptest-symbol-of-record \
+    //        `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern` \
+    //        per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    //   );
+    //   assert!(
+    //       section.contains("ivm_view_per_row_read_gate_against_actor_cap_set"),
+    //       "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite \
+    //        the materialization-gate symbol-of-record \
+    //        `ivm_view_per_row_read_gate_against_actor_cap_set` \
+    //        per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    //   );
+    //
+    // OBSERVABLE consequence: closure narrative reflects the
+    // composition (materialization + delivery) AND cites the specific
+    // proptest + materialization-gate symbols by name. Defends pim-1
+    // doc-coupling + the dual-layer IVM read-gate architecture +
+    // r4-r2-ivm-5 symbol-form-cite strengthening.
+    //
+    // Companion: tools/cite-drift-detector/tests/cite_drift_detector_finds_known_drift_fixture.rs
+    // extended at G15-A landing with a SECURITY-POSTURE Compromise #11
+    // mini-fixture covering both symbols (per r4-r2-ivm-5
+    // recommendation #2).
+    let posture = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("docs")
+            .join("SECURITY-POSTURE.md"),
+    )
+    .unwrap();
+    let section = extract_compromise_section(&posture, 11);
+    assert!(
+        section.to_lowercase().contains("closed"),
+        "SECURITY-POSTURE.md Compromise #11 must be marked CLOSED at G15-A"
+    );
+    assert!(
+        section.contains("G15-A") || section.contains("G14-D") || section.contains("Phase 3"),
+        "Compromise #11 closure narrative must cite G15-A (materialization-time gate) \
+         and/or G14-D (delivery-time gate)"
+    );
+    // g15a-mr-blocker-2 closure: the prior assertion required the
+    // proptest symbol `prop_algorithm_b_incremental_equals_rebuild_for_arbitrary_label_pattern`.
+    // That proptest is RED-PHASE (still `#[ignore]`'d with body
+    // `unimplemented!()` until G15-B lands the drift-detector). Citing
+    // it as a closure pin in SECURITY-POSTURE.md was a pim-1
+    // phantom-LIVE-cite. Compromise #11's G15-A closure stands on the
+    // materialization-time gate alone; the proptest is a separate
+    // G15-B closure surface that will be cited by THIS test once
+    // G15-B lands. Until then, the load-bearing GREEN-PHASE pins are
+    // (a) the 50/50 row test that exercises `IvmViewReadGate::filter_rows`
+    // and (b) the end-to-end e2e test that drives
+    // `Engine::materialize_view_with_gate` per pim-2 §3.6b.
+    assert!(
+        section.contains("ivm_view_per_row_read_gate_against_actor_cap_set"),
+        "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
+         materialization-gate symbol-of-record \
+         `ivm_view_per_row_read_gate_against_actor_cap_set` \
+         per §3.5b HARDENED point-1 + r4-r2-ivm-5"
+    );
+    assert!(
+        section.contains(
+            "materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e"
+        ),
+        "SECURITY-POSTURE.md Compromise #11 closure narrative MUST cite the \
+         end-to-end pim-2 §3.6b symbol-of-record \
+         `materialize_view_with_gate_filters_rows_per_actor_cap_set_at_engine_entry_point_e2e` \
+         (g15a-mr-blocker-3 closure pin — drives the production \
+         `Engine::materialize_view_with_gate` entry point with row-level \
+         observable filtering)"
+    );
+}
+
+/// Extract the section of `docs/SECURITY-POSTURE.md` for `Compromise #N`.
+/// Returns the substring from the section header up to the next
+/// `### Compromise #` (or end of file). Used by every compromise-closure
+/// pin in this file so each test reads the same posture-section shape.
+fn extract_compromise_section(posture: &str, n: u32) -> &str {
+    let header_needle = format!("### Compromise #{n}");
+    let Some(start) = posture.find(&header_needle) else {
+        return "";
+    };
+    let after_start = &posture[start..];
+    // Find the next `### Compromise #` header AFTER our start.
+    let next_header_offset = after_start[header_needle.len()..]
+        .find("### Compromise #")
+        .map_or(after_start.len(), |o| o + header_needle.len());
+    &after_start[..next_header_offset]
+}
+
+#[test]
+#[ignore = "phase-3-backlog §7.3.D — Compromise #22 (public-relay metadata leakage) deferral assertion. G16-A + G20-B shipped Compromise #22 introduction; deferral destination is Phase-7-Garden-relay-infrastructure OR Phase-9-hardened-deployment per docs/SECURITY-POSTURE.md Compromise #22 entry; test body pins doc-drift assertion; un-ignore at next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep."]
+fn compromise_22_public_relay_metadata_leakage_introduced_at_phase_3_close_with_named_phase_7_garden_relay_destination()
+ {
+    // R4-FP/R3-C ownership per net-r4-r1-1 BLOCKER (R4 large-council
+    // Round 1 networking lens). R1 net-major-1 specific_action stated:
+    //
+    //   'Add to G16-A files-owned: docs/SECURITY-POSTURE.md line for
+    //    new compromise: Compromise #22 — Public-relay metadata
+    //    leakage (device-DID + connection metadata visible to relay
+    //    operators); Phase-3-named mitigation deferred to Phase 7
+    //    Garden-relay-infrastructure or Phase 9 hardened-deployment
+    //    posture.'
+    //
+    // The disposition is BELONGS-NAMED-NOW per HARD RULE rule-12
+    // clause-b. The named destination (SECURITY-POSTURE.md) must
+    // EXIST + RECEIVE THE ENTRY NOW — not later, not "carried to
+    // brief X". This pin asserts the SECURITY-POSTURE.md narrative
+    // contains Compromise #22 with a NAMED deferral destination.
+    //
+    // G16-A or G20-B implementer wires this:
+    //
+    //   let posture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    //       .join("..").join("..").join("docs").join("SECURITY-POSTURE.md");
+    //   let posture = std::fs::read_to_string(&posture_path).unwrap();
+    //
+    //   // Compromise #22 entry exists:
+    //   let section = extract_compromise_section(&posture, 22);
+    //   assert!(!section.is_empty(),
+    //       "SECURITY-POSTURE.md must enumerate Compromise #22");
+    //
+    //   // Narrative names public-relay metadata leakage:
+    //   let lower = section.to_lowercase();
+    //   assert!(lower.contains("public-relay") || lower.contains("public relay"),
+    //       "Compromise #22 narrative must name public-relay metadata leakage");
+    //   assert!(lower.contains("device-did") || lower.contains("device did")
+    //         || lower.contains("connection metadata"),
+    //       "Compromise #22 narrative must name what leaks (device-DID / connection metadata)");
+    //
+    //   // Specific named deferral destination per HARD RULE clause-b:
+    //   assert!(
+    //       section.contains("Phase 7")
+    //           || section.contains("Garden")
+    //           || section.contains("Phase 9")
+    //           || section.contains("hardened-deployment"),
+    //       "Compromise #22 deferral destination must be specifically NAMED \
+    //        (Phase 7 Garden-relay-infrastructure OR Phase 9 \
+    //        hardened-deployment posture); generic 'future' is INSUFFICIENT \
+    //        per HARD RULE rule-12 clause-b"
+    //   );
+    //
+    //   // Status MUST NOT be 'closed' (it's introduced, not closed):
+    //   assert!(
+    //       lower.contains("introduced") || lower.contains("open")
+    //         || lower.contains("deferred"),
+    //       "Compromise #22 status must reflect INTRODUCED+DEFERRED \
+    //        (NOT closed at Phase-3 close)"
+    //   );
+    //
+    // OBSERVABLE consequence: SECURITY-POSTURE.md carries Compromise
+    // #22 with a specifically-named deferral destination at Phase-3
+    // close. Closes the pim-3 phantom-destination concern that R1
+    // net-major-1 disposition raised. Defends against the failure
+    // mode where 'all named compromises addressed' is claimed at
+    // phase-close while the public-relay metadata leakage is silently
+    // undocumented.
+    unimplemented!(
+        "G16-A or G20-B wires SECURITY-POSTURE.md Compromise #22 introduction + named deferral destination grep assertion"
+    );
+}

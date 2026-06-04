@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_SNAPSHOT_BLOB_BYTES","SNAPSHOT_BLOB_SCHEMA_VERSION"],"enum":["SnapshotBlobError"],"struct":["SnapshotBlob","SnapshotBlobBackend","SnapshotBlobSnapshotHandle","SnapshotBlobTransactionRunner"]};

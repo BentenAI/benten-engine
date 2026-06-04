@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Phase-2b G10-A-wasip1 read-only snapshot-blob `KVBackend`."><title>benten_graph::backends::snapshot_blob - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="benten_graph" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module snapshot_blob</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../benten_graph/index.html">benten_<wbr>graph</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module snapshot_<wbr>blob</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-this-is" title="What this is">What this is</a></li><li><a href="#v1--v2-schema-bump-g-core-6b-phase-4-meta-core" title="v1 → v2 schema bump (G-CORE-6b, Phase-4-Meta-Core)">v1 → v2 schema bump (G-CORE-6b, Phase-4-Meta-Core)</a></li><li><a href="#p-iii-autonomous-landing-rationale-ben-authorized-2026-05-22-night" title="P-III autonomous landing rationale (Ben-authorized 2026-05-22 night)">P-III autonomous landing rationale (Ben-authorized 2026-05-22 night)</a></li><li><a href="#read--write-posture" title="Read / write posture">Read / write posture</a></li><li><a href="#blob-cid" title="Blob CID">Blob CID</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In benten_<wbr>graph::<wbr>backends</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">benten_graph</a>::<wbr><a href="../index.html">backends</a></div><h1>Module <span>snapshot_<wbr>blob</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Phase-2b G10-A-wasip1 read-only snapshot-blob <a href="../../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a>.</p>
+<h3 id="what-this-is"><a class="doc-anchor" href="#what-this-is">§</a>What this is</h3>
+<p>D10-RESOLVED handoff shape (<code>.addl/phase-2b/00-implementation-plan.md</code> §5
+D10): a content-addressed blob carrying a snapshot of an engine’s <code>n:CID</code>
+body keys, suitable for Phase-3 sync (peer A exports the blob, peer B
+imports via <a href="struct.SnapshotBlobBackend.html#method.from_bytes" title="associated function benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes"><code>SnapshotBlobBackend::from_bytes</code></a>). The blob is a canonical
+DAG-CBOR encoding of:</p>
+<div class="example-wrap"><pre class="language-text"><code>SnapshotBlob {
+    schema_version: u32,                              // currently 2 (G-CORE-6b)
+    anchor_cid: Option&lt;Cid&gt;,                          // version-anchor head if present
+    nodes: BTreeMap&lt;Cid, Vec&lt;u8&gt;&gt;,                    // n:CID body bytes
+    system_zone_index: BTreeMap&lt;String, Vec&lt;Cid&gt;&gt;,    // label -&gt; CIDs
+    merkle_root: Option&lt;Cid&gt;,                         // v2: §8-B mode-(b) MerkleRangeProof root (None until §8-B materializer wave wires it)
+}</code></pre></div><h3 id="v1--v2-schema-bump-g-core-6b-phase-4-meta-core"><a class="doc-anchor" href="#v1--v2-schema-bump-g-core-6b-phase-4-meta-core">§</a>v1 → v2 schema bump (G-CORE-6b, Phase-4-Meta-Core)</h3>
+<p>v2 adds <strong><code>merkle_root: Option&lt;Cid&gt;</code></strong> as the §8-B mode-(b) light-client
+<code>MerkleRangeProofBackend</code> hook (per <code>.addl/phase-4-meta/00-implementation-plan.md</code>
+R0.4 edit-10 + §1.A.FROZEN item 4 + §8-B-(i)). The field is
+<code>Option&lt;Cid&gt;</code> so existing nodes-only snapshots (produced by
+<code>Engine::export_snapshot_blob</code>) remain encodable as v2 without
+requiring an MST root: <code>None</code> is the pre-§8-B-materializer sentinel.
+When the §8-B <code>MerkleRangeProofBackend</code> trait + materializer wave lands,
+the engine’s <code>export_snapshot_blob</code> path will populate this field from
+the source-side MST root, and light-client mode-(b) range-proof
+verification consumes it. Consumer-trait wire-up is named to follow at
+a §8-B benten-sync wave (<code>docs/future/phase-4-backlog.md §8-B-merkle-range-proof-consumer-wire-up</code>) — out-of-scope for G-CORE-6b
+which is the schema-bump-only sub-lane per the plan.</p>
+<h3 id="p-iii-autonomous-landing-rationale-ben-authorized-2026-05-22-night"><a class="doc-anchor" href="#p-iii-autonomous-landing-rationale-ben-authorized-2026-05-22-night">§</a>P-III autonomous landing rationale (Ben-authorized 2026-05-22 night)</h3>
+<p>The original §8-B-(i) framing scheduled this bump at the G-CORE-9
+D2-freeze gate precisely because P-III (wire/CID/on-disk format
+change) is normally orchestrator-forbidden. The standing P-III
+caution is “existing-data migration” — there are NO v1 snapshot
+blobs in the wild (no users yet), so that concern does not apply.
+<strong>No backwards-compat code</strong> (no <code>SnapshotBlobV1</code> shadow struct, no
+<code>from_v1</code> migrator, no schema-version branching in the decoder) is
+needed: a v1 blob reaching a v2 reader strict-rejects via the existing
+<a href="enum.SnapshotBlobError.html#variant.SchemaVersion" title="variant benten_graph::backends::snapshot_blob::SnapshotBlobError::SchemaVersion"><code>SnapshotBlobError::SchemaVersion</code></a> path (identical mechanism applies
+in the reverse direction post-bump). The CID of the encoded snapshot
+blob necessarily changes (one more struct field shifts the canonical
+bytes); that cascade is acceptable per the same no-users-yet rationale.</p>
+<p>Both the outer struct and the two <code>BTreeMap</code>s sort by key, so two
+engines built from identical state produce byte-identical blobs (D10 +
+sec-pre-r1-09 Inv-13 collision-safety).</p>
+<h3 id="read--write-posture"><a class="doc-anchor" href="#read--write-posture">§</a>Read / write posture</h3>
+<ul>
+<li><code>get(b"n:" ++ cid)</code> returns the contained Node body bytes if present.</li>
+<li><code>scan(b"n:")</code> enumerates every contained Node body in sorted-key
+order.</li>
+<li><code>put</code> / <code>delete</code> / <code>put_batch</code> surface
+<a href="../../enum.ErrorCode.html#variant.BackendReadOnly" title="variant benten_graph::ErrorCode::BackendReadOnly"><code>benten_errors::ErrorCode::BackendReadOnly</code></a> (<code>E_BACKEND_READ_ONLY</code>)
+via <a href="enum.SnapshotBlobError.html#variant.ReadOnly" title="variant benten_graph::backends::snapshot_blob::SnapshotBlobError::ReadOnly"><code>SnapshotBlobError::ReadOnly</code></a>. Writes against a snapshot-blob
+backend would break the canonical-bytes invariant the blob’s CID is
+computed over; the contract is read-only by design.</li>
+</ul>
+<h3 id="blob-cid"><a class="doc-anchor" href="#blob-cid">§</a>Blob CID</h3>
+<p><a href="struct.SnapshotBlobBackend.html#method.compute_blob_cid" title="method benten_graph::backends::snapshot_blob::SnapshotBlobBackend::compute_blob_cid"><code>SnapshotBlobBackend::compute_blob_cid</code></a> computes <code>BLAKE3(blob_bytes)</code>
+and packages it via [<code>benten_core::Cid::from_blake3_digest</code>] so the blob
+has its own CID for Phase-3 sync. The CID of the bytes — not of the
+decoded struct — is what makes round-trip stability load-bearing: a
+Phase-3 peer asking “do I have blob X?” by CID gets a yes/no answer
+that’s stable across re-exports.</p>
+<p>Implementation notes:</p>
+<ul>
+<li>The decoded <code>SnapshotBlob</code> is wrapped in an <code>Arc</code> so cloning the
+backend handle is cheap; the struct is read-only after construction
+so no interior mutability is needed.</li>
+<li>Reads that don’t start with the <code>n:</code> Node prefix return <code>Ok(None)</code> /
+empty scans rather than an error: the snapshot only carries Node
+bodies in 2b (edges + indexes are not part of the D10 handoff shape;
+Phase-3 work extends the schema additively under a new
+<code>schema_version</code>).</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.SnapshotBlob.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlob">Snapshot<wbr>Blob</a></dt><dd>Canonical D10 snapshot-blob payload. Encoded as DAG-CBOR; field order
+matters for byte-stability — <code>serde_ipld_dagcbor</code> writes struct fields
+in declaration order and sorts <code>BTreeMap</code> keys.</dd><dt><a class="struct" href="struct.SnapshotBlobBackend.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlobBackend">Snapshot<wbr>Blob<wbr>Backend</a></dt><dd>Read-only <a href="../../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a> over a <a href="struct.SnapshotBlob.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlob"><code>SnapshotBlob</code></a>.</dd><dt><a class="struct" href="struct.SnapshotBlobSnapshotHandle.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlobSnapshotHandle">Snapshot<wbr>Blob<wbr>Snapshot<wbr>Handle</a></dt><dd>Owned MVCC-snapshot marker for <a href="struct.SnapshotBlobBackend.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlobBackend"><code>SnapshotBlobBackend</code></a>.</dd><dt><a class="struct" href="struct.SnapshotBlobTransactionRunner.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlobTransactionRunner">Snapshot<wbr>Blob<wbr>Transaction<wbr>Runner</a></dt><dd>Owned transaction-runner marker for <a href="struct.SnapshotBlobBackend.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlobBackend"><code>SnapshotBlobBackend</code></a>.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.SnapshotBlobError.html" title="enum benten_graph::backends::snapshot_blob::SnapshotBlobError">Snapshot<wbr>Blob<wbr>Error</a></dt><dd>Errors surfaced by <a href="struct.SnapshotBlobBackend.html" title="struct benten_graph::backends::snapshot_blob::SnapshotBlobBackend"><code>SnapshotBlobBackend</code></a>.</dd></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.MAX_SNAPSHOT_BLOB_BYTES.html" title="constant benten_graph::backends::snapshot_blob::MAX_SNAPSHOT_BLOB_BYTES">MAX_<wbr>SNAPSHOT_<wbr>BLOB_<wbr>BYTES</a></dt><dd>Default maximum accepted size, in bytes, for an <strong>untrusted</strong>
+snapshot-blob payload handed to <a href="struct.SnapshotBlobBackend.html#method.from_bytes" title="associated function benten_graph::backends::snapshot_blob::SnapshotBlobBackend::from_bytes"><code>SnapshotBlobBackend::from_bytes</code></a>.</dd><dt><a class="constant" href="constant.SNAPSHOT_BLOB_SCHEMA_VERSION.html" title="constant benten_graph::backends::snapshot_blob::SNAPSHOT_BLOB_SCHEMA_VERSION">SNAPSHOT_<wbr>BLOB_<wbr>SCHEMA_<wbr>VERSION</a></dt><dd>Current snapshot-blob schema version. Bumped if the on-disk shape
+changes; readers reject blobs whose <code>schema_version</code> they don’t
+understand rather than silently mis-decoding.</dd></dl></section></div></main></body></html>

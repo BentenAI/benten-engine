@@ -1,0 +1,30 @@
+{
+  "name": "@benten/admin-ui-v0",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Admin UI v0 — Phase-4-Foundation R3 stub. Browser-wasm32 primary + Tauri 2.x embedded-webview secondary. Workflow editor + composed-view creator + plugin manager. Ships AS the first app-level plugin per CLAUDE.md baked-in #18. R3 RED-PHASE: tests use vitest 4.x Browser Mode (Playwright provider) for component/integration + standalone Playwright for top-of-pyramid E2E cross-origin/CSRF/Tauri-WebDriver-BiDi. Production logic lands at G24-A/B/C wave-6b.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "vitest run --browser",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@benten/engine": "file:../engine"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^20.19.40",
+    "@vitest/browser": "^4.1.5",
+    "@vitest/browser-playwright": "^4.1.5",
+    "playwright": "^1.50.0",
+    "typescript": "^5.6.0",
+    "vite-plugin-top-level-await": "^1.5.0",
+    "vite-plugin-wasm": "^3.4.1",
+    "vitest": "^4.1.5"
+  }
+}

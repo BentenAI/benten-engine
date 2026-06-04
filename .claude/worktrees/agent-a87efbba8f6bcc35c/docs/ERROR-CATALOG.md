@@ -1,0 +1,1789 @@
+# Error Catalog
+
+**Status:** Specification. Error codes and messages are reserved here before implementation so that every error the engine can produce has a stable code and a fix hint.
+
+**Catalog count narrative (post Phase-4-Meta-Core G-CORE-9 R1 fix-pass, 2026-05-24):** four distinct counts coexist by design — each measures a different surface:
+
+| Count | Source | Value (at HEAD post G-CORE-9 R1 fix-pass) | Meaning |
+|---|---|---|---|
+| **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **192** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **192** | The round-trip-pinned list. Matches the throwable enum 1:1. The `catalog_variant_count_matches_enum` test asserts exact equality. |
+| **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **194** | = 192 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). |
+| **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **193** | = 192 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
+
+**Why four counts (192 / 192 / 193 / 194):** the Rust enum is the source of throwable variants (192); plus a forward-compat `Unknown(String)` fallback (= 193 in rust); the TS catalog + this doc additionally retain 1 Phase-2a-retired catalog ID (= 194 in catalog/ts); the test list at stable_shape.rs::ALL_CATALOG_VARIANTS round-trips the throwable subset (192). Single canonical headline number: **192 production-throwable codes** at the Phase-4-Meta-Core G-CORE-9 R1 fix-pass close.
+
+**Phase-4-Meta-Core mint trajectory:** 170 (Phase-4-Foundation close) → 171 (#989 storage-partition seam `E_NAMESPACED_WRITE_UNSUPPORTED`) → ... → 192 (HEAD) via the G-CORE-1/2/3/4/5/6/7/8/10/DSL ErrorCode mints across the Phase-4-Meta-Core campaign. Per-mint cohort detail in commit messages PR #1304..#1344.
+
+**Cohort math (Phase-4-Foundation):**
+- **Phase-3-close baseline:** 118 codes "officially counted" + 14 pre-existing latent (CAP + INV + MODULE + SANDBOX + STREAM ×3 + SUBSCRIBE ×5 + THIN_CLIENT + VIEW family — wired through as_str/from_str/catalog/TS but missing from the regression list until R6-FP-C). True pre-Phase-4 enum size: **132 throwable**.
+- **Phase-4-Foundation R5 canary mints:** 31 new codes across 4 cohorts (G24-F thin-client +4, G23-A schema +9, G24-D plugin +15, G23-B materializer +3). 132 + 31 = 163 (the post-R5-canary intermediate count).
+- **R6-FP-A closure cohort:** R6-FP-A added 4 plugin install-record / DID-handle codes (3 substitution-discriminating + 1 caller-mint-first pre-insert enforcement). 163 + 4 = **167 throwable post R6-FP-A batch-merge**.
+- **R6-FP-3 closure cohort (cap-r6-r3-1 defensive-return hardening):** R6-FP-3 added 1 plugin-DID handle duplicate-rejection code at `PluginDidStore::insert`. 167 + 1 = **168 throwable at Phase-4-Foundation R6-FP-3 close**. The 7 cohorts:
+- **refinement-audit-2026-05 wire-format cluster (#992):** +1 `E_GRAPH_SCHEMA_VERSION_MISMATCH` (redb on-disk schema-version envelope; refuse a version this build doesn't understand rather than silently mis-route reads). 168 + 1 = **169 throwable at refinement-audit-2026-05 close**.
+- **Phase-4-Meta-Core G-CORE-1 fix-pass (#989 storage-partition seam):** +1 `E_NAMESPACED_WRITE_UNSUPPORTED` (`BrowserBackend::put_node_with_context` fails CLOSED when `ctx.namespace_did = Some(_)` rather than silently dropping the scope — preserves the C1 cross-DID non-leak invariant uniformly across every `GraphBackend` impl, not just `RedbBackend`). 169 + 1 = **170 throwable at refinement-audit + G-CORE-1 close**.
+- **Phase-4-Meta-Core G-CORE-3 cluster + DSL chunk-3 + pre-FREEZE bundle + G-CORE-9 build-out wave:** +22 new codes across the S&C primitive + sealed-CapabilityPolicy + crypto-suite-swap-matrix + DSL Backend/Io classes + walker + audit-gated pure-PQ + chain validator + manifest envelope rechecker + plugin install record clusters (`RecipientLacksKeysForSuite` + `ValueOutOfRange` + AEAD/two-CID/per-chunk cluster + `DslBackendRejected` + `DslIoError` + `AuditNotLandedPurePqRejected` + `SubgraphSpecWalkFailed` + chain-narrowing + binding-sig + install/runtime-delegation envelope + manifest envelope rechecker arms + thin-client bridge + write-boundary chain validator + audience-aware caps). 170 + 22 = **192 throwable at HEAD** (Phase-4-Meta-Core G-CORE-9 FREEZE).
+
+Authoritative count assertion lives in `crates/benten-errors/tests/stable_shape.rs` as `CATALOG_VARIANT_COUNT`; CI's drift test asserts the value matches the `ErrorCode` enum's `ALL_CATALOG_VARIANTS` length AND the exhaustive-match `catalog_variant_count_matches_enum` cross-check so adding a variant without updating this doc fails CI.
+
+Phase 3 added five new codes for Atrium sync attack defenses, device-attestation forgery, and engine cap-state observability (`E_SYNC_REVOKED_DURING_SESSION`, `E_DEVICE_ATTESTATION_FORGED`, `E_ATRIUM_INACTIVE`, plus three SYNC codes landed in R6 fix-pass Wave C1); Phase-3-close pre-v1 cleanup added the four `E_TYPED_CALL_*` family codes for the typed-CALL dispatch surface.
+
+**Catalog size after Phase-4-Foundation G24-F:** 122 of the 31-cohort baseline (118 + 4 incremental). The four added are the `E_THIN_CLIENT_*` session-protocol family for the `DidKeyedSession` + `SessionToken` contract at `crates/benten-engine/src/thin_client.rs`: `E_THIN_CLIENT_HANDSHAKE_INVALID`, `E_THIN_CLIENT_CHALLENGE_REPLAY`, `E_THIN_CLIENT_ORIGIN_MISMATCH`, `E_THIN_CLIENT_SESSION_EXPIRED`. These sit alongside the pre-existing `E_THIN_CLIENT_AUTH_REJECTED` (G14-D wave-5a device-attestation auth boundary). Per `.addl/dispatch-conventions.md §3.5g` cross-language rule-mirror discipline, the Rust enum + TS catalog + this doc updated atomically in the G24-F PR.
+
+**Phase-4-Foundation full mints by cohort** (31 new at HEAD; companion-with-canary discipline per `.addl/phase-4-foundation/00-implementation-plan.md §1.0 + §6`):
+
+| Cohort | Canary wave | New ErrorCodes |
+|---|---|---|
+| **Schema vocabulary + compiler** | G23-A | `E_SCHEMA_VALIDATION_FAILED`, `E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED`, `E_SCHEMA_SANDBOX_HOST_FN_REJECTED`, `E_SCHEMA_VOCAB_INVALID_LABEL`, `E_SCHEMA_VOCAB_EDGE_MISMATCH`, `E_SCHEMA_VOCAB_SCALAR_UNKNOWN`, `E_SCHEMA_VOCAB_REF_TARGET_MISSING`, `E_SCHEMA_VOCAB_CYCLE_REJECTED`, `E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING` (9 codes) |
+| **Materializer pipeline** | G23-B | `E_MATERIALIZER_CAP_DENIED`, `E_MATERIALIZER_SCHEMA_MISMATCH`, `E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE` (3 codes) |
+| **Plugin manifest + lifecycle** | G24-D | `E_PLUGIN_MANIFEST_INVALID`, `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID`, `E_PLUGIN_CONTENT_PEER_KEY_ROTATED`, `E_PLUGIN_AUTHOR_NOT_TRUSTED`, `E_PLUGIN_INSTALL_CONSENT_REQUIRED`, `E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE`, `E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN`, `E_PLUGIN_CONTENT_CID_MISMATCH`, `E_PLUGIN_NEW_VERSION_AVAILABLE`, `E_PLUGIN_HETEROGENEITY_INCOMPATIBLE`, `E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED`, `E_PLUGIN_DEVICE_ATTESTATION_FORGED`, `E_PLUGIN_LIBRARY_INDEX_TAMPER`, `E_REGISTRY_DISCOVERY_TIMEOUT` (15 codes; arch-r1-3 conflated `E_PLUGIN_MANIFEST_SIGNATURE_INVALID` split into 3 typed codes — USER_SIGNATURE / PEER_SIGNATURE / PEER_KEY_ROTATED) |
+| **Plugin consent-substitution (R6-FP-A split)** | R6-FP-A | `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH`, `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` (3 codes; arch-r6-r1-5 split + sec-r6r1-1 BLOCKER closure — narrows `E_PLUGIN_INSTALL_CONSENT_REQUIRED` to null-consent + discriminates three substitution-attack arms) |
+| **Plugin caller-mint-first contract (R6-FP-A-fp)** | R6-FP-A-fp | `E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED` (1 code; mr-2 BLOCKER closure — enforces caller-mint-first pattern at install_plugin Step 8, eliminates the keypair-orphan failure mode where install succeeded without any handle in the PluginDidStore) |
+| **Plugin-DID duplicate-insert defensive return (R6-FP-3)** | R6-FP-3 | `E_PLUGIN_DID_HANDLE_DUPLICATE` (1 code; cap-r6-r3-1 closure — `PluginDidStore::insert` returns `Err(PluginDidHandleDuplicate)` if a handle with the same DID is already present. Defense-in-depth atop Step 8 pre-insertion enforcement; catches caller-bug double-mint/double-insert paths + surfaces computationally-infeasible Ed25519 `did:key:` collision attempts as typed error rather than silent overwrite) |
+
+Total minted at canaries: 9 (G23-A) + 3 (G23-B) + 15 (G24-D) + 4 (G24-F thin-client session) = **31 new canary codes**. Plus 4 R6-FP-A codes (3 substitution-discriminating + 1 caller-mint-first pre-insert enforcement) + 1 R6-FP-3 code (duplicate-insert defensive return) bring the Phase-4-Foundation R6-FP-3 close total to **36 net new** (132 + 36 = 168 throwable at HEAD). The full `132 (pre-Phase-4-Foundation) → 163 (post-canary) → 167 (post R6-FP-A batch-merge) → 168 (post R6-FP-3 close)` reconciliation is documented in the **preamble narrative table** above; this row-table is the cohort-level mint manifest, not the running total. (Pre-R6-FP-C narrative claimed `118 → 135` but mis-stated the pre-Phase-3-close baseline and omitted G24-F; the preamble table corrects.) Code-shape (message template + context fields + fix hint) for each new code lands per-canary in this catalog at the canary's companion-doc PR.
+
+**Motivation:** The DX critic (2026-04-14 review) identified that the spec discussed error *edge types* (`ON_DENIED`, `ON_NOT_FOUND`, etc.) but had zero discussion of runtime error *messages* or codes. Meanwhile the 14 structural invariants will each fire rejection errors at registration time. Without a catalog, developers will hit "validation failed" with no context. This document is the contract.
+
+## Format
+
+Every error has:
+
+- **Code:** Stable identifier, e.g. `E_CAP_DENIED`. Never reused, never renumbered. Prefixed by subsystem (`E_CAP_*` for capability, `E_INV_*` for structural invariants, `E_SYNC_*` for sync, etc.)
+- **Message template:** A human-readable format string with placeholders.
+- **Context fields:** Structured data included with the error.
+- **Fix hint:** What the developer should do.
+- **Thrown at:** Registration, evaluation, sync, or other specific layers.
+
+All errors are structurally typed (not just strings) on the TypeScript side via napi-rs v3 generated types. Every `throw` in the Rust code must map to a code in this catalog.
+
+## Registration-time errors (the 14 structural invariants)
+
+### E_INV_CYCLE
+
+- **Message:** "Subgraph contains a cycle involving Nodes: {cycle_path}"
+- **Context:** `{ cycle_path: NodeId[] }`
+- **Fix:** Subgraphs must be DAGs. Replace the back-edge with an ITERATE primitive if repetition is intended.
+- **Thrown at:** Registration
+
+### E_INV_DEPTH_EXCEEDED
+
+- **Message:** "Subgraph depth {actual} exceeds configured max {max}"
+- **Context:** `{ actual: number, max: number, longest_path: NodeId[] }`
+- **Fix:** Reduce nesting of CALLs or increase max depth via capability grant.
+- **Thrown at:** Registration
+
+### E_INV_FANOUT_EXCEEDED
+
+- **Message:** "Node {node_id} has {actual} outgoing edges, exceeds max fan-out {max}"
+- **Context:** `{ node_id: NodeId, actual: number, max: number }`
+- **Fix:** Reduce BRANCH cases or split the Node. BRANCH should be binary or multi-way; consider whether a match-table is cleaner.
+- **Thrown at:** Registration
+
+<!-- cr-g7a-mr-2 fix-pass: dropped orphan E_INV_SANDBOX_NESTED stub from
+     Phase-1 placeholder. The Phase 2b SANDBOX nest-depth enforcement
+     surface lives at E_INV_SANDBOX_DEPTH (G7-B) + E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
+     (runtime saturation; G7-A) — both documented later in the file. -->
+
+### E_INV_TOO_MANY_NODES
+
+- **Message:** "Subgraph has {actual} Nodes, exceeds max {max}"
+- **Context:** `{ actual: number, max: number }`
+- **Fix:** Break into smaller subgraphs connected via CALL.
+- **Thrown at:** Registration
+
+### E_INV_TOO_MANY_EDGES
+
+- **Message:** "Subgraph has {actual} Edges, exceeds max {max}"
+- **Context:** `{ actual: number, max: number }`
+- **Fix:** Same as E_INV_TOO_MANY_NODES.
+- **Thrown at:** Registration
+
+### E_INV_SYSTEM_ZONE
+
+- **Message:** "Node IDs and labels cannot begin with the reserved 'system:' prefix — it's reserved for engine internals"
+- **Context:** `{ node_id: NodeId, label: string }`
+- **Fix:** The `system:` prefix is reserved for engine internals; both labels AND node IDs that start with `system:` are rejected at registration as defence-in-depth (G5-B-i Decision 6 reserved-prefix DX improvement). Pick a non-reserved label/ID and re-register. Runtime probing of resolved (TRANSFORM-computed) CIDs collapses system-zone targets to `Ok(None)` on the user-visible surface; only the user-facing `create_node` path fires this error directly for an input label.
+- **Thrown at:**
+    - Registration — literal-CID walker in `benten-eval::invariants::system_zone::validate_registration` (rejects a READ or WRITE operation node whose `"label"` property or node-id is a `system:*` literal).
+    - Runtime — resolved-label probe in `benten-engine::primitive_host`:
+        - `read_node` / `get_by_label` / `get_by_property` / `read_view` — TRANSFORM-computed CIDs whose resolved Node carries a `system:*` label collapse to `Ok(None)` / empty list at the user surface (symmetric with a backend miss).
+        - `put_node` — fires `EvalError::Invariant(SystemZone)` before the `PendingHostOp` is buffered, so a handler WRITE of a `system:*`-labelled Node never reaches the storage-layer defence-in-depth guard (which would otherwise surface the Phase-1 `E_SYSTEM_ZONE_WRITE` code).
+    - User-facing CRUD — `Engine::create_node` fires this code directly for any `system:*` label in the input Node's `labels` vector. `Engine::get_node` collapses system-zone reads to `Ok(None)` (the probe returns the typed code through the runtime telemetry path but not through the user-visible `Result`).
+- **Phase:** 2a G5-B-i — **active**. Registration-time (literal-CID) + runtime (resolved-label via `RedbBackend::get_node_label_only` per Code-as-graph Major #1) enforcement live. The Phase-1 `E_SYSTEM_ZONE_WRITE` host-layer stopgap is retired on the user-facing surface (`Engine::create_node` and `PrimitiveHost::put_node` now fire `E_INV_SYSTEM_ZONE`); the graph-layer storage stopgap is retained as defence-in-depth.
+
+### E_INV_DETERMINISM
+
+- **Message:** "Operation {op_type} is classified non-deterministic but appears in a context declared deterministic"
+- **Context:** `{ op_type: string, node_id: NodeId }`
+- **Fix:** Move non-deterministic operations (SANDBOX, EMIT non-local) outside the deterministic context or relax the declaration.
+- **Thrown at:** Registration
+
+### E_INV_ITERATE_MAX_MISSING
+
+- **Message:** "ITERATE Node {node_id} missing required `max` property"
+- **Context:** `{ node_id: NodeId }`
+- **Fix:** ITERATE requires an explicit `max` to guarantee termination. Add `max: <integer>`.
+- **Thrown at:** Registration
+
+### E_INV_ITERATE_BUDGET
+
+- **Message:** "Cumulative iteration budget {actual} exceeds bound {bound} through nested ITERATE/CALL"
+- **Context:** `{ actual: number, bound: number }`
+- **Fix:** Reduce the multiplicative iteration space. The cumulative budget is the worst-case product of ITERATE `max` values and non-isolated CALL callee bounds along any DAG path through the handler. Flatten the nested iteration, or declare `isolated: true` on a CALL whose callee runs under its own grant's bound (the callee frame resets the cumulative rather than inheriting the caller's remaining budget — Code-as-graph Major #2 / Option B).
+- **Thrown at:** Registration (Phase 2a multiplicative-through-CALL / Code-as-graph Major #2) and Evaluation (Phase 1 runtime flat budget, preserved at `DEFAULT_ITERATION_BUDGET = 100_000` in `crates/benten-eval/src/evaluator.rs`).
+
+  Context shape note (G11-A doc review): the registration-time variant does NOT populate a `path: NodeId[]` field. The multiplicative walker in `benten-eval::invariants::budget` reports the product-over-paths `actual` and the configured `bound`; the specific DAG path that produced the worst-case product is not surfaced in the error payload. G4-A Code-as-graph Major #2 cleanup / Phase-2a M4 residual.
+- **Phase:** 1 (runtime flat budget) + 2a (registration-time multiplicative form — G4-A lands the static product-over-paths walker in `crates/benten-eval/src/invariants/budget.rs` + `crates/benten-eval/src/evaluator/budget.rs` per cr-r1-3 shared-helper coordination). The Phase-1 nest-depth-3 stopgap (`E_INV_ITERATE_NEST_DEPTH`) is retired at Phase 2a open; the multiplicative form supersedes it. Default registration-time bound: `DEFAULT_INV_8_BUDGET = 500_000`.
+
+### E_INV_ITERATE_NEST_DEPTH
+
+> **⚠️ Not firing in production.** Retired at Phase-2a open: superseded by `E_INV_ITERATE_BUDGET` (multiplicative form). Catalog entry retained for forward-/backward-compat string round-trip; the Rust enum variant has been removed.
+
+<!-- reachability: ignore -->
+
+- **Message:** "ITERATE nesting depth {depth} exceeds Phase 1 limit {max}"
+- **Context:** `{ depth: number, max: number, path: NodeId[] }`
+- **Fix:** Phase 1 bounded ITERATE nesting structurally at depth 3 as a stopgap for the cumulative-budget enforcement shipped in Phase 2a. Retired at Phase 2a open — `E_INV_ITERATE_BUDGET` supersedes it. The catalog entry + TS class spelling stay reserved (catalog IDs are stable across phases); the Rust `ErrorCode` variant has been removed because no production path constructs it. The reachability annotation above is the drift-detector's signal that this is a deliberate forward-/backward-compat retention rather than aspirational prose.
+- **Thrown at:** Never (retired)
+- **Phase:** 2 (retired-at-Phase-2a-open marker — Phase >1 keeps it out of `phase1Required` so the drift detector does not demand a Rust enum variant. See `E_INV_ITERATE_BUDGET` for the live Phase 2a multiplicative replacement).
+
+### E_INV_CONTENT_HASH
+
+- **Message:** "Content hash mismatch for {node_id}: expected {expected}, computed {actual}"
+- **Context:** `{ node_id: NodeId, expected: Cid, actual: Cid }`
+- **Fix:** Stored bytes' computed content hash does not match the key under which they are addressed. Indicates on-disk corruption, hardware bit-flip, in-flight tamper, or an incompatible serialization migration. Re-hash from source; if persistent, restore from a backup or re-ingest.
+- **Thrown at:** (1) Subgraph load via `Subgraph::load_verified_with_cid` (graph-layer wrapper: `RedbBackend::load_subgraph_verified`); (2) Node load via `Node::load_verified` (graph-layer wrapper: `RedbBackend::get_node` — verify-on-read promoted in W9-T6 Phase-3 R5 wave-9); (3) cross-peer Node ingest via `Mst::apply_entries` per-entry rehash (sec-r4r2-1).
+- **Phase:** 1 (invariant 10 enforcement; Node-read firing surface promoted in Phase-3 W9-T6)
+
+### E_INV_REGISTRATION
+
+- **Message:** "Subgraph registration failed for {handler_id}: {reason}"
+- **Context:** `{ handler_id: string, reason: string, violated_invariants: number[] }`
+- **Fix:** Catch-all for registration failures where no more specific `E_INV_*` code applies. The `violated_invariants` list enumerates the specific invariants that rejected the subgraph.
+- **Thrown at:** Registration
+- **Phase:** 1 (invariant 12 enforcement)
+
+## Evaluation-time errors
+
+### E_CAP_DENIED
+
+- **Message:** "Capability {required} not granted to {entity} for WRITE on {target}"
+- **Context:** `{ required: string, entity: EntityId, target: NodeId }`
+- **Fix:** Grant the capability, or call from a context that already has it. `requires` on the Node indicates the needed grant.
+- **Thrown at:** Evaluation (at commit, not at individual WRITE, per the transaction-capability interaction rule)
+
+### E_CAP_DENIED_READ
+
+- **Message:** "Capability {required} not granted to {entity} for READ on {target}"
+- **Context:** `{ required: string, entity: EntityId, target: NodeId }`
+- **Fix:** Read-side capability denial. Phase 1 chooses honest-leaks-existence semantics: this error confirms the resource exists but the caller lacks read authority. Phase 3 sync may add a per-grant `existence_visibility: hidden` option that returns `E_NOT_FOUND` instead.
+- **Thrown at:** Evaluation (READ with capability policy configured)
+- **Phase:** 1 (named compromise on existence-leakage; see implementation plan §5 Rank 10)
+
+### E_CAP_REVOKED_MID_EVAL
+
+> **Status (Phase-3-close):** firing in production. The evaluator's batch-boundary capability re-check returns `CapError::RevokedMidEval` from the `ON_DENIED` arm at `crates/benten-engine/src/primitive_host.rs::check_capability` (the `benten_caps::CapError::RevokedMidEval` construction site at the scheduled-revocation check), with the mid-evaluation grant-revocation seam wired at `crates/benten-engine/src/engine_diagnostics.rs::schedule_revocation_at_iteration`. Originally reserved at Phase-2a per Compromise #1; refresh-point-5 wiring landed in Phase 2b.
+
+- **Message:** "Capability {grant_id} was revoked during ongoing evaluation at {revoked_at}"
+- **Context:** `{ grant_id: NodeId, revoked_at: HlcTimestamp, batch_boundary: number }`
+- **Fix:** Distinct from `E_CAP_REVOKED` (Phase 3 sync-side revocation). Fired when a cap is revoked between the start of evaluation and a capability re-check point (commit boundary, CALL entry, or every N ITERATE iterations, default 100). Phase 2 Invariant 13 tightens the window to per-operation.
+- **Thrown at:** Evaluation
+- **Phase:** 1 (named compromise; see implementation plan §5 Rank 10 and §2.4 P1 TOCTOU-window note)
+
+### E_CAP_NOT_IMPLEMENTED
+
+- **Message:** "Capability backend '{backend}' does not implement check_write in phase {phase}"
+- **Context:** `{ backend: string, phase: number, alternative: string }`
+- **Fix:** Distinct from `E_CAP_DENIED` — this signals operator misconfiguration (configured a capability backend whose `check_write` arm isn't implemented for the requested phase), not an authorization failure. The Phase-3 `UCANBackend` ships durable + LIVE at G21-T2 audit-6-1 closure (the napi-side `PolicyKind::Ucan` wires to `EngineBuilder::capability_policy_ucan_durable()`); the historical Phase-1 stub form returned this code on the first WRITE prior to G14-B-promotion. Operators on bespoke backends still see this code if their custom `CapabilityPolicy` impl lacks the `check_write` arm; the canonical alternatives are `NoAuthBackend` for embedded/local-only use or layering on top of `GrantBackedPolicy`. Routes to the subgraph's `ON_ERROR` edge, not `ON_DENIED`.
+- **Thrown at:** Evaluation (at commit when an unimplemented backend is configured)
+
+### E_CAP_REVOKED
+
+> **Status (Phase-3-close):** firing in production. `CapError::Revoked` is returned by the durable `UCANBackend` revocation arm at `crates/benten-caps/src/backends/ucan.rs::validate_chain_at` (three construction sites covering durable-revocation lookup, parent-attestation-rejected, and freshness-window-expired paths). Originally reserved at Phase-2a as the wire code for peer-emitted revocations; the Atrium sync stack at `benten-sync` consumes the same code path on `sync-receive`.
+
+- **Message:** "Capability {grant_id} was revoked at {revoked_at}"
+- **Context:** `{ grant_id: NodeId, revoked_at: HlcTimestamp }`
+- **Fix:** Request a new grant. Revocation propagates via sync with priority.
+- **Thrown at:** Evaluation, sync-receive
+
+### E_CAP_ATTENUATION
+
+- **Message:** "Delegated capability scope '{child_scope}' is not a subset of parent scope '{parent_scope}'"
+- **Context:** `{ parent_scope: string, child_scope: string, chain: GrantId[] }`
+- **Fix:** UCAN attenuation must narrow, never widen. Review the delegation chain.
+- **Thrown at:** Registration (for static chains), evaluation (for dynamic CALL with `isolated: false`)
+
+### E_WRITE_CONFLICT
+
+> **Status (Phase-3-close):** firing in production via the edge-routed `ON_CONFLICT` arm (see `crates/benten-engine/src/primitive_host.rs::outcome_from_terminal_with_cid`, `"ON_CONFLICT"` match arm). The Rust `EvalError::WriteConflict` enum variant remains reserved (no `Err(EvalError::WriteConflict)` construction site in `crates/*/src/`); a future native call path will surface the same code via the enum lift. Drift-detector reachability is `ignore` on the enum variant only.
+
+<!-- reachability: ignore -->
+
+- **Message:** "Expected version {expected}, found {actual} on {target}"
+- **Context:** `{ target: NodeId, expected: VersionHash, actual: VersionHash }`
+- **Fix:** Re-read, rebase changes, retry. Typical optimistic concurrency pattern.
+- **Thrown at:** Evaluation (CAS WRITE). **Runtime surface is edge-routed, not Rust-enum-valued:** WRITE's `cas` mode routes conflicts via the `ON_CONFLICT` edge; the engine stamps `error_code: "E_WRITE_CONFLICT"` on the routed step in `crates/benten-engine/src/primitive_host.rs::outcome_from_terminal_with_cid` (`"ON_CONFLICT"` arm of the edge match). Callers read the code off the edge-routing metadata, not via a `match` on an `Err(EvalError::WriteConflict)` — the enum variant exists for forward-compat with a Phase-2 native Rust path but has no construction site in Phase-1 production code. The drift-detector's `reachability: ignore` annotation reflects this asymmetry.
+
+<!-- cr-g7a-mr-2 fix-pass: dropped Phase-1 placeholder duplicates of
+     E_SANDBOX_FUEL_EXHAUSTED + E_SANDBOX_TIMEOUT + E_SANDBOX_OUTPUT_LIMIT.
+     The canonical Phase-2b SANDBOX surface (with `Reserved at G7-A
+     scaffold; G7-C wires the firing site` reachability discipline)
+     lives in the "Phase 2b G7-A SANDBOX surface" section later in
+     this file. The Phase-1 placeholders contradicted the Phase-2b
+     entries (different message/context shapes; renamed E_SANDBOX_TIMEOUT
+     -> E_SANDBOX_WALLCLOCK_EXCEEDED + E_SANDBOX_OUTPUT_LIMIT -> E_INV_SANDBOX_OUTPUT)
+     and were producing TS-narrowing orphans. -->
+
+### E_INV_SANDBOX_DEPTH
+
+- **Message:** "SANDBOX nest depth {depth} exceeds configured max {max}"
+- **Context:** `{ node_id: NodeId, depth: number, max: number }`
+- **Fix:** Reduce SANDBOX nesting (a SANDBOX whose subgraph CALLs another handler that itself SANDBOXes counts toward the same depth at registration time per D20). Either flatten the call chain or increase `max_sandbox_nest_depth` via capability grant.
+- **Thrown at:** **Registration** (static SubgraphSpec analysis at `invariants::sandbox_depth::validate_registration`) — fully active. **Runtime** — fully active at Phase 2b close (R6FP-G1 / PR #62, 3-lens convergent fix). `AttributionFrame.sandbox_depth` threads transitively through `ActiveCall` in `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (`frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)`); the dispatching frame is constructed with `sandbox_depth: nested_depth` in both match arms of the same function so SANDBOX-inside-CALL-inside-SANDBOX inherits the parent's depth. See `docs/INVARIANT-COVERAGE.md` §"Inv-4 + Inv-7 runtime arm status" for the wiring trace.
+- **Phase:** 2b (G7-B Inv-4 registration arm; wave-8b structural plumbing of the runtime field; R6FP-G1 / PR #62 closes the runtime depth-threading)
+
+### E_INV_SANDBOX_OUTPUT
+
+- **Message:** "SANDBOX output {would_be} bytes exceeds max {limit} (consumed {consumed} + attempted {attempted})"
+- **Context:** `{ node_id: NodeId, consumed: number, attempted: number, would_be: number, limit: number, path: "primary_streaming" | "backstop" }`
+- **Fix:** Reduce output emitted by the SANDBOX module's host-fn calls (or the primitive return value). D15 trap-loudly default — there is no opt-in silent-truncation flag. Use STREAM for progressive output if the workload genuinely needs unbounded byte volume.
+- **Thrown at:** **Evaluation — fully active post-wave-8b.** The `path` field distinguishes the D17 PRIMARY streaming `CountedSink::write` enforcement (fires before host-fn bytes are accepted, in `crates/benten-eval/src/sandbox/counted_sink.rs`) from the D17 BACKSTOP return-value enforcement at the primitive boundary (`CountedSink::backstop_check` after the wasm guest returns). Both arms wired through wave-8b's host-fn trampoline + primitive boundary.
+- **Phase:** 2b (G7-A + G7-B Inv-7 enforcement; wave-8b runtime wire-through; D15 + D17 PRIMARY+BACKSTOP)
+- **D21 priority:** Lowest — fires before `E_SANDBOX_FUEL_EXHAUSTED` / `E_SANDBOX_WALLCLOCK_EXCEEDED` / `E_SANDBOX_MEMORY_EXHAUSTED` when ONLY the output axis trips; otherwise higher-priority axes fire first (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT). See `docs/SANDBOX-LIMITS.md` for the rationale.
+
+### E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED
+
+> **Runtime arm wired at R6FP-G1 (PR #62).** The eval-side `SandboxError::NestedDispatchDepthExceeded` typed variant fires in `crates/benten-eval/src/primitives/sandbox.rs::execute` (depth-check guard immediately after the manifest resolve / random-cap pre-check block) once `attribution.sandbox_depth > config.max_nest_depth`. `AttributionFrame.sandbox_depth` threads transitively across nested SANDBOX entries via the parent `ActiveCall` (PR #62 3-lens convergent fix; see Inv-4 honest-disclosure block in `docs/SECURITY-POSTURE.md`). Both this typed error AND `E_INV_SANDBOX_DEPTH` (registration arm) are now active at Phase 2b close. The ESC-10 adversarial integration test stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper per `docs/future/phase-3-backlog.md` §7.3.A.7 — the runtime defense is wired; only the adversarial-test driver is paper-only.
+
+- **Message:** "SANDBOX nested-dispatch depth saturated at {depth} (configured max {max})"
+- **Context:** `{ node_id: NodeId, depth: number, max: number, saturation: "u8_ceiling" | "configured_max" }`
+- **Fix:** SANDBOX nest-depth saturation overflow distinct from `E_INV_SANDBOX_DEPTH`. Two saturation paths fire this code: the `sandbox_depth: u8` counter saturates at `u8::MAX` (type-level ceiling — extremely deep CALL chains) and the configured `max_sandbox_nest_depth` boundary (capability-grant ceiling). Either case fires this typed error rather than wrapping silently. Reduce nesting per the same guidance as `E_INV_SANDBOX_DEPTH`; if hitting the u8 ceiling, the call topology is almost certainly accidentally recursive and needs structural redesign rather than a higher cap.
+- **Thrown at:** Evaluation (saturation point at the SANDBOX entry — the counter-saturation check fires before the inner subgraph starts executing). Runtime firing site in `crates/benten-eval/src/primitives/sandbox.rs::execute` (depth-check guard).
+- **Phase:** 2b (G7-B Inv-4 enforcement plumbing; R6FP-G1 / PR #62 lands the runtime threading)
+
+### E_IVM_VIEW_STALE
+
+- **Message:** "IVM view {view_id} marked stale; async recomputation in progress"
+- **Context:** `{ view_id: NodeId, strategy: string }`
+- **Fix:** Usually not an error the developer should handle; wait and retry, or accept eventually-consistent semantics. Indicates the per-view CPU/memory budget was exceeded during incremental update.
+- **Thrown at:** Evaluation (READ from IVM view)
+
+### E_TX_ABORTED
+
+- **Message:** "Transaction aborted due to {reason}"
+- **Context:** `{ reason: string, failed_node: NodeId | null }`
+- **Fix:** Inspect the cause. Transactional subgraphs roll back ALL WRITEs on any failure. Check the `failed_node` field for the specific operation that caused the abort.
+- **Thrown at:** Evaluation
+
+### E_NESTED_TRANSACTION_NOT_SUPPORTED
+
+- **Message:** "Nested transaction at {node_id} — Phase 1 does not support nested transaction scopes"
+- **Context:** `{ node_id: NodeId, outer_tx_id: string }`
+- **Fix:** Phase 1 limits transaction scopes to non-nested calls. Restructure so inner work completes within the outer transaction's single scope, or spawn it after the outer transaction commits. Phase 2 may lift this restriction.
+- **Thrown at:** Evaluation
+- **Phase:** 1 (named compromise)
+
+### E_PRIMITIVE_NOT_IMPLEMENTED
+
+- **Message:** "Primitive {primitive_type} is defined but its executor is not implemented in phase {phase}"
+- **Context:** `{ primitive_type: string, node_id: NodeId, phase: number, target_phase: number }`
+- **Fix:** All 12 primitive *types* are defined in Phase 1 so structural validation can recognize them. The 4 primitives WAIT / STREAM / SUBSCRIBE-as-user-op / SANDBOX have executors that ship in Phase 2. Avoid calling these primitives in Phase 1 subgraphs or rely on a subgraph whose branch containing them is unreachable on the executed paths.
+- **Thrown at:** Evaluation
+- **Phase:** 1 (acknowledges Phase 2 deferral)
+
+### E_SYSTEM_ZONE_WRITE
+
+- **Message:** "WRITE to system-zone labeled Node '{label}' rejected: operation is not from a privileged engine path"
+- **Context:** `{ label: string, target: NodeId, origin: string }`
+- **Fix:** Phase 1 stopgap for Invariant 11 (which fully enforces at registration in Phase 2). User-operation WRITEs cannot touch `system:`-prefixed labels. Use the engine's privileged APIs — `Engine::grant_capability`, `Engine::create_view`, `Engine::revoke_capability` — for system-zone Node mutations.
+- **Thrown at:** Evaluation (graph write-path)
+- **Phase:** 1 (stopgap for invariant 11)
+
+### E_TRANSFORM_SYNTAX
+
+- **Message:** "TRANSFORM expression failed to parse: {reason} at position {offset}"
+- **Context:** `{ reason: string, offset: number, expression: string, grammar_doc: string }`
+- **Fix:** The TRANSFORM expression language is a positive-allowlist subset of JavaScript. Any token or AST shape not in the allowlist is rejected. Common causes: closures, `this`, imports, template literals with expressions, tagged templates, optional-chained method calls, computed property names referencing `__proto__`/`constructor`/`Symbol.*`, `new`/`with`/`eval`/`yield`/`async`/`await`, destructuring with getters.
+- **Thrown at:** Registration (TRANSFORM parser runs at registration time)
+- **Phase:** 1
+
+### E_INPUT_LIMIT
+
+> **Status (Phase-3-close):** the production firing site lives at the napi boundary (`bindings/napi/src/`). The drift-detector scans `crates/*/src/` only (per `phase-3-backlog §10.7` — v1-window scope widening), so the `reachability: ignore` annotation below reflects the structural scanner asymmetry, not a missing firing site.
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/` (the bounded streaming decoder enforcing size / depth / bytes / CID-shape limits). The drift-detector's scan path scopes to `crates/*/src/` — same scanner asymmetry as E_RELOAD_SUBSCRIBER_UNSUBSCRIBED + E_DEVSERVER_STOPPED + E_STORAGE_QUOTA_EXCEEDED below. Remove this annotation if/when (a) a `crates/`-resident construction site is added (e.g., a shared limits module in `benten-core`) OR (b) `phase-3-backlog §10.7` widens the detector's scan path to include `bindings/napi/src/`. -->
+
+- **Message:** "Napi boundary input exceeds {limit_kind} limit: {actual} > {max}"
+- **Context:** `{ limit_kind: "map_size"|"list_size"|"bytes_len"|"text_len"|"nesting_depth"|"subgraph_bytes"|"node_count"|"edge_count", actual: number, max: number }`
+- **Fix:** The TS → Rust boundary rejects oversized or pathologically-nested inputs to prevent DoS. Default limits: Value::Map 10K keys, Value::List 10K items, Value::Bytes 16MB, Value::Text 1MB, nesting depth 128, subgraph pre-parse bytes 1MB. Limits are configurable via the engine builder. Either simplify the input or raise the relevant limit explicitly with a capability-grant-authorized override.
+- **Thrown at:** Napi binding (before any Rust allocation)
+- **Phase:** 1
+
+### E_SERIALIZE
+
+- **Message:** "DAG-CBOR serialization failed: {detail}"
+- **Context:** `{ detail: string }`
+- **Fix:** The hash path's DAG-CBOR encoder refused the value. In Phase 1 this is effectively unreachable for well-typed input (all `Value` variants encode cleanly); the catalog entry exists so rare edge cases (e.g., encoder integer-overflow) surface a stable, non-empty code rather than an opaque "unknown" placeholder. Report as a bug.
+- **Thrown at:** `Node::cid` / `Edge::cid` (pre-hash canonicalization)
+- **Phase:** 1
+
+### E_SYNC_HASH_MISMATCH
+
+<!-- reachability: ignore -->
+
+- **Message:** "Received content hash {received} does not match expected {expected}"
+- **Context:** `{ node_id: NodeId, received: CidV1, expected: CidV1, peer: PeerId }`
+- **Fix:** Possible tampering or corruption. Sync is aborted; investigate the peer.
+- **Thrown at:** Sync-receive (`crates/benten-sync/src/mst.rs::Mst::apply_entries` rehash check; the variant exists at the catalog level as a sync-crate-half closure of the MST-diff-CID-byte-mismatch attack surface. The `apply_atrium_merge` engine receive-boundary today consumes Loro-CRDT byte-merge bytes, NOT MstDiff entries — engine-side wireup is the missing half. Per Wave-C1 cryptography mini-review (c1-crypto-mr-1): scope the closure claim to "sync-crate-half pending engine wireup"; the engine-half lands when MstDiff routing through the Atrium receive-boundary lands as a future Phase-3 follow-up wave OR v1-window concern. Reachability-ignored in the meantime, mirroring `E_SYNC_CAP_UNVERIFIED` forward-compat reservation pattern.)
+- **Phase:** 3 (sync subsystem lands in Phase 3 with the Atrium stack)
+
+### E_SYNC_HLC_DRIFT
+
+- **Message:** "HLC timestamp {received} exceeds drift tolerance {max_drift} from local clock {local}"
+- **Context:** `{ received: HlcTimestamp, local: HlcTimestamp, max_drift: Duration, peer: PeerId }`
+- **Fix:** Peer's clock is outside tolerance. Triggers clock reconciliation handshake; if that fails, sync pauses.
+- **Thrown at:** Sync-receive
+- **Phase:** 3 (sync subsystem, see `E_SYNC_HASH_MISMATCH`)
+
+### E_SYNC_CAP_UNVERIFIED
+
+<!-- reachability: ignore -->
+
+- **Message:** "Received WRITE lacks valid capability chain from {peer}"
+- **Context:** `{ peer: PeerId, node_id: NodeId, missing: string }`
+- **Fix:** Peer sent a change without proper authority. Sync-receive rejects; investigate peer trust level.
+- **Thrown at:** Sync-receive (reserved companion to `E_SYNC_REVOKED_DURING_SESSION` per Phase-3 R6-FP Wave-C1 — covers the missing-or-malformed cap-chain case where a peer never had a valid grant; the revoked-mid-session case fires `E_SYNC_REVOKED_DURING_SESSION` from `apply_atrium_merge`'s per-row recheck. The `SyncCapUnverified` construction site lands when the handshake-time cap-chain validator wires through; until then the variant is reachability-ignored as a forward-compat catalog reservation.)
+- **Phase:** 3 (sync subsystem, see `E_SYNC_HASH_MISMATCH`)
+
+## Value / CID / backend errors
+
+### E_VALUE_FLOAT_NAN
+
+- **Message:** "Floating-point value is NaN; Value::Float rejects NaN for deterministic content-addressing"
+- **Context:** `{ source_path: string }`
+- **Fix:** The content-hash must be canonical; NaN compares unequal to itself and breaks hash determinism. Replace NaN with a sentinel (e.g. `Value::Null`) or with a specific finite value.
+- **Thrown at:** Value construction / deserialization
+- **Phase:** 1
+
+### E_VALUE_FLOAT_NONFINITE
+
+- **Message:** "Floating-point value is non-finite (Infinity / -Infinity); Value::Float requires finite numbers"
+- **Context:** `{ source_path: string }`
+- **Fix:** DAG-CBOR's canonical form rejects ±Infinity. Clamp to a finite bound or use `Value::Null`.
+- **Thrown at:** Value construction / deserialization
+- **Phase:** 1
+
+### E_VALUE_OUT_OF_RANGE
+
+- **Message:** "Builder-time numeric value out of range for its storage type ({field}: {value} exceeds {bound})"
+- **Context:** `{ field: string, value: number, bound: number }`
+- **Fix:** `SubgraphBuilder` records each over-range numeric argument as a deferred error and surfaces them at the single-fallible-point `.build()` call (#506 / G-CORE-6 verify-pass). Most common: `iterate(max_iterations)` receives a `u64` exceeding `i64::MAX` (the on-graph `Value::Int` storage type), or `iterate_parallel(parallel_fanout)` receives a `usize` exceeding `i64::MAX`. Either cap the argument inside the caller before invoking the builder, or split the work across multiple iterate nodes. The `push()`-time `NodeHandle(u32::MAX)` exhaustion case (~4.29B nodes per builder) is practically unreachable but yields the same code if hit.
+- **Thrown at:** `SubgraphBuilder::build` (the single-fallible-point per #506 / G-CORE-6)
+- **Phase:** 4 (Phase-4-Meta-Core)
+
+### E_CID_PARSE
+
+- **Message:** "CID bytes could not be parsed into a CIDv1: {detail}"
+- **Context:** `{ detail: string, bytes_len: number }`
+- **Fix:** Phase 1 accepts base32-lower-nopad multibase (`b`-prefixed) CIDv1 via both the napi boundary and the Rust `Cid::from_str` path. Check that the caller is not passing a base58btc / base64 / hex form, and that the bytes are not truncated.
+- **Thrown at:** CID deserialization / napi boundary
+- **Phase:** 1
+
+### E_CID_UNSUPPORTED_CODEC
+
+- **Message:** "CID codec {codec} is not supported; Phase 1 recognizes DAG-CBOR (0x71)"
+- **Context:** `{ codec: number }`
+- **Fix:** Phase 1 only accepts DAG-CBOR multicodec (0x71). Re-encode under the expected codec or await later-phase codec support.
+- **Thrown at:** CID deserialization (`Cid::from_bytes` — distinct from `E_CID_PARSE`, which is reserved for length / version / digest-length structural failures)
+- **Phase:** 1
+
+### E_CID_UNSUPPORTED_HASH
+
+- **Message:** "CID hash function {code} is not supported; Phase 1 recognizes BLAKE3 (0x1e)"
+- **Context:** `{ code: number }`
+- **Fix:** Phase 1 only accepts BLAKE3 multihash (0x1e). Re-hash with BLAKE3 or await later-phase multi-hash support.
+- **Thrown at:** CID deserialization (`Cid::from_bytes` — distinct from `E_CID_PARSE`, which is reserved for length / version / digest-length structural failures)
+- **Phase:** 1
+
+### E_VERSION_BRANCHED
+
+- **Message:** "Version chain has branched — multiple NEXT_VERSION edges from the same Version Node"
+- **Context:** `{ anchor_cid: CidV1, branch_cids: CidV1[] }`
+- **Fix:** A Version Node should have at most one NEXT_VERSION successor on any linear chain. Branches are a Phase-3 sync consequence; in Phase 1 this indicates a programming error writing two NEXT_VERSION edges. Walk the chain, pick the intended successor, and remove the other NEXT_VERSION edge.
+- **Thrown at:** Version-chain traversal
+- **Phase:** 1
+
+### E_BACKEND_NOT_FOUND
+
+- **Message:** "Named backend '{name}' is not registered on this engine"
+- **Context:** `{ name: string }`
+- **Fix:** Phase 1 wires a single in-memory + redb backend pair; alternate backends land with Phase-2. This error fires when a sub-component addresses a backend that is not configured.
+- **Thrown at:** Engine builder / backend resolution
+- **Phase:** 1
+
+### E_NOT_FOUND
+
+- **Message:** "Requested entity not found: {kind} {identifier}"
+- **Context:** `{ kind: "node"|"edge"|"anchor"|"view"|"grant", identifier: string }`
+- **Fix:** Generic not-found — version-chain anchor miss, unknown view id, missing grant lookup, etc. Check that the caller has the correct CID / id. For unregistered-handler lookups specifically (post R6 fp Wave C2 / dx-r6-r1-1), the engine emits the more-specific `E_DSL_UNREGISTERED_HANDLER` instead so JS callers see the matching `EDslUnregisteredHandler` typed BentenError subclass.
+- **Thrown at:** Engine lookups
+- **Phase:** 1
+
+### E_GRAPH_INTERNAL
+
+- **Message:** "Graph storage internal error: {detail}"
+- **Context:** `{ detail: string }`
+- **Fix:** Stable code for `GraphError::RedbSource` / `GraphError::Redb` / `GraphError::Decode` — a storage-layer failure (redb I/O, transactional abort, DAG-CBOR decode of a stored Node). The underlying `std::error::Error::source()` chain is preserved on the Rust side for diagnostics; at the TS boundary only the stable code is surfaced. Inspect logs or retry; persistent errors indicate on-disk corruption and should prompt a restore from backup.
+- **Thrown at:** Graph backend (storage I/O)
+- **Phase:** 1
+
+### E_GRAPH_SCHEMA_VERSION_MISMATCH
+
+- **Message:** "redb graph schema mismatch: this build expects version {expected}, file declared version {actual}"
+- **Context:** `{ expected: number, actual: number }`
+- **Fix:** Stable code for `GraphError::SchemaVersionMismatch` — the redb on-disk graph file declares a schema-version envelope (`benten_graph::store::SCHEMA_VERSION_KEY`) whose value this build does not understand. The open is refused rather than silently mis-routing reads against a future prefix schema (mirrors the snapshot-blob SchemaVersion posture). Absence of the envelope is NOT this error — a pre-envelope file is implied-v1 (the 5-prefix layout that predates the envelope). Fires when a v1 build opens a future v2+ file (or vice versa); use a build whose `GRAPH_SCHEMA_VERSION` matches the file, or run the version-gated migration. #992 (refinement-audit-2026-05 wire-format cluster).
+- **Thrown at:** redb backend open (`RedbBackend::open_existing` / `open_or_create`)
+- **Phase:** 4-Meta (pre-v1 wire-format freeze)
+
+### E_SNAPSHOT_BLOB_SCHEMA_VERSION_MISMATCH
+
+- **Message:** "snapshot-blob schema mismatch: this build expects version {expected}, blob declared version {actual}"
+- **Context:** `{ expected: number, actual: number }`
+- **Fix:** Stable code for `SnapshotBlobError::SchemaVersion` — a decoded `benten_graph::backends::snapshot_blob::SnapshotBlob` declared a `schema_version` this build does not understand. Lifted from the prior catch-all `E_SERIALIZE` mapping at G-CORE-6b (Phase 4-Meta-Core, 2026-05-23) so callers can match the cross-version mismatch class specifically without conflating it with the generic decode-failure family. Mirrors `E_GRAPH_SCHEMA_VERSION_MISMATCH` for the snapshot-blob surface. The G-CORE-6b R5 wave (Ben-authorized autonomously per no-users-yet) landed the inaugural `1→2` bump — v2 added `merkle_root: Option<Cid>` as the §8-B mode-(b) MerkleRangeProof hook. Fires when a v1 reader sees a v2 blob (or v2 reader sees a v1 blob) — both directions strict-reject rather than silently mis-decoding. Use a build whose `SNAPSHOT_BLOB_SCHEMA_VERSION` matches the blob.
+- **Thrown at:** `SnapshotBlobBackend::from_bytes` / `from_bytes_with_cap` (`crates/benten-graph/src/backends/snapshot_blob.rs`) + lifted through `Engine::from_snapshot_blob` (`crates/benten-engine/src/engine_snapshot.rs`).
+- **Phase:** 4-Meta-Core G-CORE-6b (v1→v2 SnapshotBlob schema bump; P-III Ben-authorized autonomously per no-users-yet)
+
+### E_UNKNOWN
+
+- **Message:** "Unknown error code (forward-compat fallback)"
+- **Context:** `{ raw: string }`
+- **Fix:** The drift-detect / catalog contract reserves `ErrorCode::Unknown(s)` as a forward-compat escape valve so a newer server emitting an unrecognized code does not crash an older client. If this code reaches a caller, update the engine / bindings to the latest release — the payload carries the raw code string the server actually emitted. Never thrown by Phase-1 Rust code deliberately; it is the forward-compat recovery target callers opt into via `ErrorCode::from_str(s).unwrap_or_else(|e| ErrorCode::Unknown(e.into_inner()))` (#733: the `core::str::FromStr` impl is fallible — unrecognized input is `Err(ParseErrorCodeError)`, not a silent `Unknown`).
+- **Thrown at:** Forward-compat deserialization
+- **Phase:** 1
+
+## Engine-orchestrator errors
+
+### E_DUPLICATE_HANDLER
+
+- **Message:** "Handler id '{handler_id}' already registered with different subgraph content"
+- **Context:** `{ handler_id: string, existing_cid: CidV1, attempted_cid: CidV1 }`
+- **Fix:** Handler ids are unique within an engine. Either choose a distinct id, re-register with the same content (idempotent), or unregister the existing handler first. Two subgraphs with different CIDs cannot share an id.
+- **Thrown at:** Engine (`register_subgraph` / `register_crud`)
+- **Phase:** 1
+
+### E_NO_CAPABILITY_POLICY_CONFIGURED
+
+- **Message:** "No capability policy configured for .production() builder — call .capability_policy(...) or drop .production()"
+- **Context:** `{}`
+- **Fix:** `Engine::builder().production()` refuses to build without an explicit `CapabilityPolicy` (R1 SC2 fail-early guardrail). Call `.capability_policy(policy)` before `.open(...)`, or drop `.production()` if the engine should accept the `NoAuthBackend` default for local/embedded use.
+- **Thrown at:** Engine builder
+- **Phase:** 1
+
+### E_PRODUCTION_REQUIRES_CAPS
+
+- **Message:** "Production mode requires capabilities — .production() and .without_caps() are mutually exclusive"
+- **Context:** `{}`
+- **Fix:** `.production()` enforces that a capability policy must be configured. `.without_caps()` explicitly tears one down. Picking both is a misconfiguration — drop one. Code-reviewer finding `g7-cr-1`.
+- **Thrown at:** Engine builder
+- **Phase:** 1
+
+### E_SUBSYSTEM_DISABLED
+
+- **Message:** "Subsystem disabled: {subsystem}"
+- **Context:** `{ subsystem: "ivm" | "caps" }`
+- **Fix:** A thin engine configured with `.without_ivm()` or `.without_caps()` refuses operations that require the disabled subsystem — the "honest no" boundary. Either rebuild the engine without the opt-out, or restructure the caller to avoid the dependent surface.
+- **Thrown at:** Engine operations (`read_view`, `grant_capability`, `create_view`, …)
+- **Phase:** 1
+
+### E_UNKNOWN_VIEW
+
+- **Message:** "Unknown view: {view_id}"
+- **Context:** `{ view_id: string, registered: string[] }`
+- **Fix:** The view id was not registered. From TypeScript use `engine.createView(viewDef)`; from Rust use `Engine::create_view` (or the built-in views wired at engine-build time). Check spelling, confirm the IVM subscriber has the view wired, and that `.without_ivm()` was not used on the builder.
+- **Thrown at:** Engine (`read_view`)
+- **Phase:** 1
+
+### E_NOT_IMPLEMENTED
+
+- **Message:** "Not implemented in Phase 1: {feature}"
+- **Context:** `{ feature: string, target_phase: number }`
+- **Fix:** The engine method is a typed-todo that is wired for Phase 2+ evaluator integration. Avoid the surface in Phase-1 code or pick an equivalent Phase-1-landed alternative. See the per-method rustdoc for the target phase.
+- **Thrown at:** Engine (primitive-dispatch surfaces)
+- **Phase:** 1
+
+### E_IVM_PATTERN_MISMATCH
+
+- **Message:** "IVM view query pattern does not match any maintained index: {detail}"
+- **Context:** `{ view_id: string, detail: string }`
+- **Fix:** The caller asked a view for an index partition it doesn't maintain. Each of the five Phase-1 views keys on a specific field and rejects queries that omit it:
+  - `capability_grants` requires `entity_cid`
+  - `event_dispatch` requires `event_name`
+  - `content_listing` accepts `label` (optional — omitted returns full listing; a non-matching label is rejected)
+  - `governance_inheritance` requires `entity_cid`
+  - `version_current` requires `anchor_id`
+  Consult the view's maintained-pattern list and restrict the `ViewQuery` to supported keys. Distinct from `E_INV_REGISTRATION` — the view is healthy; the query shape is wrong.
+- **Thrown at:** IVM view read (`View::read` on any of the five Phase-1 views)
+- **Phase:** 1
+
+### E_IVM_STRATEGY_NOT_IMPLEMENTED
+
+- **Message:** "IVM strategy `{strategy:?}` is reserved but not implemented in this phase (deferred to {deferred_to_phase})"
+- **Context:** `{ strategy: "A" | "B" | "C", deferred_to_phase: string }`
+- **Fix:** Phase 2b ships `Strategy::A` (the 5 Phase-1 hand-written views) + `Strategy::B` (the generalized Algorithm B). `Strategy::Reserved` (renamed from `Strategy::C` at G23-0a per arch-r1-14; named-future-family placeholder for Z-set / DBSP cancellation if a phase commits) is refused at registration — the variant exists so the catalog of options is complete and stable, but constructing a `Strategy::Reserved` view via `benten_ivm::testing::try_construct_view_with_strategy` returns this typed error rather than silently falling back. Pick `Strategy::B` for new user-registered views; pick `Strategy::A` for the 5 hand-written baselines (Rust-only, defaults applied automatically). The on-disk wire `ErrorCode` name `E_VIEW_STRATEGY_C_RESERVED` is preserved across the rename for wire stability.
+- **Thrown at:** IVM view registration (`benten_ivm::testing::try_construct_view_with_strategy`)
+- **Phase:** 2b (introduced)
+
+### E_VERSION_UNKNOWN_PRIOR
+
+- **Message:** "Prior head was never observed by this anchor: {supplied}"
+- **Context:** `{ supplied: CidV1 }`
+- **Fix:** Surfaces from the prior-head-threaded `benten_core::version::append_version` when the caller names a `prior_head` that is neither the anchor's root head nor any new_head from a previous successful append. Re-read the anchor's current head (`walk_versions`) and retry against the observed head. Distinct from `E_VERSION_BRANCHED` (which fires when two appends race the same legitimate prior).
+- **Thrown at:** Version-chain `append_version`
+- **Phase:** 1
+
+## TypeScript binding-layer errors
+
+### E_DSL_INVALID_SHAPE
+
+- **Message:** "DSL value does not match expected shape: {reason}"
+- **Context:** `{ reason: string, received: unknown }`
+- **Fix:** Check the DSL API documentation for the expected shape.
+- **Thrown at:** TypeScript DSL wrapper (`packages/engine/src/errors.generated.ts::EDslInvalidShape`, used from `packages/engine/src/dsl.ts` builder methods) AND Rust DSL compiler (`crates/benten-dsl-compiler/src/lib.rs` — object/pair shape validation in the parser + `validate_shapes` build-phase pass; the variant carrying the diagnostic is `CompileError::Build(_)` post-G-CORE-DSL chunk-3 #790 rename from `CompileError::Emit`) AND Rust engine (`crates/benten-engine/src/engine.rs::register_subgraph` — SANDBOX numeric-budget shape validation walk per `docs/SANDBOX-LIMITS.md` §2).
+- **Phase:** 1 (TS DSL builder methods) / 3 (Rust dsl-compiler + engine register-time validation; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_ERROR`.
+
+### E_DSL_UNREGISTERED_HANDLER
+
+- **Message:** "No handler registered for '{handler_id}'"
+- **Context:** `{ handler_id: string, suggestions: string[] }`
+- **Fix:** Check spelling; register via `engine.registerSubgraph(handler)` or `engine.registerSubgraph(crud('<label>'))`.
+- **Thrown at:** TypeScript DSL wrapper (`call` method near-match suggestion path on `packages/engine/src/engine.ts::Engine`) AND Rust engine (`crates/benten-engine/src/engine.rs` — `dispatch_call_with_mode_and_trace`, `dispatch_call_inner`, `handler_to_mermaid`, `handler_predecessors`, `emit_with_handler`, `subscribe_with_handler`; `crates/benten-engine/src/engine_stream.rs::call_stream`).
+- **Phase:** 1 (TS) / 3 (Rust engine call/dispatch boundary; promoted to first-class Rust ErrorCode at R6 fp Wave C2 per dx-r6-r1-1). Routes to `ON_NOT_FOUND`.
+
+### E_HOST_NOT_FOUND
+
+> **Status (Phase-3-close):** still reserved. No production `Err(HostError::NotFound)` construction site in `crates/*/src/` at Phase-3-close; the typed code remains on the wire-stable surface for forward-compat. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15 (HostError firing-site closure couples to broader `PrimitiveHost` reserved-discriminant lift).
+
+<!-- reachability: ignore -->
+
+- **Message:** "Host-boundary lookup miss: {kind} {identifier}"
+- **Context:** `{ kind: string, identifier: string }`
+- **Fix:** Reserved HostError discriminant. Surfaces from `PrimitiveHost` impls when the requested entity is not in the backend. Distinct from `E_NOT_FOUND` because it carries the host-layer boundary (preserves the `benten-eval` → `benten-graph` arch-1 dep break).
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (shape reserved; firing site deferred to v1-assessment-window per CLAUDE.md item #15 — drift-detector reachability is `ignore` until then)
+
+### E_HOST_WRITE_CONFLICT
+
+> **Status (Phase-3-close):** still reserved. No production construction site in `crates/*/src/`. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15 (HostError firing-site closure couples to broader `PrimitiveHost` reserved-discriminant lift).
+
+<!-- reachability: ignore -->
+
+- **Message:** "Host-boundary optimistic-concurrency conflict on {target}"
+- **Context:** `{ target: string }`
+- **Fix:** Reserved HostError discriminant. Fires when a host-level compare-and-swap write detects a concurrent mutation. Surface is frozen at Phase 2a; firing site deferred to v1-assessment-window.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — firing site deferred to v1-assessment-window per CLAUDE.md item #15; drift-detector reachability is `ignore` until then)
+
+### E_HOST_BACKEND_UNAVAILABLE
+
+> **Status (Phase-3-close):** firing in production. Construction sites at `crates/benten-engine/src/engine_wait.rs` (eval-side missing-metadata fail-loud lift), `crates/benten-eval/src/primitives/wait.rs::resume_with_meta` (`meta: None` arm), `crates/benten-eval/src/primitives/subscribe.rs::SubscribeError::BackendUnavailable` mapping, and `crates/benten-engine/src/thin_client_subscribe.rs::ThinClientError::Engine` lift.
+
+- **Message:** "Host-boundary backend unavailable: {detail}"
+- **Context:** `{ detail: string }`
+- **Fix:** Fires when the underlying storage backend is offline (I/O error, disk full, network partition) OR as the eval-layer fail-loud surface for missing WAIT metadata (the engine layer promotes this to the typed `E_WAIT_METADATA_MISSING` at `engine_wait.rs::map_resume_eval_error`; the eval-side code stays `HostBackendUnavailable` as the broader generic-backend-unavailable surface). Retry with exponential backoff; if persistent, inspect the storage layer.
+- **Thrown at:** `PrimitiveHost` implementations + `benten_eval::resume_with_meta` (Phase-2a discriminant; Phase-3 firing sites listed above).
+- **Phase:** 2a discriminant; first firing sites landed in Phase 2b/3.
+
+### E_HOST_CAPABILITY_REVOKED
+
+> **Status (Phase-3-close):** still reserved. No production construction site in `crates/*/src/`. The Phase-3 sync-side revocation surface is `E_SYNC_REVOKED_DURING_SESSION` (host-boundary-distinct path); `E_HOST_CAPABILITY_REVOKED` remains the reserved HostError discriminant for in-process host-layer revocation. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15.
+
+<!-- reachability: ignore -->
+
+- **Message:** "Host-boundary capability was revoked mid-operation"
+- **Context:** `{ grant_cid: Cid }`
+- **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes a revocation between resolve and use. Retry after re-granting.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — firing site deferred to v1-assessment-window per CLAUDE.md item #15; drift-detector reachability is `ignore` until then)
+
+### E_HOST_CAPABILITY_EXPIRED
+
+> **Status (Phase-3-close):** still reserved. No production construction site in `crates/*/src/`. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15.
+
+<!-- reachability: ignore -->
+
+- **Message:** "Host-boundary capability expired by TTL"
+- **Context:** `{ grant_cid: Cid, expired_at: string }`
+- **Fix:** Reserved HostError discriminant. Fires when a host-level capability check observes the grant's TTL has elapsed. Re-grant with a longer TTL or refresh the cap.
+- **Thrown at:** `PrimitiveHost` implementation (G1-B)
+- **Phase:** 2a (reserved — firing site deferred to v1-assessment-window per CLAUDE.md item #15; drift-detector reachability is `ignore` until then)
+
+### E_EXEC_STATE_TAMPERED
+
+- **Message:** "ExecutionState payload_cid mismatch — envelope tampered"
+- **Context:** `{ expected_cid: Cid, actual_cid: Cid }`
+- **Fix:** The resume envelope's `payload_cid` recomputation does not match the declared CID. Either the bytes were tampered in transit, or the Phase-2a serialization layer drifted. Verify the source of the bytes; never resume from untrusted storage without an integrity check.
+- **Thrown at:** `Engine::resume_from_bytes` (G3-A resume protocol step 1)
+- **Phase:** 2a
+
+### E_RESUME_ACTOR_MISMATCH
+
+- **Message:** "Resume principal does not match the suspended ExecutionState"
+- **Context:** `{ suspended_actor_cid: Cid, resuming_actor_cid: Cid }`
+- **Fix:** The caller attempting `resume_from_bytes_as` does not match the actor recorded at suspend time. Only the same principal (or an equivalent delegated grant) can resume. Verify the caller identity; use `resume_from_bytes` only on the original actor's behalf.
+- **Thrown at:** `Engine::resume_from_bytes_as` (G3-A resume protocol step 2)
+- **Phase:** 2a
+
+### E_RESUME_SUBGRAPH_DRIFT
+
+- **Message:** "Pinned subgraph CID drifted from the currently registered head"
+- **Context:** `{ pinned_cid: Cid, current_cid: Cid, handler_id: string }`
+- **Fix:** The subgraph the caller suspended against has since been re-registered under a new CID. Resumption deliberately refuses to cross that boundary. If the drift is expected, re-suspend under the new CID. Distinct from `E_INV_IMMUTABILITY` — the drift is detected at resume time, not write time.
+- **Thrown at:** `Engine::resume_from_bytes` (G3-A resume protocol step 3)
+- **Phase:** 2a
+
+### E_WAIT_TIMEOUT
+
+- **Message:** "WAIT deadline elapsed before a resume signal arrived"
+- **Context:** `{ handler_id: string, node_id: NodeId, deadline_ms: number }`
+- **Fix:** A WAIT declared `duration: <ms>` and the deadline elapsed without a matching signal. Either the orchestrator that was meant to resume the suspension never dispatched, or the deadline was too tight. Re-call with a longer duration, or wire a fallback ON_ERROR edge to downstream compensation logic.
+- **Thrown at:** WAIT executor (G3-B duration path)
+- **Phase:** 2a
+
+### E_INV_IMMUTABILITY
+
+- **Message:** "Write would mutate a registered subgraph (Inv-13)"
+- **Context:** `{ cid: Cid, attempted_authority: WriteAuthority }`
+- **Fix:** Phase-2a invariant 13 — once a Node/subgraph is persisted under a CID, its bytes are immutable from user-path writes. The firing matrix has five rows (plan §9.11):
+
+  | # | WriteAuthority / Path | Content matches registered bytes | Outcome |
+  |---|---|---|---|
+  | 1 | `User` | yes | `E_INV_IMMUTABILITY` — unprivileged re-put of matching bytes is a policy violation (users cannot observe dedup on system-controlled surfaces). |
+  | 2 | `User` | no | `E_INV_IMMUTABILITY` — canonical unprivileged immutability violation. Vacuous under content-addressing (CID-match ⇔ bytes-match); reached from the `put_node_at_cid_for_test` backdoor only. |
+  | 3 | `EnginePrivileged` (version-chain append) | yes | `Ok(cid_dedup)` — content-addressed dedup. Does NOT emit `ChangeEvent`, does NOT advance audit sequence (named Compromise "Dedup writes pure-read", sec-r1-4 / atk-3). |
+  | 4 | `SyncReplica { origin_peer }` (Phase-3 sync-receive) | yes | `Ok(cid_dedup)` — same no-event + no-audit semantics as row 3. Reserved shape in 2a; wired at Phase 3 receive-path. |
+  | 5 | WAIT-resume stale-pin pre-check (any authority) | (`pinned_subgraph_cids` no longer matches the anchor's CURRENT) | `E_RESUME_SUBGRAPH_DRIFT` fires BEFORE any write. Distinct code; mirrors arch-1 resume-step-3 (§9.1) in the Inv-13 matrix. |
+
+  To change a registered subgraph, register a new handler CID; the storage is content-addressed and version-chain appends through `EnginePrivileged` dedup at row 3.
+- **Thrown at:** graph write-path (G5-A, `benten-graph`); declaration-time affordance at `benten-eval::invariants::immutability` rejects WRITE primitives whose literal `target_cid` is already registered.
+- **Phase:** 2a
+
+#### Note on E_INV_SYSTEM_ZONE (already listed above)
+
+`E_INV_SYSTEM_ZONE` is the firing code for Phase-2a Inv-11 enforcement (both registration-time literal detection and runtime TRANSFORM-constructed CID probing). The Phase-1 stopgap `E_SYSTEM_ZONE_WRITE` continues to fire at the graph write-path as the coarsest guard.
+
+### E_INV_ATTRIBUTION
+
+- **Message:** "Missing or malformed attribution frame (Inv-14)"
+- **Context:** none — Phase-2a R6FP catch-up EH5 trimmed the previously
+  documented `{ step_index, reason }` payload to match the actual Rust
+  surface, which returns the discriminant only via
+  `InvariantViolation::Attribution`. Threading per-step diagnostic context
+  through `EvalError` / `RegistrationError` / `ErrorCode` is a Phase-2b
+  refinement (post-evaluator-completion) tracked in
+  `docs/future/phase-2-backlog.md` if/when operator demand surfaces. The
+  catalog is the source of truth: until the structured payload exists, the
+  catalog spec must not promise it.
+- **Fix:** Phase-2a invariant 14: every TraceStep MUST carry an `AttributionFrame` naming the actor, handler, and capability-grant CIDs. A primitive-type that refuses to declare its attribution source fails at registration. File a bug against the primitive's `attribution_for_step` impl.
+- **Thrown at:** registration + runtime trace emission (G5-B)
+- **Phase:** 2a
+
+### E_CAP_WALLCLOCK_EXPIRED
+
+> **Status (Phase-3-close):** still reserved. `CapError::WallclockExpired` has the catalog mapping arm at `crates/benten-caps/src/error.rs::code` (the `CapError::WallclockExpired => ErrorCode::CapWallclockExpired` arm) but no production `Err(CapError::WallclockExpired)` construction site in `crates/*/src/` at Phase-3-close. Re-target deferral phase: **v1-assessment-window** per CLAUDE.md item #15 (G9-A refresh-point-5 wallclock-bound enforcement composes with the §10.1 Compromise #1 TOCTOU window bound re-evaluation).
+
+<!-- reachability: ignore -->
+
+- **Message:** "Capability wall-clock refresh bound breached"
+- **Context:** `{ elapsed_ms: number, bound_ms: number }`
+- **Fix:** A long-running ITERATE crossed the 300s default wall-clock refresh boundary; the grant was revoked between the previous refresh and the boundary. Re-grant the capability and retry. Tighten handler shapes to stay under the refresh bound if latency matters.
+- **Thrown at:** evaluator (G9-A, §9.13 refresh point #5). `CapError::WallclockExpired` is the upstream alias; the firing site is reserved at G9-A refresh-point-5 and is not yet wired in production code (drift-detector reachability is `ignore` until then).
+- **Phase:** 2a
+
+### E_CAP_CHAIN_TOO_DEEP
+
+- **Message:** "Capability attenuation chain exceeds max_chain_depth"
+- **Context:** `{ depth: number, limit: number }`
+- **Fix:** A delegation chain was deeper than the configured `GrantReader::max_chain_depth` (default 64). Either shorten the chain or raise the configured cap through the engine builder. Ucca-6 guard against malicious delegator attacks.
+- **Thrown at:** capability policy attenuation walker (G9-A)
+- **Phase:** 2a
+
+### E_CAP_SCOPE_LONE_STAR_REJECTED
+
+- **Message:** "GrantScope::parse('*') rejected — lone star is a footgun"
+- **Context:** `{ input: string }`
+- **Fix:** Lone `*` is refused because it collapses to a root-scope wildcard that cannot be meaningfully attenuated. Use a compound form (`*:<namespace>`) or name an explicit scope. Ucca-7 / G4-A.
+- **Thrown at:** `GrantScope::parse` (G4-A)
+- **Phase:** 2a
+
+### E_VIEW_STRATEGY_A_REFUSED
+
+- **Message:** "user view '{view_id}' declared Strategy::A — Strategy A is reserved for the 5 hand-written Phase-1 IVM views (Rust-only); user views must use Strategy::B"
+- **Context:** `{ view_id: string }`
+- **Fix:** D8-RESOLVED (Phase 2b). Strategy A is the hand-written-IVM lane reserved for the five Phase-1 baseline views (capability-grants, event-dispatch, content-listing, governance-inheritance, version-current). User-registered views go through generalized Algorithm B; either omit the `strategy` field (defaults to `B`) or pass `Strategy::B` explicitly.
+- **Thrown at:** `Engine::create_view` registration (G8-B)
+- **Phase:** 2b
+
+### E_VIEW_STRATEGY_C_RESERVED
+
+- **Message:** "user view '{view_id}' declared Strategy::Reserved — the Reserved strategy variant (Z-set / DBSP cancellation; renamed from Strategy::C at G23-0a) is refused at registration"
+- **Context:** `{ view_id: string }`
+- **Fix:** D8-RESOLVED (Phase 2b). Strategy C is the Z-set / DBSP cancellation algorithm slot reserved for Phase 3+; refused at registration time in Phase 2b. Use `Strategy::B` (or omit the field; user views default to B).
+- **Thrown at:** `Engine::create_view` registration (G8-B)
+- **Phase:** 2b
+
+### E_VIEW_LABEL_MISMATCH
+
+- **Message:** "user view '{view_id}' is reserved for the canonical IVM view with the hardcoded label '{expected_label}'; cannot register with a different label '{got_label}'"
+- **Context:** `{ view_id: string, expected_label: string, got_label: string }`
+- **Fix:** Phase-2b R6-R3 (r6-r3-ivm-1). Four canonical Phase-1 IVM view ids (`capability_grants`, `version_current`, `event_dispatch`, `governance_inheritance`) have hardcoded `input_pattern_label` semantics in the hand-written `AlgorithmBView::for_id` dispatch arms — re-using one of those ids with a different label silently registers a view that filters on the wrong label. Either pick a different `spec.id` (the user-defined fallback honors any label) OR change `spec.inputPattern.label` to match the hardcoded value listed in the message body.
+- **Thrown at:** `Engine::register_user_view` registration (R6-R3 fix-pass; mirrored at the TS-DSL pre-napi-boundary in `packages/engine/src/views.ts::validateUserViewSpec`).
+- **Phase:** 2b
+
+### E_WAIT_SIGNAL_SHAPE_MISMATCH
+
+> **Status (Phase-3-close):** still reserved. No production `Err(...)` construction site in `crates/*/src/` at Phase-3-close. Integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the SURFACE; the routed_edge_label classification harmonization required for the WAIT-resume shape-mismatch arm is tracked at `docs/future/phase-3-backlog.md §7.17` (routed_edge_label classification hardening — bundles the un-ignore of the `wait_signal_shape_mismatch_fires_typed_error_routed_on_error` test pin).
+
+<!-- reachability: ignore -->
+
+- **Message:** "WAIT signal payload does not match declared signal_shape"
+- **Context:** `{ node_id: NodeId, expected: string, got: unknown }`
+- **Fix:** When a WAIT declares `signal_shape: Some(schema)`, a resume with a payload that fails schema validation is rejected BEFORE any downstream TRANSFORM runs. Either widen the schema, re-send with the correct shape, or drop the `signal_shape` to keep the untyped path.
+- **Thrown at:** WAIT executor resume path (G3-B DX signal-payload typing). The integration test at `crates/benten-engine/tests/integration/wait_signal_shape_optional_typing.rs` exercises the surface; the production firing site is reserved alongside the broader G3-B DX typing landing (drift-detector reachability is `ignore` until then).
+- **Phase:** 2a
+
+### E_WAIT_SUSPENDED
+
+- **Message:** "WAIT primitive suspended awaiting external signal/duration"
+- **Context:** `{ state_cid: Cid, signal: string }`
+- **Fix:** A regular `engine.call(handler, ...)` walk hit a WAIT primitive and the dispatcher routed through the eval-side `wait::evaluate`, producing a `SuspendedHandle`. This is a control-flow signal, NOT a runtime failure — the caller catches the typed error, inspects the carried `SuspendedHandle`, and either calls `Engine::call_with_suspension` (which surfaces the same boundary as `SuspensionOutcome::Suspended`) or persists the handle bytes via `Engine::suspend_to_bytes` for later resume. Phase-2b Wave-8i (option B closure of the WAIT regular-walk dispatcher gap surfaced by the docs-vs-code audit).
+- **Thrown at:** `benten_eval::primitives::dispatch` (WAIT arm), surfaced as `EvalError::WaitSuspended`; round-trips through `eval_error_to_engine_error` to `EngineError::WaitSuspended { handle }` at the engine boundary.
+- **Phase:** 2b
+
+### E_STREAM_BACKPRESSURE_DROPPED
+
+- **Message:** "STREAM lossy mode dropped a chunk on a saturated buffer"
+- **Context:** `{ seq: u64, capacity: usize }`
+- **Fix:** STREAM was created with lossy semantics (`try_send` on a full buffer drops rather than awaits). The drop fires loudly via the trace surface — never silent. Either switch to lossless `send`, increase the sink capacity, or pace the producer. D4-RESOLVED. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::chunk_sink::BoundedSink::try_send` (lossy variant); evaluator emits a `TraceStep::BudgetExhausted { budget_type: "stream_backpressure" }` row BEFORE propagating the typed error per the D1 trace-preservation pattern.
+- **Phase:** 2b
+
+### E_STREAM_CLOSED_BY_PEER
+
+- **Message:** "STREAM consumer disconnected; producer cannot deliver chunk"
+- **Context:** `{ seq: u64 }`
+- **Fix:** The downstream `ChunkSource` was dropped (consumer detached, transport closed) before the producer's next send arrived. Resume the consumer, or terminate the producer. D4-RESOLVED. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::chunk_sink::BoundedSink::send` / `try_send`.
+- **Phase:** 2b
+
+### E_STREAM_PRODUCER_WALLCLOCK_EXCEEDED
+
+- **Message:** "STREAM producer wallclock budget elapsed while awaiting available capacity"
+- **Context:** `{ elapsed_ms: u64, budget_ms: u64 }`
+- **Fix:** A lossless STREAM producer was created with a wallclock budget (`make_chunk_sink_with_wallclock`) and the budget elapsed while a slow consumer kept the buffer full. Either widen the budget, increase capacity, accelerate the consumer, or accept lossy mode. Kills permanently-stalled sends per streaming-systems implementation hint. D4-RESOLVED. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::chunk_sink::BoundedSink::send` (wallclock-budgeted variant).
+- **Phase:** 2b
+
+### E_INV_STREAM_CONFIG
+
+- **Message:** "STREAM per-handler config widens workspace grant ceiling"
+- **Context:** `{ handler_id: string, requested: u64, ceiling: u64, axis: "chunkCountCap" | "wallclockBudgetMs" }`
+- **Fix:** Per-handler STREAM `chunkCountCap` / `wallclockBudgetMs` properties NARROW but cannot WIDEN the workspace defaults. Drop the per-handler override or align it below the workspace ceiling. Per stream-r1-9: extension-vs-replace policy is "narrow only" — widen attempts at registration / call time are rejected to defend against the over-permissive-escape failure mode. Phase-3 G19-C2.
+- **Thrown at:** `crates/benten-engine/src/engine_stream.rs::build_stream_handle` (resolves per-handler properties from the registered `SubgraphSpec` + validates against `ChunkProducerConfig::default`).
+- **Phase:** 3
+
+### E_STREAM_HANDLE_LEAKED
+
+<!-- reachability: ignore -->
+<!-- Rationale: Phase-3 G19-C2 §7.1.2 — `E_STREAM_HANDLE_LEAKED` is fired ONLY from JS at `packages/engine/src/stream.ts::ensureLeakRegistry` (FinalizationRegistry callback path) + on the `Engine.shutdown()` drain path defined on the `Engine` class at `packages/engine/src/engine.ts::Engine`. The typed catalog code exists Rust-side so error-code round-trip stays consistent across the napi boundary, but no native construction site exists by design (the leak is a JS-surface observability hook; native ownership stays correct via Rust `Drop` joining the producer thread). -->
+
+- **Message:** "STREAM handle dropped without explicit close()"
+- **Context:** `{ scenario: "finalization" | "shutdown" | "gc-pressure-timeout", handler_id?: string }`
+- **Fix:** A `StreamHandle` returned by `engine.openStream(...)` was garbage-collected (or the engine was shut down) without an explicit `close()` / `cancel()` call. Native-side ownership is correct (Rust `Drop` joins the producer thread); this surface fires JS-side leak detection so operators can spot leaking call sites. Either consume the handle to natural completion (which auto-closes via the natural-final-chunk path), call `close()` explicitly, or use `engine.callStream(...)` which wraps for-await auto-close. Per stream-r1-4: 4 enumerated leak scenarios (handler-returns-no-close, handler-throws-no-close, natural-completion-no-fire-negative, engine-shutdown-while-open) plus a sub-mechanism GC-pressure-timeout polling fallback. Native-Node-only — V8 + WHATWG GC schedule per stream-r1-10. Phase-3 G19-C2.
+- **Thrown at:** `packages/engine/src/stream.ts::ensureLeakRegistry` (FinalizationRegistry callback) + `packages/engine/src/stream.ts::fireStreamLeak` (broadcast helper used by both the FinalizationRegistry callback path and the `Engine.shutdown()` drain path on `packages/engine/src/engine.ts::Engine`); never thrown across the napi boundary.
+- **Phase:** 3
+
+### E_SUBSCRIBE_DELIVERY_FAILED
+
+- **Message:** "SUBSCRIBE delivery failed (capability re-check denied at delivery)"
+- **Context:** `{ subscriber_id: SubscriberId, anchor_cid: Cid }`
+- **Fix:** D5-RESOLVED requires capability re-intersection at every delivery boundary. A previously-granted READ cap was revoked mid-stream; the subscription auto-cancels. Re-grant the cap and re-register the subscription. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ActiveSubscription::inject` (delivery-time cap re-check).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_PATTERN_INVALID
+
+- **Message:** "SUBSCRIBE pattern is malformed (empty pattern, unclosed glob bracket, etc.)"
+- **Context:** `{ pattern: string }`
+- **Fix:** Pattern shape failed validation at registration. Fix the glob (balance `[` / `]`), provide a non-empty pattern, or switch from `LabelGlob` to `AnchorPrefix`. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ChangePattern::validate` (registration entry).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_CURSOR_LOST
+
+- **Message:** "SUBSCRIBE cursor lost (retention window exhausted mid-stream)"
+- **Context:** `{ subscriber_id: SubscriberId, delivered_count: usize }`
+- **Fix:** D5 strengthening item 4 caps persistent-cursor retention at 1000 events OR 24h, whichever first. Beyond the bound, the subscription auto-cancels and the subscriber must restart from `Latest`. Adjust event-emission rate, drain promptly, or accept the bounded-replay contract. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ActiveSubscription::inject` (mid-stream retention check).
+- **Phase:** 2b
+
+### E_SUBSCRIBE_REPLAY_WINDOW_EXCEEDED
+
+- **Message:** "SUBSCRIBE persistent cursor restart attempted past the retention window"
+- **Context:** `{ subscriber_id: SubscriberId }`
+- **Fix:** Equivalent surface to `E_SUBSCRIBE_CURSOR_LOST` raised at re-registration time rather than mid-stream. The persisted `max_delivered_seq` falls outside the retained event window; re-register with `start_from: Latest` to resume from the next published event. streaming-systems stream-d5-1. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::register_inner` (`Persistent` cursor re-registration).
+- **Phase:** 2b
+
+### E_INV_11_SYSTEM_ZONE_READ
+
+- **Message:** "SUBSCRIBE pattern names a `system:*` zone (Inv-11)"
+- **Context:** `{ pattern: string }`
+- **Fix:** User code attempted to subscribe to a `system:*` system-zone label. Distinct catalog code so SUBSCRIBE-side breaches are diagnostically separable from WRITE-side breaches (`E_INV_SYSTEM_ZONE` covers writes). Subscribe to a non-system pattern, or, for engine-internal observation, use a privileged path. Phase-2b G6-A.
+- **Thrown at:** `benten_eval::primitives::subscribe::ChangePattern::validate` (registration entry).
+- **Phase:** 2b
+## Phase 2b G7-A SANDBOX surface
+
+<!-- E_INV_SANDBOX_DEPTH: see canonical entry at the Inv-4/Inv-7 G7-B section above -->
+
+### E_SANDBOX_FUEL_EXHAUSTED
+
+- **Message:** "SANDBOX fuel exhausted: limit={limit} consumed={consumed}"
+- **Context:** `{ limit: u64, consumed: u64 }`
+- **Fix:** wasmtime fuel-meter intercept. Either reduce the per-call computation, raise `SandboxConfig::fuel` (default 1_000_000), or split the workload across multiple SANDBOX calls. Concurrent with the typed-error propagation, the engine emits `TraceStep::BudgetExhausted { budget_type: "sandbox_fuel", consumed, limit, path }` so `engine.trace(...)` consumers observe the exhaustion in-band (mirrors G12-A's `inv_8_iteration` pattern).
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b. The wasmtime `Store::set_fuel` cap + trap-callback maps fuel-exhaustion traps via `crates/benten-eval/src/sandbox/trap_to_typed.rs` to this typed variant. D3-RESOLVED per-call wasmtime `Store` lifecycle.
+- **Phase:** 2b G7-A (variant) / wave-8b (production trap-mapping)
+- **D21 priority:** fires before `E_INV_SANDBOX_OUTPUT` when both trip; loses to `E_SANDBOX_WALLCLOCK_EXCEEDED` / `E_SANDBOX_MEMORY_EXHAUSTED` (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
+
+### E_SANDBOX_MEMORY_EXHAUSTED
+
+- **Message:** "SANDBOX memory limit exhausted: {limit} bytes"
+- **Context:** `{ limit: u64 }`
+- **Fix:** wasmtime `ResourceLimiter` intercept fires deterministically BEFORE host OOM (`crates/benten-eval/src/sandbox/resource_limiter.rs`). Either reduce module memory pressure, raise `SandboxConfig::memory_bytes` (default 64 MiB), or audit for runaway `memory.grow` (ESC-2 escape vector).
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b via `ResourceLimiter` impl + memory-trap → typed-error mapping.
+- **Phase:** 2b G7-A (variant) / wave-8b (production ResourceLimiter wiring)
+- **D21 priority:** HIGHEST — fires before `E_SANDBOX_WALLCLOCK_EXCEEDED` / `E_SANDBOX_FUEL_EXHAUSTED` / `E_INV_SANDBOX_OUTPUT` when multiple are simultaneously eligible (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT — matches OS-level OOM trump).
+
+### E_SANDBOX_WALLCLOCK_EXCEEDED
+
+- **Message:** "SANDBOX wallclock deadline exceeded: {limit_ms} ms"
+- **Context:** `{ limit_ms: u64 }`
+- **Fix:** D24-RESOLVED defaults: 30s default / 5min ceiling. Per-handler `wallclock_ms` opt-in via `SubgraphSpec.primitives` (G12-D widening). Workspace-level overrides via `engine.toml` `[sandbox]` section (Ben's brief addition). Either shrink the workload, raise the per-handler value (within the engine.toml ceiling), or relax the engine.toml ceiling.
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b via `wasmtime::Store::set_epoch_deadline` + the wave-8b epoch-interruption ticker thread (`crates/benten-eval/src/sandbox/epoch_ticker.rs`) that ticks the shared engine's epoch on a configured cadence; D27 `async-support` ENABLED preserves the yield path for Phase-3 iroh forward-compat.
+- **Phase:** 2b G7-A (variant) / wave-8b (production epoch-ticker wiring)
+- **D21 priority:** fires before `E_SANDBOX_FUEL_EXHAUSTED` / `E_INV_SANDBOX_OUTPUT` when multiple trip; loses to `E_SANDBOX_MEMORY_EXHAUSTED` (D21 priority MEMORY > WALLCLOCK > FUEL > OUTPUT).
+
+### E_SANDBOX_WALLCLOCK_INVALID
+
+- **Message:** "SANDBOX wallclock setting outside allowed range"
+- **Context:** `{ requested_ms: u64, max_ms: u64 }`
+- **Fix:** Per-handler `wallclock_ms` must be > 0 and ≤ engine.toml `wallclock_max_ms` (defaults to D24-RESOLVED 5min ceiling). Reduce the per-handler value or relax `wallclock_max_ms` in `engine.toml`.
+- **Thrown at:** SubgraphSpec validation / `SandboxConfig::with_wallclock_ms`.
+- **Phase:** 2b G7-A
+
+### E_SANDBOX_HOST_FN_DENIED
+
+- **Message:** "SANDBOX host-fn capability denied: {cap}"
+- **Context:** `{ cap: string, host_fn_name: string, recheck: "per_call" \| "per_boundary" }`
+- **Fix:** Two firing paths: (1) D7 init-snapshot intersection — manifest claims a cap the dispatching grant lacks; fail before module link. (2) D18 per_call live recheck — cap revoked mid-call; subsequent host-fn invocation denied. Surfaces as a typed error THROUGH the host-fn ABI (NOT a wasmtime trap per sec-r1 D7) so the engine accounting stays clean. Either grant the missing cap, change the manifest, or relax the host-fn's `cap_recheck` declaration.
+- **Thrown at:** SANDBOX executor (init-time intersection; per-invocation re-check per D18 cadence).
+- **Phase:** 2b G7-A
+
+### E_SANDBOX_HOST_FN_NOT_FOUND
+
+- **Message:** "SANDBOX host-fn not found: {name}"
+- **Context:** `{ name: string }`
+- **Fix:** Module attempted to call a host-fn name not in the active manifest. Phase-3 G17-A2 retired the Phase-2b `random`-host-fn deferral guard (CLAUDE.md baked-in #16 closure); `random` is now LIVE alongside `time` / `log` / `kv:read` (cap-string `host:random:read`). For names that fire this code post-G17-A2: check the manifest declaration matches the import + the codegen-default surface (4 host-fns at G17-A2). The wasmtime link-time resolver path fires when wasmtime fails to resolve an import against the linker.
+- **Thrown at:** SANDBOX executor — wasmtime link-time resolver (other names than the 4 codegen-default).
+- **Phase:** 2b G7-A (variant) / wave-8b (production wiring) / Phase-3 G17-A2 (deferral guard retired)
+
+### E_SANDBOX_HOST_FN_RANDOM_BUDGET_EXCEEDED
+
+- **Message:** "SANDBOX random host-fn per-call entropy budget exceeded: requested={n} budget={n}"
+- **Context:** `{ requested_bytes: u64, budget_bytes: u64 }`
+- **Fix:** Phase-3 G17-A2 (CLAUDE.md baked-in #16 closure). A single `host.random(ptr, len)` call requested more entropy bytes than the per-call budget allows. The codegen default is **4096 bytes per call** (per r1-wsa-8). To draw more entropy, either (a) split the request across multiple sub-budget calls, or (b) override the default per-manifest via the additive optional `host_fns.random.budget_bytes_per_call` field on `ModuleManifest`. The aggregate-per-primitive cap is enforced separately at `CountedSink` (via `output_bytes`); the per-call budget is the additional ceiling on a single invocation. Routes through the `ON_DENIED` family (cap-denial precedent).
+- **Thrown at:** `register_default_host_fns` "random" trampoline at `crates/benten-eval/src/primitives/sandbox.rs::register_default_host_fns`. The `HostFnDenialMarker` carrier identifies the denial via the `random:per_call_budget_exceeded (requested=<n>, budget=<n>)` cap-string.
+- **Phase:** Phase-3 G17-A2 wave-5b
+
+### E_SANDBOX_MANIFEST_UNKNOWN
+
+- **Message:** "SANDBOX manifest name '{manifest_name}' is not registered (codegen defaults: compute-basic, compute-with-kv; install via `engine.installModule(...)` or use a different name)"
+- **Context:** `{ manifestName: string }` (Phase-3 G17-C wave-5b structured-context surface; pre-G17-C the variant carried only the message string).
+- **Fix:** ESC-15 escape vector closure: NO permissive fall-through to a default manifest. Either install the manifest via `Engine::install_module` (paired with `Engine::register_module_bytes` for the underlying wasm payload) or use one of the codegen-default names (`compute-basic`, `compute-with-kv`). Phase-3 G17-C wave-5b adds the registration-time validation walk in `Engine::register_subgraph` so misspelled names + post-uninstall residual references trip THIS error at register time (operator-actionable: the wallclock-after-zero-progress masking is gone) instead of at dispatch time as a confusing wallclock trip.
+- **Thrown at:**
+  - **Registration time (Phase-3 G17-C):** `Engine::register_subgraph::validate_sandbox_manifest_names` — walks SANDBOX nodes for unresolved manifest references via either the explicit `manifest` property or the colon-joined `<manifest>:<entry>` `module` property fallback.
+  - **Dispatch time (legacy):** `ManifestRegistry::lookup` / `ManifestRef::resolve` — preserved for non-DSL spec construction paths that bypass the validation walk.
+- **Phase:** 2b G7-A (dispatch-time path); 3 G17-C (registration-time validation walk + structured-context surface).
+
+### E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED
+
+- **Message:** "Runtime manifest registration deferred to Phase-4-Meta plugin-install"
+- **Context:** `{ name: string }`
+- **Fix:** D2-RESOLVED hybrid: `ManifestRegistry::register_runtime(name, bundle)` exists in Phase 2b but returns this typed error (the API surface is reserved so Phase-4-Meta plugin-install work doesn't introduce a new public API — it just changes the body). Use a codegen-default manifest in 2b; revisit when Phase-4-Meta plugin-install ships. (The historical "Phase 8 marketplace" framing pre-dates the CLAUDE.md baked-in #15 v1-platform-shippable widening ratified 2026-05-10 + baked-in #18 plugins-as-subgraphs — plugin installation at runtime is now a Phase-4-Meta concern, not a Phase 8 concern.)
+- **Thrown at:** `ManifestRegistry::register_runtime`.
+- **Phase:** 2b G7-A (deferral surface); Phase-4-Meta (lift).
+
+### E_SANDBOX_MODULE_INVALID
+
+- **Message:** "SANDBOX module invalid: {reason}"
+- **Context:** `{ reason: string }`
+- **Fix:** Module bytes failed wasmtime structural validation (malformed module, type mismatch, OOB section, OOB linear-memory read, recursion-depth overflow, etc.). Audit the module compiler output. ESC-1 / ESC-3 / ESC-5 / ESC-11 / ESC-12 escape vectors all route here.
+- **Thrown at:** SANDBOX executor (`Module::new` / link / instantiation).
+- **Phase:** 2b G7-A
+
+### E_SANDBOX_STACK_OVERFLOW
+
+- **Message:** "SANDBOX stack overflow: guest exceeded max_wasm_stack ({max_wasm_stack} bytes)"
+- **Context:** `{ max_wasm_stack: u64 }`
+- **Fix:** SANDBOX guest module's call stack exceeded the configured `max_wasm_stack` ceiling (default 512 KiB; matches wasmtime's `Config::max_wasm_stack` default). Distinct from `E_SANDBOX_FUEL_EXHAUSTED` (CPU-bound runaway) and `E_SANDBOX_MODULE_INVALID` (structural validation failure) — stack-overflow-via-recursion is its own observable class so operator dashboards can distinguish a benign-but-buggy recursive guest from a generic invalid module. Either reduce module recursion depth, raise `SandboxConfig::max_wasm_stack`, or audit for adversarial recursion. Phase-3 G17-A1 wave-5b mints the dedicated typed variant per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure (the prior R6FP-G1 r6-wsa-8 BELONGS-NAMED-NOW deferral is honored here).
+- **Thrown at:** SANDBOX executor — `wasmtime::Trap::StackOverflow` routes through `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error` to the dedicated variant.
+- **Phase:** Phase-3 G17-A1 wave-5b
+
+### E_SANDBOX_ESCAPE_ATTEMPT
+
+- **Message:** "SANDBOX escape attempt detected: {vector:?} — {reason}"
+- **Context:** `{ vector: EscVector, reason: string }`
+- **Fix:** SANDBOX guest attempted one of the enumerated escape vectors. Phase-3 G17-A1 wave-5b ships defenses for **ESC-7** (fuel-refill via host-fn re-entry — guest calls a host-fn whose dispatch path attempts to re-enter the SANDBOX `Store` and `add_fuel` mid-execution; defense fires from the trampoline before the inner `add_fuel` takes effect), **ESC-13** (trap during fuel-meter callback / Store-poison — host-side fuel-meter callback panics or traps; defense maps via panic-catcher + per-call `Store` lifecycle ensures fresh Store on next call), and **ESC-16** (fingerprint-collapse via wallclock-correlated state read — guest reads a host-written wallclock-derived cell to fingerprint host nondeterminism; defense fires at the next host-fn boundary BEFORE the side-channel becomes guest-observable). The discriminating `EscVector` enum (declared in `crates/benten-eval/src/sandbox/escape_defenses.rs`) carries `Esc7FuelRefillViaReEntry` / `Esc13StorePoison` / `Esc16FingerprintCollapse` variants so audit pipelines can route per-vector. Closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13) + r1-wsa-4 (ESC-16) per phase-3-backlog §6.1 + D-E (R1 revision triage). Either harden the guest module (audit for the enumerated attack patterns) or — if the attack is in a research / test corpus — gate the corpus dispatch behind explicit testing-helper feature flags.
+- **Thrown at:** SANDBOX executor — `crates/benten-eval/src/sandbox/escape_defenses.rs::run_all_checks` (and per-vector `run_esc7_check` / `run_esc13_check` / `run_esc16_check`); routes through `crates/benten-eval/src/sandbox/trap_to_typed.rs::map_call_error` via the `EscapeAttemptMarker` cause-chain unwrap.
+- **Phase:** Phase-3 G17-A1 wave-5b
+
+### E_SANDBOX_MODULE_NOT_INSTALLED
+
+- **Message:** "SANDBOX module bytes not registered for CID {module_cid}"
+- **Context:** `{ module_cid: Cid }`
+- **Fix:** A SANDBOX dispatch named a module CID for which no bytes have been registered through `Engine::register_module_bytes(cid, bytes)`. Distinct from `E_SANDBOX_MODULE_INVALID` (bytes are present but failed wasmtime structural validation): this fires BEFORE the executor sees any bytes, at the engine's lookup step. Either call `engine.register_module_bytes(module_cid, wasm_bytes)` before dispatch, or correct the SANDBOX node's `module` property to reference an already-registered CID. The Phase-2b in-memory module-bytes registry is process-local + transient (lost across `Engine` re-open); Phase 3 promotes the registry to a durable `BlobBackend` per Compromise #17. The `install_module(manifest, expected_cid)` path persists the manifest into a system-zone Node but does NOT persist the underlying wasm bytes — that asymmetry IS the Compromise #17 narrative.
+- **Thrown at:** `impl PrimitiveHost for Engine::execute_sandbox` (`crates/benten-engine/src/primitive_host.rs`) when `Engine::module_bytes_for(cid)` returns `None`.
+- **Phase:** 2b Wave-8d-types
+
+### E_SANDBOX_NESTED_DISPATCH_DENIED
+
+- **Message:** "SANDBOX nested dispatch denied"
+- **Context:** `{ host_fn_name: string }`
+- **Fix:** D19-RESOLVED: deny nested `Engine::call` from host-fn (the actual security claim). Closes the SANDBOX → CALL → SANDBOX cap-context-confusion attack class (sec-pre-r1-08). Renamed from the older `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence — the name aligns with what's actually being denied. Refactor the host-fn to NOT re-enter the engine; if Phase-3 async host-fns are needed, acquire the reserved `host:async` cap.
+- **Thrown at:** SANDBOX executor — fully active post-wave-8b. The host-fn callback path enforces the no-nested-`Engine::call` invariant via the trampoline's typed-error short-circuit before the host-side body runs.
+- **Phase:** 2b G7-A (variant) / wave-8b (production wiring)
+
+<!-- E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED: see canonical entry at the Inv-4/Inv-7 G7-B section above -->
+
+### E_MODULE_MANIFEST_CID_MISMATCH
+
+- **Message:** "Module manifest CID mismatch: expected={expected_cid} computed={computed_cid} summary={manifest_summary}"
+- **Context:** `{ expected_cid: Cid, computed_cid: Cid, manifest_summary: string }`
+- **Fix:** D16-RESOLVED-FURTHER minimal CID-pin integrity gate. `Engine::install_module(manifest, expected_cid: Cid)` REQUIRES the CID arg (not Optional — prevents the lazy `install_module(m, None)` footgun). The error includes both expected + computed CIDs + a 1-line manifest summary so an operator can diff without source-code dive. Either re-compute the expected CID against the actual manifest bytes or audit for tampering. Reserved here for the G10-B `install_module` surface; G7-C does NOT own this fire site (per wsa-r1-5 plan-internal conflict resolution).
+- **Thrown at:** `Engine::install_module` (G10-B).
+- **Phase:** 2b G10-B
+
+### E_MODULE_MIGRATIONS_REQUIRE_PERSISTENCE
+
+- **Message:** "module manifest declares N migration(s) but the target has no persistent backing store"
+- **Context:** `{ migration_count: usize }`
+- **Fix:** `docs/SECURITY-POSTURE.md` Compromise #19 — browser (`wasm32-unknown-unknown`) engines ship in-memory-only manifest persistence in Phase 2b; the IndexedDB / OPFS persistence story lands in Phase 3. Manifests that declare `migrations` need a durable backing store; the rejection prevents the migration runner from silently dropping work. On native (redb-backed) targets the same manifest installs without error. Either (a) defer the migration to a Phase-3 build with persistent storage, or (b) split the manifest into a migrations-free in-memory variant for Phase-2b browser deployments.
+- **Thrown at:** `Engine::install_module` (G10-B) on `wasm32-unknown-unknown` only.
+- **Phase:** 2b G10-B
+
+### E_ENGINE_CONFIG_INVALID
+
+- **Message:** "engine.toml at {path} parse failure: {reason}"
+- **Context:** `{ path: PathBuf, reason: string }`
+- **Fix:** Workspace-level `engine.toml` (Ben's G7-A brief addition) failed to parse against the [`EngineConfig`] schema. Either fix the TOML (see `docs/SANDBOX-LIMITS.md` for the schema) or remove the file (built-in defaults apply when absent). The `[sandbox]` section accepts `wallclock_default_ms` (override D24 30s default) and `wallclock_max_ms` (override D24 5min ceiling).
+- **Thrown at:** `EngineConfig::load_or_default` (called at `Engine::open` time).
+- **Phase:** 2b G7-A
+
+### E_BACKEND_READ_ONLY
+
+- **Message:** "backend is read-only: {operation} rejected ({backend_kind})"
+- **Context:** `{ operation: string, backend_kind: string }`
+- **Fix:** D10-RESOLVED snapshot-blob `KVBackend` (constructed via `Engine::from_snapshot_blob(bytes)`) is a read-mostly view on a content-addressed handoff blob — Phase-3 sync can transmit the blob between peers, but the dst engine cannot write into it without breaking the canonical-bytes invariant the blob's CID is computed over. The same posture applies to the Phase-2a §9.8 `network_fetch_stub` `KVBackend`: writes landed in Phase 3 (G16 wave-6 iroh transport canary; full sync surface across G16-B/C/D wave-6b). To mutate state, open a redb-backed engine via `Engine::open(path)` instead, or import the snapshot blob into a fresh redb engine and reissue writes there.
+- **Thrown at:** `SnapshotBlobBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/snapshot_blob.rs`); `NetworkFetchStubBackend::{put,delete,put_batch}` (`crates/benten-graph/src/backends/network_fetch_stub.rs`); surfaces from `Engine::from_snapshot_blob`-constructed engines on any write call.
+- **Phase:** 2b G10-A-wasip1
+
+### E_SANDBOX_UNAVAILABLE_ON_WASM
+
+- **Message:** "SANDBOX is unavailable on the wasm32 build of the engine ({target})"
+- **Context:** `{ target: "wasm32-unknown-unknown" | "wasm32-wasip1", reason: "wasmtime cannot host nested wasm execution on this target" }`
+- **Fix:** SANDBOX requires wasmtime, which does not compile to `wasm32-unknown-unknown` (browser target) and is not currently shipped on `wasm32-wasip1` engine builds either. The engine surfaces this typed error rather than `E_SUBSYSTEM_DISABLED` because the operator-actionable signal is target-specific: SANDBOX cannot run here, regardless of build flags. Phase-3 P2P sync re-routes SANDBOX invocations to a non-browser peer; until then, host SANDBOX-bearing handlers on a native `Engine::open(path)` engine and surface their results through SUBSCRIBE / STREAM to the wasm32-hosted client.
+- **Thrown at:** `crates/benten-engine/src/engine_sandbox.rs::execute_sandbox_wasm32_unavailable` (wasm32 cfg-gated stub) and the SANDBOX dispatcher path in `crates/benten-eval/src/primitives/mod.rs` when reached on a wasm32 target.
+- **Phase:** 2b wave-8c
+
+### E_RELOAD_SUBSCRIBER_UNSUBSCRIBED
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/devserver.rs::reload_subscriber_unsubscribed` (napi tooling adapter). The drift detector's reachability scanner walks `crates/*/src/` only, so a napi-side construction is a structural false negative. Remove this annotation if the scanner is widened to include `bindings/*/src/` (a Phase-3 detector improvement). -->
+
+- **Message:** "{operation} after unsubscribe"
+- **Context:** `{ operation: "drain" | "hasEvents" }`
+- **Fix:** A `ReloadSubscriberJs` napi method (`drain` / `hasEvents`) was called after `unsubscribe()` released the underlying subscriber. The handle is single-shot; recreate the subscription via `devserver.subscribeReloadEvents()` if more events are expected.
+- **Thrown at:** `bindings/napi/src/devserver.rs::ReloadSubscriberJs::{drain, has_events}` after `unsubscribe()` flips the inner `Mutex<Option<...>>` to `None`. R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_RELOAD_SUBSCRIBER_UNSUBSCRIBED"` string to a typed catalog variant so JS callers get `EReloadSubscriberUnsubscribed` typed dispatch through `mapNativeError` rather than the synthetic `E_UNKNOWN` fallback.
+- **Phase:** 2b R6 Round-2
+
+### E_DEVSERVER_STOPPED
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/devserver.rs::devserver_stopped` (napi tooling adapter). Same scanner asymmetry as E_RELOAD_SUBSCRIBER_UNSUBSCRIBED above. Remove this annotation if the scanner is widened to include `bindings/*/src/`. -->
+
+- **Message:** "dev-server has been stopped — call .start() before further operations"
+- **Context:** `{}`
+- **Fix:** A devserver napi method was called after `DevServer.stop()` flipped the in-memory state to stopped. Restart the dev-server via `.start()` before invoking further operations, or construct a fresh `DevServer` instance.
+- **Thrown at:** `bindings/napi/src/devserver.rs::devserver_stopped` (helper used by every devserver method that requires the dev-server to be running). R6 Round-2 r6-r2-napi-1 promoted this from a hand-typed `"E_DEVSERVER_STOPPED"` string to a typed catalog variant so JS callers get `EDevServerStopped` typed dispatch.
+- **Phase:** 2b R6 Round-2
+
+### E_STORAGE_QUOTA_EXCEEDED
+
+<!-- reachability: ignore -->
+<!-- Rationale: construction site lives in `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code` (browser-target IndexedDB napi adapter). The drift detector's reachability scanner walks `crates/*/src/` only, so a napi-side construction is a structural false negative. Same scanner asymmetry as E_RELOAD_SUBSCRIBER_UNSUBSCRIBED + E_DEVSERVER_STOPPED above. Remove this annotation if the scanner is widened to include `bindings/*/src/` (a Phase-3 detector improvement; tracked in `phase-3-backlog §7.11`). -->
+
+- **Message:** "IndexedDB write exceeded origin-storage quota"
+- **Context:** `{ dom_exception_name: "QuotaExceededError" }`
+- **Fix:** A browser thin-client cache write to IndexedDB exceeded the origin's storage allocation (the browser's per-origin quota). The browser surfaces `DOMException(name="QuotaExceededError")` synchronously from the `IDBObjectStore.put` request's `onerror` handler; the napi binding maps this to the typed `E_STORAGE_QUOTA_EXCEEDED` variant via `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code`. Resolution is out-of-band: the user (or operator) frees origin-storage allocation by clearing site data, removing unused cached blobs, or migrating to a deployment with larger origin quota. Per CLAUDE.md baked-in #17 thin-client commitment, the browser tab's cache is non-authoritative — losing the cached bytes is recoverable: subsequent reads re-fetch from the connected full peer through the thin-client subscription protocol (D-PHASE-3-30).
+- **Thrown at:** `bindings/napi/src/browser_indexeddb.rs::map_dom_exception_to_error_code` (Phase-3 G18-A wave-5a). Mapping is consumed by the IndexedDB-backed BlobBackend variant at `bindings/napi/src/browser_blob_store.rs` and the persistent module-manifest store at `bindings/napi/src/wasm_browser.rs`. Surface scope per CLAUDE.md baked-in #17: thin-client cache + manifest-store ONLY.
+- **Phase:** 3 G18-A
+
+### E_HLC_SKEW_EXCEEDED
+
+- **Message:** "HLC skew exceeded: remote physical_ms {remote_physical_ms} > local {local_physical_ms} + tolerance {tolerance_ms}ms"
+- **Context:** `{ local_physical_ms: u64, remote_physical_ms: u64, tolerance_ms: u64 }`
+- **Fix:** `Hlc::update(remote)` refused a remote stamp whose physical-clock component exceeds the local physical clock by more than the configured skew tolerance (default 5 minutes per `Hlc::DEFAULT_SKEW_TOLERANCE_MS`). The local HLC state is NOT mutated when this fires — Phase-3 sync rejects the offending message and continues. Inspect peer NTP / system-clock health; legitimate cross-region drift should fit comfortably inside 5 minutes. Operator-tunable knobs land alongside Phase-3 sync wiring.
+- **Thrown at:** `crates/benten-core/src/hlc.rs::Hlc::update` (Phase-3 G14-pre-D). Phase-3 sync wires the firing site into Loro per-property LWW + asymmetric-uptime MST-diff message ingest.
+- **Phase:** 3 G14-pre-D
+
+### E_CAP_UCAN_EXPIRED
+
+- **Message:** "UCAN expired (exp={exp}, now={now})"
+- **Context:** `{ exp: u64, now: u64 }`
+- **Fix:** Presented UCAN's `exp` window has elapsed at chain-walk time. Re-issue the UCAN with a fresh `exp`. Defends against the "old proof sitting in disk forever, replayed by attacker who sniffed it pre-exp" attack class per `crypto-blocker-2` BLOCKER + CLR-2.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Routes to `ON_DENIED`.
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_NOT_YET_VALID
+
+- **Message:** "UCAN not yet valid (nbf={nbf}, now={now})"
+- **Context:** `{ nbf: u64, now: u64 }`
+- **Fix:** Presented UCAN's `nbf` window has not yet opened at chain-walk time. Wait until `now >= nbf` or re-issue with an earlier `nbf`. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B).
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_BAD_SIGNATURE
+
+- **Message:** "UCAN signature failed verification (link_index={link_index})"
+- **Context:** `{ link_index: usize }`
+- **Fix:** Presented UCAN's signature failed to verify against the issuer's resolved public key. Likely tampered or signed by a different keypair than the one named in `iss`. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Constant-time comparison via `subtle::ConstantTimeEq` per `crypto-major-4`.
+- **Phase:** 3 G14-B
+
+### E_CAP_UCAN_ATTENUATION_VIOLATED
+
+- **Message:** "UCAN attenuation violated: child cap '{child_cap}' is not subsumed by parent caps"
+- **Context:** `{ child_cap: String, link_index: usize }`
+- **Fix:** Child UCAN's capability widens its parent's authority — a structural delegation violation. Re-issue the child UCAN attenuated to a subset of the parent's `att`. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_at` (Phase-3 G14-B). Composes with `benten_id::ucan::validate_chain_at` per `crypto-blocker-2`.
+- **Phase:** 3 G14-B
+
+### E_CAP_BACKEND_STORAGE
+
+- **Message:** "UCAN backend storage I/O failure: {reason}"
+- **Context:** `{ reason: String }`
+- **Fix:** Durable UCAN backend failed to read or write its grant store. Surfaces a layered backend I/O failure to the policy hook caller. Inspect underlying `GraphBackend` health (redb file permissions, disk space). Distinct from `E_CAP_DENIED` — the backend cannot determine permitted-or-not when its store is unreadable. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::{record_grant, record_revocation, validate_chain_with_durable_revocations}` (Phase-3 G14-B).
+- **Phase:** 3 G14-B
+
+### E_CAP_RATE_LIMIT_EXCEEDED
+
+- **Message:** "rate-limit exceeded for actor {actor} on zone {zone}"
+- **Context:** `{ actor: String, zone: String }`
+- **Fix:** Per-actor writes/sec/zone bucket exceeded its budget. Configure a less restrictive `InMemoryRateLimitPolicyBuilder::actor_writes_per_second` for the actor, or back off and retry. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_writes_per_sec` (Phase-3 G14-B; D-F + D-PHASE-3-26).
+- **Phase:** 3 G14-B
+
+### E_CAP_PEER_BANDWIDTH_EXCEEDED
+
+- **Message:** "peer bandwidth budget exceeded for peer {peer} ({bytes} bytes)"
+- **Context:** `{ peer: String, bytes: usize }`
+- **Fix:** Per-peer bandwidth bytes/sec budget at the Atrium boundary exceeded its limit. Defends against a malicious or buggy peer flooding the sync channel. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/rate_limit.rs::RateLimitPolicy::check_peer_bandwidth` (Phase-3 G14-B; D-F + D-PHASE-3-26 + D-PHASE-3-30).
+- **Phase:** 3 G14-B
+
+### E_CAP_SNAPSHOT_HASH_MISMATCH
+
+- **Message:** "resume: cap_snapshot_hash mismatch for actor {actor} (proof-chain changed between suspend and resume; CLR-2 §11)"
+- **Context:** `{ actor: String }`
+- **Fix:** A WAIT-suspended execution attempted to resume against a UCAN proof-chain that materially changed between suspend and resume (e.g. one of the chain's tokens was revoked, or the chain was substituted). Per CLR-2 §11 the resume MUST reject — silently re-running a continuation against a downgraded chain would let an attacker race a revoke with a resume. Re-issue the suspended request from a current envelope; the prior envelope is no longer authoritative. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` Step 3.5 (Phase-3 G14-D wave-5a; CLR-2 §11 + Compromise #10 engine-side asymmetry closure). The hash is computed by `crates/benten-engine/src/cap_snapshot_hash.rs::compute(actor_cid, &proof_chain_cids)` and persisted alongside the envelope via `Engine::put_cap_snapshot_for_envelope`.
+- **Phase:** 3 G14-D
+
+### E_SUBSCRIBE_REVOKED_MID_STREAM
+
+<!-- R6-FP-C ec-r6r1-5 closure (2026-05-13): reachability:ignore
+     annotation removed. Construction site is LIVE in production at
+     `crates/benten-eval/src/primitives/subscribe.rs::publish_change_event_with_labels`
+     (the per-event delivery-time cap-recheck closure populates
+     the termination-reason slot AND fires the typed
+     `EvalError::SubscribeRevokedMidStream` notify callback when a
+     partial-revoke event fires). Phase-3 R6-FP Wave-C1 closed
+     the engine-side wireup via cap-recheck composition with
+     G14-B's durable UCAN backend `chain-for-audience` accessor;
+     drift-detect now picks up the construction site directly. -->
+
+
+- **Message:** "subscribe: cap revoked mid-stream for subscriber {subscriber} on channel {channel}"
+- **Context:** `{ subscriber: String, channel: String }`
+- **Fix:** A SUBSCRIBE / sync-replica subscription was terminated mid-stream because the subscriber's read-coverage UCAN no longer holds — a partial revoke fired the per-event delivery-time cap-recheck on the next event. Distinct from `E_SUBSCRIBE_DELIVERY_FAILED` (transient delivery-channel failures) — this names the cap-recheck-driven termination per F6 LOAD-BEARING. Re-issue a fresh subscribe with current credentials. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/cap_recheck.rs` per-event closure firing (Phase-3 G14-D wave-5a; F6 LOAD-BEARING + Compromise #2 D5). Wave-paired construction sites land alongside G14-B's durable UCAN backend `chain-for-audience` accessor.
+- **Phase:** 3 G14-D
+
+### E_SYNC_REVOKED_DURING_SESSION
+
+- **Message:** "sync: peer {peer_did} grant revoked during session for zone {zone}"
+- **Context:** `{ peerDid: String, zone: String, cid: String }`
+- **Fix:** A sync-replica inbound WRITE was rejected because the source peer's grant was revoked locally between the Atrium handshake and the next sync round. Per CLR-2 this mirrors the SUBSCRIBE delivery-time recheck — the receiving peer's per-write cap-recheck consults the local grant store via the `cap_recheck.rs` G13-pre-C scaffold + the `CapabilityPolicy::check_write` per-row hook. The peer may re-handshake with a current grant. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/engine.rs::apply_atrium_merge` per-row apply loop (Phase-3 G16-B-F; sec-r4r1-2 BLOCKER closure; CLR-2 mirror of SUBSCRIBE-side `E_SUBSCRIBE_REVOKED_MID_STREAM`).
+- **Phase:** 3 G16-B-F
+
+### E_DEVICE_ATTESTATION_FORGED
+
+- **Message:** "device attestation envelope verification failed: {reason}"
+- **Context:** `{ reason: String, zone: String }`
+- **Fix:** An inbound on-the-wire `DeviceAttestationEnvelope` (Phase-3 G16-D wave-6b) failed cryptographic verification at the sync-merge boundary. Three failure modes surface this single typed code: (a) **DID forgery** — the envelope's signature does not verify against the public key resolved from the declared `attestation.device_did`; (b) **parent-attestation chain rejection** — the embedded `benten_id::DeviceAttestation` was rejected by the receiver's `Acceptor::accept_at` (bad parent signature, expired freshness window via `FreshnessPolicy`, replayed nonce, revoked device-DID); (c) **frame-pair binding violation** — the envelope's signed `payload_hash` does not match the BLAKE3 hash of the Loro export payload received in the same exchange (MITM frame-substitution defense). All three reject with this single code so audit pipelines route on the wire-attestation boundary uniformly. Re-handshake from a non-revoked, non-replayed device-DID issued by the local trust-store's parent. Distinct from `E_THIN_CLIENT_AUTH_REJECTED` (browser-tab attestation boundary) and `E_SYNC_REVOKED_DURING_SESSION` (mid-session local-grant revocation). Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::DeviceAttestationEnvelope::verify` (Phase-3 G16-D wave-6b fix-pass; cryptographic-attestation closure for criterion 16 per Ben ratification 2026-05-09). Composes the existing hardened `benten_id::DeviceAttestation` + `Acceptor::accept_at` + `FreshnessPolicy` primitives at the wire boundary rather than introducing parallel unsigned transport (per pim-N-cand-crypto-attestation-transport-reuse).
+- **⚠️ SUPERSEDED-BY-COLLAPSE narrative note (refinement-audit-2026-05 S3, owner-ratified 2026-05-15 — see `docs/SECURITY-POSTURE.md` Compromise #23).** The `E_DEVICE_ATTESTATION_FORGED` **code survives** — the envelope's provenance-binding signature still rejects a forged device-DID (failure mode (a) above) and the frame-pair `payload_hash` binding (failure mode (c)) is retained. **What changes:** the code no longer gates a *trust* decision — it now signals **provenance-integrity** failure only (the device-DID provenance label cannot be forged). Failure mode (b) "parent-attestation chain rejection via `Acceptor::accept_at`" is deleted with the `Acceptor`/`DeviceRevocation` pipe; device-key trust/revocation now flows through the unified user-root UCAN chain (`benten-caps::revoke`) + the retained envelope-ceiling attenuation, not a separate acceptance pipeline. The provenance-signature + payload-hash arms of `verify` remain; the `accept_at` arm is replaced by the spine ceiling-AND (the P3 `DeviceAttestationEnvelope::verify` rewire — DEFERRED to its own mini-review per the COLLAPSE PR sequence).
+- **Phase:** 3 G16-D wave-6b fp · COLLAPSE-superseded refinement-audit-2026-05 S3 (provenance-integrity-only)
+
+### E_SYNC_HOP_DEPTH_EXCEEDED
+
+- **Message:** "sync: chain hop depth {depth} exceeds bound {bound}"
+- **Context:** `{ depth: usize, bound: usize }`
+- **Fix:** An inbound sync-replica AttributionFrame chain exceeded the documented hop-depth bound (mirrors Inv-4 `sandbox_depth`). Defends against DOS/chain-bloat where an adversarial peer constructs an unbounded false chain. The peer should either issue against a shorter chain or re-handshake with a fresh authority root. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumHandle::walk_chain` constructs `Err(AtriumError::SyncHopDepthExceeded)` at the chain-bound checks (lines ~1437 + ~1442); the routing arm at `engine_sync.rs::604` maps `AtriumError::SyncHopDepthExceeded` to `ErrorCode::SyncHopDepthExceeded`. Originally reserved at G14-D wave-5a; production firing site landed in Phase-3 sync.
+- **Phase:** 3 G14-D (firing site landed Phase-3 sync)
+
+### E_THIN_CLIENT_AUTH_REJECTED
+
+- **Message:** "thin-client connect: device attestation rejected ({reason})"
+- **Context:** `{ reason: String }`
+- **Fix:** A thin-client (browser tab / edge-worker) connection attempt was rejected at the full-peer auth boundary because the connecting tab presented no device-attestation OR presented one bound to a revoked device-DID. Distinct from generic `E_CAP_DENIED` so audit pipelines can route on the thin-client auth boundary independently. Re-attest from a non-revoked device-DID. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/thin_client_subscribe.rs::ThinClientConnection::connect` (Phase-3 G14-D wave-5a; D-PHASE-3-30 + CLAUDE.md baked-in #17 — thin compute surface as device with minimum capability envelope).
+- **Phase:** 3 G14-D
+
+### E_THIN_CLIENT_HANDSHAKE_INVALID
+
+- **Message:** "thin-client handshake invalid: {reason}"
+- **Context:** `{ reason: String }`
+- **Fix:** A DID-keyed handshake at the `DidKeyedSession::establish_session` boundary failed signature verification, named an unknown challenge nonce, or named a challenge whose TTL had elapsed (default `challenge_ttl_secs = 60`). Per `docs/admin-ui-v0-threat-model.md` §T2 defense 1 + br-r1-1: every thin-client (browser tab / Tauri-embedded webview per CLAUDE.md baked-in #17 shapes b + c) MUST establish a session by signing a fresh server-minted challenge with the claimed principal DID's private key; the full peer verifies the signature against the resolved `did:key` public key. Resolution: re-handshake from a fresh challenge with a private key that resolves through `did:key` to the public key claimed by `principal_did`. Distinct from `E_THIN_CLIENT_CHALLENGE_REPLAY` (same nonce re-used after consumption) and `E_THIN_CLIENT_AUTH_REJECTED` (G14-D device-attestation auth boundary — different layer). Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session` (Phase-4-Foundation G24-F wave). Construction sites for the three sub-causes: (a) challenge-nonce-unknown lookup miss; (b) `expires_at_unix_secs` staleness check; (c) `SignatureVerifier` callback returning `Err`.
+- **Phase:** 4-Foundation G24-F
+
+### E_THIN_CLIENT_CHALLENGE_REPLAY
+
+- **Message:** "thin-client challenge already consumed (replay rejected)"
+- **Context:** `{}` (the nonce bytes are intentionally NOT propagated to the wire — leaking them would help an attacker correlate replayed-challenge attempts across operators)
+- **Fix:** A DID-keyed handshake presented a challenge nonce that was already consumed by an earlier successful handshake. The challenge nonce is single-use; even if the signature cryptographically verifies, a previously-consumed nonce rejects on the second presentation. Defends `docs/admin-ui-v0-threat-model.md` §T2 defense 1 captured-replay attack class — a hostile origin capturing the network exchange via a transparent proxy and replaying it later. Resolution: re-handshake from a fresh challenge via `DidKeyedSession::emit_challenge` (each call mints a new random 32-byte nonce). Distinct from `E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW` (Atrium sync handshake bounded-window HLC defense — different layer). Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session` (Phase-4-Foundation G24-F wave). The `consumed_nonces` set is bounded by `SessionConfig::max_consumed_nonces` (default 4096); the substantive replay window is the challenge TTL, not the set size.
+- **Phase:** 4-Foundation G24-F
+
+### E_THIN_CLIENT_ORIGIN_MISMATCH
+
+- **Message:** "thin-client origin mismatch: bound={bound} presented={presented}"
+- **Context:** `{ bound: String, presented: String }`
+- **Fix:** A thin-client request presented a session token bound to a different origin than the request's actual origin. Per `docs/admin-ui-v0-threat-model.md` §T2 defense 3 + sec-4f-r1-5: every session token carries the origin it was minted against; per-request structural recheck (Family F1 gap #2 closure) enforces origin pinning on EVERY engine call through the thin-client bridge, not just at session establishment. Defends both: (a) cross-origin handshake — a hostile origin trying to mint a session pointing at a victim's principal; and (b) mid-session token leak — a token leaked via XSS / debugger / accidental copy-paste presented from a hostile origin after the session has been in legitimate use. Resolution: the request is routed from the wrong origin; re-establish a fresh session via DID-keyed handshake from the correct origin. The full peer does NOT auto-invalidate the original token on cross-origin attempt (avoids self-inflicted DoS where a hostile probe knocks legit sessions offline). Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session` (handshake-time defense) + `DidKeyedSession::resolve` (per-request defense; called by the thin-client bridge on every engine routed call). Per CLAUDE.md baked-in #17, shape (b) HTTP/fetch and shape (c) Tauri-embedded webview IPC share the SAME `DidKeyedSession` contract — only the wire transport is swapped (per `docs/ADMIN-UI.md` §4.3 br-r1-14).
+- **Phase:** 4-Foundation G24-F
+
+### E_THIN_CLIENT_SESSION_EXPIRED
+
+- **Message:** "thin-client session expired: expires_at={expires_at} now={now}"
+- **Context:** `{ expires_at: u64, now: u64 }`
+- **Fix:** A thin-client request presented a session token whose wallclock expiry has elapsed (default `SessionConfig::session_ttl_secs = 3600`, one hour). Per `docs/admin-ui-v0-threat-model.md` §T2 defense 2 time-bound clause: session tokens carry an explicit expiry; a leaked token from a log file weeks later is NOT usable. Also surfaces on fabricated / unknown token ids (the full peer maps token-id-unknown to the same code so audit pipelines route on a single "token rejected" boundary rather than multiplexing across families). Resolution: re-handshake via fresh challenge — `DidKeyedSession::emit_challenge` → sign → `establish_session`. Distinct from `E_THIN_CLIENT_HANDSHAKE_INVALID` (handshake-time challenge-expiry; different lifecycle phase). Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-engine/src/thin_client.rs::DidKeyedSession::resolve` (Phase-4-Foundation G24-F wave). The token's `expires_at_unix_secs` is checked against the engine's `ClockFn` hook (production: `SystemTime::now`; tests: deterministic test clock).
+- **Phase:** 4-Foundation G24-F
+
+### E_CAP_UCAN_AUDIENCE_MISMATCH
+
+- **Message:** "UCAN audience mismatch: token aud '{actual}' != expected '{expected}'"
+- **Context:** `{ expected: String, actual: String }`
+- **Fix:** The presented UCAN's audience DID does not match the validation context's expected audience. Defends against cross-atrium replay (a UCAN issued to atrium A persisted in atrium B's durable store and replayed against atrium B). Re-issue the UCAN with the correct `aud` for the local atrium. Distinct from `E_CAP_DENIED` so audit pipelines can route on cross-atrium replay independently. Routes to `ON_DENIED`.
+- **Thrown at:** `crates/benten-caps/src/backends/ucan.rs::UCANBackend::validate_chain_for_audience_at` (Phase-3 G14-B mini-review fix-pass; CLR-2 audience-binding pinned at the durable chain-walk seam). Constant-time DID-bytes comparison via `subtle::ConstantTimeEq` at the `benten_id::ucan::validate_chain_for_audience` upstream.
+- **Phase:** 3 G14-B
+
+### E_ATRIUM_RELAY_UNREACHABLE
+
+- **Message:** "atrium relay unreachable at {url}: {reason}"
+- **Context:** `{ url: String, reason: String }`
+- **Fix:** The configured iroh relay endpoint is unreachable (DNS-resolution failure, TLS handshake refused, transport-level timeout). Verify the relay URL is reachable from this peer's network (curl / nslookup / openssl s_client). For Phase-3 deployments the iroh public relay default applies; operators with stricter metadata threat models can opt into self-hosted relay infrastructure (Compromise #22 in `docs/SECURITY-POSTURE.md` — Phase-7 Garden-relays land as the operator-controlled alternative). Per `net-blocker-2` BLOCKER, this is a typed error variant — never a panic, never an untyped String. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (which signals an established connection has degraded mid-flight). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-sync/src/transport.rs::Endpoint::bind_with_relay_url` + `crates/benten-sync/src/transport.rs::Endpoint::connect` (Phase-3 G16-A wave-6; net-blocker-2 BLOCKER). Mapped from the `AtriumTransportError::RelayUnreachable` typed variant via `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
+- **Phase:** 3 G16-A
+
+### E_ATRIUM_TRANSPORT_DEGRADED
+
+- **Message:** "atrium transport degraded: {reason}"
+- **Context:** `{ reason: String }`
+- **Fix:** The established Atrium transport has degraded — packet-loss above threshold, relay-fallback active mid-stream, direct connection lost, or handshake wire-format violation surfaced at the transport layer. The engine-side `engine.atrium_status()` surface (Phase-3 G16-B/D) propagates this state observably so operators can react. Investigate network conditions (packet-loss, NAT path) and the connecting peer's reachability. Per `net-blocker-2` BLOCKER, the degraded transport state is EXPLICIT — not a missing value, not a panic. Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (which signals the relay endpoint itself is unreachable at connect time). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-sync/src/transport.rs::Endpoint::*` (Phase-3 G16-A wave-6 connection-establishment + send/recv paths; net-blocker-2 BLOCKER). Also fires from `crates/benten-sync/src/handshake_wire.rs::HandshakeFrame::from_canonical_bytes` when the wire-format frame is missing required fields per net-blocker-4 BLOCKER. Mapped from the `AtriumTransportError::TransportDegraded` / `AtriumTransportError::HandshakeWireFormat` typed variants via `crates/benten-sync/src/errors.rs::AtriumTransportError::code`.
+- **Phase:** 3 G16-A
+
+### E_ATRIUM_INACTIVE
+
+- **Message:** "atrium handle is in graceful-leave state: {operation} requires rejoin()"
+- **Context:** `{ operation: String }`
+- **Fix:** An `AtriumHandle` was used after `leave()` flipped its `is_active` flag to false but before `rejoin()` flipped it back. The handle is in a graceful-leave quiesced state — distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) because the iroh endpoint remains bound + the lifecycle change is intentional (operator-initiated, not a fault). Distinct from `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) because the relay link was never lost. Call `AtriumHandle::rejoin()` to re-activate; calling `rejoin()` is idempotent (no-op if already active). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumHandle::merge_remote_change` (inbound sync) + outbound fan-out paths (publish-view-result + share-doc-update + close-share) when `is_active` flag is `false`. Mapped from `AtriumError::InvalidState` typed variant via `engine_sync.rs::AtriumError::code`.
+- **Phase:** 3 G16-B-G
+
+### E_SYNC_DIVERGENT_CID_REJECTED
+
+- **Message:** "sync replica frame rejected: system-zone target {zone} carries divergent CID {observed_cid} (Anchor-immutable per Inv-13 row-4b)"
+- **Context:** `{ zone: String, observed_cid: String, anchor_cid: String }`
+- **Fix:** An inbound sync-replica frame targets a system-zone / Anchor-immutable path (per `crates/benten-engine::system_zones::SYSTEM_ZONE_PREFIXES`) with a divergent CID. Per ds-4 Inv-13 row-4b, system-zone targets are immutable-via-sync — divergent CIDs are rejected PRE-merge by the classifier walk in `crates/benten-engine/src/engine_sync.rs::merge_remote_change` BEFORE the Loro merge applies (not post-merge cleanup). The remote peer SHOULD treat the rejection as authoritative for the system-zone path; user-data zones (Inv-13 row-4a) continue to merge via the Loro CRDT + D-C HYBRID Anchor+Version+CURRENT pattern. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer degrade) and `E_ATRIUM_RELAY_UNREACHABLE` (relay unavailability) — this is a semantic-layer reject, not a transport failure. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-engine/src/engine_sync.rs::AtriumError::DivergentCidRejected` (Phase-3 G16-B wave-6b; ds-4 Inv-13 row-4 SPLIT). PRE-merge classifier at `engine_sync.rs::merge_remote_change` walks `SYSTEM_ZONE_PREFIXES` and rejects divergent CIDs targeting system-zone paths before applying any Loro state. Mapped via `engine_sync.rs::AtriumError::code` to the stable code.
+- **Phase:** 3 G16-B
+
+### E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW
+
+- **Message:** "handshake replay within bounded window: original_hlc={original_hlc} replay_hlc={replay_hlc} window_ms={window_ms}"
+- **Context:** `{ original_hlc: u64, replay_hlc: u64, window_ms: u64 }`
+- **Fix:** A handshake frame was replayed within the bounded HLC acceptance window (default `DEFAULT_REPLAY_WINDOW_MS = 5000`). The handshake state machine rejects bounded-window replays via symmetric drift math (`now.abs_diff(hlc_physical_ms) > replay_window_ms`) so future-stamped frames are also rejected — defends against clock-skew injection. The diagnostic fields (`original_hlc`, `replay_hlc`, `window_ms`) let operators distinguish bounded-window replay from transport-layer degradation. Per `ds-r4-3`, the replay defense is EXPLICIT and TYPED — not a generic transport error. The canonical replay-detection mechanism (per-peer nonce cache) is deferred to a follow-on wave per the source comment at `crates/benten-sync/src/handshake.rs::Handshake::respond`; G16-D ships only the bounded-window math. Distinct from `E_ATRIUM_TRANSPORT_DEGRADED` (transport-layer signal) — this is a semantic-layer reject. Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-sync/src/handshake.rs::HandshakeError::ReplayWithinBoundedWindow` (Phase-3 G16-D wave-6b; ds-r4-3). Surfaces from `Handshake::respond` and `Handshake::finalise` when the carried HLC drift exceeds the replay window. Composes with G14-pre-D HLC bounded-window math.
+- **Phase:** 3 G16-D
+
+### E_WAIT_TTL_EXPIRED
+
+- **Message:** "resume: WAIT TTL deadline elapsed for envelope {envelope_cid} (suspended {suspend_wallclock_ms} ms wall-clock; ttl_hours={ttl_hours}; now {now_ms} ms)"
+- **Context:** `{ envelope_cid: String, suspend_wallclock_ms: Option<u64>, ttl_hours: Option<u32>, now_ms: u64 }`
+- **Fix:** A `resume_with_meta` (or `resume_from_bytes_*`) call landed against a SuspensionStore entry whose wall-clock TTL deadline has elapsed. The TTL is anchored at suspend time as `suspend_wallclock_ms + ttl_hours * 3_600_000` and persisted alongside the envelope; a fresh engine opening the same redb path computes the same deadline (cross-process correctness). When elapsed, the resume hot-path reaps the entry from the SuspensionStore + bumps the `WaitTtlGcStats.reaped_count` counter + returns this typed error. Distinct from `E_WAIT_TIMEOUT` (in-process / per-call deadline that fires from the eval-side resume_with_meta consumer) — `E_WAIT_TTL_EXPIRED` is the wall-clock deadline that survives suspend / restart. Per the D12 wave-8a hybrid-GC contract, expiry is detected on every resume regardless of whether the GC sweep ran first (deadline-on-resume safety is independent of the sweep schedule). Routes to `ON_ERROR`.
+- **Thrown at:** `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` (Phase-3 G20-A2 wave-8a; D12). The pre-deadline check at the resume hot-path consults `crate::wait_ttl_gc::is_expired` against the persisted `WaitMetadata`; on expiry, calls `crate::wait_ttl_gc::reap_one` + increments stats + returns this typed error. Companion GC machinery at `crates/benten-engine/src/wait_ttl_gc.rs` runs three sweep paths (event-driven on suspend / resume + interval-backstop + drop-final).
+- **Phase:** 3 G20-A2
+
+### E_WAIT_TTL_INVALID
+
+- **Message:** "register_subgraph: WAIT node {node_id} has out-of-range ttl_hours={raw}; expected integer in [1, 720]"
+- **Context:** `{ node_id: String, raw: i64 }`
+- **Fix:** A WAIT primitive's `ttl_hours` property failed registration-time validation. `ttl_hours == 0` would expire immediately on suspend (a footgun); `ttl_hours > 720` exceeds the documented 30-day ceiling. The check fires at `register_subgraph` time so a miswritten spec does not survive into running state. Either (a) drop the `ttl_hours` property entirely (defaults to no-TTL, matching the Phase-2b behaviour), (b) set it to an integer in `[1, 720]`, or (c) split the wait into staged shorter waits at the spec layer if a wait longer than 30 days is genuinely required. Distinct from `E_WAIT_TTL_EXPIRED` (runtime-deadline elapse) and `E_WAIT_TIMEOUT` (in-process per-call deadline) — this is a configuration-time error, not a runtime-deadline failure. Routes to `None` (the registration-time disposition matching `E_INV_REGISTRATION` / `E_DUPLICATE_HANDLER` / `E_INV_SANDBOX_DEPTH`); the registration error surfaces at the `register_subgraph` call site, not along an in-graph primitive edge.
+- **Thrown at:** `crates/benten-engine/src/engine.rs::register_subgraph` (Phase-3 G20-A2 wave-8a; D12). The validation walk inspects every WAIT node's `ttl_hours` property; non-integer payloads + out-of-range integers + zero values all fire this code with the offending node id + raw value carried in the message.
+- **Phase:** 3 G20-A2
+
+### E_WAIT_METADATA_MISSING
+
+- **Message:** "resume: suspension store has no WAIT metadata for envelope CID {envelope_cid} (cross-process resume without a shared SuspensionStore, fabricated handle, or evicted entry)"
+- **Context:** `{ envelope_cid: String }`
+- **Fix:** A resume call landed against an envelope whose WAIT metadata is absent from the SuspensionStore. Per Compromise #9 / G12-E closure, missing metadata is a fail-loud surface — Phase-2a's permissive `Complete(value)` fallback was a documented gap that silently dropped the deadline + signal-shape checks. The discriminator is the envelope-side record's presence: the eval-side wait primitive persists BOTH `put_wait(cid, meta)` AND `put_envelope(envelope)` for every real WAIT suspend, so a mismatch (envelope present, metadata absent) is the engine-detectable signature of metadata-missing for a real WAIT envelope. Three legitimate scenarios trigger this: (a) a cross-process resume against a different physical SuspensionStore that holds the envelope record but lost metadata; (b) the metadata-side entry was evicted by the WAIT TTL GC (event-driven sweep / interval-backstop / drop-final) without the envelope side being reaped (impossible by `reap_one`'s contract — a partial-GC-corruption signal); (c) a caller fabricated an envelope-side record without a metadata-side counterpart. Distinct from `E_WAIT_TTL_EXPIRED` (entry exists but deadline has passed — a timing failure that the resume actively detects and reaps) — `E_WAIT_METADATA_MISSING` fires when no metadata entry exists for an envelope record that should have one. The eval-layer surfaces a parallel fail-loud at `benten_eval::resume_with_meta` via `EvalError::Host(HostBackendUnavailable)` (when the public eval API is called directly with `meta: None`); the engine's `map_resume_eval_error` ALSO promotes that path to `E_WAIT_METADATA_MISSING` so direct-eval-callers route consistently. Routes to `ON_ERROR`.
+- **Thrown at:** Primary site at `crates/benten-engine/src/engine_wait.rs::resume_from_bytes_inner` (Phase-3 G20-A2 wave-8a; D12) Step 1.5 envelope-vs-metadata mismatch check. Secondary mapping at `crates/benten-engine/src/engine_wait.rs::map_resume_eval_error` promotes the eval-side `HostBackendUnavailable` fail-loud (from `crates/benten-eval/src/primitives/wait.rs::resume_with_meta`'s `meta: None` arm) to this typed code at the resume boundary so the engine API surface preserves the metadata-missing semantic uniformly across direct-eval and engine-mediated callers. The eval-side ErrorCode stays `HostBackendUnavailable` (broader semantic — generic backend-unavailable surface); the engine-layer typed code is the user-facing one.
+- **Phase:** 3 G20-A2
+
+### E_TYPED_CALL_UNKNOWN_OP
+
+- **Message:** "typed-CALL dispatch: unknown op '{op_name}' (engine:typed:* registry has no matching entry)"
+- **Context:** `{ op_name: String }`
+- **Routes via:** `ON_ERROR` edge.
+- **Fix:** A CALL primitive dispatched a `target` in the reserved `engine:typed:*` namespace, but the trailing op name does not match any registered typed-CALL op. Phase-3 G21-T1 ships 10 ops: `ed25519_sign`, `ed25519_verify`, `keypair_generate`, `keypair_from_seed`, `blake3_hash`, `multibase_encode`, `multibase_decode`, `did_resolve`, `ucan_validate_chain`, `vc_verify`. Verify the op name spelling; the registry is closed (no user-registered typed-CALL ops in Phase 3 — extension is a Rust-only engine concern per CLAUDE.md baked-in commitment #16). Distinct from `E_NOT_FOUND` (handler-id miss in the user handler registry): this code fires AFTER the `engine:typed:` prefix is recognised. See [`docs/TYPED-CALL.md`](TYPED-CALL.md) for the engineer-facing reference.
+- **Thrown at:** `crates/benten-eval/src/typed_call.rs::TypedCallOp::parse` (Phase-3 G21-T1; CLAUDE.md baked-in commitment #16 SANDBOX-vs-CALL framing). The dispatch fork at `crates/benten-eval/src/primitives/call.rs::execute` recognises the `engine:typed:` prefix and routes to the typed-CALL registry; an unknown op surfaces this code rather than falling through to the user handler registry.
+- **Phase:** 3 G21-T1
+
+### E_TYPED_CALL_INVALID_INPUT
+
+- **Message:** "typed-CALL '{op_name}' input shape rejected: {reason}"
+- **Context:** `{ op_name: String, reason: String }`
+- **Routes via:** `ON_ERROR` edge.
+- **Fix:** A typed-CALL dispatch supplied an input shape that does not match the named op's expected schema. Failure modes include: missing required field (e.g. `ed25519_sign` requires both `private_key` and `message`); wrong CBOR type (string passed where bytes expected); byte-length mismatch for fixed-width fields (Ed25519 secret keys MUST be 32 bytes; signatures MUST be 64 bytes; public keys MUST be 32 bytes). The op's input/output schema is documented inline at `crates/benten-eval/src/typed_call.rs::TypedCallOp` per-op rustdoc + tabulated at [`docs/TYPED-CALL.md`](TYPED-CALL.md). Distinct from `E_TRANSFORM_SYNTAX` (TRANSFORM expression parse failure) — this is a typed-CALL op-input validation failure that fires at dispatch time before any underlying crypto/codec call.
+- **Thrown at:** `crates/benten-eval/src/typed_call.rs` per-op input validation (Phase-3 G21-T1). Each op's `validate_input` arm rejects malformed input with this code + a per-op `reason` string before the engine-side handler in `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` is invoked.
+- **Phase:** 3 G21-T1
+
+### E_TYPED_CALL_CAP_DENIED
+
+- **Message:** "typed-CALL '{op_name}' denied: required capability '{required}' not held"
+- **Context:** `{ op_name: String, required: String }`
+- **Routes via:** `ON_DENIED` edge (joins the cap-denial family — same routing as `E_CAP_DENIED` / `E_SANDBOX_HOST_FN_DENIED`).
+- **Fix:** A typed-CALL dispatch was rejected because the dispatching grant's capability set does not include the per-op required capability. Each typed-CALL op declares a cap requirement (e.g. `cap:typed:crypto-sign` for `ed25519_sign`, `cap:typed:crypto-verify` for `ed25519_verify`, `cap:typed:did-resolve` for `did_resolve`, `cap:typed:ucan-validate` for `ucan_validate_chain`); the host's `check_capability` hook gates the op before dispatch. Under `NoAuthBackend` all typed-CALL caps are permitted; UCAN backend gates per chain claim (Phase-3-backlog §2.5(c) tracks the UCANBackend → `cap:typed:*` policy mapping carry). See [`docs/TYPED-CALL.md`](TYPED-CALL.md) §"Capability model".
+- **Thrown at:** `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` (Phase-3 G21-T1). The cap-check fires BEFORE the underlying `benten-id` / `benten-core` op is invoked so a denied call has zero observable side effect.
+- **Phase:** 3 G21-T1
+
+### E_TYPED_CALL_DISPATCH_ERROR
+
+- **Message:** "typed-CALL '{op_name}' dispatch failed: {reason}"
+- **Context:** `{ op_name: String, reason: String }`
+- **Routes via:** `ON_ERROR` edge.
+- **Fix:** A typed-CALL op's underlying implementation in `benten-id` / `benten-core` returned a typed error that bubbles out of the typed-CALL dispatch boundary. Examples: `keypair_from_seed` against a malformed envelope (returns `KeypairError`); `did_resolve` against an unsupported method (returns `DidError`); `ucan_validate_chain` against a malformed JWT (returns `UcanError::Decode`). Note: a clean negative result (Ed25519 verify returns `false`, UCAN chain expired) is NOT this code — those return a structured `{ valid: false, ... }` Map with the op-internal failure reason. This code fires only when the underlying API call cannot produce a well-formed result. See [`docs/TYPED-CALL.md`](TYPED-CALL.md) §"did_resolve DID-method validation" for the §2.5(b) carry on `did_resolve` non-`did:key:` methods.
+- **Thrown at:** `crates/benten-engine/src/primitive_host.rs::dispatch_typed_call` (Phase-3 G21-T1). Per-op error mapping promotes the underlying typed error from `benten-id` / `benten-core` to this code with the op name + a brief `reason` string for diagnostic routing.
+- **Phase:** 3 G21-T1
+
+### E_UCAN_CLOCK_NOT_INJECTED
+
+- **Message:** "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a chain with time-bounded delegations; inject a real clock via with_now_for_test (or wait for WriteContext::now threading per phase-3-backlog §2.3 (i))"
+- **Context:** `{}` (no structured payload — the violation is at the policy boundary, not at any specific token)
+- **Fix:** The `UcanGroundedPolicy` chain-walker observed the `DEFAULT_NOW_SECS = 0` sentinel against a UCAN chain that carries time-bounded delegations (`nbf > 0` OR `exp > 0`). Pre-fail-closed-fix the chain-walker silently fail-OPENed: it walked tokens against `now=0`, so a forged chain with `nbf=0` + `exp > 0` accepted whenever the rest of the chain-walk passed (no operator-visible surface signaling the missing-clock misconfiguration). The inversion at G16-B-B-rest sub-item D fail-CLOSES with this typed code so the caller MUST inject a real wallclock. Production callers will inject via the `WriteContext::now`-threading work named in `docs/future/phase-3-backlog.md §2.3 (i)`; tests inject via `UcanGroundedPolicy::with_now_for_test`. A chain WITHOUT time bounds (`nbf=0` AND `exp` unset) is safe to walk at the sentinel and does NOT trigger this code.
+- **Thrown at:** `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy::typed_cap_permitted_by_proof` (Phase-3 G16-B-B-rest sub-item D). The fail-closed branch is the load-bearing assertion at the policy boundary; the `chain_has_time_bounds` helper at the same site distinguishes "chain depends on wallclock" from "chain is unbounded."
+- **Phase:** 3 G16-B-B-rest
+
+### E_RESERVED_HANDLER_NAMESPACE
+
+- **Message:** "register_subgraph: handler_id `{handler_id}` is in the reserved `engine:typed:` namespace; this prefix is the typed-CALL registry (see CLAUDE.md baked-in #16 + phase-3-backlog §2.5(d)). E_RESERVED_HANDLER_NAMESPACE"
+- **Context:** `{ handler_id: String }`
+- **Fix:** A user attempted to register a handler whose `handler_id` starts with the reserved `engine:typed:` namespace. The eval-side dispatch fork (`crates/benten-eval/src/primitives/call.rs::execute`) pre-empts user-handler routing for this prefix — the typed-CALL registry is closed (10 ops at Phase-3 G21-T1), and extension is a Rust-only engine concern per CLAUDE.md baked-in commitment #16 (SANDBOX is for compute that doesn't fit other primitives — typed crypto / hash / DID / UCAN / VC ops fit CALL). Without this guard the user registration would be silent dead code; the registration-time reject surfaces the user-error sooner than the eval-time `E_TYPED_CALL_UNKNOWN_OP` would. Choose a non-`engine:typed:` handler_id (e.g. drop the prefix, or use a project-specific namespace). The catalog entry is paper-trail: this code does NOT route along a primitive edge (registration-time refusal, same disposition as `E_VIEW_STRATEGY_A_REFUSED` / `E_DUPLICATE_HANDLER`).
+- **Thrown at:** `crates/benten-engine/src/engine.rs::register_subgraph` + `register_subgraph_replace` (Phase-3 G21-T3 §2.5(d) fold-in; corr-minor-3 carry from G21-T1 fp-mini-review). Fires BEFORE invariant validation / subgraph CID derivation so a misnamed registration has zero observable side effect on engine state.
+- **Phase:** 3 G21-T3
+
+### E_SCHEMA_VALIDATION_FAILED
+
+- **Message:** "schema_compiler: schema failed validation (malformed JSON / missing required field / unconstrained EMIT/RESPOND target without scope)"
+- **Context:** `{ reason: String, location: Option<String> }`
+- **Fix:** Top-level schema-validation failure at `benten_platform_foundation::schema_compiler::compile`. Common causes: malformed JSON; missing `label` / `name` at the SchemaRoot; an EMIT or RESPOND target declared without a `scope` clause (per sec-3.5-r1-4, schema-emitted EMIT / RESPOND must be scope-bound). Fix: provide a well-formed JSON schema document conforming to the 8-label / 5-labeled-edge / 8-scalar vocabulary ratified at D-4F-NEW-TYPED-FIELD-NODE-VOCAB (object-to-field relationships are implicit-via-recursion; see `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`). Registration-time refusal, same routing disposition as `E_RESERVED_HANDLER_NAMESPACE`.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_EMIT_NEW_PRIMITIVE_REJECTED
+
+- **Message:** "schema_compiler: schema would require emitting a new PrimitiveKind variant outside the canonical 12 (CLAUDE.md baked-in #1 violation)"
+- **Context:** `{ requested_kind: String }`
+- **Fix:** Schema requested a primitive kind outside the 12-canonical set (READ / WRITE / TRANSFORM / BRANCH / ITERATE / WAIT / CALL / RESPOND / EMIT / SANDBOX / SUBSCRIBE / STREAM). The 12-primitive commitment is irreducible (CLAUDE.md baked-in #1). Re-express the schema as a composition over the existing 12 primitives. If the schema genuinely needs new compute that doesn't fit, route through SANDBOX (CLAUDE.md baked-in #16).
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/emit.rs` (G23-A canary).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_SANDBOX_HOST_FN_REJECTED
+
+- **Message:** "schema_compiler: schema references SANDBOX module requesting storage-mutating host fn `{host_fn}` — forbidden per CLAUDE.md baked-in #16"
+- **Context:** `{ host_fn: String, module_cid: Option<String> }`
+- **Fix:** A schema-embedded SANDBOX reference requested a storage-mutating host fn (`kv:write` / `kv:delete` / edge-mutating). Per CLAUDE.md baked-in #16 these are explicitly NOT engine concerns — they would be parallel write-pathways that bypass the WRITE primitive's capability gating + Inv-13 firing matrix + IVM materialization seam. The minimum-viable SANDBOX host-fn surface is `time` / `log` / `kv:read` / `random` only. Re-shape the schema so any writes go through the WRITE primitive (which the materializer pipeline composes for you).
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, sandbox-ref validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_INVALID_LABEL
+
+- **Message:** "schema_compiler: schema references vocabulary label `{label}` outside the 8-label set (SchemaRoot / FieldScalar / FieldObject / FieldList / FieldMap / FieldRef / FieldEnum / FieldUnion)"
+- **Context:** `{ label: String, field_name: Option<String> }`
+- **Fix:** Replace the unknown label with one of the 8 ratified labels (D-4F-NEW-TYPED-FIELD-NODE-VOCAB). The schema vocabulary is closed; extension requires re-opening the D-4F-NEW-TYPED-FIELD-NODE-VOCAB decision.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, label validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_EDGE_MISMATCH
+
+- **Message:** "schema_compiler: schema edge does not match any of the 5 labeled edge types (ITEM_TYPE / KEY_TYPE / VALUE_TYPE / REF_TARGET / VARIANT; object-to-field is implicit-via-recursion + has no edge label) for the given label pair"
+- **Context:** `{ source_label: String, target_label: String, edge: String }`
+- **Fix:** The schema's edge-label pairing is not in the 5-labeled-edge set. Consult the edge-table at `docs/SCHEMA-DRIVEN-RENDERING.md §2.2`.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, edge validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_SCALAR_UNKNOWN
+
+- **Message:** "schema_compiler: FieldScalar references scalar name `{scalar}` outside the 8-scalar vocabulary (text / int / float / bool / bytes / bytes-cid / timestamp-hlc / null)"
+- **Context:** `{ scalar: String, field_name: Option<String> }`
+- **Fix:** Use one of the 8 ratified scalar names. Each maps to a `benten-core::Value` variant per `docs/SCHEMA-DRIVEN-RENDERING.md §2.3`.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, scalar validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_REF_TARGET_MISSING
+
+- **Message:** "schema_compiler: FieldRef `{field_name}` references a target kind `{ref_target_kind}` that is missing or unresolvable"
+- **Context:** `{ field_name: String, ref_target_kind: Option<String> }`
+- **Fix:** Supply a `ref_target_kind` that resolves either to a content CID (cross-content reference) or to another label/schema in scope. FieldRef nodes MUST declare a target; an undeclared target fails the closure invariant for cross-content references.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, FieldRef validation).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_CYCLE_REJECTED
+
+- **Message:** "schema_compiler: FieldRef graph contains a cycle — schema vocabulary is DAG-only (CLAUDE.md baked-in #4)"
+- **Context:** `{ cycle_through: Vec<String> }`
+- **Fix:** Break the cycle. Schemas form a DAG per the same commitment that governs all subgraphs (CLAUDE.md baked-in #4 — DAGs only; bounded iteration via ITERATE primitive). Recursive shapes must terminate via FieldRef-to-content-CID (which is a runtime-resolved reference, not a compile-time edge).
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, cycle detection).
+- **Phase:** 4-Foundation G23-A
+
+### E_SCHEMA_VOCAB_REQUIRED_PROPERTY_MISSING
+
+- **Message:** "schema_compiler: field `{field_name}` is missing one of the 4 mandatory properties (name / required / default / scope)"
+- **Context:** `{ field_name: String, missing_property: String }`
+- **Fix:** Supply the missing property. Note: `scope` is schema-DERIVED (synthesized by the compiler from field path per sec-3.5-r1-4), NOT user-supplied — if a user-supplied `scope` is detected, the compiler discards it and synthesizes its own. The 4 mandatory properties form the irreducible per-field metadata budget.
+- **Thrown at:** `crates/benten-platform-foundation/src/schema_compiler/parse.rs` (G23-A canary, per-field validation).
+- **Phase:** 4-Foundation G23-A
+## Phase 4-Foundation G24-D — FULL plugin manifest (15 codes)
+
+Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.md` engineering reference. Atomic Rust + TS mirror per dispatch-conventions §3.5g; G24-D minted 15 new variants per the cohort-table enumeration in the preamble. Pre-G24-D landing baseline within the Phase-4-Foundation R5 cohort: 131 (118 + 4 G24-F + 9 G23-A); post-G24-D landing: 146 (131 + 15). Final Phase-4-Foundation R5 enum size after G23-B materializer cohort (+3): 149 → reconciled to 163 at R6-FP-C closure (149 list-entries + 14 pre-existing latent throwable variants promoted into the regression list per ec-r6r1-1). See preamble for the full count narrative.
+
+### E_PLUGIN_MANIFEST_INVALID
+
+- **Message:** "plugin manifest envelope structurally invalid (empty fields, signature length mismatch, malformed shares-policy)"
+- **Fix:** Inspect the `PluginManifest::validate` failure: `plugin_name` non-empty, `peer_signature` is 64 bytes (Ed25519 detached), `requires` non-empty, `shares.default == Matching` implies non-empty `rules`, per-requirement `scope` non-empty.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::validate`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID
+
+- **Message:** "install record's user-DID signature did not verify against the consenting user-DID's public key"
+- **Fix:** Catches forged install records (user-DID is the trust anchor per CLAUDE.md #18 Layer 1). Re-mint via the install signing path.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature`.
+- **Phase:** 4-Foundation G24-D (arch-r1-3 split of conflated `E_PLUGIN_MANIFEST_SIGNATURE_INVALID`)
+
+### E_PLUGIN_CONTENT_PEER_SIGNATURE_INVALID
+
+- **Message:** "plugin content peer-DID signature did not verify against declared peer-DID"
+- **Fix:** Receiver-peer rejects substituted bundles or forged peer-DID signatures (CLAUDE.md #18 Layer 2 provenance). Re-pull from a trusted peer.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_peer_signature`.
+- **Phase:** 4-Foundation G24-D (arch-r1-3 split)
+
+### E_PLUGIN_CONTENT_PEER_KEY_ROTATED
+
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at G24-D-FP-2 / Phase 4-Meta RotationLog integration.** The variant + atomic Rust+TS mirror lands at G24-D wave per §3.5g; the install-pipeline branch that consults `benten-id::did_rotation::RotationLog` and surfaces this warning lives in the unscaled-future of admin-UI-v0 + plugin manifest hardening.
+
+<!-- reachability: ignore -->
+
+- **Message:** "plugin content peer-DID key rotated (matched by RotationLog)"
+- **Fix:** Surfaces as WARNING at install (not hard-reject by default per D-4F-12). Admin UI displays the rotation chain; user may proceed or decline.
+- **Thrown at:** install pipeline at `crates/benten-platform-foundation/src/module_ecosystem.rs` + `benten-id::did_rotation::RotationLog` consultation.
+- **Phase:** 4-Foundation G24-D (arch-r1-3 split)
+
+### E_PLUGIN_AUTHOR_NOT_TRUSTED
+
+- **Message:** "plugin author peer-DID is not in the user's trust-list and no first-install consent has been recorded"
+- **Fix:** Admin UI surfaces first-install consent prompt; user may add author to trust-list or reject install.
+- **Thrown at:** `crates/benten-platform-foundation/src/module_ecosystem.rs::check_author_trust` + upgrade-author-continuity check.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_INSTALL_CONSENT_REQUIRED
+
+<!-- reachability: ignore -->
+
+> **Production firing path (Phase 4-Foundation R6-FP-A — narrowed):** post-arch-r6-r1-5 split, this variant means *no `InstallRecord` was supplied* (null-consent case). The current `install_plugin` signature takes `&InstallRecord` (non-optional), so this variant has no production-code construction site at HEAD — it is reserved for a Phase-4-Meta callable-from-admin-UI path that surfaces "user must consent before install can proceed" as a first-class error when no record is supplied. Three distinct sibling codes now discriminate the three substitution-attack arms: `E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH` (record's `manifest_cid` ≠ expected), `E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH` (record's `consenting_user_did` ≠ `InstallContext::user_did`), `E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH` (record's signed `plugin_did` ≠ supplied plugin-DID). `E_PLUGIN_INSTALL_RECORD_USER_SIGNATURE_INVALID` continues to surface for cryptographic-forge-class failures.
+
+- **Message:** "plugin install attempted without user consent (no InstallRecord supplied)"
+- **Fix:** User-DID must sign an `InstallRecord` referencing the manifest CID before the plugin enters the library. CLAUDE.md #18 Layer 1 user-as-root anchor.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation G24-D + R4b-FP-1 wired + R6-FP-A narrowed
+
+### E_PLUGIN_INSTALL_RECORD_MANIFEST_CID_MISMATCH
+
+> **Production firing path (Phase 4-Foundation R6-FP-A):** the consent gate at `plugin_lifecycle::install_plugin` Step 4 surfaces this when `install_record.manifest_cid != expected_cid`. Defends against consent-record-substitution where an attacker re-uses Alice's signed consent for plugin-A to authorize installation of plugin-B. Forensically distinct from `PluginInstallConsentRequired` (no record) and from `PluginInstallRecordUserSignatureInvalid` (forged signature).
+
+- **Message:** "install record's bound manifest_cid did not match the install path's expected manifest CID (consent-record-substitution defense)"
+- **Fix:** The install record was signed for a different manifest. Either fetch the matching manifest, or have user-DID sign a fresh InstallRecord bound to this manifest CID.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation R6-FP-A (arch-r6-r1-5 split)
+
+### E_PLUGIN_INSTALL_RECORD_CONSENTING_USER_MISMATCH
+
+> **Production firing path (Phase 4-Foundation R6-FP-A):** the consent gate at `plugin_lifecycle::install_plugin` Step 4 surfaces this when `install_record.consenting_user_did != ctx.user_did`. Defends against consent-record-substitution where an attacker presents Alice's signed consent against Bob's install context. Forensically distinct from `PluginInstallConsentRequired` (no record) and from `PluginInstallRecordUserSignatureInvalid` (forged signature).
+
+- **Message:** "install record's consenting_user_did did not match the install context's user_did (consent-record-substitution defense)"
+- **Fix:** The install record was signed by a different user. Either install under that user's context, or have the active user-DID sign a fresh InstallRecord.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (consent gate Step 4).
+- **Phase:** 4-Foundation R6-FP-A (arch-r6-r1-5 split)
+
+### E_PLUGIN_INSTALL_RECORD_PLUGIN_DID_MISMATCH
+
+> **Production firing path (Phase 4-Foundation R6-FP-A + R6-FP-A-fp — sec-r6r1-1 BLOCKER closure):** the Step 8 plugin-DID adoption check at `plugin_lifecycle::install_plugin` surfaces this when `install_record.plugin_did != *ctx.expected_plugin_did`. The caller asserts (via `InstallContext::expected_plugin_did`) which plugin-DID the user signed the InstallRecord for; if the record's bound `plugin_did_bytes` (via `InstallRecord::signing_payload`) disagrees with the caller's claim, the install rejects. Closes the sec-r6r1-1 BLOCKER where the install-record signing payload bound `plugin_did_bytes` but the legacy Step 8 silently minted a fresh DID and discarded the record's signed value — defeating the load-bearing consent-payload integrity guarantee.
+
+- **Message:** "install record's signed plugin_did did not match the supplied expected plugin-DID (consent-payload integrity defense)"
+- **Fix:** The install record was signed for a different plugin-DID. Either supply the matching plugin-DID (via the caller-mint-first pattern — caller mints via `benten_id::plugin_did::mint()`, inserts handle to `PluginDidStore`, builds InstallRecord with that DID, passes it as `InstallContext::expected_plugin_did`) or have the user re-sign a fresh InstallRecord bound to the actual minted plugin-DID.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
+- **Phase:** 4-Foundation R6-FP-A + R6-FP-A-fp (sec-r6r1-1 BLOCKER closure)
+
+### E_PLUGIN_DID_HANDLE_NOT_PRE_INSERTED
+
+> **Production firing path (Phase 4-Foundation R6-FP-A-fp — mr-1 + mr-2 BLOCKER closure):** the Step 8 plugin-DID adoption check at `plugin_lifecycle::install_plugin` surfaces this when `install_record.plugin_did == *ctx.expected_plugin_did` (consent integrity holds) BUT the corresponding `PluginDidHandle` was never inserted into the supplied `PluginDidStore`. Closes the keypair-orphan failure mode where pre-fp Step 8's empty branches let install_plugin succeed without any handle in the store, making downstream UCAN-sign-as-plugin / `PluginDidStore::revoke` on uninstall observably broken.
+
+- **Message:** "install_record.plugin_did is not present in PluginDidStore — caller-mint-first pattern requires the handle to be inserted before install_plugin is called"
+- **Fix:** Caller must mint `PluginDidHandle` via `benten_id::plugin_did::mint()` AND call `plugin_did_store.insert(handle)` BEFORE invoking `install_plugin`. The install path no longer mints on the caller's behalf; the handle is the caller's responsibility because only the caller can produce a real Ed25519 keypair backing an arbitrary DID string.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` (Step 8 plugin-DID adoption check, post-R6-FP-A-fp).
+- **Phase:** 4-Foundation R6-FP-A-fp (mr-1 + mr-2 closure)
+
+### E_PLUGIN_DID_HANDLE_DUPLICATE
+
+> **Production firing path (Phase 4-Foundation R6-FP-3 — cap-r6-r3-1 defensive-return hardening):** `PluginDidStore::insert` rejects a duplicate handle whose DID byte-equals a handle already present in the store. The caller-mint-first contract (per `docs/PLUGIN-MANIFEST.md §3 Plugin-DID minting protocol`) presumes each plugin-DID is minted exactly once + inserted exactly once; a duplicate-insert attempt indicates either a caller bug (double-mint or double-insert in the install path) or an adversarial collision attempt (would require finding two Ed25519 keypairs whose `did:key:` encodings collide, which is computationally infeasible). Pre-R6-FP-3 the insert silently overwrote — the defensive-return surfaces the contract violation as a typed error.
+
+- **Message:** "PluginDidStore::insert refused duplicate plugin-DID handle — caller-mint-first contract presumes each plugin-DID is minted + inserted exactly once"
+- **Fix:** Inspect the install path for double-mint or double-insert of the same `PluginDidHandle`. Each `benten_id::plugin_did::mint()` call MUST produce a fresh keypair → fresh DID; inserting the same handle twice indicates a caller bug. If the duplicate arose from re-installing the same plugin without a prior uninstall, call `PluginDidStore::revoke(did)` first.
+- **Thrown at:** `crates/benten-id/src/plugin_did.rs::PluginDidStore::insert`.
+- **Phase:** 4-Foundation R6-FP-3 (cap-r6-r3-1 defensive-return hardening)
+
+### E_PLUGIN_DELEGATION_OUTSIDE_MANIFEST_ENVELOPE
+
+- **Message:** "runtime UCAN delegation request fell outside the source plugin's manifest `shares` envelope"
+- **Fix:** The source plugin's manifest did not authorize delegation of this cap to this target. Inspect the source plugin's `shares` policy + the target plugin-DID.
+- **Thrown at:** `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_PRIVATE_NAMESPACE_DELEGATION_FORBIDDEN
+
+- **Message:** "cross-plugin delegation of a private-namespace cap (`private:<plugin_did>:*`) is unconditionally denied"
+- **Fix:** Private-namespace caps are sovereign to the owning plugin — never delegable cross-plugin regardless of `shares` policy. Re-scope to a sharable namespace if cross-plugin access is intended.
+- **Thrown at:** `crates/benten-caps/src/plugin_delegation.rs::check_delegation_within_envelope`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_CONTENT_CID_MISMATCH
+
+- **Message:** "plugin content bytes hash does not match the declared content_cid"
+- **Fix:** Catches substitution attacks at receive-time. Receiver re-pulls plugin from a trusted peer.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::PluginManifest::verify_content_cid_matches` + install pipeline.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_NEW_VERSION_AVAILABLE
+
+- **Message:** "a new version of an installed plugin was discovered (pull-not-push notification)"
+- **Fix:** HINT, not an error — pull-not-push model per plugin-arch-r1-13. Admin UI surfaces "new version available" prompt for user-initiated upgrade.
+- **Thrown at:** `crates/benten-platform-foundation/src/module_ecosystem.rs::new_version_available_code`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_HETEROGENEITY_INCOMPATIBLE
+
+- **Message:** "plugin requires `host:sandbox:exec` but installing peer is a thin-compute-surface"
+- **Fix:** Per CLAUDE.md #17 heterogeneity contract: SANDBOX is full-peer-only. Install on a full-peer device (laptop / phone OS app / desktop); thin-clients (browser / edge / Tauri webview) cannot host SANDBOX-using plugins.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` heterogeneity check (Step 5; the legacy `module_ecosystem::install_plugin` precursor was DELETED at Phase-4-Meta-Core G-CORE-0 — heterogeneity rejection carries forward unchanged).
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_META_COMPOSITION_CYCLE_REJECTED
+
+- **Message:** "meta-plugin composition graph contains a cycle"
+- **Fix:** Install-time cycle detection over `composes_plugins` references. Cycles would cause infinite recursion at evaluator walk; rejected as install policy.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_manifest.rs::detect_composition_cycle`.
+- **Phase:** 4-Foundation G24-D (post-R1-triage Q2 ratification — install-time AS REJECTION)
+
+### E_PLUGIN_DEVICE_ATTESTATION_FORGED
+
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at `benten-sync` plugin-share boundary.** The variant lands at G24-D wave per §3.5g + Ben's R4-triage §7 renaming (kept `E_PLUGIN_*` family prefix). The sync-layer call site consults `benten-id::device_attestation::Acceptor` during cross-peer plugin share; integration lands at the admin-UI-v0 sync-share flow.
+
+<!-- reachability: ignore -->
+
+- **Message:** "device-DID attestation envelope failed verification at the plugin-share boundary"
+- **Fix:** Renamed from earlier `E_DEVICE_ATTESTATION_FORGED_AT_PLUGIN_SHARE` per Ben's R4-triage §7 ratification (keeps `E_PLUGIN_*` family prefix). Plugin authors share from full peers with valid device-DIDs; this code surfaces forged device-attestation envelopes during cross-peer share, distinct from the existing Phase-3 sync-layer `E_DEVICE_ATTESTATION_FORGED`.
+- **Thrown at:** plugin-share path in `benten-sync` consulting `benten-id::device_attestation::Acceptor`.
+- **Phase:** 4-Foundation G24-D
+
+### E_PLUGIN_LIBRARY_INDEX_TAMPER
+
+> **⚠️ Reserved at Phase 4-Foundation G24-D; production firing path wires at the redb-backed `ManifestStore` integrity check.** The variant lands at G24-D wave per §3.5g; the durable persistence layer (post-in-memory `PluginLibrary`) consults this variant when stored entries fail hash verification or active-references point to absent CIDs.
+
+<!-- reachability: ignore -->
+
+- **Message:** "plugin library index tampering detected"
+- **Fix:** Integrity check fired: hash mismatch on stored entries, or active-reference pointing to absent CID. Rebuild the library index from durable storage / re-sync from trusted peer.
+- **Thrown at:** `crates/benten-platform-foundation/src/plugin_library.rs` integrity checks.
+- **Phase:** 4-Foundation G24-D
+
+### E_REGISTRY_DISCOVERY_TIMEOUT
+
+- **Message:** "decentralized registry discovery query timed out before any peer responded"
+- **Fix:** **Reserved at Phase 4-Foundation; first production firing at Phase 4-Meta** when registry-substrate lands per ratification #3. Phase 4-Foundation v0 uses direct content-addressed-share over Atriums (no registry).
+- **Thrown at:** decentralized-registry discovery query path in `crates/benten-platform-foundation/src/registry.rs` (Phase 4-Meta fills). The paper-only `Registry` discovery trait was pulled at v1-API-stabilization per #1198/#1014; the production firing site lands when the registry substrate is implemented at Phase 4-Meta (drift-detector reachability is `ignore` until then).
+- **Phase:** 4-Foundation G24-D (reserved); 4-Meta (firing)
+
+### E_MATERIALIZER_CAP_DENIED
+
+- **Message:** "materializer walk: Node `{cid}` denied at per-row cap-recheck for walk-principal `{principal}`; redacted in output"
+- **Context:** `{ node_cid: String, principal_cid: String, scope: Option<String> }`
+- **Fix:** The materializer walks `SchemaSubgraphSpec`-emitted READ primitives under the supplied walk-principal. Per-row reads route through `Engine::read_node_as(principal, cid)` (CLAUDE.md baked-in #18 Class B β) and the optional `IvmViewReadGate`. A denial collapses to a redacted view (Node-granularity) per ratification #7 — the materializer returns Ok(out) with the affected Node content replaced by a placeholder; the structured denial frame surfaces this typed code so the admin UI can render an explanation rather than a hard error. Joins the cap-denial routing family (`ON_DENIED`).
+- **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::materialize_with_gate` (G23-B canary).
+- **Phase:** 4-Foundation G23-B
+
+### E_MATERIALIZER_SCHEMA_MISMATCH
+
+- **Message:** "materializer rejected SubgraphSpec at entry: runtime composition requires cap-scope envelope exceeding the schema's declared `requires` (T1 negative defense)"
+- **Context:** `{ schema_name: String, declared_scopes: Vec<String>, required_scopes: Vec<String> }`
+- **Fix:** The materializer entry-point validates the SubgraphSpec's runtime cap-scope composition against the declared `requires` envelope BEFORE any READ fanout. If the spec's emitted READ / EMIT / RESPOND primitives carry a `cap_scope` annotation set whose union exceeds the declared envelope, the walk is refused with this typed code. Re-declare the schema's `requires` to cover all primitives the runtime walks, or narrow the schema so its emit shape stays inside the declared envelope. Pre-fanout rejection — no primitive-edge routing (None).
+- **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::materialize_with_gate` (G23-B canary, T1 defense per `admin-ui-v0-threat-model.md` §T1).
+- **Phase:** 4-Foundation G23-B
+
+### E_MATERIALIZER_SUBSCRIBE_SEAM_FAILURE
+
+- **Message:** "materializer reactive subscribe seam failed to attach to Engine::on_change_as_with_cursor (invalid pattern / cursor / subscription rejected)"
+- **Context:** `{ pattern: String, reason: String }`
+- **Fix:** The materializer's reactive update path routes ONLY through `Engine::on_change_as_with_cursor` (the cap-rechecking SUBSCRIBE entry point per sec-3.5-r1-9). Attachment failed — pattern is empty or invalid, the cursor type is unsupported, or the engine's policy denied subscription registration. Fix the pattern shape (non-empty event-name glob) or supply a valid SubscribeCursor; consult `Engine::on_change_as_with_cursor` docs.
+- **Thrown at:** `crates/benten-platform-foundation/src/materializer.rs::HtmlJsonMaterializer::subscribe_with_gate` (G23-B canary).
+- **Phase:** 4-Foundation G23-B
+
+### E_NAMESPACED_WRITE_UNSUPPORTED
+
+- **Message:** "namespaced write unsupported on this backend: {backend} cannot route writes to namespace_did partitions; only RedbBackend implements the per-DID partition surface today"
+- **Context:** `{ backend: &'static str }` (e.g. `"BrowserBackend"`)
+- **Fix:** The `WriteContext::namespace_did` field is the §1.A.FROZEN canary surface from G-CORE-1 (#989 cross-DID storage-partition seam). At HEAD only `RedbBackend` enforces the C1 cross-DID non-leak invariant via the per-DID partition keyspace + `ScopedView`. The `BrowserBackend` (CLAUDE.md baked-in #17 shape-b/c thin-client cache) and any other non-partitioned `GraphBackend` impl fail CLOSED on `Some(namespace_did)` with this typed code rather than silently dropping the scope and landing the write in the un-namespaced legacy keyspace — which would break the C1 invariant invisibly (a subsequent `ScopedView::get_node` would return `None` for the just-written CID). The fail-closed contract preserves the §1.A.FROZEN canary shape's safety promise across every `GraphBackend` impl, not just `RedbBackend`. Fix at the call site: either route the write through `RedbBackend` (the partitioned full-peer storage backend), or call with `WriteContext::namespace_did = None` (the legacy un-namespaced path). A future wave that implements the in-RAM partition for `BrowserBackend` replaces this typed-reject with the partitioned write path; the typed-reject is the defense in the interim per HARD RULE 12 clause-(b). Structural-shape rejection at the storage boundary — no primitive-edge routing (None).
+- **Thrown at:** `crates/benten-graph/src/browser_backend.rs::BrowserBackend::put_node_with_context` (G-CORE-1 fix-pass, Phase 4-Meta-Core).
+- **Phase:** 4-Meta-Core G-CORE-1 (fix-pass closure of `g-core-1-mr-1` MAJOR)
+
+### E_RECIPIENT_LACKS_KEYS_FOR_SUITE
+
+- **Message:** "recipient lacks one of the required key halves for the dispatched cipher-suite"
+- **Context:** `{ cipher_codepoint: u16, missing_half: &'static str }` (e.g. `cipher_codepoint: 0x647a` + `missing_half: "ml-kem-768"`)
+- **Fix:** Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.
+- **Thrown at:** `crates/benten-crypto-suite/src/cipher_suite.rs::CipherSuite::wrap_key_material` + `::unwrap_key_material` (G-CORE-3a CANARY, Phase 4-Meta-Core) — surfaces as `AeadError::RecipientLacksKeysForSuite` at the cipher-suite boundary; the boundary-lift into `benten-errors::ErrorCode::RecipientLacksKeysForSuite` for the engine-wide catalog surface lands at G-CORE-3b (caps + UCAN-bound recipient resolution where the typed-arm threads through the cap-policy path) — at G-CORE-3a the ErrorCode variant is reserved + the AeadError variant is the live production typed-arm. The drift-detector's `reachability: ignore` annotation below names this reservation; G-CORE-3b removes it when the wire-up lands.
+- **Phase:** 4-Meta-Core G-CORE-3a (F-3 W1 spec-gap closure)
+
+<!-- reachability: ignore -->
+
+### E_AEAD_REBINDING_ATTACK_DETECTED
+
+- **Message:** "AEAD authentication failed: AAD-binds-plaintext-CID rebinding attack (or AAD-binds-chunk-index cross-chunk-rebinding attack) detected at decrypt time"
+- **Context:** `{ envelope_plaintext_cid: Cid, recipient_aad_cid: Cid, variant: "whole" | "chunk", chunk_index: Option<u64> }`
+- **Fix:** Per §1.A.FROZEN item 15(g) + SECURITY-POSTURE.md "rebinding-attack-prevention" section + RATIFIED-S&C 2026-05-21 R2 (per-Spike-G/H/R3 ratification): the per-Node AEAD wrap binds `plaintext_cid` (whole-content arm) or `(plaintext_cid, chunk_index)` (per-chunk arm) into the ChaCha20-Poly1305 AAD at seal time. The decrypt-time AAD reconstruction MUST match byte-for-byte; failure means an attacker is mounting a valid ciphertext under the WRONG plaintext-CID (rebinding) or the WRONG chunk-index (cross-chunk-rebinding). Resolution: the caller's storage / mapping table has been tampered + the AEAD layer is correctly catching it; verify the two-CID mapping is consistent with the envelope's stored plaintext_cid + verify no off-tree process is mutating the encrypted-nodes table. NEVER catch + retry — the silent-acceptance of mismatch is the attack vector this code prevents.
+- **Thrown at:** `crates/benten-graph/src/aead_wrap.rs::decrypt` + `::decrypt_chunk` (lifted from `benten_crypto_suite::aead::unwrap` returning `AeadError::AeadAuthFailed` when the AAD-rebinding shape is matched); surfaces through `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::AeadAuthenticationFailed` → engine-error lift at G-CORE-3e.
+- **Phase:** 4-Meta-Core G-CORE-3d (Spike G/H + R3 ratification of `RATIFIED-sharing-and-confidentiality-2026-05-21.md` R2 two-CID + per-Node AEAD contract)
+
+<!-- reachability: ignore -->
+
+### E_TWO_CID_MAPPING_NOT_FOUND
+
+- **Message:** "two-CID mapping has no entry for plaintext CID {plaintext_cid} under the active scope"
+- **Context:** `{ plaintext_cid: Cid, scope: "unscoped" | "partition(<did>)" }`
+- **Fix:** Per RATIFIED-S&C 2026-05-21 R2 two-CID contract + multitenant-r1-5 partition-isolation property: this code is the load-bearing confidentiality arm at the head of `RedbBackend::read_via_two_cid_scoped`. A cross-DID caller (a `WriteContext::namespace_did = Some(did_y)` view trying to read content written under `did_x`) gets this code at the mapping-lookup step BEFORE any AEAD work — the partition isolation fires structurally at the key-prefix layer. NOT a tamper signal + NOT a degraded-cryptographic-state signal; semantically "this plaintext CID was never written here / under this scope." Resolution at the read site: check whether the read is intentional (re-issue under the correct namespace_did) or whether the plaintext CID was supplied by an untrusted source. NEVER promote this to an AEAD-authentication error — the distinction is the confidentiality boundary between "you saw the bytes and couldn't decrypt them" (leak) and "you didn't even see this mapping exists" (correct isolation).
+- **Thrown at:** `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::NotFound` via `crates/benten-graph/src/redb_backend.rs::RedbBackend::read_via_two_cid` + `::read_via_two_cid_scoped`. Engine-error lift at G-CORE-3e.
+- **Phase:** 4-Meta-Core G-CORE-3d
+
+<!-- reachability: ignore -->
+
+### E_TWO_CID_MAPPING_INTEGRITY_MISMATCH
+
+- **Message:** "two-CID mapping integrity mismatch: envelope's plaintext_cid field doesn't match the mapping-claimed plaintext_cid (or stored ciphertext bytes don't hash to the claimed ciphertext_cid)"
+- **Context:** `{ expected_plaintext_cid: Cid, actual_plaintext_cid: Cid, ciphertext_cid: Cid }`
+- **Fix:** Per the defense-in-depth contract documented in SECURITY-POSTURE.md "rebinding-attack-prevention" section: the two-CID mapping row `d:<did>:m:<plaintext_a> → ciphertext_cid` is structurally validated against the envelope at decrypt time. If the envelope's `plaintext_cid` field doesn't match the mapping-claimed `plaintext_a` (i.e. the mapping was tampered to redirect `plaintext_a → ciphertext_b` where *B*'s envelope carries `plaintext_cid = B ≠ A`), this typed integrity error fires. This complements the AEAD layer's AAD-binds-plaintext-CID defense — the AEAD layer would also catch the foreign envelope's AAD mismatch, but this structural check surfaces the tamper class distinctly so audit logs can distinguish "storage tamper" from "cryptographic tamper" cleanly. Resolution: investigate the storage layer for off-tree mutation of the `TWO_CID_MAP_TABLE` or `ENCRYPTED_NODES_TABLE`; the legitimate sealed write path produces consistent envelope ↔ mapping bindings. NEVER catch + retry.
+- **Thrown at:** `crates/benten-graph/src/two_cid_map.rs::TwoCidMapError::IntegrityMismatch` via `crates/benten-graph/src/redb_backend.rs::RedbBackend::read_decrypt_inner`. Engine-error lift at G-CORE-3e.
+- **Phase:** 4-Meta-Core G-CORE-3d
+
+<!-- reachability: ignore -->
+
+### E_AUTHORIZATION_GRANT_BINDING_SIG_INVALID
+
+- **Message:** "binding signature mismatch: ucan or key_material does not match the issuer's signed binding"
+- **Context:** `{ detail: String }` (which half mismatched + the verify-failure shape) OR `{ bound_audience: Cid, presented_audience: Cid }` for the wrong-audience-swap arm
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R3 (ONE-signed-artifact contract): the `AuthorizationGrant`'s `binding_sig` covers `(canonical_bytes(ucan) || canonical_bytes(key_material) || audience_bytes)` — it MUST verify before the validator consults either the UCAN scope or the key material (the binding is the foundation). This typed code fires for three distinct attack surfaces uniformly: (A-1) stolen-UCAN-without-keys — attacker lifts the UCAN half but presents a different `key_material`; the binding-sig over the new `(ucan, key_material)` tuple no longer matches the issuer's signed binding. (A-2) stolen-keys-without-UCAN — symmetric mirror of A-1 on the other half. (A-3) wrong-audience-swap — grant bound to audience X is presented for verification under audience Y; the audience binding is the load-bearing third leg per §R3 so a swap fails closed with `AudienceMismatch`. NEVER catch this error and retry with a substitute half / different audience — the typed reject IS the defense the §R3 contract exists to provide. Structural-shape rejection at the grant-validation boundary — no primitive-edge routing (None).
+- **Thrown at:** `crates/benten-caps/src/authorization_grant.rs::AuthorizationGrant::verify_binding` (G-CORE-3b, Phase 4-Meta-Core) — surfaces as `AuthorizationGrantError::BindingMismatch` / `AuthorizationGrantError::AudienceMismatch` at the cap-layer boundary; the boundary-lift into `benten-errors::ErrorCode::AuthorizationGrantBindingSigInvalid` for the engine-wide catalog surface lands at G-CORE-3e (sync/ALPN wire-up) + G-CORE-3f (Drop bundle) when grants flow through `CapabilityPolicy::check_*`. At G-CORE-3b the ErrorCode variant is reserved + the `AuthorizationGrantError` variants are the live production typed arms; the drift-detector's `reachability: ignore` annotation below names this reservation.
+- **Phase:** 4-Meta-Core G-CORE-3b (RATIFIED-S&C 2026-05-21 §R3 ONE-signed-artifact contract)
+
+<!-- reachability: ignore -->
+
+### E_CHAIN_NARROWING_VIOLATION
+
+- **Message:** "chain step {step_index} widens predecessor scope"
+- **Context:** `{ step_index: usize }` (1-based index of the offending edge — the transition from `chain[step_index-1]` to `chain[step_index]`)
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R1 (chain non-widening contract; Path (a) restricted-spec language only): a structured-`Scope` delegation chain MUST be monotonically narrowing — every step's `Scope` must be CONTAINED by its predecessor's. The chain validator surfaces this typed code at the first widening edge. Three widening arms fire it uniformly: (a) `Scope::Hashes(parent) → Scope::Hashes(child)` where `child` is NOT a subset of `parent` (adding hashes widens). (b) `Scope::RestrictedSelector(parent) → Scope::RestrictedSelector(child)` where `parent.contains(&child)` returns false (any of the 6 dimensions widens: roots / edge-allowlist / max_depth / label-allowlist / label-denylist [INVERSE] / property-equalities). (c) Cross-arm transitions (`Hashes` ↔ `RestrictedSelector`) — structurally non-comparable at v1-beta. Fix at the call site: re-issue the delegation with a properly narrowed scope. NEVER add a third `Scope` arm (e.g. `OpaqueSelector`) to work around this — Path (b) refinement-witness over opaque specs is structurally unsound per Spike H+1.1 §b.SEC #4 and the §1.A.FROZEN item 15(c) `no-opaque-arm` freeze prohibits the workaround; adding such an arm is a HALT-AND-SURFACE-TO-BEN escalation per HARD RULE 12.
+- **Thrown at:** `crates/benten-caps/src/chain_validator.rs::validate_chain_narrowing` (G-CORE-3b, Phase 4-Meta-Core) — surfaces as `ChainValidationError::ChainNotNarrowing` at the cap-layer boundary; the boundary-lift into `benten-errors::ErrorCode::ChainNarrowingViolation` for the engine-wide catalog surface lands at G-CORE-3e (sync/ALPN wire-up) when the chain validator runs at delegation-acceptance time. At G-CORE-3b the ErrorCode variant is reserved + the `ChainValidationError` variant is the live production typed arm; the drift-detector's `reachability: ignore` annotation below names this reservation.
+- **Phase:** 4-Meta-Core G-CORE-3b (RATIFIED-S&C 2026-05-21 §R1 chain-narrowing contract)
+
+<!-- reachability: ignore -->
+
+### E_UCAN_BLOBS_REQUEST_REJECTED
+
+- **Message:** "UCAN-gated iroh-blobs ALPN handler rejected request at per-request validation"
+- **Context:** `{ reason: String }` (binding-sig invalid / expired / nbf-in-future / revoked / audience mismatch / malformed grant)
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R2 (online-share contract; Flavor B per-request UCAN check): the wave-3e UCAN-gated iroh-blobs ALPN handler validates EVERY request's UCAN per-request BEFORE dispatching to `iroh_blobs::provider::handle_connection`. This typed code is the umbrella rejection arm — it fires for the "request denied at the handler boundary BEFORE any bytes flow" class. Distinct from `E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE` (scope-specific reject when the requested ciphertext_hash is NOT in the granted `RestrictedScope`'s `roots` allowlist) and `E_UNRESOLVED_PEER_DENY` (sentinel arm for the unresolvable peer-DID adversarial pattern). NEVER catch + retry — the typed reject IS the per-request defense the §R2 + §R3 (audience-binding) contracts exist to provide; a silent re-route would expose ciphertext to unauthenticated requesters.
+- **Thrown at:** `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` + `::validate_request_for_connection` (G-CORE-3e, Phase 4-Meta-Core).
+- **Phase:** 4-Meta-Core G-CORE-3e (RATIFIED-S&C 2026-05-21 §R2 online-share contract)
+
+### E_UCAN_BLOBS_REQUEST_NOT_IN_SCOPE
+
+- **Message:** "requested ciphertext_hash {hash} NOT in granted RestrictedScope scope"
+- **Context:** `{ ciphertext_hash: Cid, granted_roots: Vec<Cid> }`
+- **Fix:** Per RATIFIED-S&C 2026-05-21 §R2 + F-2 scope-check arm: the granted `RestrictedScope` allowlists a specific set of ciphertext_hashes (typically via the `with_hashes` constructor) and the handler MUST refuse requests for hashes outside that allowlist — even if the grant is otherwise valid (binding-sig OK + audience match + within validity window). The wave-3e adversarial pattern: Bob holds a grant for `{hash_a, hash_b}` and requests `hash_c`; the handler MUST NOT serve `hash_c`. NEVER widen the scope at acceptance time — the typed reject IS the contract.
+- **Thrown at:** `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request` (the scope-allowlist check after binding-sig + audience verification).
+- **Phase:** 4-Meta-Core G-CORE-3e (RATIFIED-S&C 2026-05-21 §R2 F-2 scope-check arm)
+
+### E_UNRESOLVED_PEER_DENY
+
+- **Message:** "grant references unresolvable peer-DID; refusing admission"
+- **Context:** `{ sentinel: "<unresolved-peer>" }`
+- **Fix:** Per the security-r1-2 adversarial pattern (§5 "unresolvable peer-DID at recheck"): a grant whose UCAN issuer/audience cannot be resolved through the RotationLog MUST never be admitted. The handler returns this typed code BEFORE binding-sig verification — if we can't even know who's asking, we can't know whether their key matches the binding-sig, and silent admission would defeat the entire audience-binding (§R3) defense. Couples §4.36 recheck + §4.25 sync-hydrate denial: both surfaces fire this same code on the unresolvable arm so audit pipelines route uniformly. The wave-3e production wire-up replaces the in-grant sentinel with a real RotationLog lookup.
+- **Thrown at:** `crates/benten-sync/src/ucan_blobs_protocol.rs::UcanBlobsHandler::validate_request_for_connection` (the unresolvable-peer short-circuit arm at the top of the validation cascade).
+- **Phase:** 4-Meta-Core G-CORE-3e (RATIFIED-S&C 2026-05-21 §R2 + security-r1-2 unresolvable-peer adversarial pattern)
+
+<!-- reachability: ignore -->
+
+### E_DROP_BUNDLE_ENVELOPE_SIG_INVALID
+
+- **Message:** "envelope signature mismatch: Drop bundle envelope-sig does not verify against the carried verifying key"
+- **Context:** `{ detail: String }` (which surface of the header the verify-failure points at — verifying-key-malformed / signature-malformed / Ed25519-verify-failed)
+- **Fix:** Per Spike G's defense-in-depth contract the Drop bundle has TWO independent integrity layers: (i) an Ed25519 envelope-sig over the bundle HEADER (`version + mode + spec_cid + audience + auth_grant + restricted_spec + per_node_attestation` — explicitly NOT the raw content bytes) and (ii) per-Node AEAD authentication tags inside each `EncryptedContent`. This code fires when the OUTER layer fails — the header was tampered post-issue OR the wrong verifying key is paired with the signature. Per the `tf3f_per_node_ciphertext_tamper_detected_envelope_sig_still_valid` pin, content-only tampers do NOT trip this code (they trip the inner AEAD layer as `PerNodeAeadAuthenticationFailed` instead — that asymmetry IS the defense-in-depth property). Fix at the producer side: re-build the bundle with the correct issuer keypair; never patch a header field after `to_cbor_bytes()`. No primitive-edge routing (None) — the typed-reject IS the defense.
+- **Thrown at:** `crates/benten-drop/src/bundle.rs::DropBundle::verify_envelope_signature` + `::consume_offline` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::EnvelopeSignatureInvalid` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleEnvelopeSigInvalid` for the engine-wide catalog surface lands at the G-CORE-9 v1-interface freeze when the engine's outbound-Drop API surface stabilizes. At G-CORE-3f the ErrorCode variant is reserved + the `DropBundleError` variant is the live production typed arm; the drift-detector's `reachability: ignore` annotation below names this reservation.
+- **Phase:** 4-Meta-Core G-CORE-3f (Spike G defense-in-depth)
+
+<!-- reachability: ignore -->
+
+### E_DROP_BUNDLE_VERSION_UNSUPPORTED
+
+- **Message:** "unsupported Drop bundle version: reader does not recognize the on-wire version discriminator"
+- **Context:** `{ seen: u16 }` (the unknown version discriminator read off the wire; known production version = 1)
+- **Fix:** Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints (F-3 typed-reject rule): a future Drop bundle version this reader does not know about MUST yield typed `UnsupportedDropVersion` — NEVER silent skip. Silent skip would let a malicious "future-version" bundle be ignored without warning + invite header-confusion attacks. Fix at the consumer side: upgrade `benten-drop` to a version that knows the on-wire discriminator. The test-only `DropBundleVersion::Synthetic(u16)` arm exists solely to drive this typed-reject pin. No primitive-edge routing (None).
+- **Thrown at:** `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::UnsupportedDropVersion` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleVersionUnsupported` lands at G-CORE-9 v1-interface freeze. At G-CORE-3f the ErrorCode variant is reserved + the `DropBundleError` variant is the live production typed arm.
+- **Phase:** 4-Meta-Core G-CORE-3f (F-3 typed-reject rule)
+
+<!-- reachability: ignore -->
+
+### E_DROP_BUNDLE_MODE3_INLINE_REJECTED
+
+- **Message:** "Mode-3 (InlineTiny) Drop bundle rejected: deferred to post-v1"
+- **Context:** `{ detail: String }` (which arm tripped + the deferral citation)
+- **Fix:** Per `.addl/phase-4-meta/00-implementation-plan.md` §3 G-CORE-3 def input-constraints refinement #6 L341, three sendme deployment modes exist: Mode 1 (online-pull, G-CORE-3e ALPN), Mode 2 (offline-Drop, G-CORE-3f sealed bundle), and Mode 3 (inline-tiny — bundle ≤16KiB inlined into the share URL). **Mode 3 is deferred to post-v1.** The `DropContentMode` enum has no `InlineTiny` arm — a synthetic CBOR payload requesting Mode 3 is typed-rejected at parse time. Per the `tf3f_drop_content_mode_no_inline_tiny_arm` structural pin, adding an `InlineTiny` variant in a future commit breaks the exhaustive match in that test (no `_` wildcard). Fix at the producer side: use Mode 2 (offline-Drop) for share-and-forget bundles, or Mode 1 (online-pull) when revocation semantics are load-bearing. No primitive-edge routing (None).
+- **Thrown at:** `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes` (G-CORE-3f, Phase 4-Meta-Core) — surfaces as `DropBundleError::UnsupportedDropMode` at the Drop-consumer boundary; the boundary-lift into `benten-errors::ErrorCode::DropBundleMode3InlineRejected` lands at G-CORE-9 v1-interface freeze. At G-CORE-3f the ErrorCode variant is reserved.
+- **Phase:** 4-Meta-Core G-CORE-3f (refinement #6 defer-to-post-v1 contract)
+
+<!-- reachability: ignore -->
+
+### E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY
+
+- **Message:** "manifest-envelope recheck rejected row: unresolvable peer-DID or no positive verification"
+- **Context:** `{ zone: String, key: String }` (the merge zone + row key for forensic correlation)
+- **Fix:** Per G-CORE-8 §4.36 fail-CLOSED flip: the manifest-envelope rechecker MUST row-reject on every non-positively-verified outcome (unresolvable peer-DID, sentinel `<unresolved-peer>`, no installed manifest for the inbound row, etc.). `Admitted` is the ONLY proceed path — every other outcome is `UnresolvedDeny` post-rename and routes through `outcome_to_row_reject` to a typed reject with `ON_DENIED` primitive-edge routing. NEVER add an admit-on-ambiguity path; the security-r1-2 invariant explicitly prohibits silent fail-OPEN on ambiguous-resolution arms.
+- **Thrown at:** `crates/benten-engine/src/manifest_envelope_recheck.rs::outcome_to_row_reject` (G-CORE-8, Phase 4-Meta-Core; security-r1-1 + security-r1-2 BLOCKER closure). Replaces the prior `NotApplicable → Ok(())` silent-admit path inside `apply_atrium_merge`'s per-row recheck loop. The default-builder also flips to install the `ProductionManifestEnvelopeRechecker` glue so Engine::default deployments inherit Layer-3 enforcement without an explicit `set_manifest_envelope_rechecker` call.
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.36 fail-CLOSED flip + production-rechecker default-builder wire-up)
+
+### E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED
+
+- **Message:** "install record already applied: second presentation rejected"
+- **Context:** `{ record_identity: String }` (the canonical `signing_payload` hash that names the consumed record)
+- **Fix:** Per G-CORE-8 §4.37 + R2 §5 replay-attack class: an InstallRecord is consumed exactly once. Presenting the same canonical record bytes twice (matched by `signing_payload` hash) is the replay-attack signal — the second admission rejects with this typed code BEFORE any cap is minted (zero duplicate-mint window). Fix at the caller: if a legitimate re-install is intended, mint a fresh InstallRecord with a new nonce + fresh user-DID signature; the engine treats a fresh nonce as a distinct admission.
+- **Thrown at:** `crates/benten-engine/src/install_record_replay.rs::InstallRecordReplayStore::record_and_check` (G-CORE-8, Phase 4-Meta-Core; §4.37 replay defense). The check-and-record is atomic — single critical section, no verify-then-record gap (TOCTOU defense; couples to the F3 durable-replay-marker pattern that benten-caps `FrameReplayMarker` already uses for sync-frame replay defense).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.37 InstallRecord replay-defense + atomic record-and-check)
+
+### E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED
+
+- **Message:** "write-boundary chain validator: chain does not terminate at a registered user-DID root"
+- **Context:** `{ chain_root_did: String }` (the offending non-user-DID root the chain anchored at)
+- **Fix:** Per G-CORE-8 §4.23 + CLAUDE.md baked-in #18 Layer-1 user-as-root invariant: EVERY WRITE's capability chain must trace back to a registered user-DID root grant. A plugin-DID-minted root chain is structurally rejected (a plugin cannot mint its own root authority). Fix at the call site: re-issue the delegation chain from a user-DID root; if the write is plugin-initiated, ensure the chain carries the user's signed root delegation as `chain[0]` per the manifest_envelope_chain_validation contract.
+- **Thrown at:** `crates/benten-engine/src/write_boundary_chain_validator.rs::WriteBoundaryChainValidator::validate` (G-CORE-8, Phase 4-Meta-Core; §4.23 structural-always-on user-DID root chain validator at the WRITE admission seam). Composes `benten_caps::validate_chain_with_manifest_envelope` against the engine's install-record-backed `UserDidRegistry`. Mirrors Phase-3 G16-B-F structural-always-on per-row cap-recheck — fail-CLOSED, NOT an opt-in. At G-CORE-8 the validator is a seam wired structurally-always-on inside the engine WRITE-admission path; production callers that have NOT installed a user-registry get fail-CLOSED on every chain-carrying write (the seam is honest about its mode of operation rather than silently fail-OPEN).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.23 structurally-always-on user-DID root write-boundary chain validator)
+
+### E_THIN_CLIENT_BRIDGE_PRINCIPAL_UNRESOLVED
+
+- **Message:** "thin-client bridge: cannot resolve acting principal from authenticated session"
+- **Context:** `{ token_id: String, presented_origin: String, reason: String }` (the bridge entry-point parameters + the typed session-error reason if a session lookup was attempted)
+- **Fix:** Per G-CORE-8 §4.22 + CLAUDE.md baked-in #17/#18: the thin-client bridge resolves the acting principal from the authenticated DID-keyed session token (NOT from anything the client supplies). A client cannot self-elevate by asserting `principal = X` in-band — the API has no client-principal parameter. Fix at the caller: re-establish a session via the DID-keyed handshake protocol (challenge → sign → establish_session); the resulting SessionToken is bound to the session's server-side principal-DID. If the handshake fails verify the did:key resolution, signature validity, and origin pinning per `crates/benten-engine/src/thin_client.rs` `DidKeyedSession::establish_session` contract.
+- **Thrown at:** `crates/benten-engine/src/thin_client_bridge.rs::ThinClientBridge::resolve_principal_for_request` (G-CORE-8, Phase 4-Meta-Core; §4.22 thin-client bridge principal-resolution-from-session-not-client). The bridge takes (session_token, presented_origin) and returns either the bound principal-DID or this typed code — no client-supplied principal field exists on the API surface (structural defense; would-FAIL to compile if a regression added one).
+- **Phase:** 4-Meta-Core G-CORE-8 (§4.22 thin-client bridge principal-resolution-from-session-not-client)
+
+### E_DSL_BACKEND_REJECTED
+
+- **Message:** "DSL backend rejection: {downstream_error}"
+- **Context:** Free-form string carrying the downstream consumer's error representation; the canonical wrap site (`tools/benten-dev::DevServer::replace_handler_from_dsl_with_outcome`) prefixes the body with a consumer-site tag (`devserver_engine_register: <error>`) so log greppers can route by source.
+- **Fix:** G-CORE-DSL chunk-3 (#839) — downstream-consumer rejection at the DSL-compile boundary (e.g. `Engine::register_subgraph` returned an error after a successful DSL compile in the devserver flow). Distinct from `E_DSL_IO_ERROR` (which is reserved for real `std::io::Error` failures reading a source file). Fix at the downstream consumer's call site — the DSL compile itself succeeded; the rejection came from whatever consumed the resulting `CompiledSubgraph`. Pre-#839 the devserver abused `CompileError::Io` to wrap engine-registration failures (widening the documented `Io` semantic to "everything else"); post-#839 the new `CompileError::Backend(_)` variant + this typed code are the routing-correct home.
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::CompileError::Backend(_)` (the public variant; downstream consumers wrap their typed rejections here). Canonical wrap site: `tools/benten-dev/src/lib.rs::DevServer::replace_handler_from_dsl_with_outcome`. The DSL compiler itself never emits this variant — the compile pipeline emits `Parse` / `Semantic` / `Build` / `Io` only.
+- **Phase:** 4-Meta-Core G-CORE-DSL chunk-3 (#839 closure — CompileError::Io variant-abuse fix)
+
+### E_DSL_IO_ERROR
+
+- **Message:** "DSL IO error: {path_or_stream}: {os_error}"
+- **Context:** Free-form string carrying the file path (or `<stdin>`) + the underlying `std::io::Error` Display. Construction site is `compile_file` (real `std::fs::read` / `std::io::Read::read_to_string` failures wrap their path + reason here); the wrap is a tagged `format!("{}: {}", path, e)`.
+- **Fix:** Pre-G-CORE-9-FREEZE 2026-05-24 — first-class catalog mirror of the pre-existing `CompileError::Io` variant (the §3.5g item 6 amendment closure that closes the first-class-mirror gap surfaced by PR #1339 chunk-3 where `Backend` was added as first-class but `Io` was left mapping to `E_UNKNOWN` at the napi boundary). Distinct from `E_DSL_BACKEND_REJECTED` (downstream-consumer rejection at the post-compile registration step, the chunk-3 home for what used to abuse `Io`). Fix at the call site: ensure the source file exists + is readable + is valid UTF-8; for stdin compilation, ensure the stream is non-empty and produces valid UTF-8.
+- **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::CompileError::Io(_)` (the public variant; `compile_file` constructs it directly from `std::io::Error` failures). The `CompileError::code()` method routes the variant through `benten_errors::ErrorCode::DslIoError` so the napi `mapNativeError` boundary surfaces the typed catalog code instead of collapsing to `E_UNKNOWN`.
+- **Phase:** 4-Meta-Core pre-G-CORE-9-FREEZE bundle (§3.5g item 6 amendment closure)
+
+### E_SUBGRAPH_SPEC_WALK_FAILED
+
+- **Message:** "SubgraphSpec walker failed: {reason}"
+- **Context:** Free-form string carrying the inner `benten_core::subgraph_spec::SubgraphSpecError` Display — the typed reason describing what made the spec malformed (root CID absent, edge-allowlist contradicts the walker's reachable set, etc.).
+- **Fix:** G-CORE-9 V1-FROZEN-INTERFACE row 4 / §1.A.FROZEN item 15(h) — the typed reject from the public `Engine::walk_share_scope` consumer surface around the canonical `benten_core::subgraph_spec::walker::walk` BFS enumerator. The walker fails when the spec is structurally malformed; the engine wrapper preserves the failure type via this stable catalog code so the napi `mapNativeError` boundary surfaces a typed code instead of collapsing to `E_UNKNOWN`. Construct a valid `Spec` (non-empty roots set; edge-allowlist consistent with the walker's reachable set; per-dimension constraints decidable per `RestrictedScope`); the typed reject IS the fail-closed discipline at the engine boundary.
+- **Thrown at:** `crates/benten-engine/src/engine_share_scope.rs::Engine::walk_share_scope` — wraps `benten_core::subgraph_spec::walker::walk` errors. Internal helper `spec_err_to_engine` performs the `SubgraphSpecError` → `EngineError::Other { code: SubgraphSpecWalkFailed, message: e.to_string() }` mapping.
+- **Phase:** 4-Meta-Core G-CORE-9 V1-FROZEN-INTERFACE row 4 (SubgraphSpec walker public consumer surface mint)
+
+### E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED
+
+- **Message:** "pure-PQ-sole-trust-path rejected (audit not landed): hybrid construction is the audited path until the independent ml-dsa/ml-kem/slh-dsa audit (NF-2 / C-GM-AUDIT) lands"
+- **Context:** `{ requested_sig_codepoint: 0x0003, requested_cipher_codepoint: 0x647c, audit_landed_flag: false }` (pure-PQ ML-KEM-768-only swap-matrix arm codepoint; distinct from `0x647b` which is strictly reserved for the future ML-KEM⊕HQC PQ⊕PQ end-state)
+- **Fix:** Per CLAUDE.md baked-in #5 (PQ-default reframe 2026-05-19) + baked-in #15 (v1-beta → v1-GM release-stage split with NF-2 / C-GM-AUDIT as the v1-GM exit criterion) + RATIFIED-pq-default-reframe-2026-05-19 §2 safety clause: a caller attempted to construct a `SwapMatrix` arm where pure-PQ is the SOLE trust path (NF-1 ML-DSA-65⊕SLH-DSA sig + ML-KEM-768-only enc, with the classical Ed25519/X25519 halves removed). The `benten_crypto_suite::swap_matrix::AUDIT_LANDED_PURE_PQ_FLAG` compile-time constant is `false` at workspace baseline; flipping it to `true` is a v1-GM coupled action that REQUIRES (a) Ben sign-off, (b) the independent third-party `ml-dsa`/`ml-kem`/`slh-dsa` security audit deliverable on disk, (c) pinned crate versions matching the audited versions. Until that flip lands, callers MUST use the v1-beta default (`SwapMatrix::v1_beta_default`) which is hybrid Ed25519⊕ML-DSA-65 sig + X25519⊕ML-KEM-768 enc — the hybrid construction means unaudited PQC is never the SOLE trust path (the classical half is the audited security floor). NEVER catch this error and retry with a workaround — it is the load-bearing C11b safety invariant.
+- **Thrown at:** `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix::try_pure_pq_sole_trust_path` (G-CORE-3c, Phase 4-Meta-Core; the full swap-matrix conformance wave's load-bearing safety pin). Surfaces as `SwapMatrixError::AuditNotLandedPurePqRejected` at the integration-crate boundary + lifts to `benten_errors::ErrorCode::AuditNotLandedPurePqRejected` for the engine-wide catalog surface (the engine-error lift wires through whatever entry point invokes the pure-PQ constructor; at G-CORE-3c the only such entry is the conformance pin itself + the typed-arm reservation for downstream waves).
+- **Phase:** 4-Meta-Core G-CORE-3c (full swap-matrix conformance + C11b safety invariant)
+
+<!-- reachability: ignore -->
+
+## Extending the catalog
+
+When adding a new error:
+
+1. Reserve the next code in the relevant subsystem range (e.g. next `E_CAP_*`)
+2. Document message, context, fix, layer
+3. Update the corresponding TypeScript error type in `@benten/engine/errors`
+4. Never change an existing code's meaning; deprecate and add new if semantics shift
+
+## Versioning
+
+Error codes are versioned with the engine. Adding new codes is a minor version bump. Changing an existing code's message template without changing semantics is a patch bump. Removing or changing semantics is a major version bump and requires migration documentation.

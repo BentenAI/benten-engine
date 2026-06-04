@@ -1,0 +1,39 @@
+{
+  "name": "@benten/engine",
+  "version": "0.1.0",
+  "description": "TypeScript DSL wrapper around @benten/engine-native. The developer-facing surface (Engine, crud, SubgraphBuilder) for the Benten graph engine.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./internal/trace": {
+      "types": "./dist/internal/trace.d.ts",
+      "default": "./dist/internal/trace.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@benten/engine-native": "file:../../bindings/napi"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.6"
+  }
+}

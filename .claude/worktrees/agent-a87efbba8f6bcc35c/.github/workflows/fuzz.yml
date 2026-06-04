@@ -1,0 +1,58 @@
+name: Transform grammar fuzz
+
+# Runs the 10k-iteration TRANSFORM grammar fuzz test nightly and on manual
+# dispatch. The test body lives in `crates/benten-eval/tests/transform_grammar_fuzz.rs`
+# and is marked `#[ignore]` so `cargo test` / `cargo nextest run` in CI's
+# normal path don't pay the multi-minute cost; this workflow is the only
+# scheduled runner that exercises it.
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC — off-peak for the shared GitHub Actions fleet.
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-transform:
+    name: TRANSFORM grammar fuzz (10k iter)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: fuzz-transform
+
+      - name: Run TRANSFORM grammar fuzz
+        run: >-
+          cargo test -p benten-eval
+          --test transform_grammar_fuzz
+          --release
+          --
+          --ignored
+          --nocapture
+
+      # On any fuzz-discovered counterexample, proptest writes the failing
+      # seed to `proptest-regressions/` so the next run re-checks it. We
+      # preserve those on failure so the seed survives CI workflow cleanup
+      # and the next push + a `--regenerate` run can reproduce the bug
+      # locally. Without this, a new counterexample would be lost.
+      - name: Upload proptest regressions on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: proptest-regressions-${{ github.run_id }}
+          path: |
+            crates/benten-eval/proptest-regressions/
+            **/proptest-regressions/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,29 @@
+name: 'Free disk space'
+description: |
+  Reclaim ~25-30GB on Ubuntu GH Actions runners by removing unused
+  tooling that the benten-engine build pipeline does not need.
+
+  Wave-8b discovery: workspace grew across Phase 2b (wasmtime + cranelift
+  + wat + the new sandbox modules + the integration test target) to the
+  point where `cargo test --tests --workspace` link step exhausts the
+  ~14GB free disk on standard `ubuntu-24.04` runners, producing
+  `ld: SIGBUS` / `No space left on device` failures during link.
+
+  This composite action removes preinstalled toolchains the cargo
+  pipeline does not exercise (dotnet, android NDK, GHC, CodeQL, Python,
+  Java) plus prunes the docker image cache, freeing enough headroom for
+  the workspace test compile + link.
+
+  Usage: place after `actions/checkout` and before any cargo step in
+  Ubuntu jobs that do `cargo test --workspace` or otherwise build many
+  test binaries.
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Remove unused tooling + prune docker
+      shell: bash
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/Python /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk 2>/dev/null || true
+        sudo docker image prune --all --force >/dev/null 2>&1 || true
+        df -h /

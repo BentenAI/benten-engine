@@ -1,0 +1,12 @@
+# cargo-vet exemptions — Phase-3 G20-A3 onboarding baseline (sec-r1-5).
+#
+# Onboarding policy per sec-r1-5: exemption-budget = 5 entries max at
+# Phase-3-close. The empty initial state means we start at 0/5 — every
+# exemption added here costs against the budget; an audit landing in
+# `audits.toml` is the budget-free path. Quarterly review per the
+# config policy re-evaluates whether existing exemptions can be
+# upgraded to certified audits.
+#
+# Pinned by:
+#   `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_at_or_below_5_at_phase_3_close`
+# (G20-A3 wave-8a; sec-r1-5).

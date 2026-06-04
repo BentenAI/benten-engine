@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Phase-3 G13-pre-B — `BlobBackend` trait surface scaffold."><title>benten_graph::backends::blob_backend_trait - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="benten_graph" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module blob_backend_trait</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../benten_graph/index.html">benten_<wbr>graph</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module blob_<wbr>backend_<wbr>trait</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-this-is" title="What this is">What this is</a></li><li><a href="#decisions-baked-in" title="Decisions baked in">Decisions baked in</a></li><li><a href="#method-shape" title="Method shape">Method shape</a></li><li><a href="#additive-evolution-exercised-fwd-2-1012" title="Additive evolution exercised (Fwd-2 #1012)">Additive evolution exercised (Fwd-2 #1012)</a></li></ul><h3><a href="#traits">Module Items</a></h3><ul class="block"><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In benten_<wbr>graph::<wbr>backends</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">benten_graph</a>::<wbr><a href="../index.html">backends</a></div><h1>Module <span>blob_<wbr>backend_<wbr>trait</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Phase-3 G13-pre-B — <code>BlobBackend</code> trait surface scaffold.</p>
+<h3 id="what-this-is"><a class="doc-anchor" href="#what-this-is">§</a>What this is</h3>
+<p>Phase-3 wave-1pre orchestrator-direct scaffold that locks the public
+shape of the durable blob storage abstraction. Two concrete impls land
+in later Phase-3 waves and consume this trait surface from day one:</p>
+<ol>
+<li><strong>G14-C native blob backend</strong> (<code>crates/benten-graph/src/backends/ blob_backend.rs</code>) — redb side-table, full peer / persistent.</li>
+<li><strong>G18-A browser blob backend</strong> (<code>crates/benten-graph/src/backends/ browser_blob_backend.rs</code> — wasm32-unknown-unknown only) —
+IndexedDB-backed thin-client cache (per CLAUDE.md baked-in #17).</li>
+</ol>
+<p>Locking the trait surface in wave-1pre mirrors the Phase-2b chunk-sink-
+scaffold precedent (seq-major-6): downstream consumers (G14-C engine
+<code>register_module_bytes</code> CID validation per D-PHASE-3-12, G18-A
+cross-browser determinism CI per D-PHASE-3-7) can be sequenced
+independently because the API boundary is fixed early.</p>
+<h3 id="decisions-baked-in"><a class="doc-anchor" href="#decisions-baked-in">§</a>Decisions baked in</h3>
+<ul>
+<li>
+<p><strong>Generic-cascade per D-PHASE-3-1 RESOLVED (R1-revision 2026-05-04).</strong>
+The trait is intentionally <strong>NOT object-safe</strong>: it carries an
+associated <code>type Error</code> (so each backend surfaces its own typed-error
+enum without <code>Box&lt;dyn Error&gt;</code> erasure inside the generic impl per
+D-PHASE-3-1a) AND its methods return <code>impl Future + Send</code> (RPITIT,
+stable since 1.75 — also incompatible with <code>dyn</code> erasure). Engine
+composition is therefore generic-cascade — <code>Engine&lt;B: GraphBackend&gt;</code>
+plus storage-side <code>BlobBackend</code> consumed via concrete or generic
+type parameters, never <code>Arc&lt;dyn BlobBackend&gt;</code>. The <code>tests/ blob_backend_trait_object_safety_per_d_resolution.rs</code> integration
+test pins the generic-cascade direction as a positive smoke; the
+non-object-safety property is guaranteed <em>by construction</em> (the type
+system rejects <code>dyn BlobBackend</code> because of the associated type +
+RPITIT, no separate runtime assertion required).</p>
+</li>
+<li>
+<p><strong>Async-shape baked in (browser-target compatibility).</strong> Methods
+return <code>impl Future&lt;Output = ...&gt; + Send</code> so the IndexedDB-browser
+variant — inherently async because of the JS <code>IDBRequest</code> / Promise
+wire — can implement the trait without an async-runtime adapter.
+The native redb impl wraps the synchronous redb API in
+<code>core::future::ready(...)</code> (sync-blocking shim — redb itself has no
+async surface). The <code>tests/blob_backend_trait_browser_target_ compatible_signatures.rs</code> integration test pins that the trait
+compiles + can be implemented without dragging tokio / std::thread
+into the dep graph; the wasm32-unknown-unknown target compile is
+verified in CI (<code>wasm-checks.yml</code> extends to <code>-p benten-graph</code>).</p>
+</li>
+<li>
+<p><strong>CID-validating <code>put</code> per D-PHASE-3-12 RESOLVED.</strong> The end-to-end
+CID-validation contract lives at the <code>Engine::register_module_bytes</code>
+call site (G14-C). The trait-level <code>put</code> accepts a caller-supplied
+<code>Cid</code>; the implementation MAY recompute BLAKE3 over the bytes and
+reject mismatches, OR delegate that check to the caller. G14-C’s
+redb impl recomputes locally for defense in depth; G18-A’s IndexedDB
+variant inherits the same defense (an attacker writing into IndexedDB
+directly cannot poison the cache because the next read recomputes
+the BLAKE3 of the stored bytes against the queried CID).</p>
+</li>
+<li>
+<p><strong>Thin-client commitment per CLAUDE.md baked-in #17.</strong> The native
+variant is a full peer (persistent across engine restarts); the
+browser variant is a thin-client cache (in-RAM <code>BTreeMap</code> or
+IndexedDB-backed but cache-only — never the source of truth, never
+the sync state). <code>is_persistent()</code> distinguishes the two so callers
+that need durability guarantees can refuse to wire a non-persistent
+backend.</p>
+</li>
+</ul>
+<h3 id="method-shape"><a class="doc-anchor" href="#method-shape">§</a>Method shape</h3>
+<p>Three methods cover the minimum-viable consumer surface for G14-C +
+G18-A:</p>
+<ul>
+<li><code>get(cid)</code> → <code>Option&lt;Vec&lt;u8&gt;&gt;</code> — fetch the bytes for a CID; <code>None</code>
+on a clean miss (information, not failure).</li>
+<li><code>put(cid, bytes)</code> → <code>()</code> — store bytes under a caller-supplied CID.
+Implementations MAY validate <code>BLAKE3(bytes) == cid</code> and surface a
+typed mismatch error; the contract permits but does not require it
+(D-PHASE-3-12 makes the engine-side validator authoritative).</li>
+<li><code>is_persistent()</code> → <code>bool</code> — true on full-peer durable backends
+(redb-native), false on thin-client cache backends (browser).</li>
+</ul>
+<p>Future Phase-3 waves may extend this surface (delete, scan, batch);
+the <code>#[non_exhaustive]</code> posture is reserved on the trait via additive
+default-method extensions rather than enum-style <code>#[non_exhaustive]</code>.</p>
+<h3 id="additive-evolution-exercised-fwd-2-1012"><a class="doc-anchor" href="#additive-evolution-exercised-fwd-2-1012">§</a>Additive evolution exercised (Fwd-2 #1012)</h3>
+<p>The documented additive-default-method evolution posture is now
+<em>exercised</em> (not just paper) ahead of the v1-SemVer-lock so the
+evolution-cost is known:</p>
+<ul>
+<li><code>delete(cid)</code> — evict module-bytes from the durable side-table
+(Phase-4-Meta plugin uninstall + rotation-log revocation paths
+need this). Default: idempotent <code>Ok(())</code> no-op (mirrors
+<code>KVBackend::delete</code> idempotent semantics) so non-mutating /
+thin-client backends satisfy the trait unchanged.</li>
+<li><code>list_cids()</code> — enumerate every blob CID in the backend
+(rehydrate-on-engine-open + plugin-library walk). Default:
+<code>Ok(Vec::new())</code> so backends without an enumeration index satisfy
+the trait unchanged; <code>RedbBlobBackend</code> overrides with its existing
+inherent <code>list_blob_cids</code> full-zone walk.</li>
+</ul>
+<p>Both land as <strong>additive default methods</strong> (not sub-traits) per the
+documented posture — every existing impl compiles unchanged. The
+v1-stabilization fork (additive-default vs. <code>MutableBlobBackend</code> /
+<code>EnumerableBlobBackend</code> sub-trait split) is named at
+<code>docs/future/phase-4-backlog.md §4.61</code>.</p>
+</div></details><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.BlobBackend.html" title="trait benten_graph::backends::blob_backend_trait::BlobBackend">Blob<wbr>Backend</a></dt><dd>Durable blob storage abstraction. See the module-level docstring for
+the full design rationale (D-PHASE-3-1 / D-PHASE-3-1a / D-PHASE-3-12 /
+D-PHASE-3-7 + CLAUDE.md baked-in #17 thin-client commitment).</dd></dl></section></div></main></body></html>

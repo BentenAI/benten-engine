@@ -1,0 +1,198 @@
+# Pre-G-CORE-9-FREEZE 2026-05-24 BASELINE for the
+# `drift-detect-error-variant-mirror.ts` scanner (§3.5g item 6 enforcer).
+#
+# Each non-comment / non-empty line is a `TypeName::Variant` that the
+# scanner grandfathers — these are pre-existing pub-error-variant
+# first-class-mirror gaps that pre-date the 2026-05-24 §3.5g item 6
+# ratification. The scanner fails ONLY on NEW unannotated violations
+# (i.e. variants constructed in production code that are not on this
+# baseline AND have no opt-out annotation).
+#
+# # Remediation
+#
+# The baseline is NAMED-DEFERRED to a Phase-4-Meta-Core post-G-CORE-9-FREEZE
+# follow-up wave (NOT pre-FREEZE — adding 159 new ErrorCode catalog entries
+# is a scope explosion the FREEZE window must not absorb). Tracking row:
+#   `.addl/phase-4-meta/PRE-FREEZE-BACKLOG.md` row
+#   "DEFERRED: §3.5g item 6 baseline drain (159 pre-existing pub-error-variant
+#    catalog-mirror gaps)" — split into per-crate / per-error-type chunks for
+#   parallelizable agent dispatch.
+#
+# # Adding to baseline (NOT recommended; do the proper mirror instead)
+#
+# If a genuine retrofit-blocker forces a baseline addition, append the
+# `TypeName::Variant` line + a follow-up comment naming the destination
+# the catalog entry will land in. Prefer the proper §3.5g item 6 mirror:
+# add the ErrorCode catalog entry + atomic mirror updates.
+#
+# # Removing from baseline (the goal — drain to zero)
+#
+# When you mirror a variant to `benten_errors::ErrorCode::<Code>`, REMOVE
+# its line from this file. The scanner will then assert the mirror stays
+# in place (a regression that removes the mirror without re-adding the
+# baseline line will fail). This is how the baseline drains over time.
+#
+# # Format
+#
+# One `TypeName::Variant` per line; blank lines + lines starting with `#`
+# are ignored. Sorted alphabetically.
+
+AeadError::AeadAuthFailed
+AeadError::Authentication
+AeadError::CiphertextTooShort
+AeadError::KeyMismatch
+AeadError::MalformedEnvelope
+AeadError::RecipientLacksKeysForSuite
+AeadError::TagMismatch
+AeadError::Unsupported
+AlgorithmError::CanonicalIdAnchorPrefixRefused
+AlgorithmError::SelfReferentialSubgraphRejected
+AlgorithmError::TypedOutputProjectionMismatch
+AlgorithmError::ViewLabelMismatch
+AtriumError::DeviceAttestationForged
+AtriumError::DivergentCidRejected
+AtriumError::SyncHopDepthExceeded
+AtriumTransportError::HandshakeWireFormat
+AtriumTransportError::PeerConnectFailed
+AtriumTransportError::TransportDegraded
+AuthorizationGrantError::AudienceMismatch
+AuthorizationGrantError::BindingMismatch
+AuthorizationGrantError::Serialization
+AuthorizationGrantError::VerifyingKeyMalformed
+BlobError::CidMismatch
+BlobError::Graph
+ChainValidationError::ChainNotNarrowing
+ChunkSinkError::ProducerWallclockExceeded
+CompileError::Build
+CompileError::Parse
+CompileError::Semantic
+CoreError::CidParse
+CrdtError::CanonicalBytesImport
+CrdtError::LoroInternal
+CrdtError::StampedValueCodec
+DeviceAttestationError::EnvelopeWidening
+DeviceAttestationError::IncompatibleWithRuntime
+DidError::BodyTooShort
+DidError::InvalidPrefix
+DidError::UnknownMulticodec
+DidRotationError::HlcNotStrictlyMonotonic
+DidRotationError::PreviousDidMismatch
+DidRotationError::VerbatimReplay
+DropBundleError::AuthorizationGrantFailed
+DropBundleError::CodecError
+DropBundleError::PerNodeAeadAuthenticationFailed
+DropBundleError::UnsupportedDropVersion
+EngineConfigError::Io
+EngineConfigError::Parse
+EngineError::Backend
+EngineError::Cap
+EngineError::Core
+EngineError::Graph
+EngineError::Invariant
+EngineError::ModuleManifestVerify
+EngineError::ModuleMigrationsRequirePersistence
+EngineError::Other
+EnvelopeSigError::SignatureMalformed
+EnvelopeSigError::VerifyFailed
+EnvelopeSigError::VerifyingKeyMalformed
+EvalError::Backend
+EvalError::Capability
+EvalError::Core
+EvalError::Host
+EvalError::Invariant
+EvalError::Sandbox
+FixtureError::NotFound
+FixtureError::WasmInvalid
+FixtureError::WasmRead
+FixtureError::WatParse
+FixtureError::WatRead
+GraphError::NestedTransactionNotSupported
+GraphError::Redb
+HandshakeError::AudienceMismatch
+HandshakeError::InvalidSignature
+HandshakeError::PayloadMalformed
+HandshakeError::ReplayWithinBoundedWindow
+HandshakeError::WireFormat
+IpcError::CapabilityNotInManifest
+IpcError::MethodNotInAllowlist
+LightClientError::BandwidthBudgetExceeded
+LightClientError::Mst
+LightClientError::ProofKeyMismatch
+ManifestError::Decode
+ManifestVerifyError::SignatureMalformed
+ManifestVerifyError::UcanInvalid
+MaterializerError::SubscribeSeamFailure
+MstError::ConvergenceFailedExceededMaxRounds
+MstError::EntryCidByteMismatch
+MstError::ProofKeyAbsent
+MstError::ProofRootMismatch
+PublisherRegistryError::UcanInvalid
+ReaderError::BackendFailed
+ReaderError::RecordMalformed
+SandboxError::NestedDispatchDepthExceeded
+SandboxError::OutputOverflow
+SchemaCompileError::EmitNewPrimitiveRejected
+SchemaCompileError::SandboxHostFnRejected
+SchemaCompileError::VocabRefTargetMissing
+SchemaCompileError::VocabRequiredPropertyMissing
+SeedImportError::LongInput
+SeedImportError::ShortInput
+SeedImportError::UnknownAlg
+SeedImportError::UnknownVersion
+SnapshotBlobError::Decode
+SubgraphSpecError::CidMissing
+SubgraphSpecError::ConflictingLabelPredicates
+SubgraphSpecError::Encode
+SuspensionStoreError::Backend
+SwapMatrixError::AuditNotLandedPurePqRejected
+SwapMatrixError::CipherSuite
+SwapMatrixError::ConfigMismatch
+SwapMatrixError::Signature
+ThinClientSessionError::SessionExpired
+TwoCidMapError::AeadAuthenticationFailed
+TwoCidMapError::IntegrityMismatch
+TwoCidMapError::NotFound
+TwoCidMapError::Storage
+UcanBlobsHandlerError::BindingSigInvalid
+UcanBlobsHandlerError::GrantValidation
+UcanBlobsHandlerError::NotInScope
+UcanBlobsHandlerError::UcanAudienceMismatch
+UcanBlobsHandlerError::UcanNotYetValid
+UcanBlobsHandlerError::UnresolvedDeny
+UcanError::AttenuationViolated
+UcanError::AudienceMismatch
+UcanError::BadSignature
+UcanError::CapabilityNotGranted
+UcanError::ChainLinkBroken
+UcanError::DecodeFailed
+UcanError::DeviceEnvelopeViolated
+UcanError::EmptyChain
+UcanError::Expired
+UcanError::IssuerDeviceRevoked
+UcanError::IssuerKeypairSuperseded
+UcanError::NotYetValid
+UcanError::ProofChainTooDeep
+VarsigError::BadMagic
+VarsigError::UnsupportedCodepoint
+VarsigError::UnsupportedVersion
+VcError::Expired
+VcError::IssuerNotTrusted
+VcError::MissingField
+VcError::NotYetValid
+VcError::Revoked
+VerifyError::ClassicalVerifyFailed
+VerifyError::CodepointMismatch
+VerifyError::HybridHalfMissing
+VerifyError::MalformedKey
+VerifyError::MalformedSignature
+VerifyError::PqVerifyFailed
+VerifyError::StripResistanceViolated
+VerifyError::Unsupported
+VersionDagError::Branched
+VersionDagError::UnknownPrior
+ViewError::BudgetExceeded
+ViewError::Stale
+ViewError::StrategyNotImplemented
+WorkflowEditorError::CapElevation
+WorkflowEditorError::SubgraphInjection
+WorkflowEditorError::UnknownPrimitiveKind

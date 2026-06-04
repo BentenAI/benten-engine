@@ -1,0 +1,113 @@
+[package]
+name = "phase-3-workspace-tests"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Phase-3 R3-A landed this workspace-level test package as the holding
+# pen for cross-cutting Phase-3 architectural pins + compromise-closure
+# pins that don't fit naturally inside any single crate's test
+# directory. Mirrors the Phase-2a `tests/doc_completeness` precedent.
+#
+# Files hosted here:
+#
+# - `architecture_md_state.rs` — pins ARCHITECTURE.md narrative state
+#   (in-flight callouts at G14-A1 + G16-A intermediate states; final
+#   10-crate transition lands at G20-B). R3-A authors the G14-A1
+#   intermediate-state assertion; R3-C extends with G16-A; R3-E
+#   authors the G20-B FINAL pin.
+#
+# - `security_posture_compromises.rs` — pins SECURITY-POSTURE.md
+#   compromise-table state. R3-A owns Compromise #12 (G13-E flip);
+#   R3-B owns #17 #18 #21 #2 #10; R3-C owns #11; R3-D owns #16 #19 #20;
+#   R3-E owns the G20-B FINAL `security_posture_phase_3_close_compromise_table_present`
+#   pin in the sibling file `security_posture_phase_3_close.rs`.
+#
+# Phase-3 R3-E additions (G19 observability + G20 docs sweep + thin-client):
+#
+# - `architecture_md_g20b_final.rs` — R3-E G20-B FINAL 10-crate transition
+#   pin (replaces R3-A intermediate-state callout at phase-close).
+# - `security_posture_phase_3_close.rs` — R3-E G20-B FINAL Phase-3
+#   compromise-table closure pin (every closed compromise marked CLOSED).
+# - `paper_prototype_revalidation.rs` — R3-E G20-B paper-prototype
+#   revalidation re-run + SANDBOX rate ≤ 30% (exit-criterion 14) pins.
+# - `missing_docs_workspace.rs` — R3-E G20-B no #[allow(missing_docs)]
+#   sweep + full missing_docs gate + phase-2/3 TODO marker named-destination
+#   architectural pins (C-7 + C-14 + phase-2-backlog §8.3).
+# - `cargo_vet_policy_phase_3.rs` — R3-E G20-A3 §7.3.A.9 cargo-vet +
+#   cargo-public-api existing-crate baseline + browser-bundle + suspension-
+#   cursor + benten-dev inspect-state un-ignore pins.
+# - `thin_client_protocol.rs` — R3-E thin-client wire-protocol pins per
+#   D-PHASE-3-N + CLAUDE.md baked-in #17 (fetch / POST + device-DID auth /
+#   SSE / F6 filtering at full-peer edge / exit-criterion 19 e2e).
+#
+# Phase-3 R3-C additions (G15 IVM + G16 Atriums):
+#
+# - `doc_drift_invariant_coverage.rs` (R3-C) — pins
+#   INVARIANT-COVERAGE.md retense post-G15-A (Algorithm B
+#   generalization drops the canonical-only fallback note).
+#
+# - `doc_drift_security_posture.rs` (R3-C) — pins SECURITY-POSTURE.md
+#   forward-pointer resolution post-G15-B (drift-detector landing
+#   resolves the Phase-2b "drift-detector lands at Phase 3 G15-B"
+#   forward-pointer).
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+bench = false
+
+[[test]]
+name = "architecture_md_state"
+path = "architecture_md_state.rs"
+
+[[test]]
+name = "security_posture_compromises"
+path = "security_posture_compromises.rs"
+
+[[test]]
+name = "architecture_md_g20b_final"
+path = "architecture_md_g20b_final.rs"
+
+[[test]]
+name = "security_posture_phase_3_close"
+path = "security_posture_phase_3_close.rs"
+
+[[test]]
+name = "paper_prototype_revalidation"
+path = "paper_prototype_revalidation.rs"
+
+[[test]]
+name = "missing_docs_workspace"
+path = "missing_docs_workspace.rs"
+
+[[test]]
+name = "cargo_vet_policy_phase_3"
+path = "cargo_vet_policy_phase_3.rs"
+
+[[test]]
+name = "thin_client_protocol"
+path = "thin_client_protocol.rs"
+
+[[test]]
+name = "doc_drift_invariant_coverage"
+path = "doc_drift_invariant_coverage.rs"
+
+[[test]]
+name = "doc_drift_security_posture"
+path = "doc_drift_security_posture.rs"
+
+#
+# Note: 4 atrium end-to-end tests (atrium_two_peer / atrium_three_peer /
+# atrium_two_process / atrium_two_device) were RELOCATED at R4-FP/R3-C
+# to `tests/integration/` per R3-CPC-1 (R4 large-council Round 1
+# cross-partition-consistency lens; r2-test-landscape §2.4 G16-B/G16-D
+# rows name `tests/integration/` as the canonical home; R3-C originally
+# placed them in `tests/phase_3_workspace/` by mistake).
+
+[dependencies]
+
+[lints]
+workspace = true

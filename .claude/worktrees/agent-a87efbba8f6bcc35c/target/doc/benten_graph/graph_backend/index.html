@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`GraphBackend` — the umbrella storage-layer trait introduced at G13-A (Phase-3 R5 wave-1 canary)."><title>benten_graph::graph_backend - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="benten_graph" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module graph_backend</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../benten_graph/index.html">benten_<wbr>graph</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module graph_<wbr>backend</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#why-this-trait-exists" title="Why this trait exists">Why this trait exists</a></li><li><a href="#design-constraints-load-bearing--see-arch-r1-2--arch-r1-6" title="Design constraints (load-bearing — see `arch-r1-2` + `arch-r1-6`">Design constraints (load-bearing — see <code>arch-r1-2</code> + <code>arch-r1-6</code></a></li><li><a href="#what-g13-a-does-not-do" title="What G13-A does NOT do">What G13-A does NOT do</a></li><li><a href="#usage-example-post-g13-b-illustrative-only--not-yet-on-main" title="Usage example (post-G13-B, illustrative only — not yet on main)">Usage example (post-G13-B, illustrative only — not yet on main)</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate benten_<wbr>graph</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">benten_graph</a></div><h1>Module <span>graph_<wbr>backend</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="trait.GraphBackend.html" title="trait benten_graph::graph_backend::GraphBackend"><code>GraphBackend</code></a> — the umbrella storage-layer trait introduced at G13-A
+(Phase-3 R5 wave-1 canary).</p>
+<h3 id="why-this-trait-exists"><a class="doc-anchor" href="#why-this-trait-exists">§</a>Why this trait exists</h3>
+<p>Phase-1 + Phase-2 shipped the storage layer with three composable
+sub-traits — <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a>, <a href="../store/trait.NodeStore.html" title="trait benten_graph::store::NodeStore"><code>NodeStore</code></a>, and <a href="../store/trait.EdgeStore.html" title="trait benten_graph::store::EdgeStore"><code>EdgeStore</code></a> — plus a
+handful of inherent <code>RedbBackend</code>-specific methods
+(<a href="../redb_backend/struct.RedbBackend.html#method.snapshot" title="method benten_graph::redb_backend::RedbBackend::snapshot"><code>RedbBackend::snapshot</code></a>, <a href="../redb_backend/struct.RedbBackend.html#method.register_subscriber" title="method benten_graph::redb_backend::RedbBackend::register_subscriber"><code>RedbBackend::register_subscriber</code></a>,
+<a href="../redb_backend/struct.RedbBackend.html#method.put_node_with_context" title="method benten_graph::redb_backend::RedbBackend::put_node_with_context"><code>RedbBackend::put_node_with_context</code></a>, the closure-based
+<code>RedbBackend::transaction</code>). The engine consumed <code>RedbBackend</code> directly,
+which baked the redb dependency into every layer above — including the
+<code>wasm32-unknown-unknown</code> browser-target build (Phase-2-backlog §1.1
+PHASE-3-BUNDLE-1).</p>
+<p>G13-A extracts an <em>umbrella</em> trait that composes the three subtraits
+plus the previously-inherent methods that any production-grade graph
+backend must expose. G13-B (the next wave) introduces
+<code>EngineGeneric&lt;B: GraphBackend&gt;</code> and threads <code>B</code> through every consumer
+site, freeing the engine from the concrete <code>RedbBackend</code> type and
+letting <code>BrowserBackend</code> (G13-C) substitute in for the browser bundle.</p>
+<h3 id="design-constraints-load-bearing--see-arch-r1-2--arch-r1-6"><a class="doc-anchor" href="#design-constraints-load-bearing--see-arch-r1-2--arch-r1-6">§</a>Design constraints (load-bearing — see <code>arch-r1-2</code> + <code>arch-r1-6</code></h3>
+<ul>
+<li><code>D-PHASE-3-1</code> RESOLVED)</li>
+</ul>
+<ol>
+<li><strong>Trait is intentionally NOT object-safe.</strong> <code>type Error</code> + <code>type Snapshot</code> + <code>type Transaction</code> are associated types whose presence
+precludes <code>dyn GraphBackend</code> materialization at compile time. The
+engine consumes <code>GraphBackend</code> exclusively via the
+<em>generic-cascade</em> direction (<code>Engine&lt;B: GraphBackend&gt;</code> parameters),
+never <code>Arc&lt;dyn GraphBackend&gt;</code> / <code>Box&lt;dyn GraphBackend&gt;</code> —
+this is the load-bearing per-backend zero-cost-dispatch contract
+<code>D-PHASE-3-1</code> ratified.</li>
+<li><strong><code>Self::Snapshot: Send + Sync + 'static</code>.</strong> Snapshots are <em>owned</em>
+(no borrowing lifetime) so the engine can hold a snapshot across
+<code>.await</code> points + worker threads (SUBSCRIBE delivery, IVM
+materialization, cross-process WAIT-resume). RedbBackend pays a
+small clone (the <code>redb::ReadTransaction</code> is itself <code>'static</code> —
+backed by <code>Arc</code>-counted internals), per <code>arch-r1-6</code> recommendation
+(a) “make all snapshot types owned”.</li>
+<li><strong><code>Self::Error: std::error::Error + Send + Sync + 'static</code>.</strong> Each
+backend surfaces its own typed error; the engine erases at the
+public boundary via <code>Box&lt;dyn std::error::Error + Send + Sync&gt;</code> per
+<code>D-PHASE-3-1a</code> (<code>arch-r1-1</code> BLOCKER closure pinned at G13-B).</li>
+<li><strong><code>Self::Transaction</code> is an owned handle type.</strong> No lifetime
+parameter (would force GATs + cascade into <code>Engine&lt;B&gt;</code>). The
+handle is currently a marker (the closure-based
+<a href="../redb_backend/struct.RedbBackend.html#method.transaction" title="method benten_graph::redb_backend::RedbBackend::transaction"><code>RedbBackend::transaction</code></a> inherent method remains the actual
+execution surface for Phase-3); future waves may evolve the
+handle into a borrowing-runner adapter without re-breaking the
+trait surface.</li>
+</ol>
+<h3 id="what-g13-a-does-not-do"><a class="doc-anchor" href="#what-g13-a-does-not-do">§</a>What G13-A does NOT do</h3>
+<ul>
+<li>Does NOT add <code>Engine&lt;B&gt;</code> cascade (that is G13-B wave-2).</li>
+<li>Does NOT add <code>BrowserBackend</code> (that is G13-C wave-3).</li>
+<li>Does NOT change inherent <code>RedbBackend</code> method shapes (callers
+continue to enter via <code>RedbBackend::transaction(|tx| ...)</code> etc.).</li>
+<li>Does NOT change <code>KVBackend</code> / <code>NodeStore</code> / <code>EdgeStore</code> semantics.</li>
+</ul>
+<p>G13-A is purely an <em>umbrella-shape extraction</em> canary. The R5 wave-1
+canary discipline (single agent, observable surface, mini-review)
+mirrors Phase-2b G12-A precedent.</p>
+<h3 id="usage-example-post-g13-b-illustrative-only--not-yet-on-main"><a class="doc-anchor" href="#usage-example-post-g13-b-illustrative-only--not-yet-on-main">§</a>Usage example (post-G13-B, illustrative only — not yet on main)</h3>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>benten_graph::{GraphBackend, RedbBackend};
+
+<span class="kw">fn </span>open_engine&lt;B: GraphBackend&gt;(backend: B) -&gt; Engine&lt;B&gt; {
+    <span class="comment">// Engine accepts any backend that satisfies the umbrella surface.
+    </span>Engine::new(backend)
+}
+
+<span class="kw">let </span>backend = RedbBackend::open_or_create(<span class="string">"./data.redb"</span>).unwrap();
+<span class="kw">let </span>engine = open_engine(backend);</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.RedbTransactionRunner.html" title="struct benten_graph::graph_backend::RedbTransactionRunner">Redb<wbr>Transaction<wbr>Runner</a></dt><dd>Marker handle returned by <a href="trait.GraphBackend.html#tymethod.transaction" title="method benten_graph::graph_backend::GraphBackend::transaction"><code>GraphBackend::transaction</code></a>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.GraphBackend.html" title="trait benten_graph::graph_backend::GraphBackend">Graph<wbr>Backend</a></dt><dd>Umbrella graph-backend trait composing <a href="../backend/trait.KVBackend.html" title="trait benten_graph::backend::KVBackend"><code>KVBackend</code></a>, <a href="../store/trait.NodeStore.html" title="trait benten_graph::store::NodeStore"><code>NodeStore</code></a>,
+<a href="../store/trait.EdgeStore.html" title="trait benten_graph::store::EdgeStore"><code>EdgeStore</code></a>, plus the snapshot / subscriber / transaction /
+put-with-context surface every production-grade backend must expose.</dd></dl></section></div></main></body></html>

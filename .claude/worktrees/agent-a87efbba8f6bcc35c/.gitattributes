@@ -1,0 +1,4 @@
+# Phase-2b G7-B / D26-RESOLVED — committed wasm fixture binaries are
+# binary, not text. Prevents git's text-eol normalization from touching
+# the bytes (which would invalidate the drift detector).
+*.wasm binary

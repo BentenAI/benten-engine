@@ -1,0 +1,40 @@
+# Workspace-root bench-threshold catalog (Phase 2b G7-A — perf-g7a-mr-1
+# fix-pass).
+#
+# Per-bench numeric ceilings keyed by platform tuple. Bench harnesses
+# read this file at runtime + assert measured numbers stay within the
+# per-platform p95 + p99 bounds.
+#
+# Cell-fill convention: `(target_os)-(target_arch)` joined with a dash.
+# Currently supported tuples:
+#   - linux-x86_64       (production CI runners)
+#   - macos-aarch64      (developer laptops; D22 relaxed bound)
+#   - windows-x86_64     (developer laptops; D22 relaxed bound)
+#
+# Adding a new bench: append a `[<bench-name>]` table; each platform key
+# carries `p95_ms` + `p99_ms` floats (millisecond bounds).
+
+# ---------------------------------------------------------------------------
+# Phase 2b G7-A — SANDBOX cold-start (D22-RESOLVED).
+#
+# The cold-start surface measures: Engine singleton lookup + Module
+# cache hit + per-call Store + Instance construction + cap-intersection +
+# module invocation + teardown.
+#
+# G7-A scaffold measures the partial path (Engine + Module + cap
+# intersection); G7-C wires the Store + Instance + module-invocation +
+# teardown delta. The numeric bounds below apply to the FULL cold-start
+# path; the bench-drift workflow matrix marks `sandbox_cold_start.rs` as
+# `informational` until G7-C lands.
+# ---------------------------------------------------------------------------
+[sandbox_cold_start.linux-x86_64]
+p95_ms = 2.0
+p99_ms = 5.0
+
+[sandbox_cold_start.macos-aarch64]
+p95_ms = 5.0
+p99_ms = 10.0
+
+[sandbox_cold_start.windows-x86_64]
+p95_ms = 5.0
+p99_ms = 10.0

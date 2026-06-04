@@ -1,0 +1,162 @@
+version: 2
+
+# Dependabot policy for benten-engine.
+#
+# Phase-2a tightening (2026-04-21): major-version bumps are excluded. The
+# first push triggered 12 PRs within two minutes, seven of which were
+# majors (typescript 5→6, vitest 2→4, @types/node 20→25, checkout 5→6,
+# download-artifact 4→8, github-script 7→9, setup-node 4→6, upload-artifact
+# 4→7). Those arrive faster than humans can triage and introduce semantic
+# changes (language versions, test-runner APIs) that belong on planned
+# upgrade paths rather than weekly dep-noise.
+#
+# Policy per ecosystem:
+#   - Minor + patch updates are grouped into a single PR per week per
+#     ecosystem.
+#   - Major updates are ignored globally. They come in via a human-driven
+#     bump on a purpose-built branch, not a Monday-morning PR storm.
+#
+# When we DO want a major-version bump evaluated: drop the corresponding
+# `ignore` entry, let Dependabot raise the PR, review it with the weight
+# it deserves, and restore the ignore after it lands.
+
+updates:
+  # Cargo workspace. Covers every member crate under /crates/* including
+  # `benten-renderer-tauri` (Phase-4-Foundation G24-E; engine extension
+  # per CLAUDE.md #19). Tauri 2.x version-range updates flow through
+  # this entry: today `benten-renderer-tauri` stays Tauri-runtime-
+  # agnostic (preserves `tauri-runtime-verso` swap-readiness per
+  # br-r1-9), so no direct `tauri` dep appears in its Cargo.toml; the
+  # integrator binary that wires `TauriRenderer` into a Tauri 2.x
+  # `WebviewWindowBuilder` carries the `tauri` dep and Dependabot
+  # tracks it from there. When that integrator binary lands in-tree,
+  # Tauri 2.x semver-major bumps will continue to be ignored (per the
+  # global semver-major policy below) and arrive on a human-driven
+  # bump branch — same discipline as wasmtime / iroh / Loro.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: "/bindings/napi"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: "/packages/engine"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: "/tools/create-benten-app"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Per-action floors for the human-driven major bumps that landed in
+      # prior PRs. Without these, the minor-and-patch group would track
+      # the lower major still pinned in some workflows and generate
+      # downgrade PRs (see PR #136 closed 2026-05-11 — would have
+      # unwound the v7/v8 manual bumps). Workflow consistency cleanup
+      # (some files still on v4 majors) is tracked as Phase 3.5 Track B.
+      - dependency-name: "actions/upload-artifact"
+        versions: ["< 7"]
+      - dependency-name: "actions/download-artifact"
+        versions: ["< 8"]
