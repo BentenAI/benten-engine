@@ -63,132 +63,15 @@
 #![allow(unused_variables)]
 
 // ===========================================================================
-// SELF-CONTAINED STUB-SHIM — DELETE at R5; replace with benten_sync::… .
+// R5 — real DUAL-CID production surface (`benten_sync::two_cid_store`). The
+// self-contained stub is DELETED; the `DualCidStore` (aliased to the former
+// `TwoCidStore` name) + the `DualCid` digest type (aliased to `Cid`) + the
+// reseal / blind / wire-surface / generation fns are imported here.
 // ===========================================================================
-mod two_cid_stub {
-    use std::collections::BTreeMap;
 
-    pub type Cid = [u8; 32];
-
-    /// The DUAL-CID + local/set extension of the in-tree `TwoCidStore`.
-    /// `plaintext_cid` is stable + graph-referenced; `envelope_blob_cid`
-    /// is the transport handle (changes on reseal). `plaintext_cid_local`
-    /// is LOCAL-ONLY (never serialized to any wire artifact);
-    /// `plaintext_cid_set` is HMAC-blinded under `K_Set` for set-scoped
-    /// dedup without cross-set linkage. **R0.7 precision:** the abstract
-    /// `HMAC` here is `blake3::keyed_hash(K_Set, ·)` — BLAKE3's native keyed
-    /// MAC (no hmac/sha2 dep; truncate-to-32 is the native BLAKE3 width); the
-    /// abstract name is kept, the bytes are unchanged. This is the SAME keyed
-    /// MAC the sibling `f_aad_2`'s `membership_set_id_commitment` + the §3.9
-    /// gossip topic use; R5 routes all three through the real
-    /// `benten-crypto-suite` keyed MAC over `K_Set`.
-    #[derive(Debug, Default)]
-    pub struct TwoCidStore {
-        /// plaintext_cid → envelope_blob_cid (transport handle).
-        mapping: BTreeMap<Cid, Cid>,
-        /// the LOCAL-ONLY plaintext_cid_local sidecar (never serialized).
-        local: BTreeMap<Cid, Cid>,
-    }
-
-    impl TwoCidStore {
-        #[must_use]
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        /// PRODUCTION call site — record a DUAL-CID mapping.
-        /// `plaintext_cid` is the stable graph reference; `blob_cid` is
-        /// the transport handle; `local` is the LOCAL-ONLY sidecar.
-        pub fn put_dual(&mut self, _plaintext_cid: Cid, _blob_cid: Cid, _local: Cid) {
-            unimplemented!("R5 wires benten_sync::two_cid_store::TwoCidStore::put_dual")
-        }
-
-        /// PRODUCTION call site — resolve the stable plaintext_cid to its
-        /// CURRENT transport blob handle.
-        #[must_use]
-        pub fn resolve_blob(&self, _plaintext_cid: &Cid) -> Option<Cid> {
-            unimplemented!("R5 wires TwoCidStore::resolve_blob")
-        }
-
-        /// PRODUCTION call site — the LOCAL-ONLY plaintext_cid_local. It
-        /// has NO wire serialization at all (the whole point of O-7).
-        #[must_use]
-        pub fn local_cid(&self, _plaintext_cid: &Cid) -> Option<Cid> {
-            unimplemented!("R5 wires TwoCidStore::local_cid")
-        }
-    }
-
-    /// PRODUCTION call site — reseal a payload to a (possibly new) set of
-    /// recipients. The `plaintext_cid` (canonical-payload digest) is
-    /// STABLE across reseal; the `envelope_blob_cid` (serialized-envelope
-    /// digest) CHANGES. Returns `(plaintext_cid, envelope_blob_cid)`.
-    pub fn reseal(_payload: &[u8], _nonce_seed: u8) -> (Cid, Cid) {
-        unimplemented!("R5 wires the Layer-C reseal path")
-    }
-
-    /// PRODUCTION call site — the canonical plaintext_cid for a payload
-    /// (BLAKE3 over canonical DropBundlePayload). Deterministic; reseal
-    /// does NOT change it.
-    pub fn plaintext_cid(_payload: &[u8]) -> Cid {
-        unimplemented!("R5 wires plaintext_cid")
-    }
-
-    /// PRODUCTION call site — the HMAC-blinded `plaintext_cid_set` under a
-    /// per-set key `K_Set`. A bit-flip in `K_Set` MUST change the output
-    /// (no cross-set linkage). Inputs HMAC'd as BE bytes (M-20). **R0.7
-    /// precision:** the `HMAC` here is `blake3::keyed_hash(K_Set, ·)` —
-    /// BLAKE3's native keyed MAC (no hmac/sha2 dep; truncate-to-32 = the
-    /// native BLAKE3 output width); the abstract name is kept, the bytes are
-    /// unchanged. IDENTICAL primitive to the sibling `f_aad_2`'s
-    /// `membership_set_id_commitment` keyed MAC + the §3.9 gossip-topic
-    /// construction; R5 routes through the real `benten-crypto-suite` keyed
-    /// MAC over `K_Set`.
-    pub fn blind_set_cid(_plaintext_cid: &Cid, _k_set: &[u8; 32]) -> Cid {
-        unimplemented!("R5 wires plaintext_cid_set HMAC-blinding (blake3::keyed_hash over K_Set)")
-    }
-
-    /// PRODUCTION call site — collect EVERY wire-serialization surface
-    /// that a sealed envelope produces (the env bytes, the AAD bytes, the
-    /// gossip topic bytes, the audit-Node bytes). O-7 asserts the
-    /// `plaintext_cid_local` sentinel is absent from ALL of them.
-    pub fn all_wire_serialization_surfaces(_plaintext_cid_local: &Cid) -> Vec<Vec<u8>> {
-        unimplemented!("R5 wires the wire-surface enumeration for the O-7 scan")
-    }
-}
-
-// ===========================================================================
-// SELF-CONTAINED STUB-SHIM for the generation/staleness arm (F-LC-6).
-// ===========================================================================
-mod generation_stub {
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum GenError {
-        StaleRecipientKeyGeneration { stanza: u32, current: u32 },
-        StaleKPrincipalGeneration { stanza: u32, current: u32 },
-    }
-
-    /// A stanza carrying the two generation counters bound in its AAD.
-    #[derive(Clone, Debug)]
-    pub struct Stanza {
-        pub recipient_key_generation: u32,
-        pub k_principal_generation: u32,
-    }
-
-    /// PRODUCTION call site — verify a stanza against the recipient's
-    /// CURRENT generation state. A stanza authored under a STALE
-    /// `recipient_key_generation` (U19) OR a stale `k_principal_generation`
-    /// after rotation (U20) MUST be rejected.
-    pub fn verify_stanza_generation(
-        _stanza: &Stanza,
-        _current_recipient_key_generation: u32,
-        _current_k_principal_generation: u32,
-    ) -> Result<(), GenError> {
-        unimplemented!("R5 wires Layer-C verify_stanza_generation")
-    }
-}
-
-use generation_stub::{GenError, Stanza, verify_stanza_generation};
-use two_cid_stub::{
-    Cid, TwoCidStore, all_wire_serialization_surfaces, blind_set_cid, plaintext_cid, reseal,
+use benten_sync::two_cid_store::{
+    DualCid as Cid, DualCidStore as TwoCidStore, GenError, Stanza, all_wire_serialization_surfaces,
+    blind_set_cid, plaintext_cid, reseal, verify_stanza_generation,
 };
 
 fn cid(seed: u8) -> Cid {
@@ -207,7 +90,6 @@ fn cid(seed: u8) -> Cid {
 /// re-encryption is observable as the same handle) OR changed the
 /// plaintext_cid (then every graph reference breaks).
 #[test]
-#[ignore = "RED-PHASE: F-LC-4 — reseal keeps plaintext_cid, rotates envelope_blob_cid; un-ignore at R5"]
 fn f_lc_4_reseal_stable_plaintext_cid_distinct_blob_cid() {
     let payload = b"the same canonical DropBundlePayload bytes".to_vec();
 
@@ -240,7 +122,6 @@ fn f_lc_4_reseal_stable_plaintext_cid_distinct_blob_cid() {
 /// `TwoCidStore`). would-FAIL if the store keyed on the blob_cid instead
 /// of the stable plaintext_cid (then graph references couldn't resolve).
 #[test]
-#[ignore = "RED-PHASE: F-LC-4 — TwoCidStore DUAL-CID round-trip; un-ignore at R5"]
 fn f_lc_4_two_cid_store_resolves_plaintext_to_current_blob() {
     let mut store = TwoCidStore::new();
     let pt = cid(0x11);
@@ -269,7 +150,6 @@ fn f_lc_4_two_cid_store_resolves_plaintext_to_current_blob() {
 /// This is the O-7 LOCAL-ONLY property. would-FAIL if any wire surface
 /// embedded the local CID (then local dedup state leaks to observers).
 #[test]
-#[ignore = "RED-PHASE: F-LC-5 — plaintext_cid_local absent from ALL wire surfaces (O-7); un-ignore at R5"]
 fn f_lc_5_plaintext_cid_local_never_serialized() {
     // A distinctive sentinel byte pattern so a substring scan is unambiguous.
     let local_sentinel: Cid = [0xAB; 32];
@@ -301,7 +181,6 @@ fn f_lc_5_plaintext_cid_local_never_serialized() {
 /// cross-set linkage). would-FAIL if the blinding were keyless (then two
 /// sets dedup the same content to the SAME set-CID, linking them).
 #[test]
-#[ignore = "RED-PHASE: F-LC-5 — plaintext_cid_set HMAC-blinded under K_Set; un-ignore at R5"]
 fn f_lc_5_plaintext_cid_set_k_set_bit_flip_changes_output() {
     let pt = cid(0x44);
     let mut k_set = [0x07u8; 32];
@@ -325,7 +204,6 @@ fn f_lc_5_plaintext_cid_set_k_set_bit_flip_changes_output() {
 /// observer cannot link the two sets by their dedup CIDs. would-FAIL if
 /// the blinding collapsed to a content-only digest.
 #[test]
-#[ignore = "RED-PHASE: F-LC-5 — cross-set unlinkability; un-ignore at R5"]
 fn f_lc_5_same_content_two_sets_unlinkable() {
     let pt = cid(0x55);
     let k_set_a = [0x10u8; 32];
@@ -360,7 +238,6 @@ fn f_lc_5_same_content_two_sets_unlinkable() {
 /// stanza's; the stanza is stale. would-FAIL if the verify ignored the
 /// recipient_key_generation field.
 #[test]
-#[ignore = "RED-PHASE: F-LC-6 — stale recipient_key_generation rejected (U19); un-ignore at R5"]
 fn f_lc_6_stale_recipient_key_generation_rejected() {
     let stanza = Stanza {
         recipient_key_generation: 3, // authored at gen 3
@@ -387,7 +264,6 @@ fn f_lc_6_stale_recipient_key_generation_rejected() {
 /// generation field; binding only recipient_key_generation would leave
 /// U20 unenforced. would-FAIL if verify ignored k_principal_generation.
 #[test]
-#[ignore = "RED-PHASE: F-LC-6 — stale k_principal_generation rejected (U20/GAP-6a); un-ignore at R5"]
 fn f_lc_6_stale_k_principal_generation_rejected() {
     let stanza = Stanza {
         recipient_key_generation: 5, // recipient-key is current
@@ -414,7 +290,6 @@ fn f_lc_6_stale_k_principal_generation_rejected() {
 /// (positive control — proves the rejections are not vacuous). would-FAIL
 /// if verify rejected a fresh stanza.
 #[test]
-#[ignore = "RED-PHASE: F-LC-6 — current-on-both-generations verifies (positive control); un-ignore at R5"]
 fn f_lc_6_current_generations_verify_clean() {
     let stanza = Stanza {
         recipient_key_generation: 5,

@@ -86,160 +86,32 @@
 #![allow(unused_variables)]
 
 // ===========================================================================
-// SELF-CONTAINED STUB-SHIM — DELETE at R5; replace with the real
-// `benten_drop::DropBundlePayload` + `benten_membership_set::KSet`.
+// R5 — real production surface (`benten_drop::payload`). The self-contained
+// stub is DELETED; the canonical `DropBundlePayload` + `KSet` + the seal fns
+// are imported. The hermetic CID/recipient/subtree fixtures remain test-local.
 // ===========================================================================
-mod drop_no_kset_stub {
-    /// Wave-0 envelope-format version (M-18/M-19/M-20). V2 from commit 1.
-    pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
-    /// `DROP_TO_RECIPIENT_SEALED_SENDER` — the v1-beta DEFAULT (BR-1).
-    pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 
-    /// The per-set group key (the MembershipSet keying-axis key). A Drop
-    /// MUST NEVER serialize this. Modeled as raw 32 bytes
-    /// (`secrecy::SecretBox<[u8;32]>` in production).
-    pub type KSet = [u8; 32];
-    /// A content CID for a Node in the shared subtree.
-    pub type Cid = [u8; 32];
-    /// A per-recipient HPKE-wrapped content-encryption-key (decryptable
-    /// ONLY by the recipient's sk; carries NO set-key material).
-    pub type WrappedCek = Vec<u8>;
+use benten_drop::payload::{EncryptedNode, seal_drop_leaky_for_negative_control};
+use benten_drop::{DropBundlePayload, KSet, seal_drop_over_subtree};
 
-    /// One encrypted Node of the shared subtree (the `content` half).
-    #[derive(Clone, Debug)]
-    pub struct EncryptedNode {
-        pub node_cid: Cid,
-        /// ChaCha20-Poly1305 ciphertext+tag of the Node content. Encrypted
-        /// under a per-Node CEK; the CEK is HPKE-wrapped to the recipient
-        /// (NOT under `K_Set`).
-        pub ciphertext: Vec<u8>,
-    }
-
-    /// The canonical `DropBundlePayload` (the stable `plaintext_cid` half
-    /// of the DUAL-CID). This is the structure whose serialized bytes the
-    /// CC-BLK invariant scans. It carries:
-    ///   - the SubgraphSpec CID (what-can-be-shared),
-    ///   - the encrypted Nodes (content),
-    ///   - the per-recipient HPKE-wrapped CEK (authority to decrypt THIS
-    ///     bundle — NOT the set key),
-    ///   - framing (version, codepoint).
-    /// It MUST NOT carry the `K_Set`.
-    #[derive(Clone, Debug)]
-    pub struct DropBundlePayload {
-        pub format_version: u8,
-        pub codepoint: u16,
-        pub spec_cid: Cid,
-        pub content: Vec<EncryptedNode>,
-        /// HPKE-wrapped CEK for the single Drop recipient. Decryptable by
-        /// the recipient's long-term sk; reveals only THIS bundle's CEK.
-        pub recipient_wrapped_cek: WrappedCek,
-    }
-
-    impl DropBundlePayload {
-        /// PRODUCTION helper — serialize the canonical payload to its
-        /// deterministic big-endian byte layout (V2 + BE; M-19). This is
-        /// the byte string `plaintext_cid = BLAKE3(this)` digests, and the
-        /// byte string the CC-BLK invariant scans.
-        #[must_use]
-        pub fn serialize(&self) -> Vec<u8> {
-            let mut out = Vec::new();
-            out.push(self.format_version);
-            out.extend_from_slice(&self.codepoint.to_be_bytes());
-            out.extend_from_slice(&self.spec_cid);
-            let node_count = u32::try_from(self.content.len()).expect("node count fits u32");
-            out.extend_from_slice(&node_count.to_be_bytes());
-            for node in &self.content {
-                out.extend_from_slice(&node.node_cid);
-                let ct_len = u32::try_from(node.ciphertext.len()).expect("ct len fits u32");
-                out.extend_from_slice(&ct_len.to_be_bytes());
-                out.extend_from_slice(&node.ciphertext);
-            }
-            let cek_len =
-                u32::try_from(self.recipient_wrapped_cek.len()).expect("cek len fits u32");
-            out.extend_from_slice(&cek_len.to_be_bytes());
-            out.extend_from_slice(&self.recipient_wrapped_cek);
-            out
-        }
-    }
-
-    /// PRODUCTION call site — seal a Drop bundle over a member's subtree.
-    ///
-    /// CORRECT shape (what the real impl MUST produce): for each Node in
-    /// the subtree, encrypt under a fresh per-Node CEK; wrap the bundle CEK
-    /// to the single recipient via HPKE-to-recipient-pubkey. The `K_Set` is
-    /// READ to derive/decrypt the member's own view of the subtree at seal
-    /// time, but is NEVER copied into the payload — only per-recipient
-    /// wrapped CEKs go in. This stub models that correct shape so the pin
-    /// is GREEN against a correct impl.
-    #[must_use]
-    pub fn seal_drop_over_subtree(
-        subtree: &[EncryptedNode],
-        spec_cid: &Cid,
-        recipient_pk: &[u8; 32],
-        _k_set: &KSet, // read to derive the member view; NEVER serialized
-    ) -> DropBundlePayload {
-        // The recipient-wrapped CEK is derived from the recipient pubkey +
-        // a fresh bundle CEK; it is INDEPENDENT of `_k_set` (a correct Drop
-        // never embeds the set key). Modeled as a deterministic transform
-        // of the recipient pubkey so it carries no `_k_set` bytes.
-        let mut wrapped = Vec::with_capacity(32);
-        for (i, b) in recipient_pk.iter().enumerate() {
-            wrapped.push(b ^ (0xA5u8.wrapping_add(i as u8)));
-        }
-        DropBundlePayload {
-            format_version: ENVELOPE_FORMAT_VERSION,
-            codepoint: DROP_TO_RECIPIENT_SEALED_SENDER,
-            spec_cid: *spec_cid,
-            content: subtree.to_vec(),
-            recipient_wrapped_cek: wrapped,
-        }
-    }
-
-    /// DELIBERATELY-LEAKY seal (NEGATIVE-CONTROL ONLY) — models the
-    /// wrong-but-plausible impl that embeds the live `K_Set` into the
-    /// payload (e.g. "just include the set key so the recipient can read
-    /// future set content too"). Used ONLY to prove the scanner actually
-    /// fires. NEVER a production path.
-    #[must_use]
-    pub fn seal_drop_leaky_for_negative_control(
-        subtree: &[EncryptedNode],
-        spec_cid: &Cid,
-        recipient_pk: &[u8; 32],
-        k_set: &KSet,
-    ) -> DropBundlePayload {
-        let mut payload = seal_drop_over_subtree(subtree, spec_cid, recipient_pk, k_set);
-        // The bug: the set key is appended to the recipient-wrapped CEK
-        // region (a one-line "convenience" that leaks the whole group).
-        payload.recipient_wrapped_cek.extend_from_slice(k_set);
-        payload
-    }
-
-    // -- hermetic fixtures --
-
-    pub fn fixed_cid(seed: u8) -> Cid {
-        [seed; 32]
-    }
-    pub fn fixed_recipient_pk(seed: u8) -> [u8; 32] {
-        [seed.wrapping_add(0x40); 32]
-    }
-    pub fn sample_subtree() -> Vec<EncryptedNode> {
-        vec![
-            EncryptedNode {
-                node_cid: fixed_cid(0x01),
-                ciphertext: b"encrypted node 1 content".to_vec(),
-            },
-            EncryptedNode {
-                node_cid: fixed_cid(0x02),
-                ciphertext: b"encrypted node 2 content".to_vec(),
-            },
-        ]
-    }
+fn fixed_cid(seed: u8) -> [u8; 32] {
+    [seed; 32]
 }
-
-use drop_no_kset_stub::{
-    DropBundlePayload, KSet, fixed_cid, fixed_recipient_pk, sample_subtree,
-    seal_drop_leaky_for_negative_control, seal_drop_over_subtree,
-};
+fn fixed_recipient_pk(seed: u8) -> [u8; 32] {
+    [seed.wrapping_add(0x40); 32]
+}
+fn sample_subtree() -> Vec<EncryptedNode> {
+    vec![
+        EncryptedNode {
+            node_cid: fixed_cid(0x01),
+            ciphertext: b"encrypted node 1 content".to_vec(),
+        },
+        EncryptedNode {
+            node_cid: fixed_cid(0x02),
+            ciphertext: b"encrypted node 2 content".to_vec(),
+        },
+    ]
+}
 
 /// The live `K_Set` sentinel — a distinctive 32-byte run the scan hunts
 /// for. (Defined here rather than via the illustrative stub function so the
@@ -277,7 +149,6 @@ fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
 /// break — it would leak the whole group's keys to a one-shot non-member
 /// recipient).
 #[test]
-#[ignore = "RED-PHASE: F-DROP-NO-KSET — Drop bundle provably carries NO K_Set (CC-BLK; R0.5 §2.5/§3.5); un-ignore at R5"]
 fn f_drop_no_kset_serialized_payload_omits_k_set() {
     let k_set = live_k_set_sentinel();
     let subtree = sample_subtree();
@@ -318,7 +189,6 @@ fn f_drop_no_kset_serialized_payload_omits_k_set() {
 /// never appears anywhere. would-FAIL if the scanner could not detect the
 /// `K_Set` even when it IS present (then PIN 1 guarantees nothing).
 #[test]
-#[ignore = "RED-PHASE: F-DROP-NO-KSET — negative control: a leaky seal IS caught (scanner fires); un-ignore at R5"]
 fn f_drop_no_kset_negative_control_leaky_seal_is_caught() {
     let k_set = live_k_set_sentinel();
     let subtree = sample_subtree();
@@ -348,7 +218,6 @@ fn f_drop_no_kset_negative_control_leaky_seal_is_caught() {
 /// the set key inside the CEK field under a different framing.
 /// would-FAIL if the wrapped-CEK derivation leaked the set key bytes.
 #[test]
-#[ignore = "RED-PHASE: F-DROP-NO-KSET — recipient-wrapped CEK is independent of K_Set; un-ignore at R5"]
 fn f_drop_no_kset_recipient_cek_is_independent_of_k_set() {
     let k_set = live_k_set_sentinel();
     let subtree = sample_subtree();

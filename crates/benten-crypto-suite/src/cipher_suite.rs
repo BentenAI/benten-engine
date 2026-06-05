@@ -60,7 +60,7 @@
 //! reimplement primitives.
 
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{Encoded, EncodedSizeUser as _, KemCore, MlKem768};
+use ml_kem::{B32, Encoded, EncodedSizeUser as _, KemCore, MlKem768};
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
@@ -163,6 +163,70 @@ impl CipherSuite {
                 }
             }
             _ => unreachable!("CipherSuite::resolve guards against unsupported codepoints"),
+        }
+    }
+
+    /// Deterministically derive a recipient keypair from a 32-byte `seed`.
+    ///
+    /// Both halves are derived from the seed via BLAKE3 domain-separated
+    /// expansion (the X25519 `StaticSecret` from one 32-byte block; the
+    /// ML-KEM-768 `(d, z)` from two more) so the same seed always yields
+    /// the same keypair. Used by the Layer-C drop path to map a stable
+    /// recipient pubkey *fingerprint* to a real hybrid keypair without a
+    /// keystore round-trip (the `0x647a` hybrid + the `0x6400` classical
+    /// downgrade are both supported; other codepoints would have been
+    /// rejected by [`Self::resolve`]).
+    ///
+    /// Per CLAUDE.md baked-in #5 this stays the ONLY crypto-primitive call
+    /// site — the seed expansion goes through the vetted `blake3` MAC and
+    /// the keys through `x25519-dalek` / `ml-kem`; no primitive is forked.
+    #[must_use]
+    pub fn generate_recipient_keypair_deterministic(&self, seed: &[u8; 32]) -> RecipientKeypair {
+        // Domain-separated expansion of the seed into the three 32-byte
+        // blocks the two key halves need.
+        let block = |tag: u8| -> [u8; 32] {
+            let mut h = blake3::Hasher::new();
+            h.update(b"benten-crypto-suite:recipient-seed");
+            h.update(&[tag]);
+            h.update(seed);
+            *h.finalize().as_bytes()
+        };
+        let x_block = block(0x01);
+        let x_sec = StaticSecret::from(x_block);
+        let x_pub = X25519PublicKey::from(&x_sec);
+        match self.codepoint.raw() {
+            0x647a => {
+                let d: B32 = block(0x02).into();
+                let z: B32 = block(0x03).into();
+                let (mlkem_dk, mlkem_ek) = MlKem768::generate_deterministic(&d, &z);
+                RecipientKeypair {
+                    codepoint: self.codepoint,
+                    public: RecipientPublic {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_pub),
+                        mlkem768_ek: Some(mlkem_ek.as_bytes().to_vec()),
+                    },
+                    secret: RecipientSecret {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_sec),
+                        mlkem768_dk: Some(mlkem_dk.as_bytes().to_vec()),
+                    },
+                }
+            }
+            // Classical-only `0x6400`: X25519 half only.
+            _ => RecipientKeypair {
+                codepoint: self.codepoint,
+                public: RecipientPublic {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_pub),
+                    mlkem768_ek: None,
+                },
+                secret: RecipientSecret {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_sec),
+                    mlkem768_dk: None,
+                },
+            },
         }
     }
 

@@ -60,6 +60,14 @@ serde_bytes = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 thiserror = { workspace = true }
 
+# BLAKE3 keyed/plain hash for the Layer-C `layer_c` module: the BLINDED
+# `0x6520` `audience_set_commitment` (IDENTICAL primitive to the
+# MembershipSet `0x6610` commitment), the self-describing body-CID digest,
+# and the deterministic per-recipient-keypair seed expansion (which routes
+# the actual key material through `benten-crypto-suite`, the ONLY crypto
+# call site). `default-features = false` — the core hashing API suffices.
+blake3 = { workspace = true }
+
 # Cryptographic surface for the envelope-level signature (the defense-
 # in-depth outer layer per Spike G). Goes through `benten-id` for the
 # `Keypair`/`PublicKey` API (which itself routes to ed25519-dalek via
@@ -82,3 +90,10 @@ thiserror = { workspace = true }
 # roster. Mirrors the workspace pin; `default-features = false` (the core
 # `blake3::hash` API needs no default features).
 blake3 = { workspace = true }
+
+# F-full Layer-C DUAL-CID (O-3): the `f_lc_dual_cid` family exercises the
+# `benten-sync::two_cid_store` DUAL-CID extension (DualCidStore + reseal +
+# blind_set_cid + the O-7 wire-surface enumeration + generation staleness).
+# No cycle — benten-sync depends on benten-{id,core,errors}, none of which
+# pull benten-drop (verified vs the workspace dependency edges).
+benten-sync = { path = "../benten-sync" }

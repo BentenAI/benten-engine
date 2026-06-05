@@ -115,7 +115,11 @@ sha3 = { version = "0.10", default-features = false }
 # Spike E Interpretation-B (`derive_step`/`derive_root` with
 # `"step"`/`"root"` info-tags for cross-role domain separation).
 x25519-dalek = { version = "2", default-features = false, features = ["alloc", "static_secrets", "zeroize"] }
-ml-kem = { version = "0.2", default-features = false }
+# `deterministic` lights ML-KEM-768 `generate_deterministic(d, z)` +
+# re-exports `B32` — used by `CipherSuite::generate_recipient_keypair_
+# deterministic` to derive a stable recipient keypair from a seed for the
+# Layer-C drop path (one-codepoint-per-suite; no keystore round-trip).
+ml-kem = { version = "0.2", default-features = false, features = ["deterministic"] }
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 hkdf = { version = "0.12", default-features = false }
 

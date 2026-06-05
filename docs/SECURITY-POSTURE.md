@@ -2510,6 +2510,19 @@ mitigation is constant-time decapsulation (libcrux CT-Decap). **The #30↔#32↔
 requiring the audit to cover the CT-Decap claim. **Cross-ref:** Compromise #30 (the parent window); R0.7 §5.2
 M-5.
 
+### Compromise #53 — TransportConfig-codepoint reserve (NARROWED)
+
+**Status.** OPEN; ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (Ben Q1); R0.7 §3.9.
+
+Only the `GossipPlusBlobs` transport (iroh-gossip broadcast + iroh-blobs content transfer) ships at v1-beta.
+The `Willow` / `iroh-roq` / `iroh-live` `TransportConfig` variants are **reserved-and-typed-rejected** at
+v1-beta (`benten-sync::transport_config::TransportConfig`): selecting a reserved transport yields a typed
+`TransportReservedAtV1Beta` rejection — **never a silent accept, never a silent fallback to gossip**. The
+reserves become LIVE **additively** at unused codepoints, **with no wire-break when added** (the NQ-A1
+conservative-fallback discipline). **Residual:** operators whose threat models or media needs require a
+reserved transport must wait for the additive v1-GM+ activation. **Cross-ref:** `docs/CRYPTO-CODEPOINTS.md`
+(transport-config reserve); the F-TRANS-1 family pins the typed-reject + this disclosure.
+
 ### Compromise #63 — Sealed-Sender abuse-control trade-off
 
 **Status.** OPEN; ACCEPTED TRADE-OFF (`ATO`). **Source.** NEW (BR-1; R0.7 §3.11).
