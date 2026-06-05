@@ -26,17 +26,17 @@ pub const KV_DERIVE_CONTEXT: &str = "benten-membership-set:K(V):v1";
 /// The BLAKE3-KDF context label for the per-Node content key `K(N)`.
 pub const KN_DERIVE_CONTEXT: &str = "benten-membership-set:K(N):v1";
 
-/// Derive the membership version-node key `K(V)` for a version-node CID
-/// (F4-014). Uses the BLAKE3 KDF (`blake3::derive_key`), a vetted upstream
-/// primitive — NOT a forked construction.
-///
-/// The engine owns the `K(V)` *type-restriction* (the `f_inv19_1` cross-wave
-/// pin restricts which Node kinds may key off `K(V)`); this crate owns the
-/// *keying formula* the engine restriction agrees with.
-#[must_use]
-pub fn derive_kv(version_node_cid: &[u8]) -> [u8; 32] {
-    blake3::derive_key(KV_DERIVE_CONTEXT, version_node_cid)
-}
+// The membership version-node key `K(V)` derivation (F4-014) lives in the
+// [`crate::keying_kv`] submodule as the Inv-19 TYPE-RESTRICTED front-door
+// (`derive_kv(CidTarget) -> Result<[u8; 32], KvError>`): it ACCEPTS an
+// immutable Version-Node-CID / MembershipSet identity and REJECTS a mutable
+// Anchor CID (the bug Inv-19 forbids — an Anchor's CURRENT pointer moves, so a
+// key bound there would silently re-target). The `K(V)` type-restriction is a
+// distinct concern from the gossip keyed-MAC routing that also lives in this
+// module, so it is sliced into `keying_kv` (the w-gov-audit / w-ms-sync
+// file-disjointness slice). The typed surface is re-exported here so callers
+// reach it as `benten_membership_set::keying::{derive_kv, CidTarget, KvError}`.
+pub use crate::keying_kv::{CidTarget, KvError, derive_kv};
 
 /// Derive a per-Node content key `K(N)` for a Node CID. Uses the BLAKE3 KDF
 /// (distinct context label from `K(V)` so the two derivations never collide).

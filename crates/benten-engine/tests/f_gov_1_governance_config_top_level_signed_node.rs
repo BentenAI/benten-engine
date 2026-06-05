@@ -40,92 +40,9 @@
 use std::path::Path;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::governance::{
-//         GovernanceConfig, GovernanceTier, MembershipSetPolicy,
-//         PromotionEffect, promote_tier,
-//     };
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::governance` surface.
 // =====================================================================
-mod mset_w6_governance_stub {
-    //! Local stub matching the intended W6 governance surface. Bodies
-    //! `unimplemented!()`.
-
-    /// The governance tier. Garden / Grove are CONTENT of a top-level
-    /// signed Node — NOT sub-codepoints, NOT sealed-policy fields.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum GovernanceTier {
-        Flat,
-        Moderated,
-        Polycentric,
-    }
-
-    /// The top-level signed governance config Node (InstallRecord
-    /// precedent). Carries the tier + a signature over its canonical
-    /// bytes. NEVER a field inside `MembershipSetPolicy`.
-    #[derive(Clone, Debug)]
-    pub struct GovernanceConfig {
-        pub tier: GovernanceTier,
-        /// Detached signature over the canonical Node bytes.
-        pub signature: Vec<u8>,
-        /// Garden / Grove labelling lives as Node CONTENT here.
-        pub content_label: String,
-    }
-
-    impl GovernanceConfig {
-        pub fn new_signed(_tier: GovernanceTier, _content_label: &str) -> Self {
-            unimplemented!(
-                "W6 stub — R5 replaces this module with \
-                 `use benten_membership_set::governance::*;`"
-            )
-        }
-        /// Verify the detached signature over the canonical Node bytes
-        /// (a top-level signed Node, not a sealed-policy field).
-        pub fn signature_verifies(&self) -> bool {
-            unimplemented!("W6 stub — top-level signed-Node signature verify")
-        }
-        /// Verify after tampering the tier byte (must fail — tamper-evidence).
-        pub fn signature_verifies_after_tier_tamper(&self) -> bool {
-            unimplemented!("W6 stub — tamper a signed field → signature must fail")
-        }
-    }
-
-    /// The MembershipSet sealed policy. W6 real shape MUST NOT carry a
-    /// `governance_config` field — this stub exists only so the
-    /// struct-fence arm can name it. The boolean reports whether the
-    /// sealed policy has an embedded GovernanceConfig field (real impl:
-    /// `false`).
-    pub struct MembershipSetPolicy;
-    impl MembershipSetPolicy {
-        pub fn has_embedded_governance_config_field() -> bool {
-            unimplemented!(
-                "W6 stub — GovernanceConfig is a TOP-LEVEL signed Node, NOT a \
-                 MembershipSetPolicy field"
-            )
-        }
-    }
-
-    /// The observable effect of a tier promotion. Real impl: a new Node is
-    /// added; the Kind + K_Set are UNCHANGED; no new identity is minted.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct PromotionEffect {
-        pub kind_changed: bool,
-        pub k_set_rotated: bool,
-        pub new_identity_minted: bool,
-        pub new_governance_node_added: bool,
-    }
-
-    /// W6 stub: promote the governance tier (e.g. Atrium → Garden via
-    /// Flat → Moderated). Real impl adds a Node + grants + roles WITHOUT
-    /// re-keying, minting a new identity, or changing the Kind.
-    pub fn promote_tier(
-        _from: GovernanceTier,
-        _to: GovernanceTier,
-    ) -> PromotionEffect {
-        unimplemented!("W6 stub — tier promotion = add Node + grants + roles; no re-key")
-    }
-}
-
-use mset_w6_governance_stub::{
+use benten_membership_set::governance::{
     GovernanceConfig, GovernanceTier, MembershipSetPolicy, PromotionEffect, promote_tier,
 };
 
@@ -133,7 +50,6 @@ use mset_w6_governance_stub::{
 /// signature over the canonical bytes verifies, and tampering the signed
 /// tier field breaks the signature (tamper-evidence).
 #[test]
-#[ignore = "RED-PHASE: F-GOV-1 — GovernanceConfig is a top-level signed Node; un-ignore at W6 R5 (delete mset_w6_governance_stub; insert real `use`)"]
 fn governance_config_is_a_top_level_signed_node() {
     let cfg = GovernanceConfig::new_signed(GovernanceTier::Moderated, "Garden");
     assert!(
@@ -155,7 +71,6 @@ fn governance_config_is_a_top_level_signed_node() {
 ///
 /// would-FAIL if W6 re-keys or changes the Kind on a tier promotion.
 #[test]
-#[ignore = "RED-PHASE: F-GOV-1 — tier promotion adds Node, NO re-key / NO Kind change / NO new identity; un-ignore at W6 R5"]
 fn tier_promotion_adds_node_without_rekey_or_kind_change() {
     let effect: PromotionEffect = promote_tier(GovernanceTier::Flat, GovernanceTier::Moderated);
 
@@ -185,7 +100,6 @@ fn tier_promotion_adds_node_without_rekey_or_kind_change() {
 /// `MembershipSetPolicy` (struct-fence). It lives as a top-level signed
 /// Node, decoupled from the sealed policy.
 #[test]
-#[ignore = "RED-PHASE: F-GOV-1 — GovernanceConfig is NOT a MembershipSetPolicy field; un-ignore at W6 R5"]
 fn governance_config_is_not_a_sealed_policy_field() {
     assert!(
         !MembershipSetPolicy::has_embedded_governance_config_field(),

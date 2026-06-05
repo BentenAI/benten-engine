@@ -43,48 +43,16 @@
 use std::path::Path;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::privacy::{
-//         network_observer_can_link_stanzas, admin_can_correlate_members,
-//     };
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::privacy` surface.
+// NOTE: the doc-coupling arm `threat_model_doc_states_network_observer_only_scope`
+// STAYS `#[ignore]`'d here — `docs/THREAT-MODEL.md` is minted at the TIER-3
+// doc-wave (F-DISC-2); that arm un-ignores there, NOT in this TIER-2 wave.
 // =====================================================================
-mod mset_w6_unlinkability_stub {
-    //! Local stub matching the intended W6 unlinkability surface. Bodies
-    //! `unimplemented!()`.
-
-    /// W6 stub: can a NETWORK OBSERVER (no `K_Set`, no admin view) link two
-    /// per-recipient stanzas to the same recipient from the wire bytes
-    /// alone? Real impl: `false` — per-recipient stanzas are unlinkable to
-    /// a network observer (the property that IS delivered).
-    pub fn network_observer_can_link_stanzas(
-        _stanza_a_wire: &[u8],
-        _stanza_b_wire: &[u8],
-    ) -> bool {
-        unimplemented!(
-            "W6 stub — R5 replaces this module with \
-             `use benten_membership_set::privacy::*;`; a network observer \
-             CANNOT link per-recipient stanzas"
-        )
-    }
-
-    /// W6 stub: can a MALICIOUS ADMIN (holding the `members_table`)
-    /// correlate members across stanzas? Real impl: `true` — the admin
-    /// sees the full members_table; unlinkability does NOT protect against
-    /// the admin (the boundary; #58 honest disclosure).
-    pub fn admin_can_correlate_members(_members_table_snapshot: &[u8]) -> bool {
-        unimplemented!(
-            "W6 stub — a malicious admin CAN correlate members (sees the \
-             members_table); unlinkability is network-observer-only"
-        )
-    }
-}
-
-use mset_w6_unlinkability_stub::{admin_can_correlate_members, network_observer_can_link_stanzas};
+use benten_membership_set::privacy::{admin_can_correlate_members, network_observer_can_link_stanzas};
 
 /// F-NAT-2 (a): a network observer CANNOT link two per-recipient stanzas to
 /// the same recipient — the unlinkability property that IS delivered.
 #[test]
-#[ignore = "RED-PHASE: F-NAT-2 — network observer cannot link stanzas; un-ignore at W6 R5 (delete mset_w6_unlinkability_stub; insert real `use`)"]
 fn network_observer_cannot_link_per_recipient_stanzas() {
     // Two distinct on-wire stanzas addressed to the same recipient.
     let stanza_a = b"wire:stanza:a:opaque-bytes".as_slice();
@@ -103,7 +71,6 @@ fn network_observer_cannot_link_per_recipient_stanzas() {
 /// unlinkability claim HONEST (not over-claimed): the property is
 /// network-observer-only, NOT admin-proof.
 #[test]
-#[ignore = "RED-PHASE: F-NAT-2 — malicious admin CAN correlate (boundary, not over-claimed); un-ignore at W6 R5"]
 fn malicious_admin_can_correlate_members_boundary_not_over_claimed() {
     let members_table = b"members_table:snapshot:admin-readable".as_slice();
     assert!(

@@ -233,6 +233,7 @@ export const CATALOG_CODES = [
   "E_DSL_UNKNOWN_PRIMITIVE",
   "E_DSL_MISSING_RESPOND",
   "E_ROLE_STALE_AT_VERIFY",
+  "E_KV_TARGET_NOT_IMMUTABLE",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -3238,6 +3239,21 @@ export class ERoleStaleAtVerify extends BentenError {
 }
 
 /**
+ * E_KV_TARGET_NOT_IMMUTABLE
+ *
+ * Thrown at: `crates/benten-membership-set/src/keying_kv.rs::derive_kv` — a K(V) (membership version-node key) derivation was requested against a target that is not an immutable Version-Node-CID (or a MembershipSet identity).
+ * Message template: "K(V) derivation target is not an immutable Version-Node-CID (Inv-19)"
+ */
+export class EKvTargetNotImmutable extends BentenError {
+  static readonly code = "E_KV_TARGET_NOT_IMMUTABLE";
+  static readonly fixHint = "A K(V) (membership version-node key) derivation was requested against a MUTABLE Anchor CID. Inv-19 forbids binding key material to a `benten_core::version::Anchor` CID: the Anchor's CURRENT pointer moves across an `append_version`, so a key bound to an Anchor would silently re-target as the chain advances. Derive K(V) against an immutable Version-Node-CID (or a MembershipSet identity) instead. Phase-4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2; F-INV19-1) mints this first-class catalog code.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_KV_TARGET_NOT_IMMUTABLE", "A K(V) (membership version-node key) derivation was requested against a MUTABLE Anchor CID. Inv-19 forbids binding key material to a `benten_core::version::Anchor` CID: the Anchor's CURRENT pointer moves across an `append_version`, so a key bound to an Anchor would silently re-target as the chain advances. Derive K(V) against an immutable Version-Node-CID (or a MembershipSet identity) instead. Phase-4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2; F-INV19-1) mints this first-class catalog code.", message, context);
+    this.name = "EKvTargetNotImmutable";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3446,4 +3462,5 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DSL_UNKNOWN_PRIMITIVE": EDslUnknownPrimitive,
   "E_DSL_MISSING_RESPOND": EDslMissingRespond,
   "E_ROLE_STALE_AT_VERIFY": ERoleStaleAtVerify,
+  "E_KV_TARGET_NOT_IMMUTABLE": EKvTargetNotImmutable,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

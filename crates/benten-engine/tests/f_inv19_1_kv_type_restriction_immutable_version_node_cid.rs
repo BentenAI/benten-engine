@@ -46,49 +46,11 @@ use benten_core::version::{Anchor, append_version};
 use benten_core::{Node, Value};
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::keying::{derive_kv, CidTarget, KvError};
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::keying` surface —
+// the Inv-19 type-restricted `derive_kv(CidTarget) -> Result<_, KvError>`
+// (re-exported from the `keying_kv` slice).
 // =====================================================================
-mod mset_w6_kv_stub {
-    //! Local stub matching the intended W6 K(V) type-restricted derivation
-    //! surface. Bodies `unimplemented!()`.
-
-    /// The kind of CID a K(V) derivation is being asked to bind to. Inv-19:
-    /// ONLY `ImmutableVersionNode` and `MembershipSet` are permitted; a
-    /// `MutableAnchor` MUST be rejected.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum CidTarget {
-        /// An immutable Version-Node CID — the ONLY content-addressed
-        /// target whose bytes never change (PERMITTED).
-        ImmutableVersionNode([u8; 32]),
-        /// A MembershipSet target (PERMITTED — set-identity is
-        /// Inv-21-stable).
-        MembershipSet([u8; 32]),
-        /// A mutable Anchor CID — the CURRENT pointer moves, so a key
-        /// bound here would silently re-target (FORBIDDEN by Inv-19).
-        MutableAnchor([u8; 32]),
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum KvError {
-        /// The derivation target is not an immutable Version-Node-CID (or
-        /// MembershipSet) — Inv-19 violation.
-        TargetNotImmutable,
-    }
-
-    /// W6 stub: derive K(V) for a target. Real impl: ACCEPTS
-    /// `ImmutableVersionNode` / `MembershipSet`; REJECTS `MutableAnchor`
-    /// with `KvError::TargetNotImmutable`.
-    pub fn derive_kv(_target: CidTarget) -> Result<[u8; 32], KvError> {
-        unimplemented!(
-            "W6 stub — R5 replaces this module with \
-             `use benten_membership_set::keying::*;`; the K(V) API REJECTS \
-             any non-immutable target (Inv-19)"
-        )
-    }
-}
-
-use mset_w6_kv_stub::{CidTarget, KvError, derive_kv};
+use benten_membership_set::keying::{CidTarget, KvError, derive_kv};
 
 fn fixed_cid(byte: u8) -> [u8; 32] {
     [byte; 32]
@@ -97,7 +59,6 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 /// F-INV19-1 (a): `derive_kv` ACCEPTS an immutable Version-Node-CID target
 /// (positive control) and returns a key.
 #[test]
-#[ignore = "RED-PHASE: F-INV19-1 — derive_kv accepts immutable Version-Node-CID; un-ignore at W6 R5 (delete mset_w6_kv_stub; insert real `use`)"]
 fn derive_kv_accepts_immutable_version_node_cid() {
     let target = CidTarget::ImmutableVersionNode(fixed_cid(0x19));
     let key = derive_kv(target).expect(
@@ -119,7 +80,6 @@ fn derive_kv_accepts_immutable_version_node_cid() {
 /// pointer moves) — a key bound there would silently re-target as the
 /// Anchor advances. This is exactly the bug Inv-19 forbids.
 #[test]
-#[ignore = "RED-PHASE: F-INV19-1 — derive_kv REJECTS mutable/Anchor CID (Inv-19); un-ignore at W6 R5"]
 fn derive_kv_rejects_mutable_anchor_cid() {
     let target = CidTarget::MutableAnchor(fixed_cid(0xA9));
     let result = derive_kv(target);
@@ -143,7 +103,6 @@ fn derive_kv_rejects_mutable_anchor_cid() {
 /// F-INV19-1 (c): `derive_kv` ACCEPTS a MembershipSet target (the second
 /// permitted, Inv-21-stable binding per Inv-20 clause-f).
 #[test]
-#[ignore = "RED-PHASE: F-INV19-1 — derive_kv accepts MembershipSet target; un-ignore at W6 R5"]
 fn derive_kv_accepts_membership_set_target() {
     let target = CidTarget::MembershipSet(fixed_cid(0x6C));
     let key = derive_kv(target).expect(

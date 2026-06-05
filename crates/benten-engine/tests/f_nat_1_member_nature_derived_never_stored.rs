@@ -62,100 +62,11 @@ use std::path::Path;
 use benten_id::did::Did;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::member::{
-//         MemberEntry, MemberRef, RoleId, Hlc, SigPubKey, MemberNature,
-//         is_ai_operated, derive_member_nature,
-//     };
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::member` surface —
+// the canonical 5-field `MemberEntry` (ZERO nature field; Inv-22) + the
+// DERIVED `MemberNature` IVM view (`is_ai_operated` / `derive_member_nature`).
 // =====================================================================
-mod mset_w6_nature_stub {
-    //! Local stub matching the intended W6 member surface. The `MemberEntry`
-    //! shape mirrors the canonical R0.5 §3.5 5-field record (identical to
-    //! `f_aad_1`'s stub — F4-042 alignment). CRITICAL: it has NO nature
-    //! field — Inv-22 is preserved by-construction. The nature-derivation
-    //! functions are `unimplemented!()`.
-
-    /// Stub `Hlc` — the 3-field shape (`physical_ms`, `logical`, `node_id`)
-    /// matching the canonical cluster shape (F4-045 alignment family).
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct Hlc {
-        pub physical_ms: u64,
-        pub logical: u32,
-        pub node_id: u64,
-    }
-
-    /// Stub `SigPubKey` — present iff `is_authority`.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct SigPubKey(pub Vec<u8>);
-
-    /// Stub `RoleId` — ALL 5 ACTIVE (BC-9); ordinal Invitee=0…Admin=4
-    /// (supersedes M-CONS-FINAL per M-13).
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum RoleId {
-        Invitee = 0,
-        Viewer = 1,
-        Member = 2,
-        Moderator = 3,
-        Admin = 4,
-    }
-
-    /// Stub `MemberRef` — Kind-determined keying variant (NOT a nature
-    /// discriminator — m-15 GNC-7).
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum MemberRef {
-        UserDid,
-        DeviceDid,
-        LocalDevice,
-    }
-
-    /// The fused member record — canonical R0.5 §3.5 **5-field** shape.
-    /// Inv-20 clause-i: one DID → one record. Inv-22: ZERO nature field.
-    /// The DID is the `BTreeMap<Did, MemberEntry>` KEY, not a field here.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct MemberEntry {
-        pub role: RoleId,
-        pub is_authority: bool,
-        /// Present iff `is_authority` (Inv-20 clause-i: authority ⟹ pubkey).
-        pub sig_pubkey: Option<SigPubKey>,
-        pub admitted_at_hlc: Hlc,
-        pub member_ref: MemberRef,
-    }
-
-    /// The derived nature (NOT stored). Returned by IVM-view recomputation.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct MemberNature {
-        pub is_ai_operated: bool,
-        pub is_plugin: bool,
-        pub is_autonomous_ai: bool,
-    }
-
-    impl MemberEntry {
-        /// Struct-fence introspection: does `MemberEntry` carry ANY nature
-        /// field (`member_type`, `MemberKind`, `is_ai`, etc.)? Real impl:
-        /// `false` — nature is derived, never stored. The canonical 5-field
-        /// shape above demonstrably has no such field.
-        pub fn has_any_nature_field() -> bool {
-            unimplemented!("W6 stub — MemberEntry has ZERO nature field (Inv-22)")
-        }
-    }
-
-    /// W6 stub: `is_ai_operated(did) = (did.method() == "agent")`. Derives
-    /// PURELY from the DID method-parse; did:agent: is an allowlist ALIAS,
-    /// not a stored discriminator.
-    pub fn is_ai_operated(_did_method: &str) -> bool {
-        unimplemented!("W6 stub — nature derives from `did.method() == \"agent\"`")
-    }
-
-    /// W6 stub: recompute the full member nature from the event chain
-    /// (IVM-materialized view). Returns the derived nature WITHOUT reading
-    /// any stored authoritative field — the same input yields the same
-    /// output (deterministic derivation).
-    pub fn derive_member_nature(_did_method: &str, _has_install_manifest: bool) -> MemberNature {
-        unimplemented!("W6 stub — nature is an IVM-materialized view, never authoritative")
-    }
-}
-
-use mset_w6_nature_stub::{
+use benten_membership_set::member::{
     derive_member_nature, is_ai_operated, Hlc, MemberEntry, MemberNature, MemberRef, RoleId,
     SigPubKey,
 };
@@ -165,7 +76,6 @@ use mset_w6_nature_stub::{
 /// `false`. The canonical 5-field shape `{role, is_authority, sig_pubkey,
 /// admitted_at_hlc, member_ref}` demonstrably has no nature field.
 #[test]
-#[ignore = "RED-PHASE: F-NAT-1 — MemberEntry has zero nature field (Inv-22 struct-fence); un-ignore at W6 R5 (delete mset_w6_nature_stub; insert real `use`)"]
 fn member_entry_has_zero_nature_field() {
     // Construct a canonical 5-field entry — proving the shape compiles with
     // NO nature field present (a nature field would be a 6th field here).
@@ -193,7 +103,6 @@ fn member_entry_has_zero_nature_field() {
 /// the REAL `benten_id::did::Did` method string so the parse is anchored to
 /// the live DID type.
 #[test]
-#[ignore = "RED-PHASE: F-NAT-1 — is_ai_operated derives from did.method()==\"agent\"; un-ignore at W6 R5"]
 fn is_ai_operated_derives_from_did_method_parse_only() {
     // The real DID type — the method string the W6 derivation consumes.
     let agent_did = Did::from_string_for_test_fixture("did:agent:example-agent-001".to_string());
@@ -224,7 +133,6 @@ fn is_ai_operated_derives_from_did_method_parse_only() {
 /// (deterministic derivation), and `is_plugin` / `is_autonomous_ai` follow
 /// from the manifest/method, not a stored flag.
 #[test]
-#[ignore = "RED-PHASE: F-NAT-1 — nature is IVM-recomputed, never authoritative-stored; un-ignore at W6 R5"]
 fn member_nature_is_ivm_recomputed_never_authoritative_stored() {
     let nature_a: MemberNature = derive_member_nature("agent", /* has_install_manifest */ true);
     let nature_b: MemberNature = derive_member_nature("agent", true);

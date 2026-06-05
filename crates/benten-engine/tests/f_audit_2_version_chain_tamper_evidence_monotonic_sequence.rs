@@ -40,77 +40,9 @@
 use benten_engine::Engine;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::audit::{AuditChain, AuditChainError, AdminOp};
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::audit` surface.
 // =====================================================================
-mod mset_w6_audit_chain_stub {
-    //! Local stub matching the intended W6 `AuditChain` surface — an
-    //! append-only Anchor + immutable Version Nodes + CURRENT. Bodies
-    //! `unimplemented!()`.
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum AdminOp {
-        AdmitMember,
-        KickMember,
-        RotateKey,
-        PromoteRole,
-        GovernanceChange,
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum AuditChainError {
-        /// A mid-chain Version Node's content hash does not match its
-        /// declared CID — the log was tampered (Crosby-Wallach linkage
-        /// break detected on read).
-        TamperDetectedLinkageBroken { at_seq: u64 },
-        /// Sequence must be strictly monotonic / append-only.
-        NonMonotonicAppend,
-    }
-
-    /// The append-only audit log. `seq()` reads the CURRENT sequence;
-    /// `append_op` advances exactly once per genuine admin op; replaying
-    /// an identical op is a dedup pure-read (no advance, no event).
-    pub struct AuditChain;
-
-    impl AuditChain {
-        pub fn new(_set_id: &[u8; 32]) -> Self {
-            unimplemented!(
-                "W6 stub — R5 replaces this module with \
-                 `use benten_membership_set::audit::AuditChain;`"
-            )
-        }
-        /// Current sequence number (number of immutable Version Nodes on
-        /// the chain since the Anchor).
-        pub fn seq(&self) -> u64 {
-            unimplemented!("W6 stub")
-        }
-        /// Append a genuine admin op → new immutable Version Node, CURRENT
-        /// advances, sequence +1. Returns the new sequence.
-        pub fn append_op(&mut self, _actor: &[u8; 32], _op: AdminOp) -> u64 {
-            unimplemented!("W6 stub — append-only Version-Node chain")
-        }
-        /// Replay an identical op already at CURRENT → dedup pure-read.
-        /// Returns `true` iff a phantom event was (incorrectly) emitted.
-        /// Real impl returns `false` (Inv-13: no phantom event/advance).
-        pub fn replay_identical_op_emitted_phantom_event(
-            &mut self,
-            _actor: &[u8; 32],
-            _op: AdminOp,
-        ) -> bool {
-            unimplemented!("W6 stub — dedup is a pure-read; no phantom event")
-        }
-        /// Verify the full chain on read; tampering a mid-chain Version
-        /// Node's bytes breaks its CID linkage (Crosby-Wallach).
-        pub fn verify_with_tampered_node_at(
-            &self,
-            _seq: u64,
-        ) -> Result<(), AuditChainError> {
-            unimplemented!("W6 stub — content-hash-on-read linkage check")
-        }
-    }
-}
-
-use mset_w6_audit_chain_stub::{AdminOp, AuditChain, AuditChainError};
+use benten_membership_set::audit::{AdminOp, AuditChain, AuditChainError};
 
 fn fixed_cid(byte: u8) -> [u8; 32] {
     [byte; 32]
@@ -121,7 +53,6 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 ///
 /// would-FAIL if W6 lets the sequence stall, go backwards, or skip.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-2 — audit chain advances monotonically per admin WRITE; un-ignore at W6 R5 (delete mset_w6_audit_chain_stub; insert real `use`)"]
 fn audit_chain_advances_monotonically_per_admin_write() {
     let mut chain = AuditChain::new(&fixed_cid(0x51));
     let actor = fixed_cid(0xA0);
@@ -150,7 +81,6 @@ fn audit_chain_advances_monotonically_per_admin_write() {
 /// does NOT emit a phantom event (Inv-13 re-asked at the membership-audit
 /// layer). Negative control for the monotonic assertion.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-2 — dedup replay does not advance sequence / emit phantom event (Inv-13); un-ignore at W6 R5"]
 fn dedup_replay_does_not_advance_sequence_or_emit_phantom_event() {
     let mut chain = AuditChain::new(&fixed_cid(0x51));
     let actor = fixed_cid(0xA0);
@@ -180,7 +110,6 @@ fn dedup_replay_does_not_advance_sequence_or_emit_phantom_event() {
 /// would-FAIL if W6 stores audit events in a mutable structure where a
 /// mid-chain edit goes undetected.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-2 — mid-chain tamper breaks CID linkage on read (Crosby-Wallach); un-ignore at W6 R5"]
 fn mid_chain_tamper_breaks_cid_linkage_on_read() {
     let mut chain = AuditChain::new(&fixed_cid(0x51));
     let actor = fixed_cid(0xA0);

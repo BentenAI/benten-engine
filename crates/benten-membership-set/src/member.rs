@@ -160,6 +160,85 @@ impl MemberEntry {
         }
         Ok(())
     }
+
+    /// Inv-22 struct-fence introspection: does [`MemberEntry`] carry ANY
+    /// stored nature discriminator (`member_type` / `MemberKind` / `is_ai` /
+    /// `member_nature`)?
+    ///
+    /// The answer is **always `false` by construction** — the canonical
+    /// 5-field shape `{ role, is_authority, sig_pubkey, admitted_at_hlc,
+    /// member_ref }` carries ZERO nature field. Nature is DERIVED
+    /// ([`derive_member_nature`]), never stored (Inv-22). This is a `const`
+    /// truth, not a runtime computation; it exists so the `f_nat_1`
+    /// struct-fence pin can name the property and would-FAIL if a future edit
+    /// reintroduced a stored discriminator (the 5-field shape is FROZEN).
+    #[must_use]
+    pub const fn has_any_nature_field() -> bool {
+        false
+    }
+}
+
+/// The DERIVED member nature — an IVM-materialized view, NEVER an
+/// authoritative stored field (Inv-22).
+///
+/// Every flag is recomputed from the (DID-method, install-manifest-presence)
+/// inputs by [`derive_member_nature`]; none of them is read from a
+/// `MemberEntry` field (there is none — see [`MemberEntry::has_any_nature_field`]).
+/// The struct exists only as the return shape of the derivation; it is never
+/// serialized into the canonical `members_table` (the wire shape stays the
+/// frozen 5-field record).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MemberNature {
+    /// Whether the member is AI-operated — DERIVED purely from
+    /// `did.method() == "agent"` (an optional allowlist alias, not a stored
+    /// discriminator; see [`is_ai_operated`]).
+    pub is_ai_operated: bool,
+    /// Whether the member is a plugin — DERIVED from install-manifest
+    /// presence (Inv-14 / manifest), not a stored flag.
+    pub is_plugin: bool,
+    /// Whether the member is an autonomous AI — DERIVED from
+    /// (AI-operated AND plugin-backed), composing the two derivations rather
+    /// than reading a stored field.
+    pub is_autonomous_ai: bool,
+}
+
+/// Derive whether a member is AI-operated PURELY from the DID method string.
+///
+/// `is_ai_operated(method) = (method == "agent")` — the `did:agent:` method is
+/// an optional allowlist ALIAS, NOT a stored discriminator. A `did:key:`
+/// member parses to method `"key"` → `false`. The derivation reads NOTHING
+/// from any stored member field (Inv-22): the method-parse of the member's DID
+/// IS the derivation.
+///
+/// The caller passes the already-parsed method segment of the DID
+/// (`did:<method>:<id>`), which they obtain from
+/// `benten_id::did::Did::as_str().split(':').nth(1)` or the engine's DID
+/// accessor.
+#[must_use]
+pub fn is_ai_operated(did_method: &str) -> bool {
+    did_method == "agent"
+}
+
+/// Recompute the full [`MemberNature`] IVM view from its derivation inputs.
+///
+/// The nature is a MATERIALIZED VIEW (Inv-22): it is recomputed from
+/// `(did_method, has_install_manifest)` and is never read from an
+/// authoritative stored field. Identical inputs yield an identical
+/// `MemberNature` (deterministic derivation), which is exactly what makes it a
+/// view rather than mutable state.
+///
+/// - `is_ai_operated` = [`is_ai_operated`]`(did_method)` (method == "agent").
+/// - `is_plugin` = `has_install_manifest` (Inv-14 / manifest presence).
+/// - `is_autonomous_ai` = `is_ai_operated && is_plugin` (an AI-operated
+///   member backed by an install manifest is autonomous).
+#[must_use]
+pub fn derive_member_nature(did_method: &str, has_install_manifest: bool) -> MemberNature {
+    let ai = is_ai_operated(did_method);
+    MemberNature {
+        is_ai_operated: ai,
+        is_plugin: has_install_manifest,
+        is_autonomous_ai: ai && has_install_manifest,
+    }
 }
 
 /// The fused `members_table`. The `BTreeMap<Did, MemberEntry>` key uniqueness

@@ -42,93 +42,18 @@
 use std::path::Path;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::audit::{
-//         AuditAccessGradation, AuditReadDecision, parse_audit_scope,
-//     };
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::audit` surface.
+// The `audit:<set_id>:*` scope routes through the EXISTING
+// `benten_caps::RestrictedScope` arm (m-15 GNC-1) — `Scope` stays EXACTLY 2
+// arms (no 3rd top-level arm).
 // =====================================================================
-mod mset_w6_audit_gradation_stub {
-    //! Local stub matching the intended W6 audit-gradation surface.
-    //! Bodies `unimplemented!()`.
-
-    /// The audit read-access gradation. The first two variants are LIVE at
-    /// v1-beta; the latter four are RESERVED as UCAN-caveat / IVM
-    /// compositions (NOT codepoints, NOT a 3rd Scope arm).
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum AuditAccessGradation {
-        AdminOnly,
-        PublicAllMembers,
-        // RESERVED (UCAN-caveat / IVM compositions — NOT codepoints):
-        MemberOnly,
-        Threshold,
-        TimeLocked,
-        Anonymized,
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum AuditReadDecision {
-        Admit,
-        Deny,
-    }
-
-    /// The role of a principal requesting an audit read.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum RequesterRole {
-        Admin,
-        Member,
-        NonMember,
-    }
-
-    impl AuditAccessGradation {
-        /// W6 stub: decide whether a requester of the given role may read
-        /// the audit log under this gradation.
-        pub fn decide(&self, _requester: RequesterRole) -> AuditReadDecision {
-            unimplemented!(
-                "W6 stub — R5 replaces this module with \
-                 `use benten_membership_set::audit::*;`"
-            )
-        }
-
-        /// W6 stub: is this gradation expressed as a RESERVED
-        /// UCAN-caveat / IVM composition (vs a LIVE codepoint-free scope)?
-        pub fn is_reserved_caveat_composition(&self) -> bool {
-            unimplemented!("W6 stub — reserved variants are caveat/IVM, NOT codepoints")
-        }
-
-        /// W6 stub: this gradation MUST NOT be backed by any wire
-        /// codepoint. Real impl: there is NO `AuditAccessGradation`
-        /// codepoint in the §4.0 registry (F-FREEZE-1 confirms −4).
-        pub fn backing_codepoint(&self) -> Option<u16> {
-            unimplemented!("W6 stub — gradation is a RestrictedScope arm, NEVER a codepoint")
-        }
-    }
-
-    /// W6 stub: parse an `audit:<set_id>:*` scope string. Real impl routes
-    /// through the EXISTING `benten_caps::RestrictedScope` arm — it does
-    /// NOT add a 3rd top-level `Scope` arm. Returns whether the parse
-    /// added a new top-level `Scope` variant (real impl: `false`).
-    pub fn parse_audit_scope_added_new_top_level_scope_arm(_scope: &str) -> bool {
-        unimplemented!(
-            "W6 stub — `audit:<set_id>:*` parses through the existing \
-             RestrictedScope arm; `Scope` stays EXACTLY 2 arms"
-        )
-    }
-
-    /// W6 stub: does the parsed `audit:<set_id>:*` scope decidably
-    /// CONTAIN a concrete `audit:<set_id>:read:<event_cid>` request?
-    pub fn restricted_audit_scope_contains(_scope: &str, _concrete_request: &str) -> bool {
-        unimplemented!("W6 stub — RestrictedScope decidable-contains over audit:<set_id>:*")
-    }
-}
-
-use mset_w6_audit_gradation_stub::{
+use benten_membership_set::audit::{
     AuditAccessGradation, AuditReadDecision, RequesterRole,
     parse_audit_scope_added_new_top_level_scope_arm, restricted_audit_scope_contains,
 };
 
 /// F-AUDIT-3 (a): `AdminOnly` denies a non-Admin member's audit read.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-3 — AdminOnly gradation denies non-Admin audit read; un-ignore at W6 R5 (delete mset_w6_audit_gradation_stub; insert real `use`)"]
 fn admin_only_gradation_denies_non_admin_audit_read() {
     let grad = AuditAccessGradation::AdminOnly;
     assert_eq!(
@@ -146,7 +71,6 @@ fn admin_only_gradation_denies_non_admin_audit_read() {
 /// F-AUDIT-3 (b): `PublicAllMembers` admits any member's audit read but
 /// still denies a non-member.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-3 — PublicAllMembers admits member, denies non-member; un-ignore at W6 R5"]
 fn public_all_members_gradation_admits_member_denies_non_member() {
     let grad = AuditAccessGradation::PublicAllMembers;
     assert_eq!(
@@ -166,7 +90,6 @@ fn public_all_members_gradation_admits_member_denies_non_member() {
 /// `RestrictedScope` arm WITHOUT adding a 3rd top-level `Scope` variant,
 /// and is decidably-CONTAINS over concrete requests.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-3 — audit scope parses via existing RestrictedScope arm (no 3rd Scope arm); un-ignore at W6 R5"]
 fn audit_scope_parses_via_existing_restricted_scope_arm_no_new_top_level_arm() {
     let scope = "audit:set-0x51:*";
     assert!(
@@ -193,7 +116,6 @@ fn audit_scope_parses_via_existing_restricted_scope_arm_no_new_top_level_arm() {
 /// resolve to UCAN-caveat / IVM compositions (no-audit-gradation-codepoint
 /// grep-defense: the gradation is a scope, never a codepoint).
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-3 — no AuditAccessGradation variant is a codepoint (reserved 4 are caveat/IVM); un-ignore at W6 R5"]
 fn no_gradation_variant_is_backed_by_a_wire_codepoint() {
     let all = [
         AuditAccessGradation::AdminOnly,

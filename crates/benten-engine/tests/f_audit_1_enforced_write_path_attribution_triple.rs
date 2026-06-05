@@ -59,70 +59,9 @@
 use benten_engine::Engine;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::audit::{
-//         AdminOp, AuditEmitResult, emit_audit_event_via_engine,
-//         emit_audit_event_via_bare_put,
-//     };
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::audit` surface.
 // =====================================================================
-mod mset_w6_audit_stub {
-    //! Local stub matching the intended W6 `benten_membership_set::audit`
-    //! public surface. Every method `unimplemented!()`s so any forgotten
-    //! `#[ignore]` / stub-left-in-place fails LOUD (not silent-green).
-
-    /// The administrative operation an audit Version Node records. W6 real
-    /// shape lives in `benten_membership_set::audit::AdminOp`.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum AdminOp {
-        AdmitMember,
-        KickMember,
-        RotateKey,
-        PromoteRole,
-        GovernanceChange,
-    }
-
-    /// The attribution triple as observed on the emitted audit Version
-    /// Node. `None` for any field the ingest path did not know — a bare
-    /// `put_node` leaves ALL three `None`. The enforced engine WRITE
-    /// populates all three.
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct AuditEmitResult {
-        pub actor_cid: Option<[u8; 32]>,
-        pub handler_cid: Option<[u8; 32]>,
-        pub capability_grant_cid: Option<[u8; 32]>,
-        /// Whether the audit version-chain advanced (CURRENT moved).
-        pub chain_advanced: bool,
-    }
-
-    /// W6 stub: emit an audit event through the `is_actor_active`-gated
-    /// engine WRITE path. Real impl routes through
-    /// `Engine`-enforced WRITE so the triple is SET.
-    pub fn emit_audit_event_via_engine(
-        _set_id: &[u8; 32],
-        _actor: &[u8; 32],
-        _grant_cid: &[u8; 32],
-        _op: AdminOp,
-    ) -> AuditEmitResult {
-        unimplemented!(
-            "W6 stub — R5 replaces this module with `use benten_membership_set::audit::*;`; \
-             real impl routes the admin op through the `is_actor_active`-gated enforced \
-             engine WRITE so (actor_cid, handler_cid, capability_grant_cid) is SET"
-        )
-    }
-
-    /// W6 stub: the ANTI-pattern — emitting via a bare backend `put_node`.
-    /// Real impl demonstrates the triple is left `None` and the chain does
-    /// NOT advance — this path is NOT the audit path (store.rs:468).
-    pub fn emit_audit_event_via_bare_put(
-        _set_id: &[u8; 32],
-        _actor: &[u8; 32],
-        _op: AdminOp,
-    ) -> AuditEmitResult {
-        unimplemented!("W6 stub — bare `put_node` leaves the attribution triple unset")
-    }
-}
-
-use mset_w6_audit_stub::{
+use benten_membership_set::audit::{
     AdminOp, AuditEmitResult, emit_audit_event_via_bare_put, emit_audit_event_via_engine,
 };
 
@@ -137,7 +76,6 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 /// would-FAIL if W6 emits audit Nodes via a bare `put_node` (triple stays
 /// `None`) — the tamper-evidence-is-not-free property.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-1 — audit-event via enforced engine WRITE sets the attribution triple; un-ignore at W6 R5 (delete mset_w6_audit_stub; insert real `use benten_membership_set::audit::*;`)"]
 fn enforced_write_path_populates_full_attribution_triple() {
     let set_id = fixed_cid(0x51);
     let actor = fixed_cid(0xA0);
@@ -177,7 +115,6 @@ fn enforced_write_path_populates_full_attribution_triple() {
 /// This is the negative control proving the enforced path is load-bearing
 /// (without it the positive assertion is trivially satisfiable).
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-1 — bare put_node leaves attribution triple None (NOT the audit path); un-ignore at W6 R5"]
 fn bare_put_node_leaves_attribution_triple_unset_and_chain_not_advanced() {
     let set_id = fixed_cid(0x51);
     let actor = fixed_cid(0xA0);

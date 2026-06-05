@@ -1825,6 +1825,14 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Thrown at:** `crates/benten-membership-set/src/verify.rs::verify_stanza` — returns `RoleStaleError { code: "E_ROLE_STALE_AT_VERIFY" }` when `stanza.sealed_role_assignments_generation < current_generation`.
 - **Phase:** 4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet primitive; F-MS-8 / BC-5 / F4-031; CATALOG_VARIANT_COUNT 197 → 198). Routes to `ON_ERROR`.
 
+### E_KV_TARGET_NOT_IMMUTABLE
+
+- **Message:** "K(V) derivation target is not an immutable Version-Node-CID (Inv-19)"
+- **Context:** `{ target_kind: "MutableAnchor" }`
+- **Fix:** A K(V) (membership version-node key) derivation was requested against a MUTABLE Anchor CID. Inv-19 forbids binding key material to a `benten_core::version::Anchor` CID: the Anchor's CURRENT pointer moves across an `append_version`, so a key bound to an Anchor would silently re-target as the chain advances. Derive K(V) against an immutable Version-Node-CID (or a MembershipSet identity) instead.
+- **Thrown at:** `crates/benten-membership-set/src/keying_kv.rs::derive_kv` — returns `KvError::TargetNotImmutable` when the `CidTarget` is `MutableAnchor`.
+- **Phase:** 4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2; F-INV19-1 / Inv-19; CATALOG_VARIANT_COUNT 198 → 199). Routes to `ON_ERROR`.
+
 <!-- reachability: ignore -->
 
 ## Extending the catalog
