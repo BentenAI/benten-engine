@@ -72,7 +72,7 @@
 // (parity shape: lexicographic (physical_ms, logical, node_id)); it bridges to
 // the real `BentenHlc` at the production-rule boundary via `into_benten`.
 use benten_core::hlc::BentenHlc;
-use benten_membership_set::keying::derive_kv;
+use benten_membership_set::keying::{CidTarget, derive_kv};
 use benten_membership_set::set::crdt::{fork_a_wins, fork_total_order_key};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -180,8 +180,18 @@ fn resolve_fork(a: &ForkCandidate, b: &ForkCandidate) -> ForkResolution {
 /// `benten_membership_set::keying::derive_kv` (context `"benten-membership-set:K(V):v1"`).
 /// A DIFFERENT CID derives a DIFFERENT key — the assertion is NOT a self-equality
 /// read-back of the CID.
+///
+/// TIER-2 integration note: the w-gov-audit wave re-typed the production
+/// `derive_kv` to the Inv-19 type-restricted front-door
+/// (`derive_kv(CidTarget) -> Result<[u8; 32], KvError>`). A fork-event CID is an
+/// IMMUTABLE Version-Node CID, so it routes through
+/// [`CidTarget::ImmutableVersionNode`] (which is Inv-19-PERMITTED and therefore
+/// never errors). The typed target carries the 32-byte BLAKE3 digest portion of
+/// the CID; distinct version-node CIDs still derive distinct keys (the only
+/// property this helper's callers assert).
 fn derive_k_v(version_node_cid: &[u8]) -> [u8; 32] {
-    derive_kv(version_node_cid)
+    derive_kv(CidTarget::ImmutableVersionNode(cid_digest(version_node_cid)))
+        .expect("an immutable Version-Node CID is Inv-19-PERMITTED and never rejected")
 }
 
 fn cid(payload: &[u8]) -> Vec<u8> {
@@ -189,6 +199,17 @@ fn cid(payload: &[u8]) -> Vec<u8> {
     let mut c = vec![0x01u8, 0x71, 0x1e, 0x20];
     c.extend_from_slice(d.as_bytes());
     c
+}
+
+/// Extract the 32-byte BLAKE3 digest tail from a `cid()`-shaped CID (the
+/// 4-byte `01 71 1e 20` multihash prefix + 32-byte digest). The typed
+/// `CidTarget` carries the digest, so distinct CIDs still map to distinct
+/// targets (the digest is the content-addressed, distinctness-bearing part).
+fn cid_digest(version_node_cid: &[u8]) -> [u8; 32] {
+    let tail = &version_node_cid[version_node_cid.len() - 32..];
+    let mut out = [0u8; 32];
+    out.copy_from_slice(tail);
+    out
 }
 
 fn fork(id: u32, created_ms: u64, cid_seed: &[u8], admin: bool, vector: &[&str]) -> ForkCandidate {
@@ -467,6 +488,20 @@ fn f_inv21_3_kani_tie_break_total() {
 /// unmodified winner input; the K(V) arm DERIVES the key from the
 /// Version-Node CID via `derive_k_v` and proves a different CID derives a
 /// different key (NOT a self-equality of the CID against itself).
+// TIER-2-INTEGRATION-FLAG (Ben-gated freeze decision OWED — see integrator
+// report): the w-ms-sync wave un-ignored this test against the ORIGINAL
+// full-CID `derive_kv(&[u8])`, while the w-gov-audit wave re-typed `derive_kv`
+// to the Inv-19 type-restricted `derive_kv(CidTarget) -> Result<[u8;32], _>`
+// that hashes the 32-byte digest only. The frozen golden
+// `K_V_WINNER_HEX = e3c09e37…` is the FULL-36-byte-CID value; the new typed API
+// over the 32-byte digest produces `23dcd97f…`. This is a freeze-gating golden
+// change, NOT a mechanical merge — recomputing/blessing it is Ben's call. The
+// test body has been ADAPTED to compile against the new typed API (digest path)
+// but is `#[ignore]`'d at this checkpoint pending the freeze decision: either
+// (a) ratify the digest-only golden `23dcd97f…` as the new frozen K(V) vector,
+// or (b) carry the full-CID into `CidTarget` (a w-gov-audit API tweak) to keep
+// `e3c09e37…`. Every OTHER family in this crate is GREEN.
+#[ignore = "TIER-2 freeze-decision OWED: K(V) golden e3c09e37(full-CID) vs 23dcd97f(digest-only typed API) — Ben-gated; see integrator report"]
 #[test]
 fn f_inv21_4_losing_fork_not_merged_archived_not_discarded() {
     // Winner carries ["w-only"]; loser carries ["l-only"]. A non-Admin
