@@ -203,7 +203,10 @@ pub fn serialize_vault(payload: &VaultPayload, dak: &[u8; 32]) -> Result<Vec<u8>
     let ct = cipher
         .encrypt(
             nonce,
-            chacha20poly1305::aead::Payload { msg: &pt, aad: &aad },
+            chacha20poly1305::aead::Payload {
+                msg: &pt,
+                aad: &aad,
+            },
         )
         .map_err(|_| VaultError::AeadFailed)?;
 
@@ -258,7 +261,10 @@ pub fn decode_vault(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultE
     let nonce = XNonce::from_slice(nonce_bytes);
     let aad = vault_aad();
     let pt = cipher
-        .decrypt(nonce, chacha20poly1305::aead::Payload { msg: ct, aad: &aad })
+        .decrypt(
+            nonce,
+            chacha20poly1305::aead::Payload { msg: ct, aad: &aad },
+        )
         .map_err(|_| VaultError::AeadFailed)?;
     let payload = VaultPayload::from_canonical_cbor(&pt)?;
     Ok(DecodedVault {
@@ -431,7 +437,9 @@ pub enum VaultError {
     WrongPassword,
 
     /// A vault tagged `SymmetricAeadXNonce` carried a non-24-byte nonce.
-    #[error("vault nonce width mismatch (XNonce codepoint requires a 24-byte nonce; U2 strict-decode)")]
+    #[error(
+        "vault nonce width mismatch (XNonce codepoint requires a 24-byte nonce; U2 strict-decode)"
+    )]
     NonceWidthMismatch,
 
     /// The vault codepoint is unknown.

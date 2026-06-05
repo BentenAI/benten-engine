@@ -67,7 +67,10 @@ mod tests {
 
     #[test]
     fn gossip_ships() {
-        assert_eq!(TransportConfig::GossipPlusBlobs.select(), Ok("gossip+blobs"));
+        assert_eq!(
+            TransportConfig::GossipPlusBlobs.select(),
+            Ok("gossip+blobs")
+        );
         assert!(TransportConfig::GossipPlusBlobs.ships_at_v1_beta());
     }
 

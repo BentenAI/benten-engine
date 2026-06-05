@@ -106,8 +106,6 @@ fn f_disc_2_parser_enumerates_invariants_from_doc_baseline() {
 /// doc so an extra new invariant is auto-detected by PIN 0's parser.
 /// Would-FAIL if any of Inv-16..22 is claimed-but-unregistered.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 — INVARIANT-COVERAGE.md registers \
-            Inv-16..22 (7 new invariants); un-ignore at R5"]
 fn f_disc_2_registers_inv_16_through_22() {
     let doc = invariant_coverage_md();
     let invs = registered_invariants(&doc);
@@ -125,8 +123,6 @@ fn f_disc_2_registers_inv_16_through_22() {
 /// equal the highest registered invariant (22). Would-FAIL if the header
 /// drifts from the body (a classic registry-drift) or Inv-15 is duplicated.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 (M-15) — invariant header count == end-state \
-            (22) AND Inv-15 not re-registered/duplicated; un-ignore at R5"]
 fn f_disc_2_header_count_correct_and_inv15_not_re_registered() {
     let doc = invariant_coverage_md();
     let invs = registered_invariants(&doc);
@@ -171,9 +167,6 @@ fn f_disc_2_header_count_correct_and_inv15_not_re_registered() {
 /// `future/compute-marketplace.md`. Doc-coupling existence. Would-FAIL if
 /// the doc-wave gate is claimed-complete with a doc missing.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 — 4 new docs exist (CRYPTO-CODEPOINTS, \
-            THREAT-MODEL, SECURITY-PROOFS, compute-marketplace); \
-            un-ignore at R5"]
 fn f_disc_2_four_new_docs_exist() {
     let docs = repo_root().join("docs");
     let required = [
@@ -200,8 +193,6 @@ fn f_disc_2_four_new_docs_exist() {
 /// owned HERE as the registration-catch-net. Would-FAIL if the deferrals
 /// are claimed but the doc rows are absent.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 — V1-FROZEN-INTERFACE-DEFERRED.md has \
-            D-28 + D-29 (baseline max D-27); un-ignore at R5"]
 fn f_disc_2_v1_frozen_has_d28_d29() {
     let doc = std::fs::read_to_string(repo_root().join("docs/V1-FROZEN-INTERFACE-DEFERRED.md"))
         .expect("V1-FROZEN-INTERFACE-DEFERRED.md must be present");
@@ -217,8 +208,6 @@ fn f_disc_2_v1_frozen_has_d28_d29() {
 /// the naming/roster is claimed but absent (the EP-1 §6.3 conformance
 /// gate).
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 — EP-1 roster + 'Rust engine plugin' \
-            naming landed in arch docs; un-ignore at R5"]
 fn f_disc_2_ep1_roster_and_rust_engine_plugin_naming_landed() {
     let docs = repo_root().join("docs");
     // Search the arch-facing docs for the EP-1 roster + naming.
@@ -248,9 +237,6 @@ fn f_disc_2_ep1_roster_and_rust_engine_plugin_naming_landed() {
 /// Doc-coupling. Would-FAIL if the supersession is applied in code but the
 /// rationale is undocumented (a silent codepoint reassignment).
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 (§0.4) — CRYPTO-CODEPOINTS.md records the \
-            MLS-bracket supersession (0x6380/0x6390 → MLS; \
-            MembershipSetEncryption = 0x6600); un-ignore at R5"]
 fn f_disc_2_section_0_4_supersession_recorded() {
     let codepoints =
         std::fs::read_to_string(repo_root().join("docs/CRYPTO-CODEPOINTS.md")).unwrap_or_default();
@@ -308,11 +294,6 @@ fn f_disc_2_section_0_4_supersession_recorded() {
 /// would-FAIL if R5 registered the value against the wrong symbol or only
 /// named it in prose.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-2 (R4.6/§4.0) — CRYPTO-CODEPOINTS.md \
-            registers the group-band codepoints corrected this round, \
-            each bound to its symbol on one row: 0x6610 ↔ \
-            MEMBERSHIP_SET_GROUP_MULTI_STANZA + 0x6520 ↔ \
-            LAYER_C_DROP_MULTI_RECIPIENT; un-ignore at R5"]
 fn f_disc_2_records_r46_group_codepoints_0x6610_0x6520() {
     let codepoints =
         std::fs::read_to_string(repo_root().join("docs/CRYPTO-CODEPOINTS.md")).unwrap_or_default();

@@ -1,5 +1,39 @@
 # Security Posture — Benten Engine (Phase 4-Foundation close)
 
+## Compromise disposition-class index (canonical first-occurrence registry)
+
+> This index is the **canonical first occurrence** of every `Compromise #N` token in this document and binds each
+> to its `disposition_class` per the F-full posture taxonomy (`F-DISC-1` disclosure-coherence catch-net). The five
+> classes: **`ATO`** = Accepted-Trade-Off · **`SGD`** = Substrate-Guarantee-Disclosure · **`CHD`** =
+> Composition-Hazard-Honest-Disclosure · **`OOS`** = Out-Of-Scope · **`MIT`** = Mitigated-Open. The full narrative
+> for each lives in its `### Compromise #N` detail section below (the summary tables + cross-references that follow
+> ride this index). #30–#64 dispositions are R0.7 §5.2; #1–#29 reflect the Phase-1→4-Foundation closure state.
+
+| Compromise # | class | Compromise # | class | Compromise # | class |
+|---|---|---|---|---|---|
+| Compromise #1 | `MIT` | Compromise #2 | `MIT` | Compromise #3 | `MIT` |
+| Compromise #4 | `MIT` | Compromise #5 | `ATO` | Compromise #6 | `ATO` |
+| Compromise #7 | `MIT` | Compromise #8 | `MIT` | Compromise #9 | `MIT` |
+| Compromise #10 | `MIT` | Compromise #11 | `MIT` | Compromise #12 | `MIT` |
+| Compromise #13 | `ATO` | Compromise #14 | `ATO` | Compromise #15 | `ATO` |
+| Compromise #16 | `MIT` | Compromise #17 | `MIT` | Compromise #18 | `MIT` |
+| Compromise #19 | `MIT` | Compromise #20 | `MIT` | Compromise #21 | `MIT` |
+| Compromise #22 | `SGD` | Compromise #23 | `MIT` | Compromise #24 | `MIT` |
+| Compromise #25 | `MIT` | Compromise #26 | `MIT` | Compromise #27 | `OOS` |
+| Compromise #28 | `OOS` | Compromise #29 | `SGD` | Compromise #30 | `MIT` (unaudited PQ / v1-GM audit) |
+| Compromise #31 | `MIT` (LAMPS Composite ML-DSA EUF-CMA-only) | Compromise #32 | `MIT` | Compromise #33 | `OOS` |
+| Compromise #34 | `ATO` | Compromise #35 | `ATO` | Compromise #36 | `OOS` |
+| Compromise #37 | `SGD` | Compromise #38 | `OOS` | Compromise #39 | `SGD` |
+| Compromise #40 | `SGD` | Compromise #41 | `ATO` | Compromise #42 | `ATO` |
+| Compromise #43 | `ATO` | Compromise #44 | `OOS` | Compromise #45 | `ATO` |
+| Compromise #46 | `ATO` | Compromise #47 | `ATO` | Compromise #48 | `ATO` |
+| Compromise #49 | `ATO` | Compromise #50 | `SGD` | Compromise #51 | `ATO` |
+| Compromise #52 | `ATO` | Compromise #53 | `ATO` (TransportConfig reserve; gossip ships, Willow/iroh-roq/iroh-live reserved) | Compromise #54 | `ATO` |
+| Compromise #55 | `SGD` | Compromise #56 | `SGD` | Compromise #57 | `SGD` |
+| Compromise #58 | `CHD` | Compromise #59 | `SGD` | Compromise #60 | `SGD` |
+| Compromise #61 | `CHD` | Compromise #62 | `SGD` (revocation-reach; Drops forever-valid) | Compromise #63 | `ATO` |
+| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | | | | |
+
 This document records the security claims Benten makes through Phase
 4-Foundation close and the known compromises those claims rest on. This
 document is the written, referenceable form. The Phase-3-close table
@@ -121,7 +155,7 @@ table narrative.
 | 61 | MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic) | 4-Meta-Core | **COMPOSITION-HAZARD HONEST DISCLOSURE; CLOSED.** The iroh-gossip topic would have leaked a membership-set fingerprint; CLOSED by P2 D6 HMAC-blinded (`blake3::keyed_hash`) gossip topic — set-identifying material is never published in the clear. MembershipSet panel (M-C3). |
 | 62 | Revocation reach in encryption-at-rest (already-derived keys remain decryptable; Drop bundles forever-valid once distributed) | 4-Meta-Core | **RE-POINTED from the in-tree #31 occupant (BR-2). OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN `nbf`/`exp` + key rotation.** Per RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i): UCAN revocation cuts FUTURE serves (the per-request `CapabilityPolicy::check_read` consultation fails for subsequent requests against the granted CID), but already-derived keys remain decryptable forever. Once Bob has derived `K(N)` for some Node, Bob can decrypt any ciphertext he obtains for that Node, regardless of subsequent UCAN revocation. Re-keying the Node requires Alice to re-encrypt + re-issue (a heavy operation; per-Node + per-recipient cost scales). Drop bundles are forever-valid once distributed — the producer has no callback to revoke an already-distributed Drop. **Mitigation:** tight UCAN `nbf`/`exp` windows + key rotation discipline + the typed `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate. **Stays OPEN at v1-beta + v1-GM** — this is an inherent property of encryption-at-rest where the reader holds plaintext key material; closing it would require structural changes (e.g. forward-secret re-keying on every revocation; MLS-style per-message keys) that are out of scope for v1. Authored at G-CORE-9 V1-FROZEN-INTERFACE row 8e per Ben morning queue item; tracking via the V1-FROZEN-INTERFACE.md item 15(i) FREEZE-WAVE FIX-NOW. Cross-linked #57. |
 | 63 | Sealed-Sender abuse-control trade-off (no plaintext sender ⇒ abuse-control rides recipient-issued delivery tokens) | 4-Meta-Core | **NEW (BR-1; §3.11).** The DEFAULT Sealed-Sender path (`0x6510`) carries no plaintext sender identity, so abuse/spam control cannot use per-sender filtering; it rides recipient-issued short-lived rate-limited UCAN-backed delivery tokens (refused at the receive boundary BEFORE decrypt). Residual: a recipient who over-issues tokens re-admits spam (mitigated by default-conservative token rate-limits + per-token `nbf`/`exp` + revocation). See body section. |
-| 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade).** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the cache entry propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection (no same-device replay), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
+| 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade). `SGD` substrate-guarantee disclosure.** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the cache entry propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection (no same-device replay), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. See `docs/future/refinement-audit-2026-05.md §15` for the v1-platform-shippable BLOCKER cluster framing.
 
@@ -2541,9 +2575,11 @@ re-scoped to this abuse surface); R0.7 §3.11.
 
 ### Compromise #64 — Cross-device best-effort-eventual nonce-rejection window (NQ-T4)
 
-**Status.** OPEN; ACCEPTED TRADE-OFF (`ATO`). **Source.** NEW — minted this cascade per NQ-T4 (R0.7 §10.5,
-Ben-ratified 2026-06-02). **Class.** Eventual-consistency window in replay-defense, scoped to the user's own
-device mesh.
+**Status.** OPEN; SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** NEW — minted this cascade per NQ-T4
+(R0.7 §10.5, Ben-ratified 2026-06-02). **Class.** Eventual-consistency window in replay-defense, scoped to the
+user's own device mesh — `SGD` (same honest-architectural-disclosure class as its sibling #62 revocation-reach
++ #57: the substrate GUARANTEES per-device-durable rejection and DISCLOSES that user-global rejection is
+best-effort-eventual-via-sync, not synchronous; R0.7 §5.2 dispositions #64 as `SGD`).
 
 The `jti`-keyed nonce-cache (the replay-defense substrate that re-uses the Compromise #25 durable-CAS-marker
 pattern) has two consistency tiers:
@@ -2577,9 +2613,294 @@ substrate it re-uses); NQ-T2 (`valid_until` strict-enforcement); Compromise #60 
 > **Compromise #62 detail (revocation reach)** lives at the renumbered in-tree section
 > "Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)" below +
 > the "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" section — verbatim-preserved
-> from the in-tree #31 body, renumbered per BR-2 (this is a renumber, not a rewrite). The #33–#61
-> honest-disclosure rows ride their summary-row body (no separate detail section, matching how the in-tree
-> doc handles e.g. #13/#14 disclosure rows).
+> from the in-tree #31 body, renumbered per BR-2 (this is a renumber, not a rewrite).
+
+The honest-disclosure rows **#33–#52, #54–#58, and #61** each carry a stand-alone detail section below (the
+F-full doc-wave authored them from R0.7 §5.2 so the `F-DISC-1` disclosure-coherence catch-net resolves the
+literal `Compromise #N` token + the word-boundary `disposition_class` abbreviation per row). Every section names
+its class as one of the five F-full taxonomy tokens — `ATO` (Accepted-Trade-Off), `SGD`
+(Substrate-Guarantee-Disclosure), `CHD` (Composition-Hazard-Honest-Disclosure), `OOS` (Out-Of-Scope), `MIT`
+(Mitigated-Open) — matching the summary-table disposition. Scoped-gap rows (`OOS`/`SGD`) are disclosed honestly,
+never over-claimed as fully closed.
+
+### Compromise #33 — Coercion / wrench attack OUT-OF-SCOPE (+ Layer-D approval-coercion)
+
+**Status.** OUT-OF-SCOPE (disclosed) (`OOS`). **Source.** 9-eyes; m-5 disclosure-scope extension (R0.7 §5.2).
+
+Password / physical-coercion ("wrench") attacks are outside the cryptographic threat model: no cryptosystem
+defends a principal who is compelled to unlock. **m-5 extension (Layer-D approval-coercion):** a coerced
+approving-device (forced to answer a `RemoteUnlock` / `SignUcanDelegation` prompt) makes a coerced grant look
+legitimate forever via the audit-Node — distinct from the #34 password-coercion axis. This is disclosed, not
+mitigated; the residual is inherent to any human-in-the-loop authority. **Cross-ref:** Compromise #34
+(password-knowledge); R0.7 §5.2 (m-5).
+
+### Compromise #34 — Password-knowledge implies full access (Argon2id defense-in-depth)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** 9-eyes (R0.7 §5.2).
+
+Whoever knows the principal password derives the DAK (Device-Authentication-Key) and therefore the vault. Argon2id
+(RFC 9106; OWASP params `m_cost=19456, t_cost=2, p_cost=1`) raises the **offline-guess** cost substantially but
+does not change the underlying knowledge-implies-access property: a known password is full access by design. This
+is the accepted trade-off of password-derived key material; the mitigation is cost-hardening, not a different
+trust model. **Cross-ref:** Compromise #33 (coercion); R0.7 §2.2 / §3.4 (DAK substrate).
+
+### Compromise #35 — Compromised-device retroactive decryption (no past-content FS at v1-beta)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** 9-eyes (R0.7 §5.2).
+
+A device whose long-term key is compromised can retro-decrypt content it already held — there is no past-content
+forward-secrecy at v1-beta (CGKA/MLS-PQ is deferred post-v1-beta, codepoint-bracket-reserved per U13). The
+attacker gains exactly what that device was entitled to, no more (the blast-radius is the per-device ladder in
+THREAT-MODEL.md, not the whole principal). Full PCS / past-content FS is the deferred CGKA work. **Cross-ref:**
+Compromise #42 (Layer-C FS-gap); Compromise #52 (no-PCS-against-removed-members); `THREAT-MODEL.md` (O-6
+blast-radius ladder).
+
+### Compromise #36 — RAM-residency / coredump / swap forensic-extraction OUT-OF-SCOPE
+
+**Status.** OUT-OF-SCOPE (disclosed) (`OOS`). **Source.** 9-eyes (R0.7 §5.2).
+
+Plaintext key material in process RAM extracted via coredump / swap / cold-boot forensics is outside the
+cryptographic threat model. `zeroize` (best-effort memory-wipe on drop) + `secrecy` (the O-1 Layer-A dep wrapping
+secret bytes to resist accidental logging / `Debug` leakage) are **best-effort hardening, not a guarantee** — a
+privileged local attacker who can read process memory or a swap-file is outside scope. Disclosed honestly so
+operators do not assume RAM-secrecy. **Cross-ref:** Compromise #39 (the `secrecy` dep disclosure); R0.7 §5.2.
+
+### Compromise #37 — No TEE / sealed-enclave attestation at v1-beta + v1-GM
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** 9-eyes (R0.7 §5.2).
+
+Benten makes **no** TEE / sealed-enclave / remote-attestation claim at v1-beta or v1-GM: key material rests in
+ordinary process memory protected only by OS process boundaries. There is no hardware root-of-trust, no
+SGX/TrustZone/Secure-Enclave sealing in the v1 substrate. This is disclosed as a substrate guarantee boundary
+(what the substrate does NOT provide), not over-claimed — a deployment requiring hardware attestation must layer
+it externally. **Cross-ref:** Compromise #36 (RAM-residency); R0.7 §5.2.
+
+### Compromise #38 — Physical-presence side-channels OUT-OF-SCOPE
+
+**Status.** OUT-OF-SCOPE (disclosed) (`OOS`). **Source.** 9-eyes (R0.7 §5.2).
+
+EM / power / acoustic / micro-architectural-timing side-channels that require physical presence (or co-resident
+hardware) are outside the threat model. The constant-time disciplines Benten DOES adopt (libcrux secret-independent
+ML-KEM per the `check-secret-independence` gate; constant-time AEAD) defend the **remote/network** adversary, not
+a physically-present attacker with measurement apparatus. Disclosed, not closed. **Cross-ref:** Compromise #32
+(Decap CT-mitigation, the in-scope timing axis); Compromise #51 (FFI marshaling side-channels); R0.7 §5.2.
+
+### Compromise #39 — Supply-chain dependency-pinning posture (PARTIAL)
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** 9-eyes; O-1 (R0.7 §5.2).
+
+Dependency pinning is **PARTIAL** at v1-beta: `cargo deny` + the RustSec advisory gate run in CI, and the HPKE /
+KEM crate choices are conservative — **Brendan McMillion `hpke`** (NOT Cryspen `hpke-rs`, which carried 13 CVEs
+Feb 2026) and **libcrux-ml-kem** (verified secret-independence). **O-1 disclosure:** `secrecy` is a NEW Layer-A
+dependency introduced this arc (wrapping secret bytes), disclosed here as a supply-chain surface. Full
+reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40). This row discloses the
+partial-pinning substrate honestly; it is not a closed guarantee. **Cross-ref:** Compromise #40
+(reproducible-builds); R0.7 §2.2 (tactical picks); §5.2 (O-1).
+
+> **Dependency-posture note (Layer-C HPKE):** the McMillion-`hpke`-not-Cryspen choice above is a
+> **dependency-pinning posture** recorded for the audit window. At v1-beta the Layer-C `0x647a` X-Wing KEM-DEM is
+> implemented over Benten's own vetted-primitive call site (`ml-kem` + `x25519-dalek` + `sha3` +
+> `chacha20poly1305`; see `docs/CRYPTO-CODEPOINTS.md` §"HPKE KEM-extensibility (NQ-C1)") — so the on-tree
+> dependency set reflects that. The McMillion-vs-Cryspen pin is the standing posture for the HPKE
+> key-schedule/AEAD surface, recorded so the choice does not drift.
+
+### Compromise #40 — Build-time / reproducible-builds + SLSA-3+ posture (post-v1-GM)
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** 9-eyes (R0.7 §5.2).
+
+Reproducible-builds + SLSA-3+ supply-chain provenance are **post-v1-GM** commitments, not v1-beta guarantees. At
+v1-beta there is no bit-reproducible build attestation and no signed provenance chain from source to artifact. This
+is disclosed as a substrate boundary (the guarantee does not yet exist), tracked toward post-v1-GM, and not
+over-claimed. **Cross-ref:** Compromise #39 (dependency-pinning, the v1-beta partial posture); R0.7 §5.2.
+
+### Compromise #41 — Cross-device-sync UX-vs-cryptographic boundary (+ revocation-propagation-lag)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** 9-eyes; O-4 (R0.7 §5.2).
+
+The cross-device sync UX surface (what the user perceives as "this is revoked / linked now") and the cryptographic
+boundary (what the bytes actually enforce) differ. **O-4 sub-clause (revocation-propagation-lag):** a revoked
+device can exercise a stale grant during a network partition — bounded by tight UCAN `exp`, but non-zero. This is
+the same eventual-consistency residual the #64 nonce-window names, here at the grant-revocation axis. Accepted at
+v1-beta; mitigated by the tight-`exp` default mandate (§3.4). **Cross-ref:** Compromise #64 (cross-device
+nonce-window); Compromise #60 (tight-`exp`); R0.7 §5.2 (O-4).
+
+### Compromise #42 — Layer-C forward-secrecy gap (HPKE-mode-base long-term sk)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** 9-eyes (U13) (R0.7 §3.3 / §5.2).
+
+HPKE-mode-base is structurally **non-forward-secret at the long-term-sk axis**: a recipient's long-term secret key
+decrypts every envelope ever sent to it, so a 2030 sk-compromise recovers 2026 envelopes. Partial FS is available
+via application-layer key rotation; full per-message / per-epoch FS is the CGKA/MLS-PQ work deferred post-v1-beta
+(codepoint-bracket-reserved `0x6380..0x63CF` per U13). The journalist per-message-FS threat is a **SEPARATE** design
+class (#56), kept sharply distinct so the audit does not read the two as duplicates. **Cross-ref:** Compromise #35
+(compromised-device retro-decrypt); Compromise #56 (journalist per-message FS); R0.7 §3.3.
+
+### Compromise #44 — Long-term-confidentiality posture (BSI TR-02102-1; acceptable-migration-window)
+
+**Status.** OUT-OF-SCOPE (disclosed) (`OOS`). **Source.** 9-eyes (R0.7 §5.2).
+
+The very-long-term (decades-horizon) confidentiality guarantee is outside the v1-beta posture. The X-Wing /
+MLKEM768-X25519 hybrid is disclosed as an **acceptable-migration-window** choice per BSI TR-02102-1 — adequate for
+the foreseeable migration horizon, not a decades-proof guarantee. Operators with multi-decade confidentiality
+requirements must plan for the additive PQ⊕PQ end-state (#30 / NF-1) as it matures. Disclosed, not closed.
+**Cross-ref:** Compromise #30 (unaudited-PQ / NF-1 end-state); R0.7 §5.2.
+
+### Compromise #45 — ML-KEM-768 MAL-BIND-K-CT / K-PK binding-properties
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel; M-6 (R0.7 §3.3 / §5.2).
+
+The ML-KEM-768 binding properties (MAL-BIND-K-CT / MAL-BIND-K-PK) connect to the M-6
+IND-CCA2-under-adversarially-chosen-recipient-seed audit line: the device-link / remote-permission flows DO admit a
+chosen-recipient-pubkey surface (a malicious device B supplying an adversarial pubkey). This is named as an
+**external-cryptographer-audit disclosure surface** (a §9.3 audit-deliverable line), NOT a unit-test "proof" — no
+formal-methods lens has confirmed tractability under that model at v1-beta. Accepted-and-disclosed pending the
+independent audit. **Cross-ref:** Compromise #59 (KEM-key-confirmation); Compromise #30 (audit-gated window);
+`SECURITY-PROOFS.md` (the AAD per-stanza binding); R0.7 §3.3 (M-6).
+
+### Compromise #46 — `HpkeMultiBase` O(N) wire-cost above 32 recipients
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+The multi-stanza `HpkeMultiBase` group send carries one HPKE stanza per recipient, so wire-cost grows **linearly**
+(O(N)) with recipient count. Per-Kind cardinality caps bound it: Atrium ≤32 / DeviceMesh ≤5 / SingleDevice =1. Above
+those caps the linear cost is the accepted trade-off of the per-recipient-stanza design (the alternative — a shared
+mutable group object — is the deferred CGKA class). Accepted at v1-beta. **Cross-ref:** Compromise #42 (FS-gap, same
+no-shared-mutable-object posture); R0.7 §3.3 (`HpkeMultiBase`).
+
+### Compromise #47 — Collaborative-edit-via-re-drop accepted v1-beta trade-off
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+Collaborative edits propagate via **re-drop** (re-encrypt-and-redistribute) rather than a shared mutable cipher
+object at v1-beta. This is simpler + composes with the content-addressed Drop substrate, at the cost of re-encrypt
+overhead on each edit. The shared-mutable-object alternative is the deferred CGKA design class. Accepted at v1-beta.
+**Cross-ref:** Compromise #46 (O(N) wire-cost); R0.7 §5.2.
+
+### Compromise #48 — MembershipSet-shape-leak (shared_key compromise fingerprints a generation)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+A `shared_key` compromise reveals that generation's membership-set **shape** (a fingerprint of who is in the set at
+that generation). Recovery is **fork-only** rotation (a new generation via FORK, per Inv-20 / Inv-21) — there is no
+in-place re-key that hides the prior-generation shape from a holder of the compromised key. Accepted at v1-beta;
+the blast-radius is one generation's shape, bounded by rotation discipline. **Cross-ref:** Compromise #52
+(no-PCS-against-removed-members / fork-on-kick); `THREAT-MODEL.md` (set shared_key blast-radius rung); R0.7 §5.2.
+
+### Compromise #49 — MembershipSet-member-acting-as-storage-host trust-boundary collapse
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+When a set-member is ALSO the storage host for the set's content, the member↔host trust boundary collapses: the host
+sees member-visible plaintext — but only content it was **already entitled to** as a member, so no new information
+crosses the boundary. The trade-off is that you cannot use a member as an untrusted-storage-host and expect
+host-blindness for that member's own entitlements. Accepted and disclosed. **Cross-ref:** Compromise #50
+(permanence-stewardship); R0.7 §5.2.
+
+### Compromise #50 — Permanence-stewardship dependency disclosure
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+Content permanence depends on **at-least-one-peer stewards the bytes** — Benten makes no centralized-durability
+guarantee (P2P-by-design). If every peer holding a content-addressed blob goes offline / garbage-collects it, the
+content is unrecoverable. This is disclosed as a substrate boundary: durability is a stewardship property of the
+peer mesh, not an engine guarantee. **Cross-ref:** Compromise #55 (GDPR-RTBF, the inverse no-central-delete
+property); Compromise #49 (member-as-host); R0.7 §5.2.
+
+### Compromise #51 — Tauri / NAPI-RS marshaling-boundary side-channels
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+The Tauri / NAPI-RS FFI marshaling boundary (key material crossing the JS↔Rust line) is a potential timing /
+side-channel surface: copies, allocations, and `Debug`-formatting at the boundary are not all constant-time. This
+is disclosed, not closed, at v1-beta — the deployment-shape choice (full peer vs embedded webview) determines whether
+this boundary is even exercised for key material. Accepted trade-off of the multi-language deployment surface.
+**Cross-ref:** Compromise #38 (physical side-channels); Compromise #36 (`secrecy`/`zeroize` best-effort); R0.7 §5.2.
+
+### Compromise #52 — MembershipSet-no-PCS-against-removed-members (fork-on-kick)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (M-C3 F-FE-5) (R0.7 §5.2).
+
+Removing a member does **NOT** provide post-compromise security against that member for content they already held:
+a removed member retains all prior-derived keys and can decrypt any ciphertext they already obtained. Recovery is
+**fork-on-kick** — re-key the set via a FORK (new generation) so future content uses a key the removed member never
+held. In-set role-downgrade is **subsumed** by the same property (a downgraded member retains prior-derived keys
+until the next fork). Accepted at v1-beta; the deferred CGKA class is what would provide true PCS. **Cross-ref:**
+Compromise #48 (shape-leak / fork rotation); Compromise #60 (role-transition does not invalidate prior UCANs);
+Compromise #35 (compromised-device retro-decrypt); R0.7 §5.2.
+
+### Compromise #54 — Continuous-rotation deferral (+ `AtriumWithRotatingGroupKey` revisit-trigger)
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (N3) (R0.7 §5.2).
+
+Continuous group-key rotation (CGKA-style automatic re-keying on every membership change) is **deferred** at v1-beta;
+the set re-keys on FORK, not continuously. The named **post-v1-beta revisit-trigger** is `AtriumWithRotatingGroupKey`
+— when continuous rotation is built, it lands additively at reserved codepoints with no wire-break. Accepted at
+v1-beta as the simpler fork-on-change model. **Cross-ref:** Compromise #52 (fork-on-kick); Compromise #42 (FS-gap);
+R0.7 §5.2 (N3).
+
+### Compromise #55 — GDPR-RTBF honest-architectural-disclosure (P2P-by-design)
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+Right-to-be-forgotten (GDPR Art. 17) is **architecturally constrained** by P2P-by-design: there is no central
+authority that can guarantee deletion of content already replicated across an arbitrary peer mesh. The apps-layer
+remedy is **crypto-shredding** — destroy the keys and leave the (now-undecryptable) ciphertext; this approximates
+erasure without a central delete. This is disclosed honestly as a substrate boundary, not over-claimed as compliant
+erasure. **Cross-ref:** Compromise #50 (permanence-stewardship, the durability inverse); R0.7 §5.2.
+
+### Compromise #56 — Journalist per-message forward-secrecy deferral (SEPARATE design class)
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet panel (MINT confirmed; R1-Q-8)
+(R0.7 §3.3 / §5.2).
+
+Per-message forward-secrecy (the journalist / high-risk-source threat class, where each message must be
+independently FS so a single key-compromise does not unravel a conversation) is a **SEPARATE design class** kept
+sharply distinct from #42 (HPKE long-term-sk non-FS) and #52 (fork-on-kick PCS) per the R1-Q-8 confirmed mint. It is
+**deferred post-v1-beta** (the CGKA/MLS-PQ bracket). Disclosed as its own row precisely so the audit does not fold it
+into #42/#52 and under-count the threat surface. **Cross-ref:** Compromise #42 (HPKE FS-gap); Compromise #52
+(fork-on-kick); R0.7 §3.3 (FS honest-disclosure).
+
+### Compromise #57 — RestrictedScopeSet / grant immutability honest-disclosure
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet panel (R0.7 §5.2).
+
+A `RestrictedScopeSet` grant is **immutable once issued**: narrowing or re-scoping requires re-issue (a new grant),
+not mutation of the existing one. This is a substrate-guarantee disclosure — it absorbs / cross-links the #62
+revocation-reach property (an issued grant's already-derived keys stay valid; revocation cuts future serves only).
+Disclosed so operators understand grant lifecycle is issue-and-replace, not edit-in-place. **Cross-ref:** Compromise
+#62 (revocation reach); Compromise #64 (the same SGD eventual-consistency disclosure class); R0.7 §5.2.
+
+### Compromise #58 — Audit-log insider-correlation (per-recipient-unlinkability is network-observer-only)
+
+**Status.** COMPOSITION-HAZARD HONEST DISCLOSURE (`CHD`). **Source.** MembershipSet panel (M-C2-B-3 + P5; m-7)
+(R0.7 §3.8 / §5.2).
+
+An admin (or any insider) holding the audit-log + the `members_table` **CAN correlate members** — the
+per-recipient-unlinkability property is **network-observer-only** (m-7), NOT admin-hidden. The Layer-C / `0x6610`
+group-AAD blinding (`audience_set_commitment` + `membership_set_id_commitment`) hides the roster from a **network
+observer / untrusted relay**, but a member-or-admin who holds `K_Set` + the member list recomputes the commitments
+and sees the correlation. This is a composition-hazard honest disclosure: the unlinkability claim is scoped, not
+absolute. The **threshold-admin opt-in** (no single admin sees the full audit-log) closes the insider vector for
+deployments that adopt it. This row is the load-bearing #58 the `THREAT-MODEL.md` network-observer-only scope
+cross-links — the boundary that keeps the unlinkability claim honest, not over-claimed. **Cross-ref:**
+`THREAT-MODEL.md` (network-observer-only unlinkability scoping); Compromise #43 (envelope-metadata leakage);
+Compromise #61 (gossip-topic blinding); R0.7 §3.8 (m-7).
+
+### Compromise #61 — MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic)
+
+**Status.** COMPOSITION-HAZARD HONEST DISCLOSURE (`CHD`); CLOSED. **Source.** MembershipSet panel (M-C3) (R0.7
+§3.9 / §5.2).
+
+A naive iroh-gossip topic derived from the raw membership-set id would have leaked a membership-set **fingerprint**
+to any gossip participant — a composition hazard between the transport (gossip topic) and the set-identity. **CLOSED**
+by the P2 D6 **HMAC-blinded gossip topic**: the topic is `blake3::keyed_hash(K_Set, set_id ‖ BE(generation))` (the
+unlabelled §3.9 construction), so set-identifying material is never published in the clear — only set-members holding
+`K_Set` can derive the topic. This is the SAME blinding construction the `0x6610` group-AAD
+`membership_set_id_commitment` uses (the labelled §3.10 / AAD construction), keeping the anti-fingerprint posture
+consistent across the gossip + AAD surfaces. Honest scope: identity-HIDING, not unlinkability (a static set's topic
+recurs; full per-send unlinkability = U25 v1-GM-reserve). **Cross-ref:** Compromise #58 (insider-correlation
+boundary); Compromise #43 (envelope-metadata); `CRYPTO-CODEPOINTS.md` (gossip-topic vs AAD-commitment distinction);
+R0.7 §3.9 (gossip topic) / §3.3 (`0x6610` AAD blinding).
 
 ## Per-Node AEAD wrap layer — rebinding-attack-prevention (G-CORE-3d / #1301)
 

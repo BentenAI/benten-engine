@@ -77,8 +77,7 @@ fn derive_kv_accepts_immutable_version_node_cid() {
          (the permitted, Inv-19-safe binding)",
     );
     assert_ne!(
-        key,
-        [0u8; 32],
+        key, [0u8; 32],
         "F-INV19-1: a derived K(V) MUST be non-trivial (not all-zero) — the \
          derivation actually ran"
     );
@@ -120,7 +119,10 @@ fn derive_kv_accepts_membership_set_target() {
         "F-INV19-1: derive_kv MUST accept a MembershipSet target (Inv-20 \
          clause-f — set-identity is Inv-21-stable)",
     );
-    assert_ne!(key, [0u8; 32], "F-INV19-1: MembershipSet K(V) must be non-trivial");
+    assert_ne!(
+        key, [0u8; 32],
+        "F-INV19-1: MembershipSet K(V) must be non-trivial"
+    );
 }
 
 /// F-INV19-1 (substrate): the real Anchor/Version-Node MUTABILITY

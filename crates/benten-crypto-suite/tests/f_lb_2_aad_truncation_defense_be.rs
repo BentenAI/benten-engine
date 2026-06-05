@@ -46,7 +46,6 @@
 
 #![allow(dead_code)]
 
-
 // R5: wired to the LIVE migrated `aead::{aad_per_chunk, aad_per_recipe}` (now
 // BE per M-19) + the real AAD-bound ChaCha20-Poly1305 seal/open.
 use benten_crypto_suite::aead::{
@@ -87,7 +86,8 @@ fn aead_open_with_aad(
     presented_aad: &[u8],
     _enforce: bool,
 ) -> Result<Vec<u8>, AeadOpenError> {
-    aead_unwrap(&sealed.envelope, &fixture_key(), presented_aad).map_err(|_| AeadOpenError::AadMismatch)
+    aead_unwrap(&sealed.envelope, &fixture_key(), presented_aad)
+        .map_err(|_| AeadOpenError::AadMismatch)
 }
 
 /// R5: the real AEAD open always binds the AAD (no knob).

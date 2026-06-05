@@ -148,9 +148,6 @@ fn f_freeze_1_scanner_is_live_and_economic_policy_absent_baseline() {
 /// the policy struct MUST NOT regrow the economic hook. Would-FAIL if a
 /// `MembershipSetPolicy` with an `economic_policy:` field appears.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — MembershipSetPolicy has no \
-            economic_policy field (ZERO economic freeze hook, O-8); \
-            un-ignore at R5"]
 fn f_freeze_1_membership_set_policy_no_economic_policy_field() {
     // End-state: the policy type EXISTS but the field does NOT.
     let policy_sites = rust_files_containing("MembershipSetPolicy");
@@ -175,9 +172,6 @@ fn f_freeze_1_membership_set_policy_no_economic_policy_field() {
 /// `MembershipEvent` wire enum is frozen. Would-FAIL if `MembershipEvent`
 /// reappears as a serialized wire enum with a codepoint.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — MembershipEvent is version-Node \
-            content NOT a frozen wire-enum (−1 in the −8 tally); \
-            un-ignore at R5"]
 fn f_freeze_1_membership_event_not_a_frozen_wire_enum() {
     // If `MembershipEvent` exists at R5 it must NOT be paired with a
     // wire-codepoint constant (the marker of a frozen wire enum).
@@ -202,8 +196,6 @@ fn f_freeze_1_membership_event_not_a_frozen_wire_enum() {
 /// compositions (per F-AUDIT-3). Would-FAIL if `AUDIT_ACCESS_*` codepoint
 /// constants are minted in the `0x6xxx` band.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — AuditAccessGradation variants are NOT \
-            codepoints (−4 in the −8 tally); un-ignore at R5"]
 fn f_freeze_1_audit_access_gradation_not_codepoints() {
     let sites = rust_files_containing("AuditAccessGradation");
     for site in &sites {
@@ -224,9 +216,6 @@ fn f_freeze_1_audit_access_gradation_not_codepoints() {
 /// sub-codepoints. Would-FAIL if a `GARDEN_*`/`GROVE_*` codepoint const
 /// appears in the crypto band.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — no Garden/Grove sub-codepoints \
-            (−2 in the −8 tally; they are signed-Node content); \
-            un-ignore at R5"]
 fn f_freeze_1_no_garden_grove_sub_codepoints() {
     let garden = rust_files_containing("GARDEN_CODEPOINT");
     let grove = rust_files_containing("GROVE_CODEPOINT");
@@ -245,8 +234,6 @@ fn f_freeze_1_no_garden_grove_sub_codepoints() {
 /// are D-28/D-29 PHASE-LATER-DEFER. Would-FAIL if any appears as a frozen
 /// wire struct at v1-beta.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — compute-marketplace wire types absent \
-            from frozen wire (D-28/D-29 PHASE-LATER-DEFER); un-ignore at R5"]
 fn f_freeze_1_compute_marketplace_wire_types_absent() {
     let forbidden = [
         "PeerResource",
@@ -274,8 +261,6 @@ fn f_freeze_1_compute_marketplace_wire_types_absent() {
 /// is D-27 — R5's doc-wave adds D-28/D-29. Would-FAIL if the deferrals are
 /// claimed-but-undocumented.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — V1-FROZEN doc registers D-28 + D-29 \
-            (compute/economic PHASE-LATER-DEFER); un-ignore at R5"]
 fn f_freeze_1_v1_frozen_doc_registers_d28_d29() {
     let doc = v1_frozen_doc();
     assert!(
@@ -295,8 +280,6 @@ fn f_freeze_1_v1_frozen_doc_registers_d28_d29() {
 /// name the −8 net + the O-8 double-count correction. Would-FAIL if the
 /// doc still claims −6.
 #[test]
-#[ignore = "RED-PHASE: F-FREEZE-1 — freeze-surface tally documented as −8 \
-            net (O-8 corrects R0.1's −6 double-count); un-ignore at R5"]
 fn f_freeze_1_net_frozen_surface_tally_documented_minus_eight() {
     // The tally is recorded in the freeze/codepoint doc-wave artifact.
     // R5 lands `docs/CRYPTO-CODEPOINTS.md` (per F-DISC-2) which carries

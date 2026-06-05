@@ -157,10 +157,10 @@ fn visit_rs_files(dir: &Path, f: &mut dyn FnMut(&Path, &str)) {
         let path = entry.path();
         if path.is_dir() {
             visit_rs_files(&path, f);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            if let Ok(contents) = std::fs::read_to_string(&path) {
-                f(&path, &contents);
-            }
+        } else if path.extension().is_some_and(|e| e == "rs")
+            && let Ok(contents) = std::fs::read_to_string(&path)
+        {
+            f(&path, &contents);
         }
     }
 }

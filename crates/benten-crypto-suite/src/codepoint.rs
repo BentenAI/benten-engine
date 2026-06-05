@@ -388,7 +388,12 @@ pub fn chained_state_tlv_aad_binding(present: bool) -> Vec<u8> {
     if present {
         aad.push(0x01u8);
         // The ChainedStateTlv reserve dispatches from the FS-future band base.
-        aad.extend_from_slice(&ReservedCodepoint::ChainedStateTlv.band_base().unwrap_or(0).to_be_bytes());
+        aad.extend_from_slice(
+            &ReservedCodepoint::ChainedStateTlv
+                .band_base()
+                .unwrap_or(0)
+                .to_be_bytes(),
+        );
     } else {
         aad.push(0x00u8);
     }

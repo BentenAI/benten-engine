@@ -331,8 +331,7 @@ fn structural_kdf_clause_h_sibling_walk_scope_confinement_on_real_k_principal() 
     // The member is granted ONLY K(X). Everything they can compute is a FORWARD
     // walk from K(X). The most adversarial attempt: replay Y's OWN edge_label +
     // cid against the held K(X), trying to land on Y's key.
-    let x_holder_attempt_at_y =
-        derive_step(&k_x, b"edge:VERSION_OF", &fixed_cid(0xA2));
+    let x_holder_attempt_at_y = derive_step(&k_x, b"edge:VERSION_OF", &fixed_cid(0xA2));
 
     // CONFINEMENT: the X-holder's forward walk (predecessor = K(X)) can NEVER
     // equal the owner's root-anchored K(Y) (predecessor = K(root)). The chain is

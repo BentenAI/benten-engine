@@ -89,7 +89,9 @@ pub mod endianness {
 
 #[cfg(test)]
 mod tests {
-    use super::endianness::{ascii_label_excluded, info_tag_ascii_flagged, wire_path_le_survivor_count};
+    use super::endianness::{
+        ascii_label_excluded, info_tag_ascii_flagged, wire_path_le_survivor_count,
+    };
 
     #[test]
     fn no_le_survivors_on_wire_paths() {

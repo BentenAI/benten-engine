@@ -88,3 +88,133 @@ the same additive discipline: `GossipPlusBlobs` (iroh-gossip + iroh-blobs)
 ships at v1-beta; the `Willow` / `IrohRoq` / `IrohLive` variants are
 reserved-and-typed-rejected — adding them later is additive, never a
 wire-break, never a silent fallback to gossip.
+
+## §0.4 — Codepoint source-of-truth resolution (supersession record)
+
+The two source docs (M-CONS-FINAL F8/F21 + the 9-eyes registry U13/U22)
+conflicted on three integers. The resolution (later / more-specific +
+collision-free), recorded here so the reassignment is **not silent**:
+
+| Integer | M-CONS-FINAL (F8/F21) | 9-eyes registry (U13/U22) | RESOLUTION |
+|---|---|---|---|
+| `0x6380` | "MembershipSetEncryption family" | **MLS-Application bracket** (`0x6380..0x638F`) | **9-eyes wins** → MLS-Application; **MembershipSetEncryption RELOCATES to `0x6600`** |
+| `0x6390` | "Sealed-Sender paired slot" | **MLS-Welcome bracket** (`0x6390..0x639F`) | **9-eyes wins** → MLS-Welcome; **Sealed-Sender = `0x6510`** (Ben ruling #1) |
+| Sealed-Sender | `0x6390` | **`0x6510`** | **`0x6510`** (the ONE canonical value) |
+
+**Supersession note.** The M-CONS-FINAL F8/F21 assignment of `0x6380` to
+MembershipSetEncryption and `0x6390` to the Sealed-Sender paired slot is
+**SUPERSEDED**: `0x6380` / `0x6390` are the **MLS-Application / MLS-Welcome**
+FS-future brackets (9-eyes U13), `MembershipSetEncryption` is **relocated to
+`0x6600`** (a fresh MembershipSet band disjoint from the MLS bracket), and
+Sealed-Sender has exactly one canonical value, **`0x6510`**.
+
+## §4.0 — group/MLS/MembershipSet band registration (symbol-bound rows)
+
+These rows bind each codepoint **value to its symbol on ONE line** (the
+registry-drift guard — a value is "registered" only when co-located with its
+symbol; a prose-only mention does not count):
+
+| Codepoint | Symbol | Band | State |
+|---|---|---|---|
+| `0x6380..0x638F` | MLS-Application | FS-future bracket | CODEPOINT-RESERVE (9-eyes; NOT MembershipSet) |
+| `0x6390..0x639F` | MLS-Welcome | FS-future bracket | CODEPOINT-RESERVE (9-eyes; NOT Sealed-Sender) |
+| `0x6600` | `MEMBERSHIP_SET_ENCRYPTION` | MembershipSet band (RELOCATED from `0x6380`) | **FREEZE** (§0.4 collision fix) |
+| `0x6610` | `MEMBERSHIP_SET_GROUP_MULTI_STANZA` | MembershipSet band | **FREEZE** (group K_Set multi-stanza; R4.6-corrected value) |
+| `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` | Layer-C drop / recipient band | **FREEZE** (R0.7-blinded Layer-C group multi-stanza; NOT a MembershipSet) |
+
+The in-code wire-lock for the group-band constants is regression-guarded in
+`crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
+(`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` and
+`LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`).
+
+> **REJECTED: width-unification (freeze record — do not re-litigate).** A
+> future round MUST NOT unify the u16/u32 per-band length-prefix widths across
+> the Layer-C drop band and the MembershipSet band. The two bands are
+> separately-frozen, codepoint-discriminated byte-strings; each band's AAD
+> field-set (`docs/SECURITY-PROOFS.md`) is frozen as authored. Unifying them
+> would be a wire-break for one band.
+
+## §4.4 — Net frozen-surface summary (O-8 — single canonical tally)
+
+The GN-wins (cheap-additive) shrink the frozen surface beyond the keying
+minimum. The single canonical tally is **`net -8`**:
+
+- **−1** audit structure (graph-native version-Node content, not a frozen wire structure),
+- **−1** `MembershipEvent` wire-enum (version-Node content, not a frozen codepoint-tagged wire enum),
+- **−4** AuditAccessGradation codepoints (a `RestrictedScope` arm + UCAN-caveat compositions, NOT codepoints),
+- **−2** Garden / Grove sub-codepoints (GovernanceConfig signed-Node content, NOT crypto-wire sub-codepoints),
+
+= **`net -8`**. **The R0.1 `-6` figure double-counted** — this `net -8` is the
+single canonical tally (O-8); the corrected accounting supersedes the earlier
+double-counted figure. **CE-1 drops the economic reserve** (ZERO MembershipSet freeze hook);
+the member side adds **ZERO** new frozen field; the compute side adds **ZERO**
+reserve (see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Rows D-28 / D-29).
+
+## EP-1 — extension-point roster + "Rust engine plugin" naming (§2.7 / §6.3)
+
+Benten has two extension categories (CLAUDE.md baked-in #18 + #19), recognized
++ named here per **EP-1** (recognition + naming + ~zero-code doc formalization;
+**no registry**, **trust unchanged**; do NOT mint `EngineExtension` /
+`ExtensionRegistry`):
+
+- **"Rust engine plugin"** is the canonical name for the **CLAUDE.md baked-in
+  #19** category (the qualifier is always present). Unqualified **"plugin"**
+  means a **#18 graph plugin** (an app-level subgraph plugin); **"engine
+  extension"** is a retained synonym for "Rust engine plugin".
+- **Symmetric two-plugin model:** the engine ships a default roster of each kind.
+- **The open-backend seam roster (Tier-1):** `KVBackend` / `BlobBackend` /
+  `GraphBackend` / `Renderer` / `Transport` / `Materializer`. **IVM strategy is
+  an ENUM (`benten_ivm::Strategy`), NOT a trait seam** (baked-in #2 —
+  enum-dispatch, not a backend trait).
+- **3 openness tiers:** (1) **open backend seam** (the roster above) / (2)
+  **sealed policy seam** (`CapabilityPolicy`, the #830-locked `GrantReader`,
+  `DeviceAuthBackend`) / (3) **enum-dispatch crypto** (the codepoint-dispatch
+  `match` arm + reserved IANA-disjoint codepoint per #5).
+
+## HPKE KEM-extensibility (NQ-C1) — the Benten-supplies-the-KEM resolution
+
+At v1-beta the Layer-C `0x647a` X-Wing KEM is implemented as **Benten's own
+KEM-DEM** over vetted upstream primitives (`ml-kem` + `x25519-dalek` + `sha3`
+for the X-Wing SHA3-256 combiner; `chacha20poly1305` for the DEM; `hkdf` for
+the key-schedule) — the **"Benten-supplies-the-KEM"** branch. The
+`rozbb/rust-hpke` crate's KEM roster is effectively closed to the
+RFC-9180-registered KEMs (a custom X-Wing KEM is not a first-class extension
+point there), so X25519MLKEM768 does **not** plug into that crate's KEM trait
+as a first-class registered KEM. The dependency-pinning **posture** (McMillion
+`hpke` over Cryspen `hpke-rs`) is recorded in `docs/SECURITY-POSTURE.md`
+Compromise #39 as the standing choice for the HPKE key-schedule/AEAD surface.
+
+## Gossip topic (§3.9, unlabelled) vs AAD set-id commitment (§3.10, labelled) — do not conflate
+
+Two distinct blinded constructions key off `K_Set`; they are **not** the same
+bytes and must not be conflated:
+
+- **§3.9 — the iroh-gossip topic (UNLABELLED):**
+  `blake3::keyed_hash(K_Set, set_id ‖ BE(generation))`. This is the broadcast
+  rendezvous topic (Compromise #61 closure); it carries NO label, and binds the
+  set-generation directly. It is the authoritative gossip-topic derivation.
+- **§3.10 — the AAD `membership_set_id_commitment` (LABELLED):**
+  `blake3::keyed_hash(K_Set, "benten:setid:v1" ‖ membership_set_id)` (truncated
+  to 32 bytes), bound INSIDE the `0x6610` group-AAD field-set. This is a
+  labelled domain-separated commitment used as an authenticated-not-encrypted
+  AAD field — see `docs/SECURITY-PROOFS.md`.
+
+Both are BLAKE3 keyed-MACs over `K_Set` (BLAKE3-keyed IS a native MAC;
+`benten-membership-set` carries no hmac/sha2 dep), but the **domain separation
+differs** (the gossip topic is unlabelled + binds the generation; the AAD
+commitment is labelled with `"benten:setid:v1"`). The nonce-cache replay-defense
+spec (`jti`-keyed, durable, §3.10 / NQ-T4) is documented in
+`docs/THREAT-MODEL.md` (NQ-T4) + `docs/SECURITY-POSTURE.md` Compromise #64 — it
+is ORTHOGONAL to both of these set-id constructions.
+
+## Cross-references
+
+- `docs/SECURITY-PROOFS.md` — the FROZEN AAD field-sets (`0x6510` / `0x6610` /
+  `0x6520`) + the per-stanza-LIVE decomposition.
+- `docs/THREAT-MODEL.md` — the trust-tier × operation matrix + the O-6
+  blast-radius ladder + the network-observer-only unlinkability scoping.
+- `docs/SECURITY-POSTURE.md` — the named Compromise table (#30–#64) +
+  disposition-class index.
+- `docs/V1-FROZEN-INTERFACE-DEFERRED.md` — Rows D-28 / D-29 (compute / economic
+  PHASE-LATER-DEFER).
+- `docs/INVARIANT-COVERAGE.md` — Inv-16..22.

@@ -299,7 +299,9 @@ pub enum EnvelopeError {
     },
 
     /// A declared length-prefix violated a bound (META #629 bounded-decode).
-    #[error("hostile declared length-prefix {declared} exceeds bound {bound} (META #629 bounded-decode)")]
+    #[error(
+        "hostile declared length-prefix {declared} exceeds bound {bound} (META #629 bounded-decode)"
+    )]
     HostileLengthPrefix {
         /// The hostile declared length.
         declared: usize,
@@ -397,7 +399,9 @@ mod tests {
         twin.extend_from_slice(&audience);
         twin.extend_from_slice(&body_cid);
         twin.extend_from_slice(&generation.to_be_bytes());
-        let ctx_d = BindingContext::WholeContent { plaintext_cid: twin };
+        let ctx_d = BindingContext::WholeContent {
+            plaintext_cid: twin,
+        };
         assert_ne!(
             canonical_tlv_encode(0x6510, &ctx_c),
             canonical_tlv_encode(0x6510, &ctx_d)
@@ -411,7 +415,9 @@ mod tests {
             plaintext_cid: vec![0xCD; 32],
         };
         assert!(v.strict_decode(&w).is_err());
-        assert!(v.strict_decode(&BindingContext::Vault { vault_version: 1 }).is_ok());
+        assert!(
+            v.strict_decode(&BindingContext::Vault { vault_version: 1 })
+                .is_ok()
+        );
     }
 }
-

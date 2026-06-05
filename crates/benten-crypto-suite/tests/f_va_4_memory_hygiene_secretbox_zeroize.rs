@@ -41,7 +41,6 @@
 
 #![allow(dead_code)]
 
-
 // R5: wired to the LIVE `secrecy::SecretBox`-backed `UnlockedKeyMaterial`
 // (Debug redacts; zeroize-on-Drop). The `StubSecretKey` adapter wraps the real
 // handle so the F-VA-4 pins read the production Debug + expose path. The

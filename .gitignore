@@ -121,6 +121,10 @@ docs/future/*
 !docs/future/phase-4-backlog.md
 !docs/future/kith-decentralized-identity.md
 !docs/future/v1-gate-refactor.md
+# F-full doc-wave (R5 TIER-3): the compute-marketplace deferral destination
+# is cited from in-tree code (F-FREEZE-1 / F-DISC-2 doc-coupling tests assert
+# it exists; V1-FROZEN Rows D-28/D-29 name it) — track it (HARD RULE clause-b).
+!docs/future/compute-marketplace.md
 crates/benten-graph/benches/README.md
 crates/README.md
 bindings/README.md

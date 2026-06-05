@@ -66,12 +66,14 @@ use benten_crypto_suite::envelope::{
 /// Strict-decode adapter — the production `BindingContext::strict_decode`
 /// returns a typed error; this thin wrapper preserves the test's
 /// `Result<(), &'static str>` shape.
-fn strict_decode(sealed_under: &BindingContext, requested: &BindingContext) -> Result<(), &'static str> {
+fn strict_decode(
+    sealed_under: &BindingContext,
+    requested: &BindingContext,
+) -> Result<(), &'static str> {
     sealed_under
         .strict_decode(requested)
         .map_err(|_| "cross-variant BindingContext mismatch (U2)")
 }
-
 
 /// **F-INV16-1 (U1)** — the codepoint is committed INTO the AAD/info.
 ///

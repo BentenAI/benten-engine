@@ -54,6 +54,7 @@ use benten_crypto_suite::error::UnsupportedAlgorithm;
 /// REAL registry iterator `registry::registered_envelope_codepoints`
 /// (F4-040: a registry enumerator, not a per-file hand-list).
 mod f_cp_stub {
+    pub use benten_crypto_suite::codepoint::CodepointLifecycle;
     pub use benten_crypto_suite::registry::{
         BENTEN_ENVELOPE_RANGE, BIRD_OF_PREY_BASE, CGKA_COMMIT_BASE, DEVICE_LINK_BAND_BASE,
         DRAFT_PRABEL_BASE, DROP_TO_RECIPIENT_SEALED_SENDER, EXPERIMENTAL_BASE,
@@ -63,12 +64,13 @@ mod f_cp_stub {
         VAULT_ENVELOPE, iana_hpke_reserved_ranges,
         registered_envelope_codepoints as all_assigned_envelope_codepoints,
     };
-    pub use benten_crypto_suite::codepoint::CodepointLifecycle;
 
     /// Dispatch a codepoint by its lifecycle state — Live/Deprecated dispatch
     /// `Ok`; Quarantined/Burned typed-reject (the real state machine).
     pub fn lifecycle_dispatch(state: CodepointLifecycle) -> Result<(), &'static str> {
-        state.dispatch().map_err(|_| "codepoint quarantined or burned")
+        state
+            .dispatch()
+            .map_err(|_| "codepoint quarantined or burned")
     }
 }
 
@@ -149,7 +151,8 @@ fn new_codepoint_integers_wire_locked() {
         "MembershipSetEncryption RELOCATED to 0x6600 (was M-CONS-FINAL 0x6380 which collided MLS-Application; §0.4)"
     );
     assert_eq!(
-        f_cp_stub::MEMBERSHIP_SET_GROUP_MULTI_STANZA, 0x6610,
+        f_cp_stub::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        0x6610,
         "MembershipSet group multi-stanza is 0x6610 NOT the 0x6600 set-keying value (R0.7 §4.0 \
          allocation table — THE single source of truth for the integer; §3.10/§4.1 the BLINDED \
          11-field AAD that binds it; the R4.5b migration slipped this to 0x6600 in 'settled' \
@@ -157,7 +160,8 @@ fn new_codepoint_integers_wire_locked() {
          registry test directly, not only via the cross-file f_aad_2 golden)"
     );
     assert_eq!(
-        f_cp_stub::LAYER_C_DROP_MULTI_RECIPIENT, 0x6520,
+        f_cp_stub::LAYER_C_DROP_MULTI_RECIPIENT,
+        0x6520,
         "Layer-C group multi-stanza (the blinded 8-field set's codepoint) is 0x6520 (R0.7 §3.3/§4.0; \
          locked here so a single-const drift fails THIS registry test directly, not only via the \
          cross-file f_lc_hpke golden)"
@@ -266,18 +270,33 @@ fn every_minted_codepoint_present_in_scanned_set() {
         ("VAULT_ENVELOPE", VAULT_ENVELOPE),
         ("SYMMETRIC_AEAD_12B", f_cp_stub::SYMMETRIC_AEAD_12B),
         ("LAYER_C_DROP", f_cp_stub::LAYER_C_DROP),
-        ("DROP_TO_RECIPIENT_SEALED_SENDER", DROP_TO_RECIPIENT_SEALED_SENDER),
-        ("LAYER_C_DROP_MULTI_RECIPIENT", f_cp_stub::LAYER_C_DROP_MULTI_RECIPIENT),
+        (
+            "DROP_TO_RECIPIENT_SEALED_SENDER",
+            DROP_TO_RECIPIENT_SEALED_SENDER,
+        ),
+        (
+            "LAYER_C_DROP_MULTI_RECIPIENT",
+            f_cp_stub::LAYER_C_DROP_MULTI_RECIPIENT,
+        ),
         ("DEVICE_LINK_BAND_BASE", f_cp_stub::DEVICE_LINK_BAND_BASE),
-        ("REMOTE_PERMISSION_BAND_BASE", f_cp_stub::REMOTE_PERMISSION_BAND_BASE),
+        (
+            "REMOTE_PERMISSION_BAND_BASE",
+            f_cp_stub::REMOTE_PERMISSION_BAND_BASE,
+        ),
         ("MLS_APPLICATION_BASE", MLS_APPLICATION_BASE),
         ("MLS_WELCOME_BASE", MLS_WELCOME_BASE),
         ("CGKA_COMMIT_BASE", CGKA_COMMIT_BASE),
         ("BIRD_OF_PREY_BASE", f_cp_stub::BIRD_OF_PREY_BASE),
         ("DRAFT_PRABEL_BASE", DRAFT_PRABEL_BASE),
         ("MEMBERSHIP_SET_ENCRYPTION", MEMBERSHIP_SET_ENCRYPTION),
-        ("MEMBERSHIP_SET_GROUP_MULTI_STANZA", f_cp_stub::MEMBERSHIP_SET_GROUP_MULTI_STANZA),
-        ("MEMBERSHIP_SET_SUBSET_REF", f_cp_stub::MEMBERSHIP_SET_SUBSET_REF),
+        (
+            "MEMBERSHIP_SET_GROUP_MULTI_STANZA",
+            f_cp_stub::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        ),
+        (
+            "MEMBERSHIP_SET_SUBSET_REF",
+            f_cp_stub::MEMBERSHIP_SET_SUBSET_REF,
+        ),
         ("LIFECYCLE_BAND_BASE", f_cp_stub::LIFECYCLE_BAND_BASE),
     ] {
         assert!(

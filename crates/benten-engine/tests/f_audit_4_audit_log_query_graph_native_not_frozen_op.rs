@@ -51,8 +51,18 @@ use benten_membership_set::audit::{AuditQueryComposition, audit_log_query_compos
 #[test]
 fn frozen_op_surface_is_exactly_twelve_primitive_kinds() {
     let known: &[&str] = &[
-        "READ", "WRITE", "TRANSFORM", "BRANCH", "ITERATE", "WAIT", "CALL", "RESPOND", "EMIT",
-        "SANDBOX", "SUBSCRIBE", "STREAM",
+        "READ",
+        "WRITE",
+        "TRANSFORM",
+        "BRANCH",
+        "ITERATE",
+        "WAIT",
+        "CALL",
+        "RESPOND",
+        "EMIT",
+        "SANDBOX",
+        "SUBSCRIBE",
+        "STREAM",
     ];
     assert_eq!(
         known.len(),
@@ -75,7 +85,11 @@ fn frozen_op_surface_is_exactly_twelve_primitive_kinds() {
         PrimitiveKind::Subscribe,
         PrimitiveKind::Stream,
     ];
-    assert_eq!(twelve.len(), 12, "12 known PrimitiveKind variants constructed");
+    assert_eq!(
+        twelve.len(),
+        12,
+        "12 known PrimitiveKind variants constructed"
+    );
 
     for k in &twelve {
         let tag = k.canonical_tag();
@@ -104,8 +118,18 @@ fn frozen_op_surface_is_exactly_twelve_primitive_kinds() {
 #[test]
 fn audit_log_query_composes_existing_primitives_no_new_frozen_op() {
     let twelve_tags: [&str; 12] = [
-        "READ", "WRITE", "TRANSFORM", "BRANCH", "ITERATE", "WAIT", "CALL", "RESPOND", "EMIT",
-        "SANDBOX", "SUBSCRIBE", "STREAM",
+        "READ",
+        "WRITE",
+        "TRANSFORM",
+        "BRANCH",
+        "ITERATE",
+        "WAIT",
+        "CALL",
+        "RESPOND",
+        "EMIT",
+        "SANDBOX",
+        "SUBSCRIBE",
+        "STREAM",
     ];
 
     let composition: AuditQueryComposition = audit_log_query_composition(&[0x51; 32]);

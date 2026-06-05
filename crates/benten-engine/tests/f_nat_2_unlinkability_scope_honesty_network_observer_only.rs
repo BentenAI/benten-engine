@@ -48,7 +48,9 @@ use std::path::Path;
 // STAYS `#[ignore]`'d here — `docs/THREAT-MODEL.md` is minted at the TIER-3
 // doc-wave (F-DISC-2); that arm un-ignores there, NOT in this TIER-2 wave.
 // =====================================================================
-use benten_membership_set::privacy::{admin_can_correlate_members, network_observer_can_link_stanzas};
+use benten_membership_set::privacy::{
+    admin_can_correlate_members, network_observer_can_link_stanzas,
+};
 
 /// F-NAT-2 (a): a network observer CANNOT link two per-recipient stanzas to
 /// the same recipient — the unlinkability property that IS delivered.
@@ -90,7 +92,6 @@ fn malicious_admin_can_correlate_members_boundary_not_over_claimed() {
 /// `tf3f` doc-coupling shape. RED-PHASE: THREAT-MODEL.md is minted at the
 /// F-DISC-2 doc-wave — un-ignore once it lands.
 #[test]
-#[ignore = "RED-PHASE: F-NAT-2 — THREAT-MODEL.md states network-observer-only + SECURITY-POSTURE.md #58 disclosure; un-ignore at doc-wave R5 (when THREAT-MODEL.md lands)"]
 fn threat_model_doc_states_network_observer_only_scope() {
     let repo_docs = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -102,8 +103,7 @@ fn threat_model_doc_states_network_observer_only_scope() {
     assert!(
         threat_model.contains("network-observer-only")
             || threat_model.contains("network observer only")
-            || (threat_model.contains("network observer")
-                && threat_model.contains("unlinkab")),
+            || (threat_model.contains("network observer") && threat_model.contains("unlinkab")),
         "F-NAT-2: THREAT-MODEL.md MUST scope per-recipient unlinkability as \
          NETWORK-OBSERVER-ONLY (not admin-proof) — the honest boundary"
     );
@@ -112,8 +112,7 @@ fn threat_model_doc_states_network_observer_only_scope() {
         .expect("SECURITY-POSTURE.md must be present");
     assert!(
         security_posture.contains("#58")
-            && (security_posture.contains("insider")
-                || security_posture.contains("correlat")),
+            && (security_posture.contains("insider") || security_posture.contains("correlat")),
         "F-NAT-2: SECURITY-POSTURE.md MUST carry the Compromise #58 \
          insider-correlation honest disclosure (the admin-sees-members_table \
          boundary)"

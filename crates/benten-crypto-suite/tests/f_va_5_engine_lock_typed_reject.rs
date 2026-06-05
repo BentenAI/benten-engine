@@ -40,7 +40,6 @@
 
 #![allow(dead_code)]
 
-
 // R5: wired to the LIVE vault lock-state (VaultEngine) + UnlockedKeyMaterial.
 // Thin adapters preserve the test's `StubEngine` API shape over the real
 // `benten_crypto_suite::vault::VaultEngine`.

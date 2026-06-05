@@ -59,7 +59,6 @@
 
 #![allow(dead_code)]
 
-
 // R5: wired to the LIVE vault surface (serde_ipld_dagcbor + XChaCha20-Poly1305).
 use benten_crypto_suite::vault::{
     DecodedVault, SYMMETRIC_AEAD_12B_CODEPOINT, VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,

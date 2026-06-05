@@ -358,9 +358,6 @@ fn f_disc_1_closed_range_top_is_64_not_63_baseline() {
 /// of #32..#64); the sweep is driven by `distinct_compromise_numbers`
 /// so any NEW row beyond #64 is auto-swept by PIN 2.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — all Compromise #30..#64 rows present in \
-            SECURITY-POSTURE.md; #32..#64 minted by R5 F-full doc-wave \
-            (#64 = NQ-T4 cross-device nonce-rejection window); un-ignore at R5"]
 fn f_disc_1_all_compromise_30_through_64_rows_present() {
     let doc = security_posture_md();
     let numbers = distinct_compromise_numbers(&doc);
@@ -394,9 +391,6 @@ fn f_disc_1_all_compromise_30_through_64_rows_present() {
 /// substring — so a row whose window merely embeds "MIT"/"ATO"/… inside
 /// an unrelated word is NOT spuriously reported as covered.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — every declared Compromise row carries a \
-            disposition_class (ATO/SGD/CHD/OOS/MIT); auto-includes new rows; \
-            un-ignore at R5"]
 fn f_disc_1_every_declared_row_has_a_disposition_class() {
     let doc = security_posture_md();
     let rows = extract_compromise_rows(&doc);
@@ -439,9 +433,6 @@ fn f_disc_1_every_declared_row_has_a_disposition_class() {
 /// Would-FAIL if a re-point lands on the wrong number (e.g. #31 narrated
 /// as revocation-reach), which would silently mis-route every reader.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — BR-2 re-point triple (#31=LAMPS, \
-            #62=revocation-reach, #30=unaudited-PQ) at correct slots; \
-            un-ignore at R5"]
 fn f_disc_1_br2_re_point_triple_at_correct_slots() {
     let doc = security_posture_md();
     let lines: Vec<&str> = doc.lines().collect();
@@ -476,9 +467,6 @@ fn f_disc_1_br2_re_point_triple_at_correct_slots() {
 /// "fully closed", "eliminated", "no residual risk"). Would-FAIL if a
 /// scoped-gap row is dressed up as fully closed.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — OOS/SGD honest-disclosure rows present + \
-            not over-claimed (no 'fully closed/eliminated/no residual' on a \
-            scoped-gap row); un-ignore at R5"]
 fn f_disc_1_oos_sgd_disclosures_present_and_not_over_claimed() {
     let doc = security_posture_md();
     let lines: Vec<&str> = doc.lines().collect();
@@ -528,8 +516,6 @@ fn f_disc_1_oos_sgd_disclosures_present_and_not_over_claimed() {
 /// F-DISC-1 spec body (not just the parametrized sweep). Would-FAIL if
 /// any of the seven is silently dropped.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — load-bearing disclosures present \
-            (#32/#34/#36/#39/#41/#53/#59); un-ignore at R5"]
 fn f_disc_1_load_bearing_disclosures_present() {
     let doc = security_posture_md();
     let numbers = distinct_compromise_numbers(&doc);
@@ -567,9 +553,6 @@ fn f_disc_1_load_bearing_disclosures_present() {
 /// Would-FAIL if R5 mints #64 without an SGD class (or omits it), or
 /// dresses the inherently-best-effort window as fully closed.
 #[test]
-#[ignore = "RED-PHASE: F-DISC-1 — Compromise #64 (NQ-T4 cross-device \
-            nonce-rejection window) present + SGD class + coherent text; \
-            sibling positive-control in benten-sync f_ld_5; un-ignore at R5"]
 fn f_disc_1_compromise_64_nq_t4_cross_device_nonce_window_present_and_sgd() {
     let doc = security_posture_md();
     let lines: Vec<&str> = doc.lines().collect();

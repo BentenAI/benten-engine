@@ -81,7 +81,10 @@ mod f_kat_1_real {
     }
     impl SeededRng {
         fn new(seed: &[u8; 32]) -> Self {
-            Self { state: *seed, ctr: 0 }
+            Self {
+                state: *seed,
+                ctr: 0,
+            }
         }
         fn block(&mut self) -> [u8; 32] {
             use sha2::{Digest, Sha256};

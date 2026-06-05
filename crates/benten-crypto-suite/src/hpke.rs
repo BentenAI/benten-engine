@@ -71,7 +71,9 @@ pub const fn one_primitive_across_layers() -> bool {
 
 #[cfg(any(test, feature = "testing"))]
 mod test_support {
-    use super::{CipherSuite, CipherSuiteCodepoint, unwrap_key_from_recipient, wrap_key_to_recipient};
+    use super::{
+        CipherSuite, CipherSuiteCodepoint, unwrap_key_from_recipient, wrap_key_to_recipient,
+    };
 
     /// Round-trip the unified key-encryption path: wrap a 32-byte key to a
     /// freshly-generated hybrid recipient + unwrap it back. Used by the

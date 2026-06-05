@@ -67,8 +67,8 @@ use benten_id::did::Did;
 // DERIVED `MemberNature` IVM view (`is_ai_operated` / `derive_member_nature`).
 // =====================================================================
 use benten_membership_set::member::{
-    derive_member_nature, is_ai_operated, Hlc, MemberEntry, MemberNature, MemberRef, RoleId,
-    SigPubKey,
+    Hlc, MemberEntry, MemberNature, MemberRef, RoleId, SigPubKey, derive_member_nature,
+    is_ai_operated,
 };
 
 /// F-NAT-1 (a): `MemberEntry` carries ZERO nature field (struct-fence).
@@ -79,7 +79,7 @@ use benten_membership_set::member::{
 fn member_entry_has_zero_nature_field() {
     // Construct a canonical 5-field entry — proving the shape compiles with
     // NO nature field present (a nature field would be a 6th field here).
-    let _entry = MemberEntry {
+    let entry = MemberEntry {
         role: RoleId::Member,
         is_authority: false,
         sig_pubkey: None,
@@ -90,6 +90,15 @@ fn member_entry_has_zero_nature_field() {
         },
         member_ref: MemberRef::UserDid,
     };
+    // Read a field so the 5-field literal is actually USED (not a no-effect
+    // underscore binding) — the literal compiling with exactly these 5 fields
+    // is the structural-shape pin (a 6th `nature`/`member_type` field would
+    // fail compilation here).
+    assert_eq!(
+        entry.role,
+        RoleId::Member,
+        "F-NAT-1: the canonical 5-field MemberEntry literal compiles + reads back."
+    );
     assert!(
         !MemberEntry::has_any_nature_field(),
         "F-NAT-1 (Inv-22): MemberEntry MUST carry ZERO nature field — \
@@ -110,7 +119,10 @@ fn is_ai_operated_derives_from_did_method_parse_only() {
 
     let agent_method = did_method_of(agent_did.as_str());
     let key_method = did_method_of(key_did.as_str());
-    assert_eq!(agent_method, "agent", "fixture sanity: did:agent: method-parse");
+    assert_eq!(
+        agent_method, "agent",
+        "fixture sanity: did:agent: method-parse"
+    );
     assert_eq!(key_method, "key", "fixture sanity: did:key: method-parse");
 
     assert!(
@@ -134,7 +146,8 @@ fn is_ai_operated_derives_from_did_method_parse_only() {
 /// from the manifest/method, not a stored flag.
 #[test]
 fn member_nature_is_ivm_recomputed_never_authoritative_stored() {
-    let nature_a: MemberNature = derive_member_nature("agent", /* has_install_manifest */ true);
+    let nature_a: MemberNature =
+        derive_member_nature("agent", /* has_install_manifest */ true);
     let nature_b: MemberNature = derive_member_nature("agent", true);
     assert_eq!(
         nature_a, nature_b,
@@ -186,10 +199,8 @@ fn grep_defense_no_member_type_or_member_kind_nature_field_in_membership_set_src
             // discriminator. We match the field/type tokens that the
             // Inv-22 deletion forbids: `member_type` field, `MemberKind`
             // nature enum, `member_nature:` stored field.
-            let is_member_type_field =
-                l.starts_with("member_type") || l.contains("member_type:");
-            let is_member_kind_type =
-                l.contains("enum MemberKind") || l.contains("MemberKind {");
+            let is_member_type_field = l.starts_with("member_type") || l.contains("member_type:");
+            let is_member_kind_type = l.contains("enum MemberKind") || l.contains("MemberKind {");
             let is_stored_nature_field = l.starts_with("member_nature:")
                 || (l.contains("nature:") && l.contains("MemberNature"));
             if is_member_type_field || is_member_kind_type || is_stored_nature_field {
@@ -220,10 +231,10 @@ fn visit_rs_files(dir: &Path, f: &mut dyn FnMut(&Path, &str)) {
         let path = entry.path();
         if path.is_dir() {
             visit_rs_files(&path, f);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            if let Ok(contents) = std::fs::read_to_string(&path) {
-                f(&path, &contents);
-            }
+        } else if path.extension().is_some_and(|e| e == "rs")
+            && let Ok(contents) = std::fs::read_to_string(&path)
+        {
+            f(&path, &contents);
         }
     }
 }
