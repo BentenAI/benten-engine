@@ -46,83 +46,57 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim. The AAD builders emit the correct **BE** layout
-/// (these are the reference the freeze pins lock); the AEAD-open stub IGNORES
-/// the AAD so the negative pins fail until R5 wires the real AAD-bound open.
-mod f_lb_2_stub {
-    /// Big-endian per-chunk AAD: `"benten-aead:chunk:" || plaintext_cid ||
-    /// chunk_index.to_be_bytes() || total_chunks.to_be_bytes()`.
-    ///
-    /// (The in-tree `aead::aad_per_chunk` emits LE at `aead.rs:244` — the M-19
-    /// migration flips it to this BE shape; F-W0-3 dep.)
-    pub fn aad_per_chunk_be(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> Vec<u8> {
-        let mut aad = Vec::new();
-        aad.extend_from_slice(b"benten-aead:chunk:");
-        aad.extend_from_slice(plaintext_cid);
-        aad.extend_from_slice(&chunk_index.to_be_bytes()); // BE (M-19)
-        aad.extend_from_slice(&total_chunks.to_be_bytes()); // BE (M-19)
-        aad
-    }
 
-    /// Big-endian per-Recipe AAD: distinct domain prefix `benten-aead:recipe:`.
-    pub fn aad_per_recipe_be(
-        plaintext_cid: &[u8],
-        recipe_index: u32,
-        total_recipes: u32,
-    ) -> Vec<u8> {
-        let mut aad = Vec::new();
-        aad.extend_from_slice(b"benten-aead:recipe:");
-        aad.extend_from_slice(plaintext_cid);
-        aad.extend_from_slice(&recipe_index.to_be_bytes()); // BE (M-19)
-        aad.extend_from_slice(&total_recipes.to_be_bytes()); // BE (M-19)
-        aad
-    }
+// R5: wired to the LIVE migrated `aead::{aad_per_chunk, aad_per_recipe}` (now
+// BE per M-19) + the real AAD-bound ChaCha20-Poly1305 seal/open.
+use benten_crypto_suite::aead::{
+    AeadKeyMaterial, aad_per_chunk, aad_per_recipe, unwrap as aead_unwrap, wrap as aead_wrap,
+};
+use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
 
-    /// AEAD seal carrying the seal-time AAD. STUB stores the AAD alongside the
-    /// ciphertext (modelling the real AEAD tag binding).
-    #[derive(Debug, Clone)]
-    pub struct SealedChunk {
-        pub ciphertext: Vec<u8>,
-        seal_aad: Vec<u8>,
-    }
-
-    pub fn aead_seal_with_aad(plaintext: &[u8], aad: &[u8]) -> SealedChunk {
-        SealedChunk {
-            ciphertext: plaintext.to_vec(),
-            seal_aad: aad.to_vec(),
-        }
-    }
-
-    /// AEAD open under a presented AAD. STUB IGNORES the presented AAD (the
-    /// truncation/substitution bug) and always returns the plaintext — so the
-    /// negative pins FAIL until R5. R5's real open returns `Err` when the
-    /// presented AAD ≠ the seal AAD.
-    pub fn aead_open_with_aad(
-        sealed: &SealedChunk,
-        presented_aad: &[u8],
-        enforce: bool,
-    ) -> Result<Vec<u8>, AeadOpenError> {
-        if enforce && presented_aad != sealed.seal_aad {
-            Err(AeadOpenError::AadMismatch)
-        } else {
-            // RED-PHASE: enforce == false → AAD ignored.
-            Ok(sealed.ciphertext.clone())
-        }
-    }
-
-    /// RED-PHASE knob: STUB = false (AAD ignored). R5 = true (AAD-bound open).
-    pub const ENFORCE_AAD: bool = false;
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum AeadOpenError {
-        AadMismatch,
-    }
+/// BE per-chunk AAD via the LIVE migrated `aead::aad_per_chunk`.
+fn aad_per_chunk_be(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> Vec<u8> {
+    aad_per_chunk(plaintext_cid, chunk_index, total_chunks)
 }
 
-use f_lb_2_stub::{
-    AeadOpenError, ENFORCE_AAD, aad_per_chunk_be, aad_per_recipe_be, aead_open_with_aad,
-    aead_seal_with_aad,
-};
+/// BE per-Recipe AAD via the LIVE migrated `aead::aad_per_recipe`.
+fn aad_per_recipe_be(plaintext_cid: &[u8], recipe_index: u32, total_recipes: u32) -> Vec<u8> {
+    aad_per_recipe(plaintext_cid, recipe_index, total_recipes)
+}
+
+/// A real AEAD seal carrying the ChaCha20-Poly1305 envelope under a fixed key.
+struct SealedChunk {
+    envelope: benten_crypto_suite::aead::AeadEnvelope,
+}
+
+/// Fixed 32-byte key for the hermetic AAD pins.
+fn fixture_key() -> AeadKeyMaterial {
+    AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &[0x42u8; 32])
+}
+
+fn aead_seal_with_aad(plaintext: &[u8], aad: &[u8]) -> SealedChunk {
+    let envelope = aead_wrap(plaintext, &fixture_key(), aad).expect("seal");
+    SealedChunk { envelope }
+}
+
+/// Real AEAD open under a presented AAD — the ChaCha20-Poly1305 tag binds the
+/// seal-time AAD, so a presented AAD ≠ the seal AAD fails closed. The
+/// `_enforce` knob is ignored (R5: the real open always enforces).
+fn aead_open_with_aad(
+    sealed: &SealedChunk,
+    presented_aad: &[u8],
+    _enforce: bool,
+) -> Result<Vec<u8>, AeadOpenError> {
+    aead_unwrap(&sealed.envelope, &fixture_key(), presented_aad).map_err(|_| AeadOpenError::AadMismatch)
+}
+
+/// R5: the real AEAD open always binds the AAD (no knob).
+const ENFORCE_AAD: bool = true;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AeadOpenError {
+    AadMismatch,
+}
 
 fn fixed_cid(byte: u8) -> [u8; 32] {
     [byte; 32]
@@ -135,7 +109,6 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 /// integer bytes differ. The reference is hand-built BE so a silent LE
 /// regression is caught.
 #[test]
-#[ignore = "RED-PHASE: F-LB-2 — aad_per_chunk MUST emit big-endian index/count (M-19; in-tree is LE); un-ignore at R5"]
 fn aad_per_chunk_is_big_endian() {
     let cid = fixed_cid(0xAA);
     let chunk_index: u64 = 0x0102_0304_0506_0708;
@@ -173,7 +146,6 @@ fn aad_per_chunk_is_big_endian() {
 /// re-counted open succeeds (the truncation bug); R5's AAD-bound open returns
 /// `AadMismatch`.
 #[test]
-#[ignore = "RED-PHASE: F-LB-2 — re-counting total_chunks (10→5) MUST fail AEAD-open (truncation defense, U17); un-ignore at R5"]
 fn truncation_recount_total_chunks_fails_open() {
     let cid = fixed_cid(0xBB);
     let seal_aad = aad_per_chunk_be(&cid, /* chunk_index */ 0, /* total */ 10);
@@ -197,7 +169,6 @@ fn truncation_recount_total_chunks_fails_open() {
 /// would-FAIL-if-no-op'd: the stub ignores the AAD; R5's open binds the prefix,
 /// so a chunk-sealed ciphertext presented under a recipe-AAD FAILS.
 #[test]
-#[ignore = "RED-PHASE: F-LB-2 — per-chunk seal MUST NOT open under a per-recipe AAD (domain-prefix separation); un-ignore at R5"]
 fn cross_prefix_chunk_vs_recipe_fails_open() {
     let cid = fixed_cid(0xCC);
     let chunk_aad = aad_per_chunk_be(&cid, /* idx */ 2, /* total */ 4);

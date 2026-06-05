@@ -80,24 +80,6 @@ mod f_lb_1_k_principal_stub {
     use hkdf::Hkdf;
     use sha2::Sha256;
 
-    /// Models the Layer-A vault's `UnlockedKeyMaterial.k_principal`. R5 replaces
-    /// this with the real `benten_crypto_suite::vault::UnlockedKeyMaterial`.
-    pub struct UnlockedKeyMaterialStub {
-        k_principal_bytes: [u8; 32],
-    }
-
-    impl UnlockedKeyMaterialStub {
-        pub fn from_vault_bytes_for_test(k_principal_bytes: [u8; 32]) -> Self {
-            Self { k_principal_bytes }
-        }
-
-        /// The keying-root: the structural-KDF chain seeds from THIS. R5 returns
-        /// the real `StructuralKdfKey` minted from the vault `[u8;32]`.
-        pub fn structural_kdf_root_key(&self) -> StructuralKdfKey {
-            StructuralKdfKey::from_bytes_for_test(&self.k_principal_bytes)
-        }
-    }
-
     /// SELF-CONTAINED no-`"step"`-info-tag foil for the elision negative control.
     ///
     /// The production `derive_step` builds HKDF info as `"step" || edge_label ||
@@ -125,7 +107,11 @@ mod f_lb_1_k_principal_stub {
     }
 }
 
-use f_lb_1_k_principal_stub::{UnlockedKeyMaterialStub, derive_step_without_step_info_tag};
+// R5: wired to the LIVE vault `UnlockedKeyMaterial` as the real `K_principal`
+// SOURCE (the structural-KDF derivation API was already LIVE on the base). The
+// no-`"step"`-info-tag foil remains a local negative control.
+use benten_crypto_suite::vault::UnlockedKeyMaterial as UnlockedKeyMaterialStub;
+use f_lb_1_k_principal_stub::derive_step_without_step_info_tag;
 
 /// The cipher-suite codepoint the structural-KDF root binds (X-Wing default).
 const CODEPOINT_HYBRID: u16 = 0x647a;
@@ -141,7 +127,6 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 /// would-FAIL-if-no-op'd: a non-deterministic derivation, or one that ignores
 /// the seed, breaks parity.
 #[test]
-#[ignore = "RED-PHASE: F-LB-1 — structural-KDF 5-Node walk parity seeded from the REAL K_principal; un-ignore at R5"]
 fn structural_kdf_5_node_walk_parity_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x6Au8; 32]);
     let k_principal = vault.structural_kdf_root_key();
@@ -194,7 +179,6 @@ fn structural_kdf_5_node_walk_parity_on_real_k_principal() {
 /// would-FAIL-if-no-op'd: a structure-independent formula yields the same key
 /// regardless of predecessor (Spike-E proved that does NOT converge).
 #[test]
-#[ignore = "RED-PHASE: F-LB-1 — path-divergence (different predecessor → different K(N)) on the real chain; un-ignore at R5"]
 fn structural_kdf_path_divergence_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x7Bu8; 32]);
     let k_root = derive_root(
@@ -231,7 +215,6 @@ fn structural_kdf_path_divergence_on_real_k_principal() {
 /// would-FAIL-if-no-op'd: a `derive_step` that omits the `"step"` prefix matches
 /// the foil (the crypto-agility-r1.4-2 root-cause).
 #[test]
-#[ignore = "RED-PHASE: F-LB-1 — `step` HKDF info-tag is load-bearing on the real chain; un-ignore at R5"]
 fn structural_kdf_step_info_tag_load_bearing_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x2Du8; 32]);
     let k_root = derive_root(
@@ -261,7 +244,6 @@ fn structural_kdf_step_info_tag_load_bearing_on_real_k_principal() {
 /// would-FAIL-if-no-op'd: a derivation that ignores the seed yields the same
 /// root for both vaults.
 #[test]
-#[ignore = "RED-PHASE: F-LB-1 — root key is BOUND to the real K_principal seed (different vault → different root); un-ignore at R5"]
 fn structural_kdf_root_bound_to_real_k_principal_seed() {
     let vault_a = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x01u8; 32]);
     let vault_b = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x02u8; 32]);
@@ -321,7 +303,6 @@ fn structural_kdf_root_bound_to_real_k_principal_seed() {
 /// X-holder land on `K(Y)` by supplying `Y`'s edge_label+cid, collapsing the
 /// confinement. The `assert_ne!` fires only on a one-way path-tagged chain.
 #[test]
-#[ignore = "RED-PHASE: F-LB-1 (e) — Inv-20 clause-h per-member K(N) walk-scope confinement (sibling Y NOT derivable from K(X)); un-ignore at R5"]
 fn structural_kdf_clause_h_sibling_walk_scope_confinement_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x9Cu8; 32]);
 

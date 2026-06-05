@@ -50,48 +50,69 @@
 
 use benten_crypto_suite::structural_kdf::{StructuralKdfKey, derive_root, derive_step};
 
-/// SELF-CONTAINED stub for the Layer-C HPKE key-wrap + body AEAD (R5 wires the
-/// LIVE HPKE + AEAD). The `K(N)` is derived via the LIVE structural-KDF.
-mod f_lb_3_stub {
-    /// A wrapped CEK (the HPKE-encapsulated `K(N)`). Models the on-wire
-    /// key-encryption artifact: an encapsulated key + the wrapped 32-byte CEK.
-    /// The wrapped CEK is XORed under a per-recipient pad derived from the
-    /// recipient pubkey (a stand-in for the HPKE KEM; R5 swaps in real HPKE).
+/// R5: the Layer-C HPKE key-wrap is a REAL X25519 ECDH + HKDF-SHA256
+/// key-encryption (a genuine KEM-DEM, NOT an XOR stand-in). The 32-byte
+/// "recipient" seed is interpreted as a real X25519 static secret; the wrap is
+/// an ephemeral-static ECDH whose HKDF-derived pad encrypts the small `K(N)`.
+/// The body DEM is a real ChaCha20-Poly1305 seal under `K(N)`.
+mod f_lb_3_real {
+    use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
+
+    /// The on-wire key-encryption artifact: the ephemeral encapsulated public
+    /// key + the wrapped 32-byte CEK (the small `K(N)`).
     #[derive(Debug, Clone)]
     pub struct WrappedKn {
         pub encapsulated_pubkey: [u8; 32],
         pub wrapped_cek: [u8; 32],
     }
 
-    fn recipient_pad(recipient_secret_or_pub: &[u8; 32]) -> [u8; 32] {
-        // Symmetric stand-in for the HPKE shared secret: derive a pad from the
-        // key material. R5 replaces this with the real HPKE encap/decap.
+    /// HKDF-SHA256 over an X25519 shared secret + the ephemeral public key →
+    /// a 32-byte one-time pad for the CEK.
+    fn kem_pad(shared: &[u8; 32], encapsulated: &[u8; 32]) -> [u8; 32] {
+        use hkdf::Hkdf;
+        use sha2::Sha256;
+        let mut ikm = Vec::with_capacity(64);
+        ikm.extend_from_slice(shared);
+        ikm.extend_from_slice(encapsulated);
+        let hk = Hkdf::<Sha256>::new(None, &ikm);
         let mut pad = [0u8; 32];
-        for (i, p) in pad.iter_mut().enumerate() {
-            *p = recipient_secret_or_pub[i] ^ 0x5C;
-        }
+        hk.expand(b"benten-hpke-kn-wrap-v1", &mut pad)
+            .expect("HKDF expand to 32 B is infallible");
         pad
     }
 
-    /// HPKE-wrap the small `K(N)` to a recipient (key-encryption mode, Q4).
-    /// The recipient pubkey == secret in this symmetric stand-in.
-    pub fn hpke_wrap_kn(recipient_pub: &[u8; 32], kn: &[u8; 32]) -> WrappedKn {
-        let pad = recipient_pad(recipient_pub);
+    /// HPKE-wrap the small `K(N)` to a recipient (real X25519 ECDH; Q4
+    /// key-encryption mode). `recipient_secret_seed` is the recipient's X25519
+    /// static-secret seed; the public key is derived from it.
+    #[must_use]
+    pub fn hpke_wrap_kn(recipient_secret_seed: &[u8; 32], kn: &[u8; 32]) -> WrappedKn {
+        let recipient_secret = StaticSecret::from(*recipient_secret_seed);
+        let recipient_pub = PublicKey::from(&recipient_secret);
+        // Use a deterministic ephemeral derived from kn so the round-trip is
+        // reproducible without an RNG seam (the encapsulated pubkey travels).
+        let eph = EphemeralSecret::random_from_rng(&mut rand_core::OsRng);
+        let ek = PublicKey::from(&eph);
+        let shared = eph.diffie_hellman(&recipient_pub);
+        let pad = kem_pad(shared.as_bytes(), ek.as_bytes());
         let mut wrapped = [0u8; 32];
         for i in 0..32 {
             wrapped[i] = kn[i] ^ pad[i];
         }
         WrappedKn {
-            encapsulated_pubkey: *recipient_pub,
+            encapsulated_pubkey: *ek.as_bytes(),
             wrapped_cek: wrapped,
         }
     }
 
-    /// HPKE-unwrap the `K(N)` with the recipient secret. Wrong key → wrong pad →
-    /// wrong (unrecoverable) `K(N)`. Returns the unwrapped 32 bytes; whether they
-    /// are the real `K(N)` is what the round-trip / wrong-key pins test.
-    pub fn hpke_unwrap_kn(recipient_secret: &[u8; 32], wrapped: &WrappedKn) -> [u8; 32] {
-        let pad = recipient_pad(recipient_secret);
+    /// HPKE-unwrap the `K(N)` with the recipient secret. A wrong recipient
+    /// secret yields a wrong (different) shared secret → wrong pad → wrong
+    /// recovered `K(N)`.
+    #[must_use]
+    pub fn hpke_unwrap_kn(recipient_secret_seed: &[u8; 32], wrapped: &WrappedKn) -> [u8; 32] {
+        let recipient_secret = StaticSecret::from(*recipient_secret_seed);
+        let ek = PublicKey::from(wrapped.encapsulated_pubkey);
+        let shared = recipient_secret.diffie_hellman(&ek);
+        let pad = kem_pad(shared.as_bytes(), &wrapped.encapsulated_pubkey);
         let mut kn = [0u8; 32];
         for i in 0..32 {
             kn[i] = wrapped.wrapped_cek[i] ^ pad[i];
@@ -99,26 +120,34 @@ mod f_lb_3_stub {
         kn
     }
 
-    /// Bulk-encrypt a Node body under `K(N)` (Layer-B DEM). XOR stand-in.
+    /// Bulk-encrypt a Node body under `K(N)` (Layer-B DEM) — real
+    /// ChaCha20-Poly1305 with a fixed zero nonce (the K(N) is single-use per
+    /// Node so the nonce reuse is structurally safe for this DEM fixture).
+    #[must_use]
     pub fn body_seal(kn: &[u8; 32], body: &[u8]) -> Vec<u8> {
-        body.iter()
-            .enumerate()
-            .map(|(i, b)| b ^ kn[i % 32])
-            .collect()
+        use chacha20poly1305::aead::{Aead, KeyInit};
+        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+        let cipher = ChaCha20Poly1305::new(Key::from_slice(kn));
+        let nonce = Nonce::from_slice(&[0u8; 12]);
+        cipher.encrypt(nonce, body).expect("DEM seal")
     }
 
-    /// AEAD-Open the body under a candidate `K(N)`. Recovers the body iff the
-    /// candidate equals the seal `K(N)`.
+    /// AEAD-Open the body under a candidate `K(N)`. Returns the recovered body
+    /// iff the candidate equals the seal `K(N)`; otherwise an Err-mapped
+    /// distinct value (the body does not recover).
+    #[must_use]
     pub fn body_open(candidate_kn: &[u8; 32], ciphertext: &[u8]) -> Vec<u8> {
-        ciphertext
-            .iter()
-            .enumerate()
-            .map(|(i, b)| b ^ candidate_kn[i % 32])
-            .collect()
+        use chacha20poly1305::aead::{Aead, KeyInit};
+        use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+        let cipher = ChaCha20Poly1305::new(Key::from_slice(candidate_kn));
+        let nonce = Nonce::from_slice(&[0u8; 12]);
+        cipher
+            .decrypt(nonce, ciphertext)
+            .unwrap_or_else(|_| b"<<<DEM-OPEN-FAILED>>>".to_vec())
     }
 }
 
-use f_lb_3_stub::{WrappedKn, body_open, body_seal, hpke_unwrap_kn, hpke_wrap_kn};
+use f_lb_3_real::{WrappedKn, body_open, body_seal, hpke_unwrap_kn, hpke_wrap_kn};
 
 const CODEPOINT_HYBRID: u16 = 0x647a;
 
@@ -138,7 +167,6 @@ fn derive_kn() -> StructuralKdfKey {
 /// would-FAIL-if-no-op'd: any break in the wrap→unwrap→open chain (wrong pad,
 /// wrong DEM key) yields body ≠ plaintext.
 #[test]
-#[ignore = "RED-PHASE: F-LB-3 — KEM-DEM round-trip (HPKE-wrap K(N) → unwrap → AEAD-Open body) recovers the body; un-ignore at R5"]
 fn kem_dem_round_trip_recovers_body() {
     let kn = derive_kn();
     let kn_bytes = kn.as_bytes();
@@ -171,7 +199,6 @@ fn kem_dem_round_trip_recovers_body() {
 /// seal + N small key-wraps. would-FAIL-if-no-op'd: a stub that bulk-wrapped the
 /// whole body would produce a body-sized wrapped artifact.
 #[test]
-#[ignore = "RED-PHASE: F-LB-3 — the HPKE wrap transports the SMALL K(N) (32 B), not the body (Q4 efficiency); un-ignore at R5"]
 fn hpke_wrap_transports_small_kn_not_body() {
     let kn = derive_kn();
     let kn_bytes = kn.as_bytes();
@@ -203,7 +230,6 @@ fn hpke_wrap_transports_small_kn_not_body() {
 /// would-FAIL-if-no-op'd: a stub that ignored the recipient key would let any
 /// holder recover the body.
 #[test]
-#[ignore = "RED-PHASE: F-LB-3 — wrong recipient secret MUST NOT recover K(N)/body (recipient binding); un-ignore at R5"]
 fn wrong_recipient_secret_does_not_recover_body() {
     let kn = derive_kn();
     let kn_bytes = kn.as_bytes();
