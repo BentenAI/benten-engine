@@ -76,6 +76,7 @@
 - **Migration path:** none (additive).
 
 ### PR #1344 — `Engine::walk_share_scope` addition + Compromise #31 entry
+<!-- historical record: the "#31 = revocation-reach" mint below was re-pointed to #62 at F-full per BR-2; #31 now denotes LAMPS Composite ML-DSA -->
 - **What changed:** new principal-unbearing `walk_share_scope` API at engine_share_scope.rs:59 per the S&C ratified architecture; principal-bearing `walk_share_scope_as` is deferred-additive to G-COMP-1 per V1-FROZEN-INTERFACE-DEFERRED.md Row D-11.
 - **Why break-OK:** pre-v1-API-shape ratification.
 - **Migration path:** none (additive); the principal-bearing variant is the post-v1-beta hardening (Row D-11).

@@ -16,7 +16,7 @@
 > - `a9d2753c` row 3 (EncryptionClass enum mint)
 > - `7af94d06` row 4 (Engine::walk_share_scope mint + SubgraphSpecWalkFailed ErrorCode)
 > - `d2616800` row 5 (MerkleRangeProofBackend → DEFERRED to G-COMP-1 per Option A)
-> - `75a1d33a` row 8 bundle (non_exhaustive sweep + wire-format inventory + Compromise #31)
+> - `75a1d33a` row 8 bundle (non_exhaustive sweep + wire-format inventory + Compromise #31 [revocation-reach; re-pointed to #62 at F-full per BR-2 — #31 now denotes LAMPS Composite ML-DSA])
 > - `fb7c212d` row 1 (cargo-public-api baselines regenerated — 14 of 14 real)
 > - `13322df4` row 2 (TS-public-api parity gate workflow + baseline)
 >
@@ -1748,7 +1748,7 @@ order parity arm + typed-reject arm).
   - Mitigation: tight `nbf`/`exp` + key rotation.
 
 **SECURITY-POSTURE Compromise #31 LANDED at G-CORE-9 V1-FROZEN-INTERFACE
-row 8e (commit `75a1d33a`)** — Compromise #31 added to
+row 8e (commit `75a1d33a`)** *(historical mint-event record: this revocation-reach compromise was re-pointed to **#62** at F-full per BR-2; #31 now denotes LAMPS Composite ML-DSA)* — Compromise #31 added to
 `docs/SECURITY-POSTURE.md` registry table: "Revocation reach in
 encryption-at-rest (already-derived keys remain decryptable; Drop
 bundles forever-valid once distributed)" — OPEN ARCHITECTURAL TRADE-OFF;
