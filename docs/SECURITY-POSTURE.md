@@ -27,7 +27,7 @@ table narrative.
 >   per-DID recheck (deferred to G-COMP-1 per Row D-4); v1-beta ships
 >   `NoopManifestEnvelopeRechecker` returning `NotApplicable` for
 >   resolvable peer-DIDs (Layer-A empty-DID short-circuit IS live).
-> - **Compromise #31** — Drop bundle revocation reach (forever-valid
+> - **Compromise #62** — Drop bundle revocation reach (forever-valid
 >   once distributed; OPEN ARCHITECTURAL TRADE-OFF mitigated by tight
 >   `nbf`/`exp` + key rotation per RATIFIED-S&C §R6).
 > - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-1** — `WriteBoundaryChainValidator`
@@ -88,7 +88,40 @@ table narrative.
 | 28 | (RESERVED for META #629 closure — DoS-via-unbounded-decode workspace pattern; 26 instances / 9 crates) | 4-Foundation | **OPEN; tracking via [META #629](https://github.com/BentenAI/benten-engine/issues/629) + [#1126](https://github.com/BentenAI/benten-engine/issues/1126) Compromise #28 mint task.** Reserved row; row body lands when META #629 closure or honest-disclosure mint lands. |
 | 29 | Engine-level extensions — compile-time trust posture (CLAUDE.md baked-in #19) | 4-Foundation | **OPEN ARCHITECTURAL COMMITMENT; registry-tracked for cross-reference completeness.** Engine extensions are Rust crates compile-time linked into the engine binary; trust is `cargo` + code review, not the type system. Future post-Ed25519 / post-iroh / post-redb / post-wasmtime engine-extension migrations land under this Compromise's namespace per Phase-9+ scope. The trust model is comprehensively narrated below at §"Engine-level extensions — compile-time trust"; this row makes the claim registry-discoverable for the §3.12 R7-equivalent audit walk. Tracking via [#1131](https://github.com/BentenAI/benten-engine/issues/1131). |
 | 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` / `ml-kem` have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 concatenated/committing; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD) and the concatenated combiner is **committing / strip-resistant** (both halves must verify; the typed-unsupported-arm-never-silent-fallback contract enforces fail-closed) — so **unaudited PQC is never the SOLE trust path**. **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem` audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
-| 31 | Revocation reach in encryption-at-rest (already-derived keys remain decryptable; Drop bundles forever-valid once distributed) | 4-Meta-Core | **OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN `nbf`/`exp` + key rotation.** Per RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i): UCAN revocation cuts FUTURE serves (the per-request `CapabilityPolicy::check_read` consultation fails for subsequent requests against the granted CID), but already-derived keys remain decryptable forever. Once Bob has derived `K(N)` for some Node, Bob can decrypt any ciphertext he obtains for that Node, regardless of subsequent UCAN revocation. Re-keying the Node requires Alice to re-encrypt + re-issue (a heavy operation; per-Node + per-recipient cost scales). Drop bundles are forever-valid once distributed — the producer has no callback to revoke an already-distributed Drop. **Mitigation:** tight UCAN `nbf`/`exp` windows + key rotation discipline + the typed `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate. **Stays OPEN at v1-beta + v1-GM** — this is an inherent property of encryption-at-rest where the reader holds plaintext key material; closing it would require structural changes (e.g. forward-secret re-keying on every revocation; MLS-style per-message keys) that are out of scope for v1. Authored at G-CORE-9 V1-FROZEN-INTERFACE row 8e per Ben morning queue item; tracking via the V1-FROZEN-INTERFACE.md item 15(i) FREEZE-WAVE FIX-NOW. |
+| 31 | LAMPS Composite ML-DSA combiner is EUF-CMA-only NOT SUF-CMA (CLOSED-equivalent via Inv-15 application-layer 3-layer decomposition) | 4-Meta-Core | **OPEN at construction layer; CLOSED-EQUIVALENT at application layer via Inv-15.** The v1-beta default signature combiner (LAMPS Composite ML-DSA `id-MLDSA65-Ed25519-SHA512` at `SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001`) is EUF-CMA-secure but NOT SUF-CMA-preserving (Weakly-Non-Separable per `draft-ietf-lamps-pq-composite-sigs-19` §10). The SUF-CMA gap is closed at the application layer via **Inv-15** (sig-bundle CIDs are never load-bearing identifiers; identity = canonical-payload-CID, authentication = codepoint-dispatched signature, revocation = semantic tuple). SUF-CMA-preserving combiners (Bird-of-Prey) are reserved as future-additive codepoints. See the body section "Compromise #31 — LAMPS Composite ML-DSA combiner …" + [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) Inv-15. |
+| 32 | ML-KEM-768 Decap chosen-ciphertext side-channel (libcrux CT-mitigation) — a Decap-axis refinement of #30 | 4-Meta-Core | **OPEN; MITIGATED.** Decap-axis refinement of the unaudited-PQ window (#30); explicitly cross-linked #30↔#32↔C-GM-AUDIT (M-5). The CT-Decap mitigation (libcrux constant-time decapsulation) is the substrate defense; closes with the #30 v1-GM audit. Encryption arc (9-eyes panel). See body section. |
+| 33 | Coercion / wrench attack OUT-OF-SCOPE — incl. Layer-D approval-coercion (coerced-approving-device `RemoteUnlock`/`SignUcanDelegation`) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** Password/physical coercion is outside the cryptographic threat model. m-5 extension: a coerced approving-device makes a coerced grant look legitimate forever via the audit-Node (distinct from #34 password-coercion). 9-eyes. |
+| 34 | Password-knowledge implies full access (Argon2id defense-in-depth) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Whoever knows the principal password derives the DAK; Argon2id raises the offline-guess cost but does not change the knowledge-implies-access property. 9-eyes. |
+| 35 | Compromised-device retroactive decryption (no past-content forward-secrecy at v1-beta; CGKA deferred) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** A device whose long-term key is compromised can retro-decrypt content it held; full PCS/CGKA is deferred post-v1-beta. 9-eyes. |
+| 36 | RAM-residency / coredump / swap forensic-extraction OUT-OF-SCOPE (`zeroize`+`secrecy` best-effort) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** Plaintext-in-RAM extraction via coredump/swap is outside scope; `zeroize` + `secrecy` are best-effort hardening, not a guarantee. 9-eyes. |
+| 37 | No TEE / sealed-enclave attestation at v1-beta + v1-GM | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Benten makes no TEE/enclave attestation claim; key material rests in process memory protected only by OS boundaries. 9-eyes. |
+| 38 | Physical-presence side-channels OUT-OF-SCOPE | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** EM/power/acoustic/timing physical side-channels are outside the threat model. 9-eyes. |
+| 39 | Supply-chain dependency-pinning posture (PARTIAL; `cargo deny` + RustSec + McMillion-not-Cryspen `hpke`; new `secrecy` Layer-A dep) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Dependency pinning is PARTIAL: `cargo deny` + RustSec advisory gate + the McMillion `hpke` crate (NOT Cryspen `hpke-rs` w/ 13 CVEs). O-1: `secrecy` is a new Layer-A dependency disclosed here. 9-eyes; O-1. |
+| 40 | Build-time / reproducible-builds + SLSA-3+ posture (post-v1-GM) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Reproducible-builds + SLSA-3+ provenance are post-v1-GM commitments, not v1-beta guarantees. 9-eyes. |
+| 41 | Cross-device-sync UX-vs-cryptographic boundary — incl. revocation-propagation-lag (O-4) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** The cross-device sync UX surface and the cryptographic boundary differ; O-4 sub-clause: a revoked device can exercise a stale grant during a partition (bounded by tight `exp`). 9-eyes; O-4. |
+| 42 | Layer-C forward-secrecy gap (HPKE-mode-base recipient long-term sk decrypts forever) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** HPKE-mode-base is structurally non-FS at the long-term-sk axis: a 2030 sk-compromise recovers 2026 envelopes. Partial FS via app-layer key rotation; full per-message FS is the SEPARATE #56 journalist class. 9-eyes (U13). |
+| 43 | Envelope metadata leakage to untrusted relays — IMPROVED by Sealed-Sender DEFAULT (BR-1) | 4-Meta-Core | **ACCEPTED TRADE-OFF; IMPROVED.** Sealed-Sender DEFAULT (`0x6510`) removes plaintext sender-DID on the default path; NO coarse-epoch on the Drop wire (1-hr bucket is Layer-D-only — RULING-1 / M-14); group-AAD set-identifying material is BLINDED (audience_set_commitment + membership_set_id_commitment per #61). Residual on the default Drop wire = recipient DID + linkable-but-blinded group tags (roadmap U22–U28; full per-send unlinkability = U25 v1-GM-reserve). 9-eyes (L6); BR-1; #61. |
+| 44 | Long-term-confidentiality posture (BSI TR-02102-1; X-Wing/MLKEM768-X25519 acceptable-migration-window) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** The very-long-term (decades) confidentiality horizon is outside the v1-beta posture; the hybrid KEM acceptable-migration-window is disclosed per BSI TR-02102-1. 9-eyes. |
+| 45 | ML-KEM-768 MAL-BIND-K-CT / K-PK binding-properties (connects to IND-CCA2-adversarial-recipient-seed) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** ML-KEM-768 binding properties (MAL-BIND-K-CT / K-PK) connect to the M-6 IND-CCA2-adversarial-recipient-seed audit line; this is an external-cryptographer-audit disclosure surface (NOT a unit-test "proof"). MembershipSet panel; M-6. |
+| 46 | `HpkeMultiBase` O(N) wire-cost above 32 recipients (Atrium 32 / DeviceMesh 5 / SingleDevice 1) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Multi-stanza HPKE wire-cost grows linearly with recipient count; per-Kind cardinality caps bound it (Atrium 32 / DeviceMesh 5 / SingleDevice 1). MembershipSet panel. |
+| 47 | Collaborative-edit-via-re-drop accepted v1-beta trade-off | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Collaborative edits propagate via re-drop rather than a shared mutable cipher object at v1-beta. MembershipSet panel. |
+| 48 | MembershipSet-shape-leak (shared_key compromise → fingerprints that generation; recovery via fork) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** A `shared_key` compromise reveals that generation's membership-set shape (a fingerprint); recovery is via FORK-ONLY rotation (Inv-20/Inv-21). MembershipSet panel. |
+| 49 | MembershipSet-member-acting-as-storage-host trust-boundary collapse | 4-Meta-Core | **ACCEPTED TRADE-OFF.** When a set-member is also the storage host, the member↔host trust boundary collapses (the host sees member-visible plaintext it was already entitled to). MembershipSet panel. |
+| 50 | Permanence-stewardship dependency disclosure | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Content permanence depends on at-least-one-peer-stewards-the-bytes; Benten makes no centralized-durability guarantee. MembershipSet panel. |
+| 51 | Tauri / NAPI-RS marshaling-boundary side-channels | 4-Meta-Core | **ACCEPTED TRADE-OFF.** The Tauri/NAPI-RS FFI marshaling boundary is a potential timing/side-channel surface for key material crossing the JS↔Rust line; disclosed, not closed at v1-beta. MembershipSet panel. |
+| 52 | MembershipSet-no-PCS-against-removed-members (fork-on-kick) + in-set role-downgrade subsume | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Removing a member does NOT provide post-compromise security against that member for content they already held; recovery is fork-on-kick (re-key via FORK). In-set role-downgrade is subsumed (a downgraded member retains prior-derived keys). MembershipSet panel (M-C3 F-FE-5). |
+| 53 | TransportConfig-codepoint reserve (NARROWED): iroh-gossip SHIPS; Willow / iroh-roq / iroh-live RESERVE | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Only `GossipPlusBlobs` ships at v1-beta; the Willow / iroh-roq / iroh-live `TransportConfig` variants are reserved-and-typed-rejected (additive codepoints, no wire-break when added). MembershipSet panel (Ben Q1). |
+| 54 | Continuous-rotation deferral + post-v1-beta `AtriumWithRotatingGroupKey` revisit-trigger | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Continuous group-key rotation (CGKA-style) is deferred; the named revisit-trigger is `AtriumWithRotatingGroupKey` post-v1-beta. MembershipSet panel (N3). |
+| 55 | GDPR-RTBF honest-architectural-disclosure (P2P-by-design; apps-layer crypto-shredding) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Right-to-be-forgotten is architecturally constrained by P2P-by-design (no central delete); the apps-layer remedy is crypto-shredding (destroy keys, leave ciphertext). MembershipSet panel. |
+| 56 | Journalist per-message forward-secrecy deferral (SEPARATE design class from group-key rotation) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Per-message FS (journalist threat class) is a SEPARATE design class kept sharply distinct from #42 (HPKE non-FS) and #52 (fork-on-kick) per R1-Q-8; deferred post-v1-beta. MembershipSet panel (MINT confirmed). |
+| 57 | RestrictedScopeSet / grant immutability honest-disclosure (absorbs / cross-links #62) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** A RestrictedScopeSet grant is immutable once issued; narrowing requires re-issue. Cross-links / absorbs the #62 revocation-reach property. MembershipSet panel. |
+| 58 | Audit-log insider-correlation (admin full visibility; per-recipient-unlinkability is network-observer-only) | 4-Meta-Core | **COMPOSITION-HAZARD HONEST DISCLOSURE.** An admin with audit-log visibility can correlate members; per-recipient-unlinkability is **network-observer-only** (m-7), NOT admin-hidden. Threshold-admin opt-in closes the insider vector. MembershipSet panel (M-C2-B-3 + P5). |
+| 59 | KEM-key-confirmation under multi-stanza-HPKE-Encap — re-scoped to Sealed-Sender abuse-control surface (BR-1; see #63) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** KEM key-confirmation under multi-stanza HPKE-Encap; re-scoped by BR-1 to the Sealed-Sender abuse-control surface (the abuse-control residual lands at #63). MembershipSet panel (M-C3); BR-1. |
+| 60 | RBAC-role-transition does not invalidate prior UCAN attenuations — composition note (m-6) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** An RBAC role-transition does NOT retroactively invalidate already-issued UCAN attenuations; under ship-all-5 + remote-permission an ephemeral UCAN survives a role-downgrade and is bounded ONLY by `exp` ⇒ tight-`exp` default mandate (§3.4; cross-link #52). MembershipSet panel (M-C3 F-FE-2); m-6. |
+| 61 | MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic) | 4-Meta-Core | **COMPOSITION-HAZARD HONEST DISCLOSURE; CLOSED.** The iroh-gossip topic would have leaked a membership-set fingerprint; CLOSED by P2 D6 HMAC-blinded (`blake3::keyed_hash`) gossip topic — set-identifying material is never published in the clear. MembershipSet panel (M-C3). |
+| 62 | Revocation reach in encryption-at-rest (already-derived keys remain decryptable; Drop bundles forever-valid once distributed) | 4-Meta-Core | **RE-POINTED from the in-tree #31 occupant (BR-2). OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN `nbf`/`exp` + key rotation.** Per RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i): UCAN revocation cuts FUTURE serves (the per-request `CapabilityPolicy::check_read` consultation fails for subsequent requests against the granted CID), but already-derived keys remain decryptable forever. Once Bob has derived `K(N)` for some Node, Bob can decrypt any ciphertext he obtains for that Node, regardless of subsequent UCAN revocation. Re-keying the Node requires Alice to re-encrypt + re-issue (a heavy operation; per-Node + per-recipient cost scales). Drop bundles are forever-valid once distributed — the producer has no callback to revoke an already-distributed Drop. **Mitigation:** tight UCAN `nbf`/`exp` windows + key rotation discipline + the typed `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate. **Stays OPEN at v1-beta + v1-GM** — this is an inherent property of encryption-at-rest where the reader holds plaintext key material; closing it would require structural changes (e.g. forward-secret re-keying on every revocation; MLS-style per-message keys) that are out of scope for v1. Authored at G-CORE-9 V1-FROZEN-INTERFACE row 8e per Ben morning queue item; tracking via the V1-FROZEN-INTERFACE.md item 15(i) FREEZE-WAVE FIX-NOW. Cross-linked #57. |
+| 63 | Sealed-Sender abuse-control trade-off (no plaintext sender ⇒ abuse-control rides recipient-issued delivery tokens) | 4-Meta-Core | **NEW (BR-1; §3.11).** The DEFAULT Sealed-Sender path (`0x6510`) carries no plaintext sender identity, so abuse/spam control cannot use per-sender filtering; it rides recipient-issued short-lived rate-limited UCAN-backed delivery tokens (refused at the receive boundary BEFORE decrypt). Residual: a recipient who over-issues tokens re-admits spam (mitigated by default-conservative token rate-limits + per-token `nbf`/`exp` + revocation). See body section. |
+| 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade).** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the cache entry propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection (no same-device replay), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. See `docs/future/refinement-audit-2026-05.md §15` for the v1-platform-shippable BLOCKER cluster framing.
 
@@ -2464,6 +2497,77 @@ Verified 2026-05-26 (Q1+Q2 ground-truth-verify): `Engine::revoke_capability_by_g
 
 **Honest-disclosure standing.** The blog framing for Position B (in revision; tracked at `.addl/phase-4-meta/position-b-revision-roadmap.md` + dispatched revision agent at branch `phase-4-meta-core/position-b-revision-v2`) MUST surface this compromise + the Inv-15 closure mechanism + the future-additive path as honesty caveats #7 + #8 + #9 per the cryptographer-review's blog-revision-requirements. The compromise is publicly defensible; the framing is "we shipped LAMPS for interop + closed the SUF-CMA gap at the application layer via Inv-15 + Bird-of-Prey-class is on our roadmap."
 
+### Compromise #32 — ML-KEM-768 Decap chosen-ciphertext side-channel (Decap-axis refinement of #30)
+
+**Status.** OPEN; MITIGATED. **Class.** Dependency-on-unaudited-cryptographic-primitive, Decap-axis (`MIT`).
+
+This is a **refinement of Compromise #30** (unaudited PQ primitives), scoped specifically to the ML-KEM-768
+**decapsulation** path. Chosen-ciphertext side-channels against ML-KEM Decap (timing / fault on the
+re-encryption + FO-transform comparison) are a known implementation-risk class for the primitive. The substrate
+mitigation is constant-time decapsulation (libcrux CT-Decap). **The #30↔#32↔C-GM-AUDIT chain is explicit
+(M-5):** #32 is the Decap-specific axis of the same unaudited-primitive window that #30 names broadly; both
+**CLOSE at v1-GM** when the independent `ml-dsa`/`ml-kem` audit lands (NF-2 / C-GM-AUDIT), with #32 specifically
+requiring the audit to cover the CT-Decap claim. **Cross-ref:** Compromise #30 (the parent window); R0.7 §5.2
+M-5.
+
+### Compromise #63 — Sealed-Sender abuse-control trade-off
+
+**Status.** OPEN; ACCEPTED TRADE-OFF (`ATO`). **Source.** NEW (BR-1; R0.7 §3.11).
+
+Because the DEFAULT Layer-C path (`0x6510`, Sealed-Sender) carries NO plaintext sender identity, abuse/spam
+control cannot rely on per-sender filtering. The v1-beta-Core abuse-control mechanism (Signal's delivery-token
+pattern adapted to Benten's capability discipline): a recipient (or a MembershipSet admin on behalf of members)
+issues short-lived, rate-limited UCAN-backed **delivery tokens**; a Sealed-Sender envelope without a valid token
+is refused at the receive boundary **BEFORE decrypt**. This binds abuse-control to the capability spine without
+re-exposing the sender identity. Per-token rate-limit + revocation ride the existing UCAN `nbf`/`exp` +
+revocation substrate. **The token-binding AAD carries NO `coarse_epoch`** (freeze record): freshness rides the
+delivery token's own UCAN `nbf`/`exp` + the `jti`-keyed nonce-cache (§3.10), never a time-bucket. **Residual
+(the compromise):** a recipient who over-issues delivery tokens re-admits spam — an accepted trade-off,
+mitigated by default-conservative token rate-limits. **Cross-ref:** Compromise #59 (KEM-key-confirmation
+re-scoped to this abuse surface); R0.7 §3.11.
+
+### Compromise #64 — Cross-device best-effort-eventual nonce-rejection window (NQ-T4)
+
+**Status.** OPEN; ACCEPTED TRADE-OFF (`ATO`). **Source.** NEW — minted this cascade per NQ-T4 (R0.7 §10.5,
+Ben-ratified 2026-06-02). **Class.** Eventual-consistency window in replay-defense, scoped to the user's own
+device mesh.
+
+The `jti`-keyed nonce-cache (the replay-defense substrate that re-uses the Compromise #25 durable-CAS-marker
+pattern) has two consistency tiers:
+
+- **Per-device-durable — GUARANTEED.** The cache is `jti`-keyed, durable (survives engine restart — persisted,
+  not RAM-only), and retained for ≥ the full 1-hour bucket window. A nonce consumed on a device cannot be
+  replayed against that same device.
+- **User-global — best-effort-eventual-via-sync (NOT synchronous).** A nonce consumed on device B is rejected on
+  device C **only after** the cache entry propagates to C via sync. Between consumption-on-B and
+  propagation-to-C there is a window in which the same remote-permission / DeviceLink token can be replayed once
+  against C.
+
+**Why this exists (and is accepted).** Synchronous user-global nonce rejection would require an online
+coordinator / consensus step that the P2P-by-design model deliberately avoids (there is no always-online
+authority across a user's own devices). The window is therefore an inherent property of eventual-consistency
+replay-defense, disclosed honestly rather than papered over.
+
+**Mitigations.**
+1. **Durable per-device rejection** eliminates same-device replay entirely.
+2. **Strict `valid_until` (NQ-T2):** the enforcement clock is full-1-second granularity, enforced strictly
+   (`present > valid_until → reject`) with NO grace/skew window; the coarse 1-hour metadata bucket is never
+   consulted for expiry, so it cannot widen this window.
+3. **Short delivery-token / grant `exp`** (the tight-`exp` default mandate, §3.4 / Compromise #60) bounds how
+   long any single token is replayable at all.
+
+**Stays OPEN at v1-beta + v1-GM** — closing it (synchronous cross-device rejection) is out of scope for the P2P
+model; the bounded window is the accepted residual. **Cross-ref:** Compromise #25 (shipped nonce-cache
+substrate it re-uses); NQ-T2 (`valid_until` strict-enforcement); Compromise #60 (tight-`exp`); R0.7 §10.5
+(NQ-T4 ratification) + §3.10 (nonce-cache spec).
+
+> **Compromise #62 detail (revocation reach)** lives at the renumbered in-tree section
+> "Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)" below +
+> the "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" section — verbatim-preserved
+> from the in-tree #31 body, renumbered per BR-2 (this is a renumber, not a rewrite). The #33–#61
+> honest-disclosure rows ride their summary-row body (no separate detail section, matching how the in-tree
+> doc handles e.g. #13/#14 disclosure rows).
+
 ## Per-Node AEAD wrap layer — rebinding-attack-prevention (G-CORE-3d / #1301)
 
 **Section landed at Phase-4-Meta-Core G-CORE-3d wave (per R0.8
@@ -2621,7 +2725,7 @@ regression pin.
 The AEAD primitive is **ChaCha20-Poly1305** (RFC 8439) per CLAUDE.md
 baked-in #5 crypto-agility refinement. Dispatched via
 `benten_crypto_suite::aead::wrap` / `::unwrap` over the
-codepoint-tagged `AeadKeyMaterial` (X-Wing-hybrid `0x647a` v1-beta default;
+codepoint-tagged `AeadKeyMaterial` (MLKEM768-X25519-hybrid `0x647a` v1-beta default;
 classical-only X25519 `0x6400` downgrade arm; both feed the same
 ChaCha20-Poly1305 bulk layer). The integration crate is the ONLY
 crypto-primitive call site (crypto-agility-contract:6). Never
@@ -2709,7 +2813,7 @@ codify the contract; the wave-3e pin
 `tf3e_endpoint_id_round_trips_through_verifying_key_byte_identical`
 enforces it.
 
-### Revocation reach (§R6) — Compromise #31 detail
+### Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)
 
 **Code anchors (grep-discoverable per pim-13 §3.12 audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D):** the future-serve-cut assertion at `crates/benten-engine/tests/resume_with_revoked_grant_denies.rs` + `crates/benten-sync/tests/tf3e_replay_attack_ucan_expired.rs`; the forever-valid-once-distributed Drop bundle property documented at `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`; the `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate ErrorCode at `crates/benten-errors/src/lib.rs::ErrorCode::UcanBlobsRequestRejected` (the typed mitigation arm); the offline-Drop asymmetry section "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" below (grep the section title to locate at HEAD per §3.5b HARDENED point 3 / §3.6j cite-grep-verify discipline; line number omitted to avoid future drift).
 
