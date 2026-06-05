@@ -75,6 +75,37 @@ ${CFG.canon || ''}
 const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o }
 const keyOf = f => `${f.file}::${f.family || ''}::${(f.claim || '').slice(0, 60)}`
 
+// ── FAIL-SOFT for schema agents ─────────────────────────────────────────────────────────────────────
+// A {schema} agent can throw ("subagent completed without calling StructuredOutput") — esp. on a CLEAN/0-finding
+// round (it fumbles the final tool call). That crash lost a CONVERGED R4.6 run. softSchema RETRIES once (most such
+// crashes are transient), then fails to a SAFE fallback that SURFACES (never silently drops a finding / auto-approves
+// a fix). Used for the structure consolidator + completeness-critic + fix-review. The lens-architect is schema-FREE
+// (below) because its failure was a 39-min StructuredOutput-retry HANG, which a try/catch cannot shorten.
+async function softSchema(prompt, opts, fallback, retries = 1) {
+  for (let i = 0; i <= retries; i++) {
+    try { const r = await agent(prompt, opts); if (r) return r; log(`schema-agent ${opts.label} returned empty (attempt ${i + 1})`) }
+    catch (e) { log(`schema-agent ${opts.label} crashed attempt ${i + 1} (${String((e && e.message) || e).slice(0, 80)})`) }
+  }
+  log(`schema-agent ${opts.label} failed ${retries + 1}x — failing soft (orchestrator must review)`)
+  return { ...fallback, _schemaCrashed: true }
+}
+
+// ── SCHEMA-FREE LENS-ARCHITECT helpers: prose pipe-format → lenses, with STD-catalog fallback ──────────
+const stdCatalogLenses = std => String(std).split('·').map(s => s.trim()).filter(Boolean).map((m, i) => ({
+  key: ((m.split(/[\s/(&]/)[0] || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24)) || `std-${i}`,
+  mandate: m, focus: 'the corpus', origin: 'standard' }))
+const parseLenses = text => {
+  if (!text || typeof text !== 'string') return []
+  const out = []
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\s*(?:[-*\d.]+\s*)?([A-Za-z0-9][A-Za-z0-9 _\/-]{1,44}?)\s*\|\s*(standard|bespoke|must-include|prior-missed)\s*\|\s*([^|]+?)\s*\|\s*(.+?)\s*$/i)
+    if (m) out.push({ key: m[1].trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 28), origin: m[2].toLowerCase(), focus: m[3].trim(), mandate: m[4].trim() })
+  }
+  return out
+}
+const parseBar = text => { const m = text && String(text).match(/CONVERGENCE[_ ]BAR\s*[:|]\s*(.+)/i); return m ? m[1].trim() : null }
+const ARCH_FMT = `EMIT ONLY this format — NO JSON, no paragraphs: ONE LINE PER LENS, exactly\n  <key> | <origin> | <focus-files> | <mandate>\nwhere origin ∈ {standard, bespoke, must-include, prior-missed}. After all lens lines, ONE final line:\n  CONVERGENCE_BAR: <what "0 findings" must mean for this work>\nBe decisive — emit the set in one pass; do not deliberate at length.`
+
 const LENSSET_SCHEMA = { type: 'object', additionalProperties: false, required: ['lenses', 'rationale', 'convergence_bar'], properties: {
   lenses: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['key', 'mandate', 'focus', 'origin'], properties: {
     key: { type: 'string' }, mandate: { type: 'string' }, focus: { type: 'string' },
@@ -113,7 +144,8 @@ if (args && args.lenses && args.lenses.length) {
   log(`lens set provided verbatim: ${LENSES.length} lenses (architect skipped)`)
 } else {
   phase('LensArchitecture')
-  const composed = await agent(`${COMMON}
+  // SCHEMA-FREE architect (prose pipe-format → parseLenses) — avoids the StructuredOutput retry-HANG (the 54-retry/39-min runaway) entirely. Tolerant parse + STD-catalog fallback guarantees a usable set.
+  const composedText = await agent(`${COMMON}
 ## YOU ARE THE LENS ARCHITECT (meta-reviewer) for the fix-loop review of: ${ARTIFACT}
 Reflect on the ACTUAL corpus + spec and COMPOSE the comprehensive review lens set (Pattern 6: reviewer composition follows lens surface). Steps:
 1. SKIM the corpus (enumerate changed files + read the load-bearing ones) + the spec, so you know what this work actually IS and where it can break.
@@ -121,17 +153,26 @@ Reflect on the ACTUAL corpus + spec and COMPOSE the comprehensive review lens se
 3. INVENT the BESPOKE lenses this specific corpus needs that the standard set doesn't name (its unique surface — e.g. a crypto-construction lens for a crypto corpus, a distributed-systems lens for a sync corpus, a specific ruling-fidelity lens, an unusual failure mode you can see in THIS work).
 4. MUST-INCLUDE (always add, origin must-include): ${(CFG.mustInclude || []).join(', ') || '(none)'}.
 5. PRIOR-MISSED (lenses a prior round/run flagged as missing — add them, origin prior-missed): ${CFG.priorMissedLenses || '(none)'}.
-Right-size the set (typically 8-16; enough to cover the surface, not padded) — each lens DISTINCT (no two that would find the same thing). Per lens: key (short), mandate (what to hunt, specific to this corpus), focus (which files), origin. Then RATIONALE (why this set is comprehensive for THIS work) + CONVERGENCE_BAR (what "0 findings" must mean here).`,
-    { label: 'lens-architect', phase: 'LensArchitecture', schema: LENSSET_SCHEMA })
-  const refined = await agent(`${COMMON}
+Right-size the set (typically 8-16; enough to cover the surface, not padded) — each lens DISTINCT (no two that would find the same thing).
+${ARCH_FMT}`,
+    { label: 'lens-architect', phase: 'LensArchitecture' })
+  let parsed = parseLenses(composedText)
+  let bar = parseBar(composedText)
+  if (parsed.length >= 4) {
+    const refinedText = await agent(`${COMMON}
 ## ARCHITECT-REVIEWER (extra-reflection-pass) for the fix-loop lens set
 A lens-architect composed the set below for: ${ARTIFACT}. Reason AS BEN: (a) is there a lens this corpus NEEDS that's MISSING (a failure mode / spec obligation / adversary angle no lens covers)? (b) any two lenses REDUNDANT (would find the same thing — merge)? (c) is the convergence_bar right + complete? Return the FINAL refined lens set (add missing, merge redundant, sharpen mandates). Distinct + right-sized.
-COMPOSED SET: ${JSON.stringify(composed, null, 1)}`,
-    { label: 'lens-architect-review', phase: 'LensArchitecture', schema: LENSSET_SCHEMA })
-  const ls = refined || composed
-  LENSES = ls.lenses
-  convergenceBar = ls.convergence_bar || convergenceBar
-  log(`lens-architect composed ${LENSES.length} lenses (${LENSES.filter(l => l.origin === 'bespoke').length} bespoke). Convergence bar: ${convergenceBar}`)
+${ARCH_FMT}
+COMPOSED SET (same pipe format):
+${composedText}`,
+      { label: 'lens-architect-review', phase: 'LensArchitecture' })
+    const refined = parseLenses(refinedText)
+    if (refined.length >= 4) { parsed = refined; bar = parseBar(refinedText) || bar }
+  }
+  if (parsed.length < 4) { log(`architect parse yielded ${parsed.length} lenses — falling back to STD catalog (${stdCatalogLenses(STD).length} lenses)`); parsed = stdCatalogLenses(STD) }
+  LENSES = parsed
+  convergenceBar = bar || convergenceBar
+  log(`lens-architect (schema-free) composed ${LENSES.length} lenses (${LENSES.filter(l => l.origin === 'bespoke').length} bespoke). Convergence bar: ${convergenceBar}`)
 }
 LENSES.forEach(l => lensKeys.add(l.key))
 
@@ -152,13 +193,15 @@ while (!converged && round <= MAX_ROUNDS && (!budget.total || budget.remaining()
 
   // 2. STRUCTURE + VALIDATE — dedup, adversarially set real?, classify disposition
   phase('Structure')
-  const structured = await agent(`${COMMON}\nStructuring+validation consolidator. From the ${live.length} lens reports below, extract EVERY distinct finding, dedup (keep highest severity), and for each set \`real\` by checking it against the actual corpus (default real=false if unsubstantiated) + classify \`disposition\` per HARD RULE 12. panel_returned=${live.length}, panel_expected=${LENSES.length}.\n=== REPORTS ===\n${live.map((r, i) => `--- ${i + 1} ---\n${r}`).join('\n')}`,
-    { label: `r${round}-structure`, phase: 'Structure', schema: FINDINGS_SCHEMA })
+  const structured = await softSchema(`${COMMON}\nStructuring+validation consolidator. From the ${live.length} lens reports below, extract EVERY distinct finding, dedup (keep highest severity), and for each set \`real\` by checking it against the actual corpus (default real=false if unsubstantiated) + classify \`disposition\` per HARD RULE 12. panel_returned=${live.length}, panel_expected=${LENSES.length}.\n**Even if the panel raised ZERO findings, you MUST STILL call the structured-output tool with an empty findings array — never end your turn without calling it** (a clean round is a valid, important result).\n=== REPORTS ===\n${live.map((r, i) => `--- ${i + 1} ---\n${r}`).join('\n')}`,
+    { label: `r${round}-structure`, phase: 'Structure', schema: FINDINGS_SCHEMA },
+    { findings: [], panel_returned: live.length, panel_expected: LENSES.length, summary: 'consolidator crashed — fail-soft EMPTY (orchestrator must hand-verify this round was genuinely clean before trusting convergence)' })
 
   // 2.5 COMPLETENESS-CRITIC + LENS-GAP detector — fresh gap-hunt; missed-lenses grow the panel + gate convergence
   phase('Completeness')
-  const critic = await agent(`${COMMON}\n## COMPLETENESS CRITIC (fresh, independent) + LENS-GAP detector — round ${round}\nThe ${LENSES.length}-lens panel (auto-composed by a lens-architect) + structuring just ran over this corpus. TWO jobs:\n(1) What did the panel MISS — a spec obligation / invariant / adversary path / freeze-gating byte with NO covering finding? Return each as a gap_finding (id, severity, file = the CONCRETE target file to fix (existing path OR a new path to mint), claim grounded in a real line, disposition per HARD RULE 12).\n(2) LENS-GAP: did the architect MISS A WHOLE LENS this corpus needed (a dimension no current lens examined)? Return each as a missed_lens (key, mandate, focus) — it GROWS next round's panel.\nCurrent lenses: ${JSON.stringify(LENSES.map(l => l.key))}. Convergence bar: "${convergenceBar}". Spot-check the spec vs the corpus independently. Default to empty arrays if nothing is substantiable.`,
-    { label: `r${round}-completeness`, phase: 'Completeness', schema: CRITIC_SCHEMA })
+  const critic = await agent(`${COMMON}\n## COMPLETENESS CRITIC (fresh, independent) + LENS-GAP detector — round ${round}\nThe ${LENSES.length}-lens panel (auto-composed by a lens-architect) + structuring just ran over this corpus. TWO jobs:\n(1) What did the panel MISS — a spec obligation / invariant / adversary path / freeze-gating byte with NO covering finding? Return each as a gap_finding (id, severity, file = the CONCRETE target file to fix (existing path OR a new path to mint), claim grounded in a real line, disposition per HARD RULE 12).\n(2) LENS-GAP: did the architect MISS A WHOLE LENS this corpus needed (a dimension no current lens examined)? Return each as a missed_lens (key, mandate, focus) — it GROWS next round's panel.\nCurrent lenses: ${JSON.stringify(LENSES.map(l => l.key))}. Convergence bar: "${convergenceBar}". Spot-check the spec vs the corpus independently. Default to empty arrays if nothing is substantiable — but **you MUST STILL call the structured-output tool (with empty arrays if clean); never end your turn without calling it**.`,
+    { label: `r${round}-completeness`, phase: 'Completeness', schema: CRITIC_SCHEMA },
+    { gap_findings: [], missed_lenses: [], summary: 'completeness-critic crashed — fail-soft EMPTY' })
   const gapFindings = (critic?.gap_findings || []).map(g => ({ ...g, lens: 'completeness-critic', real: true }))
   const newMissed = (critic?.missed_lenses || []).filter(l => l && l.key && !lensKeys.has(l.key))
 
@@ -168,10 +211,15 @@ while (!converged && round <= MAX_ROUNDS && (!budget.total || budget.remaining()
   decisionLog.push({ round, kind: 'triage', panel: `${live.length}/${LENSES.length}`, findings: all, critic_gaps: gapFindings.length, missed_lenses: newMissed.map(l => l.key) })
   log(`round ${round}: ${all.length} findings (${gapFindings.length} critic-gap); ${toFix.length} fresh-to-fix (${newBlkMaj.length} BLK/MAJ); ${newMissed.length} new missed-lens`)
 
-  // CONVERGENCE: full panel returned AND no NEW BLOCKER/MAJOR AND no NEW missed-lens (a missed lens could hide a BLK/MAJ)
+  // CONVERGENCE: full panel returned AND no NEW BLOCKER/MAJOR AND no NEW missed-lens (a missed lens could hide a BLK/MAJ).
+  // haveCleanSignal: a CRASHED consolidator fails soft to EMPTY findings — which LOOKS clean but isn't a reliable signal.
+  // Require at least ONE of {structure, critic} un-crashed before certifying (a single crash doesn't lose a genuinely-clean
+  // round — the other agent certifies it, fixing the R4.6 false-loss; a DOUBLE crash blocks convergence — no reliable signal).
+  const haveCleanSignal = !structured?._schemaCrashed || !critic?._schemaCrashed
   if (live.length < LENSES.length) { log(`PANEL-INCOMPLETE ${live.length}/${LENSES.length} — not certifying`) }
-  else if (round > 1 && newBlkMaj.length === 0 && newMissed.length === 0) { converged = true }
-  if (toFix.length === 0 && newMissed.length === 0) { converged = true; break }
+  else if (round > 1 && newBlkMaj.length === 0 && newMissed.length === 0 && haveCleanSignal) { converged = true }
+  else if (round > 1 && newBlkMaj.length === 0 && newMissed.length === 0 && !haveCleanSignal) { log(`would-converge but BOTH structure+critic crashed — NOT certifying (no reliable clean signal); orchestrator hand-verify round ${round}`) }
+  if (toFix.length === 0 && newMissed.length === 0 && haveCleanSignal) { converged = true; break }
   // grow the panel with the critic's missed-lenses (forces another round so the new dimension actually reviews the corpus)
   newMissed.forEach(l => { lensKeys.add(l.key); LENSES.push({ ...l, origin: 'prior-missed' }) })
 
@@ -190,8 +238,9 @@ while (!converged && round <= MAX_ROUNDS && (!budget.total || budget.remaining()
       { label: `r${round}-fix:${g.file.split('/').pop()}`, phase: 'Fix' }),
     (rec, g) => agent(`${COMMON}\nReason AS BEN. A fixer wrote a new \`${g.file}\` to \`${cluster}/${g.file}\` (read it: \`cat ${cluster}/${g.file}\`). Review its REASONING as Ben + hunt a MORE IDEAL permanent shape (extra-reflection-pass). If you improve it, OVERWRITE \`${cluster}/${g.file}\`. Verify it meets the substantive-pin bar + closes every finding + stays #[ignore]'d + no Rust-2024 reserved-keyword ids.\nFIXER MANIFEST: ${rec}`,
       { label: `r${round}-review-reason:${g.file.split('/').pop()}`, phase: 'Fix' }),
-    (_r, g) => agent(`${COMMON}\nAdversarially review the fix at \`${cluster}/${g.file}\` (diff vs \`git show ${CFG.corpusBranch}:${g.file}\`). Verify: closes_findings (${JSON.stringify(g.findings.map(f => f.id))}), compiles_shape_ok (valid Rust, still #[ignore]'d, self-contained shim, no reserved-kw), no_regression (no unrelated content lost), would_fail_on_revert (pim-2 substantive). Default REJECT if unconfirmable.`,
-      { label: `r${round}-review-fix:${g.file.split('/').pop()}`, phase: 'Fix', schema: FIXREVIEW_SCHEMA }).then(v => ({ file: g.file, findings: g.findings, review: v })))
+    (_r, g) => softSchema(`${COMMON}\nAdversarially review the fix at \`${cluster}/${g.file}\` (diff vs \`git show ${CFG.corpusBranch}:${g.file}\`). Verify: closes_findings (${JSON.stringify(g.findings.map(f => f.id))}), compiles_shape_ok (valid Rust, still #[ignore]'d, self-contained shim, no reserved-kw), no_regression (no unrelated content lost), would_fail_on_revert (pim-2 substantive). Default REJECT if unconfirmable. **You MUST call the structured-output tool with your verdict; never end your turn without it.**`,
+      { label: `r${round}-review-fix:${g.file.split('/').pop()}`, phase: 'Fix', schema: FIXREVIEW_SCHEMA },
+      { file: g.file, verdict: 'REJECT', closes_findings: false, compiles_shape_ok: false, no_regression: false, reasoning: 'fix-review crashed — NOT approving an unreviewed fix (safe side); orchestrator must hand-review this file before integrate' }).then(v => ({ file: g.file, findings: g.findings, review: v })))
   const approved = fixes.filter(Boolean).filter(f => f.review?.verdict === 'APPROVE')
   lastFixList = fixes.filter(Boolean)
   decisionLog.push({ round, kind: 'fixes', synthesis, approved: approved.map(a => ({ file: a.file, ids: a.findings.map(f => f.id), review: a.review })) })

@@ -60,6 +60,36 @@ ${CFG.canon || ''}
 
 const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o }
 
+// ── FAIL-SOFT for schema agents (retry-once → safe fallback that SURFACES) ───────────────────────────
+// A {schema} agent can throw ("subagent completed without calling StructuredOutput"), esp. on a clean result.
+// softSchema retries once then fails to a SAFE fallback (never silently drops a finding / refutes a real one).
+async function softSchema(prompt, opts, fallback, retries = 1) {
+  for (let i = 0; i <= retries; i++) {
+    try { const r = await agent(prompt, opts); if (r) return r; log(`schema-agent ${opts.label} returned empty (attempt ${i + 1})`) }
+    catch (e) { log(`schema-agent ${opts.label} crashed attempt ${i + 1} (${String((e && e.message) || e).slice(0, 80)})`) }
+  }
+  log(`schema-agent ${opts.label} failed ${retries + 1}x — failing soft (orchestrator must review)`)
+  return { ...fallback, _schemaCrashed: true }
+}
+
+// ── SCHEMA-FREE LENS-ARCHITECT helpers: prose pipe-format → lenses, with STD-catalog fallback ─────────
+// The architect is schema-FREE because its failure mode was a 39-min StructuredOutput-retry HANG (a try/catch
+// can't shorten a hang). Prose pipe-format + tolerant parse + STD-catalog fallback guarantees a usable set.
+const stdCatalogLenses = std => String(std).split('·').map(s => s.trim()).filter(Boolean).map((m, i) => ({
+  key: ((m.split(/[\s/(&]/)[0] || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24)) || `std-${i}`,
+  mandate: m, focus: 'the artifact', origin: 'standard' }))
+const parseLenses = text => {
+  if (!text || typeof text !== 'string') return []
+  const out = []
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\s*(?:[-*\d.]+\s*)?([A-Za-z0-9][A-Za-z0-9 _\/-]{1,44}?)\s*\|\s*(standard|bespoke|must-include|prior-missed)\s*\|\s*([^|]+?)\s*\|\s*(.+?)\s*$/i)
+    if (m) out.push({ key: m[1].trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 28), origin: m[2].toLowerCase(), focus: m[3].trim(), mandate: m[4].trim() })
+  }
+  return out
+}
+const parseBar = text => { const m = text && String(text).match(/CONVERGENCE[_ ]BAR\s*[:|]\s*(.+)/i); return m ? m[1].trim() : null }
+const ARCH_FMT = `EMIT ONLY this format — NO JSON, no paragraphs: ONE LINE PER LENS, exactly\n  <key> | <origin> | <focus-files> | <mandate>\nwhere origin ∈ {standard, bespoke, must-include, prior-missed}. After all lens lines, ONE final line:\n  CONVERGENCE_BAR: <what "0 findings" must mean for this work>\nBe decisive — emit the set in one pass; do not deliberate at length.`
+
 const LENSSET_SCHEMA = { type: 'object', additionalProperties: false, required: ['lenses', 'rationale', 'convergence_bar'], properties: {
   lenses: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['key', 'mandate', 'focus', 'origin'], properties: {
     key: { type: 'string' }, mandate: { type: 'string' }, focus: { type: 'string' },
@@ -82,7 +112,8 @@ if (args && args.lenses && args.lenses.length) {
   lensSet = { lenses: args.lenses.map(l => ({ ...l, origin: l.origin || 'must-include' })), rationale: 'provided verbatim via args.lenses (architect skipped)', convergence_bar: '0 confirmed BLOCKER/MAJOR' }
   log(`lens set provided verbatim: ${lensSet.lenses.length} lenses (architect skipped)`)
 } else {
-  const composed = await agent(`${COMMON}
+  // SCHEMA-FREE architect (prose pipe-format → parseLenses) — avoids the StructuredOutput retry-HANG entirely.
+  const composedText = await agent(`${COMMON}
 ## YOU ARE THE LENS ARCHITECT (meta-reviewer) for the ${TIER} review of: ${CFG.artifactDesc}
 Reflect on the ACTUAL assigned work and COMPOSE the comprehensive review lens set (Pattern 6: reviewer composition follows lens surface). Steps:
 1. SKIM the artifact (enumerate + read the load-bearing parts) + the spec, so you know what this work actually IS and where it can break.
@@ -90,16 +121,26 @@ Reflect on the ACTUAL assigned work and COMPOSE the comprehensive review lens se
 3. INVENT the BESPOKE lenses this specific artifact needs that the standard set doesn't name (its unique surface — e.g. a crypto-construction lens for a crypto corpus, a distributed-systems lens for a sync corpus, a specific-ruling-fidelity lens, an unusual failure mode you can see in THIS work).
 4. MUST-INCLUDE (always add, mark origin must-include): ${(CFG.mustInclude || []).join(', ') || '(none)'}.
 5. PRIOR-MISSED (lenses a prior round's completeness-critic flagged as missing — add them, mark origin prior-missed): ${CFG.priorMissedLenses || '(none)'}.
-Right-size the set${CFG.targetLensCount ? ` (soft target ~${CFG.targetLensCount} lenses)` : ' (typically 8-16; enough to cover the surface, not padded)'} — each lens DISTINCT (no two lenses that would find the same thing). For each lens give: key (short), mandate (what to hunt, specific to this artifact), focus (which files/sections), origin. Then state the RATIONALE (why this set is comprehensive for THIS work) + the CONVERGENCE_BAR (what "0 findings" must mean here — e.g. "every freeze-gating byte verified + every ruling has a faithful pin").`,
-    { label: `${TIER}-lens-architect`, phase: 'LensArchitecture', schema: LENSSET_SCHEMA })
-  // extra-reflection-pass: a second architect hunts a missed/redundant lens
-  const refined = await agent(`${COMMON}
+Right-size the set${CFG.targetLensCount ? ` (soft target ~${CFG.targetLensCount} lenses)` : ' (typically 8-16; enough to cover the surface, not padded)'} — each lens DISTINCT (no two lenses that would find the same thing).
+${ARCH_FMT}`,
+    { label: `${TIER}-lens-architect`, phase: 'LensArchitecture' })
+  let parsed = parseLenses(composedText)
+  let bar = parseBar(composedText)
+  if (parsed.length >= 4) {
+    // extra-reflection-pass: a second architect hunts a missed/redundant lens
+    const refinedText = await agent(`${COMMON}
 ## ARCHITECT-REVIEWER (extra-reflection-pass) for the ${TIER} lens set
 A lens-architect composed the set below for: ${CFG.artifactDesc}. Reason AS BEN: (a) is there a lens this artifact NEEDS that's MISSING (a failure mode / spec obligation / adversary angle no lens covers)? (b) any two lenses REDUNDANT (would find the same thing — merge)? (c) is the convergence_bar right + complete? Return the FINAL refined lens set (add missing, merge redundant, sharpen mandates). Keep it distinct + right-sized.
-COMPOSED SET: ${JSON.stringify(composed, null, 1)}`,
-    { label: `${TIER}-lens-architect-review`, phase: 'LensArchitecture', schema: LENSSET_SCHEMA })
-  lensSet = refined || composed
-  log(`lens-architect composed ${lensSet.lenses.length} lenses (${lensSet.lenses.filter(l => l.origin === 'bespoke').length} bespoke). Convergence bar: ${lensSet.convergence_bar}`)
+${ARCH_FMT}
+COMPOSED SET (same pipe format):
+${composedText}`,
+      { label: `${TIER}-lens-architect-review`, phase: 'LensArchitecture' })
+    const refined = parseLenses(refinedText)
+    if (refined.length >= 4) { parsed = refined; bar = parseBar(refinedText) || bar }
+  }
+  if (parsed.length < 4) { log(`architect parse yielded ${parsed.length} lenses — falling back to STD catalog (${stdCatalogLenses(STD).length} lenses)`); parsed = stdCatalogLenses(STD) }
+  lensSet = { lenses: parsed, rationale: 'schema-free architect (prose pipe-format)', convergence_bar: bar || '0 confirmed BLOCKER/MAJOR + full panel + no missed lens' }
+  log(`lens-architect (schema-free) composed ${lensSet.lenses.length} lenses (${lensSet.lenses.filter(l => l.origin === 'bespoke').length} bespoke). Convergence bar: ${lensSet.convergence_bar}`)
 }
 const LENSES = lensSet.lenses
 
@@ -116,8 +157,9 @@ log(`council: ${live.length}/${LENSES.length} lenses returned`)
 
 // ===== 2. STRUCTURE =====
 phase('Structure')
-const structured = await agent(`${COMMON}\nStructuring consolidator. From the ${live.length} lens reports, extract EVERY distinct finding, dedup (highest severity + corroborating lenses), assign ids, classify recommended_disposition per HARD RULE 12. panel_returned=${live.length}, panel_expected=${LENSES.length}. Do NOT invent findings.\n=== REPORTS ===\n${live.map((r, i) => `--- ${i + 1} ---\n${r}`).join('\n')}`,
-  { label: 'structure', phase: 'Structure', schema: FINDINGS_SCHEMA })
+const structured = await softSchema(`${COMMON}\nStructuring consolidator. From the ${live.length} lens reports, extract EVERY distinct finding, dedup (highest severity + corroborating lenses), assign ids, classify recommended_disposition per HARD RULE 12. panel_returned=${live.length}, panel_expected=${LENSES.length}. Do NOT invent findings.\n**Even if the panel raised ZERO findings, you MUST STILL call the structured-output tool with an empty findings array — never end your turn without calling it.**\n=== REPORTS ===\n${live.map((r, i) => `--- ${i + 1} ---\n${r}`).join('\n')}`,
+  { label: 'structure', phase: 'Structure', schema: FINDINGS_SCHEMA },
+  { findings: [], panel_returned: live.length, panel_expected: LENSES.length, summary: 'structure consolidator crashed — fail-soft EMPTY (orchestrator must hand-verify before trusting a CONVERGED call this round)' })
 
 // ===== 3. ADVERSARIAL VERIFY (BLK/MAJ, batched 4) =====
 phase('Verify')
@@ -125,8 +167,9 @@ const majors = (structured?.findings || []).filter(f => f.severity === 'BLOCKER'
 const verdicts = []
 for (const b of chunk(majors, 4)) {
   const res = await parallel(b.map(f => () =>
-    agent(`${COMMON}\n## ADVERSARIALLY REFUTE finding ${f.id} [${f.severity}] (lens ${f.lens}; file ${f.file}; ${f.family || ''})\nCLAIM: ${f.claim}\nGo to the actual artifact + spec; try to REFUTE it. Default REFUTED if you cannot independently reproduce the defect. CONFIRMED only if you reproduce it. PARTIAL if real but mis-severity.`,
-      { label: `verify:${f.id}`, phase: 'Verify', schema: VERDICT_SCHEMA })))
+    softSchema(`${COMMON}\n## ADVERSARIALLY REFUTE finding ${f.id} [${f.severity}] (lens ${f.lens}; file ${f.file}; ${f.family || ''})\nCLAIM: ${f.claim}\nGo to the actual artifact + spec; try to REFUTE it. Default REFUTED if you cannot independently reproduce the defect. CONFIRMED only if you reproduce it. PARTIAL if real but mis-severity. **You MUST call the structured-output tool with your verdict; never end your turn without it.**`,
+      { label: `verify:${f.id}`, phase: 'Verify', schema: VERDICT_SCHEMA },
+      { finding_id: f.id, verdict: 'CONFIRMED', corrected_severity: f.severity, reasoning: 'verify agent crashed — treating as UNREFUTED/CONFIRMED (safe side: keeps the finding alive + blocks false convergence); orchestrator must hand-verify' })))
   verdicts.push(...res.filter(Boolean))
 }
 
