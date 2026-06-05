@@ -186,11 +186,13 @@ fn resolve_fork(a: &ForkCandidate, b: &ForkCandidate) -> ForkResolution {
 /// (`derive_kv(CidTarget) -> Result<[u8; 32], KvError>`). A fork-event CID is an
 /// IMMUTABLE Version-Node CID, so it routes through
 /// [`CidTarget::ImmutableVersionNode`] (which is Inv-19-PERMITTED and therefore
-/// never errors). The typed target carries the 32-byte BLAKE3 digest portion of
-/// the CID; distinct version-node CIDs still derive distinct keys (the only
-/// property this helper's callers assert).
+/// never errors). The typed target carries the FULL 36-byte self-describing
+/// CIDv1 (`0x01 0x71 0x1e 0x20 || digest`), so the KDF binds the self-describing
+/// bytes — NOT a bare 32-byte digest (Ben-ratified 2026-06-05; R0.7 §body_cid
+/// BR / crypto-agility #5). This restores the R4-frozen `K(V)` golden. Distinct
+/// version-node CIDs still derive distinct keys.
 fn derive_k_v(version_node_cid: &[u8]) -> [u8; 32] {
-    derive_kv(CidTarget::ImmutableVersionNode(cid_digest(version_node_cid)))
+    derive_kv(CidTarget::ImmutableVersionNode(cid_full(version_node_cid)))
         .expect("an immutable Version-Node CID is Inv-19-PERMITTED and never rejected")
 }
 
@@ -201,14 +203,14 @@ fn cid(payload: &[u8]) -> Vec<u8> {
     c
 }
 
-/// Extract the 32-byte BLAKE3 digest tail from a `cid()`-shaped CID (the
-/// 4-byte `01 71 1e 20` multihash prefix + 32-byte digest). The typed
-/// `CidTarget` carries the digest, so distinct CIDs still map to distinct
-/// targets (the digest is the content-addressed, distinctness-bearing part).
-fn cid_digest(version_node_cid: &[u8]) -> [u8; 32] {
-    let tail = &version_node_cid[version_node_cid.len() - 32..];
-    let mut out = [0u8; 32];
-    out.copy_from_slice(tail);
+/// Reinterpret a `cid()`-shaped CID (the 4-byte `01 71 1e 20` multihash prefix
+/// + 32-byte digest = 36 bytes total) as the fixed-width `[u8; 36]` the typed
+/// `CidTarget` carries. The KDF binds the FULL self-describing CIDv1 (NOT the
+/// bare digest) so a future hash-width swap re-domain-separates the key
+/// automatically (R0.7 §body_cid BR / crypto-agility #5).
+fn cid_full(version_node_cid: &[u8]) -> [u8; 36] {
+    let mut out = [0u8; 36];
+    out.copy_from_slice(version_node_cid);
     out
 }
 
@@ -488,20 +490,17 @@ fn f_inv21_3_kani_tie_break_total() {
 /// unmodified winner input; the K(V) arm DERIVES the key from the
 /// Version-Node CID via `derive_k_v` and proves a different CID derives a
 /// different key (NOT a self-equality of the CID against itself).
-// TIER-2-INTEGRATION-FLAG (Ben-gated freeze decision OWED — see integrator
-// report): the w-ms-sync wave un-ignored this test against the ORIGINAL
-// full-CID `derive_kv(&[u8])`, while the w-gov-audit wave re-typed `derive_kv`
-// to the Inv-19 type-restricted `derive_kv(CidTarget) -> Result<[u8;32], _>`
-// that hashes the 32-byte digest only. The frozen golden
-// `K_V_WINNER_HEX = e3c09e37…` is the FULL-36-byte-CID value; the new typed API
-// over the 32-byte digest produces `23dcd97f…`. This is a freeze-gating golden
-// change, NOT a mechanical merge — recomputing/blessing it is Ben's call. The
-// test body has been ADAPTED to compile against the new typed API (digest path)
-// but is `#[ignore]`'d at this checkpoint pending the freeze decision: either
-// (a) ratify the digest-only golden `23dcd97f…` as the new frozen K(V) vector,
-// or (b) carry the full-CID into `CidTarget` (a w-gov-audit API tweak) to keep
-// `e3c09e37…`. Every OTHER family in this crate is GREEN.
-#[ignore = "TIER-2 freeze-decision OWED: K(V) golden e3c09e37(full-CID) vs 23dcd97f(digest-only typed API) — Ben-gated; see integrator report"]
+// TIER-2 freeze decision RESOLVED (Ben-ratified 2026-06-05, option b): `K(V)`
+// derives over the FULL self-describing CIDv1 (36 bytes:
+// `0x01 0x71 0x1e 0x20 || the 32-byte BLAKE3 digest`), NOT the bare 32-byte
+// digest. A bare digest bakes a hash-width assumption into the keying input,
+// contradicting crypto-agility #5 (R0.7 §body_cid BR, lines 603-607; applies to
+// BOTH `0x6510`/`0x6610`). The digest-only `23dcd97f…` produced by the typed API
+// when it carried only the 32-byte digest was an inadvertent deviation
+// introduced when the two TIER-2 waves merged. `CidTarget`'s immutable arms now
+// carry the full 36-byte CID and `derive_kv` feeds those bytes into the same
+// BLAKE3-KDF context, which RESTORES the R4-frozen golden `e3c09e37…` below
+// (byte-confirmed via throwaway compute). This arm is UN-IGNORED and green.
 #[test]
 fn f_inv21_4_losing_fork_not_merged_archived_not_discarded() {
     // Winner carries ["w-only"]; loser carries ["l-only"]. A non-Admin

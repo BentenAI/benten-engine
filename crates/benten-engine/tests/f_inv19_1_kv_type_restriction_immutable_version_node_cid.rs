@@ -52,8 +52,19 @@ use benten_core::{Node, Value};
 // =====================================================================
 use benten_membership_set::keying::{CidTarget, KvError, derive_kv};
 
-fn fixed_cid(byte: u8) -> [u8; 32] {
-    [byte; 32]
+/// A fixed-width 36-byte self-describing CIDv1 fixture
+/// (`0x01 0x71 0x1e 0x20 || a 32-byte digest filled with `byte`). The typed
+/// `CidTarget` carries the FULL 36-byte CID (Ben-ratified 2026-06-05; R0.7
+/// §body_cid BR / crypto-agility #5) — the KDF binds the self-describing bytes,
+/// not a bare digest. These arms assert accept/reject + non-triviality only, so
+/// the exact bytes are immaterial; what matters is the 36-byte shape.
+fn fixed_cid(byte: u8) -> [u8; 36] {
+    let mut cid = [byte; 36];
+    cid[0] = 0x01;
+    cid[1] = 0x71;
+    cid[2] = 0x1e;
+    cid[3] = 0x20;
+    cid
 }
 
 /// F-INV19-1 (a): `derive_kv` ACCEPTS an immutable Version-Node-CID target
