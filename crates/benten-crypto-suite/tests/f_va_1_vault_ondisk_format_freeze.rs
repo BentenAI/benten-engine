@@ -182,9 +182,10 @@ const VAULT_PAYLOAD_GOLDEN_HEX: &str = "a36b6b5f7072696e636970616c58201111111111
 
 /// Lowercase-hex-encode a byte slice (no external dep).
 fn to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        s.push_str(&format!("{b:02x}"));
+        let _ = write!(s, "{b:02x}");
     }
     s
 }

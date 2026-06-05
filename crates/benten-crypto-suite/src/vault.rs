@@ -14,7 +14,7 @@
 //! The vault is **reseal-heavy** (K_principal rotation + multi-device
 //! key-wrap re-seal), so a 12-byte random ChaCha20 nonce would hit the
 //! 2^32 birthday bound. The vault uses the 24-byte XChaCha20-Poly1305 nonce
-//! variant ([`SymmetricAeadXNonce`]) — the codepoint discriminates the nonce
+//! variant (`SymmetricAeadXNonce`) — the codepoint discriminates the nonce
 //! width (a 12-byte nonce presented under the XNonce codepoint is
 //! strict-rejected; U2).
 //!

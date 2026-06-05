@@ -39,8 +39,6 @@
 //! distinct binding tuples whose raw field bytes coincide encode to distinct
 //! byte strings.
 
-use crate::codepoint::CipherSuiteCodepoint;
-
 /// The V2 format-version discriminator (M-20 / Wave-0 single V1→V2 bump).
 pub const ENVELOPE_FORMAT_VERSION_V2: u8 = 0x02;
 
@@ -242,7 +240,7 @@ impl EncryptedEnvelope {
         })
     }
 
-    /// Bounded-decode the declared `nonce_len` length-prefix (byte[4])
+    /// Bounded-decode the declared `nonce_len` length-prefix (`byte[4]`)
     /// against the remaining buffer + [`MAX_NONCE_LEN`] BEFORE reading or
     /// allocating (META #629 flagship). Returns the nonce bytes on success.
     ///
@@ -312,6 +310,23 @@ pub enum EnvelopeError {
     /// A cross-variant `BindingContext` mismatch (U2 strict-decode).
     #[error("cross-variant BindingContext mismatch (U2 strict-decode; no cross-variant fallback)")]
     CrossVariantBinding,
+}
+
+/// Lift a flat [`crate::aead::AeadEnvelope`] to an [`EncryptedEnvelope`]
+/// (M-18 migration helper). The flat envelope's untyped AAD becomes the
+/// supplied typed [`BindingContext`].
+#[must_use]
+pub fn lift_from_aead_envelope(
+    flat: &crate::aead::AeadEnvelope,
+    aad_binding: BindingContext,
+) -> EncryptedEnvelope {
+    EncryptedEnvelope {
+        format_version: ENVELOPE_FORMAT_VERSION_V2,
+        cipher_codepoint: flat.cipher_codepoint.raw(),
+        aad_binding,
+        nonce: flat.nonce.clone(),
+        ciphertext: flat.ciphertext.clone(),
+    }
 }
 
 #[cfg(test)]
@@ -400,26 +415,3 @@ mod tests {
     }
 }
 
-/// Lift a flat [`crate::aead::AeadEnvelope`] to an [`EncryptedEnvelope`]
-/// (M-18 migration helper). The flat envelope's untyped AAD becomes the
-/// supplied typed [`BindingContext`].
-#[must_use]
-pub fn lift_from_aead_envelope(
-    flat: &crate::aead::AeadEnvelope,
-    aad_binding: BindingContext,
-) -> EncryptedEnvelope {
-    EncryptedEnvelope {
-        format_version: ENVELOPE_FORMAT_VERSION_V2,
-        cipher_codepoint: flat.cipher_codepoint.raw(),
-        aad_binding,
-        nonce: flat.nonce.clone(),
-        ciphertext: flat.ciphertext.clone(),
-    }
-}
-
-// Silence the unused-import lint when the crate is built without the
-// `CipherSuiteCodepoint`-using helper above; the type is referenced in
-// `lift_from_aead_envelope` via the `flat.cipher_codepoint.raw()` call.
-const _: fn() = || {
-    let _ = CipherSuiteCodepoint::HYBRID_X25519_MLKEM768;
-};
