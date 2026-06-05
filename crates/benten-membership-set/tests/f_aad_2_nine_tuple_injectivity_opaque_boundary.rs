@@ -330,7 +330,7 @@ fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) -> [
 /// Encoding = the R0.7 §3.10/§4.1 canonical-TLV contract — the BLINDED
 /// 11-field set, big-endian, length-injective:
 ///   aad_version (u8) | codepoint (u16 BE) |
-///   body_cid (lp; self-describing CIDv1) | member_count (u32 BE) |
+///   body_cid (inline self-describing CIDv1) | member_count (u32 BE) |
 ///   audience_set_commitment (32B) | stanza_index (u32 BE) |
 ///   stanza_count (u32 BE) | member_key_generation (u32 BE) |
 ///   membership_set_id_commitment (32B) | membership_set_generation (u32 BE) |
@@ -347,7 +347,7 @@ fn assemble_group_aad(t: &GroupAadInputs) -> Vec<u8> {
     buf.extend_from_slice(&t.codepoint.to_be_bytes());
     // body_cid — length-prefixed (self-describing CIDv1; lp preserves the
     // membership-band uniform variable-field framing + length-injectivity).
-    lp(&mut buf, &t.body_cid);
+    buf.extend_from_slice(&t.body_cid); // R0.8: INLINE self-describing CIDv1 (self-delimiting multihash; no redundant external lp — uniform with 0x6510/0x6520)
     // member_count — BE u32 over the canonical (sorted-deduped-as-presented)
     // member set. The roster itself is BLINDED into audience_set_commitment.
     let member_count = u32::try_from(t.member_dids.len()).expect("member count fits u32");
@@ -408,7 +408,7 @@ fn stub_cid(payload: &[u8]) -> Vec<u8> {
 /// `benten_membership_set::aad::assemble_group_aad` (M-20). (The two 32-byte
 /// commitments / body_cid / counts are codepoint-INDEPENDENT, so the R4.6
 /// correction changed ONLY golden byte index 2, `00` → `10`.)
-const EXPECTED_AAD_HEX: &str = "0166100000002401711e20cfa9fea5491b9bf64cdc143778c3ff6e0123d8f7bca130f292b27a9bde54a86000000002f89cac9e8f674417d5c99d74d6a96e7b46065b82bd5e198de9811ae9d34c230d000000000000000100000001b3ae4d07499bd779184c6d28735cf4c2458a5d63904a383e57bbcc940bdebe760000000100000001";
+const EXPECTED_AAD_HEX: &str = "01661001711e20cfa9fea5491b9bf64cdc143778c3ff6e0123d8f7bca130f292b27a9bde54a86000000002f89cac9e8f674417d5c99d74d6a96e7b46065b82bd5e198de9811ae9d34c230d000000000000000100000001b3ae4d07499bd779184c6d28735cf4c2458a5d63904a383e57bbcc940bdebe760000000100000001";
 
 // ── F-AAD-2 arms ────────────────────────────────────────────────────────
 
