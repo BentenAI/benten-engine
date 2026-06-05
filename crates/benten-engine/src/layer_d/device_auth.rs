@@ -6,7 +6,7 @@
 //! The device-auth seam: `unlock(prompt) -> SecretBox<[u8;32]>` + `lock()` +
 //! `supports_biometric()` + `supports_remote_unlock()`. It is a **sealed**
 //! trait (Tier-2; Benten-internal) — a private supertrait
-//! ([`sealed::Sealed`]) means no external crate can implement it. Object-safe
+//! (`sealed::Sealed`) means no external crate can implement it. Object-safe
 //! so the engine can hold `Box<dyn DeviceAuthBackend>`.
 //!
 //! # The headless default ([`HeadlessDeviceAuth`])
@@ -54,7 +54,7 @@ pub enum DeviceAuthError {
 }
 
 /// The sealed-marker module — the real seal is this private supertrait. No
-/// external crate can name [`sealed::Sealed`], so no external crate can
+/// external crate can name `sealed::Sealed`, so no external crate can
 /// implement [`DeviceAuthBackend`].
 mod sealed {
     /// Private supertrait — the seal.
