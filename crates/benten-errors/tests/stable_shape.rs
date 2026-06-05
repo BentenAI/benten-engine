@@ -655,6 +655,17 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // atomic mint: Rust variant + `errors.generated.ts` + ERROR-CATALOG.md +
     // this list/count in the SAME commit. CATALOG_VARIANT_COUNT 197 -> 198.
     ErrorCode::RoleStaleAtVerify,
+    // Phase-4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2;
+    // F-INV19-1 / Inv-19) — `E_KV_TARGET_NOT_IMMUTABLE`: a K(V)
+    // (membership version-node key) derivation against a mutable Anchor CID
+    // is REJECTED (binding a key to an Anchor whose CURRENT pointer moves
+    // would silently re-target the key). §3.5g atomic mint: Rust variant +
+    // `errors.generated.ts` + ERROR-CATALOG.md + this list/count in the SAME
+    // commit. CATALOG_VARIANT_COUNT 198 -> 199. (NOTE: the parallel
+    // w-ms-sync wave may also mint codes; the integrator reconciles the
+    // count at strategy-C integrate-time per the historical #1319<->#1318
+    // collision pattern.)
+    ErrorCode::KvTargetNotImmutable,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -1067,8 +1078,17 @@ fn variant_count_is_pinned() {
     // (`E_ROLE_STALE_AT_VERIFY`) — a MembershipSet group stanza sealed under
     // a stale `role_assignments_generation` is rejected at the sealed-envelope
     // verify boundary. §3.5g atomic mint across all four surfaces. 197 -> 198.
+    //
+    // **Phase-4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2;
+    // F-INV19-1 / Inv-19)**: +1 `KvTargetNotImmutable`
+    // (`E_KV_TARGET_NOT_IMMUTABLE`) — a K(V) (membership version-node key)
+    // derivation against a mutable Anchor CID is REJECTED (Inv-19 forbids
+    // binding key material to an Anchor whose CURRENT pointer moves).
+    // §3.5g atomic mint across all four surfaces. 198 -> 199. (NOTE: the
+    // parallel w-ms-sync wave may also mint codes; the integrator reconciles
+    // the count at strategy-C integrate-time.)
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 198,
+        CATALOG_VARIANT_COUNT, 199,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1362,7 +1382,10 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::DslMissingRespond
             // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet F-MS-8
             // / F4-031) — the role-staleness verify rejection catalog code.
-            | ErrorCode::RoleStaleAtVerify => true,
+            | ErrorCode::RoleStaleAtVerify
+            // Phase-4-Meta-Core F-full Wave w-gov-audit (MembershipSet
+            // F-INV19-1 / Inv-19) — the K(V) type-restriction rejection.
+            | ErrorCode::KvTargetNotImmutable => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

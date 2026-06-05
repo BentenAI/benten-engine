@@ -58,11 +58,15 @@ compile_error!(
 );
 
 pub mod aad;
+pub mod audit;
 pub mod codepoints;
 pub mod error;
+pub mod governance;
 pub mod keying;
+pub mod keying_kv;
 pub mod kind;
 pub mod member;
+pub mod privacy;
 pub mod role;
 pub mod set;
 pub mod ucan;
@@ -72,7 +76,10 @@ pub use crate::error::{E_ROLE_STALE_AT_VERIFY, MembershipSetError};
 pub use crate::kind::{
     KindDispatchError, MembershipSetKind, RequestedReserveKind, dispatch_reserve,
 };
-pub use crate::member::{Did, Hlc, MemberEntry, MemberRef, MembersTable, RoleId, SigPubKey};
+pub use crate::member::{
+    Did, Hlc, MemberEntry, MemberNature, MemberRef, MembersTable, RoleId, SigPubKey,
+    derive_member_nature, is_ai_operated,
+};
 pub use crate::set::{MembershipSet, wire_cost_ceiling};
 
 /// Crate scaffold marker — proves the 15th crate exists and is in the

@@ -1453,6 +1453,19 @@ pub enum ErrorCode {
     /// `E_ROLE_STALE_AT_VERIFY`. Routes to `ON_ERROR` (a verify-time
     /// rejection at the sealed-envelope boundary).
     RoleStaleAtVerify,
+    /// **Phase-4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2;
+    /// F-INV19-1 / Inv-19)** — a `K(V)` (membership version-node key)
+    /// derivation was requested against a target that is not an immutable
+    /// Version-Node-CID (or a MembershipSet identity). Inv-19 forbids binding
+    /// key material to a MUTABLE `benten_core::version::Anchor` CID: the
+    /// Anchor's CURRENT pointer moves across an `append_version`, so a key
+    /// bound to an Anchor would silently re-target as the chain advances. The
+    /// keying-side surface lives at
+    /// `benten_membership_set::keying::derive_kv` (returns
+    /// `KvError::TargetNotImmutable`). Maps to `E_KV_TARGET_NOT_IMMUTABLE`.
+    /// Routes to `ON_ERROR` (a fail-closed type-restriction rejection at the
+    /// key-derivation boundary).
+    KvTargetNotImmutable,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1804,6 +1817,9 @@ impl ErrorCode {
             ErrorCode::DslMissingRespond => "E_DSL_MISSING_RESPOND",
             // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet F-MS-8).
             ErrorCode::RoleStaleAtVerify => "E_ROLE_STALE_AT_VERIFY",
+            // Phase-4-Meta-Core F-full Wave w-gov-audit (MembershipSet
+            // F-INV19-1 / Inv-19).
+            ErrorCode::KvTargetNotImmutable => "E_KV_TARGET_NOT_IMMUTABLE",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2348,6 +2364,11 @@ impl ErrorCode {
             // sealed-envelope verify boundary; routes to ON_ERROR.
             ErrorCode::RoleStaleAtVerify => Some("ON_ERROR"),
 
+            // Phase-4-Meta-Core F-full Wave w-gov-audit (MembershipSet
+            // F-INV19-1 / Inv-19) — a fail-closed K(V) type-restriction
+            // rejection at the key-derivation boundary; routes to ON_ERROR.
+            ErrorCode::KvTargetNotImmutable => Some("ON_ERROR"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2676,6 +2697,9 @@ impl core::str::FromStr for ErrorCode {
             "E_DSL_MISSING_RESPOND" => ErrorCode::DslMissingRespond,
             // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet F-MS-8).
             "E_ROLE_STALE_AT_VERIFY" => ErrorCode::RoleStaleAtVerify,
+            // Phase-4-Meta-Core F-full Wave w-gov-audit (MembershipSet
+            // F-INV19-1 / Inv-19).
+            "E_KV_TARGET_NOT_IMMUTABLE" => ErrorCode::KvTargetNotImmutable,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

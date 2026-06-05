@@ -39,45 +39,9 @@
 use benten_core::PrimitiveKind;
 
 // =====================================================================
-// RED-PHASE stub-shim — DELETE at W6 implementation; replace with:
-//     use benten_membership_set::audit::{
-//         AuditQueryComposition, audit_log_query_composition,
-//     };
+// W6 R5 (Wave w-gov-audit): real `benten_membership_set::audit` surface.
 // =====================================================================
-mod mset_w6_audit_query_stub {
-    //! Local stub matching the intended W6 `audit_log_query` composition
-    //! surface. Bodies `unimplemented!()`.
-
-    /// The composition the `audit_log_query` resolves to: the ordered set
-    /// of canonical PrimitiveKind tags it walks + the RestrictedScope
-    /// string it gates on. Real impl returns the actual composition the
-    /// engine evaluator walks.
-    #[derive(Clone, Debug)]
-    pub struct AuditQueryComposition {
-        /// Canonical tags of the primitives composing the query
-        /// (e.g. READ + BRANCH + RESPOND). Each MUST be one of the 12.
-        pub primitive_tags: Vec<&'static str>,
-        /// The `audit:<set_id>:*` scope the query gates on.
-        pub gating_scope: String,
-        /// Whether `audit_log_query` is itself a NEW PrimitiveKind variant
-        /// (real impl: `false` — it composes existing primitives).
-        pub is_a_new_primitive_kind_variant: bool,
-    }
-
-    /// W6 stub: resolve the graph-native `audit_log_query` composition for
-    /// a given set. Real impl composes READ over the audit version-chain +
-    /// scope gate, NO new frozen op.
-    pub fn audit_log_query_composition(_set_id: &[u8; 32]) -> AuditQueryComposition {
-        unimplemented!(
-            "W6 stub — R5 replaces this module with \
-             `use benten_membership_set::audit::audit_log_query_composition;`; \
-             real impl composes the 12 primitives + audit:<set_id>:* scope, \
-             minting NO 13th PrimitiveKind"
-        )
-    }
-}
-
-use mset_w6_audit_query_stub::{AuditQueryComposition, audit_log_query_composition};
+use benten_membership_set::audit::{AuditQueryComposition, audit_log_query_composition};
 
 /// F-AUDIT-4 (a): the frozen op-surface is EXACTLY 12 `PrimitiveKind`
 /// variants, and all 12 round-trip their canonical tags. This is the
@@ -138,7 +102,6 @@ fn frozen_op_surface_is_exactly_twelve_primitive_kinds() {
 /// would-FAIL if W6 mints a 13th primitive (e.g. a bespoke `AuditQuery`
 /// op) instead of composing READ + scope.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-4 — audit_log_query composes the 12 primitives, no new frozen op; un-ignore at W6 R5 (delete mset_w6_audit_query_stub; insert real `use`)"]
 fn audit_log_query_composes_existing_primitives_no_new_frozen_op() {
     let twelve_tags: [&str; 12] = [
         "READ", "WRITE", "TRANSFORM", "BRANCH", "ITERATE", "WAIT", "CALL", "RESPOND", "EMIT",
@@ -176,7 +139,6 @@ fn audit_log_query_composes_existing_primitives_no_new_frozen_op() {
 /// (F-AUDIT-3 coupling) — the access control is a scope, never a codepoint
 /// or a new op signature.
 #[test]
-#[ignore = "RED-PHASE: F-AUDIT-4 — audit_log_query gates on audit:<set_id>:* scope; un-ignore at W6 R5"]
 fn audit_log_query_gates_on_audit_set_scope() {
     let composition: AuditQueryComposition = audit_log_query_composition(&[0x51; 32]);
     assert!(
