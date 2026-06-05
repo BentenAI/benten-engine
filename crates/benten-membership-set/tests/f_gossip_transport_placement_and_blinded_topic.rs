@@ -43,19 +43,27 @@
 //! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
 //!
 //! Compiles GREEN behind `#[ignore]`; SELF-CONTAINED stub-shim for
-//! parallel-safe R3. The blinded-topic stub-shim uses BLAKE3-keyed-hash as
-//! the HMAC stand-in (R5 swaps in the real `benten-crypto-suite` HMAC over
-//! `K_Set`); the byte-derivation SHAPE (key ‖ set_id ‖ BE(gen), truncate-to-32,
-//! no time input) is what F-GOSSIP-2 freezes via the absolute golden vector.
+//! parallel-safe R3. The blinded-topic stub-shim stub-shims the keyed MAC as
+//! `blake3::keyed_hash(K_Set, ·)` — where R0.7 §4.1 clarifies `HMAC` =
+//! `blake3::keyed_hash` (native BLAKE3 keyed MAC; no hmac/sha2 dep; bytes
+//! unchanged), the SAME primitive the sibling
+//! `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` uses for
+//! `membership_set_id_commitment`. R5 routes through the real
+//! `benten-crypto-suite` keyed MAC over `K_Set` (NOT HMAC-SHA256 — the crate
+//! carries no hmac/sha2 dep; do NOT invent a different HMAC/hash). The
+//! byte-derivation SHAPE (key ‖ set_id ‖ BE(gen), truncate-to-32, no time
+//! input) is what F-GOSSIP-2 freezes via the absolute golden vector.
 
 #![allow(clippy::unwrap_used)]
 
 // ── SELF-CONTAINED stub-shim ──
 
 /// PRODUCTION-stand-in: `topic = truncate(HMAC(K_Set, set_id ‖ BE(gen)))`.
-/// The stub uses BLAKE3 keyed-hash as the HMAC stand-in. R5 routes through
-/// the real crypto-suite HMAC. Pure fn of `(k_set, set_id, generation)` —
-/// NO time input (so two clocks derive the identical topic). The generation
+/// The stub uses `blake3::keyed_hash(K_Set, ·)` — where R0.7 §4.1 clarifies
+/// `HMAC` = `blake3::keyed_hash` (native BLAKE3 keyed MAC; no hmac/sha2 dep;
+/// bytes unchanged). R5 routes through the real `benten-crypto-suite` keyed
+/// MAC over `K_Set` (NOT HMAC-SHA256). Pure fn of `(k_set, set_id, generation)`
+/// — NO time input (so two clocks derive the identical topic). The generation
 /// is encoded BIG-ENDIAN (the freeze-gating byte-order — an LE encoder would
 /// flip the golden vector below).
 fn compute_gossip_topic(k_set: &[u8; 32], set_id: &[u8], generation: u32) -> [u8; 32] {
@@ -264,7 +272,8 @@ fn f_gossip_2_topic_absolute_golden_vector_be() {
 
     // FROZEN absolute topic for (K_Set=[0xAB;32], set_id, generation=7).
     // R5 confirms-or-deliberately-updates this frozen literal against the real
-    // crypto-suite HMAC (M-20).
+    // `benten-crypto-suite` keyed MAC (HMAC = `blake3::keyed_hash`; no hmac/sha2
+    // dep; bytes unchanged — R0.7 §4.1) (M-20).
     const TOPIC_GEN7_HEX: &str =
         "3d28ab3c30ff99adeabdfd08310a97a3f78705494e5de709b96ec34618736527";
     let topic7 = compute_gossip_topic(&k_set, set_id, 7);

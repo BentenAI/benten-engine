@@ -266,3 +266,82 @@ fn f_disc_2_section_0_4_supersession_recorded() {
          (the §0.4 supersession of the M-CONS-FINAL F8/F21 assignment)."
     );
 }
+
+/// PIN 7 (F2 / R4.6) — the doc-registration catch-net MUST protect THIS
+/// round's own two wire corrections: `CRYPTO-CODEPOINTS.md` MUST register
+/// the group-band codepoints `0x6610` (`MEMBERSHIP_SET_GROUP_MULTI_STANZA`,
+/// the R4.6-corrected value — was slipped to the `0x6600` set-keying value
+/// in "settled" territory) and `0x6520` (`LAYER_C_DROP_MULTI_RECIPIENT`,
+/// the R0.7-blinded Layer-C group multi-stanza value).
+///
+/// Both are **FREEZE** rows in R0.7 §4.0 (allocation table lines 1001 +
+/// 1010) / §4.1 (AAD field-set rows), and §4.0 names
+/// `docs/CRYPTO-CODEPOINTS.md` as the in-tree home of that table (spec
+/// lines 218 + 979). The in-code wire-lock for both constants is strong
+/// (`crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
+/// regression-guards `MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` and
+/// `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520` directly) — so this pin is
+/// DOC-coupling completeness, not a byte defect: it closes the
+/// doc-registration blind spot that sat exactly where the wire changed
+/// this round.
+///
+/// **Why FIX-NOW (not deferred to the R5 doc-wave):** the red-phase
+/// catch-net infrastructure exists NOW and, by its own design, must
+/// protect this round's own corrections; deferring leaves the doc-coupling
+/// blind spot precisely on the two codepoints R4.6/R0.7 corrected (HARD
+/// RULE 12 — no "minor enough to defer"). The test stays `#[ignore]`
+/// because the doc itself (`CRYPTO-CODEPOINTS.md`) is created at the R5
+/// doc-wave (spec line 206: `ls` → absent at baseline). Additive +
+/// byte-neutral (no frozen golden, codepoint constant, or AAD layout
+/// changes).
+///
+/// **Registry-binding (not a bare substring):** §4.0's table BINDS each
+/// codepoint to a SYMBOL on one logical row, and the slip this round
+/// guards against was precisely a value bound to the WRONG meaning
+/// (`0x6610` slipped to the `0x6600` set-keying symbol). So — matching
+/// PIN 0's "enumerate FROM the doc, don't match a literal" discipline and
+/// PIN 6's row shape — this pin asserts each codepoint is CO-LOCATED with
+/// its registered symbol (`0x6610`↔`MEMBERSHIP_SET_GROUP_MULTI_STANZA`,
+/// `0x6520`↔`LAYER_C_DROP_MULTI_RECIPIENT`) on the same row. A bare
+/// `.contains("0x6610")` would vacuously pass on a prose mention (e.g.
+/// inside PIN 6's `0x6600` rationale narrative) — the row-binding check
+/// would-FAIL if R5 registered the value against the wrong symbol or only
+/// named it in prose.
+#[test]
+#[ignore = "RED-PHASE: F-DISC-2 (R4.6/§4.0) — CRYPTO-CODEPOINTS.md \
+            registers the group-band codepoints corrected this round, \
+            each bound to its symbol on one row: 0x6610 ↔ \
+            MEMBERSHIP_SET_GROUP_MULTI_STANZA + 0x6520 ↔ \
+            LAYER_C_DROP_MULTI_RECIPIENT; un-ignore at R5"]
+fn f_disc_2_records_r46_group_codepoints_0x6610_0x6520() {
+    let codepoints =
+        std::fs::read_to_string(repo_root().join("docs/CRYPTO-CODEPOINTS.md")).unwrap_or_default();
+
+    // A codepoint is "registered" only when its value is CO-LOCATED with
+    // its symbol on one logical row (the §4.0 allocation-table shape) — the
+    // registry-drift guard PIN 6 uses, and the exact class this round's
+    // slip (0x6610 bound to the 0x6600 symbol) belongs to.
+    let registered_on_one_row = |value: &str, symbol: &str| -> bool {
+        codepoints
+            .lines()
+            .any(|l| l.contains(value) && l.contains(symbol))
+    };
+
+    assert!(
+        registered_on_one_row("0x6610", "MEMBERSHIP_SET_GROUP_MULTI_STANZA"),
+        "CRYPTO-CODEPOINTS.md MUST register 0x6610 BOUND TO its symbol \
+         MEMBERSHIP_SET_GROUP_MULTI_STANZA on one row (the R4.6-corrected \
+         value; distinct from the 0x6600 set-keying value the R4.5b \
+         migration slipped to). R0.7 §4.0 allocation table line 1010 \
+         FREEZES it; §4.0 names this doc its in-tree home. A prose-only \
+         mention or a value bound to the wrong symbol MUST fail."
+    );
+    assert!(
+        registered_on_one_row("0x6520", "LAYER_C_DROP_MULTI_RECIPIENT"),
+        "CRYPTO-CODEPOINTS.md MUST register 0x6520 BOUND TO its symbol \
+         LAYER_C_DROP_MULTI_RECIPIENT on one row (the R0.7-blinded Layer-C \
+         group multi-stanza value). R0.7 §4.0 allocation table line 1001 \
+         FREEZES it (per-stanza AAD BLINDED; see §3.3 / §4.1). A prose-only \
+         mention or a value bound to the wrong symbol MUST fail."
+    );
+}
