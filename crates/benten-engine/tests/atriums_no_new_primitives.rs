@@ -128,10 +128,18 @@ fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engi
 /// decomposition" section + `docs/SECURITY-POSTURE.md` Compromise #31 +
 /// CLAUDE.md baked-in #5 Phase-4-Meta-Core 2026-05-26 sharpening.
 ///
+/// **F-full freeze-record ratification (Ben 2026-06-05 "yup all sounds
+/// great"):** Inv-16..22 minted — the seven F-full design invariants
+/// (envelope-unification, hybrid-mandatory floor, codepoint-registry,
+/// keying-discipline, MembershipSet-primitive, fork-tie-break,
+/// member-nature-derived). Pin updated 15 → 22 per the same
+/// ratified-addition discipline as Inv-15. See `docs/INVARIANT-COVERAGE.md`
+/// "Inv-16..22 F-full design-mints" + the F-full freeze record.
+///
 /// The test discipline holds (this is NOT a relaxation): any FURTHER
-/// invariant additions beyond Inv-15 still require explicit Ben
-/// ratification + a corresponding update to this pin. Phase-4-Meta-Core
-/// Inv-15 is the one explicitly-ratified addition; future additions stay
+/// invariant additions beyond Inv-22 still require explicit Ben
+/// ratification + a corresponding update to this pin. Inv-15 + the F-full
+/// Inv-16..22 are the explicitly-ratified additions; future additions stay
 /// gated by this same firing-on-count-change mechanism.
 #[test]
 fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_kind() {
@@ -161,11 +169,14 @@ fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_
         })
         .count();
     assert_eq!(
-        count, 15,
-        "INVARIANT-COVERAGE.md must list exactly 15 invariants per \
+        count, 22,
+        "INVARIANT-COVERAGE.md must list exactly 22 invariants per \
          CLAUDE.md baked-in commitment + Phase-3 exit-criterion 13 + \
-         Phase-4-Meta-Core 2026-05-26 Inv-15 mint ratification \
+         Phase-4-Meta-Core Inv-15 mint + the Ben-ratified F-full freeze record \
          (14 from Phase 4-Foundation + Inv-15 for the LAMPS EUF-CMA-only \
-         3-layer-decomposition mitigation per Compromise #31) (got {count})"
+         3-layer-decomposition per Compromise #31 + Inv-16..22 the F-full \
+         design-mints: envelope-unification / hybrid-mandatory-floor / \
+         codepoint-registry / keying-discipline / MembershipSet-primitive / \
+         fork-tie-break / member-nature-derived) (got {count})"
     );
 }
