@@ -78,78 +78,14 @@
 
 use benten_id::keypair::Keypair;
 
-// ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — ExecuteWorkflow variant + AAD binding.
-// ---------------------------------------------------------------------------
-//
-// The "AEAD" here is a BLAKE3-keyed authenticator over (plaintext, AAD): a
-// stand-in for ChaCha20-Poly1305-under-HPKE. The property the family freezes
-// is that the three constraint fields are in the AAD, so mutating any of them
-// makes Open fail. R5 swaps in the real AEAD; the AAD shape is the freeze.
-//
-// R5-FOLD-IN (F-LD-3-AADVER-COHERENCE): at R5 this variant's `constraint_aad()`
-// is folded into the enclosing `PermissionRequest` envelope AAD (which carries
-// the §4.1 `aad_version=0x01` byte-0 prefix) — NOT frozen as a standalone
-// prefix-less top-level AAD. See the module-level R5-DESTINATION note above.
-mod shim {
-    /// The frozen ExecuteWorkflow variant (R0.5 §3.4 / e2r). M-20: every integer
-    /// (`max_decrypt_count: u32`) is BE on the wire.
-    #[derive(Clone)]
-    pub struct ExecuteWorkflow {
-        pub workflow_cid: [u8; 32],
-        pub input_node_cids: Vec<[u8; 32]>,
-        pub max_decrypt_count: u32,
-        pub result_recipient_pubkey: [u8; 32],
-        pub executor_did: Vec<u8>,
-    }
-
-    impl ExecuteWorkflow {
-        /// The FROZEN constraint binding: binds exactly the three constraint
-        /// fields `(executor_did, max_decrypt_count, result_recipient_pubkey)` —
-        /// the "sufficient to express no-egress" scope (NQ-T3, RATIFIED).
-        /// BE integers.
-        ///
-        /// The `b"benten-exec-workflow-v1:"` ASCII tag is an INTRA-VARIANT
-        /// domain-separation prefix for this RED-PHASE stub-shim, NOT the §4.1
-        /// `aad_version:u8` wire prefix. At R5 this binding folds into the
-        /// enclosing `PermissionRequest` envelope AAD, which carries the §4.1
-        /// `aad_version=0x01` byte-0 prefix (see module-level R5-DESTINATION
-        /// note + `f_ld_2`). The variant therefore INHERITS the cross-layer
-        /// `aad_version` prefix from its envelope; it does not freeze a
-        /// standalone prefix-less AAD (F-LD-3-AADVER-COHERENCE, R4.4).
-        pub fn constraint_aad(&self) -> Vec<u8> {
-            let mut aad = Vec::new();
-            aad.extend_from_slice(b"benten-exec-workflow-v1:");
-            aad.extend_from_slice(&(self.executor_did.len() as u32).to_be_bytes());
-            aad.extend_from_slice(&self.executor_did);
-            aad.extend_from_slice(&self.max_decrypt_count.to_be_bytes());
-            aad.extend_from_slice(&self.result_recipient_pubkey);
-            aad
-        }
-    }
-
-    /// AEAD-seal stand-in: tag = BLAKE3(key ‖ aad ‖ plaintext).
-    pub fn seal(key: &[u8; 32], aad: &[u8], plaintext: &[u8]) -> [u8; 32] {
-        let mut h = blake3::Hasher::new();
-        h.update(key);
-        h.update(&(aad.len() as u32).to_be_bytes());
-        h.update(aad);
-        h.update(plaintext);
-        *h.finalize().as_bytes()
-    }
-
-    /// AEAD-open stand-in: recomputes the tag under the PRESENTED aad; if a
-    /// constraint field was mutated post-seal, the recomputed tag differs.
-    pub fn open(key: &[u8; 32], aad: &[u8], plaintext: &[u8], tag: &[u8; 32]) -> Result<(), ()> {
-        if &seal(key, aad, plaintext) == tag {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-}
-
-use shim::{open, seal, ExecuteWorkflow};
+// R5: stub-shim DELETED; the real `benten_engine::layer_d::remote_permission`
+// ExecuteWorkflow variant + the REAL ChaCha20-Poly1305 AEAD seal/open are in
+// use (replacing the BLAKE3-keyed authenticator stand-in). The three
+// constraint fields ride the constraint AAD, so mutating any of them makes the
+// open fail (NQ-T3 — bound, not advisory).
+use benten_engine::layer_d::remote_permission::{
+    ExecuteWorkflow, exec_workflow_open, exec_workflow_seal,
+};
 
 fn sample(executor: &Keypair) -> ExecuteWorkflow {
     ExecuteWorkflow {
@@ -166,7 +102,6 @@ fn sample(executor: &Keypair) -> ExecuteWorkflow {
 /// omitted a field, the corresponding mutation arm below would (wrongly) still
 /// Open.
 #[test]
-#[ignore = "RED-PHASE: F-LD-3 — ExecuteWorkflow variant + 3-field AAD present; un-ignore at R5"]
 fn f_ld_3_execute_workflow_variant_binds_three_constraint_fields_in_aad() {
     let executor = Keypair::generate();
     let ew = sample(&executor);
@@ -191,7 +126,6 @@ fn f_ld_3_execute_workflow_variant_binds_three_constraint_fields_in_aad() {
 /// not advisory). A rented executor cannot swap itself for another and re-use
 /// the sealed material.
 #[test]
-#[ignore = "RED-PHASE: F-LD-3 — mutating executor_did breaks AEAD Open; un-ignore at R5"]
 fn f_ld_3_mutating_executor_did_breaks_open() {
     let executor = Keypair::generate();
     let other = Keypair::generate();
@@ -199,34 +133,37 @@ fn f_ld_3_mutating_executor_did_breaks_open() {
     let plaintext = b"decrypted-node-payload";
 
     let ew = sample(&executor);
-    let tag = seal(&key, &ew.constraint_aad(), plaintext);
+    let envelope = exec_workflow_seal(&ew, &key, plaintext).expect("seal MUST succeed");
 
     // Present the SAME sealed material but with a different executor_did.
     let mut mutated = ew.clone();
     mutated.executor_did = other.public_key().to_bytes().to_vec();
     assert!(
-        open(&key, &mutated.constraint_aad(), plaintext, &tag).is_err(),
+        exec_workflow_open(&mutated, &key, &envelope).is_err(),
         "swapping executor_did MUST fail AEAD Open (constraint is bound)"
     );
     // Sanity: the un-mutated AAD opens (proves the failure is the mutation).
-    open(&key, &ew.constraint_aad(), plaintext, &tag).expect("original AAD MUST open");
+    let opened = exec_workflow_open(&ew, &key, &envelope).expect("original AAD MUST open");
+    assert_eq!(
+        opened, plaintext,
+        "the original constraint AAD recovers the plaintext"
+    );
 }
 
 /// F-LD-3 mutate-max_decrypt_count → Open fails. A rented executor cannot raise
 /// its own decrypt budget.
 #[test]
-#[ignore = "RED-PHASE: F-LD-3 — mutating max_decrypt_count breaks AEAD Open; un-ignore at R5"]
 fn f_ld_3_mutating_max_decrypt_count_breaks_open() {
     let executor = Keypair::generate();
     let key = [42u8; 32];
     let plaintext = b"decrypted-node-payload";
     let ew = sample(&executor);
-    let tag = seal(&key, &ew.constraint_aad(), plaintext);
+    let envelope = exec_workflow_seal(&ew, &key, plaintext).expect("seal MUST succeed");
 
     let mut mutated = ew.clone();
     mutated.max_decrypt_count = u32::MAX; // attacker raises the budget
     assert!(
-        open(&key, &mutated.constraint_aad(), plaintext, &tag).is_err(),
+        exec_workflow_open(&mutated, &key, &envelope).is_err(),
         "raising max_decrypt_count MUST fail AEAD Open"
     );
 }
@@ -235,18 +172,17 @@ fn f_ld_3_mutating_max_decrypt_count_breaks_open() {
 /// cannot redirect the result to an attacker-chosen recipient (the no-egress
 /// channel binding).
 #[test]
-#[ignore = "RED-PHASE: F-LD-3 — mutating result_recipient_pubkey breaks AEAD Open; un-ignore at R5"]
 fn f_ld_3_mutating_result_recipient_pubkey_breaks_open() {
     let executor = Keypair::generate();
     let key = [42u8; 32];
     let plaintext = b"decrypted-node-payload";
     let ew = sample(&executor);
-    let tag = seal(&key, &ew.constraint_aad(), plaintext);
+    let envelope = exec_workflow_seal(&ew, &key, plaintext).expect("seal MUST succeed");
 
     let mut mutated = ew.clone();
     mutated.result_recipient_pubkey = [0xEE; 32]; // attacker-chosen recipient
     assert!(
-        open(&key, &mutated.constraint_aad(), plaintext, &tag).is_err(),
+        exec_workflow_open(&mutated, &key, &envelope).is_err(),
         "redirecting result_recipient_pubkey MUST fail AEAD Open"
     );
 }
@@ -273,7 +209,6 @@ fn f_ld_3_mutating_result_recipient_pubkey_breaks_open() {
 /// NOT a property of this standalone variant. See the module-level
 /// R5-DESTINATION note.
 #[test]
-#[ignore = "RED-PHASE: F-LD-3 — NQ-T3-RATIFIED AAD-sufficiency (frozen 3-field AAD sufficient; runtime enforcement post-v1-beta non-freeze-gating); un-ignore at R5"]
 fn f_ld_3_frozen_aad_is_sufficient_to_express_no_egress_constraint_nq_t3_ratified() {
     let executor = Keypair::generate();
     let ew = sample(&executor);
@@ -284,7 +219,9 @@ fn f_ld_3_frozen_aad_is_sufficient_to_express_no_egress_constraint_nq_t3_ratifie
     let has_executor = aad
         .windows(ew.executor_did.len())
         .any(|w| w == ew.executor_did.as_slice());
-    let has_budget = aad.windows(4).any(|w| w == ew.max_decrypt_count.to_be_bytes());
+    let has_budget = aad
+        .windows(4)
+        .any(|w| w == ew.max_decrypt_count.to_be_bytes());
     let has_channel = aad.windows(32).any(|w| w == ew.result_recipient_pubkey);
 
     assert!(

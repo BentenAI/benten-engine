@@ -205,6 +205,12 @@ pub mod testing;
 // build needs the constant.
 pub mod internal_principal;
 
+// F-full Layer-D (R0.7 §3.4) — DAK + device-auth + remote-permission-call +
+// multi-device key-wrap + ExecuteWorkflow reserve. Native-only (no wasm32
+// vault / keychain surface).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod layer_d;
+
 // ---------------------------------------------------------------------------
 // Public re-exports — preserve every call-site path that existed before the
 // R6 Wave 2 split.

@@ -23,11 +23,36 @@
 #![allow(dead_code)]
 #![cfg(not(target_arch = "wasm32"))]
 
-// ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — vault unlock with a no-early-return contract.
-// ---------------------------------------------------------------------------
+// R5: the stub-shim KDF + AEAD stand-ins are REPLACED with the REAL
+// `benten_crypto_suite::vault` primitives — `derive_dak` (Argon2id+HKDF) +
+// `serialize_vault`/`decode_vault` (XChaCha20-Poly1305 with a constant-time
+// AEAD tag compare). The `UnlockTrace` instrumentation wraps the REAL calls so
+// the structural no-early-return property is asserted against the real unlock
+// path (the KDF + the AEAD-open both run unconditionally on a wrong password —
+// the no-fast-fail-oracle property). The single typed `VaultDecryptFailed`
+// collapses every wrong-password cause (bad salt / params / tag) — there is no
+// error-variant side-channel.
+//
+// Argon2id is intentionally heavy; to keep the 200-iter timing harness fast we
+// seal under a REDUCED Argon2id param set (the constant-time PROPERTY is
+// param-independent — what F-VA-3 pins is "no early return / single typed
+// error / no gross timing oracle", not the OWASP cost factor, which the vault
+// format-freeze family owns).
 mod shim {
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use benten_crypto_suite::vault::{
+        Argon2idParams, DAK_HKDF_INFO_TAG, VaultPayload, decode_vault, derive_dak, serialize_vault,
+    };
+
+    /// A reduced Argon2id param set so the 200-iter timing harness completes
+    /// quickly. The no-early-return / single-typed-error / no-gross-timing
+    /// properties F-VA-3 pins are param-independent.
+    const FAST_PARAMS: Argon2idParams = Argon2idParams {
+        m_cost: 8,
+        t_cost: 1,
+        p_cost: 1,
+    };
 
     /// Tracks how far the unlock path progressed, so the test can assert the
     /// AEAD-open stage was REACHED even on a wrong password (no early return).
@@ -47,55 +72,49 @@ mod shim {
     pub struct Vault {
         salt: [u8; 16],
         sealed_under_password: Vec<u8>,
-        /// AEAD tag over the real K_principal under the correct DAK.
-        expected_tag: [u8; 32],
+        /// The REAL XChaCha20-Poly1305-sealed vault bytes under the correct DAK.
+        vault_bytes: Vec<u8>,
     }
 
     impl Vault {
         pub fn seal(password: &[u8], salt: [u8; 16]) -> Self {
-            let dak = Self::kdf(password, &salt, &UnlockTrace::default());
-            let tag = Self::aead_tag(&dak, &UnlockTrace::default());
+            // Stage 1: REAL Argon2id+HKDF DAK derivation.
+            let dak = derive_dak(password, &salt, FAST_PARAMS, DAK_HKDF_INFO_TAG);
+            // Stage 2: REAL XChaCha20-Poly1305 seal of a fixed payload.
+            let payload = VaultPayload {
+                k_principal: [0x5A; 32],
+                user_did_signing_key: vec![0x22; 64],
+                user_did_creation_time: 0,
+            };
+            let vault_bytes =
+                serialize_vault(&payload, &dak).expect("vault seal is infallible for valid params");
             Self {
                 salt,
                 sealed_under_password: password.to_vec(),
-                expected_tag: tag,
+                vault_bytes,
             }
         }
 
-        /// Stand-in Argon2id+HKDF. ALWAYS runs to completion (no input-
-        /// dependent early exit).
-        fn kdf(password: &[u8], salt: &[u8; 16], trace: &UnlockTrace) -> [u8; 32] {
+        /// Unlock. CONTRACT: ALWAYS runs the REAL KDF (Argon2id+HKDF) → the REAL
+        /// AEAD-open (XChaCha20-Poly1305, constant-time tag compare). There is
+        /// NO early return between the KDF and the AEAD-open regardless of
+        /// whether the password is right or wrong (the no-fast-fail-oracle
+        /// property). The trace records that both stages ran.
+        pub fn unlock(
+            &self,
+            password: &[u8],
+            trace: &UnlockTrace,
+        ) -> Result<[u8; 32], UnlockError> {
+            // Stage 1: REAL KDF (always runs).
+            let dak = derive_dak(password, &self.salt, FAST_PARAMS, DAK_HKDF_INFO_TAG);
             trace.kdf_ran.fetch_add(1, Ordering::SeqCst);
-            let mut h = blake3::Hasher::new();
-            h.update(b"benten-vault-dak-v1:");
-            h.update(salt);
-            h.update(password);
-            *h.finalize().as_bytes()
-        }
-
-        /// Stand-in AEAD tag computation over the DAK.
-        fn aead_tag(dak: &[u8; 32], trace: &UnlockTrace) -> [u8; 32] {
+            // Stage 2: REAL AEAD-open (ALWAYS attempted; the AEAD tag compare is
+            // constant-time inside `decode_vault`).
             trace.aead_open_attempted.fetch_add(1, Ordering::SeqCst);
-            let mut h = blake3::Hasher::new();
-            h.update(b"benten-vault-aead-tag:");
-            h.update(dak);
-            *h.finalize().as_bytes()
-        }
-
-        /// Unlock. CONTRACT: ALWAYS runs KDF → AEAD-open, then a SINGLE
-        /// constant-time tag compare. There is NO early return between the KDF
-        /// and the AEAD-open regardless of whether the password is right or
-        /// wrong (the no-fast-fail-oracle property).
-        pub fn unlock(&self, password: &[u8], trace: &UnlockTrace) -> Result<[u8; 32], UnlockError> {
-            // Stage 1: KDF (always runs).
-            let dak = Self::kdf(password, &self.salt, trace);
-            // Stage 2: AEAD-open (ALWAYS attempted — never skipped on a wrong pw).
-            let candidate_tag = Self::aead_tag(&dak, trace);
-            // Stage 3: constant-time compare of the full 32-byte tag.
-            if constant_time_eq(&candidate_tag, &self.expected_tag) {
-                Ok(dak)
-            } else {
-                Err(UnlockError::VaultDecryptFailed)
+            match decode_vault(&self.vault_bytes, &dak) {
+                // Every failure cause collapses to the single typed rejection.
+                Ok(decoded) => Ok(decoded.payload.k_principal),
+                Err(_) => Err(UnlockError::VaultDecryptFailed),
             }
         }
 
@@ -103,18 +122,9 @@ mod shim {
             &self.sealed_under_password
         }
     }
-
-    /// Constant-time 32-byte equality (no data-dependent short-circuit).
-    pub fn constant_time_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
-        let mut diff: u8 = 0;
-        for i in 0..32 {
-            diff |= a[i] ^ b[i];
-        }
-        diff == 0
-    }
 }
 
-use shim::{Vault, UnlockError, UnlockTrace};
+use shim::{UnlockError, UnlockTrace, Vault};
 use std::sync::atomic::Ordering;
 
 /// F-VA-3 STRUCTURAL no-early-return: a WRONG password still drives the unlock
@@ -122,7 +132,6 @@ use std::sync::atomic::Ordering;
 /// incremented). would-FAIL-if-no-op'd: a fast-fail impl that rejected after
 /// the KDF (before the AEAD-open) would leave `aead_open_attempted == 0`.
 #[test]
-#[ignore = "RED-PHASE: F-VA-3 — wrong password reaches AEAD-open (no early-return oracle); un-ignore at R5"]
 fn f_va_3_wrong_password_reaches_aead_open_no_early_return() {
     let vault = Vault::seal(b"correct-password", [0x11; 16]);
     let trace = UnlockTrace::default();
@@ -134,7 +143,11 @@ fn f_va_3_wrong_password_reaches_aead_open_no_early_return() {
 
     // The KDF ran AND the AEAD-open was attempted — proving NO early return
     // between them on the wrong-password path.
-    assert_eq!(trace.kdf_ran.load(Ordering::SeqCst), 1, "KDF MUST run on wrong pw");
+    assert_eq!(
+        trace.kdf_ran.load(Ordering::SeqCst),
+        1,
+        "KDF MUST run on wrong pw"
+    );
     assert_eq!(
         trace.aead_open_attempted.load(Ordering::SeqCst),
         1,
@@ -146,12 +159,13 @@ fn f_va_3_wrong_password_reaches_aead_open_no_early_return() {
 /// does not take a structurally-different, observably-faster path). Pairs with
 /// the wrong-password trace to show identical stage-progression.
 #[test]
-#[ignore = "RED-PHASE: F-VA-3 — correct password runs the same stages as wrong; un-ignore at R5"]
 fn f_va_3_correct_password_runs_same_stages_as_wrong() {
     let vault = Vault::seal(b"correct-password", [0x22; 16]);
 
     let trace_ok = UnlockTrace::default();
-    vault.unlock(b"correct-password", &trace_ok).expect("correct pw unlocks");
+    vault
+        .unlock(b"correct-password", &trace_ok)
+        .expect("correct pw unlocks");
 
     let trace_bad = UnlockTrace::default();
     let _ = vault.unlock(b"wrong-password", &trace_bad);
@@ -175,10 +189,13 @@ fn f_va_3_correct_password_runs_same_stages_as_wrong() {
 /// distinguishes "salt off" / "params off" / "tag off". A different wrong
 /// password (different bytes) still yields the identical typed error.
 #[test]
-#[ignore = "RED-PHASE: F-VA-3 — all wrong-password causes yield one typed error; un-ignore at R5"]
 fn f_va_3_all_wrong_passwords_yield_single_typed_error() {
     let vault = Vault::seal(b"correct-password", [0x33; 16]);
-    for wrong in [&b"a"[..], &b"bb"[..], &b"completely-different-and-longer"[..]] {
+    for wrong in [
+        &b"a"[..],
+        &b"bb"[..],
+        &b"completely-different-and-longer"[..],
+    ] {
         let trace = UnlockTrace::default();
         assert_eq!(
             vault.unlock(wrong, &trace),
@@ -195,7 +212,6 @@ fn f_va_3_all_wrong_passwords_yield_single_typed_error() {
 /// wrong password returning ~instantly because it skipped the KDF+AEAD), NOT to
 /// prove sub-microsecond constant-time (that is the R5/audit kani/dudect job).
 #[test]
-#[ignore = "RED-PHASE: F-VA-3 — coarse timing-invariance (best-effort gross-oracle catch); un-ignore at R5"]
 fn f_va_3_coarse_timing_invariance_best_effort() {
     use std::time::Instant;
     let vault = Vault::seal(b"correct-password", [0x44; 16]);
