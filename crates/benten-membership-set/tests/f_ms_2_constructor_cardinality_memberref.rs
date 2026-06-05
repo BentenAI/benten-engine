@@ -31,40 +31,22 @@
 
 #![allow(dead_code)]
 
-// ── self-contained in-file stub-shim ────────────────────────────────────────
+// ── R5: the real crate surface (the in-file stub-shim is deleted) ───────────
+//
+// `MembershipSetKind` / `MemberRef` / `wire_cost_ceiling` / the per-Kind
+// constructor (`MembershipSet::construct`) are now the real
+// `benten_membership_set` surface. The construction error maps 1:1 to a local
+// `ConstructError` so the pin bodies that compare error variants stay intact —
+// but each `construct()` call drives the REAL `MembershipSet::construct`
+// production entry point (would-FAIL-if-reverted).
+use benten_membership_set::MembershipSetError;
+use benten_membership_set::kind::MembershipSetKind;
+use benten_membership_set::member::MemberRef;
+use benten_membership_set::set::{MembershipSet, wire_cost_ceiling};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum MembershipSetKind {
-    Atrium,
-    DeviceMesh,
-    SingleDevice,
-}
-
-/// Stand-in for `benten_membership_set::member::MemberRef` (the KEYING /
-/// FEDERATION axis — homogeneous-per-Kind, NOT nature). The federation
-/// `SubsetRef` reserve is exercised by F-FED-2, omitted here.
-#[derive(Clone, PartialEq, Eq, Debug)]
-enum MemberRef {
-    /// Atrium members are user-DIDs.
-    UserDid,
-    /// DeviceMesh members are device-DIDs (carry a DeviceAttestation at R5).
-    DeviceDid,
-    /// SingleDevice's sole member is the local device.
-    LocalDevice,
-}
-
-impl MemberRef {
-    /// The Kind a given `MemberRef` is *only* valid inside (Kind-determined,
-    /// m-15 GNC-7). At R5 the real constructor enforces this coupling.
-    fn required_kind(&self) -> MembershipSetKind {
-        match self {
-            MemberRef::UserDid => MembershipSetKind::Atrium,
-            MemberRef::DeviceDid => MembershipSetKind::DeviceMesh,
-            MemberRef::LocalDevice => MembershipSetKind::SingleDevice,
-        }
-    }
-}
-
+/// 1:1 mirror of the construction-time `MembershipSetError` variants this file
+/// exercises — kept local so the pin bodies compare named error variants while
+/// the wrapper below drives the real constructor.
 #[derive(Debug, PartialEq, Eq)]
 enum ConstructError {
     /// Atrium needs ≥1 admin; DeviceMesh/SingleDevice need exactly-1.
@@ -77,65 +59,35 @@ enum ConstructError {
     WireCostCeilingExceeded,
 }
 
-/// Per-Kind member-count ceiling — Compromise #46 (Atrium 32 / DeviceMesh 5 /
-/// SingleDevice 1). Wire-cost is O(N) in members.
-fn wire_cost_ceiling(kind: MembershipSetKind) -> usize {
-    match kind {
-        MembershipSetKind::Atrium => 32,
-        MembershipSetKind::DeviceMesh => 5,
-        MembershipSetKind::SingleDevice => 1,
+impl From<MembershipSetError> for ConstructError {
+    fn from(e: MembershipSetError) -> Self {
+        match e {
+            MembershipSetError::AdminCardinality => ConstructError::AdminCardinality,
+            MembershipSetError::MemberCardinality => ConstructError::MemberCardinality,
+            MembershipSetError::MemberRefKindMismatch => ConstructError::MemberRefKindMismatch,
+            MembershipSetError::WireCostCeilingExceeded => ConstructError::WireCostCeilingExceeded,
+            other => panic!("unexpected construction error in F-MS-2: {other:?}"),
+        }
     }
 }
 
-/// Production-shaped per-Kind constructor with cardinality validation. At R5
-/// this is `MembershipSet::new_{atrium,device_mesh,single_device}(...)`.
+/// Drive the REAL per-Kind constructor (`MembershipSet::construct`), mapping
+/// the production `MembershipSetError` to the local `ConstructError`. A
+/// constructor that admitted 0 Atrium admins / 2 DeviceMesh admins / a
+/// `DeviceDid` in a SingleDevice set would FAIL the pins.
 fn construct(
     kind: MembershipSetKind,
     admin_count: usize,
     member_refs: &[MemberRef],
 ) -> Result<(), ConstructError> {
-    // Kind↔MemberRef coupling: every member's ref must be valid for this Kind.
-    if member_refs.iter().any(|m| m.required_kind() != kind) {
-        return Err(ConstructError::MemberRefKindMismatch);
-    }
-    // Per-Kind admin + member cardinality (the exact-count rules take
-    // precedence over the generic wire-cost ceiling, which is the upper bound
-    // for the variable-cardinality Kinds).
-    match kind {
-        MembershipSetKind::Atrium => {
-            if admin_count < 1 {
-                return Err(ConstructError::AdminCardinality);
-            }
-        }
-        MembershipSetKind::DeviceMesh => {
-            if admin_count != 1 {
-                return Err(ConstructError::AdminCardinality);
-            }
-        }
-        MembershipSetKind::SingleDevice => {
-            if admin_count != 1 {
-                return Err(ConstructError::AdminCardinality);
-            }
-            // SingleDevice is exactly-1 member — checked as a cardinality
-            // constraint BEFORE the generic ceiling (both reject a 2-member
-            // SingleDevice, but the semantic error is MemberCardinality).
-            if member_refs.len() != 1 {
-                return Err(ConstructError::MemberCardinality);
-            }
-        }
-    }
-    // Per-Kind wire-cost ceiling (#46) — the upper bound for the
-    // variable-cardinality Kinds (Atrium 32 / DeviceMesh 5).
-    if member_refs.len() > wire_cost_ceiling(kind) {
-        return Err(ConstructError::WireCostCeilingExceeded);
-    }
-    Ok(())
+    MembershipSet::construct(kind, admin_count, member_refs)
+        .map(|_| ())
+        .map_err(ConstructError::from)
 }
 
 // ── pins ────────────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-2 — per-Kind admin cardinality (Atrium ≥1 / DeviceMesh exactly-1 / SingleDevice exactly-1); un-ignore at R5"]
 fn ms2_admin_cardinality_per_kind() {
     // Positive: 1-admin Atrium succeeds.
     assert!(construct(MembershipSetKind::Atrium, 1, &[MemberRef::UserDid]).is_ok());
@@ -160,7 +112,6 @@ fn ms2_admin_cardinality_per_kind() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-2 — SingleDevice is exactly-1 self-admin member; 2-member SingleDevice rejects; un-ignore at R5"]
 fn ms2_single_device_exactly_one_member() {
     // Positive: exactly-1 LocalDevice member, 1 admin.
     assert!(
@@ -184,7 +135,6 @@ fn ms2_single_device_exactly_one_member() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-2 — MemberRef is Kind-determined (DeviceDid only in DeviceMesh; UserDid only in Atrium); un-ignore at R5"]
 fn ms2_memberref_is_kind_determined() {
     // `DeviceDid` is valid ONLY in a DeviceMesh — a DeviceDid in an Atrium
     // rejects (the Kind↔MemberRef coupling, m-15 GNC-7). Would-FAIL if the
@@ -216,7 +166,6 @@ fn ms2_memberref_is_kind_determined() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-2 — per-Kind wire-cost ceiling (Compromise #46: Atrium 32 / DeviceMesh 5 / SingleDevice 1); un-ignore at R5"]
 fn ms2_per_kind_wire_cost_ceiling() {
     // The #46 ceilings are the frozen per-Kind member caps.
     assert_eq!(wire_cost_ceiling(MembershipSetKind::Atrium), 32);

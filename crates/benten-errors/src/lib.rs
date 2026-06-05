@@ -1439,6 +1439,20 @@ pub enum ErrorCode {
     /// invariant the DSL compiler enforces at the build boundary. Maps
     /// to `E_DSL_MISSING_RESPOND`.
     DslMissingRespond,
+    /// **Phase-4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet
+    /// primitive; F-MS-8 / BC-5 / R0.7 §3.10/§4.1)** — a MembershipSet group
+    /// stanza sealed under a STALE `role_assignments_generation` was rejected
+    /// at verify. The `role_assignments_generation` counter is the 11th field
+    /// of the `0x6610` group AAD (the BLINDED 11-field set), so a stanza
+    /// sealed at generation `G` fails AEAD-open / verify once the membership
+    /// set advances its role-assignments generation to `G+1`. The new code is
+    /// the load-bearing observable for stale-role-assignment rejection; the
+    /// keying-side surface lives at
+    /// `benten_membership_set::verify::verify_stanza` (returns
+    /// `RoleStaleError { code: "E_ROLE_STALE_AT_VERIFY" }`). Maps to
+    /// `E_ROLE_STALE_AT_VERIFY`. Routes to `ON_ERROR` (a verify-time
+    /// rejection at the sealed-envelope boundary).
+    RoleStaleAtVerify,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1788,6 +1802,8 @@ impl ErrorCode {
             ErrorCode::DslParseError => "E_DSL_PARSE_ERROR",
             ErrorCode::DslUnknownPrimitive => "E_DSL_UNKNOWN_PRIMITIVE",
             ErrorCode::DslMissingRespond => "E_DSL_MISSING_RESPOND",
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet F-MS-8).
+            ErrorCode::RoleStaleAtVerify => "E_ROLE_STALE_AT_VERIFY",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2327,6 +2343,11 @@ impl ErrorCode {
             | ErrorCode::DslUnknownPrimitive
             | ErrorCode::DslMissingRespond => Some("ON_ERROR"),
 
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet
+            // F-MS-8) — a stale-role-assignment rejection at the
+            // sealed-envelope verify boundary; routes to ON_ERROR.
+            ErrorCode::RoleStaleAtVerify => Some("ON_ERROR"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2653,6 +2674,8 @@ impl core::str::FromStr for ErrorCode {
             "E_DSL_PARSE_ERROR" => ErrorCode::DslParseError,
             "E_DSL_UNKNOWN_PRIMITIVE" => ErrorCode::DslUnknownPrimitive,
             "E_DSL_MISSING_RESPOND" => ErrorCode::DslMissingRespond,
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet F-MS-8).
+            "E_ROLE_STALE_AT_VERIFY" => ErrorCode::RoleStaleAtVerify,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

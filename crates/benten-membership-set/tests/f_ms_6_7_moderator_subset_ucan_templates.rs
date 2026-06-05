@@ -58,12 +58,10 @@ use std::collections::BTreeSet;
 /// Moderator's frozen ability-token set (R0.5 §3.6.B). Sorted (BTreeSet order)
 /// so that callers can compare exactly. The golden-vector arm AND the
 /// anti-bitfield arm both derive from this — they cannot drift apart.
-const EXPECTED_MODERATOR_ABILITIES: [&str; 4] =
-    ["moderate_content", "read", "share", "write"];
+const EXPECTED_MODERATOR_ABILITIES: [&str; 4] = ["moderate_content", "read", "share", "write"];
 
 /// Member's frozen ability-token set (sorted).
-const EXPECTED_MEMBER_ABILITIES: [&str; 3] =
-    ["read", "share_within_policy", "write_own"];
+const EXPECTED_MEMBER_ABILITIES: [&str; 3] = ["read", "share_within_policy", "write_own"];
 
 /// Viewer's frozen ability-token set (sorted).
 const EXPECTED_VIEWER_ABILITIES: [&str; 1] = ["read"];
@@ -89,41 +87,19 @@ fn expected_admin_abilities() -> BTreeSet<&'static str> {
         .collect()
 }
 
-// ── self-contained in-file stub-shim ────────────────────────────────────────
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum RoleId {
-    Invitee,
-    Viewer,
-    Member,
-    Moderator,
-    Admin,
-}
-
-/// The UCAN abilities a role's template grants. Modeled as a string-set
-/// (semantics compose from UCAN, NOT a packed bitfield — F-MS-7 grep-defense).
-/// At R5 these come from `ability_template(role)` resolving real UCAN
-/// ability-tokens.
-///
-/// Admin = Moderator ∪ {admit-member, kick-member, rotate-keys, assign-roles,
-/// edit-governance-config} per the ratified ruling-2 set — produced from the
-/// canonical literals so the shim itself can't drift from the golden vectors.
-fn ability_template(role: RoleId) -> BTreeSet<&'static str> {
-    match role {
-        RoleId::Invitee => BTreeSet::new(), // NONE — zero content (F-MS-5)
-        RoleId::Viewer => EXPECTED_VIEWER_ABILITIES.iter().copied().collect(),
-        RoleId::Member => EXPECTED_MEMBER_ABILITIES.iter().copied().collect(),
-        RoleId::Moderator => {
-            EXPECTED_MODERATOR_ABILITIES.iter().copied().collect()
-        }
-        RoleId::Admin => expected_admin_abilities(),
-    }
-}
+// ── R5: the real crate surface (the in-file stub-shim is deleted) ───────────
+//
+// `RoleId` + the per-role UCAN ability-template (`ability_template`) are now
+// the real `benten_membership_set::role` surface. The canonical frozen literals
+// above (`EXPECTED_*_ABILITIES` / `ADMIN_EXCLUSIVE`) remain the single
+// source-of-truth golden vectors the real `ability_template` must reproduce —
+// both the golden-vector arm AND the anti-bitfield arm consume them, so the two
+// arms can never freeze divergent ability sets for the same role.
+use benten_membership_set::role::{RoleId, ability_template};
 
 // ── F-MS-6 pins ──────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-6 — Moderator ⊊ Admin strict subset (admin contains mod; mod NOT contains admin); un-ignore at R5"]
 fn ms6_moderator_strict_subset_of_admin() {
     let admin = ability_template(RoleId::Admin);
     let moderator = ability_template(RoleId::Moderator);
@@ -150,7 +126,6 @@ fn ms6_moderator_strict_subset_of_admin() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-6 — Moderator has NO admit/kick/rotate/assign-roles/governance abilities; un-ignore at R5"]
 fn ms6_moderator_denied_admin_governance() {
     let moderator = ability_template(RoleId::Moderator);
     // Moderator must NOT hold any admin-exclusive governance ability.
@@ -178,7 +153,6 @@ fn ms6_moderator_denied_admin_governance() {
 // ── F-MS-7 pins ──────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-7 — per-role UCAN ability-template golden-vector (stable across canary); un-ignore at R5"]
 fn ms7_per_role_ucan_ability_golden_vector() {
     // Golden-vector per role, sourced from the canonical frozen literals so the
     // golden arm and the anti-bitfield arm cannot diverge. Drift fails the pin
@@ -210,7 +184,6 @@ fn ms7_per_role_ucan_ability_golden_vector() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-7 — semantics compose from UCAN, NOT a frozen permission-flags bitfield (grep-defense); un-ignore at R5"]
 fn ms7_no_permission_flags_bitfield() {
     // Grep-defense (R0 §3.6.B): the ability-template is a SET of UCAN ability
     // *tokens* (which compose with the signed GovernanceConfig), NOT a packed
@@ -229,8 +202,7 @@ fn ms7_no_permission_flags_bitfield() {
         "Admin's materialized abilities equal the frozen named-token set (NOT a bitfield) — shared golden literal"
     );
     let moderator = ability_template(RoleId::Moderator);
-    let expected_moderator: BTreeSet<&str> =
-        EXPECTED_MODERATOR_ABILITIES.iter().copied().collect();
+    let expected_moderator: BTreeSet<&str> = EXPECTED_MODERATOR_ABILITIES.iter().copied().collect();
     assert_eq!(
         moderator, expected_moderator,
         "Moderator's materialized abilities equal the frozen named-token set (NOT a bitfield) — shared golden literal"
@@ -266,8 +238,9 @@ fn ms7_no_permission_flags_bitfield() {
     // And the named tokens are human-readable UCAN abilities, never the bare
     // bit-index forms a bitfield would expose.
     assert!(
-        admin.iter().all(|a| !a.starts_with("bit")
-            && a.chars().any(|c| c.is_alphabetic())),
+        admin
+            .iter()
+            .all(|a| !a.starts_with("bit") && a.chars().any(|c| c.is_alphabetic())),
         "abilities are named UCAN tokens, not numeric bitfield positions"
     );
 }

@@ -232,6 +232,7 @@ export const CATALOG_CODES = [
   "E_DSL_PARSE_ERROR",
   "E_DSL_UNKNOWN_PRIMITIVE",
   "E_DSL_MISSING_RESPOND",
+  "E_ROLE_STALE_AT_VERIFY",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -3222,6 +3223,21 @@ export class EDslMissingRespond extends BentenError {
 }
 
 /**
+ * E_ROLE_STALE_AT_VERIFY
+ *
+ * Thrown at: `crates/benten-membership-set/src/verify.rs::verify_stanza` — a MembershipSet group stanza sealed under a stale `role_assignments_generation` is rejected at the sealed-envelope verify boundary.
+ * Message template: "a stanza sealed under a stale role_assignments_generation was rejected at verify"
+ */
+export class ERoleStaleAtVerify extends BentenError {
+  static readonly code = "E_ROLE_STALE_AT_VERIFY";
+  static readonly fixHint = "A MembershipSet group stanza was sealed under a `role_assignments_generation` that is now STALE — the membership set has advanced its role-assignments generation since the stanza was sealed. The generation counter is the 11th field of the `0x6610` BLINDED group AAD, so a stanza sealed at generation `G` fails AEAD-open / verify once the set advances to `G+1`. Re-seal the stanza under the CURRENT `role_assignments_generation`. Phase-4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet primitive; F-MS-8) mints this first-class catalog code.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_ROLE_STALE_AT_VERIFY", "A MembershipSet group stanza was sealed under a `role_assignments_generation` that is now STALE — the membership set has advanced its role-assignments generation since the stanza was sealed. The generation counter is the 11th field of the `0x6610` BLINDED group AAD, so a stanza sealed at generation `G` fails AEAD-open / verify once the set advances to `G+1`. Re-seal the stanza under the CURRENT `role_assignments_generation`. Phase-4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet primitive; F-MS-8) mints this first-class catalog code.", message, context);
+    this.name = "ERoleStaleAtVerify";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3429,4 +3445,5 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DSL_PARSE_ERROR": EDslParseError,
   "E_DSL_UNKNOWN_PRIMITIVE": EDslUnknownPrimitive,
   "E_DSL_MISSING_RESPOND": EDslMissingRespond,
+  "E_ROLE_STALE_AT_VERIFY": ERoleStaleAtVerify,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

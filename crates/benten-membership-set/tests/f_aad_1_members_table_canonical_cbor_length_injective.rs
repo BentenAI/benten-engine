@@ -99,92 +99,20 @@
 
 use std::collections::BTreeMap;
 
-// ── SELF-CONTAINED stub-shim (R5 replaces with `benten_membership_set::…`) ──
-
-/// Stub `Did` — opaque DID string newtype, ordered for `BTreeMap` keying.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
-struct Did(String);
-
-/// Stub `Hlc` — the `admitted_at_hlc` clock. The canonical R0.5 §3.5 3-field
-/// shape (`physical_ms`, `logical`, `node_id`), big-endian-serialized. R5
-/// swaps in the real `benten_core` HLC; the canonical byte shape is what
-/// F-AAD-1 pins. (Aligned with the F-MS-3 fusion stub — F4-006.)
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-struct Hlc {
-    physical_ms: u64,
-    logical: u32,
-    node_id: u64,
-}
-
-/// Stub `SigPubKey` — present iff `is_authority`. The `Option<SigPubKey>`
-/// presence-encoding is one of the three NQ-W4 drift risks.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-struct SigPubKey(#[serde(with = "serde_bytes")] Vec<u8>);
-
-/// Stub `RoleId` — ALL 5 ACTIVE (BC-9); ordinal Invitee=0…Admin=4
-/// (supersedes M-CONS-FINAL per M-13). Serialized as its `u8` ordinal
-/// (AAD-keying-bound).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-#[serde(into = "u8")]
-enum RoleId {
-    Invitee = 0,
-    Viewer = 1,
-    Member = 2,
-    Moderator = 3,
-    Admin = 4,
-}
-impl From<RoleId> for u8 {
-    fn from(r: RoleId) -> u8 {
-        r as u8
-    }
-}
-
-/// Stub `MemberRef` — Kind-determined keying variant (NOT a nature
-/// discriminator — m-15 GNC-7). Serialized as a `u8`-tagged integer variant
-/// (R0.5 §3.5 F4-007 ruling), symmetric with `RoleId` — NOT a CBOR text
-/// string. Tags: `UserDid=0`, `DeviceDid=1`, `LocalDevice=2`; tag `3` is
-/// reserved for a future `SubsetRef`. The integer discriminant is the
-/// AAD-keying-bound canonical wire form (determinism + AAD compactness).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-#[serde(into = "u8")]
-enum MemberRef {
-    UserDid = 0,
-    DeviceDid = 1,
-    LocalDevice = 2,
-    // tag 3 reserved for a future `SubsetRef` (R0.5 §3.5).
-}
-impl From<MemberRef> for u8 {
-    fn from(m: MemberRef) -> u8 {
-        m as u8
-    }
-}
-
-/// Stub `MemberEntry` — the per-DID fused record. The canonical R0.5 §3.5
-/// 5-field shape `{ role, is_authority, sig_pubkey, admitted_at_hlc,
-/// member_ref }`. Field ORDER is load-bearing: it is the canonical
-/// serialization order R5 must preserve. (Byte-compatible with the F-MS-3
-/// fusion stub — F4-006.)
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-struct MemberEntry {
-    role: RoleId,
-    is_authority: bool,
-    sig_pubkey: Option<SigPubKey>,
-    admitted_at_hlc: Hlc,
-    member_ref: MemberRef,
-}
-
-/// PRODUCTION-stand-in: the canonical-bytes assembler. R5 replaces the
-/// body with the real `benten_membership_set::aad::canonical_members_table_bytes`
-/// which serializes the AAD-bound snapshot to canonical DAG-CBOR. The
-/// canonical encoder (sorted map keys, deterministic int encoding) is the
-/// length-injective (U3) wire contract NQ-W4 freezes.
-fn canonical_members_table_bytes(table: &BTreeMap<Did, MemberEntry>) -> Vec<u8> {
-    // `serde_ipld_dagcbor` produces canonical DAG-CBOR: map keys sorted by
-    // canonical byte order, shortest-form integer encoding, no indefinite
-    // lengths. A `BTreeMap` additionally fixes iteration order at the type
-    // level — so the bytes are independent of insertion order.
-    serde_ipld_dagcbor::to_vec(table).unwrap()
-}
+// ── R5: the real crate surface (the SELF-CONTAINED stub-shim is deleted) ──
+//
+// `Did` / `Hlc` / `SigPubKey` / `RoleId` / `MemberRef` / `MemberEntry` are now
+// the real `benten_membership_set` types, and `canonical_members_table_bytes`
+// the real `…::aad` encoder. M-20 (the freeze-byte gate): the real encoder
+// reproduces the frozen `EXPECTED_HEX` golden BYTE-FOR-BYTE (recomputed
+// off-line at impl-time via the real `canonical_members_table_bytes`; the
+// frozen literal is UNCHANGED — no drift). The serde shapes (5-field
+// `MemberEntry` int-tag `RoleId`/`MemberRef`, 3-field `Hlc`, `serde_bytes`
+// `SigPubKey`, transparent `Did` newtype) are byte-compatible with the F-AAD-1
+// freeze (F4-006/F4-007).
+use benten_membership_set::aad::canonical_members_table_bytes;
+use benten_membership_set::member::{Did, Hlc, MemberEntry, MemberRef, SigPubKey};
+use benten_membership_set::role::RoleId;
 
 /// Canonical fixture: a 2-member Atrium snapshot. One authority (Admin,
 /// with sig_pubkey present) + one plain Member (no sig_pubkey).
@@ -250,7 +178,6 @@ const EXPECTED_HEX: &str = "a26c6469643a6b65793a7a414141a564726f6c65046a6d656d62
 /// reproduce these exact bytes from the real `MemberEntry` type, or two
 /// engines would diverge (the NQ-W4 failure mode).
 #[test]
-#[ignore = "RED-PHASE: F-AAD-1 — members_table canonical-CBOR byte-pin (NQ-W4 flagship); un-ignore at R5"]
 fn f_aad_1_members_table_canonical_cbor_hex_pinned() {
     let bytes = canonical_members_table_bytes(&fixture_table());
     // The OBSERVABLE consequence: a non-empty deterministic byte string
@@ -295,7 +222,6 @@ fn f_aad_1_members_table_canonical_cbor_hex_pinned() {
 /// the trailing `64`='d'; it still fired via substring match but was not
 /// byte-precise — corrected here.)
 #[test]
-#[ignore = "RED-PHASE: F-AAD-1 — member_ref is an int discriminant not a text string (F4-007); un-ignore at R5"]
 fn f_aad_1_member_ref_is_int_not_text() {
     let hex = hex_encode(&canonical_members_table_bytes(&fixture_table()));
     // The CBOR text string `0x67` + ASCII "UserDid" must NOT appear: a
@@ -334,7 +260,6 @@ fn f_aad_1_member_ref_is_int_not_text() {
 /// non-canonical encoder (HashMap iteration, indefinite-length CBOR) would
 /// fail this.
 #[test]
-#[ignore = "RED-PHASE: F-AAD-1 — canonical-CBOR re-serialization stability; un-ignore at R5"]
 fn f_aad_1_canonical_reserialize_byte_identical() {
     let a = canonical_members_table_bytes(&fixture_table());
     let b = canonical_members_table_bytes(&fixture_table());
@@ -348,7 +273,6 @@ fn f_aad_1_canonical_reserialize_byte_identical() {
 /// cross-engine guarantee: two engines that admit members in different
 /// orders still materialize byte-identical AAD.
 #[test]
-#[ignore = "RED-PHASE: F-AAD-1 — canonical bytes independent of insertion order; un-ignore at R5"]
 fn f_aad_1_insertion_order_independent() {
     let canonical = canonical_members_table_bytes(&fixture_table());
 
@@ -372,7 +296,6 @@ fn f_aad_1_insertion_order_independent() {
 /// of another valid snapshot. We assert distinctness across three related
 /// snapshots (the fixture, a +1-member extension, a -1-member truncation).
 #[test]
-#[ignore = "RED-PHASE: F-AAD-1 — length-injectivity / truncation-extension non-collision (U3); un-ignore at R5"]
 fn f_aad_1_length_injective_no_truncation_collision() {
     let base = canonical_members_table_bytes(&fixture_table());
 
@@ -420,7 +343,6 @@ fn f_aad_1_length_injective_no_truncation_collision() {
 /// risk (Option presence, RoleId ordinal, MemberRef ordinal, Hlc) is
 /// byte-bound.
 #[test]
-#[ignore = "RED-PHASE: F-AAD-1 — every member field is byte-bound (presence/ordinal/Hlc); un-ignore at R5"]
 fn f_aad_1_every_field_is_byte_bound() {
     let base = canonical_members_table_bytes(&fixture_table());
 

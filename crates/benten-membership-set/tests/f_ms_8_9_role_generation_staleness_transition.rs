@@ -33,78 +33,20 @@
 
 #![allow(dead_code)]
 
-// ── self-contained in-file stub-shim ────────────────────────────────────────
-
-/// The NEW ErrorCode (mirrors the ErrorCode-catalog discipline; at R5 this is
-/// a `benten_errors::ErrorCode::E_ROLE_STALE_AT_VERIFY` variant + TS mirror).
-const E_ROLE_STALE_AT_VERIFY: &str = "E_ROLE_STALE_AT_VERIFY";
-
-/// A stanza sealed under a particular role-assignments generation (the AAD
-/// field). At R5 this is the real sealed-envelope verify path.
-struct Stanza {
-    sealed_role_assignments_generation: u32,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct RoleStaleError {
-    code: &'static str,
-}
-
-/// Production-shaped verify: a stanza whose sealed generation is older than the
-/// set's CURRENT generation is rejected (the generation is AAD-bound, so a
-/// post-rotation stanza fails AEAD-open / verify). At R5 this is
-/// `verify_stanza(stanza, current_generation)`.
-fn verify_stanza(stanza: &Stanza, current_generation: u32) -> Result<(), RoleStaleError> {
-    if stanza.sealed_role_assignments_generation < current_generation {
-        return Err(RoleStaleError {
-            code: E_ROLE_STALE_AT_VERIFY,
-        });
-    }
-    Ok(())
-}
-
-/// An ephemeral UCAN grant issued at a role, bounded by `nbf`/`exp` only.
-struct EphemeralGrant {
-    nbf: u64,
-    exp: u64,
-}
-
-/// The §3.4 default bound on ephemeral-grant lifetime (seconds). Tight by
-/// default so the #60 survival window is small.
-const DEFAULT_EXP_BOUND_SECS: u64 = 3600;
-
-impl EphemeralGrant {
-    /// Production-shaped issuance that ENFORCES the §3.4 tight-exp default: a
-    /// requested expiry is CLAMPED to `nbf + DEFAULT_EXP_BOUND_SECS` so the
-    /// #60 survival window stays small regardless of what the caller asked
-    /// for. At R5 this is the benten-caps ephemeral-grant minting path. A
-    /// no-op issuer that honored an unbounded `requested_exp` verbatim would
-    /// produce an over-long grant and FAIL `ms9_tight_exp_default_bounds_…`.
-    fn issue_bounded(nbf: u64, requested_exp: u64) -> Self {
-        let max_exp = nbf.saturating_add(DEFAULT_EXP_BOUND_SECS);
-        EphemeralGrant {
-            nbf,
-            exp: requested_exp.min(max_exp),
-        }
-    }
-
-    /// Production-shaped validity check: the grant is valid iff `now ∈
-    /// [nbf, exp)`. A membership-set role *downgrade* does NOT appear here —
-    /// the grant survives until `exp` (#60). At R5 this is the benten-caps
-    /// UCAN validation path.
-    fn is_valid_at(&self, now: u64) -> bool {
-        now >= self.nbf && now < self.exp
-    }
-
-    fn lifetime_secs(&self) -> u64 {
-        self.exp - self.nbf
-    }
-}
+// ── R5: the real crate surface (the in-file stub-shim is deleted) ───────────
+//
+// `Stanza` / `RoleStaleError` / `verify_stanza` are now the real
+// `benten_membership_set::verify` surface, and `EphemeralGrant` /
+// `DEFAULT_EXP_BOUND_SECS` the real `…::ucan` surface. The
+// `E_ROLE_STALE_AT_VERIFY` const is the §3.5g-minted catalog wire string
+// (`benten_errors::ErrorCode::RoleStaleAtVerify.as_static_str()`).
+use benten_membership_set::E_ROLE_STALE_AT_VERIFY;
+use benten_membership_set::ucan::{DEFAULT_EXP_BOUND_SECS, EphemeralGrant};
+use benten_membership_set::verify::{RoleStaleError, Stanza, verify_stanza};
 
 // ── F-MS-8 pins ──────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-8 — stanza under stale role_assignments_generation rejects with E_ROLE_STALE_AT_VERIFY; un-ignore at R5"]
 fn ms8_stale_generation_rejected_at_verify() {
     // Seal at generation G=7, then advance the set to G+1=8.
     let stanza = Stanza {
@@ -127,7 +69,6 @@ fn ms8_stale_generation_rejected_at_verify() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-8 — E_ROLE_STALE_AT_VERIFY is the canonical code string (catalog mirror); un-ignore at R5"]
 fn ms8_error_code_is_canonical() {
     // The new ErrorCode is the load-bearing observable. Pin the exact string so
     // the Rust↔TS catalog mirror (§3.5g) stays in sync.
@@ -147,7 +88,6 @@ fn ms8_error_code_is_canonical() {
 // ── F-MS-9 pins ──────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-9 — ephemeral UCAN at role R survives a later downgrade, bounded only by exp (#60); un-ignore at R5"]
 fn ms9_role_transition_survives_prior_ucan() {
     // Issue an Admin-role ephemeral grant valid [1000, 1000+3600).
     let grant = EphemeralGrant {
@@ -170,7 +110,6 @@ fn ms9_role_transition_survives_prior_ucan() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-9 — §3.4 tight-exp default keeps the #60 survival window small (issuer CLAMPS over-long requests); un-ignore at R5"]
 fn ms9_tight_exp_default_bounds_survival_window() {
     // F4-033: the prior arm constructed `exp = nbf + DEFAULT_EXP_BOUND_SECS`
     // and then asserted `lifetime ≤ DEFAULT_EXP_BOUND_SECS` — true BY

@@ -25,25 +25,36 @@ default = []
 testing = []
 
 [dependencies]
-# RED-PHASE STUB — intentionally ZERO workspace deps at R3-W4 so the crate
-# scaffold compiles green in isolation and the W4 test pins (which use
-# self-contained in-file stub-shims, not this crate's surface yet) stay
-# green at baseline behind `#[ignore]`. The real B-1 dependency set lands
-# at the R5 canary wave per R0 §6.1:
+# R5 canary (w-ms-canary) — the B-1 dependency set is now REAL (un-commented
+# from the R3-W4 documentation block). Per R0 §6.1: every one of these is
+# UPSTREAM; benten-membership-set is a leaf-ish addition — crypto-suite + sync
+# NEVER depend on IT (F-CRATE-2 compile-fence; verified by the no-reverse-edge
+# grep pins). The direction is membership-set → {crypto-suite, core, caps, id,
+# graph, sync}.
 #
-#   benten-crypto-suite  # HPKE / AEAD / structural-KDF primitives — the ONLY crypto call site (#5)
-#   benten-core          # Node / Version-chain / CID
-#   benten-caps          # UCAN / grants — RBAC composition
-#   benten-id            # DID + DeviceAttestation + RotationLog
-#   benten-graph         # audit-sequence + ChangeEvent
-#   benten-sync          # NEW (B-1) — HLC / Loro / MST / Transport (UPSTREAM; this crate DEPENDS ON it)
-#
-# DIRECTION: every one of those is UPSTREAM; benten-membership-set is a
-# leaf-ish addition — crypto-suite + sync NEVER depend on it (F-CRATE-2
-# compile-fence). The dep block is left empty (not the real set) on
-# purpose: a stub crate that pulled the full set would (a) drag the whole
-# graph into every W4 scoped-check and (b) risk a reverse-dep edge before
-# the canary establishes the boundary. The R5 canary un-comments these.
+# benten-crypto-suite is the ONLY crypto-primitive call site (#5) — the AAD
+# assembler hands OPAQUE Vec<u8> across this seam (m-15 GNC-5).
+benten-crypto-suite = { path = "../benten-crypto-suite" }
+benten-core = { path = "../benten-core" }            # Node / Version-chain / CID
+benten-caps = { path = "../benten-caps" }            # UCAN / grants — RBAC composition
+benten-id = { path = "../benten-id" }                # DID + DeviceAttestation + RotationLog
+benten-graph = { path = "../benten-graph" }          # audit-sequence + ChangeEvent
+benten-sync = { path = "../benten-sync" }            # B-1 — HLC / Loro / MST / Transport (UPSTREAM)
+# benten-errors hosts the stable ErrorCode catalog (the §3.5g mint for
+# E_ROLE_STALE_AT_VERIFY lives there; this crate references the variant).
+benten-errors = { workspace = true }
+
+# Crypto/serialization helpers the keying-mechanism uses directly. blake3 is
+# the project hash + keyed-MAC primitive used for the AAD commitments (the
+# §3.9 gossip-topic construction); the serde stack is the canonical-CBOR
+# members_table snapshot encoder (NQ-W4). NO crypto primitive (sha3 / ml_kem /
+# chacha20 / ml_dsa / x25519) is constructed here — all routed via crypto-suite
+# (#5 ONLY-call-site; the F-CRATE-2 grep pin enforces this).
+blake3 = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 # R3 consolidation (merged from R3-W5): the W5 RED-PHASE pins (F-AAD-*,

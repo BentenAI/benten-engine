@@ -1817,6 +1817,14 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::build` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
 - **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 196 → 197). Routes to `ON_ERROR`.
 
+### E_ROLE_STALE_AT_VERIFY
+
+- **Message:** "a stanza sealed under a stale role_assignments_generation was rejected at verify"
+- **Context:** `{ sealed_role_assignments_generation: u32, current_generation: u32 }`
+- **Fix:** A MembershipSet group stanza was sealed under a `role_assignments_generation` that is now STALE — the membership set has advanced its role-assignments generation since the stanza was sealed. The generation counter is the 11th field of the `0x6610` BLINDED group AAD (the BLINDED 11-field set per R0.7 §3.10/§4.1), so a stanza sealed at generation `G` fails AEAD-open / verify once the set advances to `G+1`. Re-seal the stanza under the CURRENT `role_assignments_generation`.
+- **Thrown at:** `crates/benten-membership-set/src/verify.rs::verify_stanza` — returns `RoleStaleError { code: "E_ROLE_STALE_AT_VERIFY" }` when `stanza.sealed_role_assignments_generation < current_generation`.
+- **Phase:** 4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet primitive; F-MS-8 / BC-5 / F4-031; CATALOG_VARIANT_COUNT 197 → 198). Routes to `ON_ERROR`.
+
 <!-- reachability: ignore -->
 
 ## Extending the catalog

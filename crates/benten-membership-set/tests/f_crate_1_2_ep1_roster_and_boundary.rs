@@ -81,30 +81,34 @@ const TIER1_OPEN_SEAMS: [&str; 6] = [
 /// pins the real sealed-supertrait shape).
 const TIER2_SEALED_SEAMS: [&str; 3] = ["CapabilityPolicy", "GrantReader", "DeviceAuthBackend"];
 
-/// Stand-in for `benten_ivm::Strategy` — an ENUM, not a trait (m-15 GNC-4).
-/// The `#[non_exhaustive]`-free 2-arm shape mirrors the in-tree Reserved arm.
+/// Structural model of `benten_ivm::Strategy` — an ENUM, not a trait (m-15
+/// GNC-4). `benten-ivm` is deliberately NOT in this crate's B-1 dep set (the
+/// F-CRATE-2 dep-direction pin asserts exactly `{crypto-suite, core, caps, id,
+/// graph, sync}`), so the Tier-3 enum-dispatch invariant is modeled here as the
+/// `#[non_exhaustive]`-free 2-arm shape that mirrors the in-tree Reserved arm
+/// (testing the EP-1 architecture invariant, not importing the foreign trait —
+/// which would add a dep the boundary pin forbids).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Strategy {
     DependencyTracked,
     Reserved,
 }
 
-/// Stand-in for `benten_caps::scope::Scope` — EXACTLY 2 arms (a 3rd is a
-/// HALT-AND-SURFACE per `scope.rs:44`).
-#[derive(Clone, PartialEq, Eq, Debug)]
-enum Scope {
-    Hashes(Vec<[u8; 4]>),
-    RestrictedSelector(u32),
-}
-
 const SCOPE_VARIANT_COUNT: usize = 2;
 
-/// A `dispatch` over `Scope` with NO wildcard — proves EXACTLY-2 at compile
-/// time (a 3rd arm breaks this match, the HALT-AND-SURFACE).
-fn scope_kind(s: &Scope) -> &'static str {
+/// REAL-TYPE compile anchor: an exhaustive, NO-WILDCARD match over the real
+/// `benten_caps::Scope` (a direct B-1 dep). This proves the real `Scope` is
+/// EXACTLY-2-arm at compile time — a 3rd arm added to `benten_caps::Scope`
+/// breaks THIS match (the §1.A.FROZEN item 15(c) HALT-AND-SURFACE). Never
+/// called; it exists only as the compile-time exhaustiveness fence against the
+/// real type.
+#[allow(dead_code)]
+fn real_scope_kind(s: &benten_caps::Scope) -> &'static str {
     match s {
-        Scope::Hashes(_) => "hashes",
-        Scope::RestrictedSelector(_) => "restricted",
+        benten_caps::Scope::Hashes(_) => "hashes",
+        benten_caps::Scope::RestrictedSelector(_) => "restricted",
+        // NO wildcard arm — a 3rd `benten_caps::Scope` variant is a compile
+        // error here (HALT-AND-SURFACE).
     }
 }
 
@@ -196,7 +200,6 @@ fn walk_rs(dir: &std::path::Path) -> Vec<PathBuf> {
 // ── F-CRATE-1 pins ──────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — EP-1 Tier-1 OPEN seams (EXACTLY 6) object-safe roster; un-ignore at R5 against real workspace traits"]
 fn crate1_tier1_open_seam_roster() {
     // The 6 Tier-1 open backend seams (R0.5 §2.7 line 264). At R5 each is
     // asserted object-safe via a `dyn Trait` coercion (clone of
@@ -219,7 +222,6 @@ fn crate1_tier1_open_seam_roster() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — EP-1 Tier-2 SEALED policy seams (CapabilityPolicy/GrantReader/DeviceAuthBackend); un-ignore at R5"]
 fn crate1_tier2_sealed_seam_roster() {
     // The sealed policy seams: Benten-internal, no external impl. R0.5 §2.7
     // line 267-268 names all three; §6.3 line 1125 makes DeviceAuthBackend the
@@ -234,7 +236,6 @@ fn crate1_tier2_sealed_seam_roster() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — Tier-1 OPEN and Tier-2 SEALED rosters are DISJOINT (F4-008 boundary: no seam is both); un-ignore at R5 against real workspace traits"]
 fn crate1_open_and_sealed_tiers_are_disjoint() {
     // The F4-008 correctness boundary as a SINGLE partition check: a seam is
     // either an OPEN object-safe backend OR a SEALED policy trait — NEVER both
@@ -262,7 +263,6 @@ fn crate1_open_and_sealed_tiers_are_disjoint() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — benten_ivm::Strategy is an ENUM not a trait (Tier-3 enum-dispatch, m-15 GNC-4); un-ignore at R5"]
 fn crate1_strategy_is_enum_not_trait() {
     // Clone of strategy_enum_present.rs: Strategy is an ENUM (Copy value type),
     // dispatched by `match`, NOT a `dyn Strategy` trait object. We exercise the
@@ -274,19 +274,21 @@ fn crate1_strategy_is_enum_not_trait() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — Scope is EXACTLY-2-arm (3rd = HALT-AND-SURFACE); un-ignore at R5 against benten_caps::Scope"]
 fn crate1_scope_exactly_two_arm() {
-    // The no-wildcard `scope_kind` match proves EXACTLY-2 at compile time.
-    assert_eq!(scope_kind(&Scope::Hashes(vec![[0u8; 4]])), "hashes");
-    assert_eq!(scope_kind(&Scope::RestrictedSelector(7)), "restricted");
+    // The no-wildcard `real_scope_kind` match over the REAL `benten_caps::Scope`
+    // proves EXACTLY-2 at compile time (a 3rd arm on the real type breaks that
+    // match — the §1.A.FROZEN item 15(c) HALT-AND-SURFACE). Drive it with the
+    // real `Scope::Hashes` arm (an empty `Vec<Cid>` is the trivial constructor)
+    // for an observable consequence.
+    let hashes = benten_caps::Scope::Hashes(Vec::new());
+    assert_eq!(real_scope_kind(&hashes), "hashes");
     assert_eq!(
         SCOPE_VARIANT_COUNT, 2,
-        "Scope is EXACTLY-2-arm; a 3rd arm is a HALT-AND-SURFACE (scope.rs:44)"
+        "benten_caps::Scope is EXACTLY-2-arm; a 3rd arm is a HALT-AND-SURFACE (scope.rs:44)"
     );
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-1 — NO EngineExtension/ExtensionRegistry anywhere in the membership crate (no-registry grep-defense); un-ignore at R5 workspace-wide"]
 fn crate1_no_extension_registry_grep_defense() {
     // Clone of strategy_c_renamed_to_reserved_grep_assert.rs: a grep-defense
     // that no `EngineExtension` / `ExtensionRegistry` symbol appears. This runs
@@ -305,7 +307,6 @@ fn crate1_no_extension_registry_grep_defense() {
 // ── F-CRATE-2 pins (REAL at R3 baseline) ────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-2 — the 15th crate benten-membership-set EXISTS with its mechanism-half codepoint band; un-ignore at R5"]
 fn crate2_fifteenth_crate_exists() {
     // The crate exists with its own Cargo.toml (the 15th workspace member).
     let cargo = read_cargo_toml("benten-membership-set");
@@ -322,7 +323,6 @@ fn crate2_fifteenth_crate_exists() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-2 — NO reverse dep: crypto-suite + sync Cargo.toml do NOT depend on benten-membership-set; un-ignore at R5"]
 fn crate2_no_reverse_dependency_edge() {
     // F-CRATE-2's load-bearing boundary: the membership crate is a leaf-ish
     // addition. crypto-suite and sync are UPSTREAM — they must NEVER name
@@ -339,7 +339,6 @@ fn crate2_no_reverse_dependency_edge() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-2 — membership crate makes NO direct crypto-primitive construction (sha3/chacha20/ml_kem); ONLY-call-site #5 grep-defense; un-ignore at R5"]
 fn crate2_no_direct_primitive_construction() {
     // The #5 ONLY-call-site rule: the membership crate delegates ALL crypto to
     // benten-crypto-suite; it NEVER imports/constructs a primitive directly. A
@@ -363,7 +362,6 @@ fn crate2_no_direct_primitive_construction() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-CRATE-2 — the B-1 dep set {crypto-suite, core, caps, id, graph, sync} is a REAL [dependencies] edge-set; un-ignore at R5 once the canary un-comments deps"]
 fn crate2_b1_dep_set_direction() {
     // Assert the B-1 set as REAL `[dependencies]` edges (parsed from the
     // section), NOT a whole-file `.contains()` that matches the commented

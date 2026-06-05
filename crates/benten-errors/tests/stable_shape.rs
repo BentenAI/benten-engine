@@ -648,6 +648,13 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::DslParseError,
     ErrorCode::DslUnknownPrimitive,
     ErrorCode::DslMissingRespond,
+    // Phase-4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet primitive;
+    // F-MS-8 / F4-031) — `E_ROLE_STALE_AT_VERIFY`: a MembershipSet group
+    // stanza sealed under a stale `role_assignments_generation` (the 11th
+    // field of the `0x6610` BLINDED group AAD) is rejected at verify. §3.5g
+    // atomic mint: Rust variant + `errors.generated.ts` + ERROR-CATALOG.md +
+    // this list/count in the SAME commit. CATALOG_VARIANT_COUNT 197 -> 198.
+    ErrorCode::RoleStaleAtVerify,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -1054,8 +1061,14 @@ fn variant_count_is_pinned() {
     // The same wave performs the atomic 4-surface rename of
     // `ViewStrategyCReserved` -> `ViewStrategyReserved` (rename, not a
     // mint — does not bump the count). 194 -> 197.
+    //
+    // **Phase-4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet
+    // primitive; F-MS-8 / F4-031)**: +1 `RoleStaleAtVerify`
+    // (`E_ROLE_STALE_AT_VERIFY`) — a MembershipSet group stanza sealed under
+    // a stale `role_assignments_generation` is rejected at the sealed-envelope
+    // verify boundary. §3.5g atomic mint across all four surfaces. 197 -> 198.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 197,
+        CATALOG_VARIANT_COUNT, 198,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1346,7 +1359,10 @@ fn catalog_variant_count_matches_enum() {
             // mirrors of `CompileError::{Parse,Semantic,Build}`.
             | ErrorCode::DslParseError
             | ErrorCode::DslUnknownPrimitive
-            | ErrorCode::DslMissingRespond => true,
+            | ErrorCode::DslMissingRespond
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (MembershipSet F-MS-8
+            // / F4-031) — the role-staleness verify rejection catalog code.
+            | ErrorCode::RoleStaleAtVerify => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

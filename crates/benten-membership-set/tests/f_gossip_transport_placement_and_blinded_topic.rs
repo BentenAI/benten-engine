@@ -55,6 +55,14 @@
 //! input) is what F-GOSSIP-2 freezes via the absolute golden vector.
 
 #![allow(clippy::unwrap_used)]
+// TIER-2 (w-ms-sync) RED-PHASE stub: cosmetic clippy lints in the
+// self-contained convergence-harness shim. Non-semantic; the w-ms-sync wave
+// rewrites this stub against the real crate surface and clears these.
+#![allow(
+    clippy::assigning_clones,
+    clippy::no_effect_underscore_binding,
+    clippy::format_collect
+)]
 
 // ── SELF-CONTAINED stub-shim ──
 
@@ -202,7 +210,8 @@ fn f_gossip_1_convergence_independent_of_gossip() {
     // a no-op MST stand-in would leave them divergent and FAIL here).
     let mut a = base_a.clone();
     let mut b = base_b.clone();
-    let converged = mst_backstop_converges(&mut a, &mut b, /* mst */ true, /* gossip */ 0);
+    let converged =
+        mst_backstop_converges(&mut a, &mut b, /* mst */ true, /* gossip */ 0);
     assert!(
         converged,
         "convergence holds with ALL gossip dropped (MST backstop)"
@@ -217,14 +226,21 @@ fn f_gossip_1_convergence_independent_of_gossip() {
     // notifications. Gossip is liveness-only; it never moves state.
     let mut a2 = base_a.clone();
     let mut b2 = base_b.clone();
-    let converged_gossip_only =
-        mst_backstop_converges(&mut a2, &mut b2, /* mst */ false, /* gossip */ 1000);
+    let converged_gossip_only = mst_backstop_converges(
+        &mut a2, &mut b2, /* mst */ false, /* gossip */ 1000,
+    );
     assert!(
         !converged_gossip_only,
         "gossip-only (no MST anti-entropy) does NOT converge — gossip is liveness-only"
     );
-    assert_eq!(a2, base_a, "gossip notifications never mutated peer A's state");
-    assert_eq!(b2, base_b, "gossip notifications never mutated peer B's state");
+    assert_eq!(
+        a2, base_a,
+        "gossip notifications never mutated peer A's state"
+    );
+    assert_eq!(
+        b2, base_b,
+        "gossip notifications never mutated peer B's state"
+    );
 }
 
 // ── F-GOSSIP-2 ──────────────────────────────────────────────────────────
@@ -274,8 +290,7 @@ fn f_gossip_2_topic_absolute_golden_vector_be() {
     // R5 confirms-or-deliberately-updates this frozen literal against the real
     // `benten-crypto-suite` keyed MAC (HMAC = `blake3::keyed_hash`; no hmac/sha2
     // dep; bytes unchanged — R0.7 §4.1) (M-20).
-    const TOPIC_GEN7_HEX: &str =
-        "3d28ab3c30ff99adeabdfd08310a97a3f78705494e5de709b96ec34618736527";
+    const TOPIC_GEN7_HEX: &str = "3d28ab3c30ff99adeabdfd08310a97a3f78705494e5de709b96ec34618736527";
     let topic7 = compute_gossip_topic(&k_set, set_id, 7);
     assert_eq!(
         hex(&topic7),

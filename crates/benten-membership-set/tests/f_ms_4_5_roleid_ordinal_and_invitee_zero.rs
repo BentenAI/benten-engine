@@ -46,78 +46,32 @@
 
 #![allow(dead_code)]
 
-// ── self-contained in-file stub-shim ────────────────────────────────────────
-
-/// Stand-in for `benten_membership_set::role::RoleId`. Ordinals are
-/// keying-AAD-bound → golden-vector-pinned. M-13: Invitee=0 (zero-content
-/// floor), Viewer=1 (supersedes M-CONS-FINAL).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u8)]
-enum RoleId {
-    Invitee = 0,
-    Viewer = 1,
-    Member = 2,
-    Moderator = 3,
-    Admin = 4,
-}
+// ── R5: the real crate surface (the in-file stub-shim is deleted) ───────────
+//
+// `RoleId` + the key-derivation gate (`derive_member_content_key`) + the
+// read-cap gate (`RoleId::grants_read_cap`) + the per-role UCAN ability
+// cardinality (`ability_template(role).len()`) are now the real
+// `benten_membership_set::role` surface. `derive_member_content_key` routes
+// `K(N)` through the BLAKE3 KDF (#5 ONLY-call-site).
+use benten_membership_set::role::{RoleId, ability_template, derive_member_content_key};
 
 /// The 5 active roles in ordinal order (Inv-20 clause-j: ship-all-5-active).
-const ALL_ROLES: [RoleId; 5] = [
-    RoleId::Invitee,
-    RoleId::Viewer,
-    RoleId::Member,
-    RoleId::Moderator,
-    RoleId::Admin,
-];
+const ALL_ROLES: [RoleId; 5] = RoleId::ALL;
 
-/// Production-shaped key-derivation gate keyed off role. At R5 this is the real
-/// `members_table`-driven keying glue (delegates K(N) to benten-crypto-suite).
-/// **Invitee derives NOTHING** (M-11 zero-content floor).
-fn derive_member_content_key(role: RoleId, node_cid: &[u8]) -> Option<Vec<u8>> {
-    match role {
-        // Invitee = pre-acceptance handshake only: NO content key.
-        RoleId::Invitee => None,
-        // Every content-bearing role derives a (stubbed) per-Node key.
-        RoleId::Viewer | RoleId::Member | RoleId::Moderator | RoleId::Admin => {
-            let mut k = b"K(N):".to_vec();
-            k.extend_from_slice(node_cid);
-            Some(k)
-        }
-    }
-}
-
-/// Production-shaped read-capability gate keyed off role. Invitee gets none.
+/// Drive the REAL read-capability gate keyed off role (Invitee gets none).
 fn grants_read_cap(role: RoleId) -> bool {
-    !matches!(role, RoleId::Invitee)
+    role.grants_read_cap()
 }
 
-/// Production-shaped per-role UCAN ability-template *cardinality* keyed off
-/// role. The full templates are F-MS-7's authoritative golden
-/// (`f_ms_6_7_moderator_subset_ucan_templates.rs`); these counts MUST agree
-/// with that golden's `ability_template(role).len()`:
-///
-/// - `Invitee  = 0` — NONE (zero-content floor, M-11)
-/// - `Viewer   = 1` — read only
-/// - `Member   = 3` — read / write(own) / share-within-policy
-/// - `Moderator= 4` — read / write / share / moderate-content
-/// - `Admin    = 9` — Moderator's 4 ∪ the 5 admin-exclusive governance
-///   abilities `{admit-member, kick-member, rotate-keys, assign-roles,
-///   edit-governance-config}` (ruling 2; `assign-roles` restored).
+/// The REAL per-role UCAN ability-template cardinality — `ability_template`'s
+/// `.len()` (the single source-of-truth shared with F-MS-7).
 fn ucan_ability_count(role: RoleId) -> usize {
-    match role {
-        RoleId::Invitee => 0,   // NONE — zero content
-        RoleId::Viewer => 1,    // read only
-        RoleId::Member => 3,    // read / write(own) / share-within-policy
-        RoleId::Moderator => 4, // read / write / share / moderate-content
-        // 4 Moderator ∪ 5 admin-exclusive (ruling 2) — agrees with F-MS-7.
-        RoleId::Admin => 9,
-    }
+    ability_template(role).len()
 }
 
 // ── F-MS-4 pins ──────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-4 — RoleId ordinals Invitee=0/Viewer=1/Member=2/Moderator=3/Admin=4 (supersedes M-CONS-FINAL Viewer=0); un-ignore at R5"]
 fn ms4_roleid_ordinal_golden_vector() {
     // The exact keying-AAD-bound ordinal values. M-13 supersedes M-CONS-FINAL:
     // Invitee=0 (NOT Viewer=0). Would-FAIL if any role's ordinal drifted.
@@ -133,7 +87,6 @@ fn ms4_roleid_ordinal_golden_vector() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-4 — serialized RoleId ordinal hex-pin (the AAD-bound byte); un-ignore at R5"]
 fn ms4_roleid_serialized_ordinal_hex_pin() {
     // The role ordinal is what travels in `role_assignments_generation`-bound
     // AAD. Pin the exact little-bytes (single byte; no endianness ambiguity)
@@ -156,7 +109,6 @@ fn ms4_roleid_serialized_ordinal_hex_pin() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-4 — all 5 RoleId variants construct (ship-all-5-active, Inv-20 clause-j); un-ignore at R5"]
 fn ms4_all_five_roles_active() {
     // Inv-20 clause-j corrected from "3 active 2 reserved" → all-5-active.
     // Constructing each role succeeds AND yields a distinct ordinal.
@@ -174,7 +126,6 @@ fn ms4_all_five_roles_active() {
 // ── F-MS-5 pins ──────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-5 — Invitee (RoleId=0) derives ZERO content: no K(N); un-ignore at R5"]
 fn ms5_invitee_derives_no_content_key() {
     let node_cid = b"bafyNODE";
     // Invitee: NO K(N). The most security-load-bearing RBAC constraint (M-11).
@@ -198,7 +149,6 @@ fn ms5_invitee_derives_no_content_key() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-5 — Invitee gets NO read cap and an EMPTY UCAN ability-template; un-ignore at R5"]
 fn ms5_invitee_no_read_cap_no_ucan_abilities() {
     // No read capability.
     assert!(
@@ -220,7 +170,6 @@ fn ms5_invitee_no_read_cap_no_ucan_abilities() {
 // ── F-MS-7 cross-file cardinality agreement (F4-RBAC-1) ──────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F4-RBAC-1 — per-role UCAN ability cardinalities agree with F-MS-7 (Admin=9, ruling 2); un-ignore at R5"]
 fn ms_ucan_ability_cardinality_agrees_with_f_ms_7() {
     // F-MS-7 (`f_ms_6_7_moderator_subset_ucan_templates.rs`) is the
     // authoritative per-role UCAN ability-template golden. The cardinalities

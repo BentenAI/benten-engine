@@ -47,6 +47,10 @@
 //! lands) the `#[kani::proof]` arm, and un-ignores.
 
 #![allow(clippy::unwrap_used)]
+// TIER-2 (w-ms-sync) RED-PHASE stub: a cosmetic `format_collect` lint in the
+// self-contained hex helper. Non-semantic; the w-ms-sync wave rewrites this
+// stub against the real crate surface and clears it.
+#![allow(clippy::format_collect)]
 // `cfg(kani)` is the conventional cargo-kani proof-harness gate. It is NOT a
 // declared workspace check-cfg (kani is a v1-GM strengthening, not a v1-beta
 // dependency — do NOT block the wave on kani standup, R2 §"kani harness is
@@ -329,7 +333,10 @@ fn f_inv21_2_totality_via_version_node_cid() {
         pairwise_min, global_min,
         "the pairwise-reduced winner equals the global min (transitive total order ⇒ order-independent convergence)"
     );
-    assert_eq!(global_min, a.id.0, "the global min is the smallest-CID fork");
+    assert_eq!(
+        global_min, a.id.0,
+        "the global min is the smallest-CID fork"
+    );
 }
 
 // ── F-INV21-3 ───────────────────────────────────────────────────────────
@@ -497,8 +504,7 @@ fn f_inv21_4_losing_fork_not_merged_archived_not_discarded() {
     // Frozen golden: the derived K(V) for cid(b\"winner\") (domain-separated
     // BLAKE3 derive_key). R5 confirms-or-deliberately-updates this frozen
     // literal against the real structural KDF (M-20).
-    const K_V_WINNER_HEX: &str =
-        "e3c09e37e2964ee768b467c4afbbca9e4d518326bdceba456ca99ce2cd1ba95e";
+    const K_V_WINNER_HEX: &str = "e3c09e37e2964ee768b467c4afbbca9e4d518326bdceba456ca99ce2cd1ba95e";
     assert_eq!(
         hex(&k_v),
         K_V_WINNER_HEX,

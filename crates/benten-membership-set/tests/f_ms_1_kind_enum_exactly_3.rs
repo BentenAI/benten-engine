@@ -37,67 +37,32 @@
 // ── self-contained in-file stub-shim (R5 replaces with the real crate
 //    surface) ──────────────────────────────────────────────────────────────
 
-/// Stand-in for `benten_membership_set::kind::MembershipSetKind`. EXACTLY-3,
-/// `#[repr(u8)]`-ordinal-stable, NO `#[non_exhaustive]` (a 4th arm must be a
-/// compile error at every match site, NOT a silently-tolerated wildcard).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u8)]
-enum MembershipSetKind {
-    Atrium = 0,
-    DeviceMesh = 1,
-    SingleDevice = 2,
-}
+// ── R5: the real crate surface (the in-file stub-shim is deleted) ───────────
+//
+// The shapes the shim modeled are now the real
+// `benten_membership_set::kind::{MembershipSetKind, RequestedReserveKind,
+// KindDispatchError, dispatch_reserve}`. `MembershipSetKind::codepoint()` IS
+// the exhaustive no-wildcard HALT-AND-SURFACE match; `::VARIANT_COUNT` IS the
+// EXACTLY-3 count.
+use benten_membership_set::kind::{
+    KindDispatchError, MembershipSetKind, RequestedReserveKind, dispatch_reserve,
+};
 
-/// Stand-in for the codepoint constant the canary mints (`0x6600`).
-const MEMBERSHIP_SET_ENCRYPTION: u16 = 0x6600;
+/// The real codepoint constant the canary mints (`0x6600`).
+const MEMBERSHIP_SET_ENCRYPTION: u16 = benten_membership_set::codepoints::MEMBERSHIP_SET_ENCRYPTION;
 
-/// The two keying-reserves the R0 §3.6.A names. They are NOT Kinds — they are
-/// a *selector* the dispatch rejects at v1-beta (typed-reject, never a silent
-/// 4th Kind). Modeled as a separate "requested reserve" axis so the real Kind
-/// enum stays EXACTLY-3.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum RequestedReserveKind {
-    AtriumWithRotatingGroupKey,
-    EphemeralLobby,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum KindDispatchError {
-    /// A reserved keying-Kind was selected at v1-beta.
-    ReserveTypedReject,
-}
-
-/// Production-shaped dispatch: maps a selected Kind to its frozen codepoint.
-/// The body is an **exhaustive match with no wildcard** — adding a 4th
-/// `MembershipSetKind` variant breaks THIS compile (the HALT-AND-SURFACE
-/// guarantee). At R5 this is the canary's real `kind.codepoint()`.
+/// Drive the production codepoint dispatch — delegates to the real
+/// `Kind::codepoint()` (the exhaustive no-wildcard match / HALT-AND-SURFACE).
 fn kind_to_codepoint(k: MembershipSetKind) -> u16 {
-    match k {
-        MembershipSetKind::Atrium => MEMBERSHIP_SET_ENCRYPTION,
-        MembershipSetKind::DeviceMesh => MEMBERSHIP_SET_ENCRYPTION,
-        MembershipSetKind::SingleDevice => MEMBERSHIP_SET_ENCRYPTION,
-        // NO wildcard arm. A new Kind = a compile error here.
-    }
+    k.codepoint()
 }
 
-/// Production-shaped reserve dispatch: a reserve-Kind selected at v1-beta is a
-/// typed-reject (never silently promoted to a real Kind).
-fn dispatch_reserve(r: RequestedReserveKind) -> Result<MembershipSetKind, KindDispatchError> {
-    match r {
-        RequestedReserveKind::AtriumWithRotatingGroupKey | RequestedReserveKind::EphemeralLobby => {
-            Err(KindDispatchError::ReserveTypedReject)
-        }
-    }
-}
-
-/// The variant count the canary's `MembershipSetKind` must expose (the real
-/// type carries a `const VARIANT_COUNT` / `strum::EnumCount` parity at R5).
-const KIND_VARIANT_COUNT: usize = 3;
+/// The real variant count the canary's `MembershipSetKind` exposes.
+const KIND_VARIANT_COUNT: usize = MembershipSetKind::VARIANT_COUNT;
 
 // ── pins ────────────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-1 — MembershipSetKind is EXACTLY 3 ordinal-stable variants (Atrium=0/DeviceMesh=1/SingleDevice=2); un-ignore at R5 against benten_membership_set::kind::MembershipSetKind"]
 fn ms1_kind_is_exactly_three_ordinal_stable() {
     // Drive the production-shaped codepoint dispatch for every Kind: the
     // exhaustive no-wildcard match is the HALT-AND-SURFACE mechanism. All 3
@@ -126,7 +91,6 @@ fn ms1_kind_is_exactly_three_ordinal_stable() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-1 — keying-reserve Kinds (AtriumWithRotatingGroupKey/EphemeralLobby) typed-reject at v1-beta; un-ignore at R5"]
 fn ms1_reserve_kinds_typed_reject_at_v1_beta() {
     // Selecting either reserve at v1-beta is a typed-reject — NEVER a silent
     // promotion to a 4th real Kind. Would-FAIL if a reserve were dispatchable.
@@ -143,7 +107,6 @@ fn ms1_reserve_kinds_typed_reject_at_v1_beta() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: F-MS-1 — Garden/Grove are GovernanceConfig tiers, NEVER MembershipSetKind variants; un-ignore at R5"]
 fn ms1_garden_grove_are_not_kinds() {
     // Garden/Grove are NOT in the Kind enum (they are GovernanceConfig tiers,
     // graph Nodes — F-GOV-1's territory). The structural guarantee is that the
