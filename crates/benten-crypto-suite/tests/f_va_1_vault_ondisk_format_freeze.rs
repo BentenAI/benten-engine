@@ -59,162 +59,31 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes this whole module + wires the LIVE
-/// `benten_crypto_suite::vault` + `EncryptedEnvelope::SymmetricAeadXNonce`
-/// surface).
-mod f_va_1_stub {
-    /// The frozen vault wire codepoint (R0 §4.0 vault band `0x6100`).
-    pub const VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT: u16 = 0x6100;
 
-    /// The 12-byte `SymmetricAead` (ChaCha20-Poly1305) sibling codepoint —
-    /// a RATIFIED, frozen, shipping v1-beta variant (Ben ruling 3,
-    /// 2026-06-02; "ship both" per R0.5 §4.1 rows `SymmetricAead [u8;12]` +
-    /// `SymmetricAeadXNonce [u8;24]`). Its assigned home is the Layer-A
-    /// vault band `0x6100..0x61FF` (R0.5 §4.0). It is NOT the vault's own
-    /// codepoint (the vault uses the 24-byte XNonce variant at `0x6100`);
-    /// here it serves as the foil for the nonce-width-discrimination pin.
-    pub const SYMMETRIC_AEAD_12B_CODEPOINT: u16 = 0x6101;
+// R5: wired to the LIVE vault surface (serde_ipld_dagcbor + XChaCha20-Poly1305).
+use benten_crypto_suite::vault::{
+    DecodedVault, SYMMETRIC_AEAD_12B_CODEPOINT, VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
+    VAULT_XNONCE_LEN as FROZEN_XNONCE_LEN, VaultError, VaultPayload, decode_vault,
+    decode_vault_strict, serialize_vault,
+};
 
-    /// XChaCha20-Poly1305 nonce width (m-4). STUB emits the WRONG width so the
-    /// red-phase pin fails until R5.
-    pub const STUB_NONCE_LEN: usize = 12; // R5 makes the real vault emit 24.
-
-    /// The frozen XNonce width the vault MUST emit.
-    pub const FROZEN_XNONCE_LEN: usize = 24;
-
-    /// Vault CBOR payload (R0 §3.1). Field order is FROZEN: k_principal,
-    /// user_did_signing_key, user_did_creation_time.
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct VaultPayload {
-        pub k_principal: [u8; 32],
-        pub user_did_signing_key: Vec<u8>,
-        pub user_did_creation_time: u64,
-    }
-
-    /// A decoded vault envelope (the on-disk `EncryptedEnvelope::
-    /// SymmetricAeadXNonce` after AEAD-open). Carries the wire codepoint + the
-    /// actual nonce bytes used so the format-freeze pins can inspect them.
-    #[derive(Debug, Clone)]
-    pub struct DecodedVault {
-        pub codepoint: u16,
-        pub nonce: Vec<u8>,
-        pub payload: VaultPayload,
-    }
-
-    /// Production serialize: build the on-disk vault envelope bytes for a fixed
-    /// payload under a fixed DAK + salt. STUB returns an empty Vec (deliberately
-    /// NOT a real serialization) so the byte-pins FAIL until R5.
-    pub fn serialize_vault_for_test(_payload: &VaultPayload, _dak: &[u8; 32]) -> Vec<u8> {
-        Vec::new()
-    }
-
-    /// Production decode of vault envelope bytes. STUB returns a `DecodedVault`
-    /// with the WRONG nonce width + WRONG codepoint so the freeze pins fail.
-    pub fn decode_vault_for_test(
-        _bytes: &[u8],
-        _dak: &[u8; 32],
-    ) -> Result<DecodedVault, VaultError> {
-        Ok(DecodedVault {
-            codepoint: SYMMETRIC_AEAD_12B_CODEPOINT,
-            nonce: vec![0u8; STUB_NONCE_LEN],
-            payload: VaultPayload {
-                k_principal: [0u8; 32],
-                user_did_signing_key: Vec::new(),
-                user_did_creation_time: 0,
-            },
-        })
-    }
-
-    /// Strict-decode: a vault tagged `SymmetricAeadXNonce` (`0x6100`) carrying a
-    /// 12-byte nonce MUST be rejected (U2 — codepoint discriminates nonce
-    /// width). STUB accepts it (the bug R5 closes); the negative pin asserts the
-    /// real decode rejects.
-    pub fn decode_vault_strict_for_test(
-        codepoint: u16,
-        nonce_len: usize,
-    ) -> Result<(), VaultError> {
-        // STUB: silently accepts the mismatch (RED-PHASE bug). R5 makes this
-        // return Err(VaultError::NonceWidthMismatch) when codepoint==XNonce &&
-        // nonce_len != 24.
-        let _ = (codepoint, nonce_len);
-        Ok(())
-    }
-
-    /// Re-serialize a decoded payload to canonical DAG-CBOR.
-    ///
-    /// **F4-038 golden-hex (per the R4-fix GOLDEN-HEX procedure):** the
-    /// prior stub returned an empty Vec, so the format-freeze test could
-    /// only assert self-equality (`first == second`) — it froze ZERO bytes
-    /// and pinned nothing about the field ORDER. This stub now emits a
-    /// REAL deterministic canonical DAG-CBOR encoding (definite-length,
-    /// canonical map-key order, big-endian integers per M-19) so the
-    /// `VAULT_PAYLOAD_GOLDEN_HEX` literal below freezes the exact field-order
-    /// bytes. Any field reorder / encoding / endianness drift flips the pin.
-    /// R5 confirms-or-deliberately-updates the frozen literal against the
-    /// real `serde_ipld_dagcbor` encoder (M-20).
-    ///
-    /// Field order is FROZEN per R0.5 §3.1: k_principal, then
-    /// user_did_signing_key, then user_did_creation_time. The canonical
-    /// DAG-CBOR map-key order (length-first, then bytewise) happens to
-    /// coincide with this declaration order for these three keys.
-    pub fn canonical_cbor_for_test(payload: &VaultPayload) -> Vec<u8> {
-        // Minimal hand-rolled canonical CBOR (no serde dep in the stub).
-        fn uint(major: u8, n: u64) -> Vec<u8> {
-            let m = major << 5;
-            if n < 24 {
-                vec![m | (n as u8)]
-            } else if n < 0x100 {
-                vec![m | 24, n as u8]
-            } else if n < 0x1_0000 {
-                let b = (n as u16).to_be_bytes();
-                vec![m | 25, b[0], b[1]]
-            } else if n < 0x1_0000_0000 {
-                let b = (n as u32).to_be_bytes();
-                vec![m | 26, b[0], b[1], b[2], b[3]]
-            } else {
-                let b = n.to_be_bytes();
-                let mut v = vec![m | 27];
-                v.extend_from_slice(&b);
-                v
-            }
-        }
-        fn tstr(s: &str) -> Vec<u8> {
-            let mut out = uint(3, s.len() as u64);
-            out.extend_from_slice(s.as_bytes());
-            out
-        }
-        fn bstr(b: &[u8]) -> Vec<u8> {
-            let mut out = uint(2, b.len() as u64);
-            out.extend_from_slice(b);
-            out
-        }
-
-        let mut out = uint(5, 3); // map of 3 pairs
-        // Pair 1: "k_principal" => bstr(k_principal)
-        out.extend(tstr("k_principal"));
-        out.extend(bstr(&payload.k_principal));
-        // Pair 2: "user_did_signing_key" => bstr(signing_key)
-        out.extend(tstr("user_did_signing_key"));
-        out.extend(bstr(&payload.user_did_signing_key));
-        // Pair 3: "user_did_creation_time" => u64 (BE per M-19)
-        out.extend(tstr("user_did_creation_time"));
-        out.extend(uint(0, payload.user_did_creation_time));
-        out
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum VaultError {
-        NonceWidthMismatch,
-        UnknownCodepoint,
-        MalformedCbor,
-    }
+/// Adapter: the real `serialize_vault` returns `Result`; the test calls a
+/// `_for_test`-shaped fn returning the bytes (panics on the infallible path).
+fn serialize_vault_for_test(payload: &VaultPayload, dak: &[u8; 32]) -> Vec<u8> {
+    serialize_vault(payload, dak).expect("vault serialize is infallible for the fixture")
 }
 
-use f_va_1_stub::{
-    DecodedVault, FROZEN_XNONCE_LEN, SYMMETRIC_AEAD_12B_CODEPOINT,
-    VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT, VaultError, VaultPayload, canonical_cbor_for_test,
-    decode_vault_for_test, decode_vault_strict_for_test, serialize_vault_for_test,
-};
+fn decode_vault_for_test(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultError> {
+    decode_vault(bytes, dak)
+}
+
+fn decode_vault_strict_for_test(codepoint: u16, nonce_len: usize) -> Result<(), VaultError> {
+    decode_vault_strict(codepoint, nonce_len)
+}
+
+fn canonical_cbor_for_test(payload: &VaultPayload) -> Vec<u8> {
+    payload.to_canonical_cbor()
+}
 
 /// A deterministic vault fixture (NOT a real keypair) so the format pins are
 /// hermetic. R5 swaps in real `K_principal` + signing-key bytes without changing
@@ -240,7 +109,6 @@ fn fixture_dak() -> [u8; 32] {
 /// 12-byte ChaCha20 nonce on the reseal-heavy vault site hits the 2^32
 /// birthday bound — this pin is the load-bearing m-4 defense.
 #[test]
-#[ignore = "RED-PHASE: F-VA-1 — vault MUST use a 24-byte XChaCha20-Poly1305 nonce (m-4 reseal-birthday defense); un-ignore at R5"]
 fn vault_uses_24_byte_xchacha20_nonce() {
     let payload = fixture_payload();
     let dak = fixture_dak();
@@ -262,7 +130,6 @@ fn vault_uses_24_byte_xchacha20_nonce() {
 /// would-FAIL-if-no-op'd: the stub tags the vault with the 12-byte sibling
 /// codepoint, so this fails until R5 dispatches the XNonce variant.
 #[test]
-#[ignore = "RED-PHASE: F-VA-1 — vault envelope MUST carry the SymmetricAeadXNonce codepoint 0x6100 (NOT the 12-byte sibling); un-ignore at R5"]
 fn vault_envelope_carries_xnonce_codepoint_0x6100() {
     let payload = fixture_payload();
     let dak = fixture_dak();
@@ -288,7 +155,6 @@ fn vault_envelope_carries_xnonce_codepoint_0x6100() {
 /// width mismatch (the bug R5 closes); the real strict decode returns
 /// `NonceWidthMismatch`.
 #[test]
-#[ignore = "RED-PHASE: F-VA-1 — XNonce codepoint + 12-byte nonce MUST be typed-rejected (U2 strict-decode); un-ignore at R5"]
 fn xnonce_codepoint_with_12_byte_nonce_is_rejected() {
     let outcome = decode_vault_strict_for_test(
         VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
@@ -331,7 +197,6 @@ fn to_hex(bytes: &[u8]) -> String {
 /// encoding drift produces bytes ≠ the frozen `VAULT_PAYLOAD_GOLDEN_HEX`. The
 /// golden-hex literal is an ABSOLUTE frozen vector (not `enc(x)==enc(x)`).
 #[test]
-#[ignore = "RED-PHASE: F-VA-1 — vault CBOR payload canonical + re-serialize byte-identical + frozen golden-hex field-order pin; un-ignore at R5"]
 fn vault_cbor_payload_canonical_and_reserializes_byte_identical() {
     let payload = fixture_payload();
     let first = canonical_cbor_for_test(&payload);

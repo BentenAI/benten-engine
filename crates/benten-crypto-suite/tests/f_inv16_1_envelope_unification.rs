@@ -59,97 +59,19 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes this whole module).
-mod f_inv16_stub {
-    /// Typed AAD binding context (Inv-16; `#[non_exhaustive]`). One enum
-    /// spans all 4 layers — the unification.
-    #[non_exhaustive]
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum BindingContext {
-        /// Layer-A vault binding.
-        Vault { vault_version: u8 },
-        /// Layer-B/whole-content per-Node binding.
-        WholeContent { plaintext_cid: Vec<u8> },
-        /// Layer-C drop / Layer-D wrap recipient binding — the canonical
-        /// `0x6510` envelope union `{aad_version, codepoint, audience,
-        /// body_cid, recipient_key_generation}`.
-        ///
-        /// R4.5-MIGRATE (R0.6 BR): `body_cid` is a SELF-DESCRIBING CIDv1
-        /// (`0x01 0x71 0x1e 0x20 || 32-byte digest` = 36 bytes), NOT a bare
-        /// fixed-32 digest (CLAUDE.md baked-in #5; restores U3
-        /// length-injectivity) — aligning the Inv-16 `Recipient` binding with
-        /// the canonical `0x6510` union the sibling `f_lc_hpke` /
-        /// `f_lc_abuse` freeze.
-        Recipient {
-            audience_did: Vec<u8>,
-            body_cid: Vec<u8>,
-            recipient_key_generation: u32,
-        },
-    }
+use benten_crypto_suite::envelope::{
+    BindingContext, canonical_tlv_encode, layer_c_and_d_share_one_hpke_primitive,
+};
 
-    /// Canonical-TLV length-injective encode of a `BindingContext` + the
-    /// committed codepoint (U1 + U3). The real R5 encoder MUST (a) commit
-    /// the codepoint into the AAD and (b) be length-injective across
-    /// variants (variant tag + per-field length prefixes).
-    ///
-    /// The STUB is DOUBLY-broken (both bugs intentional) so BOTH pins fire
-    /// RED at baseline:
-    ///   * **bug 1 (U1):** does NOT commit the codepoint → two encodes of
-    ///     the same `BindingContext` under different codepoints collide.
-    ///   * **bug 2 (U3):** emits no variant tag and no length prefixes →
-    ///     a `Recipient` tuple and a `WholeContent` tuple whose raw field
-    ///     bytes coincide encode to byte-identical strings (a genuine
-    ///     cross-variant boundary-ambiguity collision).
-    /// R5 fixes both → both pins go GREEN.
-    pub fn canonical_tlv_encode(codepoint: u16, ctx: &BindingContext) -> Vec<u8> {
-        // STUB BUG 1 (intentional): the codepoint is DROPPED (not committed
-        // into the AAD) → the U1 pin fires red.
-        let _ = codepoint;
-        let mut out = Vec::new();
-        // STUB BUG 2 (intentional): no variant tag, no length prefixes ⇒
-        // distinct tuples across variants collide (the U3 defense a real
-        // length-injective TLV must provide).
-        match ctx {
-            BindingContext::Vault { vault_version } => out.push(*vault_version),
-            BindingContext::WholeContent { plaintext_cid } => {
-                out.extend_from_slice(plaintext_cid);
-            }
-            BindingContext::Recipient {
-                audience_did,
-                body_cid,
-                recipient_key_generation,
-            } => {
-                out.extend_from_slice(audience_did);
-                out.extend_from_slice(body_cid);
-                out.extend_from_slice(&recipient_key_generation.to_be_bytes());
-            }
-        }
-        out
-    }
-
-    /// Strict-decode: open `sealed_under` as `requested` — MUST reject a
-    /// cross-variant mismatch (U2). STUB returns `Ok` always (lax) so the
-    /// cross-variant-reject pin FAILS red until R5 wires strict-decode.
-    pub fn strict_decode(
-        sealed_under: &BindingContext,
-        requested: &BindingContext,
-    ) -> Result<(), &'static str> {
-        // STUB BUG (intentional): does NOT enforce variant match.
-        let _ = (sealed_under, requested);
-        Ok(())
-    }
-
-    /// Whether Layer-C and Layer-D route through the SAME HPKE primitive
-    /// (one-HPKE-path-reused). STUB returns `false` so the reuse pin FAILS
-    /// red until R5 unifies the path.
-    pub fn layer_c_and_d_share_one_hpke_primitive() -> bool {
-        false
-    }
+/// Strict-decode adapter — the production `BindingContext::strict_decode`
+/// returns a typed error; this thin wrapper preserves the test's
+/// `Result<(), &'static str>` shape.
+fn strict_decode(sealed_under: &BindingContext, requested: &BindingContext) -> Result<(), &'static str> {
+    sealed_under
+        .strict_decode(requested)
+        .map_err(|_| "cross-variant BindingContext mismatch (U2)")
 }
 
-use f_inv16_stub::{
-    BindingContext, canonical_tlv_encode, layer_c_and_d_share_one_hpke_primitive, strict_decode,
-};
 
 /// **F-INV16-1 (U1)** — the codepoint is committed INTO the AAD/info.
 ///
@@ -161,7 +83,6 @@ use f_inv16_stub::{
 /// baseline (F4-008: previously it passed green because the old stub
 /// committed the codepoint; the stub now drops it).
 #[test]
-#[ignore = "RED-PHASE: F-INV16-1 (U1) — codepoint committed into AAD (stub drops it ⇒ fires red); un-ignore at R5"]
 fn inv16_u1_codepoint_committed_in_aad() {
     let ctx = BindingContext::WholeContent {
         plaintext_cid: vec![0xCD; 32],
@@ -180,7 +101,6 @@ fn inv16_u1_codepoint_committed_in_aad() {
 /// would-FAIL-if-no-op'd: the stub decoder is lax (returns Ok), so this
 /// fires red until R5 wires strict-decode.
 #[test]
-#[ignore = "RED-PHASE: F-INV16-1 (U2) — strict-decode rejects cross-variant BindingContext; un-ignore at R5"]
 fn inv16_u2_strict_decode_rejects_cross_variant() {
     let sealed_under = BindingContext::Vault { vault_version: 1 };
     let requested = BindingContext::WholeContent {
@@ -221,7 +141,6 @@ fn inv16_u2_strict_decode_rejects_cross_variant() {
 /// length prefix, so the constructed cross-variant pair encodes EQUAL,
 /// firing the assertion red until R5 wires the injective TLV.
 #[test]
-#[ignore = "RED-PHASE: F-INV16-1 (U3) — canonical-TLV length-injective (cross-variant collision must NOT coincide); un-ignore at R5"]
 fn inv16_u3_canonical_tlv_length_injective() {
     // The constructed cross-variant collision (F4-002; R4.5-MIGRATE re-derived
     // now that `Recipient` carries a self-describing `body_cid`):
@@ -286,7 +205,6 @@ fn inv16_u3_canonical_tlv_length_injective() {
 /// would-FAIL-if-no-op'd: the stub reports `false`, firing the assertion
 /// red until R5 unifies the path.
 #[test]
-#[ignore = "RED-PHASE: F-INV16-1 — one HPKE primitive serves Layer-C drops + Layer-D wraps (not two impls); un-ignore at R5"]
 fn inv16_one_hpke_primitive_reused_across_layers() {
     assert!(
         layer_c_and_d_share_one_hpke_primitive(),

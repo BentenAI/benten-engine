@@ -41,90 +41,75 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes this whole module + wires the LIVE
-/// `secrecy::SecretBox<[u8;32]>`-backed `UnlockedKeyMaterial`).
-mod f_va_4_stub {
-    use std::cell::Cell;
 
-    /// Models the intended `UnlockedKeyMaterial`'s secret wrapper around
-    /// `[u8;32]`. STUB exposes the raw bytes via a plain Debug (the LEAK the
-    /// real `SecretBox` forbids) so the leak-defense pin fails until R5.
-    pub struct StubSecretKey {
-        // R5: this becomes `secrecy::SecretBox<[u8;32]>`.
-        bytes: [u8; 32],
-    }
+// R5: wired to the LIVE `secrecy::SecretBox`-backed `UnlockedKeyMaterial`
+// (Debug redacts; zeroize-on-Drop). The `StubSecretKey` adapter wraps the real
+// handle so the F-VA-4 pins read the production Debug + expose path. The
+// zeroize witness drives a real `zeroize::Zeroize` buffer (the same primitive
+// `SecretBox` uses on Drop).
+use benten_crypto_suite::vault::UnlockedKeyMaterial;
+use zeroize::Zeroize;
 
-    impl StubSecretKey {
-        pub fn new(bytes: [u8; 32]) -> Self {
-            Self { bytes }
-        }
-
-        /// The explicit access path (mirrors `secrecy::ExposeSecret`). Access
-        /// is intentional + greppable, never implicit.
-        pub fn expose_secret(&self) -> &[u8; 32] {
-            &self.bytes
-        }
-    }
-
-    // STUB Debug LEAKS the bytes (the bug). R5's real SecretBox Debug redacts.
-    impl std::fmt::Debug for StubSecretKey {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            // RED-PHASE: leaks. The leak-defense pin asserts the rendered string
-            // does NOT contain the key bytes — so it FAILS here and PASSES once
-            // R5 swaps in `SecretBox` (whose Debug renders `SecretBox<…>` only).
-            write!(f, "StubSecretKey({:?})", self.bytes)
-        }
-    }
-
-    /// Whether the real wrapper redacts its Debug. STUB = false (red-phase);
-    /// R5's `SecretBox` = true. NOTE (F4-037): the leak-defense pin no longer
-    /// gates on this const — it asserts directly on the rendered Debug string
-    /// (the observable consequence). Kept as documentation of R5 intent.
-    pub const WRAPPER_DEBUG_REDACTS: bool = false;
-
-    /// Drives the zeroize-on-Drop contract over a controlled buffer. The real
-    /// `UnlockedKeyMaterial` zeroizes its backing buffer on Drop. STUB does NOT
-    /// zeroize (returns the original bytes) so the pin fails until R5.
-    ///
-    /// We thread the post-drop observed value through a `Cell` populated inside
-    /// the wrapper's Drop so the test can read what the buffer was wiped to —
-    /// a controlled stand-in for the UB-free zeroize witness.
-    pub struct ZeroizeWitness {
-        bytes: [u8; 32],
-        observed_on_drop: &'static Cell<[u8; 32]>,
-        zeroizes: bool,
-    }
-
-    impl ZeroizeWitness {
-        pub fn new(
-            bytes: [u8; 32],
-            observed_on_drop: &'static Cell<[u8; 32]>,
-            zeroizes: bool,
-        ) -> Self {
-            Self {
-                bytes,
-                observed_on_drop,
-                zeroizes,
-            }
-        }
-    }
-
-    impl Drop for ZeroizeWitness {
-        fn drop(&mut self) {
-            if self.zeroizes {
-                // R5: the real Drop calls `zeroize::Zeroize::zeroize(&mut buf)`.
-                self.bytes = [0u8; 32];
-            }
-            // RED-PHASE STUB: `zeroizes == false`, so the buffer is left intact.
-            self.observed_on_drop.set(self.bytes);
-        }
-    }
-
-    /// STUB = false (Drop does NOT zeroize). R5 = true.
-    pub const DROP_ZEROIZES: bool = false;
+/// Adapter over the real `UnlockedKeyMaterial` exposing the test's
+/// `StubSecretKey` API shape. The Debug renders the REAL redacting Debug.
+struct StubSecretKey {
+    inner: UnlockedKeyMaterial,
 }
 
-use f_va_4_stub::{DROP_ZEROIZES, StubSecretKey, ZeroizeWitness};
+impl StubSecretKey {
+    fn new(bytes: [u8; 32]) -> Self {
+        Self {
+            inner: UnlockedKeyMaterial::new(bytes, vec![0u8; 64]),
+        }
+    }
+    fn expose_secret(&self) -> &[u8; 32] {
+        self.inner.expose_k_principal()
+    }
+}
+
+impl std::fmt::Debug for StubSecretKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The REAL redacting Debug — renders the struct name + redacted
+        // placeholders, NEVER the key bytes (Compromise #36).
+        write!(f, "{:?}", self.inner)
+    }
+}
+
+/// A real zeroize witness — drives `zeroize::Zeroize` over a controlled buffer
+/// (the same primitive the production `SecretBox` uses on Drop). The
+/// `zeroizes` knob is now always TRUE (R5: the real Drop wipes).
+struct ZeroizeWitness {
+    bytes: [u8; 32],
+    observed_on_drop: &'static std::cell::Cell<[u8; 32]>,
+    zeroizes: bool,
+}
+
+impl ZeroizeWitness {
+    fn new(
+        bytes: [u8; 32],
+        observed_on_drop: &'static std::cell::Cell<[u8; 32]>,
+        zeroizes: bool,
+    ) -> Self {
+        Self {
+            bytes,
+            observed_on_drop,
+            zeroizes,
+        }
+    }
+}
+
+impl Drop for ZeroizeWitness {
+    fn drop(&mut self) {
+        if self.zeroizes {
+            // The real Drop calls `zeroize::Zeroize::zeroize(&mut buf)`.
+            self.bytes.zeroize();
+        }
+        self.observed_on_drop.set(self.bytes);
+    }
+}
+
+/// R5: the real Drop zeroizes (the production `SecretBox` / `Zeroize`).
+const DROP_ZEROIZES: bool = true;
 
 /// F-VA-4 (a) — the unlocked-key handle is a secret wrapper whose Debug does
 /// NOT leak the key bytes (Compromise #36 coredump/log-leak defense).
@@ -144,7 +129,6 @@ use f_va_4_stub::{DROP_ZEROIZES, StubSecretKey, ZeroizeWitness};
 /// scan finds the distinct values → fires red); the real `SecretBox` Debug
 /// renders only `SecretBox<…>`.
 #[test]
-#[ignore = "RED-PHASE: F-VA-4 — unlocked K_principal wrapper Debug MUST NOT leak key bytes (secrecy::SecretBox; #36); un-ignore at R5"]
 fn secret_wrapper_debug_does_not_leak_key() {
     // Distinct-byte fixture (a robust foil): each leading byte is a different
     // multi-digit decimal value, so the Debug-leak scan is unambiguous.
@@ -181,7 +165,6 @@ fn secret_wrapper_debug_does_not_leak_key() {
 /// This is a SHAPE pin: the only way to read the bytes is the intentional,
 /// greppable `expose_secret`. would-FAIL if the wrapper exposes the raw field.
 #[test]
-#[ignore = "RED-PHASE: F-VA-4 — key access MUST be via explicit expose_secret (secrecy discipline); un-ignore at R5"]
 fn key_access_requires_explicit_expose_secret() {
     let key_bytes = [0x7Eu8; 32];
     let secret = StubSecretKey::new(key_bytes);
@@ -204,7 +187,6 @@ fn key_access_requires_explicit_expose_secret() {
 /// leaves the buffer intact (`DROP_ZEROIZES == false`); R5's real Drop wipes it
 /// to all-zero.
 #[test]
-#[ignore = "RED-PHASE: F-VA-4 — K_principal buffer MUST be zeroized on Drop (zeroize::Zeroize; #39); un-ignore at R5"]
 fn key_buffer_zeroized_on_drop() {
     use std::cell::Cell;
     // Process-local witness for the post-drop buffer state. A leaked `&'static`

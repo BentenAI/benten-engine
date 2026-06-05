@@ -44,45 +44,8 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes this whole module + wires the LIVE
-/// `benten_crypto_suite::vault::derive_dak`).
-mod f_va_2_stub {
-    /// RFC-9106 / OWASP Argon2id params (R0 §2.2 tactical pick).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct Argon2idParams {
-        pub m_cost: u32,
-        pub t_cost: u32,
-        pub p_cost: u32,
-    }
-
-    /// The frozen v1-beta default params.
-    pub const OWASP_DEFAULT: Argon2idParams = Argon2idParams {
-        m_cost: 19456,
-        t_cost: 2,
-        p_cost: 1,
-    };
-
-    /// The frozen HKDF info-tag (codepoint slot for a future Argon2id-v2 param
-    /// set per R0 §3.1).
-    pub const DAK_HKDF_INFO_TAG: &[u8] = b"benten-dak-v1";
-
-    /// Production DAK derivation: `HKDF-SHA256(Argon2id(pw, salt; params),
-    /// info)`. STUB returns a CONSTANT that ignores salt + params + info so the
-    /// determinism pin passes but the sensitivity pins FAIL (the red-phase
-    /// signal). R5 replaces this with the real Argon2id+HKDF chain.
-    pub fn derive_dak(
-        _password: &[u8],
-        _salt: &[u8; 16],
-        _params: Argon2idParams,
-        _info_tag: &[u8],
-    ) -> [u8; 32] {
-        // Deterministic (so the same-input pin passes) but input-INSENSITIVE
-        // (so the param + info-tag sensitivity pins fail until R5).
-        [0xAB; 32]
-    }
-}
-
-use f_va_2_stub::{Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, derive_dak};
+// R5: wired to the LIVE vault DAK derivation (Argon2id v0x13 + HKDF-SHA256).
+use benten_crypto_suite::vault::{Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, derive_dak};
 
 fn fixture_password() -> &'static [u8] {
     b"correct horse battery staple"
@@ -99,7 +62,6 @@ fn fixture_salt() -> [u8; 16] {
 /// DAK. (The stub passes this arm; the sensitivity arms below are the red-phase
 /// failers that force the real Argon2id.)
 #[test]
-#[ignore = "RED-PHASE: F-VA-2 — Argon2id+HKDF DAK derivation MUST be deterministic over the same inputs; un-ignore at R5"]
 fn derive_dak_is_deterministic() {
     let dak_a = derive_dak(
         fixture_password(),
@@ -128,7 +90,6 @@ fn derive_dak_is_deterministic() {
 /// params (returns a constant), so this fails until R5 feeds params into a real
 /// Argon2id.
 #[test]
-#[ignore = "RED-PHASE: F-VA-2 — Argon2id params (m/t/p) MUST be load-bearing in the DAK; un-ignore at R5"]
 fn param_change_yields_different_dak() {
     let dak_default = derive_dak(
         fixture_password(),
@@ -161,7 +122,6 @@ fn param_change_yields_different_dak() {
 /// Negative-control: deriving with a DIFFERENT info-tag MUST yield a different
 /// DAK. would-FAIL-if-no-op'd: the stub ignores the info-tag.
 #[test]
-#[ignore = "RED-PHASE: F-VA-2 — the HKDF info-tag `benten-dak-v1` is load-bearing domain separation; un-ignore at R5"]
 fn hkdf_info_tag_is_load_bearing() {
     let dak_canonical = derive_dak(
         fixture_password(),

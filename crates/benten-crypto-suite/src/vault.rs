@@ -129,8 +129,16 @@ pub fn derive_dak(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultPayload {
     /// The principal's at-rest content-encryption root key.
+    ///
+    /// DAG-CBOR-encoded as a byte string (not an array of integers) per the
+    /// frozen on-disk layout — `serde_bytes` selects the byte-string major
+    /// type so the 32-byte key serializes as `0x5820 || 32 bytes`.
+    #[serde(with = "serde_bytes")]
     pub k_principal: [u8; 32],
     /// The user-DID hybrid signing key (Ed25519⊕ML-DSA-65 serialized).
+    ///
+    /// DAG-CBOR-encoded as a byte string (`serde_bytes`).
+    #[serde(with = "serde_bytes")]
     pub user_did_signing_key: Vec<u8>,
     /// Vault creation time (seconds).
     pub user_did_creation_time: u64,

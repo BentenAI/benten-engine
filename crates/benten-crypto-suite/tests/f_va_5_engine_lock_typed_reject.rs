@@ -40,80 +40,52 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes this whole module + wires the LIVE
-/// vault lock-state + `UnlockedKeyMaterial`).
-mod f_va_5_stub {
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum VaultError {
-        /// The typed pre-unlock rejection (R0 §3.1).
-        EngineLocked,
-        WrongPassword,
-    }
 
-    /// The hydrated key material (R0 §3.1) — BOTH keys, atomically.
-    #[derive(Debug, Clone)]
-    pub struct UnlockedKeyMaterial {
-        pub k_principal: [u8; 32],
-        pub user_did_signing_key: Vec<u8>,
-    }
+// R5: wired to the LIVE vault lock-state (VaultEngine) + UnlockedKeyMaterial.
+// Thin adapters preserve the test's `StubEngine` API shape over the real
+// `benten_crypto_suite::vault::VaultEngine`.
+use benten_crypto_suite::vault::{VaultEngine, VaultError, VaultPayload};
 
-    /// A minimal engine handle with a lock state, modelling the production
-    /// surface. STUB's `encrypt_node` fails OPEN pre-unlock (the bug); R5 makes
-    /// it return `Err(EngineLocked)`.
-    pub struct StubEngine {
-        unlocked: Option<UnlockedKeyMaterial>,
-        /// RED-PHASE knob: STUB = false (fails open). R5 = true (gate live).
-        enforce_lock: bool,
-    }
-
-    impl StubEngine {
-        pub fn new_locked() -> Self {
-            Self {
-                unlocked: None,
-                // RED-PHASE: lock NOT enforced. R5 flips this to true.
-                enforce_lock: false,
-            }
-        }
-
-        /// Unlock hydrates BOTH keys atomically from the (fixed) vault.
-        pub fn unlock_for_test(&mut self) {
-            self.unlocked = Some(UnlockedKeyMaterial {
-                k_principal: [0x44u8; 32],
-                user_did_signing_key: vec![0x55u8; 64],
-            });
-        }
-
-        /// A lock-gated production op. Pre-unlock MUST be `Err(EngineLocked)`.
-        pub fn encrypt_node(&self, plaintext: &[u8]) -> Result<Vec<u8>, VaultError> {
-            match &self.unlocked {
-                Some(km) => {
-                    // Post-unlock: a trivial keyed transform (NOT real AEAD;
-                    // R5 wires the structural-KDF + AEAD path). The observable
-                    // consequence is a non-empty keyed ciphertext.
-                    let mut out = Vec::with_capacity(plaintext.len());
-                    for (i, b) in plaintext.iter().enumerate() {
-                        out.push(b ^ km.k_principal[i % 32]);
-                    }
-                    Ok(out)
-                }
-                None => {
-                    if self.enforce_lock {
-                        Err(VaultError::EngineLocked)
-                    } else {
-                        // RED-PHASE fail-OPEN bug: returns plaintext-as-Ok.
-                        Ok(plaintext.to_vec())
-                    }
-                }
-            }
-        }
-
-        pub fn unlocked_handle(&self) -> Option<&UnlockedKeyMaterial> {
-            self.unlocked.as_ref()
-        }
-    }
+/// Test-view of the hydrated key material exposing the fields the F-VA-5 pins
+/// read (the production handle keeps `k_principal` in a `SecretBox`, accessed
+/// via `expose_k_principal`).
+struct UnlockedKeyMaterial {
+    k_principal: [u8; 32],
+    user_did_signing_key: Vec<u8>,
 }
 
-use f_va_5_stub::{StubEngine, UnlockedKeyMaterial, VaultError};
+struct StubEngine {
+    inner: VaultEngine,
+    view: Option<UnlockedKeyMaterial>,
+}
+
+impl StubEngine {
+    fn new_locked() -> Self {
+        Self {
+            inner: VaultEngine::new_locked(),
+            view: None,
+        }
+    }
+    fn unlock_for_test(&mut self) {
+        let payload = VaultPayload {
+            k_principal: [0x44u8; 32],
+            user_did_signing_key: vec![0x55u8; 64],
+            user_did_creation_time: 1,
+        };
+        self.inner.unlock(&payload);
+        let km = self.inner.unlocked_handle().expect("hydrated post-unlock");
+        self.view = Some(UnlockedKeyMaterial {
+            k_principal: *km.expose_k_principal(),
+            user_did_signing_key: km.user_did_signing_key().to_vec(),
+        });
+    }
+    fn encrypt_node(&self, plaintext: &[u8]) -> Result<Vec<u8>, VaultError> {
+        self.inner.encrypt_node(plaintext)
+    }
+    fn unlocked_handle(&self) -> Option<&UnlockedKeyMaterial> {
+        self.view.as_ref()
+    }
+}
 
 /// F-VA-5 (a) — a pre-unlock crypto op is typed-rejected with `EngineLocked`.
 ///
@@ -121,7 +93,6 @@ use f_va_5_stub::{StubEngine, UnlockedKeyMaterial, VaultError};
 /// wires the `EngineLocked` gate. This is the fail-CLOSED guarantee — a locked
 /// engine MUST NOT silently produce a plaintext write.
 #[test]
-#[ignore = "RED-PHASE: F-VA-5 — pre-unlock crypto op MUST return Err(EngineLocked) (fail-closed); un-ignore at R5"]
 fn pre_unlock_op_is_typed_rejected_engine_locked() {
     let engine = StubEngine::new_locked();
     let outcome = engine.encrypt_node(b"secret node body");
@@ -138,7 +109,6 @@ fn pre_unlock_op_is_typed_rejected_engine_locked() {
 /// would-FAIL-if-no-op'd: a no-op unlock would leave the op rejected; the pin
 /// demands a real ciphertext (non-empty, ≠ plaintext) from the unlocked handle.
 #[test]
-#[ignore = "RED-PHASE: F-VA-5 — post-unlock the gated op succeeds against the hydrated key; un-ignore at R5"]
 fn post_unlock_op_succeeds() {
     let mut engine = StubEngine::new_locked();
     engine.unlock_for_test();
@@ -166,7 +136,6 @@ fn post_unlock_op_succeeds() {
 /// hydrate together. would-FAIL-if-no-op'd: a handle exposing one key without
 /// the other is an atomic-hydrate violation.
 #[test]
-#[ignore = "RED-PHASE: F-VA-5 — unlock MUST atomically hydrate BOTH K_principal AND user_did_signing_key; un-ignore at R5"]
 fn unlock_atomically_hydrates_both_keys() {
     let mut engine = StubEngine::new_locked();
     assert!(
