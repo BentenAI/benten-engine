@@ -74,6 +74,143 @@ use crate::peer_id::PeerId;
 /// entry; a fresh handshake is permitted.
 pub const DEFAULT_REPLAY_WINDOW_MS: u64 = 5_000;
 
+/// The Layer-D nonce-cache retention bucket in seconds (1 hour).
+///
+/// The `jti`-keyed nonce-cache (NQ-T4 / Compromise #25 durable-CAS-marker
+/// *pattern*) MUST retain a consumed nonce for **≥ the full 1-hr bucket**. The
+/// 1-hr bucket is Layer-D-ONLY (M-14). The replay rejection is keyed on the
+/// `jti` nonce, NOT on any time field — a clock rewrite cannot evade the catch.
+pub const LAYER_D_BUCKET_SECS: u64 = 3_600;
+
+/// Typed errors surfaced by the Layer-D [`JtiNonceCache`].
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum NonceCacheError {
+    /// The presented `jti` nonce was already consumed (within the retained
+    /// window). The rejection is nonce-keyed, NOT time-keyed — a re-presented
+    /// `jti` in the same or any bucket rejects.
+    #[error("replayed jti nonce (already consumed within the Layer-D retention window)")]
+    ReplayedNonce,
+}
+
+impl NonceCacheError {
+    /// The stable [`benten_errors::ErrorCode`] for this error.
+    ///
+    /// A re-presented nonce is the same defect class as the bounded-window
+    /// handshake replay ([`HandshakeError::ReplayWithinBoundedWindow`]), so it
+    /// maps to the SAME catalog code `E_HANDSHAKE_REPLAY_WITHIN_BOUNDED_WINDOW`
+    /// — no new catalog variant is minted (the nonce-cache is a *stronger*
+    /// detector of the SAME wire-level replay, not a new error class).
+    #[must_use]
+    pub fn code(&self) -> benten_errors::ErrorCode {
+        match self {
+            NonceCacheError::ReplayedNonce => {
+                benten_errors::ErrorCode::HandshakeReplayWithinBoundedWindow
+            }
+        }
+    }
+}
+
+/// The Layer-D `jti`-keyed durable nonce-cache (NET-NEW at v1-beta; F-LD-5 /
+/// NQ-T4 / M-1).
+///
+/// This is the canonical replay-detection mechanism the §(c) bounded-window
+/// math leaves as a seam: a UCAN-token `jti` (a 32-byte nonce) keyed durable
+/// CAS-marker. It re-uses the Compromise #25 **durable-CAS-marker pattern**
+/// (NOT the #25 sync-frame *instance* — this is a DISTINCT `jti`-keyed cache).
+///
+/// ## Why nonce-keyed, not time-keyed (M-1)
+///
+/// The coarse 1-hr [`LAYER_D_BUCKET_SECS`] bucket ALONE is insufficient: two
+/// presentations within the same bucket carry the same coarse time, so a
+/// time-only check can never distinguish a fresh grant from its intra-bucket
+/// replay. Only the nonce-cache catches it. The `admit` API accepts a
+/// presented-at-seconds argument but **never reads it for the replay decision**
+/// — it is carried only to prove (in tests) the rejection is nonce-keyed.
+///
+/// ## Scope (NQ-T4 RATIFIED §10.5)
+///
+/// **Per-device-durable is GUARANTEED** (survives engine restart via the
+/// durable store); **user-global is best-effort-eventual-via-sync** — a nonce
+/// consumed on device B is rejected on device C only AFTER sync propagates B's
+/// consumed-jti set into C's durable store. The pre-sync cross-device window is
+/// the disclosed **Compromise #64** ("best-effort-eventual cross-device
+/// nonce-rejection window").
+///
+/// The exact sync wire-mechanism is the engine's responsibility (it drives the
+/// durable store across the device mesh); this type provides the durable
+/// per-device CAS-marker + the [`JtiNonceCache::from_durable`] hydration seam
+/// that both a restart and a cross-device sync feed.
+#[derive(Debug, Clone)]
+pub struct JtiNonceCache {
+    /// Consumed-jti set. On a durable-backed cache this mirrors `durable_store`;
+    /// the split exists so a future in-memory-vs-durable split is expressible
+    /// without an API change.
+    seen: std::collections::HashSet<[u8; 32]>,
+    /// The durable backing set (survives a simulated restart / feeds a
+    /// cross-device sync). A nonce admitted is recorded here.
+    durable_store: std::collections::HashSet<[u8; 32]>,
+    /// When `false`, the cache is the disable-cache NEGATIVE control: every
+    /// `admit` returns `Ok` (replay leaks through), proving the 1-hr bucket
+    /// alone is insufficient (M-1 load-bearing negative control).
+    enabled: bool,
+}
+
+impl JtiNonceCache {
+    /// Construct a fresh nonce-cache. `enabled = false` is the disable-cache
+    /// negative control (every `admit` admits).
+    #[must_use]
+    pub fn new(enabled: bool) -> Self {
+        Self {
+            seen: std::collections::HashSet::new(),
+            durable_store: std::collections::HashSet::new(),
+            enabled,
+        }
+    }
+
+    /// Hydrate from a durable consumed-jti set — simulates an engine restart OR
+    /// a cross-device sync that propagated another device's consumed-jti set
+    /// into this device's durable cache (NQ-T4 user-global best-effort-eventual
+    /// path). The hydrated cache is always enabled.
+    #[must_use]
+    pub fn from_durable(durable: std::collections::HashSet<[u8; 32]>) -> Self {
+        Self {
+            seen: durable.clone(),
+            durable_store: durable,
+            enabled: true,
+        }
+    }
+
+    /// Snapshot the durable consumed-jti set — what a restart rehydrates from
+    /// and what a cross-device sync propagates.
+    #[must_use]
+    pub fn durable_snapshot(&self) -> std::collections::HashSet<[u8; 32]> {
+        self.durable_store.clone()
+    }
+
+    /// Record-and-check, atomically. The replay decision is keyed ONLY on the
+    /// `jti` nonce; `_present_at_secs` is accepted to PROVE the rejection is
+    /// nonce-keyed (it is never read for the decision).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NonceCacheError::ReplayedNonce`] if `jti` was already consumed
+    /// (within the retained window). When the cache is disabled, always admits.
+    pub fn admit(&mut self, jti: [u8; 32], _present_at_secs: u64) -> Result<(), NonceCacheError> {
+        if !self.enabled {
+            // Disable-cache negative control: replay leaks through (the 1-hr
+            // bucket alone does not defend replay).
+            return Ok(());
+        }
+        if self.seen.contains(&jti) {
+            return Err(NonceCacheError::ReplayedNonce);
+        }
+        self.seen.insert(jti);
+        self.durable_store.insert(jti);
+        Ok(())
+    }
+}
+
 /// Post-handshake message-kind discriminator per net-blocker-3.
 ///
 /// Receivers drain messages in [`MessageKind`] order: all

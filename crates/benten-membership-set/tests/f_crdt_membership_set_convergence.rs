@@ -48,16 +48,32 @@
 
 use std::collections::BTreeMap;
 
-// ── SELF-CONTAINED stub-shim ──
+// ── R5 (w-ms-sync): wired to the REAL production tie-break ──
+//
+// The member-PROPERTY LWW (larger-HLC-wins) routes through
+// `benten_membership_set::set::crdt::admitted_at_hlc_lww_keeps_a`; the
+// fork-set-IDENTITY tie-break (smaller-created_at_hlc-wins) routes through
+// `fork_a_wins` — the SAME production rule F-INV21-* pins (NOT an inline literal
+// comparison). The fixture `Hlc` is a faithful mirror of `benten_core::hlc::Hlc`
+// bridged to the real `BentenHlc` at each production-rule boundary.
+use benten_core::hlc::BentenHlc;
+use benten_membership_set::set::crdt::{admitted_at_hlc_lww_keeps_a, fork_a_wins};
 
-/// Stub HLC — the 3-field shape (parity with `benten_core::hlc` and the
-/// sibling F-HLC / F-INV21 stubs). Lexicographic compare on
-/// (physical_ms, logical, node_id).
+/// Fixture HLC — the 3-field shape (parity with `benten_core::hlc::Hlc` and the
+/// sibling F-HLC / F-INV21 fixtures). Lexicographic compare on
+/// (physical_ms, logical, node_id). Bridges to the real `BentenHlc` via
+/// `into_benten` at the production-rule boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Hlc {
     physical_ms: u64,
     logical: u32,
     node_id: u64,
+}
+
+impl Hlc {
+    fn into_benten(self) -> BentenHlc {
+        BentenHlc::new(self.physical_ms, self.logical, self.node_id)
+    }
 }
 
 /// A membership op = a write stamped with an HLC. `admit`/`role_change`
@@ -106,9 +122,11 @@ fn merge_membership_ops(ops: &[MembershipOp]) -> BTreeMap<String, ResolvedCell> 
             MembershipOp::Kick { .. } => None,
         };
         match table.get(&did) {
-            // Larger-HLC wins (property LWW); ties broken lexicographically
-            // by (logical, node_id) via the derived Ord (total).
-            Some(existing) if existing.hlc >= hlc => {}
+            // Larger-HLC wins (property LWW) — routed through the PRODUCTION
+            // `admitted_at_hlc_lww_keeps_a` rule (keep existing iff its HLC wins;
+            // ties broken by the total (physical_ms, logical, node_id) lex order).
+            Some(existing)
+                if admitted_at_hlc_lww_keeps_a(existing.hlc.into_benten(), hlc.into_benten()) => {}
             _ => {
                 table.insert(did, ResolvedCell { hlc, role });
             }
@@ -142,14 +160,22 @@ struct ForkCandidate {
     fork_event_version_node_cid: Vec<u8>,
 }
 
-fn total_order_key(f: &ForkCandidate) -> (Hlc, Vec<u8>) {
-    (f.created_at_hlc, f.fork_event_version_node_cid.clone())
+fn total_order_key(f: &ForkCandidate) -> (BentenHlc, Vec<u8>) {
+    (
+        f.created_at_hlc.into_benten(),
+        f.fork_event_version_node_cid.clone(),
+    )
 }
 
-/// SMALLER-key fork wins (oldest-anchor; Inv-21). Same rule as
-/// `f_inv21_*::fork_winner`.
+/// SMALLER-key fork wins (oldest-anchor; Inv-21) — routed through the SAME
+/// PRODUCTION `benten_membership_set::set::crdt::fork_a_wins` rule F-INV21-* pins.
 fn fork_winner<'a>(a: &'a ForkCandidate, b: &'a ForkCandidate) -> &'a ForkCandidate {
-    if total_order_key(a) <= total_order_key(b) {
+    if fork_a_wins(
+        a.created_at_hlc.into_benten(),
+        &a.fork_event_version_node_cid,
+        b.created_at_hlc.into_benten(),
+        &b.fork_event_version_node_cid,
+    ) {
         a
     } else {
         b
@@ -234,7 +260,6 @@ fn fixture_ops() -> Vec<MembershipOp> {
 /// snapshot. (F4-021: uses the nextest/proptest default case-count, not a
 /// hardcoded 10k literal.)
 #[test]
-#[ignore = "RED-PHASE: F-CRDT-1 — membership-set convergence proptest; un-ignore at R5"]
 fn f_crdt_1_membership_set_convergence_proptest() {
     use proptest::prelude::*;
     let base = fixture_ops();
@@ -265,7 +290,6 @@ fn f_crdt_1_membership_set_convergence_proptest() {
 /// Permuting delivery order AND duplicating every op 1–3× yields the SAME
 /// converged snapshot (order-independent + idempotent).
 #[test]
-#[ignore = "RED-PHASE: F-CRDT-2 — convergence under out-of-order + duplicate delivery; un-ignore at R5"]
 fn f_crdt_2_out_of_order_and_duplicate_delivery_converges() {
     use proptest::prelude::*;
     let base = fixture_ops();
@@ -300,7 +324,6 @@ fn f_crdt_2_out_of_order_and_duplicate_delivery_converges() {
 /// simultaneously correct on the same fixture; R0 does NOT claim
 /// byte-equivalence between them.
 #[test]
-#[ignore = "RED-PHASE: F-CRDT-3 — property-LWW ∥ fork-set-identity co-existence (M-7); un-ignore at R5"]
 fn f_crdt_3_lww_property_and_fork_identity_coexist() {
     // Property side: larger-HLC wins (observable role).
     let table = merge_membership_ops(&fixture_ops());

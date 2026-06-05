@@ -155,3 +155,63 @@ impl MembershipSet {
         &self.member_refs
     }
 }
+
+/// The MembershipSet CRDT convergence rules (M-7 / M-8 / M-10 / Inv-21).
+///
+/// Two object classes co-exist in one merge round, in DELIBERATELY OPPOSITE
+/// directions (the load-bearing M-7 asymmetry):
+///
+/// - **member PROPERTY** (e.g. `admitted_at_hlc` / role) resolves by
+///   **larger-HLC-wins** (last-writer-wins LWW;
+///   [`admitted_at_hlc_lww_keeps_a`](crdt::admitted_at_hlc_lww_keeps_a)).
+/// - **set-IDENTITY fork** (Inv-21) resolves by **smaller-`created_at_hlc`-wins**
+///   = oldest-anchor-wins, made TOTAL via the forking-event Version-Node CID
+///   ([`fork_total_order_key`](crdt::fork_total_order_key) /
+///   [`fork_a_wins`](crdt::fork_a_wins)).
+///
+/// The HLC discriminant is the real [`benten_core::hlc::BentenHlc`] (lexicographic
+/// `(physical_ms, logical, node_id)`); the Version-Node CID is the immutable
+/// content-addressed fork-event identifier (the `MembershipSetId` can NEVER
+/// disambiguate concurrent same-anchor forks — they share it).
+pub mod crdt {
+    use benten_core::hlc::BentenHlc;
+
+    /// Member-PROPERTY LWW: keep `a`'s value iff its HLC is `>=` `b`'s
+    /// (larger-HLC-wins; ties broken by the total `(physical_ms, logical,
+    /// node_id)` lex order, so the result is deterministic + commutative).
+    /// Returns `true` if `a` wins. This is the `admitted_at_hlc` property rule
+    /// (the in-tree `crdt.rs` LWW applied to the membership property clock).
+    #[must_use]
+    pub fn admitted_at_hlc_lww_keeps_a(a: BentenHlc, b: BentenHlc) -> bool {
+        a >= b
+    }
+
+    /// The Inv-21 fork TOTAL-ordering key (M-8): `(created_at_hlc ASC, then
+    /// fork_event_version_node_cid ASC)`. NOT keyed on `MembershipSetId`
+    /// (concurrent same-anchor forks share it). The CID is the terminal
+    /// discriminator that makes the order total.
+    #[must_use]
+    pub fn fork_total_order_key(
+        created_at_hlc: BentenHlc,
+        fork_event_version_node_cid: &[u8],
+    ) -> (BentenHlc, Vec<u8>) {
+        (created_at_hlc, fork_event_version_node_cid.to_vec())
+    }
+
+    /// The Inv-21 fork tie-break: fork `a` wins iff its total-order key is
+    /// `<=` fork `b`'s — **SMALLER key wins** (oldest-anchor; the DELIBERATE
+    /// opposite of property LWW). Order-independent (antisymmetric): the same
+    /// fork wins regardless of argument order, because distinct fork events have
+    /// distinct CIDs so the keys are never equal. An adversarial larger-HLC
+    /// re-fork can NEVER displace the original.
+    #[must_use]
+    pub fn fork_a_wins(
+        a_created_at_hlc: BentenHlc,
+        a_fork_event_version_node_cid: &[u8],
+        b_created_at_hlc: BentenHlc,
+        b_fork_event_version_node_cid: &[u8],
+    ) -> bool {
+        fork_total_order_key(a_created_at_hlc, a_fork_event_version_node_cid)
+            <= fork_total_order_key(b_created_at_hlc, b_fork_event_version_node_cid)
+    }
+}
