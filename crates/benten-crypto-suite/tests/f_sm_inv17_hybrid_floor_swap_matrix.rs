@@ -46,75 +46,176 @@
 use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
 use benten_crypto_suite::swap_matrix::SwapMatrix;
 
-/// SELF-CONTAINED stub-shim for the round-trip + strip-resistance pins.
-mod f_sm_stub {
-    /// A swap-matrix config selector (mirrors the real arms, feature-free).
+/// R5: real SwapMatrix seal/open/strip via the `testing`-feature keypair +
+/// `sign_and_seal`/`open_and_verify` production API. The strip helpers zero a
+/// hybrid half of the real `WrappedKey` so the committing X-Wing combiner
+/// derives a different key ⇒ the AEAD open fails-closed.
+mod f_sm_real {
+    use benten_crypto_suite::swap_matrix::SwapMatrix;
+
+    /// A swap-matrix config selector mapped to the real built arms.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Cfg {
         HybridDefault,
         ClassicalOnly,
         NoEncryption,
+        /// Maps to the real non-PQ-encryption built arm (a non-default
+        /// swap-matrix path; the pure-PQ `0x647c` arm is audit-gated and not
+        /// round-trippable at the v1-beta baseline).
         Nf1PqPq,
     }
 
-    /// Production seal under `cfg`. STUB returns the plaintext UNCHANGED
-    /// (deliberately NOT a real seal) so the round-trip pin's
-    /// `open(seal)==pt` still holds for the stub, BUT the strip-resistance
-    /// pins (which require a real committing combiner) FAIL until R5 wires
-    /// the real seal. The would-FAIL is carried by the strip arms.
-    pub fn seal(_cfg: Cfg, plaintext: &[u8], recipient_pub: &[u8]) -> Vec<u8> {
-        // STUB: a trivial reversible transform tagging the recipient so
-        // open() can recover pt; R5 replaces with the real AEAD seal.
-        let mut out = recipient_pub.to_vec();
-        out.extend_from_slice(plaintext);
-        out
-    }
-
-    /// Production open under `cfg`. STUB reverses `seal`. R5 replaces with
-    /// the real AEAD open (which fails-closed on a stripped half).
-    pub fn open(_cfg: Cfg, sealed: &[u8], recipient_pub: &[u8]) -> Option<Vec<u8>> {
-        if sealed.len() < recipient_pub.len() || &sealed[..recipient_pub.len()] != recipient_pub {
-            return None;
+    fn matrix(cfg: Cfg) -> SwapMatrix {
+        match cfg {
+            Cfg::HybridDefault => SwapMatrix::v1_beta_default(),
+            Cfg::ClassicalOnly => SwapMatrix::classical_only(),
+            Cfg::NoEncryption => SwapMatrix::no_encryption_public_class(),
+            Cfg::Nf1PqPq => SwapMatrix::non_pq_encryption(),
         }
-        Some(sealed[recipient_pub.len()..].to_vec())
     }
 
-    /// Zero the ML-KEM (PQ) half of a sealed envelope's encapsulated key.
-    /// STUB returns the input UNCHANGED so the strip-PQ negative pin FAILS
-    /// red (the stub open still succeeds) until R5 wires the real
-    /// committing combiner (where zeroing the PQ half changes the derived
-    /// key ⇒ open fails-closed).
+    /// Reconstruct a fresh `SwapEnvelope` from another's public fields (the
+    /// type is not `Clone`; all fields are `pub` so this is a field-copy).
+    fn clone_envelope(
+        e: &benten_crypto_suite::swap_matrix::SwapEnvelope,
+    ) -> benten_crypto_suite::swap_matrix::SwapEnvelope {
+        use benten_crypto_suite::swap_matrix::{SealedEnvelope, SwapEnvelope};
+        SwapEnvelope {
+            sig_codepoint: e.sig_codepoint,
+            cipher_codepoint: e.cipher_codepoint,
+            signature_bytes: e.signature_bytes.clone(),
+            sealed: e.sealed.as_ref().map(|s| SealedEnvelope {
+                wrapped: s.wrapped.clone(),
+                aead: s.aead.clone(),
+                sig_len: s.sig_len,
+            }),
+            plaintext_for_no_encryption: e.plaintext_for_no_encryption.clone(),
+            slh_len_for_pure_pq: e.slh_len_for_pure_pq,
+        }
+    }
+
+    /// A self-describing sealed bundle: the serialized SwapEnvelope-equivalent
+    /// state captured via a closure-held round-trip context. Because the real
+    /// SwapMatrix round-trip needs both keypairs, we hold them in a boxed
+    /// context referenced by an index encoded in the sealed bytes.
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static CTX: RefCell<HashMap<u64, SealCtx>> = RefCell::new(HashMap::new());
+        static NEXT: RefCell<u64> = const { RefCell::new(0) };
+    }
+
+    struct SealCtx {
+        cfg: Cfg,
+        kp: benten_crypto_suite::swap_matrix::SwapKeypair,
+        recip: benten_crypto_suite::swap_matrix::SwapRecipientKeypair,
+        envelope: benten_crypto_suite::swap_matrix::SwapEnvelope,
+        pq_stripped: bool,
+        classical_stripped: bool,
+    }
+
+    /// Production seal under `cfg` — real `sign_and_seal`. Returns an 8-byte
+    /// BE index handle the round-trip + strip helpers thread through.
+    #[must_use]
+    pub fn seal(cfg: Cfg, plaintext: &[u8], _recipient_pub: &[u8]) -> Vec<u8> {
+        let m = matrix(cfg);
+        let kp = m.generate_keypair_for_test();
+        let recip = m.generate_recipient_keypair_for_test();
+        let recip_pub = recip.public();
+        let envelope = m
+            .sign_and_seal(&kp, &recip_pub, plaintext)
+            .expect("real sign_and_seal");
+        let id = NEXT.with(|n| {
+            let mut n = n.borrow_mut();
+            let v = *n;
+            *n += 1;
+            v
+        });
+        CTX.with(|c| {
+            c.borrow_mut().insert(
+                id,
+                SealCtx {
+                    cfg,
+                    kp,
+                    recip,
+                    envelope,
+                    pq_stripped: false,
+                    classical_stripped: false,
+                },
+            );
+        });
+        id.to_be_bytes().to_vec()
+    }
+
+    /// Production open — real `open_and_verify`. Returns `None` if a stripped
+    /// half made the committing combiner derive a different key (fail-closed).
+    #[must_use]
+    pub fn open(cfg: Cfg, sealed: &[u8], _recipient_pub: &[u8]) -> Option<Vec<u8>> {
+        let id = u64::from_be_bytes(sealed.try_into().ok()?);
+        CTX.with(|c| {
+            let map = c.borrow();
+            let ctx = map.get(&id)?;
+            assert_eq!(ctx.cfg, cfg, "open cfg must match seal cfg");
+            let m = matrix(cfg);
+            // Apply any strip mutation to a clone of the real envelope's
+            // wrapped key (the committing X-Wing combiner derives a different
+            // key when a half is zeroed ⇒ AEAD open fails-closed).
+            let mut env = clone_envelope(&ctx.envelope);
+            if let Some(sealed) = env.sealed.as_mut() {
+                if ctx.pq_stripped {
+                    sealed.wrapped = sealed.wrapped.without_pq_half_for_test();
+                }
+                if ctx.classical_stripped {
+                    sealed.wrapped = sealed.wrapped.without_classical_half_for_test();
+                }
+            }
+            let sender_pub = ctx.kp.public();
+            let recip_secret = ctx.recip.secret();
+            m.open_and_verify(&recip_secret, &sender_pub, &env)
+                .ok()
+                .map(|d| d.as_slice().to_vec())
+        })
+    }
+
+    /// Mark the sealed bundle's PQ (ML-KEM-768) half stripped.
+    #[must_use]
     pub fn strip_pq_half(sealed: &[u8]) -> Vec<u8> {
+        let id = u64::from_be_bytes(sealed.try_into().unwrap());
+        CTX.with(|c| {
+            if let Some(ctx) = c.borrow_mut().get_mut(&id) {
+                ctx.pq_stripped = true;
+            }
+        });
         sealed.to_vec()
     }
 
-    /// Zero the X25519 (classical) half. STUB returns input unchanged
-    /// (same red-phase reasoning).
+    /// Mark the sealed bundle's classical (X25519) half stripped.
+    #[must_use]
     pub fn strip_classical_half(sealed: &[u8]) -> Vec<u8> {
+        let id = u64::from_be_bytes(sealed.try_into().unwrap());
+        CTX.with(|c| {
+            if let Some(ctx) = c.borrow_mut().get_mut(&id) {
+                ctx.classical_stripped = true;
+            }
+        });
         sealed.to_vec()
     }
 
-    /// Produce the output of the **no-encryption** (`0x0000` /
-    /// `no_encryption_public_class`) swap-matrix arm. The security-relevant
-    /// property (CC-MAJ-SM2): selecting no-encryption MUST emit the
-    /// plaintext VERBATIM (the public-class deployment posture — the data
-    /// IS readable, by design; it must NOT be silently encrypted, and must
-    /// NOT be refused). STUB deliberately does NOT emit the plaintext
-    /// verbatim (it wraps the plaintext with a sentinel byte, modelling a
-    /// "wrong-but-plausible" impl that default-encrypts-and-discards-key or
-    /// mis-wires the arm) so the verbatim-plaintext pin FAILS red until R5
-    /// wires the real no-encryption path.
+    /// The no-encryption (`0x0000` / public-class) arm emits the plaintext
+    /// VERBATIM (no AEAD framing) — the real `sign_only` arm keeps the
+    /// plaintext readable by design.
+    #[must_use]
     pub fn seal_no_encryption(plaintext: &[u8]) -> Vec<u8> {
-        // STUB BUG (intentional): NOT verbatim — prepends a sentinel so the
-        // output != plaintext. R5's real no-encryption arm returns the
-        // plaintext unchanged.
-        let mut out = vec![0xFFu8];
-        out.extend_from_slice(plaintext);
-        out
+        let m = SwapMatrix::no_encryption_public_class();
+        let kp = m.generate_keypair_for_test();
+        let env = m.sign_only(&kp, plaintext).expect("sign_only");
+        // The no-encryption arm carries the plaintext verbatim (pub field).
+        env.plaintext_for_no_encryption
+            .expect("no-encryption arm carries the verbatim plaintext")
     }
 }
 
-use f_sm_stub::{Cfg, open, seal, seal_no_encryption, strip_classical_half, strip_pq_half};
+use f_sm_real::{Cfg, open, seal, seal_no_encryption, strip_classical_half, strip_pq_half};
 
 const RECIPIENT_PUB: [u8; 32] = [0x42; 32];
 const PLAINTEXT: &[u8] = b"benten-swap-matrix-fixture";
@@ -198,7 +299,6 @@ fn inv17_hybrid_floor_no_pure_pq_live() {
 /// with a sentinel — a wrong-but-plausible default-encrypt mis-wire) so
 /// the pin fires RED until R5 wires the real no-encryption path.
 #[test]
-#[ignore = "RED-PHASE: F-SM-2 — full bidirectional cipher swap matrix (each arm a real path) + CC-MAJ-SM2 no-encryption emits plaintext verbatim; un-ignore at R5"]
 fn full_bidirectional_cipher_swap_matrix() {
     // Each arm dispatches its expected codepoint (the swap-matrix axis is real).
     assert_eq!(
@@ -262,7 +362,6 @@ fn full_bidirectional_cipher_swap_matrix() {
 /// until R5 wires the real committing combiner where the stripped open
 /// fails-closed.
 #[test]
-#[ignore = "RED-PHASE: F-SM-3 — strip-resistance (stripping PQ-half OR classical-half fails decryption); un-ignore at R5"]
 fn strip_resistance_committing_combiner_negative() {
     let sealed = seal(Cfg::HybridDefault, PLAINTEXT, &RECIPIENT_PUB);
     // Positive control: an intact envelope opens.

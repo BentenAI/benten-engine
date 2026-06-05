@@ -48,116 +48,27 @@
 use benten_crypto_suite::codepoint::{CipherSuiteCodepoint, SigCodepoint};
 use benten_crypto_suite::error::UnsupportedAlgorithm;
 
-/// SELF-CONTAINED stub-shim for the NEW (not-yet-minted) codepoints.
+/// R5: thin re-export shim over the LIVE `benten_crypto_suite::registry` +
+/// the real `CodepointLifecycle` state machine. The non-collision /
+/// IANA-disjoint scanner input (`all_assigned_envelope_codepoints`) is the
+/// REAL registry iterator `registry::registered_envelope_codepoints`
+/// (F4-040: a registry enumerator, not a per-file hand-list).
 mod f_cp_stub {
-    /// Layer-A vault envelope codepoint (NEW; §4.0 `0x6100`; the 24-byte
-    /// `SymmetricAeadXNonce` vault variant).
-    pub const VAULT_ENVELOPE: u16 = 0x6100;
-    /// Layer-A 12-byte `SymmetricAead` (ChaCha20-Poly1305) sibling (NEW;
-    /// §4.0 vault band `0x6100..0x61FF`; RATIFIED frozen v1-beta variant
-    /// per Ben ruling 3, 2026-06-02 + R0.5 §4.1 "ship both").
-    pub const SYMMETRIC_AEAD_12B: u16 = 0x6101;
-    /// Layer-C plaintext-sender drop (NEW; §4.0 `0x6500`).
-    pub const LAYER_C_DROP: u16 = 0x6500;
-    /// Layer-C Sealed-Sender DEFAULT (NEW; §4.0 `0x6510`; BR-1 the ONE
-    /// canonical value).
-    pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
-    /// Layer-C group multi-stanza (NEW; §4.0 `0x6520`).
-    pub const LAYER_C_DROP_MULTI_RECIPIENT: u16 = 0x6520;
-    /// MembershipSet set-keying envelope (NEW; §4.0 `0x6600`; RELOCATED
-    /// from M-CONS-FINAL `0x6380` per §0.4).
-    pub const MEMBERSHIP_SET_ENCRYPTION: u16 = 0x6600;
-    /// MembershipSet group multi-stanza (NEW; §4.0 `0x6610`).
-    pub const MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16 = 0x6610;
-    /// MembershipSet federation acquisition (NEW; §4.0 `0x6620`;
-    /// reserve-only — refused at v1-beta).
-    pub const MEMBERSHIP_SET_SUBSET_REF: u16 = 0x6620;
-    /// Layer-D DeviceLink band base (NEW; §4.0 `0x6310..0x631F`).
-    pub const DEVICE_LINK_BAND_BASE: u16 = 0x6310;
-    /// Layer-D RemotePermission band base (NEW; §4.0 `0x6320..0x632F`).
-    pub const REMOTE_PERMISSION_BAND_BASE: u16 = 0x6320;
-    /// Lifecycle/revocation band base (NEW; §4.0 `0x6700..0x67FF`).
-    pub const LIFECYCLE_BAND_BASE: u16 = 0x6700;
-    /// MLS-Application bracket base (NEW; §4.0 `0x6380`; NOT MembershipSet).
-    pub const MLS_APPLICATION_BASE: u16 = 0x6380;
-    /// MLS-Welcome bracket base (NEW; §4.0 `0x6390`; NOT Sealed-Sender).
-    pub const MLS_WELCOME_BASE: u16 = 0x6390;
-    /// CGKA-Commit FS-future bracket (NEW; §4.0 `0x63A0`).
-    pub const CGKA_COMMIT_BASE: u16 = 0x63A0;
-    /// Bird-of-Prey AKEM FS-future bracket (NEW; §4.0 `0x63B0`).
-    pub const BIRD_OF_PREY_BASE: u16 = 0x63B0;
-    /// draft-prabel FS-future bracket (NEW; §4.0 `0x63C0`).
-    pub const DRAFT_PRABEL_BASE: u16 = 0x63C0;
-    /// Experimental-range base (NEW; §4.0 `0xFE00..0xFFFE`).
-    pub const EXPERIMENTAL_BASE: u16 = 0xFE00;
-    /// Extended-codepoint escape (NEW; §4.0 `0xFFFF`).
-    pub const EXTENDED_CODEPOINT_ESCAPE: u16 = 0xFFFF;
+    pub use benten_crypto_suite::registry::{
+        BENTEN_ENVELOPE_RANGE, BIRD_OF_PREY_BASE, CGKA_COMMIT_BASE, DEVICE_LINK_BAND_BASE,
+        DRAFT_PRABEL_BASE, DROP_TO_RECIPIENT_SEALED_SENDER, EXPERIMENTAL_BASE,
+        EXTENDED_CODEPOINT_ESCAPE, LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LIFECYCLE_BAND_BASE,
+        MEMBERSHIP_SET_ENCRYPTION, MEMBERSHIP_SET_GROUP_MULTI_STANZA, MEMBERSHIP_SET_SUBSET_REF,
+        MLS_APPLICATION_BASE, MLS_WELCOME_BASE, REMOTE_PERMISSION_BAND_BASE, SYMMETRIC_AEAD_12B,
+        VAULT_ENVELOPE, iana_hpke_reserved_ranges,
+        registered_envelope_codepoints as all_assigned_envelope_codepoints,
+    };
+    pub use benten_crypto_suite::codepoint::CodepointLifecycle;
 
-    /// The Benten envelope range (NEW; §4.0 `0x6100..=0x6FFF`).
-    pub const BENTEN_ENVELOPE_RANGE: std::ops::RangeInclusive<u16> = 0x6100..=0x6FFF;
-
-    /// The set of IANA HPKE kem/kdf/aead 16-bit registry ranges a Benten
-    /// envelope codepoint must AVOID (a representative low-band slice; R5
-    /// wires the real IANA range table). Used by F-CP-2 IANA-disjointness.
-    pub fn iana_hpke_reserved_ranges() -> Vec<std::ops::RangeInclusive<u16>> {
-        // IANA HPKE registries live in the low 16-bit space (e.g.
-        // kem_id 0x0010..0x0021, kdf_id 0x0001..0x0003, aead_id
-        // 0x0001..0x0003). The Benten band 0x6100.. is disjoint by
-        // construction; R5 pins the authoritative table.
-        vec![0x0001..=0x0003, 0x0010..=0x0021]
-    }
-
-    /// All Benten-assigned envelope codepoint integers from the FULL R0.5
-    /// §4.0 table (the non-collision scanner input). R5 wires this to
-    /// enumerate the REAL minted symbols (a source-scan / registry
-    /// iterator), not this literal; the stub lists every §4.0 in-band
-    /// integer so the non-collision + IANA-disjoint scanner has the full
-    /// authoritative set (F4-040).
-    ///
-    /// Sig codepoints (`0x0001/0x0002/0x0003`) are a SEPARATE `0x00xx`
-    /// namespace (R0.5 §4.0) and are deliberately NOT in this envelope set.
-    pub fn all_assigned_envelope_codepoints() -> Vec<u16> {
-        vec![
-            VAULT_ENVELOPE,    // 0x6100 vault (24-byte XNonce)
-            SYMMETRIC_AEAD_12B, // 0x6101 vault 12-byte sibling
-            0x6400,            // cipher classical-only X25519 downgrade
-            0x647a,            // cipher hybrid default (X-Wing X25519⊕ML-KEM-768)
-            0x647b,            // cipher NF-1 PQ⊕PQ (reserved)
-            0x647c,            // cipher pure-PQ swap-matrix arm (reserved)
-            DEVICE_LINK_BAND_BASE,        // 0x6310 Layer-D DeviceLink band base
-            REMOTE_PERMISSION_BAND_BASE,  // 0x6320 Layer-D RemotePermission band base
-            MLS_APPLICATION_BASE,         // 0x6380 MLS-Application bracket
-            MLS_WELCOME_BASE,             // 0x6390 MLS-Welcome bracket
-            CGKA_COMMIT_BASE,             // 0x63A0 CGKA-Commit FS bracket
-            BIRD_OF_PREY_BASE,            // 0x63B0 Bird-of-Prey AKEM FS bracket
-            DRAFT_PRABEL_BASE,            // 0x63C0 draft-prabel FS bracket
-            LAYER_C_DROP,                 // 0x6500 plaintext-sender drop (non-default sibling)
-            DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510 Sealed-Sender DEFAULT
-            LAYER_C_DROP_MULTI_RECIPIENT, // 0x6520 group multi-stanza
-            MEMBERSHIP_SET_ENCRYPTION,        // 0x6600 MembershipSet set-keying
-            MEMBERSHIP_SET_GROUP_MULTI_STANZA, // 0x6610 MembershipSet group multi-stanza
-            MEMBERSHIP_SET_SUBSET_REF,        // 0x6620 MembershipSet federation (reserve)
-            LIFECYCLE_BAND_BASE,          // 0x6700 lifecycle / revocation band base
-        ]
-    }
-
-    /// `CodepointLifecycle` typed-state (NEW; §4.1 U16).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum CodepointLifecycle {
-        Live,
-        Deprecated,
-        Quarantined,
-        Burned,
-    }
-
-    /// Dispatch a codepoint by its lifecycle state — Quarantined/Burned
-    /// MUST reject. STUB always accepts (ignores `state`) so the
-    /// Burned/Quarantined-reject pins fire red until R5 wires the real
-    /// state machine.
+    /// Dispatch a codepoint by its lifecycle state — Live/Deprecated dispatch
+    /// `Ok`; Quarantined/Burned typed-reject (the real state machine).
     pub fn lifecycle_dispatch(state: CodepointLifecycle) -> Result<(), &'static str> {
-        // STUB BUG (intentional): accepts everything regardless of state.
-        let _ = state;
-        Ok(())
+        state.dispatch().map_err(|_| "codepoint quarantined or burned")
     }
 }
 
@@ -174,7 +85,6 @@ use f_cp_stub::{
 /// value drift = wire-format break. This extends
 /// `canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`.
 #[test]
-#[ignore = "RED-PHASE: F-CP-1 — §4.0 codepoint integers (live arms) wire-locked; un-ignore at R5 (some assertions are live today; the file rides the V2 corpus regen per M-20)"]
 fn codepoint_integers_wire_locked_live_arms() {
     assert_eq!(
         SigCodepoint::HYBRID_ED25519_MLDSA65.raw(),
@@ -225,7 +135,6 @@ fn codepoint_integers_wire_locked_live_arms() {
 /// f_aad_2/f_lc_hpke goldens catch it indirectly; THIS file is the
 /// canonical wire-lock and must lock them explicitly — F-46-03).
 #[test]
-#[ignore = "RED-PHASE: F-CP-1 — §4.0 NEW codepoint integers wire-locked incl. Sealed-Sender 0x6510 (the ONE canonical value) + MembershipSet-group 0x6610 + Layer-C-group 0x6520 (R4.6 corrections); un-ignore at R5"]
 fn new_codepoint_integers_wire_locked() {
     assert_eq!(
         VAULT_ENVELOPE, 0x6100,
@@ -280,7 +189,6 @@ fn scanner_detects_collision(codepoints: &[u16]) -> bool {
 /// vacuous always-pass). would-FAIL-if-no-op'd: a scanner that never
 /// reports a collision passes (a)–(c) but FAILS the injection arm.
 #[test]
-#[ignore = "RED-PHASE: F-CP-2 — intra-band non-collision + IANA-disjoint scanner + injection arm (NQ-W2; F4-040); un-ignore at R5"]
 fn codepoint_registry_non_collision_and_iana_disjoint() {
     let assigned = all_assigned_envelope_codepoints();
 
@@ -347,7 +255,6 @@ fn codepoint_registry_non_collision_and_iana_disjoint() {
 /// non-collision/IANA scanner — this arm guards against that omission by
 /// asserting each minted const is a member of the scanned set.
 #[test]
-#[ignore = "RED-PHASE: F-CP-1 — every newly-minted §4.0 const is present in the scanned set (F4-041); un-ignore at R5"]
 fn every_minted_codepoint_present_in_scanned_set() {
     let assigned = all_assigned_envelope_codepoints();
     let present = |cp: u16| assigned.contains(&cp);
@@ -390,7 +297,6 @@ fn every_minted_codepoint_present_in_scanned_set() {
 /// fallback to the default). would-FAIL-if-no-op'd: a silent-fallback
 /// dispatch returns `Ok` for an unknown codepoint.
 #[test]
-#[ignore = "RED-PHASE: F-CP-3 — dispatch strict-reject / no cross-variant fallback (U2); un-ignore at R5 (extends tf2 dispatch pin; rides V2 corpus)"]
 fn dispatch_strict_reject_no_cross_variant_fallback() {
     // Reserved-but-unimplemented arms typed-reject at the default dispatcher.
     for reserved in [0x647b_u16, 0x647c, 0x0000] {
@@ -428,7 +334,6 @@ fn dispatch_strict_reject_no_cross_variant_fallback() {
 /// no-op'd: the stub accepts everything, so the Burned-reject assertion
 /// fires red until R5 wires the real state machine.
 #[test]
-#[ignore = "RED-PHASE: F-CP-4 — CodepointLifecycle typed-state (Burned/Quarantined reject); un-ignore at R5"]
 fn codepoint_lifecycle_burned_and_quarantined_reject() {
     assert!(
         lifecycle_dispatch(CodepointLifecycle::Live).is_ok(),
@@ -452,7 +357,6 @@ fn codepoint_lifecycle_burned_and_quarantined_reject() {
 /// `0x0003` MLDSA65⊕SLH-DSA typed-rejects at the default dispatcher.
 /// Drives the REAL `SigCodepoint::resolve`.
 #[test]
-#[ignore = "RED-PHASE: F-CP-5 — sig-side swap matrix 0x0002/0x0003 (GAP-1a/1e); un-ignore at R5"]
 fn sig_side_swap_matrix_dispatch() {
     // 0x0001 is the default + resolves.
     assert!(
@@ -483,7 +387,6 @@ fn sig_side_swap_matrix_dispatch() {
 /// v1-beta. would-FAIL-if-no-op'd: a dispatcher that resolves a reserved
 /// FS bracket to a live arm returns `Ok`.
 #[test]
-#[ignore = "RED-PHASE: F-CP-6 — FS-future bracket typed-reject 0x63A0/0x63B0/0x63C0; un-ignore at R5"]
 fn fs_future_bracket_typed_reject() {
     for fs in [
         CGKA_COMMIT_BASE,
@@ -505,7 +408,6 @@ fn fs_future_bracket_typed_reject() {
 /// MembershipSet keying envelope lives at `0x6600`. would-FAIL-if-no-op'd:
 /// if MembershipSetEncryption were still `0x6380` it would collide MLS.
 #[test]
-#[ignore = "RED-PHASE: F-CP-7 — MLS-bracket collision regression-guard (MembershipSet=0x6600 NOT 0x6380); un-ignore at R5"]
 fn mls_bracket_collision_regression_guard() {
     // MembershipSetEncryption is RELOCATED to 0x6600, away from the MLS bracket.
     assert_eq!(
