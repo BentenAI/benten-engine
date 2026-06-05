@@ -44,7 +44,8 @@ impl UcanVarsigV1Header {
         let mut bytes = Vec::with_capacity(4 + payload.len());
         bytes.push(VARSIG_MAGIC);
         bytes.push(VARSIG_V1);
-        bytes.extend_from_slice(&cp.to_le_bytes());
+        // M-19: codepoint BIG-ENDIAN (migrated from LE at F-full Wave-0).
+        bytes.extend_from_slice(&cp.to_be_bytes());
         bytes.extend_from_slice(&payload);
         Self { bytes }
     }
@@ -62,7 +63,7 @@ impl UcanVarsigV1Header {
         if self.bytes.len() < 4 {
             return false;
         }
-        let cp = u16::from_le_bytes([self.bytes[2], self.bytes[3]]);
+        let cp = u16::from_be_bytes([self.bytes[2], self.bytes[3]]);
         cp == SigCodepoint::HYBRID_ED25519_MLDSA65.raw()
     }
 
@@ -78,7 +79,7 @@ impl UcanVarsigV1Header {
         if bytes[1] != VARSIG_V1 {
             return Err(VarsigError::UnsupportedVersion { got: bytes[1] });
         }
-        let codepoint_raw = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let codepoint_raw = u16::from_be_bytes([bytes[2], bytes[3]]);
         let codepoint = SigCodepoint::from_raw(codepoint_raw);
         // Typed-unsupported dispatch — fail-closed on unknown codepoints.
         codepoint
@@ -104,7 +105,7 @@ impl UcanVarsigV1Header {
         let mut bytes = Vec::with_capacity(8);
         bytes.push(VARSIG_MAGIC);
         bytes.push(VARSIG_V1);
-        bytes.extend_from_slice(&codepoint.to_le_bytes());
+        bytes.extend_from_slice(&codepoint.to_be_bytes());
         // Add a few zero-bytes of payload — the decode will fail at the
         // codepoint resolve step BEFORE consuming payload.
         bytes.extend_from_slice(&[0u8; 4]);

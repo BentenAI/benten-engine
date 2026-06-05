@@ -114,9 +114,9 @@ fn tf3a_ucan_varsig_v1_header_layout_carries_hybrid_codepoint() {
         bytes[1]
     );
 
-    // Bytes 2-3 — codepoint, little-endian u16.
+    // Bytes 2-3 — codepoint, big-endian u16 (M-19; migrated from LE at F-full Wave-0).
     let codepoint_bytes = [bytes[2], bytes[3]];
-    let codepoint_raw = u16::from_le_bytes(codepoint_bytes);
+    let codepoint_raw = u16::from_be_bytes(codepoint_bytes);
     assert_eq!(
         codepoint_raw,
         SigCodepoint::HYBRID_ED25519_MLDSA65.raw(),

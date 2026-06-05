@@ -318,11 +318,12 @@ fn tf2_gate6_pq_hybrid_envelope_carries_explicit_format_version_discriminator() 
         benten_crypto_suite::aead::ENVELOPE_FORMAT_VERSION_V1,
         "Gate 6: byte 1 MUST carry the format-version discriminator (v1-beta = 0x01); a future v2 envelope is then distinguishable from v1 by inspecting this byte alone (multiformats-permanent-commitment property per CLAUDE.md baked-in #5)"
     );
-    let codepoint = u16::from_le_bytes([bytes[2], bytes[3]]);
+    // M-19: codepoint serialized BIG-ENDIAN (migrated from LE at F-full Wave-0).
+    let codepoint = u16::from_be_bytes([bytes[2], bytes[3]]);
     assert_eq!(
         codepoint,
         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw(),
-        "Gate 6: bytes 2-3 MUST carry the cipher-suite codepoint LE u16 (0x647a for the hybrid default)"
+        "Gate 6: bytes 2-3 MUST carry the cipher-suite codepoint BE u16 (0x647a for the hybrid default; M-19)"
     );
     // Negative-control: stripping the magic byte MUST fail to parse as
     // a Benten envelope (distinguishability property).

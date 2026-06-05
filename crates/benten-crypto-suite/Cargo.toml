@@ -119,6 +119,17 @@ ml-kem = { version = "0.2", default-features = false }
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 hkdf = { version = "0.12", default-features = false }
 
+# Layer-A vault DAK derivation (F-VA-2): Argon2id v0x13 (RFC 9106; OWASP
+# params) wrapped from the vetted upstream `argon2` crate — the ONLY
+# crypto-primitive call site per crypto-agility-contract:6 (never fork the
+# password-hash primitive). `alloc` for the in-memory derive buffer.
+argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+
+# Layer-A in-process at-rest-key memory hygiene (F-VA-4; Compromise #36/#39):
+# `secrecy::SecretBox<[u8;32]>` wraps the unlocked K_principal so its Debug
+# redacts (never leaks the bytes) + it zeroizes on Drop. Vetted upstream.
+secrecy = { version = "0.10" }
+
 # Standard supporting deps.
 serde = { workspace = true, features = ["derive", "alloc"] }
 serde_bytes = { workspace = true }

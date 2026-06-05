@@ -126,6 +126,45 @@ impl SigCodepoint {
     }
 }
 
+/// The lifecycle state of a codepoint (R0.5 §4.1 U16; the
+/// `0x6700..0x67FF` lifecycle band carries the per-codepoint state).
+///
+/// `Live`/`Deprecated` codepoints dispatch (a deprecated codepoint still
+/// decodes existing content — old-codepoints-supported-forever); a
+/// `Quarantined` or `Burned` codepoint MUST be typed-rejected — a burned
+/// codepoint is permanently un-dispatchable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CodepointLifecycle {
+    /// Actively dispatched.
+    Live,
+    /// Deprecated but still decodable (no new content; existing content still
+    /// opens).
+    Deprecated,
+    /// Quarantined — suspended pending a security review; rejected.
+    Quarantined,
+    /// Burned — permanently un-dispatchable; rejected forever.
+    Burned,
+}
+
+impl CodepointLifecycle {
+    /// Dispatch by lifecycle state. `Live`/`Deprecated` are `Ok`;
+    /// `Quarantined`/`Burned` are typed-rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UnsupportedAlgorithm::CipherSuite`] (codepoint `0`) for a
+    /// `Quarantined`/`Burned` state — the caller threads the real codepoint
+    /// at the call site; the lifecycle gate's contract is the state-reject.
+    pub fn dispatch(self) -> Result<(), UnsupportedAlgorithm> {
+        match self {
+            Self::Live | Self::Deprecated => Ok(()),
+            Self::Quarantined | Self::Burned => {
+                Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0 })
+            }
+        }
+    }
+}
+
 /// Typed hash codepoint enum (multihash codepoints; CLAUDE.md baked-in #5).
 ///
 /// v1 default = BLAKE3 (`0x1e`). Pre-blessed agile fallbacks =

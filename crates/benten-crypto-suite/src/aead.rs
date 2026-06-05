@@ -20,7 +20,7 @@
 //! ```text
 //! byte 0   : magic 0xae        (envelope identifier; Varsig sibling)
 //! byte 1   : format_version    (v1-beta = 0x01)
-//! bytes 2-3: cipher codepoint  (LE u16; e.g. 0x647a for X-Wing-hybrid)
+//! bytes 2-3: cipher codepoint  (BE u16; e.g. 0x647a for X-Wing-hybrid; M-19)
 //! byte 4   : nonce_len         (12 for ChaCha20-Poly1305)
 //! bytes 5..: nonce || ciphertext_with_tag
 //! ```
@@ -162,7 +162,9 @@ impl AeadEnvelope {
         let mut out = Vec::with_capacity(5 + self.nonce.len() + self.ciphertext.len());
         out.push(ENVELOPE_MAGIC);
         out.push(self.format_version);
-        out.extend_from_slice(&self.cipher_codepoint.raw().to_le_bytes());
+        // M-19: codepoint serialized BIG-ENDIAN (network byte order per
+        // RFC 9180 / FIPS 203 / MLS). Migrated from LE at F-full Wave-0.
+        out.extend_from_slice(&self.cipher_codepoint.raw().to_be_bytes());
         // nonce-length-byte at position 4 — a single byte (≤ 255) is
         // sufficient for all AEADs we dispatch (ChaCha20-Poly1305 = 12).
         out.push(
@@ -188,7 +190,7 @@ impl AeadEnvelope {
         }
         let format_version = bytes[1];
         let cipher_codepoint =
-            CipherSuiteCodepoint::from_raw(u16::from_le_bytes([bytes[2], bytes[3]]));
+            CipherSuiteCodepoint::from_raw(u16::from_be_bytes([bytes[2], bytes[3]]));
         let nonce_len = usize::from(bytes[4]);
         if bytes.len() < 5 + nonce_len {
             return Err(AeadError::MalformedEnvelope("envelope truncated mid-nonce"));
@@ -241,8 +243,10 @@ pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) 
     let mut aad = Vec::with_capacity(b"benten-aead:chunk:".len() + plaintext_cid.len() + 8 + 4);
     aad.extend_from_slice(b"benten-aead:chunk:");
     aad.extend_from_slice(plaintext_cid);
-    aad.extend_from_slice(&chunk_index.to_le_bytes());
-    aad.extend_from_slice(&total_chunks.to_le_bytes());
+    // M-19: chunk_index + total_chunks BIG-ENDIAN (migrated from LE at
+    // F-full Wave-0). The integer bytes are the discriminating suffix.
+    aad.extend_from_slice(&chunk_index.to_be_bytes());
+    aad.extend_from_slice(&total_chunks.to_be_bytes());
     aad
 }
 
@@ -274,8 +278,10 @@ pub fn aad_per_recipe(plaintext_cid: &[u8], recipe_index: u32, total_recipes: u3
     let mut aad = Vec::with_capacity(b"benten-aead:recipe:".len() + plaintext_cid.len() + 4 + 4);
     aad.extend_from_slice(b"benten-aead:recipe:");
     aad.extend_from_slice(plaintext_cid);
-    aad.extend_from_slice(&recipe_index.to_le_bytes());
-    aad.extend_from_slice(&total_recipes.to_le_bytes());
+    // M-19: recipe_index + total_recipes BIG-ENDIAN (migrated from LE at
+    // F-full Wave-0).
+    aad.extend_from_slice(&recipe_index.to_be_bytes());
+    aad.extend_from_slice(&total_recipes.to_be_bytes());
     aad
 }
 
@@ -469,11 +475,11 @@ mod tests {
             bytes[1], ENVELOPE_FORMAT_VERSION_V1,
             "byte 1 = format-version discriminator (Gate-6)"
         );
-        let cp = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let cp = u16::from_be_bytes([bytes[2], bytes[3]]);
         assert_eq!(
             cp,
             CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw(),
-            "bytes 2-3 = cipher codepoint LE"
+            "bytes 2-3 = cipher codepoint BE (M-19)"
         );
     }
 
