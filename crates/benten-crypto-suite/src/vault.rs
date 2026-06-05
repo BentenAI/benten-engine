@@ -322,6 +322,7 @@ impl UnlockedKeyMaterial {
     /// structural-KDF bridge pins (the vault source the structural-KDF chain
     /// seeds from).
     #[must_use]
+    #[cfg(any(test, feature = "testing"))]
     pub fn from_vault_bytes_for_test(k_principal_bytes: [u8; 32]) -> Self {
         Self::new(k_principal_bytes, vec![0x22u8; 64])
     }
