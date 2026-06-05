@@ -58,13 +58,36 @@
 // real kani integration at v1-GM registers the cfg in Cargo.toml/build.rs.
 #![allow(unexpected_cfgs)]
 
-// ── SELF-CONTAINED stub-shim ──
+// ── R5 (w-ms-sync): wired to the REAL production tie-break + KDF ──
+//
+// - The Inv-21 tie-break (`total_order_key` / `fork_winner`) routes through the
+//   production `benten_membership_set::set::crdt::{fork_total_order_key,
+//   fork_a_wins}` (smaller-key-wins; M-8 totality via Version-Node CID) — the
+//   `Hlc → BentenHlc` bridge converts the fixture clock to the real HLC the
+//   production rule keys on.
+// - K(V) derivation routes through `benten_membership_set::keying::derive_kv`
+//   (the structural BLAKE3 KDF; the frozen golden is byte-identical).
+//
+// The 3-field `Hlc` fixture below is a faithful mirror of `benten_core::hlc::Hlc`
+// (parity shape: lexicographic (physical_ms, logical, node_id)); it bridges to
+// the real `BentenHlc` at the production-rule boundary via `into_benten`.
+use benten_core::hlc::BentenHlc;
+use benten_membership_set::keying::derive_kv;
+use benten_membership_set::set::crdt::{fork_a_wins, fork_total_order_key};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Hlc {
     physical_ms: u64,
     logical: u32,
     node_id: u64,
+}
+
+impl Hlc {
+    /// Bridge the fixture clock to the REAL `BentenHlc` the production tie-break
+    /// rule keys on.
+    fn into_benten(self) -> BentenHlc {
+        BentenHlc::new(self.physical_ms, self.logical, self.node_id)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,16 +113,24 @@ struct ForkCandidate {
 }
 
 /// The TOTAL ordering key (M-8): (`created_at_hlc` ASC, then
-/// `fork_event_version_node_cid` ASC). NOT `MembershipSetId`.
-fn total_order_key(f: &ForkCandidate) -> (Hlc, Vec<u8>) {
-    (f.created_at_hlc, f.fork_event_version_node_cid.clone())
+/// `fork_event_version_node_cid` ASC). NOT `MembershipSetId`. Routes through the
+/// PRODUCTION `benten_membership_set::set::crdt::fork_total_order_key`.
+fn total_order_key(f: &ForkCandidate) -> (BentenHlc, Vec<u8>) {
+    fork_total_order_key(
+        f.created_at_hlc.into_benten(),
+        &f.fork_event_version_node_cid,
+    )
 }
 
-/// PRODUCTION-stand-in: Inv-21 fork-tie-break. SMALLER key wins
-/// (oldest-anchor; CID-ASC tiebreak). R5 routes through the real
-/// `benten_membership_set` tie-break.
+/// Inv-21 fork-tie-break: SMALLER key wins (oldest-anchor; CID-ASC tiebreak).
+/// Routes through the PRODUCTION `benten_membership_set::set::crdt::fork_a_wins`.
 fn fork_winner<'a>(a: &'a ForkCandidate, b: &'a ForkCandidate) -> &'a ForkCandidate {
-    if total_order_key(a) <= total_order_key(b) {
+    if fork_a_wins(
+        a.created_at_hlc.into_benten(),
+        &a.fork_event_version_node_cid,
+        b.created_at_hlc.into_benten(),
+        &b.fork_event_version_node_cid,
+    ) {
         a
     } else {
         b
@@ -144,13 +175,13 @@ fn resolve_fork(a: &ForkCandidate, b: &ForkCandidate) -> ForkResolution {
     }
 }
 
-/// PRODUCTION-stand-in: K(V) derivation (Inv-19). K(V) is derived from the
-/// IMMUTABLE Version-Node CID via a domain-separated KDF (BLAKE3 derive_key
-/// stand-in). A DIFFERENT CID derives a DIFFERENT key — so asserting the
-/// derived key is NOT a self-equality read-back of the CID itself. R5 routes
-/// through the real `benten_crypto_suite` structural KDF.
+/// K(V) derivation (Inv-19): derived from the IMMUTABLE Version-Node CID via the
+/// domain-separated structural BLAKE3 KDF. Routes through the PRODUCTION
+/// `benten_membership_set::keying::derive_kv` (context `"benten-membership-set:K(V):v1"`).
+/// A DIFFERENT CID derives a DIFFERENT key — the assertion is NOT a self-equality
+/// read-back of the CID.
 fn derive_k_v(version_node_cid: &[u8]) -> [u8; 32] {
-    blake3::derive_key("benten-membership-set:K(V):v1", version_node_cid)
+    derive_kv(version_node_cid)
 }
 
 fn cid(payload: &[u8]) -> Vec<u8> {
@@ -184,7 +215,6 @@ fn fork(id: u32, created_ms: u64, cid_seed: &[u8], admin: bool, vector: &[&str])
 /// displaces the original. (A test that passed under naive LWW would FAIL
 /// here.)
 #[test]
-#[ignore = "RED-PHASE: F-INV21-1 — smaller-created_at_hlc-wins (oldest-anchor; opposite of LWW); un-ignore at R5"]
 fn f_inv21_1_oldest_anchor_wins_adversary_cannot_displace() {
     let original = fork(1, 100, b"original-fork", true, &["e1"]);
     let later = fork(2, 200, b"later-fork", true, &["e2"]);
@@ -214,7 +244,6 @@ fn f_inv21_1_oldest_anchor_wins_adversary_cannot_displace() {
 /// the ordering axioms: totality + antisymmetry + **transitivity** (the
 /// F4-025 3-fork arm: a<b ∧ b<c ⟹ a<c).
 #[test]
-#[ignore = "RED-PHASE: F-INV21-2 — tie-break totality via Version-Node-CID, NOT MembershipSetId (M-8); un-ignore at R5"]
 fn f_inv21_2_totality_via_version_node_cid() {
     // Two concurrent forks with TRULY IDENTICAL created_at_hlc (same
     // physical_ms AND node_id — a genuine tie) and SHARED
@@ -349,7 +378,6 @@ fn f_inv21_2_totality_via_version_node_cid() {
 /// harness (v1-GM strengthening); it is NOT a wave blocker (R2 §"kani
 /// harness is NOT in-tree" — do NOT block the wave on kani standup).
 #[test]
-#[ignore = "RED-PHASE: F-INV21-3 — convergence proof (proptest surrogate; v1-beta floor); un-ignore at R5"]
 fn f_inv21_3_convergence_proptest_surrogate() {
     use proptest::prelude::*;
     proptest!(|(hlcs in proptest::collection::vec(0u64..1000, 2..6), seeds in 0u64..256)| {
@@ -440,7 +468,6 @@ fn f_inv21_3_kani_tie_break_total() {
 /// Version-Node CID via `derive_k_v` and proves a different CID derives a
 /// different key (NOT a self-equality of the CID against itself).
 #[test]
-#[ignore = "RED-PHASE: F-INV21-4 — losing fork not absorbed into CURRENT + archived + any author forks; un-ignore at R5"]
 fn f_inv21_4_losing_fork_not_merged_archived_not_discarded() {
     // Winner carries ["w-only"]; loser carries ["l-only"]. A non-Admin
     // authored the loser (ALL event-authors fork).

@@ -70,3 +70,10 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 serde_bytes = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
 proptest = { workspace = true }
+# R5 (w-ms-sync): the F-MST-2 substitution-defense pin drives the REAL
+# `benten_sync::mst::Mst::apply_entries` rehash check via the test-only
+# `MstEntry::new_with_explicit_cid_for_testing` constructor (gated behind
+# `benten-sync/testing`). The normal `[dependencies]` `benten-sync` stays
+# feature-clean (production); this dev-dep adds the `testing` feature only for
+# the membership-set test target (matching the CI `benten-sync/testing` flag).
+benten-sync = { path = "../benten-sync", features = ["testing"] }

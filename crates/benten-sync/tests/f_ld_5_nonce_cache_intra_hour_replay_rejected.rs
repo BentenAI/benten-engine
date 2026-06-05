@@ -53,77 +53,17 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 // ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — jti-keyed durable nonce-cache (NET-NEW at v1-beta).
+// R5 (w-ms-sync): wired to the REAL Layer-D nonce-cache.
 // ---------------------------------------------------------------------------
 //
-// The jti-keyed cache is the UCAN-token `jti` (a 32-byte nonce) keyed durable
-// CAS-marker. Retention MUST cover ≥ the full 1-hr bucket; the rejection is
-// keyed on the nonce, NOT the timestamp. (R5 deletes this whole module and
-// `use`s the real Layer-D nonce-cache.)
-mod cache {
-    use std::collections::HashSet;
-
-    pub const LAYER_D_BUCKET_SECS: u64 = 3600;
-
-    #[derive(Debug, PartialEq, Eq)]
-    pub enum NonceCacheError {
-        ReplayedNonce,
-    }
-
-    /// jti-keyed durable nonce-cache. `enabled=false` models the
-    /// "disable-cache negative" control: with the cache off, a replay is NOT
-    /// caught (proves the bucket alone is insufficient).
-    pub struct JtiNonceCache {
-        seen: HashSet<[u8; 32]>,
-        /// The durable backing set (survives a simulated restart).
-        durable_store: HashSet<[u8; 32]>,
-        enabled: bool,
-    }
-
-    impl JtiNonceCache {
-        pub fn new(enabled: bool) -> Self {
-            Self {
-                seen: HashSet::new(),
-                durable_store: HashSet::new(),
-                enabled,
-            }
-        }
-
-        /// Hydrate from the durable store (simulates engine restart, OR a
-        /// cross-device sync that propagated another device's consumed-jti
-        /// set into this device's durable cache).
-        pub fn from_durable(durable: HashSet<[u8; 32]>) -> Self {
-            Self {
-                seen: durable.clone(),
-                durable_store: durable,
-                enabled: true,
-            }
-        }
-
-        pub fn durable_snapshot(&self) -> HashSet<[u8; 32]> {
-            self.durable_store.clone()
-        }
-
-        /// Record-and-check is atomic. The check is keyed ONLY on the jti
-        /// nonce — the `_present_at_secs` arg is accepted to PROVE the
-        /// rejection is nonce-keyed, NOT time-keyed (it is never read for the
-        /// replay decision).
-        pub fn admit(&mut self, jti: [u8; 32], _present_at_secs: u64) -> Result<(), NonceCacheError> {
-            if !self.enabled {
-                // Disable-cache control: always admit (replay leaks through).
-                return Ok(());
-            }
-            if self.seen.contains(&jti) {
-                return Err(NonceCacheError::ReplayedNonce);
-            }
-            self.seen.insert(jti);
-            self.durable_store.insert(jti);
-            Ok(())
-        }
-    }
-}
-
-use cache::{JtiNonceCache, NonceCacheError, LAYER_D_BUCKET_SECS};
+// The self-contained stub-shim is DELETED. The jti-keyed durable nonce-cache is
+// now the production `benten_sync::handshake::{JtiNonceCache, NonceCacheError,
+// LAYER_D_BUCKET_SECS}` (the NET-NEW v1-beta nonce-cache that the §(c)
+// bounded-window seam left for follow-up). `admit` is keyed ONLY on the `jti`
+// nonce (the present-at-secs arg is never read for the replay decision);
+// `from_durable` is the restart / cross-device-sync hydration seam; the
+// disabled cache is the M-1 negative control.
+use benten_sync::handshake::{JtiNonceCache, LAYER_D_BUCKET_SECS, NonceCacheError};
 
 /// F-LD-5 HEADLINE: present a PermissionGrant jti twice within the same 1-hr
 /// bucket → the 2nd is rejected BY THE NONCE-CACHE (not by a time field). The
@@ -132,7 +72,6 @@ use cache::{JtiNonceCache, NonceCacheError, LAYER_D_BUCKET_SECS};
 /// would-FAIL-if-no-op'd: if `admit` skipped the seen-set check, the 2nd admit
 /// returns Ok.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — intra-hour replay rejected by jti nonce-cache (M-1); un-ignore at R5"]
 fn f_ld_5_intra_hour_replay_rejected_by_nonce_cache() {
     let mut nc = JtiNonceCache::new(true);
     let jti = [0xAB; 32];
@@ -157,7 +96,6 @@ fn f_ld_5_intra_hour_replay_rejected_by_nonce_cache() {
 /// defense (M-1). If this passed only because of a time check, disabling the
 /// cache wouldn't change the outcome — but it does.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — disable-cache control: replay leaks (bucket alone insufficient); un-ignore at R5"]
 fn f_ld_5_disable_cache_lets_replay_through_proving_bucket_insufficient() {
     let mut nc = JtiNonceCache::new(false); // cache DISABLED
     let jti = [0xAB; 32];
@@ -166,21 +104,22 @@ fn f_ld_5_disable_cache_lets_replay_through_proving_bucket_insufficient() {
     nc.admit(jti, bucket_aligned).expect("first admit");
     // With the cache off, the SAME jti in the SAME bucket is admitted again —
     // demonstrating the bucket does NOT defend replay on its own.
-    nc.admit(jti, bucket_aligned)
-        .expect("with the nonce-cache DISABLED, intra-bucket replay leaks through (bucket insufficient)");
+    nc.admit(jti, bucket_aligned).expect(
+        "with the nonce-cache DISABLED, intra-bucket replay leaks through (bucket insufficient)",
+    );
 }
 
 /// F-LD-5 RESTART-DURABILITY: the nonce-cache survives engine restart. A jti
 /// consumed before a restart is still rejected after rehydrating from the
 /// durable store — so a restart can't be used to bypass the replay window.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — nonce-cache durable across restart; un-ignore at R5"]
 fn f_ld_5_nonce_cache_durable_across_restart() {
     let jti = [0xCD; 32];
 
     // Pre-restart: consume the jti.
     let mut nc = JtiNonceCache::new(true);
-    nc.admit(jti, 1_900_000_800).expect("first admit pre-restart");
+    nc.admit(jti, 1_900_000_800)
+        .expect("first admit pre-restart");
     let durable = nc.durable_snapshot();
     drop(nc); // simulate engine shutdown
 
@@ -198,7 +137,6 @@ fn f_ld_5_nonce_cache_durable_across_restart() {
 /// catch. would-FAIL-if-no-op'd: a time-keyed cache would let a clock-shifted
 /// replay through.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — clock manipulation does not bypass nonce-keyed rejection; un-ignore at R5"]
 fn f_ld_5_clock_manipulation_does_not_bypass_nonce_cache() {
     let mut nc = JtiNonceCache::new(true);
     let jti = [0xEF; 32];
@@ -223,7 +161,6 @@ fn f_ld_5_clock_manipulation_does_not_bypass_nonce_cache() {
 /// (the cache rejects replays, not all intra-bucket traffic). Proves the cache
 /// is keyed on the nonce, not the bucket.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — distinct jti in same bucket is admitted; un-ignore at R5"]
 fn f_ld_5_distinct_jti_same_bucket_is_admitted() {
     let mut nc = JtiNonceCache::new(true);
     let bucket = 1_900_000_800;
@@ -254,7 +191,6 @@ fn f_ld_5_distinct_jti_same_bucket_is_admitted() {
 /// against the real Layer-D nonce-cache; the eventual-not-synchronous SHAPE is
 /// frozen here.
 #[test]
-#[ignore = "RED-PHASE: F-LD-5 — NQ-T4-gated multi-device shared rejection (RATIFIED §10.5: per-device GUARANTEED + user-global best-effort-eventual; pre-sync window = Compromise #64); un-ignore at R5"]
 fn f_ld_5_multi_device_shared_rejection_nq_t4_gated() {
     let jti = [0x77; 32];
 
@@ -269,18 +205,16 @@ fn f_ld_5_multi_device_shared_rejection_nq_t4_gated() {
     //     cache would (wrongly) reject here. would-FAIL-on-no-op: if the cache
     //     were synchronous-global the admit would return Err.
     let mut device_c_pre_sync = JtiNonceCache::new(true); // no sync yet
-    device_c_pre_sync
-        .admit(jti, 1_900_000_800)
-        .expect(
-            "PRE-SYNC: a fresh device C (sync has not propagated B's jti) MUST ADMIT the same jti \
+    device_c_pre_sync.admit(jti, 1_900_000_800).expect(
+        "PRE-SYNC: a fresh device C (sync has not propagated B's jti) MUST ADMIT the same jti \
              — the disclosed best-effort-eventual cross-device window (Compromise #64)",
-        );
+    );
 
     // (2) POST-SYNC REJECTION — after best-effort-global sync, B's durable
     //     consumed-jti set reaches device C; C now rejects the same jti.
     let mut device_c_post_sync = JtiNonceCache::from_durable(device_b.durable_snapshot());
-    let err = device_c_post_sync
-        .admit(jti, 1_900_000_800)
-        .expect_err("POST-SYNC: device C MUST reject a jti device B consumed (NQ-T4 ratified default)");
+    let err = device_c_post_sync.admit(jti, 1_900_000_800).expect_err(
+        "POST-SYNC: device C MUST reject a jti device B consumed (NQ-T4 ratified default)",
+    );
     assert_eq!(err, NonceCacheError::ReplayedNonce);
 }

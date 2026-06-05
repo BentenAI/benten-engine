@@ -60,6 +60,7 @@ compile_error!(
 pub mod aad;
 pub mod codepoints;
 pub mod error;
+pub mod federation;
 pub mod keying;
 pub mod kind;
 pub mod member;

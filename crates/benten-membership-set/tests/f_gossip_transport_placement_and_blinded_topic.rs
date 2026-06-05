@@ -64,64 +64,16 @@
     clippy::format_collect
 )]
 
-// ── SELF-CONTAINED stub-shim ──
-
-/// PRODUCTION-stand-in: `topic = truncate(HMAC(K_Set, set_id ‖ BE(gen)))`.
-/// The stub uses `blake3::keyed_hash(K_Set, ·)` — where R0.7 §4.1 clarifies
-/// `HMAC` = `blake3::keyed_hash` (native BLAKE3 keyed MAC; no hmac/sha2 dep;
-/// bytes unchanged). R5 routes through the real `benten-crypto-suite` keyed
-/// MAC over `K_Set` (NOT HMAC-SHA256). Pure fn of `(k_set, set_id, generation)`
-/// — NO time input (so two clocks derive the identical topic). The generation
-/// is encoded BIG-ENDIAN (the freeze-gating byte-order — an LE encoder would
-/// flip the golden vector below).
-fn compute_gossip_topic(k_set: &[u8; 32], set_id: &[u8], generation: u32) -> [u8; 32] {
-    let mut msg = Vec::with_capacity(set_id.len() + 4);
-    msg.extend_from_slice(set_id);
-    // generation_summary = the set-generation counter (BE u32), NOT a
-    // per-member vector (O-5 / m-11).
-    msg.extend_from_slice(&generation.to_be_bytes());
-    // BLAKE3 keyed-hash as the HMAC(K_Set, ·) stand-in; truncate-to-32 is
-    // already the BLAKE3 output width.
-    blake3::keyed_hash(k_set, &msg).into()
-}
-
-/// An iroh-FREE in-memory gossip transport (the F-GOSSIP-1 compile-fence
-/// analogue to the in-tree `transport_trait_boundary.rs` MockTransport).
-/// It carries NO `iroh::`-concrete type in any signature — if a future
-/// edit leaked one into the trait, this impl would stop compiling.
-trait GossipTransport {
-    /// Subscribe to a blinded topic; deliver-or-drop is liveness-only.
-    fn subscribe(&mut self, topic: [u8; 32]);
-    /// Broadcast a liveness notification ("something changed, come
-    /// anti-entropy"). Best-effort; no causal/ordered/exactly-once promise.
-    fn notify(&mut self, topic: [u8; 32]);
-    /// Whether a subscriber would receive a notification on `topic`.
-    fn would_deliver(&self, topic: [u8; 32]) -> bool;
-}
-
-struct MockGossipTransport {
-    subscribed: std::collections::BTreeSet<[u8; 32]>,
-    notified: std::collections::BTreeSet<[u8; 32]>,
-}
-impl MockGossipTransport {
-    fn new() -> Self {
-        MockGossipTransport {
-            subscribed: Default::default(),
-            notified: Default::default(),
-        }
-    }
-}
-impl GossipTransport for MockGossipTransport {
-    fn subscribe(&mut self, topic: [u8; 32]) {
-        self.subscribed.insert(topic);
-    }
-    fn notify(&mut self, topic: [u8; 32]) {
-        self.notified.insert(topic);
-    }
-    fn would_deliver(&self, topic: [u8; 32]) -> bool {
-        self.subscribed.contains(&topic) && self.notified.contains(&topic)
-    }
-}
+// ── R5 (w-ms-sync): wired to the REAL production surfaces ──
+//
+// The blinded-topic keyed-MAC is `benten_membership_set::keying::gossip_topic`
+// (routes through `blake3::keyed_hash` over K_Set — R0.7 §4.1: `HMAC` =
+// `blake3::keyed_hash`; the crate carries no hmac/sha2 dep; #5 ONLY-call-site).
+// The `GossipTransport` trait + iroh-free `MockGossipTransport` are the
+// production `benten_sync::gossip_transport` surface (NQ-D1: the transport lands
+// in benten-sync; the membership crate defines NO transport).
+use benten_membership_set::keying::gossip_topic as compute_gossip_topic;
+use benten_sync::gossip_transport::{GossipTransport, MockGossipTransport};
 
 // ── convergence-via-MST stand-in (the sibling of f_mst_*; F4-013) ──
 //
@@ -134,16 +86,21 @@ impl GossipTransport for MockGossipTransport {
 // convergence. This is the substantive sibling stand-in (NOT a `_gossip`-
 // argument-ignoring tautology).
 
-/// Two peers each hold a set of membership events. Convergence happens iff an
-/// MST anti-entropy exchange occurs (it unions the two sets); gossip
-/// notifications never move state. Returns whether the two peers ended up
-/// holding the SAME event-set. R5 routes through `benten_sync::mst`.
+/// Two peers each hold a set of membership events. Convergence happens iff a
+/// REAL MST anti-entropy exchange occurs — this routes through the production
+/// `benten_sync::mst::{Mst, run_mst_diff_to_convergence}` (F4-013): each peer's
+/// event-set is loaded into a real `Mst`, the real convergence driver exchanges
+/// the divergent entries, and the converged peers' sets are read back. Gossip
+/// notifications NEVER move state. Returns whether the two peers ended up
+/// holding the SAME event-set.
 fn mst_backstop_converges(
     peer_a: &mut std::collections::BTreeSet<u64>,
     peer_b: &mut std::collections::BTreeSet<u64>,
     mst_exchange: bool,
     gossip_notifications: u32,
 ) -> bool {
+    use benten_sync::mst::{Mst, MstEntry, run_mst_diff_to_convergence};
+
     // Gossip notifications NEVER mutate state — they only (in production)
     // prompt a peer to initiate an MST exchange. We deliberately consume the
     // count without acting on it to make the "liveness-only" contract
@@ -151,8 +108,36 @@ fn mst_backstop_converges(
     // ENTIRELY on `mst_exchange`.
     let _liveness_only = gossip_notifications;
     if mst_exchange {
-        // MST anti-entropy: union both peers' event-sets (convergence).
+        // Load each peer's event-set into a REAL Mst, keyed by the event id so
+        // the same event lands under the same content-addressed key.
+        let load = |events: &std::collections::BTreeSet<u64>| -> Mst {
+            let mut m = Mst::new();
+            for &e in events {
+                m.insert(MstEntry::from_payload(
+                    format!("evt-{e:020}"),
+                    e.to_be_bytes().to_vec(),
+                ));
+            }
+            m
+        };
+        let mut mst_a = load(peer_a);
+        let mut mst_b = load(peer_b);
+        // The REAL anti-entropy convergence driver (NOT a BTreeSet union).
+        run_mst_diff_to_convergence(&mut mst_a, &mut mst_b)
+            .expect("benign two-peer membership event-sets converge via the real MST backstop");
+        // The real driver's post-condition is root-CID equality + both peers now
+        // hold the union (each peer's Mst now has every entry, len == union len).
         let union: std::collections::BTreeSet<u64> = peer_a.union(peer_b).copied().collect();
+        assert_eq!(
+            mst_a.root_cid(),
+            mst_b.root_cid(),
+            "the real MST driver converged both peers to an identical root"
+        );
+        assert_eq!(
+            mst_a.len(),
+            union.len(),
+            "after the real MST exchange, peer A holds every membership event (the union)"
+        );
         *peer_a = union.clone();
         *peer_b = union;
     }
@@ -169,7 +154,6 @@ fn mst_backstop_converges(
 /// defines NO transport). If the trait signature required an iroh-concrete
 /// type, this impl would not compile.
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-1 — GossipTransport impl-in-isolation, no iroh leak (NQ-D1); un-ignore at R5"]
 fn f_gossip_1_transport_impl_in_isolation_no_iroh_leak() {
     let mut t = MockGossipTransport::new();
     let topic = [0x42u8; 32];
@@ -196,7 +180,6 @@ fn f_gossip_1_transport_impl_in_isolation_no_iroh_leak() {
 /// divergent peers still converge via the MST exchange; with NO MST exchange
 /// (even under a storm of gossip notifications), they do NOT converge.
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-1 — convergence holds with gossip dropped; gossip-only does not converge; un-ignore at R5"]
 fn f_gossip_1_convergence_independent_of_gossip() {
     use std::collections::BTreeSet;
 
@@ -248,7 +231,6 @@ fn f_gossip_1_convergence_independent_of_gossip() {
 /// F-GOSSIP-2 arm 1 — same-generation members compute the SAME topic;
 /// the topic is a pure fn of `(K_Set, set_id, gen)` with NO time input.
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-2 — same-gen→same-topic; pure fn, no time input (two clocks → identical topic); un-ignore at R5"]
 fn f_gossip_2_same_generation_same_topic_no_time_input() {
     let k_set = [0xABu8; 32];
     let set_id = blake3::hash(b"set-alpha");
@@ -275,7 +257,6 @@ fn f_gossip_2_same_generation_same_topic_no_time_input() {
 /// fixture as a FROZEN literal, then proves the freeze is byte-order-sensitive
 /// by showing the SAME generation value LE-encoded yields a DIFFERENT topic.
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-2 — absolute golden-hex topic + BE/LE differentiator (F4-024); un-ignore at R5"]
 fn f_gossip_2_topic_absolute_golden_vector_be() {
     let k_set = [0xABu8; 32];
     let set_id = blake3::hash(b"set-alpha");
@@ -327,7 +308,6 @@ fn f_gossip_2_topic_absolute_golden_vector_be() {
 
 /// F-GOSSIP-2 arm 2 — a fork rotates the generation ⇒ rotates the topic.
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-2 — fork rotates generation ⇒ rotates topic; un-ignore at R5"]
 fn f_gossip_2_fork_rotates_topic() {
     let k_set = [0xABu8; 32];
     let set_id = blake3::hash(b"set-alpha");
@@ -343,7 +323,6 @@ fn f_gossip_2_fork_rotates_topic() {
 /// F-GOSSIP-2 arm 3 — `K_Set` bit-flip ⇒ different topic; an observer
 /// WITHOUT `K_Set` cannot link/recover `set_id` from the topic.
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-2 — K_Set-bitflip→diff-topic + set_id not recoverable from topic; un-ignore at R5"]
 fn f_gossip_2_k_set_blinds_set_id() {
     let set_id = blake3::hash(b"set-alpha");
     let set_id = set_id.as_bytes();
@@ -376,7 +355,6 @@ fn f_gossip_2_k_set_blinds_set_id() {
 /// in SECURITY-POSTURE.md / THREAT-MODEL.md at the R5 doc-wave; this arm
 /// pins the cryptographic precondition (topic unguessable without K_Set).
 #[test]
-#[ignore = "RED-PHASE: F-GOSSIP-2 — OOB-less join impossible (topic unguessable without K_Set); un-ignore at R5"]
 fn f_gossip_2_oob_rendezvous_required() {
     let set_id = blake3::hash(b"set-alpha");
     let set_id = set_id.as_bytes();
