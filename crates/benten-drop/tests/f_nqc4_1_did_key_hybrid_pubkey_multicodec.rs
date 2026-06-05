@@ -176,8 +176,6 @@ fn f_nqc4_1_in_tree_ed25519_multicodec_shape_present_baseline() {
 /// Would-FAIL if the hybrid pubkey is shoe-horned under the Ed25519
 /// prefix (which would mis-type the key for every did:key resolver).
 #[test]
-#[ignore = "RED-PHASE: F-NQC4-1 — did.rs defines a hybrid-SIG multicodec \
-            const (Ed25519⊕ML-DSA-65), distinct from Ed25519; un-ignore at R5"]
 fn f_nqc4_1_did_rs_defines_hybrid_sig_multicodec() {
     let did_rs = invariant_doc();
     assert!(
@@ -194,8 +192,6 @@ fn f_nqc4_1_did_rs_defines_hybrid_sig_multicodec() {
 /// KEM multicodec const (X25519⊕ML-KEM-768). Source doc-coupling.
 /// Would-FAIL if the KEM pubkey lacks a distinct multicodec.
 #[test]
-#[ignore = "RED-PHASE: F-NQC4-1 — did.rs defines a hybrid-KEM multicodec \
-            const (X25519⊕ML-KEM-768); un-ignore at R5"]
 fn f_nqc4_1_did_rs_defines_hybrid_kem_multicodec() {
     let did_rs = invariant_doc();
     assert!(
@@ -213,9 +209,6 @@ fn f_nqc4_1_did_rs_defines_hybrid_kem_multicodec() {
 /// method that carries authority. Would-FAIL if `did:agent` is wired as
 /// a trust-bearing method.
 #[test]
-#[ignore = "RED-PHASE: F-NQC4-1 — did:agent: documented as optional \
-            allowlist alias (Inv-22, not a stored discriminator); \
-            un-ignore at R5"]
 fn f_nqc4_1_did_agent_optional_allowlist_alias() {
     let did_rs = invariant_doc();
     assert!(
@@ -240,9 +233,6 @@ fn f_nqc4_1_did_agent_optional_allowlist_alias() {
 /// Doc-coupling. Would-FAIL if the registration status is left silent
 /// (the open-spec arm un-surfaced).
 #[test]
-#[ignore = "RED-PHASE: F-NQC4-1 (OPEN-SPEC, NQ-C4) — CRYPTO-CODEPOINTS.md \
-            surfaces the multiformats-registration status (registered value \
-            OR reserved-private-fallback); un-ignore at R5"]
 fn f_nqc4_1_multiformats_registration_question_surfaced() {
     let codepoints = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),

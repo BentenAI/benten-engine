@@ -124,9 +124,6 @@ fn f_trans_1_reserved_transports_typed_reject_baseline() {
 /// `GossipPlusBlobs` ships. Source doc-coupling. Would-FAIL if a reserved
 /// transport is made LIVE or the enum omits the reserves.
 #[test]
-#[ignore = "RED-PHASE: F-TRANS-1 — benten-sync TransportConfig reserves \
-            Willow/iroh-roq/iroh-live (typed-reject) while GossipPlusBlobs \
-            ships; un-ignore at R5"]
 fn f_trans_1_transport_config_enum_reserves_and_ships() {
     let mut transport_cfg_src = String::new();
     let sync_dir = repo_root().join("crates/benten-sync");
@@ -171,8 +168,6 @@ fn f_trans_1_transport_config_enum_reserves_and_ships() {
 /// transports as deferred. Doc-coupling (coheres with F-DISC-1's row
 /// sweep). Would-FAIL if #53 is claimed-but-undocumented.
 #[test]
-#[ignore = "RED-PHASE: F-TRANS-1 — Compromise #53 (TransportConfig \
-            reserve) disclosed in SECURITY-POSTURE.md; un-ignore at R5"]
 fn f_trans_1_compromise_53_disclosed() {
     let doc = security_posture_md();
     // Locate the #53 row window and assert it names the transport posture.

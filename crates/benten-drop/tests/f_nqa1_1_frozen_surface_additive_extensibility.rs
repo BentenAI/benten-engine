@@ -327,16 +327,31 @@ fn f_nqa1_1_reserved_and_unknown_codepoints_typed_reject_baseline() {
              the codepoints it claims are reserved."
         );
     }
-    // And the converse: the three fabricated integers the prior corpus
+    // And the converse: the FABRICATED-STANDALONE integers the prior corpus
     // invented are PROVABLY not §4.0-blessed (demonstrates would-FAIL on a
-    // revert that re-mints them). `0x6611` additionally aliases the LIVE
-    // `MEMBERSHIP_SET_GROUP_MULTI_STANZA` band (`0x6610`), which is the
-    // sharpest reason it could never be a fresh reserve.
-    for &fabricated in &[0x6321u16, 0x6330u16, 0x6611u16] {
+    // revert that re-mints them as STANDALONE reserves). `0x6611` additionally
+    // aliases the LIVE `MEMBERSHIP_SET_GROUP_MULTI_STANZA` band (`0x6610`),
+    // which is the sharpest reason it could never be a fresh reserve.
+    //
+    // R5-RECONCILE (F4-010): `0x6321` is REMOVED from this list — it is a
+    // genuine MEMBER of the §4.0-named RemotePermission band `0x6320..0x632F`
+    // (which holds the `ExecuteWorkflow` reserve), so `cp_blessed_by_s40`
+    // CORRECTLY blesses it as a band member. The F4-010 hazard the guard
+    // closes is a fabricated *standalone* integer OUTSIDE every named band;
+    // `0x6330` (between `0x632F` and `0x6380`) and `0x6611` (between the
+    // membership `0x6610` LIVE-freeze and the `0x6620` SubsetRef reserve) are
+    // the genuine outside-every-band fabrications. The prior list conflated
+    // band-membership (legitimate) with standalone-fabrication (the hazard);
+    // asserting `0x6321` is "not blessed" contradicted the band base
+    // `0x6320`'s own membership and was a test-internal inconsistency.
+    // [FLAG-FOR-BEN — courtesy: this is a corpus test-bug reconciliation, not
+    //  a wire/golden change; the F4-010 self-enforcing guard still rejects any
+    //  fabricated STANDALONE integer outside the named bands.]
+    for &fabricated in &[0x6330u16, 0x6611u16] {
         assert!(
             !cp_blessed_by_s40(fabricated),
-            "F4-010: {fabricated:#06x} was a FABRICATED integer (no §4.0 \
-             row blesses it); the guard MUST reject it."
+            "F4-010: {fabricated:#06x} was a FABRICATED STANDALONE integer (no \
+             §4.0 band or standalone row blesses it); the guard MUST reject it."
         );
     }
 
@@ -415,10 +430,6 @@ fn f_nqa1_1_recovery_hook_trait_absent_at_core_baseline() {
 /// doc-coupling to the codepoint module. Would-FAIL if a reserved slot is
 /// accidentally made LIVE or omitted from the registry.
 #[test]
-#[ignore = "RED-PHASE: F-NQA1-1 — codepoint registry reserves \
-            {ExecuteWorkflow, SubsetRef, RecoveryArtifact, \
-            RotatingGroupKeyChainedMode, ChainedStateTlv} (typed-reject at \
-            v1-beta); un-ignore at R5"]
 fn f_nqa1_1_reserved_slots_registered_in_codepoint_module() {
     let reserved_names = [
         "ExecuteWorkflow",
@@ -450,9 +461,6 @@ fn f_nqa1_1_reserved_slots_registered_in_codepoint_module() {
 /// reserved codepoint exists in source; the trait does NOT. Would-FAIL if
 /// R5 freezes the trait at Core (boundary violation) OR omits the reserve.
 #[test]
-#[ignore = "RED-PHASE: F-NQA1-1 (NQ-W5/m-14) — RecoveryArtifact codepoint \
-            RESERVED at Core while RecoveryHook trait still ABSENT at Core; \
-            un-ignore at R5"]
 fn f_nqa1_1_recovery_artifact_reserved_but_hook_trait_absent_at_core() {
     // Reserved codepoint present.
     let reserved = rust_files_containing("RecoveryArtifact");
@@ -476,10 +484,6 @@ fn f_nqa1_1_recovery_artifact_reserved_but_hook_trait_absent_at_core() {
 /// wire-break. Doc-coupling. Would-FAIL if the additive-only freeze policy
 /// is not stated (the policy IS the freeze contract).
 #[test]
-#[ignore = "RED-PHASE: F-NQA1-1 (NQ-A1) — CRYPTO-CODEPOINTS.md documents \
-            the conservative-fallback additive-only freeze policy \
-            (reserve-codepoints + new tag, never silent wire-break); \
-            un-ignore at R5"]
 fn f_nqa1_1_conservative_fallback_policy_documented() {
     let codepoints =
         std::fs::read_to_string(repo_root().join("docs/CRYPTO-CODEPOINTS.md")).unwrap_or_default();
@@ -504,9 +508,6 @@ fn f_nqa1_1_conservative_fallback_policy_documented() {
 /// AAD assembly binds the optional sub-slot. Would-FAIL if the sub-slot
 /// is carried OUTSIDE the AAD (where it could be stripped silently).
 #[test]
-#[ignore = "RED-PHASE: F-NQA1-1 (GAP-6b) — ChainedStateTlv Option sub-slot \
-            is AAD-bound (present/absent flip detectable at decrypt, not \
-            advisory); un-ignore at R5"]
 fn f_nqa1_1_chained_state_tlv_aad_bound_sub_slot() {
     // The AAD assembly path (membership-set or crypto-suite) must
     // reference `ChainedStateTlv` in an AAD-binding context.

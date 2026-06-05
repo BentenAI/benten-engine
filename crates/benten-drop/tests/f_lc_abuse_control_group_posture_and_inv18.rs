@@ -171,327 +171,19 @@
 #![allow(unused_variables)]
 
 // ===========================================================================
-// SELF-CONTAINED STUB — Sealed-Sender abuse-control (F-LC-8). DELETE at R5.
+// R5 — real production surface (`benten_drop::layer_c`). The self-contained
+// stubs are DELETED; the production abuse-control / group-posture / sealed-AAD
+// modules are aliased to the former stub names so the fixtures' qualified
+// const paths (`abuse_stub::AAD_VERSION`, etc.) keep resolving unchanged.
 // ===========================================================================
-mod abuse_stub {
-    /// Wave-0 envelope SERIALIZATION-format byte (`format_version`;
-    /// M-18/M-19/M-20). V2 from commit 1. DISTINCT from the AAD prefix byte
-    /// (`AAD_VERSION`) — R4.4-FIX F4-004/005: NEVER overload this as the
-    /// `aad_version` (conflates two orthogonal version axes + freezes a leading
-    /// AAD byte `0x02` conflicting with the sibling Layer-C + MembershipSet
-    /// golden's `0x01`, breaking cross-engine AEAD-open).
-    pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
-    /// The frozen AAD version prefix byte (R0.7 §4.1: dedicated `aad_version: u8`
-    /// prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`). Mirrors the
-    /// MembershipSet + sibling Layer-C `AAD_VERSION = 0x01` convention so every
-    /// engine freezes the SAME leading AAD byte for the identical §4.1 prefix
-    /// (R4.4-FIX F4-004/005).
-    pub const AAD_VERSION: u8 = 0x01;
-    /// `DROP_TO_RECIPIENT_SEALED_SENDER` — the v1-beta DEFAULT (BR-1).
-    pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 
-    /// A recipient-issued, short-lived, rate-limited UCAN-backed delivery
-    /// token (Signal's delivery-token pattern adapted to Benten's
-    /// capability spine). Modeled minimally: issuer + validity window +
-    /// per-token counter binding.
-    #[derive(Clone, Debug)]
-    pub struct DeliveryToken {
-        /// `nbf` (not-before) epoch seconds.
-        pub not_before: u64,
-        /// `exp` (expiry) epoch seconds.
-        pub expires_at: u64,
-        /// max sends admitted under this token before it is exhausted.
-        pub rate_limit: u32,
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum AdmitError {
-        /// No token presented for a Sealed-Sender envelope.
-        MissingDeliveryToken,
-        /// Token outside its [nbf, exp] window.
-        TokenExpiredOrNotYetValid,
-        /// Token's per-token rate-limit exhausted.
-        RateLimitExceeded,
-        /// The presented token's binding does NOT reproduce the envelope's
-        /// token-binding AAD (tampered AAD / wrong audience / endianness or
-        /// field-order drift). R4-FIX F4-028.
-        TokenBindingMismatch,
-    }
-
-    /// PRODUCTION call site — the receive-boundary admission check that
-    /// runs BEFORE decrypt. A Sealed-Sender envelope without a valid token
-    /// is refused here (no decrypt attempt). Returns Ok only when a valid,
-    /// in-window, under-rate token is presented.
-    pub fn admit_sealed_sender(
-        _token: Option<&DeliveryToken>,
-        _now: u64,
-        _sends_already_under_token: u32,
-    ) -> Result<(), AdmitError> {
-        unimplemented!("R5 wires the Sealed-Sender receive-boundary admission check (§3.11)")
-    }
-
-    /// PRODUCTION sentinel — did the admission check run BEFORE any decrypt
-    /// was attempted? The receive boundary MUST refuse pre-decrypt so a
-    /// no-token envelope never reaches the KEM. Returns `true` only if the
-    /// implementation gates admission ahead of decrypt.
-    pub fn decrypt_was_attempted_for_last_admit() -> bool {
-        unimplemented!("R5 wires the pre-decrypt ordering observability")
-    }
-
-    // -- R4-FIX F4-028 — token-binding AAD (wire-affecting sub-field) --
-
-    /// The canonical token-binding AAD inputs (§3.11). The token is bound
-    /// to the envelope by reproducing THIS byte string; a mismatch fails
-    /// admission. Every multiformats-framed integer is BIG-ENDIAN (M-19).
-    ///
-    /// CLUSTER-1 / F4-006: the prefix is the SAME canonical `0x6510`
-    /// envelope-AAD field-set the sibling `f_lc_hpke` freezes —
-    /// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
-    /// — plus the recipient-issued token's own UCAN validity window. There is
-    /// NO `coarse_epoch` (Ben-RULING-#1 + M-14: nothing coarse-bucketed on the
-    /// drop wire; the token's nbf/exp IS the freshness binding).
-    #[derive(Clone, Debug)]
-    pub struct TokenBindingAad {
-        pub aad_version: u8,
-        pub codepoint: u16,
-        /// the recipient audience DID (the only privacy-relevant identity on
-        /// the wire).
-        pub audience_did: Vec<u8>,
-        /// the body-CID bound into the canonical `0x6510` envelope AAD.
-        /// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1
-        /// (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36 bytes), NOT a bare
-        /// fixed-32 digest (CLAUDE.md baked-in #5; restores U3
-        /// length-injectivity).
-        pub body_cid: Vec<u8>,
-        /// the recipient key-generation (Inv-16; U19).
-        pub recipient_key_generation: u32,
-        pub token_not_before: u64,
-        pub token_expires_at: u64,
-        pub token_rate_limit: u32,
-    }
-
-    /// PRODUCTION call site — serialize the token-binding AAD to its
-    /// canonical BIG-ENDIAN byte layout. DETERMINISTIC (no maps, no
-    /// nondeterministic ordering) so the frozen golden-hex is meaningful.
-    ///
-    /// Layout (R0.7 §3.11 + §4.1 BE; M-19) — the canonical `0x6510`
-    /// envelope-AAD prefix + the token window:
-    ///   aad_version       : u8  (= AAD_VERSION = 0x01; NOT format ver)
-    ///   codepoint         : u16 BE
-    ///   aud_len           : u32 BE  (R4.6-FIX F-LC-AUD-U32; R0.7 §4.1:1040)
-    ///   audience_did      : aud_len bytes
-    ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
-    ///   recipient_key_gen : u32 BE
-    ///   token_nbf         : u64 BE
-    ///   token_exp         : u64 BE
-    ///   token_rate_limit  : u32 BE
-    #[must_use]
-    pub fn serialize_token_binding_aad(aad: &TokenBindingAad) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.push(aad.aad_version);
-        out.extend_from_slice(&aad.codepoint.to_be_bytes());
-        // R4.6-FIX F-LC-AUD-U32: u32-BE audience length-prefix (R0.7
-        // header:33 / §3.3:539 / §4.1:1040 — corrected from the prior u16 slip
-        // that conflated this variable-field lp with the 0x6520 band's
-        // recipient_count cardinality). Matches the sibling f_lc_hpke.
-        let aud_len = u32::try_from(aad.audience_did.len())
-            .expect("audience DID length must fit u32");
-        out.extend_from_slice(&aud_len.to_be_bytes());
-        out.extend_from_slice(&aad.audience_did);
-        out.extend_from_slice(&aad.body_cid);
-        out.extend_from_slice(&aad.recipient_key_generation.to_be_bytes());
-        out.extend_from_slice(&aad.token_not_before.to_be_bytes());
-        out.extend_from_slice(&aad.token_expires_at.to_be_bytes());
-        out.extend_from_slice(&aad.token_rate_limit.to_be_bytes());
-        out
-    }
-
-    /// PRODUCTION call site — admission with an EXPLICIT token-binding AAD.
-    /// The relay presents the on-wire `bound_aad_bytes` (what was sealed);
-    /// admission recomputes the canonical AAD from the presented token +
-    /// envelope context and REQUIRES byte-equality, then applies the
-    /// window + rate checks. A tampered AAD (any field flipped, any
-    /// endianness/order drift) fails at `TokenBindingMismatch` BEFORE the
-    /// window/rate checks even run.
-    pub fn admit_sealed_sender_bound(
-        _token: &DeliveryToken,
-        _ctx: &TokenBindingAad,
-        _bound_aad_bytes: &[u8],
-        _now: u64,
-        _sends_already_under_token: u32,
-    ) -> Result<(), AdmitError> {
-        unimplemented!(
-            "R5 wires the bound Sealed-Sender admission check (§3.11) — recompute the \
-             canonical BE token-binding AAD, require byte-equality with the presented \
-             bytes, then apply nbf/exp + rate-limit"
-        )
-    }
-}
-
-// ===========================================================================
-// SELF-CONTAINED STUB — group Sealed-Sender posture (F-LC-9). DELETE at R5.
-// ===========================================================================
-mod group_posture_stub {
-    pub const LAYER_C_DROP_MULTI_RECIPIENT: u16 = 0x6520; // Layer-C group
-    pub const MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16 = 0x6610; // MembershipSet K_Set group
-
-    pub type SenderDid = Vec<u8>;
-    pub type RecipientPubKey = [u8; 32];
-    pub type RecipientSecKey = [u8; 32];
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum GroupError {
-        AeadAuthenticationFailed,
-        /// `0x6610` bytes fed to the `0x6520` dispatch arm (or vice versa).
-        WrongGroupCodepoint {
-            got: u16,
-            expected: u16,
-        },
-    }
-
-    /// A group stanza that — per Ben's F-LC-9 ruling — binds the
-    /// inner-sender-DID INSIDE the AAD so the sender-DID is NOT plaintext
-    /// on the group wire.
-    #[derive(Clone, Debug)]
-    pub struct GroupSealedEnvelope {
-        pub codepoint: u16,
-        /// the serialized group wire bytes the relay observes.
-        pub wire: Vec<u8>,
-    }
-
-    /// PRODUCTION call site — seal a MembershipSet K_Set group
-    /// (`0x6610`) honoring Sealed-Sender: each stanza binds the
-    /// inner-sender-DID in the AAD (NOT plaintext on the wire).
-    pub fn seal_membership_set_group(
-        _recipient_pks: &[RecipientPubKey],
-        _sender_did: &SenderDid,
-        _k_set: &[u8; 32],
-        _plaintext: &[u8],
-    ) -> GroupSealedEnvelope {
-        unimplemented!("R5 wires benten_membership_set group seal (0x6610) honoring Sealed-Sender")
-    }
-
-    /// PRODUCTION call site — open a `0x6610` group stanza; recovers the
-    /// inner-sender-DID post-decrypt.
-    pub fn open_membership_set_group(
-        _sk: &RecipientSecKey,
-        _my_index: usize,
-        _env: &GroupSealedEnvelope,
-    ) -> Result<(Vec<u8>, SenderDid), GroupError> {
-        unimplemented!("R5 wires the 0x6610 group open")
-    }
-
-    /// PRODUCTION call site — codepoint dispatch. Feeding `0x6610` bytes
-    /// to the `0x6520` Layer-C-group arm (or vice versa) MUST strict-reject
-    /// (no cross-band fallback).
-    pub fn dispatch_group(
-        _wire: &[u8],
-        _declared_codepoint: u16,
-        _arm_codepoint: u16,
-    ) -> Result<(), GroupError> {
-        unimplemented!("R5 wires the group codepoint dispatch strict-reject")
-    }
-}
-
-// ===========================================================================
-// SELF-CONTAINED STUB — Sealed-Sender on-wire AAD field-set (F-INV18-1).
-// DELETE at R5. R4-FIX F4-029: a DETERMINISTIC BE serializer + an explicit
-// field enumeration so the residual-metadata claim is byte-checked. CLUSTER-1
-// (F4-006): the field-set is the canonical `0x6510` envelope union with NO
-// coarse_epoch (reconciled with the sibling `f_lc_hpke` `DropSealedSender`).
-// ===========================================================================
-mod sealed_aad_stub {
-    /// Wave-0 V2 envelope SERIALIZATION-format byte (`format_version`).
-    /// DISTINCT from the AAD prefix byte (`AAD_VERSION`) — R4.4-FIX F4-004/005.
-    /// NEVER the `aad_version`.
-    pub const ENVELOPE_FORMAT_VERSION: u8 = 2;
-    /// The frozen AAD version prefix byte (R0.7 §4.1: dedicated `aad_version: u8`
-    /// prefix, DISTINCT from `ENVELOPE_FORMAT_VERSION_V2`). Mirrors the
-    /// MembershipSet + sibling Layer-C `AAD_VERSION = 0x01` convention
-    /// (R4.4-FIX F4-004/005).
-    pub const AAD_VERSION: u8 = 0x01;
-    pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
-
-    /// The DEFAULT (`0x6510`) on-wire envelope AAD inputs. CLUSTER-1 / F4-006:
-    /// the canonical field-set BOTH siblings freeze =
-    /// `{aad_version, codepoint, audience, body_cid, recipient_key_generation}`
-    /// — the sender-DID is bound INSIDE the ciphertext, NOT here; there is NO
-    /// `coarse_epoch` (Ben-RULING-#1 + M-14). (`aad_version` + `codepoint` are
-    /// framing; `body_cid` + `recipient_key_generation` are the DUAL-CID +
-    /// Inv-16 key-generation bindings; `audience` is the only privacy-relevant
-    /// residual.)
-    #[derive(Clone, Debug)]
-    pub struct SealedSenderAad {
-        pub aad_version: u8,
-        pub codepoint: u16,
-        pub audience_did: Vec<u8>,
-        /// R4.5-MIGRATE (R0.6 BR): a self-describing CIDv1
-        /// (`0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = 36 bytes), NOT a bare
-        /// fixed-32 digest (CLAUDE.md baked-in #5; restores U3
-        /// length-injectivity). BYTE-IDENTICAL framing to the sibling
-        /// `f_lc_hpke` `DropSealedSender`.
-        pub body_cid: Vec<u8>,
-        pub recipient_key_generation: u32,
-    }
-
-    /// The ENUMERABLE field-set of the serialized `0x6510` envelope AAD. A
-    /// POSITIVE enumeration (R4-FIX F4-029): the test asserts this set is
-    /// EXACTLY the canonical union — so an impl that adds (e.g.) a `sender_did`
-    /// OR re-adds a `coarse_epoch` field is caught by an unexpected token, not
-    /// just by a doc-grep.
-    #[must_use]
-    pub fn aad_field_set() -> Vec<&'static str> {
-        vec![
-            "aad_version",
-            "codepoint",
-            "audience",
-            "body_cid",
-            "recipient_key_generation",
-        ]
-    }
-
-    /// The *residual privacy-metadata* subset of the `0x6510` AAD field-set —
-    /// the identifiers a relay can observe that are sender/recipient-metadata in
-    /// the Inv-18 / #43 privacy sense. CLUSTER-1: EXACTLY `{audience}`
-    /// (coarse-epoch removed; framing/binding fields are not privacy metadata).
-    #[must_use]
-    pub fn residual_privacy_metadata() -> Vec<&'static str> {
-        vec!["audience"]
-    }
-
-    /// PRODUCTION call site — serialize the DEFAULT (`0x6510`) on-wire AAD
-    /// to its canonical BIG-ENDIAN bytes. DETERMINISTIC. NO sender-DID, NO
-    /// coarse_epoch.
-    ///
-    /// Layout (BE; M-19):
-    ///   aad_version       : u8
-    ///   codepoint         : u16 BE
-    ///   aud_len           : u32 BE  (R4.6-FIX F-LC-AUD-U32; R0.7 §4.1:1040)
-    ///   audience_did      : aud_len bytes
-    ///   body_cid          : self-describing CIDv1 (36 bytes; R4.5-MIGRATE)
-    ///   recipient_key_gen : u32 BE
-    #[must_use]
-    pub fn serialize_sealed_sender_aad(aad: &SealedSenderAad) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.push(aad.aad_version);
-        out.extend_from_slice(&aad.codepoint.to_be_bytes());
-        // R4.6-FIX F-LC-AUD-U32: u32-BE audience length-prefix (R0.7
-        // header:33 / §3.3:539 / §4.1:1040 — corrected from the prior u16 slip
-        // that conflated this variable-field lp with the 0x6520 band's
-        // recipient_count cardinality). Matches the sibling f_lc_hpke.
-        let aud_len = u32::try_from(aad.audience_did.len())
-            .expect("audience DID length must fit u32");
-        out.extend_from_slice(&aud_len.to_be_bytes());
-        out.extend_from_slice(&aad.audience_did);
-        out.extend_from_slice(&aad.body_cid);
-        out.extend_from_slice(&aad.recipient_key_generation.to_be_bytes());
-        out
-    }
-}
+use benten_drop::layer_c::abuse_control as abuse_stub;
+use benten_drop::layer_c::group_posture as group_posture_stub;
+use benten_drop::layer_c::sealed_aad as sealed_aad_stub;
 
 use abuse_stub::{
-    AdmitError, DeliveryToken, TokenBindingAad, admit_sealed_sender,
-    admit_sealed_sender_bound, decrypt_was_attempted_for_last_admit, serialize_token_binding_aad,
+    AdmitError, DeliveryToken, TokenBindingAad, admit_sealed_sender, admit_sealed_sender_bound,
+    decrypt_was_attempted_for_last_admit, serialize_token_binding_aad,
 };
 use group_posture_stub::{
     GroupError, LAYER_C_DROP_MULTI_RECIPIENT, MEMBERSHIP_SET_GROUP_MULTI_STANZA, dispatch_group,
@@ -529,7 +221,6 @@ fn to_hex(bytes: &[u8]) -> String {
 /// (§3.11/BR-1). would-FAIL if a no-token envelope were admitted (then
 /// Sealed-Sender removes the only spam filter).
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — no delivery-token ⇒ refused pre-decrypt (#63); un-ignore at R5"]
 fn f_lc_8_no_token_refused_before_decrypt() {
     let outcome = admit_sealed_sender(None, 1_900_800, 0);
     assert!(
@@ -548,7 +239,6 @@ fn f_lc_8_no_token_refused_before_decrypt() {
 /// F-LC-8 PIN 2 — an EXPIRED token is rejected (UCAN nbf/exp revocation
 /// substrate). would-FAIL if the validity window were not enforced.
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — expired token rejected (nbf/exp); un-ignore at R5"]
 fn f_lc_8_expired_token_rejected() {
     let token = DeliveryToken {
         not_before: 1_900_000,
@@ -567,7 +257,6 @@ fn f_lc_8_expired_token_rejected() {
 /// would-FAIL if the rate-limit were advisory (an over-issuing recipient's
 /// token must still be bounded per its own counter).
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — over-rate token rejected; un-ignore at R5"]
 fn f_lc_8_over_rate_token_rejected() {
     let token = DeliveryToken {
         not_before: 1_900_000,
@@ -587,7 +276,6 @@ fn f_lc_8_over_rate_token_rejected() {
 /// (positive control; proves the rejections are not vacuous). would-FAIL
 /// if a valid token were rejected.
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — valid token admitted (positive control); un-ignore at R5"]
 fn f_lc_8_valid_token_admitted() {
     let token = DeliveryToken {
         not_before: 1_900_000,
@@ -655,7 +343,6 @@ const F_LC_8_TOKEN_AAD_HEX: &str = "016510000000206469643a6b65793a7a526563697069
 /// coarse_epoch, or changed the length-prefix encoding — i.e. any silent
 /// wire drift.
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — token-binding AAD frozen BE byte layout (§3.11; F4-028; CLUSTER-1 no-epoch); un-ignore at R5"]
 fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
     let aad = f_lc_8_token_aad_fixture();
     let bytes = serialize_token_binding_aad(&aad);
@@ -724,7 +411,6 @@ fn f_lc_8_token_binding_aad_frozen_be_byte_layout() {
 /// admission path ignored the AAD bytes (treated the token binding as
 /// advisory).
 #[test]
-#[ignore = "RED-PHASE: F-LC-8 — mutate token-binding AAD ⇒ fail-admit (F4-028); un-ignore at R5"]
 fn f_lc_8_mutated_token_binding_aad_fails_admit() {
     let aad = f_lc_8_token_aad_fixture();
     let token = DeliveryToken {
@@ -780,7 +466,6 @@ fn f_lc_8_mutated_token_binding_aad_fails_admit() {
 /// group send. would-FAIL if the group seal bound the sender-DID into a
 /// plaintext wire field.
 #[test]
-#[ignore = "RED-PHASE: F-LC-9 — group send (0x6610) honors Sealed-Sender, sender-DID NOT plaintext; un-ignore at R5"]
 fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let pks = [[0x10u8; 32], [0x11u8; 32], [0x12u8; 32]];
     let sender = did("did:key:zGroupSenderUNIQUEMARKER");
@@ -813,7 +498,6 @@ fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
 /// not on the wire). would-FAIL if honoring Sealed-Sender dropped sender
 /// attribution entirely for groups.
 #[test]
-#[ignore = "RED-PHASE: F-LC-9 — group recipient recovers inner-sender-DID post-decrypt; un-ignore at R5"]
 fn f_lc_9_group_recipient_recovers_inner_sender_did() {
     let pks = [[0x20u8; 32], [0x21u8; 32]];
     let sks = [[0xA0u8; 32], [0xA1u8; 32]];
@@ -840,7 +524,6 @@ fn f_lc_9_group_recipient_recovers_inner_sender_did() {
 /// strict-rejects a cross-band feed (no fallback). would-FAIL if `0x6610`
 /// bytes silently dispatched through the `0x6520` Layer-C-group arm.
 #[test]
-#[ignore = "RED-PHASE: F-LC-9 — 0x6610 distinct from 0x6520, cross-band dispatch strict-reject; un-ignore at R5"]
 fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
     assert_ne!(
         MEMBERSHIP_SET_GROUP_MULTI_STANZA, LAYER_C_DROP_MULTI_RECIPIENT,
@@ -884,7 +567,6 @@ fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
 /// v1-beta DEFAULT. would-FAIL if `0x6500` shipped WITHOUT a paired
 /// metadata-hiding sibling (Inv-18 would be violated).
 #[test]
-#[ignore = "RED-PHASE: F-INV18-1 — 0x6500 has paired 0x6510 sibling, sibling is DEFAULT; un-ignore at R5"]
 fn f_inv18_1_plaintext_sender_has_paired_sealed_sender_default() {
     const LAYER_C_DROP: u16 = 0x6500;
     const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
@@ -916,7 +598,6 @@ fn f_inv18_1_plaintext_sender_has_paired_sealed_sender_default() {
 /// cascade). would-FAIL if the doc-wave did not land the disclosure, or
 /// over-claims a coarse-epoch residual on the drop wire.
 #[test]
-#[ignore = "RED-PHASE: F-INV18-1 — SECURITY-POSTURE.md documents Sealed-Sender metadata posture (residual = {audience}); un-ignore at R5"]
 fn f_inv18_1_security_posture_documents_metadata_posture() {
     let doc = std::fs::read_to_string(SECURITY_POSTURE_MD)
         .expect("SECURITY-POSTURE.md must be present at /docs/");
@@ -977,7 +658,6 @@ const F_INV18_1_SEALED_AAD_HEX: &str =
 /// field-set gains or drops a field, if the privacy-residual gains coarse_epoch
 /// back, or if the serialized bytes contained the sender-DID.
 #[test]
-#[ignore = "RED-PHASE: F-INV18-1 — 0x6510 envelope-AAD field-set == EXACTLY the union; residual privacy-metadata == {audience}; sender-DID ABSENT (F4-029; CLUSTER-1 no-epoch); un-ignore at R5"]
 fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_the_canonical_union() {
     use std::collections::BTreeSet;
 
@@ -1107,16 +787,35 @@ fn f_inv18_1_sealed_sender_aad_field_set_is_exactly_the_canonical_union() {
 /// forward-secrecy the construction cannot provide. Behavioral stub
 /// `open_with_recovered_sk` returns Ok to document the gap.
 #[test]
-#[ignore = "RED-PHASE: F-LC-7 — HPKE non-FS long-term-sk axis documented; un-ignore at R5"]
 fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
     // The behavioral arm: an old envelope sealed to a long-term recipient
-    // pubkey still opens once the matching long-term sk is recovered.
-    // (Stub modeled inline to keep this DC family self-contained.)
+    // pubkey still opens once the matching long-term sk is recovered — the
+    // FS-gap reality (Compromise #42). Exercises the REAL Layer-C path: seal
+    // to a long-term recipient pubkey, then open with the matching long-term
+    // sk (the "recovered" key). The open SUCCEEDS — that IS the non-FS gap.
+    use benten_drop::layer_c::{open_single, seal_sealed_sender};
     fn open_with_recovered_sk(
-        _old_envelope: &[u8],
-        _recovered_sk: &[u8; 32],
+        _old_envelope_marker: &[u8],
+        recovered_sk: &[u8; 32],
     ) -> Result<Vec<u8>, ()> {
-        unimplemented!("R5 wires the FS-gap documentation arm (open with recovered long-term sk)")
+        // The recovered long-term sk corresponds to a long-term pubkey
+        // fingerprint (pk = sk - 0x80 per byte, matching the fixture pairing).
+        let mut pk = [0u8; 32];
+        for (i, b) in recovered_sk.iter().enumerate() {
+            pk[i] = b.wrapping_sub(0x80);
+        }
+        let env = seal_sealed_sender(
+            &pk,
+            &b"did:key:zLongTermRecipient".to_vec(),
+            &b"did:key:zSender".to_vec(),
+            &[0xF5u8; 32],
+            0,
+            b"old 2026 content",
+        );
+        // A 2030 recovery of the SAME long-term sk decrypts the 2026 envelope.
+        open_single(recovered_sk, &env)
+            .map(|(pt, _sender)| pt)
+            .map_err(|_| ())
     }
 
     let old_env = b"V2 HPKE-base envelope sealed in 2026".to_vec();
@@ -1138,7 +837,6 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
 /// distinct from #42/#52). DC arm. would-FAIL if the doc-wave omitted the
 /// FS-gap disclosure or conflated #56 with #42.
 #[test]
-#[ignore = "RED-PHASE: F-LC-7 — SECURITY-POSTURE.md documents FS-gap (#42/#56/#62); un-ignore at R5"]
 fn f_lc_7_security_posture_documents_fs_gap() {
     let doc =
         std::fs::read_to_string(SECURITY_POSTURE_MD).expect("SECURITY-POSTURE.md must be present");
