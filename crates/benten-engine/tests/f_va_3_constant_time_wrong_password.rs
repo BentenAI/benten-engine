@@ -73,7 +73,7 @@ mod shim {
         salt: [u8; 16],
         sealed_under_password: Vec<u8>,
         /// The REAL XChaCha20-Poly1305-sealed vault bytes under the correct DAK.
-        vault_bytes: Vec<u8>,
+        ciphertext: Vec<u8>,
     }
 
     impl Vault {
@@ -86,12 +86,12 @@ mod shim {
                 user_did_signing_key: vec![0x22; 64],
                 user_did_creation_time: 0,
             };
-            let vault_bytes =
+            let ciphertext =
                 serialize_vault(&payload, &dak).expect("vault seal is infallible for valid params");
             Self {
                 salt,
                 sealed_under_password: password.to_vec(),
-                vault_bytes,
+                ciphertext,
             }
         }
 
@@ -111,7 +111,7 @@ mod shim {
             // Stage 2: REAL AEAD-open (ALWAYS attempted; the AEAD tag compare is
             // constant-time inside `decode_vault`).
             trace.aead_open_attempted.fetch_add(1, Ordering::SeqCst);
-            match decode_vault(&self.vault_bytes, &dak) {
+            match decode_vault(&self.ciphertext, &dak) {
                 // Every failure cause collapses to the single typed rejection.
                 Ok(decoded) => Ok(decoded.payload.k_principal),
                 Err(_) => Err(UnlockError::VaultDecryptFailed),

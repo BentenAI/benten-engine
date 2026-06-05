@@ -111,7 +111,11 @@ const REQUEST_SIGNING_BYTES_HEX: &str = "62656e74656e2d72656d6f74652d7065726d697
 const GRANT_SIGNING_BYTES_HEX: &str = "62656e74656e2d72656d6f74652d7065726d697373696f6e2d6772616e742d76323a01020707070707070707070707070707070700000000713fb62000000000713fb65cabababababababababababababababababababababababababababababababab0000001968706b652d777261707065642d6b65792d6d6174657269616c";
 
 fn to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut s, b| {
+        use std::fmt::Write;
+        let _ = write!(s, "{b:02x}");
+        s
+    })
 }
 
 /// Deterministic all-fixed `PermissionRequest` fixture (signature empty; the

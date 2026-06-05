@@ -54,10 +54,21 @@ iteration-budget-test-grade = []
 # R6 R2 batch-A Item 2 also enables `benten-platform-foundation/testing`
 # so the install-consent adapter integration test can reach the
 # `noop_replay_check()` helper.
+# F-full Layer-D (f_ld_4 device-link key-wrap) also enables
+# `benten-crypto-suite/testing` so the device-link round-trip test can reach
+# `CipherSuite::generate_recipient_keypair_for_test` (the hybrid
+# X25519+ML-KEM-768 recipient-keypair generator that mints device B's fresh
+# device-encryption keypair). Routed through `test-helpers` rather than a
+# `[dev-dependencies]` entry so the `testing` feature is NOT unioned into the
+# production/default feature graph (Production keypair-gen routes through the
+# principal-DID infrastructure, not this test-only helper — the `device_link`
+# PRODUCTION module consumes a `RecipientPublic`/`RecipientSecret`, it does not
+# generate one.)
 test-helpers = [
     "iteration-budget-test-grade",
     "benten-caps/testing",
     "benten-platform-foundation/testing",
+    "benten-crypto-suite/testing",
 ]
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
@@ -282,14 +293,6 @@ serde_ipld_dagcbor = { workspace = true }
 # `Engine::register_module_bytes`.
 wat = { workspace = true }
 blake3 = { workspace = true }
-# F-full Layer-D (f_ld_4 device-link key-wrap) — the `testing` feature exposes
-# `CipherSuite::generate_recipient_keypair_for_test`, the hybrid
-# X25519+ML-KEM-768 recipient-keypair generator the device-link round-trip pins
-# need to mint device B's fresh device-encryption keypair. (Production
-# keypair-gen routes through the principal-DID infrastructure, not this
-# test-only helper — the `device_link` PRODUCTION module consumes a
-# `RecipientPublic`/`RecipientSecret`, it does not generate one.)
-benten-crypto-suite = { path = "../benten-crypto-suite", features = ["testing"] }
 
 # Phase-3 G19-C2 wave-7 (§7.1) — SANDBOX execution-metrics propagation
 # tests. The `describe_sandbox_node_for_handler` accessor lives behind
