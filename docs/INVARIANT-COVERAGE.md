@@ -1,13 +1,17 @@
-# Invariant Coverage — Phase 4-Foundation Close + Phase-4-Meta-Core Inv-15 Mint
+# Invariant Coverage — Phase 4-Foundation Close + Phase-4-Meta-Core Inv-15 Mint + F-full Inv-16..22 Design-Mints
 
-CLAUDE.md commits to **15 invariants** governing the Benten engine
+CLAUDE.md commits to **22 invariants** governing the Benten engine
 (14 from Phase 4-Foundation + Inv-15 minted at Phase-4-Meta-Core per
 Ben ratification 2026-05-26: "sig-bundle CIDs are never load-bearing
 identifiers" — the application-layer 3-layer decomposition that closes
 the LAMPS Composite ML-DSA EUF-CMA-only construction-scope per L12
 finding + the cryptographer-review-of-bird-of-prey-vs-lamps elegant
-permanent shape). This document tracks per-invariant enforcement
-state, the enforcing crate, and the regression suite that pins it.
+permanent shape — and Inv-16..22 design-minted at Phase-4-Meta-Core for
+the F-full encryption + identity + MembershipSet substrate, REGISTERED
+here per the §9.1-7 doc-wave gate with enforcement-completion on the
+F-full wave path, matching the Inv-15 register-then-enforce precedent).
+This document tracks per-invariant enforcement state, the enforcing
+crate, and the regression suite that pins it.
 
 **Phase 4-Foundation status:** 14 of 14 Phase-4-Foundation invariants enforced. Phase-4-Foundation extends Inv-14 with the plugin-DID principal classifier (see `Inv-14 Phase-4-Foundation plugin-DID principal extension` sub-section below) — the principal-type matrix now spans User-local + User-sync-merged + Device-multi-device-sync + Plugin-app-level-subgraph + Plugin-via-materializer-read.
 
@@ -47,6 +51,13 @@ the full retense.
 | 13 | Immutability — User WRITE re-puts of an already-persisted CID fire `E_INV_IMMUTABILITY` | 2a | `invariants::immutability` + `WriteAuthority` firing matrix | `crates/benten-engine/tests/inv_13_*.rs` |
 | 14 | Causal attribution — every primitive frame carries an `AttributionFrame` (Phase-3 G16-B device-grain extension: `peer_did_set` + `device_did` + `sync_hop_depth` slots — see "Inv-14 Phase-3 G16-B device-grain extension" below) | 2a / 3 | `evaluator::attribution` runtime threading + `ATTRIBUTION_PROPERTY_KEY` registration check + `crates/benten-engine/src/engine_sync.rs` sync-merge frame construction (G16-B) | `crates/benten-eval/tests/attribution_*.rs` (glob matches frame_shape + non_regression + sandbox + invariant_14 files), `crates/benten-engine/tests/hlc_attribution_frame.rs` + `sec_r6r1_01_inv_14_attribution_threading_preserved_under_g12_c.rs` + `sync_replica_attribution.rs` + `resume_with_missing_attribution_triple_rejects.rs` + `resume_with_tampered_attribution_rejected.rs`, plus the G16-B sync-merge round-trip suite |
 | 15 | **Sig-bundle CIDs are never load-bearing identifiers — REGISTERED (Phase-4-Meta-Core; enforcement-completion at G-CORE-PQ-WIRE-1)** | 4-Meta-Core | Existing discipline at load-bearing surfaces: `crates/benten-engine/src/engine_caps.rs::Engine::revoke_capability_by_grant_cid` (looks up `system:CapabilityGrant` Node by Node-content-addressed CID — labels + properties only; sig sidecar excluded) + `crates/benten-platform-foundation/src/plugin_manifest.rs::manifest_cid` (computed-then-signed; consent record signs over `(manifest_cid \|\| ...)`). G-CORE-PQ-WIRE-1 brief mandates: cross-surface audit + per-surface MallorySigner property tests + cite-drift-detector `LoadBearingSigBundleCidPattern` scanner | Today: existing payload-CID-discipline tests + ground-truth-verify 2026-05-26 (Q1+Q2 favorable). Planned: `crates/benten-engine/tests/inv15_sig_malleability_does_not_change_identifier.rs` cluster (per-surface MallorySigner property tests landing at G-CORE-PQ-WIRE-1) — see "Inv-15 Phase-4-Meta-Core mint + 3-layer decomposition" section below |
+| 16 | **Envelope-layer unification — REGISTERED (Phase-4-Meta-Core; design-mint)**. ONE codepoint-dispatched `EncryptedEnvelope` serves all four layers (Layer-A vault / Layer-B per-Node AEAD / Layer-C encrypt-to-recipient drops / Layer-D device-wraps + remote-permission), with: codepoint-dispatch (U1) + AAD-binding + strict-decode no-silent-fallback (U2) + canonical-TLV length-injective encoding (U3) + sender-DID-bound-or-Sealed-Sender + replay-window — primitive-neutral (one HPKE primitive reused, not re-implemented per layer). | 4-Meta-Core | `crates/benten-crypto-suite` (`EncryptedEnvelope` / `EnvelopePayload` / `BindingContext` typed codepoint dispatch; renames in-tree `AeadEnvelope` per M-18) — the single `#5` crypto call site | **Planned (R3-W0 canary + Layer-C wave):** `F-INV16-1` (cross-layer U1–U3 parametric + one-HPKE-path-reused), `F-CP-3` (strict-reject no cross-variant fallback), `F-W0-4` (`EncryptedEnvelope`/`BindingContext` rename+lift), `F-LC-1` (HPKE mode_base round-trip), `F-AAD-2` (AAD injectivity + opaque-bytes boundary) — `crates/benten-crypto-suite/tests/` + `crates/benten-drop/tests/` |
+| 17 | **Hybrid-cryptography-mandatory floor — REGISTERED (Phase-4-Meta-Core; design-mint)**. Every KEM use-site is PQ⊕classical (X25519⊕ML-KEM-768); **no pure-PQ codepoint is LIVE or selectable** at v1-beta or v1-GM. Reserved-named-typed-rejected swap-matrix arms (e.g. `PURE_PQ_MLKEM768_ONLY` at `0x647c`) are permitted for conformance only and remain audit-gated (m-3). The classical half is the audited floor so unaudited PQC is never the SOLE trust path; the combiner is committing / strip-resistant. ANSSI/BSI/NIST SP 800-227 §4.4 aligned. | 4-Meta-Core | `crates/benten-crypto-suite` (codepoint dispatch + X-Wing-style combiner; `0x647c` gated behind `try_pure_pq_sole_trust_path` audit-flag, typed-reject until flipped) | **Planned (R3-W0 swap-matrix slice):** `F-SM-1` (hybrid floor; `0x647c` default-path → `Err`), `F-SM-2` (swap-matrix coverage), `F-SM-3` (strip-resistance: zeroing PQ-half OR classical-half fails decryption), `F-CP-5` (codepoint integer pins) — `crates/benten-crypto-suite/tests/` |
+| 18 | **Codepoint-registry discipline + metadata-disclosure invariant + `CodepointLifecycle` typed-state — REGISTERED (Phase-4-Meta-Core; design-mint)**. All crypto codepoints live in `CRYPTO-CODEPOINTS.md`, occupy the Benten-owned `0x6100..0x6FFF` band, are intra-band non-colliding + IANA-disjoint (CI scanner enforced), and traverse the `Live → Deprecated → Quarantined → Burned` lifecycle (Quarantined/Burned reject). Metadata-disclosure clause: any plaintext-sender-DID-in-AAD variant (`0x6500`) MUST disclose at SECURITY-POSTURE.md AND have a paired Sealed-Sender sibling — **satisfied by `0x6510` Sealed-Sender being the DEFAULT**. | 4-Meta-Core | `crates/benten-crypto-suite` (codepoint registry + `CodepointLifecycle` state machine) + the IANA-disjoint/non-collision CI scanner (NQ-W2) | **Planned (R3-W0 + Layer-C wave):** `F-CP-2` (intra-band non-collision + IANA-disjoint scanner), `F-CP-4` (`CodepointLifecycle` typed-state; burned-cp → `Err`), `F-CP-6` (FS-future bracket typed-reject `0x63A0/0x63B0/0x63C0`), `F-CP-7` (band-integer pins), `F-INV18-1` (paired-Sealed-Sender; `observable_metadata == {audience, coarse_epoch}`) — `crates/benten-crypto-suite/tests/` + `crates/benten-drop/tests/` |
+| 19 | **Encryption-substrate keying-function CRDT-input discipline (Path-A.5) — REGISTERED (Phase-4-Meta-Core; design-mint)**. The per-structural-path key-derivation function `K(V)` at its API boundary type-restricts its keyed payload to an **immutable Version-Node-CID** (or a MembershipSet) — encrypting key material to a mutable/Anchor CID is a type-level reject. This keeps the encryption substrate's keying inputs content-stable so a fork's key derivation is reproducible from immutable CRDT inputs. | 4-Meta-Core | `crates/benten-membership-set` (the `K(V)` keying-glue API boundary) + `benten-core` Anchor/Version/CURRENT version-chain (immutable Version-Node-CIDs) | **Planned (R3-W6 governance/keying wave):** `F-INV19-1` (GAP-3 fill: non-Version-Node CID into `K(V)` → reject; would-FAIL = encrypting to a mutable/Anchor CID), `F-INV21-4` (key → immutable-Version-Node-CID under fork) — `crates/benten-membership-set/tests/` + `crates/benten-engine/tests/` |
+| 20 | **MembershipSet primitive invariant — 12 clauses (a–l) — REGISTERED (Phase-4-Meta-Core; design-mint)**. (a) K_Set established via multi-stanza-HPKE-Encap; (b) FORK-ONLY key rotation; (c) the `0x6610` group-AAD field-set (incl. `role_assignments_generation`); (d) per-recipient unlinkability is **network-observer-only** (NOT against a malicious admin — m-7); (e) generation-CRDT; (f) Path-A.5 `K(V)` to immutable Version-Node-CIDs; (g) TransportConfig + gossip; (h) per-member `K(N)` walk-scope; (i) per-DID `MemberEntry` fusion (one DID → one record; `BTreeMap<Did, MemberEntry>`); (j) **5-value RoleId all-5-active** (Invitee=0 … Admin=4; corrected from "3 active 2 reserved" — M-13) + retention; (k) federation recursion-bound (`MEMBERSHIP_RECURSION_MAX_DEPTH = 4` + PATH-CARRIED offline cycle-detect — M-9; `SubsetRef` reserved-and-refused at v1-beta at `0x6620`); (l) Model-B independent-`K_Set`-per-set default (Model-A opt-in is post-v1-beta additive). | 4-Meta-Core | `crates/benten-membership-set` (the 15th crate — EXACTLY-3 `MembershipSetKind` + `members_table` CBOR + per-Kind constructors + 0x6610 group-AAD assembly + clause-k bound; delegates primitives to `benten-crypto-suite`, NEVER forks; depends UP on `benten-sync` for CRDT/HLC/MST/transport) | **Planned (R3-W4 + R3-W5 + R3-W6):** `F-MS-2`/`F-MS-3` (clauses a, i — per-Kind cardinality + one-DID-one-record fusion), `F-AAD-1`/`F-AAD-2` (clause c — `members_table` canonical-CBOR length-injective + 9-tuple AAD), `F-MS-4` (clause j — RoleId 5-value ordinal golden-vector), `F-LC-5`/`F-NAT-2` (clause d — `plaintext_cid` blinding + unlinkability scope-honesty), `F-FED-1`/`F-FED-2` (clauses k, l — federation depth-4 + Model-B default), `F-INV21-4` (clause f — key→immutable-Version-Node-CID), `F-AUDIT-3` (clause h — `audit:<set_id>:*` enforced-write path) — `crates/benten-membership-set/tests/` + `crates/benten-engine/tests/` |
+| 21 | **MembershipSet-fork-tie-break HARD partition — REGISTERED (Phase-4-Meta-Core; design-mint)**. On a set-identity fork, **SMALLER `created_at_hlc` wins** (oldest-anchor-wins) — **DELIBERATELY OPPOSITE** to the in-tree LARGER-HLC-wins property LWW at `crates/benten-sync/src/crdt.rs:535` (M-7). The tie-break is **TOTAL** via the forking-event **Version-Node CID** when `created_at_hlc` ties (`MembershipSetId` cannot disambiguate concurrent same-anchor forks — M-8); total order `(created_at_hlc ASC, fork_event_version_node_cid ASC)`. The losing fork's CRDT-vector MUST NOT merge into the winner (no silent absorption); it is **archived-not-discarded**. A later adversarial re-fork with `u64::MAX` HLC never displaces the original. | 4-Meta-Core | `crates/benten-membership-set` (the fork-tie-break CRDT rule) + `crates/benten-sync` (HLC ordering `crdt.rs`, Loro merge, MST anti-entropy `mst.rs` = the convergence backstop, iroh `Transport`) | **Planned (R3-W5 — strongest cluster; NET-NEW kani harness):** `F-INV21-1` (smaller-`created_at_hlc`-wins asymmetry; a naive-LWW-passing test must FAIL), `F-INV21-2` (totality via Version-Node-CID; antisymmetry/transitivity/totality property pins), `F-INV21-3` (kani convergence proof — `#[kani::proof]` total+commutative+associative+idempotent; stands up the kani harness; `#[ignore]` red-phase + proptest surrogate until kani lands), `F-INV21-4` (losing-fork MUST-NOT-merge + archived-not-discarded), `F-HLC-1` (`admitted_at_hlc` LWW vs `created_at_hlc` fork-stamp distinction), `F-CRDT-3` (LWW-property ∥ fork-set-identity co-existence) — `crates/benten-membership-set/tests/` + `crates/benten-sync/tests/` |
+| 22 | **Member-nature is derived, never stored — REGISTERED (Phase-4-Meta-Core; design-mint)**. There is NO `MemberEntry` nature field, NO Policy nature field, NO wire nature slot; **`member_type` is DELETED**. Member-nature is DERIVED at read time: `is_ai_operated(did) = (did.method() == "agent")` (`did:agent:` is an optional allowlist alias, NOT a stored discriminator); `is_plugin` / `is_autonomous_ai` derive from Inv-14 attribution / manifest; ownership derives from `root_issuers(agent_did)`. Any cached nature flag is an IVM-materialized derived view, never authoritative. `MemberRef` is **Kind-determined** (UserDid↔Atrium / DeviceDid↔DeviceMesh / LocalDevice↔SingleDevice) — it is NOT a nature discriminator (m-15 GNC-7). In-tree precedent: Inv-14 (attribution derived, not stored as authority). | 4-Meta-Core | `crates/benten-membership-set` (`members_table` carries no nature field — compile-fence) + IVM-materialized derived-view layer + `benten-id` DID-method parse (`did:agent:`) | **Planned (R3-W6 nature wave):** `F-NAT-1` (struct-fence no nature field; grep-defense `member_type`/`MemberKind` absent; `is_ai_operated` from method-parse; IVM-view recomputes; not-writable-as-authoritative), `F-MS-2` (`MemberRef` Kind-determined boundary, NOT nature), `F-NAT-2` (unlinkability scope-honesty — network-observer-only; admin CAN correlate, asserted explicitly so not over-claimed) — `crates/benten-membership-set/tests/` + `crates/benten-engine/tests/` |
 
 ---
 
@@ -384,6 +395,56 @@ Each layer changes orthogonally; you can upgrade authentication (e.g. add Bird-o
 
 ---
 
+## Inv-16..22 Phase-4-Meta-Core F-full design-mints (REGISTERED; enforcement on the F-full wave path)
+
+**Origin**: the F-full encryption + identity + MembershipSet substrate (`.addl/phase-4-meta/f-full-r0-plan.md`
+R0.7, frozen design plan; pinned to main `2172cb6d`). These seven invariants are **design-mints** — they
+codify the architectural properties the F-full Phase-4-Meta-Core waves enforce, and are REGISTERED here per
+the §9.1-7 doc-wave gate (the same register-then-enforce-on-named-wave-path discipline as the Inv-15 mint).
+None exist in code at HEAD; the enforcement-completion path is the F-full wave sequence.
+
+**Status semantics (matching the Inv-15 honest-disclosure precedent):** REGISTERED, NOT-YET-ENFORCED at HEAD.
+The R2 test-landscape (`.addl/phase-4-meta/f-full-r2-test-landscape.md` §2.1) maps every one of Inv-16..22 to
+a covering red-phase test family (status COVERED for all seven; Inv-19 was thin and gained a dedicated
+`F-INV19-1` GAP-3 fill; Inv-21 has the strongest cluster). The red-phase corpus lands in R3; the impl-to-green
+lands in R5; full (1)(2)(3) "active" status (typed error + regression pin + no-bypass) is reached when the
+F-full waves close.
+
+**Enforcement clustering (which crate owns each):**
+
+- **Inv-16 / Inv-17 / Inv-18** (the encryption arc — "9-eyes" invariants) — enforced in
+  **`benten-crypto-suite`**, the single `#5` crypto call site. The Wave-0 envelope canon (`F-W0-*`) mints the
+  `EncryptedEnvelope` / `BindingContext` types + the §4.0 codepoint integer pins + the V2/BE migration + the
+  real X-Wing combiner; no other wave authors envelope bytes until that red-phase corpus is on origin (M-20).
+
+- **Inv-19 / Inv-20 / Inv-21 / Inv-22** (the MembershipSet arc) — enforced in the **15th crate
+  `benten-membership-set`** (a thin Rust-engine-plugin keying-glue crate: EXACTLY-3 `MembershipSetKind` +
+  `members_table` CBOR + per-Kind constructors + 0x6610 group-AAD assembly + the Inv-21 fork-tie-break rule +
+  the clause-k recursion-bound). It delegates ALL crypto primitives to `benten-crypto-suite` (NEVER forks —
+  `#5`) and depends UPSTREAM on **`benten-sync`** for the CRDT/HLC/MST/transport machinery the fork-tie-break
+  (Inv-21) and convergence (Inv-20 clause-e/g) run on. The losing-fork archival (Inv-21) and the
+  member-nature derivation (Inv-22) are graph-native (data-half) per the SPLIT model.
+
+**Inv-21 directional note (load-bearing — M-7):** Inv-21's "smaller-`created_at_hlc`-wins" for **set-identity
+forks** is DELIBERATELY OPPOSITE to the established in-tree LARGER-HLC-wins LWW rule for **member-property
+merges** (`crates/benten-sync/src/crdt.rs:535`, keeps the entry where `cmp_lex == Greater`). Both rules
+co-exist over two object classes in the same merge round (`F-CRDT-3` pins the co-existence). This is not a
+contradiction of Inv-14-era CRDT semantics — it is a second, distinct CRDT rule scoped to set-identity forks,
+where oldest-anchor-wins prevents an adversary from re-forking with a fabricated future HLC to steal set
+identity. `created_at_hlc` (set-anchor creation, immutable, participates in the tie-break) is a distinct stamp
+from `admitted_at_hlc` (per-member admission, LWW, does NOT participate) — `F-HLC-1` pins the distinction.
+
+**Header-count + freeze-gating dependency:** the F-full doc-wave gate (`F-DISC-2`) asserts the end-state
+"INVARIANT-COVERAGE.md REGISTERS Inv-16..22 AND Inv-15 NOT re-registered AND header count correct". The header
+preamble now reads "**22 invariants**" (bumped from "15 invariants" by this cascade), with the Inv-15
+reconciliation note preserved. The `crates/...` enforcer paths + test-family destinations registered above are
+design-time landing sites from the FROZEN PLAN (R0.7) + R2 landscape, NOT construction sites verified at
+`2172cb6d` — the crate `benten-membership-set` does not exist at HEAD (this matches the Inv-15 precedent, which
+registered planned test files like `inv15_sig_malleability_does_not_change_identifier.rs` that did not yet
+exist at registration time).
+
+---
+
 ## What "active" means in this table
 
 A row is **active** iff:
@@ -400,3 +461,5 @@ A row is **active** iff:
 All 14 Phase-4-Foundation invariants meet (1) (2) (3) at Phase 4-Foundation close.
 
 **Inv-15 (Phase-4-Meta-Core mint)** is REGISTERED at Phase-4-Meta-Core kickoff. Status: partially-enforced-via-existing-discipline at the load-bearing surfaces (`Engine::revoke_capability_by_grant_cid` + plugin `manifest_cid`); the cross-surface audit + property-test cluster + cite-drift-detector scanner extension + pim-N codification all land in G-CORE-PQ-WIRE-1 to reach full (1) (2) (3) status. Until G-CORE-PQ-WIRE-1 closes the audit, Inv-15 status is **"registered-with-active-existing-discipline-at-load-bearing-surfaces-pending-formal-cross-surface-enforcement"** — honest disclosure that the invariant is the right shape but the systematic-enforcement work is on the wave-1 critical path.
+
+**Inv-16..22 (Phase-4-Meta-Core F-full design-mints)** are REGISTERED, NOT-YET-ENFORCED at HEAD. None of (1) (2) (3) holds yet — the typed errors, the regression pins, and the no-bypass consumption all land across the F-full wave sequence (R3 red-phase corpus → R5 impl-to-green → F-full close). They are registered now per the §9.1-7 doc-wave gate + the Inv-15 register-then-enforce precedent so the architectural properties are referenceable + the freeze-gating audit (`F-DISC-2`) can assert the end-state. See "Inv-16..22 Phase-4-Meta-Core F-full design-mints" section above for the per-invariant enforcement-completion path. The `benten-membership-set` crate (the 15th crate, owner of Inv-19..22) does not exist at HEAD; its enforcer-path + test-family cites are design-time landing sites, not verified construction sites.
