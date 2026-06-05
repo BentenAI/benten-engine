@@ -44,7 +44,7 @@ pub const DID_KEY_PREFIX: &str = "did:key:z";
 /// `did:key:z` prefix or pubkey bytes — callers that need
 /// validate-on-deserialize call [`Did::resolve`] explicitly to
 /// surface a typed [`DidError`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Did(String);
 

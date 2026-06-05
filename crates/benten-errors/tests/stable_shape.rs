@@ -648,6 +648,10 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     ErrorCode::DslParseError,
     ErrorCode::DslUnknownPrimitive,
     ErrorCode::DslMissingRespond,
+    // Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031) — MembershipSet
+    // stanza role-staleness verify rejection (E_ROLE_STALE_AT_VERIFY).
+    // CATALOG_VARIANT_COUNT 197 -> 198.
+    ErrorCode::RoleStaleAtVerify,
 ];
 
 /// Count of catalog variants (auto-derived from [`ALL_CATALOG_VARIANTS`] so
@@ -1054,8 +1058,10 @@ fn variant_count_is_pinned() {
     // The same wave performs the atomic 4-surface rename of
     // `ViewStrategyCReserved` -> `ViewStrategyReserved` (rename, not a
     // mint — does not bump the count). 194 -> 197.
+    // Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031) mints
+    // `RoleStaleAtVerify` (E_ROLE_STALE_AT_VERIFY). 197 -> 198.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 197,
+        CATALOG_VARIANT_COUNT, 198,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1346,7 +1352,10 @@ fn catalog_variant_count_matches_enum() {
             // mirrors of `CompileError::{Parse,Semantic,Build}`.
             | ErrorCode::DslParseError
             | ErrorCode::DslUnknownPrimitive
-            | ErrorCode::DslMissingRespond => true,
+            | ErrorCode::DslMissingRespond
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031) —
+            // MembershipSet stanza role-staleness verify rejection.
+            | ErrorCode::RoleStaleAtVerify => true,
             // `ErrorCode` is `#[non_exhaustive]` across crate boundary
             // — match exhaustiveness is enforced at the def-site, not
             // here. Any future variant added to the enum that isn't

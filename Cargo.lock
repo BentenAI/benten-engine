@@ -569,11 +569,19 @@ dependencies = [
 name = "benten-membership-set"
 version = "0.1.0"
 dependencies = [
+ "benten-caps",
+ "benten-core",
+ "benten-crypto-suite",
+ "benten-errors",
+ "benten-graph",
+ "benten-id",
+ "benten-sync",
  "blake3",
  "proptest",
  "serde",
  "serde_bytes",
  "serde_ipld_dagcbor",
+ "zeroize",
 ]
 
 [[package]]

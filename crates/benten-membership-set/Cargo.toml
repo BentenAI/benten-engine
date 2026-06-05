@@ -21,29 +21,52 @@ bench = false
 default = []
 # `testing` gates the `pub fn .*_for_test*` constructors / helpers per the
 # V1-FROZEN-INTERFACE.md item-15 convention (matches benten-crypto-suite /
-# benten-core / benten-caps). The R5 canary wave fills this.
-testing = []
+# benten-core / benten-caps). Chains to the upstream `testing` features so the
+# `--features testing` test build pulls the upstream test-only constructors.
+testing = [
+    "benten-crypto-suite/testing",
+    "benten-id/testing",
+    "benten-caps/testing",
+    "benten-sync/testing",
+]
 
 [dependencies]
-# RED-PHASE STUB — intentionally ZERO workspace deps at R3-W4 so the crate
-# scaffold compiles green in isolation and the W4 test pins (which use
-# self-contained in-file stub-shims, not this crate's surface yet) stay
-# green at baseline behind `#[ignore]`. The real B-1 dependency set lands
-# at the R5 canary wave per R0 §6.1:
+# B-1 dependency set (R5 canary — un-commented from the R3-W4 RED-PHASE
+# scaffold per R0 §6.1). Every one is UPSTREAM; benten-membership-set is a
+# leaf-ish addition — crypto-suite + sync NEVER depend on it (the F-CRATE-2
+# no-reverse-edge compile-fence + dependency_edges.rs assert the direction).
 #
 #   benten-crypto-suite  # HPKE / AEAD / structural-KDF primitives — the ONLY crypto call site (#5)
 #   benten-core          # Node / Version-chain / CID
 #   benten-caps          # UCAN / grants — RBAC composition
 #   benten-id            # DID + DeviceAttestation + RotationLog
 #   benten-graph         # audit-sequence + ChangeEvent
-#   benten-sync          # NEW (B-1) — HLC / Loro / MST / Transport (UPSTREAM; this crate DEPENDS ON it)
+#   benten-sync          # B-1 sync substrate — HLC / Loro / MST / Transport (UPSTREAM; this crate DEPENDS ON it)
 #
-# DIRECTION: every one of those is UPSTREAM; benten-membership-set is a
-# leaf-ish addition — crypto-suite + sync NEVER depend on it (F-CRATE-2
-# compile-fence). The dep block is left empty (not the real set) on
-# purpose: a stub crate that pulled the full set would (a) drag the whole
-# graph into every W4 scoped-check and (b) risk a reverse-dep edge before
-# the canary establishes the boundary. The R5 canary un-comments these.
+# The membership crate NEVER constructs a crypto primitive directly
+# (`sha3::` / `chacha20` / `ml_kem::` / `ml_dsa::` / `x25519_dalek::`): all
+# crypto delegates through benten-crypto-suite's typed API (the #5
+# ONLY-call-site discipline — `f_crate_1_2`'s grep-defense pins this).
+benten-crypto-suite = { path = "../benten-crypto-suite" }
+benten-core = { path = "../benten-core" }
+benten-caps = { path = "../benten-caps" }
+benten-id = { path = "../benten-id" }
+benten-graph = { path = "../benten-graph" }
+benten-sync = { path = "../benten-sync" }
+# benten-errors is the ErrorCode home (the `E_ROLE_STALE_AT_VERIFY` mint at
+# F4-031); it is upstream of every benten crate (the shared catalog root).
+benten-errors = { path = "../benten-errors" }
+
+# The mechanism-half's own (non-crypto-primitive) glue deps: BLAKE3 keyed-MAC
+# / hash (the §3.9 commitment primitive — `blake3::keyed_hash` / `blake3::hash`
+# / `blake3::derive_key`, the native keyed-MAC; no hmac/sha2 dep), canonical
+# DAG-CBOR (the `members_table` snapshot encoder = NQ-W4 length-injective),
+# serde, and zeroize-on-drop for derived key material.
+blake3 = { workspace = true, features = ["pure"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 # R3 consolidation (merged from R3-W5): the W5 RED-PHASE pins (F-AAD-*,

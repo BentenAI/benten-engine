@@ -1439,6 +1439,15 @@ pub enum ErrorCode {
     /// invariant the DSL compiler enforces at the build boundary. Maps
     /// to `E_DSL_MISSING_RESPOND`.
     DslMissingRespond,
+    /// **Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031)** — MembershipSet
+    /// stanza verify rejection: a stanza sealed under a stale
+    /// `role_assignments_generation` (the 11th field of the `0x6610` group AAD)
+    /// fails verify. Sealing at generation `G` and advancing the set to `G+1`
+    /// invalidates the older stanza at verify time (the generation is AAD-bound,
+    /// so a post-rotation stanza fails AEAD-open / verify). Surfaced by
+    /// `benten_membership_set::verify::verify_stanza`. Maps to
+    /// `E_ROLE_STALE_AT_VERIFY`.
+    RoleStaleAtVerify,
     /// Fallback for drift detector — holds the unknown raw string so it can
     /// be rendered without lossy conversion.
     Unknown(String),
@@ -1788,6 +1797,7 @@ impl ErrorCode {
             ErrorCode::DslParseError => "E_DSL_PARSE_ERROR",
             ErrorCode::DslUnknownPrimitive => "E_DSL_UNKNOWN_PRIMITIVE",
             ErrorCode::DslMissingRespond => "E_DSL_MISSING_RESPOND",
+            ErrorCode::RoleStaleAtVerify => "E_ROLE_STALE_AT_VERIFY",
             ErrorCode::Unknown(_) => "E_UNKNOWN",
         }
     }
@@ -2327,6 +2337,11 @@ impl ErrorCode {
             | ErrorCode::DslUnknownPrimitive
             | ErrorCode::DslMissingRespond => Some("ON_ERROR"),
 
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031) — MembershipSet
+            // stanza role-staleness verify rejection. Fires at the per-stanza
+            // verify boundary; route to ON_ERROR.
+            ErrorCode::RoleStaleAtVerify => Some("ON_ERROR"),
+
             // Forward-compat unknown — best-effort ON_ERROR. A future
             // server that emits a newer code we don't recognize routes
             // through the catch-all rather than dropping on the floor.
@@ -2653,6 +2668,9 @@ impl core::str::FromStr for ErrorCode {
             "E_DSL_PARSE_ERROR" => ErrorCode::DslParseError,
             "E_DSL_UNKNOWN_PRIMITIVE" => ErrorCode::DslUnknownPrimitive,
             "E_DSL_MISSING_RESPOND" => ErrorCode::DslMissingRespond,
+            // Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031) — MembershipSet
+            // stanza role-staleness verify rejection.
+            "E_ROLE_STALE_AT_VERIFY" => ErrorCode::RoleStaleAtVerify,
             other => return Err(ParseErrorCodeError(other.to_string())),
         };
         Ok(code)

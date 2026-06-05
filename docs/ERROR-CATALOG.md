@@ -7,7 +7,7 @@
 | Count | Source | Value (at HEAD post G-CORE-9 R1 fix-pass) | Meaning |
 |---|---|---|---|
 | **Throwable enum variants** | `crates/benten-errors/src/lib.rs::ErrorCode` (minus `Unknown(String)` fallback) | **192** | What the engine can actually emit at runtime. Authoritative source of THROWABLE variants. |
-| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **194** | The round-trip-pinned list. Matches the throwable enum 1:1. The `catalog_variant_count_matches_enum` test asserts exact equality. |
+| **Regression-list entries** | `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` + `CATALOG_VARIANT_COUNT` | **198** | The round-trip-pinned list. Matches the throwable enum 1:1. The `catalog_variant_count_matches_enum` test asserts exact equality. (194 at G-CORE-9 R1 → 197 after the Row D-19 G-COMP-1 DSL cohort → **198** after F-full Wave w-ms-canary mints `E_ROLE_STALE_AT_VERIFY`, F4-031.) |
 | **Catalog entries (this doc + TS classes)** | `### E_XXX` headings here + `packages/engine/src/errors.generated.ts` CATALOG_CODES | **194** | = 192 throwable + `E_UNKNOWN` (forward-compat sentinel mirroring Rust's `Unknown(String)` fallback) + `E_INV_ITERATE_NEST_DEPTH` (Phase-2a-retired ITERATE-nest-depth stopgap; catalog ID stays reserved across phases per the retention discipline at line ~112). |
 | **Rust enum entries** | `ErrorCode` enum (incl `Unknown(String)`) | **193** | = 192 throwable + 1 `Unknown(String)` forward-compat fallback. No `InvIterateNestDepth` variant (removed at Phase-2a-open when `E_INV_ITERATE_BUDGET` multiplicative form superseded it; catalog heading retained at line ~112 for backward-compat string round-trip). |
 
@@ -1816,6 +1816,14 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** The DSL handler subgraph does not terminate with a RESPOND primitive. Per CLAUDE.md commitment #1 + #4 (12 operation primitives + DAGs only + RESPOND-terminated handlers), the DSL compiler's `emit` build-phase pass refuses to emit a handler missing RESPOND. Add a trailing `.respond(...)` call to the handler chain (or its DSL-method equivalent). Phase-4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8) mints the first-class catalog mirror for the pre-existing `pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND` wire-string constant + `CompileError::Build(_)` variant (post-#790 rename from `CompileError::Emit`).
 - **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::build` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
 - **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 196 → 197). Routes to `ON_ERROR`.
+
+### E_ROLE_STALE_AT_VERIFY
+
+- **Message:** "MembershipSet stanza sealed under a stale role_assignments_generation"
+- **Context:** `{ sealed_role_assignments_generation: number, current_role_assignments_generation: number }`
+- **Fix:** Phase-4-Meta-Core F-full Wave w-ms-canary (F4-031) — the MembershipSet stanza was sealed under a stale `role_assignments_generation` (the 11th field of the `0x6610` group AAD). Sealing at generation G and advancing the set to G+1 invalidates the older stanza at verify time (the generation is AAD-bound, so a post-rotation stanza fails AEAD-open / verify). Re-seal the stanza under the set's CURRENT role_assignments_generation, or re-fetch the current set state before sealing.
+- **Thrown at:** `crates/benten-membership-set/src/verify.rs::verify_stanza` — the per-stanza role-staleness check.
+- **Phase:** 4-Meta-Core F-full Wave w-ms-canary (F4-031; CATALOG_VARIANT_COUNT 197 → 198). Routes to `ON_ERROR`.
 
 <!-- reachability: ignore -->
 
