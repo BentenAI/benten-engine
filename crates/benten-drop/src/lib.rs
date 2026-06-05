@@ -93,6 +93,6 @@ pub use bundle::{
     DROP_BUNDLE_MAX_SIZE_BYTES, DropBundle, DropBundleError, DropBundleVersion, DropContentMode,
     EncryptedContent,
 };
-pub use payload::{DropBundlePayload, KSet, seal_drop_over_subtree};
 #[cfg(any(test, feature = "testing"))]
 pub use payload::seal_drop_leaky_for_negative_control;
+pub use payload::{DropBundlePayload, KSet, seal_drop_over_subtree};

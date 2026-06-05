@@ -447,7 +447,8 @@ fn seal_inner(
     inner.extend_from_slice(&sd_len.to_be_bytes());
     inner.extend_from_slice(sender_did);
     inner.extend_from_slice(body);
-    let cek_key = AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
+    let cek_key =
+        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
     let body_env = benten_crypto_suite::aead::wrap(&inner, &cek_key, aad)
         .expect("ChaCha20-Poly1305 seal of the Layer-C inner payload must succeed");
     let ciphertext = body_env.to_wire_bytes();
@@ -489,8 +490,8 @@ fn open_inner(
         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
         cek.as_bytes(),
     );
-    let body_env =
-        AeadEnvelope::from_wire_bytes(ciphertext).map_err(|_| LayerCError::AeadAuthenticationFailed)?;
+    let body_env = AeadEnvelope::from_wire_bytes(ciphertext)
+        .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
     let inner = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, aad)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
 
@@ -593,9 +594,9 @@ pub fn open_single(
             let aad = binding.plaintext_aad_bytes();
             open_inner(recipient_sk, enc, ciphertext, &aad)
         }
-        EncryptedEnvelope::HpkeMultiBase { .. } => {
-            Err(LayerCError::UnsupportedCodepoint(LAYER_C_DROP_MULTI_RECIPIENT))
-        }
+        EncryptedEnvelope::HpkeMultiBase { .. } => Err(LayerCError::UnsupportedCodepoint(
+            LAYER_C_DROP_MULTI_RECIPIENT,
+        )),
     }
 }
 
@@ -874,10 +875,12 @@ pub fn serialize(env: &EncryptedEnvelope) -> Vec<u8> {
                 out.extend_from_slice(&aad_len.to_be_bytes());
                 out.extend_from_slice(&aad);
                 // Opaque sealed material — sender-DID NEVER in plaintext here.
-                let si_len = u32::try_from(st.sealed_inner.len()).expect("sealed_inner len fits u32");
+                let si_len =
+                    u32::try_from(st.sealed_inner.len()).expect("sealed_inner len fits u32");
                 out.extend_from_slice(&si_len.to_be_bytes());
                 out.extend_from_slice(&st.sealed_inner);
-                let cek_len = u32::try_from(st.wrapped_cek.len()).expect("wrapped_cek len fits u32");
+                let cek_len =
+                    u32::try_from(st.wrapped_cek.len()).expect("wrapped_cek len fits u32");
                 out.extend_from_slice(&cek_len.to_be_bytes());
                 out.extend_from_slice(&st.wrapped_cek);
             }
