@@ -106,9 +106,11 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - name: Install Rust toolchain (stable + wasm32-unknown-unknown)
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Install Rust toolchain (1.95.0 + wasm32-unknown-unknown)
+        # pinned 1.95.0 — 1.96.0 lld errors on napi-rs wasm env.napi_* imports (R5: tracked, un-pin when napi-rs v3 ships a 1.96-compatible wasm link path)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # action SHA from master; toolchain pinned 1.95.0 below
         with:
+          toolchain: "1.95.0"
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo

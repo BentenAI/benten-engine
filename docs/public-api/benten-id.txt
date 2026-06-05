@@ -18,9 +18,9 @@ impl core::clone::Clone for benten_id::device_attestation::RuntimeTarget
 pub fn benten_id::device_attestation::RuntimeTarget::clone(&self) -> benten_id::device_attestation::RuntimeTarget
 impl core::cmp::Eq for benten_id::device_attestation::RuntimeTarget
 impl core::cmp::PartialEq for benten_id::device_attestation::RuntimeTarget
-pub fn benten_id::device_attestation::RuntimeTarget::eq(&self, other: &benten_id::device_attestation::RuntimeTarget) -> bool
+pub fn benten_id::device_attestation::RuntimeTarget::eq(&self, &benten_id::device_attestation::RuntimeTarget) -> bool
 impl core::fmt::Debug for benten_id::device_attestation::RuntimeTarget
-pub fn benten_id::device_attestation::RuntimeTarget::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::device_attestation::RuntimeTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_id::device_attestation::RuntimeTarget
 impl core::marker::StructuralPartialEq for benten_id::device_attestation::RuntimeTarget
 impl core::marker::Freeze for benten_id::device_attestation::RuntimeTarget
@@ -37,17 +37,17 @@ impl core::clone::Clone for benten_id::device_attestation::UptimePolicy
 pub fn benten_id::device_attestation::UptimePolicy::clone(&self) -> benten_id::device_attestation::UptimePolicy
 impl core::cmp::Eq for benten_id::device_attestation::UptimePolicy
 impl core::cmp::PartialEq for benten_id::device_attestation::UptimePolicy
-pub fn benten_id::device_attestation::UptimePolicy::eq(&self, other: &benten_id::device_attestation::UptimePolicy) -> bool
+pub fn benten_id::device_attestation::UptimePolicy::eq(&self, &benten_id::device_attestation::UptimePolicy) -> bool
 impl core::default::Default for benten_id::device_attestation::UptimePolicy
 pub fn benten_id::device_attestation::UptimePolicy::default() -> Self
 impl core::fmt::Debug for benten_id::device_attestation::UptimePolicy
-pub fn benten_id::device_attestation::UptimePolicy::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::device_attestation::UptimePolicy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_id::device_attestation::UptimePolicy
 impl core::marker::StructuralPartialEq for benten_id::device_attestation::UptimePolicy
 impl serde_core::ser::Serialize for benten_id::device_attestation::UptimePolicy
-pub fn benten_id::device_attestation::UptimePolicy::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::device_attestation::UptimePolicy::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::device_attestation::UptimePolicy
-pub fn benten_id::device_attestation::UptimePolicy::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::device_attestation::UptimePolicy::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::device_attestation::UptimePolicy
 impl core::marker::Send for benten_id::device_attestation::UptimePolicy
 impl core::marker::Sync for benten_id::device_attestation::UptimePolicy
@@ -63,16 +63,16 @@ impl core::clone::Clone for benten_id::device_attestation::ZoneScope
 pub fn benten_id::device_attestation::ZoneScope::clone(&self) -> benten_id::device_attestation::ZoneScope
 impl core::cmp::Eq for benten_id::device_attestation::ZoneScope
 impl core::cmp::PartialEq for benten_id::device_attestation::ZoneScope
-pub fn benten_id::device_attestation::ZoneScope::eq(&self, other: &benten_id::device_attestation::ZoneScope) -> bool
+pub fn benten_id::device_attestation::ZoneScope::eq(&self, &benten_id::device_attestation::ZoneScope) -> bool
 impl core::default::Default for benten_id::device_attestation::ZoneScope
 pub fn benten_id::device_attestation::ZoneScope::default() -> Self
 impl core::fmt::Debug for benten_id::device_attestation::ZoneScope
-pub fn benten_id::device_attestation::ZoneScope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::device_attestation::ZoneScope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::device_attestation::ZoneScope
 impl serde_core::ser::Serialize for benten_id::device_attestation::ZoneScope
-pub fn benten_id::device_attestation::ZoneScope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::device_attestation::ZoneScope::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::device_attestation::ZoneScope
-pub fn benten_id::device_attestation::ZoneScope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::device_attestation::ZoneScope::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::device_attestation::ZoneScope
 impl core::marker::Send for benten_id::device_attestation::ZoneScope
 impl core::marker::Sync for benten_id::device_attestation::ZoneScope
@@ -89,16 +89,16 @@ impl core::clone::Clone for benten_id::device_attestation::CapabilityEnvelope
 pub fn benten_id::device_attestation::CapabilityEnvelope::clone(&self) -> benten_id::device_attestation::CapabilityEnvelope
 impl core::cmp::Eq for benten_id::device_attestation::CapabilityEnvelope
 impl core::cmp::PartialEq for benten_id::device_attestation::CapabilityEnvelope
-pub fn benten_id::device_attestation::CapabilityEnvelope::eq(&self, other: &benten_id::device_attestation::CapabilityEnvelope) -> bool
+pub fn benten_id::device_attestation::CapabilityEnvelope::eq(&self, &benten_id::device_attestation::CapabilityEnvelope) -> bool
 impl core::default::Default for benten_id::device_attestation::CapabilityEnvelope
 pub fn benten_id::device_attestation::CapabilityEnvelope::default() -> Self
 impl core::fmt::Debug for benten_id::device_attestation::CapabilityEnvelope
-pub fn benten_id::device_attestation::CapabilityEnvelope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::device_attestation::CapabilityEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::device_attestation::CapabilityEnvelope
 impl serde_core::ser::Serialize for benten_id::device_attestation::CapabilityEnvelope
-pub fn benten_id::device_attestation::CapabilityEnvelope::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::device_attestation::CapabilityEnvelope::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::device_attestation::CapabilityEnvelope
-pub fn benten_id::device_attestation::CapabilityEnvelope::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::device_attestation::CapabilityEnvelope::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::device_attestation::CapabilityEnvelope
 impl core::marker::Send for benten_id::device_attestation::CapabilityEnvelope
 impl core::marker::Sync for benten_id::device_attestation::CapabilityEnvelope
@@ -116,30 +116,30 @@ pub benten_id::device_attestation::DeviceAttestation::signature: alloc::vec::Vec
 impl benten_id::device_attestation::DeviceAttestation
 pub fn benten_id::device_attestation::DeviceAttestation::device_did(&self) -> benten_id::did::Did
 pub fn benten_id::device_attestation::DeviceAttestation::envelope(&self) -> &benten_id::device_attestation::CapabilityEnvelope
-pub fn benten_id::device_attestation::DeviceAttestation::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
-pub fn benten_id::device_attestation::DeviceAttestation::issue(parent_kp: &benten_id::keypair::Keypair, device_did: benten_id::did::Did, envelope: benten_id::device_attestation::CapabilityEnvelope) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
-pub fn benten_id::device_attestation::DeviceAttestation::issue_at(parent_kp: &benten_id::keypair::Keypair, device_did: benten_id::did::Did, envelope: benten_id::device_attestation::CapabilityEnvelope, issued_at: u64) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
-pub fn benten_id::device_attestation::DeviceAttestation::issue_for_browser_target(parent_kp: &benten_id::keypair::Keypair, device_did: benten_id::did::Did) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
-pub fn benten_id::device_attestation::DeviceAttestation::issue_with_authority(parent_kp: &benten_id::keypair::Keypair, device_did: benten_id::did::Did, envelope: benten_id::device_attestation::CapabilityEnvelope, parent_authority: &benten_id::device_attestation::CapabilityEnvelope) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
-pub fn benten_id::device_attestation::DeviceAttestation::issue_with_nonce(parent_kp: &benten_id::keypair::Keypair, device_did: benten_id::did::Did, envelope: benten_id::device_attestation::CapabilityEnvelope, issued_at: u64, nonce: [u8; 32]) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
-pub fn benten_id::device_attestation::DeviceAttestation::issue_with_runtime_check(parent_kp: &benten_id::keypair::Keypair, device_did: benten_id::did::Did, envelope: benten_id::device_attestation::CapabilityEnvelope, target: benten_id::device_attestation::RuntimeTarget) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::issue(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::issue_at(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope, u64) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::issue_for_browser_target(&benten_id::keypair::Keypair, benten_id::did::Did) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::issue_with_authority(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope, &benten_id::device_attestation::CapabilityEnvelope) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::issue_with_nonce(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope, u64, [u8; 32]) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::issue_with_runtime_check(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope, benten_id::device_attestation::RuntimeTarget) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
 pub fn benten_id::device_attestation::DeviceAttestation::parent_did(&self) -> benten_id::did::Did
 pub fn benten_id::device_attestation::DeviceAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
-pub fn benten_id::device_attestation::DeviceAttestation::verify_signature_with(&self, parent_pk: &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::verify_signature_with(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DeviceAttestationError>
 impl benten_id::canonical_bytes::CanonicalBytes for benten_id::device_attestation::DeviceAttestation
 pub fn benten_id::device_attestation::DeviceAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_id::device_attestation::DeviceAttestation
 pub fn benten_id::device_attestation::DeviceAttestation::clone(&self) -> benten_id::device_attestation::DeviceAttestation
 impl core::cmp::Eq for benten_id::device_attestation::DeviceAttestation
 impl core::cmp::PartialEq for benten_id::device_attestation::DeviceAttestation
-pub fn benten_id::device_attestation::DeviceAttestation::eq(&self, other: &benten_id::device_attestation::DeviceAttestation) -> bool
+pub fn benten_id::device_attestation::DeviceAttestation::eq(&self, &benten_id::device_attestation::DeviceAttestation) -> bool
 impl core::fmt::Debug for benten_id::device_attestation::DeviceAttestation
-pub fn benten_id::device_attestation::DeviceAttestation::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::device_attestation::DeviceAttestation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::device_attestation::DeviceAttestation
 impl serde_core::ser::Serialize for benten_id::device_attestation::DeviceAttestation
-pub fn benten_id::device_attestation::DeviceAttestation::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::device_attestation::DeviceAttestation::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::device_attestation::DeviceAttestation
-pub fn benten_id::device_attestation::DeviceAttestation::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::device_attestation::DeviceAttestation::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::device_attestation::DeviceAttestation
 impl core::marker::Send for benten_id::device_attestation::DeviceAttestation
 impl core::marker::Sync for benten_id::device_attestation::DeviceAttestation
@@ -151,28 +151,28 @@ pub mod benten_id::did
 pub struct benten_id::did::Did(_)
 impl benten_id::did::Did
 pub fn benten_id::did::Did::as_str(&self) -> &str
-pub fn benten_id::did::Did::from_public_key(pk: &benten_id::keypair::PublicKey) -> Self
-pub fn benten_id::did::Did::from_string_for_test_fixture(s: alloc::string::String) -> Self
-pub fn benten_id::did::Did::parse_validated(s: impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
+pub fn benten_id::did::Did::from_public_key(&benten_id::keypair::PublicKey) -> Self
+pub fn benten_id::did::Did::from_string_for_test_fixture(alloc::string::String) -> Self
+pub fn benten_id::did::Did::parse_validated(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve(&self) -> core::result::Result<benten_id::keypair::PublicKey, benten_id::errors::DidError>
 impl core::clone::Clone for benten_id::did::Did
 pub fn benten_id::did::Did::clone(&self) -> benten_id::did::Did
 impl core::cmp::Eq for benten_id::did::Did
 impl core::cmp::PartialEq for benten_id::did::Did
-pub fn benten_id::did::Did::eq(&self, other: &benten_id::did::Did) -> bool
+pub fn benten_id::did::Did::eq(&self, &benten_id::did::Did) -> bool
 impl core::convert::AsRef<str> for benten_id::did::Did
 pub fn benten_id::did::Did::as_ref(&self) -> &str
 impl core::fmt::Debug for benten_id::did::Did
-pub fn benten_id::did::Did::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::did::Did::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::did::Did
-pub fn benten_id::did::Did::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::did::Did::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_id::did::Did
-pub fn benten_id::did::Did::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_id::did::Did::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::StructuralPartialEq for benten_id::did::Did
 impl serde_core::ser::Serialize for benten_id::did::Did
-pub fn benten_id::did::Did::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::did::Did::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::did::Did
-pub fn benten_id::did::Did::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::did::Did::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::did::Did
 impl core::marker::Send for benten_id::did::Did
 impl core::marker::Sync for benten_id::did::Did
@@ -180,8 +180,11 @@ impl core::marker::Unpin for benten_id::did::Did
 impl core::marker::UnsafeUnpin for benten_id::did::Did
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::did::Did
 impl core::panic::unwind_safe::UnwindSafe for benten_id::did::Did
+pub const benten_id::did::DID_AGENT_PREFIX: &str
 pub const benten_id::did::DID_KEY_PREFIX: &str
 pub const benten_id::did::ED25519_MULTICODEC: [u8; 2]
+pub const benten_id::did::HYBRID_KEM_MULTICODEC: [u8; 2]
+pub const benten_id::did::HYBRID_SIG_MULTICODEC: [u8; 2]
 pub mod benten_id::did_rotation
 pub enum benten_id::did_rotation::AttestationKind
 pub benten_id::did_rotation::AttestationKind::SupersededBy
@@ -189,15 +192,15 @@ impl core::clone::Clone for benten_id::did_rotation::AttestationKind
 pub fn benten_id::did_rotation::AttestationKind::clone(&self) -> benten_id::did_rotation::AttestationKind
 impl core::cmp::Eq for benten_id::did_rotation::AttestationKind
 impl core::cmp::PartialEq for benten_id::did_rotation::AttestationKind
-pub fn benten_id::did_rotation::AttestationKind::eq(&self, other: &benten_id::did_rotation::AttestationKind) -> bool
+pub fn benten_id::did_rotation::AttestationKind::eq(&self, &benten_id::did_rotation::AttestationKind) -> bool
 impl core::fmt::Debug for benten_id::did_rotation::AttestationKind
-pub fn benten_id::did_rotation::AttestationKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::did_rotation::AttestationKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_id::did_rotation::AttestationKind
 impl core::marker::StructuralPartialEq for benten_id::did_rotation::AttestationKind
 impl serde_core::ser::Serialize for benten_id::did_rotation::AttestationKind
-pub fn benten_id::did_rotation::AttestationKind::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::did_rotation::AttestationKind::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::did_rotation::AttestationKind
-pub fn benten_id::did_rotation::AttestationKind::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::did_rotation::AttestationKind::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::did_rotation::AttestationKind
 impl core::marker::Send for benten_id::did_rotation::AttestationKind
 impl core::marker::Sync for benten_id::did_rotation::AttestationKind
@@ -214,21 +217,21 @@ impl benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::kind(&self) -> benten_id::did_rotation::AttestationKind
 pub fn benten_id::did_rotation::RotationAttestation::next_keypair_did(&self) -> benten_id::did::Did
 pub fn benten_id::did_rotation::RotationAttestation::previous_keypair_did(&self) -> benten_id::did::Did
-pub fn benten_id::did_rotation::RotationAttestation::verify_signature_with(&self, old_pk: &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DidRotationError>
+pub fn benten_id::did_rotation::RotationAttestation::verify_signature_with(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DidRotationError>
 impl benten_id::canonical_bytes::CanonicalBytes for benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::clone(&self) -> benten_id::did_rotation::RotationAttestation
 impl core::cmp::Eq for benten_id::did_rotation::RotationAttestation
 impl core::cmp::PartialEq for benten_id::did_rotation::RotationAttestation
-pub fn benten_id::did_rotation::RotationAttestation::eq(&self, other: &benten_id::did_rotation::RotationAttestation) -> bool
+pub fn benten_id::did_rotation::RotationAttestation::eq(&self, &benten_id::did_rotation::RotationAttestation) -> bool
 impl core::fmt::Debug for benten_id::did_rotation::RotationAttestation
-pub fn benten_id::did_rotation::RotationAttestation::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::did_rotation::RotationAttestation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::did_rotation::RotationAttestation
 impl serde_core::ser::Serialize for benten_id::did_rotation::RotationAttestation
-pub fn benten_id::did_rotation::RotationAttestation::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::did_rotation::RotationAttestation::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::did_rotation::RotationAttestation
-pub fn benten_id::did_rotation::RotationAttestation::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::did_rotation::RotationAttestation::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::did_rotation::RotationAttestation
 impl core::marker::Send for benten_id::did_rotation::RotationAttestation
 impl core::marker::Sync for benten_id::did_rotation::RotationAttestation
@@ -238,18 +241,18 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::did_rotation::Rotati
 impl core::panic::unwind_safe::UnwindSafe for benten_id::did_rotation::RotationAttestation
 pub struct benten_id::did_rotation::RotationLog
 impl benten_id::did_rotation::RotationLog
-pub fn benten_id::did_rotation::RotationLog::accept_rotation_event(&mut self, attestation: &benten_id::did_rotation::RotationAttestation) -> core::result::Result<(), benten_id::errors::DidRotationError>
-pub fn benten_id::did_rotation::RotationLog::append(&mut self, attestation: benten_id::did_rotation::RotationAttestation)
+pub fn benten_id::did_rotation::RotationLog::accept_rotation_event(&mut self, &benten_id::did_rotation::RotationAttestation) -> core::result::Result<(), benten_id::errors::DidRotationError>
+pub fn benten_id::did_rotation::RotationLog::append(&mut self, benten_id::did_rotation::RotationAttestation)
 pub fn benten_id::did_rotation::RotationLog::entries(&self) -> &[benten_id::did_rotation::RotationAttestation]
-pub fn benten_id::did_rotation::RotationLog::from_entries(entries: alloc::vec::Vec<benten_id::did_rotation::RotationAttestation>) -> Self
-pub fn benten_id::did_rotation::RotationLog::is_superseded(&self, did: &benten_id::did::Did) -> bool
+pub fn benten_id::did_rotation::RotationLog::from_entries(alloc::vec::Vec<benten_id::did_rotation::RotationAttestation>) -> Self
+pub fn benten_id::did_rotation::RotationLog::is_superseded(&self, &benten_id::did::Did) -> bool
 pub fn benten_id::did_rotation::RotationLog::new() -> Self
 impl core::clone::Clone for benten_id::did_rotation::RotationLog
 pub fn benten_id::did_rotation::RotationLog::clone(&self) -> benten_id::did_rotation::RotationLog
 impl core::default::Default for benten_id::did_rotation::RotationLog
 pub fn benten_id::did_rotation::RotationLog::default() -> benten_id::did_rotation::RotationLog
 impl core::fmt::Debug for benten_id::did_rotation::RotationLog
-pub fn benten_id::did_rotation::RotationLog::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::did_rotation::RotationLog::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::did_rotation::RotationLog
 impl core::marker::Send for benten_id::did_rotation::RotationLog
 impl core::marker::Sync for benten_id::did_rotation::RotationLog
@@ -257,7 +260,7 @@ impl core::marker::Unpin for benten_id::did_rotation::RotationLog
 impl core::marker::UnsafeUnpin for benten_id::did_rotation::RotationLog
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::did_rotation::RotationLog
 impl core::panic::unwind_safe::UnwindSafe for benten_id::did_rotation::RotationLog
-pub fn benten_id::did_rotation::rotate_keypair(did: &benten_id::did::Did, old_kp: &benten_id::keypair::Keypair, new_kp: &benten_id::keypair::Keypair, superseded_at: u64) -> core::result::Result<benten_id::did_rotation::RotationAttestation, benten_id::errors::DidRotationError>
+pub fn benten_id::did_rotation::rotate_keypair(&benten_id::did::Did, &benten_id::keypair::Keypair, &benten_id::keypair::Keypair, u64) -> core::result::Result<benten_id::did_rotation::RotationAttestation, benten_id::errors::DidRotationError>
 pub mod benten_id::errors
 pub enum benten_id::errors::DeviceAttestationError
 pub benten_id::errors::DeviceAttestationError::BadSignature
@@ -280,12 +283,12 @@ impl benten_id::errors::DeviceAttestationError
 pub fn benten_id::errors::DeviceAttestationError::code(&self) -> &'static str
 impl core::cmp::Eq for benten_id::errors::DeviceAttestationError
 impl core::cmp::PartialEq for benten_id::errors::DeviceAttestationError
-pub fn benten_id::errors::DeviceAttestationError::eq(&self, other: &benten_id::errors::DeviceAttestationError) -> bool
+pub fn benten_id::errors::DeviceAttestationError::eq(&self, &benten_id::errors::DeviceAttestationError) -> bool
 impl core::error::Error for benten_id::errors::DeviceAttestationError
 impl core::fmt::Debug for benten_id::errors::DeviceAttestationError
-pub fn benten_id::errors::DeviceAttestationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DeviceAttestationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::DeviceAttestationError
-pub fn benten_id::errors::DeviceAttestationError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DeviceAttestationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::DeviceAttestationError
 impl core::marker::Freeze for benten_id::errors::DeviceAttestationError
 impl core::marker::Send for benten_id::errors::DeviceAttestationError
@@ -304,12 +307,12 @@ pub benten_id::errors::DidError::InvalidPublicKey
 pub benten_id::errors::DidError::UnknownMulticodec(u8, u8)
 impl core::cmp::Eq for benten_id::errors::DidError
 impl core::cmp::PartialEq for benten_id::errors::DidError
-pub fn benten_id::errors::DidError::eq(&self, other: &benten_id::errors::DidError) -> bool
+pub fn benten_id::errors::DidError::eq(&self, &benten_id::errors::DidError) -> bool
 impl core::error::Error for benten_id::errors::DidError
 impl core::fmt::Debug for benten_id::errors::DidError
-pub fn benten_id::errors::DidError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::DidError
-pub fn benten_id::errors::DidError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::DidError
 impl core::marker::Freeze for benten_id::errors::DidError
 impl core::marker::Send for benten_id::errors::DidError
@@ -333,12 +336,12 @@ pub benten_id::errors::DidRotationError::VerbatimReplay::hlc: u64
 pub benten_id::errors::DidRotationError::VerbatimReplay::prev_did: alloc::string::String
 impl core::cmp::Eq for benten_id::errors::DidRotationError
 impl core::cmp::PartialEq for benten_id::errors::DidRotationError
-pub fn benten_id::errors::DidRotationError::eq(&self, other: &benten_id::errors::DidRotationError) -> bool
+pub fn benten_id::errors::DidRotationError::eq(&self, &benten_id::errors::DidRotationError) -> bool
 impl core::error::Error for benten_id::errors::DidRotationError
 impl core::fmt::Debug for benten_id::errors::DidRotationError
-pub fn benten_id::errors::DidRotationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidRotationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::DidRotationError
-pub fn benten_id::errors::DidRotationError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidRotationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::DidRotationError
 impl core::marker::Freeze for benten_id::errors::DidRotationError
 impl core::marker::Send for benten_id::errors::DidRotationError
@@ -351,13 +354,13 @@ pub enum benten_id::errors::KeypairError
 pub benten_id::errors::KeypairError::Csprng(alloc::string::String)
 pub benten_id::errors::KeypairError::SeedImport(benten_id::errors::SeedImportError)
 impl core::convert::From<benten_id::errors::SeedImportError> for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::from(source: benten_id::errors::SeedImportError) -> Self
+pub fn benten_id::errors::KeypairError::from(benten_id::errors::SeedImportError) -> Self
 impl core::error::Error for benten_id::errors::KeypairError
 pub fn benten_id::errors::KeypairError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::KeypairError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::KeypairError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::errors::KeypairError
 impl core::marker::Send for benten_id::errors::KeypairError
 impl core::marker::Sync for benten_id::errors::KeypairError
@@ -371,12 +374,12 @@ pub benten_id::errors::MultiSigError::PostPhase3
 pub benten_id::errors::MultiSigError::Rejected(&'static str)
 impl core::cmp::Eq for benten_id::errors::MultiSigError
 impl core::cmp::PartialEq for benten_id::errors::MultiSigError
-pub fn benten_id::errors::MultiSigError::eq(&self, other: &benten_id::errors::MultiSigError) -> bool
+pub fn benten_id::errors::MultiSigError::eq(&self, &benten_id::errors::MultiSigError) -> bool
 impl core::error::Error for benten_id::errors::MultiSigError
 impl core::fmt::Debug for benten_id::errors::MultiSigError
-pub fn benten_id::errors::MultiSigError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::MultiSigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::MultiSigError
-pub fn benten_id::errors::MultiSigError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::MultiSigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::MultiSigError
 impl core::marker::Freeze for benten_id::errors::MultiSigError
 impl core::marker::Send for benten_id::errors::MultiSigError
@@ -400,14 +403,14 @@ pub benten_id::errors::SeedImportError::UnknownVersion
 pub benten_id::errors::SeedImportError::UnknownVersion::version: u8
 impl core::cmp::Eq for benten_id::errors::SeedImportError
 impl core::cmp::PartialEq for benten_id::errors::SeedImportError
-pub fn benten_id::errors::SeedImportError::eq(&self, other: &benten_id::errors::SeedImportError) -> bool
+pub fn benten_id::errors::SeedImportError::eq(&self, &benten_id::errors::SeedImportError) -> bool
 impl core::convert::From<benten_id::errors::SeedImportError> for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::from(source: benten_id::errors::SeedImportError) -> Self
+pub fn benten_id::errors::KeypairError::from(benten_id::errors::SeedImportError) -> Self
 impl core::error::Error for benten_id::errors::SeedImportError
 impl core::fmt::Debug for benten_id::errors::SeedImportError
-pub fn benten_id::errors::SeedImportError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::SeedImportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::SeedImportError
-pub fn benten_id::errors::SeedImportError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::SeedImportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::SeedImportError
 impl core::marker::Freeze for benten_id::errors::SeedImportError
 impl core::marker::Send for benten_id::errors::SeedImportError
@@ -453,12 +456,12 @@ pub benten_id::errors::UcanError::ProofChainTooDeep::depth: usize
 pub benten_id::errors::UcanError::ProofChainTooDeep::max: usize
 impl core::cmp::Eq for benten_id::errors::UcanError
 impl core::cmp::PartialEq for benten_id::errors::UcanError
-pub fn benten_id::errors::UcanError::eq(&self, other: &benten_id::errors::UcanError) -> bool
+pub fn benten_id::errors::UcanError::eq(&self, &benten_id::errors::UcanError) -> bool
 impl core::error::Error for benten_id::errors::UcanError
 impl core::fmt::Debug for benten_id::errors::UcanError
-pub fn benten_id::errors::UcanError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::UcanError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::UcanError
-pub fn benten_id::errors::UcanError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::UcanError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::UcanError
 impl core::marker::Freeze for benten_id::errors::UcanError
 impl core::marker::Send for benten_id::errors::UcanError
@@ -484,12 +487,12 @@ pub benten_id::errors::VcError::Revoked
 pub benten_id::errors::VcError::Revoked::status_id: alloc::string::String
 impl core::cmp::Eq for benten_id::errors::VcError
 impl core::cmp::PartialEq for benten_id::errors::VcError
-pub fn benten_id::errors::VcError::eq(&self, other: &benten_id::errors::VcError) -> bool
+pub fn benten_id::errors::VcError::eq(&self, &benten_id::errors::VcError) -> bool
 impl core::error::Error for benten_id::errors::VcError
 impl core::fmt::Debug for benten_id::errors::VcError
-pub fn benten_id::errors::VcError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::VcError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::VcError
-pub fn benten_id::errors::VcError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::VcError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::VcError
 impl core::marker::Freeze for benten_id::errors::VcError
 impl core::marker::Send for benten_id::errors::VcError
@@ -506,12 +509,12 @@ pub benten_id::grant_reader::ReaderError::RecordMalformed
 pub benten_id::grant_reader::ReaderError::RecordMalformed::detail: alloc::string::String
 impl core::cmp::Eq for benten_id::grant_reader::ReaderError
 impl core::cmp::PartialEq for benten_id::grant_reader::ReaderError
-pub fn benten_id::grant_reader::ReaderError::eq(&self, other: &benten_id::grant_reader::ReaderError) -> bool
+pub fn benten_id::grant_reader::ReaderError::eq(&self, &benten_id::grant_reader::ReaderError) -> bool
 impl core::error::Error for benten_id::grant_reader::ReaderError
 impl core::fmt::Debug for benten_id::grant_reader::ReaderError
-pub fn benten_id::grant_reader::ReaderError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::grant_reader::ReaderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::grant_reader::ReaderError
-pub fn benten_id::grant_reader::ReaderError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::grant_reader::ReaderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::grant_reader::ReaderError
 impl core::marker::Freeze for benten_id::grant_reader::ReaderError
 impl core::marker::Send for benten_id::grant_reader::ReaderError
@@ -521,21 +524,21 @@ impl core::marker::UnsafeUnpin for benten_id::grant_reader::ReaderError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::grant_reader::ReaderError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::grant_reader::ReaderError
 pub trait benten_id::grant_reader::GrantReader: core::marker::Send + core::marker::Sync
-pub fn benten_id::grant_reader::GrantReader::has_unrevoked_grant_for_grant_cid(&self, grant_cid: &benten_core::Cid) -> core::result::Result<bool, benten_id::grant_reader::ReaderError>
-pub fn benten_id::grant_reader::GrantReader::has_unrevoked_grant_for_scope(&self, scope: &str) -> core::result::Result<bool, benten_id::grant_reader::ReaderError>
+pub fn benten_id::grant_reader::GrantReader::has_unrevoked_grant_for_grant_cid(&self, &benten_core::Cid) -> core::result::Result<bool, benten_id::grant_reader::ReaderError>
+pub fn benten_id::grant_reader::GrantReader::has_unrevoked_grant_for_scope(&self, &str) -> core::result::Result<bool, benten_id::grant_reader::ReaderError>
 pub mod benten_id::keypair
 pub use benten_id::keypair::Signature
 pub struct benten_id::keypair::Keypair
 impl benten_id::keypair::Keypair
 pub fn benten_id::keypair::Keypair::export_seed_envelope(&self) -> alloc::vec::Vec<u8>
-pub fn benten_id::keypair::Keypair::from_dag_cbor_envelope(bytes: &[u8]) -> core::result::Result<Self, benten_id::errors::KeypairError>
-pub fn benten_id::keypair::Keypair::from_seed_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_id::errors::KeypairError>
+pub fn benten_id::keypair::Keypair::from_dag_cbor_envelope(&[u8]) -> core::result::Result<Self, benten_id::errors::KeypairError>
+pub fn benten_id::keypair::Keypair::from_seed_bytes(&[u8]) -> core::result::Result<Self, benten_id::errors::KeypairError>
 pub fn benten_id::keypair::Keypair::generate() -> Self
 pub fn benten_id::keypair::Keypair::public_key(&self) -> &benten_id::keypair::PublicKey
 pub fn benten_id::keypair::Keypair::secret_bytes_unprotected(&self) -> [u8; 32]
-pub fn benten_id::keypair::Keypair::sign(&self, msg: &[u8]) -> ed25519::Signature
+pub fn benten_id::keypair::Keypair::sign(&self, &[u8]) -> ed25519::Signature
 impl core::fmt::Debug for benten_id::keypair::Keypair
-pub fn benten_id::keypair::Keypair::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::keypair::Keypair::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::keypair::Keypair
 impl core::marker::Send for benten_id::keypair::Keypair
 impl core::marker::Sync for benten_id::keypair::Keypair
@@ -546,17 +549,17 @@ impl core::panic::unwind_safe::UnwindSafe for benten_id::keypair::Keypair
 pub struct benten_id::keypair::PublicKey
 impl benten_id::keypair::PublicKey
 pub fn benten_id::keypair::PublicKey::as_verifying_key(&self) -> &ed25519_dalek::verifying::VerifyingKey
-pub fn benten_id::keypair::PublicKey::from_bytes(bytes: &[u8; 32]) -> core::option::Option<Self>
+pub fn benten_id::keypair::PublicKey::from_bytes(&[u8; 32]) -> core::option::Option<Self>
 pub fn benten_id::keypair::PublicKey::to_bytes(&self) -> [u8; 32]
 pub fn benten_id::keypair::PublicKey::to_did(&self) -> benten_id::did::Did
-pub fn benten_id::keypair::PublicKey::verify(&self, msg: &[u8], sig: &ed25519::Signature) -> core::result::Result<(), ed25519_dalek::errors::SignatureError>
+pub fn benten_id::keypair::PublicKey::verify(&self, &[u8], &ed25519::Signature) -> core::result::Result<(), ed25519_dalek::errors::SignatureError>
 impl core::clone::Clone for benten_id::keypair::PublicKey
 pub fn benten_id::keypair::PublicKey::clone(&self) -> benten_id::keypair::PublicKey
 impl core::cmp::Eq for benten_id::keypair::PublicKey
 impl core::cmp::PartialEq for benten_id::keypair::PublicKey
-pub fn benten_id::keypair::PublicKey::eq(&self, other: &benten_id::keypair::PublicKey) -> bool
+pub fn benten_id::keypair::PublicKey::eq(&self, &benten_id::keypair::PublicKey) -> bool
 impl core::fmt::Debug for benten_id::keypair::PublicKey
-pub fn benten_id::keypair::PublicKey::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::keypair::PublicKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::keypair::PublicKey
 impl core::marker::Freeze for benten_id::keypair::PublicKey
 impl core::marker::Send for benten_id::keypair::PublicKey
@@ -567,7 +570,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::keypair::PublicKey
 impl core::panic::unwind_safe::UnwindSafe for benten_id::keypair::PublicKey
 pub struct benten_id::keypair::SecretKey
 impl core::fmt::Debug for benten_id::keypair::SecretKey
-pub fn benten_id::keypair::SecretKey::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::keypair::SecretKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::ops::drop::Drop for benten_id::keypair::SecretKey
 pub fn benten_id::keypair::SecretKey::drop(&mut self)
 impl zeroize::Zeroize for benten_id::keypair::SecretKey
@@ -584,15 +587,15 @@ pub const benten_id::keypair::ENVELOPE_VERSION: u8
 pub mod benten_id::multi_sig
 pub struct benten_id::multi_sig::Ed25519SingleKey
 impl benten_id::multi_sig::Ed25519SingleKey
-pub fn benten_id::multi_sig::Ed25519SingleKey::new(keypair: benten_id::keypair::Keypair) -> Self
+pub fn benten_id::multi_sig::Ed25519SingleKey::new(benten_id::keypair::Keypair) -> Self
 pub fn benten_id::multi_sig::Ed25519SingleKey::public_key(&self) -> &benten_id::keypair::PublicKey
 impl benten_id::multi_sig::MultiSigSurface for benten_id::multi_sig::Ed25519SingleKey
 pub type benten_id::multi_sig::Ed25519SingleKey::Error = benten_id::errors::MultiSigError
 pub type benten_id::multi_sig::Ed25519SingleKey::Signature = ed25519::Signature
 pub fn benten_id::multi_sig::Ed25519SingleKey::participants(&self) -> u32
-pub fn benten_id::multi_sig::Ed25519SingleKey::sign(&self, msg: &[u8]) -> core::result::Result<Self::Signature, Self::Error>
+pub fn benten_id::multi_sig::Ed25519SingleKey::sign(&self, &[u8]) -> core::result::Result<Self::Signature, Self::Error>
 pub fn benten_id::multi_sig::Ed25519SingleKey::threshold(&self) -> u32
-pub fn benten_id::multi_sig::Ed25519SingleKey::verify(&self, msg: &[u8], sig: &Self::Signature) -> core::result::Result<(), Self::Error>
+pub fn benten_id::multi_sig::Ed25519SingleKey::verify(&self, &[u8], &Self::Signature) -> core::result::Result<(), Self::Error>
 impl core::marker::Freeze for benten_id::multi_sig::Ed25519SingleKey
 impl core::marker::Send for benten_id::multi_sig::Ed25519SingleKey
 impl core::marker::Sync for benten_id::multi_sig::Ed25519SingleKey
@@ -607,9 +610,9 @@ impl benten_id::multi_sig::MultiSigSurface for benten_id::multi_sig::ThresholdMu
 pub type benten_id::multi_sig::ThresholdMultiSig::Error = benten_id::errors::MultiSigError
 pub type benten_id::multi_sig::ThresholdMultiSig::Signature = alloc::vec::Vec<u8>
 pub fn benten_id::multi_sig::ThresholdMultiSig::participants(&self) -> u32
-pub fn benten_id::multi_sig::ThresholdMultiSig::sign(&self, _msg: &[u8]) -> core::result::Result<Self::Signature, Self::Error>
+pub fn benten_id::multi_sig::ThresholdMultiSig::sign(&self, &[u8]) -> core::result::Result<Self::Signature, Self::Error>
 pub fn benten_id::multi_sig::ThresholdMultiSig::threshold(&self) -> u32
-pub fn benten_id::multi_sig::ThresholdMultiSig::verify(&self, _msg: &[u8], _sig: &Self::Signature) -> core::result::Result<(), Self::Error>
+pub fn benten_id::multi_sig::ThresholdMultiSig::verify(&self, &[u8], &Self::Signature) -> core::result::Result<(), Self::Error>
 impl core::marker::Freeze for benten_id::multi_sig::ThresholdMultiSig
 impl core::marker::Send for benten_id::multi_sig::ThresholdMultiSig
 impl core::marker::Sync for benten_id::multi_sig::ThresholdMultiSig
@@ -621,23 +624,23 @@ pub trait benten_id::multi_sig::MultiSigSurface
 pub type benten_id::multi_sig::MultiSigSurface::Error
 pub type benten_id::multi_sig::MultiSigSurface::Signature
 pub fn benten_id::multi_sig::MultiSigSurface::participants(&self) -> u32
-pub fn benten_id::multi_sig::MultiSigSurface::sign(&self, msg: &[u8]) -> core::result::Result<Self::Signature, Self::Error>
+pub fn benten_id::multi_sig::MultiSigSurface::sign(&self, &[u8]) -> core::result::Result<Self::Signature, Self::Error>
 pub fn benten_id::multi_sig::MultiSigSurface::threshold(&self) -> u32
-pub fn benten_id::multi_sig::MultiSigSurface::verify(&self, msg: &[u8], sig: &Self::Signature) -> core::result::Result<(), Self::Error>
+pub fn benten_id::multi_sig::MultiSigSurface::verify(&self, &[u8], &Self::Signature) -> core::result::Result<(), Self::Error>
 impl benten_id::multi_sig::MultiSigSurface for benten_id::multi_sig::Ed25519SingleKey
 pub type benten_id::multi_sig::Ed25519SingleKey::Error = benten_id::errors::MultiSigError
 pub type benten_id::multi_sig::Ed25519SingleKey::Signature = ed25519::Signature
 pub fn benten_id::multi_sig::Ed25519SingleKey::participants(&self) -> u32
-pub fn benten_id::multi_sig::Ed25519SingleKey::sign(&self, msg: &[u8]) -> core::result::Result<Self::Signature, Self::Error>
+pub fn benten_id::multi_sig::Ed25519SingleKey::sign(&self, &[u8]) -> core::result::Result<Self::Signature, Self::Error>
 pub fn benten_id::multi_sig::Ed25519SingleKey::threshold(&self) -> u32
-pub fn benten_id::multi_sig::Ed25519SingleKey::verify(&self, msg: &[u8], sig: &Self::Signature) -> core::result::Result<(), Self::Error>
+pub fn benten_id::multi_sig::Ed25519SingleKey::verify(&self, &[u8], &Self::Signature) -> core::result::Result<(), Self::Error>
 impl benten_id::multi_sig::MultiSigSurface for benten_id::multi_sig::ThresholdMultiSig
 pub type benten_id::multi_sig::ThresholdMultiSig::Error = benten_id::errors::MultiSigError
 pub type benten_id::multi_sig::ThresholdMultiSig::Signature = alloc::vec::Vec<u8>
 pub fn benten_id::multi_sig::ThresholdMultiSig::participants(&self) -> u32
-pub fn benten_id::multi_sig::ThresholdMultiSig::sign(&self, _msg: &[u8]) -> core::result::Result<Self::Signature, Self::Error>
+pub fn benten_id::multi_sig::ThresholdMultiSig::sign(&self, &[u8]) -> core::result::Result<Self::Signature, Self::Error>
 pub fn benten_id::multi_sig::ThresholdMultiSig::threshold(&self) -> u32
-pub fn benten_id::multi_sig::ThresholdMultiSig::verify(&self, _msg: &[u8], _sig: &Self::Signature) -> core::result::Result<(), Self::Error>
+pub fn benten_id::multi_sig::ThresholdMultiSig::verify(&self, &[u8], &Self::Signature) -> core::result::Result<(), Self::Error>
 pub type benten_id::multi_sig::ThresholdSignature = alloc::vec::Vec<u8>
 pub mod benten_id::plugin_did
 pub struct benten_id::plugin_did::PluginDidHandle
@@ -645,7 +648,7 @@ impl benten_id::plugin_did::PluginDidHandle
 pub fn benten_id::plugin_did::PluginDidHandle::did(&self) -> &benten_id::did::Did
 pub fn benten_id::plugin_did::PluginDidHandle::keypair(&self) -> &benten_id::keypair::Keypair
 impl core::fmt::Debug for benten_id::plugin_did::PluginDidHandle
-pub fn benten_id::plugin_did::PluginDidHandle::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::plugin_did::PluginDidHandle::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::plugin_did::PluginDidHandle
 impl core::marker::Send for benten_id::plugin_did::PluginDidHandle
 impl core::marker::Sync for benten_id::plugin_did::PluginDidHandle
@@ -655,17 +658,17 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::plugin_did::PluginDi
 impl core::panic::unwind_safe::UnwindSafe for benten_id::plugin_did::PluginDidHandle
 pub struct benten_id::plugin_did::PluginDidStore
 impl benten_id::plugin_did::PluginDidStore
-pub fn benten_id::plugin_did::PluginDidStore::get(&self, did: &benten_id::did::Did) -> core::option::Option<&benten_id::plugin_did::PluginDidHandle>
-pub fn benten_id::plugin_did::PluginDidStore::insert(&mut self, handle: benten_id::plugin_did::PluginDidHandle) -> core::result::Result<(), benten_errors::ErrorCode>
+pub fn benten_id::plugin_did::PluginDidStore::get(&self, &benten_id::did::Did) -> core::option::Option<&benten_id::plugin_did::PluginDidHandle>
+pub fn benten_id::plugin_did::PluginDidStore::insert(&mut self, benten_id::plugin_did::PluginDidHandle) -> core::result::Result<(), benten_errors::ErrorCode>
 pub fn benten_id::plugin_did::PluginDidStore::is_empty(&self) -> bool
 pub fn benten_id::plugin_did::PluginDidStore::len(&self) -> usize
 pub fn benten_id::plugin_did::PluginDidStore::mint_and_store(&mut self) -> benten_id::did::Did
 pub fn benten_id::plugin_did::PluginDidStore::new() -> Self
-pub fn benten_id::plugin_did::PluginDidStore::revoke(&mut self, did: &benten_id::did::Did) -> bool
+pub fn benten_id::plugin_did::PluginDidStore::revoke(&mut self, &benten_id::did::Did) -> bool
 impl core::default::Default for benten_id::plugin_did::PluginDidStore
 pub fn benten_id::plugin_did::PluginDidStore::default() -> benten_id::plugin_did::PluginDidStore
 impl core::fmt::Debug for benten_id::plugin_did::PluginDidStore
-pub fn benten_id::plugin_did::PluginDidStore::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::plugin_did::PluginDidStore::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::plugin_did::PluginDidStore
 impl core::marker::Send for benten_id::plugin_did::PluginDidStore
 impl core::marker::Sync for benten_id::plugin_did::PluginDidStore
@@ -673,28 +676,28 @@ impl core::marker::Unpin for benten_id::plugin_did::PluginDidStore
 impl core::marker::UnsafeUnpin for benten_id::plugin_did::PluginDidStore
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::plugin_did::PluginDidStore
 impl core::panic::unwind_safe::UnwindSafe for benten_id::plugin_did::PluginDidStore
-pub fn benten_id::plugin_did::audience_matches_plugin_did(audience: &benten_id::did::Did, plugin_did: &benten_id::did::Did) -> bool
+pub fn benten_id::plugin_did::audience_matches_plugin_did(&benten_id::did::Did, &benten_id::did::Did) -> bool
 pub fn benten_id::plugin_did::mint() -> benten_id::plugin_did::PluginDidHandle
 pub mod benten_id::ucan
 pub struct benten_id::ucan::Capability
 pub benten_id::ucan::Capability::ability: alloc::string::String
 pub benten_id::ucan::Capability::resource: alloc::string::String
 impl benten_id::ucan::Capability
-pub fn benten_id::ucan::Capability::new(resource: impl core::convert::Into<alloc::string::String>, ability: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::ucan::Capability::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for benten_id::ucan::Capability
 pub fn benten_id::ucan::Capability::clone(&self) -> benten_id::ucan::Capability
 impl core::cmp::Eq for benten_id::ucan::Capability
 impl core::cmp::PartialEq for benten_id::ucan::Capability
-pub fn benten_id::ucan::Capability::eq(&self, other: &benten_id::ucan::Capability) -> bool
+pub fn benten_id::ucan::Capability::eq(&self, &benten_id::ucan::Capability) -> bool
 impl core::fmt::Debug for benten_id::ucan::Capability
-pub fn benten_id::ucan::Capability::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::ucan::Capability::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_id::ucan::Capability
-pub fn benten_id::ucan::Capability::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_id::ucan::Capability::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::StructuralPartialEq for benten_id::ucan::Capability
 impl serde_core::ser::Serialize for benten_id::ucan::Capability
-pub fn benten_id::ucan::Capability::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::ucan::Capability::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::ucan::Capability
-pub fn benten_id::ucan::Capability::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::ucan::Capability::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::ucan::Capability
 impl core::marker::Send for benten_id::ucan::Capability
 impl core::marker::Sync for benten_id::ucan::Capability
@@ -707,16 +710,16 @@ pub benten_id::ucan::Ucan::claims: benten_id::ucan::UcanClaims
 pub benten_id::ucan::Ucan::signature: alloc::vec::Vec<u8>
 impl benten_id::ucan::Ucan
 pub fn benten_id::ucan::Ucan::builder() -> benten_id::ucan::UcanBuilder
-pub fn benten_id::ucan::Ucan::from_canonical_bytes_bounded(bytes: &[u8], max_depth: usize) -> core::result::Result<Self, benten_id::errors::UcanError>
-pub fn benten_id::ucan::Ucan::validate_at(&self, now: u64) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_id::ucan::Ucan::from_canonical_bytes_bounded(&[u8], usize) -> core::result::Result<Self, benten_id::errors::UcanError>
+pub fn benten_id::ucan::Ucan::validate_at(&self, u64) -> core::result::Result<(), benten_id::errors::UcanError>
 impl core::clone::Clone for benten_id::ucan::Ucan
 pub fn benten_id::ucan::Ucan::clone(&self) -> benten_id::ucan::Ucan
 impl core::fmt::Debug for benten_id::ucan::Ucan
-pub fn benten_id::ucan::Ucan::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::ucan::Ucan::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_id::ucan::Ucan
-pub fn benten_id::ucan::Ucan::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::ucan::Ucan::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::ucan::Ucan
-pub fn benten_id::ucan::Ucan::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::ucan::Ucan::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::ucan::Ucan
 impl core::marker::Send for benten_id::ucan::Ucan
 impl core::marker::Sync for benten_id::ucan::Ucan
@@ -726,15 +729,15 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::ucan::Ucan
 impl core::panic::unwind_safe::UnwindSafe for benten_id::ucan::Ucan
 pub struct benten_id::ucan::UcanBuilder
 impl benten_id::ucan::UcanBuilder
-pub fn benten_id::ucan::UcanBuilder::audience(self, aud: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_id::ucan::UcanBuilder::audience_did(self, did: &benten_id::did::Did) -> Self
-pub fn benten_id::ucan::UcanBuilder::capability(self, resource: impl core::convert::Into<alloc::string::String>, ability: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_id::ucan::UcanBuilder::expiry(self, exp: u64) -> Self
-pub fn benten_id::ucan::UcanBuilder::issuer(self, iss: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_id::ucan::UcanBuilder::issuer_did(self, did: &benten_id::did::Did) -> Self
-pub fn benten_id::ucan::UcanBuilder::not_before(self, nbf: u64) -> Self
-pub fn benten_id::ucan::UcanBuilder::proof(self, parent: benten_id::ucan::Ucan) -> Self
-pub fn benten_id::ucan::UcanBuilder::sign(self, keypair: &benten_id::keypair::Keypair) -> benten_id::ucan::Ucan
+pub fn benten_id::ucan::UcanBuilder::audience(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::ucan::UcanBuilder::audience_did(self, &benten_id::did::Did) -> Self
+pub fn benten_id::ucan::UcanBuilder::capability(self, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::ucan::UcanBuilder::expiry(self, u64) -> Self
+pub fn benten_id::ucan::UcanBuilder::issuer(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::ucan::UcanBuilder::issuer_did(self, &benten_id::did::Did) -> Self
+pub fn benten_id::ucan::UcanBuilder::not_before(self, u64) -> Self
+pub fn benten_id::ucan::UcanBuilder::proof(self, benten_id::ucan::Ucan) -> Self
+pub fn benten_id::ucan::UcanBuilder::sign(self, &benten_id::keypair::Keypair) -> benten_id::ucan::Ucan
 impl core::default::Default for benten_id::ucan::UcanBuilder
 pub fn benten_id::ucan::UcanBuilder::default() -> benten_id::ucan::UcanBuilder
 impl core::marker::Freeze for benten_id::ucan::UcanBuilder
@@ -756,11 +759,11 @@ pub fn benten_id::ucan::UcanClaims::to_canonical_bytes(&self) -> alloc::vec::Vec
 impl core::clone::Clone for benten_id::ucan::UcanClaims
 pub fn benten_id::ucan::UcanClaims::clone(&self) -> benten_id::ucan::UcanClaims
 impl core::fmt::Debug for benten_id::ucan::UcanClaims
-pub fn benten_id::ucan::UcanClaims::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::ucan::UcanClaims::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_id::ucan::UcanClaims
-pub fn benten_id::ucan::UcanClaims::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::ucan::UcanClaims::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::ucan::UcanClaims
-pub fn benten_id::ucan::UcanClaims::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::ucan::UcanClaims::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::ucan::UcanClaims
 impl core::marker::Send for benten_id::ucan::UcanClaims
 impl core::marker::Sync for benten_id::ucan::UcanClaims
@@ -769,10 +772,10 @@ impl core::marker::UnsafeUnpin for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::UnwindSafe for benten_id::ucan::UcanClaims
 pub const benten_id::ucan::MAX_UCAN_PROOF_DEPTH: usize
-pub fn benten_id::ucan::validate_chain_at(chain: &[benten_id::ucan::Ucan], now: u64) -> core::result::Result<(), benten_id::errors::UcanError>
-pub fn benten_id::ucan::validate_chain_for_audience(chain: &[benten_id::ucan::Ucan], expected_audience: &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>
-pub fn benten_id::ucan::validate_chain_for_capability(chain: &[benten_id::ucan::Ucan], expected_audience: &benten_id::did::Did, required: &benten_id::ucan::Capability, now: u64) -> core::result::Result<(), benten_id::errors::UcanError>
-pub fn benten_id::ucan::validate_chain_no_time_check(chain: &[benten_id::ucan::Ucan]) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_id::ucan::validate_chain_at(&[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_id::ucan::validate_chain_for_audience(&[benten_id::ucan::Ucan], &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_id::ucan::validate_chain_for_capability(&[benten_id::ucan::Ucan], &benten_id::did::Did, &benten_id::ucan::Capability, u64) -> core::result::Result<(), benten_id::errors::UcanError>
+pub fn benten_id::ucan::validate_chain_no_time_check(&[benten_id::ucan::Ucan]) -> core::result::Result<(), benten_id::errors::UcanError>
 pub mod benten_id::vc
 pub struct benten_id::vc::Credential
 pub benten_id::vc::Credential::claims: benten_id::vc::CredentialClaims
@@ -786,14 +789,14 @@ impl core::clone::Clone for benten_id::vc::Credential
 pub fn benten_id::vc::Credential::clone(&self) -> benten_id::vc::Credential
 impl core::cmp::Eq for benten_id::vc::Credential
 impl core::cmp::PartialEq for benten_id::vc::Credential
-pub fn benten_id::vc::Credential::eq(&self, other: &benten_id::vc::Credential) -> bool
+pub fn benten_id::vc::Credential::eq(&self, &benten_id::vc::Credential) -> bool
 impl core::fmt::Debug for benten_id::vc::Credential
-pub fn benten_id::vc::Credential::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::vc::Credential::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::vc::Credential
 impl serde_core::ser::Serialize for benten_id::vc::Credential
-pub fn benten_id::vc::Credential::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::vc::Credential::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::vc::Credential
-pub fn benten_id::vc::Credential::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::vc::Credential::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::vc::Credential
 impl core::marker::Send for benten_id::vc::Credential
 impl core::marker::Sync for benten_id::vc::Credential
@@ -803,14 +806,14 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::vc::Credential
 impl core::panic::unwind_safe::UnwindSafe for benten_id::vc::Credential
 pub struct benten_id::vc::CredentialBuilder
 impl benten_id::vc::CredentialBuilder
-pub fn benten_id::vc::CredentialBuilder::claim(self, name: impl core::convert::Into<alloc::string::String>, value: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_id::vc::CredentialBuilder::credential_status_id(self, id: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_id::vc::CredentialBuilder::expires_at(self, secs: u64) -> Self
-pub fn benten_id::vc::CredentialBuilder::id(self, id: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_id::vc::CredentialBuilder::issued_at(self, secs: u64) -> Self
-pub fn benten_id::vc::CredentialBuilder::issuer(self, did: &benten_id::did::Did) -> Self
-pub fn benten_id::vc::CredentialBuilder::sign(self, issuer_kp: &benten_id::keypair::Keypair) -> core::result::Result<benten_id::vc::Credential, benten_id::errors::VcError>
-pub fn benten_id::vc::CredentialBuilder::subject(self, did: &benten_id::did::Did) -> Self
+pub fn benten_id::vc::CredentialBuilder::claim(self, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::vc::CredentialBuilder::credential_status_id(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::vc::CredentialBuilder::expires_at(self, u64) -> Self
+pub fn benten_id::vc::CredentialBuilder::id(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_id::vc::CredentialBuilder::issued_at(self, u64) -> Self
+pub fn benten_id::vc::CredentialBuilder::issuer(self, &benten_id::did::Did) -> Self
+pub fn benten_id::vc::CredentialBuilder::sign(self, &benten_id::keypair::Keypair) -> core::result::Result<benten_id::vc::Credential, benten_id::errors::VcError>
+pub fn benten_id::vc::CredentialBuilder::subject(self, &benten_id::did::Did) -> Self
 impl core::default::Default for benten_id::vc::CredentialBuilder
 pub fn benten_id::vc::CredentialBuilder::default() -> benten_id::vc::CredentialBuilder
 impl core::marker::Freeze for benten_id::vc::CredentialBuilder
@@ -835,14 +838,14 @@ impl core::clone::Clone for benten_id::vc::CredentialClaims
 pub fn benten_id::vc::CredentialClaims::clone(&self) -> benten_id::vc::CredentialClaims
 impl core::cmp::Eq for benten_id::vc::CredentialClaims
 impl core::cmp::PartialEq for benten_id::vc::CredentialClaims
-pub fn benten_id::vc::CredentialClaims::eq(&self, other: &benten_id::vc::CredentialClaims) -> bool
+pub fn benten_id::vc::CredentialClaims::eq(&self, &benten_id::vc::CredentialClaims) -> bool
 impl core::fmt::Debug for benten_id::vc::CredentialClaims
-pub fn benten_id::vc::CredentialClaims::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::vc::CredentialClaims::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::vc::CredentialClaims
 impl serde_core::ser::Serialize for benten_id::vc::CredentialClaims
-pub fn benten_id::vc::CredentialClaims::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::vc::CredentialClaims::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::vc::CredentialClaims
-pub fn benten_id::vc::CredentialClaims::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::vc::CredentialClaims::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::vc::CredentialClaims
 impl core::marker::Send for benten_id::vc::CredentialClaims
 impl core::marker::Sync for benten_id::vc::CredentialClaims
@@ -857,14 +860,14 @@ impl core::clone::Clone for benten_id::vc::CredentialStatus
 pub fn benten_id::vc::CredentialStatus::clone(&self) -> benten_id::vc::CredentialStatus
 impl core::cmp::Eq for benten_id::vc::CredentialStatus
 impl core::cmp::PartialEq for benten_id::vc::CredentialStatus
-pub fn benten_id::vc::CredentialStatus::eq(&self, other: &benten_id::vc::CredentialStatus) -> bool
+pub fn benten_id::vc::CredentialStatus::eq(&self, &benten_id::vc::CredentialStatus) -> bool
 impl core::fmt::Debug for benten_id::vc::CredentialStatus
-pub fn benten_id::vc::CredentialStatus::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::vc::CredentialStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::vc::CredentialStatus
 impl serde_core::ser::Serialize for benten_id::vc::CredentialStatus
-pub fn benten_id::vc::CredentialStatus::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::vc::CredentialStatus::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::vc::CredentialStatus
-pub fn benten_id::vc::CredentialStatus::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::vc::CredentialStatus::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::vc::CredentialStatus
 impl core::marker::Send for benten_id::vc::CredentialStatus
 impl core::marker::Sync for benten_id::vc::CredentialStatus
@@ -880,14 +883,14 @@ impl core::clone::Clone for benten_id::vc::CredentialSubject
 pub fn benten_id::vc::CredentialSubject::clone(&self) -> benten_id::vc::CredentialSubject
 impl core::cmp::Eq for benten_id::vc::CredentialSubject
 impl core::cmp::PartialEq for benten_id::vc::CredentialSubject
-pub fn benten_id::vc::CredentialSubject::eq(&self, other: &benten_id::vc::CredentialSubject) -> bool
+pub fn benten_id::vc::CredentialSubject::eq(&self, &benten_id::vc::CredentialSubject) -> bool
 impl core::fmt::Debug for benten_id::vc::CredentialSubject
-pub fn benten_id::vc::CredentialSubject::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::vc::CredentialSubject::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::vc::CredentialSubject
 impl serde_core::ser::Serialize for benten_id::vc::CredentialSubject
-pub fn benten_id::vc::CredentialSubject::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_id::vc::CredentialSubject::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_id::vc::CredentialSubject
-pub fn benten_id::vc::CredentialSubject::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_id::vc::CredentialSubject::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_id::vc::CredentialSubject
 impl core::marker::Send for benten_id::vc::CredentialSubject
 impl core::marker::Sync for benten_id::vc::CredentialSubject
@@ -897,9 +900,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::vc::CredentialSubjec
 impl core::panic::unwind_safe::UnwindSafe for benten_id::vc::CredentialSubject
 pub struct benten_id::vc::RevocationRegistry
 impl benten_id::vc::RevocationRegistry
-pub fn benten_id::vc::RevocationRegistry::is_revoked(&self, status_id: &str) -> bool
+pub fn benten_id::vc::RevocationRegistry::is_revoked(&self, &str) -> bool
 pub fn benten_id::vc::RevocationRegistry::new() -> Self
-pub fn benten_id::vc::RevocationRegistry::revoke(&self, status_id: impl core::convert::Into<alloc::string::String>)
+pub fn benten_id::vc::RevocationRegistry::revoke(&self, impl core::convert::Into<alloc::string::String>)
 impl core::default::Default for benten_id::vc::RevocationRegistry
 pub fn benten_id::vc::RevocationRegistry::default() -> benten_id::vc::RevocationRegistry
 impl !core::marker::Freeze for benten_id::vc::RevocationRegistry
@@ -911,15 +914,15 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::vc::RevocationRegist
 impl core::panic::unwind_safe::UnwindSafe for benten_id::vc::RevocationRegistry
 pub struct benten_id::vc::TrustDomain
 impl benten_id::vc::TrustDomain
-pub fn benten_id::vc::TrustDomain::contains(&self, issuer: &str) -> bool
+pub fn benten_id::vc::TrustDomain::contains(&self, &str) -> bool
 pub fn benten_id::vc::TrustDomain::empty() -> Self
-pub fn benten_id::vc::TrustDomain::new(issuers: alloc::vec::Vec<benten_id::did::Did>) -> Self
+pub fn benten_id::vc::TrustDomain::new(alloc::vec::Vec<benten_id::did::Did>) -> Self
 impl core::clone::Clone for benten_id::vc::TrustDomain
 pub fn benten_id::vc::TrustDomain::clone(&self) -> benten_id::vc::TrustDomain
 impl core::default::Default for benten_id::vc::TrustDomain
 pub fn benten_id::vc::TrustDomain::default() -> benten_id::vc::TrustDomain
 impl core::fmt::Debug for benten_id::vc::TrustDomain
-pub fn benten_id::vc::TrustDomain::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::vc::TrustDomain::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::vc::TrustDomain
 impl core::marker::Send for benten_id::vc::TrustDomain
 impl core::marker::Sync for benten_id::vc::TrustDomain
@@ -929,11 +932,11 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::vc::TrustDomain
 impl core::panic::unwind_safe::UnwindSafe for benten_id::vc::TrustDomain
 pub const benten_id::vc::VC_CONTEXT_V1: &str
 pub const benten_id::vc::VC_TYPE_BASE: &str
-pub fn benten_id::vc::verify(vc: &benten_id::vc::Credential, expected_issuer: &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_at(vc: &benten_id::vc::Credential, expected_issuer: &benten_id::did::Did, now: u64) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_bytes_in_trust_domain(bytes: &[u8], trust_domain: &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_in_trust_domain(vc: &benten_id::vc::Credential, trust_domain: &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_with_registry(vc: &benten_id::vc::Credential, expected_issuer: &benten_id::did::Did, registry: &benten_id::vc::RevocationRegistry) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify(&benten_id::vc::Credential, &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_at(&benten_id::vc::Credential, &benten_id::did::Did, u64) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_bytes_in_trust_domain(&[u8], &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_in_trust_domain(&benten_id::vc::Credential, &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_with_registry(&benten_id::vc::Credential, &benten_id::did::Did, &benten_id::vc::RevocationRegistry) -> core::result::Result<(), benten_id::errors::VcError>
 pub enum benten_id::DeviceAttestationError
 pub benten_id::DeviceAttestationError::BadSignature
 pub benten_id::DeviceAttestationError::DecodeFailed
@@ -955,12 +958,12 @@ impl benten_id::errors::DeviceAttestationError
 pub fn benten_id::errors::DeviceAttestationError::code(&self) -> &'static str
 impl core::cmp::Eq for benten_id::errors::DeviceAttestationError
 impl core::cmp::PartialEq for benten_id::errors::DeviceAttestationError
-pub fn benten_id::errors::DeviceAttestationError::eq(&self, other: &benten_id::errors::DeviceAttestationError) -> bool
+pub fn benten_id::errors::DeviceAttestationError::eq(&self, &benten_id::errors::DeviceAttestationError) -> bool
 impl core::error::Error for benten_id::errors::DeviceAttestationError
 impl core::fmt::Debug for benten_id::errors::DeviceAttestationError
-pub fn benten_id::errors::DeviceAttestationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DeviceAttestationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::DeviceAttestationError
-pub fn benten_id::errors::DeviceAttestationError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DeviceAttestationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::DeviceAttestationError
 impl core::marker::Freeze for benten_id::errors::DeviceAttestationError
 impl core::marker::Send for benten_id::errors::DeviceAttestationError
@@ -979,12 +982,12 @@ pub benten_id::DidError::InvalidPublicKey
 pub benten_id::DidError::UnknownMulticodec(u8, u8)
 impl core::cmp::Eq for benten_id::errors::DidError
 impl core::cmp::PartialEq for benten_id::errors::DidError
-pub fn benten_id::errors::DidError::eq(&self, other: &benten_id::errors::DidError) -> bool
+pub fn benten_id::errors::DidError::eq(&self, &benten_id::errors::DidError) -> bool
 impl core::error::Error for benten_id::errors::DidError
 impl core::fmt::Debug for benten_id::errors::DidError
-pub fn benten_id::errors::DidError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::DidError
-pub fn benten_id::errors::DidError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::DidError
 impl core::marker::Freeze for benten_id::errors::DidError
 impl core::marker::Send for benten_id::errors::DidError
@@ -1008,12 +1011,12 @@ pub benten_id::DidRotationError::VerbatimReplay::hlc: u64
 pub benten_id::DidRotationError::VerbatimReplay::prev_did: alloc::string::String
 impl core::cmp::Eq for benten_id::errors::DidRotationError
 impl core::cmp::PartialEq for benten_id::errors::DidRotationError
-pub fn benten_id::errors::DidRotationError::eq(&self, other: &benten_id::errors::DidRotationError) -> bool
+pub fn benten_id::errors::DidRotationError::eq(&self, &benten_id::errors::DidRotationError) -> bool
 impl core::error::Error for benten_id::errors::DidRotationError
 impl core::fmt::Debug for benten_id::errors::DidRotationError
-pub fn benten_id::errors::DidRotationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidRotationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::DidRotationError
-pub fn benten_id::errors::DidRotationError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::DidRotationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::DidRotationError
 impl core::marker::Freeze for benten_id::errors::DidRotationError
 impl core::marker::Send for benten_id::errors::DidRotationError
@@ -1026,13 +1029,13 @@ pub enum benten_id::KeypairError
 pub benten_id::KeypairError::Csprng(alloc::string::String)
 pub benten_id::KeypairError::SeedImport(benten_id::errors::SeedImportError)
 impl core::convert::From<benten_id::errors::SeedImportError> for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::from(source: benten_id::errors::SeedImportError) -> Self
+pub fn benten_id::errors::KeypairError::from(benten_id::errors::SeedImportError) -> Self
 impl core::error::Error for benten_id::errors::KeypairError
 pub fn benten_id::errors::KeypairError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::KeypairError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::KeypairError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_id::errors::KeypairError
 impl core::marker::Send for benten_id::errors::KeypairError
 impl core::marker::Sync for benten_id::errors::KeypairError
@@ -1046,12 +1049,12 @@ pub benten_id::MultiSigError::PostPhase3
 pub benten_id::MultiSigError::Rejected(&'static str)
 impl core::cmp::Eq for benten_id::errors::MultiSigError
 impl core::cmp::PartialEq for benten_id::errors::MultiSigError
-pub fn benten_id::errors::MultiSigError::eq(&self, other: &benten_id::errors::MultiSigError) -> bool
+pub fn benten_id::errors::MultiSigError::eq(&self, &benten_id::errors::MultiSigError) -> bool
 impl core::error::Error for benten_id::errors::MultiSigError
 impl core::fmt::Debug for benten_id::errors::MultiSigError
-pub fn benten_id::errors::MultiSigError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::MultiSigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::MultiSigError
-pub fn benten_id::errors::MultiSigError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::MultiSigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::MultiSigError
 impl core::marker::Freeze for benten_id::errors::MultiSigError
 impl core::marker::Send for benten_id::errors::MultiSigError
@@ -1067,12 +1070,12 @@ pub benten_id::ReaderError::RecordMalformed
 pub benten_id::ReaderError::RecordMalformed::detail: alloc::string::String
 impl core::cmp::Eq for benten_id::grant_reader::ReaderError
 impl core::cmp::PartialEq for benten_id::grant_reader::ReaderError
-pub fn benten_id::grant_reader::ReaderError::eq(&self, other: &benten_id::grant_reader::ReaderError) -> bool
+pub fn benten_id::grant_reader::ReaderError::eq(&self, &benten_id::grant_reader::ReaderError) -> bool
 impl core::error::Error for benten_id::grant_reader::ReaderError
 impl core::fmt::Debug for benten_id::grant_reader::ReaderError
-pub fn benten_id::grant_reader::ReaderError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::grant_reader::ReaderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::grant_reader::ReaderError
-pub fn benten_id::grant_reader::ReaderError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::grant_reader::ReaderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::grant_reader::ReaderError
 impl core::marker::Freeze for benten_id::grant_reader::ReaderError
 impl core::marker::Send for benten_id::grant_reader::ReaderError
@@ -1096,14 +1099,14 @@ pub benten_id::SeedImportError::UnknownVersion
 pub benten_id::SeedImportError::UnknownVersion::version: u8
 impl core::cmp::Eq for benten_id::errors::SeedImportError
 impl core::cmp::PartialEq for benten_id::errors::SeedImportError
-pub fn benten_id::errors::SeedImportError::eq(&self, other: &benten_id::errors::SeedImportError) -> bool
+pub fn benten_id::errors::SeedImportError::eq(&self, &benten_id::errors::SeedImportError) -> bool
 impl core::convert::From<benten_id::errors::SeedImportError> for benten_id::errors::KeypairError
-pub fn benten_id::errors::KeypairError::from(source: benten_id::errors::SeedImportError) -> Self
+pub fn benten_id::errors::KeypairError::from(benten_id::errors::SeedImportError) -> Self
 impl core::error::Error for benten_id::errors::SeedImportError
 impl core::fmt::Debug for benten_id::errors::SeedImportError
-pub fn benten_id::errors::SeedImportError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::SeedImportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::SeedImportError
-pub fn benten_id::errors::SeedImportError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::SeedImportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::SeedImportError
 impl core::marker::Freeze for benten_id::errors::SeedImportError
 impl core::marker::Send for benten_id::errors::SeedImportError
@@ -1149,12 +1152,12 @@ pub benten_id::UcanError::ProofChainTooDeep::depth: usize
 pub benten_id::UcanError::ProofChainTooDeep::max: usize
 impl core::cmp::Eq for benten_id::errors::UcanError
 impl core::cmp::PartialEq for benten_id::errors::UcanError
-pub fn benten_id::errors::UcanError::eq(&self, other: &benten_id::errors::UcanError) -> bool
+pub fn benten_id::errors::UcanError::eq(&self, &benten_id::errors::UcanError) -> bool
 impl core::error::Error for benten_id::errors::UcanError
 impl core::fmt::Debug for benten_id::errors::UcanError
-pub fn benten_id::errors::UcanError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::UcanError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::UcanError
-pub fn benten_id::errors::UcanError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::UcanError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::UcanError
 impl core::marker::Freeze for benten_id::errors::UcanError
 impl core::marker::Send for benten_id::errors::UcanError
@@ -1180,12 +1183,12 @@ pub benten_id::VcError::Revoked
 pub benten_id::VcError::Revoked::status_id: alloc::string::String
 impl core::cmp::Eq for benten_id::errors::VcError
 impl core::cmp::PartialEq for benten_id::errors::VcError
-pub fn benten_id::errors::VcError::eq(&self, other: &benten_id::errors::VcError) -> bool
+pub fn benten_id::errors::VcError::eq(&self, &benten_id::errors::VcError) -> bool
 impl core::error::Error for benten_id::errors::VcError
 impl core::fmt::Debug for benten_id::errors::VcError
-pub fn benten_id::errors::VcError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::VcError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_id::errors::VcError
-pub fn benten_id::errors::VcError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_id::errors::VcError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_id::errors::VcError
 impl core::marker::Freeze for benten_id::errors::VcError
 impl core::marker::Send for benten_id::errors::VcError

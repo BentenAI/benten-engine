@@ -88,7 +88,9 @@ jobs:
             # G-CORE-9 V1-FROZEN-INTERFACE row 1 (2026-05-23): 14 crates
             # cover the full v1-beta public surface; G-CORE-9 R1 Fork 3
             # (2026-05-24): drift = fail per V1-FROZEN-INTERFACE item 9.
-            for crate in benten-core benten-errors benten-graph benten-caps benten-ivm benten-eval benten-engine benten-dsl-compiler benten-crypto-suite benten-drop benten-sync benten-id benten-platform-foundation benten-renderer-tauri; do
+            # F-full R5 (2026-06-05): + benten-membership-set (15th crate;
+            # new this phase) joins the frozen-tracked surface.
+            for crate in benten-core benten-errors benten-graph benten-caps benten-ivm benten-eval benten-engine benten-dsl-compiler benten-crypto-suite benten-drop benten-sync benten-id benten-membership-set benten-platform-foundation benten-renderer-tauri; do
               echo "### $crate"
               echo
               echo '```'

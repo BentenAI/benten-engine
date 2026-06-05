@@ -1,0 +1,1252 @@
+pub mod benten_membership_set
+pub mod benten_membership_set::aad
+pub struct benten_membership_set::aad::GroupAadInputs
+pub benten_membership_set::aad::GroupAadInputs::body_cid: alloc::vec::Vec<u8>
+pub benten_membership_set::aad::GroupAadInputs::codepoint: u16
+pub benten_membership_set::aad::GroupAadInputs::k_set: [u8; 32]
+pub benten_membership_set::aad::GroupAadInputs::member_dids: alloc::vec::Vec<alloc::string::String>
+pub benten_membership_set::aad::GroupAadInputs::member_key_generation: u32
+pub benten_membership_set::aad::GroupAadInputs::membership_set_generation: u32
+pub benten_membership_set::aad::GroupAadInputs::membership_set_id: alloc::vec::Vec<u8>
+pub benten_membership_set::aad::GroupAadInputs::plaintext_sender_did: core::option::Option<alloc::string::String>
+pub benten_membership_set::aad::GroupAadInputs::role_assignments_generation: u32
+pub benten_membership_set::aad::GroupAadInputs::sealed_inner: alloc::vec::Vec<u8>
+pub benten_membership_set::aad::GroupAadInputs::stanza_count: u32
+pub benten_membership_set::aad::GroupAadInputs::stanza_index: u32
+impl core::clone::Clone for benten_membership_set::aad::GroupAadInputs
+pub fn benten_membership_set::aad::GroupAadInputs::clone(&self) -> benten_membership_set::aad::GroupAadInputs
+impl core::fmt::Debug for benten_membership_set::aad::GroupAadInputs
+pub fn benten_membership_set::aad::GroupAadInputs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_membership_set::aad::GroupAadInputs
+impl core::marker::Send for benten_membership_set::aad::GroupAadInputs
+impl core::marker::Sync for benten_membership_set::aad::GroupAadInputs
+impl core::marker::Unpin for benten_membership_set::aad::GroupAadInputs
+impl core::marker::UnsafeUnpin for benten_membership_set::aad::GroupAadInputs
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::aad::GroupAadInputs
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::aad::GroupAadInputs
+pub const benten_membership_set::aad::AAD_VERSION: u8
+pub const benten_membership_set::aad::SETID_COMMITMENT_LABEL: &[u8]
+pub fn benten_membership_set::aad::assemble_group_aad(&benten_membership_set::aad::GroupAadInputs) -> alloc::vec::Vec<u8>
+pub fn benten_membership_set::aad::audience_set_commitment(&[alloc::string::String]) -> [u8; 32]
+pub fn benten_membership_set::aad::canonical_members_table_bytes(&alloc::collections::btree::map::BTreeMap<benten_membership_set::member::Did, benten_membership_set::member::MemberEntry>) -> alloc::vec::Vec<u8>
+pub fn benten_membership_set::aad::default_group_codepoint() -> u16
+pub fn benten_membership_set::aad::membership_set_id_commitment(&[u8; 32], &[u8]) -> [u8; 32]
+pub mod benten_membership_set::audit
+pub enum benten_membership_set::audit::AdminOp
+pub benten_membership_set::audit::AdminOp::AdmitMember
+pub benten_membership_set::audit::AdminOp::GovernanceChange
+pub benten_membership_set::audit::AdminOp::KickMember
+pub benten_membership_set::audit::AdminOp::PromoteRole
+pub benten_membership_set::audit::AdminOp::RotateKey
+impl core::clone::Clone for benten_membership_set::audit::AdminOp
+pub fn benten_membership_set::audit::AdminOp::clone(&self) -> benten_membership_set::audit::AdminOp
+impl core::cmp::Eq for benten_membership_set::audit::AdminOp
+impl core::cmp::PartialEq for benten_membership_set::audit::AdminOp
+pub fn benten_membership_set::audit::AdminOp::eq(&self, &benten_membership_set::audit::AdminOp) -> bool
+impl core::fmt::Debug for benten_membership_set::audit::AdminOp
+pub fn benten_membership_set::audit::AdminOp::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::audit::AdminOp
+impl core::marker::StructuralPartialEq for benten_membership_set::audit::AdminOp
+impl core::marker::Freeze for benten_membership_set::audit::AdminOp
+impl core::marker::Send for benten_membership_set::audit::AdminOp
+impl core::marker::Sync for benten_membership_set::audit::AdminOp
+impl core::marker::Unpin for benten_membership_set::audit::AdminOp
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AdminOp
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AdminOp
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AdminOp
+pub enum benten_membership_set::audit::AuditAccessGradation
+pub benten_membership_set::audit::AuditAccessGradation::AdminOnly
+pub benten_membership_set::audit::AuditAccessGradation::Anonymized
+pub benten_membership_set::audit::AuditAccessGradation::MemberOnly
+pub benten_membership_set::audit::AuditAccessGradation::PublicAllMembers
+pub benten_membership_set::audit::AuditAccessGradation::Threshold
+pub benten_membership_set::audit::AuditAccessGradation::TimeLocked
+impl benten_membership_set::audit::AuditAccessGradation
+pub const fn benten_membership_set::audit::AuditAccessGradation::backing_codepoint(&self) -> core::option::Option<u16>
+pub fn benten_membership_set::audit::AuditAccessGradation::decide(&self, benten_membership_set::audit::RequesterRole) -> benten_membership_set::audit::AuditReadDecision
+pub fn benten_membership_set::audit::AuditAccessGradation::is_reserved_caveat_composition(&self) -> bool
+impl core::clone::Clone for benten_membership_set::audit::AuditAccessGradation
+pub fn benten_membership_set::audit::AuditAccessGradation::clone(&self) -> benten_membership_set::audit::AuditAccessGradation
+impl core::cmp::Eq for benten_membership_set::audit::AuditAccessGradation
+impl core::cmp::PartialEq for benten_membership_set::audit::AuditAccessGradation
+pub fn benten_membership_set::audit::AuditAccessGradation::eq(&self, &benten_membership_set::audit::AuditAccessGradation) -> bool
+impl core::fmt::Debug for benten_membership_set::audit::AuditAccessGradation
+pub fn benten_membership_set::audit::AuditAccessGradation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::audit::AuditAccessGradation
+impl core::marker::StructuralPartialEq for benten_membership_set::audit::AuditAccessGradation
+impl core::marker::Freeze for benten_membership_set::audit::AuditAccessGradation
+impl core::marker::Send for benten_membership_set::audit::AuditAccessGradation
+impl core::marker::Sync for benten_membership_set::audit::AuditAccessGradation
+impl core::marker::Unpin for benten_membership_set::audit::AuditAccessGradation
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditAccessGradation
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditAccessGradation
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditAccessGradation
+#[non_exhaustive] pub enum benten_membership_set::audit::AuditChainError
+pub benten_membership_set::audit::AuditChainError::NonMonotonicAppend
+pub benten_membership_set::audit::AuditChainError::TamperDetectedLinkageBroken
+pub benten_membership_set::audit::AuditChainError::TamperDetectedLinkageBroken::at_seq: u64
+impl core::clone::Clone for benten_membership_set::audit::AuditChainError
+pub fn benten_membership_set::audit::AuditChainError::clone(&self) -> benten_membership_set::audit::AuditChainError
+impl core::cmp::Eq for benten_membership_set::audit::AuditChainError
+impl core::cmp::PartialEq for benten_membership_set::audit::AuditChainError
+pub fn benten_membership_set::audit::AuditChainError::eq(&self, &benten_membership_set::audit::AuditChainError) -> bool
+impl core::error::Error for benten_membership_set::audit::AuditChainError
+impl core::fmt::Debug for benten_membership_set::audit::AuditChainError
+pub fn benten_membership_set::audit::AuditChainError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::audit::AuditChainError
+pub fn benten_membership_set::audit::AuditChainError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::audit::AuditChainError
+impl core::marker::StructuralPartialEq for benten_membership_set::audit::AuditChainError
+impl core::marker::Freeze for benten_membership_set::audit::AuditChainError
+impl core::marker::Send for benten_membership_set::audit::AuditChainError
+impl core::marker::Sync for benten_membership_set::audit::AuditChainError
+impl core::marker::Unpin for benten_membership_set::audit::AuditChainError
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditChainError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditChainError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditChainError
+pub enum benten_membership_set::audit::AuditReadDecision
+pub benten_membership_set::audit::AuditReadDecision::Admit
+pub benten_membership_set::audit::AuditReadDecision::Deny
+impl core::clone::Clone for benten_membership_set::audit::AuditReadDecision
+pub fn benten_membership_set::audit::AuditReadDecision::clone(&self) -> benten_membership_set::audit::AuditReadDecision
+impl core::cmp::Eq for benten_membership_set::audit::AuditReadDecision
+impl core::cmp::PartialEq for benten_membership_set::audit::AuditReadDecision
+pub fn benten_membership_set::audit::AuditReadDecision::eq(&self, &benten_membership_set::audit::AuditReadDecision) -> bool
+impl core::fmt::Debug for benten_membership_set::audit::AuditReadDecision
+pub fn benten_membership_set::audit::AuditReadDecision::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::audit::AuditReadDecision
+impl core::marker::StructuralPartialEq for benten_membership_set::audit::AuditReadDecision
+impl core::marker::Freeze for benten_membership_set::audit::AuditReadDecision
+impl core::marker::Send for benten_membership_set::audit::AuditReadDecision
+impl core::marker::Sync for benten_membership_set::audit::AuditReadDecision
+impl core::marker::Unpin for benten_membership_set::audit::AuditReadDecision
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditReadDecision
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditReadDecision
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditReadDecision
+pub enum benten_membership_set::audit::RequesterRole
+pub benten_membership_set::audit::RequesterRole::Admin
+pub benten_membership_set::audit::RequesterRole::Member
+pub benten_membership_set::audit::RequesterRole::NonMember
+impl core::clone::Clone for benten_membership_set::audit::RequesterRole
+pub fn benten_membership_set::audit::RequesterRole::clone(&self) -> benten_membership_set::audit::RequesterRole
+impl core::cmp::Eq for benten_membership_set::audit::RequesterRole
+impl core::cmp::PartialEq for benten_membership_set::audit::RequesterRole
+pub fn benten_membership_set::audit::RequesterRole::eq(&self, &benten_membership_set::audit::RequesterRole) -> bool
+impl core::fmt::Debug for benten_membership_set::audit::RequesterRole
+pub fn benten_membership_set::audit::RequesterRole::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::audit::RequesterRole
+impl core::marker::StructuralPartialEq for benten_membership_set::audit::RequesterRole
+impl core::marker::Freeze for benten_membership_set::audit::RequesterRole
+impl core::marker::Send for benten_membership_set::audit::RequesterRole
+impl core::marker::Sync for benten_membership_set::audit::RequesterRole
+impl core::marker::Unpin for benten_membership_set::audit::RequesterRole
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::RequesterRole
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::RequesterRole
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::RequesterRole
+pub struct benten_membership_set::audit::AuditChain
+impl benten_membership_set::audit::AuditChain
+pub fn benten_membership_set::audit::AuditChain::append_op(&mut self, &[u8; 32], benten_membership_set::audit::AdminOp) -> u64
+pub fn benten_membership_set::audit::AuditChain::new(&[u8; 32]) -> Self
+pub fn benten_membership_set::audit::AuditChain::replay_identical_op_emitted_phantom_event(&mut self, &[u8; 32], benten_membership_set::audit::AdminOp) -> bool
+pub fn benten_membership_set::audit::AuditChain::seq(&self) -> u64
+pub fn benten_membership_set::audit::AuditChain::verify_with_tampered_node_at(&self, u64) -> core::result::Result<(), benten_membership_set::audit::AuditChainError>
+impl core::clone::Clone for benten_membership_set::audit::AuditChain
+pub fn benten_membership_set::audit::AuditChain::clone(&self) -> benten_membership_set::audit::AuditChain
+impl core::fmt::Debug for benten_membership_set::audit::AuditChain
+pub fn benten_membership_set::audit::AuditChain::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_membership_set::audit::AuditChain
+impl core::marker::Send for benten_membership_set::audit::AuditChain
+impl core::marker::Sync for benten_membership_set::audit::AuditChain
+impl core::marker::Unpin for benten_membership_set::audit::AuditChain
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditChain
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditChain
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditChain
+pub struct benten_membership_set::audit::AuditEmitResult
+pub benten_membership_set::audit::AuditEmitResult::actor_cid: core::option::Option<[u8; 32]>
+pub benten_membership_set::audit::AuditEmitResult::capability_grant_cid: core::option::Option<[u8; 32]>
+pub benten_membership_set::audit::AuditEmitResult::chain_advanced: bool
+pub benten_membership_set::audit::AuditEmitResult::handler_cid: core::option::Option<[u8; 32]>
+impl core::clone::Clone for benten_membership_set::audit::AuditEmitResult
+pub fn benten_membership_set::audit::AuditEmitResult::clone(&self) -> benten_membership_set::audit::AuditEmitResult
+impl core::cmp::Eq for benten_membership_set::audit::AuditEmitResult
+impl core::cmp::PartialEq for benten_membership_set::audit::AuditEmitResult
+pub fn benten_membership_set::audit::AuditEmitResult::eq(&self, &benten_membership_set::audit::AuditEmitResult) -> bool
+impl core::fmt::Debug for benten_membership_set::audit::AuditEmitResult
+pub fn benten_membership_set::audit::AuditEmitResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::audit::AuditEmitResult
+impl core::marker::StructuralPartialEq for benten_membership_set::audit::AuditEmitResult
+impl core::marker::Freeze for benten_membership_set::audit::AuditEmitResult
+impl core::marker::Send for benten_membership_set::audit::AuditEmitResult
+impl core::marker::Sync for benten_membership_set::audit::AuditEmitResult
+impl core::marker::Unpin for benten_membership_set::audit::AuditEmitResult
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditEmitResult
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditEmitResult
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditEmitResult
+pub struct benten_membership_set::audit::AuditQueryComposition
+pub benten_membership_set::audit::AuditQueryComposition::gating_scope: alloc::string::String
+pub benten_membership_set::audit::AuditQueryComposition::is_a_new_primitive_kind_variant: bool
+pub benten_membership_set::audit::AuditQueryComposition::primitive_tags: alloc::vec::Vec<&'static str>
+impl core::clone::Clone for benten_membership_set::audit::AuditQueryComposition
+pub fn benten_membership_set::audit::AuditQueryComposition::clone(&self) -> benten_membership_set::audit::AuditQueryComposition
+impl core::fmt::Debug for benten_membership_set::audit::AuditQueryComposition
+pub fn benten_membership_set::audit::AuditQueryComposition::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_membership_set::audit::AuditQueryComposition
+impl core::marker::Send for benten_membership_set::audit::AuditQueryComposition
+impl core::marker::Sync for benten_membership_set::audit::AuditQueryComposition
+impl core::marker::Unpin for benten_membership_set::audit::AuditQueryComposition
+impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditQueryComposition
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditQueryComposition
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditQueryComposition
+pub fn benten_membership_set::audit::audit_log_query_composition(&[u8; 32]) -> benten_membership_set::audit::AuditQueryComposition
+pub fn benten_membership_set::audit::emit_audit_event_via_bare_put(&[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
+pub fn benten_membership_set::audit::emit_audit_event_via_engine(&[u8; 32], &[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
+pub fn benten_membership_set::audit::parse_audit_scope_added_new_top_level_scope_arm(&str) -> bool
+pub fn benten_membership_set::audit::restricted_audit_scope_contains(&str, &str) -> bool
+pub mod benten_membership_set::codepoints
+pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_HI: u16
+pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_LO: u16
+pub const benten_membership_set::codepoints::MEMBERSHIP_SET_ENCRYPTION: u16
+pub const benten_membership_set::codepoints::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
+pub const benten_membership_set::codepoints::MEMBERSHIP_SET_RESERVED_0X6620: u16
+pub mod benten_membership_set::error
+#[non_exhaustive] pub enum benten_membership_set::error::MembershipSetError
+pub benten_membership_set::error::MembershipSetError::AdminCardinality
+pub benten_membership_set::error::MembershipSetError::AuthorityMissingPubkey
+pub benten_membership_set::error::MembershipSetError::MemberCardinality
+pub benten_membership_set::error::MembershipSetError::MemberRefKindMismatch
+pub benten_membership_set::error::MembershipSetError::ReserveTypedReject
+pub benten_membership_set::error::MembershipSetError::RoleStaleAtVerify
+pub benten_membership_set::error::MembershipSetError::WireCostCeilingExceeded
+impl benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::as_wire_str(&self) -> &'static str
+pub fn benten_membership_set::error::MembershipSetError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::clone(&self) -> benten_membership_set::error::MembershipSetError
+impl core::cmp::Eq for benten_membership_set::error::MembershipSetError
+impl core::cmp::PartialEq for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::eq(&self, &benten_membership_set::error::MembershipSetError) -> bool
+impl core::error::Error for benten_membership_set::error::MembershipSetError
+impl core::fmt::Debug for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::error::MembershipSetError
+impl core::marker::Freeze for benten_membership_set::error::MembershipSetError
+impl core::marker::Send for benten_membership_set::error::MembershipSetError
+impl core::marker::Sync for benten_membership_set::error::MembershipSetError
+impl core::marker::Unpin for benten_membership_set::error::MembershipSetError
+impl core::marker::UnsafeUnpin for benten_membership_set::error::MembershipSetError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::error::MembershipSetError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::error::MembershipSetError
+pub const benten_membership_set::error::E_ROLE_STALE_AT_VERIFY: &str
+pub mod benten_membership_set::federation
+#[non_exhaustive] pub enum benten_membership_set::federation::AcquisitionError
+pub benten_membership_set::federation::AcquisitionError::CycleDetected
+pub benten_membership_set::federation::AcquisitionError::RecursionDepthExceeded
+impl benten_membership_set::federation::AcquisitionError
+pub fn benten_membership_set::federation::AcquisitionError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_membership_set::federation::AcquisitionError
+pub fn benten_membership_set::federation::AcquisitionError::clone(&self) -> benten_membership_set::federation::AcquisitionError
+impl core::cmp::Eq for benten_membership_set::federation::AcquisitionError
+impl core::cmp::PartialEq for benten_membership_set::federation::AcquisitionError
+pub fn benten_membership_set::federation::AcquisitionError::eq(&self, &benten_membership_set::federation::AcquisitionError) -> bool
+impl core::error::Error for benten_membership_set::federation::AcquisitionError
+impl core::fmt::Debug for benten_membership_set::federation::AcquisitionError
+pub fn benten_membership_set::federation::AcquisitionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::federation::AcquisitionError
+pub fn benten_membership_set::federation::AcquisitionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::federation::AcquisitionError
+impl core::marker::Freeze for benten_membership_set::federation::AcquisitionError
+impl core::marker::Send for benten_membership_set::federation::AcquisitionError
+impl core::marker::Sync for benten_membership_set::federation::AcquisitionError
+impl core::marker::Unpin for benten_membership_set::federation::AcquisitionError
+impl core::marker::UnsafeUnpin for benten_membership_set::federation::AcquisitionError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::federation::AcquisitionError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation::AcquisitionError
+#[non_exhaustive] pub enum benten_membership_set::federation::FederationError
+pub benten_membership_set::federation::FederationError::FederationReserved
+pub benten_membership_set::federation::FederationError::ModelAUnavailable
+impl benten_membership_set::federation::FederationError
+pub fn benten_membership_set::federation::FederationError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_membership_set::federation::FederationError
+pub fn benten_membership_set::federation::FederationError::clone(&self) -> benten_membership_set::federation::FederationError
+impl core::cmp::Eq for benten_membership_set::federation::FederationError
+impl core::cmp::PartialEq for benten_membership_set::federation::FederationError
+pub fn benten_membership_set::federation::FederationError::eq(&self, &benten_membership_set::federation::FederationError) -> bool
+impl core::error::Error for benten_membership_set::federation::FederationError
+impl core::fmt::Debug for benten_membership_set::federation::FederationError
+pub fn benten_membership_set::federation::FederationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::federation::FederationError
+pub fn benten_membership_set::federation::FederationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::federation::FederationError
+impl core::marker::Freeze for benten_membership_set::federation::FederationError
+impl core::marker::Send for benten_membership_set::federation::FederationError
+impl core::marker::Sync for benten_membership_set::federation::FederationError
+impl core::marker::Unpin for benten_membership_set::federation::FederationError
+impl core::marker::UnsafeUnpin for benten_membership_set::federation::FederationError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::federation::FederationError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation::FederationError
+pub enum benten_membership_set::federation::FederationModel
+pub benten_membership_set::federation::FederationModel::ModelA
+pub benten_membership_set::federation::FederationModel::ModelB
+impl core::clone::Clone for benten_membership_set::federation::FederationModel
+pub fn benten_membership_set::federation::FederationModel::clone(&self) -> benten_membership_set::federation::FederationModel
+impl core::cmp::Eq for benten_membership_set::federation::FederationModel
+impl core::cmp::PartialEq for benten_membership_set::federation::FederationModel
+pub fn benten_membership_set::federation::FederationModel::eq(&self, &benten_membership_set::federation::FederationModel) -> bool
+impl core::fmt::Debug for benten_membership_set::federation::FederationModel
+pub fn benten_membership_set::federation::FederationModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::federation::FederationModel
+impl core::marker::StructuralPartialEq for benten_membership_set::federation::FederationModel
+impl core::marker::Freeze for benten_membership_set::federation::FederationModel
+impl core::marker::Send for benten_membership_set::federation::FederationModel
+impl core::marker::Sync for benten_membership_set::federation::FederationModel
+impl core::marker::Unpin for benten_membership_set::federation::FederationModel
+impl core::marker::UnsafeUnpin for benten_membership_set::federation::FederationModel
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::federation::FederationModel
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation::FederationModel
+pub struct benten_membership_set::federation::KSetAcquisitionPath
+pub benten_membership_set::federation::KSetAcquisitionPath::acquisition_proof_cid: alloc::vec::Vec<u8>
+pub benten_membership_set::federation::KSetAcquisitionPath::hop_path: alloc::vec::Vec<benten_membership_set::federation::FederationSetId>
+pub benten_membership_set::federation::KSetAcquisitionPath::target_set_id: benten_membership_set::federation::FederationSetId
+impl benten_membership_set::federation::KSetAcquisitionPath
+pub fn benten_membership_set::federation::KSetAcquisitionPath::to_wire_v2_be(&self) -> alloc::vec::Vec<u8>
+pub fn benten_membership_set::federation::KSetAcquisitionPath::verify_offline(&self) -> core::result::Result<(), benten_membership_set::federation::AcquisitionError>
+impl core::clone::Clone for benten_membership_set::federation::KSetAcquisitionPath
+pub fn benten_membership_set::federation::KSetAcquisitionPath::clone(&self) -> benten_membership_set::federation::KSetAcquisitionPath
+impl core::cmp::Eq for benten_membership_set::federation::KSetAcquisitionPath
+impl core::cmp::PartialEq for benten_membership_set::federation::KSetAcquisitionPath
+pub fn benten_membership_set::federation::KSetAcquisitionPath::eq(&self, &benten_membership_set::federation::KSetAcquisitionPath) -> bool
+impl core::fmt::Debug for benten_membership_set::federation::KSetAcquisitionPath
+pub fn benten_membership_set::federation::KSetAcquisitionPath::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::federation::KSetAcquisitionPath
+impl core::marker::Freeze for benten_membership_set::federation::KSetAcquisitionPath
+impl core::marker::Send for benten_membership_set::federation::KSetAcquisitionPath
+impl core::marker::Sync for benten_membership_set::federation::KSetAcquisitionPath
+impl core::marker::Unpin for benten_membership_set::federation::KSetAcquisitionPath
+impl core::marker::UnsafeUnpin for benten_membership_set::federation::KSetAcquisitionPath
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::federation::KSetAcquisitionPath
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation::KSetAcquisitionPath
+pub const benten_membership_set::federation::ENVELOPE_FORMAT_VERSION_V2: u8
+pub const benten_membership_set::federation::MEMBERSHIP_RECURSION_MAX_DEPTH: usize
+pub fn benten_membership_set::federation::admit_subset_ref_at_v1_beta() -> core::result::Result<(), benten_membership_set::federation::FederationError>
+pub fn benten_membership_set::federation::dispatch_codepoint_at_v1_beta(u16) -> core::result::Result<(), benten_membership_set::federation::FederationError>
+pub fn benten_membership_set::federation::select_model_at_v1_beta(benten_membership_set::federation::FederationModel) -> core::result::Result<benten_membership_set::federation::FederationModel, benten_membership_set::federation::FederationError>
+pub type benten_membership_set::federation::FederationSetId = alloc::vec::Vec<u8>
+pub mod benten_membership_set::governance
+pub enum benten_membership_set::governance::GovernanceTier
+pub benten_membership_set::governance::GovernanceTier::Flat
+pub benten_membership_set::governance::GovernanceTier::Moderated
+pub benten_membership_set::governance::GovernanceTier::Polycentric
+impl core::clone::Clone for benten_membership_set::governance::GovernanceTier
+pub fn benten_membership_set::governance::GovernanceTier::clone(&self) -> benten_membership_set::governance::GovernanceTier
+impl core::cmp::Eq for benten_membership_set::governance::GovernanceTier
+impl core::cmp::PartialEq for benten_membership_set::governance::GovernanceTier
+pub fn benten_membership_set::governance::GovernanceTier::eq(&self, &benten_membership_set::governance::GovernanceTier) -> bool
+impl core::fmt::Debug for benten_membership_set::governance::GovernanceTier
+pub fn benten_membership_set::governance::GovernanceTier::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::governance::GovernanceTier
+impl core::marker::StructuralPartialEq for benten_membership_set::governance::GovernanceTier
+impl core::marker::Freeze for benten_membership_set::governance::GovernanceTier
+impl core::marker::Send for benten_membership_set::governance::GovernanceTier
+impl core::marker::Sync for benten_membership_set::governance::GovernanceTier
+impl core::marker::Unpin for benten_membership_set::governance::GovernanceTier
+impl core::marker::UnsafeUnpin for benten_membership_set::governance::GovernanceTier
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::governance::GovernanceTier
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::governance::GovernanceTier
+pub struct benten_membership_set::governance::GovernanceConfig
+pub benten_membership_set::governance::GovernanceConfig::content_label: alloc::string::String
+pub benten_membership_set::governance::GovernanceConfig::tier: benten_membership_set::governance::GovernanceTier
+impl benten_membership_set::governance::GovernanceConfig
+pub fn benten_membership_set::governance::GovernanceConfig::new_signed(benten_membership_set::governance::GovernanceTier, &str) -> Self
+pub fn benten_membership_set::governance::GovernanceConfig::signature_verifies(&self) -> bool
+pub fn benten_membership_set::governance::GovernanceConfig::signature_verifies_after_tier_tamper(&self) -> bool
+impl core::clone::Clone for benten_membership_set::governance::GovernanceConfig
+pub fn benten_membership_set::governance::GovernanceConfig::clone(&self) -> benten_membership_set::governance::GovernanceConfig
+impl core::marker::Freeze for benten_membership_set::governance::GovernanceConfig
+impl core::marker::Send for benten_membership_set::governance::GovernanceConfig
+impl core::marker::Sync for benten_membership_set::governance::GovernanceConfig
+impl core::marker::Unpin for benten_membership_set::governance::GovernanceConfig
+impl core::marker::UnsafeUnpin for benten_membership_set::governance::GovernanceConfig
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::governance::GovernanceConfig
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::governance::GovernanceConfig
+pub struct benten_membership_set::governance::MembershipSetPolicy
+impl benten_membership_set::governance::MembershipSetPolicy
+pub const fn benten_membership_set::governance::MembershipSetPolicy::has_embedded_governance_config_field() -> bool
+impl core::marker::Freeze for benten_membership_set::governance::MembershipSetPolicy
+impl core::marker::Send for benten_membership_set::governance::MembershipSetPolicy
+impl core::marker::Sync for benten_membership_set::governance::MembershipSetPolicy
+impl core::marker::Unpin for benten_membership_set::governance::MembershipSetPolicy
+impl core::marker::UnsafeUnpin for benten_membership_set::governance::MembershipSetPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::governance::MembershipSetPolicy
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::governance::MembershipSetPolicy
+pub struct benten_membership_set::governance::PromotionEffect
+pub benten_membership_set::governance::PromotionEffect::k_set_rotated: bool
+pub benten_membership_set::governance::PromotionEffect::kind_changed: bool
+pub benten_membership_set::governance::PromotionEffect::new_governance_node_added: bool
+pub benten_membership_set::governance::PromotionEffect::new_identity_minted: bool
+impl core::clone::Clone for benten_membership_set::governance::PromotionEffect
+pub fn benten_membership_set::governance::PromotionEffect::clone(&self) -> benten_membership_set::governance::PromotionEffect
+impl core::cmp::Eq for benten_membership_set::governance::PromotionEffect
+impl core::cmp::PartialEq for benten_membership_set::governance::PromotionEffect
+pub fn benten_membership_set::governance::PromotionEffect::eq(&self, &benten_membership_set::governance::PromotionEffect) -> bool
+impl core::fmt::Debug for benten_membership_set::governance::PromotionEffect
+pub fn benten_membership_set::governance::PromotionEffect::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::governance::PromotionEffect
+impl core::marker::StructuralPartialEq for benten_membership_set::governance::PromotionEffect
+impl core::marker::Freeze for benten_membership_set::governance::PromotionEffect
+impl core::marker::Send for benten_membership_set::governance::PromotionEffect
+impl core::marker::Sync for benten_membership_set::governance::PromotionEffect
+impl core::marker::Unpin for benten_membership_set::governance::PromotionEffect
+impl core::marker::UnsafeUnpin for benten_membership_set::governance::PromotionEffect
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::governance::PromotionEffect
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::governance::PromotionEffect
+pub fn benten_membership_set::governance::promote_tier(benten_membership_set::governance::GovernanceTier, benten_membership_set::governance::GovernanceTier) -> benten_membership_set::governance::PromotionEffect
+pub mod benten_membership_set::keying
+pub enum benten_membership_set::keying::CidTarget
+pub benten_membership_set::keying::CidTarget::ImmutableVersionNode([u8; 36])
+pub benten_membership_set::keying::CidTarget::MembershipSet([u8; 36])
+pub benten_membership_set::keying::CidTarget::MutableAnchor([u8; 36])
+impl core::clone::Clone for benten_membership_set::keying_kv::CidTarget
+pub fn benten_membership_set::keying_kv::CidTarget::clone(&self) -> benten_membership_set::keying_kv::CidTarget
+impl core::cmp::Eq for benten_membership_set::keying_kv::CidTarget
+impl core::cmp::PartialEq for benten_membership_set::keying_kv::CidTarget
+pub fn benten_membership_set::keying_kv::CidTarget::eq(&self, &benten_membership_set::keying_kv::CidTarget) -> bool
+impl core::fmt::Debug for benten_membership_set::keying_kv::CidTarget
+pub fn benten_membership_set::keying_kv::CidTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::keying_kv::CidTarget
+impl core::marker::StructuralPartialEq for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Freeze for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Send for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Sync for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Unpin for benten_membership_set::keying_kv::CidTarget
+impl core::marker::UnsafeUnpin for benten_membership_set::keying_kv::CidTarget
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::keying_kv::CidTarget
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::keying_kv::CidTarget
+#[non_exhaustive] pub enum benten_membership_set::keying::KvError
+pub benten_membership_set::keying::KvError::TargetNotImmutable
+impl benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::clone(&self) -> benten_membership_set::keying_kv::KvError
+impl core::cmp::Eq for benten_membership_set::keying_kv::KvError
+impl core::cmp::PartialEq for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::eq(&self, &benten_membership_set::keying_kv::KvError) -> bool
+impl core::error::Error for benten_membership_set::keying_kv::KvError
+impl core::fmt::Debug for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::keying_kv::KvError
+impl core::marker::StructuralPartialEq for benten_membership_set::keying_kv::KvError
+impl core::marker::Freeze for benten_membership_set::keying_kv::KvError
+impl core::marker::Send for benten_membership_set::keying_kv::KvError
+impl core::marker::Sync for benten_membership_set::keying_kv::KvError
+impl core::marker::Unpin for benten_membership_set::keying_kv::KvError
+impl core::marker::UnsafeUnpin for benten_membership_set::keying_kv::KvError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::keying_kv::KvError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::keying_kv::KvError
+pub const benten_membership_set::keying::KN_DERIVE_CONTEXT: &str
+pub const benten_membership_set::keying::KV_DERIVE_CONTEXT: &str
+pub fn benten_membership_set::keying::derive_kv(benten_membership_set::keying_kv::CidTarget) -> core::result::Result<[u8; 32], benten_membership_set::keying_kv::KvError>
+pub fn benten_membership_set::keying::derive_member_key(&[u8]) -> alloc::vec::Vec<u8>
+pub fn benten_membership_set::keying::gossip_topic(&[u8; 32], &[u8], u32) -> [u8; 32]
+pub mod benten_membership_set::keying_kv
+pub enum benten_membership_set::keying_kv::CidTarget
+pub benten_membership_set::keying_kv::CidTarget::ImmutableVersionNode([u8; 36])
+pub benten_membership_set::keying_kv::CidTarget::MembershipSet([u8; 36])
+pub benten_membership_set::keying_kv::CidTarget::MutableAnchor([u8; 36])
+impl core::clone::Clone for benten_membership_set::keying_kv::CidTarget
+pub fn benten_membership_set::keying_kv::CidTarget::clone(&self) -> benten_membership_set::keying_kv::CidTarget
+impl core::cmp::Eq for benten_membership_set::keying_kv::CidTarget
+impl core::cmp::PartialEq for benten_membership_set::keying_kv::CidTarget
+pub fn benten_membership_set::keying_kv::CidTarget::eq(&self, &benten_membership_set::keying_kv::CidTarget) -> bool
+impl core::fmt::Debug for benten_membership_set::keying_kv::CidTarget
+pub fn benten_membership_set::keying_kv::CidTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::keying_kv::CidTarget
+impl core::marker::StructuralPartialEq for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Freeze for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Send for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Sync for benten_membership_set::keying_kv::CidTarget
+impl core::marker::Unpin for benten_membership_set::keying_kv::CidTarget
+impl core::marker::UnsafeUnpin for benten_membership_set::keying_kv::CidTarget
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::keying_kv::CidTarget
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::keying_kv::CidTarget
+#[non_exhaustive] pub enum benten_membership_set::keying_kv::KvError
+pub benten_membership_set::keying_kv::KvError::TargetNotImmutable
+impl benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::clone(&self) -> benten_membership_set::keying_kv::KvError
+impl core::cmp::Eq for benten_membership_set::keying_kv::KvError
+impl core::cmp::PartialEq for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::eq(&self, &benten_membership_set::keying_kv::KvError) -> bool
+impl core::error::Error for benten_membership_set::keying_kv::KvError
+impl core::fmt::Debug for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::KvError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::keying_kv::KvError
+impl core::marker::StructuralPartialEq for benten_membership_set::keying_kv::KvError
+impl core::marker::Freeze for benten_membership_set::keying_kv::KvError
+impl core::marker::Send for benten_membership_set::keying_kv::KvError
+impl core::marker::Sync for benten_membership_set::keying_kv::KvError
+impl core::marker::Unpin for benten_membership_set::keying_kv::KvError
+impl core::marker::UnsafeUnpin for benten_membership_set::keying_kv::KvError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::keying_kv::KvError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::keying_kv::KvError
+pub fn benten_membership_set::keying_kv::derive_kv(benten_membership_set::keying_kv::CidTarget) -> core::result::Result<[u8; 32], benten_membership_set::keying_kv::KvError>
+pub mod benten_membership_set::kind
+pub enum benten_membership_set::kind::KindDispatchError
+pub benten_membership_set::kind::KindDispatchError::ReserveTypedReject
+impl core::clone::Clone for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::clone(&self) -> benten_membership_set::kind::KindDispatchError
+impl core::cmp::Eq for benten_membership_set::kind::KindDispatchError
+impl core::cmp::PartialEq for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::eq(&self, &benten_membership_set::kind::KindDispatchError) -> bool
+impl core::error::Error for benten_membership_set::kind::KindDispatchError
+impl core::fmt::Debug for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::kind::KindDispatchError
+impl core::marker::StructuralPartialEq for benten_membership_set::kind::KindDispatchError
+impl core::marker::Freeze for benten_membership_set::kind::KindDispatchError
+impl core::marker::Send for benten_membership_set::kind::KindDispatchError
+impl core::marker::Sync for benten_membership_set::kind::KindDispatchError
+impl core::marker::Unpin for benten_membership_set::kind::KindDispatchError
+impl core::marker::UnsafeUnpin for benten_membership_set::kind::KindDispatchError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::kind::KindDispatchError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::kind::KindDispatchError
+#[repr(u8)] pub enum benten_membership_set::kind::MembershipSetKind
+pub benten_membership_set::kind::MembershipSetKind::Atrium = 0
+pub benten_membership_set::kind::MembershipSetKind::DeviceMesh = 1
+pub benten_membership_set::kind::MembershipSetKind::SingleDevice = 2
+impl benten_membership_set::kind::MembershipSetKind
+pub const benten_membership_set::kind::MembershipSetKind::ALL: [benten_membership_set::kind::MembershipSetKind; 3]
+pub const benten_membership_set::kind::MembershipSetKind::VARIANT_COUNT: usize
+pub fn benten_membership_set::kind::MembershipSetKind::codepoint(self) -> u16
+pub fn benten_membership_set::kind::MembershipSetKind::ordinal(self) -> u8
+impl core::clone::Clone for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::clone(&self) -> benten_membership_set::kind::MembershipSetKind
+impl core::cmp::Eq for benten_membership_set::kind::MembershipSetKind
+impl core::cmp::PartialEq for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::eq(&self, &benten_membership_set::kind::MembershipSetKind) -> bool
+impl core::fmt::Debug for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::kind::MembershipSetKind
+impl core::marker::StructuralPartialEq for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Freeze for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Send for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Sync for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Unpin for benten_membership_set::kind::MembershipSetKind
+impl core::marker::UnsafeUnpin for benten_membership_set::kind::MembershipSetKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::kind::MembershipSetKind
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::kind::MembershipSetKind
+pub enum benten_membership_set::kind::RequestedReserveKind
+pub benten_membership_set::kind::RequestedReserveKind::AtriumWithRotatingGroupKey
+pub benten_membership_set::kind::RequestedReserveKind::EphemeralLobby
+impl core::clone::Clone for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::RequestedReserveKind::clone(&self) -> benten_membership_set::kind::RequestedReserveKind
+impl core::cmp::Eq for benten_membership_set::kind::RequestedReserveKind
+impl core::cmp::PartialEq for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::RequestedReserveKind::eq(&self, &benten_membership_set::kind::RequestedReserveKind) -> bool
+impl core::fmt::Debug for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::RequestedReserveKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::StructuralPartialEq for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Freeze for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Send for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Sync for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Unpin for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::UnsafeUnpin for benten_membership_set::kind::RequestedReserveKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::kind::RequestedReserveKind
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::dispatch_reserve(benten_membership_set::kind::RequestedReserveKind) -> core::result::Result<benten_membership_set::kind::MembershipSetKind, benten_membership_set::kind::KindDispatchError>
+pub mod benten_membership_set::member
+#[repr(u8)] pub enum benten_membership_set::member::MemberRef
+pub benten_membership_set::member::MemberRef::DeviceDid = 1
+pub benten_membership_set::member::MemberRef::LocalDevice = 2
+pub benten_membership_set::member::MemberRef::UserDid = 0
+impl benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::required_kind(&self) -> benten_membership_set::kind::MembershipSetKind
+impl core::clone::Clone for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::clone(&self) -> benten_membership_set::member::MemberRef
+impl core::cmp::Eq for benten_membership_set::member::MemberRef
+impl core::cmp::PartialEq for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::eq(&self, &benten_membership_set::member::MemberRef) -> bool
+impl core::convert::From<benten_membership_set::member::MemberRef> for u8
+pub fn u8::from(benten_membership_set::member::MemberRef) -> u8
+impl core::fmt::Debug for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::member::MemberRef
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MemberRef
+impl serde_core::ser::Serialize for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::MemberRef
+impl core::marker::Send for benten_membership_set::member::MemberRef
+impl core::marker::Sync for benten_membership_set::member::MemberRef
+impl core::marker::Unpin for benten_membership_set::member::MemberRef
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MemberRef
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MemberRef
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MemberRef
+#[repr(u8)] pub enum benten_membership_set::member::RoleId
+pub benten_membership_set::member::RoleId::Admin = 4
+pub benten_membership_set::member::RoleId::Invitee = 0
+pub benten_membership_set::member::RoleId::Member = 2
+pub benten_membership_set::member::RoleId::Moderator = 3
+pub benten_membership_set::member::RoleId::Viewer = 1
+impl benten_membership_set::role::RoleId
+pub const benten_membership_set::role::RoleId::ALL: [benten_membership_set::role::RoleId; 5]
+pub fn benten_membership_set::role::RoleId::grants_read_cap(self) -> bool
+pub fn benten_membership_set::role::RoleId::ordinal(self) -> u8
+impl core::clone::Clone for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::clone(&self) -> benten_membership_set::role::RoleId
+impl core::cmp::Eq for benten_membership_set::role::RoleId
+impl core::cmp::Ord for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::cmp(&self, &benten_membership_set::role::RoleId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::eq(&self, &benten_membership_set::role::RoleId) -> bool
+impl core::cmp::PartialOrd for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::partial_cmp(&self, &benten_membership_set::role::RoleId) -> core::option::Option<core::cmp::Ordering>
+impl core::convert::From<benten_membership_set::role::RoleId> for u8
+pub fn u8::from(benten_membership_set::role::RoleId) -> u8
+impl core::fmt::Debug for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::role::RoleId
+impl core::marker::StructuralPartialEq for benten_membership_set::role::RoleId
+impl serde_core::ser::Serialize for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::role::RoleId
+impl core::marker::Send for benten_membership_set::role::RoleId
+impl core::marker::Sync for benten_membership_set::role::RoleId
+impl core::marker::Unpin for benten_membership_set::role::RoleId
+impl core::marker::UnsafeUnpin for benten_membership_set::role::RoleId
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::role::RoleId
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::role::RoleId
+pub struct benten_membership_set::member::Did(pub alloc::string::String)
+impl benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::as_bytes(&self) -> &[u8]
+pub fn benten_membership_set::member::Did::new(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::clone(&self) -> benten_membership_set::member::Did
+impl core::cmp::Eq for benten_membership_set::member::Did
+impl core::cmp::Ord for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::cmp(&self, &benten_membership_set::member::Did) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::eq(&self, &benten_membership_set::member::Did) -> bool
+impl core::cmp::PartialOrd for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::partial_cmp(&self, &benten_membership_set::member::Did) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for benten_membership_set::member::Did
+impl serde_core::ser::Serialize for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::Did
+impl core::marker::Send for benten_membership_set::member::Did
+impl core::marker::Sync for benten_membership_set::member::Did
+impl core::marker::Unpin for benten_membership_set::member::Did
+impl core::marker::UnsafeUnpin for benten_membership_set::member::Did
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::Did
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::Did
+pub struct benten_membership_set::member::Hlc
+pub benten_membership_set::member::Hlc::logical: u32
+pub benten_membership_set::member::Hlc::node_id: u64
+pub benten_membership_set::member::Hlc::physical_ms: u64
+impl benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::at(u64) -> Self
+impl core::clone::Clone for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::clone(&self) -> benten_membership_set::member::Hlc
+impl core::cmp::Eq for benten_membership_set::member::Hlc
+impl core::cmp::PartialEq for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::eq(&self, &benten_membership_set::member::Hlc) -> bool
+impl core::fmt::Debug for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::Hlc
+impl serde_core::ser::Serialize for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::Hlc
+impl core::marker::Send for benten_membership_set::member::Hlc
+impl core::marker::Sync for benten_membership_set::member::Hlc
+impl core::marker::Unpin for benten_membership_set::member::Hlc
+impl core::marker::UnsafeUnpin for benten_membership_set::member::Hlc
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::Hlc
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::Hlc
+pub struct benten_membership_set::member::MemberEntry
+pub benten_membership_set::member::MemberEntry::admitted_at_hlc: benten_membership_set::member::Hlc
+pub benten_membership_set::member::MemberEntry::is_authority: bool
+pub benten_membership_set::member::MemberEntry::member_ref: benten_membership_set::member::MemberRef
+pub benten_membership_set::member::MemberEntry::role: benten_membership_set::role::RoleId
+pub benten_membership_set::member::MemberEntry::sig_pubkey: core::option::Option<benten_membership_set::member::SigPubKey>
+impl benten_membership_set::member::MemberEntry
+pub const fn benten_membership_set::member::MemberEntry::has_any_nature_field() -> bool
+pub fn benten_membership_set::member::MemberEntry::validate(&self) -> core::result::Result<(), benten_membership_set::error::MembershipSetError>
+impl core::clone::Clone for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::clone(&self) -> benten_membership_set::member::MemberEntry
+impl core::cmp::Eq for benten_membership_set::member::MemberEntry
+impl core::cmp::PartialEq for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::eq(&self, &benten_membership_set::member::MemberEntry) -> bool
+impl core::fmt::Debug for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MemberEntry
+impl serde_core::ser::Serialize for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::MemberEntry
+impl core::marker::Send for benten_membership_set::member::MemberEntry
+impl core::marker::Sync for benten_membership_set::member::MemberEntry
+impl core::marker::Unpin for benten_membership_set::member::MemberEntry
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MemberEntry
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MemberEntry
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MemberEntry
+pub struct benten_membership_set::member::MemberNature
+pub benten_membership_set::member::MemberNature::is_ai_operated: bool
+pub benten_membership_set::member::MemberNature::is_autonomous_ai: bool
+pub benten_membership_set::member::MemberNature::is_plugin: bool
+impl core::clone::Clone for benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::MemberNature::clone(&self) -> benten_membership_set::member::MemberNature
+impl core::cmp::Eq for benten_membership_set::member::MemberNature
+impl core::cmp::PartialEq for benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::MemberNature::eq(&self, &benten_membership_set::member::MemberNature) -> bool
+impl core::fmt::Debug for benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::MemberNature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::member::MemberNature
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MemberNature
+impl core::marker::Freeze for benten_membership_set::member::MemberNature
+impl core::marker::Send for benten_membership_set::member::MemberNature
+impl core::marker::Sync for benten_membership_set::member::MemberNature
+impl core::marker::Unpin for benten_membership_set::member::MemberNature
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MemberNature
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MemberNature
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MemberNature
+pub struct benten_membership_set::member::MembersTable
+impl benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::admit(&mut self, benten_membership_set::member::Did, benten_membership_set::member::MemberEntry) -> core::result::Result<(), benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::member::MembersTable::as_map(&self) -> &alloc::collections::btree::map::BTreeMap<benten_membership_set::member::Did, benten_membership_set::member::MemberEntry>
+pub fn benten_membership_set::member::MembersTable::get(&self, &benten_membership_set::member::Did) -> core::option::Option<&benten_membership_set::member::MemberEntry>
+pub fn benten_membership_set::member::MembersTable::is_empty(&self) -> bool
+pub fn benten_membership_set::member::MembersTable::len(&self) -> usize
+pub fn benten_membership_set::member::MembersTable::new() -> Self
+impl core::clone::Clone for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::clone(&self) -> benten_membership_set::member::MembersTable
+impl core::cmp::Eq for benten_membership_set::member::MembersTable
+impl core::cmp::PartialEq for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::eq(&self, &benten_membership_set::member::MembersTable) -> bool
+impl core::default::Default for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::default() -> benten_membership_set::member::MembersTable
+impl core::fmt::Debug for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MembersTable
+impl core::marker::Freeze for benten_membership_set::member::MembersTable
+impl core::marker::Send for benten_membership_set::member::MembersTable
+impl core::marker::Sync for benten_membership_set::member::MembersTable
+impl core::marker::Unpin for benten_membership_set::member::MembersTable
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MembersTable
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MembersTable
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MembersTable
+pub struct benten_membership_set::member::SigPubKey(pub alloc::vec::Vec<u8>)
+impl core::clone::Clone for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::clone(&self) -> benten_membership_set::member::SigPubKey
+impl core::cmp::Eq for benten_membership_set::member::SigPubKey
+impl core::cmp::PartialEq for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::eq(&self, &benten_membership_set::member::SigPubKey) -> bool
+impl core::fmt::Debug for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::SigPubKey
+impl serde_core::ser::Serialize for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::SigPubKey
+impl core::marker::Send for benten_membership_set::member::SigPubKey
+impl core::marker::Sync for benten_membership_set::member::SigPubKey
+impl core::marker::Unpin for benten_membership_set::member::SigPubKey
+impl core::marker::UnsafeUnpin for benten_membership_set::member::SigPubKey
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::SigPubKey
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::derive_member_nature(&str, bool) -> benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::is_ai_operated(&str) -> bool
+pub mod benten_membership_set::privacy
+pub fn benten_membership_set::privacy::admin_can_correlate_members(&[u8]) -> bool
+pub fn benten_membership_set::privacy::network_observer_can_link_stanzas(&[u8], &[u8]) -> bool
+pub mod benten_membership_set::role
+#[repr(u8)] pub enum benten_membership_set::role::RoleId
+pub benten_membership_set::role::RoleId::Admin = 4
+pub benten_membership_set::role::RoleId::Invitee = 0
+pub benten_membership_set::role::RoleId::Member = 2
+pub benten_membership_set::role::RoleId::Moderator = 3
+pub benten_membership_set::role::RoleId::Viewer = 1
+impl benten_membership_set::role::RoleId
+pub const benten_membership_set::role::RoleId::ALL: [benten_membership_set::role::RoleId; 5]
+pub fn benten_membership_set::role::RoleId::grants_read_cap(self) -> bool
+pub fn benten_membership_set::role::RoleId::ordinal(self) -> u8
+impl core::clone::Clone for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::clone(&self) -> benten_membership_set::role::RoleId
+impl core::cmp::Eq for benten_membership_set::role::RoleId
+impl core::cmp::Ord for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::cmp(&self, &benten_membership_set::role::RoleId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::eq(&self, &benten_membership_set::role::RoleId) -> bool
+impl core::cmp::PartialOrd for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::partial_cmp(&self, &benten_membership_set::role::RoleId) -> core::option::Option<core::cmp::Ordering>
+impl core::convert::From<benten_membership_set::role::RoleId> for u8
+pub fn u8::from(benten_membership_set::role::RoleId) -> u8
+impl core::fmt::Debug for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::role::RoleId
+impl core::marker::StructuralPartialEq for benten_membership_set::role::RoleId
+impl serde_core::ser::Serialize for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::role::RoleId
+impl core::marker::Send for benten_membership_set::role::RoleId
+impl core::marker::Sync for benten_membership_set::role::RoleId
+impl core::marker::Unpin for benten_membership_set::role::RoleId
+impl core::marker::UnsafeUnpin for benten_membership_set::role::RoleId
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::role::RoleId
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::ability_template(benten_membership_set::role::RoleId) -> alloc::collections::btree::set::BTreeSet<&'static str>
+pub fn benten_membership_set::role::admin_exclusive_abilities() -> alloc::collections::btree::set::BTreeSet<&'static str>
+pub fn benten_membership_set::role::derive_member_content_key(benten_membership_set::role::RoleId, &[u8]) -> core::option::Option<alloc::vec::Vec<u8>>
+pub mod benten_membership_set::scaffold
+pub const benten_membership_set::scaffold::CRATE_NAME: &str
+pub const benten_membership_set::scaffold::MEMBERSHIP_SET_BAND_HI: u16
+pub const benten_membership_set::scaffold::MEMBERSHIP_SET_BAND_LO: u16
+pub mod benten_membership_set::set
+pub mod benten_membership_set::set::crdt
+pub fn benten_membership_set::set::crdt::admitted_at_hlc_lww_keeps_a(benten_core::hlc::BentenHlc, benten_core::hlc::BentenHlc) -> bool
+pub fn benten_membership_set::set::crdt::fork_a_wins(benten_core::hlc::BentenHlc, &[u8], benten_core::hlc::BentenHlc, &[u8]) -> bool
+pub fn benten_membership_set::set::crdt::fork_total_order_key(benten_core::hlc::BentenHlc, &[u8]) -> (benten_core::hlc::BentenHlc, alloc::vec::Vec<u8>)
+pub struct benten_membership_set::set::MembershipSet
+impl benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::admin_count(&self) -> usize
+pub fn benten_membership_set::set::MembershipSet::construct(benten_membership_set::kind::MembershipSetKind, usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::set::MembershipSet::kind(&self) -> benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::set::MembershipSet::member_refs(&self) -> &[benten_membership_set::member::MemberRef]
+pub fn benten_membership_set::set::MembershipSet::new_atrium(usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::set::MembershipSet::new_device_mesh(usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::set::MembershipSet::new_single_device(usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+impl core::clone::Clone for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::clone(&self) -> benten_membership_set::set::MembershipSet
+impl core::cmp::Eq for benten_membership_set::set::MembershipSet
+impl core::cmp::PartialEq for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::eq(&self, &benten_membership_set::set::MembershipSet) -> bool
+impl core::fmt::Debug for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::set::MembershipSet
+impl core::marker::Freeze for benten_membership_set::set::MembershipSet
+impl core::marker::Send for benten_membership_set::set::MembershipSet
+impl core::marker::Sync for benten_membership_set::set::MembershipSet
+impl core::marker::Unpin for benten_membership_set::set::MembershipSet
+impl core::marker::UnsafeUnpin for benten_membership_set::set::MembershipSet
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::set::MembershipSet
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::wire_cost_ceiling(benten_membership_set::kind::MembershipSetKind) -> usize
+pub mod benten_membership_set::ucan
+pub struct benten_membership_set::ucan::EphemeralGrant
+pub benten_membership_set::ucan::EphemeralGrant::exp: u64
+pub benten_membership_set::ucan::EphemeralGrant::nbf: u64
+impl benten_membership_set::ucan::EphemeralGrant
+pub fn benten_membership_set::ucan::EphemeralGrant::is_valid_at(&self, u64) -> bool
+pub fn benten_membership_set::ucan::EphemeralGrant::issue_bounded(u64, u64) -> Self
+pub fn benten_membership_set::ucan::EphemeralGrant::lifetime_secs(&self) -> u64
+impl core::clone::Clone for benten_membership_set::ucan::EphemeralGrant
+pub fn benten_membership_set::ucan::EphemeralGrant::clone(&self) -> benten_membership_set::ucan::EphemeralGrant
+impl core::cmp::Eq for benten_membership_set::ucan::EphemeralGrant
+impl core::cmp::PartialEq for benten_membership_set::ucan::EphemeralGrant
+pub fn benten_membership_set::ucan::EphemeralGrant::eq(&self, &benten_membership_set::ucan::EphemeralGrant) -> bool
+impl core::fmt::Debug for benten_membership_set::ucan::EphemeralGrant
+pub fn benten_membership_set::ucan::EphemeralGrant::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::ucan::EphemeralGrant
+impl core::marker::StructuralPartialEq for benten_membership_set::ucan::EphemeralGrant
+impl core::marker::Freeze for benten_membership_set::ucan::EphemeralGrant
+impl core::marker::Send for benten_membership_set::ucan::EphemeralGrant
+impl core::marker::Sync for benten_membership_set::ucan::EphemeralGrant
+impl core::marker::Unpin for benten_membership_set::ucan::EphemeralGrant
+impl core::marker::UnsafeUnpin for benten_membership_set::ucan::EphemeralGrant
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::ucan::EphemeralGrant
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::ucan::EphemeralGrant
+pub const benten_membership_set::ucan::DEFAULT_EXP_BOUND_SECS: u64
+pub fn benten_membership_set::ucan::ephemeral_grant(u64, u64) -> benten_membership_set::ucan::EphemeralGrant
+pub mod benten_membership_set::verify
+pub struct benten_membership_set::verify::RoleStaleError
+pub benten_membership_set::verify::RoleStaleError::code: &'static str
+impl benten_membership_set::verify::RoleStaleError
+pub fn benten_membership_set::verify::RoleStaleError::as_membership_error(&self) -> benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::verify::RoleStaleError::new() -> Self
+impl core::clone::Clone for benten_membership_set::verify::RoleStaleError
+pub fn benten_membership_set::verify::RoleStaleError::clone(&self) -> benten_membership_set::verify::RoleStaleError
+impl core::cmp::Eq for benten_membership_set::verify::RoleStaleError
+impl core::cmp::PartialEq for benten_membership_set::verify::RoleStaleError
+pub fn benten_membership_set::verify::RoleStaleError::eq(&self, &benten_membership_set::verify::RoleStaleError) -> bool
+impl core::default::Default for benten_membership_set::verify::RoleStaleError
+pub fn benten_membership_set::verify::RoleStaleError::default() -> Self
+impl core::error::Error for benten_membership_set::verify::RoleStaleError
+impl core::fmt::Debug for benten_membership_set::verify::RoleStaleError
+pub fn benten_membership_set::verify::RoleStaleError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::verify::RoleStaleError
+pub fn benten_membership_set::verify::RoleStaleError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::verify::RoleStaleError
+impl core::marker::StructuralPartialEq for benten_membership_set::verify::RoleStaleError
+impl core::marker::Freeze for benten_membership_set::verify::RoleStaleError
+impl core::marker::Send for benten_membership_set::verify::RoleStaleError
+impl core::marker::Sync for benten_membership_set::verify::RoleStaleError
+impl core::marker::Unpin for benten_membership_set::verify::RoleStaleError
+impl core::marker::UnsafeUnpin for benten_membership_set::verify::RoleStaleError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::verify::RoleStaleError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::verify::RoleStaleError
+pub struct benten_membership_set::verify::Stanza
+pub benten_membership_set::verify::Stanza::sealed_role_assignments_generation: u32
+impl benten_membership_set::verify::Stanza
+pub fn benten_membership_set::verify::Stanza::sealed_at_generation(u32) -> Self
+impl core::clone::Clone for benten_membership_set::verify::Stanza
+pub fn benten_membership_set::verify::Stanza::clone(&self) -> benten_membership_set::verify::Stanza
+impl core::cmp::Eq for benten_membership_set::verify::Stanza
+impl core::cmp::PartialEq for benten_membership_set::verify::Stanza
+pub fn benten_membership_set::verify::Stanza::eq(&self, &benten_membership_set::verify::Stanza) -> bool
+impl core::fmt::Debug for benten_membership_set::verify::Stanza
+pub fn benten_membership_set::verify::Stanza::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::verify::Stanza
+impl core::marker::StructuralPartialEq for benten_membership_set::verify::Stanza
+impl core::marker::Freeze for benten_membership_set::verify::Stanza
+impl core::marker::Send for benten_membership_set::verify::Stanza
+impl core::marker::Sync for benten_membership_set::verify::Stanza
+impl core::marker::Unpin for benten_membership_set::verify::Stanza
+impl core::marker::UnsafeUnpin for benten_membership_set::verify::Stanza
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::verify::Stanza
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::verify::Stanza
+pub fn benten_membership_set::verify::verify_stanza(&benten_membership_set::verify::Stanza, u32) -> core::result::Result<(), benten_membership_set::verify::RoleStaleError>
+pub enum benten_membership_set::KindDispatchError
+pub benten_membership_set::KindDispatchError::ReserveTypedReject
+impl core::clone::Clone for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::clone(&self) -> benten_membership_set::kind::KindDispatchError
+impl core::cmp::Eq for benten_membership_set::kind::KindDispatchError
+impl core::cmp::PartialEq for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::eq(&self, &benten_membership_set::kind::KindDispatchError) -> bool
+impl core::error::Error for benten_membership_set::kind::KindDispatchError
+impl core::fmt::Debug for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::kind::KindDispatchError
+pub fn benten_membership_set::kind::KindDispatchError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::kind::KindDispatchError
+impl core::marker::StructuralPartialEq for benten_membership_set::kind::KindDispatchError
+impl core::marker::Freeze for benten_membership_set::kind::KindDispatchError
+impl core::marker::Send for benten_membership_set::kind::KindDispatchError
+impl core::marker::Sync for benten_membership_set::kind::KindDispatchError
+impl core::marker::Unpin for benten_membership_set::kind::KindDispatchError
+impl core::marker::UnsafeUnpin for benten_membership_set::kind::KindDispatchError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::kind::KindDispatchError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::kind::KindDispatchError
+#[repr(u8)] pub enum benten_membership_set::MemberRef
+pub benten_membership_set::MemberRef::DeviceDid = 1
+pub benten_membership_set::MemberRef::LocalDevice = 2
+pub benten_membership_set::MemberRef::UserDid = 0
+impl benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::required_kind(&self) -> benten_membership_set::kind::MembershipSetKind
+impl core::clone::Clone for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::clone(&self) -> benten_membership_set::member::MemberRef
+impl core::cmp::Eq for benten_membership_set::member::MemberRef
+impl core::cmp::PartialEq for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::eq(&self, &benten_membership_set::member::MemberRef) -> bool
+impl core::convert::From<benten_membership_set::member::MemberRef> for u8
+pub fn u8::from(benten_membership_set::member::MemberRef) -> u8
+impl core::fmt::Debug for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::member::MemberRef
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MemberRef
+impl serde_core::ser::Serialize for benten_membership_set::member::MemberRef
+pub fn benten_membership_set::member::MemberRef::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::MemberRef
+impl core::marker::Send for benten_membership_set::member::MemberRef
+impl core::marker::Sync for benten_membership_set::member::MemberRef
+impl core::marker::Unpin for benten_membership_set::member::MemberRef
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MemberRef
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MemberRef
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MemberRef
+#[non_exhaustive] pub enum benten_membership_set::MembershipSetError
+pub benten_membership_set::MembershipSetError::AdminCardinality
+pub benten_membership_set::MembershipSetError::AuthorityMissingPubkey
+pub benten_membership_set::MembershipSetError::MemberCardinality
+pub benten_membership_set::MembershipSetError::MemberRefKindMismatch
+pub benten_membership_set::MembershipSetError::ReserveTypedReject
+pub benten_membership_set::MembershipSetError::RoleStaleAtVerify
+pub benten_membership_set::MembershipSetError::WireCostCeilingExceeded
+impl benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::as_wire_str(&self) -> &'static str
+pub fn benten_membership_set::error::MembershipSetError::error_code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::clone(&self) -> benten_membership_set::error::MembershipSetError
+impl core::cmp::Eq for benten_membership_set::error::MembershipSetError
+impl core::cmp::PartialEq for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::eq(&self, &benten_membership_set::error::MembershipSetError) -> bool
+impl core::error::Error for benten_membership_set::error::MembershipSetError
+impl core::fmt::Debug for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_membership_set::error::MembershipSetError
+pub fn benten_membership_set::error::MembershipSetError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::error::MembershipSetError
+impl core::marker::Freeze for benten_membership_set::error::MembershipSetError
+impl core::marker::Send for benten_membership_set::error::MembershipSetError
+impl core::marker::Sync for benten_membership_set::error::MembershipSetError
+impl core::marker::Unpin for benten_membership_set::error::MembershipSetError
+impl core::marker::UnsafeUnpin for benten_membership_set::error::MembershipSetError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::error::MembershipSetError
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::error::MembershipSetError
+#[repr(u8)] pub enum benten_membership_set::MembershipSetKind
+pub benten_membership_set::MembershipSetKind::Atrium = 0
+pub benten_membership_set::MembershipSetKind::DeviceMesh = 1
+pub benten_membership_set::MembershipSetKind::SingleDevice = 2
+impl benten_membership_set::kind::MembershipSetKind
+pub const benten_membership_set::kind::MembershipSetKind::ALL: [benten_membership_set::kind::MembershipSetKind; 3]
+pub const benten_membership_set::kind::MembershipSetKind::VARIANT_COUNT: usize
+pub fn benten_membership_set::kind::MembershipSetKind::codepoint(self) -> u16
+pub fn benten_membership_set::kind::MembershipSetKind::ordinal(self) -> u8
+impl core::clone::Clone for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::clone(&self) -> benten_membership_set::kind::MembershipSetKind
+impl core::cmp::Eq for benten_membership_set::kind::MembershipSetKind
+impl core::cmp::PartialEq for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::eq(&self, &benten_membership_set::kind::MembershipSetKind) -> bool
+impl core::fmt::Debug for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::kind::MembershipSetKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::kind::MembershipSetKind
+impl core::marker::StructuralPartialEq for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Freeze for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Send for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Sync for benten_membership_set::kind::MembershipSetKind
+impl core::marker::Unpin for benten_membership_set::kind::MembershipSetKind
+impl core::marker::UnsafeUnpin for benten_membership_set::kind::MembershipSetKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::kind::MembershipSetKind
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::kind::MembershipSetKind
+pub enum benten_membership_set::RequestedReserveKind
+pub benten_membership_set::RequestedReserveKind::AtriumWithRotatingGroupKey
+pub benten_membership_set::RequestedReserveKind::EphemeralLobby
+impl core::clone::Clone for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::RequestedReserveKind::clone(&self) -> benten_membership_set::kind::RequestedReserveKind
+impl core::cmp::Eq for benten_membership_set::kind::RequestedReserveKind
+impl core::cmp::PartialEq for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::RequestedReserveKind::eq(&self, &benten_membership_set::kind::RequestedReserveKind) -> bool
+impl core::fmt::Debug for benten_membership_set::kind::RequestedReserveKind
+pub fn benten_membership_set::kind::RequestedReserveKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::StructuralPartialEq for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Freeze for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Send for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Sync for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::Unpin for benten_membership_set::kind::RequestedReserveKind
+impl core::marker::UnsafeUnpin for benten_membership_set::kind::RequestedReserveKind
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::kind::RequestedReserveKind
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::kind::RequestedReserveKind
+#[repr(u8)] pub enum benten_membership_set::RoleId
+pub benten_membership_set::RoleId::Admin = 4
+pub benten_membership_set::RoleId::Invitee = 0
+pub benten_membership_set::RoleId::Member = 2
+pub benten_membership_set::RoleId::Moderator = 3
+pub benten_membership_set::RoleId::Viewer = 1
+impl benten_membership_set::role::RoleId
+pub const benten_membership_set::role::RoleId::ALL: [benten_membership_set::role::RoleId; 5]
+pub fn benten_membership_set::role::RoleId::grants_read_cap(self) -> bool
+pub fn benten_membership_set::role::RoleId::ordinal(self) -> u8
+impl core::clone::Clone for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::clone(&self) -> benten_membership_set::role::RoleId
+impl core::cmp::Eq for benten_membership_set::role::RoleId
+impl core::cmp::Ord for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::cmp(&self, &benten_membership_set::role::RoleId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::eq(&self, &benten_membership_set::role::RoleId) -> bool
+impl core::cmp::PartialOrd for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::partial_cmp(&self, &benten_membership_set::role::RoleId) -> core::option::Option<core::cmp::Ordering>
+impl core::convert::From<benten_membership_set::role::RoleId> for u8
+pub fn u8::from(benten_membership_set::role::RoleId) -> u8
+impl core::fmt::Debug for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_membership_set::role::RoleId
+impl core::marker::StructuralPartialEq for benten_membership_set::role::RoleId
+impl serde_core::ser::Serialize for benten_membership_set::role::RoleId
+pub fn benten_membership_set::role::RoleId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::role::RoleId
+impl core::marker::Send for benten_membership_set::role::RoleId
+impl core::marker::Sync for benten_membership_set::role::RoleId
+impl core::marker::Unpin for benten_membership_set::role::RoleId
+impl core::marker::UnsafeUnpin for benten_membership_set::role::RoleId
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::role::RoleId
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::role::RoleId
+pub struct benten_membership_set::Did(pub alloc::string::String)
+impl benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::as_bytes(&self) -> &[u8]
+pub fn benten_membership_set::member::Did::new(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::clone(&self) -> benten_membership_set::member::Did
+impl core::cmp::Eq for benten_membership_set::member::Did
+impl core::cmp::Ord for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::cmp(&self, &benten_membership_set::member::Did) -> core::cmp::Ordering
+impl core::cmp::PartialEq for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::eq(&self, &benten_membership_set::member::Did) -> bool
+impl core::cmp::PartialOrd for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::partial_cmp(&self, &benten_membership_set::member::Did) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for benten_membership_set::member::Did
+impl serde_core::ser::Serialize for benten_membership_set::member::Did
+pub fn benten_membership_set::member::Did::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::Did
+impl core::marker::Send for benten_membership_set::member::Did
+impl core::marker::Sync for benten_membership_set::member::Did
+impl core::marker::Unpin for benten_membership_set::member::Did
+impl core::marker::UnsafeUnpin for benten_membership_set::member::Did
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::Did
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::Did
+pub struct benten_membership_set::Hlc
+pub benten_membership_set::Hlc::logical: u32
+pub benten_membership_set::Hlc::node_id: u64
+pub benten_membership_set::Hlc::physical_ms: u64
+impl benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::at(u64) -> Self
+impl core::clone::Clone for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::clone(&self) -> benten_membership_set::member::Hlc
+impl core::cmp::Eq for benten_membership_set::member::Hlc
+impl core::cmp::PartialEq for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::eq(&self, &benten_membership_set::member::Hlc) -> bool
+impl core::fmt::Debug for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::Hlc
+impl serde_core::ser::Serialize for benten_membership_set::member::Hlc
+pub fn benten_membership_set::member::Hlc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::Hlc
+impl core::marker::Send for benten_membership_set::member::Hlc
+impl core::marker::Sync for benten_membership_set::member::Hlc
+impl core::marker::Unpin for benten_membership_set::member::Hlc
+impl core::marker::UnsafeUnpin for benten_membership_set::member::Hlc
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::Hlc
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::Hlc
+pub struct benten_membership_set::MemberEntry
+pub benten_membership_set::MemberEntry::admitted_at_hlc: benten_membership_set::member::Hlc
+pub benten_membership_set::MemberEntry::is_authority: bool
+pub benten_membership_set::MemberEntry::member_ref: benten_membership_set::member::MemberRef
+pub benten_membership_set::MemberEntry::role: benten_membership_set::role::RoleId
+pub benten_membership_set::MemberEntry::sig_pubkey: core::option::Option<benten_membership_set::member::SigPubKey>
+impl benten_membership_set::member::MemberEntry
+pub const fn benten_membership_set::member::MemberEntry::has_any_nature_field() -> bool
+pub fn benten_membership_set::member::MemberEntry::validate(&self) -> core::result::Result<(), benten_membership_set::error::MembershipSetError>
+impl core::clone::Clone for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::clone(&self) -> benten_membership_set::member::MemberEntry
+impl core::cmp::Eq for benten_membership_set::member::MemberEntry
+impl core::cmp::PartialEq for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::eq(&self, &benten_membership_set::member::MemberEntry) -> bool
+impl core::fmt::Debug for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MemberEntry
+impl serde_core::ser::Serialize for benten_membership_set::member::MemberEntry
+pub fn benten_membership_set::member::MemberEntry::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::MemberEntry
+impl core::marker::Send for benten_membership_set::member::MemberEntry
+impl core::marker::Sync for benten_membership_set::member::MemberEntry
+impl core::marker::Unpin for benten_membership_set::member::MemberEntry
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MemberEntry
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MemberEntry
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MemberEntry
+pub struct benten_membership_set::MemberNature
+pub benten_membership_set::MemberNature::is_ai_operated: bool
+pub benten_membership_set::MemberNature::is_autonomous_ai: bool
+pub benten_membership_set::MemberNature::is_plugin: bool
+impl core::clone::Clone for benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::MemberNature::clone(&self) -> benten_membership_set::member::MemberNature
+impl core::cmp::Eq for benten_membership_set::member::MemberNature
+impl core::cmp::PartialEq for benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::MemberNature::eq(&self, &benten_membership_set::member::MemberNature) -> bool
+impl core::fmt::Debug for benten_membership_set::member::MemberNature
+pub fn benten_membership_set::member::MemberNature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_membership_set::member::MemberNature
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MemberNature
+impl core::marker::Freeze for benten_membership_set::member::MemberNature
+impl core::marker::Send for benten_membership_set::member::MemberNature
+impl core::marker::Sync for benten_membership_set::member::MemberNature
+impl core::marker::Unpin for benten_membership_set::member::MemberNature
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MemberNature
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MemberNature
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MemberNature
+pub struct benten_membership_set::MembersTable
+impl benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::admit(&mut self, benten_membership_set::member::Did, benten_membership_set::member::MemberEntry) -> core::result::Result<(), benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::member::MembersTable::as_map(&self) -> &alloc::collections::btree::map::BTreeMap<benten_membership_set::member::Did, benten_membership_set::member::MemberEntry>
+pub fn benten_membership_set::member::MembersTable::get(&self, &benten_membership_set::member::Did) -> core::option::Option<&benten_membership_set::member::MemberEntry>
+pub fn benten_membership_set::member::MembersTable::is_empty(&self) -> bool
+pub fn benten_membership_set::member::MembersTable::len(&self) -> usize
+pub fn benten_membership_set::member::MembersTable::new() -> Self
+impl core::clone::Clone for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::clone(&self) -> benten_membership_set::member::MembersTable
+impl core::cmp::Eq for benten_membership_set::member::MembersTable
+impl core::cmp::PartialEq for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::eq(&self, &benten_membership_set::member::MembersTable) -> bool
+impl core::default::Default for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::default() -> benten_membership_set::member::MembersTable
+impl core::fmt::Debug for benten_membership_set::member::MembersTable
+pub fn benten_membership_set::member::MembersTable::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::MembersTable
+impl core::marker::Freeze for benten_membership_set::member::MembersTable
+impl core::marker::Send for benten_membership_set::member::MembersTable
+impl core::marker::Sync for benten_membership_set::member::MembersTable
+impl core::marker::Unpin for benten_membership_set::member::MembersTable
+impl core::marker::UnsafeUnpin for benten_membership_set::member::MembersTable
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::MembersTable
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::MembersTable
+pub struct benten_membership_set::MembershipSet
+impl benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::admin_count(&self) -> usize
+pub fn benten_membership_set::set::MembershipSet::construct(benten_membership_set::kind::MembershipSetKind, usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::set::MembershipSet::kind(&self) -> benten_membership_set::kind::MembershipSetKind
+pub fn benten_membership_set::set::MembershipSet::member_refs(&self) -> &[benten_membership_set::member::MemberRef]
+pub fn benten_membership_set::set::MembershipSet::new_atrium(usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::set::MembershipSet::new_device_mesh(usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+pub fn benten_membership_set::set::MembershipSet::new_single_device(usize, &[benten_membership_set::member::MemberRef]) -> core::result::Result<Self, benten_membership_set::error::MembershipSetError>
+impl core::clone::Clone for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::clone(&self) -> benten_membership_set::set::MembershipSet
+impl core::cmp::Eq for benten_membership_set::set::MembershipSet
+impl core::cmp::PartialEq for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::eq(&self, &benten_membership_set::set::MembershipSet) -> bool
+impl core::fmt::Debug for benten_membership_set::set::MembershipSet
+pub fn benten_membership_set::set::MembershipSet::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::set::MembershipSet
+impl core::marker::Freeze for benten_membership_set::set::MembershipSet
+impl core::marker::Send for benten_membership_set::set::MembershipSet
+impl core::marker::Sync for benten_membership_set::set::MembershipSet
+impl core::marker::Unpin for benten_membership_set::set::MembershipSet
+impl core::marker::UnsafeUnpin for benten_membership_set::set::MembershipSet
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::set::MembershipSet
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::set::MembershipSet
+pub struct benten_membership_set::SigPubKey(pub alloc::vec::Vec<u8>)
+impl core::clone::Clone for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::clone(&self) -> benten_membership_set::member::SigPubKey
+impl core::cmp::Eq for benten_membership_set::member::SigPubKey
+impl core::cmp::PartialEq for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::eq(&self, &benten_membership_set::member::SigPubKey) -> bool
+impl core::fmt::Debug for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_membership_set::member::SigPubKey
+impl serde_core::ser::Serialize for benten_membership_set::member::SigPubKey
+pub fn benten_membership_set::member::SigPubKey::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for benten_membership_set::member::SigPubKey
+impl core::marker::Send for benten_membership_set::member::SigPubKey
+impl core::marker::Sync for benten_membership_set::member::SigPubKey
+impl core::marker::Unpin for benten_membership_set::member::SigPubKey
+impl core::marker::UnsafeUnpin for benten_membership_set::member::SigPubKey
+impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::member::SigPubKey
+impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::SigPubKey
+pub const benten_membership_set::E_ROLE_STALE_AT_VERIFY: &str
+pub fn benten_membership_set::derive_member_nature(&str, bool) -> benten_membership_set::member::MemberNature
+pub fn benten_membership_set::dispatch_reserve(benten_membership_set::kind::RequestedReserveKind) -> core::result::Result<benten_membership_set::kind::MembershipSetKind, benten_membership_set::kind::KindDispatchError>
+pub fn benten_membership_set::is_ai_operated(&str) -> bool
+pub fn benten_membership_set::wire_cost_ceiling(benten_membership_set::kind::MembershipSetKind) -> usize

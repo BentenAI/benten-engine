@@ -75,6 +75,7 @@ pub benten_errors::ErrorCode::InvTooManyNodes
 pub benten_errors::ErrorCode::IvmPatternMismatch
 pub benten_errors::ErrorCode::IvmStrategyNotImplemented
 pub benten_errors::ErrorCode::IvmViewStale
+pub benten_errors::ErrorCode::KvTargetNotImmutable
 pub benten_errors::ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
 pub benten_errors::ErrorCode::MaterializerCapDenied
 pub benten_errors::ErrorCode::MaterializerSchemaMismatch
@@ -116,6 +117,7 @@ pub benten_errors::ErrorCode::ReloadSubscriberUnsubscribed
 pub benten_errors::ErrorCode::ReservedHandlerNamespace
 pub benten_errors::ErrorCode::ResumeActorMismatch
 pub benten_errors::ErrorCode::ResumeSubgraphDrift
+pub benten_errors::ErrorCode::RoleStaleAtVerify
 pub benten_errors::ErrorCode::SandboxEscapeAttempt
 pub benten_errors::ErrorCode::SandboxFuelExhausted
 pub benten_errors::ErrorCode::SandboxHostFnDenied
@@ -206,25 +208,25 @@ impl core::clone::Clone for benten_errors::ErrorCode
 pub fn benten_errors::ErrorCode::clone(&self) -> benten_errors::ErrorCode
 impl core::cmp::Eq for benten_errors::ErrorCode
 impl core::cmp::Ord for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::cmp(&self, other: &benten_errors::ErrorCode) -> core::cmp::Ordering
+pub fn benten_errors::ErrorCode::cmp(&self, &benten_errors::ErrorCode) -> core::cmp::Ordering
 impl core::cmp::PartialEq for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::eq(&self, other: &benten_errors::ErrorCode) -> bool
+pub fn benten_errors::ErrorCode::eq(&self, &benten_errors::ErrorCode) -> bool
 impl core::cmp::PartialEq<&str> for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::eq(&self, other: &&str) -> bool
+pub fn benten_errors::ErrorCode::eq(&self, &&str) -> bool
 impl core::cmp::PartialEq<benten_errors::ErrorCode> for &str
-pub fn &str::eq(&self, other: &benten_errors::ErrorCode) -> bool
+pub fn &str::eq(&self, &benten_errors::ErrorCode) -> bool
 impl core::cmp::PartialOrd for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::partial_cmp(&self, other: &benten_errors::ErrorCode) -> core::option::Option<core::cmp::Ordering>
+pub fn benten_errors::ErrorCode::partial_cmp(&self, &benten_errors::ErrorCode) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_errors::ErrorCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_errors::ErrorCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_errors::ErrorCode
-pub fn benten_errors::ErrorCode::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_errors::ErrorCode::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::StructuralPartialEq for benten_errors::ErrorCode
 impl core::str::traits::FromStr for benten_errors::ErrorCode
 pub type benten_errors::ErrorCode::Err = benten_errors::ParseErrorCodeError
-pub fn benten_errors::ErrorCode::from_str(s: &str) -> core::result::Result<Self, Self::Err>
+pub fn benten_errors::ErrorCode::from_str(&str) -> core::result::Result<Self, Self::Err>
 impl core::marker::Freeze for benten_errors::ErrorCode
 impl core::marker::Send for benten_errors::ErrorCode
 impl core::marker::Sync for benten_errors::ErrorCode
@@ -240,12 +242,12 @@ impl core::clone::Clone for benten_errors::ParseErrorCodeError
 pub fn benten_errors::ParseErrorCodeError::clone(&self) -> benten_errors::ParseErrorCodeError
 impl core::cmp::Eq for benten_errors::ParseErrorCodeError
 impl core::cmp::PartialEq for benten_errors::ParseErrorCodeError
-pub fn benten_errors::ParseErrorCodeError::eq(&self, other: &benten_errors::ParseErrorCodeError) -> bool
+pub fn benten_errors::ParseErrorCodeError::eq(&self, &benten_errors::ParseErrorCodeError) -> bool
 impl core::error::Error for benten_errors::ParseErrorCodeError
 impl core::fmt::Debug for benten_errors::ParseErrorCodeError
-pub fn benten_errors::ParseErrorCodeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_errors::ParseErrorCodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_errors::ParseErrorCodeError
-pub fn benten_errors::ParseErrorCodeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_errors::ParseErrorCodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_errors::ParseErrorCodeError
 impl core::marker::Freeze for benten_errors::ParseErrorCodeError
 impl core::marker::Send for benten_errors::ParseErrorCodeError
