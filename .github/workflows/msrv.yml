@@ -64,7 +64,7 @@ jobs:
         # bloom / Inv-13 matrix hooks) stay available for the MSRV build —
         # the `test-helpers` default was flipped off to keep release
         # builds clean.
-        run: cargo build --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing
+        run: cargo build --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing
 
       - name: Fixture-match check (canonical CID)
         run: |

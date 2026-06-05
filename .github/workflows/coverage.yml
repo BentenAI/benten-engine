@@ -84,7 +84,7 @@ jobs:
         # job output so reviewers don't have to download the artifact
         # for a top-level number. The `--lcov` emission feeds codecov.io.
         #
-        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing`
+        # `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing`
         # mirrors ci.yml's build+test invocation. Without these the
         # workspace test compile fails on `benten_eval::register_test_callee`
         # (gated under `cfg(any(test, feature = "testing"))`) +
@@ -93,7 +93,7 @@ jobs:
         # testing-feature flags ci.yml passes through.
         run: |
           cargo llvm-cov --workspace --html --output-dir coverage-report \
-            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing
+            --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing
           cargo llvm-cov report --lcov --output-path coverage.lcov
           echo "### Coverage summary" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
