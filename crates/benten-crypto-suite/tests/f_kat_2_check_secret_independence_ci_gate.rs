@@ -77,7 +77,7 @@ use f_kat_2_stub::{EXPECTED_TARGET, read_secret_independence_gate};
 /// would-FAIL-if-no-op'd: the stub reports `registered=false`; R5 wires the real
 /// CI step. Absence of the gate is a freeze blocker (Compromise #32).
 #[test]
-#[ignore = "RED-PHASE: F-KAT-2 — libcrux check-secret-independence CI gate MUST be registered (#32 freeze blocker); un-ignore at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): rides the SAME libcrux-add decision f_kat_1 surfaces — the `check-secret-independence` CI gate cannot be honestly REGISTERED + ENABLED + targeting-libcrux without first wiring libcrux-ml-kem into the build + adding the `.github/workflows` step. Reporting registered=true with no real CI step would be a pass-vs-sentinel. Ben decision: add libcrux-ml-kem now (then wire the CI gate + un-ignore) vs defer the libcrux swap + its secret-independence gate to v1-GM. Kept #[ignore]'d per the no-pass-vs-sentinel HARD-GATE (#32 freeze-blocker tracked)."]
 fn secret_independence_gate_is_registered() {
     let gate = read_secret_independence_gate();
     assert!(
@@ -94,7 +94,7 @@ fn secret_independence_gate_is_registered() {
 /// The classic CI no-op is a step that exists but is gated off. would-FAIL-if-
 /// no-op'd: the stub reports `enabled=false`; R5 ensures the step runs.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-2 — the secret-independence gate MUST be ENABLED (not declared-then-skipped); un-ignore at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): rides the libcrux-add decision (see the registered test) — kept #[ignore]'d until libcrux + the CI gate are wired."]
 fn secret_independence_gate_is_enabled() {
     let gate = read_secret_independence_gate();
     assert!(
@@ -111,7 +111,7 @@ fn secret_independence_gate_is_enabled() {
 /// would-FAIL-if-no-op'd: the stub's `<unwired>` target; R5 points it at
 /// `libcrux-ml-kem`.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-2 — the secret-independence gate MUST target libcrux-ml-kem; un-ignore at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): rides the libcrux-add decision (see the registered test) — kept #[ignore]'d until libcrux + the CI gate are wired."]
 fn secret_independence_gate_targets_libcrux_ml_kem() {
     let gate = read_secret_independence_gate();
     assert_eq!(

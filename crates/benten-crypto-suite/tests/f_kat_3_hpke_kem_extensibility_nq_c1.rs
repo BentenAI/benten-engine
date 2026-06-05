@@ -126,7 +126,7 @@ use f_kat_3_stub::{
 /// open) — a frozen Layer-C byte-format with an UNRESOLVED KEM binding is
 /// a freeze-gating failure (the bytes would have no canonical meaning).
 #[test]
-#[ignore = "RED-PHASE: F-KAT-3 — NQ-C1 HPKE KEM-extensibility binding must be RATIFIED (exactly one branch) before Layer-C bytes freeze; un-ignore at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN; surface-arch-decision): NQ-C1 is a genuine WIRE-FORMAT FORK that gates the Layer-C HPKE byte-format and MUST be ratified by Ben before those bytes freeze — branch A (RFC-9180-faithful: McMillion `hpke` admits X25519MLKEM768 into a real mode_base context, cross-stack-interop bytes) vs branch B (Benten-supplies-the-KEM: Benten-canonical encapsulation bytes + reuse only the HPKE key-schedule). This is exactly the `feedback_surface_arch_decisions_under_auth` discipline — the orchestrator does NOT pick the wire-format branch unilaterally. The functional KEM-DEM substrate (the real X-Wing key-encryption) is LIVE in `benten_crypto_suite::hpke`; only the on-wire HPKE framing branch is open. Kept #[ignore]'d until Ben ratifies NQ-C1."]
 fn nq_c1_kem_binding_is_ratified_exactly_one_branch() {
     let resolution = NQ_C1_RESOLUTION
         .expect("NQ-C1 MUST be ratified before Layer-C bytes freeze (RFC-9180-faithful vs Benten-supplies-KEM)");
@@ -150,7 +150,7 @@ fn nq_c1_kem_binding_is_ratified_exactly_one_branch() {
 /// which equals neither reference vector. A seal under the wrong KEM or
 /// the wrong key-schedule produces bytes ≠ the branch reference.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-3 — Layer-C HPKE seal byte-accuracy against the ratified NQ-C1 branch reference vector; un-ignore at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): blocked on the NQ-C1 wire-format ratification (see the binding-ratified test) — the byte-accuracy reference vector has no canonical meaning until Ben picks the RFC-9180-faithful vs Benten-supplies-KEM branch. Kept #[ignore]'d."]
 fn hpke_seal_byte_accurate_for_ratified_branch() {
     let resolution =
         NQ_C1_RESOLUTION.expect("NQ-C1 must be ratified (see the binding-ratified test)");
@@ -192,7 +192,7 @@ fn hpke_seal_byte_accurate_for_ratified_branch() {
 /// the would-FAIL guard against an R5 that pins one vector for both
 /// branches (which would silently make the fork meaningless).
 #[test]
-#[ignore = "RED-PHASE: F-KAT-3 — the two NQ-C1 branches must produce DISTINCT canonical byte-formats (the fork is real); un-ignore at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): blocked on the NQ-C1 wire-format ratification — both branch reference vectors are pinned only once Ben picks the branch. Kept #[ignore]'d."]
 fn nq_c1_branches_are_byte_distinct() {
     let rfc = rfc9180_reference_seal_bytes();
     let benten = benten_canonical_reference_seal_bytes();

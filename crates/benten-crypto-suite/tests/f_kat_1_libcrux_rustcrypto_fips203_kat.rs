@@ -49,18 +49,22 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes + wires real `ml-kem` ↔ `libcrux-ml-kem`
-/// FIPS-203 KAT round-trip).
-mod f_kat_1_stub {
-    /// FIPS-203 ML-KEM-768 serialized sizes (exact; never hardcode-without-pin).
-    pub const ML_KEM_768_EK_LEN: usize = 1184; // encapsulation key
-    pub const ML_KEM_768_CT_LEN: usize = 1088; // ciphertext
-    pub const ML_KEM_768_DK_LEN: usize = 2400; // decapsulation key
-    pub const ML_KEM_768_SS_LEN: usize = 32; // shared secret
+/// R5: REAL RustCrypto `ml-kem` FIPS-203 witnesses (genuine encap/ct/dk/ss
+/// bytes from a deterministic KAT seed), NOT synthesized sentinels. The
+/// cross-impl-vs-libcrux byte-identity arm is HARD-GATED (`#[ignore]` +
+/// FLAG-FOR-BEN — see the cross-impl test below) because libcrux-ml-kem is
+/// not wired at impl-time; the size + seed-bound + within-impl-serialization
+/// arms run on the real RustCrypto impl.
+mod f_kat_1_real {
+    use ml_kem::kem::Encapsulate;
+    use ml_kem::{Encoded, EncodedSizeUser, KemCore, MlKem768};
 
-    /// A deterministic-synthesized FIPS-203 witness for one named KAT seed
-    /// (the `tf4 load_fips_204_kat_vector_for_test` precedent). The bytes are
-    /// derived from the seed so the witness is reproducible + seed-bound.
+    /// FIPS-203 ML-KEM-768 serialized sizes (exact).
+    pub const ML_KEM_768_EK_LEN: usize = 1184;
+    pub const ML_KEM_768_CT_LEN: usize = 1088;
+    pub const ML_KEM_768_DK_LEN: usize = 2400;
+    pub const ML_KEM_768_SS_LEN: usize = 32;
+
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct MlKem768Kat {
         pub encapsulation_key: Vec<u8>,
@@ -69,42 +73,85 @@ mod f_kat_1_stub {
         pub shared_secret: Vec<u8>,
     }
 
-    fn synthesize(seed: &[u8; 32], impl_tag: u8, len: usize) -> Vec<u8> {
-        // Deterministic, seed-bound, impl-tagged filler. The `impl_tag`
-        // distinguishes the two stub "impls" so they DIVERGE (red-phase).
-        // R5's real impls share the FIPS-203 corpus and AGREE (impl_tag drops).
-        (0..len)
-            .map(|i| seed[i % 32] ^ impl_tag ^ (i as u8))
-            .collect()
+    /// A deterministic CSPRNG seeded from the KAT seed (so the KAT is
+    /// reproducible + seed-bound without a published `.rsp` corpus).
+    struct SeededRng {
+        state: [u8; 32],
+        ctr: u64,
     }
-
-    /// Load the FIPS-203 witness as the **libcrux** impl would serialize it.
-    pub fn libcrux_witness(seed: &[u8; 32]) -> MlKem768Kat {
-        MlKem768Kat {
-            encapsulation_key: synthesize(seed, /* libcrux */ 0x01, ML_KEM_768_EK_LEN),
-            ciphertext: synthesize(seed, 0x01, ML_KEM_768_CT_LEN),
-            decapsulation_key: synthesize(seed, 0x01, ML_KEM_768_DK_LEN),
-            shared_secret: synthesize(seed, 0x01, ML_KEM_768_SS_LEN),
+    impl SeededRng {
+        fn new(seed: &[u8; 32]) -> Self {
+            Self { state: *seed, ctr: 0 }
+        }
+        fn block(&mut self) -> [u8; 32] {
+            use sha2::{Digest, Sha256};
+            let mut h = Sha256::new();
+            h.update(self.state);
+            h.update(self.ctr.to_be_bytes());
+            self.ctr += 1;
+            h.finalize().into()
         }
     }
+    impl rand_core::RngCore for SeededRng {
+        fn next_u32(&mut self) -> u32 {
+            let b = self.block();
+            u32::from_be_bytes([b[0], b[1], b[2], b[3]])
+        }
+        fn next_u64(&mut self) -> u64 {
+            let b = self.block();
+            u64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
+        }
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            let mut i = 0;
+            while i < dest.len() {
+                let b = self.block();
+                let n = (dest.len() - i).min(32);
+                dest[i..i + n].copy_from_slice(&b[..n]);
+                i += n;
+            }
+        }
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+            self.fill_bytes(dest);
+            Ok(())
+        }
+    }
+    impl rand_core::CryptoRng for SeededRng {}
 
-    /// Load the FIPS-203 witness as the **RustCrypto `ml-kem`** impl would
-    /// serialize it. RED-PHASE: impl_tag=0x02 ≠ libcrux's 0x01, so the two
-    /// DIVERGE (the byte-equality pin fails). R5: both share the real corpus.
-    pub fn rustcrypto_witness(seed: &[u8; 32]) -> MlKem768Kat {
+    /// Compute a REAL FIPS-203 ML-KEM-768 KAT from a deterministic seed via
+    /// the in-tree RustCrypto `ml-kem` crate.
+    pub fn real_witness(seed: &[u8; 32]) -> MlKem768Kat {
+        let mut rng = SeededRng::new(seed);
+        let (dk, ek) = MlKem768::generate(&mut rng);
+        let ek_bytes = ek.as_bytes().to_vec();
+        let dk_bytes = dk.as_bytes().to_vec();
+        // Re-load ek and encapsulate deterministically from the same RNG path.
+        let ek_arr: Encoded<<MlKem768 as KemCore>::EncapsulationKey> =
+            Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(ek_bytes.as_slice())
+                .unwrap();
+        let ek2 = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&ek_arr);
+        let (ct, ss) = ek2.encapsulate(&mut rng).unwrap();
         MlKem768Kat {
-            encapsulation_key: synthesize(seed, /* rustcrypto */ 0x02, ML_KEM_768_EK_LEN),
-            ciphertext: synthesize(seed, 0x02, ML_KEM_768_CT_LEN),
-            decapsulation_key: synthesize(seed, 0x02, ML_KEM_768_DK_LEN),
-            shared_secret: synthesize(seed, 0x02, ML_KEM_768_SS_LEN),
+            encapsulation_key: ek_bytes,
+            ciphertext: ct.as_slice().to_vec(),
+            decapsulation_key: dk_bytes,
+            shared_secret: ss.as_slice().to_vec(),
         }
     }
 }
 
-use f_kat_1_stub::{
-    ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN, libcrux_witness,
-    rustcrypto_witness,
+use f_kat_1_real::{
+    ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN, real_witness,
 };
+
+/// REAL RustCrypto witness aliased to both impl roles. The size + seed-bound
+/// + within-impl-serialization arms run on this real impl; the cross-impl-vs-
+/// libcrux byte-identity arm is HARD-GATED (`#[ignore]` + FLAG-FOR-BEN).
+fn libcrux_witness(seed: &[u8; 32]) -> f_kat_1_real::MlKem768Kat {
+    real_witness(seed)
+}
+fn rustcrypto_witness(seed: &[u8; 32]) -> f_kat_1_real::MlKem768Kat {
+    real_witness(seed)
+}
 
 const KAT_SEED: [u8; 32] = [0x07u8; 32];
 
@@ -116,7 +163,7 @@ const KAT_SEED: [u8; 32] = [0x07u8; 32];
 /// fails until R5 wires both real impls against the shared corpus. A swap that
 /// changed any serialized byte breaks every golden vector.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-1 — libcrux ↔ RustCrypto FIPS-203 serialization MUST be byte-identical (NQ-C2); un-ignore + real-corpus swap at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): awaiting the libcrux-ml-kem cross-impl integration (or the published NIST FIPS-203 .rsp corpus) — the cross-impl byte-identity vs libcrux cannot be witnessed honestly with only the in-tree RustCrypto impl; both witnesses would be the SAME impl (a tautology). The in-tree RustCrypto FIPS-203 bytes/sizes/seed-binding ARE real (the size + seed-bound arms run green); the cross-impl conformance is a Ben decision: (a) add libcrux-ml-kem v0.0.9 now + wire the byte-identity, or (b) defer NQ-C2 cross-impl to v1-GM. Kept #[ignore]'d per the no-pass-vs-sentinel HARD-GATE."]
 fn libcrux_rustcrypto_fips203_serialization_byte_identical() {
     let libcrux = libcrux_witness(&KAT_SEED);
     let rustcrypto = rustcrypto_witness(&KAT_SEED);
@@ -146,7 +193,6 @@ fn libcrux_rustcrypto_fips203_serialization_byte_identical() {
 /// Pins ek=1184, ct=1088, dk=2400, ss=32 (never hardcode-without-pin per
 /// CLAUDE.md #5). would-FAIL-if-no-op'd: a witness of any other size.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-1 — ML-KEM-768 serialized sizes are FIPS-203-exact (1184/1088/2400/32); un-ignore at R5"]
 fn ml_kem_768_serialized_sizes_are_fips203_exact() {
     let kat = libcrux_witness(&KAT_SEED);
     assert_eq!(
@@ -176,7 +222,6 @@ fn ml_kem_768_serialized_sizes_are_fips203_exact() {
 /// A wrong seed MUST produce a different ciphertext — the witness is not a
 /// constant. would-FAIL-if-no-op'd: a constant-returning loader.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-1 — FIPS-203 witness is seed-bound (wrong seed → different ciphertext); un-ignore at R5"]
 fn fips203_witness_is_seed_bound() {
     let kat = libcrux_witness(&KAT_SEED);
     let other = libcrux_witness(&[0x09u8; 32]);

@@ -122,7 +122,6 @@ fn codepoint_table_integer_values_pinned() {
 /// below fail (the explicit `assert_ne!` BE-not-LE guard makes the
 /// endianness distinction load-bearing).
 #[test]
-#[ignore = "RED-PHASE: F4-004 / M-19 — per-chunk AAD MUST be BIG-ENDIAN (aead.rs:244,245 is LE today); un-ignore at R5/Wave-0 when the M-19 step flips the production encoder to BE"]
 fn aad_per_chunk_canonical_layout_pinned() {
     // Synthetic plaintext_cid + chunk_index + total_chunks. The chosen
     // values have DISTINCT big-endian and little-endian byte orders, so the

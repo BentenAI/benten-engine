@@ -123,10 +123,32 @@ mod f_kat_4_stub {
     }
 }
 
+// R5: the OUTBOUND shape arm is REAL (a genuine Benten LAMPS Composite ML-DSA
+// signature with real Ed25519 (64 B) + ML-DSA-65 (3309 B) halves bound to the
+// OID). The INBOUND ×3 cross-ecosystem arm is HARD-GATED (`#[ignore]` +
+// FLAG-FOR-BEN — awaiting real BouncyCastle/OpenSSL/OpenPGP fixtures; per the
+// orchestrator prediction these may relax to v1-GM-deferred). The
+// mismatched-OID arm is a regression-guard over the wired verify model.
 use f_kat_4_stub::{
     Ecosystem, LAMPS_COMPOSITE_OID, LampsCompositeSig, SIG_HYBRID_ED25519_MLDSA65, VERIFY_WIRED,
-    benten_sign, benten_verify, external_fixture,
+    benten_verify, external_fixture,
 };
+
+/// Produce a REAL Benten LAMPS Composite ML-DSA signature (genuine
+/// Ed25519⊕ML-DSA-65 halves over a fixed message), carrying the LAMPS OID.
+fn benten_sign() -> LampsCompositeSig {
+    use benten_crypto_suite::sig::SignatureSuite;
+    let suite = SignatureSuite::v1_default();
+    let kp = suite.generate_keypair();
+    let msg = b"benten-lamps-outbound-fixture";
+    let sig = suite.sign(&kp, msg);
+    LampsCompositeSig {
+        ecosystem: Ecosystem::Benten,
+        oid: LAMPS_COMPOSITE_OID.to_string(),
+        ed25519_half: sig.classical_half_for_test(),
+        mldsa65_half: sig.pq_half_for_test(),
+    }
+}
 
 /// F-KAT-4 (a) — INBOUND ×3: Benten accepts `id-MLDSA65-Ed25519-SHA512` sigs
 /// from BouncyCastle + OpenSSL-3.5 + OpenPGP-PQC.
@@ -134,7 +156,7 @@ use f_kat_4_stub::{
 /// would-FAIL-if-no-op'd: the stub verifier rejects external sigs (VERIFY_WIRED
 /// = false); R5 wires the real LAMPS verify + real fixtures.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-4 — Benten verifier accepts LAMPS sigs from BouncyCastle/OpenSSL/OpenPGP (NQ-C3 inbound); un-ignore + real fixtures at R5"]
+#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): awaiting real BouncyCastle/OpenSSL-3.5/OpenPGP-PQC LAMPS `id-MLDSA65-Ed25519-SHA512` fixtures — no real cross-ecosystem corpus is in-tree or network-acquirable at impl-time, and accepting a synthesized 'external' sig would be a pass-vs-sentinel. The OUTBOUND shape + OID-binding + mismatched-OID-reject (the WIRE-affecting pins) ARE real + run green. Per the orchestrator prediction, Ben may rule this INBOUND real-fixture acceptance as v1-GM-deferred (fixture acquisition is not wire-affecting) vs freeze-gating-at-v1-beta. Kept #[ignore]'d per the no-pass-vs-sentinel HARD-GATE."]
 fn benten_accepts_cross_ecosystem_lamps_signatures() {
     for eco in [
         Ecosystem::BouncyCastle,
@@ -157,7 +179,6 @@ fn benten_accepts_cross_ecosystem_lamps_signatures() {
 /// would-FAIL-if-no-op'd: a sig missing either half, or carrying a wrong OID,
 /// fails this shape pin.
 #[test]
-#[ignore = "RED-PHASE: F-KAT-4 — Benten LAMPS sig carries the composite shape + OID 1.3.6.1.5.5.7.6.48 + codepoint 0x0001; un-ignore at R5"]
 fn benten_lamps_signature_outbound_shape() {
     let sig: LampsCompositeSig = benten_sign();
     assert_eq!(
@@ -195,7 +216,6 @@ fn benten_lamps_signature_outbound_shape() {
 /// would-FAIL-on-regression: a verifier that ignores the OID would accept the
 /// wrong-OID sig. R5 preserves: even the real verifier rejects a mismatched OID.
 #[test]
-#[ignore = "REGRESSION-GUARD (F4-036): mismatched LAMPS OID MUST be rejected (OID load-bearing; drives the WIRED model — asserts an already-correct fact); un-ignore at R5"]
 fn mismatched_oid_is_rejected() {
     let mut sig = external_fixture(Ecosystem::BouncyCastle);
     // Tamper the OID to a different composite (e.g. a P256 composite OID).
