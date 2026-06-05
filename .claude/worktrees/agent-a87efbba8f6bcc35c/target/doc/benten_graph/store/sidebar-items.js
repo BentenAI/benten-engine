@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ChangeKind"],"struct":["ChangeEvent"],"trait":["ChangeSubscriber","EdgeStore","NodeStore"]};

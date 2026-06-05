@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["BLOB_BYTES_PROPERTY","BLOB_CID_PROPERTY","MAX_MODULE_BYTES_ZONE_SCAN","MODULE_BYTES_LABEL"],"enum":["BlobError"],"struct":["RedbBlobBackend"]};

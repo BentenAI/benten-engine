@@ -130,3 +130,4 @@ tests/README.md
 # through a non-sentinel path. Tracked separately as part of the
 # packages/engine vitest cluster investigation.
 packages/engine/:memory:
+.claude/worktrees/
