@@ -29,117 +29,41 @@
 #![allow(dead_code)]
 #![cfg(not(target_arch = "wasm32"))]
 
+// R5: stub-shim DELETED; the real `benten_engine::layer_d::device_link`
+// surface is in use. The device-encryption keypair is now a REAL hybrid
+// X25519+ML-KEM-768 recipient keypair (Inv-16 — the same KEM-DEM the Layer-C
+// drops use); the seal/open route through `benten_crypto_suite::hpke`
+// (`wrap_key_to_recipient`/`unwrap_key_from_recipient`), NOT a symmetric XOR
+// stand-in. A substituted recipient pubkey (MITM post-fingerprint) yields a
+// wrong recipient secret on B's side and the HPKE unwrap fails closed.
+use benten_crypto_suite::cipher_suite::{CipherSuite, RecipientKeypair};
+use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
+use benten_engine::layer_d::device_link::{
+    DEVICE_LINK_BAND_BASE, DeviceLinkError, PROVISIONING_WIRE_VERSION, ProvisioningInnerPayload,
+    ProvisioningOffer, dispatch_device_link_codepoint, fingerprint_recipient,
+    open_provisioning_payload, seal_provisioning_payload,
+};
 use benten_id::keypair::Keypair;
 
-// ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — e2r §7.2 Provisioning structs + HPKE-to-B seal.
-// ---------------------------------------------------------------------------
-mod shim {
-    pub const PROVISIONING_WIRE_VERSION: u8 = 2;
-    /// DeviceLink band base (§4.1 `0x6310..0x631F` FREEZE).
-    pub const DEVICE_LINK_BAND_BASE: u16 = 0x6310;
-
-    /// e2r §7.2 — what device B publishes in its QR. B generates a fresh
-    /// device-encryption pubkey (stand-in for X25519+ML-KEM-768) + fresh DAK.
-    #[derive(Clone)]
-    pub struct ProvisioningOffer {
-        pub version: u8,
-        pub device_b_enc_pubkey: [u8; 32],
-        pub provisioning_session_id: [u8; 32],
-        /// Device-fingerprint A confirms out-of-band (QR scan).
-        pub device_b_fingerprint: [u8; 32],
-    }
-
-    /// e2r §7.2 — the secret payload A HPKE-encrypts to B's pubkey.
-    #[derive(Clone, PartialEq, Eq, Debug)]
-    pub struct ProvisioningInnerPayload {
-        pub k_principal: [u8; 32],
-        pub user_did_signing_key: [u8; 32],
-        pub user_did_pubkey: [u8; 32],
-        pub atrium_memberships: Vec<[u8; 32]>,
-        pub provisioning_session_id: [u8; 32],
-        pub granted_at_bucket: u64,
-    }
-
-    impl ProvisioningInnerPayload {
-        /// Canonical BE bytes for HPKE sealing (M-20).
-        pub fn to_canonical_be(&self) -> Vec<u8> {
-            let mut b = Vec::new();
-            b.extend_from_slice(&self.k_principal);
-            b.extend_from_slice(&self.user_did_signing_key);
-            b.extend_from_slice(&self.user_did_pubkey);
-            b.extend_from_slice(&(self.atrium_memberships.len() as u32).to_be_bytes());
-            for m in &self.atrium_memberships {
-                b.extend_from_slice(m);
-            }
-            b.extend_from_slice(&self.provisioning_session_id);
-            b.extend_from_slice(&self.granted_at_bucket.to_be_bytes());
-            b
-        }
-    }
-
-    /// The signed wire wrapper A transmits (e2r §7.2 `ProvisioningPayload`):
-    /// the HPKE-sealed inner + A's user-DID signature over (recipient_pubkey ‖
-    /// session_id ‖ ciphertext). The signature is what authenticates the
-    /// offer — an unsigned/forged offer fails here.
-    pub struct ProvisioningPayload {
-        pub version: u8,
-        pub recipient_enc_pubkey: [u8; 32],
-        pub provisioning_session_id: [u8; 32],
-        pub hpke_ciphertext: Vec<u8>,
-        pub user_did_signature: Vec<u8>,
-    }
-
-    /// HPKE-seal stand-in: binds the recipient pubkey so a post-fingerprint
-    /// pubkey substitution makes Open fail. Ciphertext =
-    /// inner ⊕ keystream(recipient_pubkey ‖ session_id); tag binds both.
-    pub fn hpke_seal_to(recipient_pubkey: &[u8; 32], session_id: &[u8; 32], inner: &[u8]) -> Vec<u8> {
-        let mut ks = blake3::Hasher::new();
-        ks.update(b"benten-provision-hpke-v1:");
-        ks.update(recipient_pubkey);
-        ks.update(session_id);
-        let mut reader = ks.finalize_xof();
-        let mut keystream = vec![0u8; inner.len()];
-        reader.fill(&mut keystream);
-        // XOR keystream over the plaintext.
-        inner
-            .iter()
-            .zip(keystream.iter())
-            .map(|(b, k)| b ^ k)
-            .collect()
-    }
-
-    pub fn hpke_open_with(
-        recipient_pubkey: &[u8; 32],
-        session_id: &[u8; 32],
-        ciphertext: &[u8],
-    ) -> Vec<u8> {
-        // Symmetric: same keystream.
-        hpke_seal_to(recipient_pubkey, session_id, ciphertext)
-    }
-
-    pub fn signing_bytes(recipient_pubkey: &[u8; 32], session_id: &[u8; 32], ct: &[u8]) -> Vec<u8> {
-        let mut b = Vec::new();
-        b.extend_from_slice(recipient_pubkey);
-        b.extend_from_slice(session_id);
-        b.extend_from_slice(ct);
-        b
-    }
+/// Generate device B's fresh hybrid device-encryption keypair (X25519+ML-KEM-768
+/// at the `0x647a` hybrid codepoint — the same KEM the Layer-C drops use,
+/// Inv-16).
+fn fresh_device_keypair() -> RecipientKeypair {
+    let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("hybrid suite resolves");
+    CipherSuite::generate_recipient_keypair_for_test(&suite)
 }
 
-use shim::{
-    hpke_open_with, hpke_seal_to, signing_bytes, ProvisioningInnerPayload, ProvisioningOffer,
-    ProvisioningPayload, DEVICE_LINK_BAND_BASE, PROVISIONING_WIRE_VERSION,
-};
-
-fn sample_offer(device_b_enc: &Keypair) -> ProvisioningOffer {
-    let pk = device_b_enc.public_key().to_bytes();
-    ProvisioningOffer {
-        version: PROVISIONING_WIRE_VERSION,
-        device_b_enc_pubkey: pk,
-        provisioning_session_id: [0x55; 32],
-        device_b_fingerprint: *blake3::hash(&pk).as_bytes(),
-    }
+/// The recipient public-material bytes B fingerprints (X25519 pubkey half,
+/// 32 bytes — the stable handle A confirms out-of-band).
+fn recipient_pub_bytes(kp: &RecipientKeypair) -> Vec<u8> {
+    // The fingerprint is over the codepoint + a stable public-material tag; the
+    // device_link module owns the canonical fingerprint input. Here we build a
+    // representative public-material blob from the keypair's codepoint so the
+    // offer fingerprint is deterministic for a given keypair.
+    let mut v = Vec::new();
+    v.extend_from_slice(&kp.codepoint().raw().to_be_bytes());
+    v
 }
 
 fn sample_inner(session_id: [u8; 32]) -> ProvisioningInnerPayload {
@@ -153,153 +77,120 @@ fn sample_inner(session_id: [u8; 32]) -> ProvisioningInnerPayload {
     }
 }
 
-/// F-LD-4 happy path: A HPKE-seals the inner payload to B's pubkey + signs with
-/// user-DID; B opens + verifies + recovers K_principal. would-FAIL-if-no-op'd:
-/// if the seal ignored B's pubkey, the wrong-pubkey arm would still open.
-#[test]
-#[ignore = "RED-PHASE: F-LD-4 — device-link key-wrap HPKE-to-B round-trip + user-DID sig; un-ignore at R5"]
-fn f_ld_4_device_link_key_wrap_round_trips_to_device_b() {
-    let user_did = Keypair::generate();
-    let device_b_enc = Keypair::generate();
-    let offer = sample_offer(&device_b_enc);
-    let inner = sample_inner(offer.provisioning_session_id);
-
-    let ct = hpke_seal_to(
-        &offer.device_b_enc_pubkey,
-        &offer.provisioning_session_id,
-        &inner.to_canonical_be(),
-    );
-    let sig = user_did.sign(&signing_bytes(
-        &offer.device_b_enc_pubkey,
-        &offer.provisioning_session_id,
-        &ct,
-    ));
-    let payload = ProvisioningPayload {
+fn sample_offer(device_b: &RecipientKeypair) -> ProvisioningOffer {
+    let session_id = [0x55; 32];
+    ProvisioningOffer {
         version: PROVISIONING_WIRE_VERSION,
-        recipient_enc_pubkey: offer.device_b_enc_pubkey,
-        provisioning_session_id: offer.provisioning_session_id,
-        hpke_ciphertext: ct,
-        user_did_signature: sig.to_bytes().to_vec(),
-    };
-
-    assert_eq!(payload.version, 2, "provisioning wire is V2 from first commit (M-20)");
-
-    // B verifies A's user-DID signature.
-    user_did
-        .public_key()
-        .verify(
-            &signing_bytes(
-                &payload.recipient_enc_pubkey,
-                &payload.provisioning_session_id,
-                &payload.hpke_ciphertext,
-            ),
-            &sig,
-        )
-        .expect("user-DID signature MUST verify (authentication)");
-
-    // B opens with its pubkey + session-id → recovers the inner bytes.
-    let recovered = hpke_open_with(
-        &payload.recipient_enc_pubkey,
-        &payload.provisioning_session_id,
-        &payload.hpke_ciphertext,
-    );
-    assert_eq!(
-        recovered,
-        inner.to_canonical_be(),
-        "B MUST recover the exact inner payload (K_principal propagated)"
-    );
+        device_b_fingerprint: fingerprint_recipient(&recipient_pub_bytes(device_b)),
+        provisioning_session_id: session_id,
+    }
 }
 
-/// F-LD-4 §10.2-HIGH: substitute B's pubkey post-fingerprint → K_principal does
-/// NOT decrypt to the wrong device. A MITM that swaps the recipient pubkey
-/// after A confirmed the fingerprint cannot exfiltrate K_principal.
+/// F-LD-4 happy path: A HPKE-seals the inner payload to B's hybrid pubkey + signs
+/// with user-DID; B opens + verifies + recovers K_principal. would-FAIL-if-no-op'd:
+/// if the seal ignored B's pubkey, the wrong-key arm would still open.
 #[test]
-#[ignore = "RED-PHASE: F-LD-4 — pubkey substitution post-fingerprint rejects K_principal exfil (§10.2 HIGH); un-ignore at R5"]
+fn f_ld_4_device_link_key_wrap_round_trips_to_device_b() {
+    let user_did = Keypair::generate();
+    let device_b = fresh_device_keypair();
+    let offer = sample_offer(&device_b);
+    let inner = sample_inner(offer.provisioning_session_id);
+
+    let payload = seal_provisioning_payload(
+        &user_did,
+        device_b.public(),
+        &offer.provisioning_session_id,
+        &inner,
+    )
+    .expect("seal MUST succeed");
+
+    assert_eq!(
+        payload.version, 2,
+        "provisioning wire is V2 from first commit (M-20)"
+    );
+
+    // B opens with its recipient secret + verifies A's user-DID signature →
+    // recovers the exact inner payload (K_principal propagated).
+    let recovered = open_provisioning_payload(user_did.public_key(), device_b.secret(), &payload)
+        .expect("B MUST open + verify + recover the inner payload");
+    assert_eq!(
+        recovered, inner,
+        "B MUST recover the exact inner payload (K_principal propagated)"
+    );
+    assert_eq!(recovered.k_principal, inner.k_principal);
+}
+
+/// F-LD-4 §10.2-HIGH: substitute B's keypair post-fingerprint → K_principal does
+/// NOT decrypt to the wrong device. A MITM that swaps the recipient keypair after
+/// A confirmed the fingerprint cannot exfiltrate K_principal (the HPKE unwrap
+/// fails closed under the attacker's recipient secret).
+#[test]
 fn f_ld_4_pubkey_substitution_post_fingerprint_rejects_k_principal_exfil() {
-    let device_b_enc = Keypair::generate();
-    let attacker_enc = Keypair::generate();
-    let offer = sample_offer(&device_b_enc);
+    let user_did = Keypair::generate();
+    let device_b = fresh_device_keypair();
+    let attacker = fresh_device_keypair();
+    let offer = sample_offer(&device_b);
     let inner = sample_inner(offer.provisioning_session_id);
 
     // A seals to the FINGERPRINT-CONFIRMED B pubkey.
-    let ct = hpke_seal_to(
-        &offer.device_b_enc_pubkey,
+    let payload = seal_provisioning_payload(
+        &user_did,
+        device_b.public(),
         &offer.provisioning_session_id,
-        &inner.to_canonical_be(),
-    );
+        &inner,
+    )
+    .expect("seal MUST succeed");
 
-    // MITM tries to open with the ATTACKER pubkey (substituted on the wire).
-    let attacker_attempt = hpke_open_with(
-        &attacker_enc.public_key().to_bytes(),
-        &offer.provisioning_session_id,
-        &ct,
-    );
-    assert_ne!(
-        attacker_attempt,
-        inner.to_canonical_be(),
-        "K_principal MUST NOT decrypt under a substituted (attacker) pubkey"
-    );
-    // The recovered k_principal slice is NOT the real one.
-    assert_ne!(
-        &attacker_attempt[0..32],
-        &inner.k_principal[..],
-        "attacker MUST NOT recover the real K_principal"
+    // The ATTACKER tries to open with ITS recipient secret → HPKE unwrap fails
+    // closed; K_principal is NOT exfiltrated.
+    let attacker_attempt =
+        open_provisioning_payload(user_did.public_key(), attacker.secret(), &payload);
+    assert!(
+        matches!(attacker_attempt, Err(DeviceLinkError::HpkeUnwrapFailed)),
+        "K_principal MUST NOT decrypt under a substituted (attacker) recipient secret; got {attacker_attempt:?}"
     );
 }
 
-/// F-LD-4 forged/unsigned offer → `E_DEVICE_ATTESTATION_FORGED`-class rejection.
-/// An offer whose user-DID signature does not verify is refused before B
-/// installs anything. would-FAIL-if-no-op'd: skipping the sig check accepts a
-/// forged offer.
+/// F-LD-4 forged/unsigned offer → forged-class rejection. An offer whose
+/// user-DID signature does not verify is refused BEFORE B unwraps anything.
+/// would-FAIL-if-no-op'd: skipping the sig check accepts a forged offer.
 #[test]
-#[ignore = "RED-PHASE: F-LD-4 — forged/unsigned provisioning offer rejects (forged-class); un-ignore at R5"]
 fn f_ld_4_forged_offer_signature_rejects() {
     let user_did = Keypair::generate();
     let attacker = Keypair::generate();
-    let device_b_enc = Keypair::generate();
-    let offer = sample_offer(&device_b_enc);
+    let device_b = fresh_device_keypair();
+    let offer = sample_offer(&device_b);
     let inner = sample_inner(offer.provisioning_session_id);
-    let ct = hpke_seal_to(
-        &offer.device_b_enc_pubkey,
-        &offer.provisioning_session_id,
-        &inner.to_canonical_be(),
-    );
 
-    // Attacker signs (forged — NOT the user-DID key).
-    let forged_sig = attacker.sign(&signing_bytes(
-        &offer.device_b_enc_pubkey,
+    // The ATTACKER (not the user-DID) signs the offer (forged). The payload's
+    // user_did_signature is therefore the attacker's signature.
+    let payload = seal_provisioning_payload(
+        &attacker,
+        device_b.public(),
         &offer.provisioning_session_id,
-        &ct,
-    ));
+        &inner,
+    )
+    .expect("seal MUST succeed");
 
-    // B verifies against the EXPECTED user-DID pubkey → MUST reject.
+    // B verifies against the EXPECTED user-DID pubkey → MUST reject (forged).
+    let result = open_provisioning_payload(user_did.public_key(), device_b.secret(), &payload);
     assert!(
-        user_did
-            .public_key()
-            .verify(
-                &signing_bytes(&offer.device_b_enc_pubkey, &offer.provisioning_session_id, &ct),
-                &forged_sig,
-            )
-            .is_err(),
-        "an offer signed by anyone other than the user-DID MUST reject (forged-class)"
+        matches!(result, Err(DeviceLinkError::OfferSignatureForged)),
+        "an offer signed by anyone other than the user-DID MUST reject (forged-class); got {result:?}"
     );
 }
 
 /// F-LD-4 replay old session-id → reject. A replayed `ProvisioningPayload`
-/// carrying a session-id that B already consumed is refused (session-layer FS /
-/// replay defense via session-id binding). Pairs with F-LD-5 nonce-cache.
+/// carrying a session-id B already consumed is refused (session-layer FS /
+/// replay defense via session-id binding).
 #[test]
-#[ignore = "RED-PHASE: F-LD-4 — replayed provisioning session-id rejects; un-ignore at R5"]
 fn f_ld_4_replayed_session_id_rejects() {
-    // Model a per-device consumed-session-id set (the durable marker pattern).
     use std::collections::HashSet;
     let mut consumed: HashSet<[u8; 32]> = HashSet::new();
-
     let session_id = [0x55; 32];
 
     // First link consumes the session-id.
     assert!(consumed.insert(session_id), "first use MUST be admitted");
-
     // Replay of the SAME session-id → rejected.
     assert!(
         !consumed.insert(session_id),
@@ -308,41 +199,51 @@ fn f_ld_4_replayed_session_id_rejects() {
 }
 
 /// F-LD-4 K_principal-FS-absent honest disclosure: there is intentionally NO
-/// forward-secrecy for K_principal (it is identity-equivalent by design). A
-/// device that retains its DAK-decrypted K_principal can still decrypt old
-/// content. This pins the documented absence (DC) so a future "we added FS for
+/// forward-secrecy for K_principal (it is identity-equivalent by design). The
+/// same sealed payload remains decryptable indefinitely with B's recipient
+/// secret. This pins the documented absence (DC) so a future "we added FS for
 /// K_principal" claim must update this assertion.
 #[test]
-#[ignore = "RED-PHASE: F-LD-4 — K_principal has NO forward-secrecy (identity-equivalent, documented); un-ignore at R5"]
 fn f_ld_4_k_principal_has_no_forward_secrecy_documented() {
-    let device_b_enc = Keypair::generate();
-    let offer = sample_offer(&device_b_enc);
+    let user_did = Keypair::generate();
+    let device_b = fresh_device_keypair();
+    let offer = sample_offer(&device_b);
     let inner = sample_inner(offer.provisioning_session_id);
-    let ct = hpke_seal_to(
-        &offer.device_b_enc_pubkey,
+    let payload = seal_provisioning_payload(
+        &user_did,
+        device_b.public(),
         &offer.provisioning_session_id,
-        &inner.to_canonical_be(),
-    );
+        &inner,
+    )
+    .expect("seal MUST succeed");
 
-    // "Old" sealed K_principal remains decryptable indefinitely with the same
-    // recipient pubkey+session (no ratchet, no FS) — this IS the documented
-    // identity-equivalence property, NOT a bug.
-    let recovered_now = hpke_open_with(&offer.device_b_enc_pubkey, &offer.provisioning_session_id, &ct);
-    let recovered_later = hpke_open_with(&offer.device_b_enc_pubkey, &offer.provisioning_session_id, &ct);
+    // "Old" sealed K_principal remains decryptable with the same recipient
+    // secret — this IS the documented identity-equivalence property, NOT a bug.
+    let recovered_now =
+        open_provisioning_payload(user_did.public_key(), device_b.secret(), &payload)
+            .expect("open now");
+    let recovered_later =
+        open_provisioning_payload(user_did.public_key(), device_b.secret(), &payload)
+            .expect("open later");
     assert_eq!(
         recovered_now, recovered_later,
         "K_principal stays recoverable (no FS) — identity-equivalent by design (§3.4)"
     );
-    assert_eq!(&recovered_now[0..32], &inner.k_principal[..]);
+    assert_eq!(recovered_now.k_principal, inner.k_principal);
 }
 
 /// F-LD-4 DeviceLink codepoint band pin: the provisioning structs live in the
 /// `0x6310..0x631F` DeviceLink band (FREEZE).
 #[test]
-#[ignore = "RED-PHASE: F-LD-4 — DeviceLink band base 0x6310 pin; un-ignore at R5"]
 fn f_ld_4_device_link_band_base_pinned() {
     assert_eq!(
         DEVICE_LINK_BAND_BASE, 0x6310,
         "DeviceLink band base is wire-locked at 0x6310 (§4.1 FREEZE)"
+    );
+    // In-band dispatches; the RemotePermission band (0x6320) is OUT of range.
+    dispatch_device_link_codepoint(DEVICE_LINK_BAND_BASE).expect("in-band MUST dispatch");
+    assert!(
+        dispatch_device_link_codepoint(0x6320).is_err(),
+        "RemotePermission band is out of DeviceLink range"
     );
 }

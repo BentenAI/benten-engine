@@ -76,197 +76,15 @@
 
 use benten_id::keypair::Keypair;
 
-// ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — e2r §6.4 wire structs (V2 + BE + canonical-TLV).
-// At R5: DELETE this module and replace with
-//     use benten_engine::layer_d::remote_permission::{
-//         PermissionRequest, PermissionGrant, PermissionOperation,
-//         dispatch_remote_permission_codepoint,
-//         REMOTE_PERMISSION_BAND_BASE, REMOTE_PERMISSION_WIRE_VERSION,
-//         AAD_VERSION,
-//     };
-// ---------------------------------------------------------------------------
-mod shim {
-    /// AAD-prefix / cross-version-replay-defense version byte (R0.5 §4.1:
-    /// `aad_version: u8` prefix — DISTINCT from the wire/format version).
-    /// Mirrors the MembershipSet `AAD_VERSION = 0x01` convention. A future
-    /// envelope-format bump moves `REMOTE_PERMISSION_WIRE_VERSION`, NOT this
-    /// byte; an AAD-binding-contract bump moves THIS byte.
-    pub const AAD_VERSION: u8 = 0x01;
-
-    /// Wire-format / struct framing version. Wave-0 (M-20): V2 from the first
-    /// commit. NEVER V1. Orthogonal to `AAD_VERSION` (F4-004/005-LD2).
-    pub const REMOTE_PERMISSION_WIRE_VERSION: u8 = 2;
-
-    /// RemotePermission band codepoint base (§4.1 `0x6320..0x632F` FREEZE).
-    pub const REMOTE_PERMISSION_BAND_BASE: u16 = 0x6320;
-    pub const REMOTE_PERMISSION_BAND_END: u16 = 0x632F;
-
-    /// Canonical domain-separation prefixes (part of the frozen signing bytes;
-    /// a request signature can never be replayed as a grant signature).
-    pub const REQUEST_DOMAIN: &[u8] = b"benten-remote-permission-request-v2:";
-    pub const GRANT_DOMAIN: &[u8] = b"benten-remote-permission-grant-v2:";
-
-    fn be_u32_len(n: usize) -> [u8; 4] {
-        (n as u32).to_be_bytes()
-    }
-
-    /// The operation enum (e2r §6.4). `SignUcanDelegation` carries the RESTORED
-    /// `scope` field (F4-015). The `ExecuteWorkflow` variant slot is frozen at
-    /// v1-beta (F-LD-3 owns its AAD-binding pins); runtime enforcement is
-    /// post-v1-beta.
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub enum PermissionOperation {
-        Decrypt {
-            node_cid: [u8; 32],
-        },
-        SignUcanDelegation {
-            scope: Vec<u8>, // RESTORED (F4-015): R0.5 §3.4 SignUcanDelegation(scope, audience, expires_at)
-            audience: Vec<u8>,
-            expires_at: u64,
-        },
-        RemoteUnlock,
-        ExecuteWorkflow {
-            workflow_cid: [u8; 32],
-        },
-    }
-
-    impl PermissionOperation {
-        /// Canonical-TLV BE wire encoding: discriminant tag + length-prefixed
-        /// (BE u32) variable fields + BE integers. would-FAIL if any field
-        /// switches to LE OR if a variable field drops its length prefix.
-        /// (The operation wire carries no `aad_version` — that prefix leads the
-        /// enclosing struct's signing bytes, not each operation.)
-        pub fn to_wire_be(&self) -> Vec<u8> {
-            let mut out = Vec::new();
-            match self {
-                Self::Decrypt { node_cid } => {
-                    out.push(0x00);
-                    out.extend_from_slice(node_cid);
-                }
-                Self::SignUcanDelegation {
-                    scope,
-                    audience,
-                    expires_at,
-                } => {
-                    out.push(0x01);
-                    // RESTORED scope: length-prefixed (BE) ahead of audience.
-                    out.extend_from_slice(&be_u32_len(scope.len()));
-                    out.extend_from_slice(scope);
-                    out.extend_from_slice(&be_u32_len(audience.len()));
-                    out.extend_from_slice(audience);
-                    out.extend_from_slice(&expires_at.to_be_bytes());
-                }
-                Self::RemoteUnlock => out.push(0x02),
-                Self::ExecuteWorkflow { workflow_cid } => {
-                    out.push(0x03);
-                    out.extend_from_slice(workflow_cid);
-                }
-            }
-            out
-        }
-    }
-
-    /// e2r §6.4 — signed by requesting device B. FULL field set (F4-015).
-    #[derive(Clone)]
-    pub struct PermissionRequest {
-        /// AAD-prefix version (F4-004/005-LD2). MUST equal `AAD_VERSION`.
-        pub aad_version: u8,
-        /// Wire/struct framing version. MUST equal `REMOTE_PERMISSION_WIRE_VERSION`.
-        pub version: u8,
-        pub request_id: [u8; 16],
-        /// RESTORED (F4-015): the requesting device's DID (string bytes).
-        pub requesting_device_did: Vec<u8>,
-        pub requesting_device_pubkey: [u8; 32],
-        pub operation: PermissionOperation,
-        /// RESTORED (F4-015): human-readable reason shown in the approval UX.
-        pub reason: Vec<u8>,
-        pub timestamp_bucket: u64, // coarse 1-hr bucket (F-LD-8 owns granularity)
-        /// RESTORED (F4-015): the ephemeral signing key B mints per request
-        /// (Signal-Provisioning shape; bound so a request can't be re-keyed).
-        pub ephemeral_signing_key: [u8; 32],
-        pub nonce: [u8; 32],
-        pub signature: Vec<u8>,
-    }
-
-    /// e2r §6.4 — signed by approving device A's user-DID signing key.
-    #[derive(Clone)]
-    pub struct PermissionGrant {
-        /// AAD-prefix version (F4-004/005-LD2). MUST equal `AAD_VERSION`.
-        pub aad_version: u8,
-        /// Wire/struct framing version. MUST equal `REMOTE_PERMISSION_WIRE_VERSION`.
-        pub version: u8,
-        pub request_id: [u8; 16],
-        pub granted_at_bucket: u64,
-        pub valid_until: u64,
-        pub operation_result: Vec<u8>,
-        /// MUST be present + resolvable (F-LD-6 pass-class 6 audit-binding).
-        pub audit_node_cid: [u8; 32],
-        pub signature: Vec<u8>,
-    }
-
-    impl PermissionRequest {
-        /// Canonical signing bytes (canonical-TLV, BE integers, V2 framing,
-        /// domain-separation prefix, deterministic field order — the freeze
-        /// contract). The `aad_version: u8` prefix (R0.5 §4.1) leads, then the
-        /// wire/framing `version`, mirroring the MembershipSet AAD layout.
-        /// Field order MIRRORS e2r §6.4 / R0.5 §3.4. Variable-length fields are
-        /// BE-u32-length-prefixed so the concat is length-injective (U3 — no two
-        /// distinct field tuples share a byte string).
-        pub fn signing_bytes(&self) -> Vec<u8> {
-            let mut b = Vec::new();
-            b.extend_from_slice(REQUEST_DOMAIN);
-            b.push(self.aad_version); // §4.1 aad_version prefix (F4-004/005-LD2; DISTINCT axis)
-            b.push(self.version); // wire/struct framing version
-            b.extend_from_slice(&self.request_id);
-            b.extend_from_slice(&be_u32_len(self.requesting_device_did.len()));
-            b.extend_from_slice(&self.requesting_device_did);
-            b.extend_from_slice(&self.requesting_device_pubkey);
-            b.extend_from_slice(&self.operation.to_wire_be());
-            b.extend_from_slice(&be_u32_len(self.reason.len()));
-            b.extend_from_slice(&self.reason);
-            b.extend_from_slice(&self.timestamp_bucket.to_be_bytes());
-            b.extend_from_slice(&self.ephemeral_signing_key);
-            b.extend_from_slice(&self.nonce);
-            b
-        }
-    }
-
-    impl PermissionGrant {
-        pub fn signing_bytes(&self) -> Vec<u8> {
-            let mut b = Vec::new();
-            b.extend_from_slice(GRANT_DOMAIN);
-            b.push(self.aad_version); // §4.1 aad_version prefix (F4-004/005-LD2; DISTINCT axis)
-            b.push(self.version); // wire/struct framing version
-            b.extend_from_slice(&self.request_id);
-            b.extend_from_slice(&self.granted_at_bucket.to_be_bytes());
-            b.extend_from_slice(&self.valid_until.to_be_bytes());
-            b.extend_from_slice(&self.audit_node_cid);
-            b.extend_from_slice(&be_u32_len(self.operation_result.len()));
-            b.extend_from_slice(&self.operation_result);
-            b
-        }
-    }
-
-    /// Dispatch a raw RemotePermission codepoint. Out-of-band integers
-    /// typed-reject (no silent fallback; CLAUDE.md #5).
-    #[derive(Debug)]
-    pub struct UnsupportedOperationCodepoint(pub u16);
-
-    pub fn dispatch_remote_permission_codepoint(
-        cp: u16,
-    ) -> Result<(), UnsupportedOperationCodepoint> {
-        if (REMOTE_PERMISSION_BAND_BASE..=REMOTE_PERMISSION_BAND_END).contains(&cp) {
-            Ok(())
-        } else {
-            Err(UnsupportedOperationCodepoint(cp))
-        }
-    }
-}
-
-use shim::{
-    dispatch_remote_permission_codepoint, PermissionGrant, PermissionOperation, PermissionRequest,
-    AAD_VERSION, REMOTE_PERMISSION_BAND_BASE, REMOTE_PERMISSION_WIRE_VERSION,
+// R5: stub-shim DELETED; the real `benten_engine::layer_d::remote_permission`
+// wire structs are in use. The byte-pinning goldens below were frozen by the
+// stub encoder (M-20) + are reconciled here against the real encoder (the
+// real `signing_bytes`/`to_wire_be` are byte-identical to the stub by
+// construction — same canonical-TLV/BE/V2 layout).
+use benten_engine::layer_d::remote_permission::{
+    AAD_VERSION, PermissionGrant, PermissionOperation, PermissionRequest,
+    REMOTE_PERMISSION_BAND_BASE, REMOTE_PERMISSION_WIRE_VERSION,
+    dispatch_remote_permission_codepoint,
 };
 
 // ---------------------------------------------------------------------------
@@ -281,8 +99,7 @@ use shim::{
 /// `SignUcanDelegation { scope: b"atrium:read", audience: [0xAA,0xBB],
 /// expires_at: 0x0102_0304_0506_0708 }.to_wire_be()`. (Operation wire carries
 /// no `aad_version` — unchanged by the F4-004/005-LD2 fix.)
-const OP_SIGN_UCAN_WIRE_HEX: &str =
-    "010000000b61747269756d3a7265616400000002aabb0102030405060708";
+const OP_SIGN_UCAN_WIRE_HEX: &str = "010000000b61747269756d3a7265616400000002aabb0102030405060708";
 
 /// `PermissionRequest::signing_bytes()` over the all-fixed fixture in
 /// `request_fixture()` (no random keypair — this arm pins the ENCODER).
@@ -335,7 +152,6 @@ fn grant_fixture() -> PermissionGrant {
 /// field (operation, nonce, timestamp, did, reason, ephemeral key, aad_version)
 /// changes `signing_bytes` and the signature no longer verifies.
 #[test]
-#[ignore = "RED-PHASE: F-LD-2 — PermissionRequest TLV/BE/V2 canonical sig round-trip (full e2r §6.4 fields); un-ignore at R5"]
 fn f_ld_2_permission_request_signature_round_trips_over_canonical_be_bytes() {
     let device_b = Keypair::generate();
     let mut req = request_fixture();
@@ -344,7 +160,10 @@ fn f_ld_2_permission_request_signature_round_trips_over_canonical_be_bytes() {
     req.signature = sig.to_bytes().to_vec();
 
     // V2 framing pin (M-20 — never V1).
-    assert_eq!(req.version, 2, "remote-permission wire is V2 from first commit");
+    assert_eq!(
+        req.version, 2,
+        "remote-permission wire is V2 from first commit"
+    );
     assert_eq!(req.version, REMOTE_PERMISSION_WIRE_VERSION);
 
     // F4-004/005-LD2: aad_version is a DISTINCT axis from the wire version.
@@ -415,7 +234,9 @@ fn f_ld_2_permission_request_signature_round_trips_over_canonical_be_bytes() {
     let mut tampered_did = req.clone();
     tampered_did.requesting_device_did = b"did:key:zAttacker".to_vec();
     assert!(
-        verify_pk.verify(&tampered_did.signing_bytes(), &sig).is_err(),
+        verify_pk
+            .verify(&tampered_did.signing_bytes(), &sig)
+            .is_err(),
         "mutating `requesting_device_did` MUST break the signature (RESTORED field is bound — F4-015)"
     );
 }
@@ -424,7 +245,6 @@ fn f_ld_2_permission_request_signature_round_trips_over_canonical_be_bytes() {
 /// `audit_node_cid` is part of the signed bytes (so a "grant without audit"
 /// can't be forged by stripping the field — couples F-LD-6 class 6).
 #[test]
-#[ignore = "RED-PHASE: F-LD-2 — PermissionGrant TLV/BE/V2 sig round-trip binds audit_node_cid; un-ignore at R5"]
 fn f_ld_2_permission_grant_signature_binds_audit_node_cid() {
     let device_a_user_did = Keypair::generate();
     let mut grant = grant_fixture();
@@ -459,7 +279,6 @@ fn f_ld_2_permission_grant_signature_binds_audit_node_cid() {
 /// dropped `scope` length-prefix, OR a dropped `scope` field flips this FROZEN
 /// hex literal. (M-20 / M-19 BE conformance gate; F4-015 scope-restoration.)
 #[test]
-#[ignore = "RED-PHASE: F-LD-2 — SignUcanDelegation(scope,…) BE canonical-TLV golden byte-pin; un-ignore at R5"]
 fn f_ld_2_operation_wire_encoding_is_big_endian_golden_pin() {
     // scope = b"atrium:read" (RESTORED — F4-015), audience = [0xAA,0xBB],
     // expires_at = 0x0102_0304_0506_0708 → MUST appear big-endian.
@@ -496,12 +315,10 @@ fn f_ld_2_operation_wire_encoding_is_big_endian_golden_pin() {
 /// (did/reason/ephemeral_signing_key/scope), dropping the `aad_version` prefix,
 /// reordering fields, or switching any integer to LE flips one of these literals.
 #[test]
-#[ignore = "RED-PHASE: F-LD-2 — full PermissionRequest/PermissionGrant signing_bytes golden byte-pin (all fields + aad_version); un-ignore at R5"]
 fn f_ld_2_full_struct_signing_bytes_golden_pin() {
     let req_hex = to_hex(&request_fixture().signing_bytes());
     assert_eq!(
-        req_hex,
-        REQUEST_SIGNING_BYTES_HEX,
+        req_hex, REQUEST_SIGNING_BYTES_HEX,
         "PermissionRequest::signing_bytes MUST match the FROZEN golden literal \
          (full e2r §6.4 field set incl. requesting_device_did / reason / \
          ephemeral_signing_key + the §4.1 aad_version prefix — F4-015 / F4-004/005-LD2)"
@@ -516,7 +333,8 @@ fn f_ld_2_full_struct_signing_bytes_golden_pin() {
     // canonical bytes are `aad_version(0x01) || wire_version(0x02)` — two
     // DISTINCT bytes. would-FAIL if the encoder drops the aad_version prefix
     // (the head would collapse to `…76323a02` instead of `…76323a0102`).
-    let request_domain_hex = "62656e74656e2d72656d6f74652d7065726d697373696f6e2d726571756573742d76323a";
+    let request_domain_hex =
+        "62656e74656e2d72656d6f74652d7065726d697373696f6e2d726571756573742d76323a";
     assert!(
         req_hex.starts_with(&format!("{request_domain_hex}0102")),
         "request signing bytes MUST carry `aad_version(0x01) || version(0x02)` \
@@ -541,7 +359,6 @@ fn f_ld_2_full_struct_signing_bytes_golden_pin() {
 /// `0x6320..0x632F` RemotePermission band → typed `UnsupportedOperationCodepoint`,
 /// NEVER silent acceptance (CLAUDE.md #5).
 #[test]
-#[ignore = "RED-PHASE: F-LD-2 — out-of-band remote-permission codepoint typed-rejects; un-ignore at R5"]
 fn f_ld_2_out_of_band_codepoint_typed_rejects() {
     // In-band base accepts.
     dispatch_remote_permission_codepoint(REMOTE_PERMISSION_BAND_BASE)

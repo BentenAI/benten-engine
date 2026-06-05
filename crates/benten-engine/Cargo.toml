@@ -282,6 +282,14 @@ serde_ipld_dagcbor = { workspace = true }
 # `Engine::register_module_bytes`.
 wat = { workspace = true }
 blake3 = { workspace = true }
+# F-full Layer-D (f_ld_4 device-link key-wrap) — the `testing` feature exposes
+# `CipherSuite::generate_recipient_keypair_for_test`, the hybrid
+# X25519+ML-KEM-768 recipient-keypair generator the device-link round-trip pins
+# need to mint device B's fresh device-encryption keypair. (Production
+# keypair-gen routes through the principal-DID infrastructure, not this
+# test-only helper — the `device_link` PRODUCTION module consumes a
+# `RecipientPublic`/`RecipientSecret`, it does not generate one.)
+benten-crypto-suite = { path = "../benten-crypto-suite", features = ["testing"] }
 
 # Phase-3 G19-C2 wave-7 (§7.1) — SANDBOX execution-metrics propagation
 # tests. The `describe_sandbox_node_for_handler` accessor lives behind

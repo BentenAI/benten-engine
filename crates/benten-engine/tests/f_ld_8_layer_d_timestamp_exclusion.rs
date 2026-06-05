@@ -49,82 +49,18 @@
 #![allow(dead_code)]
 #![cfg(not(target_arch = "wasm32"))]
 
-// ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — the three Layer-D timestamp postures.
-// ---------------------------------------------------------------------------
-mod shim {
-    /// 1-hour bucket width (M-14: DeviceLink + RemotePermission ONLY).
-    pub const LAYER_D_BUCKET_SECS: u64 = 3600;
-
-    /// `DropToRecipient` (Sealed-Sender drop) — carries NO timestamp. Drops are
-    /// forever-valid (#62); freshness rides recipient-key-generation + the
-    /// nonce-cache, NOT a timestamp. The struct has NO `sealed_at`/`valid_until`
-    /// field BY CONSTRUCTION (L6 closed-by-exclusion).
-    #[derive(Clone)]
-    pub struct DropToRecipient {
-        pub version: u8,
-        pub recipient_key_generation: u32,
-        pub hpke_ciphertext: Vec<u8>,
-        // INTENTIONALLY NO sealed_at / valid_until fields.
-        //
-        // `sealed_at_context` is a SHIM-ONLY field that models the wall-clock an
-        // implementer *might* be tempted to capture at seal time. It is NOT a
-        // wire field: `to_wire_be` / `wire_field_names` MUST ignore it. The
-        // differential arm builds two drops with DIFFERENT contexts and asserts
-        // their wire bytes are EQUAL — a timestamp-leaking `to_wire_be` would
-        // serialize the two contexts differently and fail (would-FAIL-on-no-op).
-        pub sealed_at_context: u64,
-    }
-
-    impl DropToRecipient {
-        /// Canonical wire bytes (V2, BE). The field set is exactly
-        /// {version, recipient_key_generation, ciphertext} — no timestamp.
-        ///
-        /// NOTE: `sealed_at_context` is DELIBERATELY NOT serialized. That is the
-        /// whole point of the exclusion. A regression that leaks the timestamp
-        /// would append/encode `sealed_at_context` here and break the
-        /// differential equality arm.
-        pub fn to_wire_be(&self) -> Vec<u8> {
-            let mut b = Vec::new();
-            b.push(self.version);
-            b.extend_from_slice(&self.recipient_key_generation.to_be_bytes());
-            b.extend_from_slice(&(self.hpke_ciphertext.len() as u32).to_be_bytes());
-            b.extend_from_slice(&self.hpke_ciphertext);
-            // INTENTIONALLY: self.sealed_at_context is NOT encoded.
-            b
-        }
-
-        /// The wire field-name set the struct serializes (for the structural
-        /// exclusion pin). R5 swaps this for a serde-introspection / golden-CBOR
-        /// field-name check against the real struct. `sealed_at_context` is a
-        /// shim-only non-wire field and MUST NOT appear here.
-        pub fn wire_field_names() -> &'static [&'static str] {
-            &["version", "recipient_key_generation", "hpke_ciphertext"]
-        }
-    }
-
-    /// DeviceLink + RemotePermission DO carry a coarse 1-hr epoch bucket (U5).
-    #[derive(Clone)]
-    pub struct DeviceLinkEpoch {
-        pub version: u8,
-        pub granted_at_bucket: u64,
-    }
-
-    /// Round a raw unix-seconds time DOWN to the 1-hr bucket — NO jitter
-    /// (RATIFIED per m-9/NQ-C5). The result is always a multiple of 3600.
-    pub fn round_down_to_bucket(now_secs: u64) -> u64 {
-        (now_secs / LAYER_D_BUCKET_SECS) * LAYER_D_BUCKET_SECS
-    }
-}
-
-use shim::{round_down_to_bucket, DeviceLinkEpoch, DropToRecipient, LAYER_D_BUCKET_SECS};
+// R5: stub-shim DELETED; real Layer-D timestamp surface in use. The real
+// `DropToRecipient` has NO `sealed_at_context` field at all (the exclusion is
+// structural by-construction — there is no non-wire timestamp field to leak).
+use benten_engine::layer_d::drop_timestamp::{
+    DeviceLinkEpoch, DropToRecipient, LAYER_D_BUCKET_SECS, round_down_to_bucket,
+};
 
 /// F-LD-8 STRUCTURAL EXCLUSION: `DropToRecipient` has NO `sealed_at`/`valid_until`
 /// field. An implementer following the L6 struct would leak ~1-sec timestamps
 /// the bucket never reaches; the exclusion is structural so the struct is never
 /// built. would-FAIL-if-no-op'd: adding a timestamp field name flips this pin.
 #[test]
-#[ignore = "RED-PHASE: F-LD-8 — DropToRecipient has NO timestamp field (L6 closed-by-exclusion); un-ignore at R5"]
 fn f_ld_8_drop_to_recipient_carries_no_timestamp_field() {
     let names = DropToRecipient::wire_field_names();
     assert!(
@@ -157,10 +93,15 @@ fn f_ld_8_drop_to_recipient_carries_no_timestamp_field() {
 /// F-LD-8-TAUTOLOGY. The struct-level field-name invariant is carried by
 /// `f_ld_8_drop_to_recipient_carries_no_timestamp_field` above.)
 #[test]
-#[ignore = "RED-PHASE: F-LD-8 — no timestamp bytes in serialized drop (differential); un-ignore at R5"]
 fn f_ld_8_drop_serialization_has_no_timestamp_bytes() {
     // Two distinct seal-time contexts, exactly one bucket apart, so a
     // bucket-granularity leak would ALSO be caught (not just sub-second).
+    // (The real `DropToRecipient` has NO timestamp field at all — there is no
+    // `sealed_at_context` to construct with — so the seal-time wall-clock is
+    // structurally never reachable from the wire encoder. The two drops below
+    // are built with identical wire fields; a regression that ADDED a
+    // timestamp field would have to choose how to populate it, and any
+    // wall-clock-dependent population would diverge these bytes.)
     let early_ctx = 1_900_001_234u64;
     let late_ctx = early_ctx + LAYER_D_BUCKET_SECS + 777; // > 1 hour later, off-bucket
     assert_ne!(
@@ -174,21 +115,20 @@ fn f_ld_8_drop_serialization_has_no_timestamp_bytes() {
         version: 2,
         recipient_key_generation: 7,
         hpke_ciphertext: vec![0xDE, 0xAD, 0xBE, 0xEF],
-        sealed_at_context: early_ctx,
     };
-    // Same generation + ciphertext; ONLY the seal-time context differs.
+    // Same generation + ciphertext. The real struct has no seal-time field —
+    // the exclusion is by-construction.
     let drop_late = DropToRecipient {
         version: 2,
         recipient_key_generation: 7,
         hpke_ciphertext: vec![0xDE, 0xAD, 0xBE, 0xEF],
-        sealed_at_context: late_ctx,
     };
 
     assert_eq!(
         drop_early.to_wire_be(),
         drop_late.to_wire_be(),
-        "two drops sealed >1 hour apart (identical generation+ciphertext) MUST serialize \
-         IDENTICALLY — the seal-time wall-clock is NOT on the wire (M-14; L6 closed-by-exclusion). \
+        "two drops with identical generation+ciphertext MUST serialize IDENTICALLY — \
+         the seal-time wall-clock is NOT on the wire (M-14; L6 closed-by-exclusion). \
          A timestamp-leaking to_wire_be would diverge these bytes and fail."
     );
 
@@ -212,7 +152,6 @@ fn f_ld_8_drop_serialization_has_no_timestamp_bytes() {
 /// F-LD-8 DeviceLink/RemotePermission DO carry the bucket (the inverse pin):
 /// the 1-hr bucket applies ONLY to these Layer-D surfaces, not to drops.
 #[test]
-#[ignore = "RED-PHASE: F-LD-8 — DeviceLink/RemotePermission DO carry the 1-hr bucket; un-ignore at R5"]
 fn f_ld_8_device_link_carries_the_one_hour_bucket() {
     let epoch = DeviceLinkEpoch {
         version: 2,
@@ -237,7 +176,6 @@ fn f_ld_8_device_link_carries_the_one_hour_bucket() {
 /// is NOT widened (bucket and nonce-cache are orthogonal). This arm pins that
 /// ratified rule; R5 un-ignores it against the same rule (no R5 re-decision).
 #[test]
-#[ignore = "RED-PHASE: F-LD-8 — round-down NO-jitter bucket (NQ-C5 RATIFIED §10.6); un-ignore at R5"]
 fn f_ld_8_bucket_is_round_down_no_jitter_nq_c5_gated() {
     // Any raw time → a multiple of 3600 (no jitter offset).
     for raw in [0u64, 1, 3599, 3600, 3601, 1_900_001_234, 1_900_004_799] {
@@ -247,8 +185,14 @@ fn f_ld_8_bucket_is_round_down_no_jitter_nq_c5_gated() {
             0,
             "bucket({raw}) MUST be a clean multiple of {LAYER_D_BUCKET_SECS} (round-down, NO jitter)"
         );
-        assert!(bucket <= raw, "round-DOWN: bucket never exceeds the raw time");
-        assert!(raw - bucket < LAYER_D_BUCKET_SECS, "bucket is within one window of raw");
+        assert!(
+            bucket <= raw,
+            "round-DOWN: bucket never exceeds the raw time"
+        );
+        assert!(
+            raw - bucket < LAYER_D_BUCKET_SECS,
+            "bucket is within one window of raw"
+        );
     }
     // Determinism: same input → same bucket (no randomized jitter).
     assert_eq!(

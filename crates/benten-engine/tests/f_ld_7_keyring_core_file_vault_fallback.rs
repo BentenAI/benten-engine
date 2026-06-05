@@ -21,121 +21,22 @@
 #![allow(dead_code)]
 #![cfg(not(target_arch = "wasm32"))]
 
-// ---------------------------------------------------------------------------
-// SELF-CONTAINED STUB-SHIM — SecretStore seam (keychain + file-vault fallback).
-// ---------------------------------------------------------------------------
-mod shim {
-    use std::collections::HashMap;
-
-    #[derive(Debug, PartialEq, Eq)]
-    pub enum SecretStoreError {
-        NotFound,
-        KeychainUnavailable,
-    }
-
-    /// The DAK-wrap secret store seam. The real backend is `keyring-core`
-    /// v1.0.0 (NOT the legacy `keyring` crate). When the OS keychain is
-    /// unavailable (headless server / CI / no-DBus), the store falls back to
-    /// the encrypted file-vault.
-    pub trait SecretStore {
-        fn store(&mut self, key: &str, secret: &[u8]) -> Result<(), SecretStoreError>;
-        fn retrieve(&self, key: &str) -> Result<Vec<u8>, SecretStoreError>;
-        /// Which backend actually serviced the last op (for the fallback pin).
-        fn backend_name(&self) -> &'static str;
-    }
-
-    /// `keyring-core` backend. `available=false` models a host with no OS
-    /// keychain (the fallback trigger).
-    pub struct KeyringCoreStore {
-        available: bool,
-        items: HashMap<String, Vec<u8>>,
-    }
-
-    impl KeyringCoreStore {
-        pub fn new(available: bool) -> Self {
-            Self {
-                available,
-                items: HashMap::new(),
-            }
-        }
-        pub fn is_available(&self) -> bool {
-            self.available
-        }
-    }
-
-    impl SecretStore for KeyringCoreStore {
-        fn store(&mut self, key: &str, secret: &[u8]) -> Result<(), SecretStoreError> {
-            if !self.available {
-                return Err(SecretStoreError::KeychainUnavailable);
-            }
-            self.items.insert(key.to_string(), secret.to_vec());
-            Ok(())
-        }
-        fn retrieve(&self, key: &str) -> Result<Vec<u8>, SecretStoreError> {
-            if !self.available {
-                return Err(SecretStoreError::KeychainUnavailable);
-            }
-            self.items
-                .get(key)
-                .cloned()
-                .ok_or(SecretStoreError::NotFound)
-        }
-        fn backend_name(&self) -> &'static str {
-            "keyring-core"
-        }
-    }
-
-    /// Encrypted file-vault fallback (DAK-encrypted on disk).
-    pub struct FileVaultStore {
-        items: HashMap<String, Vec<u8>>,
-    }
-
-    impl FileVaultStore {
-        pub fn new() -> Self {
-            Self {
-                items: HashMap::new(),
-            }
-        }
-    }
-
-    impl SecretStore for FileVaultStore {
-        fn store(&mut self, key: &str, secret: &[u8]) -> Result<(), SecretStoreError> {
-            self.items.insert(key.to_string(), secret.to_vec());
-            Ok(())
-        }
-        fn retrieve(&self, key: &str) -> Result<Vec<u8>, SecretStoreError> {
-            self.items
-                .get(key)
-                .cloned()
-                .ok_or(SecretStoreError::NotFound)
-        }
-        fn backend_name(&self) -> &'static str {
-            "file-vault"
-        }
-    }
-
-    /// The DAK-wrap store: prefer keychain, fall back to file-vault when the
-    /// keychain is unavailable.
-    pub fn open_dak_wrap_store(keychain_available: bool) -> Box<dyn SecretStore> {
-        let keyring = KeyringCoreStore::new(keychain_available);
-        if keyring.is_available() {
-            Box::new(keyring)
-        } else {
-            Box::new(FileVaultStore::new())
-        }
-    }
-}
-
-use shim::{open_dak_wrap_store, KeyringCoreStore, SecretStore, SecretStoreError};
+// R5: stub-shim DELETED; real Layer-D DAK-wrap secret-store seam in use.
+use benten_engine::layer_d::secret_store::{
+    KeyringCoreStore, SecretStore, SecretStoreError, open_dak_wrap_store,
+};
 
 /// F-LD-7 keychain round-trip: with the OS keychain available, the DAK-wrap is
 /// stored + retrieved via `keyring-core`. would-FAIL-if-no-op'd: a store that
 /// dropped the secret would fail retrieval.
 #[test]
-#[ignore = "RED-PHASE: F-LD-7 — keyring-core DAK-wrap store/retrieve round-trip; un-ignore at R5"]
 fn f_ld_7_keyring_core_dak_wrap_round_trips() {
     let mut store = open_dak_wrap_store(true);
-    assert_eq!(store.backend_name(), "keyring-core", "MUST use keyring-core when keychain available");
+    assert_eq!(
+        store.backend_name(),
+        "keyring-core",
+        "MUST use keyring-core when keychain available"
+    );
 
     let dak_wrap = b"dak-wrapped-key-material-32-bytes";
     store
@@ -152,7 +53,6 @@ fn f_ld_7_keyring_core_dak_wrap_round_trips() {
 /// work. would-FAIL-if-no-op'd: if fallback were absent, `open_dak_wrap_store`
 /// would yield a keychain backend whose store() errors `KeychainUnavailable`.
 #[test]
-#[ignore = "RED-PHASE: F-LD-7 — file-vault fallback when keychain absent; un-ignore at R5"]
 fn f_ld_7_file_vault_fallback_when_keychain_absent() {
     let mut store = open_dak_wrap_store(false); // no keychain
     assert_eq!(
@@ -164,7 +64,9 @@ fn f_ld_7_file_vault_fallback_when_keychain_absent() {
     store
         .store("benten-dak-wrap", dak_wrap)
         .expect("file-vault fallback store MUST succeed");
-    let got = store.retrieve("benten-dak-wrap").expect("file-vault retrieve MUST succeed");
+    let got = store
+        .retrieve("benten-dak-wrap")
+        .expect("file-vault retrieve MUST succeed");
     assert_eq!(got, dak_wrap);
 }
 
@@ -173,7 +75,6 @@ fn f_ld_7_file_vault_fallback_when_keychain_absent() {
 /// store/retrieve surface typed `KeychainUnavailable` (so the fallback decision
 /// is explicit, never a silent data loss).
 #[test]
-#[ignore = "RED-PHASE: F-LD-7 — keyring-core typed KeychainUnavailable; un-ignore at R5"]
 fn f_ld_7_keyring_core_typed_keychain_unavailable() {
     let mut keyring = KeyringCoreStore::new(false);
     assert_eq!(
@@ -189,7 +90,6 @@ fn f_ld_7_keyring_core_typed_keychain_unavailable() {
 /// behavioral Tauri integration is a Composing-phase concern. Couples
 /// Compromise #51 (Tauri NAPI side-channel) honest disclosure.
 #[test]
-#[ignore = "RED-PHASE: F-LD-7 — Tauri-IPC SecretStore dyn-seam smoke; un-ignore at R5"]
 fn f_ld_7_tauri_ipc_secret_store_dyn_seam_smoke() {
     // The IPC bridge holds the store as a trait object + drives store/retrieve.
     let mut store: Box<dyn SecretStore> = open_dak_wrap_store(true);
