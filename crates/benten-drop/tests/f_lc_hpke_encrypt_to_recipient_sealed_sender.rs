@@ -329,9 +329,10 @@ fn did(s: &str) -> Vec<u8> {
 
 /// Lowercase-hex of a byte slice (test-local; no external dep).
 fn to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        s.push_str(&format!("{b:02x}"));
+        let _ = write!(s, "{b:02x}");
     }
     s
 }
@@ -877,7 +878,9 @@ fn f_lc_2_blinded_group_aad_does_not_leak_raw_recipient_roster() {
     // (a) NEGATIVE: each raw recipient-DID byte-sequence MUST be ABSENT from
     //     the on-wire plaintext AAD (the roster is BLINDED, R0.7 §3.3).
     for raw_did in [did("did:key:zRecipientA"), did("did:key:zRecipientB")] {
-        let leaks = bytes.windows(raw_did.len()).any(|w| w == raw_did.as_slice());
+        let leaks = bytes
+            .windows(raw_did.len())
+            .any(|w| w == raw_did.as_slice());
         assert!(
             !leaks,
             "F-LC-2 (R4.6 / #61): the raw recipient-DID {:?} MUST NOT appear \
@@ -992,8 +995,7 @@ fn f_lc_2_group_stanza_aad_unsorted_roster_canonical() {
     // sort — the assembler (`audience_set_commitment`) must canonicalize
     // internally before deriving the commitment.
     let mut reordered = f_lc_2_group_stanza_fixture();
-    reordered.recipient_dids =
-        vec![did("did:key:zRecipientB"), did("did:key:zRecipientA")];
+    reordered.recipient_dids = vec![did("did:key:zRecipientB"), did("did:key:zRecipientA")];
     let reordered_bytes = reordered.plaintext_aad_bytes();
 
     assert_eq!(
@@ -1059,8 +1061,7 @@ fn f_lc_3_sealed_sender_aad_fixture() -> BindingContext {
 /// M-20). R5 confirms-or-deliberately-updates it against the real encoder. If
 /// these two literals ever differ, the siblings have re-diverged on the
 /// `0x6510` envelope AAD (the F-NEW-SS-AUD regression).
-const F_LC_SEALED_SENDER_AAD_HEX: &str =
-    "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
+const F_LC_SEALED_SENDER_AAD_HEX: &str = "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-LC-3 PIN 1 (R4.4-FIX CLUSTER-1 / F-NEW-SS-AUD) — the DEFAULT (`0x6510`)
 /// single-recipient Sealed-Sender envelope AAD binds the canonical union
@@ -1125,7 +1126,9 @@ fn f_lc_3_sealed_sender_single_recipient_aad_binds_audience_union_and_frozen_gol
     // The recipient AUDIENCE MUST be bound (§3.3:484 recipient-targeting) —
     // this is the axis F-NEW-SS-AUD was missing. would-FAIL on the
     // audience-less form the stale binding froze.
-    let audience_present = bytes.windows(audience.len()).any(|w| w == audience.as_slice());
+    let audience_present = bytes
+        .windows(audience.len())
+        .any(|w| w == audience.as_slice());
     assert!(
         audience_present,
         "F-LC-3 (F-NEW-SS-AUD): the single-recipient 0x6510 AAD MUST bind the \
@@ -1292,7 +1295,14 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
     let sk = fixed_sk(0x52);
     let audience = did("did:key:zRecipientAudience");
     let sender = did("did:key:zCarol");
-    let env = seal_sealed_sender(&pk, &audience, &sender, &fixed_body_cid_digest(0xE2), 0, b"hi");
+    let env = seal_sealed_sender(
+        &pk,
+        &audience,
+        &sender,
+        &fixed_body_cid_digest(0xE2),
+        0,
+        b"hi",
+    );
 
     let (_pt, recovered_sender) =
         open_single(&sk, &env).expect("recipient MUST open the sealed-sender envelope");
@@ -1314,7 +1324,14 @@ fn f_lc_3_forged_inner_sender_did_rejected() {
     let sk = fixed_sk(0x53);
     let audience = did("did:key:zRecipientAudience");
     let sender = did("did:key:zCarol");
-    let env = seal_sealed_sender(&pk, &audience, &sender, &fixed_body_cid_digest(0xE3), 0, b"hi");
+    let env = seal_sealed_sender(
+        &pk,
+        &audience,
+        &sender,
+        &fixed_body_cid_digest(0xE3),
+        0,
+        b"hi",
+    );
 
     // Adversary tampers the ciphertext (where the inner sender-DID lives).
     let mut tampered = env.clone();

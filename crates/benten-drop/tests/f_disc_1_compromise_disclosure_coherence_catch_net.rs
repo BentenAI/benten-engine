@@ -202,14 +202,9 @@ fn contains_token_word_boundary(haystack: &str, token: &str) -> bool {
         let at = start + rel;
         let end = at + tbytes.len();
         // Char immediately before the match (None ⇒ at string start).
-        let before_ok = at == 0
-            || !haystack[..at]
-                .chars()
-                .next_back()
-                .is_some_and(is_ident);
+        let before_ok = at == 0 || !haystack[..at].chars().next_back().is_some_and(is_ident);
         // Char immediately after the match (None ⇒ at string end).
-        let after_ok = end >= bytes.len()
-            || !haystack[end..].chars().next().is_some_and(is_ident);
+        let after_ok = end >= bytes.len() || !haystack[end..].chars().next().is_some_and(is_ident);
         if before_ok && after_ok {
             return true;
         }

@@ -204,9 +204,10 @@ fn did(s: &str) -> Vec<u8> {
 
 /// Lowercase-hex of a byte slice (test-local; no external dep).
 fn to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        s.push_str(&format!("{b:02x}"));
+        let _ = write!(s, "{b:02x}");
     }
     s
 }
@@ -313,8 +314,8 @@ fn fixture_body_cid() -> Vec<u8> {
 /// `f_lc_hpke` freezes; NO coarse_epoch (CLUSTER-1 / F4-006).
 fn f_lc_8_token_aad_fixture() -> TokenBindingAad {
     TokenBindingAad {
-        aad_version: abuse_stub::AAD_VERSION,                    // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
-        codepoint: abuse_stub::DROP_TO_RECIPIENT_SEALED_SENDER,  // 0x6510
+        aad_version: abuse_stub::AAD_VERSION, // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
+        codepoint: abuse_stub::DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
         body_cid: fixture_body_cid(),
         recipient_key_generation: 0,
@@ -627,8 +628,8 @@ fn f_inv18_1_security_posture_documents_metadata_posture() {
 /// (F4-029). CLUSTER-1 / F4-006: the union field-set, NO coarse_epoch.
 fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
     SealedSenderAad {
-        aad_version: sealed_aad_stub::AAD_VERSION,                    // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
-        codepoint: sealed_aad_stub::DROP_TO_RECIPIENT_SEALED_SENDER,  // 0x6510
+        aad_version: sealed_aad_stub::AAD_VERSION, // 0x01 (R4.4-FIX F4-004/005: dedicated AAD prefix, NOT format ver 0x02)
+        codepoint: sealed_aad_stub::DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510
         audience_did: did("did:key:zRecipientAudienceUNIQUE"),
         body_cid: fixture_body_cid(),
         recipient_key_generation: 0,
@@ -645,8 +646,7 @@ fn f_inv18_1_sealed_aad_fixture() -> SealedSenderAad {
 /// to the sibling `f_lc_hpke::F_LC_SEALED_SENDER_AAD_HEX` (both migrate in
 /// lockstep). R5 confirms-or-deliberately-updates this frozen literal against
 /// the real encoder (M-20).
-const F_INV18_1_SEALED_AAD_HEX: &str =
-    "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
+const F_INV18_1_SEALED_AAD_HEX: &str = "016510000000206469643a6b65793a7a526563697069656e7441756469656e6365554e4951554501711e20e00000000000000000000000000000000000000000000000000000000000000000000000";
 
 /// F-INV18-1 PIN 3 (R4-FIX F4-029) — POSITIVE field-set enumeration: the
 /// serialized `0x6510` envelope AAD field-set is EXACTLY the canonical union
