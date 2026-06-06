@@ -48,6 +48,13 @@ benten-caps = { path = "../benten-caps" }
 benten-graph = { path = "../benten-graph" }
 benten-crypto-suite = { path = "../benten-crypto-suite" }
 benten-id = { path = "../benten-id" }
+# The MembershipSet band (0x6600/0x6610/0x6620) is OWNED by benten-membership-set.
+# The Layer-C `group_posture::seal_membership_set_group` 0x6610 group seal routes
+# its per-stanza AAD through the canonical `aad::assemble_group_aad` (the BLINDED
+# 11-field set per SECURITY-PROOFS §3.3 / R0.7 §3.10/§4.1) so the live seal binds
+# byte-IDENTICALLY to the `f_aad_2` golden — single source of truth, zero drift
+# (F-02). Acyclic: benten-membership-set has no path back to benten-drop.
+benten-membership-set = { path = "../benten-membership-set" }
 
 # Canonical bytes substrate. DAG-CBOR (the workspace canonical-bytes
 # encoding per Phase-1 Cid contract) is the bundle's on-disk format.

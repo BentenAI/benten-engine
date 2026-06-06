@@ -352,6 +352,17 @@ pub enum LayerCError {
     InnerSenderDidForged,
     /// Codepoint dispatch hit an unknown/reserved arm.
     UnsupportedCodepoint(u16),
+    /// The number of stanzas actually DELIVERED does not equal the
+    /// `stanza_count` bound into every stanza's AAD — a relay dropped /
+    /// censored / truncated stanzas (SECURITY-PROOFS §3.3/§4.1
+    /// truncation-defense; fail-closed; F-01). `delivered` is what arrived;
+    /// `bound` is the count every survivor names.
+    StanzaCountMismatch {
+        /// The number of stanzas actually present in the envelope.
+        delivered: u32,
+        /// The `stanza_count` the surviving stanzas were sealed against.
+        bound: u32,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -784,6 +795,20 @@ pub fn open_group_stanza(
         .get(my_index)
         .ok_or(LayerCError::AeadAuthenticationFailed)?;
 
+    // F-01 truncation/censorship defense (SECURITY-PROOFS §3.3/§4.1): every
+    // stanza's AAD cryptographically binds `stanza_count`; if a relay dropped
+    // trailing stanzas, the DELIVERED count no longer matches the bound count.
+    // Fail closed BEFORE any decrypt. (A relay that also rewrites the per-stanza
+    // `stanza_count` would make the AAD-open below fail — the body_cid + counts
+    // are bound under the AEAD tag.)
+    let delivered = u32::try_from(stanzas.len()).unwrap_or(u32::MAX);
+    if delivered != stanza.stanza_count {
+        return Err(LayerCError::StanzaCountMismatch {
+            delivered,
+            bound: stanza.stanza_count,
+        });
+    }
+
     let suite = hybrid_suite();
     let mut pk_fingerprint = [0u8; 32];
     for (i, b) in recipient_sk.iter().enumerate() {
@@ -1082,6 +1107,11 @@ pub mod group_posture {
     use super::{AAD_VERSION, Vec, audience_set_commitment, self_describing_cid};
     use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
     use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
+    // The `0x6610` group per-stanza AAD = the BLINDED 11-field set, OWNED by the
+    // MembershipSet band (benten-membership-set). The live seal routes through
+    // the canonical `assemble_group_aad` so it binds byte-IDENTICALLY to the
+    // `f_aad_2` golden — single source of truth, zero drift (F-02).
+    use benten_membership_set::aad::{GroupAadInputs, assemble_group_aad};
 
     /// Layer-C group codepoint.
     pub const LAYER_C_DROP_MULTI_RECIPIENT: u16 = 0x6520;
@@ -1095,6 +1125,23 @@ pub mod group_posture {
     /// A recipient secret fingerprint.
     pub type RecipientSecKey = [u8; 32];
 
+    /// The MembershipSet-specific keying generations + raw set-id the `0x6610`
+    /// BLINDED 11-field AAD binds (over and above the roster/index/count that
+    /// the seal derives itself). On the DEFAULT Sealed-Sender path the
+    /// inner-sender-DID is sealed inside the stanza payload — NEVER in this set.
+    #[derive(Clone, Debug)]
+    pub struct GroupSealParams {
+        /// The raw MembershipSet identity — BLINDED via keyed MAC into
+        /// `membership_set_id_commitment` (never on the wire in the clear).
+        pub membership_set_id: Vec<u8>,
+        /// Per-recipient member-key generation (BE u32).
+        pub member_key_generation: u32,
+        /// The MembershipSet generation counter (BE u32).
+        pub membership_set_generation: u32,
+        /// The RBAC role-assignment generation (BE u32; BC-5).
+        pub role_assignments_generation: u32,
+    }
+
     /// Typed group failure modes.
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub enum GroupError {
@@ -1106,6 +1153,17 @@ pub mod group_posture {
             got: u16,
             /// The codepoint the dispatch arm expects.
             expected: u16,
+        },
+        /// The number of stanzas actually DELIVERED does not equal the
+        /// `stanza_count` bound into every stanza's AAD — a relay dropped /
+        /// censored / truncated one or more stanzas (SECURITY-PROOFS
+        /// §3.3/§4.1 truncation-defense; fail-closed). `delivered` is what
+        /// arrived; `bound` is the count every survivor names.
+        StanzaCountMismatch {
+            /// The number of stanzas actually present in the envelope.
+            delivered: u32,
+            /// The `stanza_count` the surviving stanzas were sealed against.
+            bound: u32,
         },
     }
 
@@ -1131,6 +1189,10 @@ pub mod group_posture {
         body_cid: Vec<u8>,
         /// The bulk body envelope wire bytes.
         body_wire: Vec<u8>,
+        /// The `stanza_count` bound into EVERY stanza's per-stanza AAD (the
+        /// truncation/censorship-defense count; F-01). Open verifies
+        /// `stanzas.len() == stanza_count` and fails closed on mismatch.
+        stanza_count: u32,
         /// Per-recipient sealed material (parallel to the seal order).
         stanzas: Vec<Stanza>,
     }
@@ -1197,14 +1259,60 @@ pub mod group_posture {
         })
     }
 
+    /// Build the canonical `0x6610` BLINDED 11-field per-stanza AAD inputs.
+    ///
+    /// The roster + raw set-id are BLINDED by `assemble_group_aad` (into the
+    /// two 32-byte commitments); on the DEFAULT path the inner-sender-DID is
+    /// sealed inside the stanza payload (`plaintext_sender_did = None`).
+    fn group_aad_inputs(
+        roster: &[Vec<u8>],
+        cid: &[u8],
+        params: &GroupSealParams,
+        stanza_index: u32,
+        stanza_count: u32,
+        k_set: &[u8; 32],
+    ) -> GroupAadInputs {
+        // The roster bytes are raw DIDs; assemble_group_aad sorts + BLINDS them
+        // into `audience_set_commitment` and reads only their COUNT for
+        // `member_count` — so the String round-trip is byte-faithful (DIDs are
+        // multibase ASCII; from_utf8_lossy is the identity for the derived
+        // `did:key:z` roster this seal builds).
+        let member_dids = roster
+            .iter()
+            .map(|d| String::from_utf8_lossy(d).into_owned())
+            .collect();
+        GroupAadInputs {
+            codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+            body_cid: cid.to_vec(),
+            member_dids,
+            k_set: *k_set,
+            stanza_index,
+            stanza_count,
+            member_key_generation: params.member_key_generation,
+            membership_set_id: params.membership_set_id.clone(),
+            membership_set_generation: params.membership_set_generation,
+            role_assignments_generation: params.role_assignments_generation,
+            // DEFAULT Sealed-Sender path: NO plaintext sender-DID (F-LC-9).
+            sealed_inner: Vec::new(),
+            plaintext_sender_did: None,
+        }
+    }
+
     /// Seal a MembershipSet K_Set group (`0x6610`) honoring Sealed-Sender:
     /// each stanza binds the inner-sender-DID in its sealed payload (NOT
     /// plaintext on the wire).
+    ///
+    /// The per-stanza AAD is the canonical BLINDED 11-field set
+    /// ([`benten_membership_set::aad::assemble_group_aad`]) — SECURITY-PROOFS
+    /// §3.3 / R0.7 §3.10/§4.1 — so the live seal binds byte-IDENTICALLY to the
+    /// `f_aad_2` golden (F-02). `params` supplies the MembershipSet-specific
+    /// keying generations + raw set-id that the 11-field set blinds.
     #[must_use]
     pub fn seal_membership_set_group(
         recipient_pks: &[RecipientPubKey],
         sender_did: &SenderDid,
         k_set: &[u8; 32],
+        params: &GroupSealParams,
         plaintext: &[u8],
     ) -> GroupSealedEnvelope {
         let suite = hybrid_suite();
@@ -1243,15 +1351,16 @@ pub mod group_posture {
         let mut stanzas = Vec::with_capacity(recipient_pks.len());
         for (idx, pk) in recipient_pks.iter().enumerate() {
             let stanza_index = u32::try_from(idx).expect("idx fits u32");
-            // Per-stanza AAD binds the BLINDED commitment + index/count — the
-            // sender-DID is NOT in the AAD (it is sealed inside).
-            let mut aad = Vec::new();
-            aad.push(AAD_VERSION);
-            aad.extend_from_slice(&MEMBERSHIP_SET_GROUP_MULTI_STANZA.to_be_bytes());
-            aad.extend_from_slice(&cid);
-            aad.extend_from_slice(&audience_set_commitment(&roster));
-            aad.extend_from_slice(&stanza_index.to_be_bytes());
-            aad.extend_from_slice(&stanza_count.to_be_bytes());
+            // Per-stanza AAD = the canonical BLINDED 11-field set (F-02). The
+            // sender-DID is NOT in the AAD (it is sealed inside the stanza).
+            let aad = assemble_group_aad(&group_aad_inputs(
+                &roster,
+                &cid,
+                params,
+                stanza_index,
+                stanza_count,
+                k_set,
+            ));
 
             let mut inner = Vec::new();
             let sd_len = u32::try_from(sender_did.len()).expect("len fits u32");
@@ -1282,6 +1391,7 @@ pub mod group_posture {
             wire,
             body_cid: cid,
             body_wire,
+            stanza_count,
             stanzas,
         }
     }
@@ -1291,13 +1401,30 @@ pub mod group_posture {
     ///
     /// # Errors
     ///
-    /// [`GroupError::AeadAuthenticationFailed`] when the recipient's stanza
-    /// does not authenticate.
+    /// [`GroupError::StanzaCountMismatch`] when the number of delivered stanzas
+    /// does not equal the `stanza_count` bound into every stanza's AAD (a relay
+    /// dropped / censored / truncated stanzas — SECURITY-PROOFS §3.3/§4.1
+    /// truncation-defense; F-01). [`GroupError::AeadAuthenticationFailed`] when
+    /// the recipient's stanza does not authenticate.
     pub fn open_membership_set_group(
         sk: &RecipientSecKey,
         my_index: usize,
         env: &GroupSealedEnvelope,
     ) -> Result<(Vec<u8>, SenderDid), GroupError> {
+        // F-01 truncation/censorship defense (SECURITY-PROOFS §3.3/§4.1):
+        // every stanza's AAD cryptographically binds `stanza_count`; if a relay
+        // dropped trailing stanzas, the DELIVERED count no longer matches the
+        // bound count. Fail closed BEFORE any decrypt. (A relay that also
+        // rewrites the count would make every survivor's AAD-open fail below,
+        // because each stanza's sealed AAD binds the ORIGINAL count.)
+        let delivered = u32::try_from(env.stanzas.len()).unwrap_or(u32::MAX);
+        if delivered != env.stanza_count {
+            return Err(GroupError::StanzaCountMismatch {
+                delivered,
+                bound: env.stanza_count,
+            });
+        }
+
         let suite = hybrid_suite();
         let mut pk_fingerprint = [0u8; 32];
         for (i, b) in sk.iter().enumerate() {
@@ -1342,6 +1469,51 @@ pub mod group_posture {
         let body = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, &body_aad)
             .map_err(|_| GroupError::AeadAuthenticationFailed)?;
         Ok((body, sender_did))
+    }
+
+    impl GroupSealedEnvelope {
+        /// **Test-only relay-truncation model (F-01):** drop the LAST delivered
+        /// stanza WITHOUT touching the bound `stanza_count` — exactly what an
+        /// active relay does when it censors a co-recipient. A correct
+        /// [`open_membership_set_group`] MUST then fail closed with
+        /// [`GroupError::StanzaCountMismatch`]. Reverting the open-path count
+        /// check makes the truncated open PASS THROUGH — that is the
+        /// would-FAIL-on-revert demonstration the F-01 negative test asserts.
+        #[cfg(any(test, feature = "testing"))]
+        #[must_use]
+        pub fn with_last_stanza_dropped_for_test(&self) -> Self {
+            let mut truncated = self.clone();
+            truncated.stanzas.pop();
+            // `stanza_count` is left UNCHANGED — the survivors still name the
+            // original count, which no longer matches the delivered length.
+            truncated
+        }
+
+        /// **Test-only accessor (F-01):** the number of stanzas actually present
+        /// (after any relay truncation).
+        #[cfg(any(test, feature = "testing"))]
+        #[must_use]
+        pub fn stanza_len_for_test(&self) -> usize {
+            self.stanzas.len()
+        }
+
+        /// **Test-only accessor (F-01):** the `stanza_count` bound into every
+        /// stanza's AAD.
+        #[cfg(any(test, feature = "testing"))]
+        #[must_use]
+        pub fn bound_stanza_count_for_test(&self) -> u32 {
+            self.stanza_count
+        }
+
+        /// **Test-only accessor (F-02 / M-20):** the actual canonical per-stanza
+        /// AAD bytes the live seal bound for stanza `idx` (the BLINDED 11-field
+        /// set). Used to assert byte-equality against the canonical
+        /// [`benten_membership_set::aad::assemble_group_aad`] golden.
+        #[cfg(any(test, feature = "testing"))]
+        #[must_use]
+        pub fn stanza_aad_for_test(&self, idx: usize) -> Vec<u8> {
+            self.stanzas[idx].aad.clone()
+        }
     }
 
     /// Codepoint dispatch. Feeding `0x6610` bytes to the `0x6520` Layer-C

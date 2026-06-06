@@ -236,6 +236,9 @@ pub fn benten_drop::layer_c::abuse_control::serialize_token_binding_aad(&benten_
 pub mod benten_drop::layer_c::group_posture
 pub enum benten_drop::layer_c::group_posture::GroupError
 pub benten_drop::layer_c::group_posture::GroupError::AeadAuthenticationFailed
+pub benten_drop::layer_c::group_posture::GroupError::StanzaCountMismatch
+pub benten_drop::layer_c::group_posture::GroupError::StanzaCountMismatch::bound: u32
+pub benten_drop::layer_c::group_posture::GroupError::StanzaCountMismatch::delivered: u32
 pub benten_drop::layer_c::group_posture::GroupError::WrongGroupCodepoint
 pub benten_drop::layer_c::group_posture::GroupError::WrongGroupCodepoint::expected: u16
 pub benten_drop::layer_c::group_posture::GroupError::WrongGroupCodepoint::got: u16
@@ -254,6 +257,22 @@ impl core::marker::Unpin for benten_drop::layer_c::group_posture::GroupError
 impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupError
+pub struct benten_drop::layer_c::group_posture::GroupSealParams
+pub benten_drop::layer_c::group_posture::GroupSealParams::member_key_generation: u32
+pub benten_drop::layer_c::group_posture::GroupSealParams::membership_set_generation: u32
+pub benten_drop::layer_c::group_posture::GroupSealParams::membership_set_id: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::group_posture::GroupSealParams::role_assignments_generation: u32
+impl core::clone::Clone for benten_drop::layer_c::group_posture::GroupSealParams
+pub fn benten_drop::layer_c::group_posture::GroupSealParams::clone(&self) -> benten_drop::layer_c::group_posture::GroupSealParams
+impl core::fmt::Debug for benten_drop::layer_c::group_posture::GroupSealParams
+pub fn benten_drop::layer_c::group_posture::GroupSealParams::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_drop::layer_c::group_posture::GroupSealParams
+impl core::marker::Send for benten_drop::layer_c::group_posture::GroupSealParams
+impl core::marker::Sync for benten_drop::layer_c::group_posture::GroupSealParams
+impl core::marker::Unpin for benten_drop::layer_c::group_posture::GroupSealParams
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupSealParams
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupSealParams
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupSealParams
 pub struct benten_drop::layer_c::group_posture::GroupSealedEnvelope
 pub benten_drop::layer_c::group_posture::GroupSealedEnvelope::codepoint: u16
 pub benten_drop::layer_c::group_posture::GroupSealedEnvelope::wire: alloc::vec::Vec<u8>
@@ -272,7 +291,7 @@ pub const benten_drop::layer_c::group_posture::LAYER_C_DROP_MULTI_RECIPIENT: u16
 pub const benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
 pub fn benten_drop::layer_c::group_posture::dispatch_group(&[u8], u16, u16) -> core::result::Result<(), benten_drop::layer_c::group_posture::GroupError>
 pub fn benten_drop::layer_c::group_posture::open_membership_set_group(&benten_drop::layer_c::group_posture::RecipientSecKey, usize, &benten_drop::layer_c::group_posture::GroupSealedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::group_posture::SenderDid), benten_drop::layer_c::group_posture::GroupError>
-pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_drop::layer_c::group_posture::RecipientPubKey], &benten_drop::layer_c::group_posture::SenderDid, &[u8; 32], &[u8]) -> benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_drop::layer_c::group_posture::RecipientPubKey], &benten_drop::layer_c::group_posture::SenderDid, &[u8; 32], &benten_drop::layer_c::group_posture::GroupSealParams, &[u8]) -> benten_drop::layer_c::group_posture::GroupSealedEnvelope
 pub type benten_drop::layer_c::group_posture::RecipientPubKey = [u8; 32]
 pub type benten_drop::layer_c::group_posture::RecipientSecKey = [u8; 32]
 pub type benten_drop::layer_c::group_posture::SenderDid = alloc::vec::Vec<u8>
@@ -360,6 +379,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::EncryptedEnv
 pub enum benten_drop::layer_c::LayerCError
 pub benten_drop::layer_c::LayerCError::AeadAuthenticationFailed
 pub benten_drop::layer_c::LayerCError::InnerSenderDidForged
+pub benten_drop::layer_c::LayerCError::StanzaCountMismatch
+pub benten_drop::layer_c::LayerCError::StanzaCountMismatch::bound: u32
+pub benten_drop::layer_c::LayerCError::StanzaCountMismatch::delivered: u32
 pub benten_drop::layer_c::LayerCError::UnsupportedCodepoint(u16)
 impl core::clone::Clone for benten_drop::layer_c::LayerCError
 pub fn benten_drop::layer_c::LayerCError::clone(&self) -> benten_drop::layer_c::LayerCError

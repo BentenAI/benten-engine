@@ -186,9 +186,21 @@ use abuse_stub::{
     decrypt_was_attempted_for_last_admit, serialize_token_binding_aad,
 };
 use group_posture_stub::{
-    GroupError, LAYER_C_DROP_MULTI_RECIPIENT, MEMBERSHIP_SET_GROUP_MULTI_STANZA, dispatch_group,
-    open_membership_set_group, seal_membership_set_group,
+    GroupError, GroupSealParams, LAYER_C_DROP_MULTI_RECIPIENT, MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+    dispatch_group, open_membership_set_group, seal_membership_set_group,
 };
+
+/// The canonical `GroupSealParams` for the `0x6610` seal tests — the
+/// MembershipSet-specific keying generations + raw set-id that the BLINDED
+/// 11-field AAD binds (over and above the roster/index/count the seal derives).
+fn group_seal_params() -> GroupSealParams {
+    GroupSealParams {
+        membership_set_id: b"benten:set:test-membership-group".to_vec(),
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    }
+}
 use sealed_aad_stub::{
     SealedSenderAad, aad_field_set, residual_privacy_metadata, serialize_sealed_sender_aad,
 };
@@ -472,7 +484,13 @@ fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let sender = did("did:key:zGroupSenderUNIQUEMARKER");
     let k_set = [0x33u8; 32];
 
-    let env = seal_membership_set_group(&pks, &sender, &k_set, b"group payload");
+    let env = seal_membership_set_group(
+        &pks,
+        &sender,
+        &k_set,
+        &group_seal_params(),
+        b"group payload",
+    );
     assert_eq!(
         env.codepoint, MEMBERSHIP_SET_GROUP_MULTI_STANZA,
         "F-LC-9: a MembershipSet K_Set group send MUST carry the 0x6610 \
@@ -505,7 +523,8 @@ fn f_lc_9_group_recipient_recovers_inner_sender_did() {
     let sender = did("did:key:zGroupSenderCarol");
     let k_set = [0x44u8; 32];
 
-    let env = seal_membership_set_group(&pks, &sender, &k_set, b"hello group");
+    let env =
+        seal_membership_set_group(&pks, &sender, &k_set, &group_seal_params(), b"hello group");
     let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &env)
         .expect("group recipient MUST open their stanza");
 
@@ -535,7 +554,13 @@ fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
     assert_eq!(LAYER_C_DROP_MULTI_RECIPIENT, 0x6520);
 
     // Feed 0x6610-declared bytes to the 0x6520 arm → strict-reject.
-    let env = seal_membership_set_group(&[[0x30u8; 32]], &did("did:key:zX"), &[0x55u8; 32], b"x");
+    let env = seal_membership_set_group(
+        &[[0x30u8; 32]],
+        &did("did:key:zX"),
+        &[0x55u8; 32],
+        &group_seal_params(),
+        b"x",
+    );
     let outcome = dispatch_group(
         &env.wire,
         MEMBERSHIP_SET_GROUP_MULTI_STANZA,
