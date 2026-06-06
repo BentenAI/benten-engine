@@ -69,7 +69,7 @@
 //! Per CLAUDE.md baked-in #5 / `crypto-agility-contract:6`: this is the
 //! ONLY crypto-primitive call site; we wrap vetted upstream
 //! `x25519-dalek` + `libcrux-ml-kem` (the hax/F*-verified ML-KEM-768
-//! impl, via [`crate::mlkem`]) + `sha3` crates; we NEVER fork or
+//! impl, via `crate::mlkem`) + `sha3` crates; we NEVER fork or
 //! reimplement primitives.
 
 use rand_core::OsRng as RandOsRng;
